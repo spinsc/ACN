@@ -1438,3 +1438,33 @@ html body .modal-box.acn-modal-cadastro.acn-prod-jan { width: min(440px, 95vw); 
 .acn-prod-equipes { display: flex; flex-direction: column; gap: 6px; }
 .acn-prod-equipe { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 13px; background: var(--acn-surface); border: 1.5px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-prod-equipe.sel { border: 2px solid var(--acn-brand); background: var(--acn-brand-soft); }
+
+/* ── Produção · 12e17 (06/10/2026): painel do SAC veicular (lista das OS, tabela de itens e as janelas) ── */
+.acn-prod-os-num { color: var(--acn-brand-ink); }
+.acn-prod-os-cli { max-width: 130px; overflow-wrap: anywhere; }
+.acn-prod-os-veic { max-width: 180px; }
+.acn-prod-quebra { overflow-wrap: anywhere; }
+.acn-prod-itens .acn-input { width: 100%; box-sizing: border-box; height: 30px; font-size: 12px; }
+.acn-prod-itens .acn-input.acn-prod-it-num { padding-left: 6px; padding-right: 6px; }
+.acn-prod-it-cod { width: 90px; }
+.acn-prod-it-qtd { width: 64px; }
+.acn-prod-it-val { width: 104px; }
+.acn-prod-it-rem { width: 40px; }
+.acn-prod-it-add { margin: 8px 0 4px; }
+html body .modal-box.acn-modal-cadastro.acn-prod-larga { width: min(680px, 95vw); max-width: 680px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-prod-larga.acn-prod-larguissima { width: min(980px, 95vw); max-width: 980px; }
+html body .modal-box.acn-modal-cadastro.acn-prod-obs { width: min(460px, 95vw); max-width: 460px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-prod-ver { width: min(520px, 95vw); max-width: 520px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-prod-eqos { width: min(480px, 95vw); max-width: 480px; max-height: 92vh; }
+.acn-prod-larga .form-group, .acn-prod-obs .form-group { margin-bottom: 0; }
+.acn-prod-larga .acn-modal-corpo > *, .acn-prod-obs .acn-modal-corpo > *, .acn-prod-ver .acn-modal-corpo > *, .acn-prod-eqos .acn-modal-corpo > * { flex-shrink: 0; }
+.acn-prod-ver-selos { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.acn-prod-texto { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.acn-prod-orcado { grid-template-columns: 1fr; font-size: 13px; }
+.acn-prod-membros { display: flex; flex-direction: column; gap: 5px; }
+.acn-prod-membro { display: flex; align-items: center; justify-content: space-between; padding: 3px 4px 3px 10px; font-size: 13px; border-radius: var(--acn-r2); }
+.acn-prod-membro.resp { background: var(--acn-brand-soft); }
+.acn-prod-membro.apoio { background: var(--acn-ok-soft); }
+.acn-prod-add { display: flex; align-items: center; gap: 6px; }
+.acn-prod-add .acn-input { flex: 1; min-width: 0; }
+.acn-prod-ic { display: inline-flex; align-items: center; gap: 4px; }

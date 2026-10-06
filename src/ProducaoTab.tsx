@@ -18,12 +18,15 @@ import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
+import Icone from './Icone';
 import { carregarPendencias } from './OpPendencias';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
 import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
   mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
   mdiMessageTextOutline, mdiPause, mdiCheck, mdiChevronDown, mdiChevronUp, mdiTrayArrowDown, mdiHammerWrench, mdiClose,
-  mdiAccountGroupOutline, mdiCheckAll, mdiAccount, mdiPaperclip } from '@mdi/js';
+  mdiAccountGroupOutline, mdiCheckAll, mdiAccount, mdiPaperclip,
+  mdiRefresh, mdiCar, mdiCalendarOutline, mdiClipboardListOutline, mdiSendOutline, mdiContentSaveOutline, mdiAlertOutline,
+  mdiTrashCanOutline, mdiPlus, mdiTimerOutline, mdiCommentTextOutline, mdiWrench, mdiWeatherSunny, mdiWeatherSunsetDown } from '@mdi/js';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -487,34 +490,34 @@ function ItemTable({ itens, setItens }) {
   const rem = (idx) => setItens(p=>p.filter((_,i)=>i!==idx));
   return (
     <>
-      <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
-        <thead><tr style={{background:'#f1f5f9'}}>
-          <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0',width:80}}>Código</th>
-          <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Descrição</th>
-          <th style={{padding:'5px 7px',fontSize:10,textAlign:'center',borderBottom:'1px solid #e2e8f0',width:55}}>Qtd</th>
-          <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Vl. Unit.</th>
-          <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Total</th>
-          <th style={{width:28,borderBottom:'1px solid #e2e8f0'}}></th>
+      <table className="acn-tabela acn-densa acn-prod-itens">
+        <thead><tr>
+          <th className="acn-prod-it-cod">Código</th>
+          <th>Descrição</th>
+          <th className="acn-centro acn-prod-it-qtd">Qtd</th>
+          <th className="acn-dir acn-prod-it-val">Vl. Unit.</th>
+          <th className="acn-dir acn-prod-it-val">Total</th>
+          <th className="acn-prod-it-rem"></th>
         </tr></thead>
         <tbody>
           {itens.map((item,idx)=>(
-            <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-              <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo} onChange={e=>set(idx,'codigo',e.target.value)} /></td>
-              <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao} onChange={e=>set(idx,'descricao',e.target.value)} placeholder="Peça / serviço..." /></td>
-              <td style={{padding:'3px 5px'}}><input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade} onChange={e=>set(idx,'quantidade',Number(e.target.value)||1)} /></td>
-              <td style={{padding:'3px 5px'}}><input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario} onChange={e=>set(idx,'valor_unitario',Number(e.target.value)||0)} /></td>
-              <td style={{padding:'3px 7px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>{((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-              <td><button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}} onClick={()=>rem(idx)}>×</button></td>
+            <tr key={idx}>
+              <td><input className="acn-input" value={item.codigo} onChange={e=>set(idx,'codigo',e.target.value)} /></td>
+              <td><input className="acn-input" value={item.descricao} onChange={e=>set(idx,'descricao',e.target.value)} placeholder="Peça / serviço..." /></td>
+              <td><input type="number" min={1} className="acn-input acn-prod-it-num acn-centro" value={item.quantidade} onChange={e=>set(idx,'quantidade',Number(e.target.value)||1)} /></td>
+              <td><input type="number" min={0} step="0.01" className="acn-input acn-prod-it-num acn-dir" value={item.valor_unitario} onChange={e=>set(idx,'valor_unitario',Number(e.target.value)||0)} /></td>
+              <td className="acn-dir acn-num acn-forte">{((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              <td><Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item" title="Remover item" onClick={()=>rem(idx)} /></td>
             </tr>
           ))}
         </tbody>
-        <tfoot><tr style={{background:'#f0fdf4'}}>
-          <td colSpan={4} style={{padding:'6px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
-          <td style={{padding:'6px',fontWeight:800,fontSize:12,textAlign:'right',color:'#166534'}}>R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+        <tfoot><tr>
+          <td colSpan={4} className="acn-dir acn-forte">TOTAL:</td>
+          <td className="acn-dir acn-num acn-forte">R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
           <td></td>
         </tr></tfoot>
       </table>
-      <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:10}} onClick={add}>+ Adicionar Item</button>
+      <div className="acn-prod-it-add"><Botao pequeno icone={mdiPlus} onClick={add}>Adicionar Item</Botao></div>
     </>
   );
 }
@@ -593,15 +596,17 @@ function PainelSacVeicular({ currentUser }) {
 
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
 
-  const STATUS_COR_VEI = {
-    'Em Provisionamento':           '#7c3aed',
-    'Aguardando Aceite SAC':        '#f59e0b',
-    'Provisionada':                 '#16a34a',
-    'Aguardando Início':             '#f59e0b',
-    'Verificação e Orçamento':      '#8b5cf6',
-    'Aguardando Aprovação Cliente': '#f59e0b',
-    'Em Manutenção':                '#dc2626',
-    'Em Execução':                  '#0891b2',
+  // Etapa 12e17 (06/10/2026): a cor do status segue a família do sistema (antes, um hexadecimal por status).
+  // Suposição minha: "Em Manutenção" deixa de ser vermelho (vermelho é de problema) e fica azul, como "Em Execução".
+  const STATUS_FAM_VEI = {
+    'Em Provisionamento':           'marca',
+    'Aguardando Aceite SAC':        'atencao',
+    'Provisionada':                 'ok',
+    'Aguardando Início':            'atencao',
+    'Verificação e Orçamento':      'marca',
+    'Aguardando Aprovação Cliente': 'atencao',
+    'Em Manutenção':                'info',
+    'Em Execução':                  'info',
   };
 
   // Produção define data → status: Aguardando Aceite SAC
@@ -843,17 +848,10 @@ function PainelSacVeicular({ currentUser }) {
   return (
     <div>
       {ordens.filter(isAtrasada).length > 0 && (
-        <div style={{background:'#fef2f2',border:'2px solid #ef4444',borderRadius:6,padding:'10px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:12}}>
-          <span style={{fontSize:20}}>⚠️</span>
-          <div>
-            <div style={{fontWeight:700,fontSize:11,color:'#dc2626'}}>
-              {ordens.filter(isAtrasada).length} OS(s) — veículo não chegou há mais de 2 dias após data agendada!
-            </div>
-            <div style={{fontSize:10,color:'#991b1b',marginTop:2}}>Use o botão "Remarcar" para reagendar.</div>
-          </div>
-        </div>
+        <Faixa tom="erro">
+          <b>{ordens.filter(isAtrasada).length} OS(s) — veículo não chegou há mais de 2 dias após data agendada!</b>{' '}Use o botão "Remarcar" para reagendar.
+        </Faixa>
       )}
-
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
           Não foi possível ler as OS veiculares ({erroLeitura}). Isso não quer dizer que não haja OS aguardando a Produção{ordens.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
@@ -861,15 +859,15 @@ function PainelSacVeicular({ currentUser }) {
       )}
 
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
-          <span style={{color:'#991b1b'}}>🔧 SAC Veicular — Ações da Produção ({ordens.length})</span>
-          <button className="acn-btn" style={{background:'#dc2626',fontSize:10}} onClick={load}>↻ Atualizar</button>
+        <div className="sec-hdr">
+          <span className="acn-prod-ic"><Icone path={mdiCarWrench} size={16} /> SAC Veicular — Ações da Produção ({ordens.length})</span>
+          <Botao pequeno icone={mdiRefresh} onClick={load}>Atualizar</Botao>
         </div>
-        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+        <div className="sec-body acn-rolagem acn-prod-tabela">
           {loading ? <div className="acn-empty">Carregando...</div> : ordens.length === 0 ? (
             <div className="acn-empty">{erroLeitura ? 'Leitura falhou — veja o aviso acima.' : 'Nenhuma OS veicular aguardando ação da Produção.'}</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Tipo</th><th>Data Prov.</th><th>Status</th><th>Ação Produção</th>
               </tr></thead>
@@ -877,106 +875,92 @@ function PainelSacVeicular({ currentUser }) {
                 {ordens.map(os => {
                   const atrasada = isAtrasada(os);
                   return (
-                    <tr key={os.id} style={{background:atrasada?'#fef2f2':undefined,borderLeft:atrasada?'4px solid #ef4444':undefined}}>
+                    <tr key={os.id} className={atrasada ? 'acn-linha-alerta' : undefined}>
                       <td>
-                        <strong style={{color:'#0f766e'}}>{os.numero_os}</strong>
-                        {os.tipo_avaliacao && <div><span style={{fontSize:8,background:'#e2e8f0',padding:'1px 5px',borderRadius:10}}>{os.tipo_avaliacao}</span></div>}
+                        <div className="acn-duas">
+                          <strong className="acn-forte acn-prod-os-num">{os.numero_os}</strong>
+                          {os.tipo_avaliacao && <span className="acn-eng-selo-linha"><Tag>{os.tipo_avaliacao}</Tag></span>}
+                        </div>
                       </td>
-                      <td style={{ maxWidth:110, wordBreak:'break-word' }}>{os.cliente_nome}</td>
-                      <td style={{maxWidth:130,fontSize:10}}>
-                        <div style={{ wordBreak:'break-word' }}>{os.equipamento_nome}</div>
-                        <div>{semDado(os.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : os.modelo}</div>
-                        <div style={{color:'#94a3b8'}}>{semDado(os.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${os.chassi}`}</div>
+                      <td className="acn-prod-os-cli">{os.cliente_nome}</td>
+                      <td className="acn-prod-os-veic">
+                        <div className="acn-duas">
+                          <span className="acn-prod-quebra">{os.equipamento_nome}</span>
+                          <small className="acn-prod-ic">{semDado(os.modelo) ? <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem modelo</span> : os.modelo}</small>
+                          <small className="acn-prod-ic">{semDado(os.chassi) ? <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem chassi</span> : <><Icone path={mdiWrench} size={12} /> {os.chassi}</>}</small>
+                        </div>
                       </td>
-                      <td><span style={{fontSize:9,background:'#e2e8f0',padding:'2px 6px',borderRadius:10}}>{os.tipo_avaliacao||'—'}</span></td>
-                      <td style={{fontSize:10}}>
+                      <td><Tag>{os.tipo_avaliacao||'—'}</Tag></td>
+                      <td className="acn-num acn-prod-nowrap">
                         {os.data_provisionamento
-                          ? <span style={{color:atrasada?'#dc2626':'inherit',fontWeight:atrasada?700:400}}>
+                          ? <span className={atrasada ? 'acn-prod-ic acn-txt-erro acn-forte' : 'acn-prod-ic'}>
                               {new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}
-                              {atrasada ? ' ⚠️' : ''}
+                              {atrasada && <> <Icone path={mdiAlertOutline} size={13} /></>}
                             </span>
                           : '—'}
                       </td>
                       <td>
-                        <span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span>
-                        {os.revisao_pendente && (
-                          <div style={{fontSize:8,color:'#dc2626',fontWeight:700,marginTop:2}}>⚠️ Revisão pendente — aguardando SAC</div>
-                        )}
-                        {os.tecnico_responsavel && (
-                          <div style={{fontSize:9,color:'#475569',marginTop:2}}>
-                            {os.modo_execucao === 'equipe'
-                              ? <>🏷️ <strong>{os.equipe_nome || os.tecnico_responsavel}</strong></>
-                              : <>👤 {os.tecnico_responsavel}{os.tecnico_producao_2_nome ? <> + {os.tecnico_producao_2_nome}</> : ''}</>}
-                          </div>
-                        )}
+                        <div className="acn-duas acn-prod-duas-ini">
+                          <Selo familia={STATUS_FAM_VEI[os.status]||'neutro'}>{os.status}</Selo>
+                          {os.revisao_pendente && (
+                            <small className="acn-txt-erro acn-forte acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> Revisão pendente — aguardando SAC</small>
+                          )}
+                          {os.tecnico_responsavel && (
+                            <small className="acn-prod-ic">
+                              {os.modo_execucao === 'equipe'
+                                ? <><Icone path={mdiTagOutline} size={12} /> <strong>{os.equipe_nome || os.tecnico_responsavel}</strong></>
+                                : <><Icone path={mdiAccount} size={12} /> {os.tecnico_responsavel}{os.tecnico_producao_2_nome ? <> + {os.tecnico_producao_2_nome}</> : ''}</>}
+                            </small>
+                          )}
+                        </div>
                       </td>
                       <td>
-                        <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
-                          <button className="acn-btn" style={{background:'#e2e8f0',color:'#475569',fontSize:9}}
-                            onClick={()=>setModalVerOs(os)} title="Ver diagnóstico/relato antes de provisionar">
-                            👁 VER
-                          </button>
+                        <div className="acn-acoes-linha quebra">
+                          <Botao pequeno variante="discreto" icone={mdiEyeOutline}
+                            onClick={()=>setModalVerOs(os)} title="Ver diagnóstico/relato antes de provisionar">VER</Botao>
                           {os.status === 'Em Provisionamento' && (
-                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
-                              onClick={()=>{ setProvisionarForm({data_provisao:'',periodo:'Manhã'}); setModalProvisionar(os); }}>
-                              📅 Definir Data
-                            </button>
+                            <Botao pequeno variante="primario" icone={mdiCalendarOutline}
+                              onClick={()=>{ setProvisionarForm({data_provisao:'',periodo:'Manhã'}); setModalProvisionar(os); }}>Definir Data</Botao>
                           )}
                           {os.status === 'Provisionada' && (
                             <>
-                              <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>setModalConfirmarChegada(os)}>
-                                🚗 Chegou
-                              </button>
+                              <Botao pequeno variante="primario" icone={mdiCar} onClick={()=>setModalConfirmarChegada(os)}>Chegou</Botao>
                               {atrasada && (
-                                <button className="acn-btn" style={{background:'#ef4444',fontSize:9}}
-                                  onClick={()=>{ setProvisionarForm({data_provisao:os.data_provisionamento||'',periodo:os.periodo_provisionamento||'Manhã'}); setModalProvisionar(os); }}>
-                                  📅 Remarcar
-                                </button>
+                                <Botao pequeno variante="perigo-sec" icone={mdiCalendarOutline}
+                                  onClick={()=>{ setProvisionarForm({data_provisao:os.data_provisionamento||'',periodo:os.periodo_provisionamento||'Manhã'}); setModalProvisionar(os); }}>Remarcar</Botao>
                               )}
                             </>
                           )}
                           {os.status === 'Aguardando Início' && (
-                            <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+                            <Botao pequeno variante="primario" icone={mdiPlay}
                               onClick={()=>{ setIniciarManuTecnico(''); setIniciarManuTecnicoId(null);
                                 setIniciarManuModo('individual'); setIniciarManuTecnico2(''); setIniciarManuTecnico2Id(null); setIniciarManuEquipeSel(null);
-                                setModalIniciarManu(os); }}>
-                              ▶️ Iniciar
-                            </button>
+                                setModalIniciarManu(os); }}>Iniciar</Botao>
                           )}
                           {os.status === 'Verificação e Orçamento' && (
-                            <button className="acn-btn" style={{background:'#8b5cf6',fontSize:9}}
-                              onClick={()=>{ setVerificacaoItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalVerificacao(os); }}>
-                              🔧 Inserir Materiais
-                            </button>
+                            <Botao pequeno variante="primario" icone={mdiWrench}
+                              onClick={()=>{ setVerificacaoItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalVerificacao(os); }}>Inserir Materiais</Botao>
                           )}
                           {os.status === 'Em Manutenção' && (
                             <>
-                              <button className="acn-btn" style={{background:'#0d9488',fontSize:9}}
-                                onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)?os.materiais_utilizados.map(i=>({...i})):[]}); }}>
-                                ✅ Concluir
-                              </button>
-                              <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>abrirGerenciarEquipeOS(os)}>👥 EQUIPE</button>
+                              <Botao pequeno variante="primario" icone={mdiCheck}
+                                onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)?os.materiais_utilizados.map(i=>({...i})):[]}); }}>Concluir</Botao>
+                              <Botao pequeno icone={mdiAccountMultipleOutline} onClick={()=>abrirGerenciarEquipeOS(os)}>EQUIPE</Botao>
                             </>
                           )}
                           {os.status === 'Em Execução' && (
                             <>
-                              <button className="acn-btn" style={{background:'#64748b',fontSize:9}}
-                                onClick={()=>{ setObsText(os.observacoes_manutencao||''); setModalObsProd(os); }}>
-                                💬 Obs.
-                              </button>
-                              <button className="acn-btn" style={{background:'#0891b2',fontSize:9}}
-                                onClick={()=>{ setItensExecucao(Array.isArray(os.materiais_utilizados)&&os.materiais_utilizados.length>0?os.materiais_utilizados.map(i=>({...i})):Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalItensExecucao(os); }}>
-                                📋 Itens
-                              </button>
-                              <button className="acn-btn" style={{background:'#0d9488',fontSize:9}}
-                                onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)&&os.materiais_utilizados.length>0?os.materiais_utilizados.map(i=>({...i})):Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[]}); }}>
-                                ✅ Concluir
-                              </button>
-                              <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>abrirGerenciarEquipeOS(os)}>👥 EQUIPE</button>
+                              <Botao pequeno icone={mdiMessageTextOutline}
+                                onClick={()=>{ setObsText(os.observacoes_manutencao||''); setModalObsProd(os); }}>Obs.</Botao>
+                              <Botao pequeno icone={mdiClipboardListOutline}
+                                onClick={()=>{ setItensExecucao(Array.isArray(os.materiais_utilizados)&&os.materiais_utilizados.length>0?os.materiais_utilizados.map(i=>({...i})):Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalItensExecucao(os); }}>Itens</Botao>
+                              <Botao pequeno variante="primario" icone={mdiCheck}
+                                onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)&&os.materiais_utilizados.length>0?os.materiais_utilizados.map(i=>({...i})):Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[]}); }}>Concluir</Botao>
+                              <Botao pequeno icone={mdiAccountMultipleOutline} onClick={()=>abrirGerenciarEquipeOS(os)}>EQUIPE</Botao>
                             </>
                           )}
                           {(os.status === 'Aguardando Aprovação Cliente' || os.status === 'Aguardando Aceite SAC') && (
-                            <span style={{fontSize:9,color:'#94a3b8',fontStyle:'italic'}}>Aguardando SAC</span>
+                            <span className="acn-fraco">Aguardando SAC</span>
                           )}
                         </div>
                       </td>
@@ -992,34 +976,33 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Definir / Remarcar Data */}
       {modalProvisionar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:400}}>
-            <div className="modal-title">
-              📅 {modalProvisionar.data_provisionamento ? 'Remarcar' : 'Definir'} Data — {modalProvisionar.numero_os}
+          <div className="modal-box acn-modal-cadastro acn-prod-jan" role="dialog" aria-label="Definir data de recebimento">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCalendarOutline} size={16} /> {modalProvisionar.data_provisionamento ? 'Remarcar' : 'Definir'} Data — {modalProvisionar.numero_os}</span>
             </div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>Cliente: {modalProvisionar.cliente_nome}</div>
-            {modalProvisionar.data_provisionamento && (
-              <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:11}}>
-                Data anterior: <strong>{new Date(modalProvisionar.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
-                {' '}({modalProvisionar.periodo_provisionamento||''})
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalProvisionar.cliente_nome}</div>
+              {modalProvisionar.data_provisionamento && (
+                <Faixa tom="erro">
+                  Data anterior: <strong>{new Date(modalProvisionar.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
+                  {' '}({modalProvisionar.periodo_provisionamento||''})
+                </Faixa>
+              )}
+              <div className="form-group">
+                <label className="acn-label">Nova Data de Recebimento *</label>
+                <input type="date" className="acn-input"
+                  value={provisionarForm.data_provisao}
+                  onChange={e=>setProvisionarForm(f=>({...f,data_provisao:e.target.value}))} />
               </div>
-            )}
-            <label className="acn-label">Nova Data de Recebimento *</label>
-            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={provisionarForm.data_provisao}
-              onChange={e=>setProvisionarForm(f=>({...f,data_provisao:e.target.value}))} />
-            <label className="acn-label">Período</label>
-            <div style={{display:'flex',gap:8,marginBottom:14}}>
-              {['Manhã','Tarde'].map(p=>(
-                <button key={p} className="acn-btn"
-                  style={{flex:1,background:provisionarForm.periodo===p?'#7c3aed':'#e2e8f0',color:provisionarForm.periodo===p?'white':'#1e293b'}}
-                  onClick={()=>setProvisionarForm(f=>({...f,periodo:p}))}>
-                  {p==='Manhã'?'🌅':'🌇'} {p}
-                </button>
-              ))}
+              <div className="form-group">
+                <label className="acn-label">Período</label>
+                <Chips rotulo="Período" ativo={provisionarForm.periodo} onChange={p=>setProvisionarForm(f=>({...f,periodo:p}))}
+                  itens={[{ id:'Manhã', rotulo:'Manhã', icone: mdiWeatherSunny }, { id:'Tarde', rotulo:'Tarde', icone: mdiWeatherSunsetDown }]} />
+              </div>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={salvarProvisionamento}>✓ Confirmar</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalProvisionar(null)}>Cancelar</button>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={salvarProvisionamento}>Confirmar</Botao>
+              <Botao onClick={()=>setModalProvisionar(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1028,21 +1011,25 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Confirmar Chegada */}
       {modalConfirmarChegada && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:400}}>
-            <div className="modal-title">🚗 Confirmar Chegada — {modalConfirmarChegada.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Cliente: {modalConfirmarChegada.cliente_nome}</div>
-            {modalConfirmarChegada.data_provisionamento && (
-              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:11}}>
-                📅 Data prevista: <strong>{new Date(modalConfirmarChegada.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
-                {' '}({modalConfirmarChegada.periodo_provisionamento||''})
-              </div>
-            )}
-            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11}}>
-              ✅ Próximo status: <strong>Verificação e Orçamento</strong>
+          <div className="modal-box acn-modal-cadastro acn-prod-jan" role="dialog" aria-label="Confirmar chegada">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCar} size={16} /> Confirmar Chegada — {modalConfirmarChegada.numero_os}</span>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarChegada}>🚗 Confirmar Chegada</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConfirmarChegada(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalConfirmarChegada.cliente_nome}</div>
+              {modalConfirmarChegada.data_provisionamento && (
+                <Faixa tom="info" icone={mdiCalendarOutline}>
+                  Data prevista: <strong>{new Date(modalConfirmarChegada.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
+                  {' '}({modalConfirmarChegada.periodo_provisionamento||''})
+                </Faixa>
+              )}
+              <Faixa tom="ok">
+                Próximo status: <strong>Verificação e Orçamento</strong>
+              </Faixa>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCar} onClick={confirmarChegada}>Confirmar Chegada</Botao>
+              <Botao onClick={()=>setModalConfirmarChegada(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1051,17 +1038,21 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Verificação e Orçamento */}
       {modalVerificacao && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">🔧 Verificação e Orçamento — {modalVerificacao.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalVerificacao.cliente_nome}</div>
-            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:8}}>Materiais / Itens do Orçamento</div>
-            <ItemTable itens={verificacaoItens} setItens={setVerificacaoItens} />
-            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-              ⚠️ Ao enviar, a OS aguardará aprovação do SAC/Cliente antes de iniciar manutenção.
+          <div className="modal-box acn-modal-cadastro acn-prod-larga" role="dialog" aria-label="Verificação e orçamento">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiWrench} size={16} /> Verificação e Orçamento — {modalVerificacao.numero_os}</span>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#8b5cf6',flex:1}} onClick={enviarVerificacao}>📤 Enviar para Aprovação</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVerificacao(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalVerificacao.cliente_nome}</div>
+              <div className="acn-quadro-titulo">Materiais / Itens do Orçamento</div>
+              <ItemTable itens={verificacaoItens} setItens={setVerificacaoItens} />
+              <Faixa tom="atencao">
+                Ao enviar, a OS aguardará aprovação do SAC/Cliente antes de iniciar manutenção.
+              </Faixa>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiSendOutline} onClick={enviarVerificacao}>Enviar para Aprovação</Botao>
+              <Botao onClick={()=>setModalVerificacao(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1070,18 +1061,24 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Observação de Produção */}
       {modalObsProd && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:460}}>
-            <div className="modal-title">💬 Observação de Produção — {modalObsProd.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Cliente: <strong>{modalObsProd.cliente_nome}</strong>
+          <div className="modal-box acn-modal-cadastro acn-prod-obs" role="dialog" aria-label="Observação de produção">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiMessageTextOutline} size={16} /> Observação de Produção — {modalObsProd.numero_os}</span>
             </div>
-            <label className="acn-label">Observação (visível na impressão da OS)</label>
-            <textarea className="acn-input" rows={5} autoFocus style={{width:'100%',resize:'vertical',marginBottom:14}}
-              placeholder="Descreva o andamento, peças utilizadas, observações técnicas..."
-              value={obsText} onChange={e=>setObsText(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0891b2',flex:1}} onClick={salvarObsProducao}>💾 Salvar</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObsProd(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Cliente: <strong>{modalObsProd.cliente_nome}</strong>
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Observação (visível na impressão da OS)</label>
+                <textarea className="acn-input" rows={5} autoFocus
+                  placeholder="Descreva o andamento, peças utilizadas, observações técnicas..."
+                  value={obsText} onChange={e=>setObsText(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarObsProducao}>Salvar</Botao>
+              <Botao onClick={()=>setModalObsProd(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1090,45 +1087,49 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Ver OS (somente leitura) — diagnóstico/relato antes de provisionar */}
       {modalVerOs && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:520,maxHeight:'85vh',overflowY:'auto'}}>
-            <div className="modal-title">👁 {modalVerOs.numero_os} — {modalVerOs.cliente_nome}</div>
-            <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12,fontSize:11,color:'#475569'}}>
-              {modalVerOs.tipo_avaliacao && <span style={{background:'#e2e8f0',padding:'2px 8px',borderRadius:10}}>{modalVerOs.tipo_avaliacao}</span>}
-              <span className="acn-badge" style={{background:STATUS_COR_VEI[modalVerOs.status]||'#94a3b8'}}>{modalVerOs.status}</span>
+          <div className="modal-box acn-modal-cadastro acn-prod-ver" role="dialog" aria-label="Detalhes da OS">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiEyeOutline} size={16} /> {modalVerOs.numero_os} — {modalVerOs.cliente_nome}</span>
             </div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>
-              <strong>Veículo/Equipamento:</strong> {modalVerOs.equipamento_nome||'—'}<br/>
-              <strong>Marca/Modelo:</strong> {[modalVerOs.marca,modalVerOs.modelo].filter(Boolean).join(' / ')||'—'}<br/>
-              <strong>Chassi/Série:</strong> {modalVerOs.chassi||modalVerOs.numero_serie||'—'}
+            <div className="acn-modal-corpo">
+              <div className="acn-prod-ver-selos">
+                {modalVerOs.tipo_avaliacao && <Tag>{modalVerOs.tipo_avaliacao}</Tag>}
+                <Selo familia={STATUS_FAM_VEI[modalVerOs.status]||'neutro'}>{modalVerOs.status}</Selo>
+              </div>
+              <div>
+                <div className="acn-ficha-linha"><span>Veículo/Equipamento:</span><span>{modalVerOs.equipamento_nome||'—'}</span></div>
+                <div className="acn-ficha-linha"><span>Marca/Modelo:</span><span>{[modalVerOs.marca,modalVerOs.modelo].filter(Boolean).join(' / ')||'—'}</span></div>
+                <div className="acn-ficha-linha"><span>Chassi/Série:</span><span>{modalVerOs.chassi||modalVerOs.numero_serie||'—'}</span></div>
+              </div>
+              <div className="acn-quadro-titulo acn-prod-ic"><Icone path={mdiCommentTextOutline} size={13} /> Defeito Reclamado (relato do cliente)</div>
+              <div className="acn-quadro tom-erro acn-prod-texto">
+                {modalVerOs.defeito_reclamado ? <Linkify text={modalVerOs.defeito_reclamado} /> : <span className="acn-fraco">Nenhum defeito reclamado registrado.</span>}
+              </div>
+              {modalVerOs.observacoes && (
+                <>
+                  <div className="acn-quadro-titulo acn-prod-ic"><Icone path={mdiClipboardListOutline} size={13} /> Observações</div>
+                  <div className="acn-quadro acn-prod-texto">
+                    <Linkify text={modalVerOs.observacoes} />
+                  </div>
+                </>
+              )}
+              {Array.isArray(modalVerOs.itens_cotacao) && modalVerOs.itens_cotacao.length > 0 && (
+                <>
+                  <div className="acn-quadro-titulo acn-prod-ic">
+                    <Icone path={mdiWrench} size={13} /> Itens já orçados {modalVerOs.valor_orcamento!=null && `— Total: ${fmtVal(modalVerOs.valor_orcamento)}`}
+                  </div>
+                  <div>
+                    {modalVerOs.itens_cotacao.map((it,i)=>(
+                      <div key={i} className="acn-ficha-linha acn-prod-orcado">
+                        {it.quantidade||1}x {it.descricao||it.codigo||'—'} {it.valor_unitario ? `— ${fmtVal(it.valor_unitario)}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:4}}>🗣️ Defeito Reclamado (relato do cliente)</div>
-            <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11,whiteSpace:'pre-wrap'}}>
-              {modalVerOs.defeito_reclamado ? <Linkify text={modalVerOs.defeito_reclamado} /> : <span style={{color:'#94a3b8'}}>Nenhum defeito reclamado registrado.</span>}
-            </div>
-            {modalVerOs.observacoes && (
-              <>
-                <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:4}}>📝 Observações</div>
-                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11,whiteSpace:'pre-wrap'}}>
-                  <Linkify text={modalVerOs.observacoes} />
-                </div>
-              </>
-            )}
-            {Array.isArray(modalVerOs.itens_cotacao) && modalVerOs.itens_cotacao.length > 0 && (
-              <>
-                <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:4}}>
-                  🔧 Itens já orçados {modalVerOs.valor_orcamento!=null && `— Total: ${fmtVal(modalVerOs.valor_orcamento)}`}
-                </div>
-                <div style={{marginBottom:12}}>
-                  {modalVerOs.itens_cotacao.map((it,i)=>(
-                    <div key={i} style={{fontSize:10,color:'#374151',padding:'3px 0',borderBottom:i<modalVerOs.itens_cotacao.length-1?'1px solid #f1f5f9':'none'}}>
-                      {it.quantidade||1}x {it.descricao||it.codigo||'—'} {it.valor_unitario ? `— ${fmtVal(it.valor_unitario)}` : ''}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-            <div style={{display:'flex',justifyContent:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVerOs(null)}>Fechar</button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalVerOs(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -1137,85 +1138,80 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Iniciar Manutenção */}
       {modalIniciarManu && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">▶️ Iniciar Manutenção — {modalIniciarManu.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
-              Cliente: <strong>{modalIniciarManu.cliente_nome}</strong>
-              {modalIniciarManu.veiculo_modelo && <> &nbsp;|&nbsp; Veículo: <strong>{modalIniciarManu.veiculo_modelo}</strong></>}
+          <div className="modal-box acn-modal-cadastro acn-prod-jan" role="dialog" aria-label="Iniciar manutenção">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiPlay} size={16} /> Iniciar Manutenção — {modalIniciarManu.numero_os}</span>
             </div>
-            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-              ⏱️ A contagem do KPI de manutenção inicia ao confirmar.
-            </div>
-            {/* Seletor de modo — mesmo padrão individual/dupla/equipe da Produção de OPL */}
-            <label className="acn-label">Modo de Execução</label>
-            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
-              {(['individual','dupla','equipe'] as const).map(m => (
-                <button key={m} onClick={()=>setIniciarManuModo(m)} style={{
-                  flex:1, padding:'7px 4px', border:'none', cursor:'pointer', fontSize:10, fontWeight:700,
-                  background: iniciarManuModo===m ? '#f59e0b' : 'white',
-                  color: iniciarManuModo===m ? 'white' : '#475569',
-                  borderRight: m!=='equipe' ? '1px solid #d1d5db' : 'none',
-                }}>
-                  {m==='individual'?'👤 Individual':m==='dupla'?'👥 Dupla':'🏷️ Equipe'}
-                </button>
-              ))}
-            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Cliente: <strong>{modalIniciarManu.cliente_nome}</strong>
+                {modalIniciarManu.veiculo_modelo && <> &nbsp;|&nbsp; Veículo: <strong>{modalIniciarManu.veiculo_modelo}</strong></>}
+              </div>
+              <Faixa tom="atencao" icone={mdiTimerOutline}>
+                A contagem do KPI de manutenção inicia ao confirmar.
+              </Faixa>
+              {/* Seletor de modo — mesmo padrão individual/dupla/equipe da Produção de OPL */}
+              <div className="form-group">
+                <label className="acn-label">Modo de Execução</label>
+                <Chips rotulo="Modo de execução" ativo={iniciarManuModo} onChange={setIniciarManuModo} itens={MODOS_EXECUCAO} />
+              </div>
 
-            {iniciarManuModo === 'individual' && (
-              <>
-                <label className="acn-label">Técnico Responsável *</label>
-                <ColaboradorSelect
-                  value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
-                  placeholder="Selecione o técnico responsável"
-                  className="acn-input" style={{width:'100%',marginBottom:14}}
-                  autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
-              </>
-            )}
+              {iniciarManuModo === 'individual' && (
+                <div className="form-group">
+                  <label className="acn-label">Técnico Responsável *</label>
+                  <ColaboradorSelect
+                    value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
+                    placeholder="Selecione o técnico responsável"
+                    className="acn-input"
+                    autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
+                </div>
+              )}
 
-            {iniciarManuModo === 'dupla' && (
-              <>
-                <label className="acn-label">Head Line (Técnico 1) *</label>
-                <ColaboradorSelect
-                  value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
-                  placeholder="Selecione o head line"
-                  className="acn-input" style={{width:'100%',marginBottom:8}} />
-                <label className="acn-label">Auxiliar (Técnico 2) *</label>
-                <ColaboradorSelect
-                  value={iniciarManuTecnico2} onChange={(nome)=>{ setIniciarManuTecnico2(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnico2Id(colab?.id||null); }}
-                  placeholder="Selecione o auxiliar"
-                  className="acn-input" style={{width:'100%',marginBottom:14}} />
-              </>
-            )}
-
-            {iniciarManuModo === 'equipe' && (
-              <>
-                <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
-                {equipesManu.length === 0 ? (
-                  erroEquipesManu
-                    ? <Faixa tom="erro" acao={<Botao pequeno onClick={fetchEquipesManu}>Tentar de novo</Botao>}>Não foi possível ler as equipes ({erroEquipesManu}). Isso não quer dizer que não haja equipe cadastrada.</Faixa>
-                    : <div style={{fontSize:10,color:'#ef4444',marginBottom:14}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
-                ) : (
-                  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14}}>
-                    {equipesManu.map(eq => (
-                      <div key={eq.id} onClick={()=>setIniciarManuEquipeSel(eq)} style={{
-                        padding:'9px 12px', borderRadius:6, cursor:'pointer', fontSize:11,
-                        border: iniciarManuEquipeSel?.id===eq.id ? '2px solid #f59e0b' : '1.5px solid #e2e8f0',
-                        background: iniciarManuEquipeSel?.id===eq.id ? '#fffbeb' : 'white',
-                      }}>
-                        <strong>{eq.nome}</strong>
-                        <span style={{color:'#475569',marginLeft:8,fontSize:10}}>Head: {eq.head_line_nome}</span>
-                        {(eq.membros||[]).length>0 && (
-                          <span style={{color:'#6366f1',marginLeft:8,fontSize:9}}>+{eq.membros.length} membros</span>
-                        )}
-                      </div>
-                    ))}
+              {iniciarManuModo === 'dupla' && (
+                <>
+                  <div className="form-group">
+                    <label className="acn-label">Head Line (Técnico 1) *</label>
+                    <ColaboradorSelect
+                      value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
+                      placeholder="Selecione o head line"
+                      className="acn-input" />
                   </div>
-                )}
-              </>
-            )}
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={iniciarManutencao}>▶️ Iniciar Manutenção</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciarManu(null)}>Cancelar</button>
+                  <div className="form-group">
+                    <label className="acn-label">Auxiliar (Técnico 2) *</label>
+                    <ColaboradorSelect
+                      value={iniciarManuTecnico2} onChange={(nome)=>{ setIniciarManuTecnico2(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnico2Id(colab?.id||null); }}
+                      placeholder="Selecione o auxiliar"
+                      className="acn-input" />
+                  </div>
+                </>
+              )}
+
+              {iniciarManuModo === 'equipe' && (
+                <div className="form-group">
+                  <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
+                  {equipesManu.length === 0 ? (
+                    erroEquipesManu
+                      ? <Faixa tom="erro" acao={<Botao pequeno onClick={fetchEquipesManu}>Tentar de novo</Botao>}>Não foi possível ler as equipes ({erroEquipesManu}). Isso não quer dizer que não haja equipe cadastrada.</Faixa>
+                      : <div className="acn-txt-erro">Nenhuma equipe cadastrada. Vá em Equipes para criar.</div>
+                  ) : (
+                    <div className="acn-prod-equipes">
+                      {equipesManu.map(eq => (
+                        <div key={eq.id} onClick={()=>setIniciarManuEquipeSel(eq)} className={'acn-prod-equipe' + (iniciarManuEquipeSel?.id===eq.id ? ' sel' : '')}>
+                          <strong>{eq.nome}</strong>
+                          <span className="acn-ajuda">Head: {eq.head_line_nome}</span>
+                          {(eq.membros||[]).length>0 && (
+                            <span className="acn-ajuda">+{eq.membros.length} membros</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiPlay} onClick={iniciarManutencao}>Iniciar Manutenção</Botao>
+              <Botao onClick={()=>setModalIniciarManu(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1224,63 +1220,64 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL GERENCIAR EQUIPE — responsáveis/apoios livres, pós-início (OS) */}
       {modalGerenciarEquipeOS && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">👥 Equipe — OS {modalGerenciarEquipeOS.numero_os}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
-              Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
-              do valor de mão de obra desta OS, além do que os responsáveis já recebem.
+          <div className="modal-box acn-modal-cadastro acn-prod-eqos" role="dialog" aria-label="Equipe da OS">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiAccountMultipleOutline} size={16} /> Equipe — OS {modalGerenciarEquipeOS.numero_os}</span>
             </div>
-            {erroEquipeOS && (
-              <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarEquipeAtualOS(modalGerenciarEquipeOS)}>Tentar de novo</Botao>}>
-                Não foi possível ler a equipe desta OS ({erroEquipeOS}). Os "Nenhum ... ainda" abaixo não são confiáveis.
-              </Faixa>
-            )}
-
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>RESPONSÁVEIS</div>
-            {equipeAtualOS.filter(m=>m.papel==='responsavel').length === 0 ? (
-              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum responsável ainda.</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
-                {equipeAtualOS.filter(m=>m.papel==='responsavel').map(m => (
-                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-                    padding:'6px 10px',background:'#eef2ff',borderRadius:6,fontSize:11}}>
-                    <span>{m.tecnico_nome}</span>
-                    <button onClick={()=>removerMembroEquipeOS(m)}
-                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
-                  </div>
-                ))}
+            <div className="acn-modal-corpo">
+              <div className="acn-ajuda">
+                Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
+                do valor de mão de obra desta OS, além do que os responsáveis já recebem.
               </div>
-            )}
-            <div style={{display:'flex',gap:6,marginBottom:16}}>
-              <ColaboradorSelect value={novoRespNomeOS}
-                onChange={nome=>{ setNovoRespNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoRespIdOS(c?.id||null); }}
-                placeholder="Adicionar responsável..." className="acn-input" style={{flex:1}} />
-              <button className="acn-btn" style={{background:'#6366f1',fontSize:10}} onClick={()=>adicionarMembroEquipeOS('responsavel')}>+ Add</button>
-            </div>
+              {erroEquipeOS && (
+                <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarEquipeAtualOS(modalGerenciarEquipeOS)}>Tentar de novo</Botao>}>
+                  Não foi possível ler a equipe desta OS ({erroEquipeOS}). Os "Nenhum ... ainda" abaixo não são confiáveis.
+                </Faixa>
+              )}
 
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>APOIOS (0,1% da mão de obra)</div>
-            {equipeAtualOS.filter(m=>m.papel==='apoio').length === 0 ? (
-              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum apoio ainda.</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
-                {equipeAtualOS.filter(m=>m.papel==='apoio').map(m => (
-                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-                    padding:'6px 10px',background:'#f0fdf4',borderRadius:6,fontSize:11}}>
-                    <span>{m.tecnico_nome}</span>
-                    <button onClick={()=>removerMembroEquipeOS(m)}
-                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
-                  </div>
-                ))}
+              <div className="acn-quadro-titulo">RESPONSÁVEIS</div>
+              {equipeAtualOS.filter(m=>m.papel==='responsavel').length === 0 ? (
+                <div className="acn-fraco">Nenhum responsável ainda.</div>
+              ) : (
+                <div className="acn-prod-membros">
+                  {equipeAtualOS.filter(m=>m.papel==='responsavel').map(m => (
+                    <div key={m.id} className="acn-prod-membro resp">
+                      <span>{m.tecnico_nome}</span>
+                      <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label="Excluir" title="Remover" onClick={()=>removerMembroEquipeOS(m)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="acn-prod-add">
+                <ColaboradorSelect value={novoRespNomeOS}
+                  onChange={nome=>{ setNovoRespNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoRespIdOS(c?.id||null); }}
+                  placeholder="Adicionar responsável..." className="acn-input" />
+                <Botao pequeno variante="primario" icone={mdiPlus} onClick={()=>adicionarMembroEquipeOS('responsavel')}>Add</Botao>
               </div>
-            )}
-            <div style={{display:'flex',gap:6,marginBottom:16}}>
-              <ColaboradorSelect value={novoApoioNomeOS}
-                onChange={nome=>{ setNovoApoioNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoApoioIdOS(c?.id||null); }}
-                placeholder="Adicionar apoio..." className="acn-input" style={{flex:1}} />
-              <button className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>adicionarMembroEquipeOS('apoio')}>+ Add</button>
-            </div>
 
-            <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalGerenciarEquipeOS(null)}>Fechar</button>
+              <div className="acn-quadro-titulo">APOIOS (0,1% da mão de obra)</div>
+              {equipeAtualOS.filter(m=>m.papel==='apoio').length === 0 ? (
+                <div className="acn-fraco">Nenhum apoio ainda.</div>
+              ) : (
+                <div className="acn-prod-membros">
+                  {equipeAtualOS.filter(m=>m.papel==='apoio').map(m => (
+                    <div key={m.id} className="acn-prod-membro apoio">
+                      <span>{m.tecnico_nome}</span>
+                      <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label="Excluir" title="Remover" onClick={()=>removerMembroEquipeOS(m)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="acn-prod-add">
+                <ColaboradorSelect value={novoApoioNomeOS}
+                  onChange={nome=>{ setNovoApoioNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoApoioIdOS(c?.id||null); }}
+                  placeholder="Adicionar apoio..." className="acn-input" />
+                <Botao pequeno variante="primario" icone={mdiPlus} onClick={()=>adicionarMembroEquipeOS('apoio')}>Add</Botao>
+              </div>
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalGerenciarEquipeOS(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
@@ -1288,21 +1285,27 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Concluir Manutenção */}
       {modalConcluirManu && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">✅ Concluir Manutenção — {modalConcluirManu.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalConcluirManu.cliente_nome}</div>
-            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Materiais Utilizados</div>
-            <ItemTable
-              itens={concluirManuForm.itens_usados}
-              setItens={(fn) => setConcluirManuForm(f=>({...f, itens_usados: typeof fn === 'function' ? fn(f.itens_usados) : fn}))}
-            />
-            <label className="acn-label">Observações</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:14}}
-              value={concluirManuForm.observacoes}
-              onChange={e=>setConcluirManuForm(f=>({...f,observacoes:e.target.value}))} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0d9488',flex:1}} onClick={salvarConclusao}>✓ CONCLUIR MANUTENÇÃO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirManu(null)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro acn-prod-larga" role="dialog" aria-label="Concluir manutenção">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCheck} size={16} /> Concluir Manutenção — {modalConcluirManu.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalConcluirManu.cliente_nome}</div>
+              <div className="acn-quadro-titulo">Materiais Utilizados</div>
+              <ItemTable
+                itens={concluirManuForm.itens_usados}
+                setItens={(fn) => setConcluirManuForm(f=>({...f, itens_usados: typeof fn === 'function' ? fn(f.itens_usados) : fn}))}
+              />
+              <div className="form-group">
+                <label className="acn-label">Observações</label>
+                <textarea className="acn-input" rows={3}
+                  value={concluirManuForm.observacoes}
+                  onChange={e=>setConcluirManuForm(f=>({...f,observacoes:e.target.value}))} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={salvarConclusao}>CONCLUIR MANUTENÇÃO</Botao>
+              <Botao onClick={()=>setModalConcluirManu(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1311,17 +1314,21 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Conferência de Itens (Em Execução — Remota) */}
       {modalItensExecucao && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">📋 Conferência de Itens — {modalItensExecucao.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:6}}>Cliente: {modalItensExecucao.cliente_nome}</div>
-            <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-              ℹ️ Revise os itens do orçamento: remova os não executados (×) e adicione extras. O SAC visualizará as alterações.
+          <div className="modal-box acn-modal-cadastro acn-prod-larga acn-prod-larguissima" role="dialog" aria-label="Conferência de itens">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiClipboardListOutline} size={16} /> Conferência de Itens — {modalItensExecucao.numero_os}</span>
             </div>
-            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Itens Executados</div>
-            <ItemTable itens={itensExecucao} setItens={setItensExecucao} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0891b2',flex:1}} onClick={salvarItensExecucao}>💾 Salvar Itens</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItensExecucao(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalItensExecucao.cliente_nome}</div>
+              <Faixa tom="info">
+                Revise os itens do orçamento: remova os não executados (×) e adicione extras. O SAC visualizará as alterações.
+              </Faixa>
+              <div className="acn-quadro-titulo">Itens Executados</div>
+              <ItemTable itens={itensExecucao} setItens={setItensExecucao} />
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarItensExecucao}>Salvar Itens</Botao>
+              <Botao onClick={()=>setModalItensExecucao(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
