@@ -2539,6 +2539,21 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **O que ficou de fora:** a leitura da lista de requisições do Compras (`ComprasTab`, que a tela de Compras carrega por dentro) e o PDF de impressão da demanda (`imprimirDemanda`, HTML próprio) **não foram revistos**.
 
+### ✅ Etapa 7.54 — Produção (aba principal, a fila de adaptação): iniciar, concluir, retrabalho, devolver, serralheria e os lotes seguiam como se tivessem gravado quando o banco recusava; o clique duplo gravava duas vezes
+
+**Feito em:** 06/10/2026 (continuação do `/ux-fluxo`; **primeira fatia da Produção**, que é grande: esta cobre a lista da fila e suas ações; o painel do SAC veicular, o calendário de manutenção, o voucher e as equipes são fatias seguintes). **Achados** ao ler `ProducaoTab.tsx`, **corrigidos antes** da migração visual. **Nenhum dado foi alterado.**
+
+**Os defeitos** (`ProducaoTab.tsx`, componente principal):
+
+1. **Nenhuma gravação olhava a resposta do banco.** Se a OP não gravasse: **"Iniciar"** (1 clique e o da janela de dupla/equipe) fechava a janela, **semeava a lista de responsáveis**, registrava o recado de "Produção iniciada" e avisava os envolvidos com a OP ainda na fila; **"Concluir" (liberar para o CQ)** dizia "Produção concluída" e **avisava o CQ e o vendedor por WhatsApp** com a OP parada; **"Concluir retrabalho"** apagava o motivo do CQ só na tela; **"Devolver ao PCP"**, **"Editar responsável"**, a **prioridade do dia** e a **serralheria** (marcar em execução ou concluir, que passa a OP para a fila da Adaptação) seguiam como se tivessem gravado. Agora **cada uma avisa o motivo e para** (a janela fica aberta com o que foi escolhido; sem recado, sem WhatsApp). O que falha **depois** de a OP ter gravado (lista de responsáveis, histórico) avisa o que ficou pendente.
+2. **As ações em lote** ("Iniciar produção em lote" e "Liberar checklist (CQ) em lote") seguiam para as OPs seguintes. Agora **param na primeira que não grava**, dizem até onde foram e **só gravam histórico das que mudaram**.
+3. **Clique duplo** em "Iniciar", "Concluir", "Iniciar retrabalho", "Concluir retrabalho", "Devolver ao PCP", "Editar responsável" e "Serralheria" **gravava duas vezes** (dois históricos e dois WhatsApp). Agora **uma ação por OP e tipo**.
+4. **Leituras que falhavam pareciam vazio:** a fila de OPs ("Nenhuma OP em produção no momento") e a lista de equipes ("Nenhuma equipe cadastrada. Vá em Equipes para criar"). Agora faixa vermelha com o motivo e "Tentar de novo"; **se já havia fila na tela, ela fica**.
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ — 9 OPs entre aguardando, em produção, pausada, retrabalho, lote, fabricação de serralheria e por equipe, 2 equipes; `producao.cjs`, 51 cenários, a versão de antes × a corrigida): **34 de 51 iguais; os 17 que diferem são os de propósito** — iniciar recusado (pelo botão e pela janela), **iniciar, concluir, devolver e iniciar pela janela com clique duplo (2 gravações antes, 1 depois)**, concluir recusado, retrabalho iniciado e concluído recusados, devolver e editar responsável recusados, serralheria marcada e concluída recusadas, os dois lotes recusados e as duas leituras que falham. Iguais: a lista, as filas, o lote, o Kanban, os filtros, os menus, **todos os caminhos que gravam com sucesso** (iniciar, pela janela individual e por equipe, concluir, retrabalho, devolver, editar responsável, serralheria, os dois lotes), as validações (dupla sem técnicos, equipe sem escolher), as janelas de detalhes, equipe e acompanhamento. `tempo_producao_horas` e `tempo_retrabalho_horas` (relógio) são mascarados nas duas. `npx vite build` ok.
+
+**O que ficou de fora:** `pausarOpl` e `retomarOpl` (`PausaWidget.tsx`), a janela da equipe da OP (`EquipeDaOp.tsx`) e a **importação de técnicos em lote** (`ModalImportarTecnicosEquipe`, neste mesmo arquivo, ainda por ler) **não foram revistos**.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.

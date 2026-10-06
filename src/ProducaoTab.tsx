@@ -2040,7 +2040,8 @@ export default function ProducaoTab({ currentUser }) {
       valor = parseInt(limpo, 10);
       if (!Number.isFinite(valor) || valor < 1 || valor > 99) { alert('Informe um numero de 1 a 99, ou deixe vazio.'); return; }
     }
-    await supabase.from('oples').update({ prioridade_dia: valor }).eq('id', opl.id);
+    const { error } = await supabase.from('oples').update({ prioridade_dia: valor }).eq('id', opl.id);
+    if (error) { alert('Não foi possível gravar a prioridade: ' + error.message); return; }   // Etapa 7.54 (06/10/2026)
     fetchAll(true);
   };
   const [filtroStatus, setFiltroStatus]   = useState('Todos');
@@ -2106,21 +2107,36 @@ export default function ProducaoTab({ currentUser }) {
     return () => clearInterval(t);
   }, []);
 
+  // Etapa 7.54 (06/10/2026): leitura que falha não pode parecer "Nenhuma OP em produção" nem "Nenhuma equipe cadastrada" (e a de 30 s
+  // que falhar não esvazia a fila); e um clique duplo em iniciar/concluir/devolver gravava duas vezes — uma ação por OP e tipo.
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [erroEquipes, setErroEquipes] = useState('');
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const { data } = await supabase.from('oples').select('*')
+    const { data, error } = await supabase.from('oples').select('*')
       .in('status_geral', ['Aguardando Inicio Producao', 'Em Producao', 'Retrabalho', 'Em Retrabalho'])
       .order('data_entrada', { ascending: false });
+    if (error) { setErroLeitura(error.message); if (!silent) setLoading(false); return; }
+    setErroLeitura('');
     setOpls(data || []);
     if (!silent) setLoading(false);
   };
 
   const fetchEquipes = async () => {
-    const { data } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    const { data, error } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    if (error) { setErroEquipes(error.message); return; }
+    setErroEquipes('');
     setEquipes(data || []);
   };
 
-  const iniciarProducao = async () => {
+  const iniciarProducao = umaVez('iniciar-modal', async () => {
     const opl = modalIniciar;
     const agora = new Date().toISOString();
     let upd: any = { status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: modoExecucao,
@@ -2147,16 +2163,19 @@ export default function ProducaoTab({ currentUser }) {
       logResp = `Equipe ${equipeSel.nome} (Head: ${equipeSel.head_line_nome})`;
     }
 
-    await aplicarInicio(opl, upd, logResp, agora);
+    // 7.54: se a OP não gravar, a janela fica aberta com o que foi escolhido (antes fechava como se tivesse iniciado)
+    if (!await aplicarInicio(opl, upd, logResp, agora)) return;
     setModalIniciar(null); setRespNome(''); setRespId(null); setRespNome2(''); setRespId2(null);
     setModoExecucao('individual'); setEquipeSel(null);
-  };
+  });
 
   // Grava o início da produção. Existe separado porque duas portas levam aqui:
   // o botão INICIAR (1 clique, individual) e o modal de dupla/equipe. Uma
   // função só evita que as duas portas gravem coisas diferentes.
   const aplicarInicio = async (opl: any, upd: any, logResp: string, agora: string) => {
-    await supabase.from('oples').update(upd).eq('id', opl.id);
+    const { error: erroIni } = await supabase.from('oples').update(upd).eq('id', opl.id);
+    // 7.54: gravação recusada seguia como se a produção tivesse começado (sem responsável semeado, sem recado e sem aviso)
+    if (erroIni) { alert(`Não foi possível iniciar a produção da OP ${opl.opl}: ${erroIni.message}`); return false; }
     logChange({ module: 'producao', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral, responsavel_producao: opl.responsavel_producao },
       newRow: { status_geral: upd.status_geral, responsavel_producao: upd.responsavel_producao }, user: currentUser });
@@ -2168,20 +2187,23 @@ export default function ProducaoTab({ currentUser }) {
       upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
     ].filter(Boolean);
     if (seedResponsaveis.length > 0) {
-      await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r:any) => ({
+      const { error: erroSeed } = await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r:any) => ({
         tipo: 'op', referencia_id: opl.id, papel: 'responsavel',
         tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
         adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
       })));
+      if (erroSeed) alert('A produção foi iniciada, mas a lista de responsáveis da OP não foi gravada (' + erroSeed.message + '). Use "Equipe" no menu da OP para incluí-los.');
     }
-    await supabase.from('logs_movimentacao_opl').insert([{
+    const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Inicio da producao. Responsavel: ${logResp}`,
       status_anterior: opl.status_geral, status_novo: 'Em Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    if (erroLog) alert('A produção foi iniciada, mas o histórico de movimentação não foi gravado: ' + erroLog.message);
     await registrarAndamento(opl, `Produção iniciada. Responsável: ${logResp}.`);
     fetchAll();
+    return true;
   };
 
   // INICIAR em 1 clique: assume execução individual com quem clicou. Era um
@@ -2189,7 +2211,7 @@ export default function ProducaoTab({ currentUser }) {
   // disso foi 82 das 89 OPs da fila sem responsável nenhum — o caminho caro
   // não estava sendo percorrido. Quem trabalha em dupla ou equipe usa o botão
   // 👥 ao lado, e trocar depois continua possível por ✏️ RESP. / 👥 EQUIPE.
-  const iniciarRapido = async (opl: any) => {
+  const iniciarRapido = (opl: any) => umaVez('iniciar-' + opl.id, async () => {
     const agora = new Date().toISOString();
     const resp = currentUser?.nome || 'Não informado';
     // tecnico_producao_id aponta para `colaboradores`, NÃO para o usuário
@@ -2203,7 +2225,7 @@ export default function ProducaoTab({ currentUser }) {
       responsavel_producao: resp, tecnico_producao_id: colab?.id || null,
       tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null,
     }, resp, agora);
-  };
+  })();
 
   // Inicia produção de todas as selecionadas de uma vez, sem definir
   // responsável ainda (fica "Em Producao" sem técnico) — o usuário atribui
@@ -2215,9 +2237,13 @@ export default function ProducaoTab({ currentUser }) {
     if (!await confirmar(`Iniciar produção de ${alvos.length} OP(s) selecionada(s)? Você atribui o técnico/equipe depois, na mesma seleção.`)) return;
     setAplicandoIniciarLote(true);
     const agora = new Date().toISOString();
+    let iniciadas = 0;
     for (const opl of alvos) {
-      await supabase.from('oples').update({ status_geral: 'Em Producao', data_inicio_producao: agora,
+      const { error: erroLote } = await supabase.from('oples').update({ status_geral: 'Em Producao', data_inicio_producao: agora,
         pausado: false, data_pausa: null, tempo_pausado_horas: 0 }).eq('id', opl.id);
+      // 7.54: para na primeira que não grava e diz até onde foi (antes seguia, e gravava o histórico de uma OP que não mudou)
+      if (erroLote) { alert(`Não foi possível iniciar a OP ${opl.opl}: ${erroLote.message}\n\nO lote parou aqui: ${iniciadas} OP(s) foram iniciadas e as demais continuam como estavam.`); break; }
+      iniciadas++;
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
         evento: 'Início da produção em lote (ação em massa por seleção) — responsável a definir.',
@@ -2237,14 +2263,17 @@ export default function ProducaoTab({ currentUser }) {
     if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Em Produção".'); return; }
     if (!await confirmar(`Liberar ${alvos.length} OP(s) selecionada(s) para o CQ?`)) return;
     setAplicandoIniciarLote(true);
+    let liberadas = 0;
     for (const opl of alvos) {
-      await liberarChecklist(opl);
+      // 7.54: para na primeira que não libera (o aviso do motivo já foi dado por liberarChecklist)
+      if (!await liberarChecklist(opl)) { if (liberadas < alvos.length) alert(`O lote parou na OP ${opl.opl}: ${liberadas} OP(s) foram liberadas para o CQ e as demais continuam como estavam.`); break; }
+      liberadas++;
     }
     setAplicandoIniciarLote(false);
     setSelecionados(new Set());
   };
 
-  const editarResponsavel = async () => {
+  const editarResponsavel = umaVez('editar-resp', async () => {
     const opl = modalEditResp;
     if (!opl) return;
     const agora = new Date().toISOString();
@@ -2271,7 +2300,8 @@ export default function ProducaoTab({ currentUser }) {
       logResp = `Equipe ${editEquipeSel.nome} (Head: ${editEquipeSel.head_line_nome})`;
     }
 
-    await supabase.from('oples').update(upd).eq('id', opl.id);
+    const { error: erroResp } = await supabase.from('oples').update(upd).eq('id', opl.id);
+    if (erroResp) { alert('Não foi possível alterar o responsável: ' + erroResp.message); return; }   // 7.54
     logChange({ module: 'producao', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { responsavel_producao: opl.responsavel_producao }, newRow: { responsavel_producao: upd.responsavel_producao }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -2281,30 +2311,33 @@ export default function ProducaoTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     setModalEditResp(null); fetchAll();
-  };
+  });
 
   // Equipe da OP (responsáveis, apoios e serralheria): a janela mora em EquipeDaOp.tsx desde 30/09/2026,
   // para a Produção, o Fiscal e o detalhe da OP usarem a mesma e a correção valer até o Fiscal faturar.
 
-  const liberarChecklist = async (opl) => {
+  const liberarChecklist = (opl) => umaVez('chk-' + opl.id, liberarChecklistReal)(opl);
+  const liberarChecklistReal = async (opl) => {
     // A adaptação não fecha a sua etapa com peça de fabricação/compra em aberto:
     // a demanda tem que estar concluída no setor, recebida pelo Almoxarifado e
     // liberada pelo PCP (as três etapas do checklist — ver OpPendencias.tsx).
     const { abertas } = await carregarPendencias(opl);
     if (abertas.length) {
       alert(`Não dá para concluir esta OP: ${abertas.length} pendência(s) de fabricação/compra ainda não fecharam.\n\n${abertas.map(v => `• ${v.setor || '—'}: ${v.titulo}`).join('\n')}\n\nCada uma precisa ser concluída no setor, recebida pelo Almoxarifado e liberada pelo PCP.`);
-      return;
+      return false;
     }
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_producao ? new Date(opl.data_inicio_producao) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
-    await supabase.from('oples').update({
+    const { error: erroChk } = await supabase.from('oples').update({
       status_geral: 'Aguardando CQ',
       data_conclusao_producao: agora,
       data_entrada_cq: agora,
       tempo_producao_horas: tempo,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    // 7.54: gravação recusada seguia como "Produção concluída": avisava o CQ e o vendedor com a OP ainda em produção
+    if (erroChk) { alert(`Não foi possível liberar a OP ${opl.opl} para o CQ: ${erroChk.message}`); return false; }
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Producao concluida. Liberado para CQ. Tempo: ${tempo ? tempo.toFixed(1) + 'h' : '—'}`,
@@ -2314,15 +2347,17 @@ export default function ProducaoTab({ currentUser }) {
     notificarEvento('producao_finaliza', msg.producaoFinalizada(opl.opl, currentUser?.nome));
     await registrarAndamento(opl, 'Produção concluída. OP liberada para o Controle de Qualidade.');
     fetchAll();
+    return true;
   };
 
-  const iniciarRetrabalho = async (opl) => {
+  const iniciarRetrabalho = (opl) => umaVez('retr-ini-' + opl.id, async () => {
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroRet } = await supabase.from('oples').update({
       status_geral: 'Em Retrabalho',
       data_inicio_retrabalho: agora,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    if (erroRet) { alert(`Não foi possível iniciar o retrabalho da OP ${opl.opl}: ${erroRet.message}`); return; }   // 7.54
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Retrabalho iniciado. Motivo CQ: ${opl.obs_reprovacao_cq || '—'}`,
@@ -2332,19 +2367,20 @@ export default function ProducaoTab({ currentUser }) {
     await registrarAndamento(opl,
       `Retrabalho iniciado${opl.obs_reprovacao_cq ? '. Motivo apontado pelo CQ: ' + opl.obs_reprovacao_cq : ''}.`);
     fetchAll();
-  };
+  })();
 
-  const concluirRetrabalho = async (opl) => {
+  const concluirRetrabalho = (opl) => umaVez('retr-fim-' + opl.id, async () => {
     if (!await confirmar(`Concluir o retrabalho da OP ${opl?.opl || ''}? Ela volta para o CQ.`)) return;
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_retrabalho ? new Date(opl.data_inicio_retrabalho) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
-    await supabase.from('oples').update({
+    const { error: erroRet } = await supabase.from('oples').update({
       status_geral: 'Aguardando CQ',
       tempo_retrabalho_horas: tempo,
       obs_reprovacao_cq: null,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    if (erroRet) { alert(`Não foi possível concluir o retrabalho da OP ${opl.opl}: ${erroRet.message}`); return; }   // 7.54: apagava o motivo do CQ só na tela
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Retrabalho concluido. Liberado novamente para CQ. Tempo retrabalho: ${tempo ? tempo.toFixed(1) + 'h' : '—'}`,
@@ -2353,15 +2389,16 @@ export default function ProducaoTab({ currentUser }) {
     }]);
     await registrarAndamento(opl, 'Retrabalho concluído. OP voltou para o Controle de Qualidade.');
     fetchAll();
-  };
+  })();
 
-  const devolverPCP = async () => {
+  const devolverPCP = umaVez('devolver', async () => {
     const opl = modalDevolver;
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroDev } = await supabase.from('oples').update({
       status_geral: 'Devolvida PCP',
       obs_devolucao_producao: obsDevolver,
     }).eq('id', opl.id);
+    if (erroDev) { alert(`Não foi possível devolver a OP ${opl.opl} ao PCP: ${erroDev.message}`); return; }   // 7.54
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Devolvida para PCP. Motivo: ${obsDevolver}`,
@@ -2369,7 +2406,7 @@ export default function ProducaoTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     setModalDevolver(null); setObsDevolver(''); fetchAll();
-  };
+  });
 
   const handleAction = (tipo, opl) => {
     if (tipo === 'iniciar')            iniciarRapido(opl);
@@ -2447,7 +2484,7 @@ export default function ProducaoTab({ currentUser }) {
 
   // Marca/avanca o andamento da serralheria naquela OP. Usa a coluna
   // serralheria_status, que ja existia e estava praticamente sem uso (1 linha).
-  const setSerralheria = async (opl: any, novoStatus: string) => {
+  const setSerralheria = (opl: any, novoStatus: string) => umaVez('serr-' + opl.id, async () => {
     const agora = new Date().toISOString();
     // "Fabricação serralheria com envio": serralheria → ADAPTAÇÃO → CQ →
     // embalagem → frete (decidido com o usuário em 13/09). Concluída a
@@ -2471,7 +2508,9 @@ export default function ProducaoTab({ currentUser }) {
         data_inicio_producao: null, pausado: false, data_pausa: null, tempo_pausado_horas: 0,
       });
     }
-    await supabase.from('oples').update(upd).eq('id', opl.id);
+    const { error: erroSerr } = await supabase.from('oples').update(upd).eq('id', opl.id);
+    // 7.54: gravação recusada seguia como serralheria concluída (e passava a OP para a fila da Adaptação só na tela)
+    if (erroSerr) { alert(`Não foi possível atualizar a serralheria da OP ${opl.opl}: ${erroSerr.message}`); return; }
 
     const logs: any[] = [{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
@@ -2495,7 +2534,7 @@ export default function ProducaoTab({ currentUser }) {
         'Serralheria concluída. A OP seguiu para a adaptação; depois passa pelo Controle de Qualidade e vai para embalagem e envio.');
     }
     fetchAll(true);
-  };
+  })();
 
   const oplsFiltradas = opls.filter(o => {
     if (filaAtiva === 'serralheria') { if (!temSerralheria(o)) return false; }
@@ -2552,6 +2591,11 @@ export default function ProducaoTab({ currentUser }) {
       {abaProducao === 'voucher' && <VoucherServicos currentUser={currentUser} />}
       {abaProducao === 'equipes' && <EquipesSection currentUser={currentUser} />}
       {abaProducao === 'producao' && <div>
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
+          Não foi possível ler as OPs da Produção ({erroLeitura}). Isso não quer dizer que não haja OP na fila{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
       {/* ALERTA RETRABALHO */}
       {emRetrabalho.length > 0 && (
         <Faixa tom="erro" acao={<Botao pequeno variante="perigo-sec" onClick={() => handleAction('ver', emRetrabalho[0])}>Ver OP</Botao>}>
@@ -2759,6 +2803,7 @@ export default function ProducaoTab({ currentUser }) {
             {modoExecucao === 'equipe' && (
               <>
                 <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
+                {erroEquipes && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchEquipes}>Tentar de novo</Botao>}>Não foi possível ler as equipes ({erroEquipes}).</Faixa>}
                 {equipes.length === 0 ? (
                   <div style={{fontSize:10,color:'#ef4444',marginBottom:12}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
                 ) : (
