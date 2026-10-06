@@ -1281,3 +1281,46 @@ html body .modal-box.acn-modal-cadastro.acn-kb-jan-vencidas { width: min(580px, 
 .acn-kb-tipo-linha { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--acn-line-soft); font-size: 13px; }
 @media (max-width: 900px) { .acn-kb-quadro { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .acn-kb-grade { grid-template-columns: 1fr; } .acn-kb-cab .acn-kb-cresce { flex-basis: 100%; } }
+
+/* ── Almoxarifado · 12e12 (06/10/2026): kiting, lotes, embalagem e solicitação de reposição no molde do guia ──────────── */
+.acn-alm-titulo { display: inline-flex; align-items: center; gap: 6px; }
+.acn-alm-espaco { margin-bottom: 8px; }
+/* o painel "Material de pendência aguardando recebimento": cabeçalho âmbar */
+html body .sec-hdr.acn-alm-hdr-atencao { background: var(--acn-warn-soft); border-bottom: 2px solid var(--acn-warn); }
+.acn-alm-hdr-atencao .acn-alm-titulo { color: var(--acn-warn); }
+.acn-alm-pend { margin-bottom: 8px; }
+.acn-alm-pend-titulo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; font-weight: 700; }
+.acn-alm-obs { font-size: 12px; }
+.acn-alm-lote { display: inline-flex; align-items: center; gap: 4px; color: var(--acn-brand-ink); }
+.acn-alm-lote-selo { margin-top: 2px; }
+/* a lista de solicitações de reposição */
+.acn-alm-solic-corpo { display: grid; gap: 6px; padding: 10px 12px; }
+.acn-alm-solic { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-alm-solic-texto { flex: 1; min-width: 0; }
+/* janelas */
+html body .modal-box.acn-modal-cadastro.acn-alm-jan { width: min(480px, 95vw); max-width: 480px; }
+html body .modal-box.acn-modal-cadastro.acn-alm-emb { width: min(560px, 96vw); max-width: 560px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-alm-kiting { width: min(640px, 96vw); max-width: 640px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-alm-lote-jan { width: min(980px, 95vw); max-width: 980px; max-height: 92vh; }
+.acn-alm-jan .form-group, .acn-alm-emb .form-group, .acn-alm-kiting .form-group, .acn-alm-lote-jan .form-group { margin-bottom: 0; }
+.acn-alm-emb .acn-modal-corpo > *, .acn-alm-kiting .acn-modal-corpo > *, .acn-alm-lote-jan .acn-modal-corpo > *, .acn-alm-jan .acn-modal-corpo > * { flex-shrink: 0; }
+html body .acn-input.acn-alm-mono { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; font-size: 12px; resize: vertical; }
+.acn-alm-bloco { display: grid; gap: 6px; }
+.acn-alm-seriais { max-height: 220px; overflow-y: auto; padding: 6px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: grid; gap: 4px; }
+.acn-alm-serial-linha { display: grid; grid-template-columns: 24px 1.4fr 1fr auto; gap: 5px; align-items: center; }
+.acn-alm-secao { padding-bottom: 3px; border-bottom: 2px solid var(--acn-brand); color: var(--acn-brand-ink); }
+.acn-alm-grade5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.acn-alm-grade-cep { display: grid; grid-template-columns: minmax(112px, 1fr) 2fr minmax(64px, 1fr); gap: 8px; }
+.acn-alm-cep-info { grid-column: 1 / -1; font-size: 12px; }
+.acn-alm-lote-tabela { max-height: 160px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-alm-item-escolhido { grid-template-columns: 1fr auto; align-items: center; margin: 0; padding: 6px 10px; }
+@media (max-width: 600px) { .acn-alm-grade5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .acn-alm-grade-cep { grid-template-columns: 1fr; } }
+
+/* a coluna do veículo e a das ações não podem ser espremidas pela tabela (o veículo quebrava em 5 linhas e as ações em 1 botão por linha) */
+.acn-alm-veic { min-width: 170px; font-size: 12px; }
+.acn-alm-celula-acoes { min-width: 280px; }
+.acn-alm-embalar .acn-selo { white-space: normal; line-height: 1.25; padding-top: 3px; padding-bottom: 3px; max-width: 170px; }
+.acn-alm-grade5 { align-items: end; }
+.acn-alm-bloco .acn-label .acn-ajuda { text-transform: none; letter-spacing: 0; font-weight: 400; }
+/* no celular a regra geral dá a cada campo uma base de 140 px; numa coluna isso vira altura — o campo cresce só até o que precisa */
+.acn-alm-jan .acn-modal-corpo > .form-group, .acn-alm-emb .acn-modal-corpo > .form-group, .acn-alm-kiting .acn-modal-corpo > .form-group, .acn-alm-lote-jan .acn-modal-corpo > .form-group { flex: 0 0 auto; }

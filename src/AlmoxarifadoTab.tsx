@@ -16,7 +16,13 @@ import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, Checkli
 import { confirmar, mostrarAviso } from './Feedback';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
-import { diaBR, Faixa, Botao } from './Interface';
+import { diaBR, Faixa, Botao, Chips, Selo } from './Interface';
+import Icone from './Icone';
+import {
+  mdiToolboxOutline, mdiPackageVariantClosed, mdiArrowULeftTop, mdiEyeOutline, mdiLinkVariant, mdiTrayArrowDown,
+  mdiCloseCircleOutline, mdiAlertOutline, mdiChevronUp, mdiChevronDown, mdiTruckOutline, mdiClose, mdiNumeric,
+  mdiContentSaveOutline, mdiCheckCircleOutline, mdiSendOutline,
+} from '@mdi/js';
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -669,6 +675,11 @@ Embalar e enviar assim mesmo?`)) return;
   // Data de entrada da OP é coluna do tipo date: o dia vem do texto (R16, 05/10/2026). Antes era `new Date(d)`, que mostrava o dia anterior (0 de 4 batiam com o banco).
   const fmtDt = (d) => diaBR(d);
 
+  // Etapa 12e12 (06/10/2026): a tela inteira no molde do guia (tabela, selos, botões, janelas). Nenhum campo, texto, consulta,
+  // gravação ou regra foi mexido: só a aparência. A cor de cada situação vem da família do guia, não de hex escrito à mão.
+  const FAMILIA_STATUS_KIT = { 'Kit OK': 'ok', 'Falta de Material': 'erro', 'Liberado com Pendencia': 'atencao' };
+  const ROTULO_STATUS_KIT = { 'Kit OK': 'Kit 100%', 'Falta de Material': 'Falta Mat.', 'Liberado com Pendencia': 'Com Pendencia' };
+
   return (
     <div>
       {erroLeitura && (
@@ -682,20 +693,20 @@ Embalar e enviar assim mesmo?`)) return;
               qualquer .sec-hdr, ver DashboardTab.tsx) — um estado próprio aqui
               brigava com ele e o painel nunca aparecia, mesmo com dado carregado
               (achado em 23/09/2026, o mesmo bug do painel de pendências do PCP). */}
-          <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b'}}>
-            <span style={{color:'#b45309'}}>🧰 Material de pendência aguardando recebimento ({oplsPendenciaAlmox.length})</span>
+          <div className="sec-hdr acn-alm-hdr-atencao">
+            <span className="acn-alm-titulo"><Icone path={mdiToolboxOutline} size={16} /> Material de pendência aguardando recebimento ({oplsPendenciaAlmox.length})</span>
           </div>
           <div className="sec-body">
-              <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
+              <div className="acn-ajuda acn-alm-espaco">
                 O setor concluiu o item — falta só confirmar aqui que o material chegou.
                 Vale para OP que já está em produção (liberada com pendência) e também para a que
                 ainda está na fila de kiting acima: sem esta confirmação, o Kit 100% não fecha.
               </div>
               {oplsPendenciaAlmox.map(o => (
-                <div key={o.id} style={{marginBottom:8}}>
-                  <div style={{fontSize:11,fontWeight:700}}>
+                <div key={o.id} className="acn-alm-pend">
+                  <div className="acn-alm-pend-titulo">
                     <LinkOpl opl={o} currentUser={currentUser} />
-                    <span style={{color:'#64748b',fontWeight:400,marginLeft:6}}>{o.cliente_nome || '—'} · {o.status_geral}</span>
+                    <span className="acn-ajuda">{o.cliente_nome || '—'} · {o.status_geral}</span>
                   </div>
                   <ChecklistPendencias op={o} vinculos={(pendPorOp.get(String(o.id)) || []).map(p => ({ ...p, grupo: 'demanda' }))}
                     modo="almox" currentUser={currentUser} compacto
@@ -709,11 +720,11 @@ Embalar e enviar assim mesmo?`)) return;
       <div className="sec-card">
         <div className="sec-hdr"><span>Kiting — OPs Aguardando Conferencia ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             <div className="acn-empty">Nenhuma OP aguardando Almoxarifado.</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Data</th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
                 <th>Status Kit</th><th>Obs. Almox</th><th>Responsavel</th><th>Acoes</th>
@@ -736,7 +747,7 @@ Embalar e enviar assim mesmo?`)) return;
                   }
 
                   const renderLinhaOpl = (o) => (
-                    <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'4px solid #eab308'} : {}}>
+                    <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td>
                         <LinkOpl opl={o} currentUser={currentUser} />
@@ -744,85 +755,81 @@ Embalar e enviar assim mesmo?`)) return;
                             o "Status Kit" dela já é Kit 100% da primeira
                             passagem, o que faria parecer que não há o que fazer. */}
                         {o.status_geral === STATUS_EMBALAGEM && (
-                          <div><span style={{ fontSize:9, fontWeight:800, background:'#0f766e', color:'#fff',
-                            padding:'1px 5px', borderRadius:10 }}>
-                            {ehEnvio(o) ? '📦 EMBALAR — NÃO PASSA POR PRODUÇÃO' : '📦 EMBALAR — PRODUÇÃO CONCLUÍDA'}
-                          </span></div>
+                          <div className="acn-alm-embalar"><Selo familia="info" ponto={false}>
+                            <Icone path={mdiPackageVariantClosed} size={13} /> {ehEnvio(o) ? 'EMBALAR — NÃO PASSA POR PRODUÇÃO' : 'EMBALAR — PRODUÇÃO CONCLUÍDA'}
+                          </Selo></div>
                         )}
                       </td>
-                      <td style={{fontSize:10}}>
+                      <td className="acn-alm-veic">
                         <VeiculoOuEnvio o={o} />
                       </td>
-                      <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
+                      <td><span className={(o.quantidade||1)>1 ? 'acn-txt-info' : 'acn-ajuda'}>{o.quantidade||1}</span></td>
+                      <td className="acn-texto-medio">{o.tipo_projeto}</td>
                       <td>
                         {o.status_bom === 'BOM Liberado'
-                          ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>
-                          : <span className="acn-badge" style={{background:'#f59e0b'}}>Aguard. BOM</span>}
+                          ? <Selo familia="ok" ponto={false}>BOM OK</Selo>
+                          : <Selo familia="atencao" ponto={false}>Aguard. BOM</Selo>}
                       </td>
                       <td>
-                        {!o.status_almox && <span className="acn-badge" style={{background:'#94a3b8'}}>Pendente</span>}
-                        {o.status_almox === 'Kit OK' && <span className="acn-badge" style={{background:'#22c55e'}}>Kit 100%</span>}
-                        {o.status_almox === 'Falta de Material' && <span className="acn-badge" style={{background:'#ef4444'}}>Falta Mat.</span>}
-                        {o.status_almox === 'Liberado com Pendencia' && <span className="acn-badge" style={{background:'#f97316'}}>Com Pendencia</span>}
+                        {!o.status_almox && <Selo familia="neutro" ponto={false}>Pendente</Selo>}
+                        {FAMILIA_STATUS_KIT[o.status_almox] && <Selo familia={FAMILIA_STATUS_KIT[o.status_almox]} ponto={false}>{ROTULO_STATUS_KIT[o.status_almox]}</Selo>}
                       </td>
-                      <td style={{ maxWidth:150, fontSize:10, wordBreak:'break-word' }}>{o.obs_almox || '—'}</td>
+                      <td className="acn-texto-medio acn-alm-obs">{o.obs_almox || '—'}</td>
                       <td>{o.responsavel_almox || '—'}</td>
-                      <td>
-                        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                      <td className="acn-alm-celula-acoes">
+                        <div className="acn-acoes-linha quebra">
                           {/* OP que voltou da produção só para embalar não tem
                               kiting nem falta de material: o material já virou
                               produto. A única ação é fechar a caixa — e o
                               status_almox dela já é 'Kit OK' desde a primeira
                               passagem, então essa checagem não serve aqui. */}
                           {o.status_geral === STATUS_EMBALAGEM ? (
-                            <button className="acn-btn" style={{background:'#0f766e'}}
+                            <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
                               title="Produção concluída: pesar, medir e abrir a cotação de frete"
                               onClick={()=>abrirModalEmbalagem(o)}>
-                              📦 EMBALAR E ENVIAR
-                            </button>
+                              EMBALAR E ENVIAR
+                            </Botao>
                           ) : (<>
                           {o.status_almox !== 'Kit OK' && (
                             ehEnvio(o) ? (
-                              <button className="acn-btn" style={{background:'#0f766e'}}
+                              <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
                                 title="Esta OP não passa por produção: separar, embalar e enviar"
                                 onClick={()=>abrirModalEmbalagem(o)}>
-                                📦 EMBALAR E ENVIAR
-                              </button>
+                                EMBALAR E ENVIAR
+                              </Botao>
                             ) : (
                               (() => {
                                 const falta = faltandoPara(o);
                                 return (
-                                  <button className="acn-btn"
-                                    style={{ background: falta.length ? '#cbd5e1' : '#22c55e', cursor: falta.length ? 'not-allowed' : 'pointer' }}
+                                  <Botao variante="primario" pequeno
                                     disabled={!!falta.length}
                                     title={falta.length
                                       ? `Esperando material de fabricação/compra:\n${textoFaltando(falta)}\n\nUse LIBERAR C/ PENDENCIA.`
                                       : 'Fechar o kit: tudo separado e conferido'}
                                     onClick={()=>abrirModalSeriais(o)}>
                                     KITING 100%{falta.length ? ` (${falta.length} p/ chegar)` : ''}
-                                  </button>
+                                  </Botao>
                                 );
                               })()
                             )
                           )}
-                          <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalFalta(o);setObsFalta('');}}>
+                          <Botao variante="perigo-sec" pequeno onClick={()=>{setModalFalta(o);setObsFalta('');}}>
                             FALTA MATERIAL
-                          </button>
-                          <button className="acn-btn" style={{background:'#f97316',fontSize:10}} onClick={()=>{setModalPend(o);setObsPend('');}}>
+                          </Botao>
+                          <Botao pequeno onClick={()=>{setModalPend(o);setObsPend('');}}>
                             LIBERAR C/ PENDENCIA
-                          </button>
+                          </Botao>
                           {o.status_almox === 'Liberado com Pendencia' && (
-                            <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>sanarPendencia(o)}>
+                            <Botao pequeno onClick={()=>sanarPendencia(o)}>
                               SANAR PENDENCIA
-                            </button>
+                            </Botao>
                           )}
                           </>)}
-                          <button className="acn-btn" style={{background:'#b91c1c',fontSize:9}} title="Devolver para refazer o kit ou para a Engenharia reanalisar"
+                          <Botao variante="perigo-sec" pequeno icone={mdiArrowULeftTop} title="Devolver para refazer o kit ou para a Engenharia reanalisar"
                             onClick={()=>setModalDevolver(o)}>
-                            ↩️ DEVOLVER
-                          </button>
-                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                            DEVOLVER
+                          </Botao>
+                          <Botao variante="discreto" pequeno icone={mdiEyeOutline} onClick={()=>setModalVer(o)}>Ver</Botao>
                         </div>
                       </td>
                     </tr>
@@ -840,52 +847,56 @@ Embalar e enviar assim mesmo?`)) return;
                     const qtdComPendencia = irmaos.filter(o => o.status_almox === 'Liberado com Pendencia').length;
                     return (
                       <React.Fragment key={base}>
-                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                        <tr className="acn-linha-marca">
                           <td>{fmtDt(rep.data_entrada)}</td>
                           <td>
-                            <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
-                            <div style={{marginTop:2}}>
-                              <span style={{fontSize:9,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 6px',borderRadius:10}}>
+                            <strong className="acn-alm-lote"><Icone path={mdiLinkVariant} size={14} /> {base}</strong>
+                            <div className="acn-alm-lote-selo">
+                              <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades
-                              </span>
+                              </Selo>
                             </div>
                           </td>
                           <td>—</td>
-                          <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
-                          <td style={{ maxWidth:130, wordBreak:'break-word' }}>{rep.tipo_projeto}</td>
-                          <td colSpan={2} style={{fontSize:10}}>
-                            {qtdPendente > 0 && <span className="acn-badge" style={{background:'#94a3b8',fontSize:9,marginRight:4}}>{qtdPendente} pendente</span>}
-                            {qtdKitOk > 0 && <span className="acn-badge" style={{background:'#22c55e',fontSize:9,marginRight:4}}>{qtdKitOk} kit 100%</span>}
-                            {qtdFalta > 0 && <span className="acn-badge" style={{background:'#ef4444',fontSize:9,marginRight:4}}>{qtdFalta} falta mat.</span>}
-                            {qtdComPendencia > 0 && <span className="acn-badge" style={{background:'#f97316',fontSize:9}}>{qtdComPendencia} c/ pendência</span>}
+                          <td><span className="acn-txt-info">{irmaos.length}</span></td>
+                          <td className="acn-texto-medio">{rep.tipo_projeto}</td>
+                          <td colSpan={2}>
+                            <div className="acn-selos">
+                              {qtdPendente > 0 && <Selo familia="neutro" ponto={false}>{qtdPendente} pendente</Selo>}
+                              {qtdKitOk > 0 && <Selo familia="ok" ponto={false}>{qtdKitOk} kit 100%</Selo>}
+                              {qtdFalta > 0 && <Selo familia="erro" ponto={false}>{qtdFalta} falta mat.</Selo>}
+                              {qtdComPendencia > 0 && <Selo familia="atencao" ponto={false}>{qtdComPendencia} c/ pendência</Selo>}
+                            </div>
                           </td>
                           <td>—</td>
-                          <td>
-                            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                          {/* 12e12: a linha do lote tinha uma coluna a menos e os botões caíam sob "Responsavel"; esta célula os põe sob "Acoes" */}
+                          <td>—</td>
+                          <td className="acn-alm-celula-acoes">
+                            <div className="acn-acoes-linha quebra">
                               {(qtdPendente + qtdFalta + qtdComPendencia) > 0 && (irmaos.every(ehVendaEnvioOp) ? (
-                                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} disabled={processandoLote}
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote}
                                   title="Venda para Envio: seriais de todos os produtos de todas as unidades numa tela só"
                                   onClick={()=>{
                                     const ops = irmaos.filter(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK');
                                     if (!ops.length) { alert('Nenhuma unidade do lote está aguardando kit.'); return; }
                                     setModalKitEnvioLote({ base, ops });
                                   }}>
-                                  📦 KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
-                                </button>
+                                  KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
+                                </Botao>
                               ) : (
-                                <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} disabled={processandoLote} onClick={()=>kitOkLote(item)}>
-                                  📥 IMPORTAR SERIAIS EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
-                                </button>
+                                <Botao variante="primario" pequeno icone={mdiTrayArrowDown} disabled={processandoLote} onClick={()=>kitOkLote(item)}>
+                                  IMPORTAR SERIAIS EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
+                                </Botao>
                               ))}
-                              <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} disabled={processandoLote} onClick={()=>abrirLoteAcao('falta', item)}>
-                                ❌ FALTA MATERIAL EM LOTE
-                              </button>
-                              <button className="acn-btn" style={{background:'#f97316',fontSize:9}} disabled={processandoLote} onClick={()=>abrirLoteAcao('pendencia', item)}>
-                                🟠 C/ PENDÊNCIA EM LOTE
-                              </button>
-                              <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
-                                {expandido ? '▲ Ocultar unidades' : `▼ Ver ${irmaos.length} unidades`}
-                              </button>
+                              <Botao variante="perigo-sec" pequeno icone={mdiCloseCircleOutline} disabled={processandoLote} onClick={()=>abrirLoteAcao('falta', item)}>
+                                FALTA MATERIAL EM LOTE
+                              </Botao>
+                              <Botao pequeno icone={mdiAlertOutline} disabled={processandoLote} onClick={()=>abrirLoteAcao('pendencia', item)}>
+                                C/ PENDÊNCIA EM LOTE
+                              </Botao>
+                              <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                                {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
+                              </Botao>
                             </div>
                           </td>
                         </tr>
@@ -912,14 +923,14 @@ Embalar e enviar assim mesmo?`)) return;
       {/* SOLICITAÇÃO DE REPOSIÇÃO DE ESTOQUE — pede fabricação interna (OFI) ao
           setor que fabrica aquele item, ou Compras quando não é fabricação
           interna. Passa por liberação do PCP antes de cair na fila certa. */}
-      <div className="sec-card" style={{ marginTop:12 }}>
+      <div className="sec-card acn-alm-reposicao">
         <div className="sec-hdr">
-          <span>📦 Solicitar Reposição de Estoque</span>
-          <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px' }} onClick={() => setModalReposicao(true)}>
+          <span className="acn-alm-titulo"><Icone path={mdiPackageVariantClosed} size={16} /> Solicitar Reposição de Estoque</span>
+          <Botao pequeno onClick={() => setModalReposicao(true)}>
             + Nova Solicitação
-          </button>
+          </Botao>
         </div>
-        <div className="sec-body" style={{ padding:'10px 12px' }}>
+        <div className="sec-body acn-alm-solic-corpo">
           {erroSolicitacoes && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={fetchSolicitacoes}>Tentar de novo</Botao>}>
               Não foi possível ler as solicitações ({erroSolicitacoes}).
@@ -929,17 +940,14 @@ Embalar e enviar assim mesmo?`)) return;
             <div className="acn-empty">Nenhuma solicitação de reposição ainda.</div>
           ) : (
             minhasSolicitacoes.map((s: any) => (
-              <div key={s.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-                border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6, fontSize:11 }}>
-                <span style={{ flex:1 }}>
+              <div key={s.id} className="acn-alm-solic">
+                <span className="acn-alm-solic-texto">
                   <strong>{s.item_nome}</strong> — {s.quantidade}
-                  {s.vinculo_descricao && <span style={{ color:'#1d4ed8' }}> · 🔗 {s.vinculo_descricao}</span>}
+                  {s.vinculo_descricao && <span className="acn-sub-info"> · <Icone path={mdiLinkVariant} size={12} /> {s.vinculo_descricao}</span>}
                 </span>
-                <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:10,
-                  background: s.status === 'Aguardando Liberação PCP' ? '#fef9c3' : s.status.startsWith('Roteado') ? '#dcfce7' : '#fee2e2',
-                  color: s.status === 'Aguardando Liberação PCP' ? '#854d0e' : s.status.startsWith('Roteado') ? '#166534' : '#991b1b' }}>
+                <Selo ponto={false} familia={s.status === 'Aguardando Liberação PCP' ? 'atencao' : s.status.startsWith('Roteado') ? 'ok' : 'erro'}>
                   {s.status}
-                </span>
+                </Selo>
               </div>
             ))
           )}
@@ -961,15 +969,21 @@ Embalar e enviar assim mesmo?`)) return;
       {/* MODAL FALTA */}
       {modalFalta && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Apontar Falta de Material — OP {modalFalta.opl}</div>
-            <label className="acn-label">Descreva o(s) material(is) em falta *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="ex: Cabo de 70mm2 — 5m; Conector X — 2 unidades"
-              value={obsFalta} onChange={e=>setObsFalta(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={faltaMaterial}>CONFIRMAR FALTA</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFalta(null)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro acn-alm-jan" role="dialog" aria-label="Apontar falta de material">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Apontar Falta de Material — OP {modalFalta.opl}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label" htmlFor="alm-falta">Descreva o(s) material(is) em falta *</label>
+                <textarea id="alm-falta" className="acn-input" rows={3}
+                  placeholder="ex: Cabo de 70mm2 — 5m; Conector X — 2 unidades"
+                  value={obsFalta} onChange={e=>setObsFalta(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="perigo" onClick={faltaMaterial}>CONFIRMAR FALTA</Botao>
+              <Botao onClick={()=>setModalFalta(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -978,15 +992,21 @@ Embalar e enviar assim mesmo?`)) return;
       {/* MODAL PENDENCIA */}
       {modalPend && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Liberar com Pendencia — OP {modalPend.opl}</div>
-            <label className="acn-label">Descreva a pendencia existente *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="ex: Aguardando apenas parafuso M10, demais itens completos"
-              value={obsPend} onChange={e=>setObsPend(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#f97316',flex:1}} onClick={liberarPendencia}>LIBERAR COM PENDENCIA</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPend(null)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro acn-alm-jan" role="dialog" aria-label="Liberar com pendência">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Liberar com Pendencia — OP {modalPend.opl}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label" htmlFor="alm-pend">Descreva a pendencia existente *</label>
+                <textarea id="alm-pend" className="acn-input" rows={3}
+                  placeholder="ex: Aguardando apenas parafuso M10, demais itens completos"
+                  value={obsPend} onChange={e=>setObsPend(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={liberarPendencia}>LIBERAR COM PENDENCIA</Botao>
+              <Botao onClick={()=>setModalPend(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -996,171 +1016,163 @@ Embalar e enviar assim mesmo?`)) return;
       {/* Modal de embalagem — para OP de fluxo "envio" (que nem passa por
           produção) e para OP que voltou da produção só para ser embalada. */}
       {modalEmbalagem && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-          onClick={e=>{ if(e.target===e.currentTarget) setModalEmbalagem(null); }}>
-          <div style={{ background:'#fff', borderRadius:8, width:'min(560px,96vw)', maxHeight:'92vh', overflow:'auto', padding:'18px 20px' }}>
-            <div style={{ fontWeight:800, fontSize:14, color:'#0f766e', marginBottom:2 }}>
-              📦 Embalar e enviar — OP {modalEmbalagem.opl}
+        <div className="modal-overlay" onClick={e=>{ if(e.target===e.currentTarget) setModalEmbalagem(null); }}>
+          <div className="modal-box acn-modal-cadastro acn-alm-emb" role="dialog" aria-label="Embalar e enviar">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiPackageVariantClosed} size={16} /> Embalar e enviar — OP {modalEmbalagem.opl}</span>
             </div>
-            <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
-              {modalEmbalagem.cliente_nome} · {fluxoLabel(modalEmbalagem.fluxo_entrega)} ·{' '}
-              {modalEmbalagem.status_geral === STATUS_EMBALAGEM ? 'produção concluída' : 'não passa por produção'}
-            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalEmbalagem.cliente_nome} · {fluxoLabel(modalEmbalagem.fluxo_entrega)} ·{' '}
+                {modalEmbalagem.status_geral === STATUS_EMBALAGEM ? 'produção concluída' : 'não passa por produção'}
+              </div>
 
-            {/* Quem paga o frete decide para onde esta OP vai daqui. Vinha
-                respondido do Comercial, mas nem todo fluxo era perguntado —
-                quando chega em branco, é aqui que se responde (24/09/2026). */}
-            <div style={{ marginBottom:12, background: embForm.frete_responsavel ? '#f8fafc' : '#fef2f2',
-              border: `1px solid ${embForm.frete_responsavel ? '#e2e8f0' : '#fecaca'}`, borderRadius:6, padding:'8px 10px' }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>
-                🚚 Frete * {!modalEmbalagem.frete_responsavel && (
-                  <span style={{ fontWeight:400, color:'#b91c1c' }}>— esta OP chegou sem resposta, informe agora</span>
+              {/* Quem paga o frete decide para onde esta OP vai daqui. Vinha
+                  respondido do Comercial, mas nem todo fluxo era perguntado —
+                  quando chega em branco, é aqui que se responde (24/09/2026). */}
+              <div className={'acn-quadro' + (embForm.frete_responsavel ? '' : ' tom-erro')}>
+                <div className="acn-quadro-titulo">
+                  <Icone path={mdiTruckOutline} size={14} /> Frete * {!modalEmbalagem.frete_responsavel && (
+                    <span className="acn-txt-erro">— esta OP chegou sem resposta, informe agora</span>
+                  )}
+                </div>
+                <Chips ativo={embForm.frete_responsavel || ''} onChange={v => setEmbForm(f => ({ ...f, frete_responsavel: v }))}
+                  itens={[
+                    { id: 'CIF', rotulo: 'CIF — a empresa paga' },
+                    { id: 'FOB', rotulo: 'FOB — o cliente paga' },
+                  ]} />
+                <div className="acn-ajuda">
+                  {embForm.frete_responsavel === 'FOB'
+                    ? 'Ao concluir, esta OP vai direto para a liberação comercial — a Logística não coteia nada.'
+                    : embForm.frete_responsavel === 'CIF'
+                    ? 'Ao concluir, nasce o pedido de frete para a Logística cotar.'
+                    : 'Sem essa resposta não dá para saber se a Logística precisa cotar o frete.'}
+                </div>
+              </div>
+
+              {ehVendaEnvioOp(modalEmbalagem) ? (
+                <div className="acn-alm-bloco">
+                  <div className="acn-label">
+                    Seriais ACN por produto * <span className="acn-ajuda">
+                      — pelo menos {Math.max(1, Number(modalEmbalagem.quantidade) || 1)} (uma por unidade vendida). Dá para colar do Excel: produto ⇥ serial.
+                    </span>
+                  </div>
+                  <div className="acn-alm-seriais">
+                    {(embForm.itens || []).map((x, i) => (
+                      <div key={i} className="acn-alm-serial-linha">
+                        <span className="acn-ajuda">{i + 1}</span>
+                        <input className="acn-input" placeholder="Produto" value={x.produto}
+                          onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'produto', e.target.value)} />
+                        <input className="acn-input" placeholder="Serial ACN" value={x.serial}
+                          onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'serial', e.target.value)} />
+                        <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover linha" aria-label="Remover linha"
+                          onClick={() => setEmbForm(f => ({ ...f, itens: f.itens.length > 1 ? f.itens.filter((_, j) => j !== i) : [{ produto:'', serial:'' }] }))} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="acn-kb-linha">
+                    <Botao pequeno onClick={() => setEmbForm(f => ({ ...f, itens: [...(f.itens || []), { produto:'', serial:'' }] }))}>
+                      + Linha
+                    </Botao>
+                    {(() => {
+                      const n = (embForm.itens || []).filter(x => String(x.serial || '').trim()).length;
+                      const q = Math.max(1, Number(modalEmbalagem.quantidade) || 1);
+                      return <span className={n >= q ? 'acn-txt-ok' : 'acn-txt-atencao'}>{n} de {q} serial(is)</span>;
+                    })()}
+                  </div>
+                </div>
+              ) : (<>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="alm-seriais">Números de série *</label>
+                <textarea id="alm-seriais" className="acn-input" rows={2}
+                  value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
+                  placeholder="Um por linha" />
+              </div>
+              </>)}
+
+              <div className="acn-quadro-titulo acn-alm-secao">
+                {/* o destino depende do CIF/FOB — o texto fixo "vai para a cotação
+                    de frete" mentia em OP FOB, que não passa pela Logística */}
+                {embForm.frete_responsavel === 'FOB'
+                  ? 'Embalagem (segue direto para a liberação comercial)'
+                  : embForm.frete_responsavel === 'CIF'
+                  ? 'Embalagem (vai para a cotação de frete)'
+                  : 'Embalagem'}
+              </div>
+              <div className="acn-alm-grade5">
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-peso">Peso total (kg) *</label>
+                  <input id="alm-peso" className="acn-input" value={embForm.peso_total||''}
+                    onChange={e=>setEmbForm(f=>({...f, peso_total:e.target.value}))} placeholder="Ex: 12,5" />
+                </div>
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-vol">Volumes</label>
+                  <input id="alm-vol" className="acn-input" type="number" min={1} value={embForm.volumes||'1'}
+                    onChange={e=>setEmbForm(f=>({...f, volumes:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-alt">Altura (cm)</label>
+                  <input id="alm-alt" className="acn-input" value={embForm.altura||''}
+                    onChange={e=>setEmbForm(f=>({...f, altura:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-larg">Largura (cm)</label>
+                  <input id="alm-larg" className="acn-input" value={embForm.largura||''}
+                    onChange={e=>setEmbForm(f=>({...f, largura:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-comp">Comprimento (cm)</label>
+                  <input id="alm-comp" className="acn-input" value={embForm.comprimento||''}
+                    onChange={e=>setEmbForm(f=>({...f, comprimento:e.target.value}))} />
+                </div>
+              </div>
+
+              <div className="acn-quadro-titulo acn-alm-secao">
+                Destino da entrega
+              </div>
+              <div className="acn-alm-grade-cep">
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-cep">CEP *</label>
+                  <input id="alm-cep" className="acn-input" value={embForm.destino_cep||''} inputMode="numeric" maxLength={9}
+                    onChange={e=>{ const v = formatarCep(e.target.value); setEmbForm(f=>({...f, destino_cep:v})); aplicarCep(v, embForm.destino_cidade, embForm.destino_uf); }} placeholder="00000-000" />
+                </div>
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-cidade">Cidade *</label>
+                  <input id="alm-cidade" className="acn-input" value={embForm.destino_cidade||''}
+                    onChange={e=>setEmbForm(f=>({...f, destino_cidade:e.target.value}))} />
+                </div>
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-uf">UF *</label>
+                  <select id="alm-uf" className="acn-input" value={embForm.destino_uf||''}
+                    onChange={e=>setEmbForm(f=>({...f, destino_uf:e.target.value}))}>
+                    <option value="">—</option>
+                    {UFS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                {cepInfo.texto && (
+                  <div className={'acn-alm-cep-info ' + (cepInfo.estado === 'ok' ? 'acn-txt-ok' : cepInfo.estado === 'buscando' ? 'acn-ajuda' : cepInfo.estado === 'indisponivel' ? 'acn-txt-atencao' : 'acn-txt-erro')}>
+                    {cepInfo.texto}
+                  </div>
                 )}
               </div>
-              <div style={{ display:'flex', gap:8 }}>
-                {[
-                  { v:'CIF', label:'CIF — a empresa paga' },
-                  { v:'FOB', label:'FOB — o cliente paga' },
-                ].map(opt => (
-                  <button key={opt.v} type="button" onClick={()=>setEmbForm(f=>({...f, frete_responsavel: opt.v}))}
-                    style={{ flex:1, padding:'7px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer',
-                      border: embForm.frete_responsavel === opt.v ? '2px solid #2563eb' : '1px solid #d1d5db',
-                      background: embForm.frete_responsavel === opt.v ? '#dbeafe' : '#fff',
-                      color: embForm.frete_responsavel === opt.v ? '#1d4ed8' : '#374151' }}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ fontSize:9, color:'#64748b', marginTop:4 }}>
-                {embForm.frete_responsavel === 'FOB'
-                  ? 'Ao concluir, esta OP vai direto para a liberação comercial — a Logística não coteia nada.'
-                  : embForm.frete_responsavel === 'CIF'
-                  ? 'Ao concluir, nasce o pedido de frete para a Logística cotar.'
-                  : 'Sem essa resposta não dá para saber se a Logística precisa cotar o frete.'}
+
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
+              <div className="form-group">
+                <label className="acn-label" htmlFor="alm-obs">Observações</label>
+                <textarea id="alm-obs" className="acn-input" rows={2}
+                  value={embForm.observacoes||''} onChange={e=>setEmbForm(f=>({...f, observacoes:e.target.value}))} />
               </div>
             </div>
 
-            {ehVendaEnvioOp(modalEmbalagem) ? (
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                  Seriais ACN por produto * <span style={{ fontWeight:400, color:'#64748b' }}>
-                    — pelo menos {Math.max(1, Number(modalEmbalagem.quantidade) || 1)} (uma por unidade vendida). Dá para colar do Excel: produto ⇥ serial.
-                  </span>
-                </div>
-                <div style={{ maxHeight:220, overflowY:'auto', border:'1px solid #e2e8f0', borderRadius:6, padding:6 }}>
-                  {(embForm.itens || []).map((x, i) => (
-                    <div key={i} style={{ display:'grid', gridTemplateColumns:'24px 1.4fr 1fr 24px', gap:5, marginBottom:4, alignItems:'center' }}>
-                      <span style={{ fontSize:9, color:'#94a3b8', fontWeight:700 }}>{i + 1}</span>
-                      <input className="acn-input" placeholder="Produto" value={x.produto}
-                        onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'produto', e.target.value)} />
-                      <input className="acn-input" placeholder="Serial ACN" value={x.serial}
-                        onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'serial', e.target.value)} />
-                      <button type="button" title="Remover linha"
-                        onClick={() => setEmbForm(f => ({ ...f, itens: f.itens.length > 1 ? f.itens.filter((_, j) => j !== i) : [{ produto:'', serial:'' }] }))}
-                        style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12 }}>✕</button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:4 }}>
-                  <button type="button" onClick={() => setEmbForm(f => ({ ...f, itens: [...(f.itens || []), { produto:'', serial:'' }] }))}
-                    style={{ background:'#f0fdfa', color:'#0f766e', border:'1px dashed #0f766e', borderRadius:5, fontSize:10, fontWeight:700, padding:'2px 10px', cursor:'pointer' }}>
-                    + Linha
-                  </button>
-                  {(() => {
-                    const n = (embForm.itens || []).filter(x => String(x.serial || '').trim()).length;
-                    const q = Math.max(1, Number(modalEmbalagem.quantidade) || 1);
-                    return <span style={{ fontSize:10, fontWeight:700, color: n >= q ? '#15803d' : '#b45309' }}>{n} de {q} serial(is)</span>;
-                  })()}
-                </div>
-              </div>
-            ) : (<>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Números de série *</div>
-            <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10 }}
-              value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
-              placeholder="Um por linha" />
-            </>)}
-
-            <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
-              {/* o destino depende do CIF/FOB — o texto fixo "vai para a cotação
-                  de frete" mentia em OP FOB, que não passa pela Logística */}
-              {embForm.frete_responsavel === 'FOB'
-                ? 'Embalagem (segue direto para a liberação comercial)'
-                : embForm.frete_responsavel === 'CIF'
-                ? 'Embalagem (vai para a cotação de frete)'
-                : 'Embalagem'}
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8, marginBottom:10 }}>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Peso total (kg) *</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.peso_total||''}
-                  onChange={e=>setEmbForm(f=>({...f, peso_total:e.target.value}))} placeholder="Ex: 12,5" />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Volumes</div>
-                <input className="acn-input" type="number" min={1} style={{width:'100%'}} value={embForm.volumes||'1'}
-                  onChange={e=>setEmbForm(f=>({...f, volumes:e.target.value}))} />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Altura (cm)</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.altura||''}
-                  onChange={e=>setEmbForm(f=>({...f, altura:e.target.value}))} />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Largura (cm)</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.largura||''}
-                  onChange={e=>setEmbForm(f=>({...f, largura:e.target.value}))} />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Comprimento (cm)</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.comprimento||''}
-                  onChange={e=>setEmbForm(f=>({...f, comprimento:e.target.value}))} />
-              </div>
-            </div>
-
-            <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
-              Destino da entrega
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'minmax(112px,1fr) 2fr minmax(64px,1fr)', gap:8, marginBottom:10 }}>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>CEP *</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cep||''} inputMode="numeric" maxLength={9}
-                  onChange={e=>{ const v = formatarCep(e.target.value); setEmbForm(f=>({...f, destino_cep:v})); aplicarCep(v, embForm.destino_cidade, embForm.destino_uf); }} placeholder="00000-000" />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Cidade *</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cidade||''}
-                  onChange={e=>setEmbForm(f=>({...f, destino_cidade:e.target.value}))} />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>UF *</div>
-                <select className="acn-input" style={{width:'100%'}} value={embForm.destino_uf||''}
-                  onChange={e=>setEmbForm(f=>({...f, destino_uf:e.target.value}))}>
-                  <option value="">—</option>
-                  {UFS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              {cepInfo.texto && (
-                <div style={{ gridColumn:'1 / -1', fontSize:10, fontWeight:600,
-                  color: cepInfo.estado === 'ok' ? '#15803d' : cepInfo.estado === 'buscando' ? '#64748b' : cepInfo.estado === 'indisponivel' ? '#b45309' : '#b91c1c' }}>
-                  {cepInfo.texto}
-                </div>
-              )}
-            </div>
-
-            <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
-            <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
-            <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:14 }}
-              value={embForm.observacoes||''} onChange={e=>setEmbForm(f=>({...f, observacoes:e.target.value}))} />
-
-            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEmbalagem(null)}>Cancelar</button>
-              <button className="acn-btn" style={{background:'#0f766e'}} disabled={salvandoEmb} onClick={confirmarEmbalagem}>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalEmbalagem(null)}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiPackageVariantClosed} disabled={salvandoEmb} onClick={confirmarEmbalagem}>
                 {/* o botão dizia sempre "solicitar frete", inclusive em OP FOB,
                     onde nenhum frete é solicitado (24/09/2026) */}
                 {salvandoEmb ? 'Salvando...'
-                  : embForm.frete_responsavel === 'FOB' ? '📦 Finalizar e liberar para o Comercial'
-                  : '📦 Finalizar e solicitar frete'}
-              </button>
+                  : embForm.frete_responsavel === 'FOB' ? 'Finalizar e liberar para o Comercial'
+                  : 'Finalizar e solicitar frete'}
+              </Botao>
             </div>
           </div>
         </div>
@@ -1168,32 +1180,38 @@ Embalar e enviar assim mesmo?`)) return;
 
       {modalSeriais && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:640,width:'96vw'}}>
-            <div className="modal-title">🔢 Kiting — OP {modalSeriais.opl}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>
-              Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
+          <div className="modal-box acn-modal-cadastro acn-alm-kiting" role="dialog" aria-label="Kiting">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiNumeric} size={16} /> Kiting — OP {modalSeriais.opl}</span>
             </div>
-            <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
-            <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
-              modo="almox" currentUser={currentUser}
-              onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />
-            <label className="acn-label">Números de série dos equipamentos instalados *</label>
-            <textarea autoFocus className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}}
-              placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
-              value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background: divergencias(conferencia).length ? '#f97316' : '#22c55e',flex:1}} onClick={confirmarKitOkComSeriais}>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
+              </div>
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
+              <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
+                modo="almox" currentUser={currentUser}
+                onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />
+              <div className="form-group">
+                <label className="acn-label" htmlFor="alm-seriais-kit">Números de série dos equipamentos instalados *</label>
+                <textarea id="alm-seriais-kit" autoFocus className="acn-input acn-alm-mono" rows={3}
+                  placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
+                  value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={confirmarKitOkComSeriais}>
                 {divergencias(conferencia).length ? 'CONFIRMAR KIT COM PENDÊNCIA' : 'CONFIRMAR KITING 100%'}
-              </button>
+              </Botao>
               {/* separar o que tem hoje e continuar amanhã: a OP fica onde está */}
               {conferencia.length > 0 && (
-                <button className="acn-btn" style={{background:'#0284c7'}} disabled={salvandoSeparacao}
+                <Botao icone={mdiContentSaveOutline} disabled={salvandoSeparacao}
                   title="Dá baixa no que já foi marcado e guarda o resto para depois. A OP continua no Almoxarifado."
                   onClick={salvarSeparacaoParcial}>
-                  {salvandoSeparacao ? 'Salvando...' : '💾 SALVAR SEPARAÇÃO'}
-                </button>
+                  {salvandoSeparacao ? 'Salvando...' : 'SALVAR SEPARAÇÃO'}
+                </Botao>
               )}
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalSeriais(null);setSeriaisKitForm('');}}>Cancelar</button>
+              <Botao onClick={()=>{setModalSeriais(null);setSeriaisKitForm('');}}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1213,43 +1231,47 @@ Embalar e enviar assim mesmo?`)) return;
 
       {modalSeriaisLote && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget && !aplicandoSeriaisLote) setModalSeriaisLote(null);}}>
-          <div className="modal-box" style={{maxWidth: 980,width:'95vw'}}>
-            <div className="modal-title">📥 Importar Seriais em Lote — 🔗 {modalSeriaisLote.base}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              {modalSeriaisLote.irmaos.length} unidade(s) sem kit ainda. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) —
-              cada linha vira o(s) serial(is) de uma unidade, <strong>na ordem abaixo</strong> (não há chassi/placa para
-              casar aqui, então a ordem da lista importa). Uma célula pode ter mais de um serial (separados por vírgula).
+          <div className="modal-box acn-modal-cadastro acn-alm-lote-jan" role="dialog" aria-label="Importar seriais em lote">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiTrayArrowDown} size={16} /> Importar Seriais em Lote — <Icone path={mdiLinkVariant} size={16} /> {modalSeriaisLote.base}</span>
             </div>
-            <div style={{maxHeight:160,overflowY:'auto',border:'1px solid #e2e8f0',borderRadius:6,marginBottom:10}}>
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
-                <thead><tr style={{background:'#f8fafc'}}>
-                  <th style={{padding:'4px 8px',textAlign:'left'}}>#</th>
-                  <th style={{padding:'4px 8px',textAlign:'left'}}>OP</th>
-                  <th style={{padding:'4px 8px',textAlign:'left'}}>Serial(is) a aplicar</th>
-                </tr></thead>
-                <tbody>
-                  {modalSeriaisLote.irmaos.map((o, i) => {
-                    const linha = seriaisLoteTexto.split('\n').map(l=>l.trim()).filter(Boolean)[i];
-                    return (
-                      <tr key={o.id} style={{borderTop:'1px solid #f1f5f9'}}>
-                        <td style={{padding:'4px 8px',color:'#94a3b8'}}>{i+1}</td>
-                        <td style={{padding:'4px 8px',fontWeight:700}}>{o.opl}</td>
-                        <td style={{padding:'4px 8px',color: linha ? '#15803d' : '#cbd5e1'}}>{linha || '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalSeriaisLote.irmaos.length} unidade(s) sem kit ainda. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) —
+                cada linha vira o(s) serial(is) de uma unidade, <strong>na ordem abaixo</strong> (não há chassi/placa para
+                casar aqui, então a ordem da lista importa). Uma célula pode ter mais de um serial (separados por vírgula).
+              </div>
+              <div className="acn-alm-lote-tabela">
+                <table className="acn-tabela acn-densa">
+                  <thead><tr>
+                    <th>#</th>
+                    <th>OP</th>
+                    <th>Serial(is) a aplicar</th>
+                  </tr></thead>
+                  <tbody>
+                    {modalSeriaisLote.irmaos.map((o, i) => {
+                      const linha = seriaisLoteTexto.split('\n').map(l=>l.trim()).filter(Boolean)[i];
+                      return (
+                        <tr key={o.id}>
+                          <td className="acn-ajuda">{i+1}</td>
+                          <td><strong>{o.opl}</strong></td>
+                          <td className={linha ? 'acn-txt-ok' : 'acn-ajuda'}>{linha || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <textarea autoFocus className="acn-input acn-alm-mono" rows={Math.min(8, modalSeriaisLote.irmaos.length)} aria-label="Seriais colados"
+                placeholder={'Ex:\nSN-00123\nSN-00124, SN-00125\nSN-00126'}
+                value={seriaisLoteTexto} onChange={e=>setSeriaisLoteTexto(e.target.value)} />
             </div>
-            <textarea autoFocus className="acn-input" rows={Math.min(8, modalSeriaisLote.irmaos.length)} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",fontSize:11}}
-              placeholder={'Ex:\nSN-00123\nSN-00124, SN-00125\nSN-00126'}
-              value={seriaisLoteTexto} onChange={e=>setSeriaisLoteTexto(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,opacity:aplicandoSeriaisLote?0.6:1}}
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheckCircleOutline}
                 onClick={aplicarSeriaisLote} disabled={aplicandoSeriaisLote || !seriaisLoteTexto.trim()}>
-                {aplicandoSeriaisLote ? 'Aplicando...' : `✅ Confirmar Kiting 100% (${Math.min(seriaisLoteTexto.split('\n').map(l=>l.trim()).filter(Boolean).length, modalSeriaisLote.irmaos.length)})`}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} disabled={aplicandoSeriaisLote} onClick={()=>{setModalSeriaisLote(null);setSeriaisLoteTexto('');}}>Cancelar</button>
+                {aplicandoSeriaisLote ? 'Aplicando...' : `Confirmar Kiting 100% (${Math.min(seriaisLoteTexto.split('\n').map(l=>l.trim()).filter(Boolean).length, modalSeriaisLote.irmaos.length)})`}
+              </Botao>
+              <Botao disabled={aplicandoSeriaisLote} onClick={()=>{setModalSeriaisLote(null);setSeriaisLoteTexto('');}}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1258,24 +1280,30 @@ Embalar e enviar assim mesmo?`)) return;
       {/* MODAL FALTA/PENDENCIA EM LOTE — OPs desmembradas (mesmo numero base) */}
       {modalLoteAcao && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:520,width:'95vw'}}>
-            <div className="modal-title">
-              {modalLoteAcao.tipo === 'falta' ? '❌ Falta de Material em Lote' : '🟠 Liberar com Pendência em Lote'} — {modalLoteAcao.base}
+          <div className="modal-box acn-modal-cadastro acn-alm-jan" role="dialog" aria-label="Ação em lote">
+            <div className="acn-modal-cab">
+              <span className="modal-title">
+                <Icone path={modalLoteAcao.tipo === 'falta' ? mdiCloseCircleOutline : mdiAlertOutline} size={16} /> {modalLoteAcao.tipo === 'falta' ? 'Falta de Material em Lote' : 'Liberar com Pendência em Lote'} — {modalLoteAcao.base}
+              </span>
             </div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Aplica a mesma descrição a todas as {modalLoteAcao.irmaos.length} unidades deste lote que ainda não estão nesta situação.
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Aplica a mesma descrição a todas as {modalLoteAcao.irmaos.length} unidades deste lote que ainda não estão nesta situação.
+              </div>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="alm-lote-obs">
+                  {modalLoteAcao.tipo === 'falta' ? 'Descreva o(s) material(is) em falta *' : 'Descreva a pendência existente *'}
+                </label>
+                <textarea id="alm-lote-obs" className="acn-input" rows={3}
+                  placeholder={modalLoteAcao.tipo === 'falta' ? 'ex: Cabo de 70mm2 — 5m; Conector X — 2 unidades' : 'ex: Aguardando apenas parafuso M10, demais itens completos'}
+                  value={obsLoteAcao} onChange={e=>setObsLoteAcao(e.target.value)} autoFocus />
+              </div>
             </div>
-            <label className="acn-label">
-              {modalLoteAcao.tipo === 'falta' ? 'Descreva o(s) material(is) em falta *' : 'Descreva a pendência existente *'}
-            </label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder={modalLoteAcao.tipo === 'falta' ? 'ex: Cabo de 70mm2 — 5m; Conector X — 2 unidades' : 'ex: Aguardando apenas parafuso M10, demais itens completos'}
-              value={obsLoteAcao} onChange={e=>setObsLoteAcao(e.target.value)} autoFocus />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background: modalLoteAcao.tipo === 'falta' ? '#ef4444' : '#f97316',flex:1,opacity:processandoLote?0.6:1}} onClick={confirmarLoteAcao} disabled={processandoLote}>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante={modalLoteAcao.tipo === 'falta' ? 'perigo' : 'primario'} onClick={confirmarLoteAcao} disabled={processandoLote}>
                 {processandoLote ? 'Aplicando...' : 'CONFIRMAR EM LOTE'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalLoteAcao(null)} disabled={processandoLote}>Cancelar</button>
+              </Botao>
+              <Botao onClick={()=>setModalLoteAcao(null)} disabled={processandoLote}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1338,60 +1366,63 @@ function ModalSolicitarReposicao({ currentUser, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth:480 }}>
-        <div className="modal-title">📦 Solicitar Reposição de Estoque</div>
-
-        <label className="acn-label">Item *</label>
-        {item ? (
-          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', border:'1px solid #86efac',
-            background:'#f0fdf4', borderRadius:6, marginBottom:10, fontSize:11 }}>
-            <span style={{ flex:1 }}><strong>{item.codigo}</strong> — {item.nome}</span>
-            <button onClick={() => setItem(null)} style={{ background:'none', border:'none', color:'#94a3b8', cursor:'pointer' }}>✕</button>
-          </div>
-        ) : (
-          <div style={{ position:'relative', marginBottom:10 }}>
-            <input className="acn-input" style={{ width:'100%' }} value={q} onChange={e=>handleChangeQ(e.target.value)}
-              placeholder="Buscar por código ou nome..." autoFocus />
-            {q.length >= 2 && (
-              <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'#fff',
-                border:'1px solid #d1d5db', borderRadius:6, boxShadow:'0 4px 12px #0002', maxHeight:200, overflowY:'auto' }}>
-                {sugestoes.map((it:any) => (
-                  <div key={it.id} onMouseDown={() => { setItem(it); setQ(''); setSugestoes([]); }}
-                    style={{ padding:'7px 10px', cursor:'pointer', borderBottom:'1px solid #f1f5f9', fontSize:11 }}
-                    onMouseEnter={e=>(e.currentTarget.style.background='#f0f9ff')}
-                    onMouseLeave={e=>(e.currentTarget.style.background='#fff')}>
-                    <strong>{it.codigo}</strong> — {it.nome}
-                    {it.origem_producao === 'interna' && (
-                      <span style={{ color:'#7c3aed', fontSize:9 }}> · fabricação interna ({it.setor_fabricante})</span>
-                    )}
+      <div className="modal-box acn-modal-cadastro acn-alm-jan" role="dialog" aria-label="Solicitar reposição de estoque">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiPackageVariantClosed} size={16} /> Solicitar Reposição de Estoque</span>
+        </div>
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="form-group">
+            <label className="acn-label" htmlFor="alm-rep-item">Item *</label>
+            {item ? (
+              <div className="acn-quadro tom-ok acn-alm-item-escolhido">
+                <span className="acn-kb-cresce"><strong>{item.codigo}</strong> — {item.nome}</span>
+                <Botao variante="discreto" pequeno icone={mdiClose} title="Trocar o item" aria-label="Trocar o item" onClick={() => setItem(null)} />
+              </div>
+            ) : (
+              <div className="acn-sugestao">
+                <input id="alm-rep-item" className="acn-input" value={q} onChange={e=>handleChangeQ(e.target.value)}
+                  placeholder="Buscar por código ou nome..." autoFocus />
+                {q.length >= 2 && (
+                  <div className="acn-sugestao-lista">
+                    {sugestoes.map((it:any) => (
+                      <div key={it.id} className="acn-sugestao-item" onMouseDown={() => { setItem(it); setQ(''); setSugestoes([]); }}>
+                        <strong>{it.codigo}</strong> — {it.nome}
+                        {it.origem_producao === 'interna' && (
+                          <span className="acn-sub-info"> · fabricação interna ({it.setor_fabricante})</span>
+                        )}
+                      </div>
+                    ))}
+                    {buscando && <div className="acn-sugestao-vazio">Buscando...</div>}
+                    {!buscando && erroBusca && <div className="acn-sugestao-vazio acn-txt-erro">Não foi possível buscar ({erroBusca}).</div>}
+                    {!buscando && !erroBusca && sugestoes.length===0 && <div className="acn-sugestao-vazio">Nada encontrado.</div>}
                   </div>
-                ))}
-                {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Buscando...</div>}
-                {!buscando && erroBusca && <div style={{ padding:8, fontSize:10, color:'#b91c1c', textAlign:'center' }}>Não foi possível buscar ({erroBusca}).</div>}
-                {!buscando && !erroBusca && sugestoes.length===0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Nada encontrado.</div>}
+                )}
               </div>
             )}
           </div>
-        )}
 
-        <label className="acn-label">Quantidade *</label>
-        <input className="acn-input" type="number" min="0" style={{ width:'100%', marginBottom:10 }}
-          value={quantidade} onChange={e=>setQuantidade(e.target.value)} />
+          <div className="form-group">
+            <label className="acn-label" htmlFor="alm-rep-qtd">Quantidade *</label>
+            <input id="alm-rep-qtd" className="acn-input" type="number" min="0"
+              value={quantidade} onChange={e=>setQuantidade(e.target.value)} />
+          </div>
 
-        <label className="acn-label">Motivo</label>
-        <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10 }}
-          placeholder="ex: estoque mínimo atingido" value={motivo} onChange={e=>setMotivo(e.target.value)} />
+          <div className="form-group">
+            <label className="acn-label" htmlFor="alm-rep-motivo">Motivo</label>
+            <textarea id="alm-rep-motivo" className="acn-input" rows={2}
+              placeholder="ex: estoque mínimo atingido" value={motivo} onChange={e=>setMotivo(e.target.value)} />
+          </div>
 
-        <label className="acn-label">Vincular a um processo (opcional)</label>
-        <div style={{ marginBottom:12 }}>
-          <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+          <div className="form-group">
+            <label className="acn-label">Vincular a um processo (opcional)</label>
+            <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+          </div>
         </div>
-
-        <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background:'#78716c', flex:1 }} onClick={salvar} disabled={salvando}>
-            {salvando ? 'Enviando...' : '📤 Solicitar'}
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose} disabled={salvando}>Cancelar</button>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" icone={mdiSendOutline} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Enviando...' : 'Solicitar'}
+          </Botao>
+          <Botao onClick={onClose} disabled={salvando}>Cancelar</Botao>
         </div>
       </div>
     </div>
