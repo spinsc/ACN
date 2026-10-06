@@ -558,20 +558,38 @@ function PainelSacVeicular({ currentUser }) {
   const [novoApoioNomeOS, setNovoApoioNomeOS]               = useState('');
   const [novoApoioIdOS, setNovoApoioIdOS]                   = useState<string|null>(null);
 
+  // Etapa 7.55 (06/10/2026): leitura que falha não pode parecer "Nenhuma OS veicular aguardando ação" nem "Nenhuma equipe cadastrada"
+  // (e a releitura de 30 s que falhar não esvazia a fila); e um clique duplo em definir data, chegada, orçamento, iniciar e concluir
+  // gravava duas vezes — uma ação por tipo (e OS).
+  const [erroLeitura, setErroLeitura]       = useState('');
+  const [erroEquipesManu, setErroEquipesManu] = useState('');
+  const [erroEquipeOS, setErroEquipeOS]     = useState('');
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   const load = async (silent=false) => {
     if (!silent) setLoading(true);
-    const { data } = await supabase.from('sac_ordens_servico').select('*')
+    const { data, error } = await supabase.from('sac_ordens_servico').select('*')
       .eq('is_manutencao_veicular', true)
       .in('status', STATUSES_VEICULAR_ATIVAS)
       .order('data_abertura', { ascending: false });
+    if (error) { setErroLeitura(error.message); if (!silent) setLoading(false); return; }
+    setErroLeitura('');
     setOrdens(data || []);
     if (!silent) setLoading(false);
   };
   useEffect(() => { load(); const t = setInterval(()=>load(true), 30000); return () => clearInterval(t); }, []);
-  useEffect(() => {
-    supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome')
-      .then(({ data }) => setEquipesManu(data || []));
-  }, []);
+  const fetchEquipesManu = async () => {
+    const { data, error } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    if (error) { setErroEquipesManu(error.message); return; }
+    setErroEquipesManu('');
+    setEquipesManu(data || []);
+  };
+  useEffect(() => { fetchEquipesManu(); }, []);
 
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
 
@@ -587,66 +605,70 @@ function PainelSacVeicular({ currentUser }) {
   };
 
   // Produção define data → status: Aguardando Aceite SAC
-  const salvarProvisionamento = async () => {
+  const salvarProvisionamento = umaVez('provisionar', async () => {
     if (!provisionarForm.data_provisao) { alert('Informe a data!'); return; }
     const os = modalProvisionar;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error: erroProv } = await supabase.from('sac_ordens_servico').update({
       status: 'Aguardando Aceite SAC',
       data_provisionamento: provisionarForm.data_provisao,
       periodo_provisionamento: provisionarForm.periodo,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (erroProv) { alert(`Não foi possível definir a data da OS ${os.numero_os}: ${erroProv.message}`); return; }   // 7.55: fechava a janela e avisava o SAC com a OS sem data
     notificarEvento('sac_data_definida', `Producao definiu data — ${os.numero_os} — Cliente: ${os.cliente_nome} — Data: ${new Date(provisionarForm.data_provisao+'T12:00').toLocaleDateString('pt-BR')} (${provisionarForm.periodo})`);
     setModalProvisionar(null); setProvisionarForm({ data_provisao:'', periodo:'Manhã' }); load();
-  };
+  });
 
   // Produção confirma chegada → Verificação e Orçamento.
   // 'Provisionada' só é alcançado pelo caminho Presencial (a Remota já pula
   // direto pra 'Aguardando Início' em confirmarAceiteSAC, em SacTab.tsx, já
   // que a cotação é feita antes de agendar) — então esta função é sempre
   // presencial na prática, sem precisar checar tipo_avaliacao aqui.
-  const confirmarChegada = async () => {
+  const confirmarChegada = umaVez('chegada', async () => {
     const os = modalConfirmarChegada;
     const agora = new Date().toISOString();
     const novoStatus = 'Verificação e Orçamento';
-    await supabase.from('sac_ordens_servico').update({
+    const { error: erroCheg } = await supabase.from('sac_ordens_servico').update({
       status: novoStatus,
       data_chegada_veiculo: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (erroCheg) { alert(`Não foi possível confirmar a chegada da OS ${os.numero_os}: ${erroCheg.message}`); return; }   // 7.55
     notificarEvento('sac_veiculo_chegou', `Veiculo chegou — ${os.numero_os} — ${os.cliente_nome} — Status: ${novoStatus}`);
     setModalConfirmarChegada(null); load();
-  };
+  });
 
   // Produção insere materiais e envia ao SAC → Aguardando Aprovação Cliente
-  const enviarVerificacao = async () => {
+  const enviarVerificacao = umaVez('verificacao', async () => {
     const os = modalVerificacao;
     if (!verificacaoItens.length) { alert('Adicione pelo menos um item!'); return; }
     const total = verificacaoItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error: erroVer } = await supabase.from('sac_ordens_servico').update({
       status: 'Aguardando Aprovação Cliente',
       itens_cotacao: verificacaoItens,
       valor_orcamento: total,
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (erroVer) { alert(`Não foi possível enviar o orçamento da OS ${os.numero_os}: ${erroVer.message}`); return; }   // 7.55: perdia os itens digitados e avisava o SAC de um orçamento que não existia
     notificarEvento('sac_verificacao_enviada', `Orcamento de verificacao — ${os.numero_os} — ${os.cliente_nome} — Total: ${fmtVal(total)}`);
     setModalVerificacao(null); setVerificacaoItens([]); load();
-  };
+  });
 
   // Avisa o SAC (via menção, mesmo padrão do ComprasTab) que uma OS concluiu
   // com itens diferentes do orçamento aprovado e precisa negociar o novo
   // valor com o cliente — a OS fica parada (não avança pro CQ) até isso ser
   // resolvido em SacTab.tsx (botão "🔁 Resolver Revisão").
-  const notificarRevisaoOrcamento = async (os: any, novoTotal: number) => {
+  // 7.55: devolve se o aviso saiu — antes o alerta dizia "o SAC foi avisado" mesmo sem aviso (OS sem e-mail do criador, criador não achado, menção recusada).
+  const notificarRevisaoOrcamento = async (os: any, novoTotal: number): Promise<boolean> => {
     try {
-      if (!os.criado_por_email) return;
+      if (!os.criado_por_email) return false;
       const { data: criador } = await supabase.from('auth_usuarios')
         .select('id, nome').eq('email', os.criado_por_email).maybeSingle();
-      if (!criador) return;
-      await supabase.from('mencoes').insert({
+      if (!criador) return false;
+      const { error: erroMencao } = await supabase.from('mencoes').insert({
         mencionado_id: String(criador.id), mencionado_nome: criador.nome,
         mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
         contexto: 'sac_revisao_orcamento', contexto_id: String(os.id),
@@ -655,14 +677,16 @@ function PainelSacVeicular({ currentUser }) {
         texto_trecho: `Orçamento revisado na OS ${os.numero_os} (${os.cliente_nome}) — novo total: ${fmtVal(novoTotal)} (aprovado: ${fmtVal(os.valor_orcamento)}). Negocie a aprovação do novo custo com o cliente.`,
         aba_destino: 'sac', lida: false, criado_em: new Date().toISOString(),
       });
-    } catch (e) { console.warn('Falha ao notificar SAC sobre revisão de orçamento:', e); }
+      if (erroMencao) { console.warn('Falha ao notificar SAC sobre revisão de orçamento:', erroMencao); return false; }
+      return true;
+    } catch (e) { console.warn('Falha ao notificar SAC sobre revisão de orçamento:', e); return false; }
   };
 
   // Produção conclui manutenção → compara o total apurado com o orçamento
   // aprovado (os.valor_orcamento). Se bater, segue pro CQ (Aguardando CQ);
   // se não bater, a OS permanece onde está (não avança) e o SAC é avisado
   // pra negociar o novo valor com o cliente.
-  const salvarConclusao = async () => {
+  const salvarConclusao = umaVez('concluir-manu', async () => {
     const os = modalConcluirManu;
     const agora = new Date().toISOString();
     const kpi = os.data_inicio_manutencao
@@ -673,19 +697,22 @@ function PainelSacVeicular({ currentUser }) {
     const bateu = Math.abs(novoTotal - totalAprovado) < 0.01;
 
     if (!bateu) {
-      await supabase.from('sac_ordens_servico').update({
+      const { error: erroRev } = await supabase.from('sac_ordens_servico').update({
         revisao_pendente: true,
         valor_orcamento_revisado: novoTotal,
         itens_revisados: concluirManuForm.itens_usados,
         atualizado_em: agora,
       }).eq('id', os.id);
-      await notificarRevisaoOrcamento(os, novoTotal);
+      if (erroRev) { alert(`Não foi possível registrar a revisão do orçamento da OS ${os.numero_os}: ${erroRev.message}`); return; }   // 7.55: dizia "a OS ficou pendente de revisão" sem ter gravado
+      const avisou = await notificarRevisaoOrcamento(os, novoTotal);
       setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
-      alert('Os itens não batem com o orçamento aprovado. A OS ficou pendente de revisão e o SAC foi avisado para negociar o novo valor com o cliente — conclua novamente depois que o SAC resolver.');
+      alert(avisou
+        ? 'Os itens não batem com o orçamento aprovado. A OS ficou pendente de revisão e o SAC foi avisado para negociar o novo valor com o cliente — conclua novamente depois que o SAC resolver.'
+        : 'Os itens não batem com o orçamento aprovado e a OS ficou pendente de revisão, mas NÃO foi possível avisar o SAC automaticamente. Avise o SAC diretamente para negociar o novo valor com o cliente — conclua novamente depois que ele resolver.');
       return;
     }
 
-    await supabase.from('sac_ordens_servico').update({
+    const { error: erroConc } = await supabase.from('sac_ordens_servico').update({
       status: 'Aguardando CQ',
       data_conclusao_manutencao: agora,
       materiais_utilizados: concluirManuForm.itens_usados,
@@ -696,12 +723,13 @@ function PainelSacVeicular({ currentUser }) {
       itens_revisados: null,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (erroConc) { alert(`Não foi possível concluir a manutenção da OS ${os.numero_os}: ${erroConc.message}`); return; }   // 7.55: fechava a janela e a OS ficava sem ir para o CQ
     setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
-  };
+  });
 
   // Produção inicia manutenção: registra técnico(s)/equipe + inicia KPI —
   // mesmo padrão individual/dupla/equipe da Produção de OPL.
-  const iniciarManutencao = async () => {
+  const iniciarManutencao = umaVez('iniciar-manu', async () => {
     const os = modalIniciarManu;
     const agora = new Date().toISOString();
     let upd: any = { status: 'Em Execução', data_inicio_manutencao: agora, atualizado_em: agora, modo_execucao: iniciarManuModo };
@@ -722,78 +750,87 @@ function PainelSacVeicular({ currentUser }) {
                tecnico_producao_2_nome: null, tecnico_producao_2_id: null };
     }
 
-    await supabase.from('sac_ordens_servico').update(upd).eq('id', os.id);
+    const { error: erroIniManu } = await supabase.from('sac_ordens_servico').update(upd).eq('id', os.id);
+    if (erroIniManu) { alert(`Não foi possível iniciar a manutenção da OS ${os.numero_os}: ${erroIniManu.message}`); return; }   // 7.55: fechava a janela, semeava os responsáveis e a OS seguia "Aguardando Início"
     // Semeia a lista livre de responsáveis, igual acontece em iniciarProducao (OP).
     const seedResponsaveis = [
       upd.tecnico_producao_id ? { tecnico_id: upd.tecnico_producao_id, tecnico_nome: upd.tecnico_responsavel } : null,
       upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
     ].filter(Boolean);
     if (seedResponsaveis.length > 0) {
-      await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r: any) => ({
+      const { error: erroSeedManu } = await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r: any) => ({
         tipo: 'os', referencia_id: os.id, papel: 'responsavel',
         tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
         adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
       })));
+      if (erroSeedManu) alert('A manutenção foi iniciada, mas a lista de responsáveis da OS não foi gravada (' + erroSeedManu.message + '). Use "EQUIPE" na linha da OS para incluí-los.');
     }
     setModalIniciarManu(null); setIniciarManuTecnico(''); setIniciarManuTecnicoId(null);
     setIniciarManuModo('individual'); setIniciarManuTecnico2(''); setIniciarManuTecnico2Id(null); setIniciarManuEquipeSel(null);
     load();
-  };
+  });
 
   // ── Gerenciar Equipe (responsáveis/apoios livres, pós-início) — OS ─────────
   const carregarEquipeAtualOS = async (os: any) => {
-    const { data } = await supabase.from('responsaveis_producao')
+    const { data, error } = await supabase.from('responsaveis_producao')
       .select('*').eq('tipo', 'os').eq('referencia_id', os.id).order('criado_em');
+    if (error) { setErroEquipeOS(error.message); return; }   // 7.55: leitura que falha parecia "Nenhum responsável ainda"
+    setErroEquipeOS('');
     setEquipeAtualOS(data || []);
   };
 
   const abrirGerenciarEquipeOS = (os: any) => {
     setModalGerenciarEquipeOS(os);
+    setEquipeAtualOS([]); setErroEquipeOS('');   // 7.55: não mostrar a equipe da OS anterior se a leitura desta falhar
     setNovoRespNomeOS(''); setNovoRespIdOS(null);
     setNovoApoioNomeOS(''); setNovoApoioIdOS(null);
     carregarEquipeAtualOS(os);
   };
 
-  const adicionarMembroEquipeOS = async (papel: 'responsavel'|'apoio') => {
+  const adicionarMembroEquipeOS = (papel: 'responsavel'|'apoio') => umaVez('equipe-add-' + papel, async () => {
     const os = modalGerenciarEquipeOS;
     if (!os) return;
     const nome = papel === 'responsavel' ? novoRespNomeOS : novoApoioNomeOS;
     const id   = papel === 'responsavel' ? novoRespIdOS   : novoApoioIdOS;
     if (!nome.trim()) { alert('Selecione um técnico.'); return; }
-    await supabase.from('responsaveis_producao').insert([{
+    const { error: erroAdd } = await supabase.from('responsaveis_producao').insert([{
       tipo: 'os', referencia_id: os.id, papel, tecnico_id: id, tecnico_nome: nome,
       adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
     }]);
+    if (erroAdd) { alert(`Não foi possível adicionar ${nome} à OS ${os.numero_os}: ${erroAdd.message}`); return; }   // 7.55: limpava o campo e a lista não mudava, sem aviso
     if (papel === 'responsavel') { setNovoRespNomeOS(''); setNovoRespIdOS(null); }
     else { setNovoApoioNomeOS(''); setNovoApoioIdOS(null); }
     carregarEquipeAtualOS(os);
-  };
+  })();
 
-  const removerMembroEquipeOS = async (membro: any) => {
+  const removerMembroEquipeOS = (membro: any) => umaVez('equipe-rem-' + membro.id, async () => {
     if (!await confirmar(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
-    await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
+    const { error: erroRem } = await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
+    if (erroRem) { alert(`Não foi possível remover ${membro.tecnico_nome}: ${erroRem.message}`); return; }   // 7.55
     carregarEquipeAtualOS(modalGerenciarEquipeOS);
-  };
+  })();
 
   // Salva observação de produção sem concluir (durante execução)
-  const salvarObsProducao = async () => {
-    await supabase.from('sac_ordens_servico').update({
+  const salvarObsProducao = umaVez('obs-prod', async () => {
+    const { error: erroObs } = await supabase.from('sac_ordens_servico').update({
       observacoes_manutencao: obsText.trim() || null,
       atualizado_em: new Date().toISOString(),
     }).eq('id', modalObsProd.id);
+    if (erroObs) { alert(`Não foi possível salvar a observação da OS ${modalObsProd.numero_os}: ${erroObs.message}`); return; }   // 7.55: fechava a janela e perdia o texto
     setModalObsProd(null); setObsText(''); load();
-  };
+  });
 
   // Produção salva itens conferidos durante execução (sem concluir)
-  const salvarItensExecucao = async () => {
+  const salvarItensExecucao = umaVez('itens-exec', async () => {
     const os = modalItensExecucao;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error: erroItens } = await supabase.from('sac_ordens_servico').update({
       materiais_utilizados: itensExecucao,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (erroItens) { alert(`Não foi possível salvar os itens da OS ${os.numero_os}: ${erroItens.message}`); return; }   // 7.55: fechava a janela e perdia a conferência
     setModalItensExecucao(null); setItensExecucao([]); load();
-  };
+  });
 
   const isAtrasada = (os) => {
     if (os.status !== 'Provisionada' || !os.data_provisionamento) return false;
@@ -817,6 +854,12 @@ function PainelSacVeicular({ currentUser }) {
         </div>
       )}
 
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
+          Não foi possível ler as OS veiculares ({erroLeitura}). Isso não quer dizer que não haja OS aguardando a Produção{ordens.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
+
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
           <span style={{color:'#991b1b'}}>🔧 SAC Veicular — Ações da Produção ({ordens.length})</span>
@@ -824,7 +867,7 @@ function PainelSacVeicular({ currentUser }) {
         </div>
         <div className="sec-body" style={{overflowX:'auto',padding:0}}>
           {loading ? <div className="acn-empty">Carregando...</div> : ordens.length === 0 ? (
-            <div className="acn-empty">Nenhuma OS veicular aguardando ação da Produção.</div>
+            <div className="acn-empty">{erroLeitura ? 'Leitura falhou — veja o aviso acima.' : 'Nenhuma OS veicular aguardando ação da Produção.'}</div>
           ) : (
             <table>
               <thead><tr>
@@ -1148,7 +1191,9 @@ function PainelSacVeicular({ currentUser }) {
               <>
                 <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
                 {equipesManu.length === 0 ? (
-                  <div style={{fontSize:10,color:'#ef4444',marginBottom:14}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
+                  erroEquipesManu
+                    ? <Faixa tom="erro" acao={<Botao pequeno onClick={fetchEquipesManu}>Tentar de novo</Botao>}>Não foi possível ler as equipes ({erroEquipesManu}). Isso não quer dizer que não haja equipe cadastrada.</Faixa>
+                    : <div style={{fontSize:10,color:'#ef4444',marginBottom:14}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
                 ) : (
                   <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14}}>
                     {equipesManu.map(eq => (
@@ -1185,6 +1230,11 @@ function PainelSacVeicular({ currentUser }) {
               Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
               do valor de mão de obra desta OS, além do que os responsáveis já recebem.
             </div>
+            {erroEquipeOS && (
+              <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarEquipeAtualOS(modalGerenciarEquipeOS)}>Tentar de novo</Botao>}>
+                Não foi possível ler a equipe desta OS ({erroEquipeOS}). Os "Nenhum ... ainda" abaixo não são confiáveis.
+              </Faixa>
+            )}
 
             <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>RESPONSÁVEIS</div>
             {equipeAtualOS.filter(m=>m.papel==='responsavel').length === 0 ? (
