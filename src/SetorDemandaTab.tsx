@@ -11,7 +11,11 @@ import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { confirmar, pedirTexto } from './Feedback';
-import { hojeISO, diaISO, Faixa, Botao } from './Interface';
+import { hojeISO, diaISO, Faixa, Botao, Chips, Abas, Selo } from './Interface';
+import Icone from './Icone';
+import {
+  mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline,
+} from '@mdi/js';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -21,11 +25,11 @@ function fmtHHMMSS(horas) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
-// SAC OS status → cor
-const SAC_STATUS_COR = {
-  'Diagnóstico':'#0891b2','Orçamento Pronto':'#7c3aed','Orç. Enviado':'#f59e0b',
-  'Aprovado':'#22c55e','Reprovado':'#ef4444','Em Execução':'#8b5cf6',
-  'Concluído':'#0d9488','Entregue':'#166534',
+// SAC OS status → família de cor do guia (Etapa 12e15)
+const SAC_STATUS_FAMILIA = {
+  'Diagnóstico':'info','Orçamento Pronto':'marca','Orç. Enviado':'atencao',
+  'Aprovado':'ok','Reprovado':'erro','Em Execução':'marca',
+  'Concluído':'ok','Entregue':'ok',
 };
 
 // ─── Fila de OFI (Ordem de Fabricação Interna) ────────────────────────────────
@@ -89,35 +93,31 @@ function OfiQueueSection({ setor, cor, currentUser }) {
         </Faixa>
       )}
       {ofis.length > 0 && (
-        <div className="sec-card" style={{ marginTop:12 }}>
-          <div className="sec-hdr" style={{ background:`${cor}12`, borderBottom:`2px solid ${cor}` }}>
-            <span style={{ color: cor }}>🏭 Ordens de Fabricação Interna ({ofis.length})</span>
+        <div className="sec-card acn-set-espaco">
+          <div className="sec-hdr">
+            <span className="acn-alm-titulo"><Icone path={mdiFactory} size={16} /> Ordens de Fabricação Interna ({ofis.length})</span>
           </div>
-          <div className="sec-body" style={{ padding:'10px 12px' }}>
+          <div className="sec-body acn-alm-solic-corpo">
             {ofis.map(ofi => (
-              <div key={ofi.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
-                border:`1px solid ${cor}40`, borderRadius:6, marginBottom:6, fontSize:11 }}>
-                <div style={{ flex:1 }}>
+              <div key={ofi.id} className="acn-alm-solic">
+                <div className="acn-alm-solic-texto">
                   <strong>{ofi.numero_ofi}</strong> — {ofi.descricao} · {ofi.quantidade}
                   {ofi.vinculo_descricao && (
-                    <div onClick={() => abrirVinculo({ tipo: ofi.vinculo_tipo, id: ofi.vinculo_id, descricao: ofi.vinculo_descricao })}
-                      style={{ fontSize:9, color:'#1d4ed8', cursor:'pointer', textDecoration:'underline', marginTop:2 }}>
-                      🔗 {TIPO_LABEL[ofi.vinculo_tipo] || ofi.vinculo_tipo}: {ofi.vinculo_descricao}
+                    <div className="acn-sub-info acn-set-link" onClick={() => abrirVinculo({ tipo: ofi.vinculo_tipo, id: ofi.vinculo_id, descricao: ofi.vinculo_descricao })}>
+                      <Icone path={mdiLinkVariant} size={12} /> {TIPO_LABEL[ofi.vinculo_tipo] || ofi.vinculo_tipo}: {ofi.vinculo_descricao}
                     </div>
                   )}
                   {ofi.origem === 'almoxarifado' && (
-                    <div style={{ fontSize:9, color:'#9ca3af' }}>origem: solicitação de reposição do Almoxarifado</div>
+                    <div className="acn-ajuda">origem: solicitação de reposição do Almoxarifado</div>
                   )}
                 </div>
-                <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:10,
-                  background: ofi.status === 'Pendente' ? '#fef9c3' : '#dbeafe',
-                  color: ofi.status === 'Pendente' ? '#854d0e' : '#1e40af' }}>
+                <Selo familia={ofi.status === 'Pendente' ? 'atencao' : 'info'} ponto={false}>
                   {ofi.status}
-                </span>
-                <button className="acn-btn" style={{ background: cor, fontSize:10, padding:'5px 10px' }}
+                </Selo>
+                <Botao variante="primario" pequeno icone={atualizando === ofi.id ? undefined : ofi.status === 'Pendente' ? mdiPlayOutline : mdiCheckCircleOutline}
                   onClick={() => avancarStatus(ofi)} disabled={atualizando === ofi.id}>
-                  {atualizando === ofi.id ? '...' : ofi.status === 'Pendente' ? '▶ Iniciar' : '✅ Concluir'}
-                </button>
+                  {atualizando === ofi.id ? '...' : ofi.status === 'Pendente' ? 'Iniciar' : 'Concluir'}
+                </Botao>
               </div>
             ))}
           </div>
@@ -125,16 +125,22 @@ function OfiQueueSection({ setor, cor, currentUser }) {
       )}
       {modalVerOfi && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget) setModalVerOfi(null);}}>
-          <div className="modal-box" style={{ maxWidth: 980 }}>
-            <div className="modal-title">{modalVerOfi.numero_ofi} — {modalVerOfi.setor_destino}</div>
-            <div style={{ fontSize:12, marginBottom:8 }}>{modalVerOfi.descricao} · {modalVerOfi.quantidade}</div>
-            {modalVerOfi.vinculo_descricao && (
-              <div style={{ fontSize:11, color:'#1d4ed8', marginBottom:8 }}>
-                🔗 {TIPO_LABEL[modalVerOfi.vinculo_tipo] || modalVerOfi.vinculo_tipo}: {modalVerOfi.vinculo_descricao}
-              </div>
-            )}
-            <div style={{ fontSize:11, marginBottom:12 }}>Status: <strong>{modalVerOfi.status}</strong></div>
-            <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={()=>setModalVerOfi(null)}>Fechar</button>
+          <div className="modal-box acn-modal-cadastro acn-set-ver" role="dialog" aria-label="Ordem de fabricação interna">
+            <div className="acn-modal-cab">
+              <span className="modal-title">{modalVerOfi.numero_ofi} — {modalVerOfi.setor_destino}</span>
+            </div>
+            <div className="acn-modal-corpo">
+              <div>{modalVerOfi.descricao} · {modalVerOfi.quantidade}</div>
+              {modalVerOfi.vinculo_descricao && (
+                <div className="acn-sub-info">
+                  <Icone path={mdiLinkVariant} size={12} /> {TIPO_LABEL[modalVerOfi.vinculo_tipo] || modalVerOfi.vinculo_tipo}: {modalVerOfi.vinculo_descricao}
+                </div>
+              )}
+              <div>Status: <strong>{modalVerOfi.status}</strong></div>
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalVerOfi(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
@@ -190,49 +196,48 @@ function RelatoriosSetor({ setor, cor }) {
 
   const porOpl  = dados.reduce((acc,d)=>{ const k=d.numero_opl||'Sem OP'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
   const porResp = dados.reduce((acc,d)=>{ const k=d.responsavel_nome||'Nao iniciada'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
-  const corS    = (s) => ({Pendente:'#f59e0b','Em Andamento':'#3b82f6',Concluido:'#22c55e'})[s]||'#94a3b8';
+  // Etapa 12e15 (06/10/2026): a cor de cada situação vem da família do guia, não de hex escrito à mão.
+  const famS    = (s) => ({Pendente:'atencao','Em Andamento':'info',Concluido:'ok'})[s]||'neutro';
 
   const total = dados.length;
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr" style={{background:'#1e293b'}}><span style={{color:'white'}}>Relatórios — {setor}</span></div>
-      <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0',background:'#f8fafc'}}>
-        <div className="form-row" style={{marginBottom:0}}>
-          <div className="form-group"><label className="acn-label">De</label>
-            <input type="date" className="acn-input" style={{width:'100%'}} value={filtroInicio} onChange={e=>setFiltroInicio(e.target.value)} /></div>
-          <div className="form-group"><label className="acn-label">Até</label>
-            <input type="date" className="acn-input" style={{width:'100%'}} value={filtroFim} onChange={e=>setFiltroFim(e.target.value)} /></div>
-          <div style={{display:'flex',alignItems:'flex-end'}}>
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
+      <div className="sec-hdr"><span>Relatórios — {setor}</span></div>
+      <div className="sec-body acn-set-filtros">
+        <div className="form-row">
+          <div className="form-group"><label className="acn-label" htmlFor="rel-de">De</label>
+            <input id="rel-de" type="date" className="acn-input" value={filtroInicio} onChange={e=>setFiltroInicio(e.target.value)} /></div>
+          <div className="form-group"><label className="acn-label" htmlFor="rel-ate">Até</label>
+            <input id="rel-ate" type="date" className="acn-input" value={filtroFim} onChange={e=>setFiltroFim(e.target.value)} /></div>
+          <div className="acn-set-alinha-base">
+            <Botao variante="primario" onClick={buscar}>Filtrar</Botao>
           </div>
-          <div style={{display:'flex',alignItems:'flex-end',gap:4,flexWrap:'wrap',marginLeft:'auto'}}>
-            {[{id:'resumo',label:'Resumo'},{id:'lista',label:'Lista'},{id:'atrasados',label:'Atrasados'},{id:'por_opl',label:'Por OP'},{id:'por_resp',label:'Por Responsável'}].map(a=>(
-              <button key={a.id} className="acn-btn" style={{background:abaRelat===a.id?'#1e293b':'#94a3b8',fontSize:10,padding:'4px 10px'}} onClick={()=>setAbaRelat(a.id)}>{a.label}</button>
-            ))}
+          <div className="acn-set-alinha-base acn-kb-empurra">
+            <Chips ativo={abaRelat} onChange={setAbaRelat} itens={[{id:'resumo',rotulo:'Resumo'},{id:'lista',rotulo:'Lista'},{id:'atrasados',rotulo:'Atrasados'},{id:'por_opl',rotulo:'Por OP'},{id:'por_resp',rotulo:'Por Responsável'}]} />
           </div>
         </div>
       </div>
 
-      <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+      <div className="sec-body">
+        <div className="acn-kpis">
           {[
-            {label:'Total',          val:total,              cor:'#2563eb'},
-            {label:'Pendentes',      val:pendentes.length,   cor:'#f59e0b'},
-            {label:'Em Andamento',   val:andamento.length,   cor:'#3b82f6'},
-            {label:'Concluídas',     val:concluidos.length,  cor:'#22c55e'},
-            {label:'Atrasadas',      val:atrasados.length,   cor:'#ef4444'},
-            {label:'Tempo Médio (útil)', val:tempoMedio?fmtH(tempoMedio):'—', cor:tempoMedio&&tempoMedio<=24?'#22c55e':tempoMedio?'#f59e0b':'#94a3b8'},
+            {label:'Total',          val:total,              fam:'info'},
+            {label:'Pendentes',      val:pendentes.length,   fam:'atencao'},
+            {label:'Em Andamento',   val:andamento.length,   fam:'info'},
+            {label:'Concluídas',     val:concluidos.length,  fam:'ok'},
+            {label:'Atrasadas',      val:atrasados.length,   fam:'erro'},
+            {label:'Tempo Médio (útil)', val:tempoMedio?fmtH(tempoMedio):'—', fam:tempoMedio&&tempoMedio<=24?'ok':tempoMedio?'atencao':'neutro'},
           ].map(c=>(
-            <div key={c.label} style={{flex:'1 1 120px',minWidth:100,background:'white',border:`1px solid #e2e8f0`,borderTop:`3px solid ${c.cor}`,borderRadius:4,padding:'8px 10px'}}>
-              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>{c.label}</div>
-              <div style={{fontSize:20,fontWeight:700,color:c.cor}}>{carregando?'...':c.val}</div>
+            <div key={c.label} className="acn-kpi">
+              <span className="rot"><i data-acn-familia={c.fam} />{c.label}</span>
+              <span className="val acn-num">{carregando?'...':c.val}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="sec-body" style={{overflowX:'auto'}}>
+      <div className="sec-body acn-rolagem">
         {erroBusca && (
           <Faixa tom="erro" acao={<Botao pequeno onClick={buscar}>Tentar de novo</Botao>}>
             Não foi possível ler as demandas do período ({erroBusca}). Isso não quer dizer que não haja demanda.
@@ -241,43 +246,43 @@ function RelatoriosSetor({ setor, cor }) {
         {carregando ? <div className="acn-empty">Carregando...</div> : (
           abaRelat==='lista' ? (
             dados.length===0 ? <div className="acn-empty">Nenhuma demanda no período.</div> : (
-              <table><thead><tr><th>Data</th><th>OP</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Início</th><th>Conclusão</th><th>Tempo Útil</th></tr></thead>
+              <table className="acn-tabela acn-densa"><thead><tr><th>Data</th><th>OP</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Início</th><th>Conclusão</th><th>Tempo Útil</th></tr></thead>
               <tbody>{dados.map(d=>(
                 <tr key={d.id}>
                   <td>{fmtDt(d.data_abertura)}</td><td>{d.numero_opl||'—'}</td>
-                  <td style={{ maxWidth:180, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
-                  <td><span className="acn-badge" style={{background:corS(d.status)}}>{d.status}</span></td>
+                  <td className="acn-texto-medio">{d.descricao||'—'}</td>
+                  <td><Selo familia={famS(d.status)} ponto={false}>{d.status}</Selo></td>
                   <td>{d.responsavel_nome||'—'}</td><td>{fmtDtHr(d.data_inicio)}</td>
                   <td>{fmtDtHr(d.data_conclusao)}</td><td>{fmtH(d.tempo_execucao_horas)}</td>
                 </tr>
               ))}</tbody></table>
             )
           ) : abaRelat==='atrasados' ? (
-            atrasados.length===0 ? <div className="acn-empty" style={{color:'#22c55e'}}>Nenhuma atrasada.</div> : (
-              <table><thead><tr><th>Data</th><th>OP</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Aberta há (h)</th></tr></thead>
+            atrasados.length===0 ? <div className="acn-empty acn-txt-ok">Nenhuma atrasada.</div> : (
+              <table className="acn-tabela acn-densa"><thead><tr><th>Data</th><th>OP</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Aberta há (h)</th></tr></thead>
               <tbody>{atrasados.map(d=>(
-                <tr key={d.id} style={{background:'#fff5f5'}}>
-                  <td style={{color:'#dc2626',fontWeight:600}}>{fmtDt(d.data_abertura)}</td>
+                <tr key={d.id} className="acn-linha-alerta">
+                  <td><span className="acn-txt-erro">{fmtDt(d.data_abertura)}</span></td>
                   <td>{d.numero_opl||'—'}</td>
-                  <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
-                  <td><span className="acn-badge" style={{background:'#ef4444'}}>{d.status}</span></td>
+                  <td className="acn-texto-medio">{d.descricao||'—'}</td>
+                  <td><Selo familia="erro" ponto={false}>{d.status}</Selo></td>
                   <td>{d.responsavel_nome||'Nao iniciada'}</td>
-                  <td><strong style={{color:'#dc2626'}}>{((agora-new Date(d.data_abertura))/3600000).toFixed(0)}h</strong></td>
+                  <td><strong className="acn-txt-erro">{((agora-new Date(d.data_abertura))/3600000).toFixed(0)}h</strong></td>
                 </tr>
               ))}</tbody></table>
             )
           ) : abaRelat==='por_opl' ? (
             Object.entries(porOpl).map(([opl,itens])=>(
-              <div key={opl} style={{marginBottom:12}}>
-                <div style={{fontWeight:700,fontSize:11,background:'#f1f5f9',padding:'4px 10px',borderRadius:4,marginBottom:4,display:'flex',justifyContent:'space-between'}}>
+              <div key={opl} className="acn-set-grupo">
+                <div className="acn-set-grupo-cab">
                   <span>OP: {opl}</span>
-                  <span style={{color:'#64748b'}}>{itens.length} dem. | <span style={{color:'#22c55e'}}>{itens.filter(i=>i.status==='Concluido').length} conc.</span></span>
+                  <span className="acn-ajuda">{itens.length} dem. | <span className="acn-txt-ok">{itens.filter(i=>i.status==='Concluido').length} conc.</span></span>
                 </div>
-                <table><thead><tr><th>Descrição</th><th>Status</th><th>Responsável</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
+                <table className="acn-tabela acn-densa"><thead><tr><th>Descrição</th><th>Status</th><th>Responsável</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
                 <tbody>{itens.map(d=>(
                   <tr key={d.id}>
-                    <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
-                    <td><span className="acn-badge" style={{background:corS(d.status)}}>{d.status}</span></td>
+                    <td className="acn-texto-medio">{d.descricao||'—'}</td>
+                    <td><Selo familia={famS(d.status)} ponto={false}>{d.status}</Selo></td>
                     <td>{d.responsavel_nome||'—'}</td><td>{fmtDt(d.data_abertura)}</td>
                     <td>{fmtH(d.tempo_execucao_horas)}</td>
                   </tr>
@@ -289,17 +294,17 @@ function RelatoriosSetor({ setor, cor }) {
               const conc=itens.filter(i=>i.status==='Concluido');
               const media=conc.length?conc.map(i=>i.tempo_execucao_horas||0).reduce((a,b)=>a+b,0)/conc.length:null;
               return (
-                <div key={resp} style={{marginBottom:12}}>
-                  <div style={{fontWeight:700,fontSize:11,background:'#f1f5f9',padding:'4px 10px',borderRadius:4,marginBottom:4,display:'flex',justifyContent:'space-between',flexWrap:'wrap'}}>
+                <div key={resp} className="acn-set-grupo">
+                  <div className="acn-set-grupo-cab">
                     <span>{resp}</span>
-                    <span style={{color:'#64748b',fontSize:10}}>{itens.length} total | <span style={{color:'#22c55e'}}>{conc.length} conc.</span>{media?<span style={{color:'#2563eb'}}> | média: {fmtH(media)}</span>:''}</span>
+                    <span className="acn-ajuda">{itens.length} total | <span className="acn-txt-ok">{conc.length} conc.</span>{media?<span className="acn-txt-info"> | média: {fmtH(media)}</span>:''}</span>
                   </div>
-                  <table><thead><tr><th>OP</th><th>Descrição</th><th>Status</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
+                  <table className="acn-tabela acn-densa"><thead><tr><th>OP</th><th>Descrição</th><th>Status</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
                   <tbody>{itens.map(d=>(
                     <tr key={d.id}>
                       <td>{d.numero_opl||'—'}</td>
-                      <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
-                      <td><span className="acn-badge" style={{background:corS(d.status)}}>{d.status}</span></td>
+                      <td className="acn-texto-medio">{d.descricao||'—'}</td>
+                      <td><Selo familia={famS(d.status)} ponto={false}>{d.status}</Selo></td>
                       <td>{fmtDt(d.data_abertura)}</td><td>{fmtH(d.tempo_execucao_horas)}</td>
                     </tr>
                   ))}</tbody></table>
@@ -310,17 +315,19 @@ function RelatoriosSetor({ setor, cor }) {
             /* RESUMO */
             dados.length===0 ? <div className="acn-empty">Nenhuma demanda no período.</div> : (
               <div>
-                <div style={{fontWeight:700,color:'#1e293b',marginBottom:6,fontSize:11}}>Distribuição por Status</div>
-                {[{label:'Pendente',itens:pendentes,cor:'#f59e0b'},{label:'Em Andamento',itens:andamento,cor:'#3b82f6'},{label:'Concluído',itens:concluidos,cor:'#22c55e'},{label:'Atrasado (>48h)',itens:atrasados,cor:'#ef4444'}].map(g=>(
-                  <div key={g.label} style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                    <span style={{minWidth:140,fontSize:11}}>{g.label}</span>
-                    <div style={{flex:1,background:'#f1f5f9',borderRadius:3,height:16,overflow:'hidden'}}>
-                      <div style={{width:total>0?`${(g.itens.length/total*100).toFixed(0)}%`:'0%',height:'100%',background:g.cor,transition:'width 0.4s'}} />
+                <div className="acn-quadro-titulo">Distribuição por Status</div>
+                <div className="acn-fin-barras">
+                {[{label:'Pendente',itens:pendentes,fam:'atencao'},{label:'Em Andamento',itens:andamento,fam:'info'},{label:'Concluído',itens:concluidos,fam:'ok'},{label:'Atrasado (>48h)',itens:atrasados,fam:'erro'}].map(g=>(
+                  <div key={g.label} className="acn-fin-barra">
+                    <span className="acn-set-barra-nome">{g.label}</span>
+                    <div className="acn-fin-barra-trilho" data-acn-familia={g.fam}>
+                      <i style={{width:total>0?`${(g.itens.length/total*100).toFixed(0)}%`:'0%'}} />
                     </div>
-                    <span style={{minWidth:60,textAlign:'right',fontWeight:700,color:g.cor}}>{g.itens.length} ({total>0?(g.itens.length/total*100).toFixed(0):0}%)</span>
+                    <span className="acn-set-barra-valor" data-acn-familia={g.fam}>{g.itens.length} ({total>0?(g.itens.length/total*100).toFixed(0):0}%)</span>
                   </div>
                 ))}
-                {tempoMedio!=null&&<div style={{marginTop:8,padding:'8px 12px',background:'#f0fdf4',borderRadius:4,border:'1px solid #bbf7d0',fontSize:11}}>Tempo médio útil: <strong style={{color:'#16a34a'}}>{fmtH(tempoMedio)}</strong> ({concluidos.length} amostras)</div>}
+                </div>
+                {tempoMedio!=null&&<div className="acn-quadro tom-ok"><div>Tempo médio útil: <strong>{fmtH(tempoMedio)}</strong> ({concluidos.length} amostras)</div></div>}
               </div>
             )
           )
@@ -732,8 +739,8 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   });
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
-  const corPrioridade = (p) => ({Alta:'#ef4444',Media:'#f59e0b',Baixa:'#22c55e',Normal:'#94a3b8'})[p]||'#94a3b8';
-  const statusCor = { Pendente:'#f59e0b','Em Andamento':'#3b82f6',Concluido:'#22c55e' };
+  // Etapa 12e15 (06/10/2026): a cor de cada situação vem da família do guia (a cor do setor, `cor`, deixa de pintar o cabeçalho).
+  const statusFam = { Pendente:'atencao','Em Andamento':'info',Concluido:'ok' };
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
   const fmtH  = (h) => h != null ? `${Number(h).toFixed(1)}h úteis` : '—';
 
@@ -742,37 +749,39 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   const tempos    = demandas.filter(d=>d.tempo_execucao_horas).map(d=>d.tempo_execucao_horas);
   const mediaT    = tempos.length ? tempos.reduce((a,b)=>a+b,0)/tempos.length : null;
 
-  // ── Badges e row style para SAC ───────────────────────────────────────────
+  // ── Badges e marca da linha para SAC ──────────────────────────────────────
   const sacOs = (d) => d.sac_os_id ? sacOrdensMap[d.sac_os_id] : null;
-  const sacRowBg = (d, isAjuste) => {
+  const sacRowClasse = (d, isAjuste) => {
     const os = sacOs(d);
     if (os) {
-      if (os.status==='Reprovado') return '#fef2f2';
-      if (['Aprovado','Em Execução'].includes(os.status) && d.sac_fase==='execucao') return '#eff6ff';
-      if (['Concluído','Entregue'].includes(os.status)) return '#f0fdf4';
+      if (os.status==='Reprovado') return 'acn-linha-alerta';
+      if (['Aprovado','Em Execução'].includes(os.status) && d.sac_fase==='execucao') return 'acn-linha-info';
     }
-    if (isAjuste) return d.status==='Em Andamento' ? '#fefce8' : '#fffbeb';
+    if (isAjuste) return 'acn-linha-envio';
     return undefined;
   };
 
   const sacBadge = (d) => {
     const os = sacOs(d);
     if (!os) return null;
-    const bg = SAC_STATUS_COR[os.status]||'#94a3b8';
-    return <span className="acn-badge" style={{background:bg,fontSize:8,display:'block',marginBottom:2}}>{os.numero_os}</span>;
+    return <div className="acn-set-selo-linha"><Selo familia={SAC_STATUS_FAMILIA[os.status]||'neutro'} ponto={false}>{os.numero_os}</Selo></div>;
   };
 
   const sacFlagBadge = (d) => {
     const os = sacOs(d);
     if (!os) return null;
-    if (os.status==='Reprovado') return <span className="acn-badge" style={{background:'#ef4444',fontSize:8}}>REPROVADO</span>;
-    if (['Aprovado','Em Execução'].includes(os.status) && d.sac_fase==='execucao') return <span className="acn-badge" style={{background:'#22c55e',fontSize:8}}>APROVADO</span>;
-    if (['Concluído','Entregue'].includes(os.status)) return <span className="acn-badge" style={{background:'#166534',fontSize:8}}>PRONTO</span>;
-    if (d.sac_fase==='diagnostico') return <span className="acn-badge" style={{background:'#0891b2',fontSize:8}}>DIAGNÓSTICO</span>;
+    if (os.status==='Reprovado') return <Selo familia="erro" ponto={false}>REPROVADO</Selo>;
+    if (['Aprovado','Em Execução'].includes(os.status) && d.sac_fase==='execucao') return <Selo familia="ok" ponto={false}>APROVADO</Selo>;
+    if (['Concluído','Entregue'].includes(os.status)) return <Selo familia="ok" ponto={false}>PRONTO</Selo>;
+    if (d.sac_fase==='diagnostico') return <Selo familia="info" ponto={false}>DIAGNÓSTICO</Selo>;
     return null;
   };
 
   // ── Ações por linha ───────────────────────────────────────────────────────
+  const abrirObs = (d) => { setModalObs(d); setObsTexto(''); };
+  const botaoPausa = (d) => d.pausado
+    ? <Botao key="ret" pequeno icone={mdiPlay} onClick={()=>retomar(d)}>RETOMAR</Botao>
+    : <Botao key="pau" pequeno icone={mdiPause} onClick={()=>pausar(d)}>PAUSAR</Botao>;
   const renderAcoes = (d) => {
     const isAjuste = d.descricao?.startsWith('[AJUSTE]');
     const os = sacOs(d);
@@ -780,45 +789,41 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     // SAC diagnóstico
     if (d.sac_os_id && d.sac_fase === 'diagnostico') {
       if (d.status === 'Pendente')
-        return [<button key="ini" className="acn-btn" style={{background:'#0891b2'}} onClick={()=>abrirIniciar(d)}>INICIAR DIAGNÓSTICO</button>];
+        return [<Botao key="ini" variante="primario" pequeno onClick={()=>abrirIniciar(d)}>INICIAR DIAGNÓSTICO</Botao>];
       if (d.status === 'Em Andamento')
         return [
-          <button key="obs" className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>OBS</button>,
-          <button key="orc" className="acn-btn" style={{background:'#7c3aed',fontSize:10}} onClick={()=>{setModalFinalizarOrc(d);setFinalizarOrcForm({observacoes:d.observacoes_execucao||'',valor:'',condicoes:''});}}>FINALIZAR ORÇAMENTO</button>,
-          d.pausado
-            ? <button key="ret" className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>retomar(d)}>▶ RETOMAR</button>
-            : <button key="pau" className="acn-btn" style={{background:'#64748b',fontSize:10}} onClick={()=>pausar(d)}>⏸ PAUSAR</button>,
+          <Botao key="obs" pequeno onClick={()=>abrirObs(d)}>OBS</Botao>,
+          <Botao key="orc" variante="primario" pequeno onClick={()=>{setModalFinalizarOrc(d);setFinalizarOrcForm({observacoes:d.observacoes_execucao||'',valor:'',condicoes:''});}}>FINALIZAR ORÇAMENTO</Botao>,
+          botaoPausa(d),
         ];
       if (d.status === 'Concluido')
-        return [<button key="log" className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>VER LOG</button>];
+        return [<Botao key="log" variante="discreto" pequeno onClick={()=>abrirObs(d)}>VER LOG</Botao>];
     }
 
     // SAC execução
     if (d.sac_os_id && d.sac_fase === 'execucao') {
       if (d.status === 'Pendente' && os?.status !== 'Reprovado')
-        return [<button key="ini" className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirIniciar(d)}>INICIAR REPARO</button>];
+        return [<Botao key="ini" variante="primario" pequeno onClick={()=>abrirIniciar(d)}>INICIAR REPARO</Botao>];
       if (d.status === 'Em Andamento')
         return [
-          <button key="obs" className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>OBS</button>,
-          <button key="conc" className="acn-btn" style={{background:'#0d9488'}} onClick={()=>concluir(d)}>CONCLUIR REPARO</button>,
-          d.pausado
-            ? <button key="ret" className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>retomar(d)}>▶ RETOMAR</button>
-            : <button key="pau" className="acn-btn" style={{background:'#64748b',fontSize:10}} onClick={()=>pausar(d)}>⏸ PAUSAR</button>,
+          <Botao key="obs" pequeno onClick={()=>abrirObs(d)}>OBS</Botao>,
+          <Botao key="conc" variante="primario" pequeno onClick={()=>concluir(d)}>CONCLUIR REPARO</Botao>,
+          botaoPausa(d),
         ];
       if (d.status === 'Concluido')
-        return [<button key="log" className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>VER LOG</button>];
+        return [<Botao key="log" variante="discreto" pequeno onClick={()=>abrirObs(d)}>VER LOG</Botao>];
       // Reprovado
       if (os?.status === 'Reprovado')
-        return [<button key="log" className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>VER LOG</button>];
+        return [<Botao key="log" variante="discreto" pequeno onClick={()=>abrirObs(d)}>VER LOG</Botao>];
     }
 
     // Demanda regular
     if (d.status === 'Pendente')
-      return [<button key="ini" className="acn-btn" style={{background: isAjuste?'#f59e0b':(cor||'#1e293b')}} onClick={()=>abrirIniciar(d)}>INICIAR</button>];
+      return [<Botao key="ini" variante={isAjuste ? 'secundario' : 'primario'} pequeno onClick={()=>abrirIniciar(d)}>INICIAR</Botao>];
     if (d.status === 'Em Andamento')
       return [
-        <button key="obs"  className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>OBS</button>,
-        <button key="conc" className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{
+        <Botao key="obs" pequeno onClick={()=>abrirObs(d)}>OBS</Botao>,
+        <Botao key="conc" variante="primario" pequeno onClick={()=>{
           if (setor === 'Compras') {
             setModalConcluirCompra(d);
             setCompraForm({
@@ -831,13 +836,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
             setAnexosCotacao(Array.isArray(d.anexos) ? d.anexos : []);
           }
           else concluir(d);
-        }}>CONCLUIR</button>,
-        d.pausado
-          ? <button key="ret" className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>retomar(d)}>▶ RETOMAR</button>
-          : <button key="pau" className="acn-btn" style={{background:'#64748b',fontSize:10}} onClick={()=>pausar(d)}>⏸ PAUSAR</button>,
+        }}>CONCLUIR</Botao>,
+        botaoPausa(d),
       ];
     if (d.status === 'Concluido')
-      return [<button key="log" className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>VER LOG</button>];
+      return [<Botao key="log" variante="discreto" pequeno onClick={()=>abrirObs(d)}>VER LOG</Botao>];
     return [];
   };
 
@@ -847,49 +850,45 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       ? d.descricao.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','')
       : d.descricao?.replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—';
     const timer = timerUteis(d);
-    const os = sacOs(d);
     return (
-      <tr key={d.id} style={{background:sacRowBg(d,isAjuste)}}>
-        <td style={{fontSize:10}}>{fmtDt(d.data_abertura)}</td>
+      <tr key={d.id} className={sacRowClasse(d,isAjuste)}>
+        <td className="acn-set-data">{fmtDt(d.data_abertura)}</td>
         <td>{d.numero_opl||'—'}</td>
-        <td style={{minWidth:210, maxWidth:340}}>
-          {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
-          {setor === 'Compras' && d.tipo_solicitacao && (
-            <span style={{background: d.tipo_solicitacao==='cotacao' ? '#7c3aed' : '#0891b2', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
-              {d.tipo_solicitacao==='cotacao' ? 'COTAÇÃO' : 'COMPRA'}
-            </span>
-          )}
-          {setor === 'Serralheria' && d.tipo_solicitacao === 'liberacao_parcial_bom' && (
-            <span style={{background:'#7c3aed', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
-              🔧 LIB. PARCIAL BOM
-            </span>
-          )}
+        <td className="acn-set-desc-cel">
+          <div className="acn-selos">
+            {isAjuste && <Selo familia="atencao" ponto={false}>AJUSTE</Selo>}
+            {setor === 'Compras' && d.tipo_solicitacao && (
+              <Selo familia={d.tipo_solicitacao==='cotacao' ? 'marca' : 'info'} ponto={false}>
+                {d.tipo_solicitacao==='cotacao' ? 'COTAÇÃO' : 'COMPRA'}
+              </Selo>
+            )}
+            {setor === 'Serralheria' && d.tipo_solicitacao === 'liberacao_parcial_bom' && (
+              <Selo familia="marca" ponto={false}><Icone path={mdiWrenchOutline} size={12} /> LIB. PARCIAL BOM</Selo>
+            )}
+          </div>
           {sacBadge(d)}
           {sacFlagBadge(d)}
-          {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
+          {d.pausado && <span className="acn-txt-atencao acn-set-pausado"><Icone path={mdiPause} size={12} /> PAUSADO</span>}
           {/* Descrição em até 3 linhas: pedido de compra com especificação longa
               deixava a linha com meia tela de altura. O texto completo está no
               Resumo (e no título, ao passar o mouse). */}
-          <span title={descExibida} style={{ display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden',
-            minWidth:200, maxWidth:320, wordBreak:'break-word', lineHeight:1.35 }}>{descExibida}</span>
-          <button onClick={() => setModalVer(d)} title="Resumo da demanda: descrição completa, origem, OP, prazos, valores e observações"
-            style={{marginTop:2,padding:'1px 7px',fontSize:9,fontWeight:700,background:'#e2e8f0',
-              color:'#475569',border:'none',borderRadius:3,cursor:'pointer'}}>
-            🔍 RESUMO
-          </button>
+          <span title={descExibida} className="acn-set-desc">{descExibida}</span>
+          <Botao variante="discreto" pequeno icone={mdiMagnify} onClick={() => setModalVer(d)} title="Resumo da demanda: descrição completa, origem, OP, prazos, valores e observações">
+            RESUMO
+          </Botao>
         </td>
-        <td><span className="acn-badge" style={{background:statusCor[d.status]||'#94a3b8'}}>{d.status}</span></td>
+        <td><Selo familia={statusFam[d.status]||'neutro'} ponto={false}>{d.status}</Selo></td>
         <td>{d.responsavel_nome||'—'}</td>
         <td>
           {timer
-            ? <span style={{fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
-            : <span style={{fontSize:10,color:'#94a3b8'}}>{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
+            ? <span className={'acn-set-timer ' + (d.pausado ? 'acn-txt-atencao' : 'acn-txt-info')}>{timer}</span>
+            : <span className="acn-ajuda">{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
           }
         </td>
-        <td style={{fontSize:10,color:'#0d9488'}}>{d.status==='Concluido'?fmtH(d.tempo_execucao_horas):''}</td>
-        <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+        <td><span className="acn-txt-ok">{d.status==='Concluido'?fmtH(d.tempo_execucao_horas):''}</span></td>
+        <td className="acn-set-celula-acoes"><div className="acn-acoes-linha quebra">
           {renderAcoes(d)}
-          <button className="acn-btn" style={{background:'#475569',fontSize:10,padding:'3px 7px'}} onClick={()=>imprimirDemanda(d)} title="Imprimir demanda">🖨️</button>
+          <Botao variante="discreto" pequeno icone={mdiPrinterOutline} onClick={()=>imprimirDemanda(d)} title="Imprimir demanda" aria-label="Imprimir demanda" />
         </div></td>
       </tr>
     );
@@ -902,23 +901,20 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   // Usados nas duas disposições (setor comum e tela única do Compras)
   const cardDemandas = (
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:cor||'#1e293b',color:'white'}}>
+        <div className="sec-hdr">
           <span>{setor} — Demandas</span>
-          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-            <span style={{fontSize:10,opacity:.8}}>
+          <div className="acn-set-hdr-controles">
+            <span className="acn-ajuda">
               {pendentes} pend. | {andamento} em and. {mediaT?`| média: ${fmtH(mediaT)}`:''}
             </span>
-            {['Pendente','Em Andamento','Concluido','Todos'].map(s=>(
-              <button key={s} className="acn-btn"
-                style={{background:filtro===s?'white':'rgba(255,255,255,0.2)',color:filtro===s?(cor||'#1e293b'):'white',fontSize:10,padding:'3px 8px'}}
-                onClick={()=>setFiltro(s)}>{s}</button>
-            ))}
+            <Chips ativo={filtro} onChange={setFiltro} itens={['Pendente','Em Andamento','Concluido','Todos'].map(s => ({ id: s, rotulo: s }))} />
           </div>
         </div>
 
         {/* Legenda horas úteis */}
-        <div style={{background:'#f0fdf4',borderBottom:'1px solid #bbf7d0',padding:'4px 12px',fontSize:9,color:'#166534',display:'flex',alignItems:'center',gap:8}}>
-          <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:45) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
+        <div className="acn-set-legenda">
+          <Icone path={mdiClockOutline} size={14} />
+          <span>KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:45) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
         </div>
 
         {erroLeitura && (
@@ -926,11 +922,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
             Não foi possível ler as demandas ({erroLeitura}). Isso não quer dizer que não haja demanda{demandas.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
           </Faixa>
         )}
-        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+        <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : demandas.length===0 ? (
             <div className="acn-empty">Nenhuma demanda {filtro!=='Todos'?`com status "${filtro}"`:''}.</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Data</th><th>OP Ref.</th><th>Descrição</th><th>Status</th>
                 <th>Responsável</th><th>Timer (h úteis)</th><th>KPI</th><th>Ações</th>
@@ -939,12 +935,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
                 {demandasAtivas.map(renderDemandaRow)}
                 {agruparPorStatusDemanda && demandasConcluidas.length > 0 && (
                   <tr>
-                    <td colSpan={8} style={{padding:0}}>
-                      <button onClick={()=>setMostrarConcluidas(v=>!v)}
-                        style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
-                          background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
-                        {mostrarConcluidas ? '▲ Ocultar' : '▼ Mostrar'} Concluídas ({demandasConcluidas.length})
-                      </button>
+                    <td colSpan={8} className="acn-set-concluidas-cel">
+                      <Botao variante="discreto" icone={mostrarConcluidas ? mdiChevronUp : mdiChevronDown} className="acn-set-concluidas" onClick={()=>setMostrarConcluidas(v=>!v)}>
+                        {mostrarConcluidas ? 'Ocultar' : 'Mostrar'} Concluídas ({demandasConcluidas.length})
+                      </Botao>
                     </td>
                   </tr>
                 )}
@@ -969,14 +963,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div>
-      {/* SELECTOR ABAS — a tela do Compras é uma só, sem abas */}
+      {/* SELETOR ABAS — a tela do Compras é uma só, sem abas */}
       {!layoutUnico && (
-        <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:`2px solid ${cor||'#1e293b'}`}}>
-          <button style={{flex:1,padding:'8px',background:abaAtiva==='demandas'?(cor||'#1e293b'):'white',color:abaAtiva==='demandas'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-            onClick={()=>setAbaAtiva('demandas')}>Demandas Ativas</button>
-          <button style={{flex:1,padding:'8px',background:abaAtiva==='relatorios'?(cor||'#1e293b'):'white',color:abaAtiva==='relatorios'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-            onClick={()=>setAbaAtiva('relatorios')}>Relatórios</button>
-        </div>
+        <Abas className="acn-set-abas" ativa={abaAtiva} onChange={setAbaAtiva}
+          itens={[{ id: 'demandas', rotulo: 'Demandas Ativas' }, { id: 'relatorios', rotulo: 'Relatórios' }]} />
       )}
 
       {layoutUnico ? (
@@ -1010,28 +1000,36 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       {/* ════════ MODAL INICIAR ════════ */}
       {modalIniciar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">
-              {modalIniciar.sac_fase==='diagnostico' ? '🔬 Iniciar Diagnóstico SAC' : modalIniciar.sac_fase==='execucao' ? '🔧 Iniciar Reparo SAC' : `Iniciar — ${setor}`}
+          <div className="modal-box acn-modal-cadastro acn-set-jan" role="dialog" aria-label="Iniciar demanda">
+            <div className="acn-modal-cab">
+              <span className="modal-title">
+                {modalIniciar.sac_fase==='diagnostico' ? <><Icone path={mdiMicroscope} size={16} /> Iniciar Diagnóstico SAC</> : modalIniciar.sac_fase==='execucao' ? <><Icone path={mdiWrenchOutline} size={16} /> Iniciar Reparo SAC</> : `Iniciar — ${setor}`}
+              </span>
             </div>
-            {modalIniciar.sac_os_id && sacOrdensMap[modalIniciar.sac_os_id] && (
-              <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:11}}>
-                <strong>OS:</strong> {sacOrdensMap[modalIniciar.sac_os_id].numero_os} &nbsp;|&nbsp;
-                {modalIniciar.sac_fase==='execucao'?<span style={{color:'#22c55e',fontWeight:700}}>✅ Aprovado — KPI execução inicia agora</span>:<span style={{color:'#0891b2'}}>KPI orçamento em andamento</span>}
+            <div className="acn-modal-corpo acn-form-cheio">
+              {modalIniciar.sac_os_id && sacOrdensMap[modalIniciar.sac_os_id] && (
+                <div className="acn-quadro tom-ok">
+                  <div>
+                    <strong>OS:</strong> {sacOrdensMap[modalIniciar.sac_os_id].numero_os} &nbsp;|&nbsp;
+                    {modalIniciar.sac_fase==='execucao'?<span className="acn-txt-ok"><Icone path={mdiCheckCircleOutline} size={13} /> Aprovado — KPI execução inicia agora</span>:<span className="acn-txt-info">KPI orçamento em andamento</span>}
+                  </div>
+                </div>
+              )}
+              <div className="acn-quadro">
+                <div><strong>Demanda:</strong> {modalIniciar.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'}</div>
               </div>
-            )}
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10,background:'#f8fafc',padding:'8px 10px',borderRadius:4}}>
-              <strong>Demanda:</strong> {modalIniciar.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'}
+              <div className="form-group">
+                <label className="acn-label">Responsável pela Execução *</label>
+                <ColaboradorSelect
+                  value={responsavelIniciar} onChange={setResponsavelIniciar}
+                  placeholder="Selecione o responsável"
+                  className="acn-input"
+                  autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciar()} />
+              </div>
             </div>
-            <label className="acn-label">Responsável pela Execução *</label>
-            <ColaboradorSelect
-              value={responsavelIniciar} onChange={setResponsavelIniciar}
-              placeholder="Selecione o responsável"
-              className="acn-input" style={{width:'100%',marginBottom:12}}
-              autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciar()} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:cor||'#1e293b',flex:1}} onClick={confirmarIniciar}>INICIAR</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={confirmarIniciar}>INICIAR</Botao>
+              <Botao onClick={()=>setModalIniciar(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1040,32 +1038,33 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       {/* ════════ MODAL OBSERVAÇÃO / LOG ════════ */}
       {modalObs && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:500}}>
-            <div className="modal-title">Observações / Log</div>
-            {(modalObs.logs_demanda||[]).length>0 && (
-              <div style={{maxHeight:180,overflowY:'auto',marginBottom:12,background:'#f8fafc',borderRadius:4,padding:'8px 10px',border:'1px solid #e2e8f0'}}>
-                {(modalObs.logs_demanda||[]).map((l,i)=>(
-                  <div key={i} style={{marginBottom:6,fontSize:10,borderBottom:i<(modalObs.logs_demanda||[]).length-1?'1px solid #e2e8f0':'none',paddingBottom:4}}>
-                    <span style={{color:'#94a3b8',fontSize:9}}>{l.hora?new Date(l.hora).toLocaleString('pt-BR'):''} · {l.usuario||''}</span>
-                    <div style={{color:'#374151',marginTop:2}}>{l.texto}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {modalObs.status !== 'Concluido' && (
-              <>
-                <label className="acn-label">Nova Observação {modalObs.sac_os_id?'(vai para o corpo da OS)':''}</label>
-                <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
-                  value={obsTexto} onChange={e=>setObsTexto(e.target.value)} />
-                <div style={{display:'flex',gap:8}}>
-                  <button className="acn-btn" style={{background:cor||'#1e293b',flex:1}} onClick={addObservacao}>SALVAR OBS.</button>
-                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObs(null)}>Fechar</button>
+          <div className="modal-box acn-modal-cadastro acn-set-jan acn-set-obs" role="dialog" aria-label="Observações e log">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Observações / Log</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              {(modalObs.logs_demanda||[]).length>0 && (
+                <div className="acn-quadro acn-eng-logs">
+                  {(modalObs.logs_demanda||[]).map((l,i)=>(
+                    <div key={i} className="acn-eng-log">
+                      <span className="acn-ajuda">{l.hora?new Date(l.hora).toLocaleString('pt-BR'):''} · {l.usuario||''}</span>
+                      <div>{l.texto}</div>
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
-            {modalObs.status === 'Concluido' && (
-              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalObs(null)}>Fechar</button>
-            )}
+              )}
+              {modalObs.status !== 'Concluido' && (
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="set-obs">Nova Observação {modalObs.sac_os_id?'(vai para o corpo da OS)':''}</label>
+                  <textarea id="set-obs" className="acn-input" rows={3}
+                    value={obsTexto} onChange={e=>setObsTexto(e.target.value)} />
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              {modalObs.status !== 'Concluido' && <Botao variante="primario" onClick={addObservacao}>SALVAR OBS.</Botao>}
+              <Botao onClick={()=>setModalObs(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
@@ -1073,61 +1072,63 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       {/* ════════ MODAL VER DESCRIÇÃO COMPLETA ════════ */}
       {modalVer && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalVer(null);}}>
-          <div className="modal-box" style={{maxWidth:560}}>
-            <div className="modal-title">🔍 Resumo — {modalVer.numero_demanda || modalVer.numero_opl || 'Demanda'}</div>
-            {(() => {
-              const m = modalVer;
-              const itens = [
-                ['Status', m.status],
-                ['Tipo', m.tipo_solicitacao === 'cotacao' ? 'Cotação' : m.tipo_solicitacao === 'compra' ? 'Compra' : m.tipo_solicitacao],
-                ['Setor', [m.setor_origem, m.setor_destino].filter(Boolean).join(' → ')],
-                ['OP', m.numero_opl || m.opl],
-                ['Quantidade', m.quantidade ? `${m.quantidade} ${m.unidade || ''}`.trim() : null],
-                ['Solicitado por', m.criado_por_nome || m.criado_por],
-                ['Aberta em', m.data_abertura ? new Date(m.data_abertura).toLocaleString('pt-BR') : null],
-                ['Responsável', m.responsavel_nome],
-                ['Concluída em', m.data_conclusao ? new Date(m.data_conclusao).toLocaleString('pt-BR') : null],
-                ['Tempo de execução', m.tempo_execucao_horas != null ? `${Number(m.tempo_execucao_horas).toFixed(1)}h úteis` : null],
-                ['Valor da compra', m.valor_compra != null ? Number(m.valor_compra).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) : null],
-                ['Prev. recebimento', m.data_prevista_recebimento ? new Date(String(m.data_prevista_recebimento).slice(0,10) + 'T00:00:00').toLocaleDateString('pt-BR') : null],
-                ['Centro de custo', m.centro_custo],
-                ['Prioridade', m.prioridade],
-              ].filter(([, v]) => v !== null && v !== undefined && v !== '');
-              return (
-                <div style={{display:'grid',gridTemplateColumns:'130px 1fr',gap:'3px 10px',fontSize:11,marginBottom:10}}>
-                  {itens.map(([k, v]) => (
-                    <React.Fragment key={k}>
-                      <span style={{color:'#64748b',fontWeight:700,fontSize:10}}>{k}</span>
-                      <span style={{color:'#1e293b',wordBreak:'break-word'}}>{v}</span>
-                    </React.Fragment>
+          <div className="modal-box acn-modal-cadastro acn-set-ver" role="dialog" aria-label="Resumo da demanda">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiMagnify} size={16} /> Resumo — {modalVer.numero_demanda || modalVer.numero_opl || 'Demanda'}</span>
+            </div>
+            <div className="acn-modal-corpo">
+              {(() => {
+                const m = modalVer;
+                const itens = [
+                  ['Status', m.status],
+                  ['Tipo', m.tipo_solicitacao === 'cotacao' ? 'Cotação' : m.tipo_solicitacao === 'compra' ? 'Compra' : m.tipo_solicitacao],
+                  ['Setor', [m.setor_origem, m.setor_destino].filter(Boolean).join(' → ')],
+                  ['OP', m.numero_opl || m.opl],
+                  ['Quantidade', m.quantidade ? `${m.quantidade} ${m.unidade || ''}`.trim() : null],
+                  ['Solicitado por', m.criado_por_nome || m.criado_por],
+                  ['Aberta em', m.data_abertura ? new Date(m.data_abertura).toLocaleString('pt-BR') : null],
+                  ['Responsável', m.responsavel_nome],
+                  ['Concluída em', m.data_conclusao ? new Date(m.data_conclusao).toLocaleString('pt-BR') : null],
+                  ['Tempo de execução', m.tempo_execucao_horas != null ? `${Number(m.tempo_execucao_horas).toFixed(1)}h úteis` : null],
+                  ['Valor da compra', m.valor_compra != null ? Number(m.valor_compra).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) : null],
+                  ['Prev. recebimento', m.data_prevista_recebimento ? new Date(String(m.data_prevista_recebimento).slice(0,10) + 'T00:00:00').toLocaleDateString('pt-BR') : null],
+                  ['Centro de custo', m.centro_custo],
+                  ['Prioridade', m.prioridade],
+                ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+                return (
+                  <div>
+                    {itens.map(([k, v]) => (
+                      <div key={k} className="acn-ficha-linha">
+                        <span>{k}</span>
+                        <span>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              <div className="acn-quadro-titulo">Descrição</div>
+              <div className="acn-quadro acn-set-texto-longo">
+                <Linkify text={modalVer.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'} />
+              </div>
+              {Array.isArray(modalVer.anexos) && modalVer.anexos.length > 0 && (
+                <div className="acn-selos">
+                  <strong>Anexos: </strong>
+                  {modalVer.anexos.map((a:any, i:number) => (
+                    <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-tag"><Icone path={mdiPaperclip} size={12} /> {a.nome || 'arquivo'}</a>
                   ))}
                 </div>
-              );
-            })()}
-            <div style={{fontWeight:700,fontSize:11,color:'#475569',marginBottom:4}}>Descrição</div>
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:'12px 14px',
-              whiteSpace:'pre-wrap',fontSize:12,lineHeight:1.7,color:'#1e293b',maxHeight:400,overflowY:'auto'}}>
-              <Linkify text={modalVer.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'} />
+              )}
+              {(modalVer.observacoes_execucao) && (
+                <>
+                  <div className="acn-quadro-titulo">Observações de execução:</div>
+                  <div className="acn-quadro tom-ok acn-set-texto-longo">
+                    <Linkify text={modalVer.observacoes_execucao} />
+                  </div>
+                </>
+              )}
             </div>
-            {Array.isArray(modalVer.anexos) && modalVer.anexos.length > 0 && (
-              <div style={{marginTop:10,fontSize:11}}>
-                <span style={{fontWeight:700,color:'#475569'}}>Anexos: </span>
-                {modalVer.anexos.map((a:any, i:number) => (
-                  <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{marginRight:8}}>📎 {a.nome || 'arquivo'}</a>
-                ))}
-              </div>
-            )}
-            {(modalVer.observacoes_execucao) && (
-              <>
-                <div style={{fontWeight:700,fontSize:11,color:'#475569',marginTop:14,marginBottom:4}}>Observações de execução:</div>
-                <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,padding:'10px 14px',
-                  whiteSpace:'pre-wrap',fontSize:11,lineHeight:1.7,color:'#166534'}}>
-                  <Linkify text={modalVer.observacoes_execucao} />
-                </div>
-              </>
-            )}
-            <div style={{marginTop:16,textAlign:'right'}}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVer(null)}>Fechar</button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalVer(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -1136,90 +1137,89 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       {/* ════════ MODAL CONCLUIR COMPRA ════════ */}
       {modalConcluirCompra && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setModalConcluirCompra(null);}}}>
-          <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">🛒 Concluir Compra</div>
-            <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>
-              {modalConcluirCompra.descricao?.substring(0,80)}{modalConcluirCompra.descricao?.length>80?'...':''}
+          <div className="modal-box acn-modal-cadastro acn-set-jan" role="dialog" aria-label="Concluir compra">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCartOutline} size={16} /> Concluir Compra</span>
             </div>
-            {erroCentros && (
-              <Faixa tom="erro">Não foi possível ler os centros de custo ({erroCentros}). Sem eles não dá para concluir a compra; feche e abra de novo.</Faixa>
-            )}
-
-            {canVerValorCompra && (
-              <div style={{marginBottom:12}}>
-                <label className="acn-label">💰 Valor total da compra (R$)</label>
-                <input className="acn-input" type="number" step="0.01" min="0"
-                  value={compraForm.valor}
-                  onChange={e=>setCompraForm(f=>({...f,valor:e.target.value}))}
-                  placeholder="Ex: 1500.00"
-                  style={{width:'100%'}} />
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalConcluirCompra.descricao?.substring(0,80)}{modalConcluirCompra.descricao?.length>80?'...':''}
               </div>
-            )}
+              {erroCentros && (
+                <Faixa tom="erro">Não foi possível ler os centros de custo ({erroCentros}). Sem eles não dá para concluir a compra; feche e abra de novo.</Faixa>
+              )}
 
-            <div style={{marginBottom:12}}>
-              <label className="acn-label">📅 Previsão de recebimento *</label>
-              <input className="acn-input" type="date"
-                value={compraForm.prazo}
-                onChange={e=>setCompraForm(f=>({...f,prazo:e.target.value}))}
-                style={{width:'100%'}} />
-            </div>
+              {canVerValorCompra && (
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="cc-valor"><Icone path={mdiCashMultiple} size={13} /> Valor total da compra (R$)</label>
+                  <input id="cc-valor" className="acn-input" type="number" step="0.01" min="0"
+                    value={compraForm.valor}
+                    onChange={e=>setCompraForm(f=>({...f,valor:e.target.value}))}
+                    placeholder="Ex: 1500.00" />
+                </div>
+              )}
 
-            <div style={{marginBottom:12}}>
-              <label className="acn-label">🏷️ Centro de Custo *</label>
-              <select className="acn-input" style={{width:'100%'}}
-                value={compraForm.centro_custo_id||''}
-                onChange={e=>setCompraForm(f=>({...f,centro_custo_id:e.target.value}))}>
-                <option value="">— Selecionar —</option>
-                {/* Etapa 15a (05/10/2026): só agrupa / fora da vigência não é oferecido (o que já está gravado continua visível) */}
-                {centrosParaApontar(centrosCusto, compraForm.centro_custo_id || null).map(c => (
-                  <option key={c.id} value={c.id} disabled={c.bloqueado}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}{c.bloqueado ? ` (${motivoBloqueio(c)})` : ''}</option>
-                ))}
-              </select>
-            </div>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="cc-prazo"><Icone path={mdiCalendarOutline} size={13} /> Previsão de recebimento *</label>
+                <input id="cc-prazo" className="acn-input" type="date"
+                  value={compraForm.prazo}
+                  onChange={e=>setCompraForm(f=>({...f,prazo:e.target.value}))} />
+              </div>
 
-            <div style={{marginBottom:16}}>
-              <label className="acn-label">🔗 Vincular a uma OP/OS (opcional)</label>
-              <input className="acn-input" style={{width:'100%'}}
-                placeholder="Buscar por número da OP..."
-                value={opBuscaCompra} onChange={e=>buscarOpCompra(e.target.value)} />
-              {opResultadosCompra.length > 0 && (
-                <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginTop:4,maxHeight:110,overflowY:'auto'}}>
-                  {opResultadosCompra.map(o => (
-                    <div key={o.id} onClick={()=>{setCompraForm(f=>({...f,numero_opl:o.opl}));setOpBuscaCompra(o.opl);setOpResultadosCompra([]);}}
-                      style={{padding:'5px 8px',fontSize:11,cursor:'pointer',borderBottom:'1px solid #f1f5f9'}}>
-                      <strong>{o.opl}</strong> — {o.cliente_nome||'—'}
-                    </div>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="cc-centro"><Icone path={mdiTagOutline} size={13} /> Centro de Custo *</label>
+                <select id="cc-centro" className="acn-input"
+                  value={compraForm.centro_custo_id||''}
+                  onChange={e=>setCompraForm(f=>({...f,centro_custo_id:e.target.value}))}>
+                  <option value="">— Selecionar —</option>
+                  {/* Etapa 15a (05/10/2026): só agrupa / fora da vigência não é oferecido (o que já está gravado continua visível) */}
+                  {centrosParaApontar(centrosCusto, compraForm.centro_custo_id || null).map(c => (
+                    <option key={c.id} value={c.id} disabled={c.bloqueado}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}{c.bloqueado ? ` (${motivoBloqueio(c)})` : ''}</option>
                   ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="acn-label" htmlFor="cc-op"><Icone path={mdiLinkVariant} size={13} /> Vincular a uma OP/OS (opcional)</label>
+                <input id="cc-op" className="acn-input"
+                  placeholder="Buscar por número da OP..."
+                  value={opBuscaCompra} onChange={e=>buscarOpCompra(e.target.value)} />
+                {opResultadosCompra.length > 0 && (
+                  <div className="acn-sugestao-lista acn-set-sugestoes">
+                    {opResultadosCompra.map(o => (
+                      <div key={o.id} className="acn-sugestao-item" onClick={()=>{setCompraForm(f=>({...f,numero_opl:o.opl}));setOpBuscaCompra(o.opl);setOpResultadosCompra([]);}}>
+                        <strong>{o.opl}</strong> — {o.cliente_nome||'—'}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {modalConcluirCompra.tipo_solicitacao === 'cotacao' && (
+                <div className="acn-quadro">
+                  <div className="acn-label"><Icone path={mdiPaperclip} size={13} /> Anexar cotação (PDF, imagem, planilha)</div>
+                  <div className="acn-selos">
+                    {anexosCotacao.map((a,i) => (
+                      <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-tag">
+                        <Icone path={mdiPaperclip} size={12} /> {a.nome}
+                      </a>
+                    ))}
+                  </div>
+                  <input type="file" id="anexo-cotacao-input" hidden
+                    onChange={e=>{const f=e.target.files?.[0]; if(f) uploadAnexoCotacao(f, modalConcluirCompra.id); e.target.value='';}} />
+                  <Botao pequeno icone={mdiPaperclip} disabled={enviandoAnexo}
+                    onClick={()=>document.getElementById('anexo-cotacao-input')?.click()}>
+                    {enviandoAnexo ? 'Enviando...' : 'Anexar Arquivo'}
+                  </Botao>
+                  <div className="acn-ajuda">
+                    O solicitante será avisado automaticamente ao confirmar, com o valor cotado.
+                  </div>
                 </div>
               )}
             </div>
-
-            {modalConcluirCompra.tipo_solicitacao === 'cotacao' && (
-              <div style={{marginBottom:16,background:'#f5f3ff',border:'1px solid #c4b5fd',borderRadius:6,padding:'8px 10px'}}>
-                <label className="acn-label" style={{color:'#6d28d9'}}>📎 Anexar cotação (PDF, imagem, planilha)</label>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4,marginBottom:6}}>
-                  {anexosCotacao.map((a,i) => (
-                    <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{fontSize:9,background:'#fff',border:'1px solid #c4b5fd',color:'#6d28d9',borderRadius:4,padding:'3px 8px',textDecoration:'none',fontWeight:600}}>
-                      📎 {a.nome}
-                    </a>
-                  ))}
-                </div>
-                <input type="file" id="anexo-cotacao-input" style={{display:'none'}}
-                  onChange={e=>{const f=e.target.files?.[0]; if(f) uploadAnexoCotacao(f, modalConcluirCompra.id); e.target.value='';}} />
-                <button className="acn-btn" style={{background:'#7c3aed',fontSize:9,padding:'4px 10px',opacity:enviandoAnexo?.6:1}}
-                  disabled={enviandoAnexo}
-                  onClick={()=>document.getElementById('anexo-cotacao-input')?.click()}>
-                  {enviandoAnexo ? 'Enviando...' : '📎 Anexar Arquivo'}
-                </button>
-                <div style={{fontSize:8,color:'#6d28d9',marginTop:4}}>
-                  O solicitante será avisado automaticamente ao confirmar, com o valor cotado.
-                </div>
-              </div>
-            )}
-
-            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirCompra(null)}>Cancelar</button>
-              <button className="acn-btn" style={{background:'#22c55e'}} onClick={confirmarConcluirCompra}>✅ Confirmar Conclusão</button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalConcluirCompra(null)}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiCheckCircleOutline} onClick={confirmarConcluirCompra}>Confirmar Conclusão</Botao>
             </div>
           </div>
         </div>
@@ -1228,24 +1228,34 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       {/* ════════ MODAL FINALIZAR ORÇAMENTO (Lab SAC) ════════ */}
       {modalFinalizarOrc && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">🧾 Finalizar Orçamento — {sacOrdensMap[modalFinalizarOrc.sac_os_id]?.numero_os}</div>
-            <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-              Este orçamento será enviado ao SAC para aprovação do cliente. O KPI de elaboração será calculado agora.
+          <div className="modal-box acn-modal-cadastro acn-set-jan" role="dialog" aria-label="Finalizar orçamento">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiReceiptTextOutline} size={16} /> Finalizar Orçamento — {sacOrdensMap[modalFinalizarOrc.sac_os_id]?.numero_os}</span>
             </div>
-            <label className="acn-label">Laudo / Observações do Diagnóstico</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="Descreva o diagnóstico, componentes a substituir, procedimentos..."
-              value={finalizarOrcForm.observacoes} onChange={e=>setFinalizarOrcForm(f=>({...f,observacoes:e.target.value}))} />
-            <label className="acn-label">Valor do Orçamento (R$) *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:10}} placeholder="Ex: 1.500,00"
-              value={finalizarOrcForm.valor} onChange={e=>setFinalizarOrcForm(f=>({...f,valor:e.target.value}))} />
-            <label className="acn-label">Condições de Pagamento</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:12}} placeholder="Ex: À vista ou 50%+50%"
-              value={finalizarOrcForm.condicoes} onChange={e=>setFinalizarOrcForm(f=>({...f,condicoes:e.target.value}))} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={finalizarOrcamento}>FINALIZAR E ENVIAR AO SAC</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFinalizarOrc(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <Faixa tom="info">
+                Este orçamento será enviado ao SAC para aprovação do cliente. O KPI de elaboração será calculado agora.
+              </Faixa>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="orc-laudo">Laudo / Observações do Diagnóstico</label>
+                <textarea id="orc-laudo" className="acn-input" rows={3}
+                  placeholder="Descreva o diagnóstico, componentes a substituir, procedimentos..."
+                  value={finalizarOrcForm.observacoes} onChange={e=>setFinalizarOrcForm(f=>({...f,observacoes:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="orc-valor">Valor do Orçamento (R$) *</label>
+                <input id="orc-valor" className="acn-input" placeholder="Ex: 1.500,00"
+                  value={finalizarOrcForm.valor} onChange={e=>setFinalizarOrcForm(f=>({...f,valor:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="orc-cond">Condições de Pagamento</label>
+                <input id="orc-cond" className="acn-input" placeholder="Ex: À vista ou 50%+50%"
+                  value={finalizarOrcForm.condicoes} onChange={e=>setFinalizarOrcForm(f=>({...f,condicoes:e.target.value}))} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={finalizarOrcamento}>FINALIZAR E ENVIAR AO SAC</Botao>
+              <Botao onClick={()=>setModalFinalizarOrc(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>

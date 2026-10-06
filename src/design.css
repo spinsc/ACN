@@ -1371,3 +1371,40 @@ html body .modal-box.acn-modal-cadastro.acn-pcp-kiting { width: min(980px, 96vw)
 .acn-pcp-sugestao { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-size: 13px; cursor: pointer; border-top: 1px solid var(--acn-line-soft); }
 .acn-pcp-setor { font-weight: 800; color: var(--acn-brand-ink); }
 div.acn-sub-info { display: flex; align-items: center; gap: 4px; }
+
+/* ── Telas dos setores · 12e15 (06/10/2026): Serralheria, Chicotes, Laboratório, Telecom e Compras no molde do guia ──────── */
+.acn-set-espaco { margin-top: 12px; }
+.acn-set-abas { margin-bottom: 10px; }
+.acn-set-link { cursor: pointer; text-decoration: underline; }
+.acn-set-hdr-controles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-set-legenda { display: flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 12px; color: var(--acn-ok); background: var(--acn-ok-soft); border-bottom: 1px solid var(--acn-line); }
+.acn-set-data { font-size: 12px; white-space: nowrap; }
+.acn-set-desc-cel { min-width: 210px; max-width: 340px; }
+.acn-set-selo-linha { margin-bottom: 2px; }
+.acn-set-pausado { display: flex; align-items: center; gap: 3px; font-size: 11px; }
+/* descrição em até 3 linhas: o texto inteiro vai na dica e no Resumo */
+.acn-set-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-width: 200px; max-width: 320px; line-height: 1.35; overflow-wrap: anywhere; }
+.acn-set-timer { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; font-weight: 700; }
+.acn-set-celula-acoes { min-width: 200px; }
+.acn-set-concluidas-cel { padding: 0 !important; }
+html body .acn-b.acn-set-concluidas { width: 100%; justify-content: flex-start; border-radius: 0; }
+table tr.acn-linha-info > td:first-child { box-shadow: inset 3px 0 0 var(--acn-info); }
+html body:not(.dark) .acn-main table.acn-tabela tr.acn-linha-info > td { background: var(--acn-info-soft) !important; }
+body.dark .acn-main table.acn-tabela tr.acn-linha-info > td { background: rgba(37, 99, 235, .12) !important; }
+html body .modal-box.acn-modal-cadastro.acn-set-jan { width: min(480px, 95vw); max-width: 480px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-set-obs { width: min(500px, 95vw); max-width: 500px; }
+html body .modal-box.acn-modal-cadastro.acn-set-ver { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
+.acn-set-jan .form-group { margin-bottom: 0; }
+.acn-set-jan .acn-modal-corpo > *, .acn-set-ver .acn-modal-corpo > * { flex-shrink: 0; }
+.acn-set-jan .acn-modal-corpo > .form-group { flex: 0 0 auto; }
+.acn-set-texto-longo { white-space: pre-wrap; max-height: 400px; overflow-y: auto; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.acn-set-sugestoes { position: static; max-height: 110px; margin-top: 4px; }
+/* relatórios */
+.acn-set-filtros .form-row { margin-bottom: 0; display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.acn-set-alinha-base { display: flex; align-items: flex-end; }
+.acn-set-grupo { margin-bottom: 12px; }
+.acn-set-grupo-cab { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--acn-ink); background: var(--acn-surface-2); border-radius: var(--acn-r2); }
+.acn-set-barra-nome { min-width: 140px; font-size: 12px; }
+.acn-set-barra-valor { min-width: 70px; text-align: right; font-size: 12px; font-weight: 700; color: var(--acn-f); }
+.acn-fin-barra-trilho[data-acn-familia] > i { background: var(--acn-f); }
+.acn-kpi .rot i[data-acn-familia] { background: var(--acn-f); }
