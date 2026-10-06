@@ -16,7 +16,7 @@ import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, Checkli
 import { confirmar, mostrarAviso } from './Feedback';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
-import { diaBR } from './Interface';
+import { diaBR, Faixa, Botao } from './Interface';
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -91,9 +91,14 @@ export default function AlmoxarifadoTab({ currentUser }) {
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
   useEffect(() => { fetchSolicitacoes(); }, []);
 
+  // Etapa 7.50: leitura que falha não pode parecer "nenhuma OP aguardando" nem "nenhuma solicitação ainda"
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [erroSolicitacoes, setErroSolicitacoes] = useState('');
   const fetchSolicitacoes = async () => {
-    const { data } = await supabase.from('almoxarifado_solicitacoes_reposicao')
+    const { data, error } = await supabase.from('almoxarifado_solicitacoes_reposicao')
       .select('*').order('criado_em', { ascending: false }).limit(20);
+    if (error) { setErroSolicitacoes(error.message); return; }
+    setErroSolicitacoes('');
     setMinhasSolicitacoes(data || []);
   };
 
@@ -115,13 +120,16 @@ export default function AlmoxarifadoTab({ currentUser }) {
     if (!silent) setLoading(true);
     const mapa = await indicePendencias();
     setPendPorOp(mapa);
-    const { data } = await supabase.from('oples').select('*')
+    const { data, error: erroOpls } = await supabase.from('oples').select('*')
       // 'Aguardando Embalagem' = OP que JA foi produzida (hoje: fabricação da
       // serralheria com envio) e voltou só para ser pesada, medida e embalada.
       // É uma segunda passagem pelo Almoxarifado, com trabalho diferente do
       // kiting — por isso status próprio (ver FluxoEntrega.ts).
       .in('status_geral', ['Aguardando Almox', STATUS_EMBALAGEM])
       .order('data_entrada', { ascending: false });
+    // se a leitura falhou, fica a lista que já estava na tela (em vez de esvaziar e dizer "nenhuma OP aguardando")
+    if (erroOpls) { setErroLeitura(erroOpls.message); if (!silent) setLoading(false); return; }
+    setErroLeitura('');
     setOpls(data || []);
 
     // O painel de recebimento lista TODA OP com material esperando conferência,
@@ -139,10 +147,11 @@ export default function AlmoxarifadoTab({ currentUser }) {
     // aqui embaixo é o que dá para resolver agora.
     const ids = [...mapa.keys()];
     if (ids.length) {
-      const { data: pend } = await supabase.from('oples')
+      const { data: pend, error: erroPend } = await supabase.from('oples')
         .select('id,opl,cliente_nome,modelo,status_geral,pendencias_kit')
         .in('id', ids)
         .not('status_geral', 'in', '("Faturado","Faturado e Disponivel para Entrega","Cancelado")');
+      if (erroPend) { setErroLeitura(erroPend.message); if (!silent) setLoading(false); return; }
       setOplsPendenciaAlmox((pend || []).filter(o => travaRecebimento(mapa.get(String(o.id)) || [], o).length));
     } else {
       setOplsPendenciaAlmox([]);
@@ -152,7 +161,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
 
   const setAlmox = async (opl, statusAlmox, statusGeral, obs='', extra={}) => {
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroOp } = await supabase.from('oples').update({
       status_almox: statusAlmox,
       status_geral: statusGeral,
       obs_almox: obs,
@@ -160,15 +169,21 @@ export default function AlmoxarifadoTab({ currentUser }) {
       responsavel_almox: currentUser?.nome,
       ...extra,
     }).eq('id', opl.id);
+    // Etapa 7.50 (06/10/2026): a gravação recusada seguia como se tivesse dado certo (aviso no WhatsApp, janela fechada, "Kit 100%"
+    // dito na tela com a OP parada no banco). Agora devolve false e quem chamou para; o estoque já baixado não duplica ao repetir
+    // (a baixa trabalha por diferença).
+    if (erroOp) { alert(`Não foi possível atualizar a OP ${opl.opl}: ${erroOp.message}`); return false; }
     logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_almox: opl.status_almox, status_geral: opl.status_geral, obs_almox: opl.obs_almox },
       newRow: { status_almox: statusAlmox, status_geral: statusGeral, obs_almox: obs }, user: currentUser });
-    await supabase.from('logs_movimentacao_opl').insert([{
+    const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
       evento: `Kiting: ${statusAlmox}${obs ? ' — '+obs : ''}`,
       status_anterior: opl.status_geral, status_novo: statusGeral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    if (erroLog) mostrarAviso(`A OP ${opl.opl} foi atualizada, mas o histórico de movimentação não foi gravado: ${erroLog.message}`, 'atencao');
+    return true;
   };
 
   // ── Embalagem (Fase 2) ─────────────────────────────────────────────────────
@@ -345,7 +360,7 @@ Embalar e enviar assim mesmo?`)) return;
     const baixaEmb = conferencia.length
       ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser })
       : null;
-    await setAlmox(opl, 'Kit OK', freteComCliente ? STATUS_AGUARDANDO_LIBERACAO_COMERCIAL : 'Aguardando Cotacao Frete',
+    const gravouOp = await setAlmox(opl, 'Kit OK', freteComCliente ? STATUS_AGUARDANDO_LIBERACAO_COMERCIAL : 'Aguardando Cotacao Frete',
       [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · '), {
       ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
       seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
@@ -357,6 +372,8 @@ Embalar e enviar assim mesmo?`)) return;
       // alguém abrir esta OP, o selo mostra quem paga o frete
       frete_responsavel: f.frete_responsavel,
     });
+    // 7.50: sem a OP atualizada não abre frete, não avisa ninguém e a janela fica aberta para tentar de novo
+    if (!gravouOp) { setSalvandoEmb(false); return; }
 
     // 2) nasce a solicitação de frete (status default 'Cotação') pra Logística
     //    — só quando é a empresa quem paga (CIF)
@@ -464,8 +481,8 @@ Embalar e enviar assim mesmo?`)) return;
     if (divergencias(conferencia).length) {
       // separado diferente da BOM: o kit segue, mas com pendência visível para PCP e Engenharia
       const texto = 'Diferença com a BOM — ' + resumoDivergencias(conferencia);
-      await setAlmox(modalSeriais, 'Liberado com Pendencia', 'Aguardando Almox',
-        [texto, recado].filter(Boolean).join(' · '), extra);
+      if (!await setAlmox(modalSeriais, 'Liberado com Pendencia', 'Aguardando Almox',
+        [texto, recado].filter(Boolean).join(' · '), extra)) return;
       notificarEvento('kit_pendencia', msg.kitPendencia(modalSeriais.opl, texto, currentUser?.nome));
       if (baixa.negativos.length) {
         alert(`Kit liberado com pendência, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
@@ -475,7 +492,7 @@ Embalar e enviar assim mesmo?`)) return;
       return;
     }
     const obs = [modalSeriais._pendenciaSanada ? 'Pendencia sanada' : '', recado].filter(Boolean).join(' · ');
-    await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, extra);
+    if (!await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, extra)) return;
     notificarEvento('kit_ok', msg.kitOk(modalSeriais.opl, currentUser?.nome));
     if (baixa.negativos.length) {
       alert(`Kit confirmado, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
@@ -505,16 +522,19 @@ Embalar e enviar assim mesmo?`)) return;
       const baixa = await baixarKitDaOp({ opl, linhas: conferencia, currentUser });
       const recado = textoDaBaixa(baixa);
       const prontas = conferencia.filter(l => Number(l.separado) >= Number(l.planejado)).length;
-      await supabase.from('oples').update({
+      const { error: erroSep } = await supabase.from('oples').update({
         kit_conferencia: registroConferencia(conferencia, currentUser),
         responsavel_almox: currentUser?.nome,
       }).eq('id', opl.id);
-      await supabase.from('logs_movimentacao_opl').insert([{
+      // 7.50: o estoque já baixou; se a conferência não gravou, a pessoa precisa saber para salvar de novo (não baixa duas vezes)
+      if (erroSep) { alert(`O material já deu baixa no estoque, mas a separação não foi gravada na OP: ${erroSep.message}\n\nClique em SALVAR SEPARAÇÃO de novo (o estoque não baixa duas vezes).`); return; }
+      const { error: erroLogSep } = await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
         evento: `Separação salva: ${prontas} de ${conferencia.length} item(ns)${recado ? ' — ' + recado : ''}`,
         status_anterior: opl.status_geral, status_novo: opl.status_geral,
         usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
       }]);
+      if (erroLogSep) mostrarAviso(`Separação salva, mas o histórico de movimentação não foi gravado: ${erroLogSep.message}`, 'atencao');
       if (baixa.negativos.length) {
         alert(`Separação salva, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
       } else {
@@ -526,13 +546,13 @@ Embalar e enviar assim mesmo?`)) return;
   };
 
   const faltaMaterial = async () => {
-    await setAlmox(modalFalta, 'Falta de Material', 'Aguardando Almox', obsFalta);
+    if (!await setAlmox(modalFalta, 'Falta de Material', 'Aguardando Almox', obsFalta)) return;
     notificarEvento('kit_falta_material', msg.kitFaltaMaterial(modalFalta.opl, obsFalta, currentUser?.nome));
     setModalFalta(null); setObsFalta(''); fetchAll();
   };
 
   const liberarPendencia = async () => {
-    await setAlmox(modalPend, 'Liberado com Pendencia', 'Aguardando Almox', obsPend);
+    if (!await setAlmox(modalPend, 'Liberado com Pendencia', 'Aguardando Almox', obsPend)) return;
     notificarEvento('kit_pendencia', msg.kitPendencia(modalPend.opl, obsPend, currentUser?.nome));
     setModalPend(null); setObsPend(''); fetchAll();
   };
@@ -567,16 +587,21 @@ Embalar e enviar assim mesmo?`)) return;
     setAplicandoSeriaisLote(true);
     try {
       const avisos = [];
+      // 7.50: se uma OP não grava, o lote PARA ali (as seguintes não são tentadas) e o aviso diz até onde foi
+      let aplicadas = 0, parouEm = null;
       for (let i = 0; i < linhas.length && i < irmaos.length; i++) {
         const baixa = await baixarNoLote(irmaos[i]);
         if (baixa?.negativos?.length) avisos.push(`${irmaos[i].opl}: ${baixa.negativos.map(n => n.nome).join(', ')}`);
-        await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', textoDaBaixa(baixa),
+        const gravou = await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', textoDaBaixa(baixa),
           { seriais_equipamentos: linhas[i], ...conferenciaLote(irmaos[i]) });
+        if (!gravou) { parouEm = irmaos[i].opl; break; }
+        aplicadas++;
       }
       if (avisos.length) {
         alert(`Kit fechado em lote, mas o estoque ficou negativo em:\n${avisos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
       }
-      notificarEvento('kit_ok', msg.kitOk(modalSeriaisLote.base, currentUser?.nome) + ` (${Math.min(linhas.length, irmaos.length)} unidades em lote)`);
+      if (parouEm) alert(`O lote parou na OP ${parouEm}: ${aplicadas} unidade(s) fecharam o kit e as demais continuam como estavam. Confira a lista e repita para as que faltam.`);
+      if (aplicadas > 0) notificarEvento('kit_ok', msg.kitOk(modalSeriaisLote.base, currentUser?.nome) + ` (${aplicadas} unidades em lote)`);
     } finally {
       setAplicandoSeriaisLote(false);
       setModalSeriaisLote(null); setSeriaisLoteTexto('');
@@ -590,17 +615,21 @@ Embalar e enviar assim mesmo?`)) return;
     const { base, ops } = modalKitEnvioLote;
     setProcessandoLote(true);
     try {
+      let aplicadas = 0, parouEm = null;
       for (const o of ops) {
         const itens = porOp[String(o.id)] || [];
         const baixa = await baixarNoLote(o);
-        await setAlmox(o, 'Kit OK', STATUS_EMBALAGEM,
+        const gravou = await setAlmox(o, 'Kit OK', STATUS_EMBALAGEM,
           [`Kit 100% em lote (${ops.length} unidades de ${base})`, textoDaBaixa(baixa)].filter(Boolean).join(' · '), {
           seriais_itens: itens,
           seriais_equipamentos: itens.map(x => `${x.produto}: ${x.serial}`).join('\n'),
           ...conferenciaLote(o),
         });
+        if (!gravou) { parouEm = o.opl; break; }   // 7.50: para na primeira que não grava
+        aplicadas++;
       }
-      notificarEvento('kit_ok', msg.kitOk(base, currentUser?.nome) + ` (${ops.length} unidades em lote — seguem para embalagem)`);
+      if (parouEm) alert(`O lote parou na OP ${parouEm}: ${aplicadas} unidade(s) fecharam o kit e as demais continuam como estavam. Confira a lista e repita para as que faltam.`);
+      if (aplicadas > 0) notificarEvento('kit_ok', msg.kitOk(base, currentUser?.nome) + ` (${aplicadas} unidades em lote — seguem para embalagem)`);
     } finally {
       setProcessandoLote(false);
       setModalKitEnvioLote(null);
@@ -620,12 +649,16 @@ Embalar e enviar assim mesmo?`)) return;
     if (alvo.length === 0) { alert('Nenhuma unidade deste lote se aplica.'); return; }
     setProcessandoLote(true);
     try {
+      let aplicadas = 0, parouEm = null;
       for (const opl of alvo) {
-        await setAlmox(opl, tipo === 'falta' ? 'Falta de Material' : 'Liberado com Pendencia', 'Aguardando Almox', obsLoteAcao);
+        const gravou = await setAlmox(opl, tipo === 'falta' ? 'Falta de Material' : 'Liberado com Pendencia', 'Aguardando Almox', obsLoteAcao);
+        if (!gravou) { parouEm = opl.opl; break; }   // 7.50
+        aplicadas++;
       }
+      if (parouEm) alert(`O lote parou na OP ${parouEm}: ${aplicadas} unidade(s) foram marcadas e as demais continuam como estavam. Confira a lista e repita para as que faltam.`);
       const evento = tipo === 'falta' ? 'kit_falta_material' : 'kit_pendencia';
       const msgFn = tipo === 'falta' ? msg.kitFaltaMaterial : msg.kitPendencia;
-      notificarEvento(evento, msgFn(base, obsLoteAcao, currentUser?.nome) + ` (${alvo.length} unidades em lote)`);
+      if (aplicadas > 0) notificarEvento(evento, msgFn(base, obsLoteAcao, currentUser?.nome) + ` (${aplicadas} unidades em lote)`);
     } finally {
       setProcessandoLote(false);
       setModalLoteAcao(null); setObsLoteAcao('');
@@ -638,6 +671,11 @@ Embalar e enviar assim mesmo?`)) return;
 
   return (
     <div>
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
+          Não foi possível ler as OPs do Almoxarifado ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
       {oplsPendenciaAlmox.length > 0 && (
         <div className="sec-card">
           {/* o ▾/▸ e o mostra/esconde do corpo são só do collapse global (clique em
@@ -882,7 +920,12 @@ Embalar e enviar assim mesmo?`)) return;
           </button>
         </div>
         <div className="sec-body" style={{ padding:'10px 12px' }}>
-          {minhasSolicitacoes.length === 0 ? (
+          {erroSolicitacoes && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={fetchSolicitacoes}>Tentar de novo</Botao>}>
+              Não foi possível ler as solicitações ({erroSolicitacoes}).
+            </Faixa>
+          )}
+          {minhasSolicitacoes.length === 0 && !erroSolicitacoes ? (
             <div className="acn-empty">Nenhuma solicitação de reposição ainda.</div>
           ) : (
             minhasSolicitacoes.map((s: any) => (
@@ -1252,6 +1295,7 @@ function ModalSolicitarReposicao({ currentUser, onClose, onSaved }) {
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [item, setItem] = useState<any>(null);
   const [buscando, setBuscando] = useState(false);
+  const [erroBusca, setErroBusca] = useState('');
   const [quantidade, setQuantidade] = useState('');
   const [motivo, setMotivo] = useState('');
   const [vinculo, setVinculo] = useState<VinculoValue | null>(null);
@@ -1261,10 +1305,12 @@ function ModalSolicitarReposicao({ currentUser, onClose, onSaved }) {
   const buscarItem = async (texto: string) => {
     if (!texto || texto.length < 2) { setSugestoes([]); return; }
     setBuscando(true);
-    const { data } = await supabase.from('cadastro_itens')
+    const { data, error } = await supabase.from('cadastro_itens')
       .select('id,codigo,nome,origem_producao,setor_fabricante')
       .or(`codigo.ilike.%${texto}%,nome.ilike.%${texto}%`).eq('ativo', true).order('nome').limit(8);
-    setSugestoes(data || []);
+    // 7.50: busca que falha não pode dizer "Nada encontrado."
+    setErroBusca(error ? error.message : '');
+    setSugestoes(error ? [] : (data || []));
     setBuscando(false);
   };
 
@@ -1321,7 +1367,8 @@ function ModalSolicitarReposicao({ currentUser, onClose, onSaved }) {
                   </div>
                 ))}
                 {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Buscando...</div>}
-                {!buscando && sugestoes.length===0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Nada encontrado.</div>}
+                {!buscando && erroBusca && <div style={{ padding:8, fontSize:10, color:'#b91c1c', textAlign:'center' }}>Não foi possível buscar ({erroBusca}).</div>}
+                {!buscando && !erroBusca && sugestoes.length===0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Nada encontrado.</div>}
               </div>
             )}
           </div>

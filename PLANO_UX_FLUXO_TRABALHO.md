@@ -2478,6 +2478,21 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **Limites / a observar:** no cadastro há **22 itens** com "película", "garantia estendida" ou "instalação do kit" no nome: **17 são `GENERICO`** (saem), **5 têm outra categoria** (3 "mercadoria para revenda", 1 "material de uso e consumo", 1 sem categoria) e **continuam na sugestão** — se algum deles for serviço, a correção é a categoria no cadastro de itens, não o código. A regra vale pela **categoria**, não pelo nome.
 
+### ✅ Etapa 7.50 — Almoxarifado: kiting, falta de material, pendência, embalagem e ações em lote seguiam como se tivessem gravado quando o banco recusava
+
+**Feito em:** 06/10/2026 (sessão autônoma da tarde). **Achados** ao ler `AlmoxarifadoTab.tsx` para migrá-lo (12e12), **corrigidos antes** do "antes" da migração visual, em commit à parte. **Nenhum dado foi alterado.**
+
+**Os defeitos** (`AlmoxarifadoTab.tsx`):
+
+1. **`setAlmox` (a gravação central do kiting) ignorava a resposta do banco.** Se a OP não gravasse, o sistema seguia como se tivesse dado certo: **mandava o WhatsApp de "kit OK" / "falta de material" / "pendência"**, fechava a janela, e na **embalagem abria o pedido de frete e dizia "Embalagem registrada. Solicitação de frete aberta"** com a OP parada no banco. Agora ela devolve se gravou; **quem chamou para** (sem aviso, sem frete, janela aberta para tentar de novo) e a pessoa lê "Não foi possível atualizar a OP …: motivo". Vale para o Kiting 100%, o Kit com pendência, Falta de material, Liberar com pendência e a Embalagem. O histórico de movimentação que falha agora avisa (a OP já mudou).
+2. **As ações em lote** (importar seriais, falta e pendência em lote, kiting em lote de venda para envio) seguiam para a unidade seguinte e **avisavam "N unidades em lote" mesmo sem nenhuma ter gravado**. Agora **o lote para na primeira que não grava**, diz até onde foi ("O lote parou na OP …: N unidade(s) fecharam o kit e as demais continuam como estavam") e **o WhatsApp só sai se alguma gravou**, com o número real.
+3. **"Salvar separação"**: o estoque dá baixa e depois a conferência é gravada na OP; se esta falhasse, dizia "Separação salva". Agora avisa que **o material já deu baixa mas a separação não foi gravada, e que é só salvar de novo (o estoque não baixa duas vezes — a baixa trabalha por diferença)**.
+4. **Leituras que falhavam pareciam "nenhuma OP aguardando Almoxarifado", "nenhuma solicitação de reposição ainda" e "Nada encontrado." na busca de item:** agora a faixa vermelha diz o motivo e oferece "Tentar de novo"; **se já havia lista na tela, ela fica** (em vez de esvaziar a cada atualização de 30 s que falhar).
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ, 10 OPs entre pendente, kit OK, falta, pendência, lote de 3, embalagem e venda para envio; `almox.cjs`, 47 cenários, a versão de antes × a corrigida): **37 de 47 iguais; os 10 que diferem são os de propósito** — falta de material recusada, pendência recusada, separação parcial recusada, kiting com seriais recusado, **embalagem recusada** (antes: "Embalagem registrada" + frete aberto; depois: aviso e nada aberto), pendência em lote e importar seriais recusados (**antes**: seguia e avisava; **depois**: para na 1ª e diz "0 unidade(s)"), busca de item que falha e as duas leituras que falham. Iguais: a lista, a busca, o lote expandido, todas as janelas abertas, as validações (sem seriais, sem peso, sem CEP, venda para envio sem os seriais), **os caminhos que gravam com sucesso** (falta, pendência, kiting, embalagem CIF e FOB — OP, histórico, frete, acompanhamento), o frete recusado, a busca e a solicitação de reposição. `npx vite build` ok.
+
+**O que ficou de fora:** `PainelEstoque`, `PainelFabricacaoRecebimento`, `ConferenciaKit` e `ChecklistPendencias` (outros arquivos, com leituras e gravações próprias) **não foram revistos**; a gravação do acompanhamento da OP na embalagem (`op_acompanhamentos`) segue sem checar erro (é recado, não estado).
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
