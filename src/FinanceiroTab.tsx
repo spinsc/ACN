@@ -11,7 +11,7 @@ import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avalia
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
-import { hojeISO, Botao, Faixa } from './Interface';
+import { hojeISO, diaBR, Botao, Faixa } from './Interface';
 import CustoPorOpTab from './CentroCustoRelatorios';
 import ModalFechamentoMes from './CentroCustoFechamentoTela';
 import { lerFechamentos, fechamentoVigente, nomeDoMes } from './CentroCustoFechamento';
@@ -40,7 +40,11 @@ const fmtR = (v: number) =>
 // new Date('2026-09-25') é lido como meia-noite UTC, que no Brasil vira 21h do
 // dia ANTERIOR — todo lançamento aparecia um dia mais cedo do que foi gravado.
 // Fatiar e fixar meio-dia tira o fuso do caminho (corrigido em 24/09/2026).
-const fmtDt = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+// Etapa 7.46 (05/10/2026): a mesma conta errava do outro lado para a data COM hora
+// (`data_criacao` da compra é timestamptz): fatiar o texto UTC mostrava o dia seguinte para
+// quem criou depois das 21h em Brasília (10 de 54 compras reais). `diaBR` separa os dois
+// casos: data pura sai do texto, data com hora sai no dia de quem está olhando.
+const fmtDt = (d: string) => diaBR(d);
 
 // As cores das etapas da compra vêm de ComprasFluxo (COR_ETAPA_COMPRA), a mesma
 // da tela de Compras. Aqui havia uma cópia própria que ficou com a chave
@@ -446,6 +450,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [semCentroAberto, setSemCentroAberto] = useState(false);            // Etapa 15c: tela "Compras sem centro"
   const [modalFechamento, setModalFechamento] = useState(false);            // Etapa 15e-2: janela "Fechamento do mês"
   const [fechamentos, setFechamentos] = useState<any[]>([]);                // Etapa 15e-2: para a faixa "mês fechado" (a trava de verdade é conferida no banco, ao gravar)
+  const [erroCarga, setErroCarga] = useState('');                           // Etapa 7.46: mensagem da leitura que falhou ('' = a última deu certo)
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false);              // Etapa 7.46: já houve uma leitura boa? (sem ela, não se mostram zeros no lugar dos números)
 
   // Filtros
   const now = new Date();
@@ -457,12 +463,27 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const [{ data: cData }, { data: pData }, { data: fData }, { data: dData }] = await Promise.all([
-      supabase.from('centros_custo').select('*').order('codigo'),
-      supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', { ascending: false }),
-      supabase.from('pcp_pedidos_faturamento').select('*').order('criado_em', { ascending: false }),
-      supabase.from('centro_custo_despesas').select('*').order('data', { ascending: false }),
-    ]);
+    // Etapa 7.46 (05/10/2026): a leitura que falhava era tratada como "não tem nada" — a tela zerava os
+    // quatro números e dizia "Nenhuma compra encontrada no período". Agora, se QUALQUER das quatro falhar,
+    // a tela mantém o que já tinha, avisa e oferece "Tentar de novo" (meia leitura daria um total errado).
+    let leituras: any[] = [];
+    try {
+      leituras = await Promise.all([
+        supabase.from('centros_custo').select('*').order('codigo'),
+        supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', { ascending: false }),
+        supabase.from('pcp_pedidos_faturamento').select('*').order('criado_em', { ascending: false }),
+        supabase.from('centro_custo_despesas').select('*').order('data', { ascending: false }),
+      ]);
+    } catch (e: any) { leituras = [{ error: { message: e?.message || 'sem conexão' } }]; }
+    const falha = leituras.find((r: any) => r?.error);
+    if (falha) {
+      setErroCarga(falha.error.message || 'erro desconhecido');
+      setLoading(false);
+      return;
+    }
+    const [{ data: cData }, { data: pData }, { data: fData }, { data: dData }] = leituras;
+    setErroCarga('');
+    setCarregouUmaVez(true);
     setCentros(cData || []);
     setCompras(pData || []);
     setFaturamentos(fData || []);
@@ -681,14 +702,26 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <span style={{ fontSize: 10, color: '#64748b', marginLeft: 'auto' }}>
-          {comprasFiltradas.length} compra(s) no período
-        </span>
+        {/* Etapa 7.46: sem nenhuma leitura boa, "0 compra(s)" seria mentira */}
+        {!(erroCarga && !carregouUmaVez) && (
+          <span style={{ fontSize: 10, color: '#64748b', marginLeft: 'auto' }}>
+            {comprasFiltradas.length} compra(s) no período
+          </span>
+        )}
       </div>
+
+      {/* Etapa 7.46: a leitura falhou — avisa em vez de mostrar zeros */}
+      {erroCarga && (
+        <div style={{ marginBottom: 12 }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
+            Não foi possível ler o Financeiro ({erroCarga}). Isso não quer dizer que não haja compras ou despesas.{carregouUmaVez ? ' Os números abaixo são os da última leitura que deu certo.' : ''}
+          </Faixa>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 11 }}>Carregando...</div>
-      ) : (
+      ) : (erroCarga && !carregouUmaVez) ? null : (
         <>
           {/* KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
