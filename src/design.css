@@ -1324,3 +1324,28 @@ html body .acn-input.acn-alm-mono { font-family: 'ACN Icones', 'IBM Plex Mono', 
 .acn-alm-bloco .acn-label .acn-ajuda { text-transform: none; letter-spacing: 0; font-weight: 400; }
 /* no celular a regra geral dá a cada campo uma base de 140 px; numa coluna isso vira altura — o campo cresce só até o que precisa */
 .acn-alm-jan .acn-modal-corpo > .form-group, .acn-alm-emb .acn-modal-corpo > .form-group, .acn-alm-kiting .acn-modal-corpo > .form-group, .acn-alm-lote-jan .acn-modal-corpo > .form-group { flex: 0 0 auto; }
+
+/* ── Engenharia · 12e13 (06/10/2026): a lista de análise, o acompanhamento de OS e as janelas no molde do guia ──────────── */
+.acn-eng-abas { margin: 12px 12px 0; }
+.acn-eng-sub { padding: 0 12px; }
+.acn-eng-topo { padding: 12px 12px 0; }
+.acn-eng-selo-linha { margin-top: 2px; }
+.acn-eng-veic { min-width: 100px; font-size: 12px; }
+.acn-eng-tipo { min-width: 100px; overflow-wrap: anywhere; }
+.acn-eng-celula-acoes { min-width: 150px; }
+.acn-eng-revisao { margin-left: 4px; font-size: 10px; font-weight: 700; }
+/* a linha de envio direto: lateral e fundo âmbar, como a linha parada há mais de 48 h é vermelha */
+table tr.acn-linha-envio > td:first-child { box-shadow: inset 3px 0 0 var(--acn-warn); }
+html body:not(.dark) .acn-main table.acn-tabela tr.acn-linha-envio > td { background: var(--acn-warn-soft) !important; }
+body.dark .acn-main table.acn-tabela tr.acn-linha-envio > td { background: rgba(217, 119, 6, .12) !important; }
+html body .sec-hdr.acn-eng-hdr-erro { background: var(--acn-bad-soft); border-bottom: 2px solid var(--acn-bad); }
+.acn-eng-hdr-erro .acn-alm-titulo { color: var(--acn-bad); }
+html body .modal-box.acn-modal-cadastro.acn-eng-jan { width: min(480px, 95vw); max-width: 480px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-eng-bom { width: min(820px, 96vw); max-width: 820px; max-height: 92vh; }
+.acn-eng-jan .form-group, .acn-eng-bom .form-group { margin-bottom: 0; }
+.acn-eng-jan .acn-modal-corpo > *, .acn-eng-bom .acn-modal-corpo > * { flex-shrink: 0; }
+.acn-eng-jan .acn-modal-corpo > .form-group, .acn-eng-bom .acn-modal-corpo > .form-group { flex: 0 0 auto; }
+.acn-eng-logs { max-height: 160px; overflow-y: auto; }
+.acn-eng-log { padding-bottom: 4px; font-size: 12px; border-bottom: 1px solid var(--acn-line); }
+.acn-eng-selecao { max-height: 220px; overflow-y: auto; gap: 2px; }
+.acn-eng-selecao-linha { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: 13px; cursor: pointer; }

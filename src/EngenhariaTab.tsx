@@ -21,7 +21,13 @@ import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpIt
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { indicePendencias } from './OpPendencias';
-import { MenuAcoes, Faixa, Botao, diaBR } from './Interface';
+import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
+import Icone from './Icone';
+import {
+  mdiRulerSquareCompass, mdiCogOutline, mdiTimerOutline, mdiTrayArrowUp, mdiWrenchOutline, mdiCheckCircleOutline, mdiClockAlertOutline,
+  mdiPauseCircleOutline, mdiEyeOutline, mdiNoteTextOutline, mdiPowerPlugOutline, mdiArrowULeftTop, mdiLinkVariant, mdiPlayOutline,
+  mdiChevronUp, mdiChevronDown, mdiCarOutline, mdiAlertOutline, mdiTagOutline,
+} from '@mdi/js';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -37,7 +43,7 @@ const mesmaInfoComercial = (a, b) => CAMPOS_INFO_COMERCIAL.every(k => String(a?.
 
 function PrazoEntregaOpl({ o }) {
   const data = o.data_prevista_entrega || o.prazo_entrega_comercial;
-  if (!data) return <span style={{ color: 'var(--acn-neutral)' }}>sem data</span>;
+  if (!data) return <span className="acn-ajuda">sem data</span>;
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const dias = Math.round((new Date(String(data).slice(0, 10) + 'T00:00:00').getTime() - hoje.getTime()) / 86400000);
   const situacao = dias < 0 ? `${-dias} dia${dias === -1 ? '' : 's'} em atraso`
@@ -49,7 +55,7 @@ function PrazoEntregaOpl({ o }) {
   );
 }
 
-function InfoOplEngenharia({ o, colunas, style }) {
+function InfoOplEngenharia({ o, colunas, className }) {
   const [servicosAbertos, setServicosAbertos] = useState(false);
   const comercial = o.responsavel_comercial || o.vendedor;
   const outroVendedor = o.vendedor && o.responsavel_comercial && o.vendedor.trim().toUpperCase() !== o.responsavel_comercial.trim().toUpperCase() ? o.vendedor : null;
@@ -57,7 +63,7 @@ function InfoOplEngenharia({ o, colunas, style }) {
   const servicos = String(o.resumo_servicos || '').trim();
   const servicosLongos = servicos.length > 180 || servicos.split('\n').length > 2;
   return (
-    <tr className="acn-eng-info" style={style}>
+    <tr className={'acn-eng-info' + (className ? ' ' + className : '')}>
       <td colSpan={colunas}>
         <div className="acn-eng-fatos">
           <span><b>Cliente</b><strong>{o.cliente_nome || '—'}</strong></span>
@@ -82,9 +88,9 @@ function InfoOplEngenharia({ o, colunas, style }) {
           </div>
         )}
         {servicosLongos && (
-          <button type="button" className="acn-b acn-b-discreto acn-b-p" style={{ marginTop: 2 }} onClick={() => setServicosAbertos(v => !v)}>
+          <Botao variante="discreto" pequeno onClick={() => setServicosAbertos(v => !v)}>
             {servicosAbertos ? 'Recolher serviços' : 'Ver todos os serviços'}
-          </button>
+          </Botao>
         )}
       </td>
     </tr>
@@ -528,42 +534,47 @@ export default function EngenhariaTab({ currentUser }) {
   const isEnvioDireto = (o) => o.item_envio === true || TIPOS_ENVIO_DIRETO.some(t => (o.tipo_projeto||'').includes(t));
 
 
+  // Etapa 12e13 (06/10/2026): a tela inteira no molde do guia (abas, tabela, selos, botões, janelas). Nenhum campo, texto, consulta,
+  // gravação ou regra foi mexido: só a aparência. A cor de cada situação vem da família do guia, não de hex escrito à mão.
+  const FAMILIA_OS = {
+    'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao',
+    'Provisionada': 'ok', 'Verificação e Orçamento': 'marca', 'Em Manutenção': 'erro', 'Manutenção Concluída': 'ok',
+  };
+  const trocarAba = (id) => { if (id === 'horas') setHorasAbaInicial(undefined); setAbaEng(id); };
+
   return (
     <div>
       {/* Análises pedidas à Engenharia ficam no botão "Análise" do topo (cada
           pessoa vê as do seu setor) — o quadro daqui saiu a pedido. */}
       {/* SELETOR DE SUB-ABAS */}
-      <div style={{display:'flex',gap:0,margin:'12px 12px 0',borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
-        <button style={{flex:1,padding:'8px',background:abaEng==='analise'?'#1e293b':'white',color:abaEng==='analise'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaEng('analise')}>📐 Análise</button>
-        <button style={{flex:1,padding:'8px',background:abaEng==='desenvolvimento'?'#7c3aed':'white',color:abaEng==='desenvolvimento'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaEng('desenvolvimento')}>🔩 Desenvolvimento</button>
-        <button style={{flex:1,padding:'8px',background:abaEng==='horas'?'#0891b2':'white',color:abaEng==='horas'?'white':'#0891b2',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>{ setHorasAbaInicial(undefined); setAbaEng('horas'); }}>⏱️ Horas/Tarefas</button>
-      </div>
+      <Abas className="acn-eng-abas" ativa={abaEng} onChange={trocarAba} itens={[
+        { id: 'analise', rotulo: 'Análise', icone: mdiRulerSquareCompass },
+        { id: 'desenvolvimento', rotulo: 'Desenvolvimento', icone: mdiCogOutline },
+        { id: 'horas', rotulo: 'Horas/Tarefas', icone: mdiTimerOutline },
+      ]} />
 
       {abaEng === 'desenvolvimento' ? (
-        <div style={{ padding:'0 12px' }}>
+        <div className="acn-eng-sub">
           <DesenvolvimentoPecasTab currentUser={currentUser} buscaInicial={buscaDeepLink} />
         </div>
       ) : abaEng === 'horas' ? (
-        <div style={{ padding:'0 12px' }}>
+        <div className="acn-eng-sub">
           <HorasTarefasTab currentUser={currentUser} abaInicial={horasAbaInicial} />
         </div>
       ) : <>
       {/* AGENDA */}
-      <div style={{ padding:'12px 12px 0' }}>
+      <div className="acn-eng-topo">
         <AgendaWidget setor="engenharia" currentUser={currentUser} />
       </div>
       {erroLeitura && (
-        <div style={{ padding: '12px 12px 0' }}>
+        <div className="acn-eng-topo">
           <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
             Não foi possível ler as OPs da Engenharia ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
           </Faixa>
         </div>
       )}
       {erroOsAcomp && (
-        <div style={{ padding: '12px 12px 0' }}>
+        <div className="acn-eng-topo">
           <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOsAcomp}>Tentar de novo</Botao>}>
             Não foi possível ler o acompanhamento de OS veiculares ({erroOsAcomp}).
           </Faixa>
@@ -574,17 +585,17 @@ export default function EngenhariaTab({ currentUser }) {
         <div className="sec-hdr">
           <span>OPs Aguardando Engenharia ({filtrarOpls(opls, busca).length})</span>
           {opls.filter(isEnvioDireto).length > 0 && (
-            <span style={{fontSize:10,background:'#fef3c7',color:'#92400e',padding:'3px 8px',borderRadius:10,border:'1px solid #fde68a',fontWeight:700}}>
-              📤 {opls.filter(isEnvioDireto).length} envio(s) direto(s) — sem producao
-            </span>
+            <Selo familia="atencao" ponto={false}>
+              <Icone path={mdiTrayArrowUp} size={13} /> {opls.filter(isEnvioDireto).length} envio(s) direto(s) — sem producao
+            </Selo>
           )}
         </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             <div className="acn-empty">Nenhuma OP aguardando Engenharia.</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Data Entrada</th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Status</th>
                 <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Arquivos</th><th>Acoes</th>
@@ -621,46 +632,42 @@ export default function EngenhariaTab({ currentUser }) {
                       : 0;
                     const kpi48h = emEspera && horasSemIniciar > 48;
                     const naoLida = oplsNaoLidas.has(String(o.id));
-                    const rowStyle = kpi48h
-                      ? { background:'#fef2f2', borderLeft:'4px solid #ef4444' }
-                      : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' }
-                      : naoLida ? { background:'#fffdf0', borderLeft:'4px solid #eab308' } : {};
+                    // a marca da linha: vermelha se parada há mais de 48 h, âmbar se é envio direto, amarela se há alteração não vista
+                    const marcaLinha = kpi48h ? 'acn-linha-alerta' : envioDireto ? 'acn-linha-envio' : naoLida ? 'acn-linha-nova' : '';
                     return (
                       <React.Fragment key={o.id}>
-                      <tr className={comInfo ? 'acn-eng-linha' : undefined} style={rowStyle}>
+                      <tr className={[comInfo ? 'acn-eng-linha' : '', marcaLinha].filter(Boolean).join(' ') || undefined}>
                         <td>{fmtDia(o.data_entrada)}</td>
                         <td>
                           <LinkOpl opl={o} currentUser={currentUser} />
                           {envioDireto && (
-                            <div style={{marginTop:2}}>
-                              <span style={{fontSize:9,fontWeight:700,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10,letterSpacing:'0.5px'}}>
-                                📤 ENVIO DIRETO
-                              </span>
+                            <div className="acn-eng-selo-linha">
+                              <Selo familia="atencao" ponto={false}><Icone path={mdiTrayArrowUp} size={13} /> ENVIO DIRETO</Selo>
                             </div>
                           )}
                         </td>
-                        <td style={{fontSize:10}}>
+                        <td className="acn-eng-veic">
                           <VeiculoOuEnvio o={o} />
                         </td>
-                        <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                        <td style={{ maxWidth:140, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
+                        <td><span className={(o.quantidade||1)>1 ? 'acn-txt-info' : 'acn-ajuda'}>{o.quantidade||1}</span></td>
+                        <td className="acn-eng-tipo">{o.tipo_projeto}</td>
                         <td>
-                          <span className="acn-badge" style={{background: emAndamento?'#3b82f6': kpi48h?'#ef4444':'#f59e0b'}}>
+                          <Selo familia={emAndamento ? 'info' : kpi48h ? 'erro' : 'atencao'} ponto={false}>
                             {o.status_geral}
-                            {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}} title={o.obs_devolucao_pcp ? `Motivo: ${o.obs_devolucao_pcp}` : undefined}>REVISAO</span>}
-                          </span>
+                            {o.status_geral==='Devolvida para Engenharia' && <span className="acn-eng-revisao" title={o.obs_devolucao_pcp ? `Motivo: ${o.obs_devolucao_pcp}` : undefined}>REVISAO</span>}
+                          </Selo>
                           {o.serralheria_status && (
-                            <div style={{marginTop:2}}>
-                              <span style={{fontSize:9,fontWeight:700,background:o.serralheria_status==='Pendente'?'#7c3aed':'#16a34a',color:'white',padding:'1px 6px',borderRadius:10}}>
-                                {o.serralheria_status==='Pendente' ? '🔧 Liberado Parcial (Serralheria)' : '✅ Serralheria concluída'}
-                              </span>
+                            <div className="acn-eng-selo-linha">
+                              <Selo familia={o.serralheria_status==='Pendente' ? 'marca' : 'ok'} ponto={false}>
+                                {o.serralheria_status==='Pendente'
+                                  ? <><Icone path={mdiWrenchOutline} size={13} /> Liberado Parcial (Serralheria)</>
+                                  : <><Icone path={mdiCheckCircleOutline} size={13} /> Serralheria concluída</>}
+                              </Selo>
                             </div>
                           )}
                           {kpi48h && (
-                            <div style={{marginTop:2}}>
-                              <span style={{fontSize:9,fontWeight:700,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10}}>
-                                🔴 {Math.floor(horasSemIniciar)}h sem iniciar
-                              </span>
+                            <div className="acn-eng-selo-linha">
+                              <Selo familia="erro" ponto={false}><Icone path={mdiClockAlertOutline} size={13} /> {Math.floor(horasSemIniciar)}h sem iniciar</Selo>
                             </div>
                           )}
                         </td>
@@ -669,8 +676,8 @@ export default function EngenhariaTab({ currentUser }) {
                         <td>
                           {emAndamento && tempo != null && (
                             <div>
-                              <span style={{color: o.pausado ? '#f59e0b' : undefined, fontWeight: o.pausado ? 700 : undefined}}>
-                                {o.pausado && '⏸ '}{fmtH(tempo)}
+                              <span className={o.pausado ? 'acn-txt-atencao' : undefined}>
+                                {o.pausado && <Icone path={mdiPauseCircleOutline} size={13} />}{o.pausado && ' '}{fmtH(tempo)}
                               </span>
                               <div><BadgeForaExpediente /></div>
                             </div>
@@ -678,41 +685,41 @@ export default function EngenhariaTab({ currentUser }) {
                           {!(emAndamento && tempo != null) && '—'}
                         </td>
                         <td>
-                          <div style={{display:'flex',gap:4}}>
+                          <div className="acn-acoes-linha">
                             <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} tipoFixo="proposta" compact={true} />
                             <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} compact={true} />
                           </div>
                         </td>
-                        <td>
-                          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                        <td className="acn-eng-celula-acoes">
+                          <div className="acn-acoes-linha quebra">
                             {!emAndamento && (
-                              <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>abrirIniciarEng(o)}>
+                              <Botao variante="primario" pequeno onClick={()=>abrirIniciarEng(o)}>
                                 INICIAR
-                              </button>
+                              </Botao>
                             )}
                             {emAndamento && (
                               <>
                                 <BotaoPausar pausado={o.pausado}
                                   onPausar={()=>pausarOpl(supabase,o).then(fetchAll)}
                                   onRetomar={()=>retomarOpl(supabase,o).then(fetchAll)} />
-                                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirLiberarBom(o)}>
-                                    LIBERAR BOM
-                                  </button>
+                                <Botao variante="primario" pequeno onClick={()=>abrirLiberarBom(o)}>
+                                  LIBERAR BOM
+                                </Botao>
                               </>
                             )}
                             {/* Só as ações rápidas ficam à vista; o resto no ⋯ */}
                             <MenuAcoes rotulo="Mais ações da OP" itens={[
-                              { rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) },
-                              { rotulo: '📝 Observação', onClick: () => { setModalObs(o); setNovaObs(''); }, oculto: !emAndamento },
-                              { rotulo: '🔌 Pedir chicote/serralheria', titulo: 'Pode abrir quantas demandas precisar', onClick: () => setModalFabricacao(o), oculto: !emAndamento },
-                              { rotulo: '🔧 Liberação parcial p/ Serralheria', titulo: 'Antecipar a parte metálica/estrutural sem esperar o resto do BOM',
+                              { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
+                              { rotulo: 'Observação', icone: mdiNoteTextOutline, onClick: () => { setModalObs(o); setNovaObs(''); }, oculto: !emAndamento },
+                              { rotulo: 'Pedir chicote/serralheria', icone: mdiPowerPlugOutline, titulo: 'Pode abrir quantas demandas precisar', onClick: () => setModalFabricacao(o), oculto: !emAndamento },
+                              { rotulo: 'Liberação parcial p/ Serralheria', icone: mdiWrenchOutline, titulo: 'Antecipar a parte metálica/estrutural sem esperar o resto do BOM',
                                 onClick: () => { setModalSerralheria(o); setObsSerralheria(''); }, oculto: !emAndamento || !!o.serralheria_status },
-                              { rotulo: '↩️ Devolver ao Comercial', onClick: () => { setModalDevolver(o); setObsDevolver(''); }, perigo: true, oculto: !emAndamento },
+                              { rotulo: 'Devolver ao Comercial', icone: mdiArrowULeftTop, onClick: () => { setModalDevolver(o); setObsDevolver(''); }, perigo: true, oculto: !emAndamento },
                             ]} />
                           </div>
                         </td>
                       </tr>
-                      {comInfo && <InfoOplEngenharia o={o} colunas={11} style={rowStyle} />}
+                      {comInfo && <InfoOplEngenharia o={o} colunas={11} className={marcaLinha} />}
                       </React.Fragment>
                     );
                   };
@@ -728,46 +735,44 @@ export default function EngenhariaTab({ currentUser }) {
                     const envioDireto = isEnvioDireto(rep);
                     return (
                       <React.Fragment key={base}>
-                        <tr className="acn-eng-linha" style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                        <tr className="acn-eng-linha acn-linha-marca">
                           <td>{fmtDia(rep.data_entrada)}</td>
                           <td>
-                            <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
-                            <div style={{marginTop:2}}>
-                              <span style={{fontSize:9,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 6px',borderRadius:10}}>
+                            <strong className="acn-alm-lote"><Icone path={mdiLinkVariant} size={14} /> {base}</strong>
+                            <div className="acn-eng-selo-linha acn-selos">
+                              <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades
-                              </span>
+                              </Selo>
                               {envioDireto && (
-                                <span style={{marginLeft:4,fontSize:9,fontWeight:700,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10}}>
-                                  📤 ENVIO DIRETO
-                                </span>
+                                <Selo familia="atencao" ponto={false}><Icone path={mdiTrayArrowUp} size={13} /> ENVIO DIRETO</Selo>
                               )}
                             </div>
                           </td>
                           <td>—</td>
-                          <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
-                          <td style={{ maxWidth:140, wordBreak:'break-word' }}>{rep.tipo_projeto}</td>
+                          <td><span className="acn-txt-info">{irmaos.length}</span></td>
+                          <td className="acn-eng-tipo">{rep.tipo_projeto}</td>
                           <td>
-                            {qtdEspera > 0 && <div><span className="acn-badge" style={{background:'#f59e0b',fontSize:9}}>{qtdEspera} aguardando</span></div>}
-                            {qtdAndamento > 0 && <div style={{marginTop:2}}><span className="acn-badge" style={{background:'#3b82f6',fontSize:9}}>{qtdAndamento} em análise</span></div>}
+                            {qtdEspera > 0 && <div><Selo familia="atencao" ponto={false}>{qtdEspera} aguardando</Selo></div>}
+                            {qtdAndamento > 0 && <div className="acn-eng-selo-linha"><Selo familia="info" ponto={false}>{qtdAndamento} em análise</Selo></div>}
                           </td>
-                          <td colSpan={3} style={{fontSize:10,color:'#7c6f9c'}}>Ver unidades para detalhes individuais</td>
-                          <td>
-                            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                          <td colSpan={3} className="acn-ajuda">Ver unidades para detalhes individuais</td>
+                          <td className="acn-eng-celula-acoes">
+                            <div className="acn-acoes-linha quebra">
                               {qtdEspera > 0 && (
-                                <button className="acn-btn" style={{background:'#2563eb',fontSize:9}} disabled={iniciandoLote} onClick={()=>iniciarLote(item)}>
-                                  ▶️ INICIAR EM LOTE ({qtdEspera})
-                                </button>
+                                <Botao variante="primario" pequeno icone={mdiPlayOutline} disabled={iniciandoLote} onClick={()=>iniciarLote(item)}>
+                                  INICIAR EM LOTE ({qtdEspera})
+                                </Botao>
                               )}
-                              <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>abrirBomLote(rep)}>
-                                ✅ LIBERAR BOM EM LOTE
-                              </button>
-                              <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
-                                {expandido ? '▲ Ocultar unidades' : `▼ Ver ${irmaos.length} unidades`}
-                              </button>
+                              <Botao variante="primario" pequeno icone={mdiCheckCircleOutline} onClick={()=>abrirBomLote(rep)}>
+                                LIBERAR BOM EM LOTE
+                              </Botao>
+                              <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                                {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
+                              </Botao>
                             </div>
                           </td>
                         </tr>
-                        <InfoOplEngenharia o={rep} colunas={11} style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}} />
+                        <InfoOplEngenharia o={rep} colunas={11} className="acn-linha-marca" />
                         {expandido && irmaos.map(o => renderLinhaOpl(o, !mesmaInfoComercial(o, rep)))}
                       </React.Fragment>
                     );
@@ -784,43 +789,35 @@ export default function EngenhariaTab({ currentUser }) {
       {/* ── ACOMPANHAMENTO SAC VEICULAR ── */}
       {osAcomp.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
-            <span style={{color:'#991b1b'}}>🚗 Acompanhamento de OS Veiculares ({osAcomp.length})</span>
-            <span style={{fontSize:9,color:'#dc2626',fontStyle:'italic'}}>Somente observações — agendamento é exclusivo da Produção</span>
+          <div className="sec-hdr acn-eng-hdr-erro">
+            <span className="acn-alm-titulo"><Icone path={mdiCarOutline} size={16} /> Acompanhamento de OS Veiculares ({osAcomp.length})</span>
+            <span className="acn-ajuda">Somente observações — agendamento é exclusivo da Produção</span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto',padding:0}}>
-            <table>
+          <div className="sec-body acn-rolagem">
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Abertura</th><th>Ação</th>
               </tr></thead>
               <tbody>
-                {osAcomp.map(os => {
-                  const STATUS_COR_VEI: Record<string,string> = {
-                    'Em Cotação':'#0891b2','Aguardando Aprovação Cliente':'#f59e0b',
-                    'Em Provisionamento':'#7c3aed','Aguardando Aceite SAC':'#f59e0b',
-                    'Provisionada':'#16a34a','Verificação e Orçamento':'#8b5cf6',
-                    'Em Manutenção':'#dc2626','Manutenção Concluída':'#0d9488',
-                  };
-                  return (
-                    <tr key={os.id}>
-                      <td><strong style={{color:'#0f766e'}}>{os.numero_os}</strong></td>
-                      <td style={{ maxWidth:110, wordBreak:'break-word' }}>{os.cliente_nome}</td>
-                      <td style={{maxWidth:130,fontSize:10}}>
-                        <div>{semDado(os.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : os.modelo}</div>
-                        <div style={{color:'#94a3b8'}}>{semDado(os.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${os.chassi}`}</div>
-                      </td>
-                      <td><span style={{fontSize:9,background:'#e2e8f0',padding:'2px 6px',borderRadius:10}}>{os.tipo_avaliacao||'—'}</span></td>
-                      <td><span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span></td>
-                      <td style={{fontSize:10}}>{os.data_abertura ? new Date(os.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
-                      <td>
-                        <button className="acn-btn" style={{background:'#2563eb',fontSize:9}}
-                          onClick={()=>{ setModalObsAcomp(os); setNovaObsAcomp(''); }}>
-                          📝 Obs.
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {osAcomp.map(os => (
+                  <tr key={os.id}>
+                    <td><strong>{os.numero_os}</strong></td>
+                    <td className="acn-texto-medio">{os.cliente_nome}</td>
+                    <td className="acn-texto-medio">
+                      <div>{semDado(os.modelo) ? <span className="acn-txt-erro"><Icone path={mdiAlertOutline} size={13} /> sem modelo</span> : os.modelo}</div>
+                      <div className="acn-ajuda">{semDado(os.chassi) ? <span className="acn-txt-erro"><Icone path={mdiAlertOutline} size={13} /> sem chassi</span> : <><Icone path={mdiWrenchOutline} size={13} /> {os.chassi}</>}</div>
+                    </td>
+                    <td><Tag>{os.tipo_avaliacao||'—'}</Tag></td>
+                    <td><Selo familia={FAMILIA_OS[os.status] || 'neutro'} ponto={false}>{os.status}</Selo></td>
+                    <td>{os.data_abertura ? new Date(os.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
+                    <td>
+                      <Botao variante="primario" pequeno icone={mdiNoteTextOutline}
+                        onClick={()=>{ setModalObsAcomp(os); setNovaObsAcomp(''); }}>
+                        Obs.
+                      </Botao>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -830,31 +827,37 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL: Observação de Acompanhamento */}
       {modalObsAcomp && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">📝 Acompanhamento — {modalObsAcomp.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>
-              Cliente: {modalObsAcomp.cliente_nome} · Status: <strong>{modalObsAcomp.status}</strong>
+          <div className="modal-box acn-modal-cadastro acn-eng-jan" role="dialog" aria-label="Acompanhamento da OS">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiNoteTextOutline} size={16} /> Acompanhamento — {modalObsAcomp.numero_os}</span>
             </div>
-            {Array.isArray(modalObsAcomp.logs_acompanhamento_eng) && modalObsAcomp.logs_acompanhamento_eng.length > 0 && (
-              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:'8px 10px',marginBottom:10,maxHeight:160,overflowY:'auto'}}>
-                {modalObsAcomp.logs_acompanhamento_eng.map((l,i) => (
-                  <div key={i} style={{fontSize:10,borderBottom:'1px solid #e2e8f0',paddingBottom:4,marginBottom:4}}>
-                    <span style={{color:'#94a3b8',fontSize:9}}>{l.hora ? new Date(l.hora).toLocaleString('pt-BR') : ''} · {l.usuario||''}</span>
-                    <div style={{color:'#374151',marginTop:2}}>{l.texto}</div>
-                  </div>
-                ))}
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Cliente: {modalObsAcomp.cliente_nome} · Status: <strong>{modalObsAcomp.status}</strong>
               </div>
-            )}
-            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'6px 10px',marginBottom:10,fontSize:10,color:'#92400e'}}>
-              ⚙️ Engenharia pode adicionar observações técnicas. Agendamento é exclusivo da Produção.
+              {Array.isArray(modalObsAcomp.logs_acompanhamento_eng) && modalObsAcomp.logs_acompanhamento_eng.length > 0 && (
+                <div className="acn-quadro acn-eng-logs">
+                  {modalObsAcomp.logs_acompanhamento_eng.map((l,i) => (
+                    <div key={i} className="acn-eng-log">
+                      <span className="acn-ajuda">{l.hora ? new Date(l.hora).toLocaleString('pt-BR') : ''} · {l.usuario||''}</span>
+                      <div>{l.texto}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Faixa tom="atencao">
+                Engenharia pode adicionar observações técnicas. Agendamento é exclusivo da Produção.
+              </Faixa>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="eng-obs-os">Nova Observação</label>
+                <textarea id="eng-obs-os" className="acn-input" rows={3}
+                  placeholder="Observação técnica, pontos de atenção..."
+                  value={novaObsAcomp} onChange={e=>setNovaObsAcomp(e.target.value)} autoFocus />
+              </div>
             </div>
-            <label className="acn-label">Nova Observação</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
-              placeholder="Observação técnica, pontos de atenção..."
-              value={novaObsAcomp} onChange={e=>setNovaObsAcomp(e.target.value)} autoFocus />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={addObsAcompanhamento}>SALVAR OBS.</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObsAcomp(null)}>Fechar</button>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={addObsAcompanhamento}>SALVAR OBS.</Botao>
+              <Botao onClick={()=>setModalObsAcomp(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -869,49 +872,51 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL INICIAR ENGENHARIA */}
       {modalIniciar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">Iniciar Analise — Engenharia</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12,background:'#f8fafc',padding:'8px 10px',borderRadius:4,border:'1px solid #e2e8f0'}}>
-              <div><strong>OP:</strong> {modalIniciar.opl} | <strong>Chassi:</strong> {modalIniciar.chassi || '—'}</div>
-              <div style={{marginTop:3}}><strong>Tipo:</strong> {modalIniciar.tipo_projeto}</div>
-              {isEnvioDireto(modalIniciar) && (
-                <div style={{marginTop:4,background:'#fef3c7',padding:'4px 8px',borderRadius:4,color:'#92400e',fontWeight:700,fontSize:10}}>
-                  📤 ENVIO DIRETO — sem producao na linha principal
+          <div className="modal-box acn-modal-cadastro acn-eng-jan" role="dialog" aria-label="Iniciar análise">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Iniciar Analise — Engenharia</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-quadro">
+                <div><strong>OP:</strong> {modalIniciar.opl} | <strong>Chassi:</strong> {modalIniciar.chassi || '—'}</div>
+                <div><strong>Tipo:</strong> {modalIniciar.tipo_projeto}</div>
+                {isEnvioDireto(modalIniciar) && (
+                  <Faixa tom="atencao" icone={mdiTrayArrowUp}>
+                    ENVIO DIRETO — sem producao na linha principal
+                  </Faixa>
+                )}
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Responsável pela Execução *</label>
+                <ColaboradorSelect
+                  value={responsavelEng} onChange={setResponsavelEng}
+                  incluirUsuariosDaAba="engenharia"
+                  placeholder="Selecione o responsável"
+                  className="acn-input"
+                  autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciarEng()} />
+                <div className="acn-ajuda">
+                  Pre-preenchido com seu nome. Altere se outra pessoa vai executar.
                 </div>
-              )}
-            </div>
-            <label className="acn-label">Responsável pela Execução *</label>
-            <ColaboradorSelect
-              value={responsavelEng} onChange={setResponsavelEng}
-              incluirUsuariosDaAba="engenharia"
-              placeholder="Selecione o responsável"
-              className="acn-input" style={{width:'100%',marginBottom:4}}
-              autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciarEng()} />
-            <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>
-              Pre-preenchido com seu nome. Altere se outra pessoa vai executar.
-            </div>
+              </div>
 
-            <div style={{background: precisaDesenvolvimento ? '#f5f3ff' : '#f8fafc', border:`1.5px solid ${precisaDesenvolvimento ? '#c4b5fd' : '#e2e8f0'}`, borderRadius:6, padding:'8px 10px', marginBottom:12}}>
-              <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',userSelect:'none'}}>
-                <input type="checkbox" checked={precisaDesenvolvimento}
-                  onChange={e=>setPrecisaDesenvolvimento(e.target.checked)}
-                  style={{width:15,height:15,cursor:'pointer',accentColor:'#7c3aed'}} />
-                <span style={{fontSize:11,fontWeight:700,color: precisaDesenvolvimento ? '#6d28d9' : '#475569'}}>
-                  🔩 Precisa de Desenvolvimento
-                </span>
-              </label>
-              {precisaDesenvolvimento && (
-                <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical',marginTop:8}}
-                  placeholder="O que precisa ser desenvolvido? (gera demanda automática na aba Desenvolvimento)"
-                  value={descDesenvolvimento} onChange={e=>setDescDesenvolvimento(e.target.value)} />
-              )}
+              <div className={'acn-quadro' + (precisaDesenvolvimento ? ' tom-atencao' : '')}>
+                <label className="acn-check">
+                  <input type="checkbox" checked={precisaDesenvolvimento}
+                    onChange={e=>setPrecisaDesenvolvimento(e.target.checked)} />
+                  <span><Icone path={mdiCogOutline} size={14} /> Precisa de Desenvolvimento</span>
+                </label>
+                {precisaDesenvolvimento && (
+                  <textarea className="acn-input" rows={2} aria-label="O que precisa ser desenvolvido"
+                    placeholder="O que precisa ser desenvolvido? (gera demanda automática na aba Desenvolvimento)"
+                    value={descDesenvolvimento} onChange={e=>setDescDesenvolvimento(e.target.value)} />
+                )}
+              </div>
             </div>
-
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#2563eb',flex:1,padding:'9px'}} onClick={confirmarIniciarEng}>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={confirmarIniciarEng}>
                 CONFIRMAR INICIO
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
+              </Botao>
+              <Botao onClick={()=>setModalIniciar(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -920,33 +925,53 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL BOM */}
       {modalBom && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:820,width:'96vw',maxHeight:'92vh',overflowY:'auto'}}>
-            <div className="modal-title">Liberar BOM — {modalBom.opl}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Tipo: {modalBom.tipo_projeto} | Chassi: {modalBom.chassi || '—'}
+          <div className="modal-box acn-modal-cadastro acn-eng-bom" role="dialog" aria-label="Liberar BOM">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Liberar BOM — {modalBom.opl}</span>
             </div>
-            {isEnvioDireto(modalBom) && (
-              <div style={{background:'#fffbeb',border:'2px solid #f59e0b',borderRadius:6,padding:'8px 12px',marginBottom:10,fontSize:11}}>
-                <strong style={{color:'#92400e'}}>📤 ENVIO DIRETO AO CLIENTE</strong>
-                <div style={{color:'#78350f',marginTop:3}}>
-                  Este item nao requer linha de producao. Apos BOM, PCP fara apenas a separacao no Almoxarifado
-                  e o despacho direto. Chicotes / Serralheria / Lab somente se indicado no BOM.
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Tipo: {modalBom.tipo_projeto} | Chassi: {modalBom.chassi || '—'}
+              </div>
+              {isEnvioDireto(modalBom) && (
+                <Faixa tom="atencao" icone={mdiTrayArrowUp}>
+                  <strong>ENVIO DIRETO AO CLIENTE</strong>
+                  <div>
+                    Este item nao requer linha de producao. Apos BOM, PCP fara apenas a separacao no Almoxarifado
+                    e o despacho direto. Chicotes / Serralheria / Lab somente se indicado no BOM.
+                  </div>
+                </Faixa>
+              )}
+              {(modalBom.itens_vendidos || []).length > 0 && (
+                <div className="acn-quadro tom-info">
+                  <div>
+                    <strong>Vendido:</strong>{' '}
+                    {modalBom.itens_vendidos.map((v: any) => `${Number(v.quantidade).toLocaleString('pt-BR')}× ${v.nome}`).join(' · ')}
+                  </div>
                 </div>
-              </div>
-            )}
-            {(modalBom.itens_vendidos || []).length > 0 && (
-              <div style={{fontSize:11,background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:6,padding:'6px 10px',marginBottom:8}}>
-                <strong style={{color:'#1d4ed8'}}>Vendido:</strong>{' '}
-                {modalBom.itens_vendidos.map((v: any) => `${Number(v.quantidade).toLocaleString('pt-BR')}× ${v.nome}`).join(' · ')}
-              </div>
-            )}
-            {/* Conferência da estrutura: mostra o material de instalação já
-                calculado, avisa o que vai faltar e — o mais importante — cobra
-                o cadastro dos itens que nunca foram adaptados neste carro. */}
-            <PainelConferenciaEstrutura opl={modalBom} currentUser={currentUser}
-              onUsar={(linhas, idsConj = []) => setBomLinhas(atuais => {
+              )}
+              {/* Conferência da estrutura: mostra o material de instalação já
+                  calculado, avisa o que vai faltar e — o mais importante — cobra
+                  o cadastro dos itens que nunca foram adaptados neste carro. */}
+              <PainelConferenciaEstrutura opl={modalBom} currentUser={currentUser}
+                onUsar={(linhas, idsConj = []) => setBomLinhas(atuais => {
+                  const mapa = new Map();
+                  [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
+                    .forEach(l => {
+                      const chave = l.item_id || `txt:${l.nome}`;
+                      const ja = mapa.get(chave);
+                      if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
+                      else mapa.set(chave, { ...l });
+                    });
+                  return [...mapa.values()];
+                })} />
+              {/* Carro parecido já adaptado antes tem a lista pronta — redigitar
+                  item por item é onde nasce a diferença entre duas OPs que
+                  deviam ser iguais (28/09/2026). */}
+              <CopiarBomDeOutraOp oplAtual={modalBom} onCopiar={(linhas, modo) => setBomLinhas(atuais => {
+                if (modo === 'substituir') return linhas;
                 const mapa = new Map();
-                [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
+                [...(atuais || []).filter(l => l?.item_id || String(l?.nome || '').trim()), ...linhas]
                   .forEach(l => {
                     const chave = l.item_id || `txt:${l.nome}`;
                     const ja = mapa.get(chave);
@@ -955,31 +980,19 @@ export default function EngenhariaTab({ currentUser }) {
                   });
                 return [...mapa.values()];
               })} />
-            {/* Carro parecido já adaptado antes tem a lista pronta — redigitar
-                item por item é onde nasce a diferença entre duas OPs que
-                deviam ser iguais (28/09/2026). */}
-            <CopiarBomDeOutraOp oplAtual={modalBom} onCopiar={(linhas, modo) => setBomLinhas(atuais => {
-              if (modo === 'substituir') return linhas;
-              const mapa = new Map();
-              [...(atuais || []).filter(l => l?.item_id || String(l?.nome || '').trim()), ...linhas]
-                .forEach(l => {
-                  const chave = l.item_id || `txt:${l.nome}`;
-                  const ja = mapa.get(chave);
-                  if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
-                  else mapa.set(chave, { ...l });
-                });
-              return [...mapa.values()];
-            })} />
-            <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
-            <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom}
-              pinturaSlot={<PinturaCampos valor={pinturaBom} onChange={v => setPinturaBom(p => ({ ...p, ...v }))} />} />
-            <label className="acn-label">Observacoes para PCP/Almoxarifado</label>
-            <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="Detalhes do BOM, itens especiais, pendencias..."
-              value={obsBom} onChange={e=>setObsBom(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={liberarBOM}>LIBERAR BOM</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalBom(null)}>Cancelar</button>
+              <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
+              <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom}
+                pinturaSlot={<PinturaCampos valor={pinturaBom} onChange={v => setPinturaBom(p => ({ ...p, ...v }))} />} />
+              <div className="form-group">
+                <label className="acn-label" htmlFor="eng-obs-bom">Observacoes para PCP/Almoxarifado</label>
+                <textarea id="eng-obs-bom" className="acn-input" rows={4}
+                  placeholder="Detalhes do BOM, itens especiais, pendencias..."
+                  value={obsBom} onChange={e=>setObsBom(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={liberarBOM}>LIBERAR BOM</Botao>
+              <Botao onClick={()=>setModalBom(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -994,21 +1007,27 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL LIBERAÇÃO PARCIAL SERRALHERIA — antecipa a parte metálica/estrutural sem esperar o resto do BOM */}
       {modalSerralheria && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">🔧 Liberar Parcial p/ Serralheria — {modalSerralheria.opl}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              A Serralheria começa essa parte já; você continua a análise e libera o saldo do BOM pro PCP
-              normalmente quando terminar (essa liberação parcial não interfere na liberação do BOM completo).
+          <div className="modal-box acn-modal-cadastro acn-eng-jan" role="dialog" aria-label="Liberação parcial para a Serralheria">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiWrenchOutline} size={16} /> Liberar Parcial p/ Serralheria — {modalSerralheria.opl}</span>
             </div>
-            <label className="acn-label">O que a Serralheria precisa fazer *</label>
-            <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="Descreva a parte metálica/estrutural a ser feita..."
-              value={obsSerralheria} onChange={e=>setObsSerralheria(e.target.value)} autoFocus />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} disabled={enviandoSerralheria} onClick={liberarParcialSerralheria}>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                A Serralheria começa essa parte já; você continua a análise e libera o saldo do BOM pro PCP
+                normalmente quando terminar (essa liberação parcial não interfere na liberação do BOM completo).
+              </div>
+              <div className="form-group">
+                <label className="acn-label" htmlFor="eng-serr">O que a Serralheria precisa fazer *</label>
+                <textarea id="eng-serr" className="acn-input" rows={4}
+                  placeholder="Descreva a parte metálica/estrutural a ser feita..."
+                  value={obsSerralheria} onChange={e=>setObsSerralheria(e.target.value)} autoFocus />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" disabled={enviandoSerralheria} onClick={liberarParcialSerralheria}>
                 {enviandoSerralheria ? 'Enviando...' : 'ENVIAR PARA SERRALHERIA'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} disabled={enviandoSerralheria} onClick={()=>{setModalSerralheria(null);setObsSerralheria('');}}>Cancelar</button>
+              </Botao>
+              <Botao disabled={enviandoSerralheria} onClick={()=>{setModalSerralheria(null);setObsSerralheria('');}}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1017,77 +1036,82 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL BOM EM LOTE — OPs desmembradas (mesmo numero base) */}
       {modalBomLote && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:820,width:'96vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">🏷️ Liberar BOM em Lote — {modalBomLote.base}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              {modalBomLote.irmaos.length} OPs desmembradas deste número. Desmarque as que não devem receber este BOM
-              (ex: alguma unidade com especificação diferente das demais).
+          <div className="modal-box acn-modal-cadastro acn-eng-bom" role="dialog" aria-label="Liberar BOM em lote">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiTagOutline} size={16} /> Liberar BOM em Lote — {modalBomLote.base}</span>
             </div>
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:8,marginBottom:10,maxHeight:220,overflowY:'auto'}}>
-              {modalBomLote.irmaos.map(o => (
-                <label key={o.id} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 2px',fontSize:11,cursor:'pointer'}}>
-                  <input type="checkbox" checked={!!selecionadosLote[o.id]}
-                    onChange={e=>setSelecionadosLote(s=>({...s,[o.id]:e.target.checked}))}
-                    style={{width:14,height:14,cursor:'pointer'}} />
-                  <span style={{flex:1}}>{o.opl}</span>
-                  <span style={{fontSize:9,color:'#94a3b8'}}>{o.status_geral}</span>
-                </label>
-              ))}
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalBomLote.irmaos.length} OPs desmembradas deste número. Desmarque as que não devem receber este BOM
+                (ex: alguma unidade com especificação diferente das demais).
+              </div>
+              <div className="acn-quadro acn-eng-selecao">
+                {modalBomLote.irmaos.map(o => (
+                  <label key={o.id} className="acn-eng-selecao-linha">
+                    <input type="checkbox" checked={!!selecionadosLote[o.id]}
+                      onChange={e=>setSelecionadosLote(s=>({...s,[o.id]:e.target.checked}))} />
+                    <span className="acn-kb-cresce">{o.opl}</span>
+                    <span className="acn-ajuda">{o.status_geral}</span>
+                  </label>
+                ))}
+              </div>
+              {/* Estrutura automática também no lote (29/09/2026): o painel só existia na liberação individual, então um lote
+                  como o das 39 Renegade não usava o material calculado. A referência é a primeira OP marcada; se as marcadas
+                  não têm o mesmo veículo e os mesmos itens vendidos, avisa — a mesma BOM vai para todas. */}
+              {(() => {
+                const marcadas = modalBomLote.irmaos.filter(o => selecionadosLote[o.id]);
+                const ref = marcadas.find(o => (o.itens_vendidos || []).length);
+                if (!ref) return null;
+                const chave = (o) => `${o.veiculo_id || ''}|${(o.itens_vendidos || []).map(v => `${v.item_id}x${Number(v.quantidade) || 1}`).sort().join(',')}`;
+                const iguais = marcadas.every(o => chave(o) === chave(ref));
+                return (
+                  <>
+                    {!iguais && (
+                      <Faixa tom="atencao">
+                        As OPs marcadas <b>não têm o mesmo veículo e os mesmos itens vendidos</b>. O material calculado abaixo é o da <b>{ref.opl}</b>,
+                        e a mesma BOM vai para todas — desmarque as diferentes e libere-as à parte.
+                      </Faixa>
+                    )}
+                    {/* respostas diferentes entre as marcadas: a mesma BOM iria para todas (29/09/2026) */}
+                    <AvisoRespostasDiferentes ops={marcadas} refOpl={ref.opl} versao={versaoRespostas} />
+                    <div className="acn-ajuda">Estrutura calculada com base na OP <b>{ref.opl}</b>.</div>
+                    <PainelConferenciaEstrutura opl={ref} currentUser={currentUser} opsParaResponder={marcadas}
+                      onRespondido={() => setVersaoRespostas(v => v + 1)}
+                      onUsar={(linhas, idsConj = []) => setBomLote(atuais => {
+                        const mapa = new Map();
+                        [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
+                          .forEach(l => {
+                            const c = l.item_id || `txt:${l.nome}`;
+                            const ja = mapa.get(c);
+                            if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
+                            else mapa.set(c, { ...l });
+                          });
+                        return [...mapa.values()];
+                      })} />
+                  </>
+                );
+              })()}
+              <BomEditor linhas={bomLote} onChange={setBomLote}
+                vendidos={(modalBomLote.irmaos.find(o => (o.itens_vendidos || []).length) || {}).itens_vendidos || []} />
+              <div className="acn-ajuda">A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>
+              <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length}
+                pinturaSlot={<PinturaCampos valor={pinturaBomLote} onChange={v => setPinturaBomLote(p => ({ ...p, ...v }))} />} />
+              <div className="form-group">
+                <label className="acn-label" htmlFor="eng-obs-lote">Observações para PCP/Almoxarifado (aplicadas a todas as selecionadas)</label>
+                <textarea id="eng-obs-lote" className="acn-input" rows={4}
+                  placeholder="Detalhes do BOM, itens especiais, pendencias..."
+                  value={obsBomLote} onChange={e=>setObsBomLote(e.target.value)} />
+              </div>
+              <Faixa tom="atencao">
+                OPs que ainda não foram iniciadas na Engenharia serão marcadas como iniciadas agora mesmo (responsável: você),
+                já que a liberação em lote pula a etapa individual de "Iniciar".
+              </Faixa>
             </div>
-            {/* Estrutura automática também no lote (29/09/2026): o painel só existia na liberação individual, então um lote
-                como o das 39 Renegade não usava o material calculado. A referência é a primeira OP marcada; se as marcadas
-                não têm o mesmo veículo e os mesmos itens vendidos, avisa — a mesma BOM vai para todas. */}
-            {(() => {
-              const marcadas = modalBomLote.irmaos.filter(o => selecionadosLote[o.id]);
-              const ref = marcadas.find(o => (o.itens_vendidos || []).length);
-              if (!ref) return null;
-              const chave = (o) => `${o.veiculo_id || ''}|${(o.itens_vendidos || []).map(v => `${v.item_id}x${Number(v.quantidade) || 1}`).sort().join(',')}`;
-              const iguais = marcadas.every(o => chave(o) === chave(ref));
-              return (
-                <>
-                  {!iguais && (
-                    <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'7px 10px',marginBottom:6,fontSize:10.5,color:'#92400e'}}>
-                      ⚠ As OPs marcadas <b>não têm o mesmo veículo e os mesmos itens vendidos</b>. O material calculado abaixo é o da <b>{ref.opl}</b>,
-                      e a mesma BOM vai para todas — desmarque as diferentes e libere-as à parte.
-                    </div>
-                  )}
-                  {/* respostas diferentes entre as marcadas: a mesma BOM iria para todas (29/09/2026) */}
-                  <AvisoRespostasDiferentes ops={marcadas} refOpl={ref.opl} versao={versaoRespostas} />
-                  <div style={{fontSize:9.5,color:'#64748b',marginBottom:3}}>Estrutura calculada com base na OP <b>{ref.opl}</b>.</div>
-                  <PainelConferenciaEstrutura opl={ref} currentUser={currentUser} opsParaResponder={marcadas}
-                    onRespondido={() => setVersaoRespostas(v => v + 1)}
-                    onUsar={(linhas, idsConj = []) => setBomLote(atuais => {
-                      const mapa = new Map();
-                      [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
-                        .forEach(l => {
-                          const c = l.item_id || `txt:${l.nome}`;
-                          const ja = mapa.get(c);
-                          if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
-                          else mapa.set(c, { ...l });
-                        });
-                      return [...mapa.values()];
-                    })} />
-                </>
-              );
-            })()}
-            <BomEditor linhas={bomLote} onChange={setBomLote}
-              vendidos={(modalBomLote.irmaos.find(o => (o.itens_vendidos || []).length) || {}).itens_vendidos || []} />
-            <div style={{fontSize:10,color:'#64748b',marginTop:-6,marginBottom:10}}>A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>
-            <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length}
-              pinturaSlot={<PinturaCampos valor={pinturaBomLote} onChange={v => setPinturaBomLote(p => ({ ...p, ...v }))} />} />
-            <label className="acn-label">Observações para PCP/Almoxarifado (aplicadas a todas as selecionadas)</label>
-            <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="Detalhes do BOM, itens especiais, pendencias..."
-              value={obsBomLote} onChange={e=>setObsBomLote(e.target.value)} />
-            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:10,color:'#92400e'}}>
-              ⚠️ OPs que ainda não foram iniciadas na Engenharia serão marcadas como iniciadas agora mesmo (responsável: você),
-              já que a liberação em lote pula a etapa individual de "Iniciar".
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#7c3aed',flex:1,opacity:liberandoLote?0.6:1}} onClick={liberarBomLote} disabled={liberandoLote}>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={liberarBomLote} disabled={liberandoLote}>
                 {liberandoLote ? 'Liberando...' : `LIBERAR BOM PARA ${Object.values(selecionadosLote).filter(Boolean).length} OPs`}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalBomLote(null)} disabled={liberandoLote}>Cancelar</button>
+              </Botao>
+              <Botao onClick={()=>setModalBomLote(null)} disabled={liberandoLote}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1096,23 +1120,27 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL OBS */}
       {modalObs && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Observacoes — {modalObs.opl}</div>
-            {(modalObs.logs_engenharia||[]).length > 0 && (
-              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:8,marginBottom:10,maxHeight:160,overflowY:'auto'}}>
-                {(modalObs.logs_engenharia||[]).map((l,i) => (
-                  <div key={i} style={{fontSize:10,borderBottom:'1px solid #e2e8f0',paddingBottom:4,marginBottom:4}}>
-                    <strong>{l.usuario}</strong> — {new Date(l.hora).toLocaleString('pt-BR')}<br/>{l.texto}
-                  </div>
-                ))}
-              </div>
-            )}
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
-              placeholder="Nova observacao..."
-              value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={addObs}>SALVAR</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObs(null)}>Fechar</button>
+          <div className="modal-box acn-modal-cadastro acn-eng-jan" role="dialog" aria-label="Observações da OP">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Observacoes — {modalObs.opl}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              {(modalObs.logs_engenharia||[]).length > 0 && (
+                <div className="acn-quadro acn-eng-logs">
+                  {(modalObs.logs_engenharia||[]).map((l,i) => (
+                    <div key={i} className="acn-eng-log">
+                      <strong>{l.usuario}</strong> — {new Date(l.hora).toLocaleString('pt-BR')}<br/>{l.texto}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <textarea className="acn-input" rows={3} aria-label="Nova observação"
+                placeholder="Nova observacao..."
+                value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={addObs}>SALVAR</Botao>
+              <Botao onClick={()=>setModalObs(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -1121,15 +1149,21 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL DEVOLVER */}
       {modalDevolver && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Devolver para Comercial — {modalDevolver.opl}</div>
-            <label className="acn-label">Motivo / Observacao *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              placeholder="Descreva o motivo da devolucao..."
-              value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverComercial}>CONFIRMAR DEVOLUCAO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro acn-eng-jan" role="dialog" aria-label="Devolver para o Comercial">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Devolver para Comercial — {modalDevolver.opl}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label" htmlFor="eng-dev">Motivo / Observacao *</label>
+                <textarea id="eng-dev" className="acn-input" rows={3}
+                  placeholder="Descreva o motivo da devolucao..."
+                  value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="perigo" onClick={devolverComercial}>CONFIRMAR DEVOLUCAO</Botao>
+              <Botao onClick={()=>setModalDevolver(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
