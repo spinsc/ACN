@@ -2525,6 +2525,20 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **O que ficou de fora:** a leitura das **pendências de fabricação/compra** (`indicePendencias`, em `OpPendencias.tsx`) e a reserva de estoque (`reservarParaOp`, `Estoque.tsx`) **não foram revistas** (outros arquivos).
 
+### ✅ Etapa 7.53 — Telas dos setores (Serralheria, Chicotes, Laboratório, Telecom, Compras): iniciar, concluir, pausar, orçamento e compra seguiam como se tivessem gravado quando o banco recusava; o clique duplo gravava duas vezes
+
+**Feito em:** 06/10/2026 (continuação do `/ux-fluxo`, depois do push da tarde). **Achados** ao ler `SetorDemandaTab.tsx` para migrá-lo (12e15), **corrigidos antes** do "antes" da migração visual, em commit à parte. **Nenhum dado foi alterado.**
+
+**Os defeitos** (`SetorDemandaTab.tsx`, uma tela só para os cinco setores):
+
+1. **Nenhuma gravação olhava a resposta do banco.** Se a demanda não gravasse: **"Concluir"** dizia "Demanda concluída com N un.", **marcava a OS do SAC como concluída**, **marcava a OP como "Serralheria concluída"** e **avisava o PCP no WhatsApp**; **"Iniciar"** fechava a janela e deixava a OS do SAC em "Em Execução"; **"Finalizar orçamento"** (Laboratório) concluía a demanda do diagnóstico mesmo sem a OS do SAC ter recebido o orçamento; **"Concluir compra"** avisava o solicitante da cotação com o valor. Observação, pausar e retomar também seguiam. Agora **cada uma avisa o motivo e para** (janela aberta, sem aviso, sem sincronização). As **sincronizações secundárias** (OS do SAC, marca da OP, histórico) que falham **depois** de a demanda ter gravado avisam o que ficou pendente — e, no orçamento, **"não envie de novo"**.
+2. **Clique duplo** em "Iniciar", "Concluir", "Pausar/Retomar", "Salvar observação", "Finalizar orçamento" e "Concluir compra" **gravava duas vezes** (dois registros no histórico da demanda). Agora **uma ação por demanda e tipo**.
+3. **Leituras que falhavam pareciam vazio:** as demandas ("Nenhuma demanda"), as **OFIs**, o **relatório do período**, a OS vinculada do SAC (os botões de diagnóstico e reparo sumiam), os **centros de custo** do "Concluir compra" (a lista ficava só com "— Selecionar —") e a **busca de OP**. Agora faixa vermelha com o motivo e "Tentar de novo"; **se já havia lista na tela, ela fica**. O **envio do anexo da cotação** que falhava também era silencioso.
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ — Serralheria (8 demandas, 2 OFIs), Laboratório (5 demandas ligadas a 5 OS do SAC) e Compras (compra e cotação, com centros de custo); `setor.cjs`, 61 cenários, a versão de antes × a corrigida): **41 de 61 iguais; os 20 que diferem são os de propósito** — iniciar, observação, concluir, pausar e retomar recusados; **iniciar e concluir compra com clique duplo (2 gravações antes, 1 depois)**; a liberação parcial com a marca da OP recusada; as OFIs; o orçamento com a OS recusada e com a demanda recusada; o reparo com a OS recusada; os centros que não carregam; as três leituras que falham (demandas, OFIs, relatório); **mais "Lab: concluir reparo"**, que difere só em `kpi_execucao_horas` (relógio). Iguais: a lista, os filtros, as concluídas, os cinco relatórios, todas as janelas abertas, **os caminhos que gravam com sucesso** (iniciar, observação, concluir comum, com quantidade produzida e pela liberação parcial, pausar, retomar, OFI, diagnóstico, orçamento, reparo, compra e cotação), as validações e a lista vazia. `npx vite build` ok.
+
+**O que ficou de fora:** a leitura da lista de requisições do Compras (`ComprasTab`, que a tela de Compras carrega por dentro) e o PDF de impressão da demanda (`imprimirDemanda`, HTML próprio) **não foram revistos**.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.

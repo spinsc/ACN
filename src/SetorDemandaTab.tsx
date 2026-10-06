@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -11,7 +11,7 @@ import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { confirmar, pedirTexto } from './Feedback';
-import { hojeISO, diaISO } from './Interface';
+import { hojeISO, diaISO, Faixa, Botao } from './Interface';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -37,10 +37,14 @@ function OfiQueueSection({ setor, cor, currentUser }) {
   const [modalVerOfi, setModalVerOfi] = useState<any>(null);
   const [atualizando, setAtualizando] = useState<string|null>(null);
 
+  // Etapa 7.53 (06/10/2026): leitura que falha não pode parecer "nenhuma OFI" (e a de 30 s que falhar não esvazia a fila)
+  const [erroOfis, setErroOfis] = useState('');
   const fetchOfis = async () => {
-    const { data } = await supabase.from('ofis').select('*')
+    const { data, error } = await supabase.from('ofis').select('*')
       .eq('setor_destino', setor).neq('status', 'Concluida')
       .order('criado_em', { ascending: false });
+    if (error) { setErroOfis(error.message); return; }
+    setErroOfis('');
     setOfis(data || []);
   };
 
@@ -71,13 +75,19 @@ function OfiQueueSection({ setor, cor, currentUser }) {
     setAtualizando(ofi.id);
     const patch: any = { status: proximo };
     if (proximo === 'Concluida') { patch.concluido_em = new Date().toISOString(); patch.responsavel_nome = currentUser?.nome; }
-    await supabase.from('ofis').update(patch).eq('id', ofi.id);
+    const { error } = await supabase.from('ofis').update(patch).eq('id', ofi.id);
     setAtualizando(null);
+    if (error) { alert(`Não foi possível atualizar a OFI ${ofi.numero_ofi}: ${error.message}`); return; }   // 7.53
     fetchOfis();
   };
 
   return (
     <>
+      {erroOfis && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOfis}>Tentar de novo</Botao>}>
+          Não foi possível ler as Ordens de Fabricação Interna ({erroOfis}). Isso não quer dizer que não haja OFI.
+        </Faixa>
+      )}
       {ofis.length > 0 && (
         <div className="sec-card" style={{ marginTop:12 }}>
           <div className="sec-hdr" style={{ background:`${cor}12`, borderBottom:`2px solid ${cor}` }}>
@@ -145,13 +155,17 @@ function RelatoriosSetor({ setor, cor }) {
 
   useEffect(() => { buscar(); }, []);
 
+  // 7.53: leitura que falha não pode parecer "Nenhuma demanda no período"
+  const [erroBusca, setErroBusca] = useState('');
   const buscar = async () => {
     setCarregando(true);
-    const { data } = await supabase.from('demandas_setoriais').select('*')
+    const { data, error } = await supabase.from('demandas_setoriais').select('*')
       .eq('setor_destino', setor)
       .gte('data_abertura', filtroInicio + 'T00:00:00')
       .lte('data_abertura', filtroFim + 'T23:59:59')
       .order('data_abertura', { ascending: false });
+    if (error) { setErroBusca(error.message); setCarregando(false); return; }
+    setErroBusca('');
     setDados(data || []);
     setCarregando(false);
   };
@@ -219,6 +233,11 @@ function RelatoriosSetor({ setor, cor }) {
       </div>
 
       <div className="sec-body" style={{overflowX:'auto'}}>
+        {erroBusca && (
+          <Faixa tom="erro" acao={<Botao pequeno onClick={buscar}>Tentar de novo</Botao>}>
+            Não foi possível ler as demandas do período ({erroBusca}). Isso não quer dizer que não haja demanda.
+          </Faixa>
+        )}
         {carregando ? <div className="acn-empty">Carregando...</div> : (
           abaRelat==='lista' ? (
             dados.length===0 ? <div className="acn-empty">Nenhuma demanda no período.</div> : (
@@ -346,6 +365,16 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   const [anexosCotacao, setAnexosCotacao] = useState<{nome:string,url:string}[]>([]);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const canVerValorCompra = ['Admin','Gerente','Compras'].includes(currentUser?.perfil);
+  // 7.53: leitura que falha não pode parecer "nenhuma demanda", e um clique duplo em Iniciar/Concluir/Pausar/Salvar gravava duas vezes
+  // (dois registros no log da demanda e, na conclusão, duas sincronizações com a OS/OP). Uma ação por vez, por demanda e tipo.
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [erroCentros, setErroCentros] = useState('');
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
 
   useEffect(() => {
     fetchDemandas();
@@ -355,13 +384,17 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   useEffect(() => { const t = setInterval(()=>setTick(p=>p+1), 1000); return ()=>clearInterval(t); }, []);
   useEffect(() => {
     if (setor !== 'Compras') return;
-    supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo').then(({ data }) => setCentrosCusto(data || []));
+    supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo').then(({ data, error }) => {
+      if (error) { setErroCentros(error.message); return; }   // 7.53: sem a lista não dá para escolher o centro (era "— Selecionar —" vazio)
+      setErroCentros(''); setCentrosCusto(data || []);
+    });
   }, [setor]);
 
   const buscarOpCompra = async (q: string) => {
     setOpBuscaCompra(q);
     if (!q.trim()) { setOpResultadosCompra([]); return; }
-    const { data } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q}%`).limit(8);
+    const { data, error } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q}%`).limit(8);
+    if (error) { alert('Não foi possível buscar a OP: ' + error.message); return; }   // 7.53
     setOpResultadosCompra(data || []);
   };
 
@@ -370,7 +403,8 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     const safeName = file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_').slice(0, 100);
     const path = `demandas-cotacoes/${demandaId}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type });
-    if (!error) {
+    if (error) alert(`Não subiu "${file.name}": ${error.message}`);   // 7.53: o envio falhava em silêncio e o anexo não aparecia
+    else {
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       setAnexosCotacao(prev => [...prev, { nome: file.name, url: pub?.publicUrl || '' }]);
     }
@@ -397,19 +431,24 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     if (!silent) setLoading(true);
     let q = supabase.from('demandas_setoriais').select('*').eq('setor_destino', setor).order('data_abertura', { ascending: false });
     if (filtro !== 'Todos') q = q.eq('status', filtro);
-    const { data: lista } = await q;
+    const { data: lista, error: erroLista } = await q;
+    if (erroLista) { setErroLeitura(erroLista.message); if (!silent) setLoading(false); return; }   // 7.53: fica a lista que já estava na tela
+    setErroLeitura('');
     setDemandas(lista || []);
 
     // Para Laboratório: buscar OS SAC vinculadas
     if (setor === 'Laboratorio') {
       const sacIds = (lista||[]).filter(d=>d.sac_os_id).map(d=>d.sac_os_id);
       if (sacIds.length > 0) {
-        const { data: osData } = await supabase.from('sac_ordens_servico')
+        const { data: osData, error: erroOs } = await supabase.from('sac_ordens_servico')
           .select('id, numero_os, status, valor_orcamento, condicoes_pagamento, data_abertura, data_inicio_execucao_lab, observacoes_lab')
           .in('id', sacIds);
+        if (erroOs) setErroLeitura(erroOs.message);   // 7.53: sem a OS os botões de diagnóstico/reparo somem sem aviso
+        else {
         const map: Record<string,any> = {};
         (osData||[]).forEach(o => { map[o.id] = o; });
         setSacOrdensMap(map);
+        }
       } else {
         setSacOrdensMap({});
       }
@@ -428,44 +467,51 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   // ── INICIAR ───────────────────────────────────────────────────────────────
   const abrirIniciar = (d) => { setModalIniciar(d); setResponsavelIniciar(currentUser?.nome||''); };
 
-  const confirmarIniciar = async () => {
+  const confirmarIniciar = umaVez('iniciar', async () => {
     if (!responsavelIniciar.trim()) { alert('Informe o responsável!'); return; }
     const d = modalIniciar;
     const agora = new Date().toISOString();
     const logs = [...(d.logs_demanda||[]), { texto:`Iniciado. Responsável: ${responsavelIniciar}`, usuario:currentUser?.nome, hora:agora }];
-    await supabase.from('demandas_setoriais').update({ status:'Em Andamento', data_inicio:agora, responsavel_nome:responsavelIniciar, logs_demanda:logs }).eq('id',d.id);
+    const { error: erroIni } = await supabase.from('demandas_setoriais').update({ status:'Em Andamento', data_inicio:agora, responsavel_nome:responsavelIniciar, logs_demanda:logs }).eq('id',d.id);
+    // 7.53: gravação recusada seguia como se a demanda tivesse começado (janela fechada, OS do SAC marcada "Em Execução")
+    if (erroIni) { alert('Não foi possível iniciar a demanda: ' + erroIni.message); return; }
 
     // SAC: atualiza OS
     if (d.sac_os_id) {
+      let erroSac = null;
       if (d.sac_fase === 'execucao') {
-        await supabase.from('sac_ordens_servico').update({ data_inicio_execucao_lab:agora, status:'Em Execução', atualizado_em:agora }).eq('id',d.sac_os_id);
+        ({ error: erroSac } = await supabase.from('sac_ordens_servico').update({ data_inicio_execucao_lab:agora, status:'Em Execução', atualizado_em:agora }).eq('id',d.sac_os_id));
       } else if (d.sac_fase === 'diagnostico') {
-        await supabase.from('sac_ordens_servico').update({ data_inicio_diagnostico:agora, atualizado_em:agora }).eq('id',d.sac_os_id);
+        ({ error: erroSac } = await supabase.from('sac_ordens_servico').update({ data_inicio_diagnostico:agora, atualizado_em:agora }).eq('id',d.sac_os_id));
       }
+      if (erroSac) alert('A demanda foi iniciada, mas a OS do SAC não foi atualizada: ' + erroSac.message);
     }
 
     setModalIniciar(null); setResponsavelIniciar(''); fetchDemandas();
-  };
+  });
 
   // ── OBSERVAÇÃO ────────────────────────────────────────────────────────────
-  const addObservacao = async () => {
+  const addObservacao = umaVez('obs', async () => {
     if (!obsTexto.trim()) return;
     const d = modalObs;
     const logs = [...(d.logs_demanda||[]), { texto:obsTexto, usuario:currentUser?.nome, hora:new Date().toISOString() }];
-    await supabase.from('demandas_setoriais').update({ observacoes_execucao:obsTexto, logs_demanda:logs }).eq('id',d.id);
+    const { error: erroObs } = await supabase.from('demandas_setoriais').update({ observacoes_execucao:obsTexto, logs_demanda:logs }).eq('id',d.id);
+    if (erroObs) { alert('Não foi possível salvar a observação: ' + erroObs.message); return; }   // 7.53
 
     // SAC: atualiza observacoes_lab na OS
     if (d.sac_os_id) {
       const os = sacOrdensMap[d.sac_os_id];
       const novaObs = os?.observacoes_lab ? `${os.observacoes_lab}\n[${new Date().toLocaleString('pt-BR')}] ${obsTexto}` : obsTexto;
-      await supabase.from('sac_ordens_servico').update({ observacoes_lab:novaObs, atualizado_em:new Date().toISOString() }).eq('id',d.sac_os_id);
+      const { error: erroSac } = await supabase.from('sac_ordens_servico').update({ observacoes_lab:novaObs, atualizado_em:new Date().toISOString() }).eq('id',d.sac_os_id);
+      if (erroSac) alert('A observação foi salva na demanda, mas não foi para o corpo da OS do SAC: ' + erroSac.message);
     }
 
     setObsTexto(''); setModalObs(null); fetchDemandas();
-  };
+  });
 
   // ── CONCLUIR (demanda regular) ────────────────────────────────────────────
-  const concluir = async (d) => {
+  const concluir = (d) => umaVez('concluir-' + d.id, concluirDemanda)(d);
+  const concluirDemanda = async (d) => {
     // Demanda que aponta para um item do cadastro vira saldo na prateleira, e
     // para isso precisamos saber quanto saiu da bancada DE VERDADE: pediram 44
     // e o setor pode ter feito 40 porque acabou o fio. É a mesma regra da
@@ -492,7 +538,9 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       usuario:currentUser?.nome, hora:agora }];
     const campos = { status:'Concluido', data_conclusao:agora, tempo_execucao_horas:tempo, logs_demanda:logs };
     if (produzida != null) campos.quantidade_produzida = produzida;
-    await supabase.from('demandas_setoriais').update(campos).eq('id',d.id);
+    const { error: erroConc } = await supabase.from('demandas_setoriais').update(campos).eq('id',d.id);
+    // 7.53: gravação recusada seguia como "Demanda concluída com N un" (e liberava a OS do SAC e o aviso ao PCP)
+    if (erroConc) { alert('Não foi possível concluir a demanda: ' + erroConc.message); return; }
     if (produzida != null) {
       alert(`Demanda concluída com ${produzida} ${d.unidade||'un'}. `
         + `O estoque sobe quando o Almoxarifado conferir o recebimento.`);
@@ -500,18 +548,21 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
 
     // SAC execução: atualiza OS
     if (d.sac_os_id && d.sac_fase === 'execucao') {
-      await supabase.from('sac_ordens_servico').update({
+      const { error: erroSac } = await supabase.from('sac_ordens_servico').update({
         status:'Concluído', data_finalizacao_execucao:agora, kpi_execucao_horas:tempo, atualizado_em:agora,
       }).eq('id',d.sac_os_id);
+      if (erroSac) alert('A demanda foi concluída, mas a OS do SAC não foi atualizada: ' + erroSac.message);   // 7.53
     }
 
     // Liberação parcial de BOM (Engenharia → Serralheria): devolve o aviso
     // pro PCP via trilha paralela oples.serralheria_status — não mexe no
     // status_geral normal da OP.
     if (d.tipo_solicitacao === 'liberacao_parcial_bom' && d.numero_opl) {
-      const { data: opl } = await supabase.from('oples').select('id,opl,status_geral').eq('opl', d.numero_opl).maybeSingle();
+      const { data: opl, error: erroOpl } = await supabase.from('oples').select('id,opl,status_geral').eq('opl', d.numero_opl).maybeSingle();
+      if (erroOpl) alert('A demanda foi concluída, mas não consegui ler a OP para avisar o PCP: ' + erroOpl.message + '. Avise o PCP para sanar a pendência.');   // 7.53
       if (opl) {
-        await supabase.from('oples').update({ serralheria_status: 'Concluido' }).eq('id', opl.id);
+        const { error: erroMarca } = await supabase.from('oples').update({ serralheria_status: 'Concluido' }).eq('id', opl.id);
+        if (erroMarca) alert(`A demanda foi concluída, mas a OP ${opl.opl} não foi marcada como "Serralheria concluída": ${erroMarca.message}. Avise o PCP para sanar a pendência.`);   // 7.53
         await supabase.from('logs_movimentacao_opl').insert([{
           opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
           evento: 'Serralheria concluiu a liberação parcial. Aguardando PCP sanar a pendência.',
@@ -572,7 +623,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   };
 
   // ── CONCLUIR COMPRA (modal com valor + prazo + centro de custo) ──────────
-  const confirmarConcluirCompra = async () => {
+  const confirmarConcluirCompra = umaVez('compra', async () => {
     if (!compraForm.prazo) { alert('Informe a previsão de recebimento.'); return; }
     if (!compraForm.centro_custo_id) { alert('Informe o centro de custo.'); return; }
     const d = modalConcluirCompra;
@@ -597,7 +648,9 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       }],
     };
     if (compraForm.valor) updates.valor_compra = parseFloat(compraForm.valor.replace(',','.'));
-    await supabase.from('demandas_setoriais').update(updates).eq('id', d.id);
+    const { error: erroCompra } = await supabase.from('demandas_setoriais').update(updates).eq('id', d.id);
+    // 7.53: gravação recusada seguia como compra concluída (e avisava o solicitante da cotação com o valor)
+    if (erroCompra) { alert('Não foi possível concluir a compra: ' + erroCompra.message); return; }
 
     // Cotação: avisa quem solicitou que o valor foi lançado
     if (isCotacao && compraForm.valor && d.criado_por) {
@@ -621,27 +674,29 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     setModalConcluirCompra(null); setCompraForm({ valor:'', prazo:'', centro_custo_id:'', numero_opl:'' });
     setAnexosCotacao([]); setOpBuscaCompra(''); setOpResultadosCompra([]);
     fetchDemandas();
-  };
+  });
 
   // ── PAUSAR / RETOMAR ──────────────────────────────────────────────────────
-  const pausar = async (d) => {
+  const pausar = (d) => umaVez('pausa-' + d.id, async () => {
     const agora = new Date().toISOString();
     const logs = [...(d.logs_demanda||[]), { texto:'Tarefa pausada manualmente.', usuario:currentUser?.nome, hora:agora }];
-    await supabase.from('demandas_setoriais').update({ pausado:true, data_pausa:agora, logs_demanda:logs }).eq('id',d.id);
+    const { error } = await supabase.from('demandas_setoriais').update({ pausado:true, data_pausa:agora, logs_demanda:logs }).eq('id',d.id);
+    if (error) { alert('Não foi possível pausar: ' + error.message); return; }   // 7.53
     fetchDemandas();
-  };
+  })();
 
-  const retomar = async (d) => {
+  const retomar = (d) => umaVez('pausa-' + d.id, async () => {
     const agora = new Date().toISOString();
     const horasPausadas = d.data_pausa ? horasUteis(new Date(d.data_pausa), new Date()) : 0;
     const novoTotal = (d.tempo_pausado_horas||0) + horasPausadas;
     const logs = [...(d.logs_demanda||[]), { texto:`Tarefa retomada. Pausa: ${horasPausadas.toFixed(2)}h úteis.`, usuario:currentUser?.nome, hora:agora }];
-    await supabase.from('demandas_setoriais').update({ pausado:false, data_pausa:null, tempo_pausado_horas:novoTotal, logs_demanda:logs }).eq('id',d.id);
+    const { error } = await supabase.from('demandas_setoriais').update({ pausado:false, data_pausa:null, tempo_pausado_horas:novoTotal, logs_demanda:logs }).eq('id',d.id);
+    if (error) { alert('Não foi possível retomar: ' + error.message); return; }   // 7.53
     fetchDemandas();
-  };
+  })();
 
   // ── FINALIZAR ORÇAMENTO (Lab SAC diagnóstico) ────────────────────────────
-  const finalizarOrcamento = async () => {
+  const finalizarOrcamento = umaVez('orcamento', async () => {
     if (!finalizarOrcForm.valor) { alert('Informe o valor do orçamento!'); return; }
     const d  = modalFinalizarOrc;
     const os = sacOrdensMap[d.sac_os_id];
@@ -652,7 +707,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     const valorNum = parseFloat(finalizarOrcForm.valor.replace(',','.'));
 
     // Atualiza OS
-    await supabase.from('sac_ordens_servico').update({
+    const { error: erroOrc } = await supabase.from('sac_ordens_servico').update({
       status: 'Orçamento Pronto',
       observacoes_lab: finalizarOrcForm.observacoes || null,
       valor_orcamento: valorNum,
@@ -661,17 +716,20 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       kpi_orcamento_horas: kpi1,
       atualizado_em: agora,
     }).eq('id', os.id);
+    // 7.53: se a OS não gravar, o orçamento NÃO foi enviado ao SAC; seguia concluindo a demanda do diagnóstico
+    if (erroOrc) { alert('Não foi possível enviar o orçamento ao SAC: ' + erroOrc.message); return; }
 
     // Conclui demanda de diagnóstico
     const logs = [...(d.logs_demanda||[]), { texto:`Orçamento finalizado. Valor: R$ ${finalizarOrcForm.valor}. KPI elaboração: ${kpi1.toFixed(1)}h úteis.`, usuario:currentUser?.nome, hora:agora }];
-    await supabase.from('demandas_setoriais').update({
+    const { error: erroDem } = await supabase.from('demandas_setoriais').update({
       status:'Concluido', data_conclusao:agora, tempo_execucao_horas:kpi1,
       observacoes_execucao: finalizarOrcForm.observacoes||null, logs_demanda:logs,
     }).eq('id',d.id);
+    if (erroDem) alert('O orçamento foi enviado ao SAC, mas a demanda do diagnóstico não foi concluída: ' + erroDem.message + '. Não envie de novo.');
 
     setModalFinalizarOrc(null); setFinalizarOrcForm({ observacoes:'', valor:'', condicoes:'' });
     fetchDemandas();
-  };
+  });
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
   const corPrioridade = (p) => ({Alta:'#ef4444',Media:'#f59e0b',Baixa:'#22c55e',Normal:'#94a3b8'})[p]||'#94a3b8';
@@ -863,6 +921,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
           <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:45) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
         </div>
 
+        {erroLeitura && (
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchDemandas()}>Tentar de novo</Botao>}>
+            Não foi possível ler as demandas ({erroLeitura}). Isso não quer dizer que não haja demanda{demandas.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+          </Faixa>
+        )}
         <div className="sec-body" style={{overflowX:'auto',padding:0}}>
           {loading ? <div className="acn-empty">Carregando...</div> : demandas.length===0 ? (
             <div className="acn-empty">Nenhuma demanda {filtro!=='Todos'?`com status "${filtro}"`:''}.</div>
@@ -1078,6 +1141,9 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
             <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>
               {modalConcluirCompra.descricao?.substring(0,80)}{modalConcluirCompra.descricao?.length>80?'...':''}
             </div>
+            {erroCentros && (
+              <Faixa tom="erro">Não foi possível ler os centros de custo ({erroCentros}). Sem eles não dá para concluir a compra; feche e abra de novo.</Faixa>
+            )}
 
             {canVerValorCompra && (
               <div style={{marginBottom:12}}>
