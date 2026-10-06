@@ -127,7 +127,17 @@ export async function sugerirBom(vendidos: any[]) {
       if (data) somar({ item_id: data.id, codigo: data.codigo || '', nome: data.nome, unidade: data.unidade || 'UN', quantidade: q, descricao: '', nao_cadastrado: false });
     }
   }
-  return [...porItem.values()];
+  // R19 (decidida com o usuário em 01/10/2026, aplicada em 06/10/2026): serviço e item genérico (categoria GENERICO:
+  // película, instalação do kit, garantia estendida, plotagem, licença…) continuam na venda e na proposta, mas NÃO são
+  // material para o Almoxarifado separar — saem da BOM sugerida. Se a leitura das categorias falhar, a lista segue
+  // como estava (melhor sobrar um serviço do que sumir um material).
+  const sugeridas = [...porItem.values()];
+  const idsSug = sugeridas.map(l => l.item_id).filter(Boolean);
+  if (!idsSug.length) return sugeridas;
+  const { data: cats, error: erroCats } = await supabase.from('cadastro_itens').select('id,categoria').in('id', idsSug);
+  if (erroCats) return sugeridas;
+  const genericos = new Set((cats || []).filter((c: any) => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map((c: any) => String(c.id)));
+  return sugeridas.filter(l => !l.item_id || !genericos.has(String(l.item_id)));
 }
 
 /**
