@@ -1349,3 +1349,25 @@ html body .modal-box.acn-modal-cadastro.acn-eng-bom { width: min(820px, 96vw); m
 .acn-eng-log { padding-bottom: 4px; font-size: 12px; border-bottom: 1px solid var(--acn-line); }
 .acn-eng-selecao { max-height: 220px; overflow-y: auto; gap: 2px; }
 .acn-eng-selecao-linha { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: 13px; cursor: pointer; }
+
+/* ── PCP · 12e14 (06/10/2026): faixa de prioridades, triagem, alertas e a janela do kiting no molde do guia ─────────────── */
+.acn-pcp-espaco { margin-bottom: 12px; }
+.acn-pcp-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+/* o atalho de cada bloco: âmbar quando há ação do PCP, cinza quando só acompanha (a família vem do data-acn-familia) */
+.acn-pcp-chip { display: flex; align-items: center; gap: 8px; padding: 6px 12px; text-align: left; cursor: pointer; color: var(--acn-text); background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-pcp-chip[data-acn-familia=atencao] { background: var(--acn-warn-soft); border-color: color-mix(in srgb, var(--acn-warn) 45%, transparent); color: var(--acn-warn); }
+.acn-pcp-chip:hover { box-shadow: 0 1px 6px rgba(15, 23, 42, .15); }
+.acn-pcp-chip-nome { display: block; font-size: 12px; font-weight: 800; color: var(--acn-f); }
+.acn-pcp-chip-sub { display: block; font-size: 11px; font-weight: 400; color: var(--acn-muted); }
+.acn-pcp-chip-sub.pede { font-weight: 700; color: var(--acn-f); }
+/* a pílula no cabeçalho do bloco: texto normal, não em maiúsculas */
+.acn-pcp-pilula { margin-left: 8px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.acn-pcp-pilula .acn-selo { text-transform: none; letter-spacing: 0; }
+html body .sec-hdr.acn-pcp-hdr-marca { background: var(--acn-brand-soft); border-bottom: 2px solid var(--acn-brand); }
+.acn-pcp-hdr-marca .acn-alm-titulo { color: var(--acn-brand-ink); }
+html body .modal-box.acn-modal-cadastro.acn-pcp-kiting { width: min(980px, 96vw); max-width: 980px; max-height: 92vh; }
+.acn-pcp-kiting .form-group { margin-bottom: 0; }
+.acn-pcp-kiting .acn-modal-corpo > * { flex-shrink: 0; }
+.acn-pcp-sugestao { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-size: 13px; cursor: pointer; border-top: 1px solid var(--acn-line-soft); }
+.acn-pcp-setor { font-weight: 800; color: var(--acn-brand-ink); }
+div.acn-sub-info { display: flex; align-items: center; gap: 4px; }
