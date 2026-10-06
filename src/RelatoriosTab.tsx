@@ -9,7 +9,8 @@ import { MARKUP_BANDAS, corMarkup, markupPonderadoItens, cotacaoAlvo, Termometro
 import { RelDossieOp } from './OpDossie';
 import { hojeISO, diaISO, Botao, Chips, Selo, Tag, Faixa, rotuloStatus } from './Interface';
 import Icone from './Icone';
-import { mdiPrinterOutline, mdiFileExcelOutline, mdiLinkVariant } from '@mdi/js';
+import { mdiPrinterOutline, mdiFileExcelOutline, mdiLinkVariant, mdiFilePdfBox } from '@mdi/js';
+import { montarModeloVendedores, emitirDocumento } from './ComissaoDocumento';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
@@ -1101,6 +1102,7 @@ function RelComissoes() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
   const [divisorLote, setDivisorLote] = useState<Record<string, number>>({});
+  const [emitindo, setEmitindo] = useState(false);
 
   const fmtR = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
 
@@ -1118,7 +1120,8 @@ function RelComissoes() {
       const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
       const [resFuncs, resOps, divisores] = await Promise.all([
         supabase.from('rh_funcionarios').select('id,nome,cargo,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
-        supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf')
+        // Documento detalhado (05/10/2026): o número da NF e as datas de conclusão e de entrega vão junto, para o PDF mostrar as datas de cada comissão
+        supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
           .lt('data_emissao_nf', `${proximoMes}-01T00:00:00-03:00`),
         lerDivisorPorBaseDeLote(),
@@ -1157,10 +1160,29 @@ function RelComissoes() {
   const totalComissoes = comissoes.reduce((s, c) => s + c.comissao, 0);
   const totalBase      = comissoes.reduce((s, c) => s + c.baseTotal, 0);
 
+  // 05/10/2026 (ao testar a comissão de outubro): a OP de um vendedor sem "Recebe comissão" no RH (ou sem vendedor na OP) não entrava em bloco nenhum — só o nome do vendedor
+  // aparecia num aviso, e parecia que a tela "não trazia" a nota. Agora cada uma dessas OPs aparece numa tabela com o motivo; e o vendedor com comissão mas SEM percentual
+  // (a comissão sai R$ 0,00) é avisado. Quem cadastra o percentual continua sendo o RH.
+  const nomeNorm = (s) => String(s || '').toLowerCase().trim();
+  const opsSemComissao = ops.filter(o => !funcionarios.some(f => nomeNorm(f.nome) === nomeNorm(o.responsavel_comercial)));
+  const vendedoresSemPercentual = comissoes.filter(c => c.opsVendedor.length > 0 && !(Number(c.percentual_comissao) > 0));
+
   const [mesLabel] = mes.split('-').reverse();
   const [anoLabel, mesNumLabel] = mes.split('-');
   const nomesMes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const labelMes = `${nomesMes[Number(mesNumLabel)-1]}/${anoLabel}`;
+  const mesesLongos = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+  // Documento detalhado em PDF (pedido do usuário em 05/10/2026): por vendedor, cada OP com NF, as datas (conclusão, emissão da NF, entrega), a base, o % e a comissão
+  const emitirDocumentoPdf = async () => {
+    setEmitindo(true);
+    try {
+      let usuario: any = {}; try { usuario = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
+      const modelo = montarModeloVendedores({ mesLabel: `${mesesLongos[Number(mesNumLabel)-1]} de ${anoLabel}`, comissoes, ops, valorDe, divisorDe, emitidoPor: usuario?.nome });
+      await emitirDocumento(modelo);
+    } catch (e) { alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
+    setEmitindo(false);
+  };
 
   return (
     <div>
@@ -1176,6 +1198,9 @@ function RelComissoes() {
               {ops.length} OP(s) faturada(s) em {labelMes} · {funcionarios.length} vendedor(es) com comissão cadastrada
             </span>
           )}
+          <Botao variante="primario" icone={mdiFilePdfBox} onClick={emitirDocumentoPdf} disabled={emitindo || loading || !!erro}>
+            {emitindo ? 'Gerando…' : 'Emitir documento detalhado (PDF)'}
+          </Botao>
         </div>
       </div>
 
@@ -1198,6 +1223,38 @@ function RelComissoes() {
               <strong>Vendedores com OPs faturadas mas sem comissão cadastrada no RH:</strong>{' '}
               {semCadastro.join(', ')}
             </Faixa>
+          )}
+
+          {vendedoresSemPercentual.length > 0 && (
+            <Faixa tom="atencao">
+              <strong>Vendedor com OPs faturadas mas sem percentual de comissão cadastrado (a comissão sai R$ 0,00):</strong>{' '}
+              {vendedoresSemPercentual.map(c => c.nome).join(', ')}. O percentual se cadastra em RH → Funcionários.
+            </Faixa>
+          )}
+
+          {opsSemComissao.length > 0 && (
+            <div className="sec-card">
+              <div className="sec-hdr">
+                <span><span className="acn-forte">OPs faturadas em {labelMes} que NÃO geraram comissão</span> <span className="acn-fraco">({opsSemComissao.length})</span></span>
+              </div>
+              <div className="sec-body acn-rolagem">
+                <table className="acn-tabela">
+                  <thead><tr><th>OP</th><th>Cliente</th><th>Vendedor na OP</th><th>Motivo</th><th className="acn-dir">Valor Total</th><th>NF em</th></tr></thead>
+                  <tbody>
+                    {opsSemComissao.map(o => (
+                      <tr key={o.id}>
+                        <td className="acn-forte">{o.opl}</td>
+                        <td>{o.cliente_nome || '—'}</td>
+                        <td>{o.responsavel_comercial || '—'}</td>
+                        <td className="acn-fraco">{String(o.responsavel_comercial || '').trim() ? 'vendedor sem comissão cadastrada no RH (Recebe comissão)' : 'OP sem vendedor (responsável comercial vazio)'}</td>
+                        <td className="acn-dir acn-num">{fmtR(valorDe(o))}</td>
+                        <td className="acn-fraco">{o.data_emissao_nf ? new Date(o.data_emissao_nf).toLocaleDateString('pt-BR') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           {/* Tabela de comissões */}
