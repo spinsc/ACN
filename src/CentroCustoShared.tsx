@@ -15,7 +15,7 @@ import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
 import { confirmar } from './Feedback';
-import { hojeISO, Faixa } from './Interface';
+import { hojeISO, diaISO, Faixa, Botao } from './Interface';
 import { AnexosDespesa } from './DespesaAnexos';
 import { conferirMesesAbertos, mesDe, mesDoLancamento, mesDaCompra } from './CentroCustoFechamento';
 
@@ -250,6 +250,7 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
   const [obs, setObs]         = useState('');
   const [data, setData]       = useState(() => hojeISO());
   const [salvando, setSalvando] = useState(false);
+  const [erroLeitura, setErroLeitura] = useState('');   // Etapa 7.47: a leitura do que já foi pago falhou
 
   const totalNegociado = Number(contrato.valor_total_negociado) || 0;
   const nParcelas = Number(contrato.num_parcelas) || 0;
@@ -257,23 +258,32 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
   const sugestao = (pago: number, feitas: number) =>
     nParcelas > feitas && totalNegociado > pago ? Math.round((totalNegociado - pago) / (nParcelas - feitas) * 100) / 100 : 0;
 
-  useEffect(() => {
+  // Etapa 7.47 (05/10/2026): a leitura que falhava virava "já pago R$ 0,00, parcela 1" — a janela sugeria a parcela errada e deixava de
+  // avisar que passava do total negociado. Agora avisa, oferece "Tentar de novo" e não deixa lançar sem saber o que já foi pago.
+  const lerJaPago = () => {
+    setErroLeitura('');
     supabase.from('centro_custo_despesas').select('valor').eq('despesa_pai_id', contrato.id)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { setErroLeitura(error.message || 'erro desconhecido'); return; }
         const pago = (data || []).reduce((s: number, r: any) => s + (Number(r.valor) || 0), 0);
         setJaPago(pago); setQtdFeitas((data || []).length);
         const s = sugestao(pago, (data || []).length);
         // só preenche se a pessoa ainda não digitou nada
         if (s > 0) setValor(v => v || s.toFixed(2).replace('.', ','));
       });
-  }, [contrato.id]);
+  };
+  useEffect(() => { lerJaPago(); }, [contrato.id]);
 
-  const vNum = parseFloat(String(valor).replace(',', '.')) || 0;
+  // Etapa 7.47: a mesma leitura de valor das outras janelas do centro (`lerValorBR`). A conta de antes lia "1.500,00" como R$ 1,50
+  // (o ponto virava casa decimal) — quem digitava o milhar com ponto lançava a medição mil vezes menor.
+  const lido = lerValorBR(valor);
+  const vNum = Number.isFinite(lido) ? lido : 0;
   const somaComEsta = (jaPago || 0) + vNum;
   const excedente = somaComEsta - totalNegociado;
   const numeroDaParcela = qtdFeitas + 1;
 
   const salvar = async () => {
+    if (erroLeitura) { alert('Não foi possível conferir o que já foi pago neste contrato (' + erroLeitura + '). Nada foi gravado: use "Tentar de novo" e lance a medição.'); return; }
     if (!vNum || vNum <= 0) { alert('Informe um valor válido.'); return; }
     setSalvando(true);
     // Etapa 15e-2 (05/10/2026): a medição vale no mês da sua data; mês fechado não recebe (conferido no banco agora)
@@ -304,6 +314,13 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
             </div>
           )}
         </div>
+        {erroLeitura && (
+          <div style={{ marginBottom: 10 }}>
+            <Faixa tom="erro" acao={<Botao pequeno onClick={lerJaPago}>Tentar de novo</Botao>}>
+              Não foi possível conferir o que já foi pago neste contrato ({erroLeitura}). Nada pode ser lançado antes disso.
+            </Faixa>
+          </div>
+        )}
         <label className="acn-label">Valor desta Medição (R$) *</label>
         <input className="acn-input" style={{ width:'100%', marginBottom:6 }} placeholder="0,00" inputMode="decimal"
           value={valor} onChange={e => setValor(e.target.value)} autoFocus />
@@ -321,7 +338,7 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
         <input type="date" className="acn-input" style={{ width:'100%', marginBottom:14 }}
           value={data} onChange={e => setData(e.target.value)} />
         <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando || !!erroLeitura}>
             {salvando ? 'Salvando...' : '💾 Lançar Medição'}
           </button>
           <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
@@ -366,12 +383,23 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
   const [numeroNf, setNumeroNf] = useState(lancamento?.numero_nf || '');
   const [competencia, setCompetencia] = useState(String(lancamento?.competencia || '').slice(0, 7));
   const [categorias, setCategorias] = useState<any[]>([]);
+  const [erroCategorias, setErroCategorias] = useState('');
   const [irmaos, setIrmaos] = useState<any[]>([]); // as outras partes, quando o lançamento é uma parte de um rateio
+  const [irmaosLidos, setIrmaosLidos] = useState(!lancamento?.rateio_grupo_id); // Etapa 7.47: sem rateio não há o que ler
+  const [erroIrmaos, setErroIrmaos] = useState('');
+  const lerIrmaos = () => {
+    setErroIrmaos('');
+    supabase.from('centro_custo_despesas').select('id,centro_custo_id,valor,rateio_percentual').eq('rateio_grupo_id', lancamento.rateio_grupo_id)
+      .then(({ data: d, error }) => { if (error) { setErroIrmaos(error.message || 'erro desconhecido'); return; } setIrmaos(d || []); setIrmaosLidos(true); });
+  };
   useEffect(() => {
-    supabase.from('centro_custo_categorias').select('*').order('ordem').order('nome').then(({ data: d }) => setCategorias(d || []));
-    if (lancamento?.rateio_grupo_id) {
-      supabase.from('centro_custo_despesas').select('id,centro_custo_id,valor,rateio_percentual').eq('rateio_grupo_id', lancamento.rateio_grupo_id).then(({ data: d }) => setIrmaos(d || []));
-    }
+    // Etapa 7.47 (05/10/2026): as duas leituras ignoravam o erro. Sem as categorias, o campo parecia "sem categoria" (o valor gravado não muda);
+    // sem as partes do rateio, "Excluir o rateio todo" apagava TUDO dizendo "1 parte, R$ 0,00" e sem registrar a auditoria de cada parte.
+    supabase.from('centro_custo_categorias').select('*').order('ordem').order('nome').then(({ data: d, error }) => {
+      if (error) { setErroCategorias(error.message || 'erro desconhecido'); return; }
+      setCategorias(d || []);
+    });
+    if (lancamento?.rateio_grupo_id) lerIrmaos();
   }, [lancamento?.id]);
   const [salvando, setSalvando] = useState(false);
   /**
@@ -393,7 +421,8 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
   useEffect(() => { conferirMesesAbertos([mesDoLancamento(lancamento)]).then(r => setTravaMes(r.ok ? null : r)); }, [lancamento?.id]);
   const mesFechado = !!travaMes && !travaMes.falhaLeitura;
 
-  const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
+  // Etapa 7.47: `lerValorBR` (a mesma das outras janelas do centro) no lugar da conta de antes, que tirava TODO ponto: "100.50" virava R$ 10.050
+  const num = (v: any) => { const n = lerValorBR(v); return n == null ? NaN : n; };
   const v = num(valor);
   const abaixoDoPago = ehContrato && Number.isFinite(v) && jaPago > 0 && v < jaPago;
   const trocouCentro = centroId && centroId !== lancamento?.centro_custo_id;
@@ -487,6 +516,7 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
 
   // Rateio: apagar só uma parte deixaria as outras com a divisão errada; o caminho é apagar o rateio inteiro (todas as partes)
   const excluirRateio = async () => {
+    if (!irmaosLidos) { alert('Não foi possível ler as outras partes do rateio' + (erroIrmaos ? ' (' + erroIrmaos + ')' : '') + '. Por segurança, o rateio não é excluído sem conferir todas as partes. Nada foi apagado.'); return; }
     const travaRat = await conferirMesesAbertos([mesDoLancamento(lancamento)]);
     if (!travaRat.ok) { alert(travaRat.mensagem); return; }
     const partes = irmaos.length || 1;
@@ -603,6 +633,14 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
           </div>
         </div>
         <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>Sem competência, a despesa conta no mês da data (como as de antes).</div>
+        {erroCategorias && <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 4 }}>Não foi possível ler as categorias ({erroCategorias}). A categoria atual não muda ao salvar.</div>}
+        {lancamento?.rateio_grupo_id && erroIrmaos && (
+          <div style={{ marginTop: 8 }}>
+            <Faixa tom="erro" acao={<Botao pequeno onClick={lerIrmaos}>Tentar de novo</Botao>}>
+              Não foi possível ler as outras partes do rateio ({erroIrmaos}). Enquanto isso, "Excluir o rateio todo" fica desligado.
+            </Faixa>
+          </div>
+        )}
         {lancamento?.rateio_grupo_id && (
           <div style={{ fontSize: 11, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, padding: '6px 8px', marginTop: 8 }}>
             Esta despesa é uma parte de um <b>rateio</b>{irmaos.length ? ` (${irmaos.length} partes: ${irmaos.map((x: any) => `${x.centro_custo_id === lancamento.centro_custo_id ? 'esta' : 'outra'} ${moeda(x.valor)}${x.rateio_percentual != null ? ` · ${String(Number(x.rateio_percentual)).replace('.', ',')}%` : ''}`).join(' | ')})` : ''}.
@@ -617,7 +655,7 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
             Excluir
           </button>
           {lancamento?.rateio_grupo_id && (
-            <button className="acn-btn" style={{ background: '#b91c1c' }} disabled={salvando || mesFechado} onClick={excluirRateio} title="Apaga todas as partes do rateio">
+            <button className="acn-btn" style={{ background: '#b91c1c' }} disabled={salvando || mesFechado || !irmaosLidos} onClick={excluirRateio} title="Apaga todas as partes do rateio">
               Excluir o rateio todo
             </button>
           )}
@@ -649,7 +687,11 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
 export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo }: any) {
   const [descricao, setDescricao] = useState(pedido?.descricao_material || '');
   const [valor, setValor] = useState(String(pedido?.valor_compra ?? '').replace('.', ','));
-  const [data, setData] = useState(String(pedido?.data_solicitacao || '').slice(0, 10));
+  // Etapa 7.47 (05/10/2026): `data_solicitacao` é data COM hora (timestamptz). A janela mostrava os 10 primeiros caracteres do texto em UTC
+  // (um dia depois para quem pediu à noite) e, ao salvar, gravava SEMPRE essa data por cima — mesmo sem a pessoa tocar nela —, trocando a
+  // hora por meia-noite UTC (21h do dia anterior em Brasília). Agora mostra o dia de Brasília e só grava se a pessoa mudar a data.
+  const dataInicial = pedido?.data_solicitacao ? diaISO(new Date(pedido.data_solicitacao)) : '';
+  const [data, setData] = useState(dataInicial);
   const [centroId, setCentroId] = useState(pedido?.centro_custo_id || '');
   const [salvando, setSalvando] = useState(false);
   // Etapa 15e-2 (05/10/2026): compra criada num mês fechado não tem valor, centro nem data corrigidos por aqui (o mês é o da criação).
@@ -658,7 +700,8 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
   useEffect(() => { conferirMesesAbertos([mesDaCompra(pedido)]).then(r => setTravaMes(r.ok ? null : r)); }, [pedido?.id]);
   const mesFechado = !!travaMes && !travaMes.falhaLeitura;
 
-  const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
+  // Etapa 7.47: `lerValorBR`, como nas outras janelas do centro (a conta de antes lia "100.50" como R$ 10.050)
+  const num = (v: any) => { const n = lerValorBR(v); return n == null ? NaN : n; };
   const v = num(valor);
   const trocouCentro = (centroId || null) !== (pedido?.centro_custo_id || null);
 
@@ -677,7 +720,8 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
       valor_compra: valor === '' ? null : v,
       centro_custo_id: centroId || null,
     };
-    if (data) depois.data_solicitacao = data;
+    // só se a pessoa mudou a data; meio-dia de Brasília, para o dia não escorregar em nenhum fuso
+    if (data && data !== dataInicial) depois.data_solicitacao = new Date(data + 'T12:00:00').toISOString();
     const { error } = await supabase.from('pcp_pedidos_compra').update(depois).eq('id', pedido.id);
     setSalvando(false);
     if (error) { alert('Não foi possível salvar: ' + error.message); return; }
