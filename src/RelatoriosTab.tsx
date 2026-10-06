@@ -10,7 +10,8 @@ import { RelDossieOp } from './OpDossie';
 import { hojeISO, diaISO, Botao, Chips, Selo, Tag, Faixa, rotuloStatus } from './Interface';
 import Icone from './Icone';
 import { mdiPrinterOutline, mdiFileExcelOutline, mdiLinkVariant, mdiFilePdfBox } from '@mdi/js';
-import { montarModeloVendedores, emitirDocumento } from './ComissaoDocumento';
+import { montarModeloVendedores, montarModeloTecnicos, emitirDocumento, dataBR } from './ComissaoDocumento';
+import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
@@ -1103,6 +1104,9 @@ function RelComissoes() {
   const [erro, setErro] = useState('');
   const [divisorLote, setDivisorLote] = useState<Record<string, number>>({});
   const [emitindo, setEmitindo] = useState(false);
+  // 06/10/2026 (pedido do usuário): a tela só calculava a comissão dos VENDEDORES; o pessoal da Produção, Serralheria e Adaptação aparecia como blocos vazios ("Nenhuma OP faturada"). Agora são duas visões
+  // do mesmo mês: Vendedores (como sempre) e Produção (a mesma conta do RH › Comissões de Técnicos, vinda de ComissaoCalculo.ts).
+  const [visao, setVisao] = useState<'vendedores'|'producao'>('vendedores');
 
   const fmtR = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
 
@@ -1119,7 +1123,7 @@ function RelComissoes() {
       const [anoM, mesM] = mes.split('-').map(Number);
       const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
       const [resFuncs, resOps, divisores] = await Promise.all([
-        supabase.from('rh_funcionarios').select('id,nome,cargo,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
+        supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
         // Documento detalhado (05/10/2026): o número da NF e as datas de conclusão e de entrega vão junto, para o PDF mostrar as datas de cada comissão
         supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
@@ -1166,6 +1170,10 @@ function RelComissoes() {
   const nomeNorm = (s) => String(s || '').toLowerCase().trim();
   const opsSemComissao = ops.filter(o => !funcionarios.some(f => nomeNorm(f.nome) === nomeNorm(o.responsavel_comercial)));
   const vendedoresSemPercentual = comissoes.filter(c => c.opsVendedor.length > 0 && !(Number(c.percentual_comissao) > 0));
+  // Quem tem "Recebe comissão" mas não vendeu nada no mês e NÃO é do Comercial/Licitações é técnico (Produção, Serralheria, Adaptação): a comissão dele está na visão Produção, e o bloco vazio aqui só confundia.
+  const ehDoComercial = (f) => /COMERCIAL|LICITA/i.test(String(f.departamento || ''));
+  const comissoesVisiveis = comissoes.filter(c => c.opsVendedor.length > 0 || ehDoComercial(c));
+  const foraDaVisao = comissoes.filter(c => !comissoesVisiveis.includes(c));
 
   const [mesLabel] = mes.split('-').reverse();
   const [anoLabel, mesNumLabel] = mes.split('-');
@@ -1193,18 +1201,26 @@ function RelComissoes() {
             <label className="acn-label">Mês de Referência</label>
             <input type="month" className="acn-input" value={mes} onChange={e=>setMes(e.target.value)} />
           </div>
-          {!loading && !erro && (
+          <Chips ativo={visao} onChange={id => setVisao(id as any)} rotulo="Quem aparece no relatório" itens={[
+            { id:'vendedores', rotulo:'Vendedores' },
+            { id:'producao',   rotulo:'Produção, Serralheria e Adaptação' },
+          ]} />
+          {visao === 'vendedores' && !loading && !erro && (
             <span className="acn-fraco">
-              {ops.length} OP(s) faturada(s) em {labelMes} · {funcionarios.length} vendedor(es) com comissão cadastrada
+              {ops.length} OP(s) faturada(s) em {labelMes} · {comissoesVisiveis.length} vendedor(es) com comissão cadastrada
             </span>
           )}
-          <Botao variante="primario" icone={mdiFilePdfBox} onClick={emitirDocumentoPdf} disabled={emitindo || loading || !!erro}>
-            {emitindo ? 'Gerando…' : 'Emitir documento detalhado (PDF)'}
-          </Botao>
+          {visao === 'vendedores' && (
+            <Botao variante="primario" icone={mdiFilePdfBox} onClick={emitirDocumentoPdf} disabled={emitindo || loading || !!erro}>
+              {emitindo ? 'Gerando…' : 'Emitir documento detalhado (PDF)'}
+            </Botao>
+          )}
         </div>
       </div>
 
-      {loading ? (
+      {visao === 'producao' ? (
+        <RelComissoesProducao mes={mes} labelMes={labelMes} periodo={`${mesesLongos[Number(mesNumLabel)-1].replace(/^./, s => s.toUpperCase())}/${anoLabel}`} />
+      ) : loading ? (
         <div className="acn-empty">Carregando...</div>
       ) : erro ? (
         <Faixa tom="erro">Não consegui ler as OPs faturadas de {labelMes}: {erro}</Faixa>
@@ -1257,13 +1273,20 @@ function RelComissoes() {
             </div>
           )}
 
+          {foraDaVisao.length > 0 && (
+            <div className="acn-ajuda" title={foraDaVisao.map(c => c.nome).join(', ')}>
+              {foraDaVisao.length} pessoa(s) com comissão cadastrada não aparece(m) aqui por não terem vendido em {labelMes} (passe o mouse para ver os nomes):
+              a comissão dos técnicos da Produção, Serralheria e Adaptação está na visão <strong>Produção, Serralheria e Adaptação</strong>.
+            </div>
+          )}
+
           {/* Tabela de comissões */}
           {comissoes.length === 0 ? (
             <div className="acn-empty">
               Nenhum vendedor com comissão cadastrada encontrado. Configure em RH → Funcionários → Recebe Comissão.
             </div>
           ) : (
-            comissoes.map(c => (
+            comissoesVisiveis.map(c => (
               <div key={c.id} className="sec-card">
                 {/* Cabeçalho vendedor */}
                 <div className="sec-hdr">
@@ -1318,6 +1341,231 @@ function RelComissoes() {
                 )}
               </div>
             ))
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── COMISSÃO DA PRODUÇÃO, SERRALHERIA E ADAPTAÇÃO ──
+// 06/10/2026 (pedido do usuário): o relatório só trazia os vendedores. Esta visão usa a MESMA conta do RH › Comissões de Técnicos (ComissaoCalculo.ts) — o número daqui é o de lá;
+// o crédito vem de quem foi apontado em "Equipe" da OP/OS (responsaveis_producao). Aprovar o fechamento continua sendo no RH.
+function RelComissoesProducao({ mes, labelMes, periodo }) {
+  const [situacao, setSituacao] = useState<'faturada'|'a_faturar'>('faturada');
+  const [origem, setOrigem] = useState<'todos'|'adaptacao'>('todos');
+  const [res, setRes] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
+  const [emitindo, setEmitindo] = useState(false);
+
+  const fmtR = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      setErro('');
+      if (!/^\d{4}-\d{2}$/.test(mes)) { setRes(null); return; }   // campo de mês apagado: nada a consultar
+      setLoading(true);
+      try {
+        const { data: funcs, error } = await supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,incide_em,recebe_comissao');
+        if (error) throw error;
+        const [a, m] = mes.split('-').map(Number);
+        const r = await calcularComissaoTecnicos({
+          funcionarios: funcs || [], inicio: `${mes}-01`, fim: diaISO(new Date(a, m, 0)),
+          modoFatura: situacao, filtroOrigem: origem, fechamento: { mes: m, ano: a },
+        });
+        if (!vivo) return;
+        if (r.erro) setErro(r.erro);
+        setRes(r);
+      } catch (e: any) { if (vivo) setErro(e?.message || String(e)); }
+      if (vivo) setLoading(false);
+    })();
+    return () => { vivo = false; };
+  }, [mes, situacao, origem]);
+
+  const dados: any[] = res?.dados || [];
+  const grupos: any[] = res?.grupos || [];
+  const semTecnico: any[] = res?.semTecnico || [];
+  const aprovados: Record<string, any> = {};
+  (res?.fechamentos || []).filter((f: any) => f.status === 'aprovado').forEach((f: any) => { aprovados[f.tecnico_id] = f; });
+
+  const depto = (t) => String(t.func?.departamento || '').trim().toUpperCase() || 'SEM DEPARTAMENTO';
+  const ORDEM = ['PRODUÇÃO', 'SERRALHERIA'];
+  const deptos = [...new Set(dados.map(depto))].sort((a: any, b: any) => {
+    const ia = ORDEM.indexOf(a), ib = ORDEM.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a).localeCompare(String(b), 'pt-BR');
+  });
+  const comissaoDoItem = (i, t) => i.papel === 'apoio' ? i.base * 0.001 : i.base * (Number(t.percentual) || 0) / 100;
+  const totalBase = dados.reduce((s, t) => s + t.totalBase, 0);
+  const totalComissao = dados.reduce((s, t) => s + t.totalComissao, 0);
+  const qtdItens = new Set(dados.flatMap(t => [...t.ops, ...t.oss].map(i => i.id))).size;
+  const semPercentual = dados.filter(t => !(Number(t.percentual) > 0) && [...t.ops, ...t.oss].some(i => i.papel !== 'apoio'));
+
+  const emitirDocumentoPdf = async () => {
+    setEmitindo(true);
+    try {
+      let usuario: any = {}; try { usuario = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
+      const modelo = montarModeloTecnicos({ periodo, ...rotuloComissaoTecnicos({ modoFatura: situacao, filtroOrigem: origem }), tecnicos: dados, grupos, semTecnico, aprovados, emitidoPor: usuario?.nome });
+      await emitirDocumento(modelo);
+    } catch (e) { alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
+    setEmitindo(false);
+  };
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="acn-filtros acn-filtros-campos">
+          <Chips ativo={situacao} onChange={id => setSituacao(id as any)} rotulo="Situação da nota fiscal" itens={[
+            { id:'faturada',  rotulo:'Faturada',  titulo:'OPs/OSs com NF emitida dentro do mês' },
+            { id:'a_faturar', rotulo:'A Faturar', titulo:'Produção concluída dentro do mês, NF ainda não emitida (valores estimados)' },
+          ]} />
+          <select className="acn-input acn-select-mini" aria-label="Origem" value={origem} onChange={e => setOrigem(e.target.value as any)}>
+            <option value="todos">Todas as origens</option>
+            <option value="adaptacao">Só Adaptação (veículos)</option>
+          </select>
+          <Botao variante="primario" icone={mdiFilePdfBox} onClick={emitirDocumentoPdf} disabled={emitindo || loading || !!erro || (dados.length === 0 && semTecnico.length === 0)}
+            title="PDF com cada OP/OS, as datas, a base e a comissão de cada técnico do mês">
+            {emitindo ? 'Gerando…' : 'Emitir documento detalhado (PDF)'}
+          </Botao>
+        </div>
+        <div className="acn-ajuda">
+          {situacao === 'faturada' ? `OPs/OSs com NF emitida em ${labelMes}` : `OPs/OSs concluídas na produção em ${labelMes}, NF ainda não emitida (valores estimados)`}
+          {origem === 'adaptacao' && <> · só OPs (transformação veicular) + OS de manutenção veicular</>}
+          {' '}· mesma conta do RH › Comissões de Técnicos; a aprovação do fechamento é feita lá.
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="acn-empty">Carregando...</div>
+      ) : erro ? (
+        <Faixa tom="erro">Não consegui calcular a comissão da produção de {labelMes}: {erro}</Faixa>
+      ) : (
+        <>
+          <Indicadores itens={[
+            { l:'Base de cálculo', v:fmtR(totalBase), tom:'info' },
+            { l:'Total Comissões', v:fmtR(totalComissao), tom:'ok' },
+            { l:'Técnicos', v:dados.length, tom:'neutro' },
+            { l:'OPs/OSs', v:qtdItens, tom:'neutro' },
+          ]} />
+
+          {semTecnico.length > 0 && (
+            <Faixa tom="atencao">
+              <strong>{semTecnico.length} OP/OS do período SEM técnico apontado (não geram comissão de produção):</strong>{' '}
+              {semTecnico.slice(0, 12).map(i => i.numero).join(', ')}{semTecnico.length > 12 ? ` e mais ${semTecnico.length - 12}` : ''}.
+              {' '}Aponte quem trabalhou em "Equipe" da OP/OS (Produção) e abra de novo.
+            </Faixa>
+          )}
+          {semPercentual.length > 0 && (
+            <Faixa tom="atencao">
+              <strong>Técnico com OP/OS mas sem percentual de comissão cadastrado (a comissão como responsável sai R$ 0,00):</strong>{' '}
+              {semPercentual.map(t => t.tecnicoNome).join(', ')}. O percentual se cadastra em RH → Funcionários.
+            </Faixa>
+          )}
+
+          {dados.length === 0 ? (
+            <div className="acn-empty">Nenhuma OP/OS com técnico apontado {situacao === 'faturada' ? `faturada em ${labelMes}` : `concluída em ${labelMes} e ainda sem NF`}.</div>
+          ) : (
+            <>
+              {grupos.length > 0 && (
+                <div className="sec-card">
+                  <div className="sec-hdr"><span className="acn-forte">OP/OS por técnico, dupla e equipe</span></div>
+                  <div className="sec-body">
+                    <div className="acn-pipeline">
+                      {grupos.map(g => (
+                        <div key={g.chave} className="acn-pipe-card">
+                          <Selo familia={g.tipo==='equipe' ? 'marca' : g.tipo==='dupla' ? 'info' : 'neutro'} ponto={false}>{g.tipo==='equipe' ? 'Equipe' : g.tipo==='dupla' ? 'Dupla' : 'Individual'}</Selo>
+                          <div className="acn-pipe-nome">{g.label}</div>
+                          <div className="acn-pipe-qtd">{g.qtdTotal} <span>OP/OS</span></div>
+                          <div className="acn-pipe-apoio">
+                            {g.qtdComApoio>0 && <span className="acn-txt-atencao">{g.qtdComApoio} c/ apoio</span>}
+                            {g.qtdComApoio>0 && g.qtdSemApoio>0 && ' · '}
+                            {g.qtdSemApoio>0 && <span>{g.qtdSemApoio} sem apoio</span>}
+                          </div>
+                          <div className="acn-txt-ok">{fmtR(g.totalComissao)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {deptos.map(d => {
+                const doDepto = dados.filter(t => depto(t) === d);
+                return (
+                  <div key={d} className="sec-card">
+                    <div className="sec-hdr">
+                      <span><span className="acn-forte">{d}</span> <span className="acn-fraco">({doDepto.length} técnico(s))</span></span>
+                      <span className="acn-dir">
+                        <span className="acn-fraco">Base: <strong>{fmtR(doDepto.reduce((s, t) => s + t.totalBase, 0))}</strong></span>
+                        {' '}<strong className="acn-forte">Comissão: {fmtR(doDepto.reduce((s, t) => s + t.totalComissao, 0))}</strong>
+                      </span>
+                    </div>
+                    <div className="sec-body">
+                      {doDepto.map(tec => {
+                        const aprov = aprovados[tec.tecnicoId];
+                        const itens = [...tec.ops, ...tec.oss];
+                        return (
+                          <div key={tec.tecnicoId} className={'acn-com-tec' + (aprov ? ' aprovado' : '')}>
+                            <div className="acn-com-cab">
+                              <div className="acn-com-id">
+                                <div className="acn-forte">{tec.tecnicoNome}{tec.func?.cargo && <span className="acn-fraco"> {tec.func.cargo}</span>}</div>
+                                <div className="acn-ajuda">
+                                  Incide em: <strong>{tec.incideEm}</strong> · Percentual: <strong className="acn-txt-info">{tec.percentual}%</strong> ·
+                                  {tec.ops.length > 0 && <> {tec.ops.length} OP</>}
+                                  {tec.oss.length > 0 && <> · {tec.oss.length} OS</>}
+                                </div>
+                              </div>
+                              <div className="acn-com-valores">
+                                <div>Base: <strong>{fmtR(tec.totalBase)}</strong></div>
+                                <div className={'acn-com-total' + (aprov ? ' ok' : '')}>Comissão: {fmtR(tec.totalComissao)}</div>
+                                {aprov && <div className="acn-aprovado">Aprovado por {aprov.aprovado_por}</div>}
+                              </div>
+                            </div>
+                            <div className="acn-rolagem">
+                              <table className="acn-tabela acn-compacta">
+                                <thead><tr>
+                                  <th>Tipo</th><th>Nº</th><th>Cliente</th><th>NF</th>
+                                  <th className="acn-centro">Concluída</th><th className="acn-centro">{situacao === 'faturada' ? 'NF emitida' : 'Concluída (A Faturar)'}</th><th className="acn-centro">Entrega</th>
+                                  <th className="acn-dir">Valor Total</th><th className="acn-dir">Mão de Obra</th><th className="acn-dir">Base</th><th className="acn-dir">Comissão</th>
+                                </tr></thead>
+                                <tbody>
+                                  {itens.map((i, k) => {
+                                    const mdo = i.papel === 'serralheria' ? i.valor_mao_de_obra_serralheria : i.valor_mao_de_obra;
+                                    return (
+                                      <tr key={k}>
+                                        <td>
+                                          <Selo familia={i.tipo === 'OP' ? 'ok' : 'info'} ponto={false}>{i.tipo}</Selo>
+                                          {i.papel === 'apoio' && <Selo familia="atencao" ponto={false}>APOIO</Selo>}
+                                          {i.papel === 'serralheria' && <Selo familia="marca" ponto={false}>SERRALHERIA</Selo>}
+                                        </td>
+                                        <td className="acn-forte">
+                                          {i.numero || '—'}
+                                          {i.qtdVeiculosLote > 1 && <Selo familia="neutro" ponto={false} title={`Lote de ${i.qtdVeiculosLote} veículos — valor unitário (total do lote ÷ ${i.qtdVeiculosLote})`}>lote/{i.qtdVeiculosLote}</Selo>}
+                                        </td>
+                                        <td className="acn-texto-longo">{i.cliente || '—'}</td>
+                                        <td className="acn-fraco">{[i.nf, i.nf_servico ? `NFS-e ${i.nf_servico}` : ''].filter(Boolean).join(' · ') || '—'}</td>
+                                        <td className="acn-centro acn-num">{dataBR(i.data_conclusao)}</td>
+                                        <td className="acn-centro acn-num">{dataBR(i.data_faturamento)}</td>
+                                        <td className="acn-centro acn-num">{dataBR(i.data_entrega)}</td>
+                                        <td className="acn-dir acn-num">{i.valor_total != null ? fmtR(i.valor_total) : '—'}</td>
+                                        <td className="acn-dir acn-num">{mdo != null ? fmtR(mdo) : '—'}</td>
+                                        <td className="acn-dir acn-num acn-forte">{fmtR(i.base)}</td>
+                                        <td className="acn-dir acn-num acn-txt-info">{fmtR(comissaoDoItem(i, tec))}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
         </>
       )}
