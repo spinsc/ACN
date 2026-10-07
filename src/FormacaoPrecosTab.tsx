@@ -8,6 +8,7 @@ import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
+import { Faixa, Botao } from './Interface';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -257,11 +258,14 @@ function GerenciarCategorias({ onMudou }) {
     const { error } = await supabase.from('formacao_precos_tipos').update({ nome: nome.trim() }).eq('id', c.id);
     if (error) { alert('Erro ao renomear: ' + error.message); return; }
     // a formação guarda o NOME da categoria: renomear leva junto as formações dela
-    await supabase.from('cotacoes_precos').update({ tipo: nome.trim() }).eq('tipo', c.nome);
+    // Etapa 7.59 (07/10/2026): este segundo passo ignorava o erro — a categoria mudava de nome e as formações ficavam com o nome antigo
+    const { error: erroFormacoes } = await supabase.from('cotacoes_precos').update({ tipo: nome.trim() }).eq('tipo', c.nome);
+    if (erroFormacoes) alert('A categoria foi renomeada, mas as formações dela NÃO acompanharam o novo nome (' + erroFormacoes.message + '). Renomeie de novo para tentar outra vez ou avise o suporte.');
     carregar(); onMudou?.();
   };
   const alternar = async (c) => {
-    await supabase.from('formacao_precos_tipos').update({ ativo: !c.ativo }).eq('id', c.id);
+    const { error } = await supabase.from('formacao_precos_tipos').update({ ativo: !c.ativo }).eq('id', c.id);
+    if (error) { alert('Não foi possível ' + (c.ativo ? 'desativar' : 'reativar') + ' a categoria: ' + error.message); return; }   // 7.59
     carregar(); onMudou?.();
   };
   return (
@@ -354,7 +358,7 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
 }
 
 // ─── MODAL DE CARREGAR TEMPLATE ───────────────────────────────────────────────
-function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) {
+function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose, erro = '' }) {
   const [cat, setCat] = useState('');
   const lista = modelos.filter((m: any) => !cat || categoriaDe(m) === cat);
   return (
@@ -366,8 +370,9 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
           <FiltroCategoria lista={modelos} valor={cat} onChange={setCat} />
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:10 }}>
+          {erro && <Faixa tom="erro">Não foi possível ler os modelos ({erro}). Isso não quer dizer que não haja modelo salvo.</Faixa>}
           {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
-          {!carregando && lista.length === 0 && (
+          {!carregando && lista.length === 0 && !erro && (
             <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhum modelo salvo.</div>
           )}
           {!carregando && agruparPorCategoria(lista).map(g => (
@@ -407,7 +412,7 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
 // Diferente de "Carregar Modelo" (que só copia valores pra um registro novo),
 // isto vincula de verdade o registro escolhido a este processo — o registro
 // continua existindo em "Formação de Preços", agora com o vínculo atualizado.
-function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPorCotacao, onImportar, onClose }) {
+function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPorCotacao, onImportar, onClose, erro = '' }) {
   const [cat, setCat] = useState('');
   const [selecionadas, setSelecionadas] = useState<string[]>([]);
   const [importando, setImportando] = useState(false);
@@ -436,8 +441,9 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
           o registro continua existindo em "Formação de Preços", sem cópia.
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:10 }}>
+          {erro && <Faixa tom="erro">Não foi possível ler as formações ({erro}). Isso não quer dizer que não haja formação para importar.</Faixa>}   {/* 7.59 */}
           {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
-          {!carregando && listaFiltrada.length === 0 && (
+          {!carregando && listaFiltrada.length === 0 && !erro && (
             <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhuma formação disponível.</div>
           )}
           {!carregando && agruparPorCategoria(listaFiltrada).map(g => (
@@ -621,14 +627,16 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
     difal_pct: 0, imposto_pct: 16, custo_fixo_pct: 3, unidade: 'UN', ativo: true,
   });
   const [salvando, setSalvando] = useState(false);
+  const salvandoRef = useRef(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const inp = { width:'100%', padding:'4px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' };
   const lbl = { display:'block', fontSize:8, fontWeight:700, color:'#6b7280', marginBottom:2, textTransform:'uppercase' };
 
   const salvar = async () => {
-    if (!form.nome?.trim()) return;
+    if (!form.nome?.trim() || salvando || salvandoRef.current) return;   // 7.59: o clique duplo criava o item duas vezes (o ref vale na hora; o estado só no desenho seguinte)
+    salvandoRef.current = true;
     setSalvando(true);
-    const { data } = await supabase.from('cadastro_itens').insert([{
+    const { data, error: erroItem } = await supabase.from('cadastro_itens').insert([{
       nome: form.nome.trim(), marca: form.marca?.trim() || '', fornecedor: form.fornecedor?.trim() || '',
       moeda: form.moeda || 'REAL', custo_unit: Number(form.custo_unit) || 0,
       ipi_pct: Number(form.ipi_pct) || 0, st_pct: Number(form.st_pct) || 0,
@@ -637,7 +645,9 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
       imposto_pct: Number(form.imposto_pct) || 16, custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
       unidade: form.unidade || 'UN', ativo: true,
     }]).select().single();
+    salvandoRef.current = false;
     setSalvando(false);
+    if (erroItem) { alert('Não foi possível criar o item no catálogo: ' + erroItem.message); return; }   // 7.59: não fazia nada, sem aviso
     if (data) onSalvo(data);
   };
 
@@ -1176,13 +1186,18 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   const [desconto, setDesconto]         = useState(0);
   const [obs, setObs]                   = useState('');
   const [salvando, setSalvando]         = useState(false);
+  const salvandoPropostaRef = useRef(false);
   const [propostas, setPropostas]       = useState([]);
   const [filtroCat, setFiltroCat]       = useState('');
   const [gerindoCat, setGerindoCat]     = useState(false);
 
+  // Etapa 7.59: leitura que falha não pode parecer "nenhuma formação" (e a lista que já estava na tela fica)
+  const [erroLeitura, setErroLeitura] = useState('');
   const carregarCotacoes = useCallback(async () => {
     setCarregando(true);
-    const { data } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
+    const { data, error } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
+    if (error) { setErroLeitura(error.message); setCarregando(false); return; }
+    setErroLeitura('');
     setCotacoes(data || []);
     setCarregando(false);
   }, []);
@@ -1193,15 +1208,17 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     setAberta(m);
     setDesconto(0);
     setObs('');
-    const { data } = await supabase.from('cotacoes_propostas')
+    const { data, error } = await supabase.from('cotacoes_propostas')
       .select('*').eq('cotacao_id', m.id).order('criado_em', { ascending: false });
+    if (error) alert('Não foi possível ler as propostas desta formação: ' + error.message + '\n\nA lista de propostas abaixo pode estar incompleta.');   // 7.59
     setPropostas(data || []);
   };
 
   const salvarProposta = async () => {
-    if (!cotacaoAberta) return;
+    if (!cotacaoAberta || salvando || salvandoPropostaRef.current) return;   // 7.59: clique duplo gravava a proposta duas vezes (o estado `salvando` só muda no desenho seguinte; o ref vale na hora)
     const maxDesc = Number(cotacaoAberta.desconto_maximo_pct) || 0;
     if (desconto > maxDesc) { alert(`Desconto máximo permitido é ${maxDesc}%.`); return; }
+    salvandoPropostaRef.current = true;
     setSalvando(true);
     const prms  = cotacaoAberta.parametros_globais || {};
     const items = (cotacaoAberta.itens || []);
@@ -1224,6 +1241,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
         .select('*').eq('cotacao_id', cotacaoAberta.id).order('criado_em', { ascending: false });
       setPropostas(data || []);
     }
+    salvandoPropostaRef.current = false;
     setSalvando(false);
   };
 
@@ -1390,8 +1408,9 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
         )}
       </div>
       {gerindoCat && <div style={{ maxWidth:420, marginBottom:12 }}><GerenciarCategorias onMudou={carregarCotacoes} /></div>}
+      {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregarCotacoes}>Tentar de novo</Botao>}>Não foi possível ler as formações ({erroLeitura}). Isso não quer dizer que não haja formação salva{cotacoes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
       {carregando && <div style={{ textAlign:'center', color:'#64748b', padding:30 }}>Carregando...</div>}
-      {!carregando && cotacoes.length === 0 && (
+      {!carregando && cotacoes.length === 0 && !erroLeitura && (
         <div style={{ textAlign:'center', color:'#9ca3af', fontSize:12, padding:40 }}>Nenhuma cotação salva.</div>
       )}
       <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -1739,6 +1758,18 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
 // o vínculo automaticamente (crm_oportunidade_id/licitacao_id), sem precisar
 // procurar manualmente na tela cheia.
 export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotulo }: any = {}) {
+  // Etapa 7.59 (07/10/2026): um clique duplo em salvar/registrar/excluir/vincular gravava duas vezes (duas formações iguais, duas
+  // versões) — uma ação por tipo. E leitura que falha (modelos, formações do processo, plataformas) não pode parecer "vazio".
+  const emAcao = useRef(new Set());
+  const umaVez = (chave: string, fn: (...a: any[]) => Promise<any>) => async (...args: any[]) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+  const [erroModelos, setErroModelos]       = useState('');
+  const [erroVinculo, setErroVinculo]       = useState('');
+  const [erroPlataformas, setErroPlataformas] = useState('');
+  const plataformaCarregadaRef = useRef<string | null>(null);   // a plataforma da formação aberta, para não apagá-la ao salvar se a lista não carregou
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
   const [grupoAtivo, setGrupoAtivo]   = useState('Item 1'); // aba ativa — "Item do edital"
@@ -1970,11 +2001,14 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (!vinculo?.id) return;
     setCarregandoVinculo(true);
     // N:N via tabela de junção — uma formação pode atender vários processos.
-    const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+    const { data: vinc, error: erroVinc } = await supabase.from('cotacoes_precos_vinculos')
       .select('cotacao_id').eq('tipo', vinculo.tipo).eq('processo_id', vinculo.id);
+    if (erroVinc) { setErroVinculo(erroVinc.message); setCarregandoVinculo(false); return; }   // 7.59: lia como "nenhuma formação neste processo" (a tela abria vazia e dava para criar uma duplicada)
     const ids = [...new Set((vinc || []).map((v: any) => v.cotacao_id))];
-    if (!ids.length) { setFormacoesVinculo([]); setCarregandoVinculo(false); return; }
-    const { data } = await supabase.from('cotacoes_precos').select('*').in('id', ids).order('criado_em', { ascending: false });
+    if (!ids.length) { setErroVinculo(''); setFormacoesVinculo([]); setCarregandoVinculo(false); return; }
+    const { data, error: erroForm } = await supabase.from('cotacoes_precos').select('*').in('id', ids).order('criado_em', { ascending: false });
+    if (erroForm) { setErroVinculo(erroForm.message); setCarregandoVinculo(false); return; }
+    setErroVinculo('');
     setFormacoesVinculo(data || []);
     setCarregandoVinculo(false);
   }, [vinculo?.tipo, vinculo?.id]);
@@ -2016,7 +2050,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // formação pode atender vários processos (CRM e/ou Licitação) ao mesmo
   // tempo. Clicar "Importar" de novo no mesmo processo é inofensivo
   // (unique constraint com onConflict:'do nothing').
-  const importarEVincular = async (selecionadas: any[]) => {
+  const importarEVincular = umaVez('importar', async (selecionadas: any[]) => {
     if (!vinculo?.id) return;
     const lista = Array.isArray(selecionadas) ? selecionadas : [selecionadas];
     if (!lista.length) return;
@@ -2024,11 +2058,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       .upsert(lista.map(m => ({ cotacao_id: m.id, tipo: vinculo.tipo, processo_id: vinculo.id })),
               { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
     if (error) { alert('Erro ao vincular: ' + error.message); return; }
-    await supabase.from('cotacoes_precos_log').insert(lista.map(m => ({
+    const { error: erroLogImp } = await supabase.from('cotacoes_precos_log').insert(lista.map(m => ({
       cotacao_id: m.id, tipo: 'importada',
       descricao: `Importada/vinculada a ${vinculo.tipo === 'crm' ? 'oportunidade do CRM' : 'licitação'}${rotulo ? ' "' + rotulo + '"' : ''}.`,
       usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
     })));
+    if (erroLogImp) alert('Vinculada, mas o registro no histórico da formação não foi gravado: ' + erroLogImp.message);   // 7.59
     await carregarFormacoesVinculo();
     // abre a mais recente das importadas
     const abrir = [...lista].sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em)))[0];
@@ -2037,11 +2072,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setModalImportar(false);
     carregarModelos();
     if (lista.length > 1) alert(`${lista.length} formações vinculadas a este processo. Troque entre elas pelo seletor de versões.`);
-  };
+  });
 
   // Desfaz o vínculo da formação aberta com ESTE processo (Gerentes e Admins).
   // A formação continua salva e ligada a outros processos, se houver.
-  const desvincularFormacao = async () => {
+  const desvincularFormacao = umaVez('desvincular', async () => {
     if (!vinculo?.id || !editandoId) return;
     const atual = formacoesVinculo.find((x: any) => x.id === editandoId);
     if (!atual) return;
@@ -2053,12 +2088,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (error) { alert('Erro ao desvincular: ' + error.message); return; }
     // a coluna antiga (crm_oportunidade_id / licitacao_id) também apontava para cá
     const coluna = vinculo.tipo === 'crm' ? 'crm_oportunidade_id' : 'licitacao_id';
-    await supabase.from('cotacoes_precos').update({ [coluna]: null }).eq('id', editandoId).eq(coluna, vinculo.id);
-    await supabase.from('cotacoes_precos_log').insert([{
+    // 7.59: estes dois passos ignoravam o erro; a coluna antiga que sobrava fazia a formação continuar aparecendo neste processo
+    const { error: erroColuna } = await supabase.from('cotacoes_precos').update({ [coluna]: null }).eq('id', editandoId).eq(coluna, vinculo.id);
+    if (erroColuna) alert('Desvinculada, mas a ligação antiga da formação com este processo NÃO foi limpa (' + erroColuna.message + '): ela pode continuar aparecendo aqui.');
+    const { error: erroLogDes } = await supabase.from('cotacoes_precos_log').insert([{
       cotacao_id: editandoId, tipo: 'desvinculada',
       descricao: `Desvinculada de ${vinculo.tipo === 'crm' ? 'oportunidade do CRM' : 'licitação'}${rotulo ? ' "' + rotulo + '"' : ''}.`,
       usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
     }]);
+    if (erroLogDes) console.warn('Falha ao registrar a desvinculação no histórico:', erroLogDes.message);
     const restantes = formacoesVinculo.filter((x: any) => x.id !== editandoId);
     await carregarFormacoesVinculo();
     if (restantes.length) { carregarModelo(restantes[0]); setEditandoId(restantes[0].id); }
@@ -2069,7 +2107,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       geracaoRef.current += 1;
     }
     alert('Formação desvinculada deste processo.');
-  };
+  });
 
   // Ao abrir o processo, carrega automaticamente a formação mais recente
   // (a lista vem ordenada por criado_em desc, então [0] é a última versão).
@@ -2114,7 +2152,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   useEffect(() => {
     supabase.from('plataformas_licitacao').select('*').eq('ativo', true).order('nome')
-      .then(({ data }) => setPlataformas(data || []));
+      .then(({ data, error }) => {
+        // 7.59: lista que não carrega fazia a formação abrir SEM a plataforma e o próximo "Salvar" apagava a plataforma gravada
+        if (error) { setErroPlataformas(error.message); return; }
+        setErroPlataformas('');
+        setPlataformas(data || []);
+      });
   }, []);
 
   const paramEfetivo = (item) => {
@@ -2181,7 +2224,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     supabase.from('cotacoes_precos_log').insert([{
       cotacao_id: editandoId, tipo, descricao,
       usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
-    }]).then(({ error }) => { if (error) console.error('Erro ao registrar log:', error); });
+    }]).then(({ error }) => {
+      if (error) { console.error('Erro ao registrar log:', error); alert('A alteração foi feita, mas NÃO foi registrada no histórico da formação finalizada: ' + error.message); }   // 7.59: ficava só no console
+    });
   };
 
   const remItem  = (id) => {
@@ -2414,7 +2459,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   const carregarModelos = useCallback(async () => {
     setCarregando(true);
-    const { data } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
+    const { data, error } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
+    if (error) { setErroModelos(error.message); setCarregando(false); return; }   // 7.59: lia como "nenhum modelo salvo"
+    setErroModelos('');
     setModelos(data || []);
     setCarregando(false);
   }, []);
@@ -2453,7 +2500,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   // Grava o trabalho pendente como uma NOVA versão do mesmo grupo, preservando
   // intacta a versão que a outra pessoa salvou. É a saída padrão do conflito.
-  const gravarComoNovaVersao = async (payload: any) => {
+  const gravarComoNovaVersao = umaVez('nova-versao', async (payload: any) => {
     setResolvendoConflito(true);
     const idAnterior = editandoId;
     try {
@@ -2467,10 +2514,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                    atualizado_por: currentUser?.nome || currentUser?.email || 'Sistema' }])
         .select('id, atualizado_em, atualizado_por').single();
       if (error) throw error;
+      let avisoVinculo = '';
       if (vinculo?.id) {
-        await supabase.from('cotacoes_precos_vinculos')
+        const { error: erroVincNV } = await supabase.from('cotacoes_precos_vinculos')
           .upsert([{ cotacao_id: data.id, tipo: vinculo.tipo, processo_id: vinculo.id }],
                   { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+        // 7.59: a versão nova ficava sem ligação com o processo — sumia da tela dele (o incidente de 08/09 de novo)
+        if (erroVincNV) avisoVinculo = '\n\nATENÇÃO: a versão foi gravada, mas NÃO foi ligada a este processo (' + erroVincNV.message + '). Use "Importar" para ligá-la.';
       }
       await supabase.from('cotacoes_precos_log').insert([{
         cotacao_id: data.id, tipo: 'conflito_nova_versao',
@@ -2490,26 +2540,33 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       carregarModelos();
       if (vinculo?.id) carregarFormacoesVinculo();
       window.dispatchEvent(new CustomEvent('acn:formacao-salva', { detail: { vinculo } }));
-      alert(`Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.`);
+      alert(`Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.` + avisoVinculo);
     } catch (err: any) {
       alert('Erro ao gravar como nova versão: ' + err.message);
     } finally {
       setResolvendoConflito(false);
     }
-  };
+  });
 
   // Descarta o trabalho local e recarrega o que a outra pessoa salvou.
   const descartarERecarregar = async () => {
     setResolvendoConflito(true);
+    const { data, error: erroRec } = await supabase.from('cotacoes_precos').select('*').eq('id', editandoId).maybeSingle();
+    // 7.59: o rascunho era apagado ANTES de a leitura dar certo; se falhasse, o trabalho local se perdia sem a versão do outro na tela
+    if (erroRec) { setResolvendoConflito(false); alert('Não foi possível ler a versão salva por outra pessoa: ' + erroRec.message + '\n\nNada foi descartado — o seu trabalho continua aqui.'); return; }
     descartarRascunho(editandoId); // o trabalho local foi descartado de propósito
-    const { data } = await supabase.from('cotacoes_precos').select('*').eq('id', editandoId).maybeSingle();
     if (data) carregarModelo(data);
     setConflito(null);
     setRascunhoPendente(null);
     setResolvendoConflito(false);
   };
 
-  const salvarModelo = async (nome, tipo) => {
+  const salvarModelo = umaVez('salvar', async (nome, tipo) => {
+    // 7.59: com a lista de plataformas sem carregar, a formação abre sem a plataforma e salvar a apagaria
+    if (erroPlataformas && !plataformaSelecionada && plataformaCarregadaRef.current) {
+      alert('Esta formação tem uma plataforma, mas a lista de plataformas não carregou (' + erroPlataformas + '). Recarregue a tela antes de salvar, senão a plataforma seria apagada.');
+      return;
+    }
     setSalvando(true);
     const payload: any = {
       nome,
@@ -2552,14 +2609,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
       }
     }
+    let avisoVinculoSalvar = '';
     if (!error && novaCotacaoId && vinculo?.id) {
-      await supabase.from('cotacoes_precos_vinculos')
+      const { error: erroVincSalvar } = await supabase.from('cotacoes_precos_vinculos')
         .upsert([{ cotacao_id: novaCotacaoId, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+      // 7.59: a formação nascia sem ligação com o processo e sumia da tela dele
+      if (erroVincSalvar) avisoVinculoSalvar = '\n\nATENÇÃO: a formação foi salva, mas NÃO foi ligada a este processo (' + erroVincSalvar.message + '). Use "Importar" para ligá-la.';
     }
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
       window.dispatchEvent(new CustomEvent('acn:formacao-salva', { detail: { vinculo } }));
-      alert(editandoId ? 'Cotação atualizada!' : 'Modelo salvo!');
+      alert((editandoId ? 'Cotação atualizada!' : 'Modelo salvo!') + avisoVinculoSalvar);
       setModalSalvar(false);
       // O nome digitado no modal ia só pro banco: a tela continuava achando
       // que a formação era "sem nome", então o salvamento seguinte pedia o
@@ -2579,9 +2639,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       if (vinculo?.id) carregarFormacoesVinculo();
     }
     setSalvando(false);
-  };
+  });
 
   const carregarModelo = (m) => {
+    plataformaCarregadaRef.current = m.plataforma_id || null;
     // Merge com os padrões (não substitui cego pelo JSON salvo) — modelos
     // salvos antes de algum campo existir (ex: markup_pct) não têm essa
     // chave, e um valor `undefined` num input controlado dispara o warning
@@ -2630,11 +2691,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setModalCarregar(false);
   };
 
-  const excluirModelo = async (id) => {
+  const excluirModelo = (id) => umaVez('excluir-' + id, async () => {
     if (!await confirmar('Excluir este modelo?')) return;
-    await supabase.from('cotacoes_precos').delete().eq('id', id);
+    const { error } = await supabase.from('cotacoes_precos').delete().eq('id', id);
+    if (error) { alert('Não foi possível excluir o modelo: ' + error.message); return; }   // 7.59: seguia como se tivesse excluído
     carregarModelos();
-  };
+  })();
 
   const novaQuotacao = async () => {
     if (!await confirmar('Limpar cotação atual e iniciar nova?')) return;
@@ -2672,7 +2734,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   };
 
   // Clona cotação: salva nova cópia no banco (sem OP vinculada) e abre para edição
-  const clonarCotacao = async (m) => {
+  const clonarCotacao = umaVez('clonar', async (m) => {
     const novoNome = `Cópia de ${m.nome}`;
     const { data, error } = await supabase.from('cotacoes_precos').insert([{
       nome:                novoNome,
@@ -2691,10 +2753,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setEditandoId(data.id);
     setAbaAtiva('formacao');
     carregarModelos();
-  };
+  });
 
   // ─── FINALIZAR: gerar PDF e anexar na OP ───────────────────────────────────
-  const finalizar = async () => {
+  const finalizar = umaVez('finalizar', async () => {   // 7.59: clique duplo gerava e anexava o PDF duas vezes (o estado `finalizando` só muda depois da confirmação, tarde demais)
     if (!oplVinculada) { alert('Vincule uma OP/OS primeiro para gerar o PDF.'); return; }
     if (itens.length === 0) { alert('Adicione itens antes de finalizar.'); return; }
     if (!await confirmar('Finalizar esta formação de preços e gerar o PDF?')) return;
@@ -2836,7 +2898,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
 
-      await supabase.from('opl_anexos').insert([{
+      const { error: erroAnexoPdf } = await supabase.from('opl_anexos').insert([{
         opl_id:     oplVinculada.id,
         opl_numero: oplVinculada.opl,
         setor:      'Preços',
@@ -2845,6 +2907,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         url:        pub?.publicUrl || '',
         criado_por: currentUser?.nome,
       }]);
+      // 7.59: o PDF subia e o aviso dizia "anexado à OP" mesmo sem o registro do anexo (nada aparecia nos anexos da OP)
+      if (erroAnexoPdf) throw new Error('o PDF foi gerado e enviado, mas NÃO foi anexado à OP (' + erroAnexoPdf.message + ')');
 
       alert(`PDF gerado e anexado à OP ${oplVinculada.opl}!\n\nO arquivo está disponível nos anexos da OP.`);
     } catch (err) {
@@ -2853,24 +2917,26 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     } finally {
       setFinalizando(false);
     }
-  };
+  });
 
   // ── Registrar como Versão Final (senha + rastreabilidade) ──────────────────
   // 1ª vez: marca a própria linha como 'finalizada' (versão 1). Da 2ª em
   // diante (já finalizada, usuário editou de novo depois): cria uma NOVA
   // linha em cotacoes_precos como próxima versão, preservando a anterior
   // intacta pra histórico -- e passa a editar a nova.
-  const confirmarSenhaERegistrar = async () => {
+  const confirmarSenhaERegistrar = umaVez('registrar-versao', async () => {
     if (!senhaConfirm.trim()) { setErroSenha('Informe sua senha.'); return; }
     setRegistrandoVersao(true);
     setErroSenha('');
     const { data: user, error: userErr } = await supabase.from('auth_usuarios')
       .select('senha').eq('id', currentUser?.id).maybeSingle();
-    if (userErr || !user || user.senha !== senhaConfirm) {
+    if (userErr) { setErroSenha('Não foi possível conferir a senha: ' + userErr.message); setRegistrandoVersao(false); return; }   // 7.59: dizia "Senha incorreta."
+    if (!user || user.senha !== senhaConfirm) {
       setErroSenha('Senha incorreta.');
       setRegistrandoVersao(false);
       return;
     }
+    let avisoVinculoVersao = '';
     const agora = new Date().toISOString();
     // Nunca finaliza sem nome: sem isso a formação ficava com nome vazio e
     // aparecia em branco no seletor de versões, na tela de Cotações e na aba
@@ -2923,8 +2989,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
         }
         if (vinculo?.id) {
-          await supabase.from('cotacoes_precos_vinculos')
+          const { error: erroVincV1 } = await supabase.from('cotacoes_precos_vinculos')
             .upsert([{ cotacao_id: cotacaoId, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+          if (erroVincV1) avisoVinculoVersao = '\n\nATENÇÃO: a versão foi registrada, mas NÃO foi ligada a este processo (' + erroVincV1.message + '). Use "Importar" para ligá-la.';   // 7.59
         }
         await supabase.from('cotacoes_precos_log').insert([{
           cotacao_id: cotacaoId, tipo: 'finalizada',
@@ -2948,8 +3015,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         setTravaAtualizadoEm(data.atualizado_em);
         setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
         if (vinculo?.id) {
-          await supabase.from('cotacoes_precos_vinculos')
+          const { error: erroVincVN } = await supabase.from('cotacoes_precos_vinculos')
             .upsert([{ cotacao_id: data.id, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+          if (erroVincVN) avisoVinculoVersao = '\n\nATENÇÃO: a nova versão foi registrada, mas NÃO foi ligada a este processo (' + erroVincVN.message + '). Use "Importar" para ligá-la.';   // 7.59
         }
         await supabase.from('cotacoes_precos_log').insert([{
           cotacao_id: data.id, tipo: 'finalizada',
@@ -2965,23 +3033,26 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       marcarComoSalvo(nomeFinal);
       carregarModelos();
       window.dispatchEvent(new CustomEvent('acn:formacao-salva', { detail: { vinculo } }));
-      alert('Formação de preços registrada como versão final!');
+      alert('Formação de preços registrada como versão final!' + avisoVinculoVersao);
     } catch (err: any) {
       alert('Erro ao registrar versão: ' + err.message);
     } finally {
       setRegistrandoVersao(false);
     }
-  };
+  });
 
   // Marca esta versão como a vencedora do pregão/licitação (e desmarca as
   // demais do mesmo grupo).
-  const marcarVencedora = async () => {
+  const marcarVencedora = umaVez('vencedora', async () => {
     if (!editandoId) return;
     if (!await confirmar('Marcar esta versão como a VENCEDORA do pregão/licitação?')) return;
     const raizId = versaoRaizId || editandoId;
-    await supabase.from('cotacoes_precos').update({ vencedora: false }).or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
-    const { data: marcada } = await supabase.from('cotacoes_precos')
+    // 7.59: os dois passos ignoravam o erro; se o 2º falhasse, nenhuma versão ficava vencedora e a tela dizia que sim
+    const { error: erroDesmarcar } = await supabase.from('cotacoes_precos').update({ vencedora: false }).or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
+    if (erroDesmarcar) { alert('Não foi possível marcar a vencedora: ' + erroDesmarcar.message + '\n\nNada foi alterado.'); return; }
+    const { data: marcada, error: erroMarcar } = await supabase.from('cotacoes_precos')
       .update({ vencedora: true }).eq('id', editandoId).select('atualizado_em, atualizado_por').single();
+    if (erroMarcar) { setVencedoraAtual(false); alert('As vencedoras anteriores foram desmarcadas, mas esta versão NÃO pôde ser marcada (' + erroMarcar.message + '). Marque de novo para tentar outra vez.'); return; }
     setVencedoraAtual(true);
     // Estes dois UPDATEs também disparam o gatilho de atualizado_em; sem
     // renovar o token aqui, o próximo "Salvar" acusaria conflito do usuário
@@ -2996,7 +3067,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
     }]);
     alert('Versão marcada como vencedora!');
-  };
+  });
 
   // Carrega o histórico completo (versões do grupo + log de alterações de
   // todas elas) pra exibir no modal.
@@ -3005,14 +3076,16 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setCarregandoHistorico(true);
     setModalHistorico(true);
     const raizId = versaoRaizId || editandoId;
-    const { data: versoes } = await supabase.from('cotacoes_precos')
+    const { data: versoes, error: erroVersoes } = await supabase.from('cotacoes_precos')
       .select('id,versao,finalizada_por_nome,finalizada_em,vencedora,status')
       .or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`)
       .order('versao', { ascending: true });
     const idsGrupo = (versoes || []).map((v: any) => v.id);
-    const { data: logs } = idsGrupo.length
+    const { data: logs, error: erroLogs } = idsGrupo.length
       ? await supabase.from('cotacoes_precos_log').select('*').in('cotacao_id', idsGrupo).order('criado_em', { ascending: false })
-      : { data: [] };
+      : { data: [], error: null };
+    // 7.59: leitura que falha parecia "histórico vazio"
+    if (erroVersoes || erroLogs) alert('Não foi possível ler o histórico completo (' + (erroVersoes || erroLogs).message + '). O que aparece pode estar incompleto.');
     setHistoricoVersoes(versoes || []);
     setHistoricoLogs(logs || []);
     setCarregandoHistorico(false);
@@ -3054,6 +3127,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
       {(embutido || abaAtiva === 'formacao') && (
         <div style={{ padding: embutido ? 0 : 14 }}>
+
+          {erroVinculo && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={carregarFormacoesVinculo}>Tentar de novo</Botao>}>
+              Não foi possível ler as formações deste processo ({erroVinculo}). Isso não quer dizer que não haja formação salva — <strong>não crie outra antes de conseguir ler</strong>, senão ela pode ficar duplicada.
+            </Faixa>
+          )}
+          {erroPlataformas && (
+            <Faixa tom="atencao">
+              Não foi possível ler a lista de plataformas ({erroPlataformas}). Uma formação que tenha plataforma abre sem ela e <strong>não pode ser salva</strong> até a lista carregar — recarregue a tela.
+            </Faixa>
+          )}
 
           {/* ── AVISO DE EDIÇÃO SIMULTÂNEA ──
               Aparece quando o banco recusou o UPDATE porque outra pessoa
@@ -3650,6 +3734,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             <ModalCarregar
               modelos={modelos}
               carregando={carregando}
+              erro={erroModelos}
               onCarregar={carregarModelo}
               onExcluir={excluirModelo}
               onClose={() => setModalCarregar(false)}
@@ -3660,6 +3745,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             <ModalImportar
               modelos={modelos}
               carregando={carregando}
+              erro={erroModelos}
               vinculo={vinculo}
               vinculoLabels={vinculoLabels}
               vinculosPorCotacao={vinculosPorCotacao}
