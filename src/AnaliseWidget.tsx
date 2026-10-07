@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { ehAdminOuGerente } from './utils/permissoes';
+import { ehAdminOuGerente, podeEditarParecerDaAnalise } from './utils/permissoes';
 import { pedirTexto, confirmar } from './Feedback';
 import { diaBR } from './Interface';
 
@@ -82,6 +82,9 @@ export async function concluirAnaliseSetor(setor: any, solicitacao: any, opts: {
     analisado_por: opts.usuario,
     analisado_em: agora,
     notas,
+    // concluir (de novo) recomeça o parecer: sem a marca de "editada" de uma conclusão anterior (07/10/2026)
+    notas_editado_em: null,
+    notas_editado_por: null,
   }).eq('id', setor.id);
 
   const { data: todos } = await supabase.from('analise_setores')
@@ -164,9 +167,104 @@ export async function contarAnalisesPendentesPorSetor(): Promise<Record<string, 
 
 export async function reabrirAnaliseSetor(setor: any) {
   await supabase.from('analise_setores').update({
-    status: 'pendente', analisado_por: null, analisado_em: null, notas: null,
+    status: 'pendente', analisado_por: null, analisado_em: null, notas: null, notas_editado_em: null, notas_editado_por: null,
   }).eq('id', setor.id);
   await supabase.from('analise_solicitacoes').update({ status: 'em_andamento' }).eq('id', setor.solicitacao_id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDITAR O PARECER DE UMA ANÁLISE JÁ CONCLUÍDA  (pedido do usuário em 07/10/2026)
+// Só o autor da análise (analisado_por) edita — ver podeEditarParecerDaAnalise. Antes o único caminho era "Reabrir", que APAGAVA o parecer e a assinatura.
+// A edição guarda quem e quando (notas_editado_*) para a tela mostrar a marca discreta "editada", e deixa uma linha 'analise_editada' no histórico (analise_logs);
+// o texto original continua na linha 'analise_finalizada'. Não muda o status, o autor nem a data da análise.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function editarParecerAnalise(setor: any, solicitacao: any, novoTexto: string, usuario: any): Promise<{ ok: boolean; motivo?: string }> {
+  if (!podeEditarParecerDaAnalise(usuario, setor)) return { ok: false, motivo: 'Só quem fez a análise pode editar o parecer.' };
+  const notas = String(novoTexto ?? '').trim() || null;
+  if (notas === (String(setor.notas || '').trim() || null)) return { ok: false, motivo: 'O texto não mudou.' };
+  const agora = new Date().toISOString();
+  const nome = usuario?.nome || usuario?.email || 'Usuário';
+  // status e autor na condição: se alguém reabriu ou concluiu de novo nesse meio-tempo, a edição não sobrescreve o parecer novo
+  const { data, error } = await supabase.from('analise_setores')
+    .update({ notas, notas_editado_em: agora, notas_editado_por: nome })
+    .eq('id', setor.id).eq('status', 'analisado').eq('analisado_por', setor.analisado_por).select('id');
+  if (error) return { ok: false, motivo: 'Erro ao salvar: ' + error.message };
+  if (!data?.length) return { ok: false, motivo: 'Esta análise foi reaberta ou concluída de novo por outra pessoa. Atualize a tela e confira.' };
+  try {
+    await supabase.from('analise_logs').insert([{
+      solicitacao_id: setor.solicitacao_id, setor_id: setor.id, setor: setor.setor,
+      origem: solicitacao?.origem, origem_titulo: solicitacao?.origem_titulo, origem_numero: solicitacao?.origem_numero,
+      acao: 'analise_editada', usuario: nome, notas, criado_em: agora,
+    }]);
+  } catch (_) { /* o histórico é complementar */ }
+  return { ok: true };
+}
+
+const fmtDTAno = (v: string) => {
+  try { return new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return v; }
+};
+
+/** Marca discreta ao lado de "por Fulano · data": só aparece se o parecer foi editado depois de concluído; o mouse em cima diz quem e quando. */
+export function MarcaEditada({ setor }: any) {
+  if (!setor?.notas_editado_em) return null;
+  return (
+    <span title={`Parecer editado por ${setor.notas_editado_por || '—'} em ${fmtDTAno(setor.notas_editado_em)}`}
+      style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic', cursor:'help' }}>· editada</span>
+  );
+}
+
+/** Mostra o parecer (children) e, só para o autor da análise, o atalho discreto de editar. */
+export function ParecerEditavel({ setor, solicitacao, currentUser, onSaved, children }: any) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const pode = podeEditarParecerDaAnalise(currentUser, setor);
+
+  if (!editando) {
+    return (
+      <>
+        {children}
+        {pode && (
+          <button type="button" onClick={() => { setTexto(setor.notas || ''); setEditando(true); }}
+            title="Só quem fez esta análise pode editar o parecer"
+            style={{ display:'block', background:'none', border:'none', padding:0, marginTop:3, fontSize:9, color:'#94a3b8',
+              cursor:'pointer', textDecoration:'underline' }}>
+            ✎ {setor.notas ? 'Editar parecer' : 'Adicionar observação'}
+          </button>
+        )}
+      </>
+    );
+  }
+
+  const igual = (texto.trim() || null) === (String(setor.notas || '').trim() || null);
+  const salvar = async () => {
+    setSalvando(true);
+    const r = await editarParecerAnalise(setor, solicitacao, texto, currentUser);
+    setSalvando(false);
+    if (!r.ok) { alert(r.motivo); return; }
+    setEditando(false);
+    onSaved?.();
+  };
+  return (
+    <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
+      <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={4} autoFocus
+        aria-label="Editar o parecer da análise"
+        style={{ width:'100%', boxSizing:'border-box', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4,
+          fontSize:11, lineHeight:1.55, resize:'vertical', fontFamily:'inherit', background:'#fff', color:'#334155' }} />
+      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+        <button type="button" onClick={salvar} disabled={salvando || igual}
+          style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'4px 12px', fontWeight:700, fontSize:10,
+            cursor: salvando || igual ? 'default' : 'pointer', opacity: salvando || igual ? .5 : 1 }}>
+          {salvando ? 'Salvando...' : 'Salvar'}
+        </button>
+        <button type="button" onClick={() => setEditando(false)} disabled={salvando}
+          style={{ background:'#fff', color:'#475569', border:'1px solid #cbd5e1', borderRadius:4, padding:'4px 10px', fontSize:10, cursor:'pointer' }}>
+          Cancelar
+        </button>
+        <span style={{ fontSize:9, color:'#94a3b8' }}>O parecer fica marcado como editado.</span>
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -446,10 +544,15 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                     {s.status==='analisado' && s.analisado_em && (
                       <span style={{ fontSize:8, color:'#4ade80' }}>{fmtDT(s.analisado_em)}</span>
                     )}
+                    {s.status==='analisado' && <MarcaEditada setor={s} />}
                   </div>
-                  {s.status==='analisado' && s.notas && (
-                    <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
-                      whiteSpace:'pre-wrap', wordBreak:'break-word' }}>📝 {s.notas}</div>
+                  {s.status==='analisado' && (
+                    <ParecerEditavel setor={s} solicitacao={sol} currentUser={currentUser} onSaved={() => load(true)}>
+                      {s.notas && (
+                        <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
+                          whiteSpace:'pre-wrap', wordBreak:'break-word' }}>📝 {s.notas}</div>
+                      )}
+                    </ParecerEditavel>
                   )}
                   {s.status !== 'analisado' && (
                     <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
@@ -494,21 +597,24 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                       <span style={{ fontWeight:700 }}>✅ {SETOR_LABEL[s.setor]||s.setor}</span>
                       {s.analisado_por && <span style={{ fontSize:9, color:'#15803d' }}>por {s.analisado_por}</span>}
                       {s.analisado_em && <span style={{ fontSize:9, color:'#22c55e' }}>{fmtDT(s.analisado_em)}</span>}
+                      <MarcaEditada setor={s} />
                     </div>
                     {/* O parecer e o que interessa ler aqui: fundo branco, corpo de
                         texto legivel e quebras de linha preservadas. Antes saia em
                         9px italico, do mesmo tamanho do rotulo do setor. */}
-                    {s.notas ? (
-                      <div style={{ marginTop:5, fontSize:11, color:'#14532d', lineHeight:1.55,
-                        whiteSpace:'pre-wrap', wordBreak:'break-word',
-                        background:'#fff', border:'1px solid #bbf7d0', borderRadius:5, padding:'7px 9px' }}>
-                        {s.notas}
-                      </div>
-                    ) : (
-                      <div style={{ marginTop:4, fontSize:10, color:'#15803d', fontStyle:'italic' }}>
-                        Este setor concluiu sem escrever observação.
-                      </div>
-                    )}
+                    <ParecerEditavel setor={s} solicitacao={sol} currentUser={currentUser} onSaved={() => load(true)}>
+                      {s.notas ? (
+                        <div style={{ marginTop:5, fontSize:11, color:'#14532d', lineHeight:1.55,
+                          whiteSpace:'pre-wrap', wordBreak:'break-word',
+                          background:'#fff', border:'1px solid #bbf7d0', borderRadius:5, padding:'7px 9px' }}>
+                          {s.notas}
+                        </div>
+                      ) : (
+                        <div style={{ marginTop:4, fontSize:10, color:'#15803d', fontStyle:'italic' }}>
+                          Este setor concluiu sem escrever observação.
+                        </div>
+                      )}
+                    </ParecerEditavel>
                   </div>
                 ))}
               </div>

@@ -174,3 +174,17 @@ export function ehAutorDoAviso(usuarioAtual: any, aviso: any): boolean {
 export function podeMexerNoAviso(usuarioAtual: any, aviso: any): boolean {
   return podePublicarAviso(usuarioAtual) && (ehDev(usuarioAtual) || ehAutorDoAviso(usuarioAtual, aviso));
 }
+
+// ── Parecer da análise entre setores (07/10/2026, pedido do usuário) ───────────────────────────────────────────────────
+// Depois de concluído, o parecer de um setor (analise_setores.notas) pode ser editado SÓ por quem fez a análise (analise_setores.analisado_por): nem Admin nem
+// Gerente — foi o que o usuário pediu, para o parecer continuar sendo a palavra de quem o assinou. A comparação é pelo nome (ou e-mail), sem diferenciar maiúscula,
+// como em podeCancelarAnalise; e, como o resto do sistema, é regra de tela (o login é próprio, não o do Supabase).
+export function ehAutorDaAnalise(usuarioAtual: any, setor: any): boolean {
+  const autor = String(setor?.analisado_por || '').trim().toLowerCase();
+  if (!autor) return false;
+  return autor === String(usuarioAtual?.nome || '').trim().toLowerCase()
+      || autor === String(usuarioAtual?.email || '').trim().toLowerCase();
+}
+export function podeEditarParecerDaAnalise(usuarioAtual: any, setor: any): boolean {
+  return setor?.status === 'analisado' && ehAutorDaAnalise(usuarioAtual, setor);
+}

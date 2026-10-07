@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
-import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise } from './AnaliseWidget';
+import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise, MarcaEditada, ParecerEditavel } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel Inbox de Análises Orçamentárias
@@ -353,6 +353,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                                 por {setor.analisado_por} · {fmtDT(setor.analisado_em)}
                               </span>
                             )}
+                            {concluido && <MarcaEditada setor={setor} />}
                             {concluido && !solCancelada && (
                               <button onClick={() => reabrirSetor(setor)}
                                 style={{ marginLeft:'auto', fontSize:8, color:'#94a3b8', background:'none',
@@ -363,11 +364,15 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                           </div>
 
                           {/* Nota do setor concluído */}
-                          {concluido && setor.notas && (
-                            <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
-                              whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                              📝 {setor.notas}
-                            </div>
+                          {concluido && (
+                            <ParecerEditavel setor={setor} solicitacao={sol} currentUser={currentUser} onSaved={() => load()}>
+                              {setor.notas && (
+                                <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
+                                  whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                                  📝 {setor.notas}
+                                </div>
+                              )}
+                            </ParecerEditavel>
                           )}
 
                           {/* Campo nota + botão concluir (apenas pendentes) */}
