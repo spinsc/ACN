@@ -26,7 +26,9 @@ import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant
   mdiMessageTextOutline, mdiPause, mdiCheck, mdiChevronDown, mdiChevronUp, mdiTrayArrowDown, mdiHammerWrench, mdiClose,
   mdiAccountGroupOutline, mdiCheckAll, mdiAccount, mdiPaperclip,
   mdiRefresh, mdiCar, mdiCalendarOutline, mdiClipboardListOutline, mdiSendOutline, mdiContentSaveOutline, mdiAlertOutline,
-  mdiTrashCanOutline, mdiPlus, mdiTimerOutline, mdiCommentTextOutline, mdiWrench, mdiWeatherSunny, mdiWeatherSunsetDown } from '@mdi/js';
+  mdiTrashCanOutline, mdiPlus, mdiTimerOutline, mdiCommentTextOutline, mdiWrench, mdiWeatherSunny, mdiWeatherSunsetDown,
+  mdiBellOutline, mdiChevronLeft, mdiChevronRight, mdiFormatListBulleted, mdiPrinterOutline, mdiCrownOutline, mdiCheckboxMarkedOutline,
+  mdiLinkVariant, mdiPackageVariantClosed, mdiFolderOutline } from '@mdi/js';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -331,26 +333,24 @@ function CalendarioManutencao({ currentUser }) {
       )}
       {/* PAINEL: OPLs aguardando agendamento */}
       {aguardandoNovos.length > 0 && (
-        <div style={{background:'#fff7ed',border:'2px solid #f97316',borderRadius:8,padding:14,marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#c2410c',marginBottom:10}}>
-            🔔 {aguardandoNovos.length} OP(s) de Manutenção aguardando agendamento
+        <div className="acn-quadro tom-atencao">
+          <div className="acn-quadro-titulo acn-prod-ic">
+            <Icone path={mdiBellOutline} size={14} /> {aguardandoNovos.length} OP(s) de Manutenção aguardando agendamento
           </div>
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <div className="acn-prod-ag-lista">
             {aguardandoNovos.map(o=>(
-              <div key={o.id} style={{background:'white',borderRadius:6,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap',border:'1px solid #fed7aa'}}>
-                <div>
+              <div key={o.id} className="acn-prod-ag-item">
+                <div className="acn-prod-ag-info">
                   <LinkOpl opl={o} currentUser={currentUser} />
-                  <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
+                  <span className="acn-fraco">·</span>
                   {o.cliente_nome||'—'}
-                  <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
-                  {semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}
-                  <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
-                  {semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}
+                  <span className="acn-fraco">·</span>
+                  {semDado(o.modelo) ? <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem modelo</span> : o.modelo}
+                  <span className="acn-fraco">·</span>
+                  {semDado(o.chassi) ? <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem chassi</span> : <span className="acn-prod-ic"><Icone path={mdiWrench} size={12} /> {o.chassi}</span>}
                 </div>
-                <button className="acn-btn" style={{background:'#f97316'}}
-                  onClick={()=>{ setModalAgendar(o); setFormAg({ data:'', periodo:'Manhã', obs:'' }); }}>
-                  📅 AGENDAR
-                </button>
+                <Botao variante="primario" icone={mdiCalendarOutline}
+                  onClick={()=>{ setModalAgendar(o); setFormAg({ data:'', periodo:'Manhã', obs:'' }); }}>AGENDAR</Botao>
               </div>
             ))}
           </div>
@@ -358,57 +358,53 @@ function CalendarioManutencao({ currentUser }) {
       )}
 
       {/* CALENDÁRIO */}
-      <div style={{background:'white',borderRadius:8,boxShadow:'0 1px 3px #0001',overflow:'hidden'}}>
+      <div className="sec-card">
         {/* Cabeçalho calendário */}
-        <div style={{background:'#1a3a52',color:'white',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <button onClick={()=>{ if(mes===0){setMes(11);setAno(a=>a-1);}else setMes(m=>m-1); }}
-              style={{background:'rgba(255,255,255,.2)',border:'none',color:'white',borderRadius:4,padding:'3px 10px',cursor:'pointer',fontSize:14}}>‹</button>
-            <strong style={{fontSize:14}}>{MESES[mes]} {ano}</strong>
-            <button onClick={()=>{ if(mes===11){setMes(0);setAno(a=>a+1);}else setMes(m=>m+1); }}
-              style={{background:'rgba(255,255,255,.2)',border:'none',color:'white',borderRadius:4,padding:'3px 10px',cursor:'pointer',fontSize:14}}>›</button>
+        <div className="sec-hdr">
+          <div className="acn-prod-cal-nav">
+            <Botao pequeno variante="discreto" icone={mdiChevronLeft} aria-label="Mês anterior" onClick={()=>{ if(mes===0){setMes(11);setAno(a=>a-1);}else setMes(m=>m-1); }} />
+            <strong>{MESES[mes]} {ano}</strong>
+            <Botao pequeno variante="discreto" icone={mdiChevronRight} aria-label="Mês seguinte" onClick={()=>{ if(mes===11){setMes(0);setAno(a=>a+1);}else setMes(m=>m+1); }} />
           </div>
-          <div style={{display:'flex',gap:6}}>
-            <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:9}} onClick={()=>setVistaLista(!vistaLista)}>
-              {vistaLista?'📅 Calendário':'📋 Lista'}
-            </button>
-            <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:9}} onClick={imprimirLista}>🖨️ Imprimir</button>
+          <div className="acn-acoes-linha">
+            <Botao pequeno icone={vistaLista ? mdiCalendarMonthOutline : mdiFormatListBulleted} onClick={()=>setVistaLista(!vistaLista)}>
+              {vistaLista?'Calendário':'Lista'}
+            </Botao>
+            <Botao pequeno icone={mdiPrinterOutline} onClick={imprimirLista}>Imprimir</Botao>
           </div>
         </div>
 
         {!vistaLista ? (
           /* VISTA CALENDÁRIO */
-          <div style={{padding:8}}>
+          <div className="sec-body">
             {/* Dias da semana */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:2}}>
+            <div className="acn-prod-cal-grade acn-prod-cal-semana">
               {DIAS.map(d=>(
-                <div key={d} style={{textAlign:'center',fontSize:9,fontWeight:700,color:'#6b7280',padding:'4px 0'}}>{d}</div>
+                <div key={d}>{d}</div>
               ))}
             </div>
             {/* Grid de dias */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+            <div className="acn-prod-cal-grade">
               {/* células vazias antes do primeiro dia */}
               {Array.from({length:primeiroDia}).map((_,i)=>(
-                <div key={'e'+i} style={{minHeight:70,background:'#f9fafb',borderRadius:4}}></div>
+                <div key={'e'+i} className="acn-prod-cal-vazio"></div>
               ))}
               {/* dias do mês */}
               {Array.from({length:diasNoMes},(_,i)=>i+1).map(d=>{
                 const ags = agPorDia(d);
                 const isHoje = d===hoje.getDate()&&mes===hoje.getMonth()&&ano===hoje.getFullYear();
                 return (
-                  <div key={d} style={{minHeight:70,background:isHoje?'#eff6ff':'#fafafa',borderRadius:4,border:isHoje?'2px solid #3b82f6':'1px solid #e5e7eb',padding:3}}>
-                    <div style={{fontSize:10,fontWeight:isHoje?700:400,color:isHoje?'#2563eb':'#374151',marginBottom:2}}>{d}</div>
+                  <div key={d} className={'acn-prod-cal-dia' + (isHoje ? ' hoje' : '')}>
+                    <div className="acn-prod-cal-num">{d}</div>
                     {ags.map((ag,i)=>{
                       const isSac = ag._tipo==='sac';
-                      const bgM = isSac?'#d1fae5':'#dbeafe'; const bgT = isSac?'#fef3c7':'#fed7aa';
-                      const clM = isSac?'#065f46':'#1e40af'; const clT = isSac?'#92400e':'#9a3412';
+                      const manha = ag._periodo==='Manhã';
                       return (
                         <div key={ag.id+(ag._tipo||'')} title={ag._label+' · '+ag.chassi+' · '+ag.cliente_nome+(isSac?' [SAC '+ag.status+']':'')}
-                          style={{background:ag._periodo==='Manhã'?bgM:bgT,borderRadius:3,padding:'1px 4px',fontSize:8,fontWeight:600,
-                            color:ag._periodo==='Manhã'?clM:clT,marginBottom:1,
-                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:isSac?'default':'pointer'}}
+                          className={'acn-prod-cal-chip' + (isSac ? '' : ' clicavel')}
+                          data-acn-familia={isSac ? (manha ? 'ok' : 'marca') : (manha ? 'info' : 'atencao')}
                           onClick={()=>{ if(!isSac) cancelarAgendamento(ag); }}>
-                          {isSac?'🔧':'📦'} {ag._label}
+                          <Icone path={isSac ? mdiWrench : mdiPackageVariantClosed} size={11} /> {ag._label}
                         </div>
                       );
                     })}
@@ -416,45 +412,42 @@ function CalendarioManutencao({ currentUser }) {
                 );
               })}
             </div>
-            <div style={{display:'flex',gap:12,marginTop:8,fontSize:9,color:'#6b7280',flexWrap:'wrap'}}>
-              <span><span style={{background:'#dbeafe',padding:'1px 6px',borderRadius:3,color:'#1e40af'}}>📦 OP Manhã</span></span>
-              <span><span style={{background:'#fed7aa',padding:'1px 6px',borderRadius:3,color:'#9a3412'}}>📦 OP Tarde</span></span>
-              <span><span style={{background:'#d1fae5',padding:'1px 6px',borderRadius:3,color:'#065f46'}}>🔧 SAC Manhã</span></span>
-              <span><span style={{background:'#fef3c7',padding:'1px 6px',borderRadius:3,color:'#92400e'}}>🔧 SAC Tarde</span></span>
-              <span style={{marginLeft:'auto'}}>Clique no agendamento OP para cancelar</span>
+            <div className="acn-prod-cal-legenda acn-ajuda">
+              <span className="acn-prod-cal-chip" data-acn-familia="info"><Icone path={mdiPackageVariantClosed} size={11} /> OP Manhã</span>
+              <span className="acn-prod-cal-chip" data-acn-familia="atencao"><Icone path={mdiPackageVariantClosed} size={11} /> OP Tarde</span>
+              <span className="acn-prod-cal-chip" data-acn-familia="ok"><Icone path={mdiWrench} size={11} /> SAC Manhã</span>
+              <span className="acn-prod-cal-chip" data-acn-familia="marca"><Icone path={mdiWrench} size={11} /> SAC Tarde</span>
+              <span className="acn-prod-cal-dica">Clique no agendamento OP para cancelar</span>
             </div>
           </div>
         ) : (
           /* VISTA LISTA */
-          <div style={{padding:12,overflowX:'auto'}}>
-            {agendamentos.length===0 ? <div style={{textAlign:'center',color:'#9ca3af',padding:24,fontSize:12}}>Nenhum agendamento.</div> : (
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
-                <thead><tr style={{background:'#f1f5f9'}}>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Data</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Período</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>OP</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Chassi</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Cliente</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Obs.</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Ações</th>
+          <div className="sec-body acn-rolagem acn-prod-tabela">
+            {agendamentos.length===0 ? <div className="acn-empty">Nenhum agendamento.</div> : (
+              <table className="acn-tabela acn-densa">
+                <thead><tr>
+                  <th>Data</th>
+                  <th>Período</th>
+                  <th>OP</th>
+                  <th>Chassi</th>
+                  <th>Cliente</th>
+                  <th>Obs.</th>
+                  <th>Ações</th>
                 </tr></thead>
                 <tbody>{agendamentos.map(ag=>(
-                  <tr key={ag.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                    <td style={{padding:'8px 10px'}}><strong>{new Date(ag.data_agendamento+'T00:00:00').toLocaleDateString('pt-BR')}</strong></td>
-                    <td style={{padding:'8px 10px'}}>
-                      <span style={{background:ag.periodo==='Manhã'?'#dbeafe':'#fed7aa',color:ag.periodo==='Manhã'?'#1e40af':'#9a3412',padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700}}>
-                        {ag.periodo==='Manhã'?'🌅':'🌆'} {ag.periodo}
-                      </span>
+                  <tr key={ag.id}>
+                    <td className="acn-num"><strong>{new Date(ag.data_agendamento+'T00:00:00').toLocaleDateString('pt-BR')}</strong></td>
+                    <td>
+                      <Selo familia={ag.periodo==='Manhã'?'info':'atencao'} ponto={false}>
+                        <Icone path={ag.periodo==='Manhã'?mdiWeatherSunny:mdiWeatherSunsetDown} size={12} /> {ag.periodo}
+                      </Selo>
                     </td>
-                    <td style={{padding:'8px 10px'}}><strong style={{color:'#2563eb'}}>{ag.numero_opl}</strong></td>
-                    <td style={{padding:'8px 10px'}}>{ag.chassi||'—'}</td>
-                    <td style={{padding:'8px 10px'}}>{ag.cliente_nome||'—'}</td>
-                    <td style={{padding:'8px 10px',fontSize:10,color:'#6b7280'}}>{ag.observacoes||'—'}</td>
-                    <td style={{padding:'8px 10px'}}>
-                      <button onClick={()=>cancelarAgendamento(ag)}
-                        style={{background:'none',border:'1px solid #fca5a5',color:'#dc2626',borderRadius:4,padding:'2px 7px',fontSize:9,cursor:'pointer'}}>
-                        Cancelar
-                      </button>
+                    <td><strong className="acn-forte acn-prod-os-num">{ag.numero_opl}</strong></td>
+                    <td>{ag.chassi||'—'}</td>
+                    <td>{ag.cliente_nome||'—'}</td>
+                    <td className="acn-fraco">{ag.observacoes||'—'}</td>
+                    <td>
+                      <Botao pequeno variante="perigo-sec" onClick={()=>cancelarAgendamento(ag)}>Cancelar</Botao>
                     </td>
                   </tr>
                 ))}</tbody>
@@ -467,41 +460,39 @@ function CalendarioManutencao({ currentUser }) {
       {/* MODAL AGENDAR */}
       {modalAgendar && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalAgendar(null);}}>
-          <div className="modal-box" style={{maxWidth: 980}}>
-            <div className="modal-title">📅 Agendar Manutenção</div>
-            <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,padding:'8px 12px',marginBottom:14,fontSize:11}}>
-              <strong>{modalAgendar.opl}</strong> · {modalAgendar.chassi||'—'} · {modalAgendar.cliente_nome||'—'}
-              {modalAgendar.modelo && <div style={{color:'#6b7280',fontSize:10,marginTop:2}}>{modalAgendar.modelo}</div>}
+          <div className="modal-box acn-modal-cadastro acn-prod-ag-jan" role="dialog" aria-label="Agendar manutenção">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCalendarOutline} size={16} /> Agendar Manutenção</span>
             </div>
-            <div style={{marginBottom:12}}>
-              <label className="acn-label">📅 Data de recebimento do carro *</label>
-              <input type="date" className="acn-input" style={{width:'100%'}}
-                value={formAg.data} onChange={e=>setFormAg(f=>({...f,data:e.target.value}))} />
-            </div>
-            <div style={{marginBottom:12}}>
-              <label className="acn-label">⏰ Período</label>
-              <div style={{display:'flex',gap:8}}>
-                {['Manhã','Tarde'].map(p=>(
-                  <button key={p} onClick={()=>setFormAg(f=>({...f,periodo:p}))}
-                    style={{flex:1,padding:'8px',border:`2px solid ${formAg.periodo===p?'#3b82f6':'#e5e7eb'}`,
-                      borderRadius:6,background:formAg.periodo===p?'#eff6ff':'white',
-                      fontWeight:700,fontSize:12,cursor:'pointer',color:formAg.periodo===p?'#2563eb':'#6b7280'}}>
-                    {p==='Manhã'?'🌅 Manhã':'🌆 Tarde'}
-                  </button>
-                ))}
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-quadro tom-info">
+                <div>
+                  <strong>{modalAgendar.opl}</strong> · {modalAgendar.chassi||'—'} · {modalAgendar.cliente_nome||'—'}
+                  {modalAgendar.modelo && <div className="acn-ajuda">{modalAgendar.modelo}</div>}
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Data de recebimento do carro *</label>
+                <input type="date" className="acn-input"
+                  value={formAg.data} onChange={e=>setFormAg(f=>({...f,data:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Período</label>
+                <Chips rotulo="Período" ativo={formAg.periodo} onChange={p=>setFormAg(f=>({...f,periodo:p}))}
+                  itens={[{ id:'Manhã', rotulo:'Manhã', icone: mdiWeatherSunny }, { id:'Tarde', rotulo:'Tarde', icone: mdiWeatherSunsetDown }]} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Observações</label>
+                <textarea className="acn-input" rows={2}
+                  value={formAg.obs} onChange={e=>setFormAg(f=>({...f,obs:e.target.value}))}
+                  placeholder="Defeitos relatados, histórico, etc." />
               </div>
             </div>
-            <div style={{marginBottom:16}}>
-              <label className="acn-label">📝 Observações</label>
-              <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}}
-                value={formAg.obs} onChange={e=>setFormAg(f=>({...f,obs:e.target.value}))}
-                placeholder="Defeitos relatados, histórico, etc." />
-            </div>
-            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAgendar(null)}>Cancelar</button>
-              <button className="acn-btn" style={{background:'#f97316'}} onClick={confirmarAgendamento} disabled={salvando}>
-                {salvando?'...':'✅ Confirmar Agendamento'}
-              </button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalAgendar(null)}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiCheck} onClick={confirmarAgendamento} disabled={salvando}>
+                {salvando?'...':'Confirmar Agendamento'}
+              </Botao>
             </div>
           </div>
         </div>
@@ -1396,49 +1387,45 @@ function VoucherItemTable({ itens, setItens }) {
   const rem = (idx) => setItens(p => p.filter((_,i) => i!==idx));
   return (
     <>
-      <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
-        <thead><tr style={{background:'#f1f5f9'}}>
-          <th style={{padding:'5px 8px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Placa / Chassi</th>
-          <th style={{padding:'5px 8px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Modelo</th>
-          <th style={{padding:'5px 8px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:140}}>Valor do Serviço (R$)</th>
-          <th style={{width:28,borderBottom:'1px solid #e2e8f0'}}></th>
+      <table className="acn-tabela acn-densa acn-prod-itens">
+        <thead><tr>
+          <th>Placa / Chassi</th>
+          <th>Modelo</th>
+          <th className="acn-dir acn-prod-it-valv">Valor do Serviço (R$)</th>
+          <th className="acn-prod-it-rem"></th>
         </tr></thead>
         <tbody>
           {itens.map((item,idx) => (
-            <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-              <td style={{padding:'3px 5px'}}>
-                <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.placa_chassi}
+            <tr key={idx}>
+              <td>
+                <input className="acn-input" value={item.placa_chassi}
                   onChange={e=>setField(idx,'placa_chassi',e.target.value)} placeholder="Ex: ABC-1234" />
               </td>
-              <td style={{padding:'3px 5px'}}>
-                <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.modelo}
+              <td>
+                <input className="acn-input" value={item.modelo}
                   onChange={e=>setField(idx,'modelo',e.target.value)} placeholder="Ex: Fiat Strada 2023" />
               </td>
-              <td style={{padding:'3px 5px'}}>
-                <input type="number" min={0} step="0.01" className="acn-input"
-                  style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor}
+              <td>
+                <input type="number" min={0} step="0.01" className="acn-input acn-prod-it-num acn-dir" value={item.valor}
                   onChange={e=>setField(idx,'valor',e.target.value)} placeholder="0,00" />
               </td>
               <td>
-                <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}}
-                  onClick={()=>rem(idx)} title="Remover linha">×</button>
+                <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover linha" title="Remover linha" onClick={()=>rem(idx)} />
               </td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr style={{background:'#f0fdf4'}}>
-            <td colSpan={2} style={{padding:'7px 8px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>VALOR TOTAL:</td>
-            <td style={{padding:'7px 8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
+          <tr>
+            <td colSpan={2} className="acn-dir acn-forte">VALOR TOTAL:</td>
+            <td className="acn-dir acn-num acn-forte">
               R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
             </td>
             <td></td>
           </tr>
         </tfoot>
       </table>
-      <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:10}} onClick={add}>
-        + Adicionar Veículo
-      </button>
+      <div className="acn-prod-it-add"><Botao pequeno icone={mdiPlus} onClick={add}>Adicionar Veículo</Botao></div>
     </>
   );
 }
@@ -1642,108 +1629,105 @@ function VoucherServicos({ currentUser }) {
         </Faixa>
       )}
       {/* FORMULÁRIO */}
-      <div className="sec-card" style={{marginBottom:12}}>
-        <div className="sec-hdr" style={{background:'#7c3aed'}}>
-          <span style={{color:'white'}}>🎟️ Novo Voucher de Serviço</span>
+      <div className="sec-card acn-prod-v-form">
+        <div className="sec-hdr">
+          <span className="acn-prod-ic"><Icone path={mdiTicketPercentOutline} size={16} /> Novo Voucher de Serviço</span>
         </div>
-        <div className="sec-body">
+        <div className="sec-body acn-form-cheio">
           {/* Campos gerais */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10,marginBottom:14}}>
+          <div className="acn-prod-v-grade">
             <div>
               <label className="acn-label">Tipo de Serviço *</label>
-              <div style={{display:'flex',gap:4,alignItems:'center'}}>
-                <select className="acn-input" style={{flex:1}} value={form.tipo_servico}
+              <div className="acn-prod-add">
+                <select className="acn-input" value={form.tipo_servico}
                   onChange={e=>setField('tipo_servico',e.target.value)}>
                   <option value="">— Selecione —</option>
                   {tiposServico.map(t => (
                     <option key={t.id} value={t.nome}>{t.nome}</option>
                   ))}
                 </select>
-                <button title="Gerenciar tipos de serviço"
-                  style={{background:'#7c3aed',border:'none',color:'white',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:13,flexShrink:0,fontWeight:700}}
-                  onClick={()=>setAddingTipo(a=>!a)}>+</button>
+                <Botao pequeno variante="primario" icone={mdiPlus} title="Gerenciar tipos de serviço" aria-label="Gerenciar tipos de serviço"
+                  onClick={()=>setAddingTipo(a=>!a)} />
               </div>
               {/* Mini-painel para cadastrar novo tipo */}
               {addingTipo && (
-                <div style={{marginTop:6,background:'#f5f3ff',border:'1px solid #c4b5fd',borderRadius:6,padding:'10px 12px'}}>
-                  <div style={{fontWeight:700,fontSize:9,color:'#6d28d9',marginBottom:6,textTransform:'uppercase'}}>
+                <div className="acn-quadro">
+                  <div className="acn-quadro-titulo">
                     Cadastro de Tipos de Serviço
                   </div>
                   {/* Lista dos existentes */}
                   {tiposServico.length > 0 && (
-                    <div style={{marginBottom:8,display:'flex',flexWrap:'wrap',gap:4}}>
+                    <div className="acn-prod-tipos">
                       {tiposServico.map(t => (
-                        <span key={t.id} style={{background:'white',border:'1px solid #c4b5fd',borderRadius:4,padding:'2px 7px',fontSize:10,display:'inline-flex',alignItems:'center',gap:4}}>
+                        <span key={t.id} className="acn-prod-tipo">
                           {t.nome}
-                          <button onClick={()=>excluirTipo(t.id)}
-                            style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:12,padding:0,lineHeight:1}}>×</button>
+                          <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover tipo" onClick={()=>excluirTipo(t.id)} />
                         </span>
                       ))}
                     </div>
                   )}
-                  <div style={{display:'flex',gap:4}}>
-                    <input className="acn-input" style={{flex:1,fontSize:10}} value={novoTipo}
+                  <div className="acn-prod-add">
+                    <input className="acn-input" value={novoTipo}
                       onChange={e=>setNovoTipo(e.target.value)}
                       onKeyDown={e=>e.key==='Enter'&&salvarTipo()}
                       placeholder="Nome do novo tipo..." autoFocus />
-                    <button className="acn-btn" style={{background:'#7c3aed',flexShrink:0}} onClick={salvarTipo} disabled={salvandoTipo||!novoTipo.trim()}>
+                    <Botao pequeno variante="primario" onClick={salvarTipo} disabled={salvandoTipo||!novoTipo.trim()}>
                       {salvandoTipo?'...':'Salvar'}
-                    </button>
+                    </Botao>
                   </div>
                 </div>
               )}
             </div>
             <div>
               <label className="acn-label">Nº PV / OP *</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.numero_pvop}
+              <input className="acn-input" value={form.numero_pvop}
                 onChange={e=>setField('numero_pvop',e.target.value)} placeholder="Ex: PV-2024-001" />
             </div>
             <div>
               <label className="acn-label">Data do Serviço</label>
-              <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_servico}
+              <input type="date" className="acn-input" value={form.data_servico}
                 onChange={e=>setField('data_servico',e.target.value)} />
             </div>
             <div>
               <label className="acn-label">Prestador do Serviço</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.prestador}
+              <input className="acn-input" value={form.prestador}
                 onChange={e=>setField('prestador',e.target.value)} placeholder="Nome do prestador..." />
             </div>
             <div>
               <label className="acn-label">Autorizado por</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.autorizado_por}
+              <input className="acn-input" value={form.autorizado_por}
                 onChange={e=>setField('autorizado_por',e.target.value)} placeholder="Nome do autorizador..." />
             </div>
           </div>
 
           {/* Tabela de itens */}
-          <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'.4px',marginBottom:6}}>
+          <div className="acn-quadro-titulo">
             Veículos / Itens do Serviço
           </div>
           <VoucherItemTable itens={form.itens} setItens={setItens} />
 
-          <div style={{marginTop:4,display:'flex',gap:8}}>
-            <button className="acn-btn" style={{background:'#7c3aed'}} onClick={salvar} disabled={salvando}>
-              {salvando ? 'Salvando...' : '💾 Salvar Voucher'}
-            </button>
-            <button className="acn-btn" style={{background:'#64748b'}}
-              onClick={()=>setForm({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] })}>
+          <div className="acn-acoes-linha acn-prod-v-acoes">
+            <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvar} disabled={salvando}>
+              {salvando ? 'Salvando...' : 'Salvar Voucher'}
+            </Botao>
+            <Botao onClick={()=>setForm({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] })}>
               Limpar
-            </button>
+            </Botao>
           </div>
         </div>
       </div>
 
       {/* LISTA DE VOUCHERS */}
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#7c3aed'}}>
-          <span style={{color:'white'}}>🗂 Vouchers Emitidos ({vouchers.length})</span>
-          <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:10}} onClick={load}>↻</button>
+        <div className="sec-hdr">
+          <span className="acn-prod-ic"><Icone path={mdiFolderOutline} size={16} /> Vouchers Emitidos ({vouchers.length})</span>
+          <Botao pequeno icone={mdiRefresh} aria-label="Atualizar" onClick={load} />
         </div>
-        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+        <div className="sec-body acn-rolagem acn-prod-tabela">
           {loading ? <div className="acn-empty">Carregando...</div> : vouchers.length === 0 ? (
             <div className="acn-empty">{erroLeitura ? 'Leitura falhou — veja o aviso acima.' : 'Nenhum voucher emitido ainda.'}</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Nº PV/OP</th><th>Tipo</th><th>Veículos</th>
                 <th>Valor Total</th><th>Data</th><th>Prestador</th><th>Autorizado por</th><th>Ações</th>
@@ -1756,23 +1740,23 @@ function VoucherServicos({ currentUser }) {
                     : itens.reduce((s,i) => s+(Number(i.valor)||0), 0));
                   return (
                     <tr key={v.id}>
-                      <td><strong style={{color:'#7c3aed'}}>{v.numero_pvop}</strong></td>
+                      <td><strong className="acn-forte acn-prod-os-num">{v.numero_pvop}</strong></td>
                       <td>{v.tipo_servico}</td>
-                      <td style={{fontSize:9,color:'#64748b'}}>
+                      <td className="acn-fraco">
                         {itens.length > 0
                           ? itens.map(i => i.placa_chassi || i.modelo || '—').filter(Boolean).join(', ')
                           : (v.chassi_placa || v.modelo_carro || '—')}
                       </td>
-                      <td style={{fontWeight:700,color:'#0f766e'}}>
+                      <td className="acn-num acn-forte">
                         {total != null ? `R$ ${Number(total).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
                       </td>
-                      <td>{v.data_servico ? new Date(v.data_servico+'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="acn-num">{v.data_servico ? new Date(v.data_servico+'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
                       <td>{v.prestador || '—'}</td>
                       <td>{v.autorizado_por || '—'}</td>
                       <td>
-                        <div style={{display:'flex',gap:4}}>
-                          <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>imprimirVoucher(v)}>🖨 Imprimir</button>
-                          <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>excluir(v.id)}>🗑</button>
+                        <div className="acn-acoes-linha">
+                          <Botao pequeno icone={mdiPrinterOutline} onClick={()=>imprimirVoucher(v)}>Imprimir</Botao>
+                          <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} aria-label="Excluir" title="Excluir voucher" onClick={()=>excluir(v.id)} />
                         </div>
                       </td>
                     </tr>
@@ -1863,9 +1847,9 @@ function EquipesSection({ currentUser }) {
 
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-        <div style={{ fontWeight:700, fontSize:13, color:'#1e293b' }}>🏷️ Equipes de Produção</div>
-        <button className="acn-btn" style={{ background:'#0f766e' }} onClick={abrirNova}>+ Nova Equipe</button>
+      <div className="acn-prod-eq-topo">
+        <div className="acn-forte acn-prod-ic"><Icone path={mdiTagOutline} size={16} /> Equipes de Produção</div>
+        <Botao variante="primario" icone={mdiPlus} onClick={abrirNova}>Nova Equipe</Botao>
       </div>
 
       {erroLeitura && (
@@ -1876,29 +1860,27 @@ function EquipesSection({ currentUser }) {
       {equipes.length === 0 ? (
         <div className="acn-empty">{erroLeitura ? 'Leitura falhou — veja o aviso acima.' : 'Nenhuma equipe cadastrada.'}</div>
       ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        <div className="acn-prod-eq-lista">
           {equipes.map(eq => (
-            <div key={eq.id} style={{ background:'white', border:'1px solid #e2e8f0', borderRadius:8, padding:'12px 16px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', marginBottom:4 }}>{eq.nome}</div>
-                  <div style={{ fontSize:10, color:'#475569', marginBottom:6 }}>
-                    👑 Head Line: <strong>{eq.head_line_nome}</strong>
+            <div key={eq.id} className="acn-prod-eq-card">
+              <div className="acn-prod-eq-corpo">
+                <div className="acn-forte">{eq.nome}</div>
+                <div className="acn-ajuda acn-prod-ic">
+                  <Icone path={mdiCrownOutline} size={13} /> Head Line: <strong>{eq.head_line_nome}</strong>
+                </div>
+                {(eq.membros || []).length > 0 && (
+                  <div className="acn-prod-tipos">
+                    {(eq.membros || []).map((m: any) => (
+                      <span key={m.nome} className="acn-prod-membro-tag">
+                        <Icone path={mdiAccount} size={12} /> {m.nome}
+                      </span>
+                    ))}
                   </div>
-                  {(eq.membros || []).length > 0 && (
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-                      {(eq.membros || []).map((m: any) => (
-                        <span key={m.nome} style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:12, padding:'2px 10px', fontSize:10, fontWeight:600 }}>
-                          👤 {m.nome}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display:'flex', gap:6 }}>
-                  <button className="acn-btn" style={{ background:'#6366f1', fontSize:10 }} onClick={() => abrirEditar(eq)}>✏️ Editar</button>
-                  <button className="acn-btn" style={{ background:'#ef4444', fontSize:10 }} onClick={() => excluir(eq)}>🗑️</button>
-                </div>
+                )}
+              </div>
+              <div className="acn-acoes-linha">
+                <Botao pequeno icone={mdiPencilOutline} onClick={() => abrirEditar(eq)}>Editar</Botao>
+                <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} aria-label="Excluir" title="Excluir equipe" onClick={() => excluir(eq)} />
               </div>
             </div>
           ))}
@@ -1908,46 +1890,54 @@ function EquipesSection({ currentUser }) {
       {/* MODAL EQUIPE */}
       {modal && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth:460 }}>
-            <div className="modal-title">{modal === 'nova' ? 'Nova Equipe' : 'Editar Equipe'}</div>
-
-            <label className="acn-label">Nome da Equipe *</label>
-            <input className="acn-input" style={{ width:'100%', marginBottom:10 }}
-              value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-              placeholder="Ex: Equipe Alpha" />
-
-            <label className="acn-label">👑 Head Line (Técnico Responsável) *</label>
-            <ColaboradorSelect
-              value={form.head_line_nome}
-              onChange={nome => { const c = colabs.find(x => x.nome === nome); setForm(f => ({ ...f, head_line_nome: nome, head_line_id: c?.id || '' })); }}
-              placeholder="Selecione o técnico líder"
-              className="acn-input" style={{ width:'100%', marginBottom:12 }} />
-
-            <label className="acn-label">👥 Membros da Equipe</label>
-            <div style={{ display:'flex', gap:6, marginBottom:8 }}>
-              <ColaboradorSelect
-                value={membroAdd}
-                onChange={v => setMembroAdd(v)}
-                placeholder="Adicionar técnico..."
-                className="acn-input" style={{ flex:1 }} />
-              <button className="acn-btn" style={{ background:'#0f766e', whiteSpace:'nowrap' }} onClick={addMembro}>+ Adicionar</button>
+          <div className="modal-box acn-modal-cadastro acn-prod-obs" role="dialog" aria-label={modal === 'nova' ? 'Nova equipe' : 'Editar equipe'}>
+            <div className="acn-modal-cab">
+              <span className="modal-title">{modal === 'nova' ? 'Nova Equipe' : 'Editar Equipe'}</span>
             </div>
-            {form.membros.length > 0 && (
-              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:12, padding:'8px 10px', background:'#f8fafc', borderRadius:6, border:'1px solid #e2e8f0' }}>
-                {form.membros.map(m => (
-                  <span key={m.nome} style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:12, padding:'3px 10px', fontSize:10, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
-                    👤 {m.nome}
-                    <button onClick={() => remMembro(m.nome)} style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', fontWeight:700, fontSize:11, padding:0 }}>✕</button>
-                  </span>
-                ))}
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label">Nome da Equipe *</label>
+                <input className="acn-input"
+                  value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex: Equipe Alpha" />
               </div>
-            )}
 
-            <div style={{ display:'flex', gap:8 }}>
-              <button className="acn-btn" style={{ background:'#0f766e', flex:1 }} onClick={salvar} disabled={salvando}>
+              <div className="form-group">
+                <label className="acn-label">Head Line (Técnico Responsável) *</label>
+                <ColaboradorSelect
+                  value={form.head_line_nome}
+                  onChange={nome => { const c = colabs.find(x => x.nome === nome); setForm(f => ({ ...f, head_line_nome: nome, head_line_id: c?.id || '' })); }}
+                  placeholder="Selecione o técnico líder"
+                  className="acn-input" />
+              </div>
+
+              <div className="form-group">
+                <label className="acn-label">Membros da Equipe</label>
+                <div className="acn-prod-add">
+                  <ColaboradorSelect
+                    value={membroAdd}
+                    onChange={v => setMembroAdd(v)}
+                    placeholder="Adicionar técnico..."
+                    className="acn-input" />
+                  <Botao pequeno variante="primario" icone={mdiPlus} onClick={addMembro}>Adicionar</Botao>
+                </div>
+              </div>
+              {form.membros.length > 0 && (
+                <div className="acn-quadro acn-prod-tipos">
+                  {form.membros.map(m => (
+                    <span key={m.nome} className="acn-prod-membro-tag">
+                      <Icone path={mdiAccount} size={12} /> {m.nome}
+                      <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover membro" onClick={() => remMembro(m.nome)} />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={salvar} disabled={salvando}>
                 {salvando ? 'Salvando...' : modal === 'nova' ? 'Criar Equipe' : 'Salvar Alterações'}
-              </button>
-              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setModal(null)}>Cancelar</button>
+              </Botao>
+              <Botao onClick={() => setModal(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2077,81 +2067,87 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 980, maxHeight: '85vh', overflowY: 'auto' }}>
-        <div className="modal-title">📥 Importar Técnicos/Equipes — {base === 'Seleção' ? '☑️ Seleção' : `🔗 ${base}`}</div>
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
-          {irmaos.length} unidade(s) {base === 'Seleção' ? 'selecionada(s)' : 'neste lote'}. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) — cada linha:
-          <strong> Chassi (ou Placa) [tab] Responsável</strong>, ou <strong>Chassi [tab] Placa [tab] Responsável</strong>.
-          Responsável pode ser um técnico, "Técnico A + Técnico B" (dupla) ou o nome de uma equipe cadastrada.
-          O casamento é sempre pelo chassi/placa já vinculado à OP, nunca pela ordem das linhas.
+      <div className="modal-box acn-modal-cadastro acn-prod-larga acn-prod-larguissima" role="dialog" aria-label="Importar técnicos e equipes">
+        <div className="acn-modal-cab">
+          <span className="modal-title acn-prod-ic"><Icone path={mdiTrayArrowDown} size={16} /> Importar Técnicos/Equipes — {base === 'Seleção' ? <><Icone path={mdiCheckboxMarkedOutline} size={14} /> Seleção</> : <><Icone path={mdiLinkVariant} size={14} /> {base}</>}</span>
+        </div>
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-ajuda">
+            {irmaos.length} unidade(s) {base === 'Seleção' ? 'selecionada(s)' : 'neste lote'}. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) — cada linha:
+            <strong> Chassi (ou Placa) [tab] Responsável</strong>, ou <strong>Chassi [tab] Placa [tab] Responsável</strong>.
+            Responsável pode ser um técnico, "Técnico A + Técnico B" (dupla) ou o nome de uma equipe cadastrada.
+            O casamento é sempre pelo chassi/placa já vinculado à OP, nunca pela ordem das linhas.
+          </div>
+
+          <textarea className="acn-input acn-mono acn-prod-colar" rows={5}
+            placeholder={'Ex:\n9BW1234567890\tJUNIOR\nABC1D23\tHead Line Tiago\n9BW...\tFELIPE + JONATAN'}
+            value={texto} onChange={e => setTexto(e.target.value)} />
+
+          {texto.trim() && !resultado && (
+            <div className="acn-prod-previa-bloco">
+              <div className="acn-forte">
+                Prévia — {plano.length} serão aplicadas, {naoReconhecidas.length} sem correspondência.
+              </div>
+              {plano.length > 0 && (
+                <div className="acn-rolagem acn-prod-previa">
+                  <table className="acn-tabela acn-densa">
+                    <thead>
+                      <tr>
+                        <th>OP destino</th>
+                        <th>Responsável</th>
+                        <th>Modo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plano.map(({ alvo, resp, respTexto }, i) => (
+                        <tr key={i}>
+                          <td className="acn-forte">{alvo.opl}</td>
+                          <td>{respTexto}</td>
+                          <td>
+                            <Selo familia={resp.modo === 'equipe' ? 'marca' : 'info'} ponto={false}>
+                              <Icone path={resp.modo === 'equipe' ? mdiTagOutline : resp.modo === 'dupla' ? mdiAccountMultipleOutline : mdiAccount} size={12} /> {resp.modo === 'equipe' ? 'Equipe' : resp.modo === 'dupla' ? 'Dupla' : 'Individual'}
+                            </Selo>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {naoReconhecidas.length > 0 && (
+                <div className="acn-quadro tom-erro">
+                  {naoReconhecidas.map((n, i) => <div key={i} className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> "{n.linha}" — {n.motivo}</div>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {resultado && (
+            <Faixa tom="ok">
+              {resultado.ok} unidade(s) atualizada(s){resultado.falhas ? `, ${resultado.falhas} falha(s)` : ''}.
+            </Faixa>
+          )}
+          {resultado && resultado.falhas > 0 && (
+            <Faixa tom="erro">
+              O lote parou na primeira OP que não gravou ({resultado.motivo}). {resultado.naoTentadas} OP(s) não foram tentadas e continuam como estavam.
+            </Faixa>
+          )}
+          {resultado && resultado.pendencias?.length > 0 && (
+            <Faixa tom="atencao">
+              Atualizadas, mas com pendência: {resultado.pendencias.join(' · ')}. Use "Equipe" no menu da OP para conferir.
+            </Faixa>
+          )}
         </div>
 
-        <textarea className="acn-input" rows={5} style={{ width: '100%', resize: 'vertical', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize: 10, marginBottom: 8 }}
-          placeholder={'Ex:\n9BW1234567890\tJUNIOR\nABC1D23\tHead Line Tiago\n9BW...\tFELIPE + JONATAN'}
-          value={texto} onChange={e => setTexto(e.target.value)} />
-
-        {texto.trim() && !resultado && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>
-              Prévia — {plano.length} serão aplicadas, {naoReconhecidas.length} sem correspondência.
-            </div>
-            {plano.length > 0 && (
-              <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, marginBottom: 8 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>OP destino</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>Responsável</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>Modo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plano.map(({ alvo, resp, respTexto }, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '4px 8px', fontWeight: 700 }}>{alvo.opl}</td>
-                        <td style={{ padding: '4px 8px' }}>{respTexto}</td>
-                        <td style={{ padding: '4px 8px', color: resp.modo === 'equipe' ? '#7c3aed' : '#0369a1', fontWeight: 600 }}>
-                          {resp.modo === 'equipe' ? '🏷️ Equipe' : resp.modo === 'dupla' ? '👥 Dupla' : '👤 Individual'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {naoReconhecidas.length > 0 && (
-              <div style={{ background: '#fef2f2', color: '#dc2626', padding: '8px 10px', borderRadius: 6, fontSize: 10 }}>
-                {naoReconhecidas.map((n, i) => <div key={i}>⚠️ "{n.linha}" — {n.motivo}</div>)}
-              </div>
-            )}
-          </div>
-        )}
-
-        {resultado && (
-          <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
-            ✅ {resultado.ok} unidade(s) atualizada(s){resultado.falhas ? `, ${resultado.falhas} falha(s)` : ''}.
-          </div>
-        )}
-        {resultado && resultado.falhas > 0 && (
-          <Faixa tom="erro">
-            O lote parou na primeira OP que não gravou ({resultado.motivo}). {resultado.naoTentadas} OP(s) não foram tentadas e continuam como estavam.
-          </Faixa>
-        )}
-        {resultado && resultado.pendencias?.length > 0 && (
-          <Faixa tom="atencao">
-            Atualizadas, mas com pendência: {resultado.pendencias.join(' · ')}. Use "Equipe" no menu da OP para conferir.
-          </Faixa>
-        )}
-
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="acn-modal-rodape acn-sac-rodape">
           {texto.trim() && !resultado && (
-            <button className="acn-btn" style={{ background: '#16a34a', flex: 1 }} disabled={salvando || plano.length === 0} onClick={confirmar}>
-              {salvando ? 'Aplicando...' : `✅ Confirmar e aplicar (${plano.length})`}
-            </button>
+            <Botao variante="primario" icone={mdiCheck} disabled={salvando || plano.length === 0} onClick={confirmar}>
+              {salvando ? 'Aplicando...' : `Confirmar e aplicar (${plano.length})`}
+            </Botao>
           )}
-          <button className="acn-btn" style={{ background: '#94a3b8', flex: resultado ? 1 : 'none' }} onClick={onClose}>
+          <Botao onClick={onClose}>
             {resultado ? 'Fechar' : 'Cancelar'}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>

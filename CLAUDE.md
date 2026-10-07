@@ -18,9 +18,9 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > completos — ficha, painel, controle de uso, lançamento e relatórios; pesquisa em
 > [PLANO_CENTRO_CUSTO.md](PLANO_CENTRO_CUSTO.md)) foi a prioridade e está **concluída
 > (05/10/2026)**; a tela do Financeiro e as janelas do centro de custo já foram migradas
-> para o design system (12e9 e 12e10) e, em 06/10/2026, a aba Tarefas (12e11) e as três telas
-> médias — Almoxarifado, Engenharia e PCP (12e12 a 12e14) —, cada uma com uma etapa 7.x de
-> achados antes. O `/ux-fluxo` segue pelas telas grandes, pelos componentes compartilhados
+> para o design system (12e9 e 12e10) e, em 06/10/2026, a aba Tarefas (12e11) e as telas
+> médias e grandes — Almoxarifado, Engenharia, PCP (12e12 a 12e14), os setores (12e15) e a Produção inteira (12e16 a 12e18) —, cada
+> fatia com uma etapa 7.x de achados antes. O `/ux-fluxo` segue pelas telas grandes, pelos componentes compartilhados
 > e pelas respostas que pedem desenho com o usuário (R1+R8+R3, R6, R7, R17); R4 e R9 estão
 > parciais (ver o quadro de "Respostas a aplicar").
 
