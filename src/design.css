@@ -1977,3 +1977,52 @@ html body .acn-input.acn-cot-setor.reservado { border-color: var(--acn-warn); ba
 .acn-cot-mini th.dir, .acn-cot-mini td.dir { text-align: right; }
 .acn-cot-mini th.centro, .acn-cot-mini td.centro { text-align: center; }
 .acn-cot-mais { font-style: italic; }
+
+/* ── Cotações · 12e29 (07/10/2026): o detalhe da cotação, a janela de gerar proposta/desconto e o painel de aprovações ── */
+html body .modal-overlay.acn-cot-overlay.acn-cot-ov-det { z-index: 1900; }
+html body .modal-overlay.acn-cot-overlay.acn-cot-ov-desc { z-index: 2000; }
+html body .modal-overlay.acn-cot-overlay.acn-cot-ov-aprov { z-index: 2100; }
+html body .modal-box.acn-modal-cadastro.acn-cot-jan { width: min(560px, 95vw); max-width: 560px; max-height: 90vh; }
+html body .modal-box.acn-modal-cadastro.acn-cot-jan.acn-cot-det { width: min(720px, 95vw); max-width: 720px; }
+html body .modal-box.acn-modal-cadastro.acn-cot-jan.acn-cot-pequena { width: min(440px, 95vw); max-width: 440px; max-height: 88vh; }
+html body .modal-box.acn-modal-cadastro.acn-cot-jan.acn-cot-media { width: min(580px, 95vw); max-width: 580px; max-height: 82vh; }
+.acn-cot-det-cab { align-items: flex-start; }
+.acn-cot-det-tit { flex: 1; min-width: 0; }
+.acn-cot-det-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-cot-det-meta > span { display: inline-flex; align-items: center; gap: 3px; }
+.acn-cot-det-lado { display: flex; align-items: center; gap: 6px; }
+.acn-cot-kpis { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.acn-cot-kpis.tres { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 640px) { .acn-cot-kpis.tres { grid-template-columns: 1fr; } }
+.acn-cot-kpi-v { font-size: 16px; font-weight: 800; color: var(--acn-f); }
+.acn-cot-opl-linha { display: flex; align-items: center; gap: 8px; }
+.acn-cot-busca-op { position: relative; }
+.acn-cot-sug { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: var(--acn-shadow-2); }
+.acn-cot-sug-item { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--acn-line-soft); font-size: 13px; }
+.acn-cot-sug-item:hover { background: var(--acn-brand-soft); }
+.acn-cot-sug-opl { font-weight: 600; }
+.acn-cot-bloco { display: flex; flex-direction: column; gap: 8px; }
+.acn-cot-bloco > .acn-quadro-titulo { display: flex; align-items: center; gap: 4px; }
+.acn-cot-aprov { padding: 8px 12px; background: var(--acn-f-soft); border: 1px solid color-mix(in srgb, var(--acn-f) 30%, transparent); border-radius: var(--acn-r2); }
+.acn-cot-aprov-topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.acn-cot-aprov-tit { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; }
+.acn-cot-aprov-nome { margin-bottom: 4px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-cot-aprov-txt { margin: 2px 0; font-size: 12px; color: var(--acn-text); }
+.acn-cot-aprov-acoes { display: flex; gap: 8px; margin-top: 8px; }
+.acn-cot-aprov > .acn-b { margin-top: 8px; }
+.acn-cot-prop { padding: 8px 12px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cot-prop-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.acn-cot-prop-v { font-size: 14px; font-weight: 700; color: var(--acn-ok); }
+.acn-cot-prop-desc { margin-left: 8px; font-size: 12px; color: var(--acn-bad); }
+.acn-cot-prop-lado { display: flex; align-items: center; gap: 6px; }
+.acn-cot-linha-val { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.acn-cot-linha-val.com-divisor { margin-top: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--acn-info) 30%, transparent); }
+.acn-cot-val-g { font-size: 15px; font-weight: 800; color: var(--acn-ink); }
+.acn-cot-val-m { font-size: 13px; font-weight: 700; }
+.acn-cot-val-rot { font-size: 13px; font-weight: 700; color: var(--acn-text); }
+.acn-cot-desc-v { font-size: 13px; font-weight: 800; color: var(--acn-brand-ink); }
+html body input[type=range].acn-cot-range { width: 100%; accent-color: var(--acn-brand); }
+.acn-cot-escala { display: flex; justify-content: space-between; font-size: 11px; color: var(--acn-muted); }
+html body .acn-input.acn-cot-obs { resize: vertical; font-family: inherit; }
+.acn-cot-vazio .acn-ic { vertical-align: middle; }
+.acn-cot-jan .acn-quadro-titulo { display: flex; align-items: center; gap: 4px; }

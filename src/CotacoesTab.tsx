@@ -8,7 +8,8 @@ import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
 import { Faixa, Botao, Selo, Abas, CabecalhoTela } from './Interface';
 import Icone from './Icone';
-import { mdiTimerSand, mdiLinkVariant, mdiFormatListBulleted, mdiChartBar, mdiPlus, mdiRefresh, mdiFolderOutline, mdiCashMultiple } from '@mdi/js';
+import { mdiTimerSand, mdiLinkVariant, mdiFormatListBulleted, mdiChartBar, mdiPlus, mdiRefresh, mdiFolderOutline, mdiCashMultiple,
+  mdiBankOutline, mdiClose, mdiCheckCircleOutline, mdiCloseCircleOutline, mdiCheck, mdiFileDocumentOutline, mdiSendOutline, mdiContentSaveOutline } from '@mdi/js';
 import { perfilComPoderes } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -517,42 +518,41 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:10, width:420, maxWidth:'95vw', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ padding:'14px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+    <div className="modal-overlay acn-cot-overlay acn-cot-ov-desc" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-cot-jan acn-cot-pequena" role="dialog" aria-label="Gerar Proposta">
+        <div className="acn-modal-cab">
           <div>
-            <div style={{ fontWeight:800, fontSize:13, color:'#1e293b' }}>📄 Gerar Proposta</div>
-            <div style={{ fontSize:9, color:'#64748b' }}>{cotacao.numero_cotacao} · {cotacao.nome}</div>
+            <span className="modal-title"><Icone path={mdiFileDocumentOutline} size={18} />Gerar Proposta</span>
+            <div className="acn-ajuda">{cotacao.numero_cotacao} · {cotacao.nome}</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, color:'#6b7280', cursor:'pointer' }}>✕</button>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
-        <div style={{ padding:16 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
           {/* Resumo de valor — valor de venda + impostos */}
-          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-              <span style={{ fontSize:10, color:'#64748b' }}>Valor de Venda</span>
-              <span style={{ fontSize:13, fontWeight:800, color:'#1e293b' }}>{fmtR(totVendas)}</span>
+          <div className="acn-quadro tom-info">
+            <div className="acn-cot-linha-val">
+              <span className="acn-ajuda">Valor de Venda</span>
+              <span className="acn-cot-val-g">{fmtR(totVendas)}</span>
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between', paddingTop:6, borderTop:'1px solid #bae6fd' }}>
-              <span style={{ fontSize:10, color:'#64748b' }}>Impostos</span>
-              <span style={{ fontSize:11, fontWeight:700, color:'#b45309' }}>{fmtR(totImposto)}</span>
+            <div className="acn-cot-linha-val com-divisor">
+              <span className="acn-ajuda">Impostos</span>
+              <span className="acn-cot-val-m acn-txt-erro">{fmtR(totImposto)}</span>
             </div>
           </div>
 
           {/* Slider de desconto — limitado ao maxDesc configurado */}
-          <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#475569', marginBottom:6, display:'flex', justifyContent:'space-between' }}>
-              <span>Desconto (%)</span>
-              <span style={{ color:'#0f766e', fontWeight:800 }}>{desconto}%</span>
+          <div>
+            <div className="acn-cot-linha-val">
+              <span className="acn-label">Desconto (%)</span>
+              <span className="acn-cot-desc-v">{desconto}%</span>
             </div>
             <input type="range" min={0}
               max={maxDesc > 0 ? maxDesc : 50}
               step={maxDesc > 0 ? Math.min(0.5, maxDesc / 10) : 0.5}
               value={desconto}
               onChange={e => setDesconto(Number(e.target.value))}
-              style={{ width:'100%', accentColor:'#0f766e' }} />
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#9ca3af' }}>
+              className="acn-cot-range" />
+            <div className="acn-cot-escala">
               <span>0%</span>
               {maxDesc > 0
                 ? <><span>{(maxDesc / 2).toFixed(1)}%</span><span>{maxDesc}%</span></>
@@ -561,55 +561,47 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
           </div>
 
           {/* Resultado */}
-          <div style={{ background: precisaAprovacao ? '#fef2f2' : '#f0fdf4',
-            border: `1px solid ${precisaAprovacao ? '#fca5a5' : '#86efac'}`,
-            borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-              <span style={{ fontSize:10, color:'#64748b' }}>Desconto</span>
-              <span style={{ fontSize:10, color:'#dc2626', fontWeight:700 }}>- {fmtR(valorDesc)}</span>
+          <div className={'acn-quadro ' + (precisaAprovacao ? 'tom-erro' : 'tom-ok')}>
+            <div className="acn-cot-linha-val">
+              <span className="acn-ajuda">Desconto</span>
+              <span className="acn-cot-val-m acn-txt-erro">- {fmtR(valorDesc)}</span>
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between' }}>
-              <span style={{ fontSize:11, fontWeight:700, color:'#374151' }}>Valor Final</span>
-              <span style={{ fontSize:13, fontWeight:800, color: precisaAprovacao ? '#dc2626' : '#16a34a' }}>{fmtR(valorFinal)}</span>
+            <div className="acn-cot-linha-val">
+              <span className="acn-cot-val-rot">Valor Final</span>
+              <span className={'acn-cot-val-g ' + (precisaAprovacao ? 'acn-txt-erro' : 'acn-txt-ok')}>{fmtR(valorFinal)}</span>
             </div>
             {precisaAprovacao && (
-              <div style={{ marginTop:8, padding:'6px 10px', background:'#fee2e2', borderRadius:5, fontSize:9, color:'#991b1b' }}>
-                ⚠️ Desconto acima do limite. Esta proposta precisará de <strong>aprovação do gestor</strong>.
-              </div>
+              <Faixa tom="erro">
+                Desconto acima do limite. Esta proposta precisará de <strong>aprovação do gestor</strong>.
+              </Faixa>
             )}
           </div>
 
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:4 }}>
+          <div>
+            <label className="acn-label">
               Prazo de Entrega
             </label>
-            <input value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)}
-              placeholder="Ex: 15 dias úteis"
-              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5, padding:'6px 8px', fontSize:10, boxSizing:'border-box' }} />
+            <input className="acn-input" value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)}
+              placeholder="Ex: 15 dias úteis" />
           </div>
 
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:4 }}>
+          <div>
+            <label className="acn-label">
               {precisaAprovacao ? 'Justificativa (obrigatória)' : 'Observações (opcional)'}
             </label>
-            <textarea value={obs} onChange={e => setObs(e.target.value)}
+            <textarea className="acn-input acn-cot-obs" value={obs} onChange={e => setObs(e.target.value)}
               placeholder={precisaAprovacao ? 'Explique o motivo do desconto extra...' : 'Observações para o cliente...'}
-              rows={3}
-              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5, padding:'6px 8px', fontSize:10, boxSizing:'border-box', fontFamily:'inherit', resize:'vertical' }} />
+              rows={3} />
           </div>
-
-          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-            <button onClick={onClose} style={{ background:'#f1f5f9', border:'none', borderRadius:5,
-              padding:'7px 16px', fontSize:10, color:'#475569', cursor:'pointer', fontWeight:600 }}>
-              Cancelar
-            </button>
-            <button onClick={salvar} disabled={salvando || (precisaAprovacao && !obs.trim())}
-              style={{ background: precisaAprovacao ? '#dc2626' : '#0f766e', color:'#fff', border:'none',
-                borderRadius:5, padding:'7px 18px', fontSize:10, fontWeight:700, cursor:'pointer',
-                opacity: (salvando || (precisaAprovacao && !obs.trim())) ? .5 : 1 }}>
-              {salvando ? 'Salvando...' : precisaAprovacao ? '📤 Enviar para Aprovação' : '💾 Gerar Proposta'}
-            </button>
-          </div>
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>
+            Cancelar
+          </Botao>
+          <Botao variante={precisaAprovacao ? 'perigo' : 'primario'} icone={precisaAprovacao ? mdiSendOutline : mdiContentSaveOutline}
+            onClick={salvar} disabled={salvando || (precisaAprovacao && !obs.trim())}>
+            {salvando ? 'Salvando...' : precisaAprovacao ? 'Enviar para Aprovação' : 'Gerar Proposta'}
+          </Botao>
         </div>
       </div>
     </div>
@@ -728,133 +720,121 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const margemPct = geralF.lucroPct;
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1900, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:10, width:700, maxWidth:'95vw', maxHeight:'90vh',
-        overflowY:'auto', boxShadow:'0 8px 32px #0003', display:'flex', flexDirection:'column' }}>
+    <div className="modal-overlay acn-cot-overlay acn-cot-ov-det" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-cot-jan acn-cot-det" role="dialog" aria-label="Detalhe da cotação">
 
         {/* Header */}
-        <div style={{ padding:'14px 16px', background:'#1e3a5f', color:'#fff', borderRadius:'10px 10px 0 0',
-          display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexShrink:0 }}>
-          <div>
-            <div style={{ fontSize:9, opacity:.75, fontWeight:700, letterSpacing:.5, marginBottom:2 }}>
+        <div className="acn-modal-cab acn-cot-det-cab">
+          <div className="acn-cot-det-tit">
+            <div className="acn-ajuda">
               COTAÇÃO · {cotacao.numero_cotacao || '—'}
             </div>
-            <div style={{ fontSize:14, fontWeight:800 }}>{cotacao.nome}</div>
-            <div style={{ fontSize:9, opacity:.85, marginTop:2, display:'flex', gap:10, flexWrap:'wrap' }}>
+            <span className="modal-title">{cotacao.nome}</span>
+            <div className="acn-cot-det-meta">
               <span>{cotacao.tipo} · {cotacao.empresa}</span>
-              {cotacao.opl_numero && <span>🔗 OP: {cotacao.opl_numero}</span>}
+              {cotacao.opl_numero && <span><Icone path={mdiLinkVariant} size={13} /> OP: {cotacao.opl_numero}</span>}
               {cotacao.crm_oportunidade_id && (
-                <button onClick={() => onOpenCrm && onOpenCrm(cotacao.crm_oportunidade_id)}
-                  style={{ background:'none', border:'none', color:'#93c5fd', fontSize:9,
-                    cursor:'pointer', textDecoration:'underline', padding:0 }}>
-                  🏛️ Ver no CRM
-                </button>
+                <Botao variante="discreto" pequeno icone={mdiBankOutline} onClick={() => onOpenCrm && onOpenCrm(cotacao.crm_oportunidade_id)}>
+                  Ver no CRM
+                </Botao>
               )}
             </div>
           </div>
-          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <div className="acn-cot-det-lado">
             <StatusBadge status={cotacao.status} />
-            <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
+            <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
           </div>
         </div>
 
-        <div style={{ padding:16, flex:1, overflowY:'auto' }}>
+        <div className="acn-modal-corpo">
 
           {/* KPIs */}
-          <div style={{ display:'grid', gridTemplateColumns: verCustos ? '1fr 1fr 1fr' : '1fr', gap:10, marginBottom:14 }}>
-            <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'10px 14px', textAlign:'center' }}>
-              <div style={{ fontSize:9, color:'#16a34a', fontWeight:700, marginBottom:3 }}>PREÇO DE VENDA</div>
-              <div style={{ fontSize:16, fontWeight:800, color:'#15803d' }}>{fmtR(totVendas)}</div>
+          <div className={'acn-cot-kpis' + (verCustos ? ' tres' : '')}>
+            <div className="acn-kpi">
+              <span className="rot"><i data-acn-familia="ok" />PREÇO DE VENDA</span>
+              <span className="acn-num acn-cot-kpi-v" data-acn-familia="ok">{fmtR(totVendas)}</span>
             </div>
             {verCustos && (
               <>
-                <div style={{ background:'#fef3c7', border:'1px solid #fcd34d', borderRadius:8, padding:'10px 14px', textAlign:'center' }}>
-                  <div style={{ fontSize:9, color:'#92400e', fontWeight:700, marginBottom:3 }}>CUSTO TOTAL</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#78350f' }}>{fmtR(totCusto)}</div>
+                <div className="acn-kpi">
+                  <span className="rot"><i data-acn-familia="atencao" />CUSTO TOTAL</span>
+                  <span className="acn-num acn-cot-kpi-v" data-acn-familia="atencao">{fmtR(totCusto)}</span>
                 </div>
-                <div style={{ background:'#ede9fe', border:'1px solid #c4b5fd', borderRadius:8, padding:'10px 14px', textAlign:'center' }}>
-                  <div style={{ fontSize:9, color:'#6d28d9', fontWeight:700, marginBottom:3 }}>MARGEM</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#5b21b6' }}>{fmtR(margem)} ({fmtPct(margemPct)})</div>
+                <div className="acn-kpi">
+                  <span className="rot"><i data-acn-familia="info" />MARGEM</span>
+                  <span className="acn-num acn-cot-kpi-v" data-acn-familia="info">{fmtR(margem)} ({fmtPct(margemPct)})</span>
                 </div>
               </>
             )}
           </div>
 
           {/* Tabela de itens */}
-          <div style={{ overflowX:'auto', marginBottom:14 }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+          <div className="acn-cot-tabela">
+            <table className="acn-tabela acn-densa">
               <thead>
-                <tr style={{ background:'#1e293b', color:'#cbd5e1' }}>
-                  <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:600, whiteSpace:'nowrap' }}>Item</th>
-                  <th style={{ padding:'6px 8px', textAlign:'center' }}>Qt</th>
-                  {verFornec && <th style={{ padding:'6px 8px', textAlign:'left' }}>Fornecedor</th>}
-                  {verFornec && <th style={{ padding:'6px 8px', textAlign:'left' }}>Marca</th>}
-                  {verCustos && <th style={{ padding:'6px 8px', textAlign:'right' }}>Custo</th>}
-                  {verMarkup && <th style={{ padding:'6px 8px', textAlign:'right' }}>Markup</th>}
-                  <th style={{ padding:'6px 8px', textAlign:'right' }}>Preço Unit.</th>
-                  <th style={{ padding:'6px 8px', textAlign:'right' }}>Total</th>
+                <tr>
+                  <th className="esq">Item</th>
+                  <th className="centro">Qt</th>
+                  {verFornec && <th className="esq">Fornecedor</th>}
+                  {verFornec && <th className="esq">Marca</th>}
+                  {verCustos && <th className="dir">Custo</th>}
+                  {verMarkup && <th className="dir">Markup</th>}
+                  <th className="dir">Preço Unit.</th>
+                  <th className="dir">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {itens.map((it, i) => {
                   const r = results[i];
                   return (
-                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td style={{ padding:'5px 8px', maxWidth:220, wordBreak:'break-word' }}>
-                        <div style={{ fontWeight:600, color:'#1e293b' }}>{it.produto || '—'}</div>
-                        {it.unidade && <div style={{ fontSize:8, color:'#9ca3af' }}>{it.unidade}</div>}
+                    <tr key={i}>
+                      <td className="acn-cot-nome">
+                        <div className="acn-cot-nome-t">{it.produto || '—'}</div>
+                        {it.unidade && <div className="acn-ajuda">{it.unidade}</div>}
                       </td>
-                      <td style={{ padding:'5px 8px', textAlign:'center', color:'#374151' }}>{it.qt || 1}</td>
-                      {verFornec && <td style={{ padding:'5px 8px', color:'#374151' }}>{it.fornecedor || '—'}</td>}
-                      {verFornec && <td style={{ padding:'5px 8px', color:'#374151' }}>{it.marca || '—'}</td>}
-                      {verCustos && <td style={{ padding:'5px 8px', textAlign:'right', color:'#92400e' }}>{fmtR(r.custoTotal)}</td>}
-                      {verMarkup && <td style={{ padding:'5px 8px', textAlign:'right', color:'#6d28d9' }}>{fmtPct(it.markup_pct)}</td>}
-                      <td style={{ padding:'5px 8px', textAlign:'right', fontWeight:600 }}>{fmtR(r.valorUnit)}</td>
-                      <td style={{ padding:'5px 8px', textAlign:'right', fontWeight:700, color:'#15803d' }}>{fmtR(r.valorTotal)}</td>
+                      <td className="centro">{it.qt || 1}</td>
+                      {verFornec && <td>{it.fornecedor || '—'}</td>}
+                      {verFornec && <td>{it.marca || '—'}</td>}
+                      {verCustos && <td className="dir acn-txt-atencao">{fmtR(r.custoTotal)}</td>}
+                      {verMarkup && <td className="dir">{fmtPct(it.markup_pct)}</td>}
+                      <td className="dir acn-forte">{fmtR(r.valorUnit)}</td>
+                      <td className="dir acn-forte acn-txt-ok">{fmtR(r.valorTotal)}</td>
                     </tr>
                   );
                 })}
-                <tr style={{ background:'#1e293b', color:'#fff' }}>
-                  <td colSpan={2 + (verFornec?2:0) + (verCustos?1:0) + (verMarkup?1:0)}
-                    style={{ padding:'7px 8px', fontWeight:700, fontSize:11, textAlign:'right' }}>
+                <tr className="acn-linha-total">
+                  <td colSpan={2 + (verFornec?2:0) + (verCustos?1:0) + (verMarkup?1:0)} className="dir">
                     TOTAL
                   </td>
-                  <td style={{ padding:'7px 8px', textAlign:'right', fontWeight:800, fontSize:12 }}>{fmtR(totVendas)}</td>
+                  <td className="dir">{fmtR(totVendas)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           {/* Vincular OP/OS */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#475569', marginBottom:8 }}>🔗 Vincular OP/OS</div>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo"><Icone path={mdiLinkVariant} size={14} /> Vincular OP/OS</div>
             {cotacao.opl_numero ? (
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:10, color:'#16a34a', fontWeight:700 }}>✅ OP Vinculada: {cotacao.opl_numero}</span>
+              <div className="acn-cot-opl-linha">
+                <span className="acn-cot-opl"><Icone path={mdiCheckCircleOutline} size={14} /> OP Vinculada: {cotacao.opl_numero}</span>
                 {isAdmin && (
-                  <button onClick={desvincularOp} style={{ fontSize:8, background:'#fee2e2', border:'1px solid #fca5a5', color:'#dc2626',
-                    borderRadius:3, padding:'2px 6px', cursor:'pointer' }}>
+                  <Botao variante="perigo-sec" pequeno onClick={desvincularOp}>
                     Desvincular
-                  </button>
+                  </Botao>
                 )}
               </div>
             ) : (
-              <div style={{ position:'relative' }}>
-                <input value={opBusca} onChange={e => buscarOp(e.target.value)}
-                  placeholder="Buscar OP pelo número..."
-                  style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5, padding:'6px 8px',
-                    fontSize:10, boxSizing:'border-box' }} />
-                {buscandoOp && <div style={{ fontSize:9, color:'#6b7280', padding:'4px 0' }}>Buscando...</div>}
+              <div className="acn-cot-busca-op">
+                <input className="acn-input" value={opBusca} onChange={e => buscarOp(e.target.value)}
+                  placeholder="Buscar OP pelo número..." />
+                {buscandoOp && <div className="acn-ajuda">Buscando...</div>}
                 {opOpts.length > 0 && (
-                  <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff',
-                    border:'1px solid #e2e8f0', borderRadius:5, boxShadow:'0 4px 12px #0002', zIndex:10 }}>
+                  <div className="acn-cot-sug">
                     {opOpts.map(op => (
-                      <div key={op.id} onClick={() => vincularOp(op)}
-                        style={{ padding:'7px 10px', cursor:'pointer', borderBottom:'1px solid #f1f5f9',
-                          fontSize:10, display:'flex', justifyContent:'space-between' }}>
-                        <span style={{ fontWeight:600 }}>{op.opl}</span>
-                        <span style={{ color:'#6b7280' }}>{op.cliente_nome}</span>
+                      <div key={op.id} className="acn-cot-sug-item" onClick={() => vincularOp(op)}>
+                        <span className="acn-cot-sug-opl">{op.opl}</span>
+                        <span className="acn-ajuda">{op.cliente_nome}</span>
                       </div>
                     ))}
                   </div>
@@ -864,34 +844,28 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
           </div>
 
           {erroLeitura && (
-            <div style={{ marginBottom:14 }}>
-              <Faixa tom="erro">Não foi possível ler as propostas e as solicitações de aprovação desta cotação ({erroLeitura}). Isso não quer dizer que não existam — o que aparece abaixo pode estar incompleto.</Faixa>
-            </div>
+            <Faixa tom="erro">Não foi possível ler as propostas e as solicitações de aprovação desta cotação ({erroLeitura}). Isso não quer dizer que não existam — o que aparece abaixo pode estar incompleto.</Faixa>
           )}
 
           {/* Histórico de aprovações */}
           {aprovacoes.length > 0 && (
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#475569', marginBottom:8 }}>📋 Solicitações de Aprovação</div>
+            <div className="acn-cot-bloco">
+              <div className="acn-quadro-titulo"><Icone path={mdiFormatListBulleted} size={14} /> Solicitações de Aprovação</div>
               {aprovacoes.map(a => (
-                <div key={a.id} style={{ background: a.status==='aprovado' ? '#f0fdf4' : a.status==='rejeitado' ? '#fef2f2' : '#fef9c3',
-                  border:`1px solid ${a.status==='aprovado'?'#86efac':a.status==='rejeitado'?'#fca5a5':'#fde68a'}`,
-                  borderRadius:6, padding:'8px 12px', marginBottom:8 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                    <span style={{ fontSize:10, fontWeight:700 }}>
-                      {a.status==='aprovado'?'✅':a.status==='rejeitado'?'❌':'⏳'} Desconto: {a.desconto_pct}%
+                <div key={a.id} className="acn-cot-aprov" data-acn-familia={a.status==='aprovado' ? 'ok' : a.status==='rejeitado' ? 'erro' : 'atencao'}>
+                  <div className="acn-cot-aprov-topo">
+                    <span className="acn-cot-aprov-tit">
+                      <Icone path={a.status==='aprovado' ? mdiCheckCircleOutline : a.status==='rejeitado' ? mdiCloseCircleOutline : mdiTimerSand} size={15} /> Desconto: {a.desconto_pct}%
                     </span>
-                    <span style={{ fontSize:9, color:'#6b7280' }}>{a.status}</span>
+                    <span className="acn-ajuda">{a.status}</span>
                   </div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Por: {a.solicitado_por} · {new Date(a.solicitado_em).toLocaleString('pt-BR')}</div>
-                  {a.motivo && <div style={{ fontSize:9, color:'#374151' }}>Motivo: {a.motivo}</div>}
-                  {a.resposta && <div style={{ fontSize:9, color:'#374151', marginTop:3 }}>Resposta: <Linkify text={a.resposta} /> (por {a.aprovado_por})</div>}
+                  <div className="acn-ajuda">Por: {a.solicitado_por} · {new Date(a.solicitado_em).toLocaleString('pt-BR')}</div>
+                  {a.motivo && <div className="acn-cot-aprov-txt">Motivo: {a.motivo}</div>}
+                  {a.resposta && <div className="acn-cot-aprov-txt">Resposta: <Linkify text={a.resposta} /> (por {a.aprovado_por})</div>}
                   {podeAprovar && a.status === 'pendente' && (
-                    <button onClick={() => aprovarSolicitacao(a)}
-                      style={{ marginTop:8, background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
-                        padding:'4px 12px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
-                      ✅ Responder
-                    </button>
+                    <Botao variante="primario" pequeno icone={mdiCheck} onClick={() => aprovarSolicitacao(a)}>
+                      Responder
+                    </Botao>
                   )}
                 </div>
               ))}
@@ -900,31 +874,28 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
 
           {/* Propostas geradas */}
           {propostas.length > 0 && (
-            <div>
-              <div style={{ fontSize:10, fontWeight:700, color:'#475569', marginBottom:8 }}>📄 Propostas Geradas</div>
+            <div className="acn-cot-bloco">
+              <div className="acn-quadro-titulo"><Icone path={mdiFileDocumentOutline} size={14} /> Propostas Geradas</div>
               {propostas.map(p => (
-                <div key={p.id} style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6,
-                  padding:'8px 12px', marginBottom:8 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div key={p.id} className="acn-cot-prop">
+                  <div className="acn-cot-prop-topo">
                     <div>
-                      <span style={{ fontSize:11, fontWeight:700, color:'#15803d' }}>{fmtR(p.valor_com_desconto)}</span>
+                      <span className="acn-cot-prop-v">{fmtR(p.valor_com_desconto)}</span>
                       {p.desconto_pct > 0 && (
-                        <span style={{ fontSize:9, color:'#dc2626', marginLeft:8 }}>({p.desconto_pct}% de desconto)</span>
+                        <span className="acn-cot-prop-desc">({p.desconto_pct}% de desconto)</span>
                       )}
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <span style={{ fontSize:9, color:'#9ca3af' }}>{new Date(p.criado_em).toLocaleString('pt-BR')}</span>
-                      <button onClick={() => setEmitindoProposta(p)}
-                        style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:4,
-                          padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                        📄 Emitir
-                      </button>
+                    <div className="acn-cot-prop-lado">
+                      <span className="acn-ajuda">{new Date(p.criado_em).toLocaleString('pt-BR')}</span>
+                      <Botao pequeno icone={mdiFileDocumentOutline} onClick={() => setEmitindoProposta(p)}>
+                        Emitir
+                      </Botao>
                     </div>
                   </div>
-                  <div style={{ fontSize:9, color:'#475569', marginTop:3 }}>
+                  <div className="acn-ajuda">
                     Total sem desconto: {fmtR(p.valor_total)} · por {p.criado_por}
                   </div>
-                  {p.observacoes && <div style={{ fontSize:9, color:'#374151', marginTop:3 }}>Obs: {p.observacoes}</div>}
+                  {p.observacoes && <div className="acn-cot-aprov-txt">Obs: {p.observacoes}</div>}
                 </div>
               ))}
             </div>
@@ -940,17 +911,13 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
         </div>
 
         {/* Footer de ações */}
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, flexShrink:0 }}>
-          <button onClick={() => onAbrirDesconto && onAbrirDesconto()}
-            style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:5,
-              padding:'7px 16px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-            💰 Gerar Proposta / Desconto
-          </button>
-          <button onClick={onClose}
-            style={{ background:'#f1f5f9', color:'#475569', border:'none', borderRadius:5,
-              padding:'7px 14px', fontSize:10, cursor:'pointer' }}>
+        <div className="acn-modal-rodape acn-sac-rodape acn-cot-rodape">
+          <Botao variante="primario" icone={mdiCashMultiple} onClick={() => onAbrirDesconto && onAbrirDesconto()}>
+            Gerar Proposta / Desconto
+          </Botao>
+          <Botao onClick={onClose}>
             Fechar
-          </button>
+          </Botao>
         </div>
       </div>
     </div>
@@ -1006,47 +973,40 @@ function PainelAprovacoes({ currentUser, onClose }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:2100, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:10, width:560, maxWidth:'95vw', maxHeight:'80vh',
-        overflowY:'auto', boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ padding:'14px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontWeight:800, fontSize:13, color:'#1e293b' }}>⏳ Aprovações Pendentes</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, color:'#6b7280', cursor:'pointer' }}>✕</button>
+    <div className="modal-overlay acn-cot-overlay acn-cot-ov-aprov" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-cot-jan acn-cot-media" role="dialog" aria-label="Aprovações Pendentes">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiTimerSand} size={18} />Aprovações Pendentes</span>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
-        <div style={{ padding:16 }}>
+        <div className="acn-modal-corpo">
           {erroLeitura && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as aprovações pendentes ({erroLeitura}). Isso não quer dizer que não haja nenhuma{lista.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>
           )}
-          {loading && <div style={{ textAlign:'center', color:'#9ca3af', padding:20 }}>Carregando...</div>}
+          {loading && <div className="acn-cot-vazio">Carregando...</div>}
           {!loading && lista.length === 0 && !erroLeitura && (
-            <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:11 }}>
-              ✅ Nenhuma aprovação pendente.
+            <div className="acn-cot-vazio">
+              <Icone path={mdiCheckCircleOutline} size={16} /> Nenhuma aprovação pendente.
             </div>
           )}
           {lista.map(a => (
-            <div key={a.id} style={{ background:'#fef9c3', border:'1px solid #fde68a', borderRadius:8,
-              padding:'10px 14px', marginBottom:10 }}>
-              <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', marginBottom:4 }}>
+            <div key={a.id} className="acn-cot-aprov" data-acn-familia="atencao">
+              <div className="acn-cot-aprov-nome">
                 {a.cotacao_nome || a.numero_cotacao || a.cotacao_id}
               </div>
-              <div style={{ fontSize:10, color:'#475569', marginBottom:6 }}>
-                Desconto solicitado: <strong style={{ color:'#dc2626' }}>{a.desconto_pct}%</strong>
+              <div className="acn-cot-aprov-txt">
+                Desconto solicitado: <strong className="acn-txt-erro">{a.desconto_pct}%</strong>
                 {' '}por <strong>{a.solicitado_por}</strong>
                 {' '}· {new Date(a.solicitado_em).toLocaleString('pt-BR')}
               </div>
-              {a.motivo && <div style={{ fontSize:9, color:'#374151', marginBottom:8 }}>Motivo: {a.motivo}</div>}
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => responder(a, 'aprovado')}
-                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4,
-                    padding:'5px 16px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                  ✅ Aprovar
-                </button>
-                <button onClick={() => responder(a, 'rejeitado')}
-                  style={{ background:'#dc2626', color:'#fff', border:'none', borderRadius:4,
-                    padding:'5px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                  ❌ Rejeitar
-                </button>
+              {a.motivo && <div className="acn-cot-aprov-txt">Motivo: {a.motivo}</div>}
+              <div className="acn-cot-aprov-acoes">
+                <Botao variante="primario" pequeno icone={mdiCheck} onClick={() => responder(a, 'aprovado')}>
+                  Aprovar
+                </Botao>
+                <Botao variante="perigo" pequeno icone={mdiClose} onClick={() => responder(a, 'rejeitado')}>
+                  Rejeitar
+                </Botao>
               </div>
             </div>
           ))}
