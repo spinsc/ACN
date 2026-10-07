@@ -28,7 +28,7 @@ export function CabecalhoTela({ titulo, subtitulo, acoes, abas }: {
   );
 }
 
-type ItemAba = { id: string; rotulo: React.ReactNode; icone?: string; contagem?: number | string | null; titulo?: string };
+type ItemAba = { id: string; rotulo: React.ReactNode; icone?: string; contagem?: number | string | null; titulo?: string; classe?: string };
 
 // ── Abas sublinhadas ──────────────────────────────────────────────────────────
 export function Abas({ itens, ativa, onChange, className }: { itens: ItemAba[]; ativa: string; onChange: (id: string) => void; className?: string }) {
@@ -36,7 +36,7 @@ export function Abas({ itens, ativa, onChange, className }: { itens: ItemAba[]; 
     <div className={'acn-abas' + (className ? ' ' + className : '')} role="tablist">
       {itens.map(it => (
         <button key={it.id} type="button" role="tab" aria-selected={ativa === it.id} title={it.titulo}
-          className={'acn-aba' + (ativa === it.id ? ' ativa' : '')} onClick={() => onChange(it.id)}>
+          className={'acn-aba' + (ativa === it.id ? ' ativa' : '') + (it.classe ? ' ' + it.classe : '')} onClick={() => onChange(it.id)}>
           {it.icone && <Icone path={it.icone} size={16} />}
           <span>{it.rotulo}</span>
           {it.contagem != null && <em>{it.contagem}</em>}

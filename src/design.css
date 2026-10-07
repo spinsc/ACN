@@ -2231,3 +2231,52 @@ body.dark .acn-lic-min { background: #1e293b; }
 .acn-lic-min-txt { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .acn-lic-min-st { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
 .acn-lic-min-acoes { display: flex; gap: 8px; }
+
+/* ── Licitações · 12e34 (07/10/2026): o andamento e o painel das abas — fecha a janela grande da licitação ── */
+.acn-lic-and-tit { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.acn-lic-and-analise { margin-bottom: 10px; }
+.acn-lic-and-lista { display: flex; flex-direction: column; gap: 10px; }
+.acn-quadro.acn-lic-and-nova { margin: 0; gap: 6px; }
+.acn-lic-and-nova-tit { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--acn-ok); }
+.acn-lic-and-anexos { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.acn-lic-anexar { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; color: var(--acn-text); cursor: pointer; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 35%, transparent); border-radius: var(--acn-r1); }
+.acn-lic-and-qtd { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--acn-info); }
+.acn-lic-and-registrar { align-self: flex-start; }
+.acn-lic-and { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; padding: 10px 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-left: 3px solid var(--acn-info); border-radius: var(--acn-r2); }
+.acn-lic-and.nao-lido { background: #fefce8; border-color: #d4a106; border-left-color: var(--acn-info); }
+.acn-lic-and.legado { padding: 8px 12px; background: var(--acn-surface-2); border-left-color: var(--acn-neutral); }
+body.dark .acn-lic-and { background: #1e293b; border-color: #334155; border-left-color: #60a5fa; }
+body.dark .acn-lic-and.nao-lido { background: rgba(212, 161, 6, .14); border-color: #d4a106; border-left-color: #60a5fa; }
+body.dark .acn-lic-and.legado { background: #0f172a; border-left-color: #64748b; }
+.acn-lic-and-corpo { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.acn-lic-and-txt { font-size: 13px; line-height: 1.5; color: var(--acn-ink); white-space: pre-wrap; word-break: break-word; }
+body.dark .acn-lic-and-txt { color: #e2e8f0; }
+.acn-lic-and-arquivo { justify-self: start; }
+.acn-lic-and-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+.acn-lic-and-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.acn-lic-and-acoes { display: flex; gap: 4px; flex-shrink: 0; margin-left: 6px; }
+.acn-lic-and-edit-botoes { margin-top: 6px; }
+.acn-lic-and-sep { padding: 4px 0; font-weight: 700; }
+/* painel das abas */
+.acn-lic-dir { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--acn-canvas); }
+body.dark .acn-lic-dir { background: #0f172a; }
+.acn-lic-abas-barra { display: flex; align-items: flex-start; flex-shrink: 0; padding: 0 12px; background: var(--acn-surface); border-bottom: 1px solid var(--acn-line); }
+body.dark .acn-lic-abas-barra { background: #1e293b; border-color: #334155; }
+html body .acn-abas.acn-lic-abas { flex: 1; flex-wrap: wrap !important; overflow-x: visible; gap: 0 16px; border-bottom: 0; }
+.acn-lic-abas .acn-aba { font-size: 12px; white-space: nowrap; }
+.acn-lic-abas .acn-aba.destacada { padding-left: 6px; padding-right: 6px; font-weight: 700; color: #92400e; background: #fef9c3; }
+body.dark .acn-lic-abas .acn-aba.destacada { color: #fde68a; background: rgba(212, 161, 6, .2); }
+.acn-lic-aba-ponto { display: inline-block; width: 7px; height: 7px; margin-left: 5px; border-radius: 50%; vertical-align: middle; background: var(--acn-bad); box-shadow: 0 0 0 2px var(--acn-bad-soft); }
+.acn-lic-abas-fim { display: flex; align-items: center; gap: 6px; margin-left: auto; padding: 4px 0 4px 8px; }
+.acn-lic-abas-num { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--acn-text); }
+.acn-lic-dir-corpo { flex: 1; overflow-y: auto; padding: 14px; }
+.acn-lic-form-rodape { display: flex; margin-top: 14px; }
+.acn-lic-processo { display: flex; flex-direction: column; gap: 12px; }
+.acn-lic-processo-linha { display: flex; flex-wrap: wrap; gap: 10px; }
+.acn-lic-docs-aba { display: flex; flex-direction: column; gap: 10px; }
+.acn-quadro.acn-lic-upload { margin: 0; }
+.acn-lic-upload-tit { display: flex; align-items: center; gap: 4px; }
+/* barras e botões da temperatura (a cor de cada faixa fica aqui, não mais no código) */
+.acn-lic-temp-barra[data-temp="frio"] { background: var(--acn-info); }
+.acn-lic-temp-barra[data-temp="morno"] { background: #8b5cf6; }
+.acn-lic-temp-barra[data-temp="quente"] { background: var(--acn-bad); }

@@ -16,14 +16,14 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { CabecalhoTela, Botao, Chips, Selo, Faixa, diaISO } from './Interface';
+import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO } from './Interface';
 import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
   mdiChevronDown, mdiChevronRight, mdiPencilOutline, mdiEmailOutline, mdiCellphone, mdiPhoneOutline, mdiPaperclip, mdiAccountOutline, mdiClockOutline,
   mdiContentSaveOutline, mdiAlertOutline, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline, mdiFormatStrikethrough, mdiPalette, mdiFormatColorHighlight,
   mdiLinkVariant, mdiImageOutline, mdiTablePlus, mdiTableRemove, mdiWindowMinimize, mdiTrophyOutline, mdiCheckCircleOutline, mdiPackageVariantClosed,
-  mdiRocketLaunchOutline, mdiChevronUp } from '@mdi/js';
+  mdiRocketLaunchOutline, mdiChevronUp, mdiNoteTextOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -41,9 +41,9 @@ const MARCADORES = ['Em Recurso','Em Defesa','Impugnado','Cadastrado','Pendente'
 const FAMILIA_MARCADOR: Record<string, string> = { Esclarecimento: 'info', Arrematado: 'ok', Perdida: 'atencao' };
 // Termômetro da proposta — mesmas faixas e cores do Comercial/CRM
 const TEMPERATURAS = [
-  { v: 'frio',   label: 'Frio',   emoji: '🧊', cor: '#245fb8' },
-  { v: 'morno',  label: 'Morno',  emoji: '🌤️', cor: '#8b5cf6' },
-  { v: 'quente', label: 'Quente', emoji: '🔥', cor: '#b9302a' },
+  { v: 'frio',   label: 'Frio',   emoji: '🧊' },
+  { v: 'morno',  label: 'Morno',  emoji: '🌤️' },
+  { v: 'quente', label: 'Quente', emoji: '🔥' },
 ] as const;
 const infoTemp = (t: string) => TEMPERATURAS.find(x => x.v === t);
 const AJUDA_MARCADOR: Record<string, string> = {
@@ -56,7 +56,6 @@ const PREFIXOS_LEGADOS: Record<string,string> = {
   'CADASTRADO': 'Cadastrado', 'PENDENTE': 'Pendente', 'PEGAR ATA': 'Pegar ATA',
 };
 const PRIORIDADES = ['Alta','Média','Baixa'];
-const PRIO_COR: Record<string,string> = { 'Alta':'#dc2626','Média':'#d97706','Baixa':'#16a34a' };
 const FATURAMENTO_OPTIONS = ['ACN','Detech','ACN e Detech'];
 const TIPO_CONTATO_OPCOES = ['Pregoeiro','Secretário','Supervisor','Diretor','Comprador','Outro'];
 const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1730,11 +1729,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             )}
 
             {/* ANDAMENTO — sempre visível, abaixo do formulário (não é mais aba) */}
-            <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>📝 Andamento</div>
+            <div className="acn-lic-secao">
+              <div className="acn-quadro-titulo acn-lic-and-tit"><Icone path={mdiNoteTextOutline} size={14} />Andamento</div>
 
               {/* Análise — migrada pra dentro do Andamento, não é mais aba própria do painel direito */}
-              <div style={{ marginBottom:10 }}>
+              <div className="acn-lic-and-analise">
                 <AnaliseStatusPanel
                   origemId={licit.id}
                   origemTitulo={licit.nome_projeto}
@@ -1745,87 +1744,78 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 />
               </div>
 
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div className="acn-lic-and-lista">
                 {/* Nova entrada */}
-                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
-                  <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
+                <div className="acn-quadro tom-ok acn-lic-and-nova">
+                  <div className="acn-lic-and-nova-tit"><Icone path={mdiPencilOutline} size={14} />Nova Atualização</div>
                   <RichTextInput mencoes value={novoText} onChange={v=>setNovoText(v)}
                     placeholder="Descreva o andamento... @Nome para mencionar, selecione um trecho pra formatar" minHeight={54}
                     style={{ fontSize:11 }} />
-                  <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                    <label style={{ fontSize:10, color:'#374151', cursor:'pointer', display:'flex', alignItems:'center', gap:4, background:'#e0f2fe', borderRadius:4, padding:'3px 8px', border:'1px solid #7dd3fc' }}>
-                      📎 Vincular arquivo(s)
-                      <input type="file" ref={novoAnexoRef} style={{ display:'none' }} multiple
+                  <div className="acn-lic-and-anexos">
+                    <label className="acn-lic-anexar">
+                      <Icone path={mdiPaperclip} size={14} />Vincular arquivo(s)
+                      <input type="file" ref={novoAnexoRef} className="acn-lic-oculto" multiple
                         accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg`}
                         onChange={e => setNovoAnexoFiles(Array.from(e.target.files||[]))} />
                     </label>
                     {novoAnexoFiles.length > 0 && (
-                      <span style={{ fontSize:9, color:'#0369a1', fontWeight:600 }}>
-                        📎 {novoAnexoFiles.length} arquivo(s)
-                        <button onClick={() => { setNovoAnexoFiles([]); if(novoAnexoRef.current) novoAnexoRef.current.value=''; }}
-                          style={{ marginLeft:4, background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:10 }}>✕</button>
+                      <span className="acn-lic-and-qtd">
+                        <Icone path={mdiPaperclip} size={14} />{novoAnexoFiles.length} arquivo(s)
+                        <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Tirar os arquivos escolhidos" aria-label="Tirar os arquivos escolhidos"
+                          onClick={() => { setNovoAnexoFiles([]); if(novoAnexoRef.current) novoAnexoRef.current.value=''; }} />
                       </span>
                     )}
                   </div>
-                  <button onClick={salvarAndamento} disabled={salvandoAndamento||(!novoText.trim()&&novoAnexoFiles.length===0)}
-                    style={{ marginTop:8, background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'6px 18px', fontWeight:700, fontSize:11, cursor:'pointer', opacity:(novoText.trim()||novoAnexoFiles.length>0)?1:.5 }}>
-                    {salvandoAndamento ? 'Salvando...' : '+ Registrar'}
-                  </button>
+                  <Botao variante="primario" icone={mdiPlus} className="acn-lic-and-registrar" onClick={salvarAndamento} disabled={salvandoAndamento||(!novoText.trim()&&novoAnexoFiles.length===0)}>
+                    {salvandoAndamento ? 'Salvando...' : 'Registrar'}
+                  </Botao>
                 </div>
 
                 {/* Lista de entradas */}
                 {andDocs.map((d: any) => (
-                  <div key={d.id} style={{
-                    background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
-                    border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`,
-                    borderRadius:6, borderLeft:'3px solid #2563eb', padding:'10px 12px' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        {editandoDocId === d.id ? (
-                          <div>
-                            <RichTextInput mencoes value={editandoDocTexto} onChange={v=>setEditandoDocTexto(v)}
-                              minHeight={54} style={{ fontSize:11 }} />
-                            <div style={{ display:'flex', gap:6, marginTop:6 }}>
-                              <button onClick={salvarEdicaoAndamento}
-                                style={{ background:'#475569', color:'#fff', border:'none', borderRadius:4, padding:'4px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                                💾 Salvar Nota
-                              </button>
-                              <button onClick={() => { setEditandoDocId(null); setEditandoDocTexto(''); }}
-                                style={{ padding:'4px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
-                                Cancelar
-                              </button>
-                            </div>
+                  <div key={d.id} className={'acn-lic-and' + (itemNaoLido(d.id) ? ' nao-lido' : '')}>
+                    <div className="acn-lic-and-corpo">
+                      {editandoDocId === d.id ? (
+                        <div>
+                          <RichTextInput mencoes value={editandoDocTexto} onChange={v=>setEditandoDocTexto(v)}
+                            minHeight={54} style={{ fontSize:11 }} />
+                          <div className="acn-lic-form-botoes acn-lic-and-edit-botoes">
+                            <Botao variante="primario" pequeno icone={mdiContentSaveOutline} onClick={salvarEdicaoAndamento}>
+                              Salvar Nota
+                            </Botao>
+                            <Botao pequeno onClick={() => { setEditandoDocId(null); setEditandoDocTexto(''); }}>
+                              Cancelar
+                            </Botao>
                           </div>
-                        ) : (
-                          <>
-                            {d.conteudo && (
-                              pareceHtmlFormatado(d.conteudo)
-                                ? <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }} dangerouslySetInnerHTML={{ __html: d.conteudo }} />
-                                : <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={d.conteudo} /></div>
-                            )}
-                            {d.anexo_url && (
-                              <a href={d.anexo_url} target="_blank" rel="noreferrer"
-                                style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:'#2563eb', fontWeight:600, marginTop:4 }}>
-                                📎 {d.anexo_nome||'Arquivo'}
-                              </a>
-                            )}
-                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                              <span>👤 {d.criado_por_nome||'—'}</span>
-                              <span>🕒 {fmtDT(d.criado_em)}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <div style={{ display:'flex', gap:4, flexShrink:0, marginLeft:6 }}>
-                        {editandoDocId !== d.id && (
-                          <button onClick={() => { setEditandoDocId(d.id); setEditandoDocTexto(d.conteudo||''); }}
-                            title="Editar" style={{ background:'none', border:'none', color:'#6b7280', cursor:'pointer', fontSize:11, padding:'0 2px' }}>✏️</button>
-                        )}
-                        {podeExcluirAnexos && (
-                          <button onClick={() => excluirAndamentoDoc(d.id,'licitacao_documentos')}
-                            style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px' }}>✕</button>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <>
+                          {d.conteudo && (
+                            pareceHtmlFormatado(d.conteudo)
+                              ? <div className="acn-lic-and-txt" dangerouslySetInnerHTML={{ __html: d.conteudo }} />
+                              : <div className="acn-lic-and-txt"><Linkify text={d.conteudo} /></div>
+                          )}
+                          {d.anexo_url && (
+                            <a href={d.anexo_url} target="_blank" rel="noreferrer" className="acn-lic-link-info acn-lic-and-arquivo">
+                              <Icone path={mdiPaperclip} size={13} />{d.anexo_nome||'Arquivo'}
+                            </a>
+                          )}
+                          <div className="acn-ajuda acn-lic-and-meta">
+                            <span><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'}</span>
+                            <span><Icone path={mdiClockOutline} size={12} />{fmtDT(d.criado_em)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="acn-lic-and-acoes">
+                      {editandoDocId !== d.id && (
+                        <Botao variante="discreto" pequeno icone={mdiPencilOutline} title="Editar" aria-label="Editar"
+                          onClick={() => { setEditandoDocId(d.id); setEditandoDocTexto(d.conteudo||''); }} />
+                      )}
+                      {podeExcluirAnexos && (
+                        <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover registro" aria-label="Remover registro"
+                          onClick={() => excluirAndamentoDoc(d.id,'licitacao_documentos')} />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1833,13 +1823,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 {/* Legado */}
                 {andDocsLegacy.length > 0 && (
                   <>
-                    <div style={{ fontSize:9, color:'#9ca3af', fontWeight:700, textAlign:'center', padding:'4px 0' }}>— registros anteriores —</div>
+                    <div className="acn-ajuda acn-lic-centro acn-lic-and-sep">— registros anteriores —</div>
                     {andDocsLegacy.map((a: any) => (
-                      <div key={a.id} style={{ background:'#fafafa', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #94a3b8', padding:'8px 12px' }}>
-                        <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={a.conteudo} /></div>
-                        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                          <span>👤 {a.criado_por_nome||'—'}</span>
-                          <span>🕒 {fmtDT(a.criado_em)}</span>
+                      <div key={a.id} className="acn-lic-and legado">
+                        <div className="acn-lic-and-corpo">
+                          <div className="acn-lic-and-txt"><Linkify text={a.conteudo} /></div>
+                          <div className="acn-ajuda acn-lic-and-meta">
+                            <span><Icone path={mdiAccountOutline} size={12} />{a.criado_por_nome||'—'}</span>
+                            <span><Icone path={mdiClockOutline} size={12} />{fmtDT(a.criado_em)}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1850,14 +1842,14 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   <Faixa tom="erro" acao={<Botao pequeno onClick={fetchAndamento}>Tentar de novo</Botao>}>Não foi possível ler o andamento ({erroAndamento}). Isso não quer dizer que não haja atualização{andDocs.length || andDocsLegacy.length ? '; o que aparece é da última leitura que deu certo' : ''}.</Faixa>
                 )}
                 {andDocs.length === 0 && andDocsLegacy.length === 0 && !loadingAndDocs && !erroAndamento && (
-                  <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização ainda.</div>
+                  <div className="acn-empty acn-lic-vazio">Nenhuma atualização ainda.</div>
                 )}
 
                 {/* Área Livre desta seção */}
                 {areasLivres === null && erroAreas ? (
                   <Faixa tom="erro">Não foi possível ler a Área Livre ({erroAreas}). Ela fica fechada para não correr o risco de apagar o texto das outras áreas — feche e abra a licitação de novo.</Faixa>
                 ) : areasLivres === null ? (
-                  <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:12 }}>Carregando área livre…</div>
+                  <div className="acn-ajuda acn-lic-centro">Carregando área livre…</div>
                 ) : (
                   <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
                     currentUser={currentUser} naoLida={camposNaoLidos.has('area_livre_andamento')} />
@@ -1976,45 +1968,31 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         </div>
 
         {/* ══ PAINEL DIREITO: Abas ══ */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden', ...estSplit.direita }}>
+        <div className="acn-lic-dir" style={estSplit.direita}>
 
           {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
-          <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
-            {(ehVencida ? [...TABS_DIREITO, { key:'entregas', label:'📦 Contrato e Entregas' }] : TABS_DIREITO).map(t => {
-              const destacada = tabDir !== t.key && (isAbaDestacada(t.key) || camposNaoLidos.has(t.key));
-              return (
-                <button key={t.key} onClick={() => { setTabDir(t.key); marcarAbaLida(t.key); }}
-                  style={{ flex:'0 0 auto', padding:'8px 11px', border:'none',
-                    borderBottom: tabDir===t.key ? '2px solid #2563eb' : '2px solid transparent',
-                    background: destacada ? '#fef9c3' : 'none', fontWeight: (tabDir===t.key||destacada) ? 700 : 400,
-                    color: tabDir===t.key ? '#2563eb' : destacada ? '#92400e' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
-                  {t.label}
-                  {destacada && (
-                    <span style={{ marginLeft:5, display:'inline-block', width:7, height:7, borderRadius:'50%',
-                      background:'#dc2626', boxShadow:'0 0 0 2px #fee2e2', verticalAlign:'middle' }} />
-                  )}
-                </button>
-              );
-            })}
+          <div className="acn-lic-abas-barra">
+            <Abas className="acn-lic-abas" ativa={tabDir} onChange={(k) => { setTabDir(k); marcarAbaLida(k); }}
+              itens={(ehVencida ? [...TABS_DIREITO, { key:'entregas', label:'📦 Contrato e Entregas' }] : TABS_DIREITO).map(t => {
+                const destacada = tabDir !== t.key && (isAbaDestacada(t.key) || camposNaoLidos.has(t.key));
+                return { id: t.key, rotulo: <>{t.label}{destacada && <i className="acn-lic-aba-ponto" />}</>, classe: destacada ? 'destacada' : '' };
+              })} />
             {modoSplit === 'direita' && (
-              <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, padding:'0 8px' }}>
-                <span title={licit.numero} style={{ fontSize:10, fontWeight:700, color:'#334155', maxWidth:260,
-                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{licit.numero}</span>
+              <div className="acn-lic-abas-fim">
+                <span title={licit.numero} className="acn-lic-abas-num">{licit.numero}</span>
                 <SeletorModoSplit modo={modoSplit} onModo={setModoSplit} />
-                <button onClick={() => setMinimized(true)} title="Minimizar"
-                  style={{ background:'none', border:'none', color:'#475569', fontSize:14, cursor:'pointer', padding:'2px 5px' }}>─</button>
-                <button onClick={fecharModal} title="Fechar"
-                  style={{ background:'none', border:'none', color:'#475569', fontSize:16, cursor:'pointer', padding:'2px 5px' }}>✕</button>
+                <Botao variante="discreto" pequeno icone={mdiWindowMinimize} title="Minimizar" aria-label="Minimizar" onClick={() => setMinimized(true)} />
+                <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModal} />
               </div>
             )}
           </div>
 
           {/* Conteúdo da aba */}
-          <div style={{ flex:1, overflowY:'auto', padding:14 }}>
+          <div className="acn-lic-dir-corpo">
 
             {/* ── FORMAÇÃO DE PREÇOS (embutida, já vinculada a este processo) ── */}
             {(tabDir === 'formacao_precos' || formacaoMontada) && (
-              <div style={tabDir === 'formacao_precos' ? undefined : { display:'none' }}>
+              <div className={tabDir === 'formacao_precos' ? undefined : 'acn-lic-oculto'}>
                 <FormacaoPrecosTab
                   currentUser={currentUser}
                   vinculo={{ tipo:'licitacao', id: licit.id }}
@@ -2022,7 +2000,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   embutido
                 />
                 {/* Rodapé: cotações dos fornecedores usadas para montar os custos */}
-                <div style={{ marginTop:14, display:'flex' }}>
+                <div className="acn-lic-form-rodape">
                   <SubQuadroDocumentos licitacaoId={licit.id} categoria="cotacoes_fornecedores" label="🧾 Cotações de Fornecedores"
                     currentUser={currentUser} podeExcluir={podeExcluirAnexos}
                     areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
@@ -2040,9 +2018,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
             {/* ── ARQUIVOS DE LICITAÇÃO — sub-quadros por categoria fixa ── */}
             {tabDir === 'processo' && (
-              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              <div className="acn-lic-processo">
                 {SUBQUADROS_ARQUIVOS.map((linha, i) => (
-                  <div key={i} style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                  <div key={i} className="acn-lic-processo-linha">
                     {linha.map(sq => (
                       <SubQuadroDocumentos key={sq.categoria}
                         licitacaoId={licit.id} categoria={sq.categoria} label={sq.label}
@@ -2057,57 +2035,53 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
             {/* ── ABAS DE DOCUMENTOS (demais abas — Docs Enviados, Fase Contrato, Atestados) ── */}
             {tabDir !== 'formacao_precos' && tabDir !== 'processo' && tabDir !== 'entregas' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div className="acn-lic-docs-aba">
                 {/* Upload */}
-                <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
-                  <div style={{ fontWeight:700, fontSize:10, color:'#374151', marginBottom:8 }}>
-                    + Adicionar em {TABS_DIREITO.find(t=>t.key===tabDir)?.label}
+                <div className="acn-quadro acn-lic-upload">
+                  <div className="acn-quadro-titulo acn-lic-upload-tit">
+                    <Icone path={mdiPlus} size={14} />Adicionar em {TABS_DIREITO.find(t=>t.key===tabDir)?.label}
                   </div>
                   <input type="file" ref={uploadRef} multiple
                     accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar`}
                     onChange={e => setUploadFiles(Array.from(e.target.files||[]))}
-                    style={{ width:'100%', fontSize:11, marginBottom:8 }} />
+                    className="acn-lic-arquivo" />
                   {uploadFiles.length > 0 && (
-                    <div style={{ fontSize:10, color:'#0369a1', marginBottom:6 }}>📎 {uploadFiles.length} arquivo(s) selecionado(s)</div>
+                    <div className="acn-lic-doc-anexos"><Icone path={mdiPaperclip} size={13} />{uploadFiles.length} arquivo(s) selecionado(s)</div>
                   )}
                   <input type="text" placeholder="Descrição / legenda (opcional)"
                     value={uploadDesc} onChange={e=>setUploadDesc(e.target.value)}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', marginBottom:8 }} />
-                  <button onClick={salvarDoc} disabled={salvandoDoc||(uploadFiles.length===0&&!uploadDesc.trim())}
-                    style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'6px 16px', fontSize:11, fontWeight:700, cursor:'pointer', opacity:(uploadFiles.length>0||uploadDesc.trim())?1:.5 }}>
-                    {salvandoDoc ? 'Salvando...' : '+ Adicionar'}
-                  </button>
+                    className="acn-input acn-lic-cheio" />
+                  <Botao variante="primario" icone={mdiPlus} className="acn-lic-doc-add" onClick={salvarDoc} disabled={salvandoDoc||(uploadFiles.length===0&&!uploadDesc.trim())}>
+                    {salvandoDoc ? 'Salvando...' : 'Adicionar'}
+                  </Botao>
                 </div>
 
                 {/* Lista */}
-                {loadingDocs && <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:16 }}>Carregando...</div>}
+                {loadingDocs && <div className="acn-ajuda acn-lic-centro">Carregando...</div>}
                 {erroDocs && (
                   <Faixa tom="erro" acao={<Botao pequeno onClick={fetchDocs}>Tentar de novo</Botao>}>Não foi possível ler os documentos desta categoria ({erroDocs}). Isso não quer dizer que não haja nenhum.</Faixa>
                 )}
                 {!loadingDocs && docs.length === 0 && !erroDocs && (
-                  <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhum documento nesta categoria.</div>
+                  <div className="acn-empty acn-lic-vazio">Nenhum documento nesta categoria.</div>
                 )}
                 {docs.map((d: any) => (
-                  <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'8px 10px',
-                    background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
-                    border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`, borderRadius:6 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
+                  <div key={d.id} className={'acn-lic-doc' + (itemNaoLido(d.id) ? ' nao-lido' : '')}>
+                    <div className="acn-lic-doc-corpo">
                       {d.url ? (
-                        <a href={d.url} target="_blank" rel="noreferrer"
-                          style={{ color:'#2563eb', fontSize:11, fontWeight:600, wordBreak:'break-all', display:'flex', alignItems:'center', gap:4 }}>
-                          📎 {d.nome}
+                        <a href={d.url} target="_blank" rel="noreferrer" className="acn-lic-link-info acn-lic-doc-link">
+                          <Icone path={mdiPaperclip} size={13} />{d.nome}
                         </a>
                       ) : (
-                        <div style={{ fontSize:11, color:'#374151', fontWeight:600 }}>{d.nome}</div>
+                        <div className="acn-forte">{d.nome}</div>
                       )}
-                      {d.conteudo && <div style={{ fontSize:10, color:'#64748b', marginTop:2, whiteSpace:'pre-wrap' }}><Linkify text={d.conteudo} /></div>}
-                      <div style={{ fontSize:9, color:'#9ca3af', marginTop:3 }}>
-                        👤 {d.criado_por_nome||'—'} · 🕒 {fmtDT(d.criado_em)}
+                      {d.conteudo && <div className="acn-ajuda acn-lic-doc-txt"><Linkify text={d.conteudo} /></div>}
+                      <div className="acn-ajuda acn-lic-doc-meta">
+                        <Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'} · <Icone path={mdiClockOutline} size={12} />{fmtDT(d.criado_em)}
                       </div>
                     </div>
                     {podeExcluirAnexos && (
-                      <button onClick={() => excluirDoc(d.id,'licitacao_documentos')}
-                        style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px' }}>✕</button>
+                      <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover documento" aria-label="Remover documento"
+                        onClick={() => excluirDoc(d.id,'licitacao_documentos')} />
                     )}
                   </div>
                 ))}
@@ -2853,7 +2827,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
                       onClick={() => setFiltroTemp(ativo ? '' : t.v)} onKeyDown={e => { if (e.key === 'Enter') setFiltroTemp(ativo ? '' : t.v); }}
                       title={`${t.emoji} ${t.label}: ${n}`}
                       className="acn-lic-temp-col">
-                      <div className={'acn-lic-temp-barra' + (ativo || !filtroTemp ? '' : ' apagada')} style={{ height: Math.max(3, Math.round((n / max) * 18)), background: t.cor }} />
+                      <div className={'acn-lic-temp-barra' + (ativo || !filtroTemp ? '' : ' apagada')} data-temp={t.v} style={{ height: Math.max(3, Math.round((n / max) * 18)) }} />
                     </div>
                   );
                 })}
