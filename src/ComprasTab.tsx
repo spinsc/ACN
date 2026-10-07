@@ -17,7 +17,8 @@ import Icone from './Icone';
 import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight, mdiCartOutline, mdiTableLarge, mdiViewColumnOutline,
   mdiCogOutline, mdiFactory, mdiAccountOutline, mdiClipboardTextOutline, mdiMagnify, mdiLinkVariant, mdiForumOutline, mdiCommentTextOutline,
   mdiPrinterOutline, mdiPlay, mdiTagOutline, mdiLockOutline, mdiCartCheck, mdiPackageVariantClosed, mdiEarth, mdiAlertOutline, mdiCheck,
-  mdiChevronUp, mdiChevronDown, mdiPlus } from '@mdi/js';
+  mdiChevronUp, mdiChevronDown, mdiPlus, mdiContentSaveOutline, mdiOfficeBuildingOutline, mdiCalendarOutline, mdiBullseyeArrow,
+  mdiTrashCanOutline, mdiPaperclip, mdiTrophyOutline, mdiClockOutline, mdiCheckCircleOutline, mdiCameraOutline } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
@@ -84,81 +85,79 @@ function ComposicaoCotacao({ form, setForm }: any) {
   const t = totalComposicao(form);
   const servicos = form.servicos || [];
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8 }}>
+    <div className="acn-cmp-comp">
+      <div className="acn-cmp-comp-g3">
         <div>
           <label className="acn-label">Fornecedor *</label>
-          <input className="acn-input" style={{width:'100%'}} value={form.fornecedor_nome} onChange={e=>set('fornecedor_nome', e.target.value)} />
+          <input className="acn-input" value={form.fornecedor_nome} onChange={e=>set('fornecedor_nome', e.target.value)} />
         </div>
         <div>
           <label className="acn-label">Valor unitário (R$) *</label>
-          <input className="acn-input" style={{width:'100%'}} value={form.valor_unitario} placeholder="Ex: 15,00" inputMode="decimal"
+          <input className="acn-input" value={form.valor_unitario} placeholder="Ex: 15,00" inputMode="decimal"
             onChange={e=>set('valor_unitario', e.target.value)} />
         </div>
         <div>
           <label className="acn-label">Quantidade *</label>
-          <input className="acn-input" style={{width:'100%'}} value={form.quantidade} inputMode="decimal"
+          <input className="acn-input" value={form.quantidade} inputMode="decimal"
             onChange={e=>set('quantidade', e.target.value)} />
         </div>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+      <div className="acn-cmp-comp-g2">
         <div>
           <label className="acn-label">Frete</label>
-          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-            <div className="acn-chips" role="group" aria-label="Frete">
-              <button type="button" className={form.frete_tipo !== 'pago' ? 'on' : ''} aria-pressed={form.frete_tipo !== 'pago'} onClick={()=>set('frete_tipo','gratis')}>Grátis</button>
-              <button type="button" className={form.frete_tipo === 'pago' ? 'on' : ''} aria-pressed={form.frete_tipo === 'pago'} onClick={()=>set('frete_tipo','pago')}>Pago</button>
-            </div>
+          <div className="acn-cmp-comp-frete">
+            <Chips rotulo="Frete" ativo={form.frete_tipo === 'pago' ? 'pago' : 'gratis'} onChange={(v) => set('frete_tipo', v)}
+              itens={[{ id: 'gratis', rotulo: 'Grátis' }, { id: 'pago', rotulo: 'Pago' }]} />
             {form.frete_tipo === 'pago' && (
-              <input className="acn-input" style={{flex:1, minWidth:0}} value={form.frete_valor} placeholder="Valor do frete" inputMode="decimal"
+              <input className="acn-input acn-cmp-comp-fretevalor" value={form.frete_valor} placeholder="Valor do frete" inputMode="decimal"
                 onChange={e=>set('frete_valor', e.target.value)} aria-label="Valor do frete" />
             )}
           </div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <div className="acn-cmp-comp-g2">
           <div>
             <label className="acn-label">Outras taxas (R$)</label>
-            <input className="acn-input" style={{width:'100%'}} value={form.outras_taxas} inputMode="decimal" onChange={e=>set('outras_taxas', e.target.value)} />
+            <input className="acn-input" value={form.outras_taxas} inputMode="decimal" onChange={e=>set('outras_taxas', e.target.value)} />
           </div>
           <div>
             <label className="acn-label">Desconto (R$)</label>
-            <input className="acn-input" style={{width:'100%'}} value={form.desconto_valor} inputMode="decimal" onChange={e=>set('desconto_valor', e.target.value)} />
+            <input className="acn-input" value={form.desconto_valor} inputMode="decimal" onChange={e=>set('desconto_valor', e.target.value)} />
           </div>
         </div>
       </div>
       <div>
         <label className="acn-label">Serviços adicionais</label>
         {servicos.map((s: any, i: number) => (
-          <div key={i} style={{ display:'flex', gap:6, marginBottom:4 }}>
-            <input className="acn-input" style={{flex:2, minWidth:0}} value={s.descricao} placeholder="Ex.: instalação, montagem, garantia estendida"
+          <div key={i} className="acn-cmp-comp-servico">
+            <input className="acn-input acn-cmp-comp-sdesc" value={s.descricao} placeholder="Ex.: instalação, montagem, garantia estendida"
               onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, descricao: e.target.value } : x))} aria-label="Descrição do serviço" />
-            <input className="acn-input" style={{flex:1, minWidth:0}} value={s.valor} placeholder="Valor" inputMode="decimal"
+            <input className="acn-input acn-cmp-comp-sval" value={s.valor} placeholder="Valor" inputMode="decimal"
               onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, valor: e.target.value } : x))} aria-label="Valor do serviço" />
-            <button type="button" className="acn-b acn-b-discreto acn-b-p" aria-label="Remover serviço"
-              onClick={()=>set('servicos', servicos.filter((_: any, j: number) => j !== i))}>✕</button>
+            <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover serviço"
+              onClick={()=>set('servicos', servicos.filter((_: any, j: number) => j !== i))} />
           </div>
         ))}
-        <button type="button" className="acn-b acn-b-secundario acn-b-p" onClick={()=>set('servicos', [...servicos, { descricao:'', valor:'' }])}>+ Serviço</button>
+        <Botao pequeno icone={mdiPlus} onClick={()=>set('servicos', [...servicos, { descricao:'', valor:'' }])}>Serviço</Botao>
       </div>
       <div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <div className="acn-cmp-comp-g2">
           <div>
             <label className="acn-label">Condição de pagamento</label>
-            <input className="acn-input" style={{width:'100%'}} value={form.condicao_pagamento} placeholder="Ex: 30/60 dias" onChange={e=>set('condicao_pagamento', e.target.value)} />
+            <input className="acn-input" value={form.condicao_pagamento} placeholder="Ex: 30/60 dias" onChange={e=>set('condicao_pagamento', e.target.value)} />
           </div>
           <div>
             <label className="acn-label">Prazo de entrega</label>
-            <input className="acn-input" style={{width:'100%'}} value={form.prazo_entrega} placeholder="Ex: 10 dias úteis" onChange={e=>set('prazo_entrega', e.target.value)} />
+            <input className="acn-input" value={form.prazo_entrega} placeholder="Ex: 10 dias úteis" onChange={e=>set('prazo_entrega', e.target.value)} />
           </div>
         </div>
       </div>
-      <div style={{ background:'var(--acn-surface)', border:'1px solid var(--acn-line)', borderRadius:8, padding:'8px 10px', fontSize:12 }}>
-        <div style={{ display:'flex', justifyContent:'space-between' }}><span>Itens ({form.quantidade || 0} × {moedaBr(parseValorBr(form.valor_unitario))})</span><span className="acn-num">{moedaBr(t.itens)}</span></div>
-        <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-muted)' }}><span>Frete {form.frete_tipo === 'pago' ? '' : '(grátis)'}</span><span className="acn-num">{moedaBr(t.frete)}</span></div>
-        {t.servicos > 0 && <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-muted)' }}><span>Serviços adicionais</span><span className="acn-num">{moedaBr(t.servicos)}</span></div>}
-        {t.taxas > 0 && <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-muted)' }}><span>Outras taxas</span><span className="acn-num">{moedaBr(t.taxas)}</span></div>}
-        {t.desconto > 0 && <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-ok)' }}><span>Desconto</span><span className="acn-num">− {moedaBr(t.desconto)}</span></div>}
-        <div style={{ display:'flex', justifyContent:'space-between', fontWeight:600, color:'var(--acn-ink)', borderTop:'1px solid var(--acn-line-soft)', marginTop:4, paddingTop:4 }}>
+      <div className="acn-cmp-comp-resumo">
+        <div className="acn-cmp-comp-linha"><span>Itens ({form.quantidade || 0} × {moedaBr(parseValorBr(form.valor_unitario))})</span><span className="acn-num">{moedaBr(t.itens)}</span></div>
+        <div className="acn-cmp-comp-linha acn-fraco"><span>Frete {form.frete_tipo === 'pago' ? '' : '(grátis)'}</span><span className="acn-num">{moedaBr(t.frete)}</span></div>
+        {t.servicos > 0 && <div className="acn-cmp-comp-linha acn-fraco"><span>Serviços adicionais</span><span className="acn-num">{moedaBr(t.servicos)}</span></div>}
+        {t.taxas > 0 && <div className="acn-cmp-comp-linha acn-fraco"><span>Outras taxas</span><span className="acn-num">{moedaBr(t.taxas)}</span></div>}
+        {t.desconto > 0 && <div className="acn-cmp-comp-linha acn-txt-ok"><span>Desconto</span><span className="acn-num">− {moedaBr(t.desconto)}</span></div>}
+        <div className="acn-cmp-comp-linha acn-cmp-comp-total">
           <span>Total do orçamento</span><span className="acn-num">{moedaBr(t.total)}</span>
         </div>
       </div>
@@ -420,67 +419,43 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return (
-    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden', marginTop:6 }}>
-      <div style={{ background:'#f1f5f9', borderBottom:'1px solid #e2e8f0', padding:'3px 6px',
-        display:'flex', alignItems:'center', gap:4 }}>
-        <span style={{ fontSize:8, fontWeight:700, color:'#6b7280', marginRight:2 }}>✏️ Área Livre</span>
+    <div className="acn-cmp-area">
+      <div className="acn-cmp-area-barra">
+        <span className="acn-cmp-area-tit acn-prod-ic"><Icone path={mdiPencilOutline} size={12} /> Área Livre</span>
         {(['bold','italic'] as const).map(cmd => (
-          <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd); }}
-            title={cmd === 'bold' ? 'Negrito' : 'Itálico'}
-            style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-              padding:'1px 6px', fontSize:10, fontWeight: cmd==='bold' ? 700 : 400,
-              fontStyle: cmd==='italic' ? 'italic' : 'normal', cursor:'pointer', lineHeight:1.4 }}>
+          <Botao key={cmd} pequeno variante="discreto" className={cmd === 'bold' ? 'acn-cmp-area-b' : 'acn-cmp-area-i'}
+            onMouseDown={e => { e.preventDefault(); document.execCommand(cmd); }}
+            title={cmd === 'bold' ? 'Negrito' : 'Itálico'}>
             {cmd === 'bold' ? 'B' : 'I'}
-          </button>
+          </Botao>
         ))}
-        <button onMouseDown={async e => {
-          e.preventDefault();
-          const url = await pedirTexto('URL do link:');
-          if (url) document.execCommand('createLink', false, url);
-        }} title="Inserir link"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'1px 6px', fontSize:10, cursor:'pointer', lineHeight:1.4 }}>
-          🔗
-        </button>
-        <button onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click(); }}
-          title="Inserir imagem"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'1px 6px', fontSize:10, cursor:'pointer', lineHeight:1.4 }}>
-          📷
-        </button>
-        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
+        <Botao pequeno variante="discreto" icone={mdiLinkVariant} aria-label="Inserir link" title="Inserir link"
+          onMouseDown={async e => {
+            e.preventDefault();
+            const url = await pedirTexto('URL do link:');
+            if (url) document.execCommand('createLink', false, url);
+          }} />
+        <Botao pequeno variante="discreto" icone={mdiCameraOutline} aria-label="Inserir imagem" title="Inserir imagem"
+          onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click(); }} />
+        <input ref={imgInputRef} type="file" accept="image/*" className="acn-cmp-oculto"
           onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagem(f); e.target.value = ''; }} />
-        <div style={{ flex:1 }} />
-        {salvando && <span style={{ fontSize:8, color:'#d97706' }}>Salvando...</span>}
-        {salvo && !salvando && <span style={{ fontSize:8, color:'#16a34a' }}>✓ Salvo</span>}
-        {erroSalvar && !salvando && <span style={{ fontSize:8, color:'#dc2626' }} title={erroSalvar}>NÃO salvou: {erroSalvar}</span>}
-        <button onClick={salvarAgora} disabled={salvando} title="Salvar agora"
-          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:3,
-            padding:'1px 8px', fontSize:8, fontWeight:700, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
-          💾 Salvar
-        </button>
+        <div className="acn-cmp-cresce" />
+        {salvando && <span className="acn-txt-atencao acn-cmp-area-estado">Salvando...</span>}
+        {salvo && !salvando && <span className="acn-txt-ok acn-cmp-area-estado">✓ Salvo</span>}
+        {erroSalvar && !salvando && <span className="acn-txt-erro acn-cmp-area-estado" title={erroSalvar}>NÃO salvou: {erroSalvar}</span>}
+        <Botao pequeno variante="primario" icone={mdiContentSaveOutline} onClick={salvarAgora} disabled={salvando} title="Salvar agora">
+          Salvar
+        </Botao>
       </div>
       <div
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        className="cotacao-area-livre"
+        className="cotacao-area-livre acn-cmp-editor"
         onInput={autosave}
         onPaste={handlePaste}
-        style={{ minHeight:50, padding:'8px 10px', fontSize:10, color:'#1e293b',
-          lineHeight:1.5, outline:'none', background:'#fff', wordBreak:'break-word' }}
         data-placeholder="Notas sobre esta cotação, cole tabelas, imagens, links..."
       />
-      <style>{`
-        [data-placeholder]:empty::before {
-          content: attr(data-placeholder);
-          color: #9ca3af;
-          pointer-events: none;
-        }
-        .cotacao-area-livre table { border-collapse:collapse; width:100%; }
-        .cotacao-area-livre td, .cotacao-area-livre th {
-          border:1px solid #d1d5db; padding:3px 5px; font-size:9px; }
-      `}</style>
     </div>
   );
 }
@@ -581,19 +556,25 @@ function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
   };
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:480 }}>
-        <div className="modal-title">🔗 Vínculo e link — {pedido.numero_pedido}</div>
-        <div style={{ fontSize:10, color:'#64748b', marginBottom:10 }}><DescricaoCompacta texto={pedido.descricao_material} /></div>
-        <label className="acn-label">Vincular a um PV, OP, OS, outra compra ou OFI</label>
-        <div style={{ marginBottom:12 }}>
-          <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+      <div className="modal-box acn-modal-cadastro acn-cmp-j480" role="dialog" aria-label="Vínculo e link">
+        <div className="acn-modal-cab">
+          <span className="modal-title acn-prod-ic"><Icone path={mdiLinkVariant} size={16} /> Vínculo e link — {pedido.numero_pedido}</span>
         </div>
-        <label className="acn-label">Link (opcional)</label>
-        <input className="acn-input" style={{ width:'100%', marginBottom:14 }} placeholder="https://..."
-          value={link} onChange={e => setLink(e.target.value)} />
-        <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background:'#0369a1', flex:1 }} disabled={salvando} onClick={salvar}>{salvando ? 'Salvando...' : '💾 Salvar'}</button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-ajuda"><DescricaoCompacta texto={pedido.descricao_material} /></div>
+          <div className="form-group">
+            <label className="acn-label">Vincular a um PV, OP, OS, outra compra ou OFI</label>
+            <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+          </div>
+          <div className="form-group">
+            <label className="acn-label">Link (opcional)</label>
+            <input className="acn-input" placeholder="https://..."
+              value={link} onChange={e => setLink(e.target.value)} />
+          </div>
+        </div>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvando} onClick={salvar}>{salvando ? 'Salvando...' : 'Salvar'}</Botao>
+          <Botao onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -675,93 +656,100 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
   const data = (d: any) => d ? new Date(String(d).length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString('pt-BR') : '—';
   const dep = (departamentos || []).find((d: any) => d.id === p.departamento_id);
   const Linha = ({ k, v }) => (v === null || v === undefined || v === '' ? null : (
-    <div style={{ display:'grid', gridTemplateColumns:'150px 1fr', gap:8, padding:'4px 0', borderBottom:'1px solid #f1f5f9', fontSize:11 }}>
-      <span style={{ color:'#64748b', fontWeight:700, fontSize:10 }}>{k}</span><span style={{ color:'#1e293b', wordBreak:'break-word' }}>{v}</span>
+    <div className="acn-ficha-linha acn-cmp-ficha">
+      <span>{k}</span><span>{v}</span>
     </div>
   ));
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:680, width:'95vw', maxHeight:'90vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:800, color:'#1a3a52' }}>🔍 Resumo — {p.numero_pedido}</div>
-            <span style={{ padding:'2px 9px', borderRadius:4, color:'#fff', fontSize:10, fontWeight:700, background: COR_STATUS_COMPRA[p.status_compra] || '#9ca3af' }}>{p.status_compra || '—'}</span>
-            {p.numero_oc && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, color:'#7c3aed' }}>📋 {p.numero_oc}</span>}
-            <div><SeloOrigemCompra p={p} grande /></div>
+      <div className="modal-box acn-modal-cadastro acn-cmp-j680" role="dialog" aria-label="Resumo da solicitação">
+        <div className="acn-modal-cab acn-cmp-resumo-cab">
+          <div className="acn-cmp-resumo-tit">
+            <span className="modal-title acn-prod-ic"><Icone path={mdiMagnify} size={16} /> Resumo — {p.numero_pedido}</span>
+            <div className="acn-cmp-resumo-selos">
+              <Selo familia={FAMILIA_COMPRA[p.status_compra] || 'neutro'}>{p.status_compra || '—'}</Selo>
+              {p.numero_oc && <span className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</span>}
+              <SeloOrigemCompra p={p} grande />
+            </div>
           </div>
-          <button className="acn-btn" style={{ background:'#475569' }} onClick={() => imprimirSolicitacao(p)}>🖨️ Imprimir</button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
+          <Botao icone={mdiPrinterOutline} onClick={() => imprimirSolicitacao(p)}>Imprimir</Botao>
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
-        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'8px 0 4px' }}>Solicitação</div>
-        <div style={{ fontSize:12, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 10px', whiteSpace:'pre-wrap', wordBreak:'break-word', marginBottom:6 }}>
-          {p.descricao_material || '—'}
-        </div>
-        <Linha k="Tipo" v={origemDaRequisicao(p).label} />
-        <Linha k="Quantidade" v={p.quantidade} />
-        <Linha k="OP" v={p.opl} />
-        <Linha k="Vínculo" v={p.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : null} />
-        <Linha k="Link" v={p.link_url ? <a href={p.link_url} target="_blank" rel="noreferrer">{p.link_url}</a> : null} />
-        <Linha k="Fornecedor" v={p.fornecedor} />
-        {canVerValor && <Linha k="Valor da compra" v={p.valor_compra ? moeda(p.valor_compra) : null} />}
-        <Linha k="Centro de custo" v={p.centro_custo} />
-        <Linha k="Departamento" v={dep?.nome} />
-        <Linha k="Prev. recebimento" v={p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null} />
-        <Linha k="Prazo prometido" v={p.prazo_prometido_entrega ? `${data(p.prazo_prometido_entrega)} (${p.prazo_prometido_destino === 'cliente' ? 'cliente' : 'produção'})` : null} />
-        <Linha k="NF" v={p.numero_nf} />
-        <Linha k="Solicitado por" v={[p.criado_por_nome || p.criado_por, p.data_criacao ? data(p.data_criacao) : null].filter(Boolean).join(' · ')} />
-        <Linha k="Comprador" v={p.comprador_nome} />
-        <Linha k="Reprocessos" v={p.reprocessos > 0 ? `${p.reprocessos} (ver histórico)` : null} />
-        <Linha k="Descarte" v={p.status_compra === 'Descartada' ? `${p.motivo_descarte || '—'}${p.descartado_por_nome ? ` — ${p.descartado_por_nome}` : ''}` : null} />
-        {p.observacoes_compra && (
-          <>
-            <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'10px 0 4px' }}>Observações</div>
-            <div style={{ fontSize:11, whiteSpace:'pre-wrap', wordBreak:'break-word', color:'#334155' }}><Linkify text={p.observacoes_compra} /></div>
-          </>
-        )}
-        {errosLeitura.length > 0 && (
-          <Faixa tom="erro" acao={<Botao pequeno onClick={() => setTentativa(n => n + 1)}>Tentar de novo</Botao>}>
-            Não foi possível ler {errosLeitura.join('; ')}. Isso não quer dizer que não haja.
-          </Faixa>
-        )}
-        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Cotações de fornecedores</div>
-        {cotacoes === null ? <div style={{ fontSize:10, color:'#94a3b8' }}>Carregando...</div> : cotacoes.length === 0 ? (
-          <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhuma cotação lançada.</div>
-        ) : cotacoes.map((c: any) => (
-          <div key={c.id} style={{ display:'flex', gap:8, alignItems:'center', fontSize:11, padding:'4px 6px', borderBottom:'1px solid #f1f5f9',
-            background: c.id === p.vencedora_id ? '#f0fdf4' : undefined }}>
-            <span style={{ flex:1, fontWeight: c.id === p.vencedora_id ? 800 : 600 }}>{c.id === p.vencedora_id ? '🏆 ' : ''}{c.fornecedor_nome}</span>
-            {canVerValor && <span style={{ color:'#64748b', fontSize:10 }}>{textoComposicao(c)}</span>}
-            {canVerValor && <span>{moeda(c.valor)}</span>}
-            {c.prazo_entrega && <span style={{ color:'#64748b', fontSize:10 }}>prazo {c.prazo_entrega}</span>}
-            {c.arquivo_url && <a href={c.arquivo_url} target="_blank" rel="noreferrer" style={{ fontSize:10 }}>📎</a>}
+        <div className="acn-modal-corpo">
+          <div className="acn-quadro-titulo">Solicitação</div>
+          <div className="acn-quadro acn-prod-texto">
+            {p.descricao_material || '—'}
           </div>
-        ))}
-        {aprovacoes.length > 0 && (
-          <>
-            <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Aprovações</div>
-            {aprovacoes.map((a: any) => (
-              <div key={a.id} style={{ fontSize:11, padding:'3px 6px', borderBottom:'1px solid #f1f5f9' }}>
-                {a.status === 'aprovado' ? '✅' : a.status === 'reprovado' ? '❌' : '⏳'} {a.nivel_nome || `Nível ${a.nivel}`}
-                <span style={{ color:'#64748b', fontSize:10 }}> · {a.status}{a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}</span>
-              </div>
-            ))}
-          </>
-        )}
-        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Anexos</div>
-        <AnexosCompra pedido={p} currentUser={currentUser} podeEditar={podeEditarSolicitacao(p, currentUser)} />
-        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Histórico da requisição</div>
-        <HistoricoCompra pedidoId={p.id} />
-        {acomp.length > 0 && (
-          <>
-            <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Acompanhamento (últimos)</div>
-            {acomp.map((a: any) => (
-              <div key={a.id} style={{ fontSize:11, padding:'4px 6px', borderBottom:'1px solid #f1f5f9' }}>
-                <span style={{ color:'#94a3b8', fontSize:9 }}>{a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR') : ''} · {a.usuario_nome}</span>
-                <div style={{ whiteSpace:'pre-wrap', wordBreak:'break-word' }}><Linkify text={a.texto} /></div>
-              </div>
-            ))}
-          </>
-        )}
+          <div>
+            <Linha k="Tipo" v={origemDaRequisicao(p).label} />
+            <Linha k="Quantidade" v={p.quantidade} />
+            <Linha k="OP" v={p.opl} />
+            <Linha k="Vínculo" v={p.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : null} />
+            <Linha k="Link" v={p.link_url ? <a href={p.link_url} target="_blank" rel="noreferrer">{p.link_url}</a> : null} />
+            <Linha k="Fornecedor" v={p.fornecedor} />
+            {canVerValor && <Linha k="Valor da compra" v={p.valor_compra ? moeda(p.valor_compra) : null} />}
+            <Linha k="Centro de custo" v={p.centro_custo} />
+            <Linha k="Departamento" v={dep?.nome} />
+            <Linha k="Prev. recebimento" v={p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null} />
+            <Linha k="Prazo prometido" v={p.prazo_prometido_entrega ? `${data(p.prazo_prometido_entrega)} (${p.prazo_prometido_destino === 'cliente' ? 'cliente' : 'produção'})` : null} />
+            <Linha k="NF" v={p.numero_nf} />
+            <Linha k="Solicitado por" v={[p.criado_por_nome || p.criado_por, p.data_criacao ? data(p.data_criacao) : null].filter(Boolean).join(' · ')} />
+            <Linha k="Comprador" v={p.comprador_nome} />
+            <Linha k="Reprocessos" v={p.reprocessos > 0 ? `${p.reprocessos} (ver histórico)` : null} />
+            <Linha k="Descarte" v={p.status_compra === 'Descartada' ? `${p.motivo_descarte || '—'}${p.descartado_por_nome ? ` — ${p.descartado_por_nome}` : ''}` : null} />
+          </div>
+          {p.observacoes_compra && (
+            <>
+              <div className="acn-quadro-titulo">Observações</div>
+              <div className="acn-prod-texto"><Linkify text={p.observacoes_compra} /></div>
+            </>
+          )}
+          {errosLeitura.length > 0 && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={() => setTentativa(n => n + 1)}>Tentar de novo</Botao>}>
+              Não foi possível ler {errosLeitura.join('; ')}. Isso não quer dizer que não haja.
+            </Faixa>
+          )}
+          <div className="acn-quadro-titulo">Cotações de fornecedores</div>
+          {cotacoes === null ? <div className="acn-fraco">Carregando...</div> : cotacoes.length === 0 ? (
+            <div className="acn-fraco">Nenhuma cotação lançada.</div>
+          ) : cotacoes.map((c: any) => (
+            <div key={c.id} className={'acn-cmp-res-cot' + (c.id === p.vencedora_id ? ' venc' : '')}>
+              <span className={'acn-cmp-cresce' + (c.id === p.vencedora_id ? ' acn-forte' : '')}>{c.id === p.vencedora_id ? <Icone path={mdiTrophyOutline} size={13} /> : null}{c.id === p.vencedora_id ? ' ' : ''}{c.fornecedor_nome}</span>
+              {canVerValor && <span className="acn-ajuda">{textoComposicao(c)}</span>}
+              {canVerValor && <span>{moeda(c.valor)}</span>}
+              {c.prazo_entrega && <span className="acn-ajuda">prazo {c.prazo_entrega}</span>}
+              {c.arquivo_url && <a href={c.arquivo_url} target="_blank" rel="noreferrer" aria-label="Anexo da cotação"><Icone path={mdiPaperclip} size={13} /></a>}
+            </div>
+          ))}
+          {aprovacoes.length > 0 && (
+            <>
+              <div className="acn-quadro-titulo">Aprovações</div>
+              {aprovacoes.map((a: any) => (
+                <div key={a.id} className="acn-cmp-res-apr">
+                  <span className={'acn-prod-ic ' + (a.status === 'aprovado' ? 'acn-txt-ok' : a.status === 'reprovado' ? 'acn-txt-erro' : 'acn-txt-atencao')}>
+                    <Icone path={a.status === 'aprovado' ? mdiCheckCircleOutline : a.status === 'reprovado' ? mdiCloseCircleOutline : mdiClockOutline} size={13} />
+                  </span>{' '}{a.nivel_nome || `Nível ${a.nivel}`}
+                  <span className="acn-ajuda"> · {a.status}{a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}</span>
+                </div>
+              ))}
+            </>
+          )}
+          <div className="acn-quadro-titulo">Anexos</div>
+          <AnexosCompra pedido={p} currentUser={currentUser} podeEditar={podeEditarSolicitacao(p, currentUser)} />
+          <div className="acn-quadro-titulo">Histórico da requisição</div>
+          <HistoricoCompra pedidoId={p.id} />
+          {acomp.length > 0 && (
+            <>
+              <div className="acn-quadro-titulo">Acompanhamento (últimos)</div>
+              {acomp.map((a: any) => (
+                <div key={a.id} className="acn-cmp-res-ac">
+                  <span className="acn-ajuda">{a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR') : ''} · {a.usuario_nome}</span>
+                  <div className="acn-prod-texto"><Linkify text={a.texto} /></div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2265,92 +2253,82 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL CENTRO DE CUSTO */}
       {modalCentro && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalCentro(null);}}>
-          <div className="modal-box" style={{maxWidth:460}}>
-            <div className="modal-title">🏷️ Centro de Custo — {modalCentro.numero_pedido}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>{modalCentro.descricao_material}</div>
-
-            {/* Seletor de tipo */}
-            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
-              {([['op','📋 OP/OS'],['custom','🏷️ Centro'],['livre','✏️ Livre']] as const).map(([t,l])=>(
-                <button key={t} onClick={()=>setCentroTipo(t as any)} style={{
-                  flex:1,padding:'7px 4px',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,
-                  background:centroTipo===t?'#6366f1':'white',
-                  color:centroTipo===t?'white':'#475569',
-                  borderRight:t!=='livre'?'1px solid #d1d5db':'none',
-                }}>{l}</button>
-              ))}
+          <div className="modal-box acn-modal-cadastro acn-cmp-j460" role="dialog" aria-label="Centro de custo">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiTagOutline} size={16} /> Centro de Custo — {modalCentro.numero_pedido}</span>
             </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">{modalCentro.descricao_material}</div>
 
-            {/* OP/OS */}
-            {centroTipo==='op' && (
-              <>
-                <label className="acn-label">Número da OP</label>
-                <input className="acn-input" style={{width:'100%',marginBottom:6}}
-                  value={opBusca} placeholder="Digite o número da OP para buscar..."
-                  onChange={e=>{ setOpBusca(e.target.value); buscarOps(e.target.value); }} />
-                {opResultados.length>0 && (
-                  <div style={{border:'1px solid #e2e8f0',borderRadius:6,marginBottom:10,maxHeight:160,overflowY:'auto'}}>
-                    {opResultados.map((o:any)=>(
-                      <div key={o.id} onClick={()=>{setOpSelecionada(`OP ${o.opl}`);setOpBusca(o.opl);setOpResultados([]);}}
-                        style={{padding:'7px 12px',cursor:'pointer',fontSize:10,
-                          background:opSelecionada===`OP ${o.opl}`?'#eff6ff':'white',
-                          borderBottom:'1px solid #f1f5f9'}}
-                        onMouseEnter={e=>(e.currentTarget.style.background='#f8fafc')}
-                        onMouseLeave={e=>(e.currentTarget.style.background=opSelecionada===`OP ${o.opl}`?'#eff6ff':'white')}>
-                        <strong>{o.opl}</strong>
-                        <span style={{color:'#64748b',marginLeft:8}}>{o.cliente_nome||''} {o.tipo_projeto?`— ${o.tipo_projeto}`:''}</span>
-                      </div>
-                    ))}
+              {/* Seletor de tipo */}
+              <Chips rotulo="Tipo de centro de custo" ativo={centroTipo} onChange={(t) => setCentroTipo(t as any)}
+                itens={[{ id:'op', rotulo:'OP/OS', icone: mdiClipboardTextOutline }, { id:'custom', rotulo:'Centro', icone: mdiTagOutline }, { id:'livre', rotulo:'Livre', icone: mdiPencilOutline }]} />
+
+              {/* OP/OS */}
+              {centroTipo==='op' && (
+                <>
+                  <div className="form-group">
+                    <label className="acn-label">Número da OP</label>
+                    <input className="acn-input"
+                      value={opBusca} placeholder="Digite o número da OP para buscar..."
+                      onChange={e=>{ setOpBusca(e.target.value); buscarOps(e.target.value); }} />
                   </div>
-                )}
-                {opSelecionada && <div style={{fontSize:10,color:'#1d4ed8',marginBottom:10}}>✔ Selecionado: <strong>{opSelecionada}</strong></div>}
-              </>
-            )}
+                  {opResultados.length>0 && (
+                    <div className="acn-cmp-opres">
+                      {opResultados.map((o:any)=>(
+                        <div key={o.id} onClick={()=>{setOpSelecionada(`OP ${o.opl}`);setOpBusca(o.opl);setOpResultados([]);}}
+                          className={'acn-cmp-opres-item' + (opSelecionada===`OP ${o.opl}` ? ' sel' : '')}>
+                          <strong>{o.opl}</strong>
+                          <span className="acn-fraco">{o.cliente_nome||''} {o.tipo_projeto?`— ${o.tipo_projeto}`:''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {opSelecionada && <div className="acn-txt-info acn-prod-ic"><Icone path={mdiCheck} size={13} /> Selecionado: <strong>{opSelecionada}</strong></div>}
+                </>
+              )}
 
-            {/* Centro personalizado */}
-            {centroTipo==='custom' && (
-              <>
-                <label className="acn-label">Centro de Custo</label>
-                {centrosCusto.length===0 ? (
-                  <div style={{fontSize:10,color:'#ef4444',marginBottom:10}}>
-                    Nenhum centro cadastrado. Use ⚙️ Centros de Custo para criar.
-                  </div>
-                ) : (
-                  <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10,maxHeight:200,overflowY:'auto'}}>
-                    {/* Etapa 15a (05/10/2026): centro que só agrupa ou está fora da vigência aparece apagado e não se escolhe */}
-                    {centrosParaApontar(centrosCusto, centroCustom).map((c:any)=>(
-                      <div key={c.id} onClick={()=>{ if(!c.bloqueado) setCentroCustom(c.id); }} title={c.bloqueado?`Não recebe lançamento (${motivoBloqueio(c)})`:undefined} style={{
-                        padding:'8px 12px',marginLeft:c.nivel*16,borderRadius:6,cursor:c.bloqueado?'not-allowed':'pointer',fontSize:11,opacity:c.bloqueado?0.5:1,
-                        border:centroCustom===c.id?'2px solid #6366f1':'1.5px solid #e2e8f0',
-                        background:centroCustom===c.id?'#eef2ff':'white',
-                      }}>
-                        {c.nivel>0 && <span style={{color:'#94a3b8',marginRight:4}}>└</span>}
-                        <strong style={{color:'#4f46e5'}}>{c.codigo}</strong>
-                        <span style={{marginLeft:8}}>{c.nome}</span>
-                        {c.descricao && <span style={{color:'#94a3b8',marginLeft:6,fontSize:9}}>{c.descricao}</span>}
-                        {c.bloqueado && <span style={{color:'#94a3b8',marginLeft:6,fontSize:9}}>({motivoBloqueio(c)})</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+              {/* Centro personalizado */}
+              {centroTipo==='custom' && (
+                <div className="form-group">
+                  <label className="acn-label">Centro de Custo</label>
+                  {centrosCusto.length===0 ? (
+                    <div className="acn-txt-erro">
+                      Nenhum centro cadastrado. Use ⚙️ Centros de Custo para criar.
+                    </div>
+                  ) : (
+                    <div className="acn-cmp-centros">
+                      {/* Etapa 15a (05/10/2026): centro que só agrupa ou está fora da vigência aparece apagado e não se escolhe */}
+                      {centrosParaApontar(centrosCusto, centroCustom).map((c:any)=>(
+                        <div key={c.id} onClick={()=>{ if(!c.bloqueado) setCentroCustom(c.id); }} title={c.bloqueado?`Não recebe lançamento (${motivoBloqueio(c)})`:undefined}
+                          className={'acn-cmp-centro' + (centroCustom===c.id ? ' sel' : '') + (c.bloqueado ? ' bloq' : '')} style={{ marginLeft: c.nivel*16 }}>
+                          {c.nivel>0 && <span className="acn-fraco">└</span>}
+                          <strong className="acn-cmp-centro-cod">{c.codigo}</strong>
+                          <span>{c.nome}</span>
+                          {c.descricao && <span className="acn-fraco">{c.descricao}</span>}
+                          {c.bloqueado && <span className="acn-fraco">({motivoBloqueio(c)})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* Texto livre */}
-            {centroTipo==='livre' && (
-              <>
-                <label className="acn-label">Descrição do Centro de Custo</label>
-                <input className="acn-input" style={{width:'100%',marginBottom:10}}
-                  value={centroLivre} onChange={e=>setCentroLivre(e.target.value)}
-                  placeholder="Ex: Evento, Marketing, Infraestrutura..." />
-              </>
-            )}
-
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={salvarCentro} disabled={salvandoCentro}>
-                {salvandoCentro?'Salvando...':'💾 Salvar Centro de Custo'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalCentro(null)}>Cancelar</button>
+              {/* Texto livre */}
+              {centroTipo==='livre' && (
+                <div className="form-group">
+                  <label className="acn-label">Descrição do Centro de Custo</label>
+                  <input className="acn-input"
+                    value={centroLivre} onChange={e=>setCentroLivre(e.target.value)}
+                    placeholder="Ex: Evento, Marketing, Infraestrutura..." />
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarCentro} disabled={salvandoCentro}>
+                {salvandoCentro?'Salvando...':'Salvar Centro de Custo'}
+              </Botao>
+              <Botao onClick={()=>setModalCentro(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2359,32 +2337,37 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL DEPARTAMENTO */}
       {modalDepartamento && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalDepartamento(null);}}>
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">🏢 Departamento — {modalDepartamento.numero_pedido}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
-              {modalDepartamento.descricao_material} · o gestor deste departamento será mencionado
-              assim que a 1ª cotação for lançada.
+          <div className="modal-box acn-modal-cadastro acn-cmp-j420" role="dialog" aria-label="Departamento">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiOfficeBuildingOutline} size={16} /> Departamento — {modalDepartamento.numero_pedido}</span>
             </div>
-
-            <label className="acn-label">Departamento *</label>
-            <select className="acn-input" style={{width:'100%',marginBottom:14}}
-              value={departamentoSelecionado} onChange={e=>setDepartamentoSelecionado(e.target.value)}>
-              <option value="">Selecione...</option>
-              {departamentosConfig.map((d:any) => (
-                <option key={d.id} value={d.id}>{d.nome} — {d.gestor_nome}</option>
-              ))}
-            </select>
-            {departamentosConfig.length === 0 && (
-              <div style={{fontSize:10,color:'#dc2626',marginBottom:14}}>
-                Nenhum departamento cadastrado ainda. Cadastre em Admin → 🏢 Departamentos (Compras).
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalDepartamento.descricao_material} · o gestor deste departamento será mencionado
+                assim que a 1ª cotação for lançada.
               </div>
-            )}
 
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={salvarDepartamento} disabled={salvandoDepartamento}>
-                {salvandoDepartamento?'Salvando...':'💾 Salvar Departamento'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDepartamento(null)}>Cancelar</button>
+              <div className="form-group">
+                <label className="acn-label">Departamento *</label>
+                <select className="acn-input"
+                  value={departamentoSelecionado} onChange={e=>setDepartamentoSelecionado(e.target.value)}>
+                  <option value="">Selecione...</option>
+                  {departamentosConfig.map((d:any) => (
+                    <option key={d.id} value={d.id}>{d.nome} — {d.gestor_nome}</option>
+                  ))}
+                </select>
+              </div>
+              {departamentosConfig.length === 0 && (
+                <div className="acn-txt-erro">
+                  Nenhum departamento cadastrado ainda. Cadastre em Admin → 🏢 Departamentos (Compras).
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarDepartamento} disabled={salvandoDepartamento}>
+                {salvandoDepartamento?'Salvando...':'Salvar Departamento'}
+              </Botao>
+              <Botao onClick={()=>setModalDepartamento(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2393,11 +2376,15 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL GERENCIAR CENTROS DE CUSTO */}
       {modalGerCentros && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalGerCentros(false);}}>
-          <div className="modal-box" style={{maxWidth:560,maxHeight:'85vh',overflowY:'auto'}}>
-            <div className="modal-title">⚙️ Centros de Custo</div>
-            <CentrosCustoManager embutido currentUser={currentUser} />
-            <div style={{marginTop:14}}>
-              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>{setModalGerCentros(false);loadCentros();}}>Fechar</button>
+          <div className="modal-box acn-modal-cadastro acn-cmp-j560" role="dialog" aria-label="Centros de custo">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiCogOutline} size={16} /> Centros de Custo</span>
+            </div>
+            <div className="acn-modal-corpo">
+              <CentrosCustoManager embutido currentUser={currentUser} />
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>{setModalGerCentros(false);loadCentros();}}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -2406,26 +2393,30 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL OBSERVAÇÕES */}
       {modalObs && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setModalObs(null);setObsTexto('');}}}>
-          <div className="modal-box" style={{maxWidth:500}}>
-            <div className="modal-title">💬 Observações — {modalObs.numero_pedido}</div>
-            <div style={{fontSize:10,color:'#6b7280',marginBottom:10}}>{modalObs.descricao_material}</div>
-            {modalObs.observacoes_compra ? (
-              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:10,
-                marginBottom:12,fontSize:10,whiteSpace:'pre-wrap',maxHeight:180,overflowY:'auto',lineHeight:1.8}}>
-                <Linkify text={modalObs.observacoes_compra} />
+          <div className="modal-box acn-modal-cadastro acn-cmp-j500" role="dialog" aria-label="Observações">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiCommentTextOutline} size={16} /> Observações — {modalObs.numero_pedido}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">{modalObs.descricao_material}</div>
+              {modalObs.observacoes_compra ? (
+                <div className="acn-quadro acn-prod-texto acn-cmp-obs-hist">
+                  <Linkify text={modalObs.observacoes_compra} />
+                </div>
+              ) : (
+                <div className="acn-fraco">Sem observações anteriores.</div>
+              )}
+              <div className="form-group">
+                <label className="acn-label">Nova observação</label>
+                <MencaoTextarea value={obsTexto} rows={4} onChange={v=>setObsTexto(v)}
+                  placeholder="Ex: Fornecedor adiou entrega. Aguardando nova data... @Nome para mencionar" />
               </div>
-            ) : (
-              <div style={{fontSize:10,color:'#9ca3af',marginBottom:12,fontStyle:'italic'}}>Sem observações anteriores.</div>
-            )}
-            <label className="acn-label">Nova observação</label>
-            <MencaoTextarea value={obsTexto} rows={4} onChange={v=>setObsTexto(v)}
-              placeholder="Ex: Fornecedor adiou entrega. Aguardando nova data... @Nome para mencionar"
-              style={{marginBottom:12}} />
-            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalObs(null);setObsTexto('');}}>Cancelar</button>
-              <button className="acn-btn" style={{background:'#0891b2'}} onClick={salvarObs} disabled={salvandoObs}>
-                {salvandoObs?'...':'💾 Salvar'}
-              </button>
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>{setModalObs(null);setObsTexto('');}}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarObs} disabled={salvandoObs}>
+                {salvandoObs?'...':'Salvar'}
+              </Botao>
             </div>
           </div>
         </div>
@@ -2434,19 +2425,27 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL PRAZO PROMETIDO DE ENTREGA */}
       {modalPrazoEntrega && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalPrazoEntrega(null);}}>
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">📅 Prazo de entrega — {modalPrazoEntrega.p.numero_pedido}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>{modalPrazoEntrega.p.descricao_material}</div>
-            <label className="acn-label">Nova data de entrega *</label>
-            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}} aria-label="Nova data de entrega"
-              value={modalPrazoEntrega.data} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,data:e.target.value}))} />
-            <label className="acn-label">Motivo (opcional)</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:12}} placeholder="Ex.: fornecedor adiou o envio"
-              value={modalPrazoEntrega.motivo} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,motivo:e.target.value}))} />
-            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>A alteração fica no histórico do pedido, com a data anterior.</div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={salvarPrazoEntrega}>Salvar prazo</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPrazoEntrega(null)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro acn-cmp-j420" role="dialog" aria-label="Prazo de entrega">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiCalendarOutline} size={16} /> Prazo de entrega — {modalPrazoEntrega.p.numero_pedido}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">{modalPrazoEntrega.p.descricao_material}</div>
+              <div className="form-group">
+                <label className="acn-label">Nova data de entrega *</label>
+                <input type="date" className="acn-input" aria-label="Nova data de entrega"
+                  value={modalPrazoEntrega.data} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,data:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Motivo (opcional)</label>
+                <input className="acn-input" placeholder="Ex.: fornecedor adiou o envio"
+                  value={modalPrazoEntrega.motivo} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,motivo:e.target.value}))} />
+              </div>
+              <div className="acn-ajuda">A alteração fica no histórico do pedido, com a data anterior.</div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={salvarPrazoEntrega}>Salvar prazo</Botao>
+              <Botao onClick={()=>setModalPrazoEntrega(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2454,28 +2453,28 @@ export default function ComprasTab({ currentUser }) {
 
       {modalPrazoProm && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalPrazoProm(null);}}>
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">🎯 Prazo Prometido de Entrega — {modalPrazoProm.numero_pedido}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>{modalPrazoProm.descricao_material}</div>
-            <label className="acn-label">Data prometida *</label>
-            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={prazoPromData} onChange={e=>setPrazoPromData(e.target.value)} />
-            <label className="acn-label">Prometido para</label>
-            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
-              {([['producao','🏭 Produção Interna'],['cliente','👤 Cliente Direto']] as const).map(([t,l])=>(
-                <button key={t} onClick={()=>setPrazoPromDestino(t as any)} style={{
-                  flex:1,padding:'7px 4px',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,
-                  background:prazoPromDestino===t?'#6366f1':'white',
-                  color:prazoPromDestino===t?'white':'#475569',
-                  borderRight:t==='producao'?'1px solid #d1d5db':'none',
-                }}>{l}</button>
-              ))}
+          <div className="modal-box acn-modal-cadastro acn-cmp-j420" role="dialog" aria-label="Prazo prometido de entrega">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiBullseyeArrow} size={16} /> Prazo Prometido de Entrega — {modalPrazoProm.numero_pedido}</span>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={salvarPrazoProm} disabled={salvandoPrazoProm}>
-                {salvandoPrazoProm?'Salvando...':'💾 Salvar'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPrazoProm(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">{modalPrazoProm.descricao_material}</div>
+              <div className="form-group">
+                <label className="acn-label">Data prometida *</label>
+                <input type="date" className="acn-input"
+                  value={prazoPromData} onChange={e=>setPrazoPromData(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Prometido para</label>
+                <Chips rotulo="Prometido para" ativo={prazoPromDestino} onChange={(t) => setPrazoPromDestino(t as any)}
+                  itens={[{ id:'producao', rotulo:'Produção Interna', icone: mdiFactory }, { id:'cliente', rotulo:'Cliente Direto', icone: mdiAccountOutline }]} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarPrazoProm} disabled={salvandoPrazoProm}>
+                {salvandoPrazoProm?'Salvando...':'Salvar'}
+              </Botao>
+              <Botao onClick={()=>setModalPrazoProm(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2484,194 +2483,185 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL MESA DE COTAÇÕES */}
       {modalCotacoes && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalCotacoes(null);}}>
-          <div className="modal-box" style={{maxWidth:640}}>
-            <div className="modal-title">🏷️ Mesa de Cotações — {modalCotacoes.numero_pedido}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
-              {modalCotacoes.descricao_material} · recomendado 3 cotações, mas pode aprovar com menos quando não houver 3 fornecedores disponíveis.
+          <div className="modal-box acn-modal-cadastro acn-cmp-j640" role="dialog" aria-label="Mesa de cotações">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiTagOutline} size={16} /> Mesa de Cotações — {modalCotacoes.numero_pedido}</span>
             </div>
-
-            {erroMesa && (
-              <Faixa tom="erro" acao={<Botao pequeno onClick={() => abrirModalCotacoes(modalCotacoes)}>Tentar de novo</Botao>}>
-                Não foi possível ler {erroMesa}. Isso não quer dizer que não haja cotação nem aprovação pendente — a mesa fica travada para lançar cotação e aprovar até a leitura dar certo.
-              </Faixa>
-            )}
-            <div style={{marginBottom:14}}>
-              <label className="acn-label">📅 Previsão de Recebimento *</label>
-              <input type="date" className="acn-input" style={{width:'100%'}}
-                value={inline[modalCotacoes.id]?.prazo || ''}
-                onChange={e=>setInlineField(modalCotacoes.id,'prazo',e.target.value)} />
-            </div>
-
-            {aprovacoesPedido.length > 0 && (() => {
-              const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
-              const isDepartamento = nivelAtivo?.tipo === 'departamento';
-              const alcadaAtiva = (nivelAtivo && !isDepartamento) ? alcadasConfig.find(a => a.nivel === nivelAtivo.nivel) : null;
-              // quem aprova é a pessoa marcada no Admin, nos dois caminhos
-              const souAprovador = podeAprovarCompra(currentUser);
-              const historico = aprovacoesPedido.filter(a => a.status !== 'pendente');
-              const todosAprovados = historico.length > 0 && historico.every(a => a.status === 'aprovado');
-              return (
-                <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14}}>
-                  <div style={{fontSize:11,fontWeight:700,color:'#9a3412',marginBottom:8}}>
-                    🔒 Aprovação {nivelAtivo ? (isDepartamento ? `— Departamento: ${nivelAtivo.nivel_nome}` : `— Nível ${nivelAtivo.nivel}: ${nivelAtivo.nivel_nome}`) : todosAprovados ? 'concluída' : 'anterior (histórico)'}
-                  </div>
-                  {nivelAtivo ? (
-                    souAprovador ? (
-                      <div style={{display:'flex',gap:8}}>
-                        <div style={{flex:1,fontSize:9,color:'#92400e',alignSelf:'center'}}>
-                          Aprove clicando em "✅ Aprovar" na cotação vencedora, abaixo.
-                        </div>
-                        <button className="acn-btn" style={{background:'#ef4444'}} onClick={rejeitarNivelAtivo} disabled={respondendoAprovacao}>
-                          ↩ Não aprovar (devolver para refazer)
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{fontSize:10,color:'#92400e'}}>
-                        Aguardando aprovação de: {nomesAprovadores()}
-                      </div>
-                    )
-                  ) : todosAprovados ? (
-                    <div style={{fontSize:10,color:'#16a34a',fontWeight:700}}>Todos os níveis aprovados.</div>
-                  ) : (
-                    <div style={{fontSize:10,color:'#78716c'}}>Nenhuma aprovação pendente no momento.</div>
-                  )}
-                  {nivelAtivo && (ehSolicitante(modalCotacoes, currentUser) || podeGerirCompras(currentUser)) && (
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:8,paddingTop:8,borderTop:'1px dashed #fdba74'}}>
-                      <span style={{flex:1,fontSize:10,color:'#92400e'}}>A compra não é mais necessária? Quem solicitou pode descartar em vez de aguardar a aprovação.</span>
-                      <Botao pequeno variante="perigo-sec" icone={mdiCloseCircleOutline} onClick={()=>{ const p = modalCotacoes; setModalCotacoes(null); abrirFluxo('descartar', p); }}>Descartar solicitação</Botao>
-                    </div>
-                  )}
-                  {historico.length > 0 && (
-                    <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:4}}>
-                      {historico.map(a => (
-                        <div key={a.id} style={{fontSize:9,color:'#78716c'}}>
-                          {a.tipo==='departamento' ? `Departamento ${a.nivel_nome}` : `Nível ${a.nivel} (${a.nivel_nome})`}: {a.status==='aprovado'?'✅ Aprovado':a.status==='rejeitado'?'❌ Rejeitado':'Cancelado'}
-                          {a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}
-                          {a.resposta ? ` — "${a.resposta}"` : ''}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {loadingCotacoes ? (
-              <div style={{textAlign:'center',padding:20,color:'#9ca3af',fontSize:11}}>Carregando...</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14,maxHeight:220,overflowY:'auto'}}>
-                {cotacoes.length===0 && !erroMesa && (
-                  <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
-                )}
-                {cotacoes.map((c:any) => {
-                  const compraDecidida = ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra);
-                  const emEdicao = editandoCotacaoId === c.id;
-                  return (
-                  <div key={c.id} style={{
-                    padding:'8px 10px',borderRadius:6,
-                    border: vencedoraId===c.id ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
-                    background: vencedoraId===c.id ? '#f0fdf4' : '#fff',
-                  }}>
-                    {emEdicao ? (
-                      <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                        <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} />
-                        <div style={{display:'flex',gap:6}}>
-                          <button className="acn-btn" style={{background:'#16a34a',flex:1}} disabled={salvandoEdicaoCotacao}
-                            onClick={()=>salvarEdicaoCotacao(c)}>
-                            {salvandoEdicaoCotacao ? 'Salvando...' : '💾 Salvar Correção'}
-                          </button>
-                          <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setEditandoCotacaoId(null)}>Cancelar</button>
-                        </div>
-                      </div>
-                    ) : (<>
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
-                          {c.fornecedor_nome}
-                          {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
-                        </div>
-                        <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
-                          {textoComposicao(c) ? `${textoComposicao(c)} · ` : ''}
-                          <strong style={{color:'#1e293b'}}>{c.valor ? fmt(c.valor) : '—'}</strong>
-                          {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
-                          {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
-                        </div>
-                        {c.anexo_url && (
-                          <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
-                        )}
-                      </div>
-                      {podeGerirCompras(currentUser) && (
-                        <button onClick={()=>iniciarEdicaoCotacao(c)} title="Corrigir valores desta cotação"
-                          style={{...btn,background:'#6366f1',padding:'2px 7px',fontSize:9}}>✏️</button>
-                      )}
-                      <button onClick={()=>excluirCotacao(c.id)} title="Remover"
-                        style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
-                    </div>
-                    <CotacaoAreaLivre cotacao={c}
-                      onSaved={(html:string)=>setCotacoes(prev=>prev.map(x=>x.id===c.id?{...x,area_livre:html}:x))} />
-                    {!compraDecidida && !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
-                      <button className="acn-btn" style={{background:'#16a34a',width:'100%',marginTop:6}}
-                        onClick={()=>aprovarCotacaoComoVencedora(c)}>
-                        ✅ Aprovar esta cotação como vencedora
-                      </button>
-                    )}
-                    {/* Aprovação de alçada JÁ pendente (30/09/2026): o painel de cima manda "aprovar clicando em
-                        ✅ Aprovar na cotação vencedora", mas o botão acima some quando há pendência — e não havia
-                        outro. A compra ficava parada sem ninguém conseguir aprovar. Agora quem aprova vê o botão
-                        na cotação que já é a vencedora (só nela: a escolha da vencedora já foi feita). */}
-                    {!compraDecidida && vencedoraId === c.id && podeAprovarCompra(currentUser)
-                      && aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
-                      <button className="acn-btn" style={{background:'#16a34a',width:'100%',marginTop:6}}
-                        onClick={()=>aprovarCotacaoComoVencedora(c)}>
-                        ✅ Aprovar
-                      </button>
-                    )}
-                    </>)}
-                  </div>
-                  );
-                })}
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalCotacoes.descricao_material} · recomendado 3 cotações, mas pode aprovar com menos quando não houver 3 fornecedores disponíveis.
               </div>
-            )}
 
-            {/* Nova cotação — escondida enquanto há aprovação de ALÇADA pendente (a vencedora já foi
-                travada), ou quando a compra já foi Aprovada/Comprada (a essa altura, já foi decidida —
-                pra corrigir um valor errado, usar "✏️ Editar" na cotação vencedora acima). Uma pendência
-                de DEPARTAMENTO não trava, pois ela nasce na 1ª cotação — o comprador ainda precisa poder
-                lançar a 2ª e 3ª enquanto o gestor avalia em paralelo. */}
-            {(!['Aprovado','Comprado'].includes(modalCotacoes?.status_compra) &&
-              !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento')) ? (<>
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
-              <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Fornecedor</div>
-              {modalCotacoes?.quantidade > 1 && (
-                <div style={{fontSize:9,color:'#94a3b8',marginBottom:6}}>Quantidade do pedido: {modalCotacoes.quantidade}</div>
+              {erroMesa && (
+                <Faixa tom="erro" acao={<Botao pequeno onClick={() => abrirModalCotacoes(modalCotacoes)}>Tentar de novo</Botao>}>
+                  Não foi possível ler {erroMesa}. Isso não quer dizer que não haja cotação nem aprovação pendente — a mesa fica travada para lançar cotação e aprovar até a leitura dar certo.
+                </Faixa>
               )}
-              <div style={{marginBottom:8}}>
+              <div className="form-group">
+                <label className="acn-label">Previsão de Recebimento *</label>
+                <input type="date" className="acn-input"
+                  value={inline[modalCotacoes.id]?.prazo || ''}
+                  onChange={e=>setInlineField(modalCotacoes.id,'prazo',e.target.value)} />
+              </div>
+
+              {aprovacoesPedido.length > 0 && (() => {
+                const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
+                const isDepartamento = nivelAtivo?.tipo === 'departamento';
+                const alcadaAtiva = (nivelAtivo && !isDepartamento) ? alcadasConfig.find(a => a.nivel === nivelAtivo.nivel) : null;
+                // quem aprova é a pessoa marcada no Admin, nos dois caminhos
+                const souAprovador = podeAprovarCompra(currentUser);
+                const historico = aprovacoesPedido.filter(a => a.status !== 'pendente');
+                const todosAprovados = historico.length > 0 && historico.every(a => a.status === 'aprovado');
+                return (
+                  <div className="acn-quadro tom-atencao">
+                    <div className="acn-quadro-titulo acn-prod-ic">
+                      <Icone path={mdiLockOutline} size={13} /> Aprovação {nivelAtivo ? (isDepartamento ? `— Departamento: ${nivelAtivo.nivel_nome}` : `— Nível ${nivelAtivo.nivel}: ${nivelAtivo.nivel_nome}`) : todosAprovados ? 'concluída' : 'anterior (histórico)'}
+                    </div>
+                    {nivelAtivo ? (
+                      souAprovador ? (
+                        <div className="acn-cmp-mesa-linha">
+                          <div className="acn-ajuda acn-cmp-mesa-dica">
+                            Aprove clicando em "✅ Aprovar" na cotação vencedora, abaixo.
+                          </div>
+                          <Botao variante="perigo" icone={mdiUndoVariant} onClick={rejeitarNivelAtivo} disabled={respondendoAprovacao}>
+                            Não aprovar (devolver para refazer)
+                          </Botao>
+                        </div>
+                      ) : (
+                        <div className="acn-ajuda">
+                          Aguardando aprovação de: {nomesAprovadores()}
+                        </div>
+                      )
+                    ) : todosAprovados ? (
+                      <div className="acn-txt-ok">Todos os níveis aprovados.</div>
+                    ) : (
+                      <div className="acn-fraco">Nenhuma aprovação pendente no momento.</div>
+                    )}
+                    {nivelAtivo && (ehSolicitante(modalCotacoes, currentUser) || podeGerirCompras(currentUser)) && (
+                      <div className="acn-cmp-mesa-descartar">
+                        <span className="acn-ajuda acn-cmp-mesa-dica">A compra não é mais necessária? Quem solicitou pode descartar em vez de aguardar a aprovação.</span>
+                        <Botao pequeno variante="perigo-sec" icone={mdiCloseCircleOutline} onClick={()=>{ const p = modalCotacoes; setModalCotacoes(null); abrirFluxo('descartar', p); }}>Descartar solicitação</Botao>
+                      </div>
+                    )}
+                    {historico.length > 0 && (
+                      <div className="acn-cmp-mesa-hist">
+                        {historico.map(a => (
+                          <div key={a.id} className="acn-ajuda">
+                            {a.tipo==='departamento' ? `Departamento ${a.nivel_nome}` : `Nível ${a.nivel} (${a.nivel_nome})`}: {a.status==='aprovado'?'✅ Aprovado':a.status==='rejeitado'?'❌ Rejeitado':'Cancelado'}
+                            {a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}
+                            {a.resposta ? ` — "${a.resposta}"` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {loadingCotacoes ? (
+                <div className="acn-empty">Carregando...</div>
+              ) : (
+                <div className="acn-cmp-mesa-lista">
+                  {cotacoes.length===0 && !erroMesa && (
+                    <div className="acn-fraco acn-centro acn-cmp-mesa-vazia">Nenhuma cotação registrada ainda.</div>
+                  )}
+                  {cotacoes.map((c:any) => {
+                    const compraDecidida = ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra);
+                    const emEdicao = editandoCotacaoId === c.id;
+                    return (
+                    <div key={c.id} className={'acn-cmp-cot' + (vencedoraId===c.id ? ' venc' : '')}>
+                      {emEdicao ? (
+                        <div className="acn-cmp-cot-edicao">
+                          <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} />
+                          <div className="acn-cmp-cot-acoes">
+                            <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvandoEdicaoCotacao}
+                              onClick={()=>salvarEdicaoCotacao(c)}>
+                              {salvandoEdicaoCotacao ? 'Salvando...' : 'Salvar Correção'}
+                            </Botao>
+                            <Botao onClick={()=>setEditandoCotacaoId(null)}>Cancelar</Botao>
+                          </div>
+                        </div>
+                      ) : (<>
+                      <div className="acn-cmp-cot-topo">
+                        <div className="acn-cmp-cot-info">
+                          <div className="acn-forte">
+                            {c.fornecedor_nome}
+                            {vencedoraId===c.id && <span className="acn-txt-ok acn-cmp-venc">✓ VENCEDORA</span>}
+                          </div>
+                          <div className="acn-ajuda">
+                            {textoComposicao(c) ? `${textoComposicao(c)} · ` : ''}
+                            <strong className="acn-forte">{c.valor ? fmt(c.valor) : '—'}</strong>
+                            {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
+                            {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
+                          </div>
+                          {c.anexo_url && (
+                            <a href={c.anexo_url} target="_blank" rel="noreferrer" className="acn-cmp-link-web acn-prod-ic"><Icone path={mdiPaperclip} size={12} /> {c.anexo_nome}</a>
+                          )}
+                        </div>
+                        {podeGerirCompras(currentUser) && (
+                          <Botao pequeno icone={mdiPencilOutline} onClick={()=>iniciarEdicaoCotacao(c)} title="Corrigir valores desta cotação" aria-label="Corrigir valores desta cotação" />
+                        )}
+                        <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} onClick={()=>excluirCotacao(c.id)} title="Remover" aria-label="Remover" />
+                      </div>
+                      <CotacaoAreaLivre cotacao={c}
+                        onSaved={(html:string)=>setCotacoes(prev=>prev.map(x=>x.id===c.id?{...x,area_livre:html}:x))} />
+                      {!compraDecidida && !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
+                        <Botao variante="primario" icone={mdiCheck} className="acn-cmp-largo"
+                          onClick={()=>aprovarCotacaoComoVencedora(c)}>
+                          Aprovar esta cotação como vencedora
+                        </Botao>
+                      )}
+                      {/* Aprovação de alçada JÁ pendente (30/09/2026): o painel de cima manda "aprovar clicando em
+                          ✅ Aprovar na cotação vencedora", mas o botão acima some quando há pendência — e não havia
+                          outro. A compra ficava parada sem ninguém conseguir aprovar. Agora quem aprova vê o botão
+                          na cotação que já é a vencedora (só nela: a escolha da vencedora já foi feita). */}
+                      {!compraDecidida && vencedoraId === c.id && podeAprovarCompra(currentUser)
+                        && aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
+                        <Botao variante="primario" icone={mdiCheck} className="acn-cmp-largo"
+                          onClick={()=>aprovarCotacaoComoVencedora(c)}>
+                          Aprovar
+                        </Botao>
+                      )}
+                      </>)}
+                    </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Nova cotação — escondida enquanto há aprovação de ALÇADA pendente (a vencedora já foi
+                  travada), ou quando a compra já foi Aprovada/Comprada (a essa altura, já foi decidida —
+                  pra corrigir um valor errado, usar "✏️ Editar" na cotação vencedora acima). Uma pendência
+                  de DEPARTAMENTO não trava, pois ela nasce na 1ª cotação — o comprador ainda precisa poder
+                  lançar a 2ª e 3ª enquanto o gestor avalia em paralelo. */}
+              {(!['Aprovado','Comprado'].includes(modalCotacoes?.status_compra) &&
+                !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento')) && (<>
+              <div className="acn-quadro">
+                <div className="acn-quadro-titulo acn-prod-ic"><Icone path={mdiPlus} size={13} /> Nova Cotação de Fornecedor</div>
+                {modalCotacoes?.quantidade > 1 && (
+                  <div className="acn-ajuda">Quantidade do pedido: {modalCotacoes.quantidade}</div>
+                )}
                 <ComposicaoCotacao form={novaCotacao} setForm={setNovaCotacao} />
+                <div className="form-group">
+                  <label className="acn-label">Anexo (PDF, imagem, planilha…)</label>
+                  <input type="file" className="acn-cmp-arquivo"
+                    onChange={e=>setNovoAnexoCotacao(e.target.files?.[0]||null)} />
+                </div>
+                <Botao variante="primario" icone={mdiPlus} className="acn-cmp-largo" onClick={adicionarCotacao} disabled={enviandoCotacao}>
+                  {enviandoCotacao?'Enviando...':'Adicionar Cotação'}
+                </Botao>
               </div>
-              <div style={{marginBottom:8}}>
-                <label className="acn-label">Anexo (PDF, imagem, planilha…)</label>
-                <input type="file"
-                  onChange={e=>setNovoAnexoCotacao(e.target.files?.[0]||null)} />
-              </div>
-              <button className="acn-btn" style={{background:'#d97706',width:'100%'}} onClick={adicionarCotacao} disabled={enviandoCotacao}>
-                {enviandoCotacao?'Enviando...':'+ Adicionar Cotação'}
-              </button>
-            </div>
 
-            {cotacoes.length >= 1 && (
-              <div style={{fontSize:9,color:'#64748b',marginBottom:10}}>
-                Escreva na área livre de cada cotação e clique em "✅ Aprovar" na vencedora, acima.
-              </div>
-            )}
-
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
+              {cotacoes.length >= 1 && (
+                <div className="acn-ajuda">
+                  Escreva na área livre de cada cotação e clique em "✅ Aprovar" na vencedora, acima.
+                </div>
+              )}
+              </>)}
             </div>
-            </>) : (
-              <div style={{display:'flex',gap:8}}>
-                <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
-              </div>
-            )}
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalCotacoes(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
@@ -2679,23 +2669,29 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL CONFIRMAR SENHA — reconfirma identidade antes de aprovar uma cotação */}
       {modalConfirmarSenha && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalConfirmarSenha(null);}}>
-          <div className="modal-box" style={{maxWidth:380}}>
-            <div className="modal-title">🔒 Confirmar Aprovação</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
-              Confirme sua senha para aprovar <strong>{modalConfirmarSenha.fornecedor_nome}</strong> como
-              cotação vencedora ({fmt(modalConfirmarSenha.valor)}).
+          <div className="modal-box acn-modal-cadastro acn-cmp-j380" role="dialog" aria-label="Confirmar aprovação">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-prod-ic"><Icone path={mdiLockOutline} size={16} /> Confirmar Aprovação</span>
             </div>
-            <label className="acn-label">Sua senha</label>
-            <input type="password" className="acn-input" style={{width:'100%',marginBottom:6}}
-              value={senhaConfirmacao} onChange={e=>{setSenhaConfirmacao(e.target.value);setErroSenha('');}}
-              onKeyDown={e=>e.key==='Enter'&&confirmarAprovacaoComSenha()}
-              autoFocus placeholder="Mesma senha do login" />
-            {erroSenha && <div style={{fontSize:10,color:'#dc2626',marginBottom:8}}>{erroSenha}</div>}
-            <div style={{display:'flex',gap:8,marginTop:8}}>
-              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarAprovacaoComSenha} disabled={verificandoSenha}>
-                {verificandoSenha?'Verificando...':'✅ Confirmar'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConfirmarSenha(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Confirme sua senha para aprovar <strong>{modalConfirmarSenha.fornecedor_nome}</strong> como
+                cotação vencedora ({fmt(modalConfirmarSenha.valor)}).
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Sua senha</label>
+                <input type="password" className="acn-input"
+                  value={senhaConfirmacao} onChange={e=>{setSenhaConfirmacao(e.target.value);setErroSenha('');}}
+                  onKeyDown={e=>e.key==='Enter'&&confirmarAprovacaoComSenha()}
+                  autoFocus placeholder="Mesma senha do login" />
+              </div>
+              {erroSenha && <div className="acn-txt-erro">{erroSenha}</div>}
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={confirmarAprovacaoComSenha} disabled={verificandoSenha}>
+                {verificandoSenha?'Verificando...':'Confirmar'}
+              </Botao>
+              <Botao onClick={()=>setModalConfirmarSenha(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2745,8 +2741,3 @@ export default function ComprasTab({ currentUser }) {
     </div>
   );
 }
-
-const th: React.CSSProperties = {padding:'8px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'};
-const td: React.CSSProperties = {padding:'9px 10px',verticalAlign:'middle'};
-const btn: React.CSSProperties = {padding:'5px 9px',border:'none',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'};
-const kpi: React.CSSProperties = {background:'#f8fafc',border:'2px solid #e2e8f0',borderRadius:8,padding:'10px 6px',textAlign:'center' as const};

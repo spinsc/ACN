@@ -1568,3 +1568,76 @@ html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(900px, 96
 .acn-cmp-recebidos-lista { max-height: 60vh; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-cmp-clicavel { cursor: pointer; }
 .acn-cmp-acoes { min-width: 240px; }
+
+/* ── Compras · 12e20 (07/10/2026): as janelas da tela (centro, departamento, prazos, observação, mesa de cotações, senha, vínculo, resumo) ── */
+html body .modal-box.acn-modal-cadastro.acn-cmp-j380 { width: min(380px, 95vw); max-width: 380px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j420 { width: min(420px, 95vw); max-width: 420px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j460 { width: min(460px, 95vw); max-width: 460px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j480 { width: min(480px, 95vw); max-width: 480px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j500 { width: min(500px, 95vw); max-width: 500px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j560 { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j640 { width: min(640px, 95vw); max-width: 640px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(680px, 95vw); max-width: 680px; max-height: 92vh; }
+.acn-cmp-j380 .form-group, .acn-cmp-j420 .form-group, .acn-cmp-j460 .form-group, .acn-cmp-j480 .form-group, .acn-cmp-j500 .form-group, .acn-cmp-j640 .form-group { margin-bottom: 0; }
+.acn-cmp-j380 .acn-modal-corpo > *, .acn-cmp-j420 .acn-modal-corpo > *, .acn-cmp-j460 .acn-modal-corpo > *, .acn-cmp-j480 .acn-modal-corpo > *, .acn-cmp-j500 .acn-modal-corpo > *,
+.acn-cmp-j560 .acn-modal-corpo > *, .acn-cmp-j640 .acn-modal-corpo > *, .acn-cmp-j680 .acn-modal-corpo > * { flex-shrink: 0; }
+.acn-cmp-opres { max-height: 160px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cmp-opres-item { display: flex; gap: 8px; padding: 7px 12px; font-size: 12px; cursor: pointer; background: var(--acn-surface); border-bottom: 1px solid var(--acn-line-soft); }
+.acn-cmp-opres-item:hover { background: var(--acn-surface-2); }
+.acn-cmp-opres-item.sel { background: var(--acn-info-soft); }
+.acn-cmp-centros { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; }
+.acn-cmp-centro { display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; cursor: pointer; background: var(--acn-surface); border: 1.5px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cmp-centro.sel { border: 2px solid var(--acn-brand); background: var(--acn-brand-soft); }
+.acn-cmp-centro.bloq { opacity: .5; cursor: not-allowed; }
+.acn-cmp-centro-cod { color: var(--acn-brand-ink); }
+.acn-cmp-obs-hist { max-height: 180px; overflow-y: auto; font-size: 12px; line-height: 1.7; }
+.acn-cmp-mesa-linha { display: flex; align-items: center; gap: 8px; }
+.acn-cmp-mesa-dica { flex: 1; }
+.acn-cmp-mesa-descartar { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--acn-warn) 45%, transparent); }
+.acn-cmp-mesa-hist { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.acn-cmp-mesa-lista { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.acn-cmp-mesa-vazia { padding: 14px; }
+.acn-cmp-cot { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--acn-surface); border: 1.5px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cmp-cot.venc { border: 2px solid var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-cmp-cot-topo { display: flex; align-items: center; gap: 10px; }
+.acn-cmp-cot-info { flex: 1; min-width: 0; }
+.acn-cmp-cot-edicao { display: flex; flex-direction: column; gap: 6px; }
+.acn-cmp-cot-acoes { display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 8px; }
+.acn-cmp-venc { margin-left: 6px; font-size: 11px; }
+html body .acn-cmp-largo { width: 100%; justify-content: center; }
+.acn-cmp-arquivo { font-size: 12px; }
+.acn-cmp-oculto { display: none; }
+.acn-cmp-cresce { flex: 1; min-width: 0; }
+/* a composição do orçamento de uma cotação */
+.acn-cmp-comp { display: flex; flex-direction: column; gap: 8px; }
+.acn-cmp-comp-g3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+.acn-cmp-comp-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acn-cmp-comp .acn-input { width: 100%; box-sizing: border-box; }
+.acn-cmp-comp-frete { display: flex; align-items: center; gap: 6px; }
+.acn-cmp-comp .acn-input.acn-cmp-comp-fretevalor { flex: 1; min-width: 0; width: auto; }
+.acn-cmp-comp-servico { display: flex; gap: 6px; margin-bottom: 4px; align-items: center; }
+.acn-cmp-comp .acn-input.acn-cmp-comp-sdesc { flex: 2; min-width: 0; width: auto; }
+.acn-cmp-comp .acn-input.acn-cmp-comp-sval { flex: 1; min-width: 0; width: auto; }
+.acn-cmp-comp-resumo { padding: 8px 10px; font-size: 13px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 8px; }
+.acn-cmp-comp-linha { display: flex; justify-content: space-between; }
+.acn-cmp-comp-total { margin-top: 4px; padding-top: 4px; font-weight: 600; color: var(--acn-ink); border-top: 1px solid var(--acn-line-soft); }
+/* a área livre de cada cotação (editor) */
+.acn-cmp-area { margin-top: 6px; overflow: hidden; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cmp-area-barra { display: flex; align-items: center; gap: 4px; padding: 3px 6px; background: var(--acn-neutral-soft); border-bottom: 1px solid var(--acn-line); }
+.acn-cmp-area-tit { margin-right: 2px; font-size: 11px; font-weight: 700; color: var(--acn-muted); }
+.acn-cmp-area-estado { font-size: 11px; }
+html body .acn-cmp-area-b { font-weight: 700; }
+html body .acn-cmp-area-i { font-style: italic; }
+.acn-cmp-editor { min-height: 50px; padding: 8px 10px; font-size: 12px; line-height: 1.5; outline: none; overflow-wrap: anywhere; background: var(--acn-surface); color: var(--acn-ink); }
+.cotacao-area-livre[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--acn-muted); pointer-events: none; }
+.cotacao-area-livre table { border-collapse: collapse; width: 100%; }
+.cotacao-area-livre td, .cotacao-area-livre th { border: 1px solid var(--acn-line); padding: 3px 5px; font-size: 11px; }
+/* o resumo da requisição */
+.acn-cmp-resumo-cab { display: flex; align-items: center; gap: 8px; }
+.acn-cmp-resumo-tit { flex: 1; min-width: 0; }
+.acn-cmp-resumo-selos { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.acn-cmp-ficha { grid-template-columns: 150px 1fr; font-size: 13px; }
+.acn-cmp-res-cot { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-cmp-res-cot.venc { background: var(--acn-ok-soft); }
+.acn-cmp-res-apr { padding: 3px 6px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-cmp-res-ac { padding: 4px 6px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
