@@ -28,9 +28,11 @@ import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
+import Icone from './Icone';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
-  mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
+  mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline,
+  mdiBankOutline, mdiAccountOutline, mdiCalendarOutline, mdiClockOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
@@ -2201,19 +2203,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         draggable
         onDragStart={() => handleDragStart(op.id)}
         onDragEnd={handleDragEnd}
-        className={'acn-kcard' + (naoLido ? ' nova' : '')}
-        style={{
-          background: dragging === op.id ? 'var(--acn-brand-soft)' : undefined,
-          cursor: 'grab', marginBottom: 8,
-          outline: dragOverItem === op.id && dragging !== op.id ? '2px dashed var(--acn-brand)' : undefined,
-          outlineOffset: 2,
-          opacity: dragging === op.id ? .6 : 1,
-          userSelect: 'none',
-        }}
+        className={'acn-kcard acn-crm-card' + (naoLido ? ' nova' : '') + (dragging === op.id ? ' arrastando' : '') + (dragOverItem === op.id && dragging !== op.id ? ' sobre' : '')}
         title={naoLido ? 'Este registro tem alteração(ões) que você ainda não visualizou' : undefined}
       >
         {/* ── Título (clique mostra os detalhes) ── */}
-        <h6 onClick={toggleExpand} style={{ cursor:'pointer' }} title={op.titulo}>{op.titulo}</h6>
+        <h6 onClick={toggleExpand} className="acn-crm-titulo" title={op.titulo}>{op.titulo}</h6>
 
         {/* ── Linha de apoio sempre visível ── */}
         <div className="acn-kmeta">
@@ -2221,14 +2215,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           {op.funil === 'licitacao' && <Tag>Licitação</Tag>}
           {op.tipo_negocio && <Tag>{op.tipo_negocio}</Tag>}
           {op.temperatura && (
-            <span title={`Temperatura: ${op.temperatura}`} style={{ lineHeight:1 }}>
+            <span title={`Temperatura: ${op.temperatura}`} className="acn-crm-temp-emoji">
               {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
             </span>
           )}
           {op.data_sessao && (
             <span className="acn-num">{fmtData(op.data_sessao)}{op.hora_sessao ? ` · ${String(op.hora_sessao).slice(0,5)}` : ''}</span>
           )}
-          <span className="dir-auto" style={{ display:'flex', alignItems:'center', gap:2 }}>
+          <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
                 max={markupPorOp[op.id].max} discreto
@@ -2240,10 +2234,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </span>
         </div>
         {desistiu && op.motivo_desistencia && (
-          <div className="acn-kmeta" style={{ color:'var(--acn-warn)' }} title={op.motivo_desistencia}>Desistência: {op.motivo_desistencia}</div>
+          <div className="acn-kmeta acn-crm-aviso-warn" title={op.motivo_desistencia}>Desistência: {op.motivo_desistencia}</div>
         )}
         {perdido && op.motivo_perda && (
-          <div className="acn-kmeta" style={{ color:'var(--acn-bad)' }} title={op.motivo_perda}>Motivo: {op.motivo_perda}</div>
+          <div className="acn-kmeta acn-crm-aviso-bad" title={op.motivo_perda}>Motivo: {op.motivo_perda}</div>
         )}
 
         {/* Sub-etapa — colunas abertas */}
@@ -2286,7 +2280,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
         {/* ── Detalhes (visível só quando expandido) ── */}
         {expandido && (
-        <div style={{ display:'grid', gap:5, paddingTop:8, borderTop:'1px solid var(--acn-line-soft)' }}>
+        <div className="acn-crm-detalhes">
           <div className="acn-kmeta">
             <Tag>{op.funil === 'licitacao' ? 'Licitação' : 'Venda direta'}</Tag>
             {op.tipo_licitacao === 'ata' && <Tag>Ata reg. preços</Tag>}
@@ -2313,26 +2307,25 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             </div>
           )}
           <div className="acn-kmeta" onClick={e => e.stopPropagation()}>
-            <span style={{ fontSize:9, color:'#94a3b8' }}>Tipo:</span>
+            <span className="acn-crm-tipo-rot">Tipo:</span>
             <select value={op.tipo_negocio || ''} onChange={e => atualizarTipoNegocio(op, e.target.value || null)}
               title="Tipo de negócio — usado pra escolher a régua de markup certa"
-              style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:4, border:'1px solid #d1d5db', background:'#fff', cursor:'pointer' }}>
+              className="acn-crm-tipo-sel">
               <option value="">— não definido —</option>
               {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           {op.prox_contato && (
-            <div className="acn-kmeta" style={{ fontWeight:500,
-              color: op.prox_contato === hoje ? 'var(--acn-warn)' : op.prox_contato < hoje ? 'var(--acn-bad)' : 'var(--acn-info)' }}>
+            <div className={'acn-kmeta acn-crm-prox' + (op.prox_contato === hoje ? ' hoje' : op.prox_contato < hoje ? ' atrasado' : '')}>
               Próximo contato: {op.prox_contato === hoje ? 'hoje' : op.prox_contato < hoje ? 'atrasado ·' : ''} {op.prox_contato}
               {op.hora_prox_contato && <span>· {op.hora_prox_contato}</span>}
-              {op.nome_contato && <span style={{ fontWeight:400 }}>· {op.nome_contato}</span>}
+              {op.nome_contato && <span className="acn-crm-leve">· {op.nome_contato}</span>}
             </div>
           )}
 
           <div className="acn-kmeta">
             <span className="acn-num acn-forte">{fmtMoeda(op.valor_registrado)}</span>
-            <span className="dir-auto" style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <span className="dir-auto acn-crm-dir gap6">
               {op.hora_sessao && <span className="acn-num">{String(op.hora_sessao).slice(0,5)}</span>}
               {dias !== null && !ganho && !perdido && (
                 <Selo familia={dias < 0 ? 'erro' : dias <= 3 ? 'atencao' : 'ok'} ponto={false}>
@@ -2344,9 +2337,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
           {chk && !ganho && !perdido && (
             <div className="acn-kmeta" title="Checklist da etapa">
-              <div style={{ flex:1, height:6, background:'var(--acn-line-soft)', borderRadius:3, overflow:'hidden' }}>
-                <div style={{ width:`${(chk.done/chk.total)*100}%`, height:'100%', borderRadius:3,
-                  background: chk.done===chk.total ? 'var(--acn-ok)' : 'var(--acn-warn)' }} />
+              <div className="acn-crm-barra">
+                <div className={chk.done===chk.total ? 'ok' : undefined} style={{ width:`${(chk.done/chk.total)*100}%` }} />
               </div>
               <span className="acn-num">{chk.done}/{chk.total}</span>
             </div>
@@ -2358,7 +2350,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               <span>Vendido: <strong>{fmtMoeda(tvend)}</strong></span>
               {podeVerTotais && <span>Faturado: <strong>{fmtMoeda(tfat)}</strong></span>}
               {op.data_validade_ata && (
-                <span style={{ color: diasAte(op.data_validade_ata)! < 30 ? 'var(--acn-bad)' : undefined }}>
+                <span className={diasAte(op.data_validade_ata)! < 30 ? 'acn-crm-aviso-bad' : undefined}>
                   Validade: {fmtData(op.data_validade_ata)}
                 </span>
               )}
@@ -2432,14 +2424,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
     const totalMes = opsFiltradas.filter(noMes).length;
     const dist = [
-      { rot: 'Negociação', n: opsAtivas.length, cor: 'var(--acn-info)' },
-      { rot: 'Ganhas', n: opsGanhas.length, cor: 'var(--acn-ok)' },
-      { rot: 'Perdidas', n: opsPerdidas.length, cor: 'var(--acn-bad)' },
-      { rot: 'Desistência', n: opsDesistencias.length, cor: 'var(--acn-neutral)' },
+      { rot: 'Negociação', n: opsAtivas.length, fam: 'info' },
+      { rot: 'Ganhas', n: opsGanhas.length, fam: 'ok' },
+      { rot: 'Perdidas', n: opsPerdidas.length, fam: 'erro' },
+      { rot: 'Desistência', n: opsDesistencias.length, fam: 'neutro' },
     ];
 
     return (
-      <div style={{ marginBottom:14 }}>
+      <div className="acn-crm-resumo">
         {/* Números do funil numa faixa só: valor, quantidade e distribuição */}
         <div className="sec-card acn-pipe">
           <div>
@@ -2452,7 +2444,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
           <div>
             <span className="rot">Ganhas</span>
-            <span className="val acn-num" style={{ color:'var(--acn-ok)' }}>{podeVer ? fmtMoeda(totalGanho) : opsGanhas.length}</span>
+            <span className="val acn-num acn-txt-ok">{podeVer ? fmtMoeda(totalGanho) : opsGanhas.length}</span>
             <span className="sub">
               <span className="acn-num">{opsGanhas.length}</span> · {opsAguardandoFaturamento.length} aguardando faturamento
               {podeVer && totalAguardandoFaturamento > 0 && <> ({fmtMoeda(totalAguardandoFaturamento)})</>}
@@ -2460,24 +2452,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
           <div>
             <span className="rot">Perdidas</span>
-            <span className="val acn-num" style={{ color:'var(--acn-bad)' }}>{podeVer ? fmtMoeda(totalPerdido) : opsPerdidas.length}</span>
+            <span className="val acn-num acn-txt-erro">{podeVer ? fmtMoeda(totalPerdido) : opsPerdidas.length}</span>
             <span className="sub"><span className="acn-num">{opsPerdidas.length}</span> perdidas · {opsDesistencias.length} desistência{opsDesistencias.length !== 1 ? 's' : ''}</span>
           </div>
           <div>
             <span className="rot">Distribuição · <span className="acn-num">{totalMes}</span> registros</span>
             <div className="dist" aria-hidden="true">
-              {dist.filter(d => d.n > 0).map(d => <i key={d.rot} title={`${d.rot}: ${d.n}`} style={{ flex: d.n, background: d.cor }} />)}
+              {dist.filter(d => d.n > 0).map(d => <i key={d.rot} title={`${d.rot}: ${d.n}`} data-acn-familia={d.fam} style={{ flex: d.n }} />)}
             </div>
             <span className="sub">{dist.map(d => `${d.rot} ${d.n}`).join(' · ')}</span>
             {podeVer && <MarkupBarraDistribuicao valores={opsAtivas.map(o => markupPorOp[o.id]?.pct)} />}
           </div>
         </div>
-        <div className="acn-kmeta" style={{ margin:'8px 2px 0', gap:8 }}>
+        <div className="acn-kmeta acn-crm-mes">
           <label htmlFor="crm-mes-pipeline">Mês do pipeline</label>
-          <input id="crm-mes-pipeline" type="month" className="acn-input" value={mesFiltroPipeline} onChange={e => setMesFiltroPipeline(e.target.value)}
-            style={{ width:'auto', height:28 }} />
+          <input id="crm-mes-pipeline" type="month" className="acn-input acn-crm-mes-in" value={mesFiltroPipeline} onChange={e => setMesFiltroPipeline(e.target.value)} />
           {mesFiltroPipeline && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setMesFiltroPipeline('')}>Limpar</Botao>}
-          {podeVer && <span>· Recorte: <strong style={{ color:'var(--acn-ink)', fontWeight:500 }}>{recorteLabel}</strong> (filtre por vendedor no seletor de responsável)</span>}
+          {podeVer && <span>· Recorte: <strong className="acn-crm-recorte">{recorteLabel}</strong> (filtre por vendedor no seletor de responsável)</span>}
         </div>
       </div>
     );
@@ -2485,7 +2476,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   const renderRelatorio = () => {
     return (
-      <div style={{ padding: '12px 0' }}>
+      <div className="acn-crm-rel">
         {renderResumoCards()}
 
         {/* ── Por estágio ── */}
@@ -2495,67 +2486,63 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const ganho    = isGanho(est);
           const perdido  = isPerdido(est);
           const desistiu = isDesistencia(est);
-          const hdrBg    = perdido ? '#991b1b' : ganho ? '#166534' : desistiu ? '#92400e' : (est.cor || '#1e293b');
+          const famEst   = perdido ? 'erro' : ganho ? 'ok' : desistiu ? 'atencao' : undefined;   // a cor do ponto: pela família; a das demais etapas é a que o Admin escolheu
           const totalEst    = items.reduce((s, o) => s + (o.valor_registrado || 0), 0);
           const totalEstACN = items.reduce((s, o) => s + receitaEfetiva(o), 0);
           const hoje2    = hojeISO();
 
           return (
-            <div key={est.id} className="sec-card" style={{ marginBottom:10 }}>
+            <div key={est.id} className="sec-card acn-crm-rel-bloco">
               {/* Header do estágio — cor só no ponto */}
-              <div className="acn-kcab" style={{ padding:'10px 14px', borderBottom:'1px solid var(--acn-line)', marginBottom:0 }}>
-                <i style={{ background: hdrBg }} />
+              <div className="acn-kcab acn-crm-rel-cab">
+                <i data-acn-familia={famEst} style={famEst ? undefined : { background: est.cor || 'var(--acn-ink)' }} />
                 <span>{est.nome}</span>
                 <em>{items.length}</em>
                 {podeVer && totalEst > 0 && (
-                  <span style={{ marginLeft:'auto', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
-                    <span className="acn-num" style={{ fontSize:13, fontWeight:600 }}>{fmtMoeda(totalEst)}</span>
+                  <span className="acn-crm-rel-tot">
+                    <span className="acn-num acn-crm-rel-valor">{fmtMoeda(totalEst)}</span>
                     {totalEstACN !== totalEst && (
-                      <span className="acn-num" style={{ fontSize:12, fontWeight:400, color:'var(--acn-muted)' }}>ACN: {fmtMoeda(totalEstACN)}</span>
+                      <span className="acn-num acn-crm-rel-acn">ACN: {fmtMoeda(totalEstACN)}</span>
                     )}
                   </span>
                 )}
               </div>
 
               {/* Linhas de ops */}
-              {items.map((op, i) => (
+              {items.map((op) => (
                 <div key={op.id}
                   onClick={() => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
-                  style={{ padding:'7px 12px', borderBottom: i < items.length - 1 ? '1px solid #f1f5f9' : 'none',
-                    display:'flex', alignItems:'center', gap:8, cursor:'pointer', transition:'background .1s' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                  className="acn-crm-rel-linha"
                 >
                   {/* Cor funil */}
-                  <span style={{ width:4, height:32, borderRadius:2, flexShrink:0,
-                    background: op.funil === 'licitacao' ? '#7c3aed' : '#0891b2' }} />
+                  <span className={'acn-crm-rel-funil ' + (op.funil === 'licitacao' ? 'lic' : 'vd')} />
 
                   {/* Info principal */}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', wordBreak:'break-word' }}>
+                  <div className="acn-crm-rel-info">
+                    <div className="acn-crm-rel-tit">
                       {op.titulo}
                     </div>
-                    <div style={{ fontSize:9, color:'#64748b', marginTop:1, display:'flex', gap:8, flexWrap:'wrap' }}>
-                      {op.orgao && <span>🏛️ {op.orgao}</span>}
-                      {op.responsavel_nome && <span>👤 {op.responsavel_nome}</span>}
-                      {op.tipo_licitacao === 'ata' && <span style={{ color:'#7c3aed', fontWeight:700 }}>ATA</span>}
+                    <div className="acn-crm-rel-sub">
+                      {op.orgao && <span><Icone path={mdiBankOutline} size={12} />{op.orgao}</span>}
+                      {op.responsavel_nome && <span><Icone path={mdiAccountOutline} size={12} />{op.responsavel_nome}</span>}
+                      {op.tipo_licitacao === 'ata' && <span className="acn-crm-rel-ata">ATA</span>}
                     </div>
                   </div>
 
                   {/* Coluna direita */}
-                  <div style={{ flexShrink:0, textAlign:'right' }}>
+                  <div className="acn-crm-rel-dir">
                     {podeVer && (op.valor_registrado || 0) > 0 && (
                       <>
-                        <div style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</div>
+                        <div className="acn-crm-rel-v">{fmtMoeda(op.valor_registrado)}</div>
                         {(op.faturamento_empresa==='Detech' || op.classificacao==='Parceiro') && op.valor_acn != null && (
-                          <div style={{ fontSize:8, color:'#1d4ed8', fontWeight:700 }}>ACN: {fmtMoeda(op.valor_acn)}</div>
+                          <div className="acn-crm-rel-acn2">ACN: {fmtMoeda(op.valor_acn)}</div>
                         )}
                       </>
                     )}
                     {op.prox_contato && (
-                      <div style={{ fontSize:8, color: op.prox_contato <= hoje2 ? '#dc2626' : '#64748b', marginTop:1 }}>
-                        📅 {op.prox_contato}
-                        {op.hora_prox_contato && <span> ⏰ {String(op.hora_prox_contato).slice(0,5)}</span>}
+                      <div className={'acn-crm-rel-prox' + (op.prox_contato <= hoje2 ? ' atrasado' : '')}>
+                        <Icone path={mdiCalendarOutline} size={12} />{op.prox_contato}
+                        {op.hora_prox_contato && <span><Icone path={mdiClockOutline} size={12} />{String(op.hora_prox_contato).slice(0,5)}</span>}
                       </div>
                     )}
                   </div>
@@ -2583,18 +2570,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 function ColunaRolavel({ children }: any) {
   const [ref, maxAltura] = useAlturaDeCards();
   return (
-    <div ref={ref} style={{ boxSizing:'border-box', maxHeight: maxAltura || undefined,
-      overflowY: maxAltura ? 'auto' : 'visible', scrollbarGutter:'stable' }}>
+    <div ref={ref} className="acn-crm-coluna-rol" style={{ maxHeight: maxAltura || undefined, overflowY: maxAltura ? 'auto' : 'visible' }}>
       {children}
     </div>
   );
 }
-
-const SUB_STATUS_COR: Record<string,string> = {
-    andamento: '#2563eb',
-    suspenso:  '#7c3aed',
-    aguardando:'#0891b2',
-  };
 
   const atualizarSubStatus = async (opId: string, novoStatus: string) => {
     const { error } = await supabase.from('crm_oportunidades').update({ sub_status: novoStatus }).eq('id', opId);
@@ -2635,7 +2615,7 @@ const SUB_STATUS_COR: Record<string,string> = {
       );
     }
     return (
-    <div style={{ display:'flex', gap:12, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
+    <div className="acn-crm-kanban">
       {SUPER_COLS.map(col => renderColunaKanban(col, 264))}
     </div>
     );
@@ -2648,21 +2628,20 @@ const SUB_STATUS_COR: Record<string,string> = {
         const adicionar = () => { setFormOp({ ...VAZIO_OP, funil, estagio_id: estId }); setModalOp({}); };
 
         return (
-          <div key={col.id} className="acn-kcol" style={{ width: largura, flexShrink:0 }}>
+          <div key={col.id} className="acn-kcol acn-crm-col" style={{ width: largura }}>
             {/* Cabeçalho: a cor da etapa fica só no ponto */}
             <div className="acn-kcab">
               <i style={{ background: col.bg }} />
               <span title={col.label}>{col.label}</span>
               <em>{cards.length}</em>
-              <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4 }}>
+              <span className="acn-crm-col-acoes">
                 {col.tipo === 'ganho' && (
                   <Selo familia="neutro" ponto={false}>
                     ACN {cards.filter(o=>o.empresa_vencedora==='ACN').length} · DTC {cards.filter(o=>o.empresa_vencedora==='DETECH').length}
                   </Selo>
                 )}
                 {!col.terminal && (
-                  <span className="acn-num" title="Técnica · Documental · Orçamentária"
-                    style={{ fontSize:11, fontWeight:500, color:'var(--acn-muted)', whiteSpace:'nowrap' }}>
+                  <span className="acn-num acn-crm-col-sub" title="Técnica · Documental · Orçamentária">
                     {cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} · {cards.filter(o=>o.sub_status==='suspenso').length} · {cards.filter(o=>o.sub_status==='aguardando').length}
                   </span>
                 )}
@@ -2678,11 +2657,7 @@ const SUB_STATUS_COR: Record<string,string> = {
               onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
               onDragLeave={() => setDragOver(null)}
               onDrop={() => { setDragOver(null); estId && handleDrop(estId); }}
-              style={{
-                background: isDragOver ? 'var(--acn-brand-soft)' : undefined,
-                borderRadius: 6, minHeight: 120, transition: 'background .15s',
-                outline: isDragOver ? '2px dashed var(--acn-brand)' : undefined, outlineOffset: -2,
-              }}
+              className={'acn-crm-zona' + (isDragOver ? ' sobre' : '')}
             >
               <ColunaRolavel>
               {cards.map(op => (
@@ -2705,8 +2680,7 @@ const SUB_STATUS_COR: Record<string,string> = {
 
                   {/* Celular/tablet: mudar de etapa sem arrastar */}
                   {toque && (
-                    <select value="" className="acn-input" onChange={e => { const destino = e.target.value; if (destino) handleDrop(destino, op.id); }}
-                      style={{ width:'100%', margin:'-4px 0 8px' }}>
+                    <select value="" className="acn-input acn-crm-mover" onChange={e => { const destino = e.target.value; if (destino) handleDrop(destino, op.id); }}>
                       <option value="">Mover para…</option>
                       {SUPER_COLS.filter(c => c.id !== col.id).map(c => (
                         <option key={c.id} value={c.estDrop()}>{c.label}</option>
@@ -2964,7 +2938,7 @@ const SUB_STATUS_COR: Record<string,string> = {
       {contatosHoje.length > 0 && (
         <Faixa tom="atencao" icone={mdiCalendarClockOutline}>
           <b>Contatos agendados para hoje ({contatosHoje.length})</b>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:6 }}>
+          <div className="acn-crm-hoje">
             {contatosHoje.map(o => (
               <div key={o.id} className="acn-contato-hoje">
                 <div className="acn-forte">{o.titulo}</div>
@@ -2980,17 +2954,17 @@ const SUB_STATUS_COR: Record<string,string> = {
       )}
 
       {/* ── Filtros ── */}
-      <div className="acn-kmeta" style={{ gap:8, margin:'0 0 12px' }}>
-        <input className="acn-input" placeholder="Título, órgão ou edital" aria-label="Buscar por título, órgão ou edital"
-          value={busca} onChange={e => setBusca(e.target.value)} style={{ width:220 }} />
+      <div className="acn-kmeta acn-crm-filtros">
+        <input className="acn-input acn-crm-busca" placeholder="Título, órgão ou edital" aria-label="Buscar por título, órgão ou edital"
+          value={busca} onChange={e => setBusca(e.target.value)} />
         {/* Filtro por responsável */}
-        <select className="acn-input" value={filtResp} onChange={e => setFiltResp(e.target.value)} style={{ width:'auto', minWidth:170 }} aria-label="Responsável">
+        <select className="acn-input acn-crm-sel170" value={filtResp} onChange={e => setFiltResp(e.target.value)} aria-label="Responsável">
           <option value="">Todos os responsáveis</option>
           {respUnicos.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
         {filtResp && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltResp('')} title="Limpar responsável" aria-label="Limpar responsável" />}
         {/* Filtro por tipo de negócio (Revenda/Venda/Pós-vendas) */}
-        <select className="acn-input" value={filtTipoNegocio} onChange={e => setFiltTipoNegocio(e.target.value)} style={{ width:'auto', minWidth:140 }} aria-label="Tipo de negócio">
+        <select className="acn-input acn-crm-sel140" value={filtTipoNegocio} onChange={e => setFiltTipoNegocio(e.target.value)} aria-label="Tipo de negócio">
           <option value="">Todos os tipos</option>
           {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -3001,9 +2975,9 @@ const SUB_STATUS_COR: Record<string,string> = {
           opsFunil.forEach(o => { if (o.temperatura && contTemp[o.temperatura] !== undefined) contTemp[o.temperatura]++; });
           const maxTemp = Math.max(1, contTemp.frio, contTemp.morno, contTemp.quente);
           const BARRAS = [
-            { v:'frio',   label:'🧊 Frio',   cor:'#245fb8' },
-            { v:'morno',  label:'🌤️ Morno',  cor:'#8b5cf6' },
-            { v:'quente', label:'🔥 Quente', cor:'#b9302a' },
+            { v:'frio',   label:'🧊 Frio' },
+            { v:'morno',  label:'🌤️ Morno' },
+            { v:'quente', label:'🔥 Quente' },
           ] as const;
           return (
             <div title="Temperatura dos leads — clique numa barra para filtrar" className="acn-temp-barras">
@@ -3012,9 +2986,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                 const ativo = filtTemp === b.v;
                 const h = Math.max(3, Math.round((n / maxTemp) * 18));
                 return (
-                  <div key={b.v} onClick={() => setFiltTemp(ativo ? '' : b.v)} title={`${b.label}: ${n}`}
-                    style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', cursor:'pointer', width:16, height:20 }}>
-                    <div style={{ width:10, height:h, borderRadius:'2px 2px 0 0', background: b.cor, opacity: ativo || !filtTemp ? 1 : .35 }} />
+                  <div key={b.v} onClick={() => setFiltTemp(ativo ? '' : b.v)} title={`${b.label}: ${n}`} className="acn-crm-temp-col">
+                    <div className={'acn-crm-temp-barra' + (ativo || !filtTemp ? '' : ' apagada')} data-temp={b.v} style={{ height: h }} />
                   </div>
                 );
               })}
@@ -3028,34 +3001,34 @@ const SUB_STATUS_COR: Record<string,string> = {
       {abaInterna === 'kanban' && (
         <div>
           <div>{renderResumoCards()}</div>
-          <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
+          <div className="acn-crm-rolax">{renderKanban()}</div>
         </div>
       )}
       {abaInterna === 'agenda' && (
-        <div style={{ maxWidth:520, padding:'8px 4px' }}>
+        <div className="acn-crm-agenda">
           <AgendaWidget setor="comercial" currentUser={currentUser} />
         </div>
       )}
       {abaInterna === 'recentes' && (
-        <div style={{ maxWidth:640, padding:'8px 4px' }}>
+        <div className="acn-crm-recentes">
           {erroRecentes && <Faixa tom="erro" acao={<Botao pequeno onClick={carregarRecentesCrm}>Tentar de novo</Botao>}>Não foi possível ler as últimas visualizadas ({erroRecentes}). Isso não quer dizer que você não tenha aberto nenhuma.</Faixa>}
           {recentesCrmLoading ? (
-            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Carregando...</div>
+            <div className="acn-empty acn-crm-vazio">Carregando...</div>
           ) : recentesCrm.length === 0 ? (
-            erroRecentes ? null : <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Nenhuma oportunidade visualizada ainda.</div>
+            erroRecentes ? null : <div className="acn-empty acn-crm-vazio">Nenhuma oportunidade visualizada ainda.</div>
           ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div className="acn-crm-rec-lista">
               {recentesCrm.map((r: any) => {
                 const op = ops.find(o => o.id === r.registro_id);
                 if (!op) return null;
                 return (
                   <div key={r.registro_id} onClick={() => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
-                    style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', wordBreak:'break-word' }}>{op.titulo}</div>
-                      <div style={{ fontSize:9, color:'#64748b' }}>{op.orgao || '—'} · {getEst(op.estagio_id)?.nome || '—'}</div>
+                    className="acn-crm-rec-linha">
+                    <div className="acn-crm-rec-info">
+                      <div className="acn-forte acn-crm-rec-tit">{op.titulo}</div>
+                      <div className="acn-ajuda">{op.orgao || '—'} · {getEst(op.estagio_id)?.nome || '—'}</div>
                     </div>
-                    <div style={{ fontSize:9, color:'#94a3b8', flexShrink:0 }}>
+                    <div className="acn-ajuda acn-crm-rec-quando">
                       {new Date(r.visualizado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
                     </div>
                   </div>
@@ -3066,7 +3039,7 @@ const SUB_STATUS_COR: Record<string,string> = {
         </div>
       )}
       {abaInterna === 'relatorio' && (
-        <div style={{ overflowY:'auto', padding:'0 4px 16px' }}>{renderRelatorio()}</div>
+        <div className="acn-crm-rel-pane">{renderRelatorio()}</div>
       )}
       {abaInterna === 'faturamentos' && renderFaturamentos()}
       {abaInterna === 'opls' && (() => {
