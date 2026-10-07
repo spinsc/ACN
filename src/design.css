@@ -1865,3 +1865,42 @@ html body .acn-main table.acn-tabela tr.acn-fp-rs-jan-linha.sub > td.esq { paddi
 .acn-fp-rs-card { min-width: 130px; padding: 8px 12px; background: var(--acn-f-soft); border: 1px solid color-mix(in srgb, var(--acn-f) 30%, transparent); border-radius: var(--acn-r3); }
 .acn-fp-rs-card-rot { font-size: 11px; color: var(--acn-muted); }
 .acn-fp-rs-card-v { font-size: 15px; font-weight: 800; color: var(--acn-f); }
+
+/* ── Formação de Preços · 12e26 (07/10/2026): abas, avisos, seletor de versões, cabeçalho, identificação e parâmetros globais ── */
+.acn-fp-corpo { padding: 14px; }
+.acn-fp-corpo.embutido { padding: 0; }
+.acn-fp-corpo > .acn-faixa { margin-bottom: 12px; }
+.acn-fp-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.acn-fp-sel-rot { margin-right: 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+html body .acn-input.acn-fp-sel-campo { flex: 1 1 320px; width: auto; max-width: 560px; min-width: 0; font-weight: 600; color: var(--acn-info); background: var(--acn-info-soft); }
+html body .acn-input.acn-fp-sel-campo.vencedora { border-color: var(--acn-warn); }
+.acn-fp-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.acn-fp-tela-tit { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 700; color: var(--acn-ink); }
+.acn-fp-cab-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-fp-cab-estado .acn-selo, .acn-fp-cab-estado .acn-tag { display: inline-flex; align-items: center; gap: 4px; }
+.acn-fp-cab-acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+/* o aviso de edição simultânea fica acima de tudo (era position:fixed com z-index 9999) */
+html body .modal-overlay.acn-fp-overlay.acn-fp-conf-overlay { z-index: 9999; }
+.acn-fp-conf-tit { color: var(--acn-warn); }
+.acn-fp-conf-txt { font-size: 13px; line-height: 1.6; color: var(--acn-text); }
+.acn-fp-conf-acoes { display: flex; flex-direction: column; gap: 8px; }
+.acn-fp-conf-acoes .acn-b.acn-fp-conf-btn { flex-direction: column; align-items: flex-start; justify-content: flex-start; height: auto; padding: 10px 14px; text-align: left; }
+.acn-fp-conf-sub { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; opacity: .9; }
+/* identificação e parâmetros globais: cartões */
+.acn-fp-bloco { margin-bottom: 12px; padding: 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-fp-bloco-linha { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
+.acn-fp-bloco-linha.com-divisor { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--acn-line-soft); }
+.acn-fp-bloco-rot { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-text); }
+.acn-fp-bloco-tit { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-text); }
+.acn-fp-opl-ok { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 12px; color: var(--acn-f); }
+.acn-fp-desc-linha { display: flex; align-items: center; gap: 6px; }
+html body .acn-input.acn-fp-plat-campo { min-width: 200px; width: auto; }
+.acn-fp-plat-info { display: flex; flex-wrap: wrap; gap: 12px; padding: 6px 12px; font-size: 12px; font-weight: 700; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 30%, transparent); border-radius: var(--acn-r2); }
+.acn-fp-plat-info > span { color: var(--acn-f); }
+.acn-fp-plat-info > .liquido { font-weight: 800; }
+.acn-fp-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; margin-bottom: 12px; }
+html body .acn-input.acn-fp-campo-cheio { width: 100%; box-sizing: border-box; }
+.acn-fp-params-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding-top: 10px; border-top: 1px solid var(--acn-line-soft); }
+.acn-fp-check { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.acn-fp-check input { accent-color: var(--acn-brand); }
+.acn-fp-check-on { font-weight: 700; color: var(--acn-info); }

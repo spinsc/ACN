@@ -8,12 +8,13 @@ import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
-import { Faixa, Botao, Selo, Chips } from './Interface';
+import { Faixa, Botao, Selo, Chips, Abas, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
   mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline, mdiArrowLeft, mdiFileDocumentOutline,
-  mdiFileMultipleOutline, mdiContentCopy, mdiEyeOutline, mdiChevronRight, mdiPrinterOutline } from '@mdi/js';
+  mdiFileMultipleOutline, mdiContentCopy, mdiEyeOutline, mdiChevronRight, mdiPrinterOutline, mdiChartBar, mdiUndo, mdiNotebookEditOutline, mdiAlertOutline,
+  mdiLockOutline, mdiTrophyOutline, mdiClockOutline, mdiLinkVariantOff, mdiHistory, mdiPaperclip, mdiOfficeBuildingOutline, mdiStorefrontOutline, mdiSync } from '@mdi/js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -3001,28 +3002,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
+    <div className={'acn-fp' + (embutido ? ' embutido' : '')}>
 
       {/* ── NAVEGAÇÃO DE ABAS — some no modo embutido, só a edição importa ── */}
       {!embutido && (
-        <div style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#fff', paddingLeft:14, paddingTop:8 }}>
-          {[
-            { id:'formacao',       label:'📊 Formação de Preços' },
-            { id:'precos_formados', label:'📋 Preços Formados' },
-          ].map(tab => (
-            <button key={tab.id}
-              onClick={() => setAbaAtiva(tab.id)}
-              style={{
-                padding:'8px 18px', fontSize:11, fontWeight: abaAtiva === tab.id ? 800 : 500,
-                border:'none', borderBottom: abaAtiva === tab.id ? '3px solid #2563eb' : '3px solid transparent',
-                background:'none', cursor:'pointer',
-                color: abaAtiva === tab.id ? '#2563eb' : '#64748b',
-                marginBottom:-2,
-              }}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <Abas ativa={abaAtiva} onChange={setAbaAtiva}
+          itens={[
+            { id: 'formacao', rotulo: 'Formação de Preços', icone: mdiChartBar },
+            { id: 'precos_formados', rotulo: 'Preços Formados', icone: mdiFileMultipleOutline },
+          ]} />
       )}
 
       {/* ── ABA PREÇOS FORMADOS ── */}
@@ -3032,7 +3020,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
       {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
       {(embutido || abaAtiva === 'formacao') && (
-        <div style={{ padding: embutido ? 0 : 14 }}>
+        <div className={'acn-fp-corpo' + (embutido ? ' embutido' : '')}>
 
           {erroVinculo && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={carregarFormacoesVinculo}>Tentar de novo</Botao>}>
@@ -3051,41 +3039,38 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               Nada foi sobrescrito: o trabalho local continua na tela e o
               usuário escolhe o que fazer com ele. */}
           {conflito && (
-            <div style={{ position:'fixed', inset:0, background:'#0009', zIndex:9999,
-              display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-              <div style={{ background:'#fff', borderRadius:10, maxWidth:520, width:'100%', padding:20,
-                boxShadow:'0 10px 40px #0004' }}>
-                <div style={{ fontSize:15, fontWeight:800, color:'#b45309', marginBottom:8 }}>
-                  ⚠️ Alguém salvou esta formação enquanto você editava
+            <div className="modal-overlay acn-fp-overlay acn-fp-conf-overlay">
+              <div className="modal-box acn-modal-cadastro acn-fp-jan" role="alertdialog" aria-label="Alguém salvou esta formação enquanto você editava">
+                <div className="acn-modal-cab">
+                  <span className="modal-title acn-fp-conf-tit">
+                    <Icone path={mdiAlertOutline} size={18} />
+                    Alguém salvou esta formação enquanto você editava
+                  </span>
                 </div>
-                <div style={{ fontSize:12, color:'#334155', lineHeight:1.6, marginBottom:14 }}>
-                  <strong>{conflito.dono}</strong>
-                  {conflito.quando ? ` salvou uma alteração às ${conflito.quando}` : ' salvou uma alteração'},
-                  depois que esta tela foi aberta.
-                  <br /><br />
-                  <strong>Nada foi perdido</strong> — o seu trabalho continua aqui na tela e a
-                  versão dele continua salva. Escolha como seguir:
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                  <button disabled={resolvendoConflito}
-                    onClick={() => gravarComoNovaVersao(conflito.payload)}
-                    style={{ background:'#059669', color:'#fff', border:'none', borderRadius:6,
-                      padding:'10px 14px', fontSize:12, fontWeight:800, cursor:'pointer', textAlign:'left' }}>
-                    ✅ Gravar o meu como uma NOVA versão
-                    <div style={{ fontSize:10, fontWeight:500, opacity:.9, marginTop:2 }}>
-                      Preserva os dois trabalhos. Recomendado.
-                    </div>
-                  </button>
-                  <button disabled={resolvendoConflito} onClick={descartarERecarregar}
-                    style={{ background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', borderRadius:6,
-                      padding:'10px 14px', fontSize:12, fontWeight:700, cursor:'pointer', textAlign:'left' }}>
-                    ↺ Descartar o meu e abrir a versão de {conflito.dono}
-                  </button>
-                  <button disabled={resolvendoConflito} onClick={() => setConflito(null)}
-                    style={{ background:'none', color:'#64748b', border:'none',
-                      padding:'6px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                    Cancelar e continuar editando
-                  </button>
+                <div className="acn-modal-corpo">
+                  <div className="acn-fp-conf-txt">
+                    <strong>{conflito.dono}</strong>
+                    {conflito.quando ? ` salvou uma alteração às ${conflito.quando}` : ' salvou uma alteração'},
+                    depois que esta tela foi aberta.
+                    <br /><br />
+                    <strong>Nada foi perdido</strong> — o seu trabalho continua aqui na tela e a
+                    versão dele continua salva. Escolha como seguir:
+                  </div>
+                  <div className="acn-fp-conf-acoes">
+                    <Botao variante="primario" icone={mdiCheck} className="acn-fp-conf-btn" disabled={resolvendoConflito}
+                      onClick={() => gravarComoNovaVersao(conflito.payload)}>
+                      Gravar o meu como uma NOVA versão
+                      <span className="acn-fp-conf-sub">
+                        Preserva os dois trabalhos. Recomendado.
+                      </span>
+                    </Botao>
+                    <Botao icone={mdiUndo} className="acn-fp-conf-btn" disabled={resolvendoConflito} onClick={descartarERecarregar}>
+                      Descartar o meu e abrir a versão de {conflito.dono}
+                    </Botao>
+                    <Botao variante="discreto" disabled={resolvendoConflito} onClick={() => setConflito(null)}>
+                      Cancelar e continuar editando
+                    </Botao>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3096,40 +3081,30 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               chegou a ser salvo no sistema (fechou a aba, caiu a energia,
               saiu da tela sem salvar). */}
           {rascunhoPendente && (
-            <div style={{ background:'#fffbeb', border:'1.5px solid #fcd34d', borderRadius:8,
-              padding:'10px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-              <div style={{ flex:1, minWidth:220, fontSize:11, color:'#92400e' }}>
-                <strong>📝 Há alterações não salvas desta formação neste computador</strong>
-                <div style={{ fontSize:10, marginTop:2, color:'#b45309' }}>
-                  Guardadas automaticamente em{' '}
-                  {rascunhoPendente.salvoEm
-                    ? new Date(rascunhoPendente.salvoEm).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
-                    : '—'}
-                  {rascunhoPendente.usuario ? ` · ${rascunhoPendente.usuario}` : ''}. Elas não estão no sistema ainda.
-                </div>
+            <Faixa tom="atencao" icone={mdiNotebookEditOutline} acao={<>
+              <Botao variante="primario" pequeno icone={mdiUndo} onClick={restaurarRascunho}>Restaurar</Botao>
+              <Botao pequeno onClick={() => descartarRascunho(rascunhoPendente.id)}>Descartar</Botao>
+            </>}>
+              <strong>Há alterações não salvas desta formação neste computador</strong>
+              <div className="acn-ajuda">
+                Guardadas automaticamente em{' '}
+                {rascunhoPendente.salvoEm
+                  ? new Date(rascunhoPendente.salvoEm).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+                  : '—'}
+                {rascunhoPendente.usuario ? ` · ${rascunhoPendente.usuario}` : ''}. Elas não estão no sistema ainda.
               </div>
-              <button onClick={restaurarRascunho}
-                style={{ background:'#d97706', color:'#fff', border:'none', borderRadius:6,
-                  padding:'7px 14px', fontSize:11, fontWeight:800, cursor:'pointer' }}>
-                ↩️ Restaurar
-              </button>
-              <button onClick={() => descartarRascunho(rascunhoPendente.id)}
-                style={{ background:'none', color:'#92400e', border:'1px solid #fcd34d', borderRadius:6,
-                  padding:'7px 12px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                Descartar
-              </button>
-            </div>
+            </Faixa>
           )}
 
           {/* ── SELETOR DE FORMAÇÕES VINCULADAS (modo embutido) ── */}
           {vinculo && (
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
+            <div className="acn-fp-sel">
               {carregandoVinculo ? (
-                <span style={{ fontSize:10, color:'#94a3b8' }}>Carregando formações vinculadas...</span>
+                <span className="acn-ajuda">Carregando formações vinculadas...</span>
               ) : (
                 <>
                   {formacoesVinculo.length > 0 && (
-                    <span style={{ fontSize:9, fontWeight:700, color:'#64748b', textTransform:'uppercase', marginRight:2 }}>
+                    <span className="acn-fp-sel-rot">
                       Versões ({formacoesVinculo.length})
                     </span>
                   )}
@@ -3141,9 +3116,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                     return (
                       <select value={atual ? atual.id : ''} onChange={e => trocarVersao(e.target.value)}
                         title={atual ? rotuloFormacao(atual) : 'Escolha a versão'}
-                        style={{ flex:'1 1 320px', maxWidth:560, minWidth:0, padding:'5px 10px', fontSize:11, fontWeight:700,
-                          borderRadius:6, cursor:'pointer', background:'#eff6ff', color:'#1e40af',
-                          border: atual?.vencedora ? '1.5px solid #f59e0b' : '1px solid #93c5fd' }}>
+                        className={'acn-input acn-fp-sel-campo' + (atual?.vencedora ? ' vencedora' : '')}>
                         {!atual && (
                           <option value="">{editandoId ? '— outra formação carregada —' : '— Nova formação (ainda não salva) —'}</option>
                         )}
@@ -3154,118 +3127,106 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                     );
                   })()}
                   {editandoId && formacoesVinculo.some((m: any) => m.id === editandoId) && temPoderDeGerente(currentUser) && (
-                    <button onClick={desvincularFormacao}
-                      title="Tira esta formação deste processo (não apaga a formação) — Gerentes e Admins"
-                      style={{ padding:'5px 10px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px solid #fca5a5',
-                        background:'#fff', color:'#b91c1c' }}>
-                      ⊘ Desvincular
-                    </button>
+                    <Botao variante="perigo-sec" pequeno icone={mdiLinkVariantOff} onClick={desvincularFormacao}
+                      title="Tira esta formação deste processo (não apaga a formação) — Gerentes e Admins">
+                      Desvincular
+                    </Botao>
                   )}
-                  <button onClick={novaQuotacao}
-                    style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px dashed #94a3b8',
-                      background:'#f8fafc', color:'#64748b' }}>
-                    + Nova formação
-                  </button>
-                  <button onClick={() => { setModalImportar(true); carregarModelos(); }}
-                    style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px dashed #7c3aed',
-                      background:'#faf5ff', color:'#7c3aed' }}>
-                    📥 Importar Formação
-                  </button>
+                  <Botao pequeno icone={mdiPlus} onClick={novaQuotacao}>Nova formação</Botao>
+                  <Botao pequeno icone={mdiDownloadOutline} onClick={() => { setModalImportar(true); carregarModelos(); }}>
+                    Importar Formação
+                  </Botao>
                 </>
               )}
             </div>
           )}
 
           {/* ── HEADER ── */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
+          <div className="acn-fp-cab">
             <div>
-              <div style={{ fontWeight:800, fontSize:16, color:'#1e293b' }}>📊 Formação de Preços</div>
+              <div className="acn-fp-tela-tit"><Icone path={mdiChartBar} size={20} /> Formação de Preços</div>
               {/* Antes esta faixa inteira só aparecia se a formação tivesse
                   nome — então justamente as salvas sem nome (as do incidente
                   de 08/09) ficavam sem NENHUM indicador: nem "editando", nem
                   "finalizada v3", nem última alteração. Agora aparece sempre
                   que há uma formação carregada; o nome é que é opcional. */}
               {(nomeCotacao || editandoId || temNaoSalvo) && (
-                <div style={{ fontSize:10, color:'#64748b', marginTop:2, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                <div className="acn-fp-cab-estado">
                   {editandoId
-                    ? <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>✏️ EDITANDO</span>
+                    ? <Selo familia="atencao" ponto={false}><Icone path={mdiPencilOutline} size={12} /> EDITANDO</Selo>
                     : null}
-                  {nomeCotacao ? <>Modelo: <strong>{nomeCotacao}</strong></> : <em style={{ color:'#94a3b8' }}>sem nome</em>}
+                  {nomeCotacao ? <>Modelo: <strong>{nomeCotacao}</strong></> : <em className="acn-fraco">sem nome</em>}
                   {statusCotacao === 'finalizada' && (
-                    <span style={{ background:'#dcfce7', color:'#166534', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
-                      🔒 Finalizada v{versaoAtual}{finalizadaPorNome ? ` · ${finalizadaPorNome}` : ''}
-                    </span>
+                    <Selo familia="ok" ponto={false}>
+                      <Icone path={mdiLockOutline} size={12} /> Finalizada v{versaoAtual}{finalizadaPorNome ? ` · ${finalizadaPorNome}` : ''}
+                    </Selo>
                   )}
                   {vencedoraAtual && (
-                    <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
-                      🏆 Versão Vencedora
-                    </span>
+                    <Selo familia="atencao" ponto={false}>
+                      <Icone path={mdiTrophyOutline} size={12} /> Versão Vencedora
+                    </Selo>
                   )}
                   {temNaoSalvo && (
-                    <span style={{ background:'#fef2f2', color:'#b91c1c', border:'1px solid #fca5a5', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
-                      ● Alterações não salvas
-                    </span>
+                    <Selo familia="erro">
+                      Alterações não salvas
+                    </Selo>
                   )}
                   {ultimaAlteracao?.em && (
-                    <span style={{ background:'#f1f5f9', color:'#475569', borderRadius:3, padding:'1px 6px', fontWeight:600, fontSize:9 }}>
-                      🕐 Última alteração: {new Date(ultimaAlteracao.em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                    <Tag>
+                      <Icone path={mdiClockOutline} size={12} /> Última alteração: {new Date(ultimaAlteracao.em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
                       {ultimaAlteracao.por ? ` · ${ultimaAlteracao.por}` : ''}
-                    </span>
+                    </Tag>
                   )}
                 </div>
               )}
             </div>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-              <button className="acn-btn" style={{ background:'#0891b2', fontSize:10 }}
-                onClick={() => { setModalCarregar(true); carregarModelos(); }}>
-                📂 Carregar Modelo
-              </button>
-              <button className="acn-btn" style={{ background: editandoId ? '#f59e0b' : '#16a34a', fontSize:10 }}
-                onClick={() => setModalSalvar(true)}>
-                {editandoId ? '✏️ Atualizar Cotação' : '💾 Salvar Modelo'}
-              </button>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10 }}
-                onClick={novaQuotacao}>
-                🗒️ Nova Cotação
-              </button>
+            <div className="acn-fp-cab-acoes">
+              <Botao icone={mdiFolderOpenOutline} onClick={() => { setModalCarregar(true); carregarModelos(); }}>
+                Carregar Modelo
+              </Botao>
+              <Botao variante="primario" icone={editandoId ? mdiPencilOutline : mdiContentSaveOutline} onClick={() => setModalSalvar(true)}>
+                {editandoId ? 'Atualizar Cotação' : 'Salvar Modelo'}
+              </Botao>
+              <Botao icone={mdiFileDocumentOutline} onClick={novaQuotacao}>
+                Nova Cotação
+              </Botao>
               {itens.length > 0 && (
-                <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }} onClick={() => setModalResumo(true)}
+                <Botao icone={mdiReceiptTextOutline} onClick={() => setModalResumo(true)}
                   title="Resumo por lote e item: quantidades, unitários, totais e margem — com impressão/PDF">
-                  🧾 Resumo
-                </button>
+                  Resumo
+                </Botao>
               )}
               {itens.length > 0 && (
-                <button className="acn-btn" style={{ background:'#1e3a5f', fontSize:10 }}
+                <Botao icone={mdiLockOutline}
                   onClick={() => { setSenhaConfirm(''); setErroSenha(''); setModalSenha(true); }}
                   title="Exige confirmação de senha -- grava seu nome e data como responsável pela versão">
-                  🔒 {statusCotacao === 'finalizada' ? 'Registrar Nova Versão Final' : 'Registrar Versão Final'}
-                </button>
+                  {statusCotacao === 'finalizada' ? 'Registrar Nova Versão Final' : 'Registrar Versão Final'}
+                </Botao>
               )}
               {editandoId && (
-                <button className="acn-btn" style={{ background:'#0369a1', fontSize:10 }} onClick={abrirHistorico}>
-                  📜 Histórico
-                </button>
+                <Botao icone={mdiHistory} onClick={abrirHistorico}>
+                  Histórico
+                </Botao>
               )}
               {statusCotacao === 'finalizada' && !vencedoraAtual && (
-                <button className="acn-btn" style={{ background:'#d97706', fontSize:10 }} onClick={marcarVencedora}>
-                  🏆 Marcar Vencedora
-                </button>
+                <Botao icone={mdiTrophyOutline} onClick={marcarVencedora}>
+                  Marcar Vencedora
+                </Botao>
               )}
               {oplVinculada && (
-                <button className="acn-btn"
-                  style={{ background: finalizando ? '#94a3b8' : '#dc2626', fontSize:10 }}
+                <Botao icone={finalizando ? mdiTimerSand : mdiPaperclip}
                   onClick={finalizar}
                   disabled={finalizando}>
-                  {finalizando ? '⏳ Gerando PDF...' : '📎 Finalizar & Anexar PDF'}
-                </button>
+                  {finalizando ? 'Gerando PDF...' : 'Finalizar & Anexar PDF'}
+                </Botao>
               )}
             </div>
           </div>
           {statusCotacao === 'finalizada' && (
-            <div style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'6px 10px', marginBottom:10, fontSize:10, color:'#78350f' }}>
-              ⚠️ Esta formação já foi registrada como final. Alterações de custo, markup ou remoção de item a partir
-              daqui ficam registradas no <strong>Histórico</strong> (📜 acima) para rastreabilidade.
-            </div>
+            <Faixa tom="atencao">
+              Esta formação já foi registrada como final. Alterações de custo, markup ou remoção de item a partir
+              daqui ficam registradas no <strong>Histórico</strong> (botão acima) para rastreabilidade.
+            </Faixa>
           )}
 
           {/* ── RESUMO — no topo, antes de toda a composição ── */}
@@ -3278,50 +3239,42 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           {/* ── IDENTIFICAÇÃO: OP/OS, Desconto Máx., Empresa, Plataforma ──
               Um card só (antes eram 2 caixas separadas) — mesmo assunto,
               "quem é esta cotação", com uma linha divisória entre os 2 blocos. */}
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
-            {/* alignItems:'flex-start' (não 'flex-end') — o bloco Desconto tem
-                uma 3ª linha de legenda que o de OP/OS não tem; bottom-align
+          <div className="acn-fp-bloco">
+            {/* alinhado pelo topo (não pela base) — o bloco Desconto tem uma 3ª
+                linha de legenda que o de OP/OS não tem; alinhar pela base
                 fazia os rótulos ficarem em alturas diferentes */}
-            <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-start' }}>
+            <div className="acn-fp-bloco-linha">
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔗 OP/OS Vinculada</div>
+                <div className="acn-fp-bloco-rot"><Icone path={mdiLinkVariant} size={13} /> OP/OS Vinculada</div>
                 <OplAutocomplete value={oplVinculada} onSelect={setOplVinculada} />
                 {oplVinculada && (
-                  <div style={{ fontSize:9, color:'#16a34a', marginTop:3 }}>
-                    ✓ {oplVinculada.opl} — {oplVinculada.cliente_nome}
+                  <div className="acn-fp-opl-ok" data-acn-familia="ok">
+                    <Icone path={mdiCheck} size={13} /> {oplVinculada.opl} — {oplVinculada.cliente_nome}
                   </div>
                 )}
               </div>
               {!isVendedor && (
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔒 Desconto Máx. (%)</div>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <input type="number" className="acn-input" style={{ width:80, fontSize:11, textAlign:'right' }}
+                  <div className="acn-fp-bloco-rot"><Icone path={mdiLockOutline} size={13} /> Desconto Máx. (%)</div>
+                  <div className="acn-fp-desc-linha">
+                    <input type="number" className="acn-input acn-fp-in-80 acn-fp-num"
                       min={0} max={100} step="0.5" value={descontoMaximoPct}
                       onChange={e => setDescontoMax(parseFloat(e.target.value) || 0)} />
-                    <span style={{ fontSize:10, color:'#64748b' }}>%</span>
+                    <span className="acn-ajuda">%</span>
                   </div>
-                  <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>Limite para o vendedor negociar</div>
+                  <div className="acn-ajuda">Limite para o vendedor negociar</div>
                 </div>
               )}
             </div>
 
-            <div style={{ borderTop:'1px solid #f1f5f9', marginTop:12, paddingTop:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-start' }}>
+            <div className="acn-fp-bloco-linha com-divisor">
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
-                <div style={{ display:'flex', gap:4 }}>
-                  {['ACN', 'DETECH'].map(emp => (
-                    <button key={emp} className="acn-btn"
-                      style={{ background: empresa===emp ? '#1e293b' : '#e2e8f0', color: empresa===emp ? '#fff' : '#374151', fontSize:10, minWidth:64 }}
-                      onClick={() => setEmpresa(emp)}>
-                      {emp}
-                    </button>
-                  ))}
-                </div>
+                <div className="acn-fp-bloco-rot"><Icone path={mdiOfficeBuildingOutline} size={13} /> Empresa</div>
+                <Chips ativo={empresa} onChange={setEmpresa} itens={[{ id: 'ACN', rotulo: 'ACN' }, { id: 'DETECH', rotulo: 'DETECH' }]} />
               </div>
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏪 Plataforma</div>
-                <select className="acn-input" style={{ minWidth:200, fontSize:10 }}
+                <div className="acn-fp-bloco-rot"><Icone path={mdiStorefrontOutline} size={13} /> Plataforma</div>
+                <select className="acn-input acn-fp-plat-campo"
                   value={plataformaSelecionada?.id || ''}
                   onChange={e => setPlataformaSelecionada(plataformas.find(x => x.id === e.target.value) || null)}>
                   <option value="">— Sem Plataforma —</option>
@@ -3333,21 +3286,21 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 </select>
               </div>
               {plataformaSelecionada && (
-                <div style={{ fontSize:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 12px', display:'flex', gap:12 }}>
-                  <span style={{ color:'#059669', fontWeight:700 }}>Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
-                  <span style={{ color:'#dc2626', fontWeight:700 }}>Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
-                  <span style={{ color:'#0f766e', fontWeight:800 }}>Líquido: {fmtR(totalLiquidoPlat)}</span>
+                <div className="acn-fp-plat-info">
+                  <span data-acn-familia="ok">Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
+                  <span data-acn-familia="erro">Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
+                  <span data-acn-familia="marca" className="liquido">Líquido: {fmtR(totalLiquidoPlat)}</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* ── PARÂMETROS GLOBAIS — grid fixo em vez de flex-wrap, alinha certinho ── */}
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>
-              ⚙️ Parâmetros Globais
+          <div className="acn-fp-bloco">
+            <div className="acn-fp-bloco-tit">
+              <Icone path={mdiCogOutline} size={14} /> Parâmetros Globais
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))', gap:12, marginBottom:12 }}>
+            <div className="acn-fp-params">
               {[
                 { label:'PTAX USD (R$)',  k:'ptax_dolar',     step:'0.0001' },
                 { label:'PTAX EUR (R$)',  k:'ptax_euro',      step:'0.0001' },
@@ -3360,38 +3313,34 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 { label:'Multiplicador geral', k:'lote_qtd',  step:'1' },
               ].map(({ label, k, step }) => (
                 <div key={k}>
-                  <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>{label}</div>
-                  <input type="number" className="acn-input" style={{ width:'100%', fontSize:10, textAlign:'right' }}
+                  <div className="acn-fp-rot">{label}</div>
+                  <input type="number" className="acn-input acn-fp-num acn-fp-campo-cheio"
                     step={step} value={params[k]}
                     onChange={e => setP(k, parseFloat(e.target.value) || 0)} />
                 </div>
               ))}
             </div>
-            <div style={{ display:'flex', gap:16, flexWrap:'wrap', alignItems:'center', borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
-                <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
-                  style={{ accentColor:'#0891b2' }} />
+            <div className="acn-fp-params-rodape">
+              <label className="acn-fp-check">
+                <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)} />
                 Usar globais (DIFAL/Imp/CF)
               </label>
-              <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
-                <input type="checkbox" checked={usarMarkupGlobal} onChange={e=>setUsarMarkupGlobal(e.target.checked)}
-                  style={{ accentColor:'#7c3aed' }} />
-                <span style={{ color: usarMarkupGlobal ? '#7c3aed' : undefined, fontWeight: usarMarkupGlobal ? 700 : undefined }}>
+              <label className="acn-fp-check">
+                <input type="checkbox" checked={usarMarkupGlobal} onChange={e=>setUsarMarkupGlobal(e.target.checked)} />
+                <span className={usarMarkupGlobal ? 'acn-fp-check-on' : undefined}>
                   Markup Global (sem impostos)
                 </span>
               </label>
-              <button
+              <Botao variante="primario" pequeno icone={mdiSync}
                 onClick={() => { setItens(p => p.map(x => ({
                   ...x,
                   difal_pct:      params.difal_pct,
                   imposto_pct:    params.imposto_pct,
                   custo_fixo_pct: params.custo_fixo_pct,
                 }))); setUsarGlobais(false); }}
-                style={{ fontSize:9, fontWeight:700, padding:'4px 10px', background:'#0891b2', color:'#fff',
-                  border:'none', borderRadius:4, cursor:'pointer' }}
                 title="Copia os globais para cada linha e desbloqueia edição individual">
-                ↻ Copiar globais → linhas
-              </button>
+                Copiar globais → linhas
+              </Botao>
             </div>
           </div>
 
