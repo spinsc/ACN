@@ -14,7 +14,8 @@ import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutli
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
   mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline, mdiArrowLeft, mdiFileDocumentOutline,
   mdiFileMultipleOutline, mdiContentCopy, mdiEyeOutline, mdiChevronRight, mdiPrinterOutline, mdiChartBar, mdiUndo, mdiNotebookEditOutline, mdiAlertOutline,
-  mdiLockOutline, mdiTrophyOutline, mdiClockOutline, mdiLinkVariantOff, mdiHistory, mdiPaperclip, mdiOfficeBuildingOutline, mdiStorefrontOutline, mdiSync } from '@mdi/js';
+  mdiLockOutline, mdiTrophyOutline, mdiClockOutline, mdiLinkVariantOff, mdiHistory, mdiPaperclip, mdiOfficeBuildingOutline, mdiStorefrontOutline, mdiSync,
+  mdiTrashCanOutline, mdiPuzzleOutline, mdiAccountOutline } from '@mdi/js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -2998,8 +2999,6 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setCarregandoHistorico(false);
   };
 
-  const lucroGeralColor = lucroGeral >= 10 ? '#16a34a' : lucroGeral >= 5 ? '#d97706' : '#dc2626';
-
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className={'acn-fp' + (embutido ? ' embutido' : '')}>
@@ -3345,102 +3344,76 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           </div>
 
           {/* ── LOTES DO EDITAL — nível acima dos itens ── */}
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:6 }}>
-            <span style={{ fontSize:9, fontWeight:800, color:'#475569', textTransform:'uppercase', marginRight:2 }}>Lotes</span>
+          <div className="acn-fp-faixa">
+            <span className="acn-fp-faixa-rot">Lotes</span>
             {lotesNomes.map(nome => {
               const nItens = new Set(itens.filter(x => loteDe(x) === nome).map(grupoDe)).size;
               const ativo = nome === loteAtivoValido;
               return (
-                <div key={nome} style={{ display:'flex', alignItems:'stretch', borderRadius:6, overflow:'hidden', border:'1px solid ' + (ativo ? '#1e3a5f' : '#d1d5db') }}>
-                  <button type="button" onClick={() => { setLoteAtivo(nome); setGrupoAtivo(grupoDe(itens.find(x => loteDe(x) === nome)) || 'Item 1'); }}
-                    onDoubleClick={() => renomearLote(nome)} title="Duplo-clique para renomear"
-                    style={{ padding:'6px 12px', fontSize:10, fontWeight:800, border:'none', cursor:'pointer',
-                      background: ativo ? '#1e3a5f' : '#fff', color: ativo ? '#fff' : '#334155' }}>
-                    📦 {nome} <span style={{ opacity:.75, fontWeight:400 }}>({nItens} {nItens === 1 ? 'item' : 'itens'})</span>
-                  </button>
+                <div key={nome} className={'acn-fp-aba' + (ativo ? ' ativa' : '')}>
+                  <Botao variante={ativo ? 'primario' : 'secundario'} pequeno icone={mdiPackageVariantClosed}
+                    onClick={() => { setLoteAtivo(nome); setGrupoAtivo(grupoDe(itens.find(x => loteDe(x) === nome)) || 'Item 1'); }}
+                    onDoubleClick={() => renomearLote(nome)} title="Duplo-clique para renomear">
+                    {nome} <span className="acn-fp-aba-n">({nItens} {nItens === 1 ? 'item' : 'itens'})</span>
+                  </Botao>
                   {lotesNomes.length > 1 && (
-                    <button type="button" onClick={() => removerLote(nome)} title={`Remover ${nome}`}
-                      style={{ padding:'6px 8px', fontSize:10, border:'none', cursor:'pointer',
-                        background: ativo ? '#0f2744' : '#f1f5f9', color: ativo ? '#fff' : '#dc2626' }}>
-                      🗑
-                    </button>
+                    <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={() => removerLote(nome)}
+                      title={`Remover ${nome}`} aria-label={`Remover ${nome}`} />
                   )}
                 </div>
               );
             })}
-            <button type="button" onClick={novoLote}
-              style={{ padding:'6px 10px', fontSize:10, fontWeight:700, border:'1px dashed #1e3a5f', borderRadius:6,
-                background:'#fff', color:'#1e3a5f', cursor:'pointer' }}>
-              + Lote
-            </button>
+            <Botao pequeno icone={mdiPlus} onClick={novoLote}>Lote</Botao>
           </div>
 
           {/* ── ITENS DO EDITAL (abas) — do lote ativo ── */}
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:8, paddingLeft:10, borderLeft:'3px solid #1e3a5f' }}>
+          <div className="acn-fp-faixa acn-fp-faixa-itens">
             {gruposNomes.map(nome => {
               const qtd = itens.filter(x => loteDe(x) === loteAtivoValido && grupoDe(x) === nome).length;
               const ativo = nome === grupoAtivoValido;
               return (
-                <div key={nome} style={{ display:'flex', alignItems:'stretch', borderRadius:6, overflow:'hidden', border:'1px solid ' + (ativo ? '#0891b2' : '#d1d5db') }}>
-                  <button type="button" onClick={() => setGrupoAtivo(nome)}
+                <div key={nome} className={'acn-fp-aba' + (ativo ? ' ativa' : '')}>
+                  <Botao variante={ativo ? 'primario' : 'secundario'} pequeno onClick={() => setGrupoAtivo(nome)}
                     onDoubleClick={() => renomearGrupoItem(nome)}
-                    title="Duplo-clique para renomear"
-                    style={{ padding:'6px 10px', fontSize:10, fontWeight:700, border:'none', cursor:'pointer',
-                      background: ativo ? '#0891b2' : '#fff', color: ativo ? '#fff' : '#475569' }}>
-                    {nome} <span style={{ opacity:.75, fontWeight:400 }}>({qtd})</span>
-                  </button>
+                    title="Duplo-clique para renomear">
+                    {nome} <span className="acn-fp-aba-n">({qtd})</span>
+                  </Botao>
                   {gruposNomes.length > 1 && (
-                    <button type="button" onClick={() => removerGrupoItem(nome)} title={`Remover ${nome}`}
-                      style={{ padding:'6px 8px', fontSize:10, border:'none', cursor:'pointer',
-                        background: ativo ? '#0e7490' : '#f1f5f9', color: ativo ? '#fff' : '#dc2626' }}>
-                      🗑
-                    </button>
+                    <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={() => removerGrupoItem(nome)}
+                      title={`Remover ${nome}`} aria-label={`Remover ${nome}`} />
                   )}
                 </div>
               );
             })}
-            <button type="button" onClick={novoGrupoItem}
-              style={{ padding:'6px 10px', fontSize:10, fontWeight:700, border:'1px dashed #94a3b8', borderRadius:6,
-                background:'#fff', color:'#475569', cursor:'pointer' }}>
-              + Item do Edital
-            </button>
+            <Botao pequeno icone={mdiPlus} onClick={novoGrupoItem}>Item do Edital</Botao>
           </div>
 
           {/* ── SUBGRUPOS DO ITEM (quando o item foi dividido) ── */}
           {temSubgrupos && (
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:8, marginLeft:18, paddingLeft:10, borderLeft:'3px solid #7c3aed' }}>
-              <span style={{ fontSize:9, fontWeight:800, color:'#6b21a8', textTransform:'uppercase' }}>Subgrupos</span>
+            <div className="acn-fp-faixa acn-fp-faixa-sub">
+              <span className="acn-fp-faixa-rot">Subgrupos</span>
               {subsDoItem.map(sub => {
                 const ativo = sub === subAtivoValido;
                 const q = qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub);
                 return (
-                  <div key={sub} style={{ display:'flex', alignItems:'center', gap:4, borderRadius:6, padding:'2px 4px',
-                    border:'1px solid ' + (ativo ? '#7c3aed' : '#d8b4fe'), background: ativo ? '#7c3aed' : '#faf5ff' }}>
-                    <button type="button" onClick={() => setSubgrupoAtivo(sub)} onDoubleClick={() => renomearSubgrupo(sub)}
-                      title="Duplo-clique para renomear"
-                      style={{ padding:'3px 6px', fontSize:10, fontWeight:800, border:'none', cursor:'pointer', background:'transparent',
-                        color: ativo ? '#fff' : '#6b21a8' }}>
+                  <div key={sub} className={'acn-fp-sub-chip' + (ativo ? ' ativa' : '')}>
+                    <Botao variante="discreto" pequeno onClick={() => setSubgrupoAtivo(sub)} onDoubleClick={() => renomearSubgrupo(sub)}
+                      title="Duplo-clique para renomear">
                       {sub}
-                    </button>
+                    </Botao>
                     <input type="number" min={1} value={q} title={`Unidades no subgrupo ${sub}`}
                       onChange={e => setQtdSub(sub, e.target.value)}
-                      style={{ width:44, fontSize:10, padding:'1px 3px', border:'1px solid #d8b4fe', borderRadius:4, textAlign:'right' }} />
-                    <span style={{ fontSize:9, color: ativo ? '#ede9fe' : '#7c3aed' }}>un.</span>
+                      className="acn-input acn-fp-sub-qtd acn-fp-num" />
+                    <span className="acn-ajuda">un.</span>
                   </div>
                 );
               })}
-              <button type="button" onClick={() => novoSubgrupo(null)}
-                style={{ padding:'4px 9px', fontSize:10, fontWeight:700, border:'1px dashed #7c3aed', borderRadius:6, background:'#fff', color:'#7c3aed', cursor:'pointer' }}>
-                + Subgrupo
-              </button>
-              <button type="button" onClick={() => novoSubgrupo(subAtivoValido)} title={`Novo subgrupo começando com os produtos de "${subAtivoValido}"`}
-                style={{ padding:'4px 9px', fontSize:10, fontWeight:700, border:'1px solid #d8b4fe', borderRadius:6, background:'#fff', color:'#7c3aed', cursor:'pointer' }}>
-                ⧉ Duplicar "{subAtivoValido}"
-              </button>
-              <button type="button" onClick={() => removerSubgrupo(subAtivoValido)} title={`Remover o subgrupo "${subAtivoValido}"`}
-                style={{ padding:'4px 8px', fontSize:10, border:'1px solid #fca5a5', borderRadius:6, background:'#fff', color:'#dc2626', cursor:'pointer' }}>
-                🗑
-              </button>
+              <Botao pequeno icone={mdiPlus} onClick={() => novoSubgrupo(null)}>Subgrupo</Botao>
+              <Botao pequeno icone={mdiContentCopy} onClick={() => novoSubgrupo(subAtivoValido)} title={`Novo subgrupo começando com os produtos de "${subAtivoValido}"`}>
+                Duplicar "{subAtivoValido}"
+              </Botao>
+              <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={() => removerSubgrupo(subAtivoValido)}
+                title={`Remover o subgrupo "${subAtivoValido}"`} aria-label={`Remover o subgrupo "${subAtivoValido}"`} />
             </div>
           )}
 
@@ -3449,18 +3422,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               empresa pediu que ele DIVIDA: item comprado em par (custo do par)
               e vendido por unidade — o unitário do resumo é o total dos
               produtos dividido por este número. Ver FormacaoCalculo.ts. */}
-          <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:6,
-            padding:'8px 10px', marginBottom:8, marginLeft:10 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <div className="acn-fp-divisor">
+            <div className="acn-fp-divisor-linha">
               {temSubgrupos ? (
-                <span style={{ fontSize:10, color:'#0f766e' }}>
-                  Quantidade de "{grupoAtivoValido}": <strong>{itemCalcAtivo?.qtd ?? 1}</strong> <span style={{ color:'#64748b' }}>(soma dos {subsDoItem.length} subgrupos)</span>
+                <span className="acn-fp-divisor-txt">
+                  Quantidade de "{grupoAtivoValido}": <strong>{itemCalcAtivo?.qtd ?? 1}</strong> <span className="acn-fraco">(soma dos {subsDoItem.length} subgrupos)</span>
                 </span>
               ) : (<>
-                <span style={{ fontSize:10, color:'#0f766e', fontWeight:700 }}>
-                  Dividir "{grupoAtivoValido}" por <span style={{ fontWeight:400, color:'#0d9488' }}>(ex.: comprado em par e vendido por unidade → 2)</span>
+                <span className="acn-fp-divisor-txt forte">
+                  Dividir "{grupoAtivoValido}" por <span className="acn-fp-divisor-ex">(ex.: comprado em par e vendido por unidade → 2)</span>
                 </span>
-                <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
+                <input type="number" className="acn-input acn-fp-in-60 acn-fp-num"
                   min={1} value={loteGrupo}
                   onChange={e => setParams(p => {
                     const m = { ...(p.lote_por_grupo || {}) };
@@ -3468,30 +3440,26 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                     m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
                     return { ...p, lote_por_grupo: m };
                   })} />
-                <button type="button" onClick={dividirEmSubgrupos}
-                  title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)"
-                  style={{ fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:5, border:'1px solid #7c3aed', background:'#faf5ff', color:'#7c3aed', cursor:'pointer' }}>
-                  🧩 Dividir em subgrupos
-                </button>
+                <Botao pequeno icone={mdiPuzzleOutline} onClick={dividirEmSubgrupos}
+                  title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)">
+                  Dividir em subgrupos
+                </Botao>
               </>)}
             </div>
             {!temSubgrupos && itemCalcAtivo && (
-              <div style={{ fontSize:10, color:'#0f766e', marginTop:6 }}>
+              <div className="acn-fp-divisor-txt">
                 Total {fmtR(itemCalcAtivo.total.totVendas)} ÷ {itemCalcAtivo.qtd} = <strong>unitário {fmtR(itemCalcAtivo.unit.totVendas)}</strong>
               </div>
             )}
           </div>
 
           {/* ── LISTA DE ITENS (do Item do edital ativo) ── */}
-          <div style={{ marginBottom:12 }}>
+          <div className="acn-fp-lista-itens-wrap">
             {/* Container com scroll — cada item é um cartão vertical (ver ItemRow),
                 custo/impostos/markup ficam num painel expansível dentro do cartão */}
-            <div style={{
-              background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
-              overflowY:'auto', height: tableHeight, padding:8,
-            }}>
+            <div className="acn-fp-lista-itens" style={{ height: tableHeight }}>
               {itensDoGrupo.length === 0 && (
-                <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+                <div className="acn-fp-vazio">
                   Nenhum item neste Item do edital. Use o botão <strong>+ Adicionar Item</strong>, logo abaixo da lista.
                 </div>
               )}
@@ -3513,54 +3481,43 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>{/* fim scroll */}
 
             {/* ── Alça de resize ── */}
-            <div
-              onMouseDown={startResize}
-              title="Arraste para redimensionar"
-              style={{
-                height: 12, background: '#e8ecf0',
-                borderRadius: '0 0 8px 8px',
-                border: '1px solid #e2e8f0', borderTop: 'none',
-                cursor: 'ns-resize',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                userSelect: 'none',
-              }}
-            >
-              <div style={{ display:'flex', gap:3 }}>
+            <div className="acn-fp-alca" onMouseDown={startResize} title="Arraste para redimensionar">
+              <div className="acn-fp-alca-marcas">
                 {[0,1,2,3,4].map(i => (
-                  <div key={i} style={{ width:20, height:2, background:'#94a3b8', borderRadius:2 }} />
+                  <div key={i} />
                 ))}
               </div>
             </div>
 
             {/* Contador + botão add abaixo da alça */}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4, marginBottom:6 }}>
-              <span style={{ fontSize:9, color:'#9ca3af' }}>
+            <div className="acn-fp-lista-rodape">
+              <span className="acn-ajuda">
                 {itensDoGrupo.length} item{itensDoGrupo.length !== 1 ? 'ns' : ''} em "{grupoAtivoValido}"{temSubgrupos ? ` › ${subAtivoValido}` : ''} · quantidades por 1 unidade · arraste a barra cinza para redimensionar
               </span>
               {/* O botao de adicionar item fica AQUI, colado na lista, e nao
                   la em cima junto dos botoes que agem sobre a formacao
                   inteira (salvar, versao final, carregar modelo): quem esta
                   montando o preco trabalha nesta altura da tela. */}
-              <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10 }}
+              <Botao variante="primario" icone={mdiPlus}
                 onClick={addItem}
                 title={'Adiciona uma linha em "' + grupoAtivoValido + '"'}>
-                + Adicionar Item
-              </button>
+                Adicionar Item
+              </Botao>
             </div>
           </div>{/* fim wrapper resize */}
 
           {/* ── CALCULADORAS ── */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+          <div className="acn-fp-calcs">
             <CalcMarkupReverso />
             <CalcImpostoReverso />
           </div>
 
           {/* ── OBSERVAÇÕES ── */}
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:6, textTransform:'uppercase' }}>
-              📝 Observações da Cotação
+          <div className="acn-fp-bloco">
+            <div className="acn-fp-bloco-tit">
+              <Icone path={mdiNotebookEditOutline} size={14} /> Observações da Cotação
             </div>
-            <textarea className="acn-input" style={{ width:'100%', height:80, resize:'vertical', fontSize:10 }}
+            <textarea className="acn-input acn-fp-obs"
               placeholder="Condições comerciais, validade da proposta, notas sobre o lote..." />
           </div>
 
@@ -3610,94 +3567,106 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           )}
 
           {modalSenha && (
-            <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalSenha(false); }}>
-              <div className="modal-box" style={{ maxWidth:380 }}>
-                <div className="modal-title">🔒 Confirmar Senha</div>
-                <p style={{ fontSize:11, color:'#64748b', marginBottom:10 }}>
-                  {statusCotacao === 'finalizada'
-                    ? `Isso cria uma nova versão (v${versaoAtual + 1}) registrada em seu nome, mantendo a v${versaoAtual} intacta no histórico.`
-                    : 'Isso registra esta formação como Versão 1 (final), com seu nome e a data/hora gravados para rastreabilidade.'}
-                </p>
-                <label className="acn-label">Sua senha *</label>
-                <input type="password" className="acn-input" style={{ width:'100%', marginBottom:6 }}
-                  value={senhaConfirm} onChange={e => setSenhaConfirm(e.target.value)} autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') confirmarSenhaERegistrar(); }} />
-                {erroSenha && <div style={{ fontSize:10, color:'#dc2626', marginBottom:8 }}>{erroSenha}</div>}
-                <div style={{ display:'flex', gap:8, marginTop:10 }}>
-                  <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} disabled={registrandoVersao} onClick={confirmarSenhaERegistrar}>
-                    {registrandoVersao ? 'Registrando...' : '✅ Confirmar'}
-                  </button>
-                  <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setModalSenha(false)}>Cancelar</button>
+            <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) setModalSenha(false); }}>
+              <div className="modal-box acn-modal-cadastro menor acn-fp-jan" role="dialog" aria-label="Confirmar Senha">
+                <div className="acn-modal-cab">
+                  <span className="modal-title"><Icone path={mdiLockOutline} size={18} />Confirmar Senha</span>
+                </div>
+                <div className="acn-modal-corpo acn-form-cheio">
+                  <p className="acn-ajuda">
+                    {statusCotacao === 'finalizada'
+                      ? `Isso cria uma nova versão (v${versaoAtual + 1}) registrada em seu nome, mantendo a v${versaoAtual} intacta no histórico.`
+                      : 'Isso registra esta formação como Versão 1 (final), com seu nome e a data/hora gravados para rastreabilidade.'}
+                  </p>
+                  <div>
+                    <label className="acn-label">Sua senha *</label>
+                    <input type="password" className="acn-input"
+                      value={senhaConfirm} onChange={e => setSenhaConfirm(e.target.value)} autoFocus
+                      onKeyDown={e => { if (e.key === 'Enter') confirmarSenhaERegistrar(); }} />
+                    {erroSenha && <div className="acn-fp-erro">{erroSenha}</div>}
+                  </div>
+                </div>
+                <div className="acn-modal-rodape acn-sac-rodape">
+                  <Botao variante="primario" icone={mdiCheck} disabled={registrandoVersao} onClick={confirmarSenhaERegistrar}>
+                    {registrandoVersao ? 'Registrando...' : 'Confirmar'}
+                  </Botao>
+                  <Botao onClick={() => setModalSenha(false)}>Cancelar</Botao>
                 </div>
               </div>
             </div>
           )}
 
           {modalHistorico && (
-            <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalHistorico(false); }}>
-              <div className="modal-box" style={{ maxWidth: 980, maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
-                <div className="modal-title">📜 Histórico — {nomeCotacao}</div>
-                {carregandoHistorico ? (
-                  <div style={{ padding:20, textAlign:'center', color:'#94a3b8' }}>Carregando...</div>
-                ) : (
-                  <div style={{ overflowY:'auto', flex:1 }}>
-                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', marginBottom:6 }}>Versões</div>
-                    {historicoVersoes.length === 0 ? (
-                      <div style={{ fontSize:10, color:'#94a3b8', marginBottom:14 }}>Nenhuma versão finalizada ainda.</div>
-                    ) : (
-                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, marginBottom:16 }}>
-                        <thead>
-                          <tr style={{ background:'#f8fafc' }}>
-                            <th style={{ padding:'5px 6px', textAlign:'left' }}>Versão</th>
-                            <th style={{ padding:'5px 6px', textAlign:'left' }}>Responsável</th>
-                            <th style={{ padding:'5px 6px', textAlign:'left' }}>Data</th>
-                            <th style={{ padding:'5px 6px', textAlign:'center' }}>Vencedora</th>
-                            <th style={{ padding:'5px 6px' }}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {historicoVersoes.map((v: any) => (
-                            <tr key={v.id} style={{ borderBottom:'1px solid #f1f5f9', background: v.id === editandoId ? '#eff6ff' : undefined }}>
-                              <td style={{ padding:'5px 6px', fontWeight:700 }}>v{v.versao}{v.id === editandoId ? ' (atual)' : ''}</td>
-                              <td style={{ padding:'5px 6px' }}>{v.finalizada_por_nome || '—'}</td>
-                              <td style={{ padding:'5px 6px' }}>{v.finalizada_em ? new Date(v.finalizada_em).toLocaleString('pt-BR') : '—'}</td>
-                              <td style={{ padding:'5px 6px', textAlign:'center' }}>{v.vencedora ? '🏆' : ''}</td>
-                              <td style={{ padding:'5px 6px', textAlign:'right' }}>
-                                {v.id !== editandoId && (
-                                  <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
-                                    onClick={async () => {
-                                      const { data: full } = await supabase.from('cotacoes_precos').select('*').eq('id', v.id).single();
-                                      if (full) { carregarModelo(full); setEditandoId(full.id); }
-                                      setModalHistorico(false);
-                                    }}>
-                                    Abrir
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', marginBottom:6 }}>Log de Alterações</div>
-                    {historicoLogs.length === 0 ? (
-                      <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhuma alteração registrada.</div>
-                    ) : (
-                      <div>
-                        {historicoLogs.map((l: any) => (
-                          <div key={l.id} style={{ borderBottom:'1px solid #f1f5f9', padding:'6px 2px', fontSize:10 }}>
-                            <div>{l.descricao}</div>
-                            <div style={{ color:'#94a3b8', fontSize:9, marginTop:2 }}>
-                              👤 {l.usuario_nome} · {new Date(l.criado_em).toLocaleString('pt-BR')}
+            <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) setModalHistorico(false); }}>
+              <div className="modal-box acn-modal-cadastro acn-fp-jan acn-fp-hist-jan" role="dialog" aria-label="Histórico">
+                <div className="acn-modal-cab">
+                  <span className="modal-title"><Icone path={mdiHistory} size={18} />Histórico — {nomeCotacao}</span>
+                </div>
+                <div className="acn-modal-corpo">
+                  {carregandoHistorico ? (
+                    <div className="acn-fp-vazio">Carregando...</div>
+                  ) : (
+                    <>
+                      <div className="acn-fp-hist-tit">Versões</div>
+                      {historicoVersoes.length === 0 ? (
+                        <div className="acn-ajuda">Nenhuma versão finalizada ainda.</div>
+                      ) : (
+                        <div className="acn-fp-pf-tabela">
+                          <table className="acn-tabela acn-densa">
+                            <thead>
+                              <tr>
+                                <th className="esq">Versão</th>
+                                <th className="esq">Responsável</th>
+                                <th className="esq">Data</th>
+                                <th className="centro">Vencedora</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historicoVersoes.map((v: any) => (
+                                <tr key={v.id} className={v.id === editandoId ? 'acn-fp-hist-atual' : undefined}>
+                                  <td className="acn-forte">v{v.versao}{v.id === editandoId ? ' (atual)' : ''}</td>
+                                  <td>{v.finalizada_por_nome || '—'}</td>
+                                  <td>{v.finalizada_em ? new Date(v.finalizada_em).toLocaleString('pt-BR') : '—'}</td>
+                                  <td className="centro">{v.vencedora ? <Icone path={mdiTrophyOutline} size={15} /> : ''}</td>
+                                  <td className="dir">
+                                    {v.id !== editandoId && (
+                                      <Botao variante="primario" pequeno
+                                        onClick={async () => {
+                                          const { data: full } = await supabase.from('cotacoes_precos').select('*').eq('id', v.id).single();
+                                          if (full) { carregarModelo(full); setEditandoId(full.id); }
+                                          setModalHistorico(false);
+                                        }}>
+                                        Abrir
+                                      </Botao>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <div className="acn-fp-hist-tit">Log de Alterações</div>
+                      {historicoLogs.length === 0 ? (
+                        <div className="acn-ajuda">Nenhuma alteração registrada.</div>
+                      ) : (
+                        <div>
+                          {historicoLogs.map((l: any) => (
+                            <div key={l.id} className="acn-fp-hist-log">
+                              <div>{l.descricao}</div>
+                              <div className="acn-ajuda">
+                                <Icone path={mdiAccountOutline} size={12} /> {l.usuario_nome} · {new Date(l.criado_em).toLocaleString('pt-BR')}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div style={{ display:'flex', justifyContent:'flex-end', marginTop:10 }}>
-                  <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setModalHistorico(false)}>Fechar</button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="acn-modal-rodape">
+                  <Botao onClick={() => setModalHistorico(false)}>Fechar</Botao>
                 </div>
               </div>
             </div>
