@@ -2394,3 +2394,38 @@ html body .modal-overlay.acn-crm-overlay.acn-crm-ov-op { z-index: 1000; }
 html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-op { width: min(540px, 96vw); max-width: 540px; max-height: 90vh; }
 .acn-crm-tit-ic { display: flex; align-items: center; gap: 4px; }
 .acn-crm-aviso-ic { display: flex; align-items: center; gap: 4px; }
+
+/* ── CRM · 12e37 (07/10/2026): a aba "OPs em aberto" — filtros, tabela, linhas de lote, barra de seleção e janela de confirmar a entrega ── */
+.acn-crm-opls { padding: 8px 4px; }
+.acn-crm-opl-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+html body select.acn-input.acn-crm-opl-sel { width: auto; height: 30px; font-size: 12px; font-weight: 700; }
+html body select.acn-input.acn-crm-opl-sel.ativo { background: var(--acn-brand); border-color: var(--acn-brand); color: #fff; }
+.acn-crm-opl-conta { margin-left: auto; }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-linha > td:first-child { box-shadow: inset 3px 0 0 transparent; }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-linha.nao-lida > td { background: #fffdf0 !important; }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-linha.nao-lida > td:first-child { box-shadow: inset 3px 0 0 #eab308; }
+body.dark .acn-main table.acn-tabela tr.acn-crm-opl-linha.nao-lida > td { background: rgba(212, 161, 6, .14) !important; }
+.acn-crm-opl-check { cursor: pointer; }
+.acn-crm-opl-cli { max-width: 120px; word-break: break-word; }
+.acn-crm-opl-tipo { max-width: 170px; }
+.acn-crm-opl-fluxo { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--acn-ok); }
+.acn-crm-opl-fluxo.sem { color: var(--acn-warn); }
+.acn-crm-opl-cnpj { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #7c3aed; }
+.acn-crm-opl-dev { margin-top: 3px; max-width: 210px; white-space: normal; font-size: 12px; line-height: 1.35; color: var(--acn-bad); }
+.acn-crm-opl-dev-obs { color: var(--acn-text); }
+html body .acn-main table.acn-tabela td.acn-crm-opl-onde { vertical-align: top; }
+.acn-crm-opl-resp { max-width: 100px; word-break: break-word; color: var(--acn-text); }
+.acn-crm-opl-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-lote > td { background: #f5f3ff; }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-lote > td:first-child { box-shadow: inset 4px 0 0 #7c3aed; }
+body.dark .acn-main table.acn-tabela tr.acn-crm-opl-lote > td { background: rgba(124, 58, 237, .14); }
+.acn-crm-opl-lote-base { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: #6d28d9; }
+body.dark .acn-crm-opl-lote-base { color: #c4b5fd; }
+.acn-crm-opl-faltas-col { display: flex; flex-direction: column; gap: 1px; }
+.acn-crm-opl-faltas-col > span { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; }
+.acn-crm-opl-parada { color: var(--acn-text); white-space: nowrap; }
+.acn-crm-lote-barra { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 1500; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; max-width: 92vw; padding: 10px 16px; color: #fff; background: var(--acn-ink); border-radius: var(--acn-r3); box-shadow: var(--acn-shadow-3); }
+html body .acn-crm-lote-barra .acn-b-discreto { color: #fff; }
+html body .acn-crm-lote-barra .acn-b-discreto:hover:not(:disabled) { background: rgba(255, 255, 255, .18); color: #fff; }
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-entrega { z-index: 1000; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-entrega { width: min(420px, 96vw); max-width: 420px; }

@@ -34,7 +34,8 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline,
   mdiBankOutline, mdiAccountOutline, mdiCalendarOutline, mdiClockOutline,
   mdiTimerSand, mdiCheck, mdiBriefcaseOutline, mdiPinOutline, mdiFormatBold, mdiFormatItalic, mdiImageOutline, mdiContentSaveOutline,
-  mdiPhoneOutline, mdiDomain, mdiAlertOutline } from '@mdi/js';
+  mdiPhoneOutline, mdiDomain, mdiAlertOutline,
+  mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
@@ -3007,19 +3008,20 @@ function ColunaRolavel({ children }: any) {
       )}
       {abaInterna === 'faturamentos' && renderFaturamentos()}
       {abaInterna === 'opls' && (() => {
-        const STATUS_COR: Record<string,string> = {
-          'Em Espera Engenharia':                        '#7c3aed',
-          'Em Analise Engenharia':                       '#7c3aed',
-          'Devolvida para Engenharia':                   '#dc2626',
-          'Devolvida Comercial':                         '#dc2626',
-          'Em Espera PCP':                               '#0891b2',
-          'Em Analise PCP':                              '#0891b2',
-          'Em Producao':                                 '#d97706',
-          [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL]:       '#16a34a',
-          'Aguarda Emissao NF':                          '#0ea5e9',
-          'Faturado e Disponivel para Entrega':          '#0284c7',
-          'Aguardando Agendamento Manutenção':           '#ea580c',
-          'Manutenção Agendada':                         '#ea580c',
+        // A família de cor de cada status da OP (Engenharia, PCP, produção, liberação, entrega...). O que não está aqui fica cinza.
+        const FAMILIA_STATUS_OPL: Record<string,string> = {
+          'Em Espera Engenharia':                        'marca',
+          'Em Analise Engenharia':                       'marca',
+          'Devolvida para Engenharia':                   'erro',
+          'Devolvida Comercial':                         'erro',
+          'Em Espera PCP':                               'info',
+          'Em Analise PCP':                              'info',
+          'Em Producao':                                 'atencao',
+          [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL]:       'ok',
+          'Aguarda Emissao NF':                          'info',
+          'Faturado e Disponivel para Entrega':          'info',
+          'Aguardando Agendamento Manutenção':           'atencao',
+          'Manutenção Agendada':                         'atencao',
         };
 
         const liberarFiscalCrm = async (o: any) => {
@@ -3186,56 +3188,42 @@ function ColunaRolavel({ children }: any) {
           return ta - tb;
         });
         return (
-          <div style={{ padding:'8px 4px' }}>
+          <div className="acn-crm-opls">
             {/* Filtros */}
-            <div style={{ display:'flex', gap:6, marginBottom:10, alignItems:'center', flexWrap:'wrap' }}>
-              {([['todos','Todas'],['crm','Vinculadas ao CRM'],['sem_crm','Sem vínculo CRM']] as const).map(([v,l]) => (
-                <button key={v} onClick={() => setOplsFiltro(v)}
-                  style={{ fontSize:9, padding:'3px 10px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', fontWeight:700,
-                    background: oplsFiltro===v ? '#0f766e' : '#f8fafc', color: oplsFiltro===v ? 'white' : '#64748b' }}>
-                  {l}
-                </button>
-              ))}
-              <select value={filtStatusOpl} onChange={e => setFiltStatusOpl(e.target.value)}
-                style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', fontWeight:700,
-                  background: filtStatusOpl ? '#0f766e' : '#f8fafc', color: filtStatusOpl ? 'white' : '#64748b' }}>
+            <div className="acn-crm-opl-filtros">
+              <Chips rotulo="Vínculo com o CRM" ativo={oplsFiltro} onChange={id => setOplsFiltro(id as any)}
+                itens={[{ id:'todos', rotulo:'Todas' }, { id:'crm', rotulo:'Vinculadas ao CRM' }, { id:'sem_crm', rotulo:'Sem vínculo CRM' }]} />
+              <select className={'acn-input acn-crm-opl-sel' + (filtStatusOpl ? ' ativo' : '')} value={filtStatusOpl} onChange={e => setFiltStatusOpl(e.target.value)}>
                 <option value="">Status: Todos</option>
                 {statusOplDisponiveis.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               {filtStatusOpl && (
-                <button onClick={() => setFiltStatusOpl('')} title="Limpar filtro de status"
-                  style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', background:'#f8fafc', color:'#64748b' }}>
-                  ✕
-                </button>
+                <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltStatusOpl('')} title="Limpar filtro de status" aria-label="Limpar filtro de status" />
               )}
-              <select value={oplsOrdem} onChange={e => setOplsOrdem(e.target.value as any)}
-                title="Parada há mais tempo: a OP que entrou na etapa de hoje há mais dias vem primeiro; o lote fica junto, na posição da unidade mais parada"
-                style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', fontWeight:700,
-                  background: oplsOrdem === 'parada' ? '#0f766e' : '#f8fafc', color: oplsOrdem === 'parada' ? 'white' : '#64748b' }}>
+              <select className={'acn-input acn-crm-opl-sel' + (oplsOrdem === 'parada' ? ' ativo' : '')} value={oplsOrdem} onChange={e => setOplsOrdem(e.target.value as any)}
+                title="Parada há mais tempo: a OP que entrou na etapa de hoje há mais dias vem primeiro; o lote fica junto, na posição da unidade mais parada">
                 <option value="entrada">Ordem: entrada (mais recentes)</option>
                 <option value="parada">Ordem: parada há mais tempo</option>
               </select>
-              <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
+              <span className="acn-ajuda acn-crm-opl-conta">
                 {oplsFiltradas.length} OP{oplsFiltradas.length !== 1 ? 's' : ''}
               </span>
-              <button onClick={fetchOplsEmAberto} style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', background:'#f8fafc', color:'#64748b' }}>
-                🔄
-              </button>
+              <Botao pequeno icone={mdiRefresh} onClick={fetchOplsEmAberto} title="Atualizar a lista" aria-label="Atualizar a lista" />
             </div>
 
             {erroOpls && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOplsEmAberto}>Tentar de novo</Botao>}>Não foi possível ler as OPs em aberto ({erroOpls}). Isso não quer dizer que não haja OP{oplsEmAberto.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
             {oplsLoading ? (
-              <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Carregando...</div>
+              <div className="acn-empty acn-crm-vazio">Carregando...</div>
             ) : oplsFiltradas.length === 0 ? (
-              erroOpls ? null : <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Nenhuma OP em aberto.</div>
+              erroOpls ? null : <div className="acn-empty acn-crm-vazio">Nenhuma OP em aberto.</div>
             ) : (
-              <div style={{ overflowX:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+              <div className="acn-crm-rolax">
+                <table className="acn-tabela acn-densa">
                   <thead>
-                    <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
-                      <th style={{ padding:'5px 8px', borderBottom:'2px solid #e2e8f0' }}></th>
+                    <tr>
+                      <th></th>
                       {['OP','Cliente','Tipo/Veículo','Empresa','Status','Onde está / desde','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
-                        <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
+                        <th key={h} className="esq">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -3269,125 +3257,106 @@ function ColunaRolavel({ children }: any) {
                         const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
                         const oplNaoLida = oplsNaoLidas.has(String(o.id));
                         const linha = (
-                          <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9',
-                            background: oplNaoLida ? '#fffdf0' : undefined,
-                            borderLeft: oplNaoLida ? '3px solid #eab308' : '3px solid transparent' }}
+                          <tr key={o.id} className={'acn-crm-opl-linha' + (oplNaoLida ? ' nao-lida' : '')}
                             title={oplNaoLida ? 'Esta OP tem alteração(ões) que você ainda não visualizou' : undefined}>
-                            <td style={{ padding:'5px 8px', textAlign:'center' }}>
-                              <input type="checkbox" checked={oplsSelecionadas.has(o.id)} onChange={()=>toggleOplSelecionada(o.id)} style={{ cursor:'pointer' }} />
+                            <td className="centro">
+                              <input type="checkbox" className="acn-crm-opl-check" checked={oplsSelecionadas.has(o.id)} onChange={()=>toggleOplSelecionada(o.id)} />
                             </td>
-                            <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
+                            <td className="acn-forte acn-lic-nowrap">
                               <LinkOpl opl={o} currentUser={currentUser} />
                             </td>
-                            <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>
+                            <td className="acn-crm-opl-cli">
                               {o.cliente_nome||'—'}
                             </td>
-                            <td style={{ padding:'5px 8px', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', color:'#475569', fontSize:10 }}>
-                              <div style={{ fontSize:9, fontWeight:700,
-                                color: o.fluxo_entrega ? '#0f766e' : '#b45309' }}>
-                                🚦 {fluxoLabel(o.fluxo_entrega)}
+                            <td className="acn-crm-opl-tipo">
+                              <div className={'acn-crm-opl-fluxo' + (o.fluxo_entrega ? '' : ' sem')}>
+                                <Icone path={mdiTrafficLight} size={13} />{fluxoLabel(o.fluxo_entrega)}
                               </div>
-                              <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
+                              <div className="acn-ajuda">{o.tipo_projeto || '—'}</div>
                               <VeiculoOuEnvio o={o} />
-                              {!semDado(o.cnpj_faturamento) && <div style={{ color:'#7c3aed', fontWeight:700 }}>🏢 {o.cnpj_faturamento}</div>}
+                              {!semDado(o.cnpj_faturamento) && <div className="acn-crm-opl-cnpj"><Icone path={mdiDomain} size={13} />{o.cnpj_faturamento}</div>}
                             </td>
-                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                              <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
-                                background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
-                                color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                            <td className="acn-lic-nowrap">
+                              <Selo familia={o.faturamento_empresa==='Detech' ? 'atencao' : 'marca'} ponto={false}>
                                 {o.faturamento_empresa||'ACN'}
-                              </span>
+                              </Selo>
                             </td>
-                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                              <span style={{ fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:3, color:'white',
-                                background: STATUS_COR[o.status_geral] || '#64748b' }}>
+                            <td className="acn-lic-nowrap">
+                              <Selo familia={FAMILIA_STATUS_OPL[o.status_geral] || 'neutro'} ponto={false}>
                                 {o.status_geral||'—'}
-                              </span>
+                              </Selo>
                               {o.status_geral === 'Devolvida Comercial' && (() => {
                                 const dev = devolucoesOpl[o.id];
                                 const motivo = String(o.obs_devolucao || '').trim();
                                 return (
-                                  <div title={motivo || undefined} style={{ marginTop:3, maxWidth:210, whiteSpace:'normal', fontSize:9, lineHeight:1.35, color:'#991b1b' }}>
+                                  <div title={motivo || undefined} className="acn-crm-opl-dev">
                                     ↩ {dev?.setor || 'Setor não registrado'}
                                     {dev?.usuario_nome ? ` · ${dev.usuario_nome}` : ''}
                                     {dev?.data_hora ? ` · ${new Date(dev.data_hora).toLocaleDateString('pt-BR')}` : ''}
-                                    {motivo && <div style={{ color:'#475569' }}>{motivo}</div>}
+                                    {motivo && <div className="acn-crm-opl-dev-obs">{motivo}</div>}
                                   </div>
                                 );
                               })()}
                             </td>
-                            <td style={{ padding:'5px 8px', verticalAlign:'top' }}>
+                            <td className="acn-crm-opl-onde">
                               <OndeEstaCelula op={o} desde={desdeOpls[o.id] || null} pendencias={pendenciasOpls[o.id] || []} />
                             </td>
-                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
+                            <td className="acn-fraco acn-lic-nowrap">
                               {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
                             </td>
-                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap', fontWeight: atrasada ? 700 : 400,
-                              color: atrasada ? '#dc2626' : '#64748b' }}>
+                            <td className={'acn-lic-nowrap ' + (atrasada ? 'acn-txt-erro' : 'acn-fraco')}>
                               {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
                               {atrasada && ' ⚠️'}
                             </td>
-                            <td style={{ padding:'5px 8px', maxWidth:100, color:'#475569', wordBreak:'break-word' }}>
+                            <td className="acn-crm-opl-resp">
                               {o.responsavel_comercial||'—'}
                             </td>
-                            <td style={{ padding:'5px 8px' }}>
+                            <td>
                               {crmCard ? (
-                                <button onClick={() => { setFormOp(formOpFromOp(crmCard)); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
-                                  style={{ fontSize:8, padding:'2px 6px', background:'#ede9fe', color:'#7c3aed', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
-                                  🔗 {crmCard.titulo?.slice(0,20)||'CRM'}
-                                </button>
+                                <Botao pequeno icone={mdiLinkVariant} onClick={() => { setFormOp(formOpFromOp(crmCard)); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}>
+                                  {crmCard.titulo?.slice(0,20)||'CRM'}
+                                </Botao>
                               ) : (
-                                <span style={{ fontSize:8, color:'#cbd5e1' }}>—</span>
+                                <span className="acn-fraco">—</span>
                               )}
                             </td>
-                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                              <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
+                            <td className="acn-lic-nowrap">
+                              <div className="acn-crm-opl-acoes">
                                 {/* Botão de liberação para Fiscal — aparece somente quando a OP aguarda a liberação comercial */}
                                 {aguardaLiberacaoComercial(o.status_geral) && (
-                                  <button
-                                    onClick={() => liberarFiscalCrm(o)}
-                                    style={{ fontSize:9, padding:'3px 9px', background:'#f59e0b', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
-                                    🟡 LIBERAR FISCAL
-                                  </button>
+                                  <Botao pequeno variante="primario" icone={mdiSendOutline} onClick={() => liberarFiscalCrm(o)}>
+                                    LIBERAR FISCAL
+                                  </Botao>
                                 )}
                                 {o.status_geral === 'Devolvida Comercial' && (() => {
                                   const d = destinoDaDevolucao(o);
                                   return (
-                                    <button
-                                      onClick={() => reenviarDevolvida(o)}
-                                      title={`Corrija o que foi apontado e reenvie para ${d.para}`}
-                                      style={{ fontSize:9, padding:'3px 9px', background: d.setor === 'Fiscal' ? '#0ea5e9' : '#7c3aed', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
-                                      ↩ REENVIAR P/ {d.setor === 'Fiscal' ? 'FISCAL' : 'ENGENHARIA'}
-                                    </button>
+                                    <Botao pequeno icone={mdiUndoVariant} onClick={() => reenviarDevolvida(o)}
+                                      title={`Corrija o que foi apontado e reenvie para ${d.para}`}>
+                                      REENVIAR P/ {d.setor === 'Fiscal' ? 'FISCAL' : 'ENGENHARIA'}
+                                    </Botao>
                                   );
                                 })()}
                                 {o.status_geral === 'Faturado e Disponivel para Entrega' && (
-                                  <button
-                                    onClick={() => { setModalEntregaLote([o]); setNomeRecebeuLote(''); }}
-                                    style={{ fontSize:9, padding:'3px 9px', background:'#22c55e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
-                                    ✅ CONFIRMAR ENTREGA
-                                  </button>
+                                  <Botao pequeno variante="primario" icone={mdiCheckCircleOutline} onClick={() => { setModalEntregaLote([o]); setNomeRecebeuLote(''); }}>
+                                    CONFIRMAR ENTREGA
+                                  </Botao>
                                 )}
-                                <button title="Editar todos os dados desta OP"
-                                  onClick={() => abrirEdicaoOpl(o)}
-                                  style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                  ✏️ Editar
-                                </button>
-                                <button title="Acompanhamentos / Notas"
-                                  onClick={() => setOplAcomp(o)}
-                                  style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                  💬 Notas
-                                </button>
-                                <button title="Solicitar Compra pra esta OP"
+                                <Botao pequeno icone={mdiPencilOutline} title="Editar todos os dados desta OP" onClick={() => abrirEdicaoOpl(o)}>
+                                  Editar
+                                </Botao>
+                                <Botao pequeno icone={mdiCommentTextOutline} title="Acompanhamentos / Notas" onClick={() => setOplAcomp(o)}>
+                                  Notas
+                                </Botao>
+                                <Botao pequeno icone={mdiPackageVariantClosed} title="Solicitar Compra pra esta OP"
                                   onClick={() => {
                                     setModalCompras({ id: o.crm_oportunidade_id || null,
                                       titulo: `OP ${o.opl} — ${o.cliente_nome || o.modelo || ''}`,
                                       orgao: null, _oplText: o.opl, _oplId: o.id,
                                       _oplDescricao: `${o.opl} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '') });
-                                  }}
-                                  style={{ fontSize:9, padding:'2px 7px', background:'#0369a1', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                  📦 Compra
-                                </button>
+                                  }}>
+                                  Compra
+                                </Botao>
                                 <OplAnexosWidget opl={o} setor="Comercial/CRM" currentUser={currentUser} compact={true} />
                               </div>
                             </td>
@@ -3409,59 +3378,53 @@ function ColunaRolavel({ children }: any) {
                           .sort((a:any, b:any) => new Date(a.data).getTime() - new Date(b.data).getTime())[0];
                         return (
                           <React.Fragment key={base}>
-                            <tr style={{ background:'#f5f3ff', borderLeft:'4px solid #7c3aed', borderBottom:'1px solid #f1f5f9' }}>
-                              <td style={{ padding:'5px 8px', textAlign:'center' }}>
-                                <input type="checkbox" checked={todasLoteSelecionadas} title="Selecionar todas as unidades deste lote"
+                            <tr className="acn-crm-opl-lote">
+                              <td className="centro">
+                                <input type="checkbox" className="acn-crm-opl-check" checked={todasLoteSelecionadas} title="Selecionar todas as unidades deste lote"
                                   onChange={()=>setOplsSelecionadas(prev => {
                                     const novo = new Set(prev);
                                     irmaos.forEach((o:any) => { if (todasLoteSelecionadas) novo.delete(o.id); else novo.add(o.id); });
                                     return novo;
-                                  })} style={{ cursor:'pointer' }} />
+                                  })} />
                               </td>
-                              <td style={{ padding:'5px 8px', fontWeight:700, color:'#6d28d9', whiteSpace:'nowrap' }}>
-                                🔗 {base}
-                                <div style={{ marginTop:2 }}>
-                                  <span style={{ fontSize:8, fontWeight:700, background:'#7c3aed', color:'white', padding:'1px 6px', borderRadius:10 }}>
-                                    LOTE — {irmaos.length} unidades
-                                  </span>
+                              <td className="acn-lic-nowrap">
+                                <span className="acn-crm-opl-lote-base"><Icone path={mdiLinkVariant} size={13} />{base}</span>
+                                <div>
+                                  <Selo familia="marca" ponto={false}>LOTE — {irmaos.length} unidades</Selo>
                                 </div>
                               </td>
-                              <td style={{ padding:'5px 8px' }}>{rep.cliente_nome||'—'}</td>
-                              <td style={{ padding:'5px 8px', fontSize:8 }}>
+                              <td>{rep.cliente_nome||'—'}</td>
+                              <td className="acn-crm-opl-faltas">
                                 {(qtdSemModelo + qtdSemChassi + qtdSemPlaca) > 0 ? (
-                                  <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
-                                    {qtdSemModelo > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemModelo} sem modelo</span>}
-                                    {qtdSemChassi > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemChassi} sem chassi</span>}
-                                    {qtdSemPlaca  > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemPlaca} sem placa</span>}
+                                  <div className="acn-crm-opl-faltas-col">
+                                    {qtdSemModelo > 0 && <span className="acn-txt-erro"><Icone path={mdiAlertOutline} size={12} />{qtdSemModelo} sem modelo</span>}
+                                    {qtdSemChassi > 0 && <span className="acn-txt-erro"><Icone path={mdiAlertOutline} size={12} />{qtdSemChassi} sem chassi</span>}
+                                    {qtdSemPlaca  > 0 && <span className="acn-txt-erro"><Icone path={mdiAlertOutline} size={12} />{qtdSemPlaca} sem placa</span>}
                                   </div>
-                                ) : <span style={{color:'#16a34a'}}>✓ dados completos</span>}
+                                ) : <span className="acn-txt-ok">✓ dados completos</span>}
                               </td>
-                              <td style={{ padding:'5px 8px' }}>
-                                <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
-                                  background: rep.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
-                                  color: rep.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                              <td>
+                                <Selo familia={rep.faturamento_empresa==='Detech' ? 'atencao' : 'marca'} ponto={false}>
                                   {rep.faturamento_empresa||'ACN'}
-                                </span>
+                                </Selo>
                               </td>
-                              <td colSpan={5} style={{ padding:'5px 8px', fontSize:9, color:'#7c6f9c' }}>
+                              <td colSpan={5} className="acn-ajuda">
                                 Ver unidades para detalhes individuais
                                 {maisParada && (
-                                  <div style={{ color:'#475569', whiteSpace:'nowrap' }} title="A unidade deste lote que está há mais tempo na etapa em que se encontra">
+                                  <div className="acn-crm-opl-parada" title="A unidade deste lote que está há mais tempo na etapa em que se encontra">
                                     ⏱ a mais parada: {maisParada.fonte === 'marco' ? '≈ ' : ''}{textoDias(diasDesde(maisParada.data))}
                                   </div>
                                 )}
                               </td>
-                              <td style={{ padding:'5px 8px' }}>
-                                <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                                  <button onClick={()=>setLotesExpandidosOpls(s=>({...s,[base]:!expandido}))}
-                                    style={{ fontSize:9, padding:'2px 8px', background:'#94a3b8', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                    {expandido ? '▲ Ocultar' : `▼ Ver ${irmaos.length}`}
-                                  </button>
-                                  <button title="Lançar chassi/placa/CNPJ de todas as unidades de uma vez"
-                                    onClick={()=>abrirModalLote(irmaos)}
-                                    style={{ fontSize:9, padding:'2px 8px', background:'#7c3aed', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
-                                    🚗 Lote
-                                  </button>
+                              <td>
+                                <div className="acn-crm-opl-acoes">
+                                  <Botao pequeno variante="discreto" icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidosOpls(s=>({...s,[base]:!expandido}))}>
+                                    {expandido ? 'Ocultar' : `Ver ${irmaos.length}`}
+                                  </Botao>
+                                  <Botao pequeno icone={mdiCar} title="Lançar chassi/placa/CNPJ de todas as unidades de uma vez"
+                                    onClick={()=>abrirModalLote(irmaos)}>
+                                    Lote
+                                  </Botao>
                                 </div>
                               </td>
                             </tr>
@@ -3477,30 +3440,28 @@ function ColunaRolavel({ children }: any) {
 
             {/* ── Barra de ação em lote — seleção livre por checkbox, não precisa ser do mesmo lote/base ── */}
             {oplsSelecionadas.size > 0 && (
-              <div style={{ position:'fixed', left:'50%', transform:'translateX(-50%)', bottom:16, zIndex:1500,
-                background:'#1e293b', color:'white', borderRadius:8, padding:'10px 16px', boxShadow:'0 8px 24px rgba(0,0,0,.3)',
-                display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', maxWidth:'92vw' }}>
-                <strong style={{ fontSize:12 }}>{oplsSelecionadas.size} selecionada{oplsSelecionadas.size!==1?'s':''}</strong>
-                <button className="acn-btn" style={{ background:'#f59e0b', fontSize:10 }} disabled={aplicandoLoteOpls} onClick={liberarFiscalEmLote}>
-                  {aplicandoLoteOpls ? 'Aplicando...' : '🟡 Liberar Fiscal em Lote'}
-                </button>
-                <button className="acn-btn" style={{ background:'#22c55e', fontSize:10 }}
+              <div className="acn-crm-lote-barra">
+                <strong>{oplsSelecionadas.size} selecionada{oplsSelecionadas.size!==1?'s':''}</strong>
+                <Botao pequeno variante="primario" icone={mdiSendOutline} disabled={aplicandoLoteOpls} onClick={liberarFiscalEmLote}>
+                  {aplicandoLoteOpls ? 'Aplicando...' : 'Liberar Fiscal em Lote'}
+                </Botao>
+                <Botao pequeno variante="primario" icone={mdiCheckCircleOutline}
                   onClick={() => {
                     const alvos = oplsEmAberto.filter((o:any) => oplsSelecionadas.has(o.id) && o.status_geral === 'Faturado e Disponivel para Entrega');
                     if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Faturado e Disponível para Entrega".'); return; }
                     setModalEntregaLote(alvos); setNomeRecebeuLote('');
                   }}>
-                  ✅ Confirmar Entrega em Lote
-                </button>
+                  Confirmar Entrega em Lote
+                </Botao>
                 {podeEditarOplCompleta(currentUser) && (
-                  <button className="acn-btn" style={{ background:'#2563eb', fontSize:10 }} onClick={abrirEditarLoteOpls}
+                  <Botao pequeno icone={mdiPencilOutline} onClick={abrirEditarLoteOpls}
                     title="Alterar um campo em todas as OPs marcadas (Admin/Gerente)">
-                    ✏️ Editar selecionadas
-                  </button>
+                    Editar selecionadas
+                  </Botao>
                 )}
-                <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={()=>setOplsSelecionadas(new Set())}>
-                  ✕ Limpar seleção
-                </button>
+                <Botao pequeno variante="discreto" icone={mdiSelectionOff} onClick={()=>setOplsSelecionadas(new Set())}>
+                  Limpar seleção
+                </Botao>
               </div>
             )}
             {editarLoteOpls && (
@@ -3510,24 +3471,29 @@ function ColunaRolavel({ children }: any) {
 
             {/* ── Modal Confirmar Entrega (individual e em lote — mesmo nome de quem recebeu para todas) ── */}
             {modalEntregaLote && (
-              <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget && !aplicandoLoteOpls){setModalEntregaLote(null);setNomeRecebeuLote('');}}}>
-                <div className="modal-box" style={{ maxWidth:420 }}>
-                  <div className="modal-title">✅ Confirmar Entrega{modalEntregaLote.length>1?` — ${modalEntregaLote.length} unidades`:` — ${modalEntregaLote[0]?.opl}`}</div>
-                  <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>
-                    {modalEntregaLote.length > 1
-                      ? 'O nome informado será registrado como quem recebeu em todas as unidades selecionadas.'
-                      : `Cliente: ${modalEntregaLote[0]?.cliente_nome || '—'}`}
+              <div className="modal-overlay acn-crm-overlay acn-crm-ov-entrega" onClick={e=>{if(e.target===e.currentTarget && !aplicandoLoteOpls){setModalEntregaLote(null);setNomeRecebeuLote('');}}}>
+                <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-entrega" role="dialog" aria-label="Confirmar Entrega">
+                  <div className="acn-modal-cab">
+                    <span className="modal-title"><Icone path={mdiCheckCircleOutline} size={18} />Confirmar Entrega{modalEntregaLote.length>1?` — ${modalEntregaLote.length} unidades`:` — ${modalEntregaLote[0]?.opl}`}</span>
                   </div>
-                  <label className="acn-label">Nome de quem recebeu *</label>
-                  <input className="acn-input" autoFocus style={{ width:'100%', marginBottom:14 }}
-                    placeholder="Nome do receptor" value={nomeRecebeuLote} onChange={e=>setNomeRecebeuLote(e.target.value)}
-                    onKeyDown={e=>e.key==='Enter' && confirmarEntregaLote()} />
-                  <div style={{ display:'flex', gap:8 }}>
-                    <button className="acn-btn" style={{ background:'#22c55e', flex:1 }} disabled={aplicandoLoteOpls} onClick={confirmarEntregaLote}>
+                  <div className="acn-modal-corpo acn-form-cheio">
+                    <div className="acn-ajuda">
+                      {modalEntregaLote.length > 1
+                        ? 'O nome informado será registrado como quem recebeu em todas as unidades selecionadas.'
+                        : `Cliente: ${modalEntregaLote[0]?.cliente_nome || '—'}`}
+                    </div>
+                    <div>
+                      <label className="acn-label">Nome de quem recebeu *</label>
+                      <input className="acn-input" autoFocus
+                        placeholder="Nome do receptor" value={nomeRecebeuLote} onChange={e=>setNomeRecebeuLote(e.target.value)}
+                        onKeyDown={e=>e.key==='Enter' && confirmarEntregaLote()} />
+                    </div>
+                  </div>
+                  <div className="acn-modal-rodape acn-sac-rodape">
+                    <Botao variante="primario" disabled={aplicandoLoteOpls} onClick={confirmarEntregaLote}>
                       {aplicandoLoteOpls ? 'Aplicando...' : 'CONFIRMAR'}
-                    </button>
-                    <button className="acn-btn" style={{ background:'#94a3b8' }} disabled={aplicandoLoteOpls}
-                      onClick={()=>{setModalEntregaLote(null);setNomeRecebeuLote('');}}>Cancelar</button>
+                    </Botao>
+                    <Botao disabled={aplicandoLoteOpls} onClick={()=>{setModalEntregaLote(null);setNomeRecebeuLote('');}}>Cancelar</Botao>
                   </div>
                 </div>
               </div>
