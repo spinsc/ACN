@@ -2026,3 +2026,34 @@ html body input[type=range].acn-cot-range { width: 100%; accent-color: var(--acn
 html body .acn-input.acn-cot-obs { resize: vertical; font-family: inherit; }
 .acn-cot-vazio .acn-ic { vertical-align: middle; }
 .acn-cot-jan .acn-quadro-titulo { display: flex; align-items: center; gap: 4px; }
+
+/* ── Cotações · 12e30 (07/10/2026): emitir proposta, combinar formações e nova cotação do catálogo ── */
+html body .modal-overlay.acn-cot-overlay.acn-cot-ov-emitir { z-index: 3000; }
+html body .modal-overlay.acn-cot-overlay.acn-cot-ov-comb { z-index: 9999; }
+html body .modal-overlay.acn-cot-overlay.acn-cot-ov-nova { z-index: 2500; }
+html body .modal-box.acn-modal-cadastro.acn-cot-jan.acn-cot-larga { width: min(700px, 96vw); max-width: 700px; max-height: 88vh; }
+.acn-cot-grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.acn-cot-formatos { display: flex; gap: 10px; }
+.acn-cot-formato { display: flex; flex: 1; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; background: var(--acn-surface); border: 2px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cot-formato.on { background: var(--acn-brand-soft); border-color: var(--acn-brand); }
+.acn-cot-formato input { display: none; }
+.acn-cot-check { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-cot-check input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--acn-brand); }
+.acn-cot-envio { display: flex; gap: 8px; }
+.acn-cot-envio .acn-input { flex: 1; }
+.acn-cot-linha-val.com-borda { padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-cot-resumo3 { grid-template-columns: repeat(3, 1fr); }
+.acn-cot-centro { text-align: center; }
+.acn-cot-faixa-busca { margin-top: 6px; }
+.acn-cot-sug.acn-cot-sug-prod { max-height: 220px; overflow-y: auto; box-shadow: var(--acn-shadow-3); }
+.acn-cot-sug-preco { margin-left: 12px; font-size: 13px; font-weight: 700; white-space: nowrap; color: var(--acn-ok); }
+.acn-cot-selec { overflow: hidden; border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-cot-selec-tit { display: flex; align-items: center; gap: 4px; padding: 6px 10px; font-size: 11px; font-weight: 700; color: var(--acn-text); background: var(--acn-neutral-soft); }
+.acn-cot-selec-linha { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-cot-selec-txt { flex: 1; min-width: 0; }
+.acn-cot-selec-qtd { display: flex; align-items: center; gap: 6px; }
+html body .acn-input.acn-cot-qtd { width: 64px; text-align: right; }
+.acn-cot-selec-total { min-width: 90px; text-align: right; font-size: 13px; font-weight: 700; color: var(--acn-ok); }
+.acn-cot-selec-rodape { padding: 8px 10px; display: flex; justify-content: flex-end; font-size: 14px; font-weight: 800; color: var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-cot-vazio.tracejado { padding: 20px; font-style: italic; border: 2px dashed var(--acn-line); border-radius: var(--acn-r3); }
+.acn-cot-busca-op > .acn-label { display: flex; align-items: center; gap: 4px; }

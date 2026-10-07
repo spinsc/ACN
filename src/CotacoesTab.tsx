@@ -9,7 +9,8 @@ import { pedirTexto } from './Feedback';
 import { Faixa, Botao, Selo, Abas, CabecalhoTela } from './Interface';
 import Icone from './Icone';
 import { mdiTimerSand, mdiLinkVariant, mdiFormatListBulleted, mdiChartBar, mdiPlus, mdiRefresh, mdiFolderOutline, mdiCashMultiple,
-  mdiBankOutline, mdiClose, mdiCheckCircleOutline, mdiCloseCircleOutline, mdiCheck, mdiFileDocumentOutline, mdiSendOutline, mdiContentSaveOutline } from '@mdi/js';
+  mdiBankOutline, mdiClose, mdiCheckCircleOutline, mdiCloseCircleOutline, mdiCheck, mdiFileDocumentOutline, mdiSendOutline, mdiContentSaveOutline,
+  mdiWeb, mdiPrinterOutline, mdiCameraOutline, mdiEmailOutline, mdiWhatsapp, mdiPackageVariantClosed, mdiMagnify } from '@mdi/js';
 import { perfilComPoderes } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -339,110 +340,92 @@ ${cotacao.criado_por || 'ACN'}`
     window.open(`https://wa.me/55${num}?text=${msg}`, '_blank');
   };
 
-  const inp11: React.CSSProperties = { width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 };
-
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:3000,
-      display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(560px,95vw)',
-        boxShadow:'0 8px 32px rgba(0,0,0,.3)', overflow:'hidden' }}>
-        <div style={{ background:'#1e3a5f', color:'#fff', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontWeight:800, fontSize:13 }}>📄 Emitir Proposta Final ao Cliente</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
+    <div className="modal-overlay acn-cot-overlay acn-cot-ov-emitir">
+      <div className="modal-box acn-modal-cadastro acn-cot-jan" role="dialog" aria-label="Emitir Proposta Final ao Cliente">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiFileDocumentOutline} size={18} />Emitir Proposta Final ao Cliente</span>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
-        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12, maxHeight:'80vh', overflowY:'auto' }}>
+        <div className="acn-modal-corpo acn-form-cheio">
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>ÓRGÃO / CLIENTE</label>
-            <input value={orgaoCliente} onChange={e=>setOrgaoCliente(e.target.value)}
-              placeholder="Nome do órgão ou cliente..." style={inp11} />
+            <label className="acn-label">ÓRGÃO / CLIENTE</label>
+            <input className="acn-input" value={orgaoCliente} onChange={e=>setOrgaoCliente(e.target.value)}
+              placeholder="Nome do órgão ou cliente..." />
           </div>
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>
+            <label className="acn-label">
               DESCRIÇÃO DO SERVIÇO/PRODUTO (como aparece na proposta)
             </label>
-            <input value={descricaoServico} onChange={e=>setDescricaoServico(e.target.value)}
-              placeholder="Ex: Reforma cela PCSC Palhoça" style={inp11} />
+            <input className="acn-input" value={descricaoServico} onChange={e=>setDescricaoServico(e.target.value)}
+              placeholder="Ex: Reforma cela PCSC Palhoça" />
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div className="acn-cot-grade2">
             <div>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>VALIDADE (DIAS)</label>
-              <input type="number" min={1} value={validade} onChange={e=>setValidade(e.target.value)} style={inp11} />
+              <label className="acn-label">VALIDADE (DIAS)</label>
+              <input className="acn-input" type="number" min={1} value={validade} onChange={e=>setValidade(e.target.value)} />
             </div>
             <div>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>REF. OP/OS/PV</label>
-              <input value={refPv} onChange={e=>setRefPv(e.target.value)}
-                placeholder="Número da OP, OS ou PV..." style={inp11} />
+              <label className="acn-label">REF. OP/OS/PV</label>
+              <input className="acn-input" value={refPv} onChange={e=>setRefPv(e.target.value)}
+                placeholder="Número da OP, OS ou PV..." />
             </div>
             <div>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>PRAZO DE ENTREGA</label>
-              <input value={prazoEntrega} onChange={e=>setPrazoEntrega(e.target.value)}
-                placeholder="Ex: 15 dias úteis" style={inp11} />
+              <label className="acn-label">PRAZO DE ENTREGA</label>
+              <input className="acn-input" value={prazoEntrega} onChange={e=>setPrazoEntrega(e.target.value)}
+                placeholder="Ex: 15 dias úteis" />
             </div>
           </div>
 
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:6 }}>FORMATO DE SAÍDA</label>
-            <div style={{ display:'flex', gap:10 }}>
-              {([['html','🌐 HTML'],['pdf','🖨️ PDF']] as const).map(([val,lbl])=>(
-                <label key={val} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, cursor:'pointer',
-                  padding:'8px 14px', border:`2px solid ${formato===val?'#1e3a5f':'#e2e8f0'}`,
-                  borderRadius:6, background: formato===val?'#f0f4ff':'#fff', flex:1, justifyContent:'center' }}>
+            <label className="acn-label">FORMATO DE SAÍDA</label>
+            <div className="acn-cot-formatos">
+              {([['html','HTML', mdiWeb],['pdf','PDF', mdiPrinterOutline]] as const).map(([val,lbl,ic])=>(
+                <label key={val} className={'acn-cot-formato' + (formato===val ? ' on' : '')}>
                   <input type="radio" name="formato" value={val} checked={formato===val}
-                    onChange={()=>setFormato(val)} style={{ display:'none' }} />
-                  {lbl}
+                    onChange={()=>setFormato(val)} />
+                  <Icone path={ic} size={16} /> {lbl}
                 </label>
               ))}
             </div>
           </div>
 
-          <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:11, color:'#374151', cursor:'pointer',
-            background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 12px' }}>
-            <input type="checkbox" checked={incluirFotos} onChange={e=>setIncluirFotos(e.target.checked)}
-              style={{ width:15, height:15, cursor:'pointer', accentColor:'#1e3a5f' }} />
-            📷 Incluir fotos do produto e link do catálogo na proposta
+          <label className="acn-cot-check">
+            <input type="checkbox" checked={incluirFotos} onChange={e=>setIncluirFotos(e.target.checked)} />
+            <Icone path={mdiCameraOutline} size={16} /> Incluir fotos do produto e link do catálogo na proposta
           </label>
 
           {/* Envio por e-mail */}
-          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 14px' }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:8 }}>📧 Enviar por E-mail</div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input value={emailCliente} onChange={e=>setEmailCliente(e.target.value)}
-                placeholder="email@cliente.com.br" type="email"
-                style={{ ...inp11, flex:1 }} />
-              <button onClick={enviarEmail}
-                style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:6,
-                  padding:'8px 14px', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+          <div className="acn-quadro tom-info">
+            <div className="acn-quadro-titulo"><Icone path={mdiEmailOutline} size={14} /> Enviar por E-mail</div>
+            <div className="acn-cot-envio">
+              <input className="acn-input" value={emailCliente} onChange={e=>setEmailCliente(e.target.value)}
+                placeholder="email@cliente.com.br" type="email" />
+              <Botao variante="primario" onClick={enviarEmail}>
                 Enviar
-              </button>
+              </Botao>
             </div>
           </div>
 
           {/* Envio por WhatsApp */}
-          <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'10px 14px' }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#15803d', marginBottom:8 }}>💬 Enviar por WhatsApp</div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input value={whatsapp} onChange={e=>setWhatsapp(e.target.value)}
-                placeholder="11999998888" type="tel"
-                style={{ ...inp11, flex:1 }} />
-              <button onClick={enviarWhatsApp}
-                style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6,
-                  padding:'8px 14px', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+          <div className="acn-quadro tom-ok">
+            <div className="acn-quadro-titulo"><Icone path={mdiWhatsapp} size={14} /> Enviar por WhatsApp</div>
+            <div className="acn-cot-envio">
+              <input className="acn-input" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)}
+                placeholder="11999998888" type="tel" />
+              <Botao variante="primario" onClick={enviarWhatsApp}>
                 Enviar
-              </button>
+              </Botao>
             </div>
           </div>
-
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:4 }}>
-            <button onClick={onClose}
-              style={{ padding:'8px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
-              Cancelar
-            </button>
-            <button onClick={emitir}
-              style={{ padding:'8px 24px', background:'#1e3a5f', color:'#fff', border:'none',
-                borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-              {formato === 'pdf' ? '🖨️ Gerar PDF' : '🌐 Gerar HTML'}
-            </button>
-          </div>
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>
+            Cancelar
+          </Botao>
+          <Botao variante="primario" icone={formato === 'pdf' ? mdiPrinterOutline : mdiWeb} onClick={emitir}>
+            {formato === 'pdf' ? 'Gerar PDF' : 'Gerar HTML'}
+          </Botao>
         </div>
       </div>
     </div>
@@ -1057,30 +1040,26 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:9999,
-      display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(720px,96vw)', maxHeight:'88vh',
-        overflowY:'auto', boxShadow:'0 8px 32px rgba(0,0,0,.25)', display:'flex', flexDirection:'column' }}>
-        <div style={{ background:'#7c3aed', color:'#fff', padding:'14px 18px', borderRadius:'10px 10px 0 0',
-          display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+    <div className="modal-overlay acn-cot-overlay acn-cot-ov-comb">
+      <div className="modal-box acn-modal-cadastro acn-cot-jan acn-cot-larga" role="dialog" aria-label="Combinar Formações em Proposta">
+        <div className="acn-modal-cab">
           <div>
-            <div style={{ fontWeight:800, fontSize:14 }}>🔗 Combinar Formações em Proposta</div>
-            <div style={{ fontSize:10, opacity:.85 }}>{cotacoes.length} formações selecionadas (apenas produtos)</div>
+            <span className="modal-title"><Icone path={mdiLinkVariant} size={18} />Combinar Formações em Proposta</span>
+            <div className="acn-ajuda">{cotacoes.length} formações selecionadas (apenas produtos)</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>✕</button>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
 
-        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
           {/* Resumo das formações */}
-          <div style={{ background:'#f5f3ff', border:'1px solid #ddd6fe', borderRadius:8, padding:12 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#6d28d9', marginBottom:8 }}>📦 Formações incluídas</div>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo"><Icone path={mdiPackageVariantClosed} size={14} /> Formações incluídas</div>
             {cotacoes.map(c => {
               const tot  = estruturaFormacao(c.itens || [], c.parametros_globais || {}, calcItem).geral.totVendas;
               return (
-                <div key={c.id} style={{ display:'flex', justifyContent:'space-between', fontSize:10, padding:'4px 0',
-                  borderBottom:'1px solid #ede9fe' }}>
-                  <span style={{ fontWeight:600 }}>{c.numero_cotacao || '—'} · {c.nome}</span>
-                  <span style={{ color:'#15803d', fontWeight:700 }}>{fmtR(tot)}</span>
+                <div key={c.id} className="acn-cot-linha-val com-borda">
+                  <span className="acn-cot-val-rot">{c.numero_cotacao || '—'} · {c.nome}</span>
+                  <span className="acn-cot-val-m acn-txt-ok">{fmtR(tot)}</span>
                 </div>
               );
             })}
@@ -1088,52 +1067,44 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
 
           {/* Nome da proposta */}
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:4 }}>
+            <label className="acn-label">
               NOME DA PROPOSTA COMBINADA
             </label>
-            <input value={nome} onChange={e=>setNome(e.target.value)}
-              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+            <input className="acn-input" value={nome} onChange={e=>setNome(e.target.value)} />
           </div>
 
           {/* Desconto */}
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:4 }}>
+            <label className="acn-label">
               DESCONTO GLOBAL %
             </label>
-            <input type="number" min={0} max={100} step="0.5" value={desconto}
-              onChange={e=>setDesconto(parseFloat(e.target.value)||0)}
-              style={{ width:100, border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+            <input className="acn-input acn-fp-in-110" type="number" min={0} max={100} step="0.5" value={desconto}
+              onChange={e=>setDesconto(parseFloat(e.target.value)||0)} />
           </div>
 
           {/* Resumo financeiro */}
-          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px',
-            display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
-            <div style={{ textAlign:'center' }}>
-              <div style={{ fontSize:9, color:'#6b7280' }}>Total Bruto</div>
-              <div style={{ fontWeight:800, fontSize:14, color:'#1e293b' }}>{fmtR(totalBruto)}</div>
+          <div className="acn-quadro tom-ok acn-cot-resumo3">
+            <div className="acn-cot-centro">
+              <div className="acn-ajuda">Total Bruto</div>
+              <div className="acn-cot-val-g">{fmtR(totalBruto)}</div>
             </div>
-            <div style={{ textAlign:'center' }}>
-              <div style={{ fontSize:9, color:'#6b7280' }}>Impostos ({((totalImpostos/totalBruto)*100||0).toFixed(1)}%)</div>
-              <div style={{ fontWeight:700, fontSize:13, color:'#dc2626' }}>{fmtR(totalImpostos)}</div>
+            <div className="acn-cot-centro">
+              <div className="acn-ajuda">Impostos ({((totalImpostos/totalBruto)*100||0).toFixed(1)}%)</div>
+              <div className="acn-cot-val-m acn-txt-erro">{fmtR(totalImpostos)}</div>
             </div>
-            <div style={{ textAlign:'center' }}>
-              <div style={{ fontSize:9, color:'#6b7280' }}>Líquido c/ {desconto}% desc.</div>
-              <div style={{ fontWeight:800, fontSize:14, color:'#15803d' }}>{fmtR(totalLiquido)}</div>
+            <div className="acn-cot-centro">
+              <div className="acn-ajuda">Líquido c/ {desconto}% desc.</div>
+              <div className="acn-cot-val-g acn-txt-ok">{fmtR(totalLiquido)}</div>
             </div>
           </div>
-
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button onClick={onClose}
-              style={{ padding:'8px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff',
-                fontSize:11, cursor:'pointer' }}>
-              Cancelar
-            </button>
-            <button onClick={salvar} disabled={salvando}
-              style={{ padding:'8px 22px', background:'#7c3aed', color:'#fff', border:'none',
-                borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
-              {salvando ? 'Salvando...' : '💾 Salvar Proposta Combinada'}
-            </button>
-          </div>
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>
+            Cancelar
+          </Botao>
+          <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : 'Salvar Proposta Combinada'}
+          </Botao>
         </div>
       </div>
     </div>
@@ -1252,69 +1223,54 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
 
   const prms = { ptax_dolar: 5.85, ptax_euro: 6.40 };
 
-  const inp: React.CSSProperties = {
-    width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'7px 10px', fontSize:11, boxSizing:'border-box',
-  };
-  const lbl: React.CSSProperties = { display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 };
-
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:2500,
-      display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(660px,95vw)', maxHeight:'88vh',
-        boxShadow:'0 8px 32px rgba(0,0,0,.3)', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+    <div className="modal-overlay acn-cot-overlay acn-cot-ov-nova" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-cot-jan acn-cot-larga" role="dialog" aria-label="Nova Cotação — Catálogo de Produtos">
 
-        <div style={{ background:'#0f766e', color:'#fff', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+        <div className="acn-modal-cab">
           <div>
-            <div style={{ fontWeight:800, fontSize:13 }}>📋 Nova Cotação — Catálogo de Produtos</div>
-            <div style={{ fontSize:9, opacity:.85, marginTop:1 }}>Selecione produtos do catálogo configurado</div>
+            <span className="modal-title"><Icone path={mdiFormatListBulleted} size={18} />Nova Cotação — Catálogo de Produtos</span>
+            <div className="acn-ajuda">Selecione produtos do catálogo configurado</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
 
-        <div style={{ padding:16, flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
           {/* Dados da cotação */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div className="acn-cot-grade2">
             <div>
-              <label style={lbl}>CLIENTE / ÓRGÃO *</label>
-              <input value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)}
-                placeholder="Nome do cliente..." style={inp} />
+              <label className="acn-label">CLIENTE / ÓRGÃO *</label>
+              <input className="acn-input" value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)}
+                placeholder="Nome do cliente..." />
             </div>
             <div>
-              <label style={lbl}>OP/OS (opcional)</label>
-              <input value={opNumero} onChange={e=>setOpNumero(e.target.value)}
-                placeholder="Ex: 1212.2608" style={inp} />
+              <label className="acn-label">OP/OS (opcional)</label>
+              <input className="acn-input" value={opNumero} onChange={e=>setOpNumero(e.target.value)}
+                placeholder="Ex: 1212.2608" />
             </div>
           </div>
 
           {/* Busca de produtos */}
-          <div style={{ position:'relative' }}>
-            <label style={lbl}>🔍 BUSCAR PRODUTO DO CATÁLOGO</label>
-            <input value={busca} onChange={e=>setBusca(e.target.value)}
-              placeholder="Digite o nome do produto..."
-              style={inp} />
+          <div className="acn-cot-busca-op">
+            <label className="acn-label"><Icone path={mdiMagnify} size={13} /> BUSCAR PRODUTO DO CATÁLOGO</label>
+            <input className="acn-input" value={busca} onChange={e=>setBusca(e.target.value)}
+              placeholder="Digite o nome do produto..." />
             {erroBusca && (
-              <div style={{ marginTop:6 }}>
+              <div className="acn-cot-faixa-busca">
                 <Faixa tom="erro">Não foi possível buscar no catálogo ({erroBusca}). Isso não quer dizer que o produto não exista.</Faixa>
               </div>
             )}
             {resultados.length > 0 && (
-              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff',
-                border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 8px 24px rgba(0,0,0,.15)',
-                zIndex:10, maxHeight:220, overflowY:'auto' }}>
+              <div className="acn-cot-sug acn-cot-sug-prod">
                 {resultados.map(p => (
-                  <div key={p.id} onClick={() => addProduto(p)}
-                    style={{ padding:'8px 12px', cursor:'pointer', borderBottom:'1px solid #f1f5f9',
-                      display:'flex', justifyContent:'space-between', alignItems:'center' }}
-                    onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
-                    onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
+                  <div key={p.id} className="acn-cot-sug-item" onClick={() => addProduto(p)}>
                     <div>
-                      <div style={{ fontWeight:600, fontSize:11 }}>{p.nome}</div>
-                      <div style={{ fontSize:9, color:'#9ca3af' }}>
+                      <div className="acn-cot-nome-t">{p.nome}</div>
+                      <div className="acn-ajuda">
                         {p.codigo ? `${p.codigo} · ` : ''}{p.unidade} · Garantia: {p.garantia_meses}m
                       </div>
                     </div>
-                    <div style={{ fontSize:11, fontWeight:700, color:'#15803d', whiteSpace:'nowrap', marginLeft:12 }}>
+                    <div className="acn-cot-sug-preco">
                       {p.preco_venda ? `R$ ${Number(p.preco_venda).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
                     </div>
                   </div>
@@ -1325,65 +1281,55 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
 
           {/* Produtos selecionados */}
           {selecionados.length > 0 && (
-            <div style={{ border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-              <div style={{ background:'#1e293b', color:'#cbd5e1', padding:'6px 10px', fontSize:9, fontWeight:700 }}>
-                📦 PRODUTOS SELECIONADOS ({selecionados.length})
+            <div className="acn-cot-selec">
+              <div className="acn-cot-selec-tit">
+                <Icone path={mdiPackageVariantClosed} size={14} /> PRODUTOS SELECIONADOS ({selecionados.length})
               </div>
               {selecionados.map(({ produto, qt }) => (
-                <div key={produto.id} style={{ display:'flex', alignItems:'center', gap:10,
-                  padding:'8px 10px', borderBottom:'1px solid #f1f5f9' }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:11 }}>{produto.nome}</div>
-                    <div style={{ fontSize:9, color:'#9ca3af' }}>
+                <div key={produto.id} className="acn-cot-selec-linha">
+                  <div className="acn-cot-selec-txt">
+                    <div className="acn-cot-nome-t">{produto.nome}</div>
+                    <div className="acn-ajuda">
                       {produto.unidade} · markup {produto.markup_pct}% · garantia {produto.garantia_meses}m
-                      {Array.isArray(produto.fotos) && produto.fotos.length > 0 && ` · 📸 ${produto.fotos.length} foto(s)`}
-                      {produto.catalogo_url && ' · 📄 catálogo'}
+                      {Array.isArray(produto.fotos) && produto.fotos.length > 0 && ` · ${produto.fotos.length} foto(s)`}
+                      {produto.catalogo_url && ' · catálogo'}
                     </div>
                   </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <label style={{ fontSize:9, color:'#64748b' }}>Qtd:</label>
+                  <div className="acn-cot-selec-qtd">
+                    <label className="acn-ajuda">Qtd:</label>
                     <input type="number" min={1} value={qt} onChange={e=>setQt(produto.id, e.target.value)}
-                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:11, textAlign:'right' }} />
+                      className="acn-input acn-cot-qtd" />
                   </div>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#15803d', minWidth:80, textAlign:'right' }}>
+                  <div className="acn-cot-selec-total">
                     {produto.preco_venda
                       ? `R$ ${(Number(produto.preco_venda)*qt).toLocaleString('pt-BR',{minimumFractionDigits:2})}`
                       : '—'}
                   </div>
-                  <button onClick={() => removeItem(produto.id)}
-                    style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:14 }}>✕</button>
+                  <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover produto" aria-label="Remover produto" onClick={() => removeItem(produto.id)} />
                 </div>
               ))}
-              <div style={{ padding:'8px 10px', background:'#f0fdf4', display:'flex', justifyContent:'flex-end' }}>
-                <div style={{ fontWeight:800, fontSize:12, color:'#15803d' }}>
-                  Total estimado: R$ {selecionados.reduce((acc, {produto, qt}) => acc + (Number(produto.preco_venda)||0)*qt, 0)
-                    .toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                </div>
+              <div className="acn-cot-selec-rodape">
+                Total estimado: R$ {selecionados.reduce((acc, {produto, qt}) => acc + (Number(produto.preco_venda)||0)*qt, 0)
+                  .toLocaleString('pt-BR',{minimumFractionDigits:2})}
               </div>
             </div>
           )}
 
           {selecionados.length === 0 && (
-            <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11,
-              border:'2px dashed #e2e8f0', borderRadius:8, fontStyle:'italic' }}>
+            <div className="acn-cot-vazio tracejado">
               Nenhum produto selecionado. Busque acima para adicionar.
             </div>
           )}
         </div>
 
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'flex-end', gap:8, flexShrink:0, background:'#fafafa' }}>
-          <button onClick={onClose}
-            style={{ padding:'7px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>
             Cancelar
-          </button>
-          <button onClick={salvar}
-            disabled={salvando || !nomeCliente.trim() || selecionados.length === 0}
-            style={{ padding:'7px 22px', background: (!nomeCliente.trim()||selecionados.length===0) ? '#9ca3af' : '#0f766e',
-              color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11,
-              cursor: (!nomeCliente.trim()||selecionados.length===0) ? 'not-allowed' : 'pointer',
-              opacity: salvando ? .6 : 1 }}>
-            {salvando ? 'Criando...' : '✅ Criar Cotação'}
-          </button>
+          </Botao>
+          <Botao variante="primario" icone={mdiCheck} onClick={salvar}
+            disabled={salvando || !nomeCliente.trim() || selecionados.length === 0}>
+            {salvando ? 'Criando...' : 'Criar Cotação'}
+          </Botao>
         </div>
       </div>
     </div>
