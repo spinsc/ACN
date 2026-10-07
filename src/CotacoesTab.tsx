@@ -6,6 +6,7 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
+import { Faixa, Botao } from './Interface';
 import { perfilComPoderes } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -299,7 +300,9 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
     win.document.write(html);
     win.document.close();
     if (proposta?.id && prazoEntrega !== (proposta?.prazo_entrega || '')) {
-      supabase.from('cotacoes_propostas').update({ prazo_entrega: prazoEntrega }).eq('id', proposta.id);
+      // Etapa 7.60 (07/10/2026): o erro era ignorado — a proposta saía com o prazo novo e o registro ficava com o antigo
+      supabase.from('cotacoes_propostas').update({ prazo_entrega: prazoEntrega }).eq('id', proposta.id)
+        .then(({ error }) => { if (error) alert('A proposta foi aberta, mas o novo prazo de entrega NÃO foi gravado (' + error.message + ').'); });
     }
     onClose();
   };
@@ -452,6 +455,7 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
   const [prazoEntrega, setPrazoEntrega] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [modo, setModo]         = useState('proposta'); // 'proposta' | 'aprovacao'
+  const emAcao = useRef(false);   // 7.60: o clique duplo gravava a proposta (ou o pedido de aprovação) duas vezes
 
   const prms      = cotacao.parametros_globais || {};
   const itens     = cotacao.itens || [];
@@ -467,6 +471,11 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
   const precisaAprovacao = desconto > 0 && (maxDesc <= 0 || desconto > maxDesc);
 
   const salvar = async () => {
+    if (emAcao.current) return;
+    emAcao.current = true;
+    try { await salvarInterno(); } finally { emAcao.current = false; }
+  };
+  const salvarInterno = async () => {
     setSalvando(true);
     if (precisaAprovacao) {
       // Envia para aprovação
@@ -499,8 +508,9 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
       }]);
       if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
       // Atualiza status
-      await supabase.from('cotacoes_precos').update({ status: 'proposta_gerada' }).eq('id', cotacao.id);
-      alert('Proposta salva!');
+      const { error: erroStatus } = await supabase.from('cotacoes_precos').update({ status: 'proposta_gerada' }).eq('id', cotacao.id);
+      // 7.60: o erro era ignorado e o aviso dizia só "Proposta salva!" com a cotação ainda no status antigo
+      alert(erroStatus ? 'Proposta salva, mas o status da cotação NÃO foi atualizado para "Proposta Gerada" (' + erroStatus.message + ').' : 'Proposta salva!');
       onSalvo && onSalvo();
       onClose();
     }
@@ -618,6 +628,8 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const [vinculando,  setVinculando]  = useState(false);
   const [emitindoProposta, setEmitindoProposta] = useState<any>(null);
   const timerRef = useRef(null);
+  const [erroLeitura, setErroLeitura] = useState('');   // 7.60: leitura que falha não pode parecer "sem propostas"
+  const emAcaoRef = useRef(false);   // 7.60: vincular, desvincular e responder uma vez só (o clique duplo gravava duas vezes)
 
   const isAdmin  = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
   // Aprovar cotação: só gerentes de verdade (a equipe comercial não aprova)
@@ -626,11 +638,17 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   useEffect(() => {
     supabase.from('cotacoes_propostas').select('*')
       .eq('cotacao_id', cotacao.id).order('criado_em', { ascending: false })
-      .then(({ data }) => setPropostas(data || []));
+      .then(({ data, error }) => { if (error) setErroLeitura(error.message); else setPropostas(data || []); });
     supabase.from('cotacoes_aprovacoes').select('*')
       .eq('cotacao_id', cotacao.id).order('solicitado_em', { ascending: false })
-      .then(({ data }) => setAprovacoes(data || []));
+      .then(({ data, error }) => { if (error) setErroLeitura(error.message); else setAprovacoes(data || []); });
   }, [cotacao.id]);
+
+  const umaVezDetalhe = async (fn: () => Promise<any>) => {
+    if (emAcaoRef.current) return;
+    emAcaoRef.current = true;
+    try { return await fn(); } finally { emAcaoRef.current = false; }
+  };
 
   const buscarOp = (texto) => {
     setOpBusca(texto);
@@ -646,10 +664,12 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
     }, 260);
   };
 
-  const vincularOp = async (op) => {
+  const vincularOp = (op) => umaVezDetalhe(async () => {
     setVinculando(true);
     const novoRow = { opl_id: op.id, opl_numero: op.opl, status: 'vinculada' };
-    await supabase.from('cotacoes_precos').update(novoRow).eq('id', cotacao.id);
+    const { error } = await supabase.from('cotacoes_precos').update(novoRow).eq('id', cotacao.id);
+    // 7.60: o erro era ignorado — a janela fechava como se tivesse vinculado e o histórico de alterações registrava uma mudança que não houve
+    if (error) { alert('Não foi possível vincular a OP: ' + error.message); setVinculando(false); return; }
     logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: cotacao.id, changeType: 'UPDATE',
       oldRow: cotacao, newRow: { ...cotacao, ...novoRow }, user: currentUser });
     setOpBusca('');
@@ -657,26 +677,43 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
     setVinculando(false);
     recarregar && recarregar();
     onClose();
-  };
+  });
 
-  const aprovarSolicitacao = async (aprov) => {
+  const desvincularOp = () => umaVezDetalhe(async () => {
+    const { error } = await supabase.from('cotacoes_precos').update({ opl_id: null, opl_numero: null }).eq('id', cotacao.id);
+    if (error) { alert('Não foi possível desvincular a OP: ' + error.message); return; }   // 7.60: o erro era ignorado
+    recarregar && recarregar();
+    onClose();
+  });
+
+  const aprovarSolicitacao = (aprov) => umaVezDetalhe(async () => {
     if (!podeAprovar) return;
     const resposta = await pedirTexto('Resposta (aprovado/rejeitado):');
     if (!resposta) return;
     const status = resposta.toLowerCase().includes('rej') ? 'rejeitado' : 'aprovado';
-    await supabase.from('cotacoes_aprovacoes').update({
+    const { error: erroAprov } = await supabase.from('cotacoes_aprovacoes').update({
       status, aprovado_por: currentUser?.email, aprovado_em: new Date().toISOString(), resposta: resposta,
     }).eq('id', aprov.id);
+    // 7.60: os dois passos ignoravam o erro — a tela seguia como se a resposta tivesse sido gravada
+    if (erroAprov) { alert('Não foi possível registrar a resposta: ' + erroAprov.message); return; }
     if (status === 'aprovado') {
-      await supabase.from('cotacoes_precos').update({ status: 'aprovada' }).eq('id', cotacao.id);
-      logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: cotacao.id, changeType: 'UPDATE',
-        oldRow: cotacao, newRow: { ...cotacao, status: 'aprovada' }, user: currentUser });
+      const { error: erroCot } = await supabase.from('cotacoes_precos').update({ status: 'aprovada' }).eq('id', cotacao.id);
+      if (erroCot) {
+        // a aprovação não pode ficar "aprovada" com a cotação parada no status antigo: devolve a solicitação para pendente
+        const { error: erroVolta } = await supabase.from('cotacoes_aprovacoes').update({ status: 'pendente', aprovado_por: null, aprovado_em: null, resposta: null }).eq('id', aprov.id);
+        alert('Não foi possível aprovar a cotação (' + erroCot.message + ').' + (erroVolta
+          ? '\n\nATENÇÃO: a solicitação ficou marcada como aprovada, mas a cotação não mudou de status. Avise o suporte para conferir.'
+          : ' A solicitação voltou a ficar pendente.'));
+      } else {
+        logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: cotacao.id, changeType: 'UPDATE',
+          oldRow: cotacao, newRow: { ...cotacao, status: 'aprovada' }, user: currentUser });
+      }
     }
-    const { data } = await supabase.from('cotacoes_aprovacoes').select('*')
+    const { data, error: erroRelida } = await supabase.from('cotacoes_aprovacoes').select('*')
       .eq('cotacao_id', cotacao.id).order('solicitado_em', { ascending: false });
-    setAprovacoes(data || []);
+    if (erroRelida) setErroLeitura(erroRelida.message); else setAprovacoes(data || []);
     recarregar && recarregar();
-  };
+  });
 
   const prms      = cotacao.parametros_globais || {};
   const itens     = cotacao.itens || [];
@@ -797,11 +834,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ fontSize:10, color:'#16a34a', fontWeight:700 }}>✅ OP Vinculada: {cotacao.opl_numero}</span>
                 {isAdmin && (
-                  <button onClick={async () => {
-                    await supabase.from('cotacoes_precos').update({ opl_id: null, opl_numero: null }).eq('id', cotacao.id);
-                    recarregar && recarregar();
-                    onClose();
-                  }} style={{ fontSize:8, background:'#fee2e2', border:'1px solid #fca5a5', color:'#dc2626',
+                  <button onClick={desvincularOp} style={{ fontSize:8, background:'#fee2e2', border:'1px solid #fca5a5', color:'#dc2626',
                     borderRadius:3, padding:'2px 6px', cursor:'pointer' }}>
                     Desvincular
                   </button>
@@ -830,6 +863,12 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
               </div>
             )}
           </div>
+
+          {erroLeitura && (
+            <div style={{ marginBottom:14 }}>
+              <Faixa tom="erro">Não foi possível ler as propostas e as solicitações de aprovação desta cotação ({erroLeitura}). Isso não quer dizer que não existam — o que aparece abaixo pode estar incompleto.</Faixa>
+            </div>
+          )}
 
           {/* Histórico de aprovações */}
           {aprovacoes.length > 0 && (
@@ -923,11 +962,15 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
 function PainelAprovacoes({ currentUser, onClose }) {
   const [lista, setLista]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [erroLeitura, setErroLeitura] = useState('');   // 7.60: leitura que falha não pode parecer "nenhuma aprovação pendente"
+  const emAcaoRef = useRef(false);   // 7.60: aprovar/rejeitar uma vez só (o clique duplo gravava duas vezes)
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('cotacoes_aprovacoes').select('*')
+    const { data, error } = await supabase.from('cotacoes_aprovacoes').select('*')
       .eq('status', 'pendente').order('solicitado_em', { ascending: false });
+    if (error) { setErroLeitura(error.message); setLoading(false); return; }
+    setErroLeitura('');
     setLista(data || []);
     setLoading(false);
   }, []);
@@ -935,19 +978,32 @@ function PainelAprovacoes({ currentUser, onClose }) {
   useEffect(() => { carregar(); }, [carregar]);
 
   const responder = async (aprov, decisao) => {
-    const resposta = decisao === 'aprovado'
-      ? 'Aprovado pelo gestor.'
-      : await pedirTexto('Motivo da rejeição:') || 'Rejeitado.';
-    await supabase.from('cotacoes_aprovacoes').update({
-      status: decisao, aprovado_por: currentUser?.email,
-      aprovado_em: new Date().toISOString(), resposta,
-    }).eq('id', aprov.id);
-    if (decisao === 'aprovado') {
-      await supabase.from('cotacoes_precos').update({ status: 'aprovada' }).eq('id', aprov.cotacao_id);
-      logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: aprov.cotacao_id, changeType: 'UPDATE',
-        oldRow: { status: 'pendente_aprovacao' }, newRow: { status: 'aprovada' }, user: currentUser });
-    }
-    carregar();
+    if (emAcaoRef.current) return;
+    emAcaoRef.current = true;
+    try {
+      const resposta = decisao === 'aprovado'
+        ? 'Aprovado pelo gestor.'
+        : await pedirTexto('Motivo da rejeição:') || 'Rejeitado.';
+      const { error: erroAprov } = await supabase.from('cotacoes_aprovacoes').update({
+        status: decisao, aprovado_por: currentUser?.email,
+        aprovado_em: new Date().toISOString(), resposta,
+      }).eq('id', aprov.id);
+      // 7.60: os dois passos ignoravam o erro — a lista só relia e a solicitação parecia nunca ter sido respondida
+      if (erroAprov) { alert('Não foi possível registrar a resposta: ' + erroAprov.message); return; }
+      if (decisao === 'aprovado') {
+        const { error: erroCot } = await supabase.from('cotacoes_precos').update({ status: 'aprovada' }).eq('id', aprov.cotacao_id);
+        if (erroCot) {
+          const { error: erroVolta } = await supabase.from('cotacoes_aprovacoes').update({ status: 'pendente', aprovado_por: null, aprovado_em: null, resposta: null }).eq('id', aprov.id);
+          alert('Não foi possível aprovar a cotação (' + erroCot.message + ').' + (erroVolta
+            ? '\n\nATENÇÃO: a solicitação ficou marcada como aprovada, mas a cotação não mudou de status. Avise o suporte para conferir.'
+            : ' A solicitação voltou a ficar pendente.'));
+        } else {
+          logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: aprov.cotacao_id, changeType: 'UPDATE',
+            oldRow: { status: 'pendente_aprovacao' }, newRow: { status: 'aprovada' }, user: currentUser });
+        }
+      }
+      carregar();
+    } finally { emAcaoRef.current = false; }
   };
 
   return (
@@ -960,8 +1016,11 @@ function PainelAprovacoes({ currentUser, onClose }) {
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, color:'#6b7280', cursor:'pointer' }}>✕</button>
         </div>
         <div style={{ padding:16 }}>
+          {erroLeitura && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as aprovações pendentes ({erroLeitura}). Isso não quer dizer que não haja nenhuma{lista.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>
+          )}
           {loading && <div style={{ textAlign:'center', color:'#9ca3af', padding:20 }}>Carregando...</div>}
-          {!loading && lista.length === 0 && (
+          {!loading && lista.length === 0 && !erroLeitura && (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:11 }}>
               ✅ Nenhuma aprovação pendente.
             </div>
@@ -1003,20 +1062,22 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
   const [nome,     setNome]     = useState(`Proposta Combinada — ${new Date().toLocaleDateString('pt-BR')}`);
   const [desconto, setDesconto] = useState(0);
   const [salvando, setSalvando] = useState(false);
+  const emAcao = useRef(false);   // 7.60: o clique duplo gravava a proposta combinada duas vezes
 
   // Agrega todos os itens de todas as cotações selecionadas (apenas produtos)
   const todosItens = cotacoes.flatMap(c => (c.itens || []).map(it => ({ ...it, _origem_cotacao: c.numero_cotacao || c.id })));
-  const todosResults = cotacoes.flatMap(c => {
-    const prms = c.parametros_globais || {};
-    return (c.itens || []).map(it => calcItem(it, prms));
-  });
-  const totalBruto = todosResults.reduce((s, r) => s + r.valorTotal, 0);
-  const totalImpostos = todosResults.reduce((s, r) => s + r.totalImposto, 0);
+  // Etapa 7.60 (07/10/2026): somava o valor de cada produto SEM as quantidades do item e do subgrupo (nem o "dividir por"),
+  // e o total gravado na proposta saía diferente do da Formação de Preços — a regra do projeto é uma conta só (FormacaoCalculo.ts)
+  const geraisCot = cotacoes.map(c => estruturaFormacao(c.itens || [], c.parametros_globais || {}, calcItem).geral);
+  const totalBruto = geraisCot.reduce((s, gg) => s + gg.totVendas, 0);
+  const totalImpostos = geraisCot.reduce((s, gg) => s + gg.totImposto, 0);
   const descVal = totalBruto * (desconto / 100);
   const totalLiquido = totalBruto - descVal;
 
   const salvar = async () => {
     if (!nome.trim()) { alert('Informe o nome da proposta.'); return; }
+    if (emAcao.current) return;
+    emAcao.current = true;
     setSalvando(true);
     // Salva proposta combinada no primeiro cotação como referência, ou como avulsa
     const { error } = await supabase.from('cotacoes_propostas').insert([{
@@ -1029,6 +1090,7 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
       observacoes:         `Proposta combinada de ${cotacoes.length} formações: ${cotacoes.map(c=>c.numero_cotacao||c.nome).join(', ')}`,
     }]);
     setSalvando(false);
+    emAcao.current = false;
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     alert('Proposta combinada salva!');
     onSalvo();
@@ -1054,9 +1116,7 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
           <div style={{ background:'#f5f3ff', border:'1px solid #ddd6fe', borderRadius:8, padding:12 }}>
             <div style={{ fontWeight:700, fontSize:10, color:'#6d28d9', marginBottom:8 }}>📦 Formações incluídas</div>
             {cotacoes.map(c => {
-              const prms = c.parametros_globais || {};
-              const res  = (c.itens||[]).map(it => calcItem(it, prms));
-              const tot  = res.reduce((s,r)=>s+r.valorTotal,0);
+              const tot  = estruturaFormacao(c.itens || [], c.parametros_globais || {}, calcItem).geral.totVendas;
               return (
                 <div key={c.id} style={{ display:'flex', justifyContent:'space-between', fontSize:10, padding:'4px 0',
                   borderBottom:'1px solid #ede9fe' }}>
@@ -1129,15 +1189,18 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
   const [resultados,   setResultados]   = useState([]);
   const [selecionados, setSelecionados] = useState([]); // {produto, qt}
   const [salvando,     setSalvando]     = useState(false);
+  const [erroBusca,    setErroBusca]    = useState('');   // 7.60: busca que falha não pode parecer "nenhum produto"
+  const emAcao = useRef(false);   // 7.60: o clique duplo criava duas cotações iguais
   const busRef = useRef(null);
 
   useEffect(() => {
     if (!busca.trim()) { setResultados([]); return; }
     clearTimeout(busRef.current);
     busRef.current = setTimeout(async () => {
-      const { data } = await buscarPorPalavras(supabase.from('cadastro_produtos')
+      const { data, error } = await buscarPorPalavras(supabase.from('cadastro_produtos')
         .select('id,codigo,nome,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,fotos,catalogo_url,garantia_meses')
         .eq('ativo', true), ['nome_norm', 'codigo_norm'], busca).limit(10);
+      setErroBusca(error ? error.message : '');
       setResultados(data || []);
     }, 250);
     return () => clearTimeout(busRef.current);
@@ -1156,14 +1219,19 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
 
   const salvar = async () => {
     if (!nomeCliente.trim() || selecionados.length === 0) return;
+    if (emAcao.current) return;
+    emAcao.current = true;
     setSalvando(true);
 
     // Para cada produto, busca custo do BOM
+    const falhasBom: string[] = [];
     const itensComCusto = await Promise.all(selecionados.map(async ({ produto, qt }) => {
-      const { data: bom } = await supabase
+      const { data: bom, error: erroBom } = await supabase
         .from('cadastro_produtos_itens')
         .select('quantidade, cadastro_itens(custo_unit, ipi_pct, st_pct)')
         .eq('produto_id', produto.id);
+      // 7.60: a leitura que falhava virava custo ZERO — a cotação saía com preço de venda zero, sem aviso
+      if (erroBom) falhasBom.push(produto.nome + ' (' + erroBom.message + ')');
       const custoUnit = (bom || []).reduce((acc, l) => {
         const item = l.cadastro_itens || {};
         const cu = Number(item.custo_unit) || 0;
@@ -1190,6 +1258,12 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
       };
     }));
 
+    if (falhasBom.length) {
+      setSalvando(false); emAcao.current = false;
+      alert('Não foi possível ler a composição de: ' + falhasBom.join('; ') + '.\n\nA cotação NÃO foi criada, para não sair com custo zero. Tente de novo.');
+      return;
+    }
+
     const now = new Date();
     const nn = `COT-${String(now.getFullYear()).slice(-2)}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
 
@@ -1211,6 +1285,7 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
     }]);
 
     setSalvando(false);
+    emAcao.current = false;
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     onSalvo();
     onClose();
@@ -1259,6 +1334,11 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
             <input value={busca} onChange={e=>setBusca(e.target.value)}
               placeholder="Digite o nome do produto..."
               style={inp} />
+            {erroBusca && (
+              <div style={{ marginTop:6 }}>
+                <Faixa tom="erro">Não foi possível buscar no catálogo ({erroBusca}). Isso não quer dizer que o produto não exista.</Faixa>
+              </div>
+            )}
             {resultados.length > 0 && (
               <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff',
                 border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 8px 24px rgba(0,0,0,.15)',
@@ -1366,6 +1446,9 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [selecionadas,  setSelecionadas]  = useState<string[]>([]);
   const [modalCombinar, setModalCombinar] = useState(false);
   const [modalNovaCotacao, setModalNovaCotacao] = useState(false);
+  const [erroLista, setErroLista] = useState('');   // 7.60: leitura que falha não pode parecer "nenhuma cotação"
+  const [erroPendentes, setErroPendentes] = useState('');
+  const [erroConfig, setErroConfig] = useState('');
 
   // Visibilidade controlada pelo admin
   const [cfg, setCfg] = useState({
@@ -1382,9 +1465,10 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
 
   // Carregar configurações de visibilidade
   const carregarConfig = useCallback(async () => {
-    const { data } = await supabase.from('configuracoes_sistema')
+    const { data, error } = await supabase.from('configuracoes_sistema')
       .select('chave,valor')
       .in('chave', ['cotacoes_ver_custos_margens','cotacoes_ver_fornecedores','cotacoes_ver_markup']);
+    setErroConfig(error ? error.message : '');   // 7.60: sem ler a configuração os campos sensíveis ficam ocultos (o lado seguro) — agora a tela diz por quê
     if (data) {
       const m = Object.fromEntries(data.map(r => [r.chave, r.valor === 'true']));
       // Respeita o config para TODOS — admin controla via painel, não por perfil
@@ -1412,7 +1496,9 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
       const meuSetor = setorDoUsuario(currentUser?.perfil);
       q = meuSetor ? q.or(`setor.is.null,setor.eq.${meuSetor}`) : q.is('setor', null);
     }
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) { setErroLista(error.message); setCarregando(false); return; }   // mantém a lista que já estava na tela
+    setErroLista('');
     setCotacoes(data || []);
     setCarregando(false);
   }, [isVendedor, currentUser?.perfil]);
@@ -1430,8 +1516,10 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
 
   const carregarPendentes = useCallback(async () => {
     if (!podeAprovar) return;
-    const { count } = await supabase.from('cotacoes_aprovacoes')
+    const { count, error } = await supabase.from('cotacoes_aprovacoes')
       .select('id', { count: 'exact', head: true }).eq('status', 'pendente');
+    if (error) { setErroPendentes(error.message); return; }   // 7.60: contava 0 e o aviso de aprovação esperando sumia para o gerente
+    setErroPendentes('');
     setPendCount(count || 0);
   }, [podeAprovar]);
 
@@ -1541,6 +1629,16 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
         </div>
       </div>
 
+      {erroLista && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarCotacoes()}>Tentar de novo</Botao>}>Não foi possível ler as cotações ({erroLista}). Isso não quer dizer que não haja cotação{cotacoes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>
+      )}
+      {erroPendentes && (
+        <Faixa tom="atencao">Não foi possível ler as aprovações pendentes ({erroPendentes}). O número de aprovações esperando pode estar desatualizado.</Faixa>
+      )}
+      {erroConfig && (
+        <Faixa tom="atencao">Não foi possível ler a configuração de visibilidade ({erroConfig}). Custos, fornecedores e markup ficam ocultos até a leitura dar certo.</Faixa>
+      )}
+
       {/* Aviso de campos ocultos */}
       {isVendedor && (!cfg.verCustos || !cfg.verFornec || !cfg.verMarkup) && (
         <div style={{ background:'#fef9c3', border:'1px solid #fde68a', borderRadius:6,
@@ -1553,7 +1651,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
       {carregando ? (
         <div style={{ textAlign:'center', padding:32, color:'#9ca3af' }}>Carregando...</div>
       ) : cotacoesFiltradas.length === 0 ? (
-        <div style={{ textAlign:'center', padding:32, color:'#9ca3af', fontSize:11 }}>
+        erroLista ? null : <div style={{ textAlign:'center', padding:32, color:'#9ca3af', fontSize:11 }}>
           Nenhuma cotação encontrada.
         </div>
       ) : (
@@ -1724,14 +1822,17 @@ export function CotacoesCrmPanel({ oportunidadeId, currentUser, verCustos, verFo
   const [cotacoes,   setCotacoes]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [modalDesc,  setModalDesc]  = useState(null);
+  const [erroLeitura, setErroLeitura] = useState('');   // 7.60: leitura que falha não pode parecer "nenhuma cotação vinculada"
 
   const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('cotacoes_precos').select('*')
+    const { data, error } = await supabase.from('cotacoes_precos').select('*')
       .eq('crm_oportunidade_id', oportunidadeId)
       .order('criado_em', { ascending: false });
+    if (error) { setErroLeitura(error.message); setLoading(false); return; }
+    setErroLeitura('');
     setCotacoes(data || []);
     setLoading(false);
   }, [oportunidadeId]);
@@ -1741,19 +1842,26 @@ export function CotacoesCrmPanel({ oportunidadeId, currentUser, verCustos, verFo
   if (loading) return <div style={{ color:'#9ca3af', fontSize:10, padding:10 }}>Carregando cotações...</div>;
 
   if (cotacoes.length === 0) return (
-    <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:10 }}>
+    erroLeitura
+      ? <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as cotações deste card ({erroLeitura}). Isso não quer dizer que não haja cotação vinculada.</Faixa>
+      : <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:10 }}>
       Nenhuma cotação vinculada a este card.
     </div>
   );
 
   return (
     <div>
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível reler as cotações deste card ({erroLeitura}); a lista abaixo é a da última leitura que deu certo.</Faixa>
+      )}
       {cotacoes.map(c => {
         const itens = c.itens || [];
         const prms  = c.parametros_globais || {};
         const results = itens.map(it => calcItem(it, prms));
-        const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
-        const totCusto  = results.reduce((s, r) => s + r.custoTotal, 0);
+        // 7.60: somava o valor de cada produto sem as quantidades do item e do subgrupo — o total do card saía diferente do da Formação de Preços e da lista de Cotações
+        const geralCot = estruturaFormacao(itens, prms, calcItem).geral;
+        const totVendas = geralCot.totVendas;
+        const totCusto  = geralCot.totCustos;
         return (
           <div key={c.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
             padding:'10px 14px', marginBottom:10 }}>
