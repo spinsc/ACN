@@ -17,8 +17,9 @@ import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput'
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
 import { CabecalhoTela, Botao, Chips, Selo, Faixa, diaISO } from './Interface';
+import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
-import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate } from '@mdi/js';
+import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -134,14 +135,9 @@ function UndoToast({ onRestaurado }: { onRestaurado?: () => void }) {
 
   if (!pendente) return null;
   return (
-    <div style={{ position:'fixed', bottom:20, left:'50%', transform:'translateX(-50%)', zIndex:5000,
-      background:'#1e293b', color:'#fff', borderRadius:8, padding:'10px 16px',
-      display:'flex', alignItems:'center', gap:12, boxShadow:'0 4px 16px #0004', fontSize:11 }}>
-      <span>🗑️ {pendente.label} excluído(a).</span>
-      <button onClick={desfazer}
-        style={{ background:'#f59e0b', color:'#1e293b', border:'none', borderRadius:4, padding:'4px 12px', fontWeight:800, fontSize:10, cursor:'pointer' }}>
-        ↩ Desfazer (Ctrl+Z)
-      </button>
+    <div className="acn-lic-undo" role="status">
+      <span className="acn-lic-undo-txt"><Icone path={mdiTrashCanOutline} size={16} />{pendente.label} excluído(a).</span>
+      <Botao pequeno icone={mdiUndoVariant} onClick={desfazer}>Desfazer (Ctrl+Z)</Botao>
     </div>
   );
 }
@@ -333,15 +329,12 @@ function PrazoBadge({ label, value }: { label:string; value:string }) {
   const dias = diasRestantes(value);
   const vencido = dias !== null && dias < 0;
   const urgente = dias !== null && dias >= 0 && dias <= 2;
-  const cor = vencido ? '#dc2626' : urgente ? '#d97706' : '#374151';
-  const bg  = vencido ? '#fef2f2' : urgente ? '#fffbeb' : '#f8fafc';
   return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:3, background:bg,
-      color:cor, border:`1px solid ${cor}30`, borderRadius:4, padding:'1px 6px', fontSize:9, fontWeight:700 }}>
+    <Selo familia={vencido ? 'erro' : urgente ? 'atencao' : 'neutro'} ponto={false}>
       {label}: {fmtDT(value)}
       {vencido && ' ⚠️'}
       {urgente && ` (${dias}d)`}
-    </span>
+    </Selo>
   );
 }
 
@@ -2255,18 +2248,16 @@ function FInput({ label, value, onChange, type='text', placeholder }: { label:st
   if (type === 'money') {
     return (
       <div>
-        <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-        <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(value)}
-          onChange={e=>onChange(maskMoedaBR(e.target.value).raw)}
-          style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+        <label className="acn-label">{label}</label>
+        <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(value)} className="acn-input acn-lic-cheio"
+          onChange={e=>onChange(maskMoedaBR(e.target.value).raw)} />
       </div>
     );
   }
   return (
     <div>
-      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-      <input type={type} value={value||''} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+      <label className="acn-label">{label}</label>
+      <input type={type} value={value||''} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className="acn-input acn-lic-cheio" />
     </div>
   );
 }
@@ -2276,21 +2267,20 @@ function FInput({ label, value, onChange, type='text', placeholder }: { label:st
 // cada re-render (cada tecla digitada), fazendo o React desmontar e remontar o
 // <input>, o que tira o foco do campo a cada caractere digitado.
 function ModalNovaInput({ label, field, value, onChange, type='text', required=false }: any) {
+  const classe = 'acn-input acn-lic-cheio' + (required && !value ? ' acn-lic-obrig' : '');
   if (type === 'money') {
     return (
       <div>
-        <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}{required?' *':''}</label>
-        <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(value)}
-          onChange={e=>onChange(field, maskMoedaBR(e.target.value).raw)}
-          style={{ width:'100%', padding:'5px 8px', border:`1px solid ${required&&!value?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+        <label className="acn-label">{label}{required?' *':''}</label>
+        <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(value)} className={classe}
+          onChange={e=>onChange(field, maskMoedaBR(e.target.value).raw)} />
       </div>
     );
   }
   return (
     <div>
-      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}{required?' *':''}</label>
-      <input type={type} value={value||''} onChange={e=>onChange(field,e.target.value)}
-        style={{ width:'100%', padding:'5px 8px', border:`1px solid ${required&&!value?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+      <label className="acn-label">{label}{required?' *':''}</label>
+      <input type={type} value={value||''} onChange={e=>onChange(field,e.target.value)} className={classe} />
     </div>
   );
 }
@@ -2334,37 +2324,33 @@ function ModalNova({ currentUser, onClose, onSaved }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(660px,95vw)', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'14px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, color:'#1f2937', display:'flex', justifyContent:'space-between' }}>
-          <span>+ Nova Licitação</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
+    <div className="modal-overlay acn-lic-overlay acn-lic-ov-nova">
+      <div className="modal-box acn-modal-cadastro acn-lic-jan acn-lic-nova" role="dialog" aria-label="Nova Licitação">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiPlus} size={18} />Nova Licitação</span>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
 
-        <div style={{ overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:10 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
 
           {/* ACN / Detech */}
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>ACN / Detech *</label>
-            <div style={{ display:'flex', gap:6 }}>
+            <label className="acn-label">ACN / Detech *</label>
+            <div className="acn-lic-opcoes">
               {FATURAMENTO_OPTIONS.map(opt => (
-                <button key={opt} onClick={() => set('faturamento_empresa', opt)}
-                  style={{ flex:1, padding:'5px 4px', fontSize:11, fontWeight:700, cursor:'pointer', borderRadius:4,
-                    border:`1.5px solid ${form.faturamento_empresa===opt?'#2563eb':'#d1d5db'}`,
-                    background: form.faturamento_empresa===opt ? '#dbeafe' : '#fff',
-                    color: form.faturamento_empresa===opt ? '#1d4ed8' : '#374151' }}>
+                <Botao key={opt} pequeno variante={form.faturamento_empresa===opt ? 'primario' : 'secundario'} aria-pressed={form.faturamento_empresa===opt}
+                  className="acn-lic-opc" onClick={() => set('faturamento_empresa', opt)}>
                   {opt}
-                </button>
+                </Botao>
               ))}
             </div>
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div className="acn-grade-2">
             <ModalNovaInput label="Nome do Projeto" field="numero" value={form.numero} onChange={set} required />
             <div>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação *</label>
-              <select value={form.classificacao} onChange={e=>set('classificacao',e.target.value)}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+              <label className="acn-label">Classificação *</label>
+              <select className="acn-input acn-lic-cheio" value={form.classificacao} onChange={e=>set('classificacao',e.target.value)}>
                 <option>Direta</option>
                 <option>Parceiro</option>
                 <option>Adesão a ATA</option>
@@ -2376,38 +2362,34 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           <ModalNovaInput label="Portal" field="orgao" value={form.orgao} onChange={set} required />
 
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Tipo</label>
-            <div style={{ display:'flex', gap:6 }}>
+            <label className="acn-label">Tipo</label>
+            <div className="acn-lic-opcoes">
               {['Registro de Preços','Contrato'].map(opt => (
-                <button key={opt} onClick={() => set('tipo_objeto', opt)}
-                  style={{ flex:1, padding:'5px 4px', fontSize:11, fontWeight:700, cursor:'pointer', borderRadius:4,
-                    border:`1.5px solid ${form.tipo_objeto===opt?'#2563eb':'#d1d5db'}`,
-                    background: form.tipo_objeto===opt ? '#dbeafe' : '#fff',
-                    color: form.tipo_objeto===opt ? '#1d4ed8' : '#374151' }}>
+                <Botao key={opt} pequeno variante={form.tipo_objeto===opt ? 'primario' : 'secundario'} aria-pressed={form.tipo_objeto===opt}
+                  className="acn-lic-opc" onClick={() => set('tipo_objeto', opt)}>
                   {opt}
-                </button>
+                </Botao>
               ))}
             </div>
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div className="acn-grade-2">
             <ModalNovaInput label="Valor Global Previsto (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="money" />
             <div>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Julgamento</label>
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+              <label className="acn-label">Julgamento</label>
+              <div className="acn-lic-opcoes quebra">
                 {JULGAMENTO_OPCOES.map(opt => {
                   const ativos: string[] = form.julgamento || [];
                   const sel = ativos.includes(opt);
                   return (
-                    <button key={opt} onClick={() => setForm((f:any) => {
+                    <Botao key={opt} pequeno variante={sel ? 'primario' : 'secundario'} aria-pressed={sel}
+                      icone={sel ? mdiCheck : undefined}
+                      onClick={() => setForm((f:any) => {
                         const at = f.julgamento || [];
                         return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
-                      })}
-                      style={{ padding:'4px 8px', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4,
-                        border:`1.5px solid ${sel?'#2563eb':'#d1d5db'}`,
-                        background: sel ? '#dbeafe' : '#fff', color: sel ? '#1d4ed8' : '#374151' }}>
-                      {sel?'✓ ':''}{opt}
-                    </button>
+                      })}>
+                      {opt}
+                    </Botao>
                   );
                 })}
               </div>
@@ -2415,23 +2397,20 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           </div>
 
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Forma de Disputa</label>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            <label className="acn-label">Forma de Disputa</label>
+            <div className="acn-lic-opcoes quebra">
               {FORMA_DISPUTA_OPCOES.map(opt => (
-                <button key={opt} onClick={() => set('forma_disputa', opt)}
-                  style={{ flex:'1 0 30%', padding:'5px', border:`1.5px solid ${form.forma_disputa===opt?'#2563eb':'#d1d5db'}`,
-                    background: form.forma_disputa===opt ? '#dbeafe' : '#fff',
-                    color: form.forma_disputa===opt ? '#1d4ed8' : '#374151',
-                    borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                <Botao key={opt} pequeno variante={form.forma_disputa===opt ? 'primario' : 'secundario'} aria-pressed={form.forma_disputa===opt}
+                  className="acn-lic-opc terco" onClick={() => set('forma_disputa', opt)}>
                   {opt}
-                </button>
+                </Botao>
               ))}
             </div>
           </div>
 
-          <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:8 }}>PRAZOS</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">PRAZOS</div>
+            <div className="acn-grade-2">
               <ModalNovaInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" value={form.data_limite_esclarecimentos} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Limite Cadastro da Proposta" field="data_limite_proposta" value={form.data_limite_proposta} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Data/Hora de Disputa" field="data_disputa" value={form.data_disputa} onChange={set} type="datetime-local" />
@@ -2440,12 +2419,11 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           </div>
         </div>
 
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? 'Salvando...' : '+ Criar Licitação'}
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" icone={mdiPlus} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : 'Criar Licitação'}
+          </Botao>
         </div>
       </div>
     </div>
@@ -2455,13 +2433,16 @@ function ModalNova({ currentUser, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE LICITAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
+// Família de cor de cada status — o card da lista e o relatório por status usam a mesma
+const FAMILIA_STATUS_LICIT: Record<string, string> = { 'Aberta':'info', 'Em Andamento':'info', 'Vencida':'ok', 'Finalizada':'ok', 'Perdida':'erro', 'Descartada':'neutro', 'Suspenso':'atencao' };
+
 function LicitCard({ l, onClick, unread = false, markup = undefined }) {
   const dias = diasRestantes(l.data_disputa);
   const urgente = isDiaDisputa(l.data_disputa);
   const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Andamento'].includes(l.status);
   const orgaoEhLink = !!l.orgao && /^https?:\/\//i.test(l.orgao.trim());
 
-  const familia = ({ 'Aberta':'info', 'Em Andamento':'info', 'Vencida':'ok', 'Finalizada':'ok', 'Perdida':'erro', 'Descartada':'neutro', 'Suspenso':'atencao' } as any)[l.status] || 'neutro';
+  const familia = FAMILIA_STATUS_LICIT[l.status] || 'neutro';
 
   return (
     <div onClick={onClick} className={'acn-licit' + (unread ? ' nova' : '')} role="button" tabIndex={0}
@@ -2479,7 +2460,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
           {l.epp && <Selo familia="neutro" ponto={false}>EPP</Selo>}
           {l.classificacao && <Selo familia="neutro" ponto={false}>{l.classificacao}</Selo>}
           {infoTemp(l.temperatura) && (
-            <span title={`Temperatura: ${infoTemp(l.temperatura).label}`} style={{ lineHeight:1 }}>{infoTemp(l.temperatura).emoji}</span>
+            <span title={`Temperatura: ${infoTemp(l.temperatura).label}`} className="acn-lic-temp-emoji">{infoTemp(l.temperatura).emoji}</span>
           )}
           <span>{l.numero || '—'}</span>
         </h6>
@@ -2488,14 +2469,13 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
           <Selo familia={familia}>{l.status}</Selo>
           {l.data_limite_proposta && <span className="acn-num">Proposta: {fmtDT(l.data_limite_proposta)}</span>}
           {l.data_disputa && (
-            <span className="acn-num" style={{ fontWeight:500, color: vencidoDisputa ? 'var(--acn-bad)' : urgente ? 'var(--acn-warn)' : 'var(--acn-ink)' }}>
+            <span className={'acn-num acn-lic-disputa' + (vencidoDisputa ? ' vencida' : urgente ? ' urgente' : '')}>
               Disputa: {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` · ${dias} d`:''}{vencidoDisputa ? ' · passou' : ''}
             </span>
           )}
           {l.orgao ? (
             orgaoEhLink ? (
-              <a href={l.orgao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
-                style={{ color:'var(--acn-brand-ink)', wordBreak:'break-all' }}>
+              <a href={l.orgao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="acn-lic-orgao-link">
                 {l.orgao}
               </a>
             ) : <span>{l.orgao}</span>
@@ -2516,14 +2496,15 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
 const fmtDtRel = (v) => v ? new Date(v).toLocaleDateString('pt-BR') : '—';
 const fmtValRel = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
 
+// Cada grupo tem a sua família de cor (o ponto do cartão e a barrinha do título vêm dela)
 const GRUPOS_RELATORIO = [
-  { label:'🟢 Em Andamento', key:'Em Andamento', cor:'#059669', bgCor:'#ecfdf5' },
-  { label:'🏆 Vencidas',     key:'Vencida',      cor:'#16a34a', bgCor:'#f0fdf4' },
-  { label:'🏁 Finalizadas',  key:'Finalizada',   cor:'#0d9488', bgCor:'#f0fdfa' },
-  { label:'📋 Adesões a ATA', key:'__adesao',    cor:'#0891b2', bgCor:'#f0f9ff' },
-  { label:'❌ Perdidas',     key:'Perdida',       cor:'#dc2626', bgCor:'#fef2f2' },
-  { label:'🚫 Descartadas',  key:'Descartada',   cor:'#6b7280', bgCor:'#f9fafb' },
-  { label:'⏸️ Suspensas',    key:'Suspenso',     cor:'#d97706', bgCor:'#fffbeb' },
+  { rot:'Em Andamento',    key:'Em Andamento', familia:'ok' },
+  { rot:'Vencidas',        key:'Vencida',      familia:'ok' },
+  { rot:'Finalizadas',     key:'Finalizada',   familia:'ok' },
+  { rot:'Adesões a ATA',   key:'__adesao',     familia:'info' },
+  { rot:'Perdidas',        key:'Perdida',      familia:'erro' },
+  { rot:'Descartadas',     key:'Descartada',   familia:'neutro' },
+  { rot:'Suspensas',       key:'Suspenso',     familia:'atencao' },
 ];
 
 function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {} }) {
@@ -2543,34 +2524,33 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {}
     return filtradas.filter(l => l.status === key);
   };
 
-  if (loading) return <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#9ca3af' }}>Carregando...</div>;
+  if (loading) return <div className="acn-empty acn-lic-vazio">Carregando...</div>;
 
   return (
-    <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+    <div className="acn-lic-rel">
       {/* Filtro de ano */}
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-        <span style={{ fontSize:11, fontWeight:700, color:'#475569' }}>Filtrar por ano:</span>
-        <select value={anoFiltro} onChange={e=>setAnoFiltro(e.target.value)}
-          style={{ padding:'4px 10px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+      <div className="acn-lic-rel-filtro">
+        <span className="acn-forte">Filtrar por ano:</span>
+        <select className="acn-input acn-lic-auto" value={anoFiltro} onChange={e=>setAnoFiltro(e.target.value)}>
           <option value="">Todos os anos</option>
           {anos.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <span style={{ fontSize:10, color:'#94a3b8' }}>{filtradas.length} licitações{anoFiltro ? ` em ${anoFiltro}` : ''}</span>
+        <span className="acn-ajuda">{filtradas.length} licitações{anoFiltro ? ` em ${anoFiltro}` : ''}</span>
       </div>
 
       {/* Cards de resumo */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:8, marginBottom:16 }}>
+      <div className="acn-kpis acn-lic-rel-kpis">
         {GRUPOS_RELATORIO.map(g => {
           const grupo = getGrupo(g.key);
           return (
-            <div key={g.key} style={{ background:g.bgCor, border:`1.5px solid ${g.cor}30`, borderRadius:8, padding:'10px 14px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:g.cor, marginBottom:4 }}>{g.label}</div>
-              <div style={{ fontSize:22, fontWeight:800, color:g.cor }}>{grupo.length}</div>
-              <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
+            <div key={g.key} className="acn-kpi">
+              <span className="rot"><i data-acn-familia={g.familia} />{g.rot}</span>
+              <span className="val acn-num">{grupo.length}</span>
+              <span className="sub">
                 {grupo.filter(l => l.valor_proposta || l.valor_estimado).length > 0
                   ? fmtValRel(grupo.reduce((s,l) => s + (Number(l.valor_proposta) || Number(l.valor_estimado) || 0), 0))
                   : 'sem valores'}
-              </div>
+              </span>
             </div>
           );
         })}
@@ -2585,53 +2565,41 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {}
         const grupo = getGrupo(g.key);
         if (grupo.length === 0) return null;
         return (
-          <div key={g.key} style={{ marginBottom:20 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-              <div style={{ width:4, height:18, background:g.cor, borderRadius:2 }} />
-              <span style={{ fontWeight:800, fontSize:12, color:g.cor }}>{g.label}</span>
-              <span style={{ fontSize:10, color:'#94a3b8' }}>({grupo.length})</span>
+          <div key={g.key} className="acn-lic-rel-grupo">
+            <div className="acn-lic-rel-grupo-cab" data-acn-familia={g.familia}>
+              <i className="acn-lic-rel-barra" />
+              <span className="acn-lic-rel-grupo-tit">{g.rot}</span>
+              <span className="acn-ajuda">({grupo.length})</span>
             </div>
-            <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+            <div className="sec-card acn-lic-rel-tabela">
+              <table className="acn-tabela acn-densa">
                 <thead>
-                  <tr style={{ background:'#f8fafc' }}>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Nº</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Projeto / Órgão</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Tipo</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'right', color:'#64748b' }}>Valor</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Disputa</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Status</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'center', color:'#64748b' }}>Abrir</th>
+                  <tr>
+                    <th className="esq">Nº</th>
+                    <th className="esq">Projeto / Órgão</th>
+                    <th className="esq">Tipo</th>
+                    <th className="dir">Valor</th>
+                    <th className="esq">Disputa</th>
+                    <th className="esq">Status</th>
+                    <th className="centro">Abrir</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {grupo.map((l, idx) => (
-                    <tr key={l.id}
-                      style={{ borderTop:'1px solid #f1f5f9', background: idx%2===0 ? '#fff' : '#fafafa', cursor:'pointer' }}
-                      onClick={() => onOpenLicit(l)}>
-                      <td style={{ padding:'6px 10px', fontWeight:700, color:'#1e293b', whiteSpace:'nowrap' }}>{l.numero || '—'}</td>
-                      <td style={{ padding:'6px 10px', maxWidth:220 }}>
-                        <div style={{ fontWeight:600, wordBreak:'break-word' }}>{l.nome_projeto || '—'}</div>
-                        <div style={{ fontSize:9, color:'#94a3b8', wordBreak:'break-word' }}>{l.orgao || ''}</div>
+                  {grupo.map(l => (
+                    <tr key={l.id} className="acn-lic-linha" onClick={() => onOpenLicit(l)}>
+                      <td className="acn-forte acn-lic-nowrap">{l.numero || '—'}</td>
+                      <td className="acn-lic-projeto">
+                        <div className="acn-forte">{l.nome_projeto || '—'}</div>
+                        <div className="acn-ajuda">{l.orgao || ''}</div>
                       </td>
-                      <td style={{ padding:'6px 10px', color:'#475569' }}>{l.classificacao || '—'}</td>
-                      <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color:'#0f766e' }}>
+                      <td>{l.classificacao || '—'}</td>
+                      <td className="dir acn-txt-ok">
                         {fmtValRel(l.valor_proposta || l.valor_estimado)}
                       </td>
-                      <td style={{ padding:'6px 10px', color:'#475569', whiteSpace:'nowrap' }}>{fmtDtRel(l.data_disputa)}</td>
-                      <td style={{ padding:'6px 10px' }}>
-                        <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:10,
-                          background:(STATUS_COR[l.status]||'#94a3b8')+'20',
-                          color: STATUS_COR[l.status]||'#64748b' }}>
-                          {l.status}
-                        </span>
-                      </td>
-                      <td style={{ padding:'6px 10px', textAlign:'center' }}>
-                        <button onClick={e => { e.stopPropagation(); onOpenLicit(l); }}
-                          style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:4,
-                            padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                          Ver
-                        </button>
+                      <td className="acn-lic-nowrap">{fmtDtRel(l.data_disputa)}</td>
+                      <td><Selo familia={FAMILIA_STATUS_LICIT[l.status] || 'neutro'}>{l.status}</Selo></td>
+                      <td className="centro">
+                        <Botao pequeno onClick={e => { e.stopPropagation(); onOpenLicit(l); }}>Ver</Botao>
                       </td>
                     </tr>
                   ))}
@@ -2695,29 +2663,28 @@ function PipelineCardsLicitacoes({ licitacoes, total = null }: any) {
   const totalAguardando  = aguardando.reduce((s:number,l:any) => s + valorDe(l), 0);
 
   const cartoes = [
-    { rot: 'Em negociação', n: emNegociacao.length, total: totalNegociacao, cor: 'var(--acn-ink)', sub: 'licitações abertas ou em andamento' },
-    { rot: 'Ganhas',        n: ganhas.length,       total: totalGanhas,     cor: 'var(--acn-ok)',  sub: 'vencidas' },
-    { rot: 'Perdidas',      n: perdidas.length,     total: totalPerdidas,   cor: 'var(--acn-bad)', sub: 'perdidas' },
-    { rot: 'Aguardando faturamento', n: aguardando.length, total: totalAguardando, cor: 'var(--acn-warn)', sub: 'ganhas ainda não faturadas' },
+    { rot: 'Em negociação', n: emNegociacao.length, total: totalNegociacao, cor: '',                sub: 'licitações abertas ou em andamento' },
+    { rot: 'Ganhas',        n: ganhas.length,       total: totalGanhas,     cor: 'acn-txt-ok',      sub: 'vencidas' },
+    { rot: 'Perdidas',      n: perdidas.length,     total: totalPerdidas,   cor: 'acn-txt-erro',    sub: 'perdidas' },
+    { rot: 'Aguardando faturamento', n: aguardando.length, total: totalAguardando, cor: 'acn-txt-atencao', sub: 'ganhas ainda não faturadas' },
   ];
   return (
-    <div style={{ marginBottom:12 }}>
+    <div className="acn-lic-pipe-bloco">
       {/* Mesma faixa do Comercial/CRM: valor, quantidade e o que significa */}
-      <div className="sec-card acn-pipe" style={{ gridTemplateColumns:'repeat(4, minmax(0, 1fr))' }}>
+      <div className="sec-card acn-pipe acn-lic-pipe4">
         {cartoes.map(c => (
           <div key={c.rot}>
             <span className="rot">{c.rot}</span>
-            <span className="val acn-num" style={{ color:c.cor }}>{c.total > 0 ? fmtValRel(c.total) : c.n}</span>
+            <span className={'val acn-num ' + c.cor}>{c.total > 0 ? fmtValRel(c.total) : c.n}</span>
             <span className="sub"><span className="acn-num">{c.n}</span> {c.sub}</span>
           </div>
         ))}
       </div>
-      <div className="acn-kmeta" style={{ margin:'8px 2px 0', gap:8 }}>
+      <div className="acn-kmeta acn-lic-pipe-mes">
         <label htmlFor="licit-mes-pipeline">Mês do pipeline</label>
-        <input id="licit-mes-pipeline" type="month" className="acn-input" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
-          style={{ width:'auto', height:28 }} />
+        <input id="licit-mes-pipeline" type="month" className="acn-input acn-lic-mes" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)} />
         {mesFiltro && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setMesFiltro('')}>Limpar</Botao>}
-        <span style={{ fontSize: 10, color: '#64748b' }}>
+        <span className="acn-ajuda">
           valores pelo <b>estimado</b>
           {recortado && <> · contando <b>{licitacoes.length}</b> de {total} licitações, pelos filtros da lista</>}
         </span>
@@ -2942,7 +2909,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   licitacoes.forEach(l => { conts[l.status] = (conts[l.status]||0) + 1; });
 
   return (
-    <div style={{ display:'flex', flexDirection:'column' }}>
+    <div className="acn-lic-tela">
       <UndoToast onRestaurado={fetchLicit} />
 
       <CabecalhoTela
@@ -2952,18 +2919,18 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       />
 
       {/* AGENDA */}
-      <div style={{ flexShrink:0, marginBottom:12 }}>
+      <div className="acn-lic-agenda">
         <AgendaWidget setor="licitacoes" currentUser={currentUser} />
       </div>
 
       {/* PIPELINE — mesma faixa do Comercial/CRM */}
-      <div style={{ flexShrink:0 }}>
+      <div className="acn-lic-fixo">
         {/* Segue tipo, temperatura, setor de análise e período — só não segue
             o status, que é o eixo dos próprios cartões (ver baseSemStatus). */}
         <PipelineCardsLicitacoes licitacoes={baseSemStatus} total={licitacoes.length} />
       </div>
 
-      <div className="sec-card" style={{ marginBottom:0, overflow:'visible' }}>
+      <div className="sec-card acn-lic-filtros-card">
         {/* STATUS + RELATÓRIO */}
         <div className="acn-filtros">
           <Botao pequeno variante={vistaRelatorio ? 'primario' : 'secundario'} icone={vistaRelatorio ? mdiArrowLeft : mdiChartBar}
@@ -2987,8 +2954,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
                     <div key={t.v} role="button" tabIndex={0} aria-pressed={ativo} aria-label={`${t.label}: ${n}`}
                       onClick={() => setFiltroTemp(ativo ? '' : t.v)} onKeyDown={e => { if (e.key === 'Enter') setFiltroTemp(ativo ? '' : t.v); }}
                       title={`${t.emoji} ${t.label}: ${n}`}
-                      style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', cursor:'pointer', width:16, height:20 }}>
-                      <div style={{ width:10, height: Math.max(3, Math.round((n / max) * 18)), borderRadius:'2px 2px 0 0', background: t.cor, opacity: ativo || !filtroTemp ? 1 : .35 }} />
+                      className="acn-lic-temp-col">
+                      <div className={'acn-lic-temp-barra' + (ativo || !filtroTemp ? '' : ' apagada')} style={{ height: Math.max(3, Math.round((n / max) * 18)), background: t.cor }} />
                     </div>
                   );
                 })}
@@ -3003,23 +2970,23 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
         </div>
 
         {/* FILTROS */}
-        <div className="acn-filtros" style={{ alignItems:'flex-end' }}>
+        <div className="acn-filtros acn-lic-filtros-fim">
           <div>
             <label className="acn-label">Ordenar por</label>
-            <select className="acn-input" value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ width:'auto' }}>
+            <select className="acn-input acn-lic-auto" value={sortBy} onChange={e=>setSortBy(e.target.value)}>
               {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div>
             <label className="acn-label">Tipo</label>
-            <select className="acn-input" value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)} style={{ width:'auto' }}>
+            <select className="acn-input acn-lic-auto" value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
               <option value="todos">Todos</option>
               <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
             </select>
           </div>
           <div>
             <label className="acn-label">Análise</label>
-            <select className="acn-input" value={filtroAnaliseSetor} onChange={e=>setFiltroAnaliseSetor(e.target.value)} style={{ width:'auto' }}>
+            <select className="acn-input acn-lic-auto" value={filtroAnaliseSetor} onChange={e=>setFiltroAnaliseSetor(e.target.value)}>
               <option value="todas">Todas</option>
               <option value="Orcamento">Orçamentária</option>
               <option value="Telecom">Telecom</option>
@@ -3029,15 +2996,15 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           </div>
           <div>
             <label className="acn-label">Disputa de</label>
-            <input className="acn-input" type="date" value={filtroPeriodoDe} onChange={e=>setFiltroPeriodoDe(e.target.value)} style={{ width:'auto' }} />
+            <input className="acn-input acn-lic-auto" type="date" value={filtroPeriodoDe} onChange={e=>setFiltroPeriodoDe(e.target.value)} />
           </div>
           <div>
             <label className="acn-label">Até</label>
-            <input className="acn-input" type="date" value={filtroPeriodoAte} onChange={e=>setFiltroPeriodoAte(e.target.value)} style={{ width:'auto' }} />
+            <input className="acn-input acn-lic-auto" type="date" value={filtroPeriodoAte} onChange={e=>setFiltroPeriodoAte(e.target.value)} />
           </div>
           <div>
             <label className="acn-label">Agrupar por período</label>
-            <select className="acn-input" value={agrupamentoPeriodo} onChange={e=>setAgrupamentoPeriodo(e.target.value as any)} style={{ width:'auto' }}>
+            <select className="acn-input acn-lic-auto" value={agrupamentoPeriodo} onChange={e=>setAgrupamentoPeriodo(e.target.value as any)}>
               <option value="">Não agrupar</option>
               <option value="semana">Semana</option>
               <option value="mes">Mês</option>
@@ -3063,18 +3030,18 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       {vistaRelatorio ? (
         <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} markupPorLicit={markupPorLicit} />
       ) : (
-        <div style={{ height:'90vh', overflowY:'auto', padding:'12px 0' }}>
+        <div className="acn-lic-lista">
           {loading || (modoRecentes && recentesLicitLoading) ? (
-            <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
+            <div className="acn-empty acn-lic-vazio">Carregando...</div>
           ) : !lista.length ? (
-            erroLista ? null : <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>
+            erroLista ? null : <div className="acn-empty acn-lic-vazio">
               {modoRecentes ? 'Nenhuma licitação visualizada ainda.'
                 : filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
             </div>
           ) : gruposPeriodo ? (
             gruposPeriodo.map((g, i) => (
-              <div key={i} style={{ marginBottom:16 }}>
-                <div className="acn-kcab" style={{ padding:'4px 0 8px', borderBottom:'1px solid var(--acn-line)', marginBottom:8 }}>
+              <div key={i} className="acn-lic-grupo">
+                <div className="acn-kcab acn-lic-grupo-cab">
                   <span>{g.label}</span><em>{g.itens.length}</em>
                 </div>
                 {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} markup={markupPorLicit[l.id]} />)}
