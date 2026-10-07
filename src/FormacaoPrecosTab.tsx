@@ -13,7 +13,7 @@ import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
   mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline, mdiArrowLeft, mdiFileDocumentOutline,
-  mdiFileMultipleOutline, mdiContentCopy, mdiEyeOutline } from '@mdi/js';
+  mdiFileMultipleOutline, mdiContentCopy, mdiEyeOutline, mdiChevronRight, mdiPrinterOutline } from '@mdi/js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -1391,62 +1391,62 @@ function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, 
     { label: 'Lucro %',  k: 'lucroPct',   fmt: fmtPct, hide: isVendedor, semUnitario: true },
   ].filter(x => !x.hide);
   const th = (h: string, esquerda = false) => (
-    <th key={h} style={{ textAlign: esquerda ? 'left' : 'right', fontSize:9, fontWeight:700, padding:'5px 8px' }}>{h}</th>
+    <th key={h} className={esquerda ? 'esq' : 'dir'}>{h}</th>
   );
+  // margem positiva = ok, negativa = erro (a mesma regra do resumo inteiro)
+  const tomMargem = (v: number) => v >= 0 ? 'acn-txt-ok' : 'acn-txt-erro';
   if (!estrutura.itens.length) return null;
 
   return (
-    <div style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:8, padding:12, marginBottom:12 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom: recolhido ? 0 : 10 }}>
-        <div style={{ fontWeight:800, fontSize:12, color:'#1e293b' }}>🧾 Resumo da formação</div>
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'baseline', gap:6 }}>
-          <span style={{ fontSize:10, color:'#64748b' }}>Valor total de todos os itens</span>
-          <span style={{ fontSize:16, fontWeight:800, color:'#1e40af' }}>{fmtR(g.totVendas)}</span>
+    <div className="acn-fp-rs">
+      <div className={'acn-fp-rs-cab' + (recolhido ? ' recolhido' : '')}>
+        <div className="acn-fp-rs-tit"><Icone path={mdiReceiptTextOutline} size={16} /> Resumo da formação</div>
+        <div className="acn-fp-rs-total">
+          <span className="acn-ajuda">Valor total de todos os itens</span>
+          <span className="acn-fp-rs-total-v" data-acn-familia="info">{fmtR(g.totVendas)}</span>
         </div>
-        <button type="button" onClick={() => setRecolhido(r => !r)}
-          style={{ fontSize:10, fontWeight:700, padding:'3px 10px', borderRadius:5, border:'1px solid #cbd5e1', background:'#f8fafc', color:'#475569', cursor:'pointer' }}>
-          {recolhido ? '▾ Mostrar resumo' : '▴ Recolher'}
-        </button>
+        <Botao pequeno icone={recolhido ? mdiChevronDown : mdiChevronUp} onClick={() => setRecolhido(r => !r)}>
+          {recolhido ? 'Mostrar resumo' : 'Recolher'}
+        </Botao>
       </div>
 
       {!recolhido && (<>
         {/* Totais gerais */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:8, marginBottom:10 }}>
+        <div className="acn-fp-rs-kpis">
           {[
-            { label:'Total de Vendas',   value: fmtR(g.totVendas),  bg:'#1e40af', hide: false },
-            { label:'Total de Custos',   value: fmtR(g.totCustos),  bg:'#065f46', hide: isVendedor },
-            { label:'Total DIFAL',       value: fmtR(g.totDifal),   bg:'#92400e', hide: isVendedor },
-            { label:'Total Impostos',    value: fmtR(g.totImposto), bg:'#831843', hide: false },
-            { label:'Margem Real Total', value: fmtR(g.totMargem),  bg: g.totMargem >= 0 ? '#166534' : '#991b1b', hide: isVendedor },
-            { label:'Lucro % Geral',     value: fmtPct(g.lucroPct), bg: g.lucroPct >= 10 ? '#16a34a' : g.lucroPct >= 5 ? '#d97706' : '#dc2626', hide: isVendedor },
+            { label:'Total de Vendas',   value: fmtR(g.totVendas),  fam:'info', hide: false },
+            { label:'Total de Custos',   value: fmtR(g.totCustos),  fam:'ok', hide: isVendedor },
+            { label:'Total DIFAL',       value: fmtR(g.totDifal),   fam:'atencao', hide: isVendedor },
+            { label:'Total Impostos',    value: fmtR(g.totImposto), fam:'erro', hide: false },
+            { label:'Margem Real Total', value: fmtR(g.totMargem),  fam: g.totMargem >= 0 ? 'ok' : 'erro', hide: isVendedor },
+            { label:'Lucro % Geral',     value: fmtPct(g.lucroPct), fam: g.lucroPct >= 10 ? 'ok' : g.lucroPct >= 5 ? 'atencao' : 'erro', hide: isVendedor },
             ...(plataforma ? [
-              { label:`Desconto ${plataforma.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     bg:'#0891b2', hide: false },
-              { label:`Retenção ${plataforma.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     bg:'#7c3aed', hide: false },
-              { label:'Valor Líquido c/ Plataforma',                        value: fmtR(totalLiquidoPlat), bg:'#0f766e', hide: false },
+              { label:`Desconto ${plataforma.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     fam:'info', hide: false },
+              { label:`Retenção ${plataforma.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     fam:'neutro', hide: false },
+              { label:'Valor Líquido c/ Plataforma',                        value: fmtR(totalLiquidoPlat), fam:'marca', hide: false },
             ] : []),
-          ].filter(x => !x.hide).map(({ label, value, bg }) => (
-            <div key={label} className="acn-kpi" style={{ padding:'8px 12px' }}>
-              <span className="rot"><i style={{ background:bg }} />{label}</span>
-              <span className="acn-num" style={{ fontSize:15, fontWeight:600, lineHeight:1.3,
-                color: /^(Margem|Lucro)/.test(label) ? bg : 'var(--acn-ink)' }}>{value}</span>
+          ].filter(x => !x.hide).map(({ label, value, fam }) => (
+            <div key={label} className="acn-kpi acn-fp-rs-kpi">
+              <span className="rot"><i data-acn-familia={fam} />{label}</span>
+              <span className="acn-num acn-fp-rs-kv" data-acn-familia={/^(Margem|Lucro)/.test(label) ? fam : undefined}>{value}</span>
             </div>
           ))}
         </div>
         {multiplicador > 1 && (
-          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 10px', marginBottom:10, display:'flex', gap:16, flexWrap:'wrap', fontSize:11 }}>
-            <strong style={{ color:'#0369a1' }}>✖️ × {multiplicador} (Multiplicador geral)</strong>
+          <div className="acn-fp-rs-mult">
+            <strong>× {multiplicador} (Multiplicador geral)</strong>
             <span>Vendas: <strong>{fmtR(g.totVendas * multiplicador)}</strong></span>
             {!isVendedor && <span>Custos: <strong>{fmtR(g.totCustos * multiplicador)}</strong></span>}
             {!isVendedor && <span>DIFAL: <strong>{fmtR(g.totDifal * multiplicador)}</strong></span>}
-            {!isVendedor && <span>Margem: <strong style={{ color: g.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(g.totMargem * multiplicador)}</strong></span>}
+            {!isVendedor && <span>Margem: <strong className={tomMargem(g.totMargem)}>{fmtR(g.totMargem * multiplicador)}</strong></span>}
           </div>
         )}
 
         {/* Lotes com todos os itens; composição recolhida por item */}
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <div className="acn-fp-rs-tabela">
+          <table className="acn-tabela acn-densa">
             <thead>
-              <tr style={{ background:'#1e3a5f', color:'#fff' }}>
+              <tr>
                 {th('Lote / Item', true)}{th('Qtd.')}{th('Unitário')}{th('Total')}
                 {!isVendedor && th('Margem')}{!isVendedor && th('Lucro %')}
               </tr>
@@ -1454,13 +1454,13 @@ function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, 
             <tbody>
               {estrutura.lotes.map((lc: any) => (
                 <React.Fragment key={lc.nome}>
-                  <tr style={{ background: lc.nome === loteAtivo ? '#e0f2fe' : '#f1f5f9' }}>
-                    <td style={{ fontSize:10, fontWeight:800, color:'#1e3a5f', padding:'5px 8px' }}>📦 {lc.nome}</td>
-                    <td style={{ fontSize:9, color:'#64748b', textAlign:'right', padding:'5px 8px' }}>{lc.itens.length} {lc.itens.length === 1 ? 'item' : 'itens'}</td>
-                    <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }} title="Soma do unitário de cada item do lote (1 unidade de cada)">{fmtR(lc.unit.totVendas)}</td>
-                    <td style={{ fontSize:11, fontWeight:800, color:'#1e40af', textAlign:'right', padding:'5px 8px' }}>{fmtR(lc.total.totVendas)}</td>
-                    {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px', color: lc.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(lc.total.totMargem)}</td>}
-                    {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }}>{fmtPct(lc.total.lucroPct)}</td>}
+                  <tr className={'acn-fp-rs-lote' + (lc.nome === loteAtivo ? ' ativo' : '')}>
+                    <td className="acn-fp-rs-lote-nome"><Icone path={mdiPackageVariantClosed} size={13} /> {lc.nome}</td>
+                    <td className="dir acn-fraco">{lc.itens.length} {lc.itens.length === 1 ? 'item' : 'itens'}</td>
+                    <td className="dir acn-forte" title="Soma do unitário de cada item do lote (1 unidade de cada)">{fmtR(lc.unit.totVendas)}</td>
+                    <td className="dir acn-forte acn-txt-info">{fmtR(lc.total.totVendas)}</td>
+                    {!isVendedor && <td className={'dir acn-forte ' + tomMargem(lc.total.totMargem)}>{fmtR(lc.total.totMargem)}</td>}
+                    {!isVendedor && <td className="dir acn-forte">{fmtPct(lc.total.lucroPct)}</td>}
                   </tr>
                   {lc.itens.map((ic: any) => {
                     const chave = `${lc.nome}::${ic.nome}`;
@@ -1468,60 +1468,59 @@ function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, 
                     const ativo = lc.nome === loteAtivo && ic.nome === grupoAtivo;
                     return (
                       <React.Fragment key={chave}>
-                        <tr style={{ borderTop:'1px solid #f1f5f9', background: ativo ? '#f0fdfa' : undefined }}>
-                          <td style={{ fontSize:10, color:'#334155', padding:'3px 8px 3px 14px', whiteSpace:'nowrap' }}>
-                            <button type="button" onClick={() => alternar(chave)} title={aberto ? 'Esconder composição' : 'Ver composição (custos, impostos, margem)'}
-                              style={{ border:'none', background:'none', cursor:'pointer', fontSize:10, color:'#0f766e', padding:'0 6px 0 0' }}>
-                              {aberto ? '▾' : '▸'}
-                            </button>
-                            <span onClick={() => onSelecionar(lc.nome, ic.nome)} style={{ cursor:'pointer', fontWeight: ativo ? 800 : 600, textDecoration:'underline dotted' }}
+                        <tr className={'acn-fp-rs-item' + (ativo ? ' ativo' : '')}>
+                          <td className="acn-fp-rs-item-nome">
+                            <Botao variante="discreto" pequeno icone={aberto ? mdiChevronDown : mdiChevronRight} onClick={() => alternar(chave)}
+                              title={aberto ? 'Esconder composição' : 'Ver composição (custos, impostos, margem)'}
+                              aria-label={aberto ? 'Esconder composição' : 'Ver composição (custos, impostos, margem)'} />
+                            <span onClick={() => onSelecionar(lc.nome, ic.nome)} className={'acn-fp-rs-nome' + (ativo ? ' ativo' : '')}
                               title="Ir para este item na composição">{ic.nome}</span>
-                            {ic.subgrupos.length ? <span style={{ color:'#7c3aed' }}> · {ic.subgrupos.length} subgrupos</span> : ''}
+                            {ic.subgrupos.length ? <span className="acn-fp-rs-sub"> · {ic.subgrupos.length} subgrupos</span> : ''}
                           </td>
-                          <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{ic.qtd}</td>
-                          <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }} title={ic.subgrupos.length ? 'Unitário médio (total ÷ quantidade)' : undefined}>{fmtR(ic.unit.totVendas)}</td>
-                          <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'3px 8px' }}>{fmtR(ic.total.totVendas)}</td>
-                          {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px', color: ic.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(ic.total.totMargem)}</td>}
-                          {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{fmtPct(ic.total.lucroPct)}</td>}
+                          <td className="dir">{ic.qtd}</td>
+                          <td className="dir" title={ic.subgrupos.length ? 'Unitário médio (total ÷ quantidade)' : undefined}>{fmtR(ic.unit.totVendas)}</td>
+                          <td className="dir acn-forte">{fmtR(ic.total.totVendas)}</td>
+                          {!isVendedor && <td className={'dir ' + tomMargem(ic.total.totMargem)}>{fmtR(ic.total.totMargem)}</td>}
+                          {!isVendedor && <td className="dir">{fmtPct(ic.total.lucroPct)}</td>}
                         </tr>
                         {aberto && (
-                          <tr>
-                            <td colSpan={isVendedor ? 4 : 6} style={{ padding:'4px 8px 8px 34px', background:'#f8fafc' }}>
-                              <table style={{ borderCollapse:'collapse', minWidth:320 }}>
+                          <tr className="acn-fp-rs-det-linha">
+                            <td colSpan={isVendedor ? 4 : 6} className="acn-fp-rs-det">
+                              <table className="acn-fp-rs-mini">
                                 <thead>
                                   <tr>
-                                    <th style={{ textAlign:'left', fontSize:8, color:'#0f766e', padding:'2px 8px' }} />
-                                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', padding:'2px 8px' }}>{ic.subgrupos.length ? 'Unitário médio' : 'Unitário (1 un.)'}</th>
-                                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', padding:'2px 8px' }}>Total (× {ic.qtd})</th>
+                                    <th className="esq" />
+                                    <th className="dir">{ic.subgrupos.length ? 'Unitário médio' : 'Unitário (1 un.)'}</th>
+                                    <th className="dir">Total (× {ic.qtd})</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {linhasComposicao.map(({ label, k, fmt, semUnitario }: any) => (
-                                    <tr key={label} style={{ borderTop:'1px solid #e2e8f0' }}>
-                                      <td style={{ fontSize:10, color:'#134e4a', padding:'3px 8px' }}>{label}</td>
-                                      <td style={{ fontSize:10, color:'#0f766e', textAlign:'right', padding:'3px 8px' }}>{semUnitario ? '—' : fmt(ic.unit[k])}</td>
-                                      <td style={{ fontSize:10, fontWeight:700, color:'#134e4a', textAlign:'right', padding:'3px 8px' }}>{fmt(ic.total[k])}</td>
+                                    <tr key={label}>
+                                      <td>{label}</td>
+                                      <td className="dir acn-fraco">{semUnitario ? '—' : fmt(ic.unit[k])}</td>
+                                      <td className="dir acn-forte">{fmt(ic.total[k])}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                               {ic.subgrupos.length > 0 && (
-                                <table style={{ borderCollapse:'collapse', minWidth:320, marginTop:6 }}>
+                                <table className="acn-fp-rs-mini sub">
                                   <thead>
                                     <tr>
                                       {['Subgrupo', 'Qtd.', 'Unitário', 'Total', ...(isVendedor ? [] : ['Margem'])].map(h => (
-                                        <th key={h} style={{ textAlign: h === 'Subgrupo' ? 'left' : 'right', fontSize:8, color:'#6b21a8', padding:'2px 8px' }}>{h}</th>
+                                        <th key={h} className={h === 'Subgrupo' ? 'esq' : 'dir'}>{h}</th>
                                       ))}
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {ic.subgrupos.map((sg: any) => (
-                                      <tr key={sg.nome} style={{ borderTop:'1px solid #f3e8ff' }}>
-                                        <td style={{ fontSize:10, fontWeight:700, color:'#6b21a8', padding:'2px 8px' }}>{sg.nome}</td>
-                                        <td style={{ fontSize:10, textAlign:'right', padding:'2px 8px' }}>{sg.qtd}</td>
-                                        <td style={{ fontSize:10, textAlign:'right', padding:'2px 8px' }}>{fmtR(sg.unit.totVendas)}</td>
-                                        <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'2px 8px' }}>{fmtR(sg.total.totVendas)}</td>
-                                        {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'2px 8px', color: sg.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(sg.total.totMargem)}</td>}
+                                      <tr key={sg.nome}>
+                                        <td className="acn-forte">{sg.nome}</td>
+                                        <td className="dir">{sg.qtd}</td>
+                                        <td className="dir">{fmtR(sg.unit.totVendas)}</td>
+                                        <td className="dir acn-forte">{fmtR(sg.total.totVendas)}</td>
+                                        {!isVendedor && <td className={'dir ' + tomMargem(sg.total.totMargem)}>{fmtR(sg.total.totMargem)}</td>}
                                       </tr>
                                     ))}
                                   </tbody>
@@ -1535,13 +1534,13 @@ function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, 
                   })}
                 </React.Fragment>
               ))}
-              <tr style={{ borderTop:'2px solid #1e3a5f', background:'#eef2ff' }}>
-                <td style={{ fontSize:10, fontWeight:800, color:'#1e3a5f', padding:'6px 8px' }}>Total de todos os itens</td>
+              <tr className="acn-linha-total">
+                <td>Total de todos os itens</td>
                 <td />
                 <td />
-                <td style={{ fontSize:12, fontWeight:800, color:'#1e40af', textAlign:'right', padding:'6px 8px' }}>{fmtR(g.totVendas)}</td>
-                {!isVendedor && <td style={{ fontSize:10, fontWeight:800, textAlign:'right', padding:'6px 8px', color: g.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(g.totMargem)}</td>}
-                {!isVendedor && <td style={{ fontSize:10, fontWeight:800, textAlign:'right', padding:'6px 8px' }}>{fmtPct(g.lucroPct)}</td>}
+                <td className="dir acn-txt-info">{fmtR(g.totVendas)}</td>
+                {!isVendedor && <td className={'dir ' + tomMargem(g.totMargem)}>{fmtR(g.totMargem)}</td>}
+                {!isVendedor && <td className="dir">{fmtPct(g.lucroPct)}</td>}
               </tr>
             </tbody>
           </table>
@@ -1600,55 +1599,57 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
   };
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 3000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 900, width: '96vw', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:800, color:'#0f172a' }}>🧾 Resumo da formação</div>
-            <div style={{ fontSize:10, color:'#64748b' }}>{titulo}{categoria ? ` · 🏷️ ${categoria}` : ''}{versao ? ` · v${versao}` : ''}</div>
+    <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-fp-jan acn-fp-rs-jan" role="dialog" aria-label="Resumo da formação">
+        <div className="acn-modal-cab">
+          <div className="acn-fp-rs-jan-tit">
+            <span className="modal-title"><Icone path={mdiReceiptTextOutline} size={18} />Resumo da formação</span>
+            <div className="acn-ajuda">{titulo}{categoria ? ` · ${categoria}` : ''}{versao ? ` · v${versao}` : ''}</div>
           </div>
-          <button className="acn-btn" style={{ background:'#0f766e', fontSize:11 }} onClick={imprimir}>🖨️ Imprimir / PDF</button>
-          <button className="acn-btn" style={{ background:'#94a3b8', fontSize:11 }} onClick={onClose}>Fechar</button>
+          <div className="acn-fp-rs-jan-acoes">
+            <Botao variante="primario" icone={mdiPrinterOutline} onClick={imprimir}>Imprimir / PDF</Botao>
+            <Botao onClick={onClose}>Fechar</Botao>
+          </div>
         </div>
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-            <thead>
-              <tr style={{ background:'#1e3a5f', color:'#fff' }}>
-                {cols.map(c => <th key={c} style={{ padding:'6px 8px', textAlign: c === 'Lote / Item' ? 'left' : 'right', fontSize:10 }}>{c}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((l, i) => (
-                <tr key={i} style={{ background: l.tipo === 'lote' ? '#e0f2fe' : undefined, borderTop:'1px solid #e2e8f0',
-                  fontWeight: l.tipo === 'lote' ? 800 : 400, color: l.tipo === 'sub' ? '#6b21a8' : '#1e293b' }}>
-                  {celulas(l).map((c, j) => (
-                    <td key={j} style={{ padding:'4px 8px', textAlign: j === 0 ? 'left' : 'right',
-                      paddingLeft: j === 0 ? (l.tipo === 'item' ? 22 : l.tipo === 'sub' ? 38 : 8) : 8 }}>
-                      {c}{j === 2 && l.medio ? <span style={{ fontSize:9, color:'#7c3aed' }}> (médio)</span> : null}
-                    </td>
-                  ))}
+        <div className="acn-modal-corpo">
+          <div className="acn-fp-rs-tabela">
+            <table className="acn-tabela acn-densa">
+              <thead>
+                <tr>
+                  {cols.map(c => <th key={c} className={c === 'Lote / Item' ? 'esq' : 'dir'}>{c}</th>)}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
-          {[
-            { label:'Total geral', v: fmtR(g.totVendas), bg:'#1e40af' },
-            { label:'Impostos', v: fmtR(g.totImposto), bg:'#831843' },
-            ...(isVendedor ? [] : [
-              { label:'Custos', v: fmtR(g.totCustos), bg:'#065f46' },
-              { label:'Margem', v: fmtR(g.totMargem), bg: g.totMargem >= 0 ? '#166534' : '#991b1b' },
-              { label:'Lucro %', v: fmtPct(g.lucroPct), bg:'#334155' },
-            ]),
-            ...(multiplicador > 1 ? [{ label:`× Multiplicador ${multiplicador}`, v: fmtR(g.totVendas * multiplicador), bg:'#0369a1' }] : []),
-            ...(plataforma ? [{ label:`Líquido c/ ${plataforma.nome}`, v: fmtR(plataforma.liquido), bg:'#0f766e' }] : []),
-          ].map(x => (
-            <div key={x.label} style={{ background:x.bg, color:'#fff', borderRadius:8, padding:'8px 12px', minWidth:130 }}>
-              <div style={{ fontSize:9, opacity:.85 }}>{x.label}</div>
-              <div style={{ fontSize:14, fontWeight:800 }}>{x.v}</div>
-            </div>
-          ))}
+              </thead>
+              <tbody>
+                {linhas.map((l, i) => (
+                  <tr key={i} className={'acn-fp-rs-jan-linha ' + l.tipo}>
+                    {celulas(l).map((c, j) => (
+                      <td key={j} className={j === 0 ? 'esq' : 'dir'}>
+                        {c}{j === 2 && l.medio ? <span className="acn-fp-rs-medio"> (médio)</span> : null}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="acn-fp-rs-cards">
+            {[
+              { label:'Total geral', v: fmtR(g.totVendas), fam:'info' },
+              { label:'Impostos', v: fmtR(g.totImposto), fam:'erro' },
+              ...(isVendedor ? [] : [
+                { label:'Custos', v: fmtR(g.totCustos), fam:'ok' },
+                { label:'Margem', v: fmtR(g.totMargem), fam: g.totMargem >= 0 ? 'ok' : 'erro' },
+                { label:'Lucro %', v: fmtPct(g.lucroPct), fam:'neutro' },
+              ]),
+              ...(multiplicador > 1 ? [{ label:`× Multiplicador ${multiplicador}`, v: fmtR(g.totVendas * multiplicador), fam:'info' }] : []),
+              ...(plataforma ? [{ label:`Líquido c/ ${plataforma.nome}`, v: fmtR(plataforma.liquido), fam:'marca' }] : []),
+            ].map(x => (
+              <div key={x.label} className="acn-fp-rs-card" data-acn-familia={x.fam}>
+                <div className="acn-fp-rs-card-rot">{x.label}</div>
+                <div className="acn-fp-rs-card-v">{x.v}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1818,3 +1818,50 @@ html body .acn-input.acn-fp-in-80 { width: 80px; }
 html body .acn-input.acn-fp-pf-obs { width: 100%; box-sizing: border-box; height: 60px; resize: vertical; }
 .acn-fp-prop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-fp-prop-obs { font-size: 12px; font-style: italic; color: var(--acn-muted); }
+
+/* ── Formação de Preços · 12e25 (07/10/2026): o resumo no topo da formação e a janela "Resumo da formação" ── */
+.acn-fp-rs { margin-bottom: 12px; padding: 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-fp-rs-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.acn-fp-rs-cab.recolhido { margin-bottom: 0; }
+.acn-fp-rs-tit { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-fp-rs-total { display: flex; align-items: baseline; gap: 6px; margin-left: auto; }
+.acn-fp-rs-total-v { font-size: 17px; font-weight: 800; color: var(--acn-f); }
+.acn-fp-rs-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.acn-fp-rs-kpi { padding: 8px 12px; }
+.acn-fp-rs-kv { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--acn-ink); }
+.acn-fp-rs-kv[data-acn-familia] { color: var(--acn-f); }
+.acn-fp-rs-mult { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 10px; padding: 6px 10px; font-size: 13px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 30%, transparent); border-radius: var(--acn-r2); }
+.acn-fp-rs-mult > strong:first-child { color: var(--acn-info); }
+.acn-fp-rs-tabela { overflow-x: auto; }
+html body .acn-main table.acn-tabela th.dir, html body .acn-main table.acn-tabela td.dir { text-align: right; }
+html body .acn-main table.acn-tabela th.esq, html body .acn-main table.acn-tabela td.esq { text-align: left; }
+html body .acn-main .acn-fp-rs-tabela table.acn-tabela td { height: 32px; }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-lote > td { background: var(--acn-neutral-soft); font-weight: 600; }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-lote.ativo > td { background: var(--acn-info-soft); }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-item.ativo > td { background: var(--acn-brand-soft); }
+.acn-fp-rs-lote-nome { display: flex; align-items: center; gap: 4px; color: var(--acn-ink); }
+.acn-fp-rs-item-nome { padding-left: 14px !important; white-space: nowrap; }
+.acn-fp-rs-nome { cursor: pointer; font-weight: 600; text-decoration: underline dotted; }
+.acn-fp-rs-nome.ativo { font-weight: 800; }
+.acn-fp-rs-sub { color: var(--acn-muted); }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-det-linha > td { height: auto; background: var(--acn-surface-2); }
+.acn-fp-rs-det { padding: 4px 8px 8px 34px !important; }
+.acn-fp-rs-mini { min-width: 320px; border-collapse: collapse; font-size: 12px; }
+.acn-fp-rs-mini.sub { margin-top: 6px; }
+.acn-fp-rs-mini th { padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--acn-brand-ink); }
+.acn-fp-rs-mini td { padding: 3px 8px; border-top: 1px solid var(--acn-line); }
+.acn-fp-rs-mini th.dir, .acn-fp-rs-mini td.dir { text-align: right; }
+.acn-fp-rs-mini th.esq, .acn-fp-rs-mini td.esq { text-align: left; }
+/* a janela do resumo */
+html body .modal-box.acn-modal-cadastro.acn-fp-rs-jan { width: min(900px, 96vw); max-width: 900px; max-height: 90vh; }
+.acn-fp-rs-jan-tit { flex: 1; min-width: 0; }
+.acn-fp-rs-jan-acoes { display: flex; gap: 8px; }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-jan-linha.lote > td { background: var(--acn-info-soft); font-weight: 700; }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-jan-linha.item > td.esq { padding-left: 22px !important; }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-jan-linha.sub > td { color: var(--acn-neutral); }
+html body .acn-main table.acn-tabela tr.acn-fp-rs-jan-linha.sub > td.esq { padding-left: 38px !important; }
+.acn-fp-rs-medio { font-size: 11px; color: var(--acn-muted); }
+.acn-fp-rs-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+.acn-fp-rs-card { min-width: 130px; padding: 8px 12px; background: var(--acn-f-soft); border: 1px solid color-mix(in srgb, var(--acn-f) 30%, transparent); border-radius: var(--acn-r3); }
+.acn-fp-rs-card-rot { font-size: 11px; color: var(--acn-muted); }
+.acn-fp-rs-card-v { font-size: 15px; font-weight: 800; color: var(--acn-f); }
