@@ -881,7 +881,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 }
 
 // ─── LINHA DE ITEM ────────────────────────────────────────────────────────────
-function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor }) {
+function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor, onLiberarGlobais }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct, validacao } = result;
   const modoTabela = item.tipo_calculo === 'TABELA';
   const lucroFam = lucroPct >= 10 ? 'ok' : lucroPct >= 5 ? 'atencao' : 'erro';
@@ -1025,14 +1025,18 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
                 step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
                 onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
-                readOnly={usarParamsGlobais} />
+                readOnly={usarParamsGlobais}
+                title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
+                onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
             </div>
             <div>
               <div className="acn-fp-ir-rot2">Imposto%</div>
               <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
                 step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
                 onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
-                readOnly={usarParamsGlobais} />
+                readOnly={usarParamsGlobais}
+                title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
+                onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
             </div>
             {valor('Custo c/Imp. Unit', 'marca', fmtR(custoUnitBrl))}
             {valor('Custo Total', 'marca', fmtR(custoTotal))}
@@ -1763,6 +1767,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // produto — então, com a marcação ligada, o valor global é gravado em cada
   // produto (o mesmo que a tela já mostrava e calculava) e a marcação vai junto
   // em parametros_globais para reabrir do mesmo jeito.
+  // 07/10/2026 (pedido do usuário): com "Usar globais" ligado o DIFAL/Imposto do item ficavam travados sem explicação ("não deixa digitar").
+  // Regra já decidida: DIFAL é livre por proposta, global ou item a item. Clicar no campo travado agora pergunta e libera a edição item a item,
+  // copiando antes os globais para cada linha (os valores que o item mostrava continuam os mesmos, só passam a ser editáveis).
+  const copiarGlobaisParaLinhas = () => {
+    setItens(p => p.map(x => ({ ...x, difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct })));
+    setUsarGlobais(false);
+  };
+  const liberarGlobais = async () => {
+    if (!await confirmar('O DIFAL e o Imposto estão valendo pelos parâmetros globais, para todos os itens.\n\nLiberar a edição item a item? Cada item fica com o valor atual e você pode mudar só o que precisar.')) return;
+    copiarGlobaisParaLinhas();
+  };
   const paramsParaGravar = () => ({ ...params, usar_globais: usarGlobais, usar_markup_global: usarMarkupGlobal });
   const itensParaGravar = () => itens.map(({ _id, ...rest }) => paramEfetivo(rest));
 
@@ -3331,12 +3346,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 </span>
               </label>
               <Botao variante="primario" pequeno icone={mdiSync}
-                onClick={() => { setItens(p => p.map(x => ({
-                  ...x,
-                  difal_pct:      params.difal_pct,
-                  imposto_pct:    params.imposto_pct,
-                  custo_fixo_pct: params.custo_fixo_pct,
-                }))); setUsarGlobais(false); }}
+                onClick={copiarGlobaisParaLinhas}
                 title="Copia os globais para cada linha e desbloqueia edição individual">
                 Copiar globais → linhas
               </Botao>
@@ -3473,6 +3483,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   onExpand={(linhas) => expandItem(item._id, linhas)}
                   onRemove={() => remItem(item._id)}
                   usarParamsGlobais={usarGlobais}
+                  onLiberarGlobais={liberarGlobais}
                   usarMarkupGlobal={usarMarkupGlobal}
                   params={params}
                   isVendedor={isVendedor}
