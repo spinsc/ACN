@@ -2477,3 +2477,34 @@ html body .acn-crm-data-hora .acn-input:last-child { width: 90px; }
 .acn-crm-fatbloq-lista { margin: 6px 0 0; padding-left: 18px; }
 .acn-crm-fatbloq-nota { margin-top: 8px; }
 html body textarea.acn-input.acn-crm-motivo-txt { height: 80px; resize: vertical; }
+
+/* ── CRM · 12e39 (07/10/2026): as janelas de andamento, converter em licitação/ATA, vincular a processo, converter em OS e nova venda/adesão ── */
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-and, html body .modal-overlay.acn-crm-overlay.acn-crm-ov-vinc, html body .modal-overlay.acn-crm-overlay.acn-crm-ov-os,
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-venda { z-index: 1000; }
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-conv { z-index: 1001; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-and { width: min(480px, 96vw); max-width: 480px; max-height: 85vh; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-conv { width: min(460px, 96vw); max-width: 460px; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-vinc { width: min(460px, 96vw); max-width: 460px; max-height: 80vh; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-os { width: min(460px, 96vw); max-width: 460px; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-venda { width: min(500px, 96vw); max-width: 500px; max-height: 88vh; }
+/* andamento da negociação */
+.acn-quadro.acn-crm-and-nova { margin: 0; gap: 6px; }
+.acn-crm-and-lista { display: flex; flex-direction: column; gap: 6px; }
+.acn-crm-and-item { padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-left: 3px solid #7c3aed; border-radius: var(--acn-r1); }
+body.dark .acn-crm-and-item { background: #1e293b; border-color: #334155; border-left-color: #a78bfa; }
+.acn-crm-and-txt { font-size: 13px; line-height: 1.5; color: var(--acn-ink); white-space: pre-wrap; word-break: break-word; }
+body.dark .acn-crm-and-txt { color: #e2e8f0; }
+.acn-crm-and-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+.acn-crm-and-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+/* converter em licitação / ATA */
+.acn-crm-conv-opcoes { display: flex; flex-direction: column; gap: 8px; }
+html body .acn-b.acn-crm-conv-btn { justify-content: flex-start; height: auto; padding: 10px 14px; text-align: left; }
+.acn-crm-conv-txt { display: block; font-weight: 700; }
+.acn-crm-conv-sub { font-size: 12px; font-weight: 400; opacity: .85; }
+/* vincular a processo */
+.acn-quadro.acn-crm-vinc-ja { flex-direction: row; align-items: center; justify-content: space-between; display: flex; }
+.acn-crm-vinc-lista { overflow-y: auto; min-height: 100px; }
+.acn-crm-vinc-item { padding: 7px 9px; margin-bottom: 5px; cursor: pointer; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-crm-vinc-item:hover { border-color: var(--acn-brand); }
+/* nova venda / adesão */
+.acn-quadro.acn-crm-venda-op { display: flex; align-items: center; gap: 8px; }

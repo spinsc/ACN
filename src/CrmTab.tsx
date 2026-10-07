@@ -36,7 +36,8 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiTimerSand, mdiCheck, mdiBriefcaseOutline, mdiPinOutline, mdiFormatBold, mdiFormatItalic, mdiImageOutline, mdiContentSaveOutline,
   mdiPhoneOutline, mdiDomain, mdiAlertOutline,
   mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff,
-  mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel } from '@mdi/js';
+  mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel,
+  mdiNoteTextOutline, mdiFileDocumentOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
@@ -1963,6 +1964,43 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     } else if (aviso) {
       mostrarAviso(aviso.texto, aviso.tom);
     }
+  });
+
+  // Converte o card (venda direta) em licitação ou em adesão a ATA. Era o mesmo código escrito duas vezes dentro dos dois botões; os textos, os
+  // números ("VD-" / "ATA-") e a gravação são os de antes. 7.62: o erro de ligar a licitação criada ao card agora é avisado.
+  const converterParaLicitacao = umaVez('converter-licitacao', async (tipo: 'licitacao' | 'ata') => {
+    const ata = tipo === 'ata';
+    if (!await confirmar(ata ? 'Converter em Adesão a ATA?' : 'Converter em Licitação (status: Aberta)?')) return;
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const op = modalConverterLicit;
+    const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: ata ? `Convertida de Venda Direta CRM (Adesão a ATA): ${op.titulo}` : `Convertida de Venda Direta CRM: ${op.titulo}` }];
+    const { data: novaLic, error } = await supabase.from('licitacoes').insert([{
+      numero: op.numero_edital || `${ata ? 'ATA' : 'VD'}-${op.id.slice(0,6).toUpperCase()}`,
+      nome_projeto: op.titulo || '—',
+      orgao: op.orgao || '',
+      objeto_principal: op.descricao || '',
+      classificacao: ata ? 'Adesão a ATA' : 'Direta',
+      status: 'Aberta',
+      prioridade: 'Média',
+      analista_nome: op.responsavel_nome || currentUser?.nome || '',
+      analista_email: currentUser?.email || '',
+      historico,
+      marcadores: [],
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+      criado_em: agora,
+      atualizado_em: agora,
+    }]).select().single();
+    setSalvando(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    if (novaLic) {
+      const { error: errLig } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
+      if (errLig) mostrarAviso(`A licitação foi criada, mas não foi ligada a este card\n${errLig.message}`, 'atencao');   // 7.62: o erro era ignorado
+    }
+    setModalConverterLicit(null);
+    await load();
+    alert(ata ? 'Adesão a ATA criada! Acesse a aba Licitações para acompanhar.' : 'Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
   });
 
   // Liga (ou desliga, com null) o card a um processo licitatório. 7.62: o erro era ignorado e a janela fechava como se tivesse ligado.
@@ -3895,52 +3933,49 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL ANDAMENTO ══════ */}
       {modalAndamento && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-          onClick={()=>setModalAndamento(null)}>
-          <div style={{ background:'white', borderRadius:8, width:'min(480px,96vw)', maxHeight:'85vh', display:'flex', flexDirection:'column',
-            padding:'16px 18px', boxShadow:'0 8px 32px #0004' }} onClick={e=>e.stopPropagation()}>
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-and" onClick={()=>setModalAndamento(null)}>
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-and" role="dialog" aria-label="Andamento da Negociação" onClick={e=>e.stopPropagation()}>
             {/* Header */}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+            <div className="acn-modal-cab">
               <div>
-                <div style={{ fontWeight:700, fontSize:12, color:'#7c3aed' }}>📝 Andamento da Negociação</div>
-                <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>{modalAndamento.titulo}</div>
+                <span className="modal-title"><Icone path={mdiNoteTextOutline} size={18} />Andamento da Negociação</span>
+                <div className="acn-ajuda">{modalAndamento.titulo}</div>
               </div>
-              <button onClick={()=>setModalAndamento(null)} style={{ background:'none', border:'none', fontSize:16, color:'#94a3b8', cursor:'pointer' }}>✕</button>
+              <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={()=>setModalAndamento(null)} />
             </div>
-            {/* Nova observação */}
-            <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:10, marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#6d28d9', marginBottom:5 }}>✏️ Nova atualização</div>
-              <RichTextInput
-                mencoes
-                value={novoAndamento}
-                onChange={v => setNovoAndamento(v)}
-                placeholder="Descreva o andamento da negociação... @Nome pra mencionar, selecione um trecho pra formatar"
-                minHeight={54}
-                style={{ border:'1px solid #c4b5fd', fontSize:11, marginBottom:6 }} />
-              <button onClick={salvarAndamentoCrm} disabled={salvandoAndamento||!novoAndamento.trim()}
-                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
-                  fontWeight:700, fontSize:10, cursor:'pointer', opacity:novoAndamento.trim()?1:.5 }}>
-                {salvandoAndamento ? 'Salvando...' : '+ Registrar'}
-              </button>
-            </div>
-            {/* Histórico */}
-            {erroAndamentoModal && <Faixa tom="erro" acao={<Botao pequeno onClick={() => lerAndamentoCrm(modalAndamento.id)}>Tentar de novo</Botao>}>Não foi possível ler o andamento ({erroAndamentoModal}). Isso não quer dizer que não haja atualização.</Faixa>}
-            <div style={{ overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:6 }}>
-              {andamentoHistorico.length === 0 && !erroAndamentoModal && (
-                <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>Nenhuma atualização registrada ainda.</div>
-              )}
-              {andamentoHistorico.map((h,i)=>(
-                <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0',
-                  borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
-                  {pareceHtmlFormatado(h.texto)
-                    ? <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }} dangerouslySetInnerHTML={{ __html: h.texto }} />
-                    : <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={h.texto} /></div>}
-                  <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                    <span>👤 {h.usuario_nome||'—'}</span>
-                    <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+            <div className="acn-modal-corpo">
+              {/* Nova observação */}
+              <div className="acn-quadro acn-crm-and-nova">
+                <div className="acn-quadro-titulo acn-crm-tit-ic"><Icone path={mdiPencilOutline} size={14} />Nova atualização</div>
+                <RichTextInput
+                  mencoes
+                  value={novoAndamento}
+                  onChange={v => setNovoAndamento(v)}
+                  placeholder="Descreva o andamento da negociação... @Nome pra mencionar, selecione um trecho pra formatar"
+                  minHeight={54}
+                  style={{ fontSize:11 }} />
+                <Botao variante="primario" pequeno icone={mdiPlus} onClick={salvarAndamentoCrm} disabled={salvandoAndamento||!novoAndamento.trim()}>
+                  {salvandoAndamento ? 'Salvando...' : 'Registrar'}
+                </Botao>
+              </div>
+              {/* Histórico */}
+              {erroAndamentoModal && <Faixa tom="erro" acao={<Botao pequeno onClick={() => lerAndamentoCrm(modalAndamento.id)}>Tentar de novo</Botao>}>Não foi possível ler o andamento ({erroAndamentoModal}). Isso não quer dizer que não haja atualização.</Faixa>}
+              <div className="acn-crm-and-lista">
+                {andamentoHistorico.length === 0 && !erroAndamentoModal && (
+                  <div className="acn-empty acn-crm-vazio">Nenhuma atualização registrada ainda.</div>
+                )}
+                {andamentoHistorico.map((h,i)=>(
+                  <div key={h.id||i} className="acn-crm-and-item">
+                    {pareceHtmlFormatado(h.texto)
+                      ? <div className="acn-crm-and-txt" dangerouslySetInnerHTML={{ __html: h.texto }} />
+                      : <div className="acn-crm-and-txt"><Linkify text={h.texto} /></div>}
+                    <div className="acn-ajuda acn-crm-and-meta">
+                      <span><Icone path={mdiAccountOutline} size={12} />{h.usuario_nome||'—'}</span>
+                      <span><Icone path={mdiClockOutline} size={12} />{h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -3948,185 +3983,127 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL CONVERTER VENDA DIRETA → LICITAÇÃO/ATA ══════ */}
       {modalConverterLicit && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1001, display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-conv"
           onClick={e => { if (e.target===e.currentTarget) setModalConverterLicit(null); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(460px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:10 }}>🏛️ Converter para Licitação / Adesão a ATA</div>
-            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:12, fontSize:10 }}>
-              <strong>{modalConverterLicit.titulo}</strong>
-              {modalConverterLicit.orgao && <div style={{ color:'#0369a1' }}>{modalConverterLicit.orgao}</div>}
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-conv" role="dialog" aria-label="Converter para Licitação / Adesão a ATA">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiBankOutline} size={18} />Converter para Licitação / Adesão a ATA</span>
             </div>
-            <div style={{ fontSize:10, color:'#374151', marginBottom:12 }}>
-              Escolha o tipo de processo licitatório:
+            <div className="acn-modal-corpo">
+              <div className="acn-quadro tom-info">
+                <strong>{modalConverterLicit.titulo}</strong>
+                {modalConverterLicit.orgao && <div className="acn-ajuda">{modalConverterLicit.orgao}</div>}
+              </div>
+              <div>
+                Escolha o tipo de processo licitatório:
+              </div>
+              <div className="acn-crm-conv-opcoes">
+                <Botao variante="primario" icone={mdiBankOutline} className="acn-crm-conv-btn" disabled={salvando} onClick={() => converterParaLicitacao('licitacao')}>
+                  <span className="acn-crm-conv-txt">
+                    Processo Licitatório<br/>
+                    <span className="acn-crm-conv-sub">Cria nova licitação com status "Aberta"</span>
+                  </span>
+                </Botao>
+                <Botao icone={mdiFileDocumentOutline} className="acn-crm-conv-btn" disabled={salvando} onClick={() => converterParaLicitacao('ata')}>
+                  <span className="acn-crm-conv-txt">
+                    Adesão a ATA<br/>
+                    <span className="acn-crm-conv-sub">Cria registro de Adesão a Ata de Registro de Preços</span>
+                  </span>
+                </Botao>
+              </div>
             </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              <button
-                style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
-                disabled={salvando}
-                onClick={async () => {
-                  if (!await confirmar('Converter em Licitação (status: Aberta)?')) return;
-                  setSalvando(true);
-                  const agora = new Date().toISOString();
-                  const op = modalConverterLicit;
-                  const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM: ${op.titulo}` }];
-                  const { data: novaLic, error } = await supabase.from('licitacoes').insert([{
-                    numero: op.numero_edital || `VD-${op.id.slice(0,6).toUpperCase()}`,
-                    nome_projeto: op.titulo || '—',
-                    orgao: op.orgao || '',
-                    objeto_principal: op.descricao || '',
-                    classificacao: 'Direta',
-                    status: 'Aberta',
-                    prioridade: 'Média',
-                    analista_nome: op.responsavel_nome || currentUser?.nome || '',
-                    analista_email: currentUser?.email || '',
-                    historico,
-                    marcadores: [],
-                    criado_por: currentUser?.email,
-                    criado_por_nome: currentUser?.nome,
-                    criado_em: agora,
-                    atualizado_em: agora,
-                  }]).select().single();
-                  setSalvando(false);
-                  if (error) { alert('Erro: ' + error.message); return; }
-                  if (novaLic) {
-                    const { error: errLig } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
-                    if (errLig) mostrarAviso(`A licitação foi criada, mas não foi ligada a este card\n${errLig.message}`, 'atencao');   // 7.62: o erro era ignorado
-                  }
-                  setModalConverterLicit(null);
-                  await load();
-                  alert('Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
-                }}>
-                🏛️ Processo Licitatório<br/>
-                <span style={{ fontSize:9, fontWeight:400 }}>Cria nova licitação com status "Aberta"</span>
-              </button>
-              <button
-                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
-                disabled={salvando}
-                onClick={async () => {
-                  if (!await confirmar('Converter em Adesão a ATA?')) return;
-                  setSalvando(true);
-                  const agora = new Date().toISOString();
-                  const op = modalConverterLicit;
-                  const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM (Adesão a ATA): ${op.titulo}` }];
-                  const { data: novaLic, error } = await supabase.from('licitacoes').insert([{
-                    numero: op.numero_edital || `ATA-${op.id.slice(0,6).toUpperCase()}`,
-                    nome_projeto: op.titulo || '—',
-                    orgao: op.orgao || '',
-                    objeto_principal: op.descricao || '',
-                    classificacao: 'Adesão a ATA',
-                    status: 'Aberta',
-                    prioridade: 'Média',
-                    analista_nome: op.responsavel_nome || currentUser?.nome || '',
-                    analista_email: currentUser?.email || '',
-                    historico,
-                    marcadores: [],
-                    criado_por: currentUser?.email,
-                    criado_por_nome: currentUser?.nome,
-                    criado_em: agora,
-                    atualizado_em: agora,
-                  }]).select().single();
-                  setSalvando(false);
-                  if (error) { alert('Erro: ' + error.message); return; }
-                  if (novaLic) {
-                    const { error: errLig } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
-                    if (errLig) mostrarAviso(`A licitação foi criada, mas não foi ligada a este card\n${errLig.message}`, 'atencao');   // 7.62: o erro era ignorado
-                  }
-                  setModalConverterLicit(null);
-                  await load();
-                  alert('Adesão a ATA criada! Acesse a aba Licitações para acompanhar.');
-                }}>
-                📋 Adesão a ATA<br/>
-                <span style={{ fontSize:9, fontWeight:400 }}>Cria registro de Adesão a Ata de Registro de Preços</span>
-              </button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalConverterLicit(null)}>Cancelar</Botao>
             </div>
-            <button style={{ marginTop:10, width:'100%', padding:'7px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}
-              onClick={() => setModalConverterLicit(null)}>Cancelar</button>
           </div>
         </div>
       )}
 
       {/* ══════ MODAL VINCULAR A PROCESSO LICITATÓRIO ══════ */}
       {modalVincularLicit && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-vinc"
           onClick={e => { if (e.target===e.currentTarget) setModalVincularLicit(null); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(460px,96vw)', maxHeight:'80vh', display:'flex', flexDirection:'column', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#0e7490', marginBottom:8 }}>🔗 Vincular a Processo Licitatório</div>
-            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'6px 10px', marginBottom:10, fontSize:10 }}>
-              <strong>{modalVincularLicit.titulo}</strong> {modalVincularLicit.numero_pv && <span style={{ color:'#0369a1' }}>· PV {modalVincularLicit.numero_pv}</span>}
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-vinc" role="dialog" aria-label="Vincular a Processo Licitatório">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiLinkVariant} size={18} />Vincular a Processo Licitatório</span>
             </div>
-
-            {modalVincularLicit.licitacao_processo_id && (
-              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'8px 10px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <span style={{ fontSize:10, color:'#166534', fontWeight:700 }}>✓ Já vinculado a um processo</span>
-                <button className="acn-btn" style={{ background:'#dc2626', fontSize:8, padding:'3px 8px' }}
-                  onClick={() => ligarProcesso(null)}>
-                  Desvincular
-                </button>
+            <div className="acn-modal-corpo">
+              <div className="acn-quadro tom-info">
+                <div><strong>{modalVincularLicit.titulo}</strong> {modalVincularLicit.numero_pv && <span className="acn-txt-info">· PV {modalVincularLicit.numero_pv}</span>}</div>
               </div>
-            )}
 
-            <input
-              placeholder="🔍 Buscar por número, nome do projeto ou órgão..."
-              value={buscaVincularLicit}
-              onChange={async e => {
-                const v = e.target.value;
-                setBuscaVincularLicit(v);
-                if (v.trim().length < 2) { setResultVincularLicit([]); return; }
-                const { data, error } = await supabase.from('licitacoes')
-                  .select('id,numero,nome_projeto,orgao,status')
-                  .or(`numero.ilike.%${v}%,nome_projeto.ilike.%${v}%,orgao.ilike.%${v}%`)
-                  .limit(20);
-                if (error) { setErroVincular(error.message); setResultVincularLicit([]); return; }   // 7.62: lia como "Nenhum processo encontrado"
-                setErroVincular('');
-                setResultVincularLicit(data || []);
-              }}
-              style={{ padding:'6px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, marginBottom:8, boxSizing:'border-box' }}
-              autoFocus
-            />
-
-            <div style={{ overflowY:'auto', flex:1, minHeight:100 }}>
-              {resultVincularLicit.map(lic => (
-                <div key={lic.id} onClick={() => ligarProcesso(lic.id)} style={{
-                  padding:'7px 9px', border:'1px solid #e2e8f0', borderRadius:5, marginBottom:5, cursor:'pointer',
-                }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:'#1e293b' }}>{lic.numero} — {lic.nome_projeto}</div>
-                  <div style={{ fontSize:9, color:'#64748b' }}>{lic.orgao} · {lic.status}</div>
+              {modalVincularLicit.licitacao_processo_id && (
+                <div className="acn-quadro tom-ok acn-crm-vinc-ja">
+                  <span className="acn-txt-ok"><Icone path={mdiCheck} size={14} /> Já vinculado a um processo</span>
+                  <Botao pequeno variante="perigo" onClick={() => ligarProcesso(null)}>
+                    Desvincular
+                  </Botao>
                 </div>
-              ))}
-              {erroVincular && <Faixa tom="erro">Não foi possível buscar os processos ({erroVincular}). Isso não quer dizer que não exista nenhum.</Faixa>}
-              {buscaVincularLicit.trim().length >= 2 && resultVincularLicit.length === 0 && !erroVincular && (
-                <div style={{ fontSize:10, color:'#94a3b8', textAlign:'center', padding:'12px 0' }}>Nenhum processo encontrado</div>
               )}
-            </div>
 
-            <button style={{ marginTop:10, width:'100%', padding:'7px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}
-              onClick={() => setModalVincularLicit(null)}>Fechar</button>
+              <input className="acn-input"
+                placeholder="🔍 Buscar por número, nome do projeto ou órgão..."
+                value={buscaVincularLicit}
+                onChange={async e => {
+                  const v = e.target.value;
+                  setBuscaVincularLicit(v);
+                  if (v.trim().length < 2) { setResultVincularLicit([]); return; }
+                  const { data, error } = await supabase.from('licitacoes')
+                    .select('id,numero,nome_projeto,orgao,status')
+                    .or(`numero.ilike.%${v}%,nome_projeto.ilike.%${v}%,orgao.ilike.%${v}%`)
+                    .limit(20);
+                  if (error) { setErroVincular(error.message); setResultVincularLicit([]); return; }   // 7.62: lia como "Nenhum processo encontrado"
+                  setErroVincular('');
+                  setResultVincularLicit(data || []);
+                }}
+                autoFocus
+              />
+
+              <div className="acn-crm-vinc-lista">
+                {resultVincularLicit.map(lic => (
+                  <div key={lic.id} onClick={() => ligarProcesso(lic.id)} className="acn-crm-vinc-item">
+                    <div className="acn-forte">{lic.numero} — {lic.nome_projeto}</div>
+                    <div className="acn-ajuda">{lic.orgao} · {lic.status}</div>
+                  </div>
+                ))}
+                {erroVincular && <Faixa tom="erro">Não foi possível buscar os processos ({erroVincular}). Isso não quer dizer que não exista nenhum.</Faixa>}
+                {buscaVincularLicit.trim().length >= 2 && resultVincularLicit.length === 0 && !erroVincular && (
+                  <div className="acn-empty acn-crm-vazio">Nenhum processo encontrado</div>
+                )}
+              </div>
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalVincularLicit(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
 
       {/* ══════ MODAL CONVERTER OP/OS ══════ */}
       {modalConverter && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(460px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#166534', marginBottom:8 }}>🏆 Negócio Ganho — Lançar no Sistema</div>
-            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'8px 10px', marginBottom:12 }}>
-              <div style={{ fontSize:8, fontWeight:700, color:'#166534', marginBottom:2 }}>OPORTUNIDADE</div>
-              <div style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{modalConverter.titulo}</div>
-              {modalConverter.orgao && <div style={{ fontSize:9, color:'#64748b' }}>{modalConverter.orgao}</div>}
-              <div style={{ fontSize:10, color:'#0f766e', fontWeight:700, marginTop:2 }}>{fmtMoeda(modalConverter.valor_registrado)}</div>
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-os">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-os" role="dialog" aria-label="Negócio Ganho — Lançar no Sistema">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-crm-tit-ok"><Icone path={mdiTrophyOutline} size={18} />Negócio Ganho — Lançar no Sistema</span>
+            </div>
+            <div className="acn-modal-corpo">
+              <div className="acn-quadro tom-ok">
+                <div className="acn-quadro-titulo">OPORTUNIDADE</div>
+                <div className="acn-forte">{modalConverter.titulo}</div>
+                {modalConverter.orgao && <div className="acn-ajuda">{modalConverter.orgao}</div>}
+                <div className="acn-txt-ok">{fmtMoeda(modalConverter.valor_registrado)}</div>
+              </div>
+
+              <div className="acn-ajuda">
+                Número da OS será gerado automaticamente.
+              </div>
             </div>
 
-            <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
-              Número da OS será gerado automaticamente.
-            </div>
-
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalConverter(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px', background:'#ea580c', opacity: salvando?.5:1 }}
-                onClick={converterGanho} disabled={salvando}>
-                {salvando ? 'Criando...' : '🔧 Criar OS'}
-              </button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalConverter(null)}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiWrenchOutline} onClick={converterGanho} disabled={salvando}>
+                {salvando ? 'Criando...' : 'Criar OS'}
+              </Botao>
             </div>
           </div>
         </div>
@@ -4134,99 +4111,93 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL VENDA / ADESÃO ══════ */}
       {modalVenda && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-venda"
           onClick={e => { if (e.target===e.currentTarget) setModalVenda(null); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(500px,96vw)', maxHeight:'88vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', marginBottom:8 }}>
-              {modalVenda.venda ? '✏️ Editar Venda' : '+ Registrar Venda / Adesão'}
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-venda" role="dialog" aria-label="Venda / Adesão">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={modalVenda.venda ? mdiPencilOutline : mdiPlus} size={18} />{modalVenda.venda ? 'Editar Venda' : 'Registrar Venda / Adesão'}</span>
             </div>
-            {modalVenda.op && (
-              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'6px 10px', marginBottom:12, fontSize:9 }}>
-                <strong>{modalVenda.op.titulo}</strong>
-                {modalVenda.op.tipo_licitacao === 'ata' && (
-                  <span style={{ marginLeft:8, fontSize:8, background:'#f5f3ff', color:'#7c3aed', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>Ata</span>
-                )}
+            <div className="acn-modal-corpo acn-form-cheio">
+              {modalVenda.op && (
+                <div className="acn-quadro tom-ok acn-crm-venda-op">
+                  <strong>{modalVenda.op.titulo}</strong>
+                  {modalVenda.op.tipo_licitacao === 'ata' && <Selo familia="marca" ponto={false}>Ata</Selo>}
+                </div>
+              )}
+
+              {/* Número da OP vinculada — formato XXXX.XXXX */}
+              <div>
+                <label className="acn-label">Nº da OP Vinculada (formato XXXX.XXXX)</label>
+                <input className="acn-input" value={formVenda.numero_op||''} placeholder="Ex: 2024.0001"
+                  maxLength={9}
+                  onChange={e => setFormVenda(f => ({...f, numero_op: mascaraOp(e.target.value)}))}
+                />
+                <div className="acn-ajuda">Formato XXXX.XXXX — identifica a OP de produção desta venda filha</div>
               </div>
-            )}
 
-            {/* Número da OP vinculada — formato XXXX.XXXX */}
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Nº da OP Vinculada (formato XXXX.XXXX)</div>
-              <input value={formVenda.numero_op||''} placeholder="Ex: 2024.0001"
-                maxLength={9}
-                onChange={e => setFormVenda(f => ({...f, numero_op: mascaraOp(e.target.value)}))}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-              />
-              <div style={{ fontSize:8, color:'#94a3b8', marginTop:1 }}>Formato XXXX.XXXX — identifica a OP de produção desta venda filha</div>
-            </div>
+              {([
+                { label:'Órgão Aderente / Comprador *', key:'orgao_aderente', placeholder:'Ex: Corpo de Bombeiros / João Silva LTDA' },
+                { label:'Descrição do Item / Serviço', key:'descricao', placeholder:'Ex: 50x Rádio DMR Motorola DP4801e' },
+                { label:'Quantidade', key:'quantidade', placeholder:'50' },
+                { label:'Valor Unitário (R$)', key:'valor_unitario', placeholder:'6400' },
+                { label:'Valor Total (R$) *', key:'valor_total', placeholder:'320000' },
+              ] as any[]).map(({ label, key, placeholder }) => (
+                <div key={key}>
+                  <label className="acn-label">{label}</label>
+                  <input className="acn-input" value={formVenda[key]||''} placeholder={placeholder}
+                    onChange={e => setFormVenda(f => ({...f,[key]:e.target.value}))}
+                  />
+                </div>
+              ))}
 
-            {([
-              { label:'Órgão Aderente / Comprador *', key:'orgao_aderente', placeholder:'Ex: Corpo de Bombeiros / João Silva LTDA' },
-              { label:'Descrição do Item / Serviço', key:'descricao', placeholder:'Ex: 50x Rádio DMR Motorola DP4801e' },
-              { label:'Quantidade', key:'quantidade', placeholder:'50' },
-              { label:'Valor Unitário (R$)', key:'valor_unitario', placeholder:'6400' },
-              { label:'Valor Total (R$) *', key:'valor_total', placeholder:'320000' },
-            ] as any[]).map(({ label, key, placeholder }) => (
-              <div key={key} style={{ marginBottom:8 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>{label}</div>
-                <input value={formVenda[key]||''} placeholder={placeholder}
-                  onChange={e => setFormVenda(f => ({...f,[key]:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+              <div>
+                <label className="acn-label">Status Faturamento</label>
+                <select className="acn-input" value={formVenda.status_faturamento} onChange={e => setFormVenda(f => ({...f, status_faturamento: e.target.value}))}>
+                  <option value="pendente">Pendente</option>
+                  <option value="faturado">✓ Faturado</option>
+                  <option value="cancelado">✕ Cancelado</option>
+                </select>
+              </div>
+
+              {formVenda.status_faturamento === 'faturado' && (
+                <>
+                  <div>
+                    <label className="acn-label">Número da NF</label>
+                    <input className="acn-input" value={formVenda.numero_nf||''} placeholder="Ex: 004821"
+                      onChange={e => setFormVenda(f => ({...f, numero_nf:e.target.value}))}
+                    />
+                  </div>
+                  <div>
+                    <label className="acn-label">Data do Faturamento</label>
+                    <input className="acn-input" type="date" value={formVenda.data_faturamento||''}
+                      onChange={e => setFormVenda(f => ({...f, data_faturamento:e.target.value}))}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="acn-label">Operador Responsável (Vendedor)</label>
+                <ColaboradorSelect
+                  value={formVenda.operador_nome||''}
+                  onChange={v => setFormVenda(f => ({...f, operador_nome:v}))}
+                  placeholder="Selecione o operador"
                 />
               </div>
-            ))}
 
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Status Faturamento</div>
-              <select value={formVenda.status_faturamento} onChange={e => setFormVenda(f => ({...f, status_faturamento: e.target.value}))}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-                <option value="pendente">Pendente</option>
-                <option value="faturado">✓ Faturado</option>
-                <option value="cancelado">✕ Cancelado</option>
-              </select>
+              <div>
+                <label className="acn-label">Observações</label>
+                <MencaoTextarea value={formVenda.observacoes||''} rows={2}
+                  placeholder="Notas adicionais sobre esta venda / adesão... @Nome para mencionar"
+                  onChange={v => setFormVenda(f => ({...f, observacoes:v}))} />
+              </div>
             </div>
 
-            {formVenda.status_faturamento === 'faturado' && (
-              <>
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número da NF</div>
-                  <input value={formVenda.numero_nf||''} placeholder="Ex: 004821"
-                    onChange={e => setFormVenda(f => ({...f, numero_nf:e.target.value}))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-                  />
-                </div>
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Data do Faturamento</div>
-                  <input type="date" value={formVenda.data_faturamento||''}
-                    onChange={e => setFormVenda(f => ({...f, data_faturamento:e.target.value}))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-                  />
-                </div>
-              </>
-            )}
-
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Operador Responsável (Vendedor)</div>
-              <ColaboradorSelect
-                value={formVenda.operador_nome||''}
-                onChange={v => setFormVenda(f => ({...f, operador_nome:v}))}
-                placeholder="Selecione o operador"
-              />
-            </div>
-
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
-              <MencaoTextarea value={formVenda.observacoes||''} rows={2}
-                placeholder="Notas adicionais sobre esta venda / adesão... @Nome para mencionar"
-                onChange={v => setFormVenda(f => ({...f, observacoes:v}))} />
-            </div>
-
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalVenda(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
-                onClick={salvarVenda} disabled={salvando}>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalVenda(null)}>Cancelar</Botao>
+              <Botao variante="primario" onClick={salvarVenda} disabled={salvando}>
                 {salvando ? 'Salvando...' : 'Salvar Venda Filha'}
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
