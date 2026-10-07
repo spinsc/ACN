@@ -14,7 +14,7 @@ import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { Botao, MenuAcoes, Selo, Faixa, Chips } from './Interface';
 import Icone from './Icone';
-import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight, mdiCartOutline, mdiTableLarge, mdiViewColumnOutline,
+import { mdiClose, mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight, mdiCartOutline, mdiTableLarge, mdiViewColumnOutline,
   mdiCogOutline, mdiFactory, mdiAccountOutline, mdiClipboardTextOutline, mdiMagnify, mdiLinkVariant, mdiForumOutline, mdiCommentTextOutline,
   mdiPrinterOutline, mdiPlay, mdiTagOutline, mdiLockOutline, mdiCartCheck, mdiPackageVariantClosed, mdiEarth, mdiAlertOutline, mdiCheck,
   mdiChevronUp, mdiChevronDown, mdiPlus, mdiContentSaveOutline, mdiOfficeBuildingOutline, mdiCalendarOutline, mdiBullseyeArrow,
