@@ -881,7 +881,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 }
 
 // ─── LINHA DE ITEM ────────────────────────────────────────────────────────────
-function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor, onLiberarGlobais }) {
+function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor, onLiberarGlobais, onLiberarMarkup }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct, validacao } = result;
   const modoTabela = item.tipo_calculo === 'TABELA';
   const lucroFam = lucroPct >= 10 ? 'ok' : lucroPct >= 5 ? 'atencao' : 'erro';
@@ -958,7 +958,9 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
             step="0.1" value={item.markup_pct}
             onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-            readOnly={!!usarMarkupGlobal} />
+            readOnly={!!usarMarkupGlobal}
+            title={usarMarkupGlobal ? 'Vale o markup global. Clique para liberar a edição item a item.' : undefined}
+            onClick={() => { if (usarMarkupGlobal) onLiberarMarkup?.(); }} />
         </div>
         <div className="acn-fp-ir-uni">
           <div className="acn-fp-ir-rot">Valor Unit.</div>
@@ -1777,6 +1779,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const liberarGlobais = async () => {
     if (!await confirmar('O DIFAL e o Imposto estão valendo pelos parâmetros globais, para todos os itens.\n\nLiberar a edição item a item? Cada item fica com o valor atual e você pode mudar só o que precisar.')) return;
     copiarGlobaisParaLinhas();
+  };
+  // 07/10/2026 (pedido do usuário): mesmo caso do DIFAL — definir o markup pelo global e depois ajustar item a item. Clicar no markup travado pergunta,
+  // copia o markup global para cada linha e desliga o "Markup Global"; os preços não mudam, só passam a ser editáveis.
+  const liberarMarkup = async () => {
+    if (!await confirmar('O Markup Global está valendo para todos os itens.\n\nLiberar a edição do markup item a item? Cada item fica com o markup atual e você muda só o que precisar.')) return;
+    setItens(p => p.map(x => ({ ...x, markup_pct: params.markup_pct })));
+    setUsarMarkupGlobal(false);
   };
   const paramsParaGravar = () => ({ ...params, usar_globais: usarGlobais, usar_markup_global: usarMarkupGlobal });
   const itensParaGravar = () => itens.map(({ _id, ...rest }) => paramEfetivo(rest));
@@ -3484,6 +3493,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   onRemove={() => remItem(item._id)}
                   usarParamsGlobais={usarGlobais}
                   onLiberarGlobais={liberarGlobais}
+                  onLiberarMarkup={liberarMarkup}
                   usarMarkupGlobal={usarMarkupGlobal}
                   params={params}
                   isVendedor={isVendedor}
