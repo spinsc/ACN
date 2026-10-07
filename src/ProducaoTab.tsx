@@ -200,6 +200,16 @@ function CalendarioManutencao({ currentUser }) {
   const [vistaLista, setVistaLista] = useState(false);
   const [sacOrdens, setSacOrdens]   = useState([]);
 
+  // Etapa 7.56 (06/10/2026): leitura que falha não pode parecer "Nenhum agendamento" nem sumir com o painel de OPs aguardando
+  // (a lista que já estava na tela fica); e um clique duplo em agendar/cancelar gravava duas vezes — uma ação por tipo (e agendamento).
+  const [erroLeitura, setErroLeitura] = useState('');
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   const load = async () => {
     const [agRes, aguRes, sacRes] = await Promise.all([
       supabase.from('agendamentos_manutencao').select('*').order('data_agendamento', { ascending: true }),
@@ -211,45 +221,60 @@ function CalendarioManutencao({ currentUser }) {
         .in('status', STATUSES_VEICULAR_ATIVAS)
         .not('data_provisionamento', 'is', null),
     ]);
-    setAgendamentos(agRes.data || []);
-    setAguardando(aguRes.data || []);
+    const erroLer = agRes.error || aguRes.error || sacRes.error;
+    setErroLeitura(erroLer ? erroLer.message : '');
+    if (!agRes.error) setAgendamentos(agRes.data || []);
+    if (!aguRes.error) setAguardando(aguRes.data || []);
     if (sacRes.error) console.error('Erro ao carregar OS veicular no calendário:', sacRes.error);
-    setSacOrdens(sacRes.data || []);
+    else setSacOrdens(sacRes.data || []);
   };
   useEffect(() => { load(); }, []);
 
-  const confirmarAgendamento = async () => {
+  const confirmarAgendamento = umaVez('agendar', async () => {
     if (!formAg.data) { alert('Selecione uma data.'); return; }
     setSalvando(true);
     const opl = modalAgendar;
-    const { error: errAg } = await supabase.from('agendamentos_manutencao').insert([{
+    const { data: criado, error: errAg } = await supabase.from('agendamentos_manutencao').insert([{
       opl_id: opl.id, numero_opl: opl.opl, chassi: opl.chassi,
       cliente_nome: opl.cliente_nome, modelo: opl.modelo,
       data_agendamento: formAg.data, periodo: formAg.periodo,
       observacoes: formAg.obs, agendado_por: currentUser?.nome,
-    }]);
+    }]).select('id');
     if (errAg) { alert('Erro ao agendar: ' + errAg.message); setSalvando(false); return; }
-    await supabase.from('oples').update({
+    const { error: errOpl } = await supabase.from('oples').update({
       status_geral: 'Manutenção Agendada',
       data_agendamento_manutencao: formAg.data,
       periodo_agendamento: formAg.periodo,
     }).eq('id', opl.id);
-    await supabase.from('logs_movimentacao_opl').insert([{
+    if (errOpl) {
+      // 7.56: o agendamento já estava gravado e a OP seguia "Aguardando agendamento" — desfaz o agendamento para tentar de novo sem duplicar.
+      const idAg = criado?.[0]?.id;
+      let desfez = false;
+      if (idAg) { const { error: errDes } = await supabase.from('agendamentos_manutencao').delete().eq('id', idAg); desfez = !errDes; }
+      alert(`Não foi possível agendar a OP ${opl.opl}: ${errOpl.message}` + (desfez ? '' : '\n\nO agendamento chegou a ser gravado e não pôde ser desfeito: confira o calendário e cancele-o se aparecer.'));
+      setSalvando(false);
+      load();
+      return;
+    }
+    const { error: errLog } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Manutenção agendada para ${new Date(formAg.data+'T00:00:00').toLocaleDateString('pt-BR')} (${formAg.periodo})`,
       status_anterior: 'Aguardando Agendamento Manutenção', status_novo: 'Manutenção Agendada',
       usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
     }]);
+    if (errLog) alert('A manutenção foi agendada, mas o histórico de movimentação não foi gravado: ' + errLog.message);
     setModalAgendar(null); setFormAg({ data:'', periodo:'Manhã', obs:'' }); setSalvando(false);
     load();
-  };
+  });
 
-  const cancelarAgendamento = async (ag) => {
+  const cancelarAgendamento = (ag) => umaVez('cancelar-' + ag.id, async () => {
     if (!await confirmar(`Cancelar agendamento de ${ag.numero_opl}?`)) return;
-    await supabase.from('agendamentos_manutencao').delete().eq('id', ag.id);
-    await supabase.from('oples').update({ status_geral: 'Aguardando Agendamento Manutenção' }).eq('id', ag.opl_id);
+    const { error: errDel } = await supabase.from('agendamentos_manutencao').delete().eq('id', ag.id);
+    if (errDel) { alert(`Não foi possível cancelar o agendamento de ${ag.numero_opl}: ${errDel.message}`); return; }   // 7.56
+    const { error: errOpl } = await supabase.from('oples').update({ status_geral: 'Aguardando Agendamento Manutenção' }).eq('id', ag.opl_id);
+    if (errOpl) alert(`O agendamento foi cancelado, mas a OP ${ag.numero_opl} não voltou para "Aguardando agendamento": ${errOpl.message}`);
     load();
-  };
+  })();
 
   // ── Calendário ──
   const primeiroDia = new Date(ano, mes, 1).getDay(); // 0=Dom
@@ -299,6 +324,11 @@ function CalendarioManutencao({ currentUser }) {
 
   return (
     <div>
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
+          Não foi possível ler os agendamentos ({erroLeitura}). Isso não quer dizer que não haja agendamento nem OP aguardando{(agendamentos.length || aguardando.length) ? '; o que está na tela é da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
       {/* PAINEL: OPLs aguardando agendamento */}
       {aguardandoNovos.length > 0 && (
         <div style={{background:'#fff7ed',border:'2px solid #f97316',borderRadius:8,padding:14,marginBottom:12}}>
@@ -1427,15 +1457,27 @@ function VoucherServicos({ currentUser }) {
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setItens = (fn) => setForm(f => ({ ...f, itens: typeof fn === 'function' ? fn(f.itens) : fn }));
 
+  // Etapa 7.56 (06/10/2026): leitura que falha não pode parecer "Nenhum voucher" nem lista de tipos vazia (a lista que já estava na tela
+  // fica); excluir tipo/voucher ignorava o erro; e um clique duplo em salvar gravava dois vouchers — uma ação por tipo.
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [erroTipos, setErroTipos]     = useState('');
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   const loadTipos = async () => {
     try {
       const { data, error } = await supabase.from('tipos_servico_voucher').select('*').order('nome');
-      if (!error) setTiposServico(data || []);
-      // se tabela não existe ainda, ignora silenciosamente
-    } catch { /* tabela ainda não criada */ }
+      if (error) { setErroTipos(error.message); return; }
+      setErroTipos('');
+      setTiposServico(data || []);
+    } catch (e) { setErroTipos(String(e?.message || e)); }
   };
 
-  const salvarTipo = async () => {
+  const salvarTipo = umaVez('tipo', async () => {
     if (!novoTipo.trim()) return;
     setSalvandoTipo(true);
     const { error } = await supabase.from('tipos_servico_voucher').insert([{ nome: novoTipo.trim() }]);
@@ -1443,24 +1485,27 @@ function VoucherServicos({ currentUser }) {
     setForm(f => ({ ...f, tipo_servico: novoTipo.trim() }));
     setNovoTipo(''); setAddingTipo(false); setSalvandoTipo(false);
     loadTipos();
-  };
+  });
 
-  const excluirTipo = async (id) => {
+  const excluirTipo = (id) => umaVez('tipo-del-' + id, async () => {
     if (!await confirmar('Remover este tipo de serviço?')) return;
-    await supabase.from('tipos_servico_voucher').delete().eq('id', id);
+    const { error } = await supabase.from('tipos_servico_voucher').delete().eq('id', id);
+    if (error) { alert('Não foi possível remover o tipo de serviço: ' + error.message); return; }   // 7.56
     loadTipos();
-  };
+  })();
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('vouchers_servico').select('*').order('criado_em', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('vouchers_servico').select('*').order('criado_em', { ascending: false }).limit(100);
+    if (error) { setErroLeitura(error.message); setLoading(false); return; }
+    setErroLeitura('');
     setVouchers(data || []);
     setLoading(false);
   };
 
   useEffect(() => { load(); loadTipos(); }, []);
 
-  const salvar = async () => {
+  const salvar = umaVez('salvar', async () => {
     if (!form.tipo_servico || !form.numero_pvop) { alert('Informe ao menos o Tipo de Serviço e Nº PV/OP!'); return; }
     const itens = form.itens.filter(i => i.placa_chassi || i.modelo || Number(i.valor));
     const valor_total = itens.reduce((s,i) => s + (Number(i.valor)||0), 0);
@@ -1479,13 +1524,14 @@ function VoucherServicos({ currentUser }) {
     setForm({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] });
     setSalvando(false);
     load();
-  };
+  });
 
-  const excluir = async (id) => {
+  const excluir = (id) => umaVez('del-' + id, async () => {
     if (!await confirmar('Excluir este voucher?')) return;
-    await supabase.from('vouchers_servico').delete().eq('id', id);
+    const { error } = await supabase.from('vouchers_servico').delete().eq('id', id);
+    if (error) { alert('Não foi possível excluir o voucher: ' + error.message); return; }   // 7.56: o voucher continuava na lista sem aviso nenhum
     load();
-  };
+  })();
 
   const imprimirVoucher = (v) => {
     const w = window.open('', '_blank', 'width=800,height=950,scrollbars=yes');
@@ -1585,6 +1631,16 @@ function VoucherServicos({ currentUser }) {
 
   return (
     <div>
+      {erroTipos && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={loadTipos}>Tentar de novo</Botao>}>
+          Não foi possível ler os tipos de serviço ({erroTipos}). A lista de tipos abaixo pode estar vazia ou incompleta por isso.
+        </Faixa>
+      )}
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={load}>Tentar de novo</Botao>}>
+          Não foi possível ler os vouchers ({erroLeitura}). Isso não quer dizer que não haja voucher emitido{vouchers.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
       {/* FORMULÁRIO */}
       <div className="sec-card" style={{marginBottom:12}}>
         <div className="sec-hdr" style={{background:'#7c3aed'}}>
@@ -1685,7 +1741,7 @@ function VoucherServicos({ currentUser }) {
         </div>
         <div className="sec-body" style={{overflowX:'auto',padding:0}}>
           {loading ? <div className="acn-empty">Carregando...</div> : vouchers.length === 0 ? (
-            <div className="acn-empty">Nenhum voucher emitido ainda.</div>
+            <div className="acn-empty">{erroLeitura ? 'Leitura falhou — veja o aviso acima.' : 'Nenhum voucher emitido ainda.'}</div>
           ) : (
             <table>
               <thead><tr>
@@ -1745,8 +1801,20 @@ function EquipesSection({ currentUser }) {
   const [form, setForm] = useState({ ...FORM_VAZIO });
   const [membroAdd, setMembroAdd] = useState('');
 
+  // Etapa 7.56 (06/10/2026): leitura que falha não pode parecer "Nenhuma equipe cadastrada" (a lista na tela fica); salvar e excluir
+  // ignoravam o erro e fechavam a janela; e um clique duplo em "Criar equipe" criava duas equipes iguais — uma ação por tipo.
+  const [erroLeitura, setErroLeitura] = useState('');
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   const load = async () => {
-    const { data } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    const { data, error } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    if (error) { setErroLeitura(error.message); return; }
+    setErroLeitura('');
     setEquipes(data || []);
   };
   useEffect(() => { load(); }, []);
@@ -1758,7 +1826,7 @@ function EquipesSection({ currentUser }) {
     setModal('editar');
   };
 
-  const salvar = async () => {
+  const salvar = umaVez('salvar', async () => {
     if (!form.nome.trim() || !form.head_line_nome.trim()) { alert('Informe nome da equipe e Head Line.'); return; }
     setSalvando(true);
     const payload = {
@@ -1768,19 +1836,19 @@ function EquipesSection({ currentUser }) {
       membros: form.membros,
       ativa: true,
     };
-    if (editando) {
-      await supabase.from('producao_equipes').update(payload).eq('id', editando.id);
-    } else {
-      await supabase.from('producao_equipes').insert([payload]);
-    }
+    const { error } = editando
+      ? await supabase.from('producao_equipes').update(payload).eq('id', editando.id)
+      : await supabase.from('producao_equipes').insert([payload]);
+    if (error) { alert(`Não foi possível salvar a equipe: ${error.message}`); setSalvando(false); return; }   // 7.56: fechava a janela e a equipe não existia
     setSalvando(false); setModal(null); setEditando(null); load();
-  };
+  });
 
-  const excluir = async (eq: any) => {
+  const excluir = (eq: any) => umaVez('del-' + eq.id, async () => {
     if (!await confirmar(`Excluir equipe "${eq.nome}"?`)) return;
-    await supabase.from('producao_equipes').update({ ativa: false }).eq('id', eq.id);
+    const { error } = await supabase.from('producao_equipes').update({ ativa: false }).eq('id', eq.id);
+    if (error) { alert(`Não foi possível excluir a equipe "${eq.nome}": ${error.message}`); return; }   // 7.56
     load();
-  };
+  })();
 
   const addMembro = () => {
     const nome = membroAdd.trim();
@@ -1800,8 +1868,13 @@ function EquipesSection({ currentUser }) {
         <button className="acn-btn" style={{ background:'#0f766e' }} onClick={abrirNova}>+ Nova Equipe</button>
       </div>
 
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
+          Não foi possível ler as equipes ({erroLeitura}). Isso não quer dizer que não haja equipe cadastrada{equipes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
       {equipes.length === 0 ? (
-        <div className="acn-empty">Nenhuma equipe cadastrada.</div>
+        <div className="acn-empty">{erroLeitura ? 'Leitura falhou — veja o aviso acima.' : 'Nenhuma equipe cadastrada.'}</div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {equipes.map(eq => (
@@ -1942,12 +2015,17 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
   const [texto, setTexto] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [resultado, setResultado] = useState(null);
+  // Etapa 7.56 (06/10/2026): um clique duplo em "Confirmar e aplicar" rodava o lote duas vezes (dois históricos por OP).
+  const aplicando = useRef(false);
 
   const { plano, naoReconhecidas } = calcularPlanoImportacaoTecnicos(texto.split('\n'), irmaos, equipes, colaboradoresList);
 
   const confirmar = async () => {
+    if (aplicando.current) return;
+    aplicando.current = true;
     setSalvando(true);
-    let ok = 0, falhas = 0;
+    let ok = 0, falhas = 0, naoTentadas = 0, motivo = '';
+    const pendencias = [];
     const agora = new Date().toISOString();
     for (const { alvo, resp } of plano) {
       let upd = { modo_execucao: resp.modo };
@@ -1968,28 +2046,32 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
         upd.data_inicio_producao = agora;
       }
       const { error } = await supabase.from('oples').update(upd).eq('id', alvo.id);
-      if (error) { falhas++; continue; }
+      // 7.56: o lote passava para as OPs seguintes depois de uma falha; agora para na primeira que não grava e diz até onde foi.
+      if (error) { falhas++; motivo = `${alvo.opl}: ${error.message}`; naoTentadas = plano.length - ok - falhas; break; }
       ok++;
       const seed = [
         upd.tecnico_producao_id ? { tecnico_id: upd.tecnico_producao_id, tecnico_nome: upd.responsavel_producao } : null,
         upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
       ].filter(Boolean);
       if (seed.length > 0) {
-        await supabase.from('responsaveis_producao').insert(seed.map(r => ({
+        const { error: erroSeed } = await supabase.from('responsaveis_producao').insert(seed.map(r => ({
           tipo: 'op', referencia_id: alvo.id, papel: 'responsavel',
           tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
           adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
         })));
+        if (erroSeed) pendencias.push(`${alvo.opl}: lista de responsáveis não gravada (${erroSeed.message})`);
       }
-      await supabase.from('logs_movimentacao_opl').insert([{
+      const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: alvo.id, numero_opl: alvo.opl, setor: 'Producao',
         evento: `Responsável definido via importação em lote — ${upd.responsavel_producao}${upd.equipe_nome ? ` (Equipe ${upd.equipe_nome})` : ''}${upd.tecnico_producao_2_nome ? ` + ${upd.tecnico_producao_2_nome}` : ''}.`,
         status_anterior: alvo.status_geral, status_novo: upd.status_geral || alvo.status_geral,
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
+      if (erroLog) pendencias.push(`${alvo.opl}: histórico não gravado (${erroLog.message})`);
     }
+    aplicando.current = false;
     setSalvando(false);
-    setResultado({ ok, falhas });
+    setResultado({ ok, falhas, naoTentadas, motivo, pendencias });
     onImportado();
   };
 
@@ -2049,6 +2131,16 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
           <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
             ✅ {resultado.ok} unidade(s) atualizada(s){resultado.falhas ? `, ${resultado.falhas} falha(s)` : ''}.
           </div>
+        )}
+        {resultado && resultado.falhas > 0 && (
+          <Faixa tom="erro">
+            O lote parou na primeira OP que não gravou ({resultado.motivo}). {resultado.naoTentadas} OP(s) não foram tentadas e continuam como estavam.
+          </Faixa>
+        )}
+        {resultado && resultado.pendencias?.length > 0 && (
+          <Faixa tom="atencao">
+            Atualizadas, mas com pendência: {resultado.pendencias.join(' · ')}. Use "Equipe" no menu da OP para conferir.
+          </Faixa>
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>

@@ -2569,6 +2569,22 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **O que ficou de fora:** `CalendarioManutencao` (agendamento de manutenção das OP), `VoucherServicos`, `EquipesSection` e `ModalImportarTecnicosEquipe` (fatia seguinte); `pausarOpl`/`retomarOpl` (`PausaWidget.tsx`) e `EquipeDaOp.tsx` continuam sem revisão.
 
+### ✅ Etapa 7.56 — Produção (Agendamentos, Voucher, Equipes e importação de técnicos): agendar, cancelar, excluir e importar seguiam como se tivessem gravado; o clique duplo gravava duas vezes; o lote da importação não parava na primeira falha
+
+**Feito em:** 06/10/2026 (continuação do `/ux-fluxo`; **terceira e última fatia da Produção**). **Achados** ao ler `CalendarioManutencao`, `VoucherServicos`, `EquipesSection` e `ModalImportarTecnicosEquipe` (em `ProducaoTab.tsx`), **corrigidos antes** da migração visual. **Nenhum dado foi alterado.**
+
+**Os defeitos:**
+
+1. **Agendar uma manutenção** gravava o agendamento e **só depois** mudava a OP para "Manutenção Agendada" **sem olhar o resultado**: se a OP não gravasse, o calendário mostrava o agendamento **e a OP seguia no painel "aguardando agendamento"** (dava para agendar a mesma OP duas vezes). Agora, se a OP não grava, **o agendamento é desfeito** (para tentar de novo sem duplicar) e a tela avisa; se o histórico não grava, avisa o que ficou pendente.
+2. **Cancelar um agendamento** apagava e devolvia a OP para a fila sem olhar nenhum dos dois resultados. **Excluir tipo de serviço**, **excluir voucher** e **excluir/salvar equipe** idem (o "Criar equipe" fechava a janela com a equipe não criada). Agora **cada uma avisa o motivo e para** (a janela fica aberta com o que foi digitado).
+3. **A importação de técnicos em lote** continuava para as OPs seguintes depois de uma falha, e **não olhava** a gravação da lista de responsáveis nem a do histórico. Agora **para na primeira OP que não grava**, diz qual foi e quantas **não foram tentadas**, e lista as OPs que atualizaram mas ficaram com **pendência** (responsáveis ou histórico).
+4. **Clique duplo** em agendar, cancelar agendamento, salvar voucher, salvar tipo de serviço, excluir, criar equipe e **"Confirmar e aplicar" da importação (o lote inteiro rodava duas vezes)** gravava em dobro. Agora **uma ação por tipo** (e por registro).
+5. **Leituras que falhavam pareciam vazio:** os agendamentos e as OPs aguardando (o painel laranja sumia), os vouchers, os tipos de serviço (o voucher engolia o erro "se a tabela não existe") e as equipes ("Nenhuma equipe cadastrada"). Agora faixa vermelha com o motivo e "Tentar de novo"; **se já havia lista na tela, ela fica**.
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ — 2 agendamentos e 3 OPs de manutenção no mês, 1 OS do SAC no calendário, 2 vouchers e 2 tipos, 2 equipes, um lote de 3 OPs com chassi; `agenda.cjs`, 59 cenários, a versão publicada × a corrigida): **36 de 59 iguais; os 23 que diferem são os de propósito** — agendar com a OP recusada (**o agendamento é desfeito**) e com o histórico recusado, cancelar recusado (nos dois passos), excluir tipo, voucher e equipe recusados, criar e editar equipe recusados, **os 5 cliques duplos (agendar 2 gravações antes, 1 depois; salvar voucher, salvar tipo, criar equipe: 2 → 1; importação: 12 → 6)**, os importes recusados (na 1ª OP, na 2ª, nos responsáveis e no histórico) e as 5 leituras que falham. Iguais: o calendário, as vistas, todas as janelas abertas, **todos os caminhos que gravam** (agendar, cancelar, salvar voucher, tipo novo, excluir, criar/editar/excluir equipe, importar), as validações e os "recusado" que já eram tratados. `npx vite build` ok.
+
+**O que ficou de fora:** o **desfazer do agendamento** depende de o banco devolver o código do agendamento criado (devolve; no teste o servidor simulado foi ensinado a devolver); se não devolvesse, a tela avisa para cancelar à mão. `pausarOpl`/`retomarOpl` (`PausaWidget.tsx`) e `EquipeDaOp.tsx` continuam sem revisão.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
