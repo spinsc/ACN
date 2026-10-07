@@ -2429,3 +2429,51 @@ html body .acn-crm-lote-barra .acn-b-discreto { color: #fff; }
 html body .acn-crm-lote-barra .acn-b-discreto:hover:not(:disabled) { background: rgba(255, 255, 255, .18); color: #fff; }
 html body .modal-overlay.acn-crm-overlay.acn-crm-ov-entrega { z-index: 1000; }
 html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-entrega { width: min(420px, 96vw); max-width: 420px; }
+
+/* ── CRM · 12e38 (07/10/2026): as janelas do funil — checklist, empresa vencedora, enviar proposta, temperatura, aviso do Faturado, perda e desistência ── */
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-gate, html body .modal-overlay.acn-crm-overlay.acn-crm-ov-emp, html body .modal-overlay.acn-crm-overlay.acn-crm-ov-enviado,
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-temp, html body .modal-overlay.acn-crm-overlay.acn-crm-ov-fat, html body .modal-overlay.acn-crm-overlay.acn-crm-ov-motivo { z-index: 1000; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-gate { width: min(420px, 96vw); max-width: 420px; max-height: 80vh; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-emp { width: min(360px, 96vw); max-width: 360px; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-enviado { width: min(400px, 96vw); max-width: 400px; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-temp { width: min(360px, 96vw); max-width: 360px; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-fatbloq { width: min(400px, 96vw); max-width: 400px; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-motivo { width: min(380px, 96vw); max-width: 380px; }
+.modal-title.acn-crm-tit-ok { color: var(--acn-ok); }
+.modal-title.acn-crm-tit-bad { color: var(--acn-bad); }
+.modal-title.acn-crm-tit-warn { color: var(--acn-warn); }
+body.dark .modal-title.acn-crm-tit-ok { color: #8fd3a5; }
+body.dark .modal-title.acn-crm-tit-bad { color: #fca5a5; }
+body.dark .modal-title.acn-crm-tit-warn { color: #fbbf24; }
+/* checklist */
+.acn-crm-gate-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; cursor: pointer; border-bottom: 1px dashed var(--acn-line); }
+.acn-crm-gate-cx { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 2px solid var(--acn-line); border-radius: 3px; background: var(--acn-surface); color: #fff; }
+.acn-crm-gate-cx.ok { background: var(--acn-ok); border-color: var(--acn-ok); }
+.acn-crm-gate-txt { flex: 1; font-size: 13px; color: var(--acn-text); }
+.acn-crm-gate-obrig { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--acn-bad); }
+html body .acn-b.pendente { opacity: .6; cursor: not-allowed; }
+/* empresa vencedora */
+.acn-crm-emp-botoes { display: flex; gap: 10px; }
+html body .acn-b.acn-crm-emp-btn { flex: 1; padding: 12px; font-size: 14px; font-weight: 800; border-width: 2px; }
+html body .acn-b.acn-crm-emp-btn.acn { background: var(--acn-info-soft); color: var(--acn-info); border-color: var(--acn-info); }
+html body .acn-b.acn-crm-emp-btn.dtc { background: #f3e8ff; color: #7c3aed; border-color: #a855f7; }
+body.dark .acn-b.acn-crm-emp-btn.acn { background: rgba(36, 95, 184, .22); color: #93c5fd; }
+body.dark .acn-b.acn-crm-emp-btn.dtc { background: rgba(124, 58, 237, .22); color: #c4b5fd; }
+/* enviar proposta e temperatura */
+html body .acn-input.acn-crm-pv { width: 100%; font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+html body .acn-input.acn-crm-pv.travado { background: var(--acn-neutral-soft); cursor: not-allowed; }
+.acn-crm-termo { position: relative; height: 10px; margin-bottom: 6px; border-radius: 5px; background: linear-gradient(to right, var(--acn-info), #8b5cf6, var(--acn-bad)); }
+.acn-crm-termo-ponto { position: absolute; top: -3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 3px solid var(--acn-ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .35); transform: translateX(-50%); transition: left .15s; }
+.acn-crm-temp-opcoes { display: flex; gap: 6px; }
+.acn-crm-temp-opc { flex: 1; padding: 7px 4px; border: 2px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); color: var(--acn-muted); font: 700 12px var(--acn-font); cursor: pointer; }
+.acn-crm-temp-opc.on[data-temp="frio"] { border-color: var(--acn-info); background: var(--acn-info-soft); color: var(--acn-info); }
+.acn-crm-temp-opc.on[data-temp="morno"] { border-color: #8b5cf6; background: #f3e8ff; color: #7c3aed; }
+.acn-crm-temp-opc.on[data-temp="quente"] { border-color: var(--acn-bad); background: var(--acn-bad-soft); color: var(--acn-bad); }
+body.dark .acn-crm-temp-opc:not(.on) { background: #1e293b; border-color: #334155; }
+.acn-crm-data-hora { display: flex; gap: 6px; }
+html body .acn-crm-data-hora .acn-input:first-child { flex: 1; width: auto; }
+html body .acn-crm-data-hora .acn-input:last-child { width: 90px; }
+/* aviso do Faturado, perda e desistência */
+.acn-crm-fatbloq-lista { margin: 6px 0 0; padding-left: 18px; }
+.acn-crm-fatbloq-nota { margin-top: 8px; }
+html body textarea.acn-input.acn-crm-motivo-txt { height: 80px; resize: vertical; }

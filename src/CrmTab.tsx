@@ -35,7 +35,8 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiBankOutline, mdiAccountOutline, mdiCalendarOutline, mdiClockOutline,
   mdiTimerSand, mdiCheck, mdiBriefcaseOutline, mdiPinOutline, mdiFormatBold, mdiFormatItalic, mdiImageOutline, mdiContentSaveOutline,
   mdiPhoneOutline, mdiDomain, mdiAlertOutline,
-  mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff } from '@mdi/js';
+  mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff,
+  mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
@@ -3627,42 +3628,39 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL CHECKLIST GATE ══════ */}
       {modalGate && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(420px,96vw)', maxHeight:'80vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', marginBottom:4 }}>📋 Gate Lean — Checklist Obrigatório</div>
-            <div style={{ fontSize:9, color:'#92400e', background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
-              ⚠️ Para avançar para <strong>"{getEst(modalGate.estagioDestId)?.nome}"</strong>, conclua os itens obrigatórios:
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-gate">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-gate" role="dialog" aria-label="Checklist obrigatório">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiClipboardTextOutline} size={18} />Gate Lean — Checklist Obrigatório</span>
             </div>
+            <div className="acn-modal-corpo">
+              <Faixa tom="atencao">
+                Para avançar para <strong>"{getEst(modalGate.estagioDestId)?.nome}"</strong>, conclua os itens obrigatórios:
+              </Faixa>
 
-            {modalGate.itens.map((it: any) => {
-              const done = !!modalGate.prog?.find((p: any) => p.item_id === it.id && p.concluido);
-              return (
-                <div key={it.id} onClick={() => toggleItem(modalGate.op.id, it.id, done)}
-                  style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0', borderBottom:'1px dashed #f1f5f9', cursor:'pointer' }}>
-                  <div style={{
-                    width:16, height:16, borderRadius:3, flexShrink:0,
-                    border:`2px solid ${done?'#22c55e':'#d1d5db'}`,
-                    background: done ? '#22c55e' : 'white',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                  }}>
-                    {done && <span style={{ color:'white', fontSize:10, fontWeight:900 }}>✓</span>}
-                  </div>
-                  <span style={{ fontSize:10, color:'#374151', flex:1 }}>{it.item_texto}</span>
-                  {it.obrigatorio && <span style={{ fontSize:7, color:'#ef4444', fontWeight:700, flexShrink:0 }}>OBRIG.</span>}
-                </div>
-              );
-            })}
+              <div>
+                {modalGate.itens.map((it: any) => {
+                  const done = !!modalGate.prog?.find((p: any) => p.item_id === it.id && p.concluido);
+                  return (
+                    <div key={it.id} onClick={() => toggleItem(modalGate.op.id, it.id, done)} className="acn-crm-gate-item">
+                      <span className={'acn-crm-gate-cx' + (done ? ' ok' : '')}>{done && <Icone path={mdiCheck} size={12} />}</span>
+                      <span className="acn-crm-gate-txt">{it.item_texto}</span>
+                      {it.obrigatorio && <span className="acn-crm-gate-obrig">OBRIG.</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             {(() => {
               const ok = modalGate.itens.filter((i:any)=>i.obrigatorio).every((i:any)=>modalGate.prog?.find((p:any)=>p.item_id===i.id&&p.concluido));
               return (
-                <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:12 }}>
-                  <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalGate(null)}>Cancelar</button>
-                  <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
-                    background: ok ? '#22c55e' : '#94a3b8', cursor: ok ? 'pointer' : 'not-allowed' }}
+                <div className="acn-modal-rodape">
+                  <Botao onClick={() => setModalGate(null)}>Cancelar</Botao>
+                  <Botao variante={ok ? 'primario' : 'secundario'} icone={ok ? mdiCheck : mdiLockOutline} className={ok ? undefined : 'pendente'}
                     onClick={() => { if (ok) { const alvo = modalGate; setModalGate(null); moverCard(alvo.op.id, alvo.estagioDestId); } }}>
-                    {ok ? '✓ Avançar Estágio' : '🔒 Itens pendentes'}
-                  </button>
+                    {ok ? 'Avançar Estágio' : 'Itens pendentes'}
+                  </Botao>
                 </div>
               );
             })()}
@@ -3672,97 +3670,92 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL EMPRESA VENCEDORA ══════ */}
       {modalEmpresaVenc && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(360px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:13, color:'#166534', marginBottom:4 }}>🏆 Licitação Vencida!</div>
-            <div style={{ fontSize:11, color:'#475569', marginBottom:16 }}>
-              <strong>{modalEmpresaVenc.op.titulo}</strong><br/>
-              Qual empresa venceu esta licitação?
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-emp">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-emp" role="dialog" aria-label="Qual empresa venceu?">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-crm-tit-ok"><Icone path={mdiTrophyOutline} size={18} />Licitação Vencida!</span>
             </div>
-            <div style={{ display:'flex', gap:10 }}>
-              {(['ACN','DETECH'] as const).map(emp => (
-                <button key={emp} onClick={() => escolherEmpresaVencedora(emp)} style={{
-                  flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
-                  cursor:'pointer',
-                  background: emp === 'ACN' ? '#dbeafe' : '#f3e8ff',
-                  color:      emp === 'ACN' ? '#1e40af' : '#7c3aed',
-                  borderColor:emp === 'ACN' ? '#3b82f6' : '#a855f7',
-                }}>
-                  {emp}
-                </button>
-              ))}
+            <div className="acn-modal-corpo">
+              <div>
+                <strong>{modalEmpresaVenc.op.titulo}</strong><br/>
+                Qual empresa venceu esta licitação?
+              </div>
+              <div className="acn-crm-emp-botoes">
+                {(['ACN','DETECH'] as const).map(emp => (
+                  <Botao key={emp} className={'acn-crm-emp-btn ' + (emp === 'ACN' ? 'acn' : 'dtc')} onClick={() => escolherEmpresaVencedora(emp)}>
+                    {emp}
+                  </Botao>
+                ))}
+              </div>
             </div>
-            <button onClick={() => setModalEmpresaVenc(null)}
-              style={{ marginTop:12, width:'100%', background:'none', border:'1px solid #e2e8f0', borderRadius:6, padding:'6px', fontSize:10, cursor:'pointer', color:'#64748b' }}>
-              Cancelar
-            </button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalEmpresaVenc(null)}>Cancelar</Botao>
+            </div>
           </div>
         </div>
       )}
 
       {/* ══════ MODAL GATE ENVIADO — PV + TEMPERATURA + CONTATO ══════ */}
       {modalEnviado && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(400px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:13, color:'#0369a1', marginBottom:4 }}>📤 Enviar Proposta</div>
-            <div style={{ fontSize:11, color:'#475569', marginBottom:14 }}>
-              <strong>{modalEnviado.op.titulo}</strong>
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-enviado">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-enviado" role="dialog" aria-label="Enviar Proposta">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiSendOutline} size={18} />Enviar Proposta</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div><strong>{modalEnviado.op.titulo}</strong></div>
+
+              <div>
+                <label className="acn-label">Número do PV (4 dígitos) *</label>
+                {(() => {
+                  // PV já atribuído: só Admin e gerentes trocam (confirmarEnviado confere no banco)
+                  const pvTravado = !!String(modalEnviado?.op?.numero_pv || '').trim() && !podeAlterarNumeroOplPv(currentUser);
+                  return (
+                    <input className={'acn-input acn-crm-pv' + (pvTravado ? ' travado' : '')}
+                      value={pvTexto} placeholder="0000" maxLength={4} disabled={pvTravado}
+                      title={pvTravado ? 'PV já atribuído. Só administradores e gerentes podem alterar o número.' : undefined}
+                      onChange={e => setPvTexto(e.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus={!pvTravado} />
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="acn-label">Temperatura do Lead *</label>
+                <div className="acn-crm-termo">
+                  {temperaturaSel && (
+                    <div className="acn-crm-termo-ponto" style={{ left: temperaturaSel==='frio' ? '0%' : temperaturaSel==='morno' ? '50%' : '100%' }} />
+                  )}
+                </div>
+                <div className="acn-crm-temp-opcoes">
+                  {([
+                    { v:'frio',   label:'🧊 Frio' },
+                    { v:'morno',  label:'🌤️ Morno' },
+                    { v:'quente', label:'🔥 Quente' },
+                  ] as const).map(t => (
+                    <button key={t.v} type="button" onClick={() => setTemperaturaSel(t.v)} data-temp={t.v}
+                      className={'acn-crm-temp-opc' + (temperaturaSel===t.v ? ' on' : '')}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="acn-label">Próximo Contato *</label>
+                <div className="acn-crm-data-hora">
+                  <input type="date" className="acn-input"
+                    value={enviadoContatoData} onChange={e => setEnviadoContatoData(e.target.value)} />
+                  <input type="time" className="acn-input"
+                    value={enviadoContatoHora} onChange={e => setEnviadoContatoHora(e.target.value)} />
+                </div>
+              </div>
             </div>
 
-            <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>Número do PV (4 dígitos) *</label>
-            {(() => {
-              // PV já atribuído: só Admin e gerentes trocam (confirmarEnviado confere no banco)
-              const pvTravado = !!String(modalEnviado?.op?.numero_pv || '').trim() && !podeAlterarNumeroOplPv(currentUser);
-              return (
-                <input className="acn-input" style={{ width:'100%', fontSize:12, marginBottom:12, letterSpacing:2, fontWeight:700,
-                    ...(pvTravado ? { background:'#f1f5f9', cursor:'not-allowed' } : {}) }}
-                  value={pvTexto} placeholder="0000" maxLength={4} disabled={pvTravado}
-                  title={pvTravado ? 'PV já atribuído. Só administradores e gerentes podem alterar o número.' : undefined}
-                  onChange={e => setPvTexto(e.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus={!pvTravado} />
-              );
-            })()}
-
-            <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:6 }}>Temperatura do Lead *</label>
-            <div style={{ position:'relative', height:10, borderRadius:5, marginBottom:6,
-              background:'linear-gradient(to right, #3b82f6, #a855f7, #dc2626)' }}>
-              {temperaturaSel && (
-                <div style={{ position:'absolute', top:-3, width:16, height:16, borderRadius:'50%',
-                  background:'white', border:'3px solid #1e293b', boxShadow:'0 1px 4px #0005',
-                  left: temperaturaSel==='frio' ? '0%' : temperaturaSel==='morno' ? '50%' : '100%',
-                  transform:'translateX(-50%)', transition:'left .15s' }} />
-              )}
-            </div>
-            <div style={{ display:'flex', gap:6, marginBottom:14 }}>
-              {([
-                { v:'frio',   label:'🧊 Frio',   cor:'#3b82f6' },
-                { v:'morno',  label:'🌤️ Morno',  cor:'#a855f7' },
-                { v:'quente', label:'🔥 Quente',  cor:'#dc2626' },
-              ] as const).map(t => (
-                <button key={t.v} onClick={() => setTemperaturaSel(t.v)}
-                  style={{ flex:1, padding:'7px 4px', fontSize:10, fontWeight:700, borderRadius:6, cursor:'pointer',
-                    border: `2px solid ${temperaturaSel===t.v ? t.cor : '#e2e8f0'}`,
-                    background: temperaturaSel===t.v ? `${t.cor}18` : 'white',
-                    color: temperaturaSel===t.v ? t.cor : '#94a3b8' }}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>Próximo Contato *</label>
-            <div style={{ display:'flex', gap:6, marginBottom:16 }}>
-              <input type="date" className="acn-input" style={{ flex:1, fontSize:11 }}
-                value={enviadoContatoData} onChange={e => setEnviadoContatoData(e.target.value)} />
-              <input type="time" className="acn-input" style={{ width:90, fontSize:11 }}
-                value={enviadoContatoHora} onChange={e => setEnviadoContatoHora(e.target.value)} />
-            </div>
-
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'5px 12px' }}
-                onClick={() => setModalEnviado(null)} disabled={salvandoEnviado}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#0369a1', fontSize:10, padding:'5px 12px', opacity: salvandoEnviado?.5:1 }}
-                onClick={confirmarEnviado} disabled={salvandoEnviado}>
-                {salvandoEnviado ? 'Salvando...' : '✅ Confirmar Envio'}
-              </button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalEnviado(null)} disabled={salvandoEnviado}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiCheck} onClick={confirmarEnviado} disabled={salvandoEnviado}>
+                {salvandoEnviado ? 'Salvando...' : 'Confirmar Envio'}
+              </Botao>
             </div>
           </div>
         </div>
@@ -3770,46 +3763,39 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL EDITAR TEMPERATURA (a qualquer momento) ══════ */}
       {modalEditarTemp && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-temp"
           onClick={e => { if (e.target === e.currentTarget) setModalEditarTemp(null); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(360px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:4 }}>🌡️ Temperatura do Lead</div>
-            <div style={{ fontSize:11, color:'#475569', marginBottom:14 }}>
-              <strong>{modalEditarTemp.titulo}</strong>
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-temp" role="dialog" aria-label="Temperatura do Lead">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiThermometer} size={18} />Temperatura do Lead</span>
             </div>
-
-            <div style={{ position:'relative', height:10, borderRadius:5, marginBottom:6,
-              background:'linear-gradient(to right, #3b82f6, #a855f7, #dc2626)' }}>
-              {tempEditSel && (
-                <div style={{ position:'absolute', top:-3, width:16, height:16, borderRadius:'50%',
-                  background:'white', border:'3px solid #1e293b', boxShadow:'0 1px 4px #0005',
-                  left: tempEditSel==='frio' ? '0%' : tempEditSel==='morno' ? '50%' : '100%',
-                  transform:'translateX(-50%)', transition:'left .15s' }} />
-              )}
+            <div className="acn-modal-corpo">
+              <div><strong>{modalEditarTemp.titulo}</strong></div>
+              <div>
+                <div className="acn-crm-termo">
+                  {tempEditSel && (
+                    <div className="acn-crm-termo-ponto" style={{ left: tempEditSel==='frio' ? '0%' : tempEditSel==='morno' ? '50%' : '100%' }} />
+                  )}
+                </div>
+                <div className="acn-crm-temp-opcoes">
+                  {([
+                    { v:'frio',   label:'🧊 Frio' },
+                    { v:'morno',  label:'🌤️ Morno' },
+                    { v:'quente', label:'🔥 Quente' },
+                  ] as const).map(t => (
+                    <button key={t.v} type="button" onClick={() => setTempEditSel(t.v)} data-temp={t.v}
+                      className={'acn-crm-temp-opc' + (tempEditSel===t.v ? ' on' : '')}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div style={{ display:'flex', gap:6, marginBottom:16 }}>
-              {([
-                { v:'frio',   label:'🧊 Frio',   cor:'#3b82f6' },
-                { v:'morno',  label:'🌤️ Morno',  cor:'#a855f7' },
-                { v:'quente', label:'🔥 Quente',  cor:'#dc2626' },
-              ] as const).map(t => (
-                <button key={t.v} onClick={() => setTempEditSel(t.v)}
-                  style={{ flex:1, padding:'7px 4px', fontSize:10, fontWeight:700, borderRadius:6, cursor:'pointer',
-                    border: `2px solid ${tempEditSel===t.v ? t.cor : '#e2e8f0'}`,
-                    background: tempEditSel===t.v ? `${t.cor}18` : 'white',
-                    color: tempEditSel===t.v ? t.cor : '#94a3b8' }}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'5px 12px' }}
-                onClick={() => setModalEditarTemp(null)} disabled={salvandoTempEdit}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#0369a1', fontSize:10, padding:'5px 12px', opacity: (salvandoTempEdit||!tempEditSel)?.5:1 }}
-                onClick={confirmarEdicaoTemp} disabled={salvandoTempEdit || !tempEditSel}>
-                {salvandoTempEdit ? 'Salvando...' : '✅ Salvar'}
-              </button>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalEditarTemp(null)} disabled={salvandoTempEdit}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiCheck} onClick={confirmarEdicaoTemp} disabled={salvandoTempEdit || !tempEditSel}>
+                {salvandoTempEdit ? 'Salvando...' : 'Salvar'}
+              </Botao>
             </div>
           </div>
         </div>
@@ -3817,50 +3803,55 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ AVISO — BLOQUEIO DO ESTÁGIO FATURADO ══════ */}
       {avisoFaturadoBloq && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-fat"
           onClick={() => setAvisoFaturadoBloq(null)}>
-          <div style={{ background:'white', borderRadius:8, width:'min(400px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-fatbloq" role="dialog" aria-label="Ainda não pode ir para Faturado"
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight:700, fontSize:13, color:'#991b1b', marginBottom:8 }}>🚫 Ainda não pode ir para Faturado</div>
-            <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>
-              <strong>{avisoFaturadoBloq.op.titulo}</strong>
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-crm-tit-bad"><Icone path={mdiCancel} size={18} />Ainda não pode ir para Faturado</span>
             </div>
-            {avisoFaturadoBloq.semOpl ? (
-              <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
-                Nenhuma OP está vinculada a esta oportunidade ainda. Lance a OP (botão "📋 Lançar OP") antes de faturar e entregar.
-              </div>
-            ) : (
-              <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
-                Esta ainda tem OP(s) sem confirmação de faturamento/entrega:
-                <ul style={{ margin:'6px 0 0', paddingLeft:18 }}>
-                  {avisoFaturadoBloq.pendentes.map((o: any) => (
-                    <li key={o.opl} style={{ marginBottom:2 }}>{o.opl} — <em>{o.status_geral || 'sem status'}</em></li>
-                  ))}
-                </ul>
-                <div style={{ marginTop:8 }}>Confirme a entrega na aba Fiscal (tabela "Já Faturados") antes de mover para Faturado.</div>
-              </div>
-            )}
-            <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'5px 12px', width:'100%' }}
-              onClick={() => setAvisoFaturadoBloq(null)}>Entendido</button>
+            <div className="acn-modal-corpo">
+              <div><strong>{avisoFaturadoBloq.op.titulo}</strong></div>
+              {avisoFaturadoBloq.semOpl ? (
+                <div className="acn-ajuda">
+                  Nenhuma OP está vinculada a esta oportunidade ainda. Lance a OP (botão "📋 Lançar OP") antes de faturar e entregar.
+                </div>
+              ) : (
+                <div className="acn-ajuda">
+                  Esta ainda tem OP(s) sem confirmação de faturamento/entrega:
+                  <ul className="acn-crm-fatbloq-lista">
+                    {avisoFaturadoBloq.pendentes.map((o: any) => (
+                      <li key={o.opl}>{o.opl} — <em>{o.status_geral || 'sem status'}</em></li>
+                    ))}
+                  </ul>
+                  <div className="acn-crm-fatbloq-nota">Confirme a entrega na aba Fiscal (tabela "Já Faturados") antes de mover para Faturado.</div>
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setAvisoFaturadoBloq(null)}>Entendido</Botao>
+            </div>
           </div>
         </div>
       )}
 
       {/* ══════ MODAL MOTIVO PERDA ══════ */}
       {modalMotivo && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(380px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#991b1b', marginBottom:8 }}>❌ Registrar como Não Vencida/Perdida</div>
-            <div style={{ fontSize:10, color:'#374151', marginBottom:10 }}>
-              Informe o motivo para <strong>"{modalMotivo.op.titulo}"</strong>:
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-motivo">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-motivo" role="dialog" aria-label="Registrar como Não Vencida/Perdida">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-crm-tit-bad"><Icone path={mdiCloseCircleOutline} size={18} />Registrar como Não Vencida/Perdida</span>
             </div>
-            <textarea value={motivoTexto} onChange={e => setMotivoTexto(e.target.value)}
-              placeholder="Ex: Preço acima do mercado, prazo incompatível, concorrência..."
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, height:80, resize:'vertical', boxSizing:'border-box' }}
-            />
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:10 }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalMotivo(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#991b1b', fontSize:10, padding:'4px 12px' }} onClick={confirmarPerda}>Confirmar Perda</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div>
+                Informe o motivo para <strong>"{modalMotivo.op.titulo}"</strong>:
+              </div>
+              <textarea className="acn-input acn-crm-motivo-txt" value={motivoTexto} onChange={e => setMotivoTexto(e.target.value)}
+                placeholder="Ex: Preço acima do mercado, prazo incompatível, concorrência..." />
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalMotivo(null)}>Cancelar</Botao>
+              <Botao variante="perigo" onClick={confirmarPerda}>Confirmar Perda</Botao>
             </div>
           </div>
         </div>
@@ -3868,20 +3859,22 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL DESISTÊNCIA ══════ */}
       {modalDesist && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(380px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#92400e', marginBottom:8 }}>🚫 Registrar Desistência</div>
-            <div style={{ fontSize:10, color:'#374151', marginBottom:10 }}>
-              Motivo da desistência em <strong>"{modalDesist.op.titulo}"</strong>:
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-motivo">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-motivo" role="dialog" aria-label="Registrar Desistência">
+            <div className="acn-modal-cab">
+              <span className="modal-title acn-crm-tit-warn"><Icone path={mdiCancel} size={18} />Registrar Desistência</span>
             </div>
-            <textarea value={desistTexto} onChange={e => setDesistTexto(e.target.value)}
-              placeholder="Ex: Edital desfavorável, fora do escopo, capacidade técnica insuficiente, decisão estratégica..."
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, height:80, resize:'vertical', boxSizing:'border-box' }}
-              autoFocus
-            />
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:10 }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalDesist(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#92400e', fontSize:10, padding:'4px 12px' }} onClick={confirmarDesistencia}>Confirmar Desistência</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div>
+                Motivo da desistência em <strong>"{modalDesist.op.titulo}"</strong>:
+              </div>
+              <textarea className="acn-input acn-crm-motivo-txt" value={desistTexto} onChange={e => setDesistTexto(e.target.value)}
+                placeholder="Ex: Edital desfavorável, fora do escopo, capacidade técnica insuficiente, decisão estratégica..."
+                autoFocus />
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalDesist(null)}>Cancelar</Botao>
+              <Botao variante="perigo" onClick={confirmarDesistencia}>Confirmar Desistência</Botao>
             </div>
           </div>
         </div>
