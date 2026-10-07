@@ -1938,3 +1938,42 @@ html body .modal-box.acn-modal-cadastro.acn-fp-hist-jan { width: min(980px, 96vw
 .acn-fp-hist-log { padding: 6px 2px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-fp-hist-log .acn-ajuda { display: flex; align-items: center; gap: 4px; }
 html body .acn-main table.acn-tabela tr.acn-fp-hist-atual > td { background: var(--acn-info-soft); }
+
+/* ── Cotações · 12e28 (07/10/2026): a tela principal (cabeçalho, filtros, tabela) e o painel de cotações do card do CRM ── */
+html body .acn-main table.acn-tabela th.centro, html body .acn-main table.acn-tabela td.centro { text-align: center; }
+.acn-cot { padding-bottom: 24px; }
+.acn-cot > .acn-faixa { margin-bottom: 10px; }
+.acn-cot-pend { margin-left: 6px; padding: 0 6px; font-size: 11px; font-weight: 800; background: #fff; color: var(--acn-bad); border-radius: 10px; }
+.acn-cot-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+html body .acn-input.acn-cot-busca { flex: 1 1 220px; width: auto; }
+.acn-cot-vazio { padding: 32px; text-align: center; font-size: 13px; color: var(--acn-muted); }
+.acn-cot-carregando { padding: 10px; }
+.acn-cot-tabela { overflow-x: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+html body .acn-main table.acn-tabela th.acn-cot-col-sel { width: 28px; }
+html body .acn-main table.acn-tabela tr.acn-cot-linha:hover > td { background: var(--acn-brand-soft); }
+html body .acn-main table.acn-tabela tr.acn-cot-linha.sel > td { background: var(--acn-info-soft); }
+html body .acn-main table.acn-tabela tr.acn-cot-linha.nao-lida > td { background: var(--acn-warn-soft); }
+html body .acn-main table.acn-tabela tr.acn-cot-linha.nao-lida > td:first-child { box-shadow: inset 3px 0 0 var(--acn-warn); }
+.acn-cot-linha input[type=checkbox], .acn-cot-tabela th input[type=checkbox] { accent-color: var(--acn-brand); }
+.acn-cot-num { font-weight: 700; color: var(--acn-info); }
+.acn-cot-link.acn-b { padding: 0; min-height: 0; font-weight: 700; text-decoration: underline; color: var(--acn-info); }
+.acn-cot-nome { max-width: 220px; overflow-wrap: anywhere; }
+.acn-cot-nome-t { font-weight: 600; color: var(--acn-ink); }
+html body .acn-input.acn-cot-setor { width: auto; max-width: 200px; font-weight: 600; }
+html body .acn-input.acn-cot-setor.reservado { border-color: var(--acn-warn); background: var(--acn-warn-soft); color: var(--acn-warn); }
+.acn-cot-opl { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--acn-ok); }
+/* painel do card do CRM */
+.acn-cot-cartao { margin-bottom: 10px; padding: 10px 14px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-cot-cartao-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.acn-cot-cartao-num { margin-right: 8px; font-size: 12px; font-weight: 700; color: var(--acn-info); }
+.acn-cot-cartao-nome { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--acn-ink); }
+.acn-cot-cartao-val { text-align: right; }
+.acn-cot-cartao-total { font-size: 15px; font-weight: 800; color: var(--acn-ok); }
+.acn-cot-mini-wrap { margin-bottom: 8px; overflow-x: auto; }
+.acn-cot-mini { width: 100%; border-collapse: collapse; font-size: 12px; }
+.acn-cot-mini th { padding: 3px 6px; font-weight: 600; background: var(--acn-neutral-soft); }
+.acn-cot-mini td { padding: 3px 6px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-cot-mini th.esq, .acn-cot-mini td.esq { text-align: left; }
+.acn-cot-mini th.dir, .acn-cot-mini td.dir { text-align: right; }
+.acn-cot-mini th.centro, .acn-cot-mini td.centro { text-align: center; }
+.acn-cot-mais { font-style: italic; }

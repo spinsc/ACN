@@ -6,7 +6,9 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
-import { Faixa, Botao } from './Interface';
+import { Faixa, Botao, Selo, Abas, CabecalhoTela } from './Interface';
+import Icone from './Icone';
+import { mdiTimerSand, mdiLinkVariant, mdiFormatListBulleted, mdiChartBar, mdiPlus, mdiRefresh, mdiFolderOutline, mdiCashMultiple } from '@mdi/js';
 import { perfilComPoderes } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -61,22 +63,19 @@ export function setorDoUsuario(perfil) {
 }
 
 const STATUS_CORES = {
-  rascunho:          { bg:'#f1f5f9', color:'#475569', label:'Rascunho' },
-  ativa:             { bg:'#dbeafe', color:'#1d4ed8', label:'Ativa' },
-  aprovada:          { bg:'#dcfce7', color:'#16a34a', label:'Aprovada' },
-  proposta_gerada:   { bg:'#fef9c3', color:'#92400e', label:'Proposta Gerada' },
-  vinculada:         { bg:'#ede9fe', color:'#6d28d9', label:'Vinculada' },
-  cancelada:         { bg:'#fee2e2', color:'#dc2626', label:'Cancelada' },
+  rascunho:          { label:'Rascunho' },
+  ativa:             { label:'Ativa' },
+  aprovada:          { label:'Aprovada' },
+  proposta_gerada:   { label:'Proposta Gerada' },
+  vinculada:         { label:'Vinculada' },
+  cancelada:         { label:'Cancelada' },
 };
+// a cor de cada status vem da família do guia (Etapa 12e28, 07/10/2026)
+const FAMILIA_COTACAO = { rascunho:'neutro', ativa:'info', aprovada:'ok', proposta_gerada:'atencao', vinculada:'marca', cancelada:'erro' };
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_CORES[status] || { bg:'#f1f5f9', color:'#475569', label: status || '—' };
-  return (
-    <span style={{ background:cfg.bg, color:cfg.color, borderRadius:3, padding:'2px 7px',
-      fontSize:9, fontWeight:700, letterSpacing:.2 }}>
-      {cfg.label}
-    </span>
-  );
+  const cfg = STATUS_CORES[status] || { label: status || '—' };
+  return <Selo familia={FAMILIA_COTACAO[status] || 'neutro'} ponto={false}>{cfg.label}</Selo>;
 }
 
 // ─── Modal de Desconto / Proposta ────────────────────────────────────────────
@@ -1541,92 +1540,51 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const statusOpcoes = [...new Set(cotacoes.map(c => c.status).filter(Boolean))];
 
   return (
-    <div style={{ padding:'0 0 24px', fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
-      {/* Header */}
-      <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:14, color:'#1e293b' }}>📋 Cotações</div>
-            <div style={{ fontSize:9, color:'#64748b', marginTop:1 }}>
-              {cotacoesFiltradas.length} cotação(ões) · {cotacoes.filter(c=>c.status==='ativa').length} ativas
-            </div>
-          </div>
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-            {podeAprovar && pendCount > 0 && (
-              <button onClick={() => setModalAprovs(true)}
-                style={{ background:'#dc2626', color:'#fff', border:'none', borderRadius:5,
-                  padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer',
-                  display:'flex', alignItems:'center', gap:5 }}>
-                ⏳ Aprovações Pendentes
-                <span style={{ background:'#fff', color:'#dc2626', borderRadius:10, padding:'0 5px', fontSize:9, fontWeight:800 }}>
-                  {pendCount}
-                </span>
-              </button>
-            )}
-            {selecionadas.length >= 2 && (
-              <button onClick={() => setModalCombinar(true)}
-                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:5,
-                  padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                🔗 Combinar em Proposta ({selecionadas.length})
-              </button>
-            )}
-            <button onClick={() => setSimplificada(v => !v)}
-              style={{ background: simplificada ? '#0369a1' : '#f1f5f9',
-                border: simplificada ? 'none' : '1px solid #e2e8f0', borderRadius:5,
-                padding:'6px 12px', fontSize:9,
-                color: simplificada ? '#fff' : '#475569', cursor:'pointer', fontWeight:700 }}>
-              {simplificada ? '📋 Completo' : '📊 Simplificado'}
-            </button>
-            <button onClick={() => setModalNovaCotacao(true)}
-              style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:5,
-                padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-              ➕ Nova Cotação
-            </button>
-            <button onClick={() => { carregarCotacoes(); carregarPendentes(); }}
-              style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:5,
-                padding:'6px 12px', fontSize:9, color:'#475569', cursor:'pointer' }}>
-              🔄 Atualizar
-            </button>
-          </div>
-        </div>
+    <div className="acn-cot">
+      <CabecalhoTela
+        titulo="Cotações"
+        subtitulo={<>{cotacoesFiltradas.length} cotação(ões) · {cotacoes.filter(c=>c.status==='ativa').length} ativas</>}
+        acoes={<>
+          {podeAprovar && pendCount > 0 && (
+            <Botao variante="perigo" icone={mdiTimerSand} onClick={() => setModalAprovs(true)}>
+              Aprovações Pendentes
+              <span className="acn-cot-pend">{pendCount}</span>
+            </Botao>
+          )}
+          {selecionadas.length >= 2 && (
+            <Botao icone={mdiLinkVariant} onClick={() => setModalCombinar(true)}>
+              Combinar em Proposta ({selecionadas.length})
+            </Botao>
+          )}
+          <Botao icone={simplificada ? mdiFormatListBulleted : mdiChartBar} onClick={() => setSimplificada(v => !v)}>
+            {simplificada ? 'Completo' : 'Simplificado'}
+          </Botao>
+          <Botao variante="primario" icone={mdiPlus} onClick={() => setModalNovaCotacao(true)}>
+            Nova Cotação
+          </Botao>
+          <Botao icone={mdiRefresh} onClick={() => { carregarCotacoes(); carregarPendentes(); }}>
+            Atualizar
+          </Botao>
+        </>}
+        abas={
+          <Abas ativa={abaLista} onChange={setAbaLista} itens={[
+            { id:'todas',   rotulo:'Todas',   icone: mdiFormatListBulleted, contagem: cotacoes.length },
+            { id:'avulsas', rotulo:'Avulsas', icone: mdiFolderOutline, contagem: qtdAvulsas,
+              titulo:'Cotações sem vínculo com oportunidade CRM' },
+          ]} />
+        }
+      />
 
-        {/* Tabs: Todas / Avulsas */}
-        <div style={{ marginTop:12, display:'flex', gap:0, borderBottom:'2px solid #e2e8f0' }}>
-          {[
-            { id:'todas',   label:'📋 Todas',  count: cotacoes.length },
-            { id:'avulsas', label:'📁 Avulsas', count: qtdAvulsas,
-              title:'Cotações sem vínculo com oportunidade CRM' },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => setAbaLista(tab.id)} title={tab.title}
-              style={{ background:'none', border:'none', borderBottom: abaLista===tab.id
-                ? '2px solid #0369a1' : '2px solid transparent',
-                marginBottom:-2, padding:'7px 16px', fontSize:10, fontWeight:700, cursor:'pointer',
-                color: abaLista===tab.id ? '#0369a1' : '#64748b',
-                display:'flex', alignItems:'center', gap:5 }}>
-              {tab.label}
-              <span style={{ background: abaLista===tab.id ? '#0369a1' : '#e2e8f0',
-                color: abaLista===tab.id ? '#fff' : '#64748b',
-                borderRadius:10, padding:'0 6px', fontSize:9, fontWeight:800 }}>
-                {tab.count}
-              </span>
-            </button>
+      {/* Filtros */}
+      <div className="acn-cot-filtros">
+        <input className="acn-input acn-cot-busca" value={busca} onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar por nome, número, OP..." />
+        <select className="acn-input" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+          <option value="">Todos os status</option>
+          {Object.entries(STATUS_CORES).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
           ))}
-        </div>
-
-        {/* Filtros */}
-        <div style={{ marginTop:10, display:'flex', gap:8, flexWrap:'wrap' }}>
-          <input value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por nome, número, OP..."
-            style={{ flex:'1 1 220px', border:'1px solid #d1d5db', borderRadius:5, padding:'6px 10px',
-              fontSize:10, outline:'none' }} />
-          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-            style={{ border:'1px solid #d1d5db', borderRadius:5, padding:'6px 10px', fontSize:10 }}>
-            <option value="">Todos os status</option>
-            {Object.entries(STATUS_CORES).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
-            ))}
-          </select>
-        </div>
+        </select>
       </div>
 
       {erroLista && (
@@ -1641,123 +1599,105 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
 
       {/* Aviso de campos ocultos */}
       {isVendedor && (!cfg.verCustos || !cfg.verFornec || !cfg.verMarkup) && (
-        <div style={{ background:'#fef9c3', border:'1px solid #fde68a', borderRadius:6,
-          padding:'8px 12px', marginBottom:10, fontSize:9, color:'#78350f' }}>
-          ℹ️ Alguns campos desta cotação estão ocultos por configuração do administrador.
-        </div>
+        <Faixa tom="info">
+          Alguns campos desta cotação estão ocultos por configuração do administrador.
+        </Faixa>
       )}
 
       {/* Tabela */}
       {carregando ? (
-        <div style={{ textAlign:'center', padding:32, color:'#9ca3af' }}>Carregando...</div>
+        <div className="acn-cot-vazio">Carregando...</div>
       ) : cotacoesFiltradas.length === 0 ? (
-        erroLista ? null : <div style={{ textAlign:'center', padding:32, color:'#9ca3af', fontSize:11 }}>
+        erroLista ? null : <div className="acn-cot-vazio">
           Nenhuma cotação encontrada.
         </div>
       ) : (
-        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
-              <thead>
-                <tr style={{ background:'#1e293b', color:'#cbd5e1' }}>
-                  <th style={{ padding:'8px 6px', width:28 }}>
-                    <input type="checkbox"
-                      checked={selecionadas.length === cotacoesFiltradas.length && cotacoesFiltradas.length > 0}
-                      onChange={e => setSelecionadas(e.target.checked ? cotacoesFiltradas.map(c=>c.id) : [])}
-                      style={{ accentColor:'#7c3aed' }} />
-                  </th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Número</th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Nome</th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Status</th>
-                  {isAdmin && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Setor</th>}
-                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Tipo</th>}
-                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Empresa</th>}
-                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>OP</th>}
-                  <th style={{ padding:'8px 10px', textAlign:'right', fontWeight:600 }}>Valor Total</th>
-                  <th style={{ padding:'8px 10px', textAlign:'right', fontWeight:600 }}>% Impostos</th>
-                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Criado em</th>}
-                  <th style={{ padding:'8px 10px', textAlign:'center', fontWeight:600 }}>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cotacoesFiltradas.map((c, i) => {
-                  const itens   = c.itens || [];
-                  const prms    = c.parametros_globais || {};
-                  const { totVendas, totImposto } = estruturaFormacao(itens, prms, calcItem).geral;
-                  const impostoPct = totVendas > 0 ? (totImposto / totVendas * 100) : (prms.imposto_pct || 0);
-                  const sel = selecionadas.includes(c.id);
-                  const naoLida = cotacoesNaoLidas.has(String(c.id));
+        <div className="acn-cot-tabela">
+          <table className="acn-tabela acn-densa">
+            <thead>
+              <tr>
+                <th className="acn-cot-col-sel">
+                  <input type="checkbox"
+                    checked={selecionadas.length === cotacoesFiltradas.length && cotacoesFiltradas.length > 0}
+                    onChange={e => setSelecionadas(e.target.checked ? cotacoesFiltradas.map(c=>c.id) : [])} />
+                </th>
+                <th className="esq">Número</th>
+                <th className="esq">Nome</th>
+                <th className="esq">Status</th>
+                {isAdmin && <th className="esq">Setor</th>}
+                {!simplificada && <th className="esq">Tipo</th>}
+                {!simplificada && <th className="esq">Empresa</th>}
+                {!simplificada && <th className="esq">OP</th>}
+                <th className="dir">Valor Total</th>
+                <th className="dir">% Impostos</th>
+                {!simplificada && <th className="esq">Criado em</th>}
+                <th className="centro">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cotacoesFiltradas.map((c, i) => {
+                const itens   = c.itens || [];
+                const prms    = c.parametros_globais || {};
+                const { totVendas, totImposto } = estruturaFormacao(itens, prms, calcItem).geral;
+                const impostoPct = totVendas > 0 ? (totImposto / totVendas * 100) : (prms.imposto_pct || 0);
+                const sel = selecionadas.includes(c.id);
+                const naoLida = cotacoesNaoLidas.has(String(c.id));
 
-                  return (
-                    <tr key={c.id} style={{ background: naoLida ? '#fffdf0' : sel ? '#f5f3ff' : i%2===0?'#fff':'#f8fafc',
-                      boxShadow: naoLida ? 'inset 3px 0 0 #eab308' : 'none',
-                      cursor:'pointer', transition:'background .1s' }}
-                      onMouseEnter={e => { if(!sel && !naoLida) e.currentTarget.style.background='#f0fdf4'; }}
-                      onMouseLeave={e => { if(!sel) e.currentTarget.style.background= naoLida ? '#fffdf0' : i%2===0?'#fff':'#f8fafc'; }}>
-                      <td style={{ padding:'7px 6px', textAlign:'center' }}>
-                        <input type="checkbox" checked={sel}
-                          onChange={e => setSelecionadas(p => e.target.checked ? [...p, c.id] : p.filter(x=>x!==c.id))}
-                          style={{ accentColor:'#7c3aed' }} />
-                      </td>
-                      <td style={{ padding:'7px 10px', fontWeight:700, color:'#0369a1' }}>
-                        {c.crm_oportunidade_id && onAbrirCrmCard ? (
-                          <button onClick={() => onAbrirCrmCard(c.crm_oportunidade_id)}
-                            style={{ background:'none', border:'none', color:'#0369a1', cursor:'pointer',
-                              fontWeight:700, fontSize:10, padding:0, textDecoration:'underline' }}>
-                            {c.numero_cotacao || '—'}
-                          </button>
-                        ) : (
-                          <span>{c.numero_cotacao || '—'}</span>
-                        )}
-                      </td>
-                      <td style={{ padding:'7px 10px', maxWidth:200, wordBreak:'break-word' }}>
-                        <div style={{ fontWeight:600, color:'#1e293b' }}>{c.nome}</div>
-                        {!simplificada && c.criado_por && <div style={{ fontSize:8, color:'#9ca3af' }}>{c.criado_por}</div>}
-                      </td>
-                      <td style={{ padding:'7px 10px' }}><StatusBadge status={c.status} /></td>
-                      {isAdmin && (
-                        <td style={{ padding:'7px 10px' }} onClick={e => e.stopPropagation()}>
-                          <select value={c.setor || ''} onChange={e => liberarSetor(c, e.target.value || null)}
-                            title="Quem vê esta cotação"
-                            style={{ fontSize:9, fontWeight:700, padding:'3px 6px', borderRadius:4,
-                              border: c.setor === RESERVADO ? '1px solid #f59e0b' : '1px solid #d1d5db',
-                              background: c.setor === RESERVADO ? '#fffbeb' : '#fff',
-                              color: c.setor === RESERVADO ? '#b45309' : '#374151', cursor:'pointer' }}>
-                            <option value="">— sem setor (legado, todo mundo vê) —</option>
-                            <option value={RESERVADO}>🔒 Reservada (só Admin/Gerente)</option>
-                            {SETORES_COTACAO.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </td>
+                return (
+                  <tr key={c.id} className={'acn-cot-linha' + (naoLida ? ' nao-lida' : sel ? ' sel' : '')}>
+                    <td className="centro">
+                      <input type="checkbox" checked={sel}
+                        onChange={e => setSelecionadas(p => e.target.checked ? [...p, c.id] : p.filter(x=>x!==c.id))} />
+                    </td>
+                    <td className="acn-cot-num">
+                      {c.crm_oportunidade_id && onAbrirCrmCard ? (
+                        <Botao variante="discreto" pequeno className="acn-cot-link" onClick={() => onAbrirCrmCard(c.crm_oportunidade_id)}>
+                          {c.numero_cotacao || '—'}
+                        </Botao>
+                      ) : (
+                        <span>{c.numero_cotacao || '—'}</span>
                       )}
-                      {!simplificada && <td style={{ padding:'7px 10px', color:'#475569' }}>{c.tipo || '—'}</td>}
-                      {!simplificada && <td style={{ padding:'7px 10px', color:'#475569' }}>{c.empresa || '—'}</td>}
-                      {!simplificada && <td style={{ padding:'7px 10px' }}>
-                        {c.opl_numero
-                          ? <span style={{ fontWeight:700, color:'#16a34a' }}>🔗 {c.opl_numero}</span>
-                          : <span style={{ color:'#9ca3af', fontSize:9 }}>—</span>}
-                      </td>}
-                      <td style={{ padding:'7px 10px', textAlign:'right', fontWeight:700, color:'#15803d' }}>
-                        {totVendas > 0 ? fmtR(totVendas) : '—'}
+                    </td>
+                    <td className="acn-cot-nome">
+                      <div className="acn-cot-nome-t">{c.nome}</div>
+                      {!simplificada && c.criado_por && <div className="acn-ajuda">{c.criado_por}</div>}
+                    </td>
+                    <td><StatusBadge status={c.status} /></td>
+                    {isAdmin && (
+                      <td onClick={e => e.stopPropagation()}>
+                        <select value={c.setor || ''} onChange={e => liberarSetor(c, e.target.value || null)}
+                          title="Quem vê esta cotação"
+                          className={'acn-input acn-cot-setor' + (c.setor === RESERVADO ? ' reservado' : '')}>
+                          <option value="">— sem setor (legado, todo mundo vê) —</option>
+                          <option value={RESERVADO}>🔒 Reservada (só Admin/Gerente)</option>
+                          {SETORES_COTACAO.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
                       </td>
-                      <td style={{ padding:'7px 10px', textAlign:'right', color:'#dc2626', fontWeight:600 }}>
-                        {impostoPct > 0 ? `${impostoPct.toFixed(1)}%` : '—'}
-                      </td>
-                      {!simplificada && <td style={{ padding:'7px 10px', color:'#6b7280', fontSize:9 }}>
-                        {c.criado_em ? new Date(c.criado_em).toLocaleString('pt-BR') : '—'}
-                      </td>}
-                      <td style={{ padding:'7px 10px', textAlign:'center' }}>
-                        <button onClick={() => setModalDetalhe(c)}
-                          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4,
-                            padding:'4px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                          Ver
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    )}
+                    {!simplificada && <td className="acn-fraco">{c.tipo || '—'}</td>}
+                    {!simplificada && <td className="acn-fraco">{c.empresa || '—'}</td>}
+                    {!simplificada && <td>
+                      {c.opl_numero
+                        ? <span className="acn-cot-opl"><Icone path={mdiLinkVariant} size={13} /> {c.opl_numero}</span>
+                        : <span className="acn-fraco">—</span>}
+                    </td>}
+                    <td className="dir acn-forte acn-txt-ok">
+                      {totVendas > 0 ? fmtR(totVendas) : '—'}
+                    </td>
+                    <td className="dir acn-txt-erro">
+                      {impostoPct > 0 ? `${impostoPct.toFixed(1)}%` : '—'}
+                    </td>
+                    {!simplificada && <td className="acn-fraco">
+                      {c.criado_em ? new Date(c.criado_em).toLocaleString('pt-BR') : '—'}
+                    </td>}
+                    <td className="centro">
+                      <Botao variante="primario" pequeno onClick={() => setModalDetalhe(c)}>Ver</Botao>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -1839,12 +1779,12 @@ export function CotacoesCrmPanel({ oportunidadeId, currentUser, verCustos, verFo
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  if (loading) return <div style={{ color:'#9ca3af', fontSize:10, padding:10 }}>Carregando cotações...</div>;
+  if (loading) return <div className="acn-ajuda acn-cot-carregando">Carregando cotações...</div>;
 
   if (cotacoes.length === 0) return (
     erroLeitura
       ? <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as cotações deste card ({erroLeitura}). Isso não quer dizer que não haja cotação vinculada.</Faixa>
-      : <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:10 }}>
+      : <div className="acn-cot-vazio">
       Nenhuma cotação vinculada a este card.
     </div>
   );
@@ -1863,57 +1803,56 @@ export function CotacoesCrmPanel({ oportunidadeId, currentUser, verCustos, verFo
         const totVendas = geralCot.totVendas;
         const totCusto  = geralCot.totCustos;
         return (
-          <div key={c.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
-            padding:'10px 14px', marginBottom:10 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+          <div key={c.id} className="acn-cot-cartao">
+            <div className="acn-cot-cartao-cab">
               <div>
-                <span style={{ fontWeight:700, color:'#0369a1', fontSize:10, marginRight:8 }}>
+                <span className="acn-cot-cartao-num">
                   {c.numero_cotacao || '—'}
                 </span>
                 <StatusBadge status={c.status} />
-                <div style={{ fontSize:10, fontWeight:600, color:'#1e293b', marginTop:3 }}>{c.nome}</div>
-                <div style={{ fontSize:9, color:'#6b7280' }}>
+                <div className="acn-cot-cartao-nome">{c.nome}</div>
+                <div className="acn-ajuda">
                   {c.tipo} · {c.empresa}
                   {c.opl_numero ? ` · OP: ${c.opl_numero}` : ''}
                   {` · Criado: ${c.criado_em ? new Date(c.criado_em).toLocaleDateString('pt-BR') : '—'}`}
                 </div>
               </div>
-              <div style={{ textAlign:'right' }}>
-                <div style={{ fontSize:13, fontWeight:800, color:'#15803d' }}>{fmtR(totVendas)}</div>
-                {verCustos && <div style={{ fontSize:9, color:'#92400e' }}>Custo: {fmtR(totCusto)}</div>}
+              <div className="acn-cot-cartao-val">
+                <div className="acn-cot-cartao-total">{fmtR(totVendas)}</div>
+                {verCustos && <div className="acn-ajuda">Custo: {fmtR(totCusto)}</div>}
               </div>
             </div>
 
             {/* Itens resumidos */}
             {itens.length > 0 && (
-              <div style={{ overflowX:'auto', marginBottom:8 }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:9 }}>
+              <div className="acn-cot-mini-wrap">
+                <table className="acn-cot-mini">
                   <thead>
-                    <tr style={{ background:'#f1f5f9' }}>
-                      <th style={{ padding:'3px 6px', textAlign:'left', fontWeight:600 }}>Item</th>
-                      <th style={{ padding:'3px 6px', textAlign:'center' }}>Qt</th>
-                      {verFornec && <th style={{ padding:'3px 6px', textAlign:'left' }}>Fornecedor</th>}
-                      {verMarkup && <th style={{ padding:'3px 6px', textAlign:'right' }}>Markup</th>}
-                      {verCustos && <th style={{ padding:'3px 6px', textAlign:'right' }}>Custo</th>}
-                      <th style={{ padding:'3px 6px', textAlign:'right' }}>Total</th>
+                    <tr>
+                      <th className="esq">Item</th>
+                      <th className="centro">Qt</th>
+                      {verFornec && <th className="esq">Fornecedor</th>}
+                      {verMarkup && <th className="dir">Markup</th>}
+                      {verCustos && <th className="dir">Custo</th>}
+                      <th className="dir">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {itens.slice(0, 5).map((it, i) => {
                       const r = results[i] || {};
                       return (
-                        <tr key={i} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                          <td style={{ padding:'3px 6px', color:'#374151' }}>{it.produto || '—'}</td>
-                          <td style={{ padding:'3px 6px', textAlign:'center' }}>{it.qt || 1}</td>
-                          {verFornec && <td style={{ padding:'3px 6px', color:'#475569' }}>{it.fornecedor||'—'}</td>}
-                          {verMarkup && <td style={{ padding:'3px 6px', textAlign:'right', color:'#6d28d9' }}>{fmtPct(it.markup_pct)}</td>}
-                          {verCustos && <td style={{ padding:'3px 6px', textAlign:'right', color:'#92400e' }}>{fmtR(r.custoTotal)}</td>}
-                          <td style={{ padding:'3px 6px', textAlign:'right', fontWeight:600 }}>{fmtR(r.valorTotal)}</td>
+                        <tr key={i}>
+                          <td>{it.produto || '—'}</td>
+                          <td className="centro">{it.qt || 1}</td>
+                          {verFornec && <td className="acn-fraco">{it.fornecedor||'—'}</td>}
+                          {verMarkup && <td className="dir">{fmtPct(it.markup_pct)}</td>}
+                          {verCustos && <td className="dir acn-txt-atencao">{fmtR(r.custoTotal)}</td>}
+                          <td className="dir acn-forte">{fmtR(r.valorTotal)}</td>
                         </tr>
                       );
                     })}
                     {itens.length > 5 && (
-                      <tr><td colSpan={5} style={{ padding:'3px 6px', color:'#9ca3af', fontStyle:'italic' }}>
+                      <tr><td colSpan={5} className="acn-fraco acn-cot-mais">
                         + {itens.length - 5} itens adicionais...
                       </td></tr>
                     )}
@@ -1922,11 +1861,9 @@ export function CotacoesCrmPanel({ oportunidadeId, currentUser, verCustos, verFo
               </div>
             )}
 
-            <button onClick={() => setModalDesc(c)}
-              style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
-                padding:'4px 12px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-              💰 Gerar Proposta
-            </button>
+            <Botao variante="primario" pequeno icone={mdiCashMultiple} onClick={() => setModalDesc(c)}>
+              Gerar Proposta
+            </Botao>
           </div>
         );
       })}
