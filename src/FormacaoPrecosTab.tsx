@@ -12,7 +12,8 @@ import { Faixa, Botao, Selo, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
-  mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline } from '@mdi/js';
+  mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline, mdiArrowLeft, mdiFileDocumentOutline,
+  mdiFileMultipleOutline, mdiContentCopy, mdiEyeOutline } from '@mdi/js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -1175,54 +1176,54 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     const valorComDesconto = totVendas * (1 - desconto / 100);
 
     return (
-      <div style={{ padding:14, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-          <button className="acn-btn" style={{ background:'#64748b', fontSize:10 }} onClick={() => setAberta(null)}>← Voltar</button>
+      <div className="acn-fp-pf">
+        <div className="acn-fp-pf-cab">
+          <Botao icone={mdiArrowLeft} onClick={() => setAberta(null)}>Voltar</Botao>
           <div>
-            <div style={{ fontWeight:800, fontSize:14, color:'#1e293b' }}>{cotacaoAberta.nome}</div>
-            <div style={{ fontSize:10, color:'#64748b' }}>
+            <div className="acn-fp-pf-nome">{cotacaoAberta.nome}</div>
+            <div className="acn-ajuda">
               {cotacaoAberta.tipo} · {cotacaoAberta.empresa}
               {cotacaoAberta.opl_numero ? ` · OP: ${cotacaoAberta.opl_numero}` : ''}
               {' '}· por {cotacaoAberta.criado_por}
-              {maxDesc > 0 ? <span style={{ marginLeft:8, color:'#dc2626', fontWeight:700 }}>Desc.máx: {maxDesc}%</span> : ''}
+              {maxDesc > 0 ? <span className="acn-fp-pf-max">Desc.máx: {maxDesc}%</span> : ''}
             </div>
           </div>
         </div>
 
         {/* Tabela de itens */}
-        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <div className="acn-fp-pf-tabela">
+          <table className="acn-tabela acn-densa">
             <thead>
               <tr>
-                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'left' }}>Produto / Descrição</th>
-                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'center' }}
+                <th>Produto / Descrição</th>
+                <th className="centro"
                   title='Quantidade deste produto por unidade do Item — não confundir com "Quantidade do Item" (o lote inteiro)'>Qt/un.</th>
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Unit.</th>}
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Total</th>}
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#92400e', color:'#fff', fontSize:9, textAlign:'right' }}>DIFAL</th>}
-                <th style={{ padding:'5px 8px', background:'#1e40af', color:'#fff', fontSize:9, textAlign:'right' }}>Valor Unit.</th>
-                <th style={{ padding:'5px 8px', background:'#1e40af', color:'#fff', fontSize:9, textAlign:'right' }}>Valor Total</th>
-                <th style={{ padding:'5px 8px', background:'#831843', color:'#fff', fontSize:9, textAlign:'right' }}>Imposto</th>
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'right' }}>Lucro%</th>}
+                {!isVendedor && <th className="dir">Custo Unit.</th>}
+                {!isVendedor && <th className="dir">Custo Total</th>}
+                {!isVendedor && <th className="dir">DIFAL</th>}
+                <th className="dir">Valor Unit.</th>
+                <th className="dir">Valor Total</th>
+                <th className="dir">Imposto</th>
+                {!isVendedor && <th className="dir">Lucro%</th>}
               </tr>
             </thead>
             <tbody>
               {items.map((item, idx) => {
                 const r = results[idx];
-                const lucroColor = r.lucroPct >= 10 ? '#16a34a' : r.lucroPct >= 5 ? '#d97706' : '#dc2626';
+                const lucroTxt = r.lucroPct >= 10 ? 'acn-txt-ok' : r.lucroPct >= 5 ? 'acn-txt-atencao' : 'acn-txt-erro';
                 return (
-                  <tr key={item._id} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                    <td style={{ padding:'5px 8px', fontSize:10 }}>
-                      {item.produto || '—'}{item.marca ? <span style={{ color:'#94a3b8' }}> ({item.marca})</span> : ''}
+                  <tr key={item._id}>
+                    <td>
+                      {item.produto || '—'}{item.marca ? <span className="acn-fraco"> ({item.marca})</span> : ''}
                     </td>
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'center' }}>{item.qt}</td>
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#0f766e' }}>{fmtR(r.custoUnitBrl)}</td>}
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#0f766e' }}>{fmtR(r.custoTotal)}</td>}
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#b45309' }}>{fmtR(r.totalDifal)}</td>}
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#1d4ed8', fontWeight:600 }}>{fmtR(r.valorUnit)}</td>
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#1d4ed8', fontWeight:700 }}>{fmtR(r.valorTotal)}</td>
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#9d174d' }}>{fmtR(r.totalImposto)}</td>
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', fontWeight:800, color:lucroColor }}>{fmtPct(r.lucroPct)}</td>}
+                    <td className="centro">{item.qt}</td>
+                    {!isVendedor && <td className="dir acn-txt-ok">{fmtR(r.custoUnitBrl)}</td>}
+                    {!isVendedor && <td className="dir acn-txt-ok">{fmtR(r.custoTotal)}</td>}
+                    {!isVendedor && <td className="dir acn-txt-atencao">{fmtR(r.totalDifal)}</td>}
+                    <td className="dir acn-txt-info">{fmtR(r.valorUnit)}</td>
+                    <td className="dir acn-txt-info acn-forte">{fmtR(r.valorTotal)}</td>
+                    <td className="dir acn-txt-erro">{fmtR(r.totalImposto)}</td>
+                    {!isVendedor && <td className={'dir acn-forte ' + lucroTxt}>{fmtPct(r.lucroPct)}</td>}
                   </tr>
                 );
               })}
@@ -1231,79 +1232,78 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
         </div>
 
         {/* Totais + simulação de desconto */}
-        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:14, marginBottom:12 }}>
-          <div style={{ fontWeight:700, fontSize:11, color:'#475569', marginBottom:10, textTransform:'uppercase' }}>💰 Simulação de Desconto</div>
-          <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+        <div className="acn-fp-pf-sim">
+          <div className="acn-quadro-titulo"><Icone path={mdiCashMultiple} size={14} /> Simulação de Desconto</div>
+          <div className="acn-fp-pf-sim-linha">
             <div>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total de Vendas</div>
-              <div style={{ fontSize:18, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
+              <div className="acn-fp-rot">Total de Vendas</div>
+              <div className="acn-fp-pf-v1" data-acn-familia="info">{fmtR(totVendas)}</div>
             </div>
             <div>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total Impostos</div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#831843' }}>{fmtR(totImposto)}</div>
+              <div className="acn-fp-rot">Total Impostos</div>
+              <div className="acn-fp-pf-v2" data-acn-familia="erro">{fmtR(totImposto)}</div>
             </div>
             {!isVendedor && (
               <div>
-                <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total DIFAL</div>
-                <div style={{ fontSize:14, fontWeight:700, color:'#92400e' }}>{fmtR(totDifal)}</div>
+                <div className="acn-fp-rot">Total DIFAL</div>
+                <div className="acn-fp-pf-v2" data-acn-familia="atencao">{fmtR(totDifal)}</div>
               </div>
             )}
-            <div style={{ borderLeft:'1px solid #e2e8f0', paddingLeft:20 }}>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:4 }}>
+            <div className="acn-fp-pf-desc">
+              <div className="acn-fp-rot">
                 Desconto % &nbsp;
                 {maxDesc > 0
-                  ? <span>(máx autorizado: <strong style={{ color:'#dc2626' }}>{maxDesc}%</strong>)</span>
-                  : <span style={{ color:'#94a3b8' }}>(sem desconto definido)</span>}
+                  ? <span>(máx autorizado: <strong className="acn-txt-erro">{maxDesc}%</strong>)</span>
+                  : <span className="acn-fraco">(sem desconto definido)</span>}
               </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <input type="number" className="acn-input" style={{ width:80, fontSize:12, textAlign:'right' }}
+              <div className="acn-fp-pf-desc-campo">
+                <input type="number" className="acn-input acn-fp-in-80 acn-fp-num"
                   min={0} max={maxDesc > 0 ? maxDesc : 100} step="0.1" value={desconto}
                   onChange={e => {
                     const v = parseFloat(e.target.value) || 0;
                     setDesconto(maxDesc > 0 ? Math.min(v, maxDesc) : v);
                   }} />
-                <span style={{ fontSize:11, color:'#64748b' }}>%</span>
+                <span className="acn-ajuda">%</span>
               </div>
             </div>
             {desconto > 0 && (
               <>
                 <div>
-                  <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Desconto (R$)</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#dc2626' }}>- {fmtR(descontoValor)}</div>
+                  <div className="acn-fp-rot">Desconto (R$)</div>
+                  <div className="acn-fp-pf-v2" data-acn-familia="erro">- {fmtR(descontoValor)}</div>
                 </div>
-                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'8px 14px' }}>
-                  <div style={{ fontSize:9, color:'#166534', marginBottom:2 }}>Total c/ Desconto</div>
-                  <div style={{ fontSize:20, fontWeight:800, color:'#16a34a' }}>{fmtR(valorComDesconto)}</div>
+                <div className="acn-fp-pf-liq" data-acn-familia="ok">
+                  <div className="acn-fp-rot">Total c/ Desconto</div>
+                  <div className="acn-fp-pf-v1">{fmtR(valorComDesconto)}</div>
                 </div>
               </>
             )}
           </div>
-          <div style={{ marginTop:12 }}>
-            <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Observações da proposta</div>
-            <textarea className="acn-input" style={{ width:'100%', height:60, resize:'vertical', fontSize:10 }}
+          <div>
+            <div className="acn-fp-rot">Observações da proposta</div>
+            <textarea className="acn-input acn-fp-pf-obs"
               placeholder="Condições especiais, validade da proposta, notas..."
               value={obs} onChange={e => setObs(e.target.value)} />
           </div>
-          <div style={{ marginTop:8 }}>
-            <button className="acn-btn" style={{ background:'#16a34a' }} onClick={salvarProposta} disabled={salvando}>
-              {salvando ? 'Salvando...' : '💾 Salvar Proposta'}
-            </button>
+          <div>
+            <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarProposta} disabled={salvando}>
+              {salvando ? 'Salvando...' : 'Salvar Proposta'}
+            </Botao>
           </div>
         </div>
 
         {/* Histórico de propostas */}
         {propostas.length > 0 && (
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:14 }}>
-            <div style={{ fontWeight:700, fontSize:11, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>📋 Propostas Salvas</div>
+          <div className="acn-fp-pf-sim">
+            <div className="acn-quadro-titulo"><Icone path={mdiFileDocumentOutline} size={14} /> Propostas Salvas</div>
             {propostas.map(p => (
-              <div key={p.id} style={{ display:'flex', gap:12, alignItems:'center', padding:'6px 0',
-                borderBottom:'1px solid #f1f5f9', flexWrap:'wrap', fontSize:10 }}>
-                <span style={{ color:'#64748b' }}>{new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>
+              <div key={p.id} className="acn-fp-prop">
+                <span className="acn-ajuda">{new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>
                 <span>Desc.: <strong>{p.desconto_pct}%</strong></span>
-                <span>Total: <strong style={{ color:'#1e40af' }}>{fmtR(p.valor_total)}</strong></span>
-                <span>c/ Desc.: <strong style={{ color:'#16a34a' }}>{fmtR(p.valor_com_desconto)}</strong></span>
-                <span style={{ color:'#64748b' }}>por {p.criado_por}</span>
-                {p.observacoes && <span style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic' }}><Linkify text={p.observacoes} /></span>}
+                <span>Total: <strong className="acn-txt-info">{fmtR(p.valor_total)}</strong></span>
+                <span>c/ Desc.: <strong className="acn-txt-ok">{fmtR(p.valor_com_desconto)}</strong></span>
+                <span className="acn-ajuda">por {p.criado_por}</span>
+                {p.observacoes && <span className="acn-fp-prop-obs"><Linkify text={p.observacoes} /></span>}
               </div>
             ))}
           </div>
@@ -1315,23 +1315,21 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   // ── Lista de cotações ──
   const cotacoesFiltradas = cotacoes.filter(m => !filtroCat || categoriaDe(m) === filtroCat);
   return (
-    <div style={{ padding:14, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
-        <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', flex:1 }}>📋 Preços Formados</div>
+    <div className="acn-fp-pf">
+      <div className="acn-fp-pf-lista-cab">
+        <div className="acn-fp-pf-tit"><Icone path={mdiFileMultipleOutline} size={18} /> Preços Formados</div>
         <FiltroCategoria lista={cotacoes} valor={filtroCat} onChange={setFiltroCat} />
         {temPoderDeGerente(currentUser) && (
-          <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={() => setGerindoCat(g => !g)}>
-            ⚙️ Categorias
-          </button>
+          <Botao icone={mdiCogOutline} onClick={() => setGerindoCat(g => !g)}>Categorias</Botao>
         )}
       </div>
-      {gerindoCat && <div style={{ maxWidth:420, marginBottom:12 }}><GerenciarCategorias onMudou={carregarCotacoes} /></div>}
+      {gerindoCat && <div className="acn-fp-pf-cats"><GerenciarCategorias onMudou={carregarCotacoes} /></div>}
       {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregarCotacoes}>Tentar de novo</Botao>}>Não foi possível ler as formações ({erroLeitura}). Isso não quer dizer que não haja formação salva{cotacoes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
-      {carregando && <div style={{ textAlign:'center', color:'#64748b', padding:30 }}>Carregando...</div>}
+      {carregando && <div className="acn-fp-vazio">Carregando...</div>}
       {!carregando && cotacoes.length === 0 && !erroLeitura && (
-        <div style={{ textAlign:'center', color:'#9ca3af', fontSize:12, padding:40 }}>Nenhuma cotação salva.</div>
+        <div className="acn-fp-vazio">Nenhuma cotação salva.</div>
       )}
-      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+      <div className="acn-fp-pf-lista">
         {agruparPorCategoria(cotacoesFiltradas).map(g => (
           <React.Fragment key={g.nome}>
           <TituloCategoria nome={g.nome} qtd={g.itens.length} />
@@ -1340,39 +1338,28 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
           const items   = m.itens || [];
           const totVendas = estruturaFormacao(items, prms, calcItem).geral.totVendas;
           return (
-            <div key={m.id}
-              style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px',
-                display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700, fontSize:12 }}>{m.nome}</div>
-                <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
+            <div key={m.id} className="acn-fp-card">
+              <div className="acn-fp-card-txt">
+                <div className="acn-fp-card-nome">{m.nome}</div>
+                <div className="acn-ajuda">
                   {m.empresa} · {items.length} {items.length === 1 ? 'item' : 'itens'}
                   {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
                   {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
                   {' '}· por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
                 </div>
               </div>
-              <div style={{ textAlign:'right', minWidth:100 }}>
-                <div style={{ fontSize:9, color:'#64748b' }}>Total de Vendas</div>
-                <div style={{ fontSize:13, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
+              <div className="acn-fp-card-tot">
+                <div className="acn-ajuda">Total de Vendas</div>
+                <div className="acn-fp-card-v" data-acn-familia="info">{fmtR(totVendas)}</div>
               </div>
-              <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+              <div className="acn-fp-card-acoes">
                 {!isVendedor && onEditar && (
-                  <button className="acn-btn" style={{ background:'#f59e0b', fontSize:9 }}
-                    onClick={() => onEditar(m)}>
-                    ✏️ Editar
-                  </button>
+                  <Botao pequeno icone={mdiPencilOutline} onClick={() => onEditar(m)}>Editar</Botao>
                 )}
                 {!isVendedor && onClonar && (
-                  <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9 }}
-                    onClick={() => onClonar(m)}>
-                    ⎘ Clonar
-                  </button>
+                  <Botao pequeno icone={mdiContentCopy} onClick={() => onClonar(m)}>Clonar</Botao>
                 )}
-                <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
-                  onClick={() => abrirCotacao(m)}>
-                  Abrir →
-                </button>
+                <Botao variante="primario" pequeno icone={mdiEyeOutline} onClick={() => abrirCotacao(m)}>Abrir</Botao>
               </div>
             </div>
           );

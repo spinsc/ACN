@@ -1787,3 +1787,34 @@ html body .acn-input.acn-fp-neg { background: var(--acn-bad-soft); }
 .acn-fp-ir-tc.acn-chips { flex-wrap: nowrap; }
 .acn-fp-mr-linha { display: flex; gap: 3px; }
 .acn-fp-ir-rot2.com-ic { display: flex; align-items: center; gap: 4px; }
+
+/* ── Formação de Preços · 12e24 (07/10/2026): a aba "Preços Formados" (lista de formações e o detalhe com a simulação de desconto) ── */
+.acn-fp-pf { padding: 14px; }
+.acn-fp-pf-lista-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.acn-fp-pf-tit { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; color: var(--acn-ink); }
+.acn-fp-pf-cats { max-width: 420px; margin-bottom: 12px; }
+.acn-fp-pf-lista { display: flex; flex-direction: column; gap: 8px; }
+.acn-fp-card { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-fp-card-txt { flex: 1; min-width: 0; }
+.acn-fp-card-nome { font-size: 14px; font-weight: 600; color: var(--acn-ink); }
+.acn-fp-card-tot { min-width: 100px; text-align: right; }
+.acn-fp-card-v { font-size: 14px; font-weight: 800; color: var(--acn-f); }
+.acn-fp-card-acoes { display: flex; flex-shrink: 0; gap: 6px; }
+.acn-fp-pf-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.acn-fp-pf-nome { font-size: 15px; font-weight: 700; color: var(--acn-ink); }
+.acn-fp-pf-max { margin-left: 8px; font-weight: 700; color: var(--acn-bad); }
+.acn-fp-pf-tabela { margin-bottom: 12px; overflow-x: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+html body .acn-main .acn-fp-pf-tabela table.acn-tabela th.dir, html body .acn-main .acn-fp-pf-tabela table.acn-tabela td.dir { text-align: right; }
+html body .acn-main .acn-fp-pf-tabela table.acn-tabela th.centro, html body .acn-main .acn-fp-pf-tabela table.acn-tabela td.centro { text-align: center; }
+.acn-fp-pf-sim { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; padding: 14px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-fp-pf-sim .acn-quadro-titulo { display: flex; align-items: center; gap: 4px; }
+.acn-fp-pf-sim-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px; }
+.acn-fp-pf-v1 { font-size: 20px; font-weight: 800; color: var(--acn-f); }
+.acn-fp-pf-v2 { font-size: 15px; font-weight: 700; color: var(--acn-f); }
+.acn-fp-pf-desc { padding-left: 20px; border-left: 1px solid var(--acn-line); }
+.acn-fp-pf-desc-campo { display: flex; align-items: center; gap: 8px; }
+.acn-fp-pf-liq { padding: 8px 14px; background: var(--acn-f-soft); border: 1px solid color-mix(in srgb, var(--acn-f) 30%, transparent); border-radius: var(--acn-r2); }
+html body .acn-input.acn-fp-in-80 { width: 80px; }
+html body .acn-input.acn-fp-pf-obs { width: 100%; box-sizing: border-box; height: 60px; resize: vertical; }
+.acn-fp-prop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-fp-prop-obs { font-size: 12px; font-style: italic; color: var(--acn-muted); }
