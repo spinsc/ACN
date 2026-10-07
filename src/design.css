@@ -2368,3 +2368,29 @@ body.dark .acn-crm-rec-linha { background: #1e293b; border-color: #334155; }
 .acn-crm-rec-info { min-width: 0; }
 .acn-crm-rec-tit { word-break: break-word; }
 .acn-crm-rec-quando { flex-shrink: 0; }
+
+/* ── CRM · 12e36 (07/10/2026): a aba Faturamentos, a nota livre do card aberto e a janela "Venda Direta" ── */
+html body .sec-card.acn-pipe.acn-crm-fat-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
+.acn-crm-fat-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.acn-crm-fat-sep { width: 1px; height: 20px; background: var(--acn-line); }
+html body .sec-card.acn-crm-fat-tabela { overflow: auto; margin-bottom: 0; }
+.acn-crm-fat-op { max-width: 130px; word-break: break-word; }
+.acn-crm-fat-vazio { text-align: center; padding: 20px; color: var(--acn-muted); }
+.acn-crm-fat-rodape { display: flex; gap: 12px; padding: 5px 10px; font-size: 12px; color: var(--acn-muted); background: var(--acn-surface-2); border-top: 1px solid var(--acn-line); }
+body.dark .acn-crm-fat-rodape { background: #0f172a; border-color: #334155; }
+/* nota livre (Área Livre do card aberto) */
+.acn-crm-nota { margin-top: 16px; overflow: hidden; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-crm-nota.nao-lida { border-color: #d4a106; box-shadow: 0 0 0 3px #fefce8; }
+body.dark .acn-crm-nota { border-color: #334155; }
+.acn-crm-nota-barra { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 5px 8px; background: var(--acn-neutral-soft); border-bottom: 1px solid var(--acn-line); }
+body.dark .acn-crm-nota-barra { background: #1e293b; border-color: #334155; }
+.acn-crm-nota-tit { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; font-size: 12px; font-weight: 700; color: var(--acn-muted); }
+.acn-crm-nota-editor { min-height: 100px; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--acn-ink); background: var(--acn-surface); outline: none; word-break: break-word; }
+body.dark .acn-crm-nota-editor { background: #1e293b; color: #e2e8f0; }
+.acn-crm-nota-rodape { display: flex; justify-content: flex-end; padding: 6px 10px; background: var(--acn-surface-2); border-top: 1px solid var(--acn-line); }
+body.dark .acn-crm-nota-rodape { background: #0f172a; border-color: #334155; }
+/* janelas do CRM */
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-op { z-index: 1000; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-op { width: min(540px, 96vw); max-width: 540px; max-height: 90vh; }
+.acn-crm-tit-ic { display: flex; align-items: center; gap: 4px; }
+.acn-crm-aviso-ic { display: flex; align-items: center; gap: 4px; }

@@ -27,12 +27,14 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
-import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
+import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
 import Icone from './Icone';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline,
-  mdiBankOutline, mdiAccountOutline, mdiCalendarOutline, mdiClockOutline } from '@mdi/js';
+  mdiBankOutline, mdiAccountOutline, mdiCalendarOutline, mdiClockOutline,
+  mdiTimerSand, mdiCheck, mdiBriefcaseOutline, mdiPinOutline, mdiFormatBold, mdiFormatItalic, mdiImageOutline, mdiContentSaveOutline,
+  mdiPhoneOutline, mdiDomain, mdiAlertOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
@@ -2714,88 +2716,72 @@ function ColunaRolavel({ children }: any) {
   const renderFaturamentos = () => (
     <div>
       {podeVerTotais && (
-        <div className="sec-card acn-pipe" style={{ gridTemplateColumns:'repeat(3, minmax(0, 1fr))', marginBottom:12 }}>
+        <div className="sec-card acn-pipe acn-crm-fat-kpis">
           {[
-            { label:'Total vendido', val: totalGeral,         cor:'var(--acn-ink)' },
-            { label:'Faturado',      val: totalFaturadoGeral, cor:'var(--acn-ok)' },
-            { label:'A faturar',     val: totalPendenteGeral, cor:'var(--acn-warn)' },
+            { label:'Total vendido', val: totalGeral,         cor:'' },
+            { label:'Faturado',      val: totalFaturadoGeral, cor:'acn-txt-ok' },
+            { label:'A faturar',     val: totalPendenteGeral, cor:'acn-txt-atencao' },
           ].map(({ label, val, cor }) => (
             <div key={label}>
               <span className="rot">{label}</span>
-              <span className="val acn-num" style={{ color:cor }}>{fmtMoeda(val)}</span>
+              <span className={'val acn-num ' + cor}>{fmtMoeda(val)}</span>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ display:'flex', gap:6, marginBottom:8, flexWrap:'wrap', alignItems:'center' }}>
-        {(['todos','pendente','faturado'] as const).map(f => (
-          <button key={f} className="acn-btn"
-            style={{ background: filtFat===f ? '#1e293b' : '#94a3b8' }}
-            onClick={() => setFiltFat(f)}>
-            {f === 'todos' ? 'Todos' : f === 'pendente' ? '⏳ Pendentes' : '✓ Faturados'}
-          </button>
-        ))}
-        <span style={{ color:'#e2e8f0' }}>|</span>
-        {(['todos','licitacao','venda_direta'] as const).map(f => (
-          <button key={f} className="acn-btn"
-            style={{ background: filtFunil===f ? '#1e293b' : '#94a3b8' }}
-            onClick={() => setFiltFunil(f)}>
-            {f === 'todos' ? 'Todos' : f === 'licitacao' ? '🏛️ Licitações' : '💼 V. Diretas'}
-          </button>
-        ))}
+      <div className="acn-crm-fat-filtros">
+        <Chips rotulo="Situação do faturamento" ativo={filtFat} onChange={id => setFiltFat(id as any)}
+          itens={[{ id:'todos', rotulo:'Todos' }, { id:'pendente', rotulo:'Pendentes', icone: mdiTimerSand }, { id:'faturado', rotulo:'Faturados', icone: mdiCheck }]} />
+        <span className="acn-crm-fat-sep" aria-hidden="true" />
+        <Chips rotulo="Funil" ativo={filtFunil} onChange={id => setFiltFunil(id as any)}
+          itens={[{ id:'todos', rotulo:'Todos' }, { id:'licitacao', rotulo:'Licitações', icone: mdiBankOutline }, { id:'venda_direta', rotulo:'V. Diretas', icone: mdiBriefcaseOutline }]} />
       </div>
 
-      <div style={{ background:'white', borderRadius:8, border:'1px solid #e2e8f0', overflow:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:9 }}>
+      <div className="sec-card acn-crm-fat-tabela">
+        <table className="acn-tabela acn-densa">
           <thead>
             <tr>
               {['Funil','Oportunidade','Órgão/Aderente','Operador','Qtd','Valor Total','NF','Data Fat.','Status',''].map(h => (
-                <th key={h} style={{ background:'#1e293b', color:'#cbd5e1', padding:'4px 7px', fontWeight:600, textAlign:'left', fontSize:8, whiteSpace:'nowrap' }}>{h}</th>
+                <th key={h} className={h === 'Qtd' ? 'centro' : 'esq'}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {vendasFiltradas.length === 0 ? (
-              <tr><td colSpan={10} style={{ textAlign:'center', padding:'20px', color:'#94a3b8', fontSize:10 }}>Nenhum registro encontrado</td></tr>
+              <tr><td colSpan={10} className="acn-crm-fat-vazio">Nenhum registro encontrado</td></tr>
             ) : vendasFiltradas.map(v => {
               const opv = ops.find(o => o.id === v.oportunidade_id);
               return (
-                <tr key={v.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                  <td style={{ padding:'5px 7px' }}>
-                    <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
-                      background: opv?.funil==='licitacao' ? '#f5f3ff' : '#ecfeff',
-                      color:      opv?.funil==='licitacao' ? '#7c3aed'  : '#0e7490' }}>
-                      {opv?.funil==='licitacao' ? '🏛️ Lic.' : '💼 VD'}
-                    </span>
+                <tr key={v.id}>
+                  <td>
+                    <Selo familia={opv?.funil==='licitacao' ? 'marca' : 'info'} ponto={false}>
+                      {opv?.funil==='licitacao' ? 'Lic.' : 'VD'}
+                    </Selo>
                   </td>
-                  <td style={{ padding:'5px 7px', maxWidth:130, wordBreak:'break-word' }}>
+                  <td className="acn-crm-fat-op">
                     <strong title={opv?.titulo}>{opv?.titulo || '—'}</strong>
                   </td>
-                  <td style={{ padding:'5px 7px' }}>{v.orgao_aderente || opv?.orgao || '—'}</td>
-                  <td style={{ padding:'5px 7px' }}>{v.operador_nome || '—'}</td>
-                  <td style={{ padding:'5px 7px', textAlign:'center' }}>{v.quantidade || '—'}</td>
-                  <td style={{ padding:'5px 7px', fontWeight:700, color:'#0f766e' }}>{currentUser?.ver_valores === false ? '***' : fmtMoeda(v.valor_total)}</td>
-                  <td style={{ padding:'5px 7px' }}>{v.numero_nf || <span style={{ color:'#f59e0b' }}>Pendente</span>}</td>
-                  <td style={{ padding:'5px 7px' }}>{fmtData(v.data_faturamento)}</td>
-                  <td style={{ padding:'5px 7px' }}>
-                    <span style={{ fontSize:8, fontWeight:700, padding:'2px 7px', borderRadius:10,
-                      background: v.status_faturamento==='faturado' ? '#dcfce7' : v.status_faturamento==='cancelado' ? '#fee2e2' : '#fef9c3',
-                      color:      v.status_faturamento==='faturado' ? '#166534' : v.status_faturamento==='cancelado' ? '#991b1b' : '#854d0e' }}>
-                      {v.status_faturamento==='faturado' ? '✓ Faturado' : v.status_faturamento==='cancelado' ? 'Cancelado' : '⏳ Pendente'}
-                    </span>
+                  <td>{v.orgao_aderente || opv?.orgao || '—'}</td>
+                  <td>{v.operador_nome || '—'}</td>
+                  <td className="centro">{v.quantidade || '—'}</td>
+                  <td className="acn-txt-ok">{currentUser?.ver_valores === false ? '***' : fmtMoeda(v.valor_total)}</td>
+                  <td>{v.numero_nf || <span className="acn-txt-atencao">Pendente</span>}</td>
+                  <td>{fmtData(v.data_faturamento)}</td>
+                  <td>
+                    <Selo familia={v.status_faturamento==='faturado' ? 'ok' : v.status_faturamento==='cancelado' ? 'erro' : 'atencao'} ponto={false}>
+                      {v.status_faturamento==='faturado' ? 'Faturado' : v.status_faturamento==='cancelado' ? 'Cancelado' : 'Pendente'}
+                    </Selo>
                   </td>
-                  <td style={{ padding:'5px 7px' }}>
-                    <button className="acn-btn" style={{ background:'#475569' }}
+                  <td>
+                    <Botao pequeno variante="discreto" icone={mdiPencilOutline} title="Editar venda" aria-label="Editar venda"
                       onClick={() => {
                         setModalVenda({ op: opv, venda: v });
                         // os valores entram no campo já no formato brasileiro (1.234,56): o "salvar" trata todo ponto
                         // como separador de milhar, e o número cru do banco (1234.56) virava 123456 ao salvar sem mexer
                         // no valor — 100 vezes maior (achado na revisão dos formulários de edição, 29/09/2026)
                         setFormVenda({ ...VAZIO_VENDA, ...v, valor_unitario: fmtValorEdit(v.valor_unitario), valor_total: fmtValorEdit(v.valor_total) });
-                      }}>
-                      ✏️
-                    </button>
+                      }} />
                   </td>
                 </tr>
               );
@@ -2803,10 +2789,10 @@ function ColunaRolavel({ children }: any) {
           </tbody>
         </table>
         {vendasFiltradas.length > 0 && (
-          <div style={{ padding:'5px 10px', background:'#f8fafc', borderTop:'1px solid #e2e8f0', display:'flex', gap:12, fontSize:9, color:'#64748b' }}>
+          <div className="acn-crm-fat-rodape">
             <span>{vendasFiltradas.length} registros</span>
             {podeVerTotais && currentUser?.ver_valores !== false && (
-              <span>Total: <strong style={{ color:'#0f766e' }}>
+              <span>Total: <strong className="acn-txt-ok">
                 {fmtMoeda(vendasFiltradas.reduce((s,v)=>s+(v.valor_total||0),0))}
               </strong></span>
             )}
@@ -2825,41 +2811,22 @@ function ColunaRolavel({ children }: any) {
     <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAbrirTabContent(modalAbrir, abrirTabDir)}>Tentar de novo</Botao>}>Não foi possível ler esta aba ({erroAbrir}). Isso não quer dizer que não haja nada registrado.</Faixa>
   ) : null;
   const NotaLivreEditor = (
-    <div style={{ marginTop:16, border:`1px solid ${notaNaoLida ? '#fde047' : '#d1d5db'}`, borderRadius:6, overflow:'hidden',
-      boxShadow: notaNaoLida ? '0 0 0 3px #fefce8' : 'none' }}>
+    <div className={'acn-crm-nota' + (notaNaoLida ? ' nao-lida' : '')}>
       {erroNota && <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarNotaLivre(modalAbrir, abrirTabDir)}>Tentar de novo</Botao>}>Não foi possível ler a nota que já existe ({erroNota}). Para não apagá-la sem você ver, o botão "Salvar Nota" fica travado até a leitura dar certo.</Faixa>}
-      <div style={{ background:'#f1f5f9', padding:'5px 8px', borderBottom:'1px solid #d1d5db',
-        display:'flex', alignItems:'center', gap:4, flexWrap:'wrap' }}>
-        <span style={{ fontSize:9, fontWeight:700, color:'#475569', marginRight:4 }}>📌 Área Livre</span>
-        <button onMouseDown={e=>{ e.preventDefault(); document.execCommand('bold'); }}
-          title="Negrito" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, fontWeight:700, cursor:'pointer', lineHeight:1.4 }}>
-          <b>B</b>
-        </button>
-        <button onMouseDown={e=>{ e.preventDefault(); document.execCommand('italic'); }}
-          title="Itálico" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, fontStyle:'italic', cursor:'pointer', lineHeight:1.4 }}>
-          <i>I</i>
-        </button>
-        <button onMouseDown={e=>{ e.preventDefault(); inserirLinkNota(); }}
-          title="Inserir link" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          🔗
-        </button>
-        <button onMouseDown={e=>{ e.preventDefault(); abrirNotaImgRef.current?.click(); }}
-          title="Inserir imagem" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          📷
-        </button>
-        <input ref={abrirNotaImgRef} type="file" accept="image/*" style={{ display:'none' }}
+      <div className="acn-crm-nota-barra">
+        <span className="acn-crm-nota-tit"><Icone path={mdiPinOutline} size={14} />Área Livre</span>
+        <Botao pequeno icone={mdiFormatBold} title="Negrito" aria-label="Negrito" onMouseDown={e=>{ e.preventDefault(); document.execCommand('bold'); }} />
+        <Botao pequeno icone={mdiFormatItalic} title="Itálico" aria-label="Itálico" onMouseDown={e=>{ e.preventDefault(); document.execCommand('italic'); }} />
+        <Botao pequeno icone={mdiLinkVariant} title="Inserir link" aria-label="Inserir link" onMouseDown={e=>{ e.preventDefault(); inserirLinkNota(); }} />
+        <Botao pequeno icone={mdiImageOutline} title="Inserir imagem" aria-label="Inserir imagem" onMouseDown={e=>{ e.preventDefault(); abrirNotaImgRef.current?.click(); }} />
+        <input ref={abrirNotaImgRef} type="file" accept="image/*" className="acn-lic-oculto"
           onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagemNota(f); e.target.value=''; }} />
       </div>
       <div
         ref={abrirNotaRef}
         contentEditable
         suppressContentEditableWarning
-        style={{ minHeight:100, padding:'10px 12px', fontSize:12, color:'#1e293b',
-          lineHeight:1.6, outline:'none', background:'#fff', wordBreak:'break-word' }}
+        className="acn-crm-nota-editor"
         onPaste={e => {
           const items = Array.from(e.clipboardData?.items || []);
           // Se houver HTML no clipboard (ex: tabela colada do Excel/Word), deixa o browser
@@ -2873,13 +2840,10 @@ function ColunaRolavel({ children }: any) {
           }
         }}
       />
-      <div style={{ background:'#f8fafc', borderTop:'1px solid #e2e8f0', padding:'6px 10px', display:'flex', justifyContent:'flex-end' }}>
-        <button onClick={salvarNotaLivre} disabled={abrirNotaSalvando}
-          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4,
-            padding:'5px 14px', fontWeight:700, fontSize:10, cursor:'pointer',
-            opacity: abrirNotaSalvando ? .6 : 1 }}>
-          {abrirNotaSalvando ? 'Salvando...' : '💾 Salvar Nota'}
-        </button>
+      <div className="acn-crm-nota-rodape">
+        <Botao variante="primario" pequeno icone={mdiContentSaveOutline} onClick={salvarNotaLivre} disabled={abrirNotaSalvando}>
+          {abrirNotaSalvando ? 'Salvando...' : 'Salvar Nota'}
+        </Botao>
       </div>
     </div>
   );
@@ -3576,121 +3540,120 @@ function ColunaRolavel({ children }: any) {
 
       {/* ══════ MODAL CRIAR/EDITAR OP ══════ */}
       {modalOp !== null && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(540px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
-            <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#1e293b' }}>
-              {modalOp?.id ? '✏️ Editar' : '+ Nova'} Venda Direta
+        <div className="modal-overlay acn-crm-overlay acn-crm-ov-op">
+          <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-op" role="dialog" aria-label="Venda Direta">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={modalOp?.id ? mdiPencilOutline : mdiPlus} size={18} />{modalOp?.id ? 'Editar' : 'Nova'} Venda Direta</span>
             </div>
 
-            {/* Campos texto */}
-            {([
-              { label:'Título *', key:'titulo', placeholder:'Ex: Projeto Rádios SESP 2025' },
-              { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
-            ] as any[]).map(({ label, key, placeholder, type }) => (
-              <div key={key} style={{ marginBottom:8 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>{label}</div>
-                <input type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
-                  onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+            <div className="acn-modal-corpo acn-form-cheio">
+              {/* Campos texto */}
+              {([
+                { label:'Título *', key:'titulo', placeholder:'Ex: Projeto Rádios SESP 2025' },
+                { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
+              ] as any[]).map(({ label, key, placeholder, type }) => (
+                <div key={key}>
+                  <label className="acn-label">{label}</label>
+                  <input className="acn-input" type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
+                    onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))} />
+                </div>
+              ))}
+
+              <div>
+                <label className="acn-label">Cliente (opcional)</label>
+                <ClienteAutocomplete
+                  value={formOp._cliente_nome || ''}
+                  onChange={v => setFormOp(f => ({ ...f, _cliente_nome: v, cliente_id: null }))}
+                  onSelect={c => setFormOp(f => ({ ...f, _cliente_nome: c.nome, cliente_id: c.id }))}
+                  placeholder="Vincular cliente do cadastro..."
+                />
+                {formOp.cliente_id && (
+                  <div className="acn-ajuda acn-txt-ok">
+                    <Icone path={mdiCheck} size={12} /> Cliente vinculado — dados serão puxados automaticamente ao lançar OS
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="acn-label">Responsável / Operador</label>
+                <ColaboradorSelect
+                  value={formOp.responsavel_nome||''}
+                  onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))}
+                  placeholder="Selecione o operador"
                 />
               </div>
-            ))}
 
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cliente (opcional)</div>
-              <ClienteAutocomplete
-                value={formOp._cliente_nome || ''}
-                onChange={v => setFormOp(f => ({ ...f, _cliente_nome: v, cliente_id: null }))}
-                onSelect={c => setFormOp(f => ({ ...f, _cliente_nome: c.nome, cliente_id: c.id }))}
-                placeholder="Vincular cliente do cadastro..."
-              />
-              {formOp.cliente_id && (
-                <div style={{ fontSize:8, color:'#059669', marginTop:2 }}>
-                  ✓ Cliente vinculado — dados serão puxados automaticamente ao lançar OS
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Responsável / Operador</div>
-              <ColaboradorSelect
-                value={formOp.responsavel_nome||''}
-                onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))}
-                placeholder="Selecione o operador"
-              />
-            </div>
-
-            {/* ── Campos de contato ── */}
-            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:6 }}>📞 CONTATO</div>
-              <div style={{ marginBottom:5 }}>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
-                <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
-                  value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
+              {/* ── Campos de contato ── */}
+              <div className="acn-quadro tom-info">
+                <div className="acn-quadro-titulo acn-crm-tit-ic"><Icone path={mdiPhoneOutline} size={14} />CONTATO</div>
                 <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Telefone</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999"
-                    value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                  <label className="acn-label">Nome</label>
+                  <input className="acn-input" placeholder="Nome do contato"
+                    value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
                 </div>
-                <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>E-mail</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="email@exemplo.com"
-                    value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
-                </div>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-                <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>📅 Próximo Contato</div>
-                  <input type="date" className="acn-input" style={{ width:'100%' }}
-                    value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
-                </div>
-                <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>⏰ Hora do Contato</div>
-                  <input type="time" className="acn-input" style={{ width:'100%' }}
-                    value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
-                </div>
-              </div>
-            </div>
-
-            {/* ── Empresa / Faturamento ── */}
-            <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:5, padding:'8px 10px', marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:6 }}>🏢 EMPRESA / FATURAMENTO</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Empresa Faturante</div>
-                  <select className="acn-input" style={{ width:'100%' }}
-                    value={formOp.faturamento_empresa||'ACN'}
-                    onChange={e => setFormOp((f:any) => ({ ...f, faturamento_empresa: e.target.value }))}>
-                    <option value="ACN">ACN</option>
-                    <option value="Detech">Detech</option>
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>
-                    Valor ACN/Detech (R$)
-                    <span style={{ color:'#94a3b8', fontWeight:400, marginLeft:4 }}>parceiro</span>
+                <div className="acn-grade-2">
+                  <div>
+                    <label className="acn-label">Telefone</label>
+                    <input className="acn-input" placeholder="(99) 99999-9999"
+                      value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
                   </div>
-                  <input className="acn-input" style={{ width:'100%' }} type="text"
-                    placeholder="Valor que entra como receita"
-                    value={formOp.valor_acn||''}
-                    onChange={e => setFormOp((f:any) => ({ ...f, valor_acn: e.target.value }))} />
+                  <div>
+                    <label className="acn-label">E-mail</label>
+                    <input className="acn-input" placeholder="email@exemplo.com"
+                      value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
+                  </div>
+                </div>
+                <div className="acn-grade-2">
+                  <div>
+                    <label className="acn-label">Próximo Contato</label>
+                    <input type="date" className="acn-input"
+                      value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="acn-label">Hora do Contato</label>
+                    <input type="time" className="acn-input"
+                      value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
+                  </div>
                 </div>
               </div>
-              {(formOp.faturamento_empresa==='Detech' || formOp.classificacao==='Parceiro') && !formOp.valor_acn && (
-                <div style={{ fontSize:8, color:'#92400e', marginTop:4 }}>
-                  ⚠️ Preencha o Valor ACN/Detech para que o relatório contabilize corretamente a receita real.
+
+              {/* ── Empresa / Faturamento ── */}
+              <div className="acn-quadro tom-atencao">
+                <div className="acn-quadro-titulo acn-crm-tit-ic"><Icone path={mdiDomain} size={14} />EMPRESA / FATURAMENTO</div>
+                <div className="acn-grade-2">
+                  <div>
+                    <label className="acn-label">Empresa Faturante</label>
+                    <select className="acn-input"
+                      value={formOp.faturamento_empresa||'ACN'}
+                      onChange={e => setFormOp((f:any) => ({ ...f, faturamento_empresa: e.target.value }))}>
+                      <option value="ACN">ACN</option>
+                      <option value="Detech">Detech</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="acn-label">
+                      Valor ACN/Detech (R$)
+                      <span className="acn-fraco"> parceiro</span>
+                    </label>
+                    <input className="acn-input" type="text"
+                      placeholder="Valor que entra como receita"
+                      value={formOp.valor_acn||''}
+                      onChange={e => setFormOp((f:any) => ({ ...f, valor_acn: e.target.value }))} />
+                  </div>
                 </div>
-              )}
+                {(formOp.faturamento_empresa==='Detech' || formOp.classificacao==='Parceiro') && !formOp.valor_acn && (
+                  <div className="acn-ajuda atencao acn-crm-aviso-ic">
+                    <Icone path={mdiAlertOutline} size={12} />Preencha o Valor ACN/Detech para que o relatório contabilize corretamente a receita real.
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalOp(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
-                onClick={salvarOportunidade} disabled={salvando}>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setModalOp(null)}>Cancelar</Botao>
+              <Botao variante="primario" onClick={salvarOportunidade} disabled={salvando}>
                 {salvando ? 'Salvando...' : 'Salvar'}
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
