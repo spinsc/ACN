@@ -415,6 +415,22 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const abrirDragStartX   = useRef(0);
   const abrirDragStartW   = useRef(0);
 
+  // 7.62 (07/10/2026): leitura que falha não pode parecer "tela vazia" — cada uma guarda o motivo e a tela mostra uma faixa com "Tentar de novo"
+  const [erroCarga, setErroCarga]           = useState('');   // o quadro (estágios, oportunidades, checklist, vendas)
+  const [erroOpls, setErroOpls]             = useState('');   // a lista "OPs em aberto"
+  const [erroAbrir, setErroAbrir]           = useState('');   // andamento/documentos do card aberto
+  const [erroNota, setErroNota]             = useState('');   // a nota livre do card aberto — sem lê-la, salvar apagaria a que existe
+  const [erroAndamentoModal, setErroAndamentoModal] = useState('');   // a janela "Atualizar andamento"
+  const [erroRecentes, setErroRecentes]     = useState('');
+  const [erroVincular, setErroVincular]     = useState('');
+  // uma ação por vez nos botões que gravam: o estado "salvando" só muda no desenho seguinte e o clique duplo gravava duas vezes
+  const emAcao = useRef(new Set<string>());
+  const umaVez = (chave: string, fn: (...a: any[]) => Promise<any>) => async (...args: any[]) => {
+    if (emAcao.current.has(chave)) return undefined;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   // ── auditoria/colaboração (POC — infraestrutura global, ver AuditSystem.tsx) ──
   const { camposNaoLidos, naoLidos } = useUnreadChanges('crm_oportunidades', modalAbrir?.id, currentUser);
   // Um item de lista (comentário, documento) é "não lido" se existe uma linha em
@@ -448,20 +464,26 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       supabase.from('crm_checklist_progresso').select('*'),
       supabase.from('crm_vendas').select('*').order('criado_em', { ascending: false }),
     ]);
+    // 7.62: a leitura que falhava virava lista vazia — o quadro aparecia sem cartão nenhum, como se não houvesse oportunidade. Agora a lista que
+    // já estava na tela fica, e a faixa diz o motivo.
+    const falhou = [r1, r2, r3, r4, r5].find(r => r.error);
+    if (falhou) { setErroCarga(falhou.error.message); if (!silent) setLoading(false); return; }
+    setErroCarga('');
     setEstagios(r1.data || []);
     setOps(r2.data || []);
     setItens(r3.data || []);
     setProgresso(r4.data || []);
     setVendas(r5.data || []);
     // Carrega pedidos de compra vinculados ao CRM
-    const { data: pcData } = await supabase
+    const { data: pcData, error: errPc } = await supabase
       .from('pcp_pedidos_compra')
       .select('*')
       .not('oportunidade_id','is',null);
-    setPedidosCompra(pcData || []);
+    if (!errPc) setPedidosCompra(pcData || []);
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
-    const { data: oplsDosCards } = await supabase
+    const { data: oplsDosCards, error: errOplsCards } = await supabase
       .from('oples').select('id,opl,status_geral,crm_oportunidade_id,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
+    if (errOplsCards) { carregarMarkupPorProcesso('crm').then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
     const porCard: Record<string, string[]> = {};
     (oplsDosCards || []).forEach((o: any) => {
       const k = String(o.crm_oportunidade_id);
@@ -619,9 +641,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const [moved]   = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
 
-    await Promise.all(
+    const resultados = await Promise.all(
       reordered.map((c, i) => supabase.from('crm_oportunidades').update({ posicao: i + 1 }).eq('id', c.id))
     );
+    const falhaOrdem = resultados.find((r: any) => r.error);
+    if (falhaOrdem) mostrarAviso(`Não foi possível gravar a nova ordem dos cards\n${falhaOrdem.error.message}`, 'erro');   // 7.62: o erro era ignorado
     await load(true);
   };
 
@@ -645,7 +669,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     }
 
     if (estDest?.tipo === 'faturado') {
-      const { data: oplsVinc } = await supabase.from('oples').select('opl,status_geral').eq('crm_oportunidade_id', op.id);
+      const { data: oplsVinc, error: errVinc } = await supabase.from('oples').select('opl,status_geral').eq('crm_oportunidade_id', op.id);
+      if (errVinc) { mostrarAviso(`Não foi possível conferir as OPs deste card\n${errVinc.message}`, 'erro'); return; }   // 7.62: lia como "nenhuma OP vinculada" e mostrava o aviso errado
       const semOpl = !oplsVinc || oplsVinc.length === 0;
       const pendentes = (oplsVinc || []).filter(o => o.status_geral !== 'Faturado');
       if (semOpl || pendentes.length > 0) {
@@ -684,80 +709,90 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     await moverCard(op.id, estagioDestId);
   };
 
-  const moverCard = async (opId: string, estagioId: string) => {
-    await supabase.from('crm_oportunidades').update({
-      estagio_id: estagioId,
-      atualizado_em: new Date().toISOString(),
-    }).eq('id', opId);
-    await supabase.from('crm_historico').insert({
-      oportunidade_id: opId,
-      tipo: 'status_change',
-      estagio_novo: getEst(estagioId)?.nome,
-      usuario_nome: currentUser?.nome || 'Sistema',
-    });
-    await load();
+  // Devolve true se o card foi movido. 7.62: o erro da gravação era ignorado e quem chamava seguia como se tivesse movido (ex.: a janela "Vencido"
+  // criava a OP de um card que não saiu do lugar); o registro no histórico também. Uma troca por vez por card (o clique duplo gravava duas vezes).
+  const moverCard = async (opId: string, estagioId: string): Promise<boolean> => {
+    const r = await umaVez('mover-' + opId, async () => {
+      const { error } = await supabase.from('crm_oportunidades').update({
+        estagio_id: estagioId,
+        atualizado_em: new Date().toISOString(),
+      }).eq('id', opId);
+      if (error) { mostrarAviso(`Não foi possível mover o card\n${error.message}`, 'erro'); return false; }
+      const { error: errH } = await supabase.from('crm_historico').insert({
+        oportunidade_id: opId,
+        tipo: 'status_change',
+        estagio_novo: getEst(estagioId)?.nome,
+        usuario_nome: currentUser?.nome || 'Sistema',
+      });
+      if (errH) mostrarAviso(`O card foi movido, mas o registro no histórico não foi gravado\n${errH.message}`, 'atencao');
+      await load();
+      return true;
+    })();
+    return !!r;
   };
 
   // ─────────────────────────────────────────────────────────────────────────
   // ANDAMENTO
   // ─────────────────────────────────────────────────────────────────────────
-  const abrirAndamento = async (op: any) => {
-    setModalAndamento(op);
-    setNovoAndamento('');
+  const lerAndamentoCrm = async (opId: string) => {
     const { data, error: errH } = await supabase
       .from('crm_historico')
       .select('*')
-      .eq('oportunidade_id', op.id)
+      .eq('oportunidade_id', opId)
       .eq('tipo', 'observacao')
       .order('criado_em', { ascending: false });
     if (errH) {
       // criado_em pode não existir ainda — rodar SQL: ALTER TABLE crm_historico ADD COLUMN IF NOT EXISTS criado_em timestamptz DEFAULT now()
-      const { data: d2 } = await supabase.from('crm_historico').select('*').eq('oportunidade_id', op.id).eq('tipo', 'observacao');
+      const { data: d2, error: e2 } = await supabase.from('crm_historico').select('*').eq('oportunidade_id', opId).eq('tipo', 'observacao');
+      // 7.62: se a segunda leitura também falha, a janela dizia "Nenhuma atualização registrada ainda" — agora diz o motivo e mantém o que já estava
+      if (e2) { setErroAndamentoModal(e2.message); return; }
+      setErroAndamentoModal('');
       setAndamentoHistorico(d2 || []);
     } else {
+      setErroAndamentoModal('');
       setAndamentoHistorico(data || []);
     }
   };
 
-  const salvarAndamentoCrm = async () => {
+  const abrirAndamento = async (op: any) => {
+    setModalAndamento(op);
+    setNovoAndamento('');
+    setErroAndamentoModal('');
+    setAndamentoHistorico([]);
+    await lerAndamentoCrm(op.id);
+  };
+
+  const salvarAndamentoCrm = umaVez('andamento-crm', async () => {
     if (!novoAndamento.trim() || !modalAndamento) return;
     setSalvandoAndamento(true);
-    const { error } = await supabase.from('crm_historico').insert({
-      oportunidade_id: modalAndamento.id,
-      tipo: 'observacao',
-      texto: novoAndamento.trim(),
-      usuario_nome: currentUser?.nome || currentUser?.email || 'Usuário',
-      criado_em: new Date().toISOString(),
-    });
-    if (error) { alert('Erro ao salvar: ' + error.message); }
-    else {
-      // Salva @menções do andamento
-      await salvarMencoes({
+    try {
+      const { error } = await supabase.from('crm_historico').insert({
+        oportunidade_id: modalAndamento.id,
+        tipo: 'observacao',
         texto: novoAndamento.trim(),
-        mencionanteId: String(currentUser?.id || ''),
-        mencionanteNome: currentUser?.nome || 'Sistema',
-        contexto: 'crm',
-        contextoId: String(modalAndamento.id),
-        contextoDescricao: `CRM: ${modalAndamento.titulo || '—'}`,
-        campo: 'andamento_crm',
-        abaDestino: 'crm',
+        usuario_nome: currentUser?.nome || currentUser?.email || 'Usuário',
+        criado_em: new Date().toISOString(),
       });
-      setNovoAndamento('');
-      const { data: dH, error: eH } = await supabase
-        .from('crm_historico')
-        .select('*')
-        .eq('oportunidade_id', modalAndamento.id)
-        .eq('tipo', 'observacao')
-        .order('criado_em', { ascending: false });
-      if (eH) {
-        const { data: d2 } = await supabase.from('crm_historico').select('*').eq('oportunidade_id', modalAndamento.id).eq('tipo', 'observacao');
-        setAndamentoHistorico(d2 || []);
-      } else {
-        setAndamentoHistorico(dH || []);
+      if (error) { alert('Erro ao salvar: ' + error.message); }
+      else {
+        // Salva @menções do andamento
+        await salvarMencoes({
+          texto: novoAndamento.trim(),
+          mencionanteId: String(currentUser?.id || ''),
+          mencionanteNome: currentUser?.nome || 'Sistema',
+          contexto: 'crm',
+          contextoId: String(modalAndamento.id),
+          contextoDescricao: `CRM: ${modalAndamento.titulo || '—'}`,
+          campo: 'andamento_crm',
+          abaDestino: 'crm',
+        });
+        setNovoAndamento('');
+        await lerAndamentoCrm(modalAndamento.id);
       }
+    } finally {
+      setSalvandoAndamento(false);
     }
-    setSalvandoAndamento(false);
-  };
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // EMITIR PEDIDO DE COMPRA (vinculado ao card CRM)
@@ -767,13 +802,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // histórico do card, que só faz sentido quando a compra saiu de um card com id real (a tela "OPLs em Aberto" pode não ter oportunidade).
   const aoCriarCompraCrm = async (r: any) => {
     if (modalCompras?.id) {
-      await supabase.from('crm_historico').insert({
+      const { error: errNota } = await supabase.from('crm_historico').insert({
         oportunidade_id: modalCompras.id,
         tipo: 'observacao',
         texto: `Pedido de Compra ${r.numero_pedido} emitido para o setor Compras.`,
         usuario_nome: currentUser?.nome || 'Sistema',
         criado_em: new Date().toISOString(),
       });
+      if (errNota) mostrarAviso(`O pedido foi criado, mas a anotação no histórico do card não foi gravada\n${errNota.message}`, 'atencao');   // 7.62: o erro era ignorado
     }
     alert(`Pedido ${r.numero_pedido} criado! Acompanhe na aba Compras.`);
     setModalCompras(null);
@@ -786,7 +822,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // converte string vazia → null (evita 400 em colunas date/uuid no Postgres)
   const limpar = (v: any) => (v === '' || v === undefined) ? null : v;
 
-  const salvarOportunidade = async () => {
+  const salvarOportunidade = umaVez('salvar-oportunidade', async () => {
     if (!formOp.titulo?.trim()) return;
     setSalvando(true);
     const p: any = {
@@ -841,7 +877,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     }
     setModalOp(null);
     await load();
-  };
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // ABRIR MODAL — split-screen
@@ -896,10 +932,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const carregarRecentesCrm = useCallback(async () => {
     if (!currentUser?.id) return;
     setRecentesCrmLoading(true);
-    const { data } = await supabase.from('visualizacoes_recentes')
+    const { data, error } = await supabase.from('visualizacoes_recentes')
       .select('registro_id, visualizado_em')
       .eq('usuario_id', currentUser.id).eq('tipo', 'crm')
       .order('visualizado_em', { ascending: false }).limit(20);
+    if (error) { setErroRecentes(error.message); setRecentesCrmLoading(false); return; }   // 7.62: lia como "nenhuma oportunidade visualizada"
+    setErroRecentes('');
     setRecentesCrm(data || []);
     setRecentesCrmLoading(false);
   }, [currentUser?.id]);
@@ -951,7 +989,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplEditando(completa);
   };
 
-  const salvarOplEdit = async () => {
+  const salvarOplEdit = umaVez('salvar-opl-edit', async () => {
     if (!oplEditando) return;
     setOplSalvando(true);
 
@@ -1179,7 +1217,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       oldRow: Object.fromEntries(Object.keys(mudados).map(k => [k, oplEditando[k]])), newRow: mudados, user: currentUser });
     setOplEditando(null);
     fetchOplsEmAberto();
-  };
+  });
 
   // ── Lançamento em lote: chassi/placa/CNPJ de todas as unidades de um lote ──
   // (irmaos já vem ordenado por sufixo /01../NN pelo chamador)
@@ -1284,7 +1322,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     });
   };
 
-  const salvarLote = async () => {
+  const salvarLote = umaVez('salvar-lote', async () => {
     if (!modalLote) return;
     setLoteSalvando(true);
     const agora = new Date().toISOString();
@@ -1316,15 +1354,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (falhas.length) { mostrarAviso(`Algumas unidades não foram salvas\n${falhas.join('\n')}`, 'erro'); fetchOplsEmAberto(); return; }
     setModalLote(null);
     fetchOplsEmAberto();
-  };
+  });
 
   const fetchOplsEmAberto = async () => {
     setOplsLoading(true);
-    const { data } = await supabase
+    const { data, error: errLista } = await supabase
       .from('oples')
       .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,veiculo_id,' + COLUNAS_MARCOS_OP)
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
+    // 7.62: a leitura que falhava virava "Nenhuma OP em aberto" — e sumia com a lista que já estava na tela
+    if (errLista) { setErroOpls(errLista.message); setOplsLoading(false); return; }
+    setErroOpls('');
     const lista = data || [];
     setOplsEmAberto(lista);
     // Onde está / desde quando (Etapa 6.2). O histórico tem mais de 1.000 linhas e o servidor
@@ -1348,13 +1389,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // (a coluna obs_devolucao guarda só o motivo). Uma consulta para todas.
     const devolvidas = lista.filter((o: any) => o.status_geral === 'Devolvida Comercial').map((o: any) => o.id);
     if (devolvidas.length) {
-      const { data: logs } = await supabase.from('logs_movimentacao_opl')
+      const { data: logs, error: errLogs } = await supabase.from('logs_movimentacao_opl')
         .select('opl_id,setor,usuario_nome,data_hora')
         .in('opl_id', devolvidas).eq('status_novo', 'Devolvida Comercial')
         .order('data_hora', { ascending: false });
       const porOpl: Record<string, any> = {};
       (logs || []).forEach((l: any) => { if (!porOpl[l.opl_id]) porOpl[l.opl_id] = l; }); // a mais recente
-      setDevolucoesOpl(porOpl);
+      if (!errLogs) setDevolucoesOpl(porOpl);   // 7.62: sem o log, "reenviar" iria sempre para a Engenharia — mantém o que havia
     } else {
       setDevolucoesOpl({});
     }
@@ -1368,88 +1409,102 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const fetchAbrirTabContent = async (op: any, tab: string) => {
     setAbrirDocs([]);
     setAbrirAndamentoHist([]);
+    // 7.62: a leitura que falhava virava "Nenhuma atualização/nenhum documento registrado" — agora a aba mostra o motivo
     if (tab === 'andamento') {
-      const { data } = await supabase.from('crm_historico')
+      const { data, error } = await supabase.from('crm_historico')
         .select('*').eq('oportunidade_id', op.id).eq('tipo', 'observacao')
         .order('criado_em', { ascending: false });
+      if (error) { setErroAbrir(error.message); return; }
+      setErroAbrir('');
       setAbrirAndamentoHist(data || []);
     } else {
-      const { data } = await supabase.from('licitacao_documentos')
+      const { data, error } = await supabase.from('licitacao_documentos')
         .select('*').eq('licitacao_id', op.id).eq('categoria', tab)
         .order('criado_em', { ascending: false });
+      if (error) { setErroAbrir(error.message); return; }
+      setErroAbrir('');
       setAbrirDocs(data || []);
     }
   };
 
-  const salvarAbrirAndamento = async () => {
+  const salvarAbrirAndamento = umaVez('abrir-andamento', async () => {
     if (!abrirNovoText.trim() || !modalAbrir) return;
     setAbrirSalvandoDoc(true);
-    const agora = new Date().toISOString();
-    const { data: novoAndamento } = await supabase.from('crm_historico').insert([{
-      oportunidade_id: modalAbrir.id,
-      tipo: 'observacao',
-      texto: abrirNovoText,
-      usuario_nome: currentUser?.nome,
-      criado_em: agora,
-    }]).select('id').single();
-    await salvarMencoes({
-      texto: abrirNovoText,
-      mencionanteId: String(currentUser?.id || ''),
-      mencionanteNome: currentUser?.nome || 'Sistema',
-      contexto: 'crm',
-      contextoId: String(modalAbrir.id),
-      contextoDescricao: `CRM: ${modalAbrir.titulo || '—'}`,
-      campo: 'andamento_crm',
-      abaDestino: 'crm',
-    });
-    logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
-      oldRow: { andamento: null }, newRow: { andamento: abrirNovoText.slice(0, 120) }, user: currentUser,
-      metadata: { ref_id: novoAndamento?.id } });
-    setAbrirNovoText('');
-    await fetchAbrirTabContent(modalAbrir, 'andamento');
-    setAbrirSalvandoDoc(false);
-  };
+    try {
+      const agora = new Date().toISOString();
+      const { data: novoAndamento, error } = await supabase.from('crm_historico').insert([{
+        oportunidade_id: modalAbrir.id,
+        tipo: 'observacao',
+        texto: abrirNovoText,
+        usuario_nome: currentUser?.nome,
+        criado_em: agora,
+      }]).select('id').single();
+      // 7.62: o erro era ignorado — as @menções e o histórico de alterações saíam como se o andamento existisse
+      if (error) { mostrarAviso(`Não foi possível registrar o andamento\n${error.message}`, 'erro'); return; }
+      await salvarMencoes({
+        texto: abrirNovoText,
+        mencionanteId: String(currentUser?.id || ''),
+        mencionanteNome: currentUser?.nome || 'Sistema',
+        contexto: 'crm',
+        contextoId: String(modalAbrir.id),
+        contextoDescricao: `CRM: ${modalAbrir.titulo || '—'}`,
+        campo: 'andamento_crm',
+        abaDestino: 'crm',
+      });
+      logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+        oldRow: { andamento: null }, newRow: { andamento: abrirNovoText.slice(0, 120) }, user: currentUser,
+        metadata: { ref_id: novoAndamento?.id } });
+      setAbrirNovoText('');
+      await fetchAbrirTabContent(modalAbrir, 'andamento');
+    } finally {
+      setAbrirSalvandoDoc(false);
+    }
+  });
 
-  const salvarAbrirDoc = async () => {
+  const salvarAbrirDoc = umaVez('abrir-doc', async () => {
     if (!modalAbrir || (!abrirUploadFile && !abrirUploadDesc.trim())) return;
     setAbrirSalvandoDoc(true);
-    const agora = new Date().toISOString();
-    let url = '';
-    let nome = '';
-    if (abrirUploadFile) {
-      const ext = abrirUploadFile.name.split('.').pop();
-      const path = `crm-docs/${modalAbrir.id}/${abrirTabDir}/${Date.now()}.${ext}`;
-      // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
-      const ct = contentTypeUpload(abrirUploadFile);
-      const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
-      if (upErr) {
-        alert(`Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);
-        setAbrirSalvandoDoc(false);
-        return;
+    try {
+      const agora = new Date().toISOString();
+      let url = '';
+      let nome = '';
+      if (abrirUploadFile) {
+        const ext = abrirUploadFile.name.split('.').pop();
+        const path = `crm-docs/${modalAbrir.id}/${abrirTabDir}/${Date.now()}.${ext}`;
+        // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
+        const ct = contentTypeUpload(abrirUploadFile);
+        const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
+        if (upErr) {
+          alert(`Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);
+          return;
+        }
+        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+        url = pub.publicUrl;
+        nome = abrirUploadFile.name;
       }
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-      url = pub.publicUrl;
-      nome = abrirUploadFile.name;
+      const { data: novoDoc, error: errDoc } = await supabase.from('licitacao_documentos').insert([{
+        licitacao_id: modalAbrir.id,
+        categoria: abrirTabDir,
+        nome: nome || abrirUploadDesc,
+        url: url || null,
+        conteudo: abrirUploadDesc || null,
+        criado_por: currentUser?.email,
+        criado_por_nome: currentUser?.nome,
+        criado_em: agora,
+      }]).select('id').single();
+      // 7.62: o erro era ignorado — o histórico de alterações dizia que o documento existia e o campo era limpo, perdendo a legenda digitada
+      if (errDoc) { mostrarAviso(`Não foi possível registrar o documento\n${errDoc.message}`, 'erro'); return; }
+      logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+        oldRow: { [abrirTabDir]: null }, newRow: { [abrirTabDir]: nome || abrirUploadDesc.slice(0, 80) }, user: currentUser,
+        formatters: { [abrirTabDir]: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id } });
+      setAbrirUploadFile(null);
+      setAbrirUploadDesc('');
+      if (abrirUploadRef.current) abrirUploadRef.current.value = '';
+      await fetchAbrirTabContent(modalAbrir, abrirTabDir);
+    } finally {
+      setAbrirSalvandoDoc(false);
     }
-    const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
-      licitacao_id: modalAbrir.id,
-      categoria: abrirTabDir,
-      nome: nome || abrirUploadDesc,
-      url: url || null,
-      conteudo: abrirUploadDesc || null,
-      criado_por: currentUser?.email,
-      criado_por_nome: currentUser?.nome,
-      criado_em: agora,
-    }]).select('id').single();
-    logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
-      oldRow: { [abrirTabDir]: null }, newRow: { [abrirTabDir]: nome || abrirUploadDesc.slice(0, 80) }, user: currentUser,
-      formatters: { [abrirTabDir]: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id } });
-    setAbrirUploadFile(null);
-    setAbrirUploadDesc('');
-    if (abrirUploadRef.current) abrirUploadRef.current.value = '';
-    await fetchAbrirTabContent(modalAbrir, abrirTabDir);
-    setAbrirSalvandoDoc(false);
-  };
+  });
 
   const excluirAbrirDoc = async (id: string, tabela: string, label?: string) => {
     // Mensagem específica (mostra o que vai ser apagado) reduz o risco de
@@ -1457,38 +1512,64 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // notar, porque "Excluir este registro?" genérico não dizia qual era.
     const msg = label ? `Excluir "${label}"?` : 'Excluir este registro?';
     if (!await confirmar(msg)) return;
-    await supabase.from(tabela).delete().eq('id', id);
-    await fetchAbrirTabContent(modalAbrir, abrirTabDir);
+    await umaVez('excluir-' + id, async () => {
+      const { error } = await supabase.from(tabela).delete().eq('id', id);
+      // 7.62: o erro era ignorado — a lista era relida e o registro continuava lá, sem dizer por quê
+      if (error) { mostrarAviso(`Não foi possível excluir\n${error.message}`, 'erro'); return; }
+      await fetchAbrirTabContent(modalAbrir, abrirTabDir);
+    })();
   };
 
   // ── Nota Livre (editor rico) ──
   const carregarNotaLivre = async (op: any, tab: string) => {
-    const { data } = await supabase.from('licitacao_documentos')
+    // a mais recente (se por qualquer motivo houver duas linhas, "maybeSingle" sozinho falhava e a nota aparecia vazia)
+    const { data, error } = await supabase.from('licitacao_documentos')
       .select('conteudo').eq('licitacao_id', op.id).eq('categoria', 'nota__' + tab).eq('nome', '__nota_livre__')
+      .order('criado_em', { ascending: false }).limit(1)
       .maybeSingle();
+    // 7.62: a leitura que falhava deixava o editor vazio — e salvar APAGAVA a nota que existia. Agora o editor avisa e o salvar fica travado.
+    if (error) { setErroNota(error.message); return; }
+    setErroNota('');
     const html = data?.conteudo || '';
     if (abrirNotaRef.current) abrirNotaRef.current.innerHTML = html;
   };
 
-  const salvarNotaLivre = async () => {
+  // Antes: apagava a nota e depois gravava a nova — se a gravação falhasse, a nota que existia estava perdida; e os erros eram ignorados.
+  // Agora: grava a nova primeiro, só então apaga a(s) anterior(es).
+  const salvarNotaLivre = umaVez('nota-livre', async () => {
     if (!modalAbrir || !abrirNotaRef.current) return;
+    if (erroNota) { mostrarAviso('Não dá para salvar a nota\nA nota que já existe não foi lida (' + erroNota + '); salvar agora a substituiria sem você ver. Use "Tentar de novo" acima do editor.', 'erro'); return; }
     setAbrirNotaSalvando(true);
-    const html = abrirNotaRef.current.innerHTML;
-    const cat = 'nota__' + abrirTabDir;
-    await supabase.from('licitacao_documentos').delete()
-      .eq('licitacao_id', modalAbrir.id).eq('categoria', cat).eq('nome', '__nota_livre__');
-    if (html && html.replace(/<br\s*\/?>/gi,'').trim()) {
-      await supabase.from('licitacao_documentos').insert([{
-        licitacao_id: modalAbrir.id, categoria: cat, nome: '__nota_livre__',
-        conteudo: html, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
-        criado_em: new Date().toISOString(),
-      }]);
-      logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
-        oldRow: { [`nota_${abrirTabDir}`]: null }, newRow: { [`nota_${abrirTabDir}`]: 'editada' }, user: currentUser,
-        formatters: { [`nota_${abrirTabDir}`]: () => '📝 Área Livre editada' } });
+    try {
+      const html = abrirNotaRef.current.innerHTML;
+      const cat = 'nota__' + abrirTabDir;
+      const { data: antigas, error: errLer } = await supabase.from('licitacao_documentos').select('id')
+        .eq('licitacao_id', modalAbrir.id).eq('categoria', cat).eq('nome', '__nota_livre__');
+      if (errLer) { mostrarAviso(`Não foi possível salvar a nota\n${errLer.message}`, 'erro'); return; }
+      const idsAntigos = (antigas || []).map((r: any) => r.id);
+      const temTexto = !!(html && html.replace(/<br\s*\/?>/gi,'').trim());
+      if (temTexto) {
+        const { error: errNova } = await supabase.from('licitacao_documentos').insert([{
+          licitacao_id: modalAbrir.id, categoria: cat, nome: '__nota_livre__',
+          conteudo: html, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+          criado_em: new Date().toISOString(),
+        }]);
+        if (errNova) { mostrarAviso(`A nota NÃO foi salva — a que existia continua como estava\n${errNova.message}`, 'erro'); return; }
+      }
+      if (idsAntigos.length) {
+        const { error: errDel } = await supabase.from('licitacao_documentos').delete().in('id', idsAntigos);
+        if (errDel) mostrarAviso(temTexto ? `A nota foi salva, mas a versão anterior não foi removida\n${errDel.message}` : `Não foi possível apagar a nota\n${errDel.message}`, temTexto ? 'atencao' : 'erro');
+        if (errDel && !temTexto) return;
+      }
+      if (temTexto) {
+        logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+          oldRow: { [`nota_${abrirTabDir}`]: null }, newRow: { [`nota_${abrirTabDir}`]: 'editada' }, user: currentUser,
+          formatters: { [`nota_${abrirTabDir}`]: () => '📝 Área Livre editada' } });
+      }
+    } finally {
+      setAbrirNotaSalvando(false);
     }
-    setAbrirNotaSalvando(false);
-  };
+  });
 
   const inserirImagemNota = async (file: File) => {
     if (!modalAbrir) return;
@@ -1511,7 +1592,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#0369a1;text-decoration:underline;">${label}</a>`);
   };
 
-  const salvarAbrirForm = async () => {
+  const salvarAbrirForm = umaVez('salvar-abrir-form', async () => {
     if (!formOp.titulo?.trim() || !modalAbrir) return;
     if (isGanho(getEst(formOp.estagio_id)) && !formOp.empresa_vencedora) {
       alert('Selecione a empresa vencedora.');
@@ -1527,8 +1608,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         alert('Nº do PV precisa ter 4 dígitos.');
         return;
       }
-      const { data: dupPv } = await supabase.from('crm_oportunidades').select('id')
+      const { data: dupPv, error: errDupPv } = await supabase.from('crm_oportunidades').select('id')
         .eq('numero_pv', pv).neq('id', modalAbrir.id).maybeSingle();
+      // 7.62: sem conseguir conferir se o PV já existe, não grava às cegas
+      if (errDupPv) { mostrarAviso(`Não foi possível conferir se o PV já existe\n${errDupPv.message}`, 'erro'); return; }
       if (dupPv) {
         alert('Já existe outra oportunidade com esse número de PV.');
         return;
@@ -1539,7 +1622,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // atribuição continua livre. Confere o valor do BANCO — o da tela pode
     // estar desatualizado (outra pessoa pode ter atribuído o PV nesse meio-tempo).
     if (!podeAlterarNumeroOplPv(currentUser)) {
-      const { data: pvBanco } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', modalAbrir.id).maybeSingle();
+      const { data: pvBanco, error: errPvBanco } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', modalAbrir.id).maybeSingle();
+      if (errPvBanco) { mostrarAviso(`Não foi possível conferir o PV gravado\n${errPvBanco.message}`, 'erro'); return; }
       const salvo = String(pvBanco?.numero_pv || '').trim();
       if (salvo && salvo !== (numeroPvFinal || '')) {
         alert(`O PV ${salvo} já foi atribuído a esta oportunidade.\n\nSó administradores e gerentes podem alterar o número do PV.`);
@@ -1598,7 +1682,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // OBS: crm_historico já é preenchido automaticamente por trigger (tg_crm_audit_estagio)
     // sempre que estagio_id muda, então nenhum insert manual é necessário aqui.
     const entrouEmVencidoAgora = isGanho(getEst(formOp.estagio_id)) && !isGanho(getEst(modalAbrir.estagio_id));
-    await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
+    const { error: errSalvar } = await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
+    // 7.62: o erro era ignorado — o histórico de alterações registrava a mudança e, se o card entrasse em Vencido, a OP era criada, sem o card ter gravado
+    if (errSalvar) { setSalvando(false); mostrarAviso(`Não foi possível salvar as alterações\n${errSalvar.message}`, 'erro'); return; }
     // Auditoria/colaboração (POC — ver AuditSystem.tsx): grava o diff campo a campo.
     logChange({
       module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
@@ -1619,30 +1705,36 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     } else if (avisoOp) {
       mostrarAviso(avisoOp.texto, avisoOp.tom);
     }
-  };
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // TOGGLE CHECKLIST
   // ─────────────────────────────────────────────────────────────────────────
   const toggleItem = async (opId: string, itemId: string, atual: boolean) => {
-    const ex = progresso.find(p => p.oportunidade_id === opId && p.item_id === itemId);
-    if (ex) {
-      await supabase.from('crm_checklist_progresso').update({
-        concluido: !atual,
-        concluido_por: currentUser?.nome,
-        concluido_em: !atual ? new Date().toISOString() : null,
-      }).eq('id', ex.id);
-    } else {
-      await supabase.from('crm_checklist_progresso').insert({
-        oportunidade_id: opId, item_id: itemId, concluido: true,
-        concluido_por: currentUser?.nome, concluido_em: new Date().toISOString(),
-      });
-    }
-    const { data } = await supabase.from('crm_checklist_progresso').select('*').eq('oportunidade_id', opId);
-    setProgresso(prev => [...prev.filter(p => p.oportunidade_id !== opId), ...(data || [])]);
-    if (modalGate?.op?.id === opId) {
-      setModalGate((g: any) => g ? { ...g, prog: data || [] } : null);
-    }
+    await umaVez('item-' + opId + '-' + itemId, async () => {
+      const ex = progresso.find(p => p.oportunidade_id === opId && p.item_id === itemId);
+      // 7.62: o erro era ignorado — o item parecia marcado/desmarcado e a janela liberava (ou travava) o avanço de estágio por isso
+      if (ex) {
+        const { error } = await supabase.from('crm_checklist_progresso').update({
+          concluido: !atual,
+          concluido_por: currentUser?.nome,
+          concluido_em: !atual ? new Date().toISOString() : null,
+        }).eq('id', ex.id);
+        if (error) { mostrarAviso(`Não foi possível gravar o item do checklist\n${error.message}`, 'erro'); return; }
+      } else {
+        const { error } = await supabase.from('crm_checklist_progresso').insert({
+          oportunidade_id: opId, item_id: itemId, concluido: true,
+          concluido_por: currentUser?.nome, concluido_em: new Date().toISOString(),
+        });
+        if (error) { mostrarAviso(`Não foi possível gravar o item do checklist\n${error.message}`, 'erro'); return; }
+      }
+      const { data, error: errLer } = await supabase.from('crm_checklist_progresso').select('*').eq('oportunidade_id', opId);
+      if (errLer) { mostrarAviso(`O item foi gravado, mas não deu para reler o checklist\n${errLer.message}`, 'atencao'); return; }
+      setProgresso(prev => [...prev.filter(p => p.oportunidade_id !== opId), ...(data || [])]);
+      if (modalGate?.op?.id === opId) {
+        setModalGate((g: any) => g ? { ...g, prog: data || [] } : null);
+      }
+    })();
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1668,11 +1760,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       return { opl: null, aviso: { tom: 'atencao', texto: 'A OP não foi criada sozinha\nEsta oportunidade não tem PV atribuído, então não deu para gerar o número. Use "Lançar OP" no menu do card.' } };
     }
 
-    const { data: jaExiste } = await supabase.from('oples').select('id').eq('crm_oportunidade_id', op.id).limit(1).maybeSingle();
+    const { data: jaExiste, error: errJaExiste } = await supabase.from('oples').select('id').eq('crm_oportunidade_id', op.id).limit(1).maybeSingle();
+    // 7.62: sem conseguir conferir se já existe OP, não cria (podia duplicar)
+    if (errJaExiste) return { opl: null, aviso: { tom: 'erro', texto: `A OP não foi criada sozinha\nNão deu para conferir se este card já tem OP (${errJaExiste.message}). Use "Lançar OP" no menu do card.` } };
     if (jaExiste) return { opl: null, aviso: null }; // já tem OP vinculada — não duplica
 
     const baseOpl = numOpDePv(empresa, op.numero_pv);
-    const { data: colisao } = await supabase.from('oples').select('id').eq('opl', baseOpl).maybeSingle();
+    const { data: colisao, error: errColisao } = await supabase.from('oples').select('id').eq('opl', baseOpl).maybeSingle();
+    if (errColisao) return { opl: null, aviso: { tom: 'erro', texto: `A OP ${baseOpl} não foi criada sozinha\nNão deu para conferir se o número já está em uso (${errColisao.message}). Use "Lançar OP" no menu do card.` } };
     if (colisao) {
       return { opl: null, aviso: { tom: 'atencao', texto: `A OP ${baseOpl} não foi criada sozinha\nEsse número já está em uso por outra OP. Use "Lançar OP" no menu do card e informe outro número.` } };
     }
@@ -1764,7 +1859,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // GATE ENVIADO — PV + temperatura + contato obrigatório
   // ─────────────────────────────────────────────────────────────────────────
-  const confirmarEnviado = async () => {
+  const confirmarEnviado = umaVez('confirmar-enviado', async () => {
     if (!modalEnviado) return;
     const pv = pvTexto.replace(/\D/g, '').padStart(4, '0').slice(0, 4);
     if (!/^\d{4}$/.test(pv)) { alert('Informe um número de PV com 4 dígitos.'); return; }
@@ -1776,7 +1871,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
     // PV já atribuído: só Admin e gerentes trocam (mesma regra do painel do card)
     if (!podeAlterarNumeroOplPv(currentUser)) {
-      const { data: pvBanco } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', op.id).maybeSingle();
+      const { data: pvBanco, error: errPvBanco } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', op.id).maybeSingle();
+      if (errPvBanco) { mostrarAviso(`Não foi possível conferir o PV gravado\n${errPvBanco.message}`, 'erro'); setSalvandoEnviado(false); return; }
       const salvo = String(pvBanco?.numero_pv || '').trim();
       if (salvo && salvo !== pv) {
         alert(`O PV ${salvo} já foi atribuído a esta oportunidade.\n\nSó administradores e gerentes podem alterar o número do PV.`);
@@ -1785,14 +1881,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       }
     }
 
-    const { data: dup } = await supabase.from('crm_oportunidades').select('id,titulo').eq('numero_pv', pv).neq('id', op.id).maybeSingle();
+    const { data: dup, error: errDup } = await supabase.from('crm_oportunidades').select('id,titulo').eq('numero_pv', pv).neq('id', op.id).maybeSingle();
+    if (errDup) { mostrarAviso(`Não foi possível conferir se o PV já existe\n${errDup.message}`, 'erro'); setSalvandoEnviado(false); return; }
     if (dup) {
       alert(`PV ${pv} já está em uso em "${dup.titulo}". Informe outro número.`);
       setSalvandoEnviado(false);
       return;
     }
 
-    await supabase.from('crm_oportunidades').update({
+    // 7.62: o erro desta gravação era ignorado e a agenda e o histórico eram criados mesmo com o card parado no estágio de antes
+    const { error: errCard } = await supabase.from('crm_oportunidades').update({
       estagio_id:        modalEnviado.estagioDestId,
       numero_pv:         pv,
       temperatura:       temperaturaSel,
@@ -1800,13 +1898,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       hora_prox_contato: enviadoContatoHora || null,
       atualizado_em:      new Date().toISOString(),
     }).eq('id', op.id);
+    if (errCard) { mostrarAviso(`Não foi possível enviar a proposta\n${errCard.message}`, 'erro'); setSalvandoEnviado(false); return; }
 
     let respEmail = currentUser?.email;
     if (op.responsavel_nome && op.responsavel_nome !== currentUser?.nome) {
       const { data: respUser } = await supabase.from('auth_usuarios').select('email').eq('nome', op.responsavel_nome).maybeSingle();
       if (respUser?.email) respEmail = respUser.email;
     }
-    await supabase.from('agenda_compromissos').insert([{
+    const { error: errAgenda } = await supabase.from('agenda_compromissos').insert([{
       setor:         'comercial',
       usuario_email: respEmail,
       usuario_nome:  op.responsavel_nome || currentUser?.nome,
@@ -1815,7 +1914,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       data_hora:     new Date(`${enviadoContatoData}T${enviadoContatoHora || '09:00'}:00`).toISOString(),
     }]);
 
-    await supabase.from('crm_historico').insert({
+    const { error: errHist } = await supabase.from('crm_historico').insert({
       oportunidade_id: op.id, tipo: 'status_change',
       estagio_novo: getEst(modalEnviado.estagioDestId)?.nome,
       conteudo: `PV ${pv} atribuído · Temperatura: ${temperaturaSel} · Próximo contato: ${enviadoContatoData}${enviadoContatoHora ? ' ' + enviadoContatoHora : ''}`,
@@ -1826,18 +1925,58 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setModalEnviado(null);
     setPvTexto(''); setTemperaturaSel(''); setEnviadoContatoData(''); setEnviadoContatoHora('');
     await load();
-  };
+    const faltou: string[] = [];
+    if (errAgenda) faltou.push(`o compromisso na agenda não foi criado (${errAgenda.message})`);
+    if (errHist) faltou.push(`o registro no histórico não foi gravado (${errHist.message})`);
+    if (faltou.length) mostrarAviso(`A proposta foi enviada, mas ${faltou.join(' e ')}`, 'atencao');
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // EDITAR TEMPERATURA A QUALQUER MOMENTO (fora do gate Enviado)
   // ─────────────────────────────────────────────────────────────────────────
-  const confirmarEdicaoTemp = async () => {
+  // Janela "Qual empresa venceu?". 7.62: se o card não saía do lugar (gravação recusada), a OP era criada do mesmo jeito; e a gravação da empresa
+  // vencedora também tinha o erro ignorado. Agora para no primeiro que falha e diz o que ficou feito. Uma vez só (o clique duplo criava duas OPs).
+  const escolherEmpresaVencedora = umaVez('empresa-vencedora', async (emp: 'ACN'|'DETECH') => {
+    if (!modalEmpresaVenc) return;
+    const opVenc = modalEmpresaVenc.op;
+    const moveu = await moverCard(opVenc.id, modalEmpresaVenc.estagioDestId);
+    if (!moveu) return;   // o aviso já foi dado; a janela fica aberta para tentar de novo
+    const { error: errEmp } = await supabase.from('crm_oportunidades').update({ empresa_vencedora: emp }).eq('id', opVenc.id);
+    setModalEmpresaVenc(null);
+    if (errEmp) {
+      await load();
+      mostrarAviso(`O card foi para "Vencido", mas a empresa vencedora não foi gravada\n${errEmp.message}. A OP não foi criada: abra o card, informe a empresa e salve.`, 'erro');
+      return;
+    }
+    // OP nasce sozinha, já numerada a partir do PV (A/D+PV+.+MMAA)
+    // e entra direto no fluxo normal — sem precisar de "Lançar OP" manual.
+    const { opl: oplCriada, aviso } = await criarOpAutomatica(opVenc, emp);
+    await load();
+    if (oplCriada) {
+      alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+    } else if (aviso) {
+      mostrarAviso(aviso.texto, aviso.tom);
+    }
+  });
+
+  // Liga (ou desliga, com null) o card a um processo licitatório. 7.62: o erro era ignorado e a janela fechava como se tivesse ligado.
+  const ligarProcesso = umaVez('ligar-processo', async (licitacaoId: string | null) => {
+    if (!modalVincularLicit) return;
+    const { error } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: licitacaoId }).eq('id', modalVincularLicit.id);
+    if (error) { mostrarAviso(`Não foi possível ${licitacaoId ? 'vincular' : 'desvincular'} o processo\n${error.message}`, 'erro'); return; }
+    setModalVincularLicit(null);
+    await load();
+  });
+
+  const confirmarEdicaoTemp = umaVez('editar-temperatura', async () => {
     if (!modalEditarTemp || !tempEditSel) return;
     setSalvandoTempEdit(true);
-    await supabase.from('crm_oportunidades').update({
+    const { error } = await supabase.from('crm_oportunidades').update({
       temperatura: tempEditSel, atualizado_em: new Date().toISOString(),
     }).eq('id', modalEditarTemp.id);
-    await supabase.from('crm_historico').insert({
+    // 7.62: o erro era ignorado — a janela fechava e o histórico dizia "Temperatura alterada" sem ter alterado
+    if (error) { setSalvandoTempEdit(false); mostrarAviso(`Não foi possível salvar a temperatura\n${error.message}`, 'erro'); return; }
+    const { error: errHist } = await supabase.from('crm_historico').insert({
       oportunidade_id: modalEditarTemp.id, tipo: 'observacao',
       conteudo: `Temperatura alterada para: ${tempEditSel}`, usuario_nome: currentUser?.nome,
     });
@@ -1845,7 +1984,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setModalEditarTemp(null);
     setTempEditSel('');
     await load();
-  };
+    if (errHist) mostrarAviso(`A temperatura foi salva, mas o registro no histórico não foi gravado\n${errHist.message}`, 'atencao');
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // TIPO DE NEGÓCIO (Revenda/Venda/Pós-vendas) — pedido do Rafael Nunes (dono
@@ -1855,9 +1995,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   const atualizarTipoNegocio = async (op: any, novoTipo: string | null) => {
     setOps(prev => prev.map(o => o.id === op.id ? { ...o, tipo_negocio: novoTipo } : o)); // otimista
-    await supabase.from('crm_oportunidades').update({
+    const { error } = await supabase.from('crm_oportunidades').update({
       tipo_negocio: novoTipo, atualizado_em: new Date().toISOString(),
     }).eq('id', op.id);
+    // 7.62: o erro era ignorado — o card mostrava o tipo novo até a próxima leitura trazer o de antes de volta
+    if (error) {
+      setOps(prev => prev.map(o => o.id === op.id ? { ...o, tipo_negocio: op.tipo_negocio } : o));
+      mostrarAviso(`Não foi possível salvar o tipo de negócio\n${error.message}`, 'erro');
+      return;
+    }
     if (novoTipo !== op.tipo_negocio) {
       await supabase.from('crm_historico').insert({
         oportunidade_id: op.id, tipo: 'observacao',
@@ -1869,51 +2015,59 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // MOTIVO PERDA
   // ─────────────────────────────────────────────────────────────────────────
-  const confirmarPerda = async () => {
+  const confirmarPerda = umaVez('confirmar-perda', async () => {
     if (!modalMotivo) return;
-    await supabase.from('crm_oportunidades').update({
+    const { error } = await supabase.from('crm_oportunidades').update({
       estagio_id: modalMotivo.estagioDestId,
       motivo_perda: motivoTexto,
       atualizado_em: new Date().toISOString(),
     }).eq('id', modalMotivo.op.id);
-    await supabase.from('crm_historico').insert({
+    // 7.62: o erro era ignorado — a janela fechava como se o card tivesse ido para Perdido
+    if (error) { mostrarAviso(`Não foi possível registrar a perda\n${error.message}`, 'erro'); return; }
+    const { error: errHist } = await supabase.from('crm_historico').insert({
       oportunidade_id: modalMotivo.op.id, tipo: 'status_change',
       estagio_novo: getEst(modalMotivo.estagioDestId)?.nome,
       conteudo: motivoTexto, usuario_nome: currentUser?.nome,
     });
     setModalMotivo(null);
     await load();
-  };
+    if (errHist) mostrarAviso(`A perda foi registrada, mas o histórico não foi gravado\n${errHist.message}`, 'atencao');
+  });
 
-  const confirmarDesistencia = async () => {
+  const confirmarDesistencia = umaVez('confirmar-desistencia', async () => {
     if (!modalDesist) return;
-    await supabase.from('crm_oportunidades').update({
+    const { error } = await supabase.from('crm_oportunidades').update({
       estagio_id:          modalDesist.estagioDestId,
       motivo_desistencia:  desistTexto,
       atualizado_em:       new Date().toISOString(),
     }).eq('id', modalDesist.op.id);
-    await supabase.from('crm_historico').insert({
+    if (error) { mostrarAviso(`Não foi possível registrar a desistência\n${error.message}`, 'erro'); return; }
+    const { error: errHist } = await supabase.from('crm_historico').insert({
       oportunidade_id: modalDesist.op.id, tipo: 'status_change',
       estagio_novo: getEst(modalDesist.estagioDestId)?.nome,
       conteudo: `Desistência: ${desistTexto}`, usuario_nome: currentUser?.nome,
     });
     setModalDesist(null);
     await load();
-  };
+    if (errHist) mostrarAviso(`A desistência foi registrada, mas o histórico não foi gravado\n${errHist.message}`, 'atencao');
+  });
 
   const reativarOp = async (op: any) => {
     const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e) && !isDesistencia(e));
     if (!first) return;
-    await supabase.from('crm_oportunidades').update({
-      estagio_id: first.id, motivo_desistencia: null, atualizado_em: new Date().toISOString(),
-    }).eq('id', op.id);
-    await load();
+    await umaVez('reativar-' + op.id, async () => {
+      const { error } = await supabase.from('crm_oportunidades').update({
+        estagio_id: first.id, motivo_desistencia: null, atualizado_em: new Date().toISOString(),
+      }).eq('id', op.id);
+      if (error) { mostrarAviso(`Não foi possível reativar\n${error.message}`, 'erro'); return; }
+      await load();
+    })();
   };
 
   // ─────────────────────────────────────────────────────────────────────────
   // SALVAR VENDA
   // ─────────────────────────────────────────────────────────────────────────
-  const salvarVenda = async () => {
+  const salvarVenda = umaVez('salvar-venda', async () => {
     if (!modalVenda || !formVenda.valor_total) return;
     setSalvando(true);
     const p: any = {
@@ -1935,11 +2089,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       numero_op:         limpar(formVenda.numero_op),
       observacoes:       limpar(formVenda.observacoes),
     };
-    if (modalVenda.venda?.id) {
-      await supabase.from('crm_vendas').update(p).eq('id', modalVenda.venda.id);
-    } else {
-      await supabase.from('crm_vendas').insert(p);
-    }
+    // 7.62: o erro era ignorado — a janela fechava como se a venda tivesse sido gravada
+    const { error: errVenda } = modalVenda.venda?.id
+      ? await supabase.from('crm_vendas').update(p).eq('id', modalVenda.venda.id)
+      : await supabase.from('crm_vendas').insert(p);
+    if (errVenda) { setSalvando(false); mostrarAviso(`Não foi possível salvar a venda\n${errVenda.message}`, 'erro'); return; }
     // Salva @menções das observações da venda
     if (formVenda.observacoes?.trim()) {
       await salvarMencoes({
@@ -1956,14 +2110,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setSalvando(false);
     setModalVenda(null);
     await load();
-  };
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // EXCLUIR OP
   // ─────────────────────────────────────────────────────────────────────────
   const excluirOp = async (op: any) => {
     if (!await confirmar(`Excluir "${op.titulo}"? Esta ação não pode ser desfeita.`)) return;
-    await supabase.from('crm_oportunidades').delete().eq('id', op.id);
+    const { error } = await supabase.from('crm_oportunidades').delete().eq('id', op.id);
+    // 7.62: o erro era ignorado — o card seguia no quadro sem dizer por quê
+    if (error) { mostrarAviso(`Não foi possível excluir\n${error.message}`, 'erro'); return; }
     await load();
   };
 
@@ -2441,7 +2597,8 @@ const SUB_STATUS_COR: Record<string,string> = {
   };
 
   const atualizarSubStatus = async (opId: string, novoStatus: string) => {
-    await supabase.from('crm_oportunidades').update({ sub_status: novoStatus }).eq('id', opId);
+    const { error } = await supabase.from('crm_oportunidades').update({ sub_status: novoStatus }).eq('id', opId);
+    if (error) { mostrarAviso(`Não foi possível trocar a sub-etapa\n${error.message}`, 'erro'); return; }   // 7.62: o erro era ignorado
     await load();
   };
 
@@ -2689,9 +2846,14 @@ const SUB_STATUS_COR: Record<string,string> = {
   // ÁREA LIVRE (rich text editor reutilizável)
   // ─────────────────────────────────────────────────────────────────────────
   const notaNaoLida = camposNaoLidos.has(`nota_${abrirTabDir}`);
+  // a faixa que diz por que a aba do card (andamento/documentos) não carregou — com o botão para tentar de novo
+  const faixaErroAbrir = erroAbrir ? (
+    <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAbrirTabContent(modalAbrir, abrirTabDir)}>Tentar de novo</Botao>}>Não foi possível ler esta aba ({erroAbrir}). Isso não quer dizer que não haja nada registrado.</Faixa>
+  ) : null;
   const NotaLivreEditor = (
     <div style={{ marginTop:16, border:`1px solid ${notaNaoLida ? '#fde047' : '#d1d5db'}`, borderRadius:6, overflow:'hidden',
       boxShadow: notaNaoLida ? '0 0 0 3px #fefce8' : 'none' }}>
+      {erroNota && <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarNotaLivre(modalAbrir, abrirTabDir)}>Tentar de novo</Botao>}>Não foi possível ler a nota que já existe ({erroNota}). Para não apagá-la sem você ver, o botão "Salvar Nota" fica travado até a leitura dar certo.</Faixa>}
       <div style={{ background:'#f1f5f9', padding:'5px 8px', borderBottom:'1px solid #d1d5db',
         display:'flex', alignItems:'center', gap:4, flexWrap:'wrap' }}>
         <span style={{ fontSize:9, fontWeight:700, color:'#475569', marginRight:4 }}>📌 Área Livre</span>
@@ -2786,6 +2948,10 @@ const SUB_STATUS_COR: Record<string,string> = {
         }
       />
 
+      {erroCarga && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>Não foi possível ler o quadro do CRM ({erroCarga}). Isso não quer dizer que não haja oportunidade{ops.length ? '; o que aparece é da última leitura que deu certo' : ''}.</Faixa>
+      )}
+
       {/* ── Seção Contatos ── */}
       {secaoCrm === 'contatos' && (
         <ContactosSection currentUser={currentUser} />
@@ -2872,10 +3038,11 @@ const SUB_STATUS_COR: Record<string,string> = {
       )}
       {abaInterna === 'recentes' && (
         <div style={{ maxWidth:640, padding:'8px 4px' }}>
+          {erroRecentes && <Faixa tom="erro" acao={<Botao pequeno onClick={carregarRecentesCrm}>Tentar de novo</Botao>}>Não foi possível ler as últimas visualizadas ({erroRecentes}). Isso não quer dizer que você não tenha aberto nenhuma.</Faixa>}
           {recentesCrmLoading ? (
             <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Carregando...</div>
           ) : recentesCrm.length === 0 ? (
-            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Nenhuma oportunidade visualizada ainda.</div>
+            erroRecentes ? null : <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Nenhuma oportunidade visualizada ainda.</div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {recentesCrm.map((r: any) => {
@@ -2926,12 +3093,13 @@ const SUB_STATUS_COR: Record<string,string> = {
             data_liberacao_comercial: agora,
           }).eq('id', o.id);
           if (error) { alert('Erro: ' + error.message); return; }
-          await supabase.from('logs_movimentacao_opl').insert([{
+          const { error: errLog } = await supabase.from('logs_movimentacao_opl').insert([{
             opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
             evento: 'OP liberada para emissão de NF pelo Fiscal.',
             status_anterior: o.status_geral, status_novo: 'Aguarda Emissao NF',
             usuario_nome: currentUser?.nome || null, data_hora: agora,
           }]);
+          if (errLog) mostrarAviso(`A OP foi liberada, mas o registro no histórico dela não foi gravado\n${errLog.message}`, 'atencao');   // 7.62: o erro era ignorado
           fetchOplsEmAberto();
         };
 
@@ -2973,12 +3141,13 @@ const SUB_STATUS_COR: Record<string,string> = {
             .eq('id', o.id).eq('status_geral', 'Devolvida Comercial').select('id');
           if (error) { alert('Erro ao reenviar: ' + error.message); return; }
           if (!mudou?.length) { alert('Esta OP já mudou de status. A lista foi atualizada.'); fetchOplsEmAberto(); return; }
-          await supabase.from('logs_movimentacao_opl').insert([{
+          const { error: errLogReenvio } = await supabase.from('logs_movimentacao_opl').insert([{
             opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
             evento: `OP reenviada para ${d.para} após correção do Comercial.`,
             status_anterior: 'Devolvida Comercial', status_novo: d.status,
             usuario_nome: currentUser?.nome || null, data_hora: agora,
           }]);
+          if (errLogReenvio) mostrarAviso(`A OP foi reenviada, mas o registro no histórico dela não foi gravado\n${errLogReenvio.message}`, 'atencao');   // 7.62: o erro era ignorado
           logChange({ module: 'comercial', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
             oldRow: { status_geral: o.status_geral }, newRow: novo, user: currentUser });
           // Só a Engenharia tem evento de aviso para "OP enviada"; o "Liberar
@@ -2998,45 +3167,59 @@ const SUB_STATUS_COR: Record<string,string> = {
           if (!await confirmar(`Liberar ${alvos.length} OP(s) selecionada(s) para o Fiscal emitir a NF?`)) return;
           setAplicandoLoteOpls(true);
           const agora = new Date().toISOString();
+          // 7.62: o erro de cada OP era ignorado — a barra fechava como se todas tivessem sido liberadas. Agora diz quais não foram (e só registra no histórico as que foram).
+          const falhasLib: string[] = [];
+          const semHistoricoLib: string[] = [];
           for (const o of alvos) {
-            await supabase.from('oples').update({ status_geral: 'Aguarda Emissao NF', data_liberacao_comercial: agora }).eq('id', o.id);
-            await supabase.from('logs_movimentacao_opl').insert([{
+            const { error: errLib } = await supabase.from('oples').update({ status_geral: 'Aguarda Emissao NF', data_liberacao_comercial: agora }).eq('id', o.id);
+            if (errLib) { falhasLib.push(`${o.opl}: ${errLib.message}`); continue; }
+            const { error: errLogLib } = await supabase.from('logs_movimentacao_opl').insert([{
               opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
               evento: 'OP liberada para emissão de NF pelo Fiscal (ação em lote).',
               status_anterior: o.status_geral, status_novo: 'Aguarda Emissao NF',
               usuario_nome: currentUser?.nome || null, data_hora: agora,
             }]);
+            if (errLogLib) semHistoricoLib.push(`${o.opl}: ${errLogLib.message}`);
           }
           setAplicandoLoteOpls(false);
           setOplsSelecionadas(new Set());
           fetchOplsEmAberto();
+          if (falhasLib.length) mostrarAviso(`Algumas OPs não foram liberadas\n${falhasLib.join('\n')}`, 'erro');
+          if (semHistoricoLib.length) mostrarAviso(`As OPs foram liberadas, mas o registro no histórico de algumas não foi gravado\n${semHistoricoLib.join('\n')}`, 'atencao');
         };
 
         // Confirma a entrega ao cliente — usada tanto pelo botão individual
         // (1 OPL) quanto pela ação em lote (várias de uma vez, mesmo nome de
         // quem recebeu para todas — pensado para lote do mesmo cliente).
-        const confirmarEntregaLote = async () => {
+        const confirmarEntregaLote = umaVez('entrega-lote', async () => {
           if (!modalEntregaLote || modalEntregaLote.length === 0) return;
           if (!nomeRecebeuLote.trim()) { alert('Informe o nome de quem recebeu!'); return; }
           setAplicandoLoteOpls(true);
           const agora = new Date().toISOString();
+          // 7.62: o erro de cada OP era ignorado — a janela fechava como se todas tivessem sido entregues, e o aviso de "entregue" saía mesmo com a gravação recusada
+          const falhasEntrega: string[] = [];
+          const semHistoricoEntrega: string[] = [];
           for (const o of modalEntregaLote) {
-            await supabase.from('oples').update({
+            const { error: errEntrega } = await supabase.from('oples').update({
               status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeuLote.trim(), data_entrega: agora,
             }).eq('id', o.id);
-            await supabase.from('logs_movimentacao_opl').insert([{
+            if (errEntrega) { falhasEntrega.push(`${o.opl}: ${errEntrega.message}`); continue; }
+            const { error: errLogEntrega } = await supabase.from('logs_movimentacao_opl').insert([{
               opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
               evento: `Equipamento entregue. Recebeu: ${nomeRecebeuLote.trim()}`,
               status_anterior: o.status_geral, status_novo: 'Faturado',
               usuario_nome: currentUser?.nome || null, data_hora: agora,
             }]);
+            if (errLogEntrega) semHistoricoEntrega.push(`${o.opl}: ${errLogEntrega.message}`);
             notificarEvento('comercial_entregue', msg.entregue(o.opl, o.cliente_nome||'—', nomeRecebeuLote.trim()));
           }
           setAplicandoLoteOpls(false);
           setModalEntregaLote(null); setNomeRecebeuLote('');
           setOplsSelecionadas(new Set());
           fetchOplsEmAberto();
-        };
+          if (falhasEntrega.length) mostrarAviso(`Algumas entregas não foram confirmadas\n${falhasEntrega.join('\n')}`, 'erro');
+          if (semHistoricoEntrega.length) mostrarAviso(`As entregas foram confirmadas, mas o registro no histórico de algumas OPs não foi gravado\n${semHistoricoEntrega.join('\n')}`, 'atencao');
+        });
         // Status distintos realmente presentes nas OPLs em aberto — opções do
         // filtro vêm dos dados, não de uma lista fixa (evita mostrar status
         // que hoje não tem nenhuma OPL, e cobre automaticamente algum status
@@ -3103,10 +3286,11 @@ const SUB_STATUS_COR: Record<string,string> = {
               </button>
             </div>
 
+            {erroOpls && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOplsEmAberto}>Tentar de novo</Botao>}>Não foi possível ler as OPs em aberto ({erroOpls}). Isso não quer dizer que não haja OP{oplsEmAberto.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
             {oplsLoading ? (
               <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Carregando...</div>
             ) : oplsFiltradas.length === 0 ? (
-              <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Nenhuma OP em aberto.</div>
+              erroOpls ? null : <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Nenhuma OP em aberto.</div>
             ) : (
               <div style={{ overflowX:'auto' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
@@ -3574,7 +3758,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                   <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalGate(null)}>Cancelar</button>
                   <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
                     background: ok ? '#22c55e' : '#94a3b8', cursor: ok ? 'pointer' : 'not-allowed' }}
-                    onClick={() => { if (ok) { moverCard(modalGate.op.id, modalGate.estagioDestId); setModalGate(null); } }}>
+                    onClick={() => { if (ok) { const alvo = modalGate; setModalGate(null); moverCard(alvo.op.id, alvo.estagioDestId); } }}>
                     {ok ? '✓ Avançar Estágio' : '🔒 Itens pendentes'}
                   </button>
                 </div>
@@ -3595,21 +3779,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             </div>
             <div style={{ display:'flex', gap:10 }}>
               {(['ACN','DETECH'] as const).map(emp => (
-                <button key={emp} onClick={async () => {
-                  const opVenc = modalEmpresaVenc.op;
-                  await moverCard(opVenc.id, modalEmpresaVenc.estagioDestId);
-                  await supabase.from('crm_oportunidades').update({ empresa_vencedora: emp }).eq('id', opVenc.id);
-                  setModalEmpresaVenc(null);
-                  // OP nasce sozinha, já numerada a partir do PV (A/D+PV+.+MMAA)
-                  // e entra direto no fluxo normal — sem precisar de "Lançar OP" manual.
-                  const { opl: oplCriada, aviso } = await criarOpAutomatica(opVenc, emp);
-                  await load();
-                  if (oplCriada) {
-                    alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
-                  } else if (aviso) {
-                    mostrarAviso(aviso.texto, aviso.tom);
-                  }
-                }} style={{
+                <button key={emp} onClick={() => escolherEmpresaVencedora(emp)} style={{
                   flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
                   cursor:'pointer',
                   background: emp === 'ACN' ? '#dbeafe' : '#f3e8ff',
@@ -3859,8 +4029,9 @@ const SUB_STATUS_COR: Record<string,string> = {
               </button>
             </div>
             {/* Histórico */}
+            {erroAndamentoModal && <Faixa tom="erro" acao={<Botao pequeno onClick={() => lerAndamentoCrm(modalAndamento.id)}>Tentar de novo</Botao>}>Não foi possível ler o andamento ({erroAndamentoModal}). Isso não quer dizer que não haja atualização.</Faixa>}
             <div style={{ overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:6 }}>
-              {andamentoHistorico.length === 0 && (
+              {andamentoHistorico.length === 0 && !erroAndamentoModal && (
                 <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>Nenhuma atualização registrada ainda.</div>
               )}
               {andamentoHistorico.map((h,i)=>(
@@ -3922,7 +4093,10 @@ const SUB_STATUS_COR: Record<string,string> = {
                   }]).select().single();
                   setSalvando(false);
                   if (error) { alert('Erro: ' + error.message); return; }
-                  if (novaLic) await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
+                  if (novaLic) {
+                    const { error: errLig } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
+                    if (errLig) mostrarAviso(`A licitação foi criada, mas não foi ligada a este card\n${errLig.message}`, 'atencao');   // 7.62: o erro era ignorado
+                  }
                   setModalConverterLicit(null);
                   await load();
                   alert('Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
@@ -3958,7 +4132,10 @@ const SUB_STATUS_COR: Record<string,string> = {
                   }]).select().single();
                   setSalvando(false);
                   if (error) { alert('Erro: ' + error.message); return; }
-                  if (novaLic) await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
+                  if (novaLic) {
+                    const { error: errLig } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
+                    if (errLig) mostrarAviso(`A licitação foi criada, mas não foi ligada a este card\n${errLig.message}`, 'atencao');   // 7.62: o erro era ignorado
+                  }
                   setModalConverterLicit(null);
                   await load();
                   alert('Adesão a ATA criada! Acesse a aba Licitações para acompanhar.');
@@ -3987,11 +4164,7 @@ const SUB_STATUS_COR: Record<string,string> = {
               <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'8px 10px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span style={{ fontSize:10, color:'#166534', fontWeight:700 }}>✓ Já vinculado a um processo</span>
                 <button className="acn-btn" style={{ background:'#dc2626', fontSize:8, padding:'3px 8px' }}
-                  onClick={async () => {
-                    await supabase.from('crm_oportunidades').update({ licitacao_processo_id: null }).eq('id', modalVincularLicit.id);
-                    setModalVincularLicit(null);
-                    await load();
-                  }}>
+                  onClick={() => ligarProcesso(null)}>
                   Desvincular
                 </button>
               </div>
@@ -4004,10 +4177,12 @@ const SUB_STATUS_COR: Record<string,string> = {
                 const v = e.target.value;
                 setBuscaVincularLicit(v);
                 if (v.trim().length < 2) { setResultVincularLicit([]); return; }
-                const { data } = await supabase.from('licitacoes')
+                const { data, error } = await supabase.from('licitacoes')
                   .select('id,numero,nome_projeto,orgao,status')
                   .or(`numero.ilike.%${v}%,nome_projeto.ilike.%${v}%,orgao.ilike.%${v}%`)
                   .limit(20);
+                if (error) { setErroVincular(error.message); setResultVincularLicit([]); return; }   // 7.62: lia como "Nenhum processo encontrado"
+                setErroVincular('');
                 setResultVincularLicit(data || []);
               }}
               style={{ padding:'6px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, marginBottom:8, boxSizing:'border-box' }}
@@ -4016,18 +4191,15 @@ const SUB_STATUS_COR: Record<string,string> = {
 
             <div style={{ overflowY:'auto', flex:1, minHeight:100 }}>
               {resultVincularLicit.map(lic => (
-                <div key={lic.id} onClick={async () => {
-                  await supabase.from('crm_oportunidades').update({ licitacao_processo_id: lic.id }).eq('id', modalVincularLicit.id);
-                  setModalVincularLicit(null);
-                  await load();
-                }} style={{
+                <div key={lic.id} onClick={() => ligarProcesso(lic.id)} style={{
                   padding:'7px 9px', border:'1px solid #e2e8f0', borderRadius:5, marginBottom:5, cursor:'pointer',
                 }}>
                   <div style={{ fontSize:10, fontWeight:700, color:'#1e293b' }}>{lic.numero} — {lic.nome_projeto}</div>
                   <div style={{ fontSize:9, color:'#64748b' }}>{lic.orgao} · {lic.status}</div>
                 </div>
               ))}
-              {buscaVincularLicit.trim().length >= 2 && resultVincularLicit.length === 0 && (
+              {erroVincular && <Faixa tom="erro">Não foi possível buscar os processos ({erroVincular}). Isso não quer dizer que não exista nenhum.</Faixa>}
+              {buscaVincularLicit.trim().length >= 2 && resultVincularLicit.length === 0 && !erroVincular && (
                 <div style={{ fontSize:10, color:'#94a3b8', textAlign:'center', padding:'12px 0' }}>Nenhum processo encontrado</div>
               )}
             </div>
@@ -4520,6 +4692,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                     </div>
 
                     {/* Lista de registros salvos */}
+                    {faixaErroAbrir}
                     {abrirDocs.length > 0 && (
                       <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                         <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:.4 }}>
@@ -4578,8 +4751,9 @@ const SUB_STATUS_COR: Record<string,string> = {
                         {abrirSalvandoDoc ? 'Salvando...' : '+ Registrar'}
                       </button>
                     </div>
+                    {faixaErroAbrir}
                     <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
-                      {abrirAndamentoHist.length === 0 && (
+                      {abrirAndamentoHist.length === 0 && !erroAbrir && (
                         <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:'10px 0' }}>Nenhuma atualização registrada ainda.</div>
                       )}
                       {abrirAndamentoHist.map((h,i) => (
@@ -4627,8 +4801,9 @@ const SUB_STATUS_COR: Record<string,string> = {
                         {abrirSalvandoDoc ? 'Salvando...' : '+ Salvar'}
                       </button>
                     </div>
+                    {faixaErroAbrir}
                     <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
-                      {abrirDocs.length === 0 && (
+                      {abrirDocs.length === 0 && !erroAbrir && (
                         <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:16 }}>Nenhum documento registrado.</div>
                       )}
                       {abrirDocs.map((d,i) => (
