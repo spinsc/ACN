@@ -12,8 +12,12 @@ import KanbanColuna from './KanbanColuna';
 import { combinaBusca } from './SearchUtils';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
-import { Botao, MenuAcoes, Selo, Faixa } from './Interface';
-import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight } from '@mdi/js';
+import { Botao, MenuAcoes, Selo, Faixa, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight, mdiCartOutline, mdiTableLarge, mdiViewColumnOutline,
+  mdiCogOutline, mdiFactory, mdiAccountOutline, mdiClipboardTextOutline, mdiMagnify, mdiLinkVariant, mdiForumOutline, mdiCommentTextOutline,
+  mdiPrinterOutline, mdiPlay, mdiTagOutline, mdiLockOutline, mdiCartCheck, mdiPackageVariantClosed, mdiEarth, mdiAlertOutline, mdiCheck,
+  mdiChevronUp, mdiChevronDown, mdiPlus } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
@@ -490,6 +494,12 @@ const CARDS_POR_COLUNA = 5;
 /** Quantos recebidos ficam à vista no quadro; o resto sai no "ver todos" */
 const RECEBIDOS_NO_QUADRO = 10;
 const COR_STATUS_COMPRA: Record<string,string> = COR_ETAPA_COMPRA;
+// Etapa 12e19 (06/10/2026): a cor de cada etapa na tela (selo, bolinha do total e borda do cartão) segue a família do sistema.
+// Suposição minha: a cor viva do quadro (KanbanColuna, compartilhado) segue por hexadecimal até ele ser migrado.
+const FAMILIA_COMPRA: Record<string,string> = {
+  'Pendente': 'neutro', 'Em Andamento': 'info', 'Aguardando Aprovação': 'atencao', 'Aprovado': 'ok',
+  'Comprado': 'marca', 'Recebido': 'neutro', 'Descartada': 'erro',
+};
 
 // ─── DESCRIÇÃO COMPACTA ───────────────────────────────────────────────────────
 // A descrição da compra ocupava a linha inteira (e o card do kanban) quando o
@@ -498,19 +508,17 @@ const COR_STATUS_COMPRA: Record<string,string> = COR_ETAPA_COMPRA;
 function DescricaoCompacta({ texto, linhas = 2 }: { texto: string; linhas?: number }) {
   const [aberta, setAberta] = useState(false);
   const t = String(texto || '').trim();
-  if (!t) return <span style={{ color:'#9ca3af' }}>—</span>;
+  if (!t) return <span className="acn-fraco">—</span>;
   const longa = t.length > 70 || t.includes('\n');
   return (
-    <span style={{ display:'block' }} title={longa && !aberta ? t : undefined}>
-      <span style={aberta || !longa ? { display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word' } : {
-        display:'-webkit-box', WebkitLineClamp: linhas, WebkitBoxOrient:'vertical', overflow:'hidden', wordBreak:'break-word' }}>
+    <span className="acn-cmp-desc-compacta" title={longa && !aberta ? t : undefined}>
+      <span className={aberta || !longa ? 'acn-cmp-desc-aberta' : 'acn-cmp-desc-cortada'} style={aberta || !longa ? undefined : { WebkitLineClamp: linhas }}>
         {t}
       </span>
       {longa && (
-        <button type="button" onClick={e => { e.stopPropagation(); setAberta(a => !a); }}
-          style={{ background:'none', border:'none', padding:0, color:'#2563eb', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+        <Botao pequeno variante="discreto" className="acn-cmp-vermais" onClick={e => { e.stopPropagation(); setAberta(a => !a); }}>
           {aberta ? 'ver menos' : 'ver mais'}
-        </button>
+        </Botao>
       )}
     </span>
   );
@@ -523,10 +531,9 @@ function DescricaoCompacta({ texto, linhas = 2 }: { texto: string; linhas?: numb
 function SeloOrigemCompra({ p, grande = false }: { p: any; grande?: boolean }) {
   const o = origemDaRequisicao(p);
   return (
-    <span title={o.detalhe ? `${o.label}: ${o.detalhe}` : o.label}
-      style={{ display:'inline-block', marginTop:3, fontSize: grande ? 10 : 8.5, fontWeight:800,
-        padding: grande ? '2px 8px' : '1px 6px', borderRadius:10, color:'#fff', background:o.cor }}>
-      {o.tipo === 'op' ? '🔗' : o.tipo === 'estoque' ? '📦' : '📋'} {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
+    <span className={'acn-cmp-origem' + (grande ? ' grande' : '')} data-acn-familia={o.tipo === 'estoque' ? 'ok' : o.tipo === 'op' ? 'marca' : 'neutro'}
+      title={o.detalhe ? `${o.label}: ${o.detalhe}` : o.label}>
+      <Icone path={o.tipo === 'op' ? mdiLinkVariant : o.tipo === 'estoque' ? mdiPackageVariantClosed : mdiClipboardTextOutline} size={12} /> {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
     </span>
   );
 }
@@ -535,17 +542,18 @@ function SeloOrigemCompra({ p, grande = false }: { p: any; grande?: boolean }) {
 function VinculoLinkCompra({ p, compacto = false }: { p: any; compacto?: boolean }) {
   if (!p?.vinculo_tipo && !p?.link_url) return null;
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop: compacto ? 2 : 3 }}>
+    <div className={'acn-cmp-vinculo' + (compacto ? ' compacto' : '')}>
       {p.vinculo_tipo && (
-        <button type="button" onClick={e => { e.stopPropagation(); abrirVinculo({ tipo: p.vinculo_tipo, id: p.vinculo_id, descricao: p.vinculo_descricao }); }}
-          title="Abrir registro vinculado"
-          style={{ background:'none', border:'none', padding:0, color:'#0369a1', fontSize:9, fontWeight:700, cursor:'pointer', textAlign:'left', textDecoration:'underline' }}>
-          🔗 {TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: {p.vinculo_descricao}
-        </button>
+        <Botao pequeno variante="discreto" className="acn-cmp-link" icone={mdiLinkVariant}
+          onClick={e => { e.stopPropagation(); abrirVinculo({ tipo: p.vinculo_tipo, id: p.vinculo_id, descricao: p.vinculo_descricao }); }}
+          title="Abrir registro vinculado">
+          {TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: {p.vinculo_descricao}
+        </Botao>
       )}
       {p.link_url && (
-        <a href={p.link_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-          style={{ color:'#0f766e', fontSize:9, fontWeight:700, wordBreak:'break-all' }}>🌐 link</a>
+        <a href={p.link_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="acn-cmp-link-web acn-prod-ic">
+          <Icone path={mdiEarth} size={12} /> link
+        </a>
       )}
     </div>
   );
@@ -601,40 +609,41 @@ function ModalRecebidos({ lista, canVerValor, onAbrir, onClose }) {
     : lista;
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:900, width:'96vw', maxHeight:'90vh', display:'flex', flexDirection:'column' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10, flexWrap:'wrap' }}>
-          <div style={{ fontSize:14, fontWeight:800, color:'#15803d', flex:1 }}>📋 Recebidos ({lista.length})</div>
-          <input value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar nos recebidos"
-            placeholder="Buscar por número, OC, descrição, fornecedor ou OP"
-            style={{ flex:'1 1 260px', padding:'6px 10px', border:'1px solid #d1d5db', borderRadius:5, fontSize:11 }} />
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
+      <div className="modal-box acn-modal-cadastro acn-cmp-recebidos" role="dialog" aria-label="Recebidos">
+        <div className="acn-modal-cab acn-cmp-recebidos-cab">
+          <span className="modal-title acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={16} /> Recebidos ({lista.length})</span>
+          <input className="acn-input acn-cmp-recebidos-busca" value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar nos recebidos"
+            placeholder="Buscar por número, OC, descrição, fornecedor ou OP" />
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
-        <div style={{ overflowY:'auto', border:'1px solid #e2e8f0', borderRadius:6 }}>
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
-            <thead><tr style={{ background:'#f8fafc', position:'sticky', top:0 }}>
-              <th style={th}>Pedido</th><th style={th}>Descrição</th><th style={th}>Fornecedor</th>
-              <th style={th}>Recebido em</th>{canVerValor && <th style={{ ...th, textAlign:'right' }}>Valor</th>}
-            </tr></thead>
-            <tbody>
-              {filtrados.map((p:any) => (
-                <tr key={p.id} onClick={() => onAbrir(p)} style={{ cursor:'pointer', borderTop:'1px solid #f1f5f9' }}
-                  title="Abrir o resumo da requisição">
-                  <td style={td}>
-                    <strong>{p.numero_pedido}</strong>
-                    {p.numero_oc && <div style={{ fontSize:9, color:'#7c3aed', fontWeight:700 }}>📋 {p.numero_oc}</div>}
-                    <SeloOrigemCompra p={p} />
-                  </td>
-                  <td style={{ ...td, maxWidth:320 }}><DescricaoCompacta texto={p.descricao_material} linhas={1} /></td>
-                  <td style={td}>{p.fornecedor || '—'}</td>
-                  <td style={td}>{dataBr(p.data_conclusao)}</td>
-                  {canVerValor && <td style={{ ...td, textAlign:'right', fontWeight:700, color:'#16a34a' }}>{moedaBr(p.valor_compra)}</td>}
-                </tr>
-              ))}
-              {filtrados.length === 0 && (
-                <tr><td colSpan={canVerValor ? 5 : 4} style={{ ...td, textAlign:'center', color:'#94a3b8' }}>Nada encontrado para "{busca}".</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="acn-modal-corpo">
+          <div className="acn-rolagem acn-cmp-recebidos-lista">
+            <table className="acn-tabela acn-densa">
+              <thead><tr>
+                <th>Pedido</th><th>Descrição</th><th>Fornecedor</th>
+                <th>Recebido em</th>{canVerValor && <th className="acn-dir">Valor</th>}
+              </tr></thead>
+              <tbody>
+                {filtrados.map((p:any) => (
+                  <tr key={p.id} onClick={() => onAbrir(p)} className="acn-cmp-clicavel"
+                    title="Abrir o resumo da requisição">
+                    <td>
+                      <strong>{p.numero_pedido}</strong>
+                      {p.numero_oc && <div className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</div>}
+                      <SeloOrigemCompra p={p} />
+                    </td>
+                    <td className="acn-cmp-desc"><DescricaoCompacta texto={p.descricao_material} linhas={1} /></td>
+                    <td>{p.fornecedor || '—'}</td>
+                    <td className="acn-num">{dataBr(p.data_conclusao)}</td>
+                    {canVerValor && <td className="acn-dir acn-num acn-txt-ok">{moedaBr(p.valor_compra)}</td>}
+                  </tr>
+                ))}
+                {filtrados.length === 0 && (
+                  <tr><td colSpan={canVerValor ? 5 : 4} className="acn-centro acn-fraco">Nada encontrado para "{busca}".</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -762,29 +771,29 @@ const esperaTexto = (iso: any) => {
 
 function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbrir }: any) {
   if (!lista.length) {
-    return <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>✓ Nenhuma compra esperando a sua aprovação.</div>;
+    return <div className="acn-ajuda acn-prod-ic acn-cmp-vazio-aprov"><Icone path={mdiCheck} size={13} /> Nenhuma compra esperando a sua aprovação.</div>;
   }
   return (
-    <div style={{ border: '1px solid #fdba74', background: '#fff7ed', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: '#9a3412' }}>Esperando a sua aprovação ({lista.length})</div>
-      <div style={{ fontSize: 10, color: '#7c2d12', margin: '2px 0 6px' }}>
+    <div className="acn-quadro tom-atencao acn-cmp-aprov">
+      <div className="acn-quadro-titulo">Esperando a sua aprovação ({lista.length})</div>
+      <div className="acn-ajuda">
         Qualquer aprovador pode decidir{outros.length ? `; também recebem: ${outros.join(', ')}` : ''}. Mais antigas primeiro.
       </div>
       {lista.map((p: any) => (
-        <div key={p.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '7px 0', borderTop: '1px solid #fed7aa', flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 100 }}>
-            <strong style={{ fontSize: 11 }}>{p.numero_pedido}</strong>
-            <div style={{ fontSize: 9, color: '#9a3412' }}>aguardando {esperaTexto(p._desde)}</div>
+        <div key={p.id} className="acn-cmp-aprov-item">
+          <div className="acn-cmp-aprov-ped">
+            <strong>{p.numero_pedido}</strong>
+            <div className="acn-ajuda">aguardando {esperaTexto(p._desde)}</div>
           </div>
-          <div style={{ flex: 1, minWidth: 220, fontSize: 11 }}>
+          <div className="acn-cmp-aprov-desc">
             <DescricaoCompacta texto={p.descricao_material} />
-            <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
+            <div className="acn-ajuda">
               Pedido por {p.criado_por_nome || '—'}{p.opl ? ` · OP ${p.opl}` : ''}
             </div>
           </div>
-          <div style={{ minWidth: 170, fontSize: 10 }}>
-            <div>{p._cotacoes ? `${p._cotacoes} ${p._cotacoes === 1 ? 'cotação' : 'cotações'}` :<span style={{ color: '#b91c1c', fontWeight: 700 }}>⚠ sem cotação</span>}</div>
-            <div style={{ fontSize: 9, color: '#64748b' }}>
+          <div className="acn-cmp-aprov-cot">
+            <div>{p._cotacoes ? `${p._cotacoes} ${p._cotacoes === 1 ? 'cotação' : 'cotações'}` : <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem cotação</span>}</div>
+            <div className="acn-ajuda">
               {p.vencedora_id
                 ? `Vencedora: ${p.fornecedor || '—'}${canVerValor && p.valor_compra ? ` — ${fmt(p.valor_compra)}` : ''}`
                 : 'Vencedora ainda não escolhida'}
@@ -917,16 +926,16 @@ export default function ComprasTab({ currentUser }) {
     ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
 
   const fmtData = (d: string) => {
-    if (!d) return <span style={{color:'#9ca3af'}}>—</span>;
+    if (!d) return <span className="acn-fraco">—</span>;
     // data_prevista_recebimento é timestamptz no banco — supabase-js retorna ISO completo
     // (ex: "2026-08-30T00:00:00+00:00"), não só "YYYY-MM-DD". Pega só a data antes de remontar.
     const dt = new Date(d.slice(0, 10) + 'T00:00:00');
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     const diff = Math.ceil((dt.getTime()-hoje.getTime())/86400000);
     const str = dt.toLocaleDateString('pt-BR');
-    if (diff < 0)   return <span style={{color:'#dc2626',fontWeight:700}}>{str} ⚠️</span>;
-    if (diff === 0) return <span style={{color:'#f59e0b',fontWeight:700}}>Hoje!</span>;
-    if (diff <= 3)  return <span style={{color:'#f59e0b'}}>{str}</span>;
+    if (diff < 0)   return <span className="acn-txt-erro acn-prod-ic">{str} <Icone path={mdiAlertOutline} size={12} /></span>;
+    if (diff === 0) return <span className="acn-txt-atencao">Hoje!</span>;
+    if (diff <= 3)  return <span className="acn-txt-atencao">{str}</span>;
     return str;
   };
 
@@ -1864,254 +1873,216 @@ export default function ComprasTab({ currentUser }) {
     const isAprovado = p.status_compra === 'Aprovado';
     const naoLido = pedidosNaoLidos.has(String(p.id));
     return (
-      <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9',
-        background: naoLido ? '#fffdf0' : isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : isAprovado ? '#f0f9ff' : undefined,
-        borderLeft: naoLido ? '4px solid #eab308' : undefined}}>
-        <td style={td}>
+      <tr key={p.id} className={naoLido ? 'acn-linha-nova' : (isEM || isAguardandoAprovacao || isAprovado) ? 'acn-cmp-linha' : undefined}
+        data-acn-familia={naoLido ? undefined : isEM ? 'ok' : isAguardandoAprovacao ? 'atencao' : isAprovado ? 'info' : undefined}>
+        <td>
           <strong>{p.numero_pedido}</strong>
           <div><SeloOrigemCompra p={p} /></div>
         </td>
-        <td style={td}>
+        <td>
           {p.opl ? (
-            <button onClick={async () => {
+            <Botao pequeno variante="discreto" className="acn-cmp-link" onClick={async () => {
               const { data, error: erroOp } = await supabase.from('oples').select('id').eq('opl', p.opl).maybeSingle();
               if (erroOp) { alert(`Não foi possível procurar a OP ${p.opl}: ${erroOp.message}`); return; }   // 7.57: dizia "não encontrada"
               if (!data) { alert(`OP ${p.opl} não encontrada no cadastro.`); return; }
               abrirVinculo({ tipo:'op', id: data.id, descricao: p.opl });
-            }} style={{ background:'none', border:'none', padding:0, color:'#2563eb', fontWeight:700, cursor:'pointer', textDecoration:'underline', font:'inherit' }}>
+            }}>
               {p.opl}
-            </button>
+            </Botao>
           ) : '—'}
           {p.oportunidade_id && (
             <div>
-              <button onClick={()=>abrirVinculo({ tipo:'pv', id:p.oportunidade_id, descricao:p.numero_pedido })}
-                style={{ background:'none', border:'none', padding:0, color:'#7c3aed', fontSize:9, fontWeight:700, cursor:'pointer', textDecoration:'underline', whiteSpace:'nowrap' }}>
-                🔗 Proposta
-              </button>
+              <Botao pequeno variante="discreto" className="acn-cmp-link" icone={mdiLinkVariant}
+                onClick={()=>abrirVinculo({ tipo:'pv', id:p.oportunidade_id, descricao:p.numero_pedido })}>
+                Proposta
+              </Botao>
             </div>
           )}
           <VinculoLinkCompra p={p} />
         </td>
-        <td style={{...td,minWidth:200,maxWidth:300}}>
+        <td className="acn-cmp-desc">
           <DescricaoCompacta texto={p.descricao_material} />
         </td>
-        <td style={td}>{p.quantidade}</td>
-        <td style={td}>{p.fornecedor||'—'}</td>
+        <td>{p.quantidade}</td>
+        <td>{p.fornecedor||'—'}</td>
 
         {/* VALOR — somente leitura; só é definido ao escolher a cotação vencedora na Mesa de Cotações */}
         {canVerValor && (
-          <td style={td}>
+          <td className="acn-num">
             {p.valor_compra
-              ? <strong style={{color:'#16a34a'}}>{fmt(p.valor_compra)}</strong>
-              : <span style={{color:'#9ca3af'}}>—</span>}
+              ? <strong className="acn-txt-ok">{fmt(p.valor_compra)}</strong>
+              : <span className="acn-fraco">—</span>}
           </td>
         )}
 
         {/* CENTRO DE CUSTO */}
-        <td style={{...td,maxWidth:130}}>
+        <td className="acn-cmp-chipcel">
           {p.centro_custo ? (
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
-              <span style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:10, padding:'2px 8px', fontSize:9, fontWeight:700, maxWidth:100, wordBreak:'break-word' }} title={p.centro_custo}>
+            <div className="acn-cmp-chiplinha">
+              <span className="acn-cmp-chip" data-acn-familia="info" title={p.centro_custo}>
                 {p.centro_custo}
               </span>
-              <button onClick={()=>abrirModalCentro(p)} title="Alterar centro de custo"
-                style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+              <Botao pequeno variante="discreto" icone={mdiPencilOutline} onClick={()=>abrirModalCentro(p)} title="Alterar centro de custo" aria-label="Alterar centro de custo" />
             </div>
           ) : (
-            <button onClick={()=>abrirModalCentro(p)}
-              style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
-              + Definir
-            </button>
+            <Botao pequeno variante="discreto" icone={mdiPlus} onClick={()=>abrirModalCentro(p)}>Definir</Botao>
           )}
         </td>
 
         {/* DEPARTAMENTO */}
-        <td style={{...td,maxWidth:130}}>
+        <td className="acn-cmp-chipcel">
           {(() => {
             const dep = departamentosConfig.find((d:any) => d.id === p.departamento_id);
             return dep ? (
-              <div style={{display:'flex',alignItems:'center',gap:5}}>
-                <span style={{ background:'#f0fdf4', color:'#15803d', borderRadius:10, padding:'2px 8px', fontSize:9, fontWeight:700, maxWidth:100, wordBreak:'break-word' }} title={dep.nome}>
+              <div className="acn-cmp-chiplinha">
+                <span className="acn-cmp-chip" data-acn-familia="ok" title={dep.nome}>
                   {dep.nome}
                 </span>
-                <button onClick={()=>abrirModalDepartamento(p)} title="Alterar departamento"
-                  style={{...btn,background:'transparent',color:'#15803d',fontSize:12,padding:'0 2px'}}>✏️</button>
+                <Botao pequeno variante="discreto" icone={mdiPencilOutline} onClick={()=>abrirModalDepartamento(p)} title="Alterar departamento" aria-label="Alterar departamento" />
               </div>
             ) : (
-              <button onClick={()=>abrirModalDepartamento(p)}
-                style={{...btn,background:'#f1f5f9',color:'#15803d',fontSize:9,border:'1px dashed #86efac'}}>
-                + Definir
-              </button>
+              <Botao pequeno variante="discreto" icone={mdiPlus} onClick={()=>abrirModalDepartamento(p)}>Definir</Botao>
             );
           })()}
         </td>
 
         {/* PRAZO — editável direto para itens Em Andamento */}
-        <td style={td}>
+        <td className="acn-num">
           {isEM ? (
-            <input type="date"
+            <input type="date" className="acn-input acn-cmp-prazo"
               value={row.prazo}
               onChange={e => setInlineField(p.id,'prazo',e.target.value)}
-              style={{width:130,padding:'5px 7px',border:'2px solid #16a34a',borderRadius:5,fontSize:12,outline:'none'}}
             />
           ) : (
-            <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <div className="acn-cmp-chiplinha">
               {fmtData(p.data_prevista_recebimento)}
               {podeGerirCompras(currentUser) && !['Pendente', DESCARTADA].includes(p.status_compra) && (
-                <button onClick={()=>setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0,10) : '', motivo: '' })}
-                  title="Alterar o prazo de entrega" aria-label="Alterar o prazo de entrega"
-                  style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+                <Botao pequeno variante="discreto" icone={mdiPencilOutline}
+                  onClick={()=>setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0,10) : '', motivo: '' })}
+                  title="Alterar o prazo de entrega" aria-label="Alterar o prazo de entrega" />
               )}
             </div>
           )}
         </td>
 
         {/* PRAZO PROMETIDO — compromisso com Produção ou Cliente, independente do prazo do fornecedor */}
-        <td style={{...td,maxWidth:130}}>
+        <td className="acn-cmp-chipcel acn-num">
           {p.prazo_prometido_entrega ? (
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
+            <div className="acn-cmp-chiplinha">
               <span title={p.prazo_prometido_destino==='cliente'?'Prometido ao cliente':'Prometido à Produção'}>
-                {p.prazo_prometido_destino==='cliente' ? '👤' : '🏭'}
+                <Icone path={p.prazo_prometido_destino==='cliente' ? mdiAccountOutline : mdiFactory} size={14} />
               </span>
               {fmtData(p.prazo_prometido_entrega)}
-              <button onClick={()=>abrirModalPrazoProm(p)} title="Alterar prazo prometido"
-                style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+              <Botao pequeno variante="discreto" icone={mdiPencilOutline} onClick={()=>abrirModalPrazoProm(p)} title="Alterar prazo prometido" aria-label="Alterar prazo prometido" />
             </div>
           ) : (
-            <button onClick={()=>abrirModalPrazoProm(p)}
-              style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
-              + Definir
-            </button>
+            <Botao pequeno variante="discreto" icone={mdiPlus} onClick={()=>abrirModalPrazoProm(p)}>Definir</Botao>
           )}
         </td>
 
-        <td style={td}>
-          <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,
-            background:COR[p.status_compra]||'#9ca3af'}}>
-            {p.status_compra||'—'}
-          </span>
-          {p.reprocessos > 0 && <div style={{marginTop:4}}><Selo familia="atencao" ponto={false} title="Voltou de etapa — veja o motivo no Resumo">Reprocesso nº {p.reprocessos}</Selo></div>}
-          {p.status_compra === DESCARTADA && p.motivo_descarte && <div style={{marginTop:4,fontSize:10,color:'#64748b',maxWidth:180}} title={p.motivo_descarte}>{String(p.motivo_descarte).slice(0,60)}</div>}
+        <td>
+          <Selo familia={FAMILIA_COMPRA[p.status_compra] || 'neutro'}>{p.status_compra||'—'}</Selo>
+          {p.reprocessos > 0 && <div className="acn-cmp-sub"><Selo familia="atencao" ponto={false} title="Voltou de etapa — veja o motivo no Resumo">Reprocesso nº {p.reprocessos}</Selo></div>}
+          {p.status_compra === DESCARTADA && p.motivo_descarte && <div className="acn-ajuda acn-cmp-motivo" title={p.motivo_descarte}>{String(p.motivo_descarte).slice(0,60)}</div>}
           {p.numero_oc && (
-            <div style={{marginTop:4}}>
-              <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}} title="Ordem de Compra">
-                📋 {p.numero_oc}
+            <div className="acn-cmp-sub">
+              <span className="acn-mono acn-cmp-oc acn-prod-ic" title="Ordem de Compra">
+                <Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}
               </span>
             </div>
           )}
         </td>
 
-        <td style={{...td,whiteSpace:'nowrap'}}>
-          {/* ▶️ Pendente → Em Andamento */}
+        <td className="acn-cmp-acoes">
+          <div className="acn-acoes-linha quebra">
+          {/* Pendente → Em Andamento */}
           {p.status_compra==='Pendente' && (
-            <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',marginRight:3}}>▶️ Iniciar</button>
+            <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>avancarStatus(p)}>Iniciar</Botao>
           )}
 
-          {/* 🏷️ Mesa de Cotações — fluxo recomendado para Em Andamento → Comprado */}
+          {/* Mesa de Cotações — fluxo recomendado para Em Andamento → Comprado */}
           {isEM && (
-            <button onClick={()=>abrirModalCotacoes(p)}
-              style={{...btn,background:'#d97706',marginRight:3}}>
-              🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}
-            </button>
+            <Botao pequeno variante="primario" icone={mdiTagOutline} onClick={()=>abrirModalCotacoes(p)}>
+              Cotações{p.vencedora_id ? ' ✓' : ''}
+            </Botao>
           )}
 
-          {/* 🔒 Aguardando Aprovação — abre a mesma mesa de cotações, agora mostrando a seção de aprovação */}
+          {/* Aguardando Aprovação — abre a mesma mesa de cotações, agora mostrando a seção de aprovação */}
           {isAguardandoAprovacao && (
-            <button onClick={()=>abrirModalCotacoes(p)}
-              style={{...btn,background:'#ea580c',marginRight:3}}>
-              🔒 Ver Aprovação
-            </button>
+            <Botao pequeno variante="primario" icone={mdiLockOutline} onClick={()=>abrirModalCotacoes(p)}>
+              Ver Aprovação
+            </Botao>
           )}
 
-          {/* 🛒 Aprovado → Comprado — ação explícita e separada da aprovação */}
+          {/* Aprovado → Comprado — ação explícita e separada da aprovação */}
           {isAprovado && (
-            <button onClick={()=>abrirFluxo('confirmar', p)} style={{...btn,background:'#0ea5e9',marginRight:3}}>
-              🛒 Confirmar Compra
-            </button>
+            <Botao pequeno variante="primario" icone={mdiCartCheck} onClick={()=>abrirFluxo('confirmar', p)}>
+              Confirmar Compra
+            </Botao>
           )}
 
-          {/* 🔍 Ver/Corrigir Cotações — depois de Aprovado/Comprado, o botão normal de
+          {/* Ver/Corrigir Cotações — depois de Aprovado/Comprado, o botão normal de
               Cotações some (é pra quando ainda se está decidindo); esse reabre a mesma
               Mesa de Cotações em modo consulta/correção (edição só Admin, ver excluirCotacao). */}
           {['Aprovado','Comprado'].includes(p.status_compra) && (
-            <button onClick={()=>abrirModalCotacoes(p)} title="Ver cotações e corrigir valores se necessário"
-              style={{...btn,background:'#6366f1',marginRight:3}}>
-              🔍 Ver/Corrigir Cotações
-            </button>
+            <Botao pequeno icone={mdiMagnify} onClick={()=>abrirModalCotacoes(p)} title="Ver cotações e corrigir valores se necessário">
+              Ver/Corrigir Cotações
+            </Botao>
           )}
 
-          {/* 📦 Comprado → Recebido — só via conferência técnica na Logística (Fase 3) */}
+          {/* Comprado → Recebido — só via conferência técnica na Logística (Fase 3) */}
           {p.status_compra==='Comprado' && (
-            <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
-              style={{fontSize:9,color:'#78716c',marginRight:6,fontStyle:'italic'}}>
-              📦 Aguarda recebimento na Logística
+            <span className="acn-ajuda acn-cmp-aguarda acn-prod-ic" title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar">
+              <Icone path={mdiPackageVariantClosed} size={12} /> Aguarda recebimento na Logística
             </span>
           )}
 
-          {/* 🔍 Resumo da solicitação */}
-          <button onClick={()=>setModalResumo(p)} title="Resumo da solicitação"
-            style={{...btn,background:'#0f766e',marginRight:3}}>
-            🔍 Resumo
-          </button>
+          {/* Resumo da solicitação */}
+          <Botao pequeno icone={mdiMagnify} onClick={()=>setModalResumo(p)} title="Resumo da solicitação">
+            Resumo
+          </Botao>
 
-          {/* 🔗 Vínculo (PV/OP/OS/compra/OFI) e link */}
-          <button onClick={()=>setModalVinculo(p)} title={p.vinculo_tipo || p.link_url ? 'Editar vínculo/link' : 'Vincular a PV, OP, OS, outra compra ou OFI / adicionar link'}
-            style={{...btn,background:(p.vinculo_tipo || p.link_url)?'#0369a1':'#94a3b8',marginRight:3}}>
-            🔗
-          </button>
+          {/* Vínculo (PV/OP/OS/compra/OFI) e link */}
+          <Botao pequeno variante={(p.vinculo_tipo || p.link_url) ? 'secundario' : 'discreto'} icone={mdiLinkVariant} aria-label="Vínculo e link"
+            onClick={()=>setModalVinculo(p)} title={p.vinculo_tipo || p.link_url ? 'Editar vínculo/link' : 'Vincular a PV, OP, OS, outra compra ou OFI / adicionar link'} />
 
-          {/* 🗨️ Acompanhamento — timeline/chat do pedido */}
-          <button onClick={()=>setModalAcomp(p)}
-            style={{...btn,background:'#7c3aed',marginRight:3}}>
-            🗨️
-          </button>
+          {/* Acompanhamento — timeline/chat do pedido */}
+          <Botao pequeno variante="discreto" icone={mdiForumOutline} aria-label="Acompanhamento" title="Acompanhamento" onClick={()=>setModalAcomp(p)} />
 
-          {/* 💬 Observações (registro curto, aparece na impressão) */}
-          <button onClick={()=>{setModalObs(p);setObsTexto('');}}
-            style={{...btn,background:p.observacoes_compra?'#0891b2':'#64748b',marginRight:3}}>
-            💬
-          </button>
+          {/* Observações (registro curto, aparece na impressão) */}
+          <Botao pequeno variante={p.observacoes_compra ? 'secundario' : 'discreto'} icone={mdiCommentTextOutline} aria-label="Observações" title="Observações"
+            onClick={()=>{setModalObs(p);setObsTexto('');}} />
 
-          {/* 🖨️ Imprimir */}
-          <button onClick={()=>imprimirSolicitacao(p)}
-            style={{...btn,background:'#475569'}}>🖨️</button>
-          <span style={{ display:'inline-block', verticalAlign:'middle', marginLeft:3 }}><MenuAcoes itens={itensMenuFluxo(p)} rotulo="Etapa, edição e descarte" /></span>
+          {/* Imprimir */}
+          <Botao pequeno variante="discreto" icone={mdiPrinterOutline} aria-label="Imprimir" title="Imprimir a solicitação" onClick={()=>imprimirSolicitacao(p)} />
+          <MenuAcoes itens={itensMenuFluxo(p)} rotulo="Etapa, edição e descarte" />
 
-          {/* 📋 Imprimir Ordem de Compra — só existe depois de Comprado */}
+          {/* Imprimir Ordem de Compra — só existe depois de Comprado */}
           {p.numero_oc && (
-            <button onClick={()=>imprimirOrdemCompra(p)} title={`Imprimir ${p.numero_oc}`}
-              style={{...btn,background:'#7c3aed',marginLeft:3}}>📋 OC</button>
+            <Botao pequeno icone={mdiClipboardTextOutline} onClick={()=>imprimirOrdemCompra(p)} title={`Imprimir ${p.numero_oc}`}>OC</Botao>
           )}
+          </div>
         </td>
       </tr>
     );
   };
 
   return (
-    <div style={{background:'#fff',borderRadius:8,padding:20,marginTop:16,boxShadow:'0 1px 3px #0001'}}>
+    <div className="acn-cmp">
 
       {/* CABEÇALHO */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <h2 style={{fontSize:15,fontWeight:700,color:'#1a3a52',margin:0}}>🛒 Requisições de Compra</h2>
-          <button onClick={()=>setModalGerCentros(true)}
-            style={{...btn,background:'#6366f1',fontSize:10,whiteSpace:'nowrap'}}>⚙️ Centros de Custo</button>
+      <div className="acn-cmp-cab">
+        <div className="acn-cmp-cab-esq">
+          <h2 className="acn-cmp-titulo"><Icone path={mdiCartOutline} size={18} /> Requisições de Compra</h2>
+          <Botao pequeno icone={mdiCogOutline} onClick={()=>setModalGerCentros(true)}>Centros de Custo</Botao>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-        <div style={{ display:'flex', border:'1px solid #cbd5e1', borderRadius:6, overflow:'hidden' }}>
-          {([['tabela','☰ Tabela'],['kanban','▦ Kanban']] as const).map(([v,l]) => (
-            <button key={v} onClick={()=>setVisao(v)}
-              style={{ fontSize:10, fontWeight:800, padding:'5px 12px', cursor:'pointer', border:'none',
-                background: visao===v ? '#1e293b' : '#fff', color: visao===v ? '#fff' : '#64748b' }}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <select value={filtro} onChange={e=>setFiltro(e.target.value)}
-          style={{padding:'5px 10px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11}}>
-          <option value="">Todos os status</option>
-          {[...ETAPAS_COMPRA, DESCARTADA].map(s=><option key={s}>{s}</option>)}
-        </select>
+        <div className="acn-cmp-filtros">
+          <Chips rotulo="Visão" ativo={visao} onChange={(v) => setVisao(v as any)}
+            itens={[{ id:'tabela', rotulo:'Tabela', icone: mdiTableLarge }, { id:'kanban', rotulo:'Kanban', icone: mdiViewColumnOutline }]} />
+          <select className="acn-input acn-cmp-filtro-status" value={filtro} onChange={e=>setFiltro(e.target.value)} aria-label="Status">
+            <option value="">Todos os status</option>
+            {[...ETAPAS_COMPRA, DESCARTADA].map(s=><option key={s}>{s}</option>)}
+          </select>
         </div>
       </div>
 
@@ -2123,15 +2094,15 @@ export default function ComprasTab({ currentUser }) {
       )}
 
       {/* KPIs — resumo no topo, antes da lista */}
-      <div style={{marginBottom:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10}}>
-        <div style={{...kpi,borderColor:'#1e293b'}}>
-          <div style={{fontSize:20,fontWeight:700,color:'#1e293b'}}>{total}</div>
-          <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>Total</div>
+      <div className="acn-kpis acn-cmp-kpis">
+        <div className="acn-kpi">
+          <span className="val acn-num">{total}</span>
+          <span className="rot"><i data-acn-familia="neutro" />Total</span>
         </div>
         {kpis.map(k=>(
-          <div key={k.label} style={{...kpi,borderColor:k.cor}}>
-            <div style={{fontSize:20,fontWeight:700,color:k.cor}}>{k.n}</div>
-            <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>{k.label}</div>
+          <div key={k.label} className="acn-kpi">
+            <span className="val acn-num">{k.n}</span>
+            <span className="rot"><i data-acn-familia={FAMILIA_COMPRA[k.label] || 'neutro'} />{k.label}</span>
           </div>
         ))}
       </div>
@@ -2163,15 +2134,13 @@ export default function ComprasTab({ currentUser }) {
           : pedidos.filter((p:any) => p.status_compra === st);
         return (<>
         {celular && <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />}
-        <div style={{ display:'flex', gap:8, overflowX:'auto', alignItems:'flex-start', paddingBottom:6 }}>
+        <div className="acn-cmp-quadro">
           {colunas.filter(st => !celular || st === ativa).map(st => (
-            <div key={st} style={{ flex: celular ? '1 1 auto' : '1 1 230px', minWidth: celular ? 0 : 230, maxWidth: 420, display:'flex', borderRadius:10,
-                outline: colunaAlvo === st && arrastando ? '2px dashed var(--acn-brand)' : undefined, outlineOffset: 2,
-                background: colunaAlvo === st && arrastando ? 'var(--acn-brand-soft)' : undefined }}
+            <div key={st} className={'acn-cmp-coluna' + (celular ? ' celular' : '') + (colunaAlvo === st && arrastando ? ' alvo' : '')}
               onDragOver={e => { if (!arrastando) return; e.preventDefault(); if (colunaAlvo !== st) setColunaAlvo(st); }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setColunaAlvo(c => c === st ? null : c); }}
               onDrop={e => { e.preventDefault(); const p = pedidos.find((x:any) => x.id === arrastando); setArrastando(null); setColunaAlvo(null); if (p) moverPara(p, st); }}>
-            <div style={{ display:'flex', flexDirection:'column', width:'100%' }}>
+            <div className="acn-cmp-coluna-int">
             <KanbanColuna titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={0}
               {...(celular ? { visiveis: 100000 } : { visiveis: CARDS_POR_COLUNA })}
               itens={itensDaColuna(st)} vazio="Nenhuma requisição"
@@ -2182,44 +2151,44 @@ export default function ComprasTab({ currentUser }) {
                     onDragStart={e => { setArrastando(p.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', p.id); } catch {} }}
                     onDragEnd={() => { setArrastando(null); setColunaAlvo(null); }}
                     title={celular ? undefined : 'Arraste para outra etapa'}
-                    style={{ background:'#fff', border:`1px solid ${naoLido ? '#eab308' : '#e2e8f0'}`, borderLeft:`4px solid ${COR_STATUS_COMPRA[st]}`,
-                    borderRadius:6, padding:'7px 9px', boxShadow:'0 1px 2px #0000000d', fontSize:11, cursor: celular ? undefined : 'grab', opacity: arrastando === p.id ? .55 : 1 }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
-                      <strong style={{ fontSize:11, color:'#1e293b' }}>{p.numero_pedido}</strong>
-                      {p.numero_oc && <span style={{ fontSize:8, fontWeight:700, color:'#7c3aed' }}>📋 {p.numero_oc}</span>}
+                    className={'acn-cmp-card' + (naoLido ? ' nova' : '') + (celular ? '' : ' arrastavel') + (arrastando === p.id ? ' arrastando' : '')}
+                    data-acn-familia={FAMILIA_COMPRA[st] || 'neutro'}>
+                    <div className="acn-cmp-card-topo">
+                      <strong>{p.numero_pedido}</strong>
+                      {p.numero_oc && <span className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</span>}
                     </div>
-                    <div style={{ fontSize:10, color:'#334155', margin:'3px 0' }}><DescricaoCompacta texto={p.descricao_material} /></div>
-                    <div style={{ fontSize:9, color:'#64748b' }}>
+                    <div className="acn-cmp-card-desc"><DescricaoCompacta texto={p.descricao_material} /></div>
+                    <div className="acn-ajuda">
                       Qtd {p.quantidade || 1}{p.fornecedor ? ` · ${p.fornecedor}` : ''}{p.opl ? ` · OP ${p.opl}` : ''}
                     </div>
                     <SeloOrigemCompra p={p} />
                     <VinculoLinkCompra p={p} compacto />
                     {(p.reprocessos > 0 || p.status_compra === DESCARTADA) && (
-                      <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:4 }}>
+                      <div className="acn-cmp-card-selos">
                         {p.reprocessos > 0 && <Selo familia="atencao" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
-                        {p.status_compra === DESCARTADA && p.motivo_descarte && <span style={{ fontSize:10, color:'#64748b' }} title={p.motivo_descarte}>{String(p.motivo_descarte).slice(0,70)}</span>}
+                        {p.status_compra === DESCARTADA && p.motivo_descarte && <span className="acn-ajuda" title={p.motivo_descarte}>{String(p.motivo_descarte).slice(0,70)}</span>}
                       </div>
                     )}
                     {celular && (
-                      <select className="acn-input" value="" style={{ width:'100%', marginTop:6 }} aria-label="Mover para outra etapa"
+                      <select className="acn-input acn-cmp-mover" value="" aria-label="Mover para outra etapa"
                         onChange={e => { const d = e.target.value; if (d) moverPara(p, d); }}>
                         <option value="">Mover para…</option>
                         {STATUS_COMPRAS.filter(x => x !== p.status_compra).map(x => <option key={x} value={x}>{x}</option>)}
                       </select>
                     )}
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4, marginTop:5, flexWrap:'wrap' }}>
-                      <span style={{ fontSize:9 }}>
-                        {canVerValor && p.valor_compra ? <strong style={{ color:'#16a34a', marginRight:6 }}>{fmt(p.valor_compra)}</strong> : null}
+                    <div className="acn-cmp-card-rodape">
+                      <span className="acn-ajuda">
+                        {canVerValor && p.valor_compra ? <strong className="acn-txt-ok acn-cmp-card-valor">{fmt(p.valor_compra)}</strong> : null}
                         {p.data_prevista_recebimento ? fmtData(p.data_prevista_recebimento) : null}
                       </span>
-                      <div style={{ display:'flex', gap:3 }}>
-                        {p.status_compra==='Pendente' && <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',padding:'2px 6px',fontSize:9}}>▶️ Iniciar</button>}
-                        {p.status_compra==='Em Andamento' && <button onClick={()=>abrirModalCotacoes(p)} style={{...btn,background:'#d97706',padding:'2px 6px',fontSize:9}}>🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}</button>}
-                        {p.status_compra==='Aguardando Aprovação' && <button onClick={()=>abrirModalCotacoes(p)} style={{...btn,background:'#ea580c',padding:'2px 6px',fontSize:9}}>🔒 Aprovação</button>}
-                        {p.status_compra==='Aprovado' && <button onClick={()=>abrirFluxo('confirmar', p)} style={{...btn,background:'#0ea5e9',padding:'2px 6px',fontSize:9}}>🛒 Confirmar</button>}
-                        <button onClick={()=>setModalResumo(p)} title="Resumo" style={{...btn,background:'#0f766e',padding:'2px 6px',fontSize:9}}>🔍</button>
-                        <button onClick={()=>setModalVinculo(p)} title="Vínculo e link" style={{...btn,background:(p.vinculo_tipo||p.link_url)?'#0369a1':'#94a3b8',padding:'2px 6px',fontSize:9}}>🔗</button>
-                        <button onClick={()=>setModalAcomp(p)} title="Acompanhamento" style={{...btn,background:'#7c3aed',padding:'2px 6px',fontSize:9}}>🗨️</button>
+                      <div className="acn-acoes-linha quebra">
+                        {p.status_compra==='Pendente' && <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>avancarStatus(p)}>Iniciar</Botao>}
+                        {p.status_compra==='Em Andamento' && <Botao pequeno variante="primario" icone={mdiTagOutline} onClick={()=>abrirModalCotacoes(p)}>Cotações{p.vencedora_id ? ' ✓' : ''}</Botao>}
+                        {p.status_compra==='Aguardando Aprovação' && <Botao pequeno variante="primario" icone={mdiLockOutline} onClick={()=>abrirModalCotacoes(p)}>Aprovação</Botao>}
+                        {p.status_compra==='Aprovado' && <Botao pequeno variante="primario" icone={mdiCartCheck} onClick={()=>abrirFluxo('confirmar', p)}>Confirmar</Botao>}
+                        <Botao pequeno icone={mdiMagnify} onClick={()=>setModalResumo(p)} title="Resumo" aria-label="Abrir resumo" />
+                        <Botao pequeno variante={(p.vinculo_tipo||p.link_url) ? 'secundario' : 'discreto'} icone={mdiLinkVariant} onClick={()=>setModalVinculo(p)} title="Vínculo e link" aria-label="Vínculo e link" />
+                        <Botao pequeno variante="discreto" icone={mdiForumOutline} onClick={()=>setModalAcomp(p)} title="Acompanhamento" aria-label="Acompanhamento" />
                         <MenuAcoes itens={itensMenuFluxo(p)} rotulo="Etapa, edição e descarte" />
                       </div>
                     </div>
@@ -2227,11 +2196,9 @@ export default function ComprasTab({ currentUser }) {
                 );
               }} />
             {st === RECEBIDO && recebidosOrdenados.length > 0 && (
-              <button onClick={() => setModalRecebidos(recebidosOrdenados)}
-                style={{ marginTop:4, padding:'5px 8px', border:'1px solid #bbf7d0', borderRadius:6,
-                  background:'#f0fdf4', color:'#15803d', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                📋 Ver todos os recebidos ({recebidosOrdenados.length})
-              </button>
+              <Botao pequeno icone={mdiClipboardTextOutline} className="acn-cmp-recebidos-btn" onClick={() => setModalRecebidos(recebidosOrdenados)}>
+                Ver todos os recebidos ({recebidosOrdenados.length})
+              </Botao>
             )}
             </div>
             </div>
@@ -2240,37 +2207,35 @@ export default function ComprasTab({ currentUser }) {
         </>);
       })()}
 
-      {loading ? <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
-        : pedidos.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhuma requisição encontrada. {queryError ? '' : '(tabela vazia ou sem permissão)'}</div>
+      {loading ? <div className="acn-empty">Carregando...</div>
+        : pedidos.length===0 ? <div className="acn-empty">Nenhuma requisição encontrada. {queryError ? '' : '(tabela vazia ou sem permissão)'}</div>
         : visao === 'kanban' ? null : (
-        <div style={{overflowX:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+        <div className="acn-rolagem">
+          <table className="acn-tabela acn-densa">
             <thead>
-              <tr style={{background:'#f1f5f9',borderBottom:'2px solid #e2e8f0'}}>
-                <th style={th}>Nº Pedido</th>
-                <th style={th}>OP</th>
-                <th style={th}>Descrição</th>
-                <th style={th}>Qtd</th>
-                <th style={th}>Fornecedor</th>
-                {canVerValor && <th style={th}>💰 Valor da Compra</th>}
-                <th style={th}>🏷️ Centro de Custo</th>
-                <th style={th}>🏢 Departamento</th>
-                <th style={th}>📅 Prev. Recebimento</th>
-                <th style={th}>🎯 Prazo Prometido</th>
-                <th style={th}>Status</th>
-                <th style={th}>Ações</th>
+              <tr>
+                <th>Nº Pedido</th>
+                <th>OP</th>
+                <th>Descrição</th>
+                <th>Qtd</th>
+                <th>Fornecedor</th>
+                {canVerValor && <th>Valor da Compra</th>}
+                <th>Centro de Custo</th>
+                <th>Departamento</th>
+                <th>Prev. Recebimento</th>
+                <th>Prazo Prometido</th>
+                <th>Status</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {pedidosAtivos.map(renderPedidoRow)}
               {agruparPorStatus && pedidosConcluidos.length > 0 && (
                 <tr>
-                  <td colSpan={canVerValor ? 12 : 11} style={{padding:0}}>
-                    <button onClick={()=>setMostrarConcluidos(v=>!v)}
-                      style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
-                        background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
-                      {mostrarConcluidos ? '▲ Ocultar' : '▼ Mostrar'} Recebidos e descartados ({pedidosConcluidos.length})
-                    </button>
+                  <td colSpan={canVerValor ? 12 : 11} className="acn-cmp-toggle-cel">
+                    <Botao variante="discreto" className="acn-cmp-toggle" icone={mostrarConcluidos ? mdiChevronUp : mdiChevronDown} onClick={()=>setMostrarConcluidos(v=>!v)}>
+                      {mostrarConcluidos ? 'Ocultar' : 'Mostrar'} Recebidos e descartados ({pedidosConcluidos.length})
+                    </Botao>
                   </td>
                 </tr>
               )}
