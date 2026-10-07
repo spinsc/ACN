@@ -175,6 +175,20 @@ interface Props {
   crmCard?:          any; // card CRM para pré-preenchimento e vínculo
 }
 
+// Número da OS no padrão do SAC ("OS-0038/2026"). Mesma regra de SacTab.tsx (gerarNumeroOS): primeiro a função atômica do banco; se ela falhar, maior número do ano + 1.
+async function gerarNumeroOS(): Promise<string> {
+  const { data: rpcData, error: rpcErr } = await supabase.rpc('proximo_numero_os');
+  if (!rpcErr && rpcData) return rpcData as string;
+  const ano = new Date().getFullYear();
+  const { data } = await supabase.from('sac_ordens_servico').select('numero_os').like('numero_os', `OS-%-${ano}`);
+  let max = 0;
+  for (const row of (data || [])) {
+    const m = row.numero_os?.match(/^OS-(\d+)\//);
+    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+  }
+  return `OS-${String(max + 1).padStart(4, '0')}/${ano}`;
+}
+
 export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, crmCard }: Props) {
   const [form, setForm]       = useState({ ...VAZIO });
   // Venda para Envio já define a rota (envio de material): o campo Fluxo de
@@ -485,25 +499,36 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           return; // vai para o passo 2 (documentos) em vez de fechar
         }
       } else {
-        const payload: any = {
+        // Correção de 07/10/2026 (erro "Could not find the 'criado_por' column of 'sac_ordens_servico'" mostrado à Letícia ao lançar a OS pelo card do CRM):
+        // este caminho foi escrito em 23/07 com nomes de coluna que a tabela nunca teve (criado_por, descricao_problema, equipamento, data_prevista) e sem gerar o
+        // número da OS; por isso nenhuma OS saiu daqui — as que existem vieram da tela do SAC. Agora grava nas colunas reais e gera o número como o SAC faz.
+        const payloadBase: any = {
           tipo_servico:         form.tipo_servico,
-          descricao_problema:   form.descricao_problema.trim(),
-          equipamento:          form.equipamento || null,
+          defeito_reclamado:    form.descricao_problema.trim(),
+          equipamento_nome:     form.equipamento || null,
           numero_serie:         form.numero_serie || null,
           empresa:              form.empresa,
           cliente_nome:         form.cliente_nome.trim(),
           responsavel_nome:     form.responsavel.trim(),
           data_abertura:        form.data_entrada,
-          data_prevista:        form.prazo_entrega || null,
+          data_prevista_entrega: form.prazo_entrega || null,
           observacoes:          form.observacoes || null,
           resumo_servicos:      form.resumo_servicos || null,
           status:               'Aberta',
-          criado_por:           currentUser?.id,
           criado_por_nome:      currentUser?.nome,
+          criado_por_email:     currentUser?.email,
+          atualizado_em:        new Date().toISOString(),
           crm_oportunidade_id:  crmCard?.id || null,
         };
-        const { data, error } = await supabase.from('sac_ordens_servico').insert([payload]).select().single();
-        if (error) throw error;
+        // Se o número sorteado já existir (23505), gera o próximo e tenta de novo, como no SAC.
+        let data: any = null;
+        for (let tentativa = 0; tentativa < 5; tentativa++) {
+          const numero_os = await gerarNumeroOS();
+          const r = await supabase.from('sac_ordens_servico').insert([{ ...payloadBase, numero_os }]).select().single();
+          if (!r.error) { data = r.data; break; }
+          if (r.error.code !== '23505') throw r.error;
+        }
+        if (!data) throw new Error('Não foi possível gerar um número de OS único. Tente de novo.');
         onSaved?.(data, 'os');
       }
       onClose();
