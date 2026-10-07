@@ -22,21 +22,14 @@ import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
   mdiChevronDown, mdiChevronRight, mdiPencilOutline, mdiEmailOutline, mdiCellphone, mdiPhoneOutline, mdiPaperclip, mdiAccountOutline, mdiClockOutline,
   mdiContentSaveOutline, mdiAlertOutline, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline, mdiFormatStrikethrough, mdiPalette, mdiFormatColorHighlight,
-  mdiLinkVariant, mdiImageOutline, mdiTablePlus, mdiTableRemove } from '@mdi/js';
+  mdiLinkVariant, mdiImageOutline, mdiTablePlus, mdiTableRemove, mdiWindowMinimize, mdiTrophyOutline, mdiCheckCircleOutline, mdiPackageVariantClosed,
+  mdiRocketLaunchOutline, mdiChevronUp } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
 const STATUS_LIST = ['Aberta','Em Andamento','Vencida','Finalizada','Perdida','Descartada','Suspenso'];
-const STATUS_COR: Record<string,string> = {
-  'Aberta':       '#2563eb',
-  'Em Andamento': '#059669',
-  'Vencida':      '#16a34a',
-  'Finalizada':   '#0d9488',
-  'Perdida':      '#dc2626',
-  'Descartada':   '#6b7280',
-  'Suspenso':     '#d97706',
-};
+// (as cores de cada status agora vêm da família de cor do guia — ver FAMILIA_STATUS_LICIT; a tabela de hexadecimais saiu na 12e33)
 // Marcadores. Os 3 primeiros sao situacoes juridicas (ja existiam); os de
 // baixo sao situacoes operacionais que as pessoas vinham escrevendo NO NOME
 // do processo ("CADASTRADO - PE 55/2026...", "PEGAR ATA - ...") por falta
@@ -1023,11 +1016,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const marcarComoLidoAudit = useMarkAsRead('licitacoes', licit?.id, currentUser);
   // Caixa de destaque sutil em volta do campo inteiro (rótulo + input) quando ele
   // mudou e ainda não foi visto por este usuário — mesma receita do CRM.
-  const campoDestaque = (field: string): React.CSSProperties => ({
-    borderRadius: 5, padding: '4px 6px', margin: '0 -6px 0 -6px',
-    background: camposNaoLidos.has(field) ? '#fefce8' : 'transparent',
-    border: `1px solid ${camposNaoLidos.has(field) ? '#fde047' : 'transparent'}`,
-  });
+  const campoCls = (field: string, extra = '') =>
+    'acn-lic-campo' + (extra ? ' ' + extra : '') + (camposNaoLidos.has(field) ? ' nao-lido' : '');
   // Fecha o modal marcando como lido — nunca automaticamente no mount, só ao
   // sair da tela. O card na lista (useUnreadMap) se limpa sozinho via Realtime
   // em entity_views, sem precisar de callback direto pra cá.
@@ -1533,7 +1523,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const ehVencida = s === 'Vencida' || showAcoesVencida;
 
   const botaoProximoStatus = () => {
-    if (s === 'Aberta' && isAnalista) return { label:'🚀 Iniciar Andamento', next:'Em Andamento' };
+    if (s === 'Aberta' && isAnalista) return { label:'Iniciar Andamento', next:'Em Andamento' };   // o foguete agora é o ícone do botão
     return null;
   };
   const btnProximo = botaoProximoStatus();
@@ -1558,21 +1548,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Minimizado ────────────────────────────────────────────────────────────
   if (minimized) {
     return (
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:1000, background:'#1e3a5f', color:'#fff', padding:'8px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 -2px 12px #0004' }}>
-        <div>
-          <span style={{ fontSize:9, opacity:.75, marginRight:8, textTransform:'uppercase' }}>{s}</span>
-          <span style={{ fontSize:12, fontWeight:700 }}>{licit.numero} — {licit.nome_projeto}</span>
-          <span style={{ fontSize:10, opacity:.7, marginLeft:8 }}>{licit.orgao}</span>
+      <div className="acn-lic-min">
+        <div className="acn-lic-min-txt">
+          <span className="acn-lic-min-st">{s}</span>
+          <span className="acn-forte">{licit.numero} — {licit.nome_projeto}</span>
+          <span className="acn-fraco">{licit.orgao}</span>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={() => setMinimized(false)}
-            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'4px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-            ⬆ Restaurar
-          </button>
-          <button onClick={onClose}
-            style={{ background:'none', border:'1px solid #fff4', borderRadius:4, color:'#fff', padding:'4px 10px', fontSize:10, cursor:'pointer' }}>
-            ✕
-          </button>
+        <div className="acn-lic-min-acoes">
+          <Botao pequeno variante="primario" icone={mdiChevronUp} onClick={() => setMinimized(false)}>Restaurar</Botao>
+          <Botao pequeno variante="discreto" icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
       </div>
     );
@@ -1580,106 +1564,93 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   // ── Renderização principal ────────────────────────────────────────────────
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex' }}>
-      <div ref={containerRef} style={{ display:'flex', width:'100%', height:'100%', cursor: isDragging ? 'col-resize' : 'default', userSelect: isDragging ? 'none' : 'auto' }}>
+    <div className="modal-overlay acn-lic-overlay acn-lic-ov-card">
+      <div ref={containerRef} className={'acn-lic-cont' + (isDragging ? ' arrastando' : '')}>
 
         {/* ══ PAINEL ESQUERDO: Formulário ══ */}
-        <div style={{ display:'flex', flexDirection:'column', background:'#fff', overflow:'hidden', ...estSplit.esquerda }}>
+        <div className="acn-lic-esq" style={estSplit.esquerda}>
 
           {/* Header */}
-          <div style={{ padding:'10px 14px', background:STATUS_COR[s]||'#374151', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:9, opacity:.85, fontWeight:700, letterSpacing:.5 }}>{s.toUpperCase()} · {licit.classificacao} · {formEdit.faturamento_empresa||'ACN'}</div>
-              <div style={{ fontSize:12, fontWeight:700, wordBreak:'break-word' }}>{licit.numero} — {licit.nome_projeto}</div>
-              <div style={{ fontSize:9, opacity:.85 }}>{licit.orgao}</div>
+          <div className="acn-lic-cab" data-acn-familia={FAMILIA_STATUS_LICIT[s] || 'neutro'}>
+            <div className="acn-lic-cab-info">
+              <div className="acn-lic-cab-linha1">{s.toUpperCase()} · {licit.classificacao} · {formEdit.faturamento_empresa||'ACN'}</div>
+              <div className="acn-lic-cab-titulo">{licit.numero} — {licit.nome_projeto}</div>
+              <div className="acn-lic-cab-orgao">{licit.orgao}</div>
             </div>
-            <div style={{ display:'flex', gap:4, flexShrink:0, alignItems:'center' }}>
+            <div className="acn-lic-cab-acoes">
               <SeletorModoSplit modo={modoSplit} onModo={setModoSplit} escuro />
-              <button onClick={() => setMinimized(true)}
-                title="Minimizar"
-                style={{ background:'rgba(255,255,255,.2)', border:'none', color:'#fff', fontSize:14, cursor:'pointer', padding:'3px 6px', borderRadius:3 }}>
-                ─
-              </button>
-              <button onClick={fecharModal}
-                style={{ background:'rgba(255,255,255,.2)', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'3px 6px', borderRadius:3 }}>
-                ✕
-              </button>
+              <Botao variante="discreto" pequeno icone={mdiWindowMinimize} title="Minimizar" aria-label="Minimizar" onClick={() => setMinimized(true)} />
+              <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModal} />
             </div>
           </div>
 
           {/* Marcadores */}
-          <div style={{ padding:'6px 12px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', flexShrink:0 }}>
-            <button onClick={() => alternarEpp()} aria-pressed={!!formEdit.epp}
-              title="Empresas de pequeno porte (ME/EPP): licitação exclusiva ou com cota reservada"
-              style={{ border:`1.5px solid ${formEdit.epp?'#0f766e':'#d1d5db'}`,
-                background: formEdit.epp?'#ccfbf1':'#fff', color: formEdit.epp?'#0f766e':'#6b7280',
-                borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:800, cursor:'pointer' }}>
-              {formEdit.epp ? '✓ ' : ''}EPP
-            </button>
-            <span role="radiogroup" aria-label="Temperatura da proposta" title="Temperatura da proposta"
-              style={{ display:'inline-flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
+          <div className="acn-lic-marcadores">
+            <Botao pequeno variante={formEdit.epp ? 'primario' : 'secundario'} icone={formEdit.epp ? mdiCheck : undefined} aria-pressed={!!formEdit.epp}
+              title="Empresas de pequeno porte (ME/EPP): licitação exclusiva ou com cota reservada" onClick={() => alternarEpp()}>
+              EPP
+            </Botao>
+            <span className="acn-lic-temp" role="radiogroup" aria-label="Temperatura da proposta" title="Temperatura da proposta">
               {TEMPERATURAS.map(t => {
                 const sel = formEdit.temperatura === t.v;
                 return (
-                  <button key={t.v} role="radio" aria-checked={sel} onClick={() => trocarTemperatura(t.v)} title={`${t.label}${sel ? ' (clique de novo para limpar)' : ''}`}
-                    style={{ border:'none', padding:'1px 7px', fontSize:9, fontWeight:800, cursor:'pointer',
-                      background: sel ? t.cor : '#fff', color: sel ? '#fff' : '#6b7280' }}>
+                  <button key={t.v} type="button" role="radio" aria-checked={sel} data-temp={t.v} className={'acn-lic-temp-btn' + (sel ? ' on' : '')}
+                    onClick={() => trocarTemperatura(t.v)} title={`${t.label}${sel ? ' (clique de novo para limpar)' : ''}`}>
                     {t.emoji} {t.label}
                   </button>
                 );
               })}
             </span>
-            {MARCADORES.map(m => (
-              <button key={m} onClick={() => toggleMarcador(m)} title={AJUDA_MARCADOR[m]}
-                style={{ border:`1.5px solid ${marcadores.includes(m)?'#dc2626':'#d1d5db'}`,
-                  background: marcadores.includes(m)?'#fef2f2':'#fff',
-                  color: marcadores.includes(m)?'#dc2626':'#6b7280',
-                  borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                {marcadores.includes(m)?'✓ ':''}{m}
-              </button>
-            ))}
+            {MARCADORES.map(m => {
+              const ligado = marcadores.includes(m);
+              return (
+                <Botao key={m} pequeno variante={ligado ? 'perigo-sec' : 'secundario'} icone={ligado ? mdiCheck : undefined} aria-pressed={ligado}
+                  title={AJUDA_MARCADOR[m]} onClick={() => toggleMarcador(m)}>
+                  {m}
+                </Botao>
+              );
+            })}
           </div>
 
           {/* Form (scrollable) */}
-          <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+          <div className="acn-lic-form">
 
             {/* Seletores compactos: faturamento, classificação e tipo numa linha */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-              <div style={campoDestaque('faturamento_empresa')}>
-                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>ACN / Detech</label>
-                <select value={formEdit.faturamento_empresa||''} onChange={e=>setF('faturamento_empresa',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+            <div className="acn-grade-3">
+              <div className={campoCls('faturamento_empresa')}>
+                <label className="acn-label">ACN / Detech</label>
+                <select value={formEdit.faturamento_empresa||''} onChange={e=>setF('faturamento_empresa',e.target.value)} className="acn-input acn-lic-cheio">
                   {!formEdit.faturamento_empresa && <option value="">—</option>}
                   {FATURAMENTO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </div>
-              <div style={campoDestaque('classificacao')}>
-                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação</label>
-                <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+              <div className={campoCls('classificacao')}>
+                <label className="acn-label">Classificação</label>
+                <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)} className="acn-input acn-lic-cheio">
                   <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
                 </select>
               </div>
-              <div style={campoDestaque('tipo_objeto')}>
-                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Tipo</label>
-                <select value={formEdit.tipo_objeto||''} onChange={e=>setF('tipo_objeto',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+              <div className={campoCls('tipo_objeto')}>
+                <label className="acn-label">Tipo</label>
+                <select value={formEdit.tipo_objeto||''} onChange={e=>setF('tipo_objeto',e.target.value)} className="acn-input acn-lic-cheio">
                   <option value="">—</option>
                   {['Registro de Preços','Contrato'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </div>
             </div>
 
-            <div style={campoDestaque('numero')}><FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} /></div>
+            <div className={campoCls('numero')}><FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} /></div>
 
             {/* Fluxo de Entrega e endereços: só em Vencida (nos outros status não
                 há o que entregar ainda). Mesma classificação usada na OP. */}
             {ehVencida && (<>
-            <div style={{ ...campoDestaque('fluxo_entrega'), background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'7px 9px', marginBottom:6 }}>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#0369a1', textTransform:'uppercase', marginBottom:2 }}>Fluxo de Entrega</label>
-              <select value={formEdit.fluxo_entrega||''} onChange={e=>setF('fluxo_entrega',e.target.value)}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #7dd3fc', borderRadius:4, fontSize:11 }}>
+            <div className={campoCls('fluxo_entrega', 'acn-lic-fluxo')}>
+              <label className="acn-label">Fluxo de Entrega</label>
+              <select value={formEdit.fluxo_entrega||''} onChange={e=>setF('fluxo_entrega',e.target.value)} className="acn-input acn-lic-cheio">
                 <option value="">— Ainda não definido —</option>
                 {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
               </select>
-              <div style={{ fontSize:9, color:'#0369a1', marginTop:3 }}>
+              <div className="acn-lic-fluxo-ajuda">
                 {formEdit.fluxo_entrega
                   ? FLUXOS.find(f => f.valor === formEdit.fluxo_entrega)?.ajuda
                   : 'Define se, ao virar OP, o processo vai para a Adaptação, para a Fabricação ou direto para envio.'}
@@ -1690,35 +1661,33 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             <EnderecosEntrega licitacaoId={licit.id} />
             </>)}
 
-            <div style={campoDestaque('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
-            <div style={campoDestaque('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
+            <div className={campoCls('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
+            <div className={campoCls('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
 
             <QuadroFormacaoLicitacao licitacaoId={licit.id} />
-            <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'flex-end' }}>
-              <div style={{ ...campoDestaque('valor_estimado'), flex:'1 1 140px', minWidth:130 }}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
-              <div style={{ ...campoDestaque('julgamento'), flex:'0 1 auto' }}>
-                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Julgamento</label>
-                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+            <div className="acn-lic-linha-valor">
+              <div className={campoCls('valor_estimado', 'acn-lic-c-valor')}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
+              <div className={campoCls('julgamento', 'acn-lic-c-julg')}>
+                <label className="acn-label">Julgamento</label>
+                <div className="acn-lic-opcoes quebra">
                   {JULGAMENTO_OPCOES.map(opt => {
                     const ativos: string[] = formEdit.julgamento || [];
                     const sel = ativos.includes(opt);
                     return (
-                      <button key={opt} onClick={() => setFormEdit((f:any) => {
+                      <Botao key={opt} pequeno variante={sel ? 'primario' : 'secundario'} aria-pressed={sel} icone={sel ? mdiCheck : undefined}
+                        onClick={() => setFormEdit((f:any) => {
                           const at = f.julgamento || [];
                           return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
-                        })}
-                        style={{ padding:'4px 8px', fontSize:9, fontWeight:700, cursor:'pointer', borderRadius:4,
-                          border:`1.5px solid ${sel?'#2563eb':'#d1d5db'}`,
-                          background: sel ? '#dbeafe' : '#fff', color: sel ? '#1d4ed8' : '#374151' }}>
-                        {sel?'✓ ':''}{opt}
-                      </button>
+                        })}>
+                        {opt}
+                      </Botao>
                     );
                   })}
                 </div>
               </div>
-              <div style={{ ...campoDestaque('forma_disputa'), flex:'1 1 120px', minWidth:110 }}>
-                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Forma de Disputa</label>
-                <select value={formEdit.forma_disputa||''} onChange={e=>setF('forma_disputa',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+              <div className={campoCls('forma_disputa', 'acn-lic-c-forma')}>
+                <label className="acn-label">Forma de Disputa</label>
+                <select value={formEdit.forma_disputa||''} onChange={e=>setF('forma_disputa',e.target.value)} className="acn-input acn-lic-cheio">
                   <option value="">—</option>
                   {FORMA_DISPUTA_OPCOES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
@@ -1726,14 +1695,14 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </div>
 
             {/* PRAZOS */}
-            <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>PRAZOS</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <div style={campoDestaque('data_limite_esclarecimentos')}><FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" /></div>
-                <div style={campoDestaque('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
-                <div style={campoDestaque('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
-                <div style={campoDestaque('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
-                <div style={campoDestaque('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} placeholder="Ex.: 30 dias após o empenho" /></div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">PRAZOS</div>
+              <div className="acn-grade-2">
+                <div className={campoCls('data_limite_esclarecimentos')}><FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" /></div>
+                <div className={campoCls('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
+                <div className={campoCls('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
+                <div className={campoCls('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
+                <div className={campoCls('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} placeholder="Ex.: 30 dias após o empenho" /></div>
               </div>
             </div>
 
@@ -1742,18 +1711,18 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
             {/* HISTÓRICO — mesmo padrão hide/show de CONTATOS DO PROCESSO, começa recolhido */}
             {(licit.historico||[]).length > 0 && (
-              <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
-                <button onClick={() => setHistoricoExpandido(e => !e)}
-                  style={{ fontSize:9, fontWeight:700, color:'#374151', textTransform:'uppercase', background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:4, marginBottom:6 }}>
-                  {historicoExpandido ? '▼' : '▶'} HISTÓRICO ({licit.historico.length})
-                </button>
+              <div className="acn-lic-secao">
+                <Botao variante="discreto" pequeno icone={historicoExpandido ? mdiChevronDown : mdiChevronRight} aria-expanded={historicoExpandido}
+                  onClick={() => setHistoricoExpandido(e => !e)}>
+                  HISTÓRICO ({licit.historico.length})
+                </Botao>
                 {historicoExpandido && [...(licit.historico||[])].reverse().slice(0,5).map((h: any, i: number) => (
-                  <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:STATUS_COR[h.status]||'#6b7280', marginTop:3, flexShrink:0 }} />
+                  <div key={i} className="acn-lic-hist" data-acn-familia={FAMILIA_STATUS_LICIT[h.status] || 'neutro'}>
+                    <i className="acn-lic-hist-ponto" />
                     <div>
-                      <div style={{ fontSize:10, fontWeight:700, color:STATUS_COR[h.status]||'#374151' }}>{h.status}</div>
-                      <div style={{ fontSize:9, color:'#6b7280' }}>{h.usuario} · {fmtDT(h.data)}</div>
-                      {h.obs && <div style={{ fontSize:9, color:'#374151', wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: htmlSeguro(h.obs) }} />}
+                      <div className="acn-lic-hist-status">{h.status}</div>
+                      <div className="acn-ajuda">{h.usuario} · {fmtDT(h.data)}</div>
+                      {h.obs && <div className="acn-ajuda acn-lic-hist-obs" dangerouslySetInnerHTML={{ __html: htmlSeguro(h.obs) }} />}
                     </div>
                   </div>
                 ))}
@@ -1898,7 +1867,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           </div>
 
           {/* Footer */}
-          <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 14px', flexShrink:0, display:'flex', flexDirection:'column', gap:6 }}>
+          <div className="acn-lic-rodape">
 
             {modalCompraAberto && (
               <ModalSolicitarCompra currentUser={currentUser}
@@ -1916,46 +1885,39 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             )}
 
             {showAcoesVencida && (
-              <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:6, padding:10, marginBottom:4 }}>
-                <div style={{ fontWeight:700, color:'#166534', fontSize:12, marginBottom:6 }}>🏆 VENCIDA! Emita os documentos:</div>
+              <div className="acn-quadro tom-ok acn-lic-vencida">
+                <div className="acn-lic-vencida-tit"><Icone path={mdiTrophyOutline} size={18} />VENCIDA! Emita os documentos:</div>
                 {pedidoEmitido ? (
-                  <div style={{ background:'#dcfce7', borderRadius:4, padding:'6px 10px', fontSize:10, color:'#166534', fontWeight:700, marginBottom:4 }}>
-                    ✅ Pedido {pedidoEmitido} emitido!
-                  </div>
+                  <div className="acn-lic-pedido-ok"><Icone path={mdiCheckCircleOutline} size={16} />Pedido {pedidoEmitido} emitido!</div>
                 ) : (
-                  <button onClick={emitirPedidoCompra}
-                    style={{ width:'100%', background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4 }}>
-                    📦 Emitir Pedido de Compra
-                  </button>
+                  <Botao variante="primario" icone={mdiPackageVariantClosed} className="acn-botao-cheio" onClick={emitirPedidoCompra}>
+                    Emitir Pedido de Compra
+                  </Botao>
                 )}
-                <button onClick={() => { setTabDir('entregas'); if (modoSplit === 'esquerda') setModoSplit('dividido'); }}
-                  style={{ width:'100%', background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4 }}>
-                  📦 Contrato e Entregas — registrar pedidos e gerar OPs
-                </button>
-                <button onClick={fecharModal}
-                  style={{ width:'100%', background:'#fff', color:'#374151', border:'1px solid #d1d5db', borderRadius:4, padding:'5px', fontSize:10, cursor:'pointer' }}>
+                <Botao icone={mdiPackageVariantClosed} className="acn-botao-cheio" onClick={() => { setTabDir('entregas'); if (modoSplit === 'esquerda') setModoSplit('dividido'); }}>
+                  Contrato e Entregas — registrar pedidos e gerar OPs
+                </Botao>
+                <Botao className="acn-botao-cheio" onClick={fecharModal}>
                   Fechar
-                </button>
+                </Botao>
               </div>
             )}
 
             {confirmStatus && (
-              <div style={{ background:'#fef3c7', border:'1px solid #fcd34d', borderRadius:4, padding:8 }}>
-                <div style={{ fontWeight:700, fontSize:10, marginBottom:5 }}>
-                  Mover para: <span style={{ color:STATUS_COR[confirmStatus] }}>{confirmStatus}</span>
+              <div className="acn-quadro tom-atencao acn-lic-confirma">
+                <div className="acn-forte">
+                  Mover para: <span className="acn-lic-status-cor" data-acn-familia={FAMILIA_STATUS_LICIT[confirmStatus] || 'neutro'}>{confirmStatus}</span>
                 </div>
                 <RichTextInput value={obsEncerramento} onChange={html=>setObsEncerramento(html)}
                   placeholder="Observação (opcional)... (selecione um trecho pra formatar)" minHeight={36}
-                  style={{ width:'100%', marginBottom:5 }} />
-                <div style={{ display:'flex', gap:6 }}>
-                  <button onClick={() => mudarStatus(confirmStatus)} disabled={salvando}
-                    style={{ flex:1, background:STATUS_COR[confirmStatus], color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                    {salvando ? '...' : '✓ Confirmar'}
-                  </button>
-                  <button onClick={() => { setConfirmStatus(null); setObsEncerramento(''); }}
-                    style={{ padding:'5px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
+                  style={{ width:'100%' }} />
+                <div className="acn-lic-form-botoes">
+                  <Botao variante="primario" icone={mdiCheck} className="acn-lic-cresce" onClick={() => mudarStatus(confirmStatus)} disabled={salvando}>
+                    {salvando ? '...' : 'Confirmar'}
+                  </Botao>
+                  <Botao onClick={() => { setConfirmStatus(null); setObsEncerramento(''); }}>
                     Cancelar
-                  </button>
+                  </Botao>
                 </div>
               </div>
             )}
@@ -1966,24 +1928,20 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     registro. Os demais "salvar" (Área Livre, nota de andamento,
                     contato) ficam discretos de propósito: cada um grava um
                     sub-recurso à parte (Área Livre já autosalva sozinha). */}
-                <button onClick={salvarForm} disabled={salvandoForm}
-                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'10px', fontWeight:800, fontSize:13, cursor:'pointer', opacity:salvandoForm?.6:1, boxShadow:'0 2px 6px #16a34a40' }}>
-                  {salvandoForm ? 'Salvando...' : '💾 Salvar Alterações'}
-                </button>
+                <Botao variante="primario" icone={mdiContentSaveOutline} className="acn-lic-salvar" onClick={salvarForm} disabled={salvandoForm}>
+                  {salvandoForm ? 'Salvando...' : 'Salvar Alterações'}
+                </Botao>
 
                 {btnProximo && (
-                  <button onClick={() => setConfirmStatus(btnProximo.next)}
-                    style={{ background:STATUS_COR[btnProximo.next], color:'#fff', border:'none', borderRadius:6, padding:'7px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                  <Botao icone={mdiRocketLaunchOutline} onClick={() => setConfirmStatus(btnProximo.next)}>
                     {btnProximo.label}
-                  </button>
+                  </Botao>
                 )}
 
                 {/* Era 5 botões lado a lado (quebrava em 2 linhas) — virou select
                     pra ocupar uma linha só (pedido do usuário em 24/09/2026). */}
                 {s === 'Em Andamento' && isAnalista && (
-                  <select value="" onChange={e => { if (e.target.value) setConfirmStatus(e.target.value); }}
-                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4,
-                      fontSize:10, fontWeight:700, color:'#374151', cursor:'pointer' }}>
+                  <select value="" onChange={e => { if (e.target.value) setConfirmStatus(e.target.value); }} className="acn-input acn-lic-cheio acn-lic-mudar">
                     <option value="">Mudar status para...</option>
                     {['Vencida','Finalizada','Perdida','Descartada','Suspenso'].map(ns => (
                       <option key={ns} value={ns}>
@@ -1994,21 +1952,17 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 )}
 
                 {statusAnterior() && (
-                  <button onClick={voltarFase} disabled={salvando}
-                    title={`Voltar para "${statusAnterior()}"`}
-                    style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:4,
-                      padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                    ◀ Voltar Fase (para {statusAnterior()})
-                  </button>
+                  <Botao pequeno icone={mdiArrowLeft} onClick={voltarFase} disabled={salvando} title={`Voltar para "${statusAnterior()}"`}>
+                    Voltar Fase (para {statusAnterior()})
+                  </Botao>
                 )}
 
                 {/* "Solicitar Análise" saiu daqui: fica só o do Andamento (corpo do card) */}
-                <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+                <div className="acn-lic-rodape-fim">
                   {isAdmin && (
-                    <button onClick={onExcluir}
-                      style={{ background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:4, padding:'5px 10px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                      🗑️ Excluir
-                    </button>
+                    <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={onExcluir}>
+                      Excluir
+                    </Botao>
                   )}
                 </div>
               </>
@@ -2017,11 +1971,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         </div>
 
         {/* ══ DIVISOR REDIMENSIONÁVEL ══ */}
-        <div
-          onMouseDown={onDividerMouseDown}
-          style={{ width:6, background: isDragging ? '#2563eb40' : '#e2e8f0', cursor:'col-resize', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s', ...estSplit.divisor }}
-        >
-          <div style={{ width:2, height:40, background:'#c0c0c0', borderRadius:1 }} />
+        <div className={'acn-lic-divisor' + (isDragging ? ' arrastando' : '')} onMouseDown={onDividerMouseDown} style={estSplit.divisor}>
+          <div className="acn-lic-divisor-marca" />
         </div>
 
         {/* ══ PAINEL DIREITO: Abas ══ */}

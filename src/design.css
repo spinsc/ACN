@@ -2169,3 +2169,65 @@ body.dark .acn-lic-doc.nao-lido { background: rgba(212, 161, 6, .14); border-col
 .acn-lic-mini tr.total td { border-top-color: color-mix(in srgb, var(--acn-info) 45%, transparent); }
 .acn-lic-mini th.esq, .acn-lic-mini td.esq { text-align: left; }
 .acn-lic-mini th.dir, .acn-lic-mini td.dir { text-align: right; }
+
+/* ── Licitações · 12e33 (07/10/2026): a janela grande da licitação — moldura, cabeçalho, marcadores, formulário, histórico e rodapé ── */
+html body .modal-overlay.acn-lic-overlay.acn-lic-ov-card { z-index: 1000; align-items: stretch; justify-content: stretch; padding: 0; }
+.acn-lic-cont { display: flex; width: 100%; height: 100%; cursor: default; user-select: auto; }
+.acn-lic-cont.arrastando { cursor: col-resize; user-select: none; }
+.acn-lic-esq { display: flex; flex-direction: column; overflow: hidden; background: var(--acn-surface); }
+body.dark .acn-lic-esq { background: #1e293b; }
+.acn-lic-cab { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 10px 14px; color: #fff; background: var(--acn-neutral); }
+.acn-lic-cab[data-acn-familia="info"] { background: var(--acn-info); }
+.acn-lic-cab[data-acn-familia="ok"] { background: var(--acn-ok); }
+.acn-lic-cab[data-acn-familia="erro"] { background: var(--acn-bad); }
+.acn-lic-cab[data-acn-familia="atencao"] { background: var(--acn-warn); }
+.acn-lic-cab-info { flex: 1; min-width: 0; }
+.acn-lic-cab-linha1 { font-size: 12px; font-weight: 700; letter-spacing: .5px; opacity: .85; }
+.acn-lic-cab-titulo { font-size: 13px; font-weight: 700; word-break: break-word; }
+.acn-lic-cab-orgao { font-size: 12px; opacity: .85; }
+.acn-lic-cab-acoes { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+html body .acn-lic-cab .acn-b-discreto { color: #fff; background: rgba(255, 255, 255, .2); }
+html body .acn-lic-cab .acn-b-discreto:hover:not(:disabled) { background: rgba(255, 255, 255, .35); color: #fff; }
+.acn-lic-marcadores { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex-shrink: 0; padding: 6px 12px; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+body.dark .acn-lic-marcadores { background: #0f172a; border-color: #334155; }
+.acn-lic-temp { display: inline-flex; overflow: hidden; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); }
+.acn-lic-temp-btn { padding: 3px 8px; border: 0; font: 700 12px var(--acn-font); color: var(--acn-muted); background: var(--acn-surface); cursor: pointer; }
+.acn-lic-temp-btn.on { color: #fff; }
+.acn-lic-temp-btn.on[data-temp="frio"] { background: var(--acn-info); }
+.acn-lic-temp-btn.on[data-temp="morno"] { background: #8b5cf6; }
+.acn-lic-temp-btn.on[data-temp="quente"] { background: var(--acn-bad); }
+body.dark .acn-lic-temp-btn:not(.on) { background: #1e293b; color: #94a3b8; }
+.acn-lic-form { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.acn-lic-campo { padding: 4px 6px; margin: 0 -6px; border: 1px solid transparent; border-radius: 5px; background: transparent; }
+.acn-lic-campo.nao-lido { background: #fefce8; border-color: #d4a106; }
+body.dark .acn-lic-campo.nao-lido { background: rgba(212, 161, 6, .14); }
+.acn-lic-campo.acn-lic-fluxo { padding: 7px 9px; margin: 0 0 6px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 30%, transparent); border-radius: var(--acn-r2); }
+.acn-lic-fluxo-ajuda { margin-top: 3px; font-size: 12px; color: var(--acn-info); }
+.acn-lic-linha-valor { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.acn-lic-campo.acn-lic-c-valor { flex: 1 1 140px; min-width: 130px; }
+.acn-lic-campo.acn-lic-c-julg { flex: 0 1 auto; }
+.acn-lic-campo.acn-lic-c-forma { flex: 1 1 120px; min-width: 110px; }
+.acn-lic-secao { border-top: 1px solid var(--acn-line-soft); padding-top: 8px; }
+.acn-lic-hist { display: flex; gap: 8px; margin: 6px 0; }
+.acn-lic-hist-ponto { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; flex-shrink: 0; background: var(--acn-f); }
+.acn-lic-hist-status { font-size: 12px; font-weight: 700; color: var(--acn-f); }
+.acn-lic-hist-obs { word-break: break-word; }
+.acn-lic-rodape { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; padding: 10px 14px; border-top: 1px solid var(--acn-line); }
+body.dark .acn-lic-rodape { border-color: #334155; }
+.acn-lic-rodape-fim { display: flex; justify-content: flex-end; gap: 6px; }
+html body .acn-b.acn-lic-salvar { min-height: 40px; font-size: 13px; }
+html body .acn-input.acn-lic-mudar { font-weight: 700; cursor: pointer; }
+.acn-quadro.acn-lic-vencida { margin: 0 0 4px; }
+.acn-lic-vencida-tit { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--acn-ok); }
+.acn-lic-pedido-ok { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: var(--acn-ok); background: var(--acn-ok-soft); border-radius: var(--acn-r1); }
+.acn-quadro.acn-lic-confirma { margin: 0; gap: 6px; }
+.acn-lic-status-cor { font-weight: 700; color: var(--acn-f); }
+.acn-lic-divisor { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 6px; background: var(--acn-line); cursor: col-resize; transition: background .15s; }
+.acn-lic-divisor.arrastando { background: color-mix(in srgb, var(--acn-brand) 30%, transparent); }
+.acn-lic-divisor-marca { width: 2px; height: 40px; border-radius: 1px; background: var(--acn-muted); }
+body.dark .acn-lic-divisor { background: #334155; }
+.acn-lic-min { position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--acn-surface); border-top: 2px solid var(--acn-brand); box-shadow: 0 -2px 12px rgba(23, 33, 43, .18); }
+body.dark .acn-lic-min { background: #1e293b; }
+.acn-lic-min-txt { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.acn-lic-min-st { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+.acn-lic-min-acoes { display: flex; gap: 8px; }
