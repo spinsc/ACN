@@ -563,14 +563,18 @@ function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
   const [vinculo, setVinculo] = useState(pedido.vinculo_tipo ? { tipo: pedido.vinculo_tipo, id: pedido.vinculo_id, descricao: pedido.vinculo_descricao } : null);
   const [link, setLink] = useState(pedido.link_url || '');
   const [salvando, setSalvando] = useState(false);
+  const emAcao = useRef(false);   // 7.58: clique duplo gravava duas vezes
   const salvar = async () => {
+    if (emAcao.current) return;
     const l = link.trim();
     if (l && !/^https?:\/\//i.test(l)) { alert('O link precisa começar com http:// ou https://'); return; }
     if (vinculo?.tipo === 'compra' && String(vinculo.id) === String(pedido.id)) { alert('Não dá para vincular a requisição a ela mesma.'); return; }
+    emAcao.current = true;
     setSalvando(true);
     const { error } = await supabase.from('pcp_pedidos_compra').update({
       vinculo_tipo: vinculo?.tipo || null, vinculo_id: vinculo?.id || null, vinculo_descricao: vinculo?.descricao || null, link_url: l || null,
     }).eq('id', pedido.id);
+    emAcao.current = false;
     setSalvando(false);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     onSalvo();
@@ -654,14 +658,19 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
   const [cotacoes, setCotacoes] = useState<any[] | null>(null);
   const [aprovacoes, setAprovacoes] = useState<any[]>([]);
   const [acomp, setAcomp] = useState<any[]>([]);
+  // Etapa 7.58 (06/10/2026): leitura que falha não pode parecer "Nenhuma cotação lançada" nem sumir com as aprovações e o acompanhamento.
+  const [errosLeitura, setErrosLeitura] = useState<string[]>([]);
+  const [tentativa, setTentativa] = useState(0);
   useEffect(() => {
+    setErrosLeitura([]);
+    const falhou = (o: string, e: any) => setErrosLeitura(prev => [...prev, `${o} (${e.message})`]);
     supabase.from('pcp_cotacoes_fornecedores').select('*').eq('pedido_id', p.id).order('criado_em', { ascending: true })
-      .then(({ data }) => setCotacoes(data || []));
+      .then(({ data, error }) => { if (error) { falhou('as cotações', error); setCotacoes(prev => prev ?? []); } else setCotacoes(data || []); });
     supabase.from('pcp_aprovacoes').select('*').eq('pedido_id', p.id).order('nivel', { ascending: true })
-      .then(({ data }) => setAprovacoes(data || []));
+      .then(({ data, error }) => { if (error) falhou('as aprovações', error); else setAprovacoes(data || []); });
     supabase.from('op_acompanhamentos').select('*').eq('referencia_id', String(p.id)).order('criado_em', { ascending: false }).limit(20)
-      .then(({ data }) => setAcomp(data || []));
-  }, [p.id]);
+      .then(({ data, error }) => { if (error) falhou('o acompanhamento', error); else setAcomp(data || []); });
+  }, [p.id, tentativa]);
   const moeda = (v: any) => v != null && v !== '' ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v)) : '—';
   const data = (d: any) => d ? new Date(String(d).length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString('pt-BR') : '—';
   const dep = (departamentos || []).find((d: any) => d.id === p.departamento_id);
@@ -708,6 +717,11 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
             <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'10px 0 4px' }}>Observações</div>
             <div style={{ fontSize:11, whiteSpace:'pre-wrap', wordBreak:'break-word', color:'#334155' }}><Linkify text={p.observacoes_compra} /></div>
           </>
+        )}
+        {errosLeitura.length > 0 && (
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => setTentativa(n => n + 1)}>Tentar de novo</Botao>}>
+            Não foi possível ler {errosLeitura.join('; ')}. Isso não quer dizer que não haja.
+          </Faixa>
         )}
         <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Cotações de fornecedores</div>
         {cotacoes === null ? <div style={{ fontSize:10, color:'#94a3b8' }}>Carregando...</div> : cotacoes.length === 0 ? (

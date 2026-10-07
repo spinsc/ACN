@@ -21,7 +21,7 @@
 //     Comprado com prazo de entrega vencido e sem recebimento → Compras e
 //     Almoxarifado dão a posição (e recebem uma menção).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { horasUteis } from './utils/horasUteis';
 import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
@@ -75,13 +75,25 @@ const fmtData = (v: any) => v ? new Date(String(v).slice(0, 10) + 'T12:00:00').t
 const horasTexto = (h: number) => h < 1 ? 'menos de 1 h' : h < 10 ? `${h.toFixed(1).replace('.', ',')} h` : `${Math.round(h)} h`;
 
 // ── Histórico e avisos ───────────────────────────────────────────────────────
-export async function registrarHistorico(pedidoId: string, reg: any, user: any) {
+// Devolve false se o registro não foi gravado (Etapa 7.58, 06/10/2026: quem precisa do registro — a justificativa obrigatória — não sabia).
+export async function registrarHistorico(pedidoId: string, reg: any, user: any): Promise<boolean> {
   const { error } = await supabase.from('pcp_pedidos_compra_historico').insert([{
     pedido_id: pedidoId, tipo: reg.tipo, status_de: reg.de || null, status_para: reg.para || null,
     motivo: reg.motivo || null, dados: reg.dados || null,
     usuario_email: user?.email || null, usuario_nome: user?.nome || null,
   }]);
   if (error) console.warn('Falha ao registrar histórico da compra:', error.message);
+  return !error;
+}
+
+// Etapa 7.58: um clique duplo em salvar/confirmar/descartar gravava duas vezes (dois históricos, dois avisos). Uma ação por vez em cada janela.
+function useUmaVez() {
+  const em = useRef(false);
+  return (fn: (...a: any[]) => Promise<any>) => async (...args: any[]) => {
+    if (em.current) return;
+    em.current = true;
+    try { return await fn(...args); } finally { em.current = false; }
+  };
 }
 
 async function inserirMencao(dest: { id: any; nome: string }, pedido: any, texto: string, user: any, campo: string) {
@@ -171,8 +183,9 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
   const [motivo, setMotivo] = useState('');
   const [refazer, setRefazer] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const umaVez = useUmaVez();
 
-  const salvar = async () => {
+  const salvar = umaVez(async () => {
     if (!motivo.trim()) { alert('Informe por que a requisição está voltando.'); return; }
     if (!refazer.trim()) { alert('Informe o que precisa ser refeito.'); return; }
     setSalvando(true);
@@ -183,20 +196,31 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
       numero_nf: pedido.numero_nf, data_recebimento_real: pedido.data_recebimento_real,
     };
     const upd: any = { status_compra: destino, reprocessos: (Number(pedido.reprocessos) || 0) + 1 };
+    let idsCanceladas: any[] = [];
     if (destino === 'Em Andamento' && ['Aguardando Aprovação', 'Aprovado'].includes(de)) {
       // a escolha da vencedora e as aprovações em aberto são refeitas; as cotações continuam lá
       upd.vencedora_id = null; upd.justificativa_vencedora = null; upd.valor_compra = null;
-      await supabase.from('pcp_aprovacoes').update({ status: 'cancelado', resposta: `Reprocesso: ${motivo.trim()}` })
-        .eq('pedido_id', pedido.id).eq('status', 'pendente');
+      // 7.58: o cancelamento das aprovações pendentes ignorava o erro e rodava ANTES de o pedido voltar; se o pedido não voltasse,
+      // ficava "Aguardando Aprovação" sem nenhuma aprovação pendente. Agora confere e, se o pedido não voltar, as aprovações voltam a "pendente".
+      const { data: canceladas, error: erroCanc } = await supabase.from('pcp_aprovacoes').update({ status: 'cancelado', resposta: `Reprocesso: ${motivo.trim()}` })
+        .eq('pedido_id', pedido.id).eq('status', 'pendente').select('id');
+      if (erroCanc) { setSalvando(false); alert('Não foi possível cancelar as aprovações pendentes: ' + erroCanc.message + '\n\nNada foi alterado.'); return; }
+      idsCanceladas = (canceladas || []).map((a: any) => a.id);
     }
     if (destino === 'Comprado' && de === 'Recebido') upd.data_conclusao = null;
     const { error } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', pedido.id);
-    if (error) { setSalvando(false); alert('Não foi possível voltar a etapa: ' + error.message); return; }
+    if (error) {
+      let restaurou = true;
+      if (idsCanceladas.length) { const { error: erroRest } = await supabase.from('pcp_aprovacoes').update({ status: 'pendente', resposta: null }).in('id', idsCanceladas); restaurou = !erroRest; }
+      setSalvando(false);
+      alert('Não foi possível voltar a etapa: ' + error.message + (idsCanceladas.length ? (restaurou ? '\n\nAs aprovações pendentes foram mantidas.' : '\n\nATENÇÃO: as aprovações pendentes foram canceladas e não foi possível desfazer. Confira a mesa de cotações.') : ''));
+      return;
+    }
     await registrarHistorico(pedido.id, { tipo: 'retorno', de, para: destino, motivo: motivo.trim(), dados: { ...dados, refazer: refazer.trim(), reprocesso: upd.reprocessos } }, currentUser);
     await mencionarSolicitante(pedido, `A requisição ${pedido.numero_pedido} voltou de "${de}" para "${destino}" (reprocesso nº ${upd.reprocessos}). Motivo: ${motivo.trim()}. Será refeito: ${refazer.trim()}`, currentUser, 'reprocesso');
     setSalvando(false);
     onFeito?.();
-  };
+  });
 
   return (
     <Janela titulo={`Voltar para "${destino}"`} subtitulo="Isto conta como reprocesso. Nada é apagado: cotações, aprovações e valores ficam no histórico." onClose={onClose}>
@@ -218,17 +242,27 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
 export function ModalDescartar({ pedido, currentUser, onClose, onFeito }: any) {
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const salvar = async () => {
+  const umaVez = useUmaVez();
+  const salvar = umaVez(async () => {
     if (!motivo.trim()) { alert('Informe o motivo do descarte.'); return; }
     setSalvando(true);
     const de = pedido.status_compra;
-    await supabase.from('pcp_aprovacoes').update({ status: 'cancelado', resposta: `Descartada: ${motivo.trim()}` })
-      .eq('pedido_id', pedido.id).eq('status', 'pendente');
+    // 7.58: mesmo cuidado do "voltar etapa" — o cancelamento das aprovações era ignorado e vinha antes de o pedido ser descartado
+    const { data: canceladas, error: erroCanc } = await supabase.from('pcp_aprovacoes').update({ status: 'cancelado', resposta: `Descartada: ${motivo.trim()}` })
+      .eq('pedido_id', pedido.id).eq('status', 'pendente').select('id');
+    if (erroCanc) { setSalvando(false); alert('Não foi possível cancelar as aprovações pendentes: ' + erroCanc.message + '\n\nNada foi alterado.'); return; }
+    const idsCanceladas = (canceladas || []).map((a: any) => a.id);
     const { error } = await supabase.from('pcp_pedidos_compra').update({
       status_compra: DESCARTADA, status_antes_descarte: de, motivo_descarte: motivo.trim(),
       descartado_por_nome: currentUser?.nome || null, descartado_em: new Date().toISOString(),
     }).eq('id', pedido.id);
-    if (error) { setSalvando(false); alert('Não foi possível descartar: ' + error.message); return; }
+    if (error) {
+      let restaurou = true;
+      if (idsCanceladas.length) { const { error: erroRest } = await supabase.from('pcp_aprovacoes').update({ status: 'pendente', resposta: null }).in('id', idsCanceladas); restaurou = !erroRest; }
+      setSalvando(false);
+      alert('Não foi possível descartar: ' + error.message + (idsCanceladas.length ? (restaurou ? '\n\nAs aprovações pendentes foram mantidas.' : '\n\nATENÇÃO: as aprovações pendentes foram canceladas e não foi possível desfazer. Confira a mesa de cotações.') : ''));
+      return;
+    }
     await registrarHistorico(pedido.id, { tipo: 'descarte', de, para: DESCARTADA, motivo: motivo.trim() }, currentUser);
     if (!ehSolicitante(pedido, currentUser)) {
       await mencionarSolicitante(pedido, `A requisição ${pedido.numero_pedido} foi descartada por ${currentUser?.nome || '—'}. Motivo: ${motivo.trim()}`, currentUser, 'descarte');
@@ -237,7 +271,7 @@ export function ModalDescartar({ pedido, currentUser, onClose, onFeito }: any) {
     }
     setSalvando(false);
     onFeito?.();
-  };
+  });
   return (
     <Janela titulo="Descartar requisição de compra" subtitulo="A requisição sai do fluxo mas não é apagada: fica em Descartadas e pode ser reativada." onClose={onClose}>
       <ResumoPedido p={pedido} />
@@ -256,7 +290,8 @@ export function ModalReativar({ pedido, currentUser, onClose, onFeito }: any) {
     ? pedido.status_antes_descarte : 'Pendente';
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const salvar = async () => {
+  const umaVez = useUmaVez();
+  const salvar = umaVez(async () => {
     if (!motivo.trim()) { alert('Informe por que está reativando.'); return; }
     setSalvando(true);
     const { error } = await supabase.from('pcp_pedidos_compra').update({ status_compra: destino, motivo_descarte: null }).eq('id', pedido.id);
@@ -264,7 +299,7 @@ export function ModalReativar({ pedido, currentUser, onClose, onFeito }: any) {
     await registrarHistorico(pedido.id, { tipo: 'reativacao', de: DESCARTADA, para: destino, motivo: motivo.trim(), dados: { motivo_descarte_anterior: pedido.motivo_descarte } }, currentUser);
     setSalvando(false);
     onFeito?.();
-  };
+  });
   return (
     <Janela titulo={`Reativar requisição (volta para "${destino}")`} onClose={onClose}>
       <ResumoPedido p={pedido} />
@@ -285,9 +320,12 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
   const [comprador, setComprador] = useState(currentUser?.email || '');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [erroCompradores, setErroCompradores] = useState('');
+  const umaVez = useUmaVez();
   useEffect(() => {
     supabase.from('auth_usuarios').select('email, nome, perfil').eq('ativo', true).in('perfil', ['Compras', 'Admin'])
-      .order('nome').then(({ data }) => {
+      .order('nome').then(({ data, error }) => {
+        if (error) setErroCompradores(error.message);   // 7.58: a lista de compradores vazia por falha parecia "não há comprador"
         const lista = data || [];
         if (currentUser?.email && !lista.some((u: any) => u.email === currentUser.email)) lista.unshift({ email: currentUser.email, nome: currentUser.nome });
         setCompradores(lista);
@@ -295,7 +333,7 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
         if (!['Compras'].includes(currentUser?.perfil) && doSetor) setComprador(doSetor.email);
       });
   }, []);
-  const salvar = async () => {
+  const salvar = umaVez(async () => {
     const c = compradores.find(u => u.email === comprador);
     if (!c) { alert('Escolha o comprador responsável.'); return; }
     setSalvando(true);
@@ -306,10 +344,11 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
     await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Pendente', para: 'Em Andamento', motivo: obs.trim() || null, dados: { comprador: c.nome } }, currentUser);
     setSalvando(false);
     onFeito?.();
-  };
+  });
   return (
     <Janela titulo="Iniciar cotação" subtitulo="A requisição vai para Em Andamento." onClose={onClose}>
       <ResumoPedido p={pedido} />
+      {erroCompradores && <Faixa tom="erro">Não foi possível ler a lista de compradores ({erroCompradores}). Feche e abra a janela de novo.</Faixa>}
       <Rotulo>Comprador responsável *</Rotulo>
       <select className="acn-input" style={{ width: '100%' }} value={comprador} onChange={e => setComprador(e.target.value)}>
         <option value="">Selecione…</option>
@@ -338,6 +377,7 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
 export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
   const [prazo, setPrazo] = useState(pedido.data_prevista_recebimento ? String(pedido.data_prevista_recebimento).slice(0, 10) : '');
   const [salvando, setSalvando] = useState(false);
+  const umaVez = useUmaVez();
 
   const itensBase = Array.isArray(pedido?.itens) ? pedido.itens.filter((i: any) => String(i?.nome || '').trim()) : [];
   const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
@@ -352,7 +392,7 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
     : num(pedido.quantidade);
   const mudou = Math.abs(totalComprado - totalPedido) > 0.0001;
 
-  const salvar = async () => {
+  const salvar = umaVez(async () => {
     if (!prazo) { alert('Informe o prazo de entrega combinado com o fornecedor.'); return; }
     if (totalComprado <= 0) { alert('Informe a quantidade comprada.'); return; }
     setSalvando(true);
@@ -363,7 +403,7 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
     const ok = await onConfirmar(pedido, prazo, totalComprado, itensComprados);
     setSalvando(false);
     if (ok !== false) onClose?.();
-  };
+  });
 
   const inp: React.CSSProperties = { width: '100%', padding: '5px 8px', border: '1px solid var(--acn-line)',
     borderRadius: 4, fontSize: 12, boxSizing: 'border-box' };
@@ -419,6 +459,7 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
 // ── Anexos da requisição ─────────────────────────────────────────────────────
 export async function enviarAnexosCompra(pedidoId: string, arquivos: File[], user: any) {
   const erros: string[] = [];
+  const enviados: string[] = [];
   for (const f of arquivos) {
     if (f.size > 20 * 1024 * 1024) { erros.push(`${f.name}: maior que 20 MB`); continue; }
     const nomeLimpo = f.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -426,11 +467,15 @@ export async function enviarAnexosCompra(pedidoId: string, arquivos: File[], use
     const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: f.type || undefined });
     if (error) { erros.push(`${f.name}: ${error.message}`); continue; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-    await supabase.from('pcp_pedidos_compra_anexos').insert([{
+    const { error: erroReg } = await supabase.from('pcp_pedidos_compra_anexos').insert([{
       pedido_id: pedidoId, nome: f.name, url: pub?.publicUrl || path, tipo: f.type || null, tamanho: f.size,
       criado_por: user?.email || null, criado_por_nome: user?.nome || null,
     }]);
+    if (erroReg) { erros.push(`${f.name}: o arquivo subiu, mas não foi registrado na requisição (${erroReg.message})`); continue; }   // 7.58: aparecia como enviado
+    enviados.push(f.name);
   }
+  // o nome dos que foram de fato (o retorno de sempre segue sendo a lista de erros)
+  (erros as any).enviados = enviados;
   return erros;
 }
 
@@ -462,28 +507,37 @@ export function EscolherAnexos({ arquivos, onChange }: { arquivos: File[]; onCha
 export function AnexosCompra({ pedido, currentUser, podeEditar }: any) {
   const [anexos, setAnexos] = useState<any[] | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [erroLeitura, setErroLeitura] = useState('');
+  const umaVez = useUmaVez();
   const carregar = useCallback(async () => {
-    const { data } = await supabase.from('pcp_pedidos_compra_anexos').select('*').eq('pedido_id', pedido.id).order('criado_em');
+    const { data, error } = await supabase.from('pcp_pedidos_compra_anexos').select('*').eq('pedido_id', pedido.id).order('criado_em');
+    if (error) { setErroLeitura(error.message); setAnexos(prev => prev ?? []); return; }   // 7.58: leitura que falha não pode parecer "Nenhum anexo."
+    setErroLeitura('');
     setAnexos(data || []);
   }, [pedido.id]);
   useEffect(() => { carregar(); }, [carregar]);
-  const enviar = async (files: FileList | null) => {
+  const enviar = umaVez(async (files: FileList | null) => {
     if (!files?.length) return;
+    const lista = Array.from(files);   // o input é limpo logo depois; guarda os arquivos antes
     setEnviando(true);
-    const erros = await enviarAnexosCompra(pedido.id, Array.from(files), currentUser);
-    await registrarHistorico(pedido.id, { tipo: 'anexo', motivo: `Anexou: ${Array.from(files).map(f => f.name).join(', ')}` }, currentUser);
+    const erros = await enviarAnexosCompra(pedido.id, lista, currentUser);
+    const enviados: string[] = (erros as any).enviados || [];
+    // 7.58: o histórico dizia "Anexou: <todos>" mesmo quando alguns não foram; agora só os que foram
+    if (enviados.length) await registrarHistorico(pedido.id, { tipo: 'anexo', motivo: `Anexou: ${enviados.join(', ')}` }, currentUser);
     setEnviando(false);
     if (erros.length) alert('Alguns arquivos não foram enviados:\n' + erros.join('\n'));
     carregar();
-  };
-  const remover = async (a: any) => {
+  });
+  const remover = (a: any) => umaVez(async () => {
     if (!await confirmar(`Remover o anexo "${a.nome}"?`)) return;
-    await supabase.from('pcp_pedidos_compra_anexos').delete().eq('id', a.id);
+    const { error } = await supabase.from('pcp_pedidos_compra_anexos').delete().eq('id', a.id);
+    if (error) { alert('Não foi possível remover o anexo: ' + error.message); return; }   // 7.58: seguia como se tivesse removido
     await registrarHistorico(pedido.id, { tipo: 'anexo', motivo: `Removeu o anexo: ${a.nome}` }, currentUser);
     carregar();
-  };
+  })();
   return (
     <div>
+      {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler os anexos ({erroLeitura}). Isso não quer dizer que não haja anexo.</Faixa>}
       {anexos === null ? <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Carregando…</div>
         : anexos.length === 0 ? <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Nenhum anexo.</div>
         : anexos.map(a => (
@@ -512,11 +566,16 @@ const FAMILIA_HIST: Record<string, string> = { retorno: 'atencao', descarte: 'er
 
 export function HistoricoCompra({ pedidoId, recarregar = 0 }: any) {
   const [itens, setItens] = useState<any[] | null>(null);
+  const [erroLeitura, setErroLeitura] = useState('');
   useEffect(() => {
     supabase.from('pcp_pedidos_compra_historico').select('*').eq('pedido_id', pedidoId).order('criado_em', { ascending: false })
-      .then(({ data }) => setItens(data || []));
+      .then(({ data, error }) => {
+        if (error) { setErroLeitura(error.message); setItens(prev => prev ?? []); return; }   // 7.58: leitura que falha não pode parecer "Nenhum registro ainda."
+        setErroLeitura(''); setItens(data || []);
+      });
   }, [pedidoId, recarregar]);
   if (itens === null) return <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Carregando…</div>;
+  if (erroLeitura && !itens.length) return <Faixa tom="erro">Não foi possível ler o histórico ({erroLeitura}). Isso não quer dizer que não haja registro.</Faixa>;
   if (!itens.length) return <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Nenhum registro ainda.</div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -554,10 +613,11 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
   // A lista de material é a mesma de quando se abre a solicitação (05/10/2026): dá para completar a de uma requisição antiga que nasceu sem lista.
   const [itens, setItens] = useState<any[]>(() => (Array.isArray(pedido.itens) && pedido.itens.length ? pedido.itens : [itemVazio()]));
   const [salvando, setSalvando] = useState(false);
+  const umaVez = useUmaVez();
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
   const temCotacaoOuCompra = ['Aprovado', 'Comprado', 'Recebido'].includes(pedido.status_compra);
 
-  const salvar = async () => {
+  const salvar = umaVez(async () => {
     if (!form.descricao_material.trim()) { alert('A descrição não pode ficar vazia.'); return; }
     const itensNovos = itensPreenchidos(itens);
     // com lista de itens a quantidade é a soma deles (como na criação); sem lista, vale o campo
@@ -594,7 +654,7 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
     }
     setSalvando(false);
     onFeito?.();
-  };
+  });
 
   return (
     <Janela titulo={`Editar solicitação — ${pedido.numero_pedido}`} subtitulo="As alterações ficam registradas no histórico da requisição." onClose={onClose} largura={620}>
@@ -688,9 +748,12 @@ export function alertasDoUsuario(alertas: any[], u: any) {
 
 const CAMPOS_ALERTA = 'id, numero_pedido, descricao_material, quantidade, fornecedor, status_compra, ultima_movimentacao_em, data_atualizacao, data_criacao, data_prevista_recebimento, criado_por, criado_por_nome, comprador_email, comprador_nome, reprocessos, alerta_entrega_mencionado_em, numero_oc';
 
+// Etapa 7.58: se a leitura falhar, LANÇA o erro (antes devolvia "nenhum alerta" e a janela de justificativa obrigatória deixava de aparecer);
+// quem chama mantém os alertas que já tinha na tela.
 export async function carregarAlertasCompras() {
-  const { data } = await supabase.from('pcp_pedidos_compra').select(CAMPOS_ALERTA)
+  const { data, error } = await supabase.from('pcp_pedidos_compra').select(CAMPOS_ALERTA)
     .in('status_compra', ['Pendente', 'Em Andamento', 'Aprovado', 'Comprado']);
+  if (error) throw new Error(error.message);
   return calcularAlertasCompras(data || []);
 }
 
@@ -706,30 +769,35 @@ export async function dispararMencoesEntrega(alertas: any[], user: any) {
   }
 }
 
-export async function registrarJustificativa(alerta: any, texto: string, user: any) {
+// Devolve false se o registro não foi gravado (7.58: a janela obrigatória fechava e a justificativa se perdia).
+export async function registrarJustificativa(alerta: any, texto: string, user: any): Promise<boolean> {
   const p = alerta.pedido;
   if (alerta.tipo === 'entrega') {
-    await registrarHistorico(p.id, { tipo: 'posicao_entrega', de: p.status_compra, para: p.status_compra, motivo: texto, dados: { prazo: p.data_prevista_recebimento, dias_atraso: alerta.dias } }, user);
+    const ok = await registrarHistorico(p.id, { tipo: 'posicao_entrega', de: p.status_compra, para: p.status_compra, motivo: texto, dados: { prazo: p.data_prevista_recebimento, dias_atraso: alerta.dias } }, user);
+    if (!ok) return false;
     // próxima ocorrência volta a avisar se continuar atrasado
-    await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: null }).eq('id', p.id);
-  } else {
-    await registrarHistorico(p.id, { tipo: 'parado', de: p.status_compra, para: p.status_compra, motivo: texto, dados: { horas_uteis_parado: Math.round(alerta.horas) } }, user);
+    const { error } = await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: null }).eq('id', p.id);
+    if (error) console.warn('Falha ao reabrir o aviso de entrega:', error.message);
+    return true;
   }
+  return registrarHistorico(p.id, { tipo: 'parado', de: p.status_compra, para: p.status_compra, motivo: texto, dados: { horas_uteis_parado: Math.round(alerta.horas) } }, user);
 }
 
 function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: any) {
   const [texto, setTexto] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const umaVez = useUmaVez();
   const p = alerta.pedido;
   const entrega = alerta.tipo === 'entrega';
-  const salvar = async () => {
+  const salvar = umaVez(async () => {
     if (!texto.trim()) { alert(entrega ? 'Informe a posição da entrega.' : 'Informe o motivo de estar parada.'); return; }
     setSalvando(true);
-    await registrarJustificativa(alerta, texto.trim(), currentUser);
+    const gravou = await registrarJustificativa(alerta, texto.trim(), currentUser);
     setSalvando(false);
+    if (!gravou) { alert('Não foi possível registrar. O texto continua aí — tente de novo.'); return; }   // 7.58: limpava o texto e fechava como se tivesse registrado
     setTexto('');
     onRespondido?.();
-  };
+  });
   return (
     <div style={{ border: '1px solid var(--acn-line)', borderLeft: `3px solid ${entrega ? 'var(--acn-bad)' : 'var(--acn-warn)'}`, borderRadius: 8, padding: '8px 10px', background: 'var(--acn-surface)' }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
@@ -755,11 +823,15 @@ function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: a
 // Painel do botão "Avisos" para Compras (e entregas atrasadas para o Almoxarifado)
 export function AlertasComprasPanel({ currentUser, onClose, onCountChange, onAbrirCompras, onAvisosOp, qtdAvisosOp = 0 }: any) {
   const [alertas, setAlertas] = useState<any[] | null>(null);
+  const [erroLeitura, setErroLeitura] = useState('');
   const carregar = useCallback(async () => {
-    const todos = await carregarAlertasCompras();
-    const meus = alertasDoUsuario(todos, currentUser);
-    setAlertas(meus);
-    onCountChange?.(meus.length);
+    try {
+      const todos = await carregarAlertasCompras();
+      const meus = alertasDoUsuario(todos, currentUser);
+      setErroLeitura('');
+      setAlertas(meus);
+      onCountChange?.(meus.length);
+    } catch (e: any) { setErroLeitura(String(e?.message || e)); setAlertas(prev => prev ?? []); }   // 7.58: lia como "Nada parado nem atrasado"
   }, [currentUser?.email, currentUser?.perfil]);
   useEffect(() => { carregar(); }, [carregar]);
   const parados = (alertas || []).filter(a => a.tipo === 'parado');
@@ -778,7 +850,8 @@ export function AlertasComprasPanel({ currentUser, onClose, onCountChange, onAbr
           <Botao pequeno variante="discreto" onClick={onClose} aria-label="Fechar">✕</Botao>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {alertas !== null && alertas.length === 0 && (
+          {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler os avisos ({erroLeitura}). Isso não quer dizer que não haja requisição parada ou atrasada.</Faixa>}
+          {alertas !== null && alertas.length === 0 && !erroLeitura && (
             <div className="acn-empty" style={{ margin: 0 }}>
               Aqui aparecem as requisições paradas (Pendente e Em Andamento há 48h úteis, Aprovado há 24h úteis) e as compras com entrega atrasada.
             </div>
