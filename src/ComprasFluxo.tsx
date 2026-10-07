@@ -116,9 +116,14 @@ export const podeAprovarCompra = (u: any) => u?.pode_aprovar_compra === true;
 
 /** Os aprovadores ativos, para avisar todos e para dizer na tela quem falta. */
 export async function carregarAprovadoresCompra() {
-  const { data } = await supabase.from('auth_usuarios')
+  return (await lerAprovadoresCompra()).data;
+}
+
+/** Igual a `carregarAprovadoresCompra`, mas diz se a leitura falhou — vazio por erro não é "ninguém aprova" (Etapa 7.57, 06/10/2026). */
+export async function lerAprovadoresCompra(): Promise<{ data: any[]; error: string | null }> {
+  const { data, error } = await supabase.from('auth_usuarios')
     .select('id,nome,email').eq('ativo', true).eq('pode_aprovar_compra', true).order('nome');
-  return data || [];
+  return { data: data || [], error: error ? error.message : null };
 }
 
 export async function mencionarPerfis(perfis: string[], pedido: any, texto: string, user: any, campo: string) {

@@ -12,13 +12,13 @@ import KanbanColuna from './KanbanColuna';
 import { combinaBusca } from './SearchUtils';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
-import { Botao, MenuAcoes, Selo } from './Interface';
+import { Botao, MenuAcoes, Selo, Faixa } from './Interface';
 import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
   ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao,
-  podeAprovarCompra, carregarAprovadoresCompra } from './ComprasFluxo';
+  podeAprovarCompra, carregarAprovadoresCompra, lerAprovadoresCompra } from './ComprasFluxo';
 
 const VAZIO_COTACAO = {
   fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
@@ -354,6 +354,7 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
   const timerRef    = useRef<any>(null);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo]       = useState(false);
+  const [erroSalvar, setErroSalvar] = useState('');
 
   useEffect(() => {
     const el = editorRef.current;
@@ -373,8 +374,9 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
     if (!error) {
       onSaved?.(html);
       setSalvo(true);
+      setErroSalvar('');
       setTimeout(() => setSalvo(false), 2000);
-    }
+    } else setErroSalvar(error.message);   // 7.57: o autosave que falhava ficava calado e a nota se perdia ao fechar
   };
 
   const autosave = () => {
@@ -447,6 +449,7 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
         <div style={{ flex:1 }} />
         {salvando && <span style={{ fontSize:8, color:'#d97706' }}>Salvando...</span>}
         {salvo && !salvando && <span style={{ fontSize:8, color:'#16a34a' }}>✓ Salvo</span>}
+        {erroSalvar && !salvando && <span style={{ fontSize:8, color:'#dc2626' }} title={erroSalvar}>NÃO salvou: {erroSalvar}</span>}
         <button onClick={salvarAgora} disabled={salvando} title="Salvar agora"
           style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:3,
             padding:'1px 8px', fontSize:8, fontWeight:700, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
@@ -796,6 +799,15 @@ function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbri
 
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
+  // Etapa 7.57: um clique duplo em salvar/aprovar/rejeitar/excluir gravava duas vezes (duas linhas de aprovação, duas cotações
+  // iguais, dois avisos aos aprovadores) — uma ação por tipo (e por registro).
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   // Compras que esperam aprovação (só para quem aprova): null = ainda não carregou ou não é aprovador
   const [esperando, setEsperando] = useState<any[] | null>(null);
   // Linhas com alteração não vista por este usuário ganham borda amarela —
@@ -857,7 +869,7 @@ export default function ComprasTab({ currentUser }) {
   const [modalPrazoProm, setModalPrazoProm]     = useState<any>(null);
   // Comprador ajusta o prazo de entrega (prev. recebimento) depois da compra
   const [modalPrazoEntrega, setModalPrazoEntrega] = useState<any>(null);   // { p, data, motivo }
-  const salvarPrazoEntrega = async () => {
+  const salvarPrazoEntrega = umaVez('prazo-entrega', async () => {
     const { p, data, motivo } = modalPrazoEntrega;
     if (!data) { alert('Informe a nova data de entrega.'); return; }
     const antes = p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0, 10) : null;
@@ -870,7 +882,7 @@ export default function ComprasTab({ currentUser }) {
       dados: { campos: [{ campo: 'Prazo de entrega', de: br(antes), para: br(data) }] } }, currentUser);
     setModalPrazoEntrega(null);
     load();
-  };
+  });
   const [prazoPromData, setPrazoPromData]       = useState('');
   const [prazoPromDestino, setPrazoPromDestino] = useState<'producao'|'cliente'>('producao');
   const [salvandoPrazoProm, setSalvandoPrazoProm] = useState(false);
@@ -952,21 +964,37 @@ export default function ComprasTab({ currentUser }) {
     return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
   }, []);
 
+  // Mesa de Cotações: se a leitura das cotações ou das aprovações falhar, a mesa não pode agir como se não houvesse cotação
+  // nem aprovação pendente (a ausência de aprovação pendente liberava o botão "Aprovar").
+  const [erroMesa, setErroMesa] = useState('');
+
+  // Etapa 7.57 (06/10/2026): leitura da configuração que falha não pode parecer "não há centro de custo / alçada /
+  // departamento / aprovador" (alçada vazia significava "não precisa de aprovação"). A lista que já estava fica e a tela avisa.
+  const [erroConfig, setErroConfig] = useState<string[]>([]);
+  const marcarErroConfig = (nome: string, msg: string | null) =>
+    setErroConfig(prev => { const sem = prev.filter(x => !x.startsWith(nome + ':')); return msg ? [...sem, `${nome}: ${msg}`] : sem; });
+
   const loadCentros = async () => {
-    const { data } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
-    setCentrosCusto(data || []);
+    const { data, error } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
+    marcarErroConfig('centros de custo', error ? error.message : null);
+    if (!error) setCentrosCusto(data || []);
   };
 
   const loadAlcadas = async () => {
-    const { data } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
-    setAlcadasConfig(data || []);
-    setAprovadoresCompra(await carregarAprovadoresCompra());
+    const { data, error } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
+    marcarErroConfig('alçadas de aprovação', error ? error.message : null);
+    if (!error) setAlcadasConfig(data || []);
+    const ap = await lerAprovadoresCompra();
+    marcarErroConfig('quem aprova', ap.error);
+    if (!ap.error) setAprovadoresCompra(ap.data);
   };
 
   const loadDepartamentos = async () => {
-    const { data } = await supabase.from('compras_departamentos').select('*').eq('ativo', true).order('nome');
-    setDepartamentosConfig(data || []);
+    const { data, error } = await supabase.from('compras_departamentos').select('*').eq('ativo', true).order('nome');
+    marcarErroConfig('departamentos', error ? error.message : null);
+    if (!error) setDepartamentosConfig(data || []);
   };
+  const recarregarConfig = () => { loadCentros(); loadAlcadas(); loadDepartamentos(); };
 
   const buscarOps = async (q: string) => {
     if (!q.trim()) { setOpResultados([]); return; }
@@ -985,7 +1013,7 @@ export default function ComprasTab({ currentUser }) {
     setOpResultados([]);
   };
 
-  const salvarCentro = async () => {
+  const salvarCentro = umaVez('centro', async () => {
     if (!modalCentro) return;
     setSalvandoCentro(true);
     if (centroTipo === 'custom') {
@@ -994,8 +1022,9 @@ export default function ComprasTab({ currentUser }) {
       // telas que ainda leem só centro_custo — ex: agrupamento no Financeiro).
       const centro = centrosCusto.find((c:any) => c.id === centroCustom);
       const label = centro ? labelHierarquico(centro, centrosCusto) + ' — ' + centro.nome : '';
-      await supabase.from('pcp_pedidos_compra').update({ centro_custo_id: centroCustom, centro_custo: label }).eq('id', modalCentro.id);
+      const { error: erroCentro } = await supabase.from('pcp_pedidos_compra').update({ centro_custo_id: centroCustom, centro_custo: label }).eq('id', modalCentro.id);
       setSalvandoCentro(false);
+      if (erroCentro) { alert('Não foi possível salvar o centro de custo: ' + erroCentro.message); return; }   // 7.57: fechava a janela e o pedido seguia sem centro
       setModalCentro(null); load();
       return;
     }
@@ -1007,27 +1036,29 @@ export default function ComprasTab({ currentUser }) {
       if (!centroLivre.trim()) { alert('Informe o centro de custo.'); setSalvandoCentro(false); return; }
       valor = centroLivre.trim();
     }
-    await supabase.from('pcp_pedidos_compra').update({ centro_custo: valor, centro_custo_id: null }).eq('id', modalCentro.id);
+    const { error: erroCentroTxt } = await supabase.from('pcp_pedidos_compra').update({ centro_custo: valor, centro_custo_id: null }).eq('id', modalCentro.id);
     setSalvandoCentro(false);
+    if (erroCentroTxt) { alert('Não foi possível salvar o centro de custo: ' + erroCentroTxt.message); return; }   // 7.57
     setModalCentro(null);
     load();
-  };
+  });
 
   const abrirModalDepartamento = (p: any) => {
     setModalDepartamento(p);
     setDepartamentoSelecionado(p.departamento_id || '');
   };
 
-  const salvarDepartamento = async () => {
+  const salvarDepartamento = umaVez('departamento', async () => {
     if (!modalDepartamento) return;
     if (!departamentoSelecionado) { alert('Selecione um departamento.'); return; }
     setSalvandoDepartamento(true);
-    await supabase.from('pcp_pedidos_compra')
+    const { error: erroDep } = await supabase.from('pcp_pedidos_compra')
       .update({ departamento_id: departamentoSelecionado }).eq('id', modalDepartamento.id);
     setSalvandoDepartamento(false);
+    if (erroDep) { alert('Não foi possível salvar o departamento: ' + erroDep.message); return; }   // 7.57: sem departamento a aprovação do gestor nem nasce
     setModalDepartamento(null);
     load();
-  };
+  });
 
   const [queryError, setQueryError] = useState<string|null>(null);
 
@@ -1061,7 +1092,9 @@ export default function ComprasTab({ currentUser }) {
     let q = supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', {ascending:false});
     if (filtro) q = q.eq('status_compra', filtro);
     const { data, error } = await q;
-    if (error) { setQueryError(error.message); if (!silent) setLoading(false); setPedidos([]); return; }
+    // 7.57: a releitura de 30 s que falhava esvaziava a lista (parecia "nenhuma requisição"); agora a lista fica. Numa leitura
+    // pedida (troca de filtro, recarregar) segue vazia, porque a lista antiga seria de outro filtro.
+    if (error) { setQueryError(error.message); if (!silent) { setLoading(false); setPedidos([]); } return; }
     setPedidos(data || []);
     if (silent) {
       // Refresh silencioso (polling a cada 30s): não sobrescrever edições em
@@ -1155,9 +1188,10 @@ export default function ComprasTab({ currentUser }) {
 
   // "Em Andamento" → "Aguardando Aprovação": sem vencedora, só com cotação.
   // Quem escolhe e aprova a vencedora é a própria etapa de aprovação.
-  const enviarParaAprovacao = async (p: any) => {
-    const { count } = await supabase.from('pcp_cotacoes_fornecedores')
+  const enviarParaAprovacao = (p: any) => umaVez('enviar-aprov-' + p.id, async () => {
+    const { count, error: erroCont } = await supabase.from('pcp_cotacoes_fornecedores')
       .select('id', { count: 'exact', head: true }).eq('pedido_id', p.id);
+    if (erroCont) { alert('Não foi possível conferir as cotações do pedido: ' + erroCont.message); return; }   // 7.57: lia como "sem cotação"
     if (!count) {
       alert('Lance pelo menos uma cotação antes de enviar para aprovação — sem cotação não há o que aprovar.');
       abrirModalCotacoes(p);
@@ -1172,7 +1206,7 @@ export default function ComprasTab({ currentUser }) {
       `Sua requisição ${p.numero_pedido} está aguardando a escolha e aprovação da cotação vencedora.`,
       currentUser, 'aguardando_aprovacao');
     load(true);
-  };
+  })();
 
   // ── Mesa de Cotações ──────────────────────────────────────────────────────
   // Removido de propósito: existia um atalho manual "✅ Concluir" que fechava
@@ -1186,22 +1220,28 @@ export default function ComprasTab({ currentUser }) {
     setNovoAnexoCotacao(null);
     setVencedoraId(p.vencedora_id || null);
     setLoadingCotacoes(true);
-    const { data } = await supabase.from('pcp_cotacoes_fornecedores')
+    setErroMesa('');
+    setCotacoes([]); setAprovacoesPedido([]);   // 7.57: não mostrar as cotações/aprovações do pedido anterior se a leitura deste falhar
+    const { data, error } = await supabase.from('pcp_cotacoes_fornecedores')
       .select('*').eq('pedido_id', p.id).order('criado_em', { ascending: true });
-    setCotacoes(data || []);
+    if (error) setErroMesa('as cotações (' + error.message + ')');
+    else setCotacoes(data || []);
     setLoadingCotacoes(false);
     carregarAprovacoes(p.id);
   };
 
+  // Devolve as aprovações do pedido, ou null se a leitura falhou (aí a mesa fica travada para aprovar até recarregar)
   const carregarAprovacoes = async (pedidoId: string) => {
-    const { data } = await supabase.from('pcp_aprovacoes')
+    const { data, error } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', pedidoId).order('nivel', { ascending: true });
+    if (error) { setErroMesa(prev => (prev ? prev + ' e ' : '') + 'as aprovações (' + error.message + ')'); return null; }
     setAprovacoesPedido(data || []);
     return data || [];
   };
 
-  const adicionarCotacao = async () => {
+  const adicionarCotacao = umaVez('cotacao', async () => {
     if (!modalCotacoes) return;
+    if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de lançar cotação.'); return; }   // 7.57: a contagem de cotações decide a aprovação do departamento
     if (!novaCotacao.fornecedor_nome.trim() || !parseValorBr(novaCotacao.valor_unitario) || !(Number(String(novaCotacao.quantidade).replace(',', '.')) > 0)) {
       alert('Informe o fornecedor, o valor unitário e a quantidade.'); return;
     }
@@ -1230,37 +1270,48 @@ export default function ComprasTab({ currentUser }) {
     // aprovação do gestor do departamento (camada adicional à alçada por valor,
     // que só dispara depois, ao confirmar a compra com vencedora).
     if (cotacoes.length === 0 && modalCotacoes.departamento_id) {
-      await dispararAprovacaoDepartamento(modalCotacoes);
+      const resDep = await dispararAprovacaoDepartamento(modalCotacoes);
+      if (resDep.erro) alert('A cotação foi salva, mas a aprovação do departamento NÃO foi criada: ' + resDep.erro + '\n\nAvise quem aprova ou peça para refazer a cotação.');
+      else if (resDep.avisoFalhou) alert('A cotação foi salva e a aprovação do departamento foi criada, mas o aviso aos aprovadores não saiu. Avise-os diretamente.');
     }
     setNovaCotacao({ ...VAZIO_COTACAO, quantidade: String(modalCotacoes.quantidade || 1) });
     setNovoAnexoCotacao(null);
     abrirModalCotacoes(modalCotacoes);
-  };
+  });
 
   // ── Aprovação por Departamento ────────────────────────────────────────────
-  const dispararAprovacaoDepartamento = async (pedido: any) => {
-    const departamento = departamentosConfig.find((d:any) => d.id === pedido.departamento_id);
-    if (!departamento) return;
-    await supabase.from('pcp_aprovacoes').insert([{
+  // Devolve { erro } se a aprovação não nasceu e { avisoFalhou } se nasceu mas o aviso aos aprovadores não saiu (7.57).
+  // Lê o departamento do pedido no banco na hora (não da lista da tela): lista vazia por falha de leitura pulava a aprovação.
+  const dispararAprovacaoDepartamento = async (pedido: any): Promise<{ erro?: string; avisoFalhou?: boolean }> => {
+    const { data: departamento, error: erroDepLer } = await supabase.from('compras_departamentos')
+      .select('*').eq('id', pedido.departamento_id).eq('ativo', true).maybeSingle();
+    if (erroDepLer) return { erro: 'não foi possível ler o departamento (' + erroDepLer.message + ')' };
+    if (!departamento) return {};
+    const { error: erroApr } = await supabase.from('pcp_aprovacoes').insert([{
       pedido_id: pedido.id, tipo: 'departamento', nivel: 0, nivel_nome: departamento.nome,
       aprovador_id: departamento.gestor_id, aprovador_nome: departamento.gestor_nome,
       valor_no_momento: null, status: 'pendente',
       solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
     }]);
-    await notificarGestorDepartamento(pedido, departamento);
+    if (erroApr) return { erro: erroApr.message };
+    const avisou = await notificarGestorDepartamento(pedido, departamento);
+    return avisou ? {} : { avisoFalhou: true };
   };
 
   // Vai para TODOS que aprovam compra, não só para o gestor do departamento:
   // desde 24/09/2026 quem aprova são as quatro pessoas marcadas no Admin, em
   // qualquer caminho. O nome do departamento continua no texto, porque ajuda
   // a entender de onde veio o pedido.
-  const notificarGestorDepartamento = async (pedido: any, departamento: any) => {
+  // Devolve true se TODOS os avisos saíram (7.57: a falha era engolida e quem aprova nunca ficava sabendo).
+  const notificarGestorDepartamento = async (pedido: any, departamento: any): Promise<boolean> => {
     try {
-      const aprovadores = await carregarAprovadoresCompra();
-      if (!aprovadores.length) return;
+      const { data: aprovadores, error: erroAp } = await lerAprovadoresCompra();
+      if (erroAp) { console.warn('Falha ao ler quem aprova:', erroAp); return false; }
+      if (!aprovadores.length) return false;
+      let todos = true;
       const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${pedido.descricao_material}`;
       for (const ap of aprovadores) {
-        await supabase.from('mencoes').insert({
+        const { error: erroMen } = await supabase.from('mencoes').insert({
           mencionado_id: String(ap.id), mencionado_nome: ap.nome,
           mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
           contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
@@ -1268,6 +1319,7 @@ export default function ComprasTab({ currentUser }) {
           campo: 'aprovacao_departamento', texto_trecho: texto,
           aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
         });
+        if (erroMen) { todos = false; console.warn('Falha ao avisar ' + ap.nome + ':', erroMen.message); }
       }
       const emails = aprovadores.map((a: any) => a.email).filter(Boolean);
       if (emails.length) {
@@ -1279,10 +1331,11 @@ export default function ComprasTab({ currentUser }) {
           body: { to: emails, subject: `Nova cotação — Pedido ${pedido.numero_pedido}`, html },
         });
       }
-    } catch (e) { console.warn('Falha ao notificar aprovadores:', e); }
+      return todos;
+    } catch (e) { console.warn('Falha ao notificar aprovadores:', e); return false; }
   };
 
-  const excluirCotacao = async (id: string) => {
+  const excluirCotacao = (id: string) => umaVez('excluir-cotacao-' + id, async () => {
     // A vencedora, uma vez que a compra já foi Aprovada/Comprada, não pode
     // simplesmente sumir — se o valor dela estava errado, o caminho é
     // corrigir (✏️ Editar), não excluir (perderia o registro/rastreio).
@@ -1292,10 +1345,11 @@ export default function ComprasTab({ currentUser }) {
       return;
     }
     if (!await confirmar('Remover esta cotação?')) return;
-    await supabase.from('pcp_cotacoes_fornecedores').delete().eq('id', id);
+    const { error: erroExc } = await supabase.from('pcp_cotacoes_fornecedores').delete().eq('id', id);
+    if (erroExc) { alert('Não foi possível remover a cotação: ' + erroExc.message); return; }   // 7.57: seguia como se tivesse removido
     if (vencedoraId === id) setVencedoraId(null);
     abrirModalCotacoes(modalCotacoes);
-  };
+  })();
 
   const iniciarEdicaoCotacao = (c: any) => {
     setEditandoCotacaoId(c.id);
@@ -1306,7 +1360,7 @@ export default function ComprasTab({ currentUser }) {
   // propaga o novo total pra pcp_pedidos_compra.valor_compra — é esse o
   // campo que Centro de Custo/Financeiro de fato leem, então é aqui que o
   // erro "entrou errado no centro de custo" se corrige de verdade.
-  const salvarEdicaoCotacao = async (c: any) => {
+  const salvarEdicaoCotacao = (c: any) => umaVez('editar-cotacao-' + c.id, async () => {
     if (!editCotacaoForm.fornecedor_nome?.trim() || !parseValorBr(editCotacaoForm.valor_unitario) || !(Number(String(editCotacaoForm.quantidade).replace(',', '.')) > 0)) {
       alert('Informe o fornecedor, o valor unitário e a quantidade.'); return;
     }
@@ -1319,27 +1373,32 @@ export default function ComprasTab({ currentUser }) {
       oldRow: { fornecedor_nome: c.fornecedor_nome, valor_unitario: c.valor_unitario, valor: c.valor },
       newRow: payload, user: currentUser });
     if (c.id === vencedoraId && novoValorTotal != null && novoValorTotal !== c.valor) {
-      await supabase.from('pcp_pedidos_compra').update({ valor_compra: novoValorTotal }).eq('id', modalCotacoes.id);
-      logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: modalCotacoes.id, changeType: 'UPDATE',
+      const { error: erroValor } = await supabase.from('pcp_pedidos_compra').update({ valor_compra: novoValorTotal }).eq('id', modalCotacoes.id);
+      // 7.57: a cotação era corrigida e o valor do pedido (o que o Financeiro e o centro de custo leem) seguia o antigo, sem aviso
+      if (erroValor) alert('A cotação foi corrigida, mas o VALOR DO PEDIDO (que o Financeiro lê) não foi atualizado: ' + erroValor.message + '\n\nCorrija de novo para tentar outra vez.');
+      else logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: modalCotacoes.id, changeType: 'UPDATE',
         oldRow: { valor_compra: c.valor }, newRow: { valor_compra: novoValorTotal }, user: currentUser });
     }
     setSalvandoEdicaoCotacao(false);
     setEditandoCotacaoId(null);
     await abrirModalCotacoes(modalCotacoes);
     setFiltro(''); load();
-  };
+  })();
 
   // ── Alçadas de Aprovação (Fase 2) ─────────────────────────────────────────
-  const notificarAprovadoresNivel = async (pedido: any, nivelRow: any) => {
+  // Devolve true se TODOS os avisos saíram (7.57).
+  const notificarAprovadoresNivel = async (pedido: any, nivelRow: any): Promise<boolean> => {
     try {
       // Avisa TODOS que podem aprovar, não os que têm certo perfil: o pedido
       // fica na caixa dos quatro e qualquer um resolve (regra de 24/09/2026).
-      const aprovadores = await carregarAprovadoresCompra();
-      if (!aprovadores.length) return;
+      const { data: aprovadores, error: erroAp } = await lerAprovadoresCompra();
+      if (erroAp) { console.warn('Falha ao ler quem aprova:', erroAp); return false; }
+      if (!aprovadores.length) return false;
+      let todos = true;
       const valorFmt = fmt(pedido.valor_compra);
       const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${pedido.descricao_material} — ${valorFmt}`;
       for (const ap of aprovadores) {
-        await supabase.from('mencoes').insert({
+        const { error: erroMen } = await supabase.from('mencoes').insert({
           mencionado_id: String(ap.id), mencionado_nome: ap.nome,
           mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
           contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
@@ -1347,6 +1406,7 @@ export default function ComprasTab({ currentUser }) {
           campo: 'aprovacao_nivel', texto_trecho: texto,
           aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
         });
+        if (erroMen) { todos = false; console.warn('Falha ao avisar ' + ap.nome + ':', erroMen.message); }
       }
       const emails = aprovadores.map((a:any) => a.email).filter(Boolean);
       if (emails.length > 0) {
@@ -1358,7 +1418,8 @@ export default function ComprasTab({ currentUser }) {
           body: { to: emails, subject: `Aprovação necessária — Pedido ${pedido.numero_pedido}`, html },
         });
       }
-    } catch (e) { console.warn('Falha ao notificar aprovadores:', e); }
+      return todos;
+    } catch (e) { console.warn('Falha ao notificar aprovadores:', e); return false; }
   };
 
   const notificarCriadorPedido = async (pedido: any, mensagem: string) => {
@@ -1382,11 +1443,13 @@ export default function ComprasTab({ currentUser }) {
   // "Compras — Demandas" pra ela seguir o fluxo normal a partir dali (ex:
   // acompanhamento de recebimento/logística) — busca o pedido fresco pra já
   // pegar o numero_oc gerado pelo trigger na mesma atualização.
-  const criarDemandaComprasFinalizada = async (pedidoId: string) => {
+  // Devolve null se a demanda nasceu e a mensagem do problema se não nasceu (7.57: a falha era engolida).
+  const criarDemandaComprasFinalizada = async (pedidoId: string): Promise<string | null> => {
     try {
-      const { data: pedido } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
-      if (!pedido) return;
-      await supabase.from('demandas_setoriais').insert([{
+      const { data: pedido, error: erroPed } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
+      if (erroPed) return erroPed.message;
+      if (!pedido) return 'pedido não encontrado';
+      const { error: erroDem } = await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras',
         descricao: `[COMPRA RECEBIDA] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — ${fmt(pedido.valor_compra)}`,
         numero_opl: pedido.opl || null,
@@ -1397,22 +1460,28 @@ export default function ComprasTab({ currentUser }) {
         data_abertura: new Date().toISOString(),
         logs_demanda: [{ texto: `Compra confirmada${pedido.numero_oc ? ` — OC ${pedido.numero_oc}` : ''}.`, usuario: currentUser?.nome, hora: new Date().toISOString() }],
       }]);
-    } catch (e) { console.warn('Falha ao criar demanda de compra concluída:', e); }
+      return erroDem ? erroDem.message : null;
+    } catch (e) { console.warn('Falha ao criar demanda de compra concluída:', e); return String((e as any)?.message || e); }
   };
 
   // Ponto único que decide, ao confirmar uma compra, se ela precisa de aprovação
   // (alçada disparada pelo valor) ou se pode ir direto pra 'Aprovado' (aguardando
   // a confirmação real da compra, ver confirmarCompra) como antes.
-  const dispararOuConfirmar = async (pedidoId: string, extraUpdates: any) => {
+  const dispararOuConfirmar = async (pedidoId: string, extraUpdates: any): Promise<{ error: any; aguardandoAprovacao?: boolean; avisoFalhou?: boolean }> => {
     const valorCompra = extraUpdates.valor_compra;
-    const niveis = alcadasConfig
+    // 7.57: as alçadas vêm do banco na hora da decisão. Se a leitura da tela tivesse falhado, a lista vazia dizia "nenhuma
+    // alçada dispara" e a compra ia direto para "Aprovado" sem a aprovação por valor.
+    const { data: alcadasAtuais, error: erroAlc } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
+    if (erroAlc) return { error: { message: 'não foi possível ler as alçadas de aprovação (' + erroAlc.message + ') — nada foi alterado' } };
+    const niveis = (alcadasAtuais || [])
       .filter(a => a.ativo && Number(a.valor_minimo) <= Number(valorCompra || 0))
       .sort((a,b) => a.nivel - b.nivel);
     // Pode já existir uma linha de aprovação por departamento pendente, criada na
     // 1ª cotação (ver dispararAprovacaoDepartamento) — nesse caso a compra também
     // precisa aguardar, mesmo que nenhuma alçada por valor tenha disparado agora.
-    const { data: pendentesExistentes } = await supabase.from('pcp_aprovacoes')
+    const { data: pendentesExistentes, error: erroPend } = await supabase.from('pcp_aprovacoes')
       .select('id').eq('pedido_id', pedidoId).eq('status', 'pendente').limit(1);
+    if (erroPend) return { error: { message: 'não foi possível conferir as aprovações pendentes (' + erroPend.message + ') — nada foi alterado' } };   // 7.57: lia como "sem pendência" e pulava a aprovação do departamento
     const jaTemPendencia = (pendentesExistentes?.length || 0) > 0;
     if (niveis.length === 0 && !jaTemPendencia) {
       const { error } = await supabase.from('pcp_pedidos_compra')
@@ -1431,21 +1500,26 @@ export default function ComprasTab({ currentUser }) {
       `Sua requisição ${pedidoAtual.numero_pedido} (${String(pedidoAtual.descricao_material || '').slice(0, 80)}) está aguardando aprovação — vencedora: ${extraUpdates.fornecedor || '—'}, ${fmt(extraUpdates.valor_compra)}.`,
       currentUser, 'aguardando_aprovacao');
     if (niveis.length > 0) {
-      await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
+      const { error: erroNiveis } = await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
         pedido_id: pedidoId, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: valorCompra,
         status: 'pendente', solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
       })));
+      // 7.57: sem as linhas de aprovação o pedido ficava "Aguardando Aprovação" e ninguém conseguia aprovar. Quem tenta de novo
+      // pela mesma cotação passa por aqui outra vez (o pedido já está no estado certo e as linhas nascem agora).
+      if (erroNiveis) return { error: { message: 'o pedido foi para "Aguardando Aprovação", mas as linhas de aprovação NÃO foram criadas (' + erroNiveis.message + '). Clique em "Aprovar" na cotação de novo para tentar outra vez' } };
     }
     // Notifica o nível pendente de menor número — pode ser a linha de departamento
     // (nivel 0, já notificada quando criada) ou o 1º nível de alçada recém-criado.
-    const { data: pendentesOrdenados } = await supabase.from('pcp_aprovacoes')
+    let avisoFalhou = false;
+    const { data: pendentesOrdenados, error: erroOrd } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', pedidoId).eq('status', 'pendente').order('nivel', { ascending: true });
+    if (erroOrd) avisoFalhou = true;
     const proximaPendencia = pendentesOrdenados?.[0];
     if (proximaPendencia && proximaPendencia.tipo !== 'departamento') {
-      const nivelConfig = alcadasConfig.find(a => a.nivel === proximaPendencia.nivel);
-      if (nivelConfig) await notificarAprovadoresNivel({ ...pedidoAtual, ...extraUpdates, id: pedidoId }, nivelConfig);
+      const nivelConfig = (alcadasAtuais || []).find(a => a.nivel === proximaPendencia.nivel);
+      if (nivelConfig && !(await notificarAprovadoresNivel({ ...pedidoAtual, ...extraUpdates, id: pedidoId }, nivelConfig))) avisoFalhou = true;
     }
-    return { error: null, aguardandoAprovacao: true };
+    return { error: null, aguardandoAprovacao: true, avisoFalhou };
   };
 
   // Marca a pendência de menor nível (de `lista`) como aprovada e resolve em
@@ -1453,13 +1527,16 @@ export default function ComprasTab({ currentUser }) {
   // "Comprado" se não sobrar nada e já existir vencedora. Recebe `lista`/`pedido`
   // como parâmetro (em vez de ler do state) pra poder ser chamada logo após um
   // fetch fresco, sem depender do próximo render pra enxergar dados recém-criados.
-  const resolverPendenciaComoAprovada = async (lista: any[], pedido: any) => {
+  // Devolve { erro } se alguma gravação falhou (7.57) e { avisoFalhou } se o aviso ao próximo nível não saiu.
+  const resolverPendenciaComoAprovada = async (lista: any[], pedido: any): Promise<{ erro?: string; avisoFalhou?: boolean }> => {
     const nivelAtivo = lista.find(a => a.status === 'pendente');
-    if (!nivelAtivo) return;
-    await supabase.from('pcp_aprovacoes').update({
+    if (!nivelAtivo) return {};
+    let avisoFalhou = false;
+    const { error: erroAprov } = await supabase.from('pcp_aprovacoes').update({
       status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(),
     }).eq('id', nivelAtivo.id);
+    if (erroAprov) return { erro: 'não foi possível registrar a aprovação (' + erroAprov.message + ')' };   // 7.57: seguia como se tivesse aprovado
     // Aprovou: acabou para TODO MUNDO. O pedido cai na caixa das quatro
     // pessoas que aprovam, e quando uma resolve não faz sentido as outras três
     // continuarem com o aviso pendurado (regra do usuário em 24/09/2026).
@@ -1467,12 +1544,14 @@ export default function ComprasTab({ currentUser }) {
     // limpa a caixa de quem marcou — dizer "resolvido" não aprova nada.
     await resolverMencoesDeTodos({ contexto: 'compra_aprovacao', contextoId: pedido.id,
       porNome: currentUser?.nome, motivo: 'aprovado' });
-    const { data: restantes } = await supabase.from('pcp_aprovacoes')
+    const { data: restantes, error: erroRest } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', pedido.id).eq('status', 'pendente').order('nivel', { ascending: true });
+    if (erroRest) return { erro: 'a aprovação foi registrada, mas não foi possível conferir se faltam outros níveis (' + erroRest.message + ')' };
     if (restantes && restantes.length > 0) {
       if (restantes[0].tipo !== 'departamento') {
-        const proximaAlcada = alcadasConfig.find(a => a.nivel === restantes[0].nivel);
-        if (proximaAlcada) await notificarAprovadoresNivel(pedido, proximaAlcada);
+        const { data: alcadasAtuais, error: erroAlc } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
+        const proximaAlcada = (alcadasAtuais || alcadasConfig).find(a => a.nivel === restantes[0].nivel);
+        if (erroAlc || !proximaAlcada || !(await notificarAprovadoresNivel(pedido, proximaAlcada))) avisoFalhou = true;
       }
       // linha de departamento: já foi notificada quando criada, nada a fazer aqui.
     } else {
@@ -1480,14 +1559,18 @@ export default function ComprasTab({ currentUser }) {
       // cedo a linha de departamento (antes do comprador confirmar a compra) não
       // deve sozinho fechar o pedido. A compra em si só fecha em confirmarCompra,
       // numa ação separada e explícita.
-      const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra')
+      const { data: pedidoAtual, error: erroVenc } = await supabase.from('pcp_pedidos_compra')
         .select('vencedora_id').eq('id', pedido.id).maybeSingle();
+      if (erroVenc) return { erro: 'a aprovação foi registrada, mas não foi possível ler a cotação vencedora do pedido (' + erroVenc.message + ')' };
       if (pedidoAtual?.vencedora_id) {
-        await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Aprovado' }).eq('id', pedido.id);
+        const { error: erroStatus } = await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Aprovado' }).eq('id', pedido.id);
+        // 7.57: a linha de aprovação ficava "aprovado" e o pedido seguia "Aguardando Aprovação", sem aviso
+        if (erroStatus) return { erro: 'a aprovação foi registrada, mas o pedido NÃO passou para "Aprovado" (' + erroStatus.message + ')' };
         await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aguardando Aprovação', para: 'Aprovado', motivo: 'Aprovações concluídas.' }, currentUser);
         await notificarCriadorPedido(pedido, `Compra aprovada — aguardando confirmação de compra — pedido ${pedido.numero_pedido}.`);
       }
     }
+    return { avisoFalhou };
   };
 
   // Ação explícita e separada da aprovação: só aqui a compra de fato "fecha"
@@ -1511,7 +1594,8 @@ export default function ComprasTab({ currentUser }) {
     await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aprovado', para: 'Comprado',
       motivo: [difQtd, prazo ? `Prazo de entrega: ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : '']
         .filter(Boolean).join(' ') || null }, currentUser);
-    await criarDemandaComprasFinalizada(pedido.id);
+    const erroDemanda = await criarDemandaComprasFinalizada(pedido.id);
+    if (erroDemanda) alert('A compra foi confirmada, mas a demanda de acompanhamento em "Compras — Demandas" NÃO foi criada: ' + erroDemanda + '\n\nAvise o Compras para abrir à mão.');   // 7.57
     await notificarCriadorPedido(pedido, `Compra confirmada — pedido ${pedido.numero_pedido}.`);
     setFiltro('');
     load();
@@ -1530,17 +1614,21 @@ export default function ComprasTab({ currentUser }) {
     return podeAprovarCompra(currentUser);
   };
 
-  const aprovarNivelAtivo = async () => {
+  const aprovarNivelAtivo = umaVez('aprovar-nivel', async () => {
     if (!modalCotacoes) return;
+    if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de aprovar.'); return; }   // 7.57
     setRespondendoAprovacao(true);
-    await resolverPendenciaComoAprovada(aprovacoesPedido, modalCotacoes);
+    const res = await resolverPendenciaComoAprovada(aprovacoesPedido, modalCotacoes);
     setRespondendoAprovacao(false);
+    if (res.erro) { alert('Aprovação NÃO concluída: ' + res.erro); setFiltro(''); load(); return; }   // 7.57: a janela fechava como se tivesse aprovado
+    if (res.avisoFalhou) alert('Aprovado, mas o aviso ao próximo nível de aprovação não saiu. Avise quem aprova diretamente.');
     setModalCotacoes(null);
     setFiltro('');
     load();
-  };
+  });
 
-  const rejeitarNivelAtivo = async () => {
+  const rejeitarNivelAtivo = umaVez('rejeitar-nivel', async () => {
+    if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de devolver.'); return; }   // 7.57
     const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
     if (!nivelAtivo || !modalCotacoes) return;
     // Mesma checagem de autorização que "Aprovar" já faz — rejeitar não pode
@@ -1554,20 +1642,43 @@ export default function ComprasTab({ currentUser }) {
     if (motivo === null) return;
     if (!motivo.trim()) { alert('Informe o motivo.'); return; }
     setRespondendoAprovacao(true);
-    await supabase.from('pcp_aprovacoes').update({
+    // 7.57: cada gravação é conferida; se o pedido não voltar para "Em Andamento", as linhas de aprovação voltam a "pendente"
+    // (antes a rejeição ficava gravada e o pedido seguia "Aguardando Aprovação" sem linha pendente — ninguém mais conseguia aprovar).
+    const idsPendentes = aprovacoesPedido.filter(a => a.status === 'pendente').map(a => a.id);
+    const restaurarPendentes = async () => {
+      const { error: erroRest } = await supabase.from('pcp_aprovacoes')
+        .update({ status: 'pendente', respondido_por: null, respondido_por_nome: null, respondido_em: null, resposta: null }).in('id', idsPendentes);
+      return !erroRest;
+    };
+    const { error: erroRej } = await supabase.from('pcp_aprovacoes').update({
       status: 'rejeitado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(), resposta: motivo.trim(),
     }).eq('id', nivelAtivo.id);
+    if (erroRej) { setRespondendoAprovacao(false); alert('Não foi possível registrar a rejeição: ' + erroRej.message); return; }
     // Não aprovar também encerra para todos: o pedido volta para "Em Andamento"
     // e sai da fila de aprovação, então ninguém mais tem o que decidir nele.
     await resolverMencoesDeTodos({ contexto: 'compra_aprovacao', contextoId: modalCotacoes.id,
       porNome: currentUser?.nome, motivo: 'devolvido para refazer' });
-    await supabase.from('pcp_aprovacoes').update({ status: 'cancelado' })
+    const { error: erroCanc } = await supabase.from('pcp_aprovacoes').update({ status: 'cancelado' })
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
-    await supabase.from('pcp_pedidos_compra').update({
+    if (erroCanc) {
+      const voltou = await restaurarPendentes();
+      setRespondendoAprovacao(false);
+      alert('Não foi possível devolver o pedido: ' + erroCanc.message + (voltou ? '\n\nA aprovação voltou a ficar pendente.' : '\n\nATENÇÃO: a rejeição ficou gravada e não foi possível desfazer. Confira a mesa.'));
+      load();
+      return;
+    }
+    const { error: erroVoltar } = await supabase.from('pcp_pedidos_compra').update({
       status_compra: 'Em Andamento', vencedora_id: null, justificativa_vencedora: null,
       reprocessos: (Number(modalCotacoes.reprocessos) || 0) + 1,
     }).eq('id', modalCotacoes.id);
+    if (erroVoltar) {
+      const voltou = await restaurarPendentes();
+      setRespondendoAprovacao(false);
+      alert('Não foi possível devolver o pedido para "Em Andamento": ' + erroVoltar.message + (voltou ? '\n\nA aprovação voltou a ficar pendente.' : '\n\nATENÇÃO: a rejeição ficou gravada e não foi possível desfazer. Confira a mesa.'));
+      load();
+      return;
+    }
     await registrarHistorico(modalCotacoes.id, { tipo: 'retorno', de: 'Aguardando Aprovação', para: 'Em Andamento', motivo: `Não aprovado — ${motivo.trim()}`,
       dados: { refazer: 'Rever as cotações e reenviar para aprovação', nivel: nivelAtivo.nivel_nome, reprocesso: (Number(modalCotacoes.reprocessos) || 0) + 1 } }, currentUser);
     await notificarCriadorPedido(modalCotacoes, `Compra rejeitada (Nível ${nivelAtivo.nivel} — ${nivelAtivo.nivel_nome}). Motivo: ${motivo.trim()}`);
@@ -1576,7 +1687,7 @@ export default function ComprasTab({ currentUser }) {
     setModalCotacoes(null);
     setFiltro('');
     load();
-  };
+  });
 
   // Clique em "✅ Aprovar" numa cotação específica: valida as regras de sempre
   // (prazo definido) e, se houver uma pendência de aprovação em aberto,
@@ -1585,6 +1696,7 @@ export default function ComprasTab({ currentUser }) {
   // obrigatório — nem sempre dá pra conseguir 3 fornecedores pro mesmo item.
   const aprovarCotacaoComoVencedora = (cotacao: any) => {
     if (!modalCotacoes) return;
+    if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de aprovar.'); return; }   // 7.57: sem a leitura não dá para saber se há aprovação pendente
     // A previsão de recebimento saiu daqui em 24/09/2026: quem aprova decide a
     // cotação e se libera, só isso. O prazo é combinado com o fornecedor e quem
     // informa é o Compras ao efetivar a compra (ModalConfirmarCompra), onde ele
@@ -1601,13 +1713,14 @@ export default function ComprasTab({ currentUser }) {
 
   // Confirma a senha de quem está aprovando e, se bater, seleciona a cotação
   // como vencedora e resolve a aprovação pendente (se houver e for desta pessoa).
-  const confirmarAprovacaoComSenha = async () => {
+  const confirmarAprovacaoComSenha = umaVez('aprovar-senha', async () => {
     const cotacao = modalConfirmarSenha;
     if (!cotacao || !modalCotacoes) return;
     if (!senhaConfirmacao) { setErroSenha('Digite sua senha.'); return; }
     setVerificandoSenha(true);
-    const { data: usuarioAtual } = await supabase.from('auth_usuarios')
+    const { data: usuarioAtual, error: erroUsu } = await supabase.from('auth_usuarios')
       .select('senha').eq('id', currentUser?.id).maybeSingle();
+    if (erroUsu) { setVerificandoSenha(false); setErroSenha('Não foi possível conferir a senha: ' + erroUsu.message); return; }   // 7.57: dizia "Senha incorreta."
     if (!usuarioAtual || usuarioAtual.senha !== senhaConfirmacao) {
       setVerificandoSenha(false);
       setErroSenha('Senha incorreta.');
@@ -1618,13 +1731,15 @@ export default function ComprasTab({ currentUser }) {
       || `Cotação vencedora: ${cotacao.fornecedor_nome}`;
     // Se a alçada JÁ está pendente para esta mesma vencedora, só falta aprovar: disparar de novo criaria
     // outra linha de aprovação pendente para o mesmo nível (30/09/2026). Confere no banco, não no estado da tela.
-    const { data: jaPendentes } = await supabase.from('pcp_aprovacoes').select('id,tipo')
+    const { data: jaPendentes, error: erroJa } = await supabase.from('pcp_aprovacoes').select('id,tipo')
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
-    const alcadaJaPendente = (jaPendentes || []).some((a: any) => a.tipo !== 'departamento');
-    const { data: pedidoVenc } = await supabase.from('pcp_pedidos_compra')
+    const { data: pedidoVenc, error: erroVenc } = await supabase.from('pcp_pedidos_compra')
       .select('vencedora_id').eq('id', modalCotacoes.id).maybeSingle();
+    // 7.57: falha de leitura aqui criava uma segunda linha de aprovação pendente para o mesmo nível
+    if (erroJa || erroVenc) { setVerificandoSenha(false); setErroSenha('Não foi possível conferir as aprovações do pedido: ' + (erroJa || erroVenc).message); return; }
+    const alcadaJaPendente = (jaPendentes || []).some((a: any) => a.tipo !== 'departamento');
     const mesmaVencedora = pedidoVenc?.vencedora_id === cotacao.id;
-    const { error } = alcadaJaPendente && mesmaVencedora
+    const resDisparo: any = alcadaJaPendente && mesmaVencedora
       ? { error: null }
       : await dispararOuConfirmar(modalCotacoes.id, {
           vencedora_id: cotacao.id,
@@ -1633,6 +1748,7 @@ export default function ComprasTab({ currentUser }) {
           valor_compra: cotacao.valor,
           // sem data_prevista_recebimento: ela é do Compras, na efetivação
         });
+    const error = resDisparo.error;
     if (error) {
       setVerificandoSenha(false);
       setErroSenha('Erro: ' + error.message);
@@ -1642,16 +1758,26 @@ export default function ComprasTab({ currentUser }) {
     // departamento) — busca fresco e resolve na hora se for algo que ESTE
     // usuário pode aprovar; senão fica "Aguardando Aprovação" normalmente.
     const listaFresca = await carregarAprovacoes(modalCotacoes.id);
+    if (listaFresca === null) {
+      setVerificandoSenha(false);
+      setErroSenha('A cotação foi enviada, mas não foi possível ler as aprovações para concluir. Feche a janela e confira a mesa.');
+      load();
+      return;
+    }
     const pendenciaFresca = listaFresca.find((a:any) => a.status === 'pendente');
+    let avisoFalhou = !!(resDisparo as any)?.avisoFalhou;
     if (pendenciaFresca && souAprovadorPara(pendenciaFresca)) {
-      await resolverPendenciaComoAprovada(listaFresca, modalCotacoes);
+      const res = await resolverPendenciaComoAprovada(listaFresca, modalCotacoes);
+      if (res.erro) { setVerificandoSenha(false); setErroSenha('Aprovação NÃO concluída: ' + res.erro); load(); return; }   // 7.57
+      if (res.avisoFalhou) avisoFalhou = true;
     }
     setVerificandoSenha(false);
     setModalConfirmarSenha(null);
     setModalCotacoes(null);
     setFiltro('');
     load();
-  };
+    if (avisoFalhou) alert('Aprovado/enviado para aprovação, mas o aviso aos aprovadores não saiu. Avise quem aprova diretamente.');
+  });
 
   // ── Prazo Prometido de Entrega ────────────────────────────────────────────
   const abrirModalPrazoProm = (p: any) => {
@@ -1660,7 +1786,7 @@ export default function ComprasTab({ currentUser }) {
     setPrazoPromDestino(p.prazo_prometido_destino || 'producao');
   };
 
-  const salvarPrazoProm = async () => {
+  const salvarPrazoProm = umaVez('prazo-prometido', async () => {
     if (!modalPrazoProm) return;
     if (!prazoPromData) { alert('Informe a data prometida.'); return; }
     setSalvandoPrazoProm(true);
@@ -1675,9 +1801,9 @@ export default function ComprasTab({ currentUser }) {
       newRow: { prazo_prometido_entrega: prazoPromData, prazo_prometido_destino: prazoPromDestino }, user: currentUser });
     setModalPrazoProm(null);
     load();
-  };
+  });
 
-  const salvarObs = async () => {
+  const salvarObs = umaVez('obs', async () => {
     if (!obsTexto.trim() || !modalObs) return;
     setSalvandoObs(true);
     const agora = new Date().toLocaleString('pt-BR');
@@ -1702,7 +1828,7 @@ export default function ComprasTab({ currentUser }) {
     }
     else alert('Erro: ' + error.message);
     setSalvandoObs(false);
-  };
+  });
 
   const itensMenuFluxo = (p: any) => {
     const gestor = podeGerirCompras(currentUser);
@@ -1748,7 +1874,8 @@ export default function ComprasTab({ currentUser }) {
         <td style={td}>
           {p.opl ? (
             <button onClick={async () => {
-              const { data } = await supabase.from('oples').select('id').eq('opl', p.opl).maybeSingle();
+              const { data, error: erroOp } = await supabase.from('oples').select('id').eq('opl', p.opl).maybeSingle();
+              if (erroOp) { alert(`Não foi possível procurar a OP ${p.opl}: ${erroOp.message}`); return; }   // 7.57: dizia "não encontrada"
               if (!data) { alert(`OP ${p.opl} não encontrada no cadastro.`); return; }
               abrirVinculo({ tipo:'op', id: data.id, descricao: p.opl });
             }} style={{ background:'none', border:'none', padding:0, color:'#2563eb', fontWeight:700, cursor:'pointer', textDecoration:'underline', font:'inherit' }}>
@@ -2009,10 +2136,15 @@ export default function ComprasTab({ currentUser }) {
         ))}
       </div>
 
+      {erroConfig.length > 0 && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={recarregarConfig}>Tentar de novo</Botao>}>
+          Não foi possível ler: {erroConfig.join('; ')}. Isso não quer dizer que não haja — e <strong>sem as alçadas e os aprovadores lidos, a aprovação de compras fica travada</strong>.
+        </Faixa>
+      )}
       {queryError && (
-        <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,padding:'10px 14px',marginBottom:12,fontSize:11,color:'#dc2626'}}>
-          ⚠️ Erro ao carregar dados: <strong>{queryError}</strong>
-        </div>
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
+          Erro ao carregar dados: <strong>{queryError}</strong>. Isso não quer dizer que não haja requisição{pedidos.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
       )}
 
       {!loading && pedidos.length > 0 && visao === 'kanban' && (() => {
@@ -2379,6 +2511,11 @@ export default function ComprasTab({ currentUser }) {
               {modalCotacoes.descricao_material} · recomendado 3 cotações, mas pode aprovar com menos quando não houver 3 fornecedores disponíveis.
             </div>
 
+            {erroMesa && (
+              <Faixa tom="erro" acao={<Botao pequeno onClick={() => abrirModalCotacoes(modalCotacoes)}>Tentar de novo</Botao>}>
+                Não foi possível ler {erroMesa}. Isso não quer dizer que não haja cotação nem aprovação pendente — a mesa fica travada para lançar cotação e aprovar até a leitura dar certo.
+              </Faixa>
+            )}
             <div style={{marginBottom:14}}>
               <label className="acn-label">📅 Previsão de Recebimento *</label>
               <input type="date" className="acn-input" style={{width:'100%'}}
@@ -2444,7 +2581,7 @@ export default function ComprasTab({ currentUser }) {
               <div style={{textAlign:'center',padding:20,color:'#9ca3af',fontSize:11}}>Carregando...</div>
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14,maxHeight:220,overflowY:'auto'}}>
-                {cotacoes.length===0 && (
+                {cotacoes.length===0 && !erroMesa && (
                   <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
                 )}
                 {cotacoes.map((c:any) => {
