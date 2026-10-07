@@ -1695,3 +1695,39 @@ html body .modal-box.acn-modal-cadastro.acn-flx-jan { width: min(var(--acn-flx-l
 .acn-flx-vazio { margin: 0; }
 .acn-flx-grupo { margin: 4px 0 0; }
 .acn-flx-lista { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Formação de Preços · 12e22 (07/10/2026): campo de OP/OS, categorias e as janelas de salvar, carregar, importar e novo item ── */
+html body .modal-overlay.acn-fp-overlay { z-index: 3000; }
+html body .modal-box.acn-modal-cadastro.acn-fp-jan { width: min(500px, 95vw); max-width: 500px; max-height: 90vh; }
+html body .modal-box.acn-modal-cadastro.acn-fp-jan.menor { width: min(420px, 95vw); max-width: 420px; }
+html body .modal-box.acn-modal-cadastro.acn-fp-lista-jan { width: min(620px, 95vw); max-width: 620px; max-height: 80vh; }
+.acn-fp-busca { position: relative; }
+.acn-fp-busca-linha { display: flex; align-items: center; gap: 4px; }
+html body .acn-input.acn-fp-busca-campo { width: 220px; }
+.acn-fp-sug { position: absolute; top: 100%; left: 0; z-index: 500; min-width: 280px; max-height: 220px; overflow-y: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: var(--acn-shadow-2); }
+.acn-fp-sug-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--acn-line-soft); font-size: 13px; }
+.acn-fp-sug-item:hover { background: var(--acn-surface-2); }
+.acn-fp-sug-item strong { color: var(--acn-brand-ink); }
+.acn-fp-sug-cli { margin: 0 8px; color: var(--acn-text); }
+html body .acn-input.acn-fp-filtro { width: auto; min-width: 180px; padding-top: 3px; padding-bottom: 3px; }
+.acn-fp-cat { display: flex; align-items: center; gap: 4px; margin: 8px 2px 4px; padding-bottom: 2px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-text); border-bottom: 1px solid var(--acn-line); }
+.acn-fp-cat span { color: var(--acn-muted); font-weight: 600; }
+.acn-fp-cats { margin-top: 6px; padding: 8px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-fp-cats-topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.acn-fp-cats-tit { font-size: 11px; font-weight: 700; color: var(--acn-text); }
+.acn-fp-cats-linha { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 13px; }
+.acn-fp-cats-linha.inativa { opacity: .55; }
+.acn-fp-cats-nome { flex: 1; min-width: 0; }
+.acn-fp-rot-linha { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+.acn-fp-vazio { padding: 24px 10px; text-align: center; font-size: 13px; color: var(--acn-muted); }
+.acn-fp-modelo { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-fp-modelo.marcavel { cursor: pointer; }
+.acn-fp-modelo.marcada { border-color: var(--acn-brand); background: var(--acn-brand-soft); }
+.acn-fp-modelo-txt { flex: 1; min-width: 0; }
+.acn-fp-modelo-nome { font-size: 13px; font-weight: 600; color: var(--acn-ink); }
+.acn-fp-rodape-contagem { align-items: center; }
+.acn-fp-rodape-contagem .acn-ajuda { flex: 1; }
+.acn-fp-grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acn-fp-larga { grid-column: 1 / -1; }
+.acn-fp-grade5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.acn-fp-obrigatorio { border-color: var(--acn-bad); }

@@ -9,6 +9,9 @@ import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
 import { Faixa, Botao } from './Interface';
+import Icone from './Icone';
+import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
+  mdiDownloadOutline, mdiLinkVariant, mdiCheck } from '@mdi/js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -168,35 +171,26 @@ function OplAutocomplete({ value, onSelect }) {
   };
 
   return (
-    <div style={{ position:'relative' }}>
-      <div style={{ display:'flex', gap:4, alignItems:'center' }}>
-        <input className="acn-input" style={{ fontSize:10, width:200 }}
+    <div className="acn-fp-busca">
+      <div className="acn-fp-busca-linha">
+        <input className="acn-input acn-fp-busca-campo"
           placeholder="Buscar OP/OS por número ou cliente..."
           value={query}
           onChange={e => buscar(e.target.value)}
           onFocus={() => resultados.length > 0 && setAberto(true)}
           onBlur={() => setTimeout(() => setAberto(false), 180)} />
         {value && (
-          <button onClick={limpar}
-            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'2px 6px', fontSize:9, cursor:'pointer' }}>
-            ✕
-          </button>
+          <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Limpar a OP/OS" aria-label="Limpar a OP/OS" onClick={limpar} />
         )}
-        {buscando && <span style={{ fontSize:9, color:'#64748b' }}>...</span>}
+        {buscando && <span className="acn-ajuda">...</span>}
       </div>
       {aberto && resultados.length > 0 && (
-        <div style={{ position:'absolute', top:'100%', left:0, zIndex:500, background:'#fff',
-          border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 4px 12px #0002',
-          minWidth:280, maxHeight:220, overflowY:'auto' }}>
+        <div className="acn-fp-sug">
           {resultados.map(op => (
-            <div key={op.id}
-              onMouseDown={() => selecionar(op)}
-              style={{ padding:'6px 10px', cursor:'pointer', borderBottom:'1px solid #f1f5f9', fontSize:10 }}
-              onMouseOver={e => (e.currentTarget.style.background = '#f0f9ff')}
-              onMouseOut={e  => (e.currentTarget.style.background = '')}>
-              <strong style={{ color:'#2563eb' }}>{op.opl}</strong>
-              <span style={{ marginLeft:8, color:'#475569' }}>{op.cliente_nome}</span>
-              <span style={{ marginLeft:6, fontSize:9, color:'#94a3b8' }}>{op.status_geral}</span>
+            <div key={op.id} className="acn-fp-sug-item" onMouseDown={() => selecionar(op)}>
+              <strong>{op.opl}</strong>
+              <span className="acn-fp-sug-cli">{op.cliente_nome}</span>
+              <span className="acn-ajuda">{op.status_geral}</span>
             </div>
           ))}
         </div>
@@ -227,7 +221,7 @@ function agruparPorCategoria(lista: any[]) {
 function FiltroCategoria({ lista, valor, onChange }) {
   const nomes = [...new Set(lista.map(categoriaDe))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return (
-    <select className="acn-input" value={valor} onChange={e => onChange(e.target.value)} style={{ fontSize:10, padding:'3px 6px' }}>
+    <select className="acn-input acn-fp-filtro" value={valor} onChange={e => onChange(e.target.value)}>
       <option value="">Todas as categorias ({lista.length})</option>
       {nomes.map(n => <option key={n} value={n}>{n} ({lista.filter(m => categoriaDe(m) === n).length})</option>)}
     </select>
@@ -235,9 +229,8 @@ function FiltroCategoria({ lista, valor, onChange }) {
 }
 
 const TituloCategoria = ({ nome, qtd }) => (
-  <div style={{ fontSize:9, fontWeight:800, color:'#475569', textTransform:'uppercase', letterSpacing:.4,
-    margin:'8px 2px 4px', borderBottom:'1px solid #e2e8f0', paddingBottom:2 }}>
-    🏷️ {nome} <span style={{ color:'#94a3b8', fontWeight:600 }}>({qtd})</span>
+  <div className="acn-fp-cat">
+    <Icone path={mdiTagOutline} size={14} /> {nome} <span>({qtd})</span>
   </div>
 );
 
@@ -269,19 +262,18 @@ function GerenciarCategorias({ onMudou }) {
     carregar(); onMudou?.();
   };
   return (
-    <div style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:8, marginTop:6, background:'#f8fafc' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-        <span style={{ fontSize:9, fontWeight:800, color:'#475569' }}>CATEGORIAS (Gerentes e Admins)</span>
-        <button type="button" onClick={criar} style={{ fontSize:9, fontWeight:700, border:'1px dashed #16a34a', color:'#16a34a', background:'#fff', borderRadius:4, padding:'1px 8px', cursor:'pointer' }}>+ Nova</button>
+    <div className="acn-fp-cats">
+      <div className="acn-fp-cats-topo">
+        <span className="acn-fp-cats-tit">CATEGORIAS (Gerentes e Admins)</span>
+        <Botao pequeno icone={mdiPlus} onClick={criar}>Nova</Botao>
       </div>
       {cats.map(c => (
-        <div key={c.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:10, padding:'2px 0', opacity: c.ativo ? 1 : .5 }}>
-          <span style={{ flex:1 }}>{c.nome}{!c.ativo && ' (desativada)'}</span>
-          <button type="button" onClick={() => renomear(c)} title="Renomear" style={{ fontSize:9, border:'none', background:'none', cursor:'pointer' }}>✏️</button>
-          <button type="button" onClick={() => alternar(c)} title={c.ativo ? 'Desativar (some da escolha; formações já salvas mantêm)' : 'Reativar'}
-            style={{ fontSize:9, border:'1px solid #cbd5e1', background:'#fff', borderRadius:4, cursor:'pointer', padding:'0 5px' }}>
+        <div key={c.id} className={'acn-fp-cats-linha' + (c.ativo ? '' : ' inativa')}>
+          <span className="acn-fp-cats-nome">{c.nome}{!c.ativo && ' (desativada)'}</span>
+          <Botao variante="discreto" pequeno icone={mdiPencilOutline} title="Renomear" aria-label="Renomear" onClick={() => renomear(c)} />
+          <Botao pequeno onClick={() => alternar(c)} title={c.ativo ? 'Desativar (some da escolha; formações já salvas mantêm)' : 'Reativar'}>
             {c.ativo ? 'Desativar' : 'Reativar'}
-          </button>
+          </Botao>
         </div>
       ))}
     </div>
@@ -312,45 +304,47 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
   const opcoes = tipo && !tipos.some((t: any) => t.nome === tipo) ? [{ id: '_atual', nome: tipo }, ...tipos] : tipos;
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:380, padding:20, boxShadow:'0 8px 32px #0003', maxHeight:'90vh', overflowY:'auto' }}>
-        <div style={{ fontWeight:800, fontSize:13, marginBottom:12 }}>
-          {editando ? '✏️ Atualizar Cotação' : '💾 Salvar Modelo de Cotação'}
+    <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro menor acn-fp-jan" role="dialog" aria-label={editando ? 'Atualizar Cotação' : 'Salvar Modelo de Cotação'}>
+        <div className="acn-modal-cab">
+          <span className="modal-title">
+            <Icone path={editando ? mdiPencilOutline : mdiContentSaveOutline} size={18} />
+            {editando ? 'Atualizar Cotação' : 'Salvar Modelo de Cotação'}
+          </span>
         </div>
-        <div style={{ marginBottom:8 }}>
-          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Nome do Modelo *</div>
-          <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: PMSC Lote 3 – Nov/2026"
-            value={nome} onChange={e => setNome(e.target.value)} autoFocus />
-        </div>
-        <div style={{ marginBottom:14 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:3 }}>
-            <span style={{ fontSize:9, fontWeight:700, color:'#475569' }}>Categoria *</span>
-            {podeGerirCategorias && (
-              <button type="button" onClick={() => setGerindo(g => !g)}
-                style={{ fontSize:9, border:'none', background:'none', color:'#0369a1', cursor:'pointer', fontWeight:700 }}>
-                ⚙️ {gerindo ? 'Fechar' : 'Gerenciar categorias'}
-              </button>
-            )}
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div>
+            <div className="acn-label">Nome do Modelo *</div>
+            <input className="acn-input" placeholder="Ex: PMSC Lote 3 – Nov/2026"
+              value={nome} onChange={e => setNome(e.target.value)} autoFocus />
           </div>
-          <select className="acn-input" style={{ width:'100%' }} value={tipo} disabled={carregandoTipos}
-            onChange={e => setTipo(e.target.value)}>
-            {carregandoTipos && <option>Carregando...</option>}
-            {!carregandoTipos && !tipo && <option value="">— escolha —</option>}
-            {opcoes.map((t: any) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
-          </select>
-          {!podeGerirCategorias && (
-            <div style={{ fontSize:9, color:'#94a3b8', marginTop:3 }}>Precisa de uma categoria nova? Peça a um gerente ou administrador.</div>
-          )}
-          {gerindo && <GerenciarCategorias onMudou={carregarTipos} />}
+          <div>
+            <div className="acn-fp-rot-linha">
+              <span className="acn-label">Categoria *</span>
+              {podeGerirCategorias && (
+                <Botao variante="discreto" pequeno icone={mdiCogOutline} onClick={() => setGerindo(g => !g)}>
+                  {gerindo ? 'Fechar' : 'Gerenciar categorias'}
+                </Botao>
+              )}
+            </div>
+            <select className="acn-input" value={tipo} disabled={carregandoTipos}
+              onChange={e => setTipo(e.target.value)}>
+              {carregandoTipos && <option>Carregando...</option>}
+              {!carregandoTipos && !tipo && <option value="">— escolha —</option>}
+              {opcoes.map((t: any) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+            </select>
+            {!podeGerirCategorias && (
+              <div className="acn-ajuda">Precisa de uma categoria nova? Peça a um gerente ou administrador.</div>
+            )}
+            {gerindo && <GerenciarCategorias onMudou={carregarTipos} />}
+          </div>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background: editando ? '#f59e0b' : '#16a34a', flex:1 }}
-            onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } if (!tipo) { alert('Selecione a categoria.'); return; } onSalvar(nome.trim(), tipo); }}
-            disabled={salvando}>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" disabled={salvando}
+            onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } if (!tipo) { alert('Selecione a categoria.'); return; } onSalvar(nome.trim(), tipo); }}>
             {salvando ? 'Salvando...' : editando ? 'ATUALIZAR' : 'SALVAR'}
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -362,46 +356,40 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose, er
   const [cat, setCat] = useState('');
   const lista = modelos.filter((m: any) => !cat || categoriaDe(m) === cat);
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(560px,95vw)', maxHeight:'75vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ flex:1 }}>📂 Modelos Salvos</span>
+    <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-fp-jan acn-fp-lista-jan" role="dialog" aria-label="Modelos Salvos">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiFolderOpenOutline} size={18} />Modelos Salvos</span>
           <FiltroCategoria lista={modelos} valor={cat} onChange={setCat} />
         </div>
-        <div style={{ flex:1, overflowY:'auto', padding:10 }}>
+        <div className="acn-modal-corpo">
           {erro && <Faixa tom="erro">Não foi possível ler os modelos ({erro}). Isso não quer dizer que não haja modelo salvo.</Faixa>}
-          {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
+          {carregando && <div className="acn-fp-vazio">Carregando...</div>}
           {!carregando && lista.length === 0 && !erro && (
-            <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhum modelo salvo.</div>
+            <div className="acn-fp-vazio">Nenhum modelo salvo.</div>
           )}
           {!carregando && agruparPorCategoria(lista).map(g => (
             <div key={g.nome}>
               <TituloCategoria nome={g.nome} qtd={g.itens.length} />
               {g.itens.map(m => (
-                <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
-                  border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6 }}>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:11 }}>{m.nome}</div>
-                    <div style={{ fontSize:9, color:'#64748b' }}>
+                <div key={m.id} className="acn-fp-modelo">
+                  <div className="acn-fp-modelo-txt">
+                    <div className="acn-fp-modelo-nome">{m.nome}</div>
+                    <div className="acn-ajuda">
                       {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
                       {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
                       {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
                     </div>
                   </div>
-                  <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'3px 10px' }}
-                    onClick={() => onCarregar(m)}>Carregar</button>
-                  <button onClick={() => onExcluir(m.id)} title="Excluir modelo"
-                    style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'3px 7px', fontSize:9, cursor:'pointer' }}>
-                    ✕
-                  </button>
+                  <Botao variante="primario" pequeno onClick={() => onCarregar(m)}>Carregar</Botao>
+                  <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Excluir modelo" aria-label="Excluir modelo" onClick={() => onExcluir(m.id)} />
                 </div>
               ))}
             </div>
           ))}
         </div>
-        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0' }}>
-          <button className="acn-btn" style={{ background:'#94a3b8', float:'right' }} onClick={onClose}>Fechar</button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -429,22 +417,21 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
     setImportando(false);
   };
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(600px,95vw)', maxHeight:'78vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ flex:1 }}>📥 Importar Formação Existente</span>
+    <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-fp-jan acn-fp-lista-jan" role="dialog" aria-label="Importar Formação Existente">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiDownloadOutline} size={18} />Importar Formação Existente</span>
           <FiltroCategoria lista={disponiveis} valor={cat} onChange={setCat} />
         </div>
-        <div style={{ padding:'8px 16px', fontSize:9, color:'#64748b', borderBottom:'1px solid #f1f5f9' }}>
-          Marque uma ou mais formações. Elas passam a ficar ligadas a este processo (aparecem no seletor de versões) —
-          o registro continua existindo em "Formação de Preços", sem cópia.
-        </div>
-        <div style={{ flex:1, overflowY:'auto', padding:10 }}>
+        <div className="acn-modal-corpo">
+          <div className="acn-ajuda">
+            Marque uma ou mais formações. Elas passam a ficar ligadas a este processo (aparecem no seletor de versões) —
+            o registro continua existindo em "Formação de Preços", sem cópia.
+          </div>
           {erro && <Faixa tom="erro">Não foi possível ler as formações ({erro}). Isso não quer dizer que não haja formação para importar.</Faixa>}   {/* 7.59 */}
-          {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
+          {carregando && <div className="acn-fp-vazio">Carregando...</div>}
           {!carregando && listaFiltrada.length === 0 && !erro && (
-            <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhuma formação disponível.</div>
+            <div className="acn-fp-vazio">Nenhuma formação disponível.</div>
           )}
           {!carregando && agruparPorCategoria(listaFiltrada).map(g => (
             <div key={g.nome}>
@@ -455,17 +442,16 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
                   .filter(Boolean);
                 const marcada = selecionadas.includes(m.id);
                 return (
-                  <label key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', cursor:'pointer',
-                    border:'1px solid ' + (marcada ? '#7c3aed' : '#e2e8f0'), background: marcada ? '#faf5ff' : '#fff', borderRadius:6, marginBottom:6 }}>
-                    <input type="checkbox" checked={marcada} onChange={() => alternar(m.id)} style={{ accentColor:'#7c3aed' }} />
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:11 }}>{m.nome || <em style={{ color:'#94a3b8' }}>sem nome</em>}{m.versao ? ` · v${m.versao}` : ''}</div>
-                      <div style={{ fontSize:9, color:'#64748b' }}>
+                  <label key={m.id} className={'acn-fp-modelo marcavel' + (marcada ? ' marcada' : '')}>
+                    <input type="checkbox" checked={marcada} onChange={() => alternar(m.id)} />
+                    <div className="acn-fp-modelo-txt">
+                      <div className="acn-fp-modelo-nome">{m.nome || <em>sem nome</em>}{m.versao ? ` · v${m.versao}` : ''}</div>
+                      <div className="acn-ajuda">
                         {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
                       </div>
                       {vinculosAtuais.length > 0 && (
-                        <div style={{ fontSize:9, color:'#b45309', marginTop:2 }}>
-                          🔗 já atende: {vinculosAtuais.join(' · ')}
+                        <div className="acn-ajuda atencao">
+                          <Icone path={mdiLinkVariant} size={13} /> já atende: {vinculosAtuais.join(' · ')}
                         </div>
                       )}
                     </div>
@@ -475,13 +461,12 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
             </div>
           ))}
         </div>
-        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, alignItems:'center' }}>
-          <span style={{ fontSize:10, color:'#64748b', flex:1 }}>{selecionadas.length} selecionada(s)</span>
-          <button className="acn-btn" style={{ background:'#7c3aed', opacity: selecionadas.length ? 1 : .5 }}
-            disabled={!selecionadas.length || importando} onClick={importar}>
-            {importando ? 'Vinculando...' : `📥 Vincular ${selecionadas.length || ''} selecionada(s)`}
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
+        <div className="acn-modal-rodape acn-fp-rodape-contagem">
+          <span className="acn-ajuda">{selecionadas.length} selecionada(s)</span>
+          <Botao variante="primario" icone={mdiDownloadOutline} disabled={!selecionadas.length || importando} onClick={importar}>
+            {importando ? 'Vinculando...' : `Vincular ${selecionadas.length || ''} selecionada(s)`}
+          </Botao>
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -629,8 +614,6 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
   const [salvando, setSalvando] = useState(false);
   const salvandoRef = useRef(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const inp = { width:'100%', padding:'4px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' };
-  const lbl = { display:'block', fontSize:8, fontWeight:700, color:'#6b7280', marginBottom:2, textTransform:'uppercase' };
 
   const salvar = async () => {
     if (!form.nome?.trim() || salvando || salvandoRef.current) return;   // 7.59: o clique duplo criava o item duas vezes (o ref vale na hora; o estado só no desenho seguinte)
@@ -652,49 +635,47 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:10, width:480, maxWidth:'96vw', boxShadow:'0 16px 48px rgba(0,0,0,.28)', overflow:'hidden' }}>
-        <div style={{ background:'#0f766e', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontWeight:800, fontSize:12 }}>➕ Novo Item no Catálogo</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer' }}>✕</button>
+    <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-fp-jan" role="dialog" aria-label="Novo Item no Catálogo">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiPlus} size={18} />Novo Item no Catálogo</span>
+          <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={onClose} />
         </div>
-        <div style={{ padding:'14px 16px' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-            <div style={{ gridColumn:'1/-1' }}>
-              <span style={lbl}>Nome / Produto *</span>
-              <input style={{ ...inp, borderColor: !form.nome ? '#f87171' : '#d1d5db' }}
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-fp-grade2">
+            <div className="acn-fp-larga">
+              <span className="acn-label">Nome / Produto *</span>
+              <input className={'acn-input' + (!form.nome ? ' acn-fp-obrigatorio' : '')}
                 value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome do item" autoFocus />
             </div>
-            <div><span style={lbl}>Marca</span><input style={inp} value={form.marca} onChange={e=>set('marca',e.target.value)} placeholder="Ex: Schneider" /></div>
-            <div><span style={lbl}>Fornecedor</span><input style={inp} value={form.fornecedor} onChange={e=>set('fornecedor',e.target.value)} placeholder="Fornecedor" /></div>
+            <div><span className="acn-label">Marca</span><input className="acn-input" value={form.marca} onChange={e=>set('marca',e.target.value)} placeholder="Ex: Schneider" /></div>
+            <div><span className="acn-label">Fornecedor</span><input className="acn-input" value={form.fornecedor} onChange={e=>set('fornecedor',e.target.value)} placeholder="Fornecedor" /></div>
             <div>
-              <span style={lbl}>Moeda</span>
-              <select style={inp} value={form.moeda} onChange={e=>set('moeda',e.target.value)}>
+              <span className="acn-label">Moeda</span>
+              <select className="acn-input" value={form.moeda} onChange={e=>set('moeda',e.target.value)}>
                 {['REAL','DOLAR','EURO'].map(m=><option key={m}>{m}</option>)}
               </select>
             </div>
-            <div><span style={lbl}>Custo Unitário</span><input style={inp} type="number" min={0} step="0.01" value={form.custo_unit} onChange={e=>set('custo_unit',e.target.value)} /></div>
+            <div><span className="acn-label">Custo Unitário</span><input className="acn-input" type="number" min={0} step="0.01" value={form.custo_unit} onChange={e=>set('custo_unit',e.target.value)} /></div>
             <div>
-              <span style={lbl}>Tipo Cálculo</span>
-              <select style={inp} value={form.tipo_calculo} onChange={e=>set('tipo_calculo',e.target.value)}>
+              <span className="acn-label">Tipo Cálculo</span>
+              <select className="acn-input" value={form.tipo_calculo} onChange={e=>set('tipo_calculo',e.target.value)}>
                 <option value="CUSTO">CUSTO (markup)</option>
                 <option value="TABELA">TABELA (desconto)</option>
               </select>
             </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6 }}>
+          <div className="acn-fp-grade5">
             {[['IPI%','ipi_pct'],['ST%','st_pct'],[form.tipo_calculo==='TABELA'?'Desconto%':'Markup%','markup_pct'],['DIFAL%','difal_pct'],['Imposto%','imposto_pct']].map(([l,k])=>(
-              <div key={k}><span style={lbl}>{l}</span><input style={inp} type="number" min={0} step="0.5" value={form[k]} onChange={e=>set(k,e.target.value)} /></div>
+              <div key={k}><span className="acn-label">{l}</span><input className="acn-input" type="number" min={0} step="0.5" value={form[k]} onChange={e=>set(k,e.target.value)} /></div>
             ))}
           </div>
         </div>
-        <div style={{ padding:'8px 16px 12px', display:'flex', justifyContent:'flex-end', gap:8, borderTop:'1px solid #f1f5f9' }}>
-          <button onClick={onClose} style={{ padding:'5px 12px', border:'1px solid #d1d5db', borderRadius:5, background:'#fff', cursor:'pointer', fontSize:10 }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando || !form.nome?.trim()}
-            style={{ padding:'5px 14px', border:'none', borderRadius:5, background: form.nome?.trim() ? '#0f766e' : '#9ca3af', color:'#fff', cursor: form.nome?.trim() ? 'pointer' : 'not-allowed', fontSize:10, fontWeight:700, opacity: salvando ? .6 : 1 }}>
-            {salvando ? 'Salvando...' : '✅ Salvar e Usar'}
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" icone={mdiCheck} onClick={salvar} disabled={salvando || !form.nome?.trim()}>
+            {salvando ? 'Salvando...' : 'Salvar e Usar'}
+          </Botao>
         </div>
       </div>
     </div>
