@@ -16,7 +16,7 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { CabecalhoTela, Botao, Chips, Selo, diaISO } from './Interface';
+import { CabecalhoTela, Botao, Chips, Selo, Faixa, diaISO } from './Interface';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate } from '@mdi/js';
 
@@ -72,13 +72,25 @@ const fmtDataCurta = (d: Date) => d.toLocaleDateString('pt-BR', { day:'2-digit',
 // deletar (mesmo padrão de excluirLicitacao), e dispara este evento — um
 // toast global escuta e oferece "Ctrl+Z" por alguns segundos pra restaurar.
 // ─────────────────────────────────────────────────────────────────────────────
-async function registrarExclusaoParaUndo(tabela: string, dados: any, deletadoPor: string, label: string) {
-  const { data } = await supabase.from('lixeira').insert([{
-    tabela, registro_id: dados.id, dados, deletado_por: deletadoPor,
+// Etapa 7.61 (07/10/2026): antes cada exclusão apagava o registro e DEPOIS tentava guardar a cópia, ignorando os dois erros —
+// se a cópia falhasse, o registro sumia sem volta; se a exclusão falhasse, o aviso de "excluído" aparecia mesmo assim.
+// Agora: lê o registro INTEIRO (a lista da licitação não traz as Áreas Livres, e a cópia saía sem elas), guarda a cópia, só então apaga,
+// e se apagar falhar a cópia é descartada. Devolve true só quando excluiu de verdade.
+async function excluirComUndo(tabela: string, id: string, deletadoPor: string, rotulo: string | ((reg: any) => string)): Promise<boolean> {
+  const { data: reg, error: erroLeitura } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
+  if (erroLeitura || !reg) { alert('Não foi possível ler o registro antes de excluir (' + (erroLeitura?.message || 'não encontrado') + '). Nada foi excluído.'); return false; }
+  const { data: lix, error: erroLixeira } = await supabase.from('lixeira').insert([{
+    tabela, registro_id: reg.id, dados: reg, deletado_por: deletadoPor,
   }]).select('id').single();
-  if (data?.id) {
-    window.dispatchEvent(new CustomEvent('acn:undo-disponivel', { detail: { lixeiraId: data.id, label } }));
+  if (erroLixeira || !lix?.id) { alert('Não foi possível guardar a cópia de segurança (' + (erroLixeira?.message || 'sem resposta') + '). Nada foi excluído.'); return false; }
+  const { data: apagados, error: erroExclusao } = await supabase.from(tabela).delete().eq('id', id).select('id');
+  if (erroExclusao || !apagados?.length) {
+    await supabase.from('lixeira').delete().eq('id', lix.id);   // o registro continua aí: a cópia não vale
+    alert('Não foi possível excluir (' + (erroExclusao?.message || 'o banco não apagou nada') + ').');
+    return false;
   }
+  window.dispatchEvent(new CustomEvent('acn:undo-disponivel', { detail: { lixeiraId: lix.id, label: typeof rotulo === 'function' ? rotulo(reg) : rotulo } }));
+  return true;
 }
 
 function UndoToast({ onRestaurado }: { onRestaurado?: () => void }) {
@@ -344,11 +356,15 @@ function ContatosSection({ licitacaoId, currentUser }) {
   const [editandoId, setEditandoId] = useState<string|null>(null);
   const contatoVazio = { nome:'', tipo_contato:'', email:'', observacao:'', telefones:[{ numero:'', tipo:'Celular' }] };
   const [form, setForm] = useState<any>(contatoVazio);
+  const [erroLeitura, setErroLeitura] = useState('');   // 7.61: leitura que falha não pode parecer "nenhum contato"
+  const emAcao = useRef(false);   // 7.61: salvar/excluir uma vez só (o clique duplo gravava duas vezes)
 
   const fetchContatos = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('licitacao_contatos')
+    const { data, error } = await supabase.from('licitacao_contatos')
       .select('*').eq('licitacao_id', licitacaoId).order('criado_em');
+    if (error) { setErroLeitura(error.message); setLoading(false); return; }
+    setErroLeitura('');
     setContatos(data || []);
     setLoading(false);
   }, [licitacaoId]);
@@ -377,6 +393,11 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   const salvar = async () => {
     if (!form.nome.trim()) { alert('Nome do contato obrigatório'); return; }
+    if (emAcao.current) return;
+    emAcao.current = true;
+    try { await salvarInterno(); } finally { emAcao.current = false; }
+  };
+  const salvarInterno = async () => {
     const agora = new Date().toISOString();
     if (editandoId) {
       const { error } = await supabase.from('licitacao_contatos').update({
@@ -403,9 +424,9 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   const excluir = async (id: string) => {
     if (!await confirmar('Remover este contato?')) return;
-    const { data: reg } = await supabase.from('licitacao_contatos').select('*').eq('id', id).maybeSingle();
-    await supabase.from('licitacao_contatos').delete().eq('id', id);
-    if (reg) registrarExclusaoParaUndo('licitacao_contatos', reg, currentUser?.nome || currentUser?.email, `Contato "${reg.nome||'—'}"`);
+    if (emAcao.current) return;
+    emAcao.current = true;
+    try { await excluirComUndo('licitacao_contatos', id, currentUser?.nome || currentUser?.email, (reg) => `Contato "${reg.nome||'—'}"`); } finally { emAcao.current = false; }
     fetchContatos();
   };
 
@@ -501,6 +522,10 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
           {loading && <div style={{ fontSize:10, color:'#9ca3af', padding:4 }}>Carregando...</div>}
 
+          {erroLeitura && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={fetchContatos}>Tentar de novo</Botao>}>Não foi possível ler os contatos ({erroLeitura}). Isso não quer dizer que não haja contato cadastrado.</Faixa>
+          )}
+
           {contatos.map((c: any) => (
             <div key={c.id}>
               {editandoId === c.id ? renderFormContato() : (
@@ -549,7 +574,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
             </div>
           ))}
 
-          {!loading && contatos.length === 0 && !adicionando && (
+          {!loading && contatos.length === 0 && !adicionando && !erroLeitura && (
             <div style={{ fontSize:10, color:'#9ca3af', textAlign:'center', padding:'8px 0' }}>Nenhum contato cadastrado.</div>
           )}
         </div>
@@ -587,6 +612,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
   };
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo]       = useState(false);
+  const [erroSalvar, setErroSalvar] = useState('');   // 7.61: o autosave que falhava não dizia nada — a pessoa seguia digitando achando que estava gravado
 
   // Carrega conteúdo quando muda aba ou licitação
   useEffect(() => {
@@ -606,6 +632,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
       .update({ areas_livres: novasAreas, atualizado_em: new Date().toISOString() })
       .eq('id', licitacaoId);
     setSalvando(false);
+    setErroSalvar(error ? error.message : '');
     if (!error) {
       onAreasLivresChange(novasAreas);
       setSalvo(true);
@@ -761,6 +788,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
         <div style={{ flex:1 }} />
         {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
         {salvo && !salvando && <span style={{ fontSize:9, color:'#16a34a' }}>✓ Salvo</span>}
+        {erroSalvar && !salvando && <span style={{ fontSize:9, color:'#dc2626', fontWeight:700 }} title={erroSalvar}>⚠ NÃO salvou: {erroSalvar}</span>}
         {/* Discreto de propósito — já autosalva 1.5s após parar de digitar; o
             botão em destaque da tela é "💾 Salvar Alterações" (registro
             inteiro), este aqui só força salvar antes desse intervalo. */}
@@ -811,6 +839,8 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
   const [uploadDesc, setUploadDesc] = useState('');
   const [salvando, setSalvando] = useState(false);
   const uploadRef = useRef<any>(null);
+  const [erroLeitura, setErroLeitura] = useState('');   // 7.61: leitura que falha não pode parecer "nenhum documento"
+  const emAcao = useRef(false);   // 7.61: adicionar/excluir uma vez só
 
   const htmlAntigo = (areasLivres || {})[`processo:${categoria}`] || '';
   const temLetra = htmlAntigo.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
@@ -818,9 +848,11 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('licitacao_documentos').select('*')
+    const { data, error } = await supabase.from('licitacao_documentos').select('*')
       .eq('licitacao_id', licitacaoId).eq('categoria', categoria)
       .order('criado_em', { ascending: false });
+    if (error) { setErroLeitura(error.message); setLoading(false); return; }
+    setErroLeitura('');
     setDocs(data || []);
     setLoading(false);
   }, [licitacaoId, categoria]);
@@ -838,47 +870,58 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 
   const salvar = async () => {
     if (uploadFiles.length === 0 && !uploadDesc.trim()) return;
+    if (emAcao.current) return;
+    emAcao.current = true;
     setSalvando(true);
     const agora = new Date().toISOString();
     const autor = currentUser?.nome || currentUser?.email || 'Usuário';
+    const falhas: string[] = [];
     try {
       if (uploadFiles.length === 0 && uploadDesc.trim()) {
-        const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
+        const { data: novoDoc, error: erroDoc } = await supabase.from('licitacao_documentos').insert([{
           licitacao_id: licitacaoId, categoria,
           nome: uploadDesc.slice(0,80) || 'Documento',
           url: null, conteudo: uploadDesc.trim(),
           criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
         }]).select('id').single();
+        // 7.61: o erro era ignorado e o histórico de alterações registrava um anexo que não existia
+        if (erroDoc) { alert('Erro: ' + erroDoc.message); return; }
         logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licitacaoId, changeType: 'UPDATE',
           oldRow: { processo: null }, newRow: { processo: (uploadDesc.slice(0,80) || 'Documento') }, user: currentUser,
           formatters: { processo: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id, categoria } });
       } else {
         for (const file of uploadFiles) {
           const url = await uploadAnexo(file, licitacaoId, categoria);
-          const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
+          // 7.61: o envio que falhava devolvia vazio e o documento era registrado SEM arquivo, só com o nome
+          if (!url) { falhas.push(file.name + ' (o envio do arquivo falhou)'); continue; }
+          const { data: novoDoc, error: erroDoc } = await supabase.from('licitacao_documentos').insert([{
             licitacao_id: licitacaoId, categoria, nome: file.name, url,
             conteudo: uploadDesc.trim() || null,
             criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
           }]).select('id').single();
+          if (erroDoc) { falhas.push(file.name + ' (' + erroDoc.message + ')'); continue; }
           logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licitacaoId, changeType: 'UPDATE',
             oldRow: { processo: null }, newRow: { processo: file.name }, user: currentUser,
             formatters: { processo: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id, categoria } });
         }
       }
+      if (falhas.length) alert('Estes arquivos NÃO foram anexados: ' + falhas.join('; ') + '.');
       setUploadFiles([]);
       setUploadDesc('');
       if (uploadRef.current) uploadRef.current.value = '';
       await fetchDocs();
     } finally {
       setSalvando(false);
+      emAcao.current = false;
     }
   };
 
   const excluir = async (d: any) => {
     if (!podeExcluir) { alert('Você não tem permissão para excluir arquivos.'); return; }
     if (!await confirmar('Remover este registro?')) return;
-    await supabase.from('licitacao_documentos').delete().eq('id', d.id);
-    registrarExclusaoParaUndo('licitacao_documentos', d, currentUser?.nome || currentUser?.email, label);
+    if (emAcao.current) return;
+    emAcao.current = true;
+    try { await excluirComUndo('licitacao_documentos', d.id, currentUser?.nome || currentUser?.email, label); } finally { emAcao.current = false; }
     fetchDocs();
   };
 
@@ -897,7 +940,8 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
         {salvando ? 'Salvando...' : '+ Adicionar'}
       </button>
       {loading && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center' }}>Carregando...</div>}
-      {!loading && docs.length === 0 && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center', padding:8 }}>Nenhum documento.</div>}
+      {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchDocs}>Tentar de novo</Botao>}>Não foi possível ler os documentos ({erroLeitura}). Isso não quer dizer que não haja nenhum.</Faixa>}
+      {!loading && docs.length === 0 && !erroLeitura && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center', padding:8 }}>Nenhum documento.</div>}
       {docs.map(d => (
         <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:6, padding:'6px 8px',
           background: itemNaoLido?.(d.id) ? '#fefce8' : '#f8fafc',
@@ -1078,11 +1122,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // Enquanto não chegou fica null e a Área Livre não aparece: salvar sobre um
   // objeto vazio apagaria o texto das outras áreas.
   const [areasLivres, setAreasLivres] = useState<any>(licitProp.areas_livres === undefined ? null : (licitProp.areas_livres || {}));
+  const [erroAreas, setErroAreas] = useState('');
   useEffect(() => {
     if (licitProp.areas_livres !== undefined) return;
     let vivo = true;
     supabase.from('licitacoes').select('areas_livres').eq('id', licitProp.id).maybeSingle()
-      .then(({ data }) => { if (vivo) setAreasLivres(data?.areas_livres || {}); });
+      .then(({ data, error }) => {
+        if (!vivo) return;
+        // 7.61: a leitura que falhava virava "{}" — exatamente o que o comentário acima manda evitar: o próximo salvamento da Área Livre
+        // gravava um objeto sem as outras áreas e APAGAVA o texto delas. Falhou, fica null e a Área Livre não abre.
+        if (error) { setErroAreas(error.message); return; }
+        setErroAreas('');
+        setAreasLivres(data?.areas_livres || {});
+      });
     return () => { vivo = false; };
   }, [licitProp.id]);
 
@@ -1125,6 +1177,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const [salvando, setSalvando] = useState(false);
   const [obsEncerramento, setObsEncerramento] = useState('');
   const [confirmStatus, setConfirmStatus] = useState<string|null>(null);
+  // 7.61: uma ação por vez nos botões que gravam — o estado `salvando` só muda no desenho seguinte e o clique duplo gravava duas vezes
+  const emAcao = useRef(new Set<string>());
+  const umaVez = (chave: string, fn: (...a: any[]) => Promise<any>) => async (...args: any[]) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+  const [erroDocs, setErroDocs] = useState('');
+  const [erroAndamento, setErroAndamento] = useState('');
 
   const isAdmin = true;
   const isAnalista = true;
@@ -1156,9 +1217,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Fetch docs (abas de documentos) ──
   const fetchDocs = useCallback(async () => {
     setLoadingDocs(true);
-    const { data } = await supabase.from('licitacao_documentos')
+    const { data, error } = await supabase.from('licitacao_documentos')
       .select('*').eq('licitacao_id', licit.id).eq('categoria', tabDir)
       .order('criado_em', { ascending: false });
+    if (error) { setErroDocs(error.message); setLoadingDocs(false); return; }   // 7.61: lia como "nenhum documento"
+    setErroDocs('');
     setDocs(data || []);
     setLoadingDocs(false);
   }, [licit.id, tabDir]);
@@ -1176,6 +1239,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         .eq('licitacao_id', licit.id).eq('tipo', 'andamento')
         .order('criado_em', { ascending: false }),
     ]);
+    if (novosRes.error || legacyRes.error) { setErroAndamento((novosRes.error || legacyRes.error).message); setLoadingAndDocs(false); return; }   // 7.61: lia como "nenhum andamento"
+    setErroAndamento('');
     setAndDocs(novosRes.data || []);
     setAndDocsLegacy(legacyRes.data || []);
     setLoadingAndDocs(false);
@@ -1253,7 +1318,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   useEffect(() => { marcarAbaLida(tabDir); }, [tabDir, abaAlteracoes]);
 
   // ── Salvar form esquerdo ──────────────────────────────────────────────────
-  const salvarForm = async () => {
+  const salvarForm = umaVez('form', async () => {
     // Barra data absurda antes de gravar (digito a mais no ano)
     const camposData: [string,string][] = [
       ['data_limite_esclarecimentos','Limite de Esclarecimentos'],
@@ -1294,10 +1359,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       onRefresh();
     }
     setSalvandoForm(false);
-  };
+  });
 
   // ── Salvar nova atualização de Andamento ────────────────────────────────────
-  const salvarAndamento = async () => {
+  const salvarAndamento = umaVez('andamento', async () => {
     if (!novoText.trim() && novoAnexoFiles.length === 0) return;
     setSalvandoAndamento(true);
     const agora = new Date().toISOString();
@@ -1309,6 +1374,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       if (novoAnexoFiles.length > 0) {
         primeiroAnexoUrl = await uploadAnexo(novoAnexoFiles[0], licit.id, 'andamento');
         primeiroAnexoNome = novoAnexoFiles[0].name;
+        // 7.61: o envio que falhava devolvia vazio e o andamento era gravado com o nome do arquivo e SEM o arquivo
+        if (!primeiroAnexoUrl) { alert('O envio do arquivo "' + primeiroAnexoNome + '" falhou. O andamento NÃO foi gravado — tente de novo.'); return; }
       }
       const { data: novoAndamento, error } = await supabase.from('licitacao_documentos').insert([{
         licitacao_id: licit.id, categoria: 'andamento',
@@ -1316,21 +1383,27 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         anexo_url: primeiroAnexoUrl, anexo_nome: primeiroAnexoNome,
         criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
       }]).select('id').single();
+      // 7.61: o erro só era conferido DEPOIS de registrar no histórico e de gravar os arquivos extras — com o andamento recusado,
+      // o histórico dizia que ele existia e os extras ficavam soltos. Agora para aqui.
+      if (error) { alert('Erro: ' + error.message); return; }
       logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
         oldRow: { andamento: null }, newRow: { andamento: novoText.trim().slice(0, 120) }, user: currentUser,
         metadata: { ref_id: novoAndamento?.id } });
       // uploads adicionais (arquivos extras sem texto)
+      const falhasExtras: string[] = [];
       for (let i = 1; i < novoAnexoFiles.length; i++) {
         const url = await uploadAnexo(novoAnexoFiles[i], licit.id, 'andamento');
-        await supabase.from('licitacao_documentos').insert([{
+        if (!url) { falhasExtras.push(novoAnexoFiles[i].name + ' (o envio do arquivo falhou)'); continue; }
+        const { error: erroExtra } = await supabase.from('licitacao_documentos').insert([{
           licitacao_id: licit.id, categoria: 'andamento',
           nome: 'Andamento', conteudo: null,
           anexo_url: url, anexo_nome: novoAnexoFiles[i].name,
           criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
         }]);
+        if (erroExtra) falhasExtras.push(novoAnexoFiles[i].name + ' (' + erroExtra.message + ')');
       }
-      if (error) { alert('Erro: ' + error.message); }
-      else {
+      if (falhasExtras.length) alert('O andamento foi gravado, mas estes arquivos NÃO foram anexados: ' + falhasExtras.join('; ') + '.');
+      {
         await salvarMencoes({
           texto:             novoText.trim(),
           mencionanteId:     String(currentUser?.id || ''),
@@ -1349,10 +1422,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     } finally {
       setSalvandoAndamento(false);
     }
-  };
+  });
 
   // ── Editar andamento existente ────────────────────────────────────────────
-  const salvarEdicaoAndamento = async () => {
+  const salvarEdicaoAndamento = umaVez('edicao-andamento', async () => {
     if (!editandoDocId) return;
     const { error } = await supabase.from('licitacao_documentos')
       .update({ conteudo: editandoDocTexto, atualizado_em: new Date().toISOString() })
@@ -1371,22 +1444,21 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     setEditandoDocId(null);
     setEditandoDocTexto('');
     fetchAndamento();
-  };
+  });
 
   // ── Excluir entrada de Andamento ────────────────────────────────────────────
   const excluirAndamentoDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
     if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
     if (!await confirmar('Remover este registro?')) return;
-    const { data: reg } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
-    await supabase.from(tabela).delete().eq('id', id);
-    if (reg) registrarExclusaoParaUndo(tabela, reg, currentUser?.nome || currentUser?.email, 'Registro de andamento');
+    await umaVez('exclusao-' + id, () => excluirComUndo(tabela, id, currentUser?.nome || currentUser?.email, 'Registro de andamento'))();
     fetchAndamento();
   };
 
   // ── Salvar novo doc nas demais abas ─────────────────────────────────────────
-  const salvarDoc = async () => {
+  const salvarDoc = umaVez('doc', async () => {
     if (uploadFiles.length === 0 && !uploadDesc.trim()) return;
     setSalvandoDoc(true);
+    const falhas: string[] = [];
     const agora = new Date().toISOString();
     const autor = currentUser?.nome || currentUser?.email || 'Usuário';
     try {
@@ -1406,17 +1478,21 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         // upload de cada arquivo
         for (const file of uploadFiles) {
           const url = await uploadAnexo(file, licit.id, tabDir);
-          const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
+          // 7.61: o envio que falhava devolvia vazio e o documento era registrado SEM arquivo; o erro de gravação também era ignorado
+          if (!url) { falhas.push(file.name + ' (o envio do arquivo falhou)'); continue; }
+          const { data: novoDoc, error: erroDoc } = await supabase.from('licitacao_documentos').insert([{
             licitacao_id: licit.id, categoria: tabDir,
             nome: file.name, url,
             conteudo: uploadDesc.trim() || null,
             criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
           }]).select('id').single();
+          if (erroDoc) { falhas.push(file.name + ' (' + erroDoc.message + ')'); continue; }
           logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
             oldRow: { [tabDir]: null }, newRow: { [tabDir]: file.name }, user: currentUser,
             formatters: { [tabDir]: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id } });
         }
       }
+      if (falhas.length) alert('Estes arquivos NÃO foram anexados: ' + falhas.join('; ') + '.');
       setUploadFiles([]);
       setUploadDesc('');
       if (uploadRef.current) uploadRef.current.value = '';
@@ -1425,26 +1501,26 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     } finally {
       setSalvandoDoc(false);
     }
-  };
+  });
 
   // ── Excluir doc ───────────────────────────────────────────────────────────
   const excluirDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
     if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
     if (!await confirmar('Remover este registro?')) return;
-    const { data: reg } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
-    await supabase.from(tabela).delete().eq('id', id);
-    if (reg) registrarExclusaoParaUndo(tabela, reg, currentUser?.nome || currentUser?.email, 'Documento/anexo');
+    await umaVez('exclusao-' + id, () => excluirComUndo(tabela, id, currentUser?.nome || currentUser?.email, 'Documento/anexo'))();
     fetchDocs();
     fetchAbaAlteracoes();
   };
 
   // ── Mudar status ──────────────────────────────────────────────────────────
-  const mudarStatus = async (novoStatus: string) => {
+  const mudarStatus = umaVez('status', async (novoStatus: string) => {
     setSalvando(true);
     const agora = new Date().toISOString();
     const hist = [...(licit.historico || []), { status: novoStatus, usuario: currentUser?.nome, data: agora, obs: obsEncerramento || '' }];
     const novoRow = { status: novoStatus, historico: hist, obs_encerramento: obsEncerramento || null, atualizado_em: agora };
-    await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
+    const { error: erroStatus } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
+    // 7.61: o erro era ignorado — a janela fechava como se a licitação tivesse mudado de status (inclusive "Vencida") e o histórico registrava a troca
+    if (erroStatus) { alert('Não foi possível mudar o status para "' + novoStatus + '": ' + erroStatus.message); setSalvando(false); return; }
     logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
       oldRow: licit, newRow: { ...licit, ...novoRow }, user: currentUser });
     setConfirmStatus(null);
@@ -1452,7 +1528,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     setSalvando(false);
     onRefresh();
     if (novoStatus === 'Vencida') { setShowAcoesVencida(true); } else { fecharModal(); }
-  };
+  });
 
   // ── Emitir Pedido de Compra ───────────────────────────────────────────────
   // 05/10/2026: abre a MESMA solicitação de compra de todo o sistema (lista de itens, prioridade, anexos...). Antes gravava uma linha com o
@@ -1861,12 +1937,17 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   </>
                 )}
 
-                {andDocs.length === 0 && andDocsLegacy.length === 0 && !loadingAndDocs && (
+                {erroAndamento && (
+                  <Faixa tom="erro" acao={<Botao pequeno onClick={fetchAndamento}>Tentar de novo</Botao>}>Não foi possível ler o andamento ({erroAndamento}). Isso não quer dizer que não haja atualização{andDocs.length || andDocsLegacy.length ? '; o que aparece é da última leitura que deu certo' : ''}.</Faixa>
+                )}
+                {andDocs.length === 0 && andDocsLegacy.length === 0 && !loadingAndDocs && !erroAndamento && (
                   <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização ainda.</div>
                 )}
 
                 {/* Área Livre desta seção */}
-                {areasLivres === null ? (
+                {areasLivres === null && erroAreas ? (
+                  <Faixa tom="erro">Não foi possível ler a Área Livre ({erroAreas}). Ela fica fechada para não correr o risco de apagar o texto das outras áreas — feche e abra a licitação de novo.</Faixa>
+                ) : areasLivres === null ? (
                   <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:12 }}>Carregando área livre…</div>
                 ) : (
                   <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
@@ -2109,7 +2190,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
                 {/* Lista */}
                 {loadingDocs && <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:16 }}>Carregando...</div>}
-                {!loadingDocs && docs.length === 0 && (
+                {erroDocs && (
+                  <Faixa tom="erro" acao={<Botao pequeno onClick={fetchDocs}>Tentar de novo</Botao>}>Não foi possível ler os documentos desta categoria ({erroDocs}). Isso não quer dizer que não haja nenhum.</Faixa>
+                )}
+                {!loadingDocs && docs.length === 0 && !erroDocs && (
                   <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhum documento nesta categoria.</div>
                 )}
                 {docs.map((d: any) => (
@@ -2214,12 +2298,15 @@ function ModalNovaInput({ label, field, value, onChange, type='text', required=f
 function ModalNova({ currentUser, onClose, onSaved }) {
   const [form, setForm] = useState({ ...LICIT_VAZIO });
   const [salvando, setSalvando] = useState(false);
+  const emAcao = useRef(false);   // 7.61: o clique duplo criava a licitação duas vezes
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const salvar = async () => {
     if (!form.numero.trim()) { alert('Número da licitação obrigatório!'); return; }
     if (!form.nome_projeto.trim()) { alert('Nome do projeto obrigatório!'); return; }
     if (!form.orgao.trim()) { alert('Órgão obrigatório!'); return; }
+    if (emAcao.current) return;
+    emAcao.current = true;
     setSalvando(true);
     const agora = new Date().toISOString();
     const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs:'Licitação aberta.' }];
@@ -2240,6 +2327,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       atualizado_em: agora,
     }]);
     setSalvando(false);
+    emAcao.current = false;
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     onSaved();
     onClose();
@@ -2661,6 +2749,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [agrupamentoPeriodo, setAgrupamentoPeriodo] = useState<''|'semana'|'mes'|'bimestre'|'trimestre'|'semestre'>('');
   const [recentesLicit, setRecentesLicit] = useState<any[]>([]);
   const [recentesLicitLoading, setRecentesLicitLoading] = useState(false);
+  const [erroLista, setErroLista] = useState('');   // 7.61: leitura que falha não pode parecer "nenhuma licitação"
 
   const isAdmin = true;
   const isAnalista = true;
@@ -2723,8 +2812,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   const excluirLicitacao = async (l: any) => {
     if (!await confirmar(`Excluir "${l.numero} — ${l.nome_projeto}"?`)) return;
-    await supabase.from('licitacoes').delete().eq('id', l.id);
-    registrarExclusaoParaUndo('licitacoes', l, currentUser?.nome || currentUser?.email, `Licitação "${l.numero}"`);
+    // 7.61: a cópia de segurança saía da linha da LISTA (sem as Áreas Livres) e era guardada depois de apagar; ver excluirComUndo
+    const ok = await excluirComUndo('licitacoes', l.id, currentUser?.nome || currentUser?.email, `Licitação "${l.numero}"`);
+    if (!ok) return;
     setSelected(null);
     fetchLicit();
   };
@@ -2736,9 +2826,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     // select('*') a lista estourava o tempo limite do banco e não carregava.
     // O card busca areas_livres ao abrir (LicitacaoModal). Coluna nova na tabela
     // precisa entrar aqui também.
-    const { data } = await supabase.from('licitacoes')
+    const { data, error } = await supabase.from('licitacoes')
       .select(COLUNAS_LISTA_LICITACOES)
       .order('criado_em', { ascending: false });
+    if (error) { setErroLista(error.message); setLoading(false); return; }   // mantém a lista que já estava na tela
+    setErroLista('');
     setLicitacoes(data || []);
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
     carregarMarkupPorProcesso('licitacao').then(setMarkupPorLicit);
@@ -2963,6 +3055,10 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
         </div>
       </div>
 
+      {erroLista && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={fetchLicit}>Tentar de novo</Botao>}>Não foi possível ler as licitações ({erroLista}). Isso não quer dizer que não haja licitação{licitacoes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>
+      )}
+
       {/* LISTA ou RELATÓRIO */}
       {vistaRelatorio ? (
         <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} markupPorLicit={markupPorLicit} />
@@ -2971,7 +3067,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           {loading || (modoRecentes && recentesLicitLoading) ? (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
           ) : !lista.length ? (
-            <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>
+            erroLista ? null : <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>
               {modoRecentes ? 'Nenhuma licitação visualizada ainda.'
                 : filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
             </div>
