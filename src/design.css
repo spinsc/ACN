@@ -2106,3 +2106,66 @@ html body .modal-box.acn-modal-cadastro.acn-lic-jan.acn-lic-nova { width: min(66
 .acn-lic-opcoes.quebra { flex-wrap: wrap; }
 .acn-lic-opc { flex: 1; }
 .acn-lic-opc.terco { flex: 1 0 30%; }
+
+/* ── Licitações · 12e32 (07/10/2026): os quadros de dentro da licitação — contatos, área livre, documentos e formação de preços ── */
+.acn-lic-centro { text-align: center; padding: 8px 0; }
+.acn-lic-cresce { flex: 1; }
+.acn-lic-oculto { display: none; }
+.acn-lic-estado { display: inline-flex; align-items: center; gap: 3px; }
+.acn-lic-link-info { display: inline-flex; align-items: center; gap: 4px; color: var(--acn-info); text-decoration: none; font-weight: 600; word-break: break-all; }
+.acn-lic-link-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--acn-ok); text-decoration: none; font-weight: 600; }
+body.dark .acn-lic-link-info { color: #93c5fd; }
+body.dark .acn-lic-link-ok { color: #86efac; }
+/* contatos do processo */
+.acn-lic-contatos { border-top: 1px solid var(--acn-line-soft); padding-top: 8px; }
+.acn-lic-contatos-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.acn-quadro.acn-lic-form-contato { margin: 0 0 8px; }
+html body .acn-label.acn-lic-tel-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.acn-lic-tel-linha { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+html body .acn-input.acn-lic-tel-num { flex: 2; min-width: 0; }
+html body .acn-input.acn-lic-tel-tipo { flex: 1; min-width: 0; }
+.acn-lic-form-botoes { display: flex; gap: 6px; }
+.acn-lic-contato { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; padding: 7px 10px; margin-bottom: 6px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+body.dark .acn-lic-contato { background: #1e293b; border-color: #334155; }
+.acn-lic-contato-corpo { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 12px; }
+.acn-lic-contato-nome { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-lic-tels { display: flex; flex-wrap: wrap; gap: 8px; }
+.acn-lic-tel, .acn-lic-tel-fixo { display: inline-flex; align-items: center; gap: 4px; }
+.acn-lic-contato-obs { font-style: italic; word-break: break-word; }
+.acn-lic-contato-acoes { display: flex; gap: 3px; flex-shrink: 0; }
+/* área livre */
+.acn-lic-area { margin-top: 10px; overflow: hidden; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-lic-area.nao-lida { border-color: #d4a106; box-shadow: 0 0 0 3px #fefce8; }
+.acn-lic-area-barra { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 4px 8px; background: var(--acn-neutral-soft); border-bottom: 1px solid var(--acn-line); }
+.acn-lic-area-tit { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; font-size: 12px; font-weight: 700; color: var(--acn-muted); }
+.acn-lic-area .licit-area-livre { min-height: 90px; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--acn-ink); background: var(--acn-surface); outline: none; word-break: break-word; }
+.acn-lic-area .licit-area-livre[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--acn-muted); pointer-events: none; }
+.licit-area-livre table { border-collapse: collapse; width: 100%; }
+.licit-area-livre td, .licit-area-livre th { border: 1px solid var(--acn-line); padding: 4px 6px; font-size: 12px; }
+body.dark .acn-lic-area { background: #0f172a; border-color: #334155; }
+body.dark .acn-lic-area-barra { background: #1e293b; border-color: #334155; }
+body.dark .acn-lic-area .licit-area-livre { background: #1e293b; color: #e2e8f0; }
+/* documentos de cada categoria */
+.acn-lic-docs { display: flex; flex-direction: column; gap: 8px; flex: 1 1 260px; min-width: 0; padding: 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+body.dark .acn-lic-docs { background: #1e293b; border-color: #334155; }
+.acn-lic-arquivo { width: 100%; font-size: 12px; }
+.acn-lic-doc-anexos { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-info); }
+.acn-lic-doc-add { align-self: flex-start; }
+.acn-lic-doc { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); }
+.acn-lic-doc.nao-lido { background: #fefce8; border-color: #d4a106; }
+body.dark .acn-lic-doc { background: #0f172a; border-color: #334155; }
+body.dark .acn-lic-doc.nao-lido { background: rgba(212, 161, 6, .14); border-color: #d4a106; }
+.acn-lic-doc-corpo { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 12px; }
+.acn-lic-doc-txt { white-space: pre-wrap; }
+.acn-lic-doc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.acn-lic-antiga { padding: 6px 8px; background: var(--acn-surface-2); border: 1px dashed var(--acn-line); border-radius: var(--acn-r1); }
+.acn-lic-antiga-corpo { font-size: 12px; color: var(--acn-text); word-break: break-word; overflow-x: auto; }
+/* quadro da formação de preços */
+.acn-quadro.acn-lic-formacao { margin: 4px 0 8px; gap: 6px; padding: 8px 10px; }
+.acn-lic-formacao-cab { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.acn-lic-mini { width: 100%; border-collapse: collapse; font-size: 12px; }
+.acn-lic-mini th { padding: 2px 4px; font-size: 11px; font-weight: 700; color: var(--acn-muted); }
+.acn-lic-mini td { padding: 3px 4px; border-top: 1px solid color-mix(in srgb, var(--acn-info) 22%, transparent); }
+.acn-lic-mini tr.total td { border-top-color: color-mix(in srgb, var(--acn-info) 45%, transparent); }
+.acn-lic-mini th.esq, .acn-lic-mini td.esq { text-align: left; }
+.acn-lic-mini th.dir, .acn-lic-mini td.dir { text-align: right; }

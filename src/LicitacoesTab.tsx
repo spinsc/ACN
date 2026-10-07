@@ -19,7 +19,10 @@ import { confirmar, pedirTexto } from './Feedback';
 import { CabecalhoTela, Botao, Chips, Selo, Faixa, diaISO } from './Interface';
 import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
-import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck } from '@mdi/js';
+import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
+  mdiChevronDown, mdiChevronRight, mdiPencilOutline, mdiEmailOutline, mdiCellphone, mdiPhoneOutline, mdiPaperclip, mdiAccountOutline, mdiClockOutline,
+  mdiContentSaveOutline, mdiAlertOutline, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline, mdiFormatStrikethrough, mdiPalette, mdiFormatColorHighlight,
+  mdiLinkVariant, mdiImageOutline, mdiTablePlus, mdiTableRemove } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -431,8 +434,6 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   const isMobile = (tipo: string) => tipo === 'Celular' || tipo === 'WhatsApp';
 
-  const inputStyle = { width:'100%', padding:'4px 7px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' as const };
-
   // NAO voltar a usar isto como componente JSX: por estar definido dentro de
   // ContatosSection, cada render cria uma funcao nova, o React trata como um
   // tipo diferente e desmonta/remonta a arvore inteira. Como o form e
@@ -441,71 +442,68 @@ function ContatosSection({ licitacaoId, currentUser }) {
   // Chamado como funcao, o JSX entra na arvore do proprio ContatosSection e
   // os inputs mantem identidade entre renders.
   const renderFormContato = () => (
-    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:8 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
+    <div className="acn-quadro acn-lic-form-contato">
+      <div className="acn-grade-2">
         <div>
-          <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:1 }}>NOME *</label>
-          <input value={form.nome} onChange={e=>setF('nome',e.target.value)} style={inputStyle} placeholder="Nome" />
+          <label className="acn-label">NOME *</label>
+          <input value={form.nome} onChange={e=>setF('nome',e.target.value)} className="acn-input acn-lic-cheio" placeholder="Nome" />
         </div>
         <div>
-          <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:1 }}>TIPO DE CONTATO</label>
-          <select value={form.tipo_contato} onChange={e=>setF('tipo_contato',e.target.value)} style={inputStyle}>
+          <label className="acn-label">TIPO DE CONTATO</label>
+          <select value={form.tipo_contato} onChange={e=>setF('tipo_contato',e.target.value)} className="acn-input acn-lic-cheio">
             <option value="">Selecione...</option>
             {TIPO_CONTATO_OPCOES.map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
       </div>
-      <div style={{ marginBottom:6 }}>
-        <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:1 }}>E-MAIL</label>
-        <input type="email" value={form.email} onChange={e=>setF('email',e.target.value)} style={inputStyle} placeholder="email@exemplo.com" />
+      <div>
+        <label className="acn-label">E-MAIL</label>
+        <input type="email" value={form.email} onChange={e=>setF('email',e.target.value)} className="acn-input acn-lic-cheio" placeholder="email@exemplo.com" />
       </div>
-      <div style={{ marginBottom:6 }}>
-        <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:4, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <div>
+        <div className="acn-label acn-lic-tel-cab">
           <span>TELEFONES</span>
-          <button onClick={addTelefone} style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'1px 6px', fontSize:9, cursor:'pointer' }}>+ Adicionar</button>
+          <Botao pequeno icone={mdiPlus} onClick={addTelefone}>Adicionar</Botao>
         </div>
         {(form.telefones||[]).map((tel: any, i: number) => (
-          <div key={i} style={{ display:'flex', gap:4, marginBottom:4, alignItems:'center' }}>
+          <div key={i} className="acn-lic-tel-linha">
             <input value={tel.numero} onChange={e=>setTel(i,'numero',e.target.value)}
-              style={{ ...inputStyle, flex:2 }} placeholder="(11) 99999-9999" />
-            <select value={tel.tipo} onChange={e=>setTel(i,'tipo',e.target.value)} style={{ ...inputStyle, flex:1 }}>
+              className="acn-input acn-lic-tel-num" placeholder="(11) 99999-9999" />
+            <select value={tel.tipo} onChange={e=>setTel(i,'tipo',e.target.value)} className="acn-input acn-lic-tel-tipo">
               <option>Celular</option><option>Fixo</option><option>WhatsApp</option>
             </select>
             {(form.telefones||[]).length > 1 && (
-              <button onClick={()=>removeTel(i)} style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 3px', flexShrink:0 }}>✕</button>
+              <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover telefone" aria-label="Remover telefone" onClick={()=>removeTel(i)} />
             )}
           </div>
         ))}
       </div>
-      <div style={{ marginBottom:8 }}>
-        <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:1 }}>OBSERVAÇÃO</label>
+      <div>
+        <label className="acn-label">OBSERVAÇÃO</label>
         <RichTextInput value={form.observacao} onChange={html=>setF('observacao',html)}
-          style={{ ...inputStyle }} minHeight={40} placeholder="Observações... (selecione um trecho pra formatar)" />
+          style={{ width:'100%' }} minHeight={40} placeholder="Observações... (selecione um trecho pra formatar)" />
       </div>
-      <div style={{ display:'flex', gap:6 }}>
-        <button onClick={salvar} style={{ flex:1, background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-          {editandoId ? '💾 Salvar' : '+ Adicionar'}
-        </button>
-        <button onClick={() => { setAdicionando(false); setEditandoId(null); setForm(contatoVazio); }}
-          style={{ padding:'5px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
+      <div className="acn-lic-form-botoes">
+        <Botao variante="primario" icone={editandoId ? mdiContentSaveOutline : mdiPlus} className="acn-lic-cresce" onClick={salvar}>
+          {editandoId ? 'Salvar' : 'Adicionar'}
+        </Botao>
+        <Botao onClick={() => { setAdicionando(false); setEditandoId(null); setForm(contatoVazio); }}>
           Cancelar
-        </button>
+        </Botao>
       </div>
     </div>
   );
 
   return (
-    <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-        <button onClick={() => setExpandido(e => !e)}
-          style={{ fontSize:9, fontWeight:700, color:'#374151', textTransform:'uppercase', background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
-          {expandido ? '▼' : '▶'} CONTATOS DO PROCESSO {contatos.length > 0 ? `(${contatos.length})` : ''}
-        </button>
+    <div className="acn-lic-contatos">
+      <div className="acn-lic-contatos-cab">
+        <Botao variante="discreto" pequeno icone={expandido ? mdiChevronDown : mdiChevronRight} aria-expanded={expandido} onClick={() => setExpandido(e => !e)}>
+          CONTATOS DO PROCESSO {contatos.length > 0 ? `(${contatos.length})` : ''}
+        </Botao>
         {expandido && !adicionando && !editandoId && (
-          <button onClick={() => { setAdicionando(true); setEditandoId(null); setForm(contatoVazio); }}
-            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 8px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
-            + Contato
-          </button>
+          <Botao pequeno icone={mdiPlus} onClick={() => { setAdicionando(true); setEditandoId(null); setForm(contatoVazio); }}>
+            Contato
+          </Botao>
         )}
       </div>
 
@@ -513,7 +511,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
         <div>
           {(adicionando && !editandoId) && renderFormContato()}
 
-          {loading && <div style={{ fontSize:10, color:'#9ca3af', padding:4 }}>Carregando...</div>}
+          {loading && <div className="acn-ajuda acn-lic-centro">Carregando...</div>}
 
           {erroLeitura && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={fetchContatos}>Tentar de novo</Botao>}>Não foi possível ler os contatos ({erroLeitura}). Isso não quer dizer que não haja contato cadastrado.</Faixa>
@@ -522,45 +520,38 @@ function ContatosSection({ licitacaoId, currentUser }) {
           {contatos.map((c: any) => (
             <div key={c.id}>
               {editandoId === c.id ? renderFormContato() : (
-                <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, padding:'7px 10px', marginBottom:6 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', marginBottom:2 }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{c.nome}</span>
-                        {c.tipo_contato && (
-                          <span style={{ fontSize:9, background:'#e0f2fe', color:'#0369a1', borderRadius:3, padding:'1px 5px', fontWeight:700 }}>{c.tipo_contato}</span>
-                        )}
+                <div className="acn-lic-contato">
+                  <div className="acn-lic-contato-corpo">
+                    <div className="acn-lic-contato-nome">
+                      <span className="acn-forte">{c.nome}</span>
+                      {c.tipo_contato && <Selo familia="info" ponto={false}>{c.tipo_contato}</Selo>}
+                    </div>
+                    {c.email && (
+                      <div>
+                        <a href={`mailto:${c.email}`} className="acn-lic-link-info"><Icone path={mdiEmailOutline} size={14} />{c.email}</a>
                       </div>
-                      {c.email && (
-                        <div style={{ fontSize:10, color:'#2563eb', marginBottom:2 }}>
-                          <a href={`mailto:${c.email}`} style={{ color:'#2563eb', textDecoration:'none' }}>✉ {c.email}</a>
-                        </div>
-                      )}
-                      {(c.telefones||[]).length > 0 && (
-                        <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
-                          {(c.telefones||[]).map((tel: any, i: number) => (
-                            <span key={i} style={{ fontSize:10, color:'#374151' }}>
-                              {isMobile(tel.tipo) ? (
-                                <a href={wppLink(tel.numero)} target="_blank" rel="noreferrer"
-                                  style={{ color:'#16a34a', textDecoration:'none', fontWeight:600 }}>
-                                  📱 {tel.numero}
-                                </a>
-                              ) : (
-                                <span>📞 {tel.numero}</span>
-                              )}
-                              <span style={{ fontSize:8, color:'#9ca3af', marginLeft:2 }}>({tel.tipo})</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {c.observacao && <div style={{ fontSize:9, color:'#6b7280', marginTop:2, fontStyle:'italic', wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: htmlSeguro(c.observacao) }} />}
-                    </div>
-                    <div style={{ display:'flex', gap:3, flexShrink:0 }}>
-                      <button onClick={() => iniciarEdicao(c)}
-                        style={{ background:'none', border:'none', color:'#6b7280', cursor:'pointer', fontSize:11, padding:'0 3px' }}>✏️</button>
-                      <button onClick={() => excluir(c.id)}
-                        style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:11, padding:'0 3px' }}>✕</button>
-                    </div>
+                    )}
+                    {(c.telefones||[]).length > 0 && (
+                      <div className="acn-lic-tels">
+                        {(c.telefones||[]).map((tel: any, i: number) => (
+                          <span key={i} className="acn-lic-tel">
+                            {isMobile(tel.tipo) ? (
+                              <a href={wppLink(tel.numero)} target="_blank" rel="noreferrer" className="acn-lic-link-ok">
+                                <Icone path={mdiCellphone} size={14} />{tel.numero}
+                              </a>
+                            ) : (
+                              <span className="acn-lic-tel-fixo"><Icone path={mdiPhoneOutline} size={14} />{tel.numero}</span>
+                            )}
+                            <span className="acn-ajuda">({tel.tipo})</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {c.observacao && <div className="acn-ajuda acn-lic-contato-obs" dangerouslySetInnerHTML={{ __html: htmlSeguro(c.observacao) }} />}
+                  </div>
+                  <div className="acn-lic-contato-acoes">
+                    <Botao variante="discreto" pequeno icone={mdiPencilOutline} title="Editar contato" aria-label="Editar contato" onClick={() => iniciarEdicao(c)} />
+                    <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover contato" aria-label="Remover contato" onClick={() => excluir(c.id)} />
                   </div>
                 </div>
               )}
@@ -568,7 +559,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
           ))}
 
           {!loading && contatos.length === 0 && !adicionando && !erroLeitura && (
-            <div style={{ fontSize:10, color:'#9ca3af', textAlign:'center', padding:'8px 0' }}>Nenhum contato cadastrado.</div>
+            <div className="acn-ajuda acn-lic-centro">Nenhum contato cadastrado.</div>
           )}
         </div>
       )}
@@ -580,6 +571,14 @@ function ContatosSection({ licitacaoId, currentUser }) {
 // ÁREA LIVRE POR ABA — editor rico com suporte a tabelas coladas do Excel/Word
 // Salva em licitacoes.areas_livres[tabKey] como HTML
 // ─────────────────────────────────────────────────────────────────────────────
+// Ferramentas da barra da Área Livre — cada uma tem o comando do navegador, o ícone e o nome para quem usa leitor de tela
+const FERRAMENTAS_AREA_LIVRE = [
+  { cmd: 'bold',          rot: 'Negrito',    icone: mdiFormatBold },
+  { cmd: 'italic',        rot: 'Itálico',    icone: mdiFormatItalic },
+  { cmd: 'underline',     rot: 'Sublinhado', icone: mdiFormatUnderline },
+  { cmd: 'strikeThrough', rot: 'Tachado',    icone: mdiFormatStrikethrough },
+] as const;
+
 function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, currentUser, naoLida }: any) {
   const editorRef  = useRef<any>(null);
   const imgInputRef = useRef<any>(null);
@@ -714,82 +713,47 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return (
-    <div style={{ background:'#f8fafc', border:`1px solid ${naoLida ? '#fde047' : '#e2e8f0'}`, borderRadius:6, overflow:'hidden', marginTop:10,
-      boxShadow: naoLida ? '0 0 0 3px #fefce8' : 'none' }}>
+    <div className={'acn-lic-area' + (naoLida ? ' nao-lida' : '')}>
       {/* Toolbar */}
-      <div style={{ background:'#f1f5f9', borderBottom:'1px solid #e2e8f0', padding:'4px 8px',
-        display:'flex', alignItems:'center', gap:4 }}>
-        <span style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginRight:4 }}>✏️ Área Livre</span>
-        {(['bold','italic','underline','strikeThrough'] as const).map(cmd => (
-          <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd); }}
-            title={cmd === 'bold' ? 'Negrito' : cmd === 'italic' ? 'Itálico' : cmd === 'underline' ? 'Sublinhado' : 'Tachado'}
-            style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-              padding:'2px 7px', fontSize:11, fontWeight: cmd==='bold' ? 700 : 400,
-              fontStyle: cmd==='italic' ? 'italic' : 'normal',
-              textDecoration: cmd==='underline' ? 'underline' : cmd==='strikeThrough' ? 'line-through' : 'none',
-              cursor:'pointer', lineHeight:1.4 }}>
-            {cmd === 'bold' ? 'B' : cmd === 'italic' ? 'I' : cmd === 'underline' ? 'S' : 'X'}
-          </button>
+      <div className="acn-lic-area-barra">
+        <span className="acn-lic-area-tit"><Icone path={mdiPencilOutline} size={14} />Área Livre</span>
+        {FERRAMENTAS_AREA_LIVRE.map(f => (
+          <Botao key={f.cmd} pequeno icone={f.icone} title={f.rot} aria-label={f.rot}
+            onMouseDown={e => { e.preventDefault(); document.execCommand(f.cmd); }} />
         ))}
         {/* Cor de texto e destaque/pintado — reaproveita o padrão de input
             escondido já usado para inserir imagem (imgInputRef abaixo). */}
-        <button onMouseDown={e => { e.preventDefault(); salvarSelecao(); corTextoRef.current?.click(); }}
-          title="Cor do texto"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          🎨
-        </button>
-        <input ref={corTextoRef} type="color" style={{ display:'none' }}
+        <Botao pequeno icone={mdiPalette} title="Cor do texto" aria-label="Cor do texto"
+          onMouseDown={e => { e.preventDefault(); salvarSelecao(); corTextoRef.current?.click(); }} />
+        <input ref={corTextoRef} type="color" className="acn-lic-oculto"
           onChange={e => { restaurarSelecaoEAplicar('foreColor', e.target.value); autosave(); }} />
-        <button onMouseDown={e => { e.preventDefault(); salvarSelecao(); corDestaqueRef.current?.click(); }}
-          title="Destacar / pintar fundo do texto"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          🖍️
-        </button>
-        <input ref={corDestaqueRef} type="color" style={{ display:'none' }}
+        <Botao pequeno icone={mdiFormatColorHighlight} title="Destacar / pintar fundo do texto" aria-label="Destacar o texto"
+          onMouseDown={e => { e.preventDefault(); salvarSelecao(); corDestaqueRef.current?.click(); }} />
+        <input ref={corDestaqueRef} type="color" className="acn-lic-oculto"
           onChange={e => { restaurarSelecaoEAplicar('hiliteColor', e.target.value); autosave(); }} />
-        <button onMouseDown={async e => {
-          e.preventDefault();
-          const url = await pedirTexto('URL do link:');
-          if (url) document.execCommand('createLink', false, url);
-        }} title="Inserir link"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          🔗
-        </button>
-        <button onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click(); }}
-          title="Inserir imagem"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          📷
-        </button>
-        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
+        <Botao pequeno icone={mdiLinkVariant} title="Inserir link" aria-label="Inserir link"
+          onMouseDown={async e => {
+            e.preventDefault();
+            const url = await pedirTexto('URL do link:');
+            if (url) document.execCommand('createLink', false, url);
+          }} />
+        <Botao pequeno icone={mdiImageOutline} title="Inserir imagem" aria-label="Inserir imagem"
+          onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click(); }} />
+        <input ref={imgInputRef} type="file" accept="image/*" className="acn-lic-oculto"
           onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagem(f); e.target.value = ''; }} />
-        <button onMouseDown={e => { e.preventDefault(); inserirTabela(); }}
-          title="Inserir tabela editável"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
-          ⊞
-        </button>
-        <button onMouseDown={e => { e.preventDefault(); excluirTabela(); }}
-          title="Excluir tabela (posicione o cursor dentro dela)"
-          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4, color:'#dc2626' }}>
-          ⊟
-        </button>
-        <div style={{ flex:1 }} />
-        {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
-        {salvo && !salvando && <span style={{ fontSize:9, color:'#16a34a' }}>✓ Salvo</span>}
-        {erroSalvar && !salvando && <span style={{ fontSize:9, color:'#dc2626', fontWeight:700 }} title={erroSalvar}>⚠ NÃO salvou: {erroSalvar}</span>}
+        <Botao pequeno icone={mdiTablePlus} title="Inserir tabela editável" aria-label="Inserir tabela"
+          onMouseDown={e => { e.preventDefault(); inserirTabela(); }} />
+        <Botao pequeno variante="perigo-sec" icone={mdiTableRemove} title="Excluir tabela (posicione o cursor dentro dela)" aria-label="Excluir tabela"
+          onMouseDown={e => { e.preventDefault(); excluirTabela(); }} />
+        <div className="acn-lic-cresce" />
+        {salvando && <span className="acn-txt-atencao">Salvando...</span>}
+        {salvo && !salvando && <span className="acn-txt-ok acn-lic-estado"><Icone path={mdiCheck} size={14} />Salvo</span>}
+        {erroSalvar && !salvando && <span className="acn-txt-erro acn-lic-estado" title={erroSalvar}><Icone path={mdiAlertOutline} size={14} />NÃO salvou: {erroSalvar}</span>}
         {/* Discreto de propósito — já autosalva 1.5s após parar de digitar; o
-            botão em destaque da tela é "💾 Salvar Alterações" (registro
+            botão em destaque da tela é "Salvar Alterações" (registro
             inteiro), este aqui só força salvar antes desse intervalo. */}
-        <button onClick={salvarAgora} disabled={salvando} title="Forçar salvar agora (já autosalva sozinho)"
-          style={{ background:'#f1f5f9', color:'#64748b', border:'1px solid #d1d5db', borderRadius:3,
-            padding:'2px 8px', fontSize:9, fontWeight:600, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
-          💾
-        </button>
+        <Botao variante="discreto" pequeno icone={mdiContentSaveOutline} onClick={salvarAgora} disabled={salvando}
+          title="Forçar salvar agora (já autosalva sozinho)" aria-label="Salvar agora" />
       </div>
       {/* Editor */}
       <div
@@ -799,21 +763,8 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
         className="licit-area-livre"
         onInput={autosave}
         onPaste={handlePaste}
-        style={{ minHeight:90, padding:'10px 12px', fontSize:11, color:'#1e293b',
-          lineHeight:1.6, outline:'none', background:'#fff', wordBreak:'break-word' }}
         data-placeholder="Notas livres, cole tabelas do Excel, imagens, links..."
       />
-      <style>{`
-        [data-placeholder]:empty::before {
-          content: attr(data-placeholder);
-          color: #9ca3af;
-          pointer-events: none;
-        }
-        /* Tabelas coladas do Excel ficam com estilo básico */
-        .licit-area-livre table { border-collapse:collapse; width:100%; }
-        .licit-area-livre td, .licit-area-livre th {
-          border:1px solid #d1d5db; padding:4px 6px; font-size:10px; }
-      `}</style>
     </div>
   );
 }
@@ -919,37 +870,34 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
   };
 
   return (
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:10, display:'flex', flexDirection:'column', gap:8, minWidth:0, flex:'1 1 260px' }}>
-      <div style={{ fontWeight:700, fontSize:10, color:'#374151' }}>{label}</div>
+    <div className="acn-lic-docs">
+      <div className="acn-forte">{label}</div>
       <input type="file" ref={uploadRef} multiple
         accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar`}
         onChange={e => setUploadFiles(Array.from(e.target.files||[]))}
-        style={{ width:'100%', fontSize:9 }} />
-      {uploadFiles.length > 0 && <div style={{ fontSize:9, color:'#0369a1' }}>📎 {uploadFiles.length} arquivo(s)</div>}
+        className="acn-lic-arquivo" />
+      {uploadFiles.length > 0 && <div className="acn-lic-doc-anexos"><Icone path={mdiPaperclip} size={13} />{uploadFiles.length} arquivo(s)</div>}
       <input type="text" placeholder="Descrição / legenda (opcional)" value={uploadDesc} onChange={e=>setUploadDesc(e.target.value)}
-        style={{ width:'100%', padding:'4px 7px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
-      <button onClick={salvar} disabled={salvando||(uploadFiles.length===0&&!uploadDesc.trim())}
-        style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'5px 10px', fontSize:10, fontWeight:700, cursor:'pointer', alignSelf:'flex-start', opacity:(uploadFiles.length>0||uploadDesc.trim())?1:.5 }}>
-        {salvando ? 'Salvando...' : '+ Adicionar'}
-      </button>
-      {loading && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center' }}>Carregando...</div>}
+        className="acn-input acn-lic-cheio" />
+      <Botao variante="primario" pequeno icone={mdiPlus} className="acn-lic-doc-add" onClick={salvar} disabled={salvando||(uploadFiles.length===0&&!uploadDesc.trim())}>
+        {salvando ? 'Salvando...' : 'Adicionar'}
+      </Botao>
+      {loading && <div className="acn-ajuda acn-lic-centro">Carregando...</div>}
       {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchDocs}>Tentar de novo</Botao>}>Não foi possível ler os documentos ({erroLeitura}). Isso não quer dizer que não haja nenhum.</Faixa>}
-      {!loading && docs.length === 0 && !erroLeitura && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center', padding:8 }}>Nenhum documento.</div>}
+      {!loading && docs.length === 0 && !erroLeitura && <div className="acn-ajuda acn-lic-centro">Nenhum documento.</div>}
       {docs.map(d => (
-        <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:6, padding:'6px 8px',
-          background: itemNaoLido?.(d.id) ? '#fefce8' : '#f8fafc',
-          border: `1px solid ${itemNaoLido?.(d.id) ? '#fde047' : '#e2e8f0'}`, borderRadius:4 }}>
-          <div style={{ flex:1, minWidth:0 }}>
+        <div key={d.id} className={'acn-lic-doc' + (itemNaoLido?.(d.id) ? ' nao-lido' : '')}>
+          <div className="acn-lic-doc-corpo">
             {d.url ? (
-              <a href={d.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb', fontSize:10, fontWeight:600, wordBreak:'break-all' }}>📎 {d.nome}</a>
+              <a href={d.url} target="_blank" rel="noreferrer" className="acn-lic-link-info acn-lic-doc-link"><Icone path={mdiPaperclip} size={13} />{d.nome}</a>
             ) : (
-              <div style={{ fontSize:10, color:'#374151', fontWeight:600 }}>{d.nome}</div>
+              <div className="acn-forte">{d.nome}</div>
             )}
-            {d.conteudo && <div style={{ fontSize:9, color:'#64748b', marginTop:2, whiteSpace:'pre-wrap' }}><Linkify text={d.conteudo} /></div>}
-            <div style={{ fontSize:8, color:'#9ca3af', marginTop:2 }}>👤 {d.criado_por_nome||'—'} · 🕒 {fmtDT(d.criado_em)}</div>
+            {d.conteudo && <div className="acn-ajuda acn-lic-doc-txt"><Linkify text={d.conteudo} /></div>}
+            <div className="acn-ajuda acn-lic-doc-meta"><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'} · <Icone path={mdiClockOutline} size={12} />{fmtDT(d.criado_em)}</div>
           </div>
           {podeExcluir && (
-            <button onClick={()=>excluir(d)} style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:11, padding:'0 2px' }}>✕</button>
+            <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover documento" aria-label="Remover documento" onClick={()=>excluir(d)} />
           )}
         </div>
       ))}
@@ -960,12 +908,11 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
           o que já existe aparece para LEITURA; não dá mais para escrever.
           Nada foi apagado do banco (licitacoes.areas_livres). */}
       {textoAntigo && (
-        <div style={{ background:'#f8fafc', border:'1px dashed #cbd5e1', borderRadius:4, padding:'6px 8px' }}>
-          <div style={{ fontSize:8, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', marginBottom:3 }}>
+        <div className="acn-lic-antiga">
+          <div className="acn-quadro-titulo">
             Anotação antiga (somente leitura)
           </div>
-          <div style={{ fontSize:10, color:'#475569', wordBreak:'break-word', overflowX:'auto' }}
-            dangerouslySetInnerHTML={{ __html: htmlSeguro(textoAntigo) }} />
+          <div className="acn-lic-antiga-corpo" dangerouslySetInnerHTML={{ __html: htmlSeguro(textoAntigo) }} />
         </div>
       )}
     </div>
@@ -1005,34 +952,34 @@ function QuadroFormacaoLicitacao({ licitacaoId }: any) {
   if (!est.lotes.length) return null;
   const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   return (
-    <div style={{ border:'1px solid #bfdbfe', background:'#eff6ff', borderRadius:6, padding:'8px 10px', margin:'4px 0 8px' }}>
-      <div style={{ display:'flex', alignItems:'baseline', gap:6, flexWrap:'wrap', marginBottom:6 }}>
-        <span style={{ fontSize:9, fontWeight:800, color:'#1e3a8a', textTransform:'uppercase', letterSpacing:.3 }}>Formação de preços</span>
-        <span style={{ fontSize:9, color:'#475569' }}>
+    <div className="acn-quadro tom-info acn-lic-formacao">
+      <div className="acn-lic-formacao-cab">
+        <span className="acn-quadro-titulo">Formação de preços</span>
+        <span className="acn-ajuda">
           v{cot.versao || 1}{cot.nome ? ` · ${cot.nome}` : ''}{cot.status === 'finalizada' ? ' · final' : ''}
         </span>
       </div>
-      <table style={{ width:'100%', borderCollapse:'collapse' }}>
+      <table className="acn-lic-mini">
         <thead>
           <tr>
-            <th style={{ textAlign:'left', fontSize:8, color:'#64748b', fontWeight:700, padding:'2px 4px' }}>Lote</th>
-            <th style={{ textAlign:'right', fontSize:8, color:'#64748b', fontWeight:700, padding:'2px 4px' }} title="Soma do unitário de cada item do lote">Valor unitário</th>
-            <th style={{ textAlign:'right', fontSize:8, color:'#64748b', fontWeight:700, padding:'2px 4px' }}>Valor do lote</th>
+            <th className="esq">Lote</th>
+            <th className="dir" title="Soma do unitário de cada item do lote">Valor unitário</th>
+            <th className="dir">Valor do lote</th>
           </tr>
         </thead>
         <tbody>
           {est.lotes.map((l: any) => (
-            <tr key={l.nome} style={{ borderTop:'1px solid #dbeafe' }}>
-              <td style={{ fontSize:10, fontWeight:700, color:'#1e3a8a', padding:'3px 4px' }}>{l.nome}</td>
-              <td style={{ fontSize:10, textAlign:'right', padding:'3px 4px' }}>{brl(l.unit.totVendas)}</td>
-              <td style={{ fontSize:10, fontWeight:800, textAlign:'right', padding:'3px 4px', color:'#1e40af' }}>{brl(l.total.totVendas)}</td>
+            <tr key={l.nome}>
+              <td className="esq acn-forte">{l.nome}</td>
+              <td className="dir">{brl(l.unit.totVendas)}</td>
+              <td className="dir acn-forte acn-txt-info">{brl(l.total.totVendas)}</td>
             </tr>
           ))}
           {est.lotes.length > 1 && (
-            <tr style={{ borderTop:'1px solid #93c5fd' }}>
-              <td style={{ fontSize:10, fontWeight:800, padding:'3px 4px' }}>Total</td>
+            <tr className="total">
+              <td className="esq acn-forte">Total</td>
               <td />
-              <td style={{ fontSize:11, fontWeight:800, textAlign:'right', padding:'3px 4px', color:'#1e40af' }}>{brl(est.geral.totVendas)}</td>
+              <td className="dir acn-forte acn-txt-info">{brl(est.geral.totVendas)}</td>
             </tr>
           )}
         </tbody>
