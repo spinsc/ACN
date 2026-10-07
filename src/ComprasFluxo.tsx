@@ -30,7 +30,7 @@ import { confirmar } from './Feedback';
 import { ItensDemandaEditor, itemVazio, itensPreenchidos } from './DemandaItens';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { AvisoSaldoCentro } from './CentroCustoUso';
-import { mdiPaperclip, mdiTrashCanOutline, mdiUpload } from '@mdi/js';
+import { mdiPaperclip, mdiTrashCanOutline, mdiUpload, mdiClose } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
 // encerra a compra é o material chegar, e o nome antigo confundia com a
@@ -148,31 +148,35 @@ export async function mencionarPerfis(perfis: string[], pedido: any, texto: stri
 // ── Janela padrão ────────────────────────────────────────────────────────────
 function Janela({ titulo, subtitulo, children, onClose, largura = 520, bloqueada = false }: any) {
   return (
-    <div className="modal-overlay" style={{ zIndex: 2600 }}
+    <div className="modal-overlay acn-flx-overlay"
       onClick={e => { if (!bloqueada && e.target === e.currentTarget) onClose?.(); }}>
-      <div className="modal-box" style={{ maxWidth: largura, width: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div className="modal-title" style={{ marginBottom: subtitulo ? 2 : 12 }}>{titulo}</div>
-        {subtitulo && <div style={{ fontSize: 12, color: 'var(--acn-muted)', marginBottom: 12 }}>{subtitulo}</div>}
-        {children}
+      <div className="modal-box acn-modal-cadastro acn-flx-jan" role="dialog" aria-label={typeof titulo === 'string' ? titulo : undefined} style={{ ['--acn-flx-larg' as any]: largura + 'px' }}>
+        <div className="acn-modal-cab">
+          <span className="modal-title">{titulo}</span>
+          {subtitulo && <div className="acn-ajuda">{subtitulo}</div>}
+        </div>
+        <div className="acn-modal-corpo acn-form-cheio acn-flx-corpo">
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
-const Rotulo = ({ children }: any) => <label className="acn-label" style={{ display: 'block', marginBottom: 3 }}>{children}</label>;
-const Texto = (props: any) => <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', minHeight: 64 }} {...props} />;
-const Rodape = ({ children }: any) => <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14, flexWrap: 'wrap' }}>{children}</div>;
+const Rotulo = ({ children }: any) => <label className="acn-label acn-flx-rotulo">{children}</label>;
+const Texto = (props: any) => <textarea className="acn-input acn-flx-texto" rows={3} {...props} />;
+const Rodape = ({ children }: any) => <div className="acn-flx-rodape">{children}</div>;
 
 function ResumoPedido({ p }: any) {
   return (
-    <div style={{ background: 'var(--acn-surface-2)', border: '1px solid var(--acn-line)', borderRadius: 8, padding: '8px 10px', marginBottom: 12, fontSize: 12 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="acn-flx-resumo">
+      <div className="acn-flx-resumo-topo">
         <strong className="acn-mono">{p.numero_pedido}</strong>
         <Selo familia="neutro">{p.status_compra}</Selo>
         {p.reprocessos > 0 && <Selo familia="atencao" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
       </div>
-      <div style={{ marginTop: 4, color: 'var(--acn-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 60, overflow: 'hidden' }}>{p.descricao_material}</div>
-      <div style={{ marginTop: 2, color: 'var(--acn-muted)' }}>Qtd {p.quantidade || 1}{p.criado_por_nome ? ` · solicitado por ${p.criado_por_nome}` : ''}</div>
+      <div className="acn-flx-resumo-desc">{p.descricao_material}</div>
+      <div className="acn-fraco">Qtd {p.quantidade || 1}{p.criado_por_nome ? ` · solicitado por ${p.criado_por_nome}` : ''}</div>
     </div>
   );
 }
@@ -227,7 +231,7 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
       <ResumoPedido p={pedido} />
       <Rotulo>Por que está voltando? *</Rotulo>
       <Texto value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex.: fornecedor não tem mais o item no preço cotado" autoFocus />
-      <div style={{ height: 10 }} />
+      <div className="acn-flx-esp" />
       <Rotulo>O que precisa ser refeito? *</Rotulo>
       <Texto value={refazer} onChange={e => setRefazer(e.target.value)} placeholder="Ex.: cotar novamente com 2 fornecedores e reenviar para aprovação" />
       <Rodape>
@@ -350,11 +354,11 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
       <ResumoPedido p={pedido} />
       {erroCompradores && <Faixa tom="erro">Não foi possível ler a lista de compradores ({erroCompradores}). Feche e abra a janela de novo.</Faixa>}
       <Rotulo>Comprador responsável *</Rotulo>
-      <select className="acn-input" style={{ width: '100%' }} value={comprador} onChange={e => setComprador(e.target.value)}>
+      <select className="acn-input" value={comprador} onChange={e => setComprador(e.target.value)}>
         <option value="">Selecione…</option>
         {compradores.map(u => <option key={u.email} value={u.email}>{u.nome}</option>)}
       </select>
-      <div style={{ height: 10 }} />
+      <div className="acn-flx-esp" />
       <Rotulo>Observação (opcional)</Rotulo>
       <Texto value={obs} onChange={e => setObs(e.target.value)} rows={2} />
       <Rodape>
@@ -405,49 +409,45 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
     if (ok !== false) onClose?.();
   });
 
-  const inp: React.CSSProperties = { width: '100%', padding: '5px 8px', border: '1px solid var(--acn-line)',
-    borderRadius: 4, fontSize: 12, boxSizing: 'border-box' };
-
   return (
     <Janela titulo="Confirmar compra" subtitulo="Gera a Ordem de Compra e envia para o acompanhamento de recebimento." onClose={onClose}>
       <ResumoPedido p={pedido} />
-      <div style={{ fontSize: 12, marginBottom: 10 }}>Fornecedor: <strong>{pedido.fornecedor || '—'}</strong></div>
+      <div className="acn-flx-forn">Fornecedor: <strong>{pedido.fornecedor || '—'}</strong></div>
 
       <Rotulo>Quantidade comprada *</Rotulo>
-      <div style={{ fontSize: 11, color: 'var(--acn-muted)', marginBottom: 6 }}>
+      <div className="acn-ajuda">
         O que você fechou com o fornecedor. Comprar a mais por caixa fechada ou lote mínimo é normal —
         é este número que sai na Ordem de Compra e que vai entrar no estoque quando chegar.
       </div>
 
       {itensBase.length ? (
-        <div style={{ border: '1px solid var(--acn-line)', borderRadius: 6, overflow: 'hidden', marginBottom: 4 }}>
+        <div className="acn-flx-itens">
           {itensBase.map((i: any, n: number) => (
-            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
-              borderTop: n ? '1px solid var(--acn-line)' : 'none' }}>
-              <span style={{ flex: 1, fontSize: 12, minWidth: 0, wordBreak: 'break-word' }}>{i.nome}</span>
-              <span style={{ fontSize: 11, color: 'var(--acn-muted)', whiteSpace: 'nowrap' }}>
+            <div key={n} className="acn-flx-item">
+              <span className="acn-flx-item-nome">{i.nome}</span>
+              <span className="acn-ajuda acn-flx-item-ped">
                 pedido {num(i.quantidade) || '—'}
               </span>
-              <input type="number" min={0} step="any" style={{ ...inp, width: 90 }} value={qtds[n] ?? ''}
+              <input type="number" min={0} step="any" className="acn-input acn-flx-qtd" value={qtds[n] ?? ''}
                 onChange={e => setQtds(v => v.map((x, j) => j === n ? e.target.value : x))} />
             </div>
           ))}
         </div>
       ) : (
-        <input type="number" min={0} step="any" style={inp} value={qtdTotal}
+        <input type="number" min={0} step="any" className="acn-input" value={qtdTotal}
           onChange={e => setQtdTotal(e.target.value)} />
       )}
 
       {mudou && (
-        <div style={{ fontSize: 11, color: 'var(--acn-atencao-ink, #b45309)', marginTop: 4, marginBottom: 4 }}>
+        <div className="acn-txt-atencao acn-flx-dif">
           Diferente do pedido: {totalPedido} pedido{totalPedido === 1 ? '' : 's'} · {totalComprado} comprado{totalComprado === 1 ? '' : 's'}.
           Fica registrado no histórico do pedido.
         </div>
       )}
 
       <Rotulo>Prazo de entrega do pedido *</Rotulo>
-      <input type="date" className="acn-input" style={{ width: '100%' }} value={prazo} onChange={e => setPrazo(e.target.value)} />
-      <div style={{ fontSize: 11, color: 'var(--acn-muted)', marginTop: 4 }}>Se o recebimento não for registrado até esta data, Compras e Almoxarifado recebem um alerta.</div>
+      <input type="date" className="acn-input" value={prazo} onChange={e => setPrazo(e.target.value)} />
+      <div className="acn-ajuda">Se o recebimento não for registrado até esta data, Compras e Almoxarifado recebem um alerta.</div>
       <Rodape>
         <Botao variante="secundario" onClick={onClose} disabled={salvando}>Cancelar</Botao>
         <Botao variante="primario" onClick={salvar} disabled={salvando}>{salvando ? 'Confirmando…' : 'Confirmar compra'}</Botao>
@@ -482,20 +482,19 @@ export async function enviarAnexosCompra(pedidoId: string, arquivos: File[], use
 export function EscolherAnexos({ arquivos, onChange }: { arquivos: File[]; onChange: (f: File[]) => void }) {
   return (
     <div>
-      <label className="acn-b acn-b-secundario acn-b-p" style={{ cursor: 'pointer' }}>
-        <input type="file" multiple style={{ display: 'none' }}
+      <label className="acn-b acn-b-secundario acn-b-p acn-flx-anexar">
+        <input type="file" multiple className="acn-cmp-oculto"
           onChange={e => { const novos = Array.from(e.target.files || []); if (novos.length) onChange([...arquivos, ...novos]); e.target.value = ''; }} />
         📎 Anexar arquivos
       </label>
-      <span style={{ fontSize: 11, color: 'var(--acn-muted)', marginLeft: 8 }}>Foto, PDF, planilha ou qualquer arquivo (até 20 MB cada)</span>
+      <span className="acn-ajuda acn-flx-anexar-dica">Foto, PDF, planilha ou qualquer arquivo (até 20 MB cada)</span>
       {arquivos.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+        <div className="acn-flx-arquivos">
           {arquivos.map((f, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {f.name}</span>
-              <span style={{ color: 'var(--acn-muted)', fontSize: 11 }}>{(f.size / 1024).toFixed(0)} KB</span>
-              <button type="button" onClick={() => onChange(arquivos.filter((_, j) => j !== i))}
-                style={{ border: 'none', background: 'none', color: 'var(--acn-bad)', cursor: 'pointer' }} aria-label={`Remover ${f.name}`}>✕</button>
+            <div key={i} className="acn-flx-arquivo">
+              <span className="acn-flx-arquivo-nome">📄 {f.name}</span>
+              <span className="acn-ajuda">{(f.size / 1024).toFixed(0)} KB</span>
+              <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => onChange(arquivos.filter((_, j) => j !== i))} aria-label={`Remover ${f.name}`} />
             </div>
           ))}
         </div>
@@ -538,18 +537,18 @@ export function AnexosCompra({ pedido, currentUser, podeEditar }: any) {
   return (
     <div>
       {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler os anexos ({erroLeitura}). Isso não quer dizer que não haja anexo.</Faixa>}
-      {anexos === null ? <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Carregando…</div>
-        : anexos.length === 0 ? <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Nenhum anexo.</div>
+      {anexos === null ? <div className="acn-ajuda">Carregando…</div>
+        : anexos.length === 0 ? <div className="acn-ajuda">Nenhum anexo.</div>
         : anexos.map(a => (
-          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '3px 0', borderBottom: '1px solid var(--acn-line-soft)' }}>
-            <a href={a.url} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--acn-brand-ink)' }}>📎 {a.nome}</a>
-            <span style={{ fontSize: 11, color: 'var(--acn-muted)' }}>{a.criado_por_nome || ''} · {fmtDT(a.criado_em)}</span>
+          <div key={a.id} className="acn-flx-anexo">
+            <a href={a.url} target="_blank" rel="noreferrer" className="acn-flx-anexo-nome">📎 {a.nome}</a>
+            <span className="acn-ajuda">{a.criado_por_nome || ''} · {fmtDT(a.criado_em)}</span>
             {podeEditar && <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Remover ${a.nome}`} title="Remover" onClick={() => remover(a)} />}
           </div>
         ))}
       {podeEditar && (
-        <label className="acn-b acn-b-secundario acn-b-p" style={{ cursor: enviando ? 'wait' : 'pointer', marginTop: 6 }}>
-          <input type="file" multiple style={{ display: 'none' }} disabled={enviando} onChange={e => { enviar(e.target.files); e.target.value = ''; }} />
+        <label className={'acn-b acn-b-secundario acn-b-p acn-flx-anexar acn-flx-anexar-topo' + (enviando ? ' ocupado' : '')}>
+          <input type="file" multiple className="acn-cmp-oculto" disabled={enviando} onChange={e => { enviar(e.target.files); e.target.value = ''; }} />
           {enviando ? 'Enviando…' : '📎 Adicionar anexos'}
         </label>
       )}
@@ -574,22 +573,22 @@ export function HistoricoCompra({ pedidoId, recarregar = 0 }: any) {
         setErroLeitura(''); setItens(data || []);
       });
   }, [pedidoId, recarregar]);
-  if (itens === null) return <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Carregando…</div>;
+  if (itens === null) return <div className="acn-ajuda">Carregando…</div>;
   if (erroLeitura && !itens.length) return <Faixa tom="erro">Não foi possível ler o histórico ({erroLeitura}). Isso não quer dizer que não haja registro.</Faixa>;
-  if (!itens.length) return <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>Nenhum registro ainda.</div>;
+  if (!itens.length) return <div className="acn-ajuda">Nenhum registro ainda.</div>;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className="acn-flx-hist">
       {itens.map(h => (
-        <div key={h.id} style={{ borderLeft: '3px solid var(--acn-line)', paddingLeft: 8, fontSize: 12 }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div key={h.id} className="acn-flx-hist-item">
+          <div className="acn-flx-hist-topo">
             <Selo familia={(FAMILIA_HIST[h.tipo] || 'neutro') as any} ponto={false}>{TIPO_HIST[h.tipo] || h.tipo}</Selo>
-            {(h.status_de || h.status_para) && <span style={{ color: 'var(--acn-text)' }}>{h.status_de || '—'} → {h.status_para || '—'}</span>}
-            <span style={{ color: 'var(--acn-muted)', fontSize: 11, marginLeft: 'auto' }}>{h.usuario_nome || '—'} · {fmtDT(h.criado_em)}</span>
+            {(h.status_de || h.status_para) && <span>{h.status_de || '—'} → {h.status_para || '—'}</span>}
+            <span className="acn-ajuda acn-flx-hist-quem">{h.usuario_nome || '—'} · {fmtDT(h.criado_em)}</span>
           </div>
-          {h.motivo && <div style={{ marginTop: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{h.motivo}</div>}
-          {h.dados?.refazer && <div style={{ marginTop: 2, color: 'var(--acn-muted)' }}>Será refeito: {h.dados.refazer}</div>}
+          {h.motivo && <div className="acn-flx-hist-motivo">{h.motivo}</div>}
+          {h.dados?.refazer && <div className="acn-fraco acn-flx-hist-motivo">Será refeito: {h.dados.refazer}</div>}
           {h.tipo === 'edicao' && Array.isArray(h.dados?.campos) && (
-            <div style={{ marginTop: 2, color: 'var(--acn-muted)' }}>
+            <div className="acn-fraco acn-flx-hist-motivo">
               {h.dados.campos.map((c: any, i: number) => <div key={i}>{c.campo}: "{String(c.de ?? '—').slice(0, 80)}" → "{String(c.para ?? '—').slice(0, 80)}"</div>)}
             </div>
           )}
@@ -663,37 +662,37 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
       )}
       <Rotulo>Descrição do material / serviço *</Rotulo>
       <Texto value={form.descricao_material} onChange={e => set('descricao_material', e.target.value)} rows={3} />
-      <div style={{ marginTop: 10 }}>
+      <div className="acn-flx-bloco">
         <ItensDemandaEditor itens={itens} onChange={setItens} titulo="Itens a comprar" comValor
           dica="Valor é opcional: se não souber, o comprador completa." />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10, marginTop: 10 }}>
+      <div className="acn-flx-bloco acn-flx-qtdforn">
         <div><Rotulo>Quantidade *</Rotulo>
           {itensPreenchidos(itens).length
             ? <div className="acn-ajuda">{itensPreenchidos(itens).reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0)} (soma dos itens)</div>
-            : <input className="acn-input" type="number" min={0} step="any" style={{ width: '100%' }} value={form.quantidade} onChange={e => set('quantidade', e.target.value)} />}</div>
+            : <input className="acn-input" type="number" min={0} step="any" value={form.quantidade} onChange={e => set('quantidade', e.target.value)} />}</div>
         <div><Rotulo>Fornecedor sugerido</Rotulo>
-          <input className="acn-input" style={{ width: '100%' }} value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} /></div>
+          <input className="acn-input" value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} /></div>
       </div>
-      <div style={{ marginTop: 10 }}>
+      <div className="acn-flx-bloco">
         <Rotulo>Centro de custo</Rotulo>
-        <CentroCustoSelect value={form.centroId} onChange={v => set('centroId', v)} style={{ width: '100%' }} />
+        <CentroCustoSelect value={form.centroId} onChange={v => set('centroId', v)} className="acn-input" semEstilo />
         {/* Etapa 15c: aviso (só aviso) quando o centro já usou 80% do orçamento do mês ou do ano */}
         <AvisoSaldoCentro centroId={form.centroId} />
       </div>
-      <div style={{ marginTop: 10 }}>
+      <div className="acn-flx-bloco">
         <Rotulo>Vincular a um processo (opcional)</Rotulo>
         <VinculoPicker value={form.vinculo} onSelect={v => set('vinculo', v)} onClear={() => set('vinculo', null)} />
       </div>
-      <div style={{ marginTop: 10 }}>
+      <div className="acn-flx-bloco">
         <Rotulo>Link (opcional)</Rotulo>
-        <input className="acn-input" style={{ width: '100%' }} value={form.link_url} onChange={e => set('link_url', e.target.value)} placeholder="https://…" />
+        <input className="acn-input" value={form.link_url} onChange={e => set('link_url', e.target.value)} placeholder="https://…" />
       </div>
-      <div style={{ marginTop: 10 }}>
+      <div className="acn-flx-bloco">
         <Rotulo>Observações</Rotulo>
         <Texto value={form.observacoes} onChange={e => set('observacoes', e.target.value)} rows={2} />
       </div>
-      <div style={{ marginTop: 12 }}>
+      <div className="acn-flx-bloco">
         <Rotulo>Anexos</Rotulo>
         <AnexosCompra pedido={pedido} currentUser={currentUser} podeEditar />
       </div>
@@ -799,21 +798,21 @@ function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: a
     onRespondido?.();
   });
   return (
-    <div style={{ border: '1px solid var(--acn-line)', borderLeft: `3px solid ${entrega ? 'var(--acn-bad)' : 'var(--acn-warn)'}`, borderRadius: 8, padding: '8px 10px', background: 'var(--acn-surface)' }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+    <div className={'acn-flx-alerta ' + (entrega ? 'entrega' : 'parada')}>
+      <div className="acn-flx-alerta-topo">
         <strong className="acn-mono">{p.numero_pedido}</strong>
         <Selo familia={entrega ? 'erro' : 'atencao'}>{entrega ? `Entrega atrasada · ${alerta.dias} d` : `${p.status_compra} · parada há ${horasTexto(alerta.horas)} úteis`}</Selo>
         {p.reprocessos > 0 && <Selo familia="neutro" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
       </div>
-      <div style={{ fontSize: 12, marginTop: 4, color: 'var(--acn-text)', wordBreak: 'break-word' }}>{String(p.descricao_material || '').slice(0, 180)}</div>
-      <div style={{ fontSize: 11, color: 'var(--acn-muted)', marginTop: 2 }}>
+      <div className="acn-flx-alerta-desc">{String(p.descricao_material || '').slice(0, 180)}</div>
+      <div className="acn-ajuda">
         {p.criado_por_nome ? `Solicitado por ${p.criado_por_nome}` : ''}{p.comprador_nome ? ` · Comprador: ${p.comprador_nome}` : ''}
         {entrega ? ` · Prazo: ${fmtData(p.data_prevista_recebimento)}${p.fornecedor ? ` · ${p.fornecedor}` : ''}` : ''}
       </div>
-      <textarea className="acn-input" rows={compacto ? 2 : 2} style={{ width: '100%', marginTop: 6, resize: 'vertical' }}
+      <textarea className="acn-input acn-flx-alerta-texto" rows={compacto ? 2 : 2}
         placeholder={entrega ? 'Posição: o que aconteceu com a entrega e qual a nova previsão *' : p.status_compra === 'Aprovado' ? 'Por que a compra ainda não foi efetivada? *' : 'Por que está parada? *'}
         value={texto} onChange={e => setTexto(e.target.value)} aria-label="Justificativa" />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+      <div className="acn-flx-alerta-acoes">
         <Botao pequeno variante="primario" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando…' : entrega ? 'Registrar posição' : 'Registrar motivo'}</Botao>
       </div>
     </div>
@@ -837,28 +836,28 @@ export function AlertasComprasPanel({ currentUser, onClose, onCountChange, onAbr
   const parados = (alertas || []).filter(a => a.tipo === 'parado');
   const entregas = (alertas || []).filter(a => a.tipo === 'entrega');
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3100, display: 'flex', justifyContent: 'flex-end' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,.35)' }} onClick={onClose} />
-      <div style={{ position: 'relative', width: 480, maxWidth: '100vw', height: '100%', background: 'var(--acn-canvas)', boxShadow: 'var(--acn-shadow-3)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 16px', background: 'var(--acn-surface)', borderBottom: '1px solid var(--acn-line)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--acn-ink)' }}>Avisos de Compras</div>
-            <div style={{ fontSize: 12, color: 'var(--acn-muted)' }}>{alertas === null ? 'Carregando…' : alertas.length ? `${alertas.length} requisição(ões) precisam de resposta` : 'Nada parado nem atrasado'}</div>
+    <div className="acn-flx-gaveta">
+      <div className="acn-flx-gaveta-fundo" onClick={onClose} />
+      <div className="acn-flx-gaveta-painel">
+        <div className="acn-flx-gaveta-cab">
+          <div className="acn-cmp-cresce">
+            <div className="acn-flx-gaveta-tit">Avisos de Compras</div>
+            <div className="acn-ajuda">{alertas === null ? 'Carregando…' : alertas.length ? `${alertas.length} requisição(ões) precisam de resposta` : 'Nada parado nem atrasado'}</div>
           </div>
           {onAvisosOp && <Botao pequeno variante="secundario" onClick={onAvisosOp}>Avisos de OP{qtdAvisosOp ? ` (${qtdAvisosOp})` : ''}</Botao>}
           {onAbrirCompras && <Botao pequeno variante="secundario" onClick={onAbrirCompras}>Abrir Compras</Botao>}
           <Botao pequeno variante="discreto" onClick={onClose} aria-label="Fechar">✕</Botao>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="acn-flx-gaveta-corpo">
           {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler os avisos ({erroLeitura}). Isso não quer dizer que não haja requisição parada ou atrasada.</Faixa>}
           {alertas !== null && alertas.length === 0 && !erroLeitura && (
-            <div className="acn-empty" style={{ margin: 0 }}>
+            <div className="acn-empty acn-flx-vazio">
               Aqui aparecem as requisições paradas (Pendente e Em Andamento há 48h úteis, Aprovado há 24h úteis) e as compras com entrega atrasada.
             </div>
           )}
-          {parados.length > 0 && <div className="acn-label" style={{ margin: '4px 0 0' }}>Paradas — motivo obrigatório</div>}
+          {parados.length > 0 && <div className="acn-label acn-flx-grupo">Paradas — motivo obrigatório</div>}
           {parados.map(a => <CartaoAlerta key={a.pedido.id + a.tipo} alerta={a} currentUser={currentUser} onRespondido={carregar} />)}
-          {entregas.length > 0 && <div className="acn-label" style={{ margin: '8px 0 0' }}>Entregas atrasadas — posição</div>}
+          {entregas.length > 0 && <div className="acn-label acn-flx-grupo">Entregas atrasadas — posição</div>}
           {entregas.map(a => <CartaoAlerta key={a.pedido.id + a.tipo} alerta={a} currentUser={currentUser} onRespondido={carregar} />)}
         </div>
       </div>
@@ -873,7 +872,7 @@ export function JanelaParadasObrigatoria({ alertas, currentUser, onRespondido }:
   return (
     <Janela titulo={`${parados.length} requisição(ões) de compra parada(s)`} largura={620} bloqueada
       subtitulo="Pendente e Em Andamento podem ficar até 48h úteis sem atualização; Aprovado, até 24h úteis. Informe o motivo de cada uma — a contagem volta a correr a partir do registro.">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="acn-flx-lista">
         {parados.map((a: any) => <CartaoAlerta key={a.pedido.id} alerta={a} currentUser={currentUser} onRespondido={onRespondido} />)}
       </div>
     </Janela>
