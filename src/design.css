@@ -1731,3 +1731,59 @@ html body .acn-input.acn-fp-filtro { width: auto; min-width: 180px; padding-top:
 .acn-fp-larga { grid-column: 1 / -1; }
 .acn-fp-grade5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .acn-fp-obrigatorio { border-color: var(--acn-bad); }
+
+/* ── Formação de Preços · 12e23 (07/10/2026): calculadoras, busca de produto e a linha de item ── */
+.acn-fp-rot { margin-bottom: 2px; font-size: 11px; font-weight: 600; color: var(--acn-muted); }
+.acn-fp-calc { padding: 12px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-fp-calc-tit { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--acn-f); }
+.acn-fp-calc-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.acn-fp-calc-res { margin-left: 4px; font-size: 14px; font-weight: 700; color: var(--acn-f); }
+html body .acn-input.acn-fp-in-70 { width: 70px; }
+html body .acn-input.acn-fp-in-110 { width: 110px; }
+html body .acn-input.acn-fp-in-120 { width: 120px; }
+/* busca de produto (lista de sugestões que vaza para fora do cartão do item) */
+.acn-fp-ac { position: relative; width: 100%; }
+html body .acn-input.acn-fp-ac-campo { width: 100%; box-sizing: border-box; padding: 3px 6px; }
+.acn-fp-ac-espera { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); color: var(--acn-muted); }
+.acn-fp-ac-lista { position: absolute; top: 100%; left: 0; z-index: 2000; min-width: 320px; max-width: 420px; max-height: 320px; overflow-y: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); box-shadow: var(--acn-shadow-3); }
+.acn-fp-ac-tit { display: flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--acn-f); background: var(--acn-f-soft); }
+.acn-fp-ac-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-fp-ac-item:hover { background: var(--acn-brand-soft); }
+.acn-fp-ac-item.sem-borda { cursor: default; border-bottom: 0; }
+.acn-fp-ac-item.sem-borda:hover { background: transparent; }
+.acn-fp-ac-nome { font-size: 13px; font-weight: 600; color: var(--acn-ink); }
+.acn-fp-ac-apoio { font-size: 11px; color: var(--acn-muted); }
+.acn-fp-ac-preco { text-align: right; flex-shrink: 0; }
+.acn-fp-ac-valor { font-size: 12px; font-weight: 700; color: var(--acn-f); }
+.acn-fp-ac-multi { font-size: 11px; font-weight: 700; color: var(--acn-warn); }
+.acn-fp-ac-prod { border-bottom: 1px solid var(--acn-line-soft); }
+.acn-fp-ac-acoes { display: flex; border-top: 1px solid var(--acn-line-soft); }
+.acn-fp-ac-acoes > .acn-b { flex: 1; border-radius: 0; }
+.acn-fp-ac-vazio { padding: 8px 10px; font-size: 12px; text-align: center; color: var(--acn-muted); }
+.acn-fp-ac-criar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer; border-top: 1px solid var(--acn-line); background: var(--acn-surface-2); font-size: 12px; font-weight: 700; color: var(--acn-brand-ink); }
+.acn-fp-ac-criar:hover { background: var(--acn-brand-soft); }
+/* a linha de um item da formação */
+.acn-fp-ir { margin-bottom: 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-fp-ir-cab { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 8px 10px; }
+.acn-fp-ir-prod { flex: 2 1 200px; min-width: 160px; position: relative; }
+.acn-fp-ir-c1 { flex: 1 1 90px; min-width: 80px; }
+.acn-fp-ir-qt { width: 64px; }
+.acn-fp-ir-mk { width: 92px; }
+.acn-fp-ir-uni { min-width: 90px; text-align: right; }
+.acn-fp-ir-tot { min-width: 100px; text-align: right; }
+.acn-fp-ir-rot, .acn-fp-ir-rot2 { margin-bottom: 2px; font-size: 11px; color: var(--acn-muted); }
+.acn-fp-ir-vu { padding: 5px 0; font-size: 13px; font-weight: 600; color: var(--acn-f); }
+.acn-fp-ir-vt { padding: 5px 0; font-size: 14px; font-weight: 800; color: var(--acn-f); }
+html body .acn-input.acn-fp-ir-campo { width: 100%; box-sizing: border-box; padding: 5px 7px; }
+html body .acn-input.acn-fp-num { text-align: right; }
+html body .acn-input.acn-fp-travado { background: var(--acn-neutral-soft); color: var(--acn-muted); }
+html body .acn-input.acn-fp-mk-global { background: var(--acn-info-soft); color: var(--acn-info); }
+html body .acn-input.acn-fp-neg { background: var(--acn-bad-soft); }
+.acn-fp-ir-corpo { padding: 4px 12px 12px; background: var(--acn-surface-2); border-top: 1px solid var(--acn-line); border-radius: 0 0 var(--acn-r3) var(--acn-r3); }
+.acn-fp-ir-secao { display: flex; align-items: center; gap: 4px; margin: 12px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-brand-ink); }
+.acn-fp-ir-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+.acn-fp-span2 { grid-column: span 2; }
+.acn-fp-ir-val { font-size: 13px; font-weight: 600; color: var(--acn-f); }
+.acn-fp-ir-tc.acn-chips { flex-wrap: nowrap; }
+.acn-fp-mr-linha { display: flex; gap: 3px; }
+.acn-fp-ir-rot2.com-ic { display: flex; align-items: center; gap: 4px; }

@@ -8,10 +8,11 @@ import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
-import { Faixa, Botao } from './Interface';
+import { Faixa, Botao, Selo, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
-  mdiDownloadOutline, mdiLinkVariant, mdiCheck } from '@mdi/js';
+  mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
+  mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline } from '@mdi/js';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -497,19 +498,15 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
   };
   return (
     <div title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
-      <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>🔄 Preço unit. desejado</div>
-      <div style={{ display:'flex', gap:3 }}>
-        <input className="acn-input" style={{ width:'100%', fontSize:11, padding:'5px 7px', textAlign:'right' }}
+      <div className="acn-fp-ir-rot2 com-ic"><Icone path={mdiRefresh} size={12} /> Preço unit. desejado</div>
+      <div className="acn-fp-mr-linha">
+        <input className="acn-input acn-fp-ir-campo acn-fp-num"
           placeholder={bloqueado ? 'markup global' : 'R$'} value={preco} disabled={bloqueado}
           onChange={e => setPreco(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') aplicar(); }} />
-        <button type="button" onClick={aplicar} disabled={bloqueado || !preco}
+        <Botao variante="primario" pequeno icone={mdiRefresh} onClick={aplicar} disabled={bloqueado || !preco}
           title={modoTabela ? 'Calcula e aplica o desconto' : 'Calcula e aplica o markup'}
-          style={{ fontSize:10, fontWeight:800, padding:'0 8px', borderRadius:4, border:'none',
-            cursor: bloqueado || !preco ? 'default' : 'pointer',
-            background: bloqueado || !preco ? '#e2e8f0' : '#0891b2', color: bloqueado || !preco ? '#94a3b8' : '#fff' }}>
-          ↺
-        </button>
+          aria-label={modoTabela ? 'Calcula e aplica o desconto' : 'Calcula e aplica o markup'} />
       </div>
     </div>
   );
@@ -532,29 +529,24 @@ function CalcMarkupReverso() {
   };
 
   return (
-    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:12 }}>
-      <div style={{ fontWeight:800, fontSize:11, marginBottom:8, color:'#0891b2' }}>🔄 Markup Reverso</div>
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-end' }}>
+    <div className="acn-fp-calc">
+      <div className="acn-fp-calc-tit" data-acn-familia="info"><Icone path={mdiRefresh} size={15} /> Markup Reverso</div>
+      <div className="acn-fp-calc-linha">
         <div>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Preço de Venda (R$)</div>
-          <input className="acn-input" style={{ width:110 }} placeholder="Ex: 15000" value={precoVenda} onChange={e=>setPrecoVenda(e.target.value)} />
+          <div className="acn-fp-rot">Preço de Venda (R$)</div>
+          <input className="acn-input acn-fp-in-110" placeholder="Ex: 15000" value={precoVenda} onChange={e=>setPrecoVenda(e.target.value)} />
         </div>
         <div>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Custo c/Impostos BRL</div>
-          <input className="acn-input" style={{ width:110 }} placeholder="Ex: 8000" value={custoFob} onChange={e=>setCustoFob(e.target.value)} />
+          <div className="acn-fp-rot">Custo c/Impostos BRL</div>
+          <input className="acn-input acn-fp-in-110" placeholder="Ex: 8000" value={custoFob} onChange={e=>setCustoFob(e.target.value)} />
         </div>
         <div>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>DIFAL %</div>
-          <input className="acn-input" style={{ width:70 }} value={difal} onChange={e=>setDifal(e.target.value)} />
+          <div className="acn-fp-rot">DIFAL %</div>
+          <input className="acn-input acn-fp-in-70" value={difal} onChange={e=>setDifal(e.target.value)} />
         </div>
-        {/* Rótulo "fantasma" — sem ele o botão (menor que um input) ficava
-            visualmente flutuando mais baixo que os campos ao lado */}
-        <div>
-          <div style={{ fontSize:9, color:'transparent', marginBottom:2 }}>·</div>
-          <button className="acn-btn" style={{ background:'#0891b2', fontSize:10, padding:'5px 12px' }} onClick={calcular}>Calcular</button>
-        </div>
+        <Botao variante="primario" onClick={calcular}>Calcular</Botao>
         {resultado != null && (
-          <div style={{ fontWeight:800, fontSize:13, color: resultado >= 0 ? '#16a34a' : '#dc2626', marginLeft:4 }}>
+          <div className="acn-fp-calc-res" data-acn-familia={resultado >= 0 ? 'ok' : 'erro'}>
             Markup = {fmtPct(resultado)}
           </div>
         )}
@@ -579,23 +571,20 @@ function CalcImpostoReverso() {
   };
 
   return (
-    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:12 }}>
-      <div style={{ fontWeight:800, fontSize:11, marginBottom:8, color:'#7c3aed' }}>🧮 Imposto Reverso</div>
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-end' }}>
+    <div className="acn-fp-calc">
+      <div className="acn-fp-calc-tit" data-acn-familia="neutro"><Icone path={mdiCalculatorVariantOutline} size={15} /> Imposto Reverso</div>
+      <div className="acn-fp-calc-linha">
         <div>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Preço com Imposto (R$)</div>
-          <input className="acn-input" style={{ width:120 }} placeholder="Ex: 18600" value={precoComImposto} onChange={e=>setPrecoComImposto(e.target.value)} />
+          <div className="acn-fp-rot">Preço com Imposto (R$)</div>
+          <input className="acn-input acn-fp-in-120" placeholder="Ex: 18600" value={precoComImposto} onChange={e=>setPrecoComImposto(e.target.value)} />
         </div>
         <div>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Imposto %</div>
-          <input className="acn-input" style={{ width:70 }} value={imposto} onChange={e=>setImposto(e.target.value)} />
+          <div className="acn-fp-rot">Imposto %</div>
+          <input className="acn-input acn-fp-in-70" value={imposto} onChange={e=>setImposto(e.target.value)} />
         </div>
-        <div>
-          <div style={{ fontSize:9, color:'transparent', marginBottom:2 }}>·</div>
-          <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10, padding:'5px 12px' }} onClick={calcular}>Calcular</button>
-        </div>
+        <Botao variante="primario" onClick={calcular}>Calcular</Botao>
         {resultado != null && (
-          <div style={{ fontWeight:700, fontSize:11, color:'#7c3aed', marginLeft:4 }}>
+          <div className="acn-fp-calc-res" data-acn-familia="neutro">
             Sem imposto: <strong>{fmtR(resultado.semImposto)}</strong> &nbsp;|&nbsp; Imposto: <strong>{fmtR(resultado.valorImposto)}</strong>
           </div>
         )}
@@ -779,52 +768,42 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
   const temResultados = res.itens.length > 0 || res.produtos.length > 0;
 
   return (
-    <div ref={ref} style={{ position:'relative', width:'100%' }}>
+    <div ref={ref} className="acn-fp-ac">
       <input
-        className="acn-input"
-        style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
+        className="acn-input acn-fp-ac-campo"
         placeholder="Descrição do item"
         value={q}
         onChange={e => { setQ(e.target.value); onFill({ produto: e.target.value }); buscar(e.target.value); }}
         onFocus={() => { if (temResultados) setOpen(true); }}
       />
       {buscando && (
-        <div style={{ position:'absolute', right:4, top:'50%', transform:'translateY(-50%)', fontSize:8, color:'#9ca3af' }}>⏳</div>
+        <div className="acn-fp-ac-espera"><Icone path={mdiTimerSand} size={14} /></div>
       )}
       {open && (
-        <div style={{
-          position:'absolute', top:'100%', left:0, zIndex:2000, minWidth:320, maxWidth:420,
-          background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
-          boxShadow:'0 8px 28px rgba(0,0,0,.18)', maxHeight:320, overflowY:'auto',
-        }}>
+        <div className="acn-fp-ac-lista">
           {/* ── Itens do catálogo ── */}
           {res.itens.length > 0 && (
             <>
-              <div style={{ padding:'4px 8px', fontSize:8, fontWeight:800, color:'#0f766e', background:'#f0fdf4', textTransform:'uppercase', letterSpacing:'.5px' }}>
-                📦 Itens do Catálogo
+              <div className="acn-fp-ac-tit" data-acn-familia="marca">
+                <Icone path={mdiPackageVariantClosed} size={13} /> Itens do Catálogo
               </div>
               {res.itens.map(it => (
-                <div key={it.id}
-                  onClick={() => selecionarItem(it)}
-                  style={{ padding:'6px 10px', cursor:'pointer', borderBottom:'1px solid #f8fafc', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}
-                  onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
-                  onMouseLeave={e=>e.currentTarget.style.background='#fff'}
-                >
+                <div key={it.id} className="acn-fp-ac-item" onClick={() => selecionarItem(it)}>
                   <div>
-                    <div style={{ fontWeight:600, fontSize:10 }}>{it.nome}</div>
-                    <div style={{ fontSize:8, color:'#9ca3af' }}>
+                    <div className="acn-fp-ac-nome">{it.nome}</div>
+                    <div className="acn-fp-ac-apoio">
                       {[it.marca, it.fornecedor].filter(Boolean).join(' · ')} {it.codigo ? `· ${it.codigo}` : ''}
                     </div>
                   </div>
-                  <div style={{ textAlign:'right', flexShrink:0 }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>
+                  <div className="acn-fp-ac-preco">
+                    <div className="acn-fp-ac-valor" data-acn-familia="marca">
                       R$ {Number(it.custo_unit||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
                     </div>
-                    <div style={{ fontSize:8, color:'#9ca3af' }}>{it.moeda} · {it.unidade}</div>
+                    <div className="acn-fp-ac-apoio">{it.moeda} · {it.unidade}</div>
                     {/* comprado em par/trio: o custo acima já é o da UNIDADE,
                         e vale dizer isso para ninguém achar que está errado */}
                     {Number(it.compra_multiplo) > 1 && (
-                      <div style={{ fontSize:8, color:'#b45309', fontWeight:700 }}>
+                      <div className="acn-fp-ac-multi">
                         por unidade · vem {it.compra_multiplo} por embalagem
                       </div>
                     )}
@@ -837,38 +816,32 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
           {/* ── Produtos compostos ── */}
           {res.produtos.length > 0 && (
             <>
-              <div style={{ padding:'4px 8px', fontSize:8, fontWeight:800, color:'#7c3aed', background:'#faf5ff', textTransform:'uppercase', letterSpacing:'.5px' }}>
-                🏭 Produtos Compostos (BOM)
+              <div className="acn-fp-ac-tit" data-acn-familia="info">
+                <Icone path={mdiFactory} size={13} /> Produtos Compostos (BOM)
               </div>
               {res.produtos.map(p => (
-                <div key={p.id} style={{ borderBottom:'1px solid #f8fafc' }}>
-                  <div style={{ padding:'6px 10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                <div key={p.id} className="acn-fp-ac-prod">
+                  <div className="acn-fp-ac-item sem-borda">
                     <div>
-                      <div style={{ fontWeight:600, fontSize:10 }}>{p.nome}</div>
-                      <div style={{ fontSize:8, color:'#9ca3af' }}>{p.categoria || ''} {p.codigo ? `· ${p.codigo}` : ''}</div>
+                      <div className="acn-fp-ac-nome">{p.nome}</div>
+                      <div className="acn-fp-ac-apoio">{p.categoria || ''} {p.codigo ? `· ${p.codigo}` : ''}</div>
                     </div>
-                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div className="acn-fp-ac-preco">
                       {p.preco_venda > 0 && (
-                        <div style={{ fontSize:10, fontWeight:700, color:'#7c3aed' }}>
+                        <div className="acn-fp-ac-valor" data-acn-familia="info">
                           R$ {Number(p.preco_venda||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
                         </div>
                       )}
                     </div>
                   </div>
                   {/* botões de ação para produto */}
-                  <div style={{ display:'flex', gap:0, borderTop:'1px solid #f3f4f6' }}>
-                    <button
-                      onClick={() => selecionarProdutoKit(p)}
-                      style={{ flex:1, padding:'4px 6px', border:'none', background:'#faf5ff', cursor:'pointer', fontSize:8, fontWeight:700, color:'#7c3aed', borderRight:'1px solid #ede9fe' }}
-                    >
-                      📦 Inserir como kit (1 linha)
-                    </button>
-                    <button
-                      onClick={() => expandirBom(p)}
-                      style={{ flex:1, padding:'4px 6px', border:'none', background:'#faf5ff', cursor:'pointer', fontSize:8, fontWeight:700, color:'#6d28d9' }}
-                    >
-                      🔩 Expandir componentes BOM
-                    </button>
+                  <div className="acn-fp-ac-acoes">
+                    <Botao variante="discreto" pequeno icone={mdiPackageVariant} onClick={() => selecionarProdutoKit(p)}>
+                      Inserir como kit (1 linha)
+                    </Botao>
+                    <Botao variante="discreto" pequeno icone={mdiCogOutline} onClick={() => expandirBom(p)}>
+                      Expandir componentes BOM
+                    </Botao>
                   </div>
                 </div>
               ))}
@@ -877,20 +850,15 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 
           {/* ── Nenhum resultado ── */}
           {!buscando && !temResultados && q.trim() && (
-            <div style={{ padding:'8px 10px', fontSize:9, color:'#9ca3af', textAlign:'center' }}>
+            <div className="acn-fp-ac-vazio">
               Nenhum item encontrado para "{q}"
             </div>
           )}
 
           {/* ── Criar novo ── */}
-          <div
-            onClick={() => { setOpen(false); setCriando(true); }}
-            style={{ padding:'7px 10px', cursor:'pointer', borderTop:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:6, background:'#fafafa' }}
-            onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
-            onMouseLeave={e=>e.currentTarget.style.background='#fafafa'}
-          >
-            <span style={{ fontSize:12 }}>➕</span>
-            <span style={{ fontSize:9, fontWeight:700, color:'#0f766e' }}>
+          <div className="acn-fp-ac-criar" onClick={() => { setOpen(false); setCriando(true); }}>
+            <Icone path={mdiPlus} size={14} />
+            <span>
               Criar "{q.trim() || 'novo item'}" no catálogo
             </span>
           </div>
@@ -913,32 +881,25 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct, validacao } = result;
   const modoTabela = item.tipo_calculo === 'TABELA';
-  const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
+  const lucroFam = lucroPct >= 10 ? 'ok' : lucroPct >= 5 ? 'atencao' : 'erro';
   const [aberto, setAberto] = useState(false);
 
-  // estilos base reutilizáveis
-  const inp11 = { fontSize:11, padding:'5px 7px' };
-  const inp11r = { ...inp11, textAlign:'right' as const };
-  const globStyle = (extra={}) => ({
-    ...inp11r, ...extra,
-    background: usarParamsGlobais ? '#f1f5f9' : undefined,
-    color:      usarParamsGlobais ? '#94a3b8' : undefined,
-  });
+  // campos de valor travados pelos parâmetros globais ficam cinza (só leitura)
+  const classeGlobal = usarParamsGlobais ? ' acn-fp-travado' : '';
 
   // Vendedor não vê custo/impostos — não há nada pra expandir (o markup fica no cabeçalho, à vista de todos).
   const temDetalhe = !isVendedor;
 
   // Rótulo de seção reutilizável nas 3 seções do corpo expandido
-  const secao = (label) => (
-    <div style={{ fontSize:9, fontWeight:800, color:'#0f766e', marginBottom:6, marginTop:12, textTransform:'uppercase', letterSpacing:.4 }}>
-      {label}
+  const secao = (icone, label) => (
+    <div className="acn-fp-ir-secao">
+      <Icone path={icone} size={14} /> {label}
     </div>
   );
-  const campoGrid = { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))', gap:10 };
-  const valor = (label, cor, texto) => (
+  const valor = (label, fam, texto) => (
     <div>
-      <div style={{ fontSize:8, color:'#64748b' }}>{label}</div>
-      <div style={{ fontSize:11, color:cor, fontWeight:600 }}>{texto}</div>
+      <div className="acn-fp-ir-rot2">{label}</div>
+      <div className="acn-fp-ir-val" data-acn-familia={fam}>{texto}</div>
     </div>
   );
 
@@ -947,15 +908,15 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
     // (ProdutoAutocomplete, position:absolute) precisa poder "vazar" pra fora
     // do cartão pra aparecer inteiro; um ancestral com overflow:hidden cortava
     // a lista de sugestões numa faixa minúscula, impossível de usar.
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:8 }}>
+    <div className="acn-fp-ir">
       {/* ── Cabeçalho do item — sempre visível. Todo campo segue a mesma
-          estrutura (rótulo pequeno + linha de conteúdo) e a linha usa
-          alignItems:'flex-end' — com todos os blocos da mesma altura, os
+          estrutura (rótulo pequeno + linha de conteúdo) e a linha alinha
+          pela base (flex-end) — com todos os blocos da mesma altura, os
           rótulos ficam alinhados no topo e os campos/botões alinhados
           embaixo, tudo na mesma linha de base ── */}
-      <div style={{ display:'flex', alignItems:'flex-end', gap:10, padding:'8px 10px', flexWrap:'wrap' }}>
-        <div style={{ flex:'2 1 200px', minWidth:160, position:'relative' }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Produto / Descrição</div>
+      <div className="acn-fp-ir-cab">
+        <div className="acn-fp-ir-prod">
+          <div className="acn-fp-ir-rot">Produto / Descrição</div>
           <ProdutoAutocomplete
             value={item.produto}
             params={params}
@@ -963,110 +924,88 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             onExpand={linhas => onExpand(linhas)}
           />
         </div>
-        <div style={{ flex:'1 1 90px', minWidth:80 }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Marca</div>
-          <input className="acn-input" style={{ width:'100%', ...inp11 }}
+        <div className="acn-fp-ir-c1">
+          <div className="acn-fp-ir-rot">Marca</div>
+          <input className="acn-input acn-fp-ir-campo"
             value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
         </div>
-        <div style={{ flex:'1 1 90px', minWidth:80 }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Modelo</div>
-          <input className="acn-input" style={{ width:'100%', ...inp11 }}
+        <div className="acn-fp-ir-c1">
+          <div className="acn-fp-ir-rot">Modelo</div>
+          <input className="acn-input acn-fp-ir-campo"
             value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
         </div>
-        <div style={{ width:56 }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}
+        <div className="acn-fp-ir-qt">
+          <div className="acn-fp-ir-rot"
             title='Quantidade deste produto DENTRO DE 1 unidade do Item (ex.: 2 antenas por viatura). Para a quantidade de viaturas/unidades do Item inteiro, use o campo "Quantidade do Item", acima da lista.'>
             Qt/un.
           </div>
-          <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+          <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
             min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
         </div>
         {/* Markup (ou desconto, no modo TABELA) deste produto — ao lado da quantidade,
             à vista e editável por todos os usuários. Com "Markup Global" ligado fica
             travado mostrando o valor global, como antes. */}
-        <div style={{ width:84 }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}
+        <div className="acn-fp-ir-mk">
+          <div className="acn-fp-ir-rot"
             title={usarMarkupGlobal ? 'Markup Global ligado: vale o markup dos parâmetros globais' : undefined}>
             {modoTabela ? 'Desconto %' : 'Markup %'}
           </div>
-          <input type="number" className="acn-input"
+          <input type="number"
+            className={'acn-input acn-fp-ir-campo acn-fp-num' + (usarMarkupGlobal ? ' acn-fp-mk-global' : item.markup_pct < 0 ? ' acn-fp-neg' : '')}
             aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
-            style={{ width:'100%', ...inp11r,
-              background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
-              color: usarMarkupGlobal ? '#7c3aed' : undefined }}
             step="0.1" value={item.markup_pct}
             onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
             readOnly={!!usarMarkupGlobal} />
         </div>
-        <div style={{ minWidth:90, textAlign:'right' }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Valor Unit.</div>
-          <div style={{ fontSize:12, color:'#1d4ed8', fontWeight:600, padding:'5px 0' }}>{fmtR(valorUnit)}</div>
+        <div className="acn-fp-ir-uni">
+          <div className="acn-fp-ir-rot">Valor Unit.</div>
+          <div className="acn-fp-ir-vu" data-acn-familia="info">{fmtR(valorUnit)}</div>
         </div>
-        <div style={{ minWidth:100, textAlign:'right' }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Valor Total</div>
-          <div style={{ fontSize:13, color:'#1d4ed8', fontWeight:800, padding:'5px 0' }}>{fmtR(valorTotal)}</div>
+        <div className="acn-fp-ir-tot">
+          <div className="acn-fp-ir-rot">Valor Total</div>
+          <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
         </div>
-        {/* Rótulo "fantasma" (mesma altura, invisível) nos botões — sem isso
-            eles ficariam mais altos que os campos, fora da linha de base */}
         {temDetalhe && (
-          <div>
-            <div style={{ fontSize:8, color:'transparent', marginBottom:2 }}>·</div>
-            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e informações do produto"
-              style={{ background: aberto ? '#f0fdfa' : 'none', border:'1px solid ' + (aberto ? '#5eead4' : '#e2e8f0'),
-                color:'#0f766e', fontSize:9, fontWeight:700, cursor:'pointer', padding:'5px 8px', borderRadius:4 }}>
-              {aberto ? '▾ Menos' : '▸ Custo/impostos'}
-            </button>
-          </div>
+          <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
+            onClick={() => setAberto(v => !v)} title="Custo, impostos e informações do produto">
+            {aberto ? 'Menos' : 'Custo/impostos'}
+          </Botao>
         )}
-        <div>
-          <div style={{ fontSize:8, color:'transparent', marginBottom:2 }}>·</div>
-          <button onClick={onRemove}
-            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'5px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
-            ✕
-          </button>
-        </div>
+        <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
       </div>
 
       {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
       {aberto && temDetalhe && (
-        <div style={{ borderTop:'1px solid #e8ecf0', background:'#f8fafc', padding:'4px 12px 12px', borderRadius:'0 0 7px 7px' }}>
+        <div className="acn-fp-ir-corpo">
 
-          {secao('💰 Precificação')}
-          <div style={campoGrid}>
+          {secao(mdiCashMultiple, 'Precificação')}
+          <div className="acn-fp-ir-grade">
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Moeda</div>
-              <select className="acn-input" style={{ width:'100%', ...inp11 }}
+              <div className="acn-fp-ir-rot2">Moeda</div>
+              <select className="acn-input acn-fp-ir-campo"
                 value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
                 {MOEDAS.map(m=><option key={m}>{m}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Custo Unit.</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+              <div className="acn-fp-ir-rot2">Custo Unit.</div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>IPI%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+              <div className="acn-fp-ir-rot2">IPI%</div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ST%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+              <div className="acn-fp-ir-rot2">ST%</div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Tipo Cálculo</div>
-              <div style={{ display:'flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
-                {(['CUSTO','TABELA'] as const).map(t => (
-                  <button key={t} type="button" onClick={() => onSet('tipo_calculo', t)}
-                    style={{ flex:1, padding:'5px 0', fontSize:9, fontWeight:700, border:'none', cursor:'pointer',
-                      background: (item.tipo_calculo||'CUSTO')===t ? '#0891b2' : '#fff',
-                      color:      (item.tipo_calculo||'CUSTO')===t ? '#fff'    : '#64748b' }}>
-                    {t}
-                  </button>
-                ))}
-              </div>
+              <div className="acn-fp-ir-rot2">Tipo Cálculo</div>
+              <Chips className="acn-fp-ir-tc" ativo={item.tipo_calculo || 'CUSTO'} onChange={t => onSet('tipo_calculo', t)}
+                itens={[{ id: 'CUSTO', rotulo: 'CUSTO' }, { id: 'TABELA', rotulo: 'TABELA' }]} />
             </div>
             {/* Markup reverso DESTE produto: digita o preço unitário desejado e o
                 markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
@@ -1076,80 +1015,78 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
           </div>
 
-          {secao('🧾 Impostos & Validação')}
-          <div style={campoGrid}>
+          {secao(mdiReceiptTextOutline, 'Impostos & Validação')}
+          <div className="acn-fp-ir-grade">
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>DIFAL%</div>
-              <input type="number" className="acn-input"
-                style={{ width:'100%', ...globStyle() }}
+              <div className="acn-fp-ir-rot2">DIFAL%</div>
+              <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
                 step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
                 onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
                 readOnly={usarParamsGlobais} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Imposto%</div>
-              <input type="number" className="acn-input"
-                style={{ width:'100%', ...globStyle() }}
+              <div className="acn-fp-ir-rot2">Imposto%</div>
+              <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
                 step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
                 onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
                 readOnly={usarParamsGlobais} />
             </div>
-            {valor('Custo c/Imp. Unit', '#0f766e', fmtR(custoUnitBrl))}
-            {valor('Custo Total', '#0f766e', fmtR(custoTotal))}
-            {valor('DIFAL Total', '#b45309', fmtR(totalDifal))}
-            {valor('Imposto Total', '#9d174d', fmtR(totalImposto))}
-            {valor('Lucro%', lucroColor, fmtPct(lucroPct))}
+            {valor('Custo c/Imp. Unit', 'marca', fmtR(custoUnitBrl))}
+            {valor('Custo Total', 'marca', fmtR(custoTotal))}
+            {valor('DIFAL Total', 'atencao', fmtR(totalDifal))}
+            {valor('Imposto Total', 'erro', fmtR(totalImposto))}
+            {valor('Lucro%', lucroFam, fmtPct(lucroPct))}
             <div>
-              <div style={{ fontSize:8, color:'#64748b' }}>
+              <div className="acn-fp-ir-rot2">
                 {modoTabela ? `Desc. máx. ${DESCONTO_MAXIMO_TABELA_PCT}%` : `Markup mín. ${MARKUP_MINIMO_CUSTO_PCT}%`}
               </div>
-              <div style={{ fontSize:11, fontWeight:800, color: validacao === 'ERRO' ? '#dc2626' : '#16a34a' }}>
-                {validacao === 'ERRO' ? '⚠️ ERRO' : '✅ OK'}
-              </div>
+              <Selo familia={validacao === 'ERRO' ? 'erro' : 'ok'} ponto={false}>
+                {validacao === 'ERRO' ? 'ERRO' : 'OK'}
+              </Selo>
             </div>
           </div>
 
-          {secao('ℹ️ Informações do Produto (só referência, não entram no cálculo)')}
-          <div style={campoGrid}>
+          {secao(mdiInformationOutline, 'Informações do Produto (só referência, não entram no cálculo)')}
+          <div className="acn-fp-ir-grade">
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Prazo de Entrega</div>
-              <input className="acn-input" style={{ width:'100%', ...inp11 }}
+              <div className="acn-fp-ir-rot2">Prazo de Entrega</div>
+              <input className="acn-input acn-fp-ir-campo"
                 value={item.prazo_entrega||''} onChange={e=>onSet('prazo_entrega', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Garantia</div>
-              <input className="acn-input" style={{ width:'100%', ...inp11 }}
+              <div className="acn-fp-ir-rot2">Garantia</div>
+              <input className="acn-input acn-fp-ir-campo"
                 value={item.garantia||''} onChange={e=>onSet('garantia', e.target.value)} />
             </div>
-            <div style={{ gridColumn:'span 2' }}>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Regime do Fornecedor</div>
-              <select className="acn-input" style={{ width:'100%', ...inp11 }}
+            <div className="acn-fp-span2">
+              <div className="acn-fp-ir-rot2">Regime do Fornecedor</div>
+              <select className="acn-input acn-fp-ir-campo"
                 value={item.fornecedor_regime||''} onChange={e=>onSet('fornecedor_regime', e.target.value)}>
                 <option value="">— Selecione —</option>
                 {['Simples','Lucro real','Lucro presumido','Regime especial'].map(o=><option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>NCM</div>
-              <input className="acn-input" style={{ width:'100%', ...inp11 }}
+              <div className="acn-fp-ir-rot2">NCM</div>
+              <input className="acn-input acn-fp-ir-campo"
                 value={item.ncm||''} onChange={e=>onSet('ncm', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Origem</div>
-              <select className="acn-input" style={{ width:'100%', ...inp11 }}
+              <div className="acn-fp-ir-rot2">Origem</div>
+              <select className="acn-input acn-fp-ir-campo"
                 value={item.origem_produto||''} onChange={e=>onSet('origem_produto', e.target.value)}>
                 <option value="">— Selecione —</option>
                 {['Nacional','Importado'].map(o=><option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ICMS%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+              <div className="acn-fp-ir-rot2">ICMS%</div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 step="0.1" value={item.icms_pct||0} onChange={e=>onSet('icms_pct', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ISS%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+              <div className="acn-fp-ir-rot2">ISS%</div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 step="0.1" value={item.iss_pct||0} onChange={e=>onSet('iss_pct', e.target.value)} />
             </div>
           </div>
