@@ -159,10 +159,10 @@ export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }
       const tem = new Set((jaTem || []).map(x => x.referencia_id));
       const faltam = lista.filter(o => !tem.has(o.id));
       if (!faltam.length) { alert(`${col.nome} já está ${lista.length > 1 ? 'em todas as unidades' : 'nesta lista'}.`); return; }
-      const { data: gravadas, error } = await supabase.from('responsaveis_producao').insert(faltam.map(o => ({
+      const { data: gravadas, error } = await supabase.from('responsaveis_producao').upsert(faltam.map(o => ({
         tipo: 'op', referencia_id: o.id, papel: p.papel, tecnico_id: col.id, tecnico_nome: col.nome,
         adicionado_por: usuario?.email || null, adicionado_por_nome: usuario?.nome || null,
-      }))).select('id,referencia_id');
+      })), { onConflict: 'tipo,referencia_id,tecnico_id,papel', ignoreDuplicates: true }).select('id,referencia_id');
       if (error) { alert('Não foi possível gravar: ' + error.message); return; }
       const feitas = new Set((gravadas || []).map(g => g.referencia_id));
       await registrarNoHistorico(faltam.filter(o => feitas.has(o.id)), `${p.rotulo} adicionado: ${col.nome}`, p.setorLog);
@@ -333,6 +333,7 @@ export async function inserirResponsaveisSemRepetir(linhas: any[]): Promise<{ er
   const vistas = new Set<string>();
   const novas = linhas.filter(l => { const k = chave(l); if (existentes.has(k) || vistas.has(k)) return false; vistas.add(k); return true; });
   if (!novas.length) return { error: null };
-  const { error } = await supabase.from('responsaveis_producao').insert(novas);
+  // upsert que ignora repetição: com a trava do banco (responsaveis_producao_unica) um clique duplo ou duas abas ao mesmo tempo não dão erro nem linha repetida
+  const { error } = await supabase.from('responsaveis_producao').upsert(novas, { onConflict: 'tipo,referencia_id,tecnico_id,papel', ignoreDuplicates: true });
   return { error };
 }
