@@ -11,7 +11,7 @@ import { hojeISO, diaISO, Botao, Chips, Selo, Tag, Faixa, rotuloStatus } from '.
 import Icone from './Icone';
 import { mdiPrinterOutline, mdiFileExcelOutline, mdiLinkVariant, mdiFilePdfBox } from '@mdi/js';
 import { montarModeloVendedores, montarModeloTecnicos, emitirDocumento, dataBR } from './ComissaoDocumento';
-import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
+import { calcularComissaoTecnicos, rotuloComissaoTecnicos, percentualDoVendedor, regraDoVendedor } from './ComissaoCalculo';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
@@ -1105,6 +1105,7 @@ function RelComissoes() {
   const [erro, setErro] = useState('');
   const [divisorLote, setDivisorLote] = useState<Record<string, number>>({});
   const [emitindo, setEmitindo] = useState(false);
+  const [tipoPorOp, setTipoPorOp] = useState<Record<string, string | null>>({});   // opId → tipo de negócio do card do CRM
   // 06/10/2026 (pedido do usuário): a tela só calculava a comissão dos VENDEDORES; o pessoal da Produção, Serralheria e Adaptação aparecia como blocos vazios ("Nenhuma OP faturada"). Agora são duas visões
   // do mesmo mês: Vendedores (como sempre) e Produção (a mesma conta do RH › Comissões de Técnicos, vinda de ComissaoCalculo.ts).
   const [visao, setVisao] = useState<'vendedores'|'producao'>('vendedores');
@@ -1124,9 +1125,9 @@ function RelComissoes() {
       const [anoM, mesM] = mes.split('-').map(Number);
       const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
       const [resFuncs, resOps, divisores] = await Promise.all([
-        supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
+        supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,percentuais_por_tipo,incide_em,recebe_comissao').eq('recebe_comissao', true),
         // Documento detalhado (05/10/2026): o número da NF e as datas de conclusão e de entrega vão junto, para o PDF mostrar as datas de cada comissão
-        supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
+        supabase.from('oples').select('id,opl,crm_oportunidade_id,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
           .lt('data_emissao_nf', `${proximoMes}-01T00:00:00-03:00`),
         lerDivisorPorBaseDeLote(),
@@ -1135,6 +1136,14 @@ function RelComissoes() {
       if (falha) setErro(falha.message);
       setFuncionarios(resFuncs.data || []);
       setOps(resOps.data || []);
+      // 08/10/2026: tipo de negócio (Revenda/Venda/Pós-vendas) de cada OP = o do card do CRM a que ela está ligada; decide qual percentual do vendedor vale
+      const idsCrm = [...new Set((resOps.data || []).map((x: any) => x.crm_oportunidade_id).filter(Boolean))];
+      const tiposCrm: Record<string, string> = {};
+      if (idsCrm.length) {
+        const { data: cards } = await supabase.from('crm_oportunidades').select('id,tipo_negocio').in('id', idsCrm);
+        (cards || []).forEach((c: any) => { if (c.tipo_negocio) tiposCrm[c.id] = c.tipo_negocio; });
+      }
+      setTipoPorOp(Object.fromEntries((resOps.data || []).map((x: any) => [x.id, tiposCrm[x.crm_oportunidade_id] || null])));
       setDivisorLote(divisores);
       setLoading(false);
     };
@@ -1151,9 +1160,11 @@ function RelComissoes() {
     const opsVendedor = ops.filter(o =>
       (o.responsavel_comercial || '').toLowerCase().trim() === (f.nome || '').toLowerCase().trim()
     );
+    // cada OP carrega o tipo de negócio, o percentual que valeu e se foi o do tipo (_porTipo); a comissão é a soma OP a OP
+    const opsVendedorPct = opsVendedor.map(o => { const r = percentualDoVendedor(f, tipoPorOp[o.id]); return { ...o, _tipo: r.tipo, _pct: r.pct, _porTipo: r.porTipo }; });
     const baseTotal = opsVendedor.reduce((s, o) => s + (Number(valorDe(o)) || 0), 0);
-    const comissao  = baseTotal * ((Number(f.percentual_comissao) || 0) / 100);
-    return { ...f, opsVendedor, baseTotal, comissao };
+    const comissao  = opsVendedorPct.reduce((s, o) => s + (Number(valorDe(o)) || 0) * (o._pct / 100), 0);
+    return { ...f, opsVendedor: opsVendedorPct, baseTotal, comissao };
   });
 
   // Vendedores com OPs faturadas mas sem cadastro no RH (aviso)
@@ -1170,7 +1181,7 @@ function RelComissoes() {
   // (a comissão sai R$ 0,00) é avisado. Quem cadastra o percentual continua sendo o RH.
   const nomeNorm = (s) => String(s || '').toLowerCase().trim();
   const opsSemComissao = ops.filter(o => !funcionarios.some(f => nomeNorm(f.nome) === nomeNorm(o.responsavel_comercial)));
-  const vendedoresSemPercentual = comissoes.filter(c => c.opsVendedor.length > 0 && !(Number(c.percentual_comissao) > 0));
+  const vendedoresSemPercentual = comissoes.filter(c => c.opsVendedor.length > 0 && c.opsVendedor.some((o: any) => !(o._pct > 0)));
   // Quem tem "Recebe comissão" mas não vendeu nada no mês e NÃO é do Comercial/Licitações é técnico (Produção, Serralheria, Adaptação): a comissão dele está na visão Produção, e o bloco vazio aqui só confundia.
   const ehDoComercial = (f) => /COMERCIAL|LICITA/i.test(String(f.departamento || ''));
   const comissoesVisiveis = comissoes.filter(c => c.opsVendedor.length > 0 || ehDoComercial(c));
@@ -1294,7 +1305,7 @@ function RelComissoes() {
                   <span>
                     <span className="acn-forte">{c.nome}</span>
                     {c.cargo && <span className="acn-fraco"> {c.cargo}</span>}
-                    {' '}<Selo familia="info" ponto={false}>{c.percentual_comissao}% sobre {c.incide_em || 'Faturamento'}</Selo>
+                    {' '}<Selo familia="info" ponto={false}>{regraDoVendedor(c)}</Selo>
                   </span>
                   <span className="acn-dir">
                     <span className="acn-fraco">Base: <strong>{fmtR(c.baseTotal)}</strong></span>
@@ -1311,24 +1322,28 @@ function RelComissoes() {
                         <tr>
                           <th>OP</th>
                           <th>Cliente</th>
+                          <th>Tipo</th>
                           <th className="acn-dir">Valor Total</th>
+                          <th className="acn-dir">%</th>
                           <th className="acn-dir">Comissão</th>
                           <th>NF em</th>
                         </tr>
                       </thead>
                       <tbody>
                         {c.opsVendedor.map((o) => {
-                          const comOp = (Number(valorDe(o))||0) * ((Number(c.percentual_comissao)||0)/100);
+                          const comOp = (Number(valorDe(o))||0) * ((Number(o._pct)||0)/100);
                           return (
                             <tr key={o.id}>
                               <td className="acn-forte">{o.opl}</td>
                               <td>{o.cliente_nome || '—'}</td>
+                              <td className="acn-fraco">{o._tipo || '—'}</td>
                               <td className="acn-dir acn-num">
                                 {fmtR(valorDe(o))}
                                 {divisorDe(o) > 1 && (
                                   <Selo familia="neutro" ponto={false} title={`Lote de ${divisorDe(o)} veículos — valor unitário (total do lote ÷ ${divisorDe(o)})`}>lote/{divisorDe(o)}</Selo>
                                 )}
                               </td>
+                              <td className="acn-dir acn-num" title={o._porTipo ? 'Percentual do tipo ' + o._tipo : 'Percentual geral'}>{String(o._pct).replace('.', ',')}%{o._porTipo ? '*' : ''}</td>
                               <td className="acn-dir acn-num acn-forte">{fmtR(comOp)}</td>
                               <td className="acn-fraco">
                                 {o.data_emissao_nf ? new Date(o.data_emissao_nf).toLocaleDateString('pt-BR') : '—'}

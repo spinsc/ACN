@@ -233,3 +233,23 @@ export function rotuloComissaoTecnicos({ modoFatura, filtroOrigem }: any) {
     origem: filtroOrigem === 'adaptacao' ? 'só Adaptação — OPs (transformação veicular) + OS de manutenção veicular' : 'todas as origens (OPs e OS)',
   };
 }
+
+/**
+ * Percentual de comissão de um VENDEDOR numa OP, conforme o tipo de negócio (Revenda, Venda, Pós-vendas) do card do CRM a que a OP está ligada.
+ * Pedido do usuário em 08/10/2026: o vendedor pode ter percentuais diferentes por tipo de venda (RH › Funcionários › percentuais_por_tipo). O tipo que não estiver preenchido
+ * — ou a OP sem card/sem tipo — usa o percentual geral (percentual_comissao), como sempre. `porTipo` diz se foi o percentual do tipo que valeu (para marcar no documento).
+ */
+export function percentualDoVendedor(func: any, tipoNegocio: any): { pct: number; porTipo: boolean; tipo: string | null } {
+  const por = (func && typeof func.percentuais_por_tipo === 'object' && func.percentuais_por_tipo) || {};
+  const v = tipoNegocio ? por[tipoNegocio] : undefined;
+  if (v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v))) return { pct: Number(v), porTipo: true, tipo: tipoNegocio };
+  return { pct: Number(func?.percentual_comissao) || 0, porTipo: false, tipo: tipoNegocio || null };
+}
+
+/** Texto curto da regra do vendedor: "2% sobre Faturamento · Venda 3% · Revenda 1,5%". */
+export function regraDoVendedor(func: any): string {
+  const f = (v: any) => String(Number(v) || 0).replace('.', ',') + '%';
+  const por = (func && typeof func.percentuais_por_tipo === 'object' && func.percentuais_por_tipo) || {};
+  const extras = Object.entries(por).filter(([, v]) => v !== '' && v != null && Number.isFinite(Number(v))).map(([k, v]) => `${k} ${f(v)}`);
+  return `${f(func?.percentual_comissao)} sobre ${func?.incide_em || 'Faturamento'}${extras.length ? ' · ' + extras.join(' · ') : ''}`;
+}

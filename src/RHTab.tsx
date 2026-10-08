@@ -9,6 +9,7 @@ import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './Co
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
+import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
 import Icone from './Icone';
 import { mdiFilePdfBox, mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
 
@@ -175,7 +176,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
     nome:'', email:'', cpf:'', cnpj:'', cargo:'', departamento:'', data_admissao:'',
     tipo_colaborador:'Funcionário',
     salario:'', valor_servicos:'',
-    recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento',
+    recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento', pct_tipo: {} as Record<string, string>,
     ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, ''])),
   };
   const [form, setForm] = useState(func ? {
@@ -188,6 +189,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
     recebe_comissao: func.recebe_comissao||false,
     percentual_comissao: func.percentual_comissao!=null ? String(func.percentual_comissao) : '',
     incide_em: func.incide_em||'Faturamento',
+    pct_tipo: Object.fromEntries(Object.entries(func.percentuais_por_tipo || {}).map(([k, v]) => [k, String(v)])) as Record<string, string>,
     ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, func[k] || ''])),
   } : vazio);
   const [buscandoCep, setBuscandoCep] = useState(false);
@@ -228,6 +230,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
       recebe_comissao: form.recebe_comissao,
       percentual_comissao: form.recebe_comissao && form.percentual_comissao ? Number(form.percentual_comissao) : null,
       incide_em: form.recebe_comissao ? form.incide_em : null,
+      // 08/10/2026: só guarda os tipos que foram preenchidos; vazio = usa o percentual geral
+      percentuais_por_tipo: (() => { const e = Object.entries(form.pct_tipo || {}).filter(([, v]) => String(v).trim() !== '' && Number.isFinite(Number(v))).map(([k, v]) => [k, Number(v)]); return form.recebe_comissao && e.length ? Object.fromEntries(e) : null; })(),
       ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, String(form[k] || '').trim() || null])),
     };
     if (func) {
@@ -379,6 +383,20 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
                   {lbl('Percentual de Comissão (%)')}
                   <input type="number" min="0" max="100" step="0.1" className="acn-input" value={form.percentual_comissao}
                     onChange={e=>set('percentual_comissao',e.target.value)} placeholder="Ex: 5.0" />
+                </div>
+                <div style={campoDestaque('percentuais_por_tipo')}>
+                  {lbl('Percentual por tipo de venda (opcional)')}
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {TIPOS_NEGOCIO_CRM.map(t => (
+                      <label key={t} style={{ display:'flex', flexDirection:'column', gap:2, fontSize:11 }}>
+                        {t}
+                        <input type="number" min="0" max="100" step="0.1" className="acn-input" style={{ width:90 }} aria-label={'Percentual de comissão em venda do tipo ' + t}
+                          value={form.pct_tipo?.[t] ?? ''} placeholder={form.percentual_comissao || 'geral'}
+                          onChange={e => setForm((f: any) => ({ ...f, pct_tipo: { ...(f.pct_tipo || {}), [t]: e.target.value } }))} />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="acn-ajuda">Em branco = vale o percentual geral acima. O tipo é o do card do CRM a que a OP está ligada; OP sem card ou sem tipo usa o geral.</div>
                 </div>
                 <div style={campoDestaque('incide_em')}>
                   {lbl('Comissão Incide Sobre')}

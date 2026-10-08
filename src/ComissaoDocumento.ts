@@ -54,14 +54,15 @@ export function montarModeloVendedores({ mesLabel, comissoes, ops, valorDe, divi
   const comCadastro = new Set(comissoes.map((c: any) => nomeNorm(c.nome)));
   const linhaOp = (o: any, c: any) => {
     const base = Number(valorDe(o)) || 0;
-    const p = Number(c.percentual_comissao) || 0;
+    // percentual que valeu NESTA OP: o do tipo de negócio, se o vendedor tem um para o tipo (marcado com *), senão o geral (08/10/2026)
+    const p = o._pct != null ? Number(o._pct) || 0 : Number(c.percentual_comissao) || 0;
     return {
       op: o.opl || '—', lote: divisorDe(o) > 1 ? ` (lote/${divisorDe(o)})` : '',
       linha: [
         `${o.opl || '—'}${divisorDe(o) > 1 ? ` (lote/${divisorDe(o)})` : ''}`, o.cliente_nome || '—',
         [o.numero_nf || o.nfe, o.numero_nf_servico ? `NFS-e ${o.numero_nf_servico}` : ''].filter(Boolean).join(' · ') || '—',
         dataBR(o.data_conclusao_producao), dataHoraBR(o.data_emissao_nf), dataBR(o.data_entrega),
-        reais(base), pct(p), reais(r2(base * p / 100)),
+        reais(base), pct(p) + (o._porTipo ? '*' : ''), reais(r2(base * p / 100)),
       ],
     };
   };
@@ -70,8 +71,8 @@ export function montarModeloVendedores({ mesLabel, comissoes, ops, valorDe, divi
   const vendedores = comissoes.map((c: any) => {
     const linhas = c.opsVendedor.map((o: any) => linhaOp(o, c).linha);
     return {
-      nome: c.nome, cargo: c.cargo || '', regra: `${pct(c.percentual_comissao)} sobre ${c.incide_em || 'Faturamento'}`,
-      semPercentual: semPercentual(c.percentual_comissao),
+      nome: c.nome, cargo: c.cargo || '', regra: `${pct(c.percentual_comissao)} sobre ${c.incide_em || 'Faturamento'}${Object.entries(c.percentuais_por_tipo || {}).filter(([, v]) => v !== '' && v != null).map(([k, v]) => ` · ${k} ${pct(v)}`).join('')}`,
+      semPercentual: c.opsVendedor.length > 0 ? c.opsVendedor.some((o: any) => !(Number(o._pct != null ? o._pct : c.percentual_comissao) > 0)) : semPercentual(c.percentual_comissao),
       qtd: c.opsVendedor.length, base: r2(c.baseTotal), comissao: r2(c.comissao),
       head: HEAD_OP, body: linhas,
       subtotal: ['', '', '', '', '', `Subtotal (${c.opsVendedor.length} OP)`, reais(c.baseTotal), '', reais(c.comissao)],
@@ -100,6 +101,7 @@ export function montarModeloVendedores({ mesLabel, comissoes, ops, valorDe, divi
     criterio: [
       `Período: ${mesLabel} — OPs com nota fiscal emitida no mês (data de emissão da NF), em qualquer situação da OP.`,
       'Base da comissão: valor total da OP; em OP de lote (vários veículos) conta o valor de UM veículo (valor do lote ÷ veículos).',
+      'Percentual: o do cadastro do vendedor; quando ele tem percentual por tipo de venda (Revenda, Venda, Pós-vendas), vale o do tipo do card do CRM a que a OP está ligada (marcado com *).',
       `${ops.length} OP(s) com NF emitida no mês · ${vendedores.filter((v: any) => v.qtd > 0).length} vendedor(es) com comissão calculada.`,
     ],
     resumo: {
