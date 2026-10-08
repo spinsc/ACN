@@ -5,7 +5,7 @@ import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
          somarResultados, estruturaFormacao, custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
-import { buscarPorPalavras } from './SearchUtils';
+import { buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
 import { Faixa, Botao, Selo, Chips, Abas, Tag } from './Interface';
@@ -1116,6 +1116,8 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   const salvandoPropostaRef = useRef(false);
   const [propostas, setPropostas]       = useState([]);
   const [filtroCat, setFiltroCat]       = useState('');
+  // Pedido do usuário em 07/10/2026: pesquisar por texto dentro dos preços formados (nome, empresa, OP, autor, categoria e os nomes dos itens).
+  const [buscaPF, setBuscaPF]               = useState('');
   const [gerindoCat, setGerindoCat]     = useState(false);
 
   // Etapa 7.59: leitura que falha não pode parecer "nenhuma formação" (e a lista que já estava na tela fica)
@@ -1321,12 +1323,16 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   }
 
   // ── Lista de cotações ──
-  const cotacoesFiltradas = cotacoes.filter(m => !filtroCat || categoriaDe(m) === filtroCat);
+  const cotacoesFiltradas = cotacoes.filter(m => (!filtroCat || categoriaDe(m) === filtroCat)
+    && combinaBusca([m.nome, m.empresa, m.opl_numero, m.criado_por, categoriaDe(m), ...(m.itens || []).map((i: any) => i.produto || i.nome)], buscaPF));
   return (
     <div className="acn-fp-pf">
       <div className="acn-fp-pf-lista-cab">
         <div className="acn-fp-pf-tit"><Icone path={mdiFileMultipleOutline} size={18} /> Preços Formados</div>
         <FiltroCategoria lista={cotacoes} valor={filtroCat} onChange={setFiltroCat} />
+        <input className="acn-input acn-fp-pf-busca" type="search" value={buscaPF} onChange={e => setBuscaPF(e.target.value)}
+          placeholder="Buscar preço formado (nome, empresa, OP, autor, item)…" aria-label="Buscar preço formado" />
+        {buscaPF.trim() && !carregando && <span className="acn-ajuda">{cotacoesFiltradas.length} de {cotacoes.length}</span>}
         {temPoderDeGerente(currentUser) && (
           <Botao icone={mdiCogOutline} onClick={() => setGerindoCat(g => !g)}>Categorias</Botao>
         )}
@@ -1336,6 +1342,9 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
       {carregando && <div className="acn-fp-vazio">Carregando...</div>}
       {!carregando && cotacoes.length === 0 && !erroLeitura && (
         <div className="acn-fp-vazio">Nenhuma cotação salva.</div>
+      )}
+      {!carregando && cotacoes.length > 0 && cotacoesFiltradas.length === 0 && (
+        <div className="acn-fp-vazio">{'Nenhum preço formado encontrado' + (buscaPF.trim() ? ' para "' + buscaPF.trim() + '"' : '')}.</div>
       )}
       <div className="acn-fp-pf-lista">
         {agruparPorCategoria(cotacoesFiltradas).map(g => (

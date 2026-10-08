@@ -2508,3 +2508,6 @@ html body .acn-b.acn-crm-conv-btn { justify-content: flex-start; height: auto; p
 .acn-crm-vinc-item:hover { border-color: var(--acn-brand); }
 /* nova venda / adesão */
 .acn-quadro.acn-crm-venda-op { display: flex; align-items: center; gap: 8px; }
+
+/* ── Preços Formados · pesquisa por texto (07/10/2026) ── */
+html body .acn-input.acn-fp-pf-busca { flex: 1 1 260px; min-width: 220px; max-width: 460px; }
