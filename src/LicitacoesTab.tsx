@@ -15,7 +15,8 @@ import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
-import { confirmar, pedirTexto } from './Feedback';
+import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
 import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO } from './Interface';
 import { podeEditarAtualizacao } from './utils/permissoes';
 import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
@@ -1959,7 +1960,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
                 {/* "Solicitar Análise" saiu daqui: fica só o do Andamento (corpo do card) */}
                 <div className="acn-lic-rodape-fim">
-                  {isAdmin && (
+                  {podeExcluirLicitacao(currentUser) && (
                     <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={onExcluir}>
                       Excluir
                     </Botao>
@@ -2659,6 +2660,12 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   useEffect(() => { if (modoRecentes) carregarRecentesLicit(); }, [modoRecentes, carregarRecentesLicit]);
 
   const excluirLicitacao = async (l: any) => {
+    // Regra de 07/10/2026 (pedido do usuário): só Admin e o Gerente de Licitações excluem uma licitação (antes o botão aparecia para todos: `isAdmin` era fixo em true); e com OP lançada
+    // a partir dos pedidos ou formação de preços vinculada ela NÃO é excluída (ver ExclusaoDeCard.ts).
+    if (!podeExcluirLicitacao(currentUser)) { mostrarAviso('Só o Admin e o Gerente de Licitações podem excluir uma licitação.', 'atencao'); return; }
+    const bloq = await bloqueiosDeExclusao('licitacao', l.id);
+    if (bloq.erro) { mostrarAviso(`Não foi possível conferir o que está ligado a "${l.numero}" (${bloq.erro}). Por segurança, nada foi excluído.`, 'erro'); return; }
+    if (bloq.motivos.length) { mostrarAviso(`"${l.numero}" não pode ser excluída porque tem:\n• ${bloq.motivos.join('\n• ')}\nDesfaça esses vínculos antes de excluir.`, 'atencao'); return; }
     if (!await confirmar(`Excluir "${l.numero} — ${l.nome_projeto}"?`)) return;
     // 7.61: a cópia de segurança saía da linha da LISTA (sem as Áreas Livres) e era guardada depois de apagar; ver excluirComUndo
     const ok = await excluirComUndo('licitacoes', l.id, currentUser?.nome || currentUser?.email, `Licitação "${l.numero}"`);

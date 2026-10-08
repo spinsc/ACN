@@ -42,6 +42,7 @@ import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
 import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
+import { podeExcluirCardComercial, bloqueiosDeExclusao } from './ExclusaoDeCard';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
@@ -2186,6 +2187,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // EXCLUIR OP
   // ─────────────────────────────────────────────────────────────────────────
   const excluirOp = async (op: any) => {
+    // Regra de 07/10/2026 (pedido do usuário): só Admin e o Gerente Comercial excluem um card; e com OP/OS lançada, vendas registradas ou formação de preços vinculada o card NÃO é excluído (ver ExclusaoDeCard.ts).
+    if (!podeExcluirCardComercial(currentUser)) { mostrarAviso('Só o Admin e o Gerente Comercial podem excluir um card.', 'atencao'); return; }
+    const bloq = await bloqueiosDeExclusao('crm', op.id);
+    if (bloq.erro) { mostrarAviso(`Não foi possível conferir o que está ligado a "${op.titulo}" (${bloq.erro}). Por segurança, nada foi excluído.`, 'erro'); return; }
+    if (bloq.motivos.length) { mostrarAviso(`"${op.titulo}" não pode ser excluído porque tem:\n• ${bloq.motivos.join('\n• ')}\nDesfaça esses vínculos antes, ou use "Desistência" / "Perdido" para tirar o card do andamento.`, 'atencao'); return; }
     if (!await confirmar(`Excluir "${op.titulo}"? Esta ação não pode ser desfeita.`)) return;
     const { error } = await supabase.from('crm_oportunidades').delete().eq('id', op.id);
     // 7.62: o erro era ignorado — o card seguia no quadro sem dizer por quê
@@ -2262,7 +2268,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         onClick: () => { setModalVincularLicit(op); setBuscaVincularLicit(''); setResultVincularLicit([]); }, oculto: !ganho },
       { rotulo: 'Reativar', icone: mdiRestore, onClick: () => reativarOp(op), oculto: !desistiu },
       { rotulo: 'Converter em licitação/ATA', icone: mdiGavel, onClick: () => setModalConverterLicit(op), oculto: !(funil === 'venda_direta' && !desistiu && est?.tipo === 'estimativa') },
-      { rotulo: 'Excluir', icone: mdiTrashCanOutline, onClick: () => excluirOp(op), perigo: true, oculto: currentUser?.perfil !== 'Admin' },
+      { rotulo: 'Excluir', icone: mdiTrashCanOutline, onClick: () => excluirOp(op), perigo: true, oculto: !podeExcluirCardComercial(currentUser) },
     ];
 
     return (
