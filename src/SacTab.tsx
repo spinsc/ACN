@@ -14,7 +14,7 @@ import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
-import { mdiFormatListBulleted, mdiViewColumnOutline } from '@mdi/js';
+import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 import Icone from './Icone';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
@@ -280,6 +280,9 @@ export default function SacTab({ currentUser }) {
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
   const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', chassi:'', defeito:'' };
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
+  // Lote de OS (pedido do usuário em 07/10/2026): com vários equipamentos, "uma OS para cada" — cada uma com o seu número, ligadas por lote_id; o quadro mostra o lote num card só.
+  const [criarEmLote, setCriarEmLote]       = useState(false);
+  const [lotesAbertos, setLotesAbertos]     = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchOrdens(); fetchEquipamentos(); fetchCategorias(); fetchTiposServico();
@@ -428,6 +431,16 @@ export default function SacTab({ currentUser }) {
       urlsArquivos.push({ ...result, enviado_em: new Date().toISOString(), enviado_por: currentUser?.nome||'' });
     }
 
+    // Lote: uma OS por equipamento, todas com o mesmo lote_id; sem lote, uma OS só com a lista inteira (como sempre foi). O número da 1ª já foi gerado acima (e usado na pasta das fotos).
+    const emLote = criarEmLote && equipLista.length > 1;
+    const unidades: any[][] = emLote ? equipLista.map(e => [e]) : [equipLista];
+    const loteId = emLote ? crypto.randomUUID() : null;
+    const loteDescricao = emLote ? `Lote de ${equipLista.length} equipamentos — ${form.cliente_nome}` : null;
+    const criadas: string[] = [];
+    const parcial = () => criadas.length ? `\n\nJá criadas neste lote: ${criadas.join(', ')}. Confira em Ordens de Serviço antes de tentar de novo (para não duplicar).` : '';
+    for (let u = 0; u < unidades.length; u++) {
+    const equipLista = unidades[u];   // a lista desta OS (no lote, só o equipamento dela); o resto do corpo usa esta
+    if (u > 0) numero = await gerarNumeroOS();
     // Payload base sem numero_os (será preenchido em cada tentativa)
     const payloadBase = {
       empresa: form.empresa || 'ACN',
@@ -438,9 +451,10 @@ export default function SacTab({ currentUser }) {
       modelo: equipLista[0]?.modelo || null,
       numero_serie: equipLista[0]?.numero_serie || null,
       chassi: equipLista[0]?.chassi || null,
-      quantidade: form.quantidade || 1,
+      quantidade: emLote ? 1 : (form.quantidade || 1),
       defeito_reclamado: equipLista[0]?.defeito || null,
       equipamentos_lista: equipLista,
+      ...(emLote ? { lote_id: loteId, lote_descricao: loteDescricao } : {}),
       observacoes: form.observacoes || null,
       cliente_nome: form.cliente_nome,
       empresa_orgao: form.empresa_orgao || null,
@@ -491,10 +505,11 @@ export default function SacTab({ currentUser }) {
         .insert([{ ...payloadBase, numero_os: numero }])
         .select('id').single();
       if (!error) { osData = data; break; }
-      if (error.code !== '23505') { alert('Erro: ' + error.message); setSalvando(false); return; }
+      if (error.code !== '23505') { alert('Erro: ' + error.message + parcial()); setSalvando(false); fetchOrdens(); return; }
     }
 
-    if (!osData) { alert('Não foi possível gerar número único. Tente novamente.'); setSalvando(false); return; }
+    if (!osData) { alert('Não foi possível gerar número único. Tente novamente.' + parcial()); setSalvando(false); fetchOrdens(); return; }
+    criadas.push(numero);
 
     if (form.observacoes) {
       await salvarMencoes({
@@ -557,11 +572,14 @@ export default function SacTab({ currentUser }) {
     }
     if (falhasDemanda.length) alert(`A OS ${numero} foi aberta, mas ${falhasDemanda.join(' e ')}. Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
-    notificarEvento('sac_os_aberta', `*Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
+    // no lote, um aviso só (com todos os números), no fim
+    if (!emLote) notificarEvento('sac_os_aberta', `*Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
+    else if (u === unidades.length - 1) notificarEvento('sac_os_aberta', `*Novo lote de ${criadas.length} OS*\n${criadas.join(', ')}\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
+    }   // fim do laço por unidade
 
     const _savedCliente = { formData: { ...form }, clienteId: form._cliente_id };
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAnexarFiles([]); setAcessInput('');
-    setEquipLista([{ ...EQUIP_VAZIO }]);
+    setEquipLista([{ ...EQUIP_VAZIO }]); setCriarEmLote(false);
     setCrmBusca(''); setCrmSugestoes([]);
     setModalNova(false); setSalvando(false); fetchOrdens();
     if (_savedCliente.formData.cliente_nome?.trim()) salvarClienteAuto(_savedCliente.formData, _savedCliente.clienteId).catch(console.error);
@@ -944,6 +962,51 @@ OK = ACN   |   Cancelar = DETECH`;
     { id: 'concluido', rotulo: 'CONCLUÍDO', familia: 'ok' },
   ];
   const reprovadasFiltradas = ordensFiltradas.filter(o => colunaKanban(o.status) === null).length;
+  // Lote no quadro (07/10/2026, decidido com o usuário): as OS de um mesmo lote viram UM card, que fica na etapa da OS mais atrasada (pendente antes de em andamento antes de concluído);
+  // ao abrir o lote aparecem as OS, cada uma com o seu status e as suas ações. OS sem lote seguem como cards próprios.
+  const ORDEM_COLUNA: Record<string, number> = { pendente: 0, andamento: 1, concluido: 2 };
+  const itensDaColuna = (colId: string) => {
+    const vistos = new Set<string>(); const itens: any[] = [];
+    for (const o of ordensFiltradas) {
+      const c = colunaKanban(o.status); if (c === null) continue;
+      if (!o.lote_id) { if (c === colId) itens.push({ tipo: 'os', o }); continue; }
+      if (vistos.has(o.lote_id)) continue; vistos.add(o.lote_id);
+      const oss = ordensFiltradas.filter(x => x.lote_id === o.lote_id && colunaKanban(x.status) !== null);
+      const atrasada = Object.keys(ORDEM_COLUNA).sort((a, b) => ORDEM_COLUNA[a] - ORDEM_COLUNA[b]).find(k => oss.some(x => colunaKanban(x.status) === k));
+      if (atrasada === colId) itens.push({ tipo: 'lote', id: o.lote_id, oss });
+    }
+    return itens;
+  };
+  const renderCardLote = (item: any) => {
+    const aberto = lotesAbertos.has(item.id);
+    const primeira = item.oss[0];
+    const porStatus = Object.entries(item.oss.reduce((a: any, x: any) => ({ ...a, [x.status]: (a[x.status] || 0) + 1 }), {}));
+    const naoLida = item.oss.some((x: any) => ordensNaoLidas.has(String(x.id)));
+    return (
+      <div key={'lote-' + item.id} className={'acn-kb-card acn-kb-lote' + (naoLida ? ' nova' : '')}>
+        <div className="acn-kb-topo"><strong className="acn-forte">Lote · {item.oss.length} OS</strong><Selo familia="marca" ponto={false}>Lote</Selo></div>
+        {primeira.cliente_nome && <div className="acn-fraco">{primeira.cliente_nome}</div>}
+        <div className="acn-kb-equip">{item.oss.map((x: any) => x.numero_os).join(' · ')}</div>
+        <div className="acn-kb-meta">{porStatus.map(([st, n]: any) => <Selo key={st} familia={FAMILIA_STATUS_SAC[st] || 'neutro'}>{n}× {st}</Selo>)}</div>
+        <Botao pequeno variante="discreto" icone={aberto ? mdiChevronUp : mdiChevronDown} aria-expanded={aberto}
+          onClick={() => setLotesAbertos(s => { const n = new Set(s); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n; })}>
+          {aberto ? 'Fechar o lote' : 'Abrir o lote'}
+        </Botao>
+        {aberto && (
+          <div className="acn-kb-lote-lista">
+            {item.oss.map((o: any) => (
+              <div key={o.id} className="acn-kb-lote-os">
+                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /></div>
+                <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}{o.numero_serie ? ' · SN ' + o.numero_serie : ''}</div>
+                <div className="acn-kb-meta"><Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo></div>
+                <div className="acn-acoes-linha quebra">{renderAcoes(o)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
   // o mesmo valor que a lista mostra: o do orçamento, ou a soma dos itens da cotação
   const valorDaOS = (o: any) => {
     const v = Number(o.valor_orcamento) || 0;
@@ -1699,7 +1762,7 @@ OK = ACN   |   Cancelar = DETECH`;
             { id: 'kanban', rotulo: 'Kanban', icone: mdiViewColumnOutline },
           ]} />
           <Botao variante="primario" icone={mdiPlus} // Etapa 7.24 (01/10/2026): só as fotos eram zeradas ao abrir; o documento escolhido numa abertura CANCELADA ficava na memória (o contador mostrava "1 arquivo(s)" com o campo vazio) e ia junto da OS seguinte
-            onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setArquivosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
+            onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setArquivosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setCriarEmLote(false);setModalNova(true);}}>
             Nova OS
           </Botao>
           </div>
@@ -1754,13 +1817,15 @@ OK = ACN   |   Cancelar = DETECH`;
             {loading ? <div className="acn-empty">Carregando...</div> : (
               <div className="acn-kb">
                 {COLUNAS_KANBAN.map(col => {
-                  const cards = ordensFiltradas.filter(o => colunaKanban(o.status) === col.id);
+                  const cards = itensDaColuna(col.id);
                   return (
                     <div key={col.id} className={'acn-kb-col ' + col.id} aria-label={col.rotulo}>
                       <div className="acn-kb-cab"><span>{col.rotulo}</span><Selo familia={col.familia} ponto={false}>{cards.length}</Selo></div>
                       <div className="acn-kb-corpo">
                         {cards.length === 0 && <div className="acn-empty">Nenhuma OS</div>}
-                        {cards.map(o => {
+                        {cards.map(item => {
+                          if (item.tipo === 'lote') return renderCardLote(item);
+                          const o = item.o;
                           const valor = valorDaOS(o);
                           return (
                             <div key={o.id} className={'acn-kb-card' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '')}>
@@ -1814,6 +1879,7 @@ OK = ACN   |   Cancelar = DETECH`;
                       <div className="acn-duas acn-sac-id">
                         <strong className="acn-forte">{o.numero_os}</strong>
                         <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
+                        {o.lote_id && <Selo familia="marca" ponto={false} title={o.lote_descricao || 'Faz parte de um lote de OS'}>Lote</Selo>}
                       </div>
                     </td>
                     <td className="acn-texto-curto">{o.tipo_servico}</td>
@@ -1953,6 +2019,12 @@ OK = ACN   |   Cancelar = DETECH`;
               <div className="acn-quadro-titulo">
                 Dados do{equipLista.length > 1 ? 's' : ''} Equipamento{equipLista.length > 1 ? 's' : ''} ({equipLista.length})
               </div>
+              {equipLista.length > 1 && (
+                <label className="acn-sac-lote-opcao">
+                  <input type="checkbox" checked={criarEmLote} onChange={e => setCriarEmLote(e.target.checked)} />
+                  Criar uma OS para cada equipamento (lote) — cada uma com o seu número; o quadro mostra o lote num card só
+                </label>
+              )}
               {equipLista.map((eq, idx) => (
                 <div key={idx} className="acn-sac-unid">
                   {equipLista.length > 1 && (

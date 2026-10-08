@@ -2534,3 +2534,9 @@ body.dark .acn-crm-col-valor { color: #8fd3a5; }
 .acn-participante-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 12px; background: var(--acn-info-soft); color: var(--acn-info); font-size: 12px; font-weight: 600; }
 .acn-participante-chip button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 11px; padding: 0 3px; opacity: .7; }
 .acn-participante-chip button:hover { opacity: 1; }
+
+/* ── SAC · lote de OS (07/10/2026) ── */
+.acn-sac-lote-opcao { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; color: var(--acn-ink); cursor: pointer; }
+.acn-kb-lote { border-left: 3px solid var(--acn-brand); }
+.acn-kb-lote-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.acn-kb-lote-os { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-neutral-soft); }
