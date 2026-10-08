@@ -2183,10 +2183,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   };
 
   const remItem  = async (id) => {
-    // 07/10/2026 (pedido do usuário): tirar um item da formação também pergunta — mesmo com ela ainda em montagem. Linha em branco (sem produto e sem custo) sai direto.
+    // 07/10/2026 (pedido do usuário): tirar um item da formação também pergunta — mesmo com ela ainda em montagem.
+    // 08/10/2026: a linha em branco (sem produto e sem custo) também pergunta; antes saía direto e o usuário, que testou justamente numa linha recém-criada, achou que não perguntava.
     const aRemover = itens.find(x => x._id === id);
-    const emBranco = !!aRemover && !String(aRemover.produto || '').trim() && !Number(aRemover.custo_unit);
-    if (!await confirmarRemocao('o item "' + (aRemover?.produto || 'sem nome') + '" desta formação', emBranco)) return;
+    if (!await confirmarRemocao('o item "' + (aRemover?.produto || 'sem nome') + '" desta formação')) return;
     if (statusCotacao === 'finalizada') {
       const item = itens.find(x => x._id === id);
       if (item) registrarLog('item_removido', `[${loteDe(item)} › ${grupoDe(item)}] Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);
