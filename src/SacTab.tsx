@@ -17,6 +17,7 @@ import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
+import { SelectVeiculo } from './VeiculoCadastro';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
 
@@ -280,7 +281,7 @@ export default function SacTab({ currentUser }) {
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
-  const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', chassi:'', defeito:'' };
+  const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', chassi:'', defeito:'', veiculo_id:'' };
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
   // Lote de OS (pedido do usuário em 07/10/2026): com vários equipamentos, "uma OS para cada" — cada uma com o seu número, ligadas por lote_id; o quadro mostra o lote num card só.
   const [criarEmLote, setCriarEmLote]       = useState(false);
@@ -2044,9 +2045,17 @@ OK = ACN   |   Cancelar = DETECH`;
                         onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,marca:e.target.value}:x))} />
                     </div>
                     <div className="form-group">
-                      <label className="acn-label">Modelo</label>
-                      <input className="acn-input" value={eq.modelo}
-                        onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,modelo:e.target.value}:x))} />
+                      <label className="acn-label">{(form.is_veiculo || isVeicular(form.tipo_projeto)) ? 'Veículo (catálogo)' : 'Modelo'}</label>
+                      {(form.is_veiculo || isVeicular(form.tipo_projeto)) ? (
+                        /* 08/10/2026 (pedido do usuário): na OS de veículo o modelo vem do MESMO cadastro de veículos da OP (marca, modelo e ano; dá para cadastrar um novo no "+ Novo"),
+                           em vez de texto livre. O texto do modelo continua sendo gravado (relatórios e busca antigos seguem enxergando) e o id da ficha fica junto na lista de equipamentos da OS. */
+                        <SelectVeiculo valor={eq.veiculo_id || ''} currentUser={currentUser}
+                          placeholder="Procure o veículo (marca, modelo ou ano)"
+                          onChange={(id, ficha) => setEquipLista(l => l.map((x, i) => i === idx ? { ...x, veiculo_id: id || '', modelo: ficha?.nome_exibicao || (id ? x.modelo : ''), marca: ficha?.marca || x.marca } : x))} />
+                      ) : (
+                        <input className="acn-input" value={eq.modelo}
+                          onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,modelo:e.target.value}:x))} />
+                      )}
                     </div>
                     {(form.is_veiculo || isVeicular(form.tipo_projeto)) ? (
                       <div className="form-group">
