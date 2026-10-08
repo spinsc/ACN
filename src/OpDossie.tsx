@@ -13,6 +13,7 @@
 //   • aba "Dossiê da OP" em Relatórios, buscando por OPL ou por PV.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
+import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { carregarDossie, buscarOps } from './OpVinculos';
 import { QuadroItensOp } from './OpItens';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
@@ -381,7 +382,7 @@ async function gerarPdfDossie(d, setGerando) {
     }
     doc.save(`Dossie_${String(o.opl || 'OP').replace(/[^\w.-]/g, '_')}.pdf`);
   } catch (e) {
-    alert('Não foi possível gerar o PDF: ' + (e?.message || e));
+    if (!tratarFalhaDeArquivoNovo(e)) alert('Não foi possível gerar o PDF: ' + (e?.message || e));
   } finally {
     setGerando(false);
   }

@@ -9,6 +9,7 @@ import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
+import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { Faixa, Botao, Selo, Chips, Abas, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
@@ -2870,7 +2871,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       alert(`PDF gerado e anexado à OP ${oplVinculada.opl}!\n\nO arquivo está disponível nos anexos da OP.`);
     } catch (err) {
       console.error(err);
-      alert('Erro ao finalizar: ' + err.message);
+      if (!tratarFalhaDeArquivoNovo(err)) alert('Erro ao finalizar: ' + err.message);
     } finally {
       setFinalizando(false);
     }

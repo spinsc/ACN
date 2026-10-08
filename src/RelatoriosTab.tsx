@@ -12,6 +12,7 @@ import Icone from './Icone';
 import { mdiPrinterOutline, mdiFileExcelOutline, mdiLinkVariant, mdiFilePdfBox } from '@mdi/js';
 import { montarModeloVendedores, montarModeloTecnicos, emitirDocumento, dataBR } from './ComissaoDocumento';
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
+import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
@@ -1188,7 +1189,7 @@ function RelComissoes() {
       let usuario: any = {}; try { usuario = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
       const modelo = montarModeloVendedores({ mesLabel: `${mesesLongos[Number(mesNumLabel)-1]} de ${anoLabel}`, comissoes, ops, valorDe, divisorDe, emitidoPor: usuario?.nome });
       await emitirDocumento(modelo);
-    } catch (e) { alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
+    } catch (e) { if (!tratarFalhaDeArquivoNovo(e)) alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
     setEmitindo(false);
   };
 
@@ -1408,7 +1409,7 @@ function RelComissoesProducao({ mes, labelMes, periodo }) {
       let usuario: any = {}; try { usuario = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
       const modelo = montarModeloTecnicos({ periodo, ...rotuloComissaoTecnicos({ modoFatura: situacao, filtroOrigem: origem }), tecnicos: dados, grupos, semTecnico, aprovados, emitidoPor: usuario?.nome });
       await emitirDocumento(modelo);
-    } catch (e) { alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
+    } catch (e) { if (!tratarFalhaDeArquivoNovo(e)) alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
     setEmitindo(false);
   };
 

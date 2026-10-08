@@ -19,6 +19,7 @@ import { iniciarTonsVisuais } from './TonsVisuais'
 import { iniciarContrasteEscuro } from './ContrasteEscuro'
 import { iniciarCamposNumericos } from './CamposNumericos'
 import { iniciarProtecaoDeFundo } from './ProtecaoDeFundo'
+import { iniciarAvisoDeVersaoNova } from './VersaoNova'
 
 // Guard contra dupla execução no Safari 10 / iOS 10:
 // O browser executa tanto o bundle moderno (type=module) quanto o legado (nomodule)
@@ -31,6 +32,7 @@ if (!(window as any).__ACN_LOADED__) {
   iniciarContrasteEscuro(); // modo escuro: mede fundo e letra reais e corrige o que ficar ilegível
   iniciarCamposNumericos(); // rolar a rodinha não altera mais campos numéricos
   iniciarProtecaoDeFundo(); // arrastar o mouse (ex.: selecionar texto) para fora da janela não a fecha mais
+  iniciarAvisoDeVersaoNova(); // aba aberta de antes de uma publicação: explica o erro de arquivo que sumiu e oferece atualizar
   // Todo alert() do sistema vira aviso no canto da tela (mesma mensagem, sem travar a tela)
   window.alert = (mensagem?: any) => mostrarAviso(mensagem);
   createRoot(document.getElementById('root')!).render(

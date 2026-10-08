@@ -7,6 +7,7 @@ import { confirmar } from './Feedback';
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './ComissaoDocumento';
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
+import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import Icone from './Icone';
 import { mdiFilePdfBox, mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
@@ -1874,7 +1875,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
       fechamentos.filter((f: any) => f.status === 'aprovado').forEach((f: any) => { aprovados[f.tecnico_id] = f; });
       const modelo = montarModeloTecnicos({ ...rotuloCalculo, tecnicos: dados, grupos, semTecnico, aprovados, emitidoPor: currentUser?.nome });
       await emitirDocumento(modelo);
-    } catch (e: any) { alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
+    } catch (e: any) { if (!tratarFalhaDeArquivoNovo(e)) alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
     setEmitindo(false);
   };
 
