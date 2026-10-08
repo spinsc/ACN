@@ -155,7 +155,10 @@ export default function QualidadeTab({ currentUser }) {
     let sigUrl = null;
     try {
       const blob = await (await fetch(signData)).blob();
-      const path = `assinaturas/cq_${numero}_${Date.now()}.png`;
+      // 08/10/2026: o número da OP pode ter acento, espaço e barra ("A1354.2606 - PREF. SÃO JOSÉ"), e o armazenamento recusa isso na chave ("Invalid key"): a aprovação do CQ não passava.
+      // Só o nome do ARQUIVO é limpo; o número gravado na auditoria continua o de sempre.
+      const numeroSeguro = String(numero || "op").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `assinaturas/cq_${numeroSeguro}_${Date.now()}.png`;
       const { data: up, error: errUp } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
       if (errUp || !up) throw (errUp || new Error('o armazenamento não respondeu'));
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
