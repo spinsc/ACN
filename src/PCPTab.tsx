@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
@@ -73,6 +74,7 @@ export default function PCPTab({ currentUser }) {
   const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVer, setModalVer] = useState(null);
+  const [resumoLote, setResumoLote] = useState<any>(null);   // { base, irmaos }: cartão de resumo do lote como uma coisa só (08/10/2026)
   const [obsDevolver, setObsDevolver] = useState('');
   const [busca, setBusca] = useState('');
   // Vínculo pronto pra abrir a Nova Demanda Avulsa já ligada àquela OP — ver
@@ -737,6 +739,9 @@ export default function PCPTab({ currentUser }) {
                               <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades
                               </Selo>
+                              {lotePedidoIgual(irmaos)
+                                ? <Selo familia="ok" ponto={false} title="Todas as unidades têm os mesmos itens vendidos: dá para tratar o lote como uma coisa só">carros iguais</Selo>
+                                : <Selo familia="atencao" ponto={false} title="As unidades NÃO têm todas os mesmos itens vendidos — confira unidade por unidade">itens diferentes</Selo>}
                             </div>
                           </td>
                           <td>—</td>
@@ -769,6 +774,9 @@ export default function PCPTab({ currentUser }) {
                                   EMBALAGEM EM LOTE ({qtdProntoEmbalagem})
                                 </Botao>
                               )}
+                              <Botao pequeno icone={mdiClipboardTextOutline} title="Resumo do lote como uma coisa só: etapas, valores e itens vendidos" onClick={()=>setResumoLote({ base, irmaos })}>
+                                Resumo
+                              </Botao>
                               <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
                                 {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
                               </Botao>
@@ -1075,6 +1083,7 @@ export default function PCPTab({ currentUser }) {
       <DemandaFooter setor="PCP" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
+      {resumoLote && <ResumoLoteOpl base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
 
       {/* MODAL DEVOLVER — escolhe o destino: Almoxarifado (refazer kit) ou Engenharia (reanalisar) */}
       {modalDevolver && (

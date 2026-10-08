@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -25,7 +26,7 @@ import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
 import Icone from './Icone';
 import {
   mdiRulerSquareCompass, mdiCogOutline, mdiTimerOutline, mdiTrayArrowUp, mdiWrenchOutline, mdiCheckCircleOutline, mdiClockAlertOutline,
-  mdiPauseCircleOutline, mdiEyeOutline, mdiNoteTextOutline, mdiPowerPlugOutline, mdiArrowULeftTop, mdiLinkVariant, mdiPlayOutline,
+  mdiPauseCircleOutline, mdiEyeOutline, mdiNoteTextOutline, mdiPowerPlugOutline, mdiArrowULeftTop, mdiLinkVariant, mdiPlayOutline, mdiClipboardTextOutline,
   mdiChevronUp, mdiChevronDown, mdiCarOutline, mdiAlertOutline, mdiTagOutline,
 } from '@mdi/js';
 
@@ -195,6 +196,7 @@ export default function EngenhariaTab({ currentUser }) {
   const [osAcomp, setOsAcomp] = useState([]);
   const [modalObsAcomp, setModalObsAcomp] = useState(null);
   const [modalVer, setModalVer] = useState(null);
+  const [resumoLote, setResumoLote] = useState<any>(null);   // { base, irmaos }: cartão de resumo do lote como uma coisa só (08/10/2026)
   const [novaObsAcomp, setNovaObsAcomp] = useState('');
   const [busca, setBusca] = useState('');
 
@@ -746,6 +748,9 @@ export default function EngenhariaTab({ currentUser }) {
                               {envioDireto && (
                                 <Selo familia="atencao" ponto={false}><Icone path={mdiTrayArrowUp} size={13} /> ENVIO DIRETO</Selo>
                               )}
+                              {lotePedidoIgual(irmaos)
+                                ? <Selo familia="ok" ponto={false} title="Todas as unidades têm os mesmos itens vendidos: dá para tratar o lote como uma coisa só">carros iguais</Selo>
+                                : <Selo familia="atencao" ponto={false} title="As unidades NÃO têm todas os mesmos itens vendidos — confira unidade por unidade">itens diferentes</Selo>}
                             </div>
                           </td>
                           <td>—</td>
@@ -765,6 +770,9 @@ export default function EngenhariaTab({ currentUser }) {
                               )}
                               <Botao variante="primario" pequeno icone={mdiCheckCircleOutline} onClick={()=>abrirBomLote(rep)}>
                                 LIBERAR BOM EM LOTE
+                              </Botao>
+                              <Botao pequeno icone={mdiClipboardTextOutline} title="Resumo do lote como uma coisa só: etapas, valores e itens vendidos" onClick={()=>setResumoLote({ base, irmaos })}>
+                                Resumo
                               </Botao>
                               <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
                                 {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
@@ -868,6 +876,7 @@ export default function EngenhariaTab({ currentUser }) {
       <DemandaFooter setor="Engenharia" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
+      {resumoLote && <ResumoLoteOpl base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
 
       {/* MODAL INICIAR ENGENHARIA */}
       {modalIniciar && (
