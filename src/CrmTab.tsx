@@ -26,7 +26,7 @@ import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
-import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
+import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
 import Icone from './Icone';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
@@ -376,6 +376,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [filtResp, setFiltResp]             = useState('');
   const [filtTemp, setFiltTemp]             = useState<''|'frio'|'morno'|'quente'>('');
   const [filtTipoNegocio, setFiltTipoNegocio] = useState('');
+  const [filtMarkup, setFiltMarkup] = useState('');   // faixa de markup (07/10/2026)
   // Filtro de mês dos cartões de pipeline (Em Negociação/Perdidas/Ganhas/
   // Aguardando Faturamento) — formato 'YYYY-MM', vazio = todos os meses.
   const [mesFiltroPipeline, setMesFiltroPipeline] = useState('');
@@ -589,10 +590,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     o.funil === 'venda_direta' &&
     o.responsavel_nome === currentUser?.nome
   );
+  // faixa de markup do card (a mesma do selo: corte do tipo de negócio dele; sem preço formado = "neutro")
+  const faixaDoCard = (o: any) => idFaixaMarkup(markupPorOp[o.id]?.pct, o.tipo_negocio ? bandasMarkup[o.tipo_negocio] : undefined);
   const opsFiltradas   = opsFunil.filter(o => {
     if (filtResp && o.responsavel_nome !== filtResp) return false;
     if (filtTemp && o.temperatura !== filtTemp) return false;
     if (filtTipoNegocio && o.tipo_negocio !== filtTipoNegocio) return false;
+    if (filtMarkup && faixaDoCard(o) !== filtMarkup) return false;
     return combinaBusca([o.titulo, o.orgao, o.numero_edital], busca);
   });
 
@@ -2973,6 +2977,15 @@ function ColunaRolavel({ children }: any) {
           {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         {filtTipoNegocio && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltTipoNegocio('')} title="Limpar tipo" aria-label="Limpar tipo" />}
+        {/* Filtro por faixa de markup (as mesmas faixas do selo do card; o número entre parênteses é quantos cards do funil caem em cada uma) */}
+        <select className="acn-input acn-crm-sel170" value={filtMarkup} onChange={e => setFiltMarkup(e.target.value)} aria-label="Faixa de markup">
+          <option value="">Todas as faixas de markup</option>
+          {OPCOES_FAIXA_MARKUP.map(f => {
+            const n = opsFunil.filter(o => faixaDoCard(o) === f.id).length;
+            return (n > 0 || filtMarkup === f.id) ? <option key={f.id} value={f.id}>{f.label} ({n})</option> : null;
+          })}
+        </select>
+        {filtMarkup && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltMarkup('')} title="Limpar faixa de markup" aria-label="Limpar faixa de markup" />}
         {/* Filtro por temperatura do lead — mini gráfico de barras clicável */}
         {(() => {
           const contTemp: Record<string, number> = { frio:0, morno:0, quente:0 };

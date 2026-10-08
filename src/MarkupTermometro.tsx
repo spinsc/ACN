@@ -62,6 +62,21 @@ export function corMarkup(pct: number | null | undefined, cfg: BandaMarkupConfig
   return banda || bandas[3]; // pct === 100 exatamente cai aqui (verde)
 }
 
+// Filtro por faixa (pedido do usuário em 07/10/2026, Comercial e Licitações): as opções são as próprias faixas do selo — Markup baixo, Apertado, Bom, Na meta, Overmarkup — mais "Sem cotação"
+// (card sem preço formado) e "Sem régua fixa" (tipo de negócio sem régua no Admin). Quem filtra usa o MESMO corte do selo: o do tipo de negócio do card, quando existe.
+export const OPCOES_FAIXA_MARKUP: { id: string; label: string }[] = [
+  { id: 'vermelho', label: 'Markup baixo' },
+  { id: 'laranja',  label: 'Apertado' },
+  { id: 'amarelo',  label: 'Bom' },
+  { id: 'verde',    label: 'Na meta' },
+  { id: 'dourado',  label: 'Overmarkup' },
+  { id: 'neutro',   label: 'Sem cotação' },
+  { id: 'sem_regua', label: 'Sem régua fixa' },
+];
+export function idFaixaMarkup(pct: number | null | undefined, cfg?: BandaMarkupConfig): string {
+  return corMarkup(pct, cfg).id;
+}
+
 // Carrega os cortes configurados em Admin → Faixas de Markup
 // (configuracoes_sistema, chaves markup_regua_<tipo>_ativa/min/bom). Tipo sem
 // configuração cai no padrão (65/80, régua ativa) — mesmo comportamento de

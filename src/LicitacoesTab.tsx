@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ModalSolicitarAnalise, AnaliseStatusPanel } from './AnaliseWidget';
-import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
+import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup } from './MarkupTermometro';
 import AgendaWidget from './AgendaWidget';
 import { UnreadBadge } from './useUnread';
 import { salvarMencoes } from './MencaoTextarea';
@@ -2576,6 +2576,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
   const [filtroTipo, setFiltroTipo] = useState<string>('Direta');
   const [filtroTemp, setFiltroTemp] = useState<string>('');
+  const [filtroMarkup, setFiltroMarkup] = useState<string>('');   // faixa de markup (07/10/2026)
   const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
   const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
   const [filtroPeriodoDe, setFiltroPeriodoDe] = useState('');
@@ -2721,6 +2722,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const baseSemStatus = licitacoes
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
     .filter(l => !filtroTemp || l.temperatura === filtroTemp)
+    .filter(l => !filtroMarkup || idFaixaMarkup(markupPorLicit[l.id]?.pct) === filtroMarkup)
     .filter(l => filtroAnaliseSetor === 'todas' || (analisesPendentesPorLicit[l.id]||[]).includes(filtroAnaliseSetor))
     .filter(l => {
       if (!filtroPeriodoDe && !filtroPeriodoAte) return true;
@@ -2857,6 +2859,16 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
             </select>
           </div>
           <div>
+            <label className="acn-label">Markup</label>
+            <select className="acn-input acn-lic-auto" value={filtroMarkup} onChange={e=>setFiltroMarkup(e.target.value)} aria-label="Faixa de markup">
+              <option value="">Todas as faixas</option>
+              {OPCOES_FAIXA_MARKUP.filter(f => f.id !== 'sem_regua').map(f => {
+                const n = licitacoes.filter(l => idFaixaMarkup(markupPorLicit[l.id]?.pct) === f.id).length;
+                return (n > 0 || filtroMarkup === f.id) ? <option key={f.id} value={f.id}>{f.label} ({n})</option> : null;
+              })}
+            </select>
+          </div>
+          <div>
             <label className="acn-label">Análise</label>
             <select className="acn-input acn-lic-auto" value={filtroAnaliseSetor} onChange={e=>setFiltroAnaliseSetor(e.target.value)}>
               <option value="todas">Todas</option>
@@ -2885,9 +2897,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
               <option value="semestre">Semestre</option>
             </select>
           </div>
-          {(filtroTipo!=='Direta'||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
+          {(filtroTipo!=='Direta'||filtroAnaliseSetor!=='todas'||filtroMarkup||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
             <Botao pequeno variante="discreto" icone={mdiClose}
-              onClick={() => { setFiltroTipo('Direta'); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}>
+              onClick={() => { setFiltroTipo('Direta'); setFiltroAnaliseSetor('todas'); setFiltroMarkup(''); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}>
               Limpar filtros
             </Botao>
           )}

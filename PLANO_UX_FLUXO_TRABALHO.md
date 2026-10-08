@@ -4296,7 +4296,7 @@ Lista passada pelo usuário em 07/10/2026, com as dúvidas tiradas na hora e o t
 
 | # | Item | Situação | O que foi feito |
 |---|---|---|---|
-| 1 | Filtro por faixa de markup em Licitações e Comercial | ⬜ | |
+| 1 | Filtro por faixa de markup em Licitações e Comercial | ✅ 08/10/2026 | Filtro "Faixa de markup" no Comercial (barra de filtros do kanban) e nas Licitações (barra de filtros), com as faixas atuais do selo (Markup baixo, Apertado, Bom, Na meta, Overmarkup, Sem cotação, e Sem régua fixa no Comercial) e a contagem de cada uma; no Comercial usa o corte do tipo de negócio do card, como o selo. Testado: Comercial com 9 cards simulados (opções com contagem 1/1/1/6; Apertado = 1 card; Sem cotação = os 6 sem preço formado) e Licitações com 3 (baixo/bom/sem cotação = 1 cada). |
 | 2 | Preços Formados: pesquisa por texto | ✅ 08/10/2026 | Campo "Buscar preço formado" na aba Preços Formados: acha por nome, empresa, OP, autor, categoria e nome dos itens, sem diferenciar acento e maiúscula, com qualquer ordem das palavras; mostra "N de M" e a mensagem de nenhum resultado. Testado com 3 formações simuladas (nome, item com acento, empresa, sem resultado e limpar). |
 | 3 | Formação aberta: só a versão final visível; as outras num botão "Versões" (lista, resumo, trocar a final) | ⬜ | |
 | 4 | Kanban do Comercial: total de preços formados ao lado do status da coluna | ⬜ | |
