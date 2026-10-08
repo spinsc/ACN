@@ -1,7 +1,9 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
-import { diaBR, hojeISO } from './Interface';
+import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline } from '@mdi/js';
+import Icone from './Icone';
 import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 
 // O dossiê importa OplProgressBar deste arquivo; para não fechar um ciclo de
@@ -627,6 +629,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
   const [erroCompras, setErroCompras] = useState('');
+  // Seriais dos itens instalados, registrados pelo CQ na auditoria aprovada mais recente (pedido do usuário em 07/10/2026) — migração cq_seriais_dos_itens_instalados
+  const [seriaisCq, setSeriaisCq] = useState<any>(null);
+  const [erroSeriaisCq, setErroSeriaisCq] = useState('');
+  const [historicoAberto, setHistoricoAberto] = useState(false);
   /**
    * A OP é lida do banco toda vez que o modal abre (28/09/2026).
    *
@@ -668,6 +674,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         if (!error) setComprasVinculadas(data || []);
       });
   }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
+
+  useEffect(() => {
+    if (!opl?.id) { setSeriaisCq(null); return; }
+    let vivo = true;
+    supabase.from('cq_auditorias').select('seriais_instalados, data_auditoria, auditor_nome').eq('opl_id', opl.id).eq('resultado', 'Aprovado')
+      .not('seriais_instalados', 'is', null).order('data_auditoria', { ascending: false }).limit(1)
+      .then(({ data, error }) => { if (!vivo) return; setErroSeriaisCq(error ? error.message : ''); if (!error) setSeriaisCq((data || [])[0] || null); });
+    return () => { vivo = false; };
+  }, [opl?.id]);
 
   // A ficha do veículo do catálogo (marca, nome e faixa de anos) — a OP guarda só o código dela.
   // Lida por id, e não pela lista de fichas ativas, para aparecer mesmo se a ficha for desativada.
@@ -840,9 +855,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const Campo = useMemo(() =>
     ({ label, value, full = false, field }: { label: string; value: any; full?: boolean; field?: string }) =>
       value != null && value !== '' && value !== false ? (
-        <div style={{ marginBottom: 8, gridColumn: full ? '1 / -1' : undefined, ...(field ? campoDestaque(field) : {}) }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-          <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
+        <div className={'acn-opl-campo' + (full ? ' cheio' : '')} style={field ? campoDestaque(field) : undefined}>
+          <div className="acn-opl-rot">{label}</div>
+          <div className="acn-opl-val">{String(value)}</div>
         </div>
       ) : null,
   [campoDestaque]);
@@ -854,8 +869,25 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     : (opl.tipo_servico_terceiro ? [opl.tipo_servico_terceiro] : []);
   const obsServTerceiro = opl.obs_servico_terceiro || '';
 
+  // ── Prazos: a lista de datas da OP, com a previsão de entrega em vermelho se já passou e a OP ainda não terminou ──
+  const previsaoEntrega = String(opl.data_prevista_entrega || '').slice(0, 10);
+  const entregaAtrasada = !!previsaoEntrega && previsaoEntrega < hojeISO() && !['Faturado', 'Cancelado'].includes(opl.status_geral);
+  const prazo = (label: string, valor: any, field: string, alerta = false) => {
+    const v = fmtDt(valor);
+    if (!valor || v === '—') return null;
+    return (
+      <div className={'acn-opl-prazo' + (alerta ? ' atrasado' : '')} style={campoDestaque(field)}>
+        <span className="acn-opl-rot">{label}</span><span className="acn-opl-val">{v}{alerta ? ' · atrasada' : ''}</span>
+      </div>
+    );
+  };
+  const mostrarFinanceiro = opl.valor_total != null || opl.valor_mao_de_obra != null || opl.valor_mao_de_obra_serralheria != null;
+  const mostrarFaturamento = !!(opl.cnpj_faturamento || opl.razao_social_faturamento || opl.centro_custo || opl.observacoes_faturamento);
+  const logsVisiveis = historicoAberto ? logs : logs.slice(0, 5);
+  const fatos = [opl.cliente_nome, opl.modelo || opl.veiculo, opl.quantidade ? `${opl.quantidade} ${soEnvio(opl.fluxo_entrega) ? 'un' : 'veíc.'}` : null].filter(Boolean);
+
   return (
-    <div className="modal-overlay">
+    <div className="acn-opl-overlay">
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
@@ -875,429 +907,356 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <ModalDossieOp op={opl} onClose={() => setVerDossie(false)} />
         </Suspense>
       )}
-      <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto', overflowX: 'hidden' }}>
+      <div className="acn-opl" role="dialog" aria-label={`OP ${opl.opl}`}>
 
-        {/* Cabeçalho */}
-        <div style={{ background: '#0f172a', color: '#fff', margin: '-14px -14px 0', padding: '12px 16px',
-          borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-            <div style={{ fontSize: 10, opacity: .65, fontWeight: 700, letterSpacing: .5, textTransform: 'uppercase' }}>
-              {opl.faturamento_empresa || 'ACN'} · {opl.tipo_projeto || 'OP'}
-            </div>
-            {/* Muitos botões condicionais aqui (Alterar nº, Dossiê, Editar OP,
-                Editar lote, Resumo do lote) — sem quebra de linha eles forçavam
-                o cabeçalho a ficar mais largo que o modal, e o modal ganhava
-                barra de rolagem horizontal (achado em 24/09/2026). */}
-            <div style={{ fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', rowGap: 6 }}>
-              OP {opl.opl}
-              {podeTrocarNumero && (
-                <button onClick={trocarNumero}
-                  title="Alterar o número desta OP (só administradores e gerentes)"
-                  style={{ background: '#334155', border: '1px solid #475569', color: '#e2e8f0', borderRadius: 5,
-                    padding: '1px 7px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                  ✏️ Alterar nº
-                </button>
-              )}
+        {/* ── Cabeçalho: quem é a OP, o essencial em uma linha, o status e as ações agrupadas ── */}
+        <header className="acn-opl-cab">
+          <div className="acn-opl-cab-txt">
+            <div className="acn-opl-cab-sup">{opl.faturamento_empresa || 'ACN'} · {opl.tipo_projeto || 'OP'}</div>
+            <div className="acn-opl-cab-tit">
+              <span>OP {opl.opl}</span>
               <OrigemVendaBadge origem={opl.origem_venda} />
-              <button onClick={() => setVerDossie(true)}
-                title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF"
-                style={{ background: '#0f766e', border: 'none', color: '#fff', borderRadius: 5,
-                  padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                📚 Dossiê
-              </button>
-              {podeEditarTudo && (
-                <button onClick={() => setEditando(true)}
-                  title="Editar todos os campos e valores desta OP, inclusive o status (Admin/Gerente)"
-                  style={{ background: '#2563eb', border: 'none', color: '#fff', borderRadius: 5,
-                    padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                  ✏️ Editar OP
-                </button>
-              )}
-              {podeEditarTudo && qtdLote > 1 && (
-                <button onClick={abrirEdicaoLote}
-                  title="Alterar um campo em todas as unidades deste lote"
-                  style={{ background: '#7c3aed', border: 'none', color: '#fff', borderRadius: 5,
-                    padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                  ✏️ Editar lote
-                </button>
-              )}
-              {qtdLote > 1 && (
-                <button onClick={() => setVerResumoLote(true)}
-                  title="Todas as unidades deste lote numa tabela"
-                  style={{ background: '#1d4ed8', border: 'none', color: '#fff', borderRadius: 5,
-                    padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                  📋 Resumo do lote ({qtdLote})
-                </button>
-              )}
+              <Selo status={opl.status_geral || 'Sem status'} />
             </div>
+            {fatos.length > 0 && <div className="acn-opl-cab-fatos">{fatos.join(' · ')}{previsaoEntrega && <span className={entregaAtrasada ? 'acn-txt-erro' : undefined}> · entrega {fmtDt(opl.data_prevista_entrega)}{entregaAtrasada ? ' (atrasada)' : ''}</span>}</div>}
           </div>
-          <span style={{ background: opl.status_geral === 'Faturado' ? '#16a34a' : opl.status_geral === 'Cancelado' ? '#dc2626' : '#334155',
-            color: '#fff', fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 12, letterSpacing: .3 }}>
-            {opl.status_geral || 'Sem status'}
-          </span>
-          <button onClick={fecharEMarcarLido} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
-        </div>
+          <div className="acn-opl-cab-acoes">
+            <Botao variante="primario" icone={mdiBookOpenPageVariantOutline} onClick={() => setVerDossie(true)}
+              title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF">Dossiê</Botao>
+            <MenuAcoes rotulo="Mais ações da OP" itens={[
+              { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
+              { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },
+              { rotulo: `Resumo do lote (${qtdLote})`, icone: mdiFormatListNumbered, onClick: () => setVerResumoLote(true), oculto: qtdLote <= 1 },
+              { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
+            ]} />
+            <button type="button" className="acn-opl-x" onClick={fecharEMarcarLido} aria-label="Fechar" title="Fechar"><Icone path={mdiClose} size={20} /></button>
+          </div>
+        </header>
 
-        <OndeEstaAgoraAuto op={opl} onAbrirDossie={() => setVerDossie(true)} />
+        <div className="acn-opl-corpo">
+        {/* ── Situação: onde está agora, o andamento e o que pede ação (rola junto com o resto; o cabeçalho é que fica fixo) ── */}
+        <div className="acn-opl-situacao">
+          <OndeEstaAgoraAuto op={opl} onAbrirDossie={() => setVerDossie(true)} />
+          {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
 
-        {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
-
-        {/* ── Botão LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) ── */}
-        {aguardaLiberacaoComercial(opl.status_geral) && (
-          <div style={{ margin: '12px 0 0', padding: '12px 16px', background: '#f0fdf4',
-            border: '2px solid #22c55e', borderRadius: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1 }}>
+          {/* LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) */}
+          {aguardaLiberacaoComercial(opl.status_geral) && (
+            <div className="acn-opl-aviso ok">
+              <div className="acn-opl-aviso-txt">
                 {/* "Aprovado pelo CQ" só quando passou pelo CQ: OP de envio não passa (Etapa 5.1, 29/09/2026) */}
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d' }}>✅ {opl.resultado_cq === 'Aprovado' ? 'APROVADO PELO CQ — ' : ''}AGUARDANDO LIBERAÇÃO COMERCIAL</div>
-                <div style={{ fontSize: 10, color: '#166534', marginTop: 2 }}>
-                  Esta OP está pronta. Libere para o Fiscal emitir a Nota Fiscal.
-                </div>
-                {!opl.seriais_equipamentos && (
-                  <div style={{ fontSize: 9, color: '#b45309', marginTop: 4 }}>
-                    ⚠️ Números de série ainda não informados pelo Almoxarifado no kiting.
-                  </div>
-                )}
+                <strong>✅ {opl.resultado_cq === 'Aprovado' ? 'APROVADO PELO CQ — ' : ''}AGUARDANDO LIBERAÇÃO COMERCIAL</strong>
+                <span>Esta OP está pronta. Libere para o Fiscal emitir a Nota Fiscal.</span>
+                {!opl.seriais_equipamentos && <span className="acn-txt-atencao">⚠️ Números de série ainda não informados pelo Almoxarifado no kiting.</span>}
               </div>
-              <button
-                onClick={confirmarLiberarParaFiscal} disabled={liberando}
-                style={{ background: liberando ? '#94a3b8' : '#f59e0b', color: '#fff', border: 'none',
-                  borderRadius: 7, padding: '9px 18px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
-                  whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {liberando ? 'Liberando...' : '🟡 LIBERAR PARA FISCAL'}
-              </button>
+              <Botao variante="primario" onClick={confirmarLiberarParaFiscal} disabled={liberando}>{liberando ? 'Liberando...' : '🟡 LIBERAR PARA FISCAL'}</Botao>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Alerta serviço de terceiro */}
-        {temServTerceiro && (
-          <div style={{ margin: '12px 0 0', padding: '10px 14px', background: '#fffbeb',
-            border: '2px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <span style={{ fontSize: 22, flexShrink: 0 }}>⚠️</span>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#b45309' }}>NECESSITA SERVIÇO DE TERCEIRO</div>
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginTop:5 }}>
-                {tiposServ.map(t => (
-                  <span key={t} style={{ background:'#f59e0b', color:'#fff', fontSize:10,
-                    fontWeight:700, padding:'2px 8px', borderRadius:8 }}>{t}</span>
-                ))}
+          {/* Alerta serviço de terceiro */}
+          {temServTerceiro && (
+            <div className="acn-opl-aviso atencao">
+              <span className="acn-opl-aviso-ico">⚠️</span>
+              <div className="acn-opl-aviso-txt">
+                <strong>NECESSITA SERVIÇO DE TERCEIRO</strong>
+                <span className="acn-opl-chips">{tiposServ.map(t => <span key={t} className="acn-opl-chip">{t}</span>)}</span>
+                {obsServTerceiro && <span>Obs: {obsServTerceiro}</span>}
               </div>
-              {obsServTerceiro && (
-                <div style={{ fontSize: 10, color: '#92400e', marginTop: 4 }}>Obs: {obsServTerceiro}</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Identificação ── */}
-        <Sec title="🔍 Identificação" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Número OP"         value={opl.opl} />
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Origem da venda</div>
-            {podeEditarOrigem(usuario) ? (
-              <select value={opl.origem_venda || ''} onChange={e => trocarOrigem(e.target.value)}
-                style={{ fontSize: 11, fontWeight: 700, padding: '3px 6px', borderRadius: 4,
-                  border: opl.origem_venda ? '1px solid #cbd5e1' : '1.5px dashed #f59e0b',
-                  background: opl.origem_venda ? '#fff' : '#fffbeb' }}>
-                {!opl.origem_venda && <option value="">— informar —</option>}
-                {ORIGENS.map(o => <option key={o.valor} value={o.valor}>{o.emoji} {o.label}</option>)}
-              </select>
-            ) : (
-              <OrigemVendaBadge origem={opl.origem_venda} />
-            )}
-          </div>
-          <Campo label="Empresa"           value={opl.faturamento_empresa} />
-          <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
-          <Campo label="Cliente"           value={opl.cliente_nome} />
-          <Campo label="Qtd. Veículos"     value={opl.quantidade} />
-          <Campo label="NF-e (material)"   value={opl.numero_nf} />
-          {opl.numero_nf_servico && <Campo label="NFS-e (serviço)" value={opl.numero_nf_servico} />}
-          <Campo label="Criado por"        value={opl.criado_por_nome || opl.criado_por} />
-          {/* a coluna é data_criacao; "criado_em" não existe em oples e o campo saía sempre vazio (29/09/2026) */}
-          <Campo label="Cadastrado em"     value={fmtDtH(opl.data_criacao || opl.criado_em)} />
-          {/* Dados comerciais que a criação e a edição pedem e o cartão não mostrava (29/09/2026) */}
-          <Campo label="Cliente final"     value={opl.cliente_final} field="cliente_final" />
-          <Campo label="Vendedor"          value={opl.vendedor} field="vendedor" />
-          <Campo label="Canal de venda"    value={opl.canal_venda} field="canal_venda" />
-          <Campo label="Edital"            value={opl.edital} field="edital" />
-          <Campo label="Nº da proposta"    value={opl.proposta} field="proposta" />
-          {opl.crm_oportunidade_id && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Proposta</div>
-              <button onClick={() => abrirVinculo({ tipo: 'pv', id: opl.crm_oportunidade_id, descricao: opl.opl })}
-                style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', fontWeight: 700, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
-                🔗 Proposta CRM
-              </button>
             </div>
           )}
         </div>
 
-        {/* ── Veículo ── */}
-        <Sec title={soEnvio(opl.fluxo_entrega) ? "📦 Envio" : "🚗 Veículo"} />
-        {/* quem paga o frete só aparece em OP que sai daqui embalada */}
-        {(terminaEmEnvio(opl.fluxo_entrega) || opl.tipo_projeto === TIPO_VENDA_ENVIO) && (
-          <div style={{ marginBottom: 8 }}><SeloFrete o={opl} /></div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Veículo (catálogo)"        value={fichaVeiculo ? textoVeiculo(fichaVeiculo) : null} field="veiculo_id" />
-          <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
-          <Campo label="Chassi"                    value={opl.chassi} field="chassi" />
-          <Campo label="Placa"                     value={opl.placa} field="placa" />
-          <Campo label="Equipamento / Veículo"     value={opl.veiculo} field="veiculo" />
-          <Campo label="Local de instalação"       value={opl.local_instalacao} field="local_instalacao" />
-          <Campo label={soEnvio(opl.fluxo_entrega) ? "Quantidade" : "Qtd. Veículos"} value={opl.quantidade} field="quantidade" />
-          <Campo label="Data Entrada"              value={fmtDt(opl.data_entrada)} field="data_entrada" />
-          <Campo label="Recebimento do Veículo"    value={fmtDt(opl.data_chegada_veiculo)} field="data_chegada_veiculo" />
-          <Campo label="Previsão de Entrega"       value={fmtDt(opl.data_prevista_entrega)} field="data_prevista_entrega" />
-          <Campo label="Prazo Entrega Comercial"   value={fmtDt(opl.prazo_entrega_comercial)} field="prazo_entrega_comercial" />
-          <Campo label="Prazo Entrega Produção"    value={fmtDt(opl.prazo_entrega_producao)} field="prazo_entrega_producao" />
-          <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} field="data_aceite_cliente" />
-          <Campo label="🛡️ Prazo de Garantia"      value={opl.prazo_garantia} field="prazo_garantia" />
-        </div>
-        {/* Rota da entrega: fluxo, destino e frete (cadastrados na criação e na edição) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="🚦 Fluxo de entrega"       value={opl.fluxo_entrega ? fluxoLabel(opl.fluxo_entrega) : null} field="fluxo_entrega" />
-          <Campo label="Cidade / UF de entrega"    value={[opl.destino_cidade, opl.destino_uf].filter(Boolean).join(' / ') || null} field="destino_cidade" />
-          <Campo label="CEP de entrega"            value={opl.destino_cep} field="destino_cep" />
-          <Campo label="🚚 Frete (CIF/FOB)"        value={opl.frete_responsavel} field="frete_responsavel" />
-          <Campo label="Observações do envio"      value={opl.envio_obs} field="envio_obs" full />
-        </div>
+          {/* ═════════ Coluna principal: o que é e o que tem que ser feito ═════════ */}
+          <div className="acn-opl-col">
 
-        {/* ── Financeiro ── */}
-        {(opl.valor_total != null || opl.valor_mao_de_obra != null || opl.valor_mao_de_obra_serralheria != null) && (
-          <>
-            <Sec title="💰 Financeiro" />
-            {currentUser?.ver_valores === false ? (
-              <div style={{ padding:'8px 12px', background:'#f1f5f9', borderRadius:6, fontSize:11, color:'#64748b', marginBottom:8 }}>
-                🔒 Valores financeiros restritos — sem permissão de visualização.
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-                <Campo label="Valor Total"           value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} field="valor_total" />
-                <Campo label="Valor M.O."            value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} field="valor_mao_de_obra" />
-                <Campo label="Valor M.O. Serralheria" value={opl.valor_mao_de_obra_serralheria != null ? fmtR$(opl.valor_mao_de_obra_serralheria) : null} field="valor_mao_de_obra_serralheria" />
-                <Campo label="Faturamento"           value={opl.faturamento_empresa} field="faturamento_empresa" />
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── Faturamento (CNPJ/CPF, razão social e centro de custo — cadastrados na edição) ── */}
-        {(opl.cnpj_faturamento || opl.razao_social_faturamento || opl.centro_custo || opl.observacoes_faturamento) && (
-          <>
-            <Sec title="🧾 Faturamento" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-              <Campo label="CNPJ / CPF de faturamento"  value={opl.cnpj_faturamento} field="cnpj_faturamento" />
-              <Campo label="Razão social de faturamento" value={opl.razao_social_faturamento} field="razao_social_faturamento" />
-              <Campo label="🏷️ Centro de custo"         value={opl.centro_custo} field="centro_custo" />
-              <Campo label="Observações de faturamento" value={opl.observacoes_faturamento} field="observacoes_faturamento" full />
-            </div>
-          </>
-        )}
-
-        {/* ── Compras Vinculadas ── */}
-        {erroCompras && (
-          <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:'7px 10px', fontSize:10, color:'#b91c1c', marginBottom:10 }}>
-            Não foi possível ler as compras vinculadas ({erroCompras}). Isso não quer dizer que não existam.
-          </div>
-        )}
-        {comprasVinculadas.length > 0 && (
-          <>
-            <Sec title="📦 Compras Vinculadas" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-              {comprasVinculadas.map(c => (
-                <button key={c.id} onClick={() => abrirVinculo({ tipo: 'compra', id: c.id, descricao: c.numero_pedido })}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '7px 10px',
-                    cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>
-                    🔗 {c.numero_pedido} — {c.descricao_material}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    {currentUser?.ver_valores !== false && c.valor_compra != null && (
-                      <span style={{ fontSize: 10, color: '#166534', fontWeight: 700 }}>{fmtR$(c.valor_compra)}</span>
+            {/* ── Itens: vendido × BOM × separado, fotos de chegada e seriais ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab"><span>📦 Itens da OP — vendido × BOM × separado no kit</span></header>
+              <div className="acn-opl-card-corpo">
+                {editandoVendido ? (
+                  <div>
+                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} />
+                    <div className="acn-opl-botoes">
+                      <Botao variante="primario" onClick={salvarVendido}>Salvar itens vendidos</Botao>
+                      <Botao onClick={() => setEditandoVendido(null)}>Cancelar</Botao>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Como o carro chegou — tirado na abertura da OP. É o que resolve discussão de avaria no fim do serviço (28/09/2026). */}
+                    {(opl.fotos_veiculo || []).length > 0 && (
+                      <div className="acn-opl-bloco">
+                        <div className="acn-opl-rot">📷 Como o carro chegou ({opl.fotos_veiculo.length})</div>
+                        <FotosVeiculoVer fotos={opl.fotos_veiculo} tamanho={72} />
+                      </div>
                     )}
-                    {(() => {
-                      // Recebida ou descartada não tem mais "chegada" a esperar; nas demais, a previsão vira data (vermelha se já passou) ou "sem previsão"
-                      const encerrada = c.status_compra === 'Recebido' || c.status_compra === 'Descartada';
-                      if (encerrada) return null;
-                      const prev = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : '';
-                      const atrasada = !!prev && prev < hojeISO();
-                      return (
-                        <span title="Previsão de chegada da mercadoria" style={{ fontSize: 9, fontWeight: 700, color: !prev ? '#94a3b8' : atrasada ? '#b91c1c' : '#475569' }}>
-                          {prev ? `Chega ${prev.split('-').reverse().join('/')}${atrasada ? ' (atrasada)' : ''}` : 'sem previsão'}
-                        </span>
-                      );
-                    })()}
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', background: '#e2e8f0', borderRadius: 10, padding: '2px 8px' }}>
-                      {c.status_compra}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+                    <QuadroItensOp opl={opl} />
+                    {!(opl.itens_vendidos || []).length && !(opl.bom_itens || []).length && (
+                      <div className="acn-ajuda">Sem itens vendidos nem BOM registrados.</div>
+                    )}
+                    {podeEditarVendido && (
+                      <div className="acn-opl-botoes">
+                        <Botao pequeno icone={mdiPencilOutline} onClick={() => setEditandoVendido((opl.itens_vendidos || []).length ? opl.itens_vendidos : [])}>
+                          {(opl.itens_vendidos || []).length ? 'Editar itens vendidos' : 'Informar itens vendidos'}
+                        </Botao>
+                      </div>
+                    )}
+                  </>
+                )}
 
-        {/* ── Status por Setor ── */}
-        <Sec title="📊 Status por Setor" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Status Geral"      value={opl.status_geral} field="status_geral" />
-          <Campo label="Status BOM"        value={opl.status_bom} field="status_bom" />
-          <Campo label="Status Almox"      value={opl.status_almox} field="status_almox" />
-        </div>
+                {/* Seriais de Equipamentos (informados pelo Almoxarifado no kiting) */}
+                {opl.seriais_equipamentos && (
+                  <div className="acn-opl-bloco">
+                    <div className="acn-opl-rot">🔢 Seriais dos equipamentos (Almoxarifado)</div>
+                    <div className="acn-opl-texto azul"><Linkify text={opl.seriais_equipamentos} /></div>
+                  </div>
+                )}
 
-        {/* ── Responsáveis ── */}
-        <Sec title="👥 Responsáveis" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Comercial"    value={opl.responsavel_comercial || opl.criado_por_nome} field="responsavel_comercial" />
-          <Campo label="Engenharia"   value={opl.responsavel_engenharia} field="responsavel_engenharia" />
-          <Campo label="Almoxarifado" value={opl.responsavel_almox} field="responsavel_almox" />
-          <Campo label="Produção"     value={opl.responsavel_producao} field="responsavel_producao" />
-          <Campo label="Fiscal"       value={opl.responsavel_fiscal} field="responsavel_fiscal" />
-          <Campo label="Qualidade"    value={opl.responsavel_qualidade} field="responsavel_qualidade" />
-        </div>
+                {/* Seriais dos itens instalados (informados pelo CQ na auditoria aprovada) */}
+                {erroSeriaisCq && <div className="acn-opl-aviso erro">Não foi possível ler os seriais do CQ ({erroSeriaisCq}).</div>}
+                {seriaisCq && Array.isArray(seriaisCq.seriais_instalados) && seriaisCq.seriais_instalados.length > 0 && (
+                  <div className="acn-opl-bloco">
+                    <div className="acn-opl-rot">🔎 Seriais dos itens instalados (CQ · {seriaisCq.auditor_nome || '—'} · {fmtDtH(seriaisCq.data_auditoria)})</div>
+                    <table className="acn-opl-tab">
+                      <thead><tr><th>Item</th><th>Qtd</th><th>Seriais</th></tr></thead>
+                      <tbody>
+                        {seriaisCq.seriais_instalados.map((s: any, k: number) => (
+                          <tr key={k}>
+                            <td>{s.item}</td><td>{s.quantidade}</td>
+                            <td>{s.sem_serial ? <span className="acn-fraco">sem serial — {s.motivo || 'sem motivo'}</span> : (s.seriais || []).join(', ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </section>
 
-        {/* ── Quem trabalhou na adaptação e na serralheria (30/09/2026) ──
-            É o apontamento em que a comissão dos técnicos se apoia; pode ser corrigido daqui até o
-            Fiscal faturar (ver EquipeDaOp.tsx). */}
-        <Sec title="🛠 Quem trabalhou na OP" />
-        <EquipeDaOpResumo opl={opl} currentUser={usuario} />
-
-        {/* ── Vendido × BOM × Separado ── */}
-        <Sec title="📦 Vendido × BOM × Separado no kit" />
-        {editandoVendido ? (
-          <div style={{ marginBottom: 10 }}>
-            <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              <button className="acn-btn" style={{ background: '#2563eb' }} onClick={salvarVendido}>Salvar itens vendidos</button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setEditandoVendido(null)}>Cancelar</button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Como o carro chegou — tirado na abertura da OP. É o que resolve
-                discussão de avaria no fim do serviço (28/09/2026). */}
-            {(opl.fotos_veiculo || []).length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>
-                  📷 Como o carro chegou ({opl.fotos_veiculo.length})
+            {/* ── Compras ligadas a esta OP: material que vai chegar ── */}
+            {erroCompras && <div className="acn-opl-aviso erro">Não foi possível ler as compras vinculadas ({erroCompras}). Isso não quer dizer que não existam.</div>}
+            {comprasVinculadas.length > 0 && (
+              <section className="acn-opl-card">
+                <header className="acn-opl-card-cab"><span>🛒 Compras vinculadas ({comprasVinculadas.length})</span></header>
+                <div className="acn-opl-card-corpo acn-opl-compras">
+                  {comprasVinculadas.map(c => (
+                    <button key={c.id} type="button" className="acn-opl-compra" onClick={() => abrirVinculo({ tipo: 'compra', id: c.id, descricao: c.numero_pedido })}>
+                      <span className="acn-opl-compra-nome">🔗 {c.numero_pedido} — {c.descricao_material}</span>
+                      <span className="acn-opl-compra-meta">
+                        {currentUser?.ver_valores !== false && c.valor_compra != null && <span className="acn-txt-ok">{fmtR$(c.valor_compra)}</span>}
+                        {(() => {
+                          // Recebida ou descartada não tem mais "chegada" a esperar; nas demais, a previsão vira data (vermelha se já passou) ou "sem previsão"
+                          const encerrada = c.status_compra === 'Recebido' || c.status_compra === 'Descartada';
+                          if (encerrada) return null;
+                          const prev = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : '';
+                          const atrasada = !!prev && prev < hojeISO();
+                          return (
+                            <span title="Previsão de chegada da mercadoria" className={!prev ? 'acn-fraco' : atrasada ? 'acn-txt-erro' : undefined}>
+                              {prev ? `Chega ${prev.split('-').reverse().join('/')}${atrasada ? ' (atrasada)' : ''}` : 'sem previsão'}
+                            </span>
+                          );
+                        })()}
+                        <Selo status={c.status_compra} />
+                      </span>
+                    </button>
+                  ))}
                 </div>
-                <FotosVeiculoVer fotos={opl.fotos_veiculo} tamanho={72} />
+              </section>
+            )}
+
+            {/* ── O que fazer e como: serviços, especificações e observações ── */}
+            {(opl.resumo_servicos || opl.especificacoes || opl.observacoes_comercial || opl.observacoes || opl.observacoes_atencao) && (
+              <section className="acn-opl-card">
+                <header className="acn-opl-card-cab"><span>🔧 Serviços, especificações e observações</span></header>
+                <div className="acn-opl-card-corpo">
+                  {opl.observacoes_atencao && (
+                    <div className="acn-opl-bloco"><div className="acn-opl-rot acn-txt-erro">⚠️ Atenção</div><div className="acn-opl-texto vermelho"><Linkify text={opl.observacoes_atencao} /></div></div>
+                  )}
+                  {opl.resumo_servicos && (
+                    <div className="acn-opl-bloco"><div className="acn-opl-rot">🔧 Resumo dos serviços a serem executados</div><div className="acn-opl-texto verde"><Linkify text={opl.resumo_servicos} /></div></div>
+                  )}
+                  {opl.especificacoes && (
+                    <div className="acn-opl-bloco"><div className="acn-opl-rot">📐 Especificações</div><div className="acn-opl-texto"><Linkify text={opl.especificacoes} /></div></div>
+                  )}
+                  {opl.observacoes_comercial && (
+                    <div className="acn-opl-bloco"><div className="acn-opl-rot">Observações comerciais</div><div className="acn-opl-texto"><Linkify text={opl.observacoes_comercial} /></div></div>
+                  )}
+                  {opl.observacoes && (
+                    <div className="acn-opl-bloco"><div className="acn-opl-rot">Observações gerais</div><div className="acn-opl-texto"><Linkify text={opl.observacoes} /></div></div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* ── Documentos anexados ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab"><span>📎 Documentos anexados</span></header>
+              <div className="acn-opl-card-corpo"><AnexosOPSection oplId={opl.id} /></div>
+            </section>
+
+            {/* ── Histórico de movimentações: as 5 últimas à vista, o resto sob demanda ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab">
+                <span>📋 Histórico de movimentações{logs.length ? ` (${logs.length})` : ''}</span>
+                {logs.length > 5 && <Botao pequeno variante="discreto" onClick={() => setHistoricoAberto(v => !v)}>{historicoAberto ? 'Mostrar só as últimas 5' : `Ver todas (${logs.length})`}</Botao>}
+              </header>
+              <div className="acn-opl-card-corpo">
+                {loading ? (
+                  <div className="acn-ajuda acn-centro">Carregando...</div>
+                ) : logs.length === 0 ? (
+                  <div className="acn-ajuda acn-centro">Nenhum registro de movimentação.</div>
+                ) : (
+                  <table className="acn-opl-tab">
+                    <thead><tr><th>Data/Hora</th><th>Setor</th><th>Evento</th><th>Operador</th></tr></thead>
+                    <tbody>
+                      {logsVisiveis.map((l, k) => (
+                        <tr key={l.id || k}>
+                          <td className="acn-opl-nowrap">{fmtDtH(l.data_hora)}</td>
+                          <td>{l.setor || '—'}</td>
+                          <td title={l.evento}>{l.evento || '—'}</td>
+                          <td>{l.usuario_nome ? <span className="acn-opl-chip claro">{l.usuario_nome}</span> : <span className="acn-fraco">—</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
-            )}
-            <QuadroItensOp opl={opl} />
-            {!(opl.itens_vendidos || []).length && !(opl.bom_itens || []).length && (
-              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Sem itens vendidos nem BOM registrados.</div>
-            )}
-            {podeEditarVendido && (
-              <button className="acn-btn" style={{ background: '#fff', color: '#1d4ed8', border: '1px solid #93c5fd', fontSize: 10, marginBottom: 8 }}
-                onClick={() => setEditandoVendido((opl.itens_vendidos || []).length ? opl.itens_vendidos : [])}>
-                ✏️ {(opl.itens_vendidos || []).length ? 'Editar itens vendidos' : 'Informar itens vendidos'}
-              </button>
-            )}
-          </>
-        )}
-
-        {/* ── Seriais de Equipamentos ── */}
-        {opl.seriais_equipamentos && (
-          <>
-            <Sec title="🔢 Seriais dos Equipamentos" />
-            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 6 }}>
-              <div style={{ fontSize: 11, color: '#1e3a8a', whiteSpace: 'pre-wrap', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}><Linkify text={opl.seriais_equipamentos} /></div>
-            </div>
-          </>
-        )}
-
-        {/* ── Resumo dos Serviços ── */}
-        {opl.resumo_servicos && (
-          <>
-            <Sec title="🔧 Resumo dos Serviços a serem executados" />
-            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 6 }}>
-              <div style={{ fontSize: 11, color: '#14532d', whiteSpace: 'pre-wrap' }}><Linkify text={opl.resumo_servicos} /></div>
-            </div>
-          </>
-        )}
-
-        {/* ── Especificações (texto da edição do Comercial que o cartão não mostrava) ── */}
-        {opl.especificacoes && (
-          <>
-            <Sec title="📐 Especificações" />
-            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
-              <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}><Linkify text={opl.especificacoes} /></div>
-            </div>
-          </>
-        )}
-
-        {/* ── Observações ── */}
-        {(opl.observacoes_comercial || opl.observacoes || opl.observacoes_atencao) && (
-          <>
-            <Sec title="📝 Observações" />
-            {opl.observacoes_atencao && (
-              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 3 }}>⚠️ Atenção</div>
-                <div style={{ fontSize: 11, color: '#7f1d1d', whiteSpace: 'pre-wrap' }}><Linkify text={opl.observacoes_atencao} /></div>
-              </div>
-            )}
-            {opl.observacoes_comercial && (
-              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Observações Comerciais</div>
-                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}><Linkify text={opl.observacoes_comercial} /></div>
-              </div>
-            )}
-            {opl.observacoes && (
-              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Observações Gerais</div>
-                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}><Linkify text={opl.observacoes} /></div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── Histórico de Movimentações ── */}
-        <Sec title="📋 Histórico de Movimentações" />
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11 }}>Carregando...</div>
-        ) : logs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11 }}>Nenhum registro de movimentação.</div>
-        ) : (
-          <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-              <thead><tr style={{ background: '#1e293b', position: 'sticky', top: 0 }}>
-                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Data/Hora</th>
-                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Setor</th>
-                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Evento</th>
-                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Operador</th>
-              </tr></thead>
-              <tbody>
-                {logs.map((l, i) => (
-                  <tr key={l.id || i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                    <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', color: '#64748b' }}>{fmtDtH(l.data_hora)}</td>
-                    <td style={{ padding: '4px 8px', color: '#475569' }}>{l.setor || '—'}</td>
-                    <td style={{ padding: '4px 8px', maxWidth: 220, wordBreak:'break-word' }} title={l.evento}>
-                      {l.evento || '—'}
-                    </td>
-                    <td style={{ padding: '4px 8px' }}>
-                      {l.usuario_nome
-                        ? <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>{l.usuario_nome}</span>
-                        : <span style={{ color: '#94a3b8' }}>—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            </section>
           </div>
-        )}
 
-        {/* ── Documentos / Anexos ── */}
-        <Sec title="📎 Documentos Anexados" />
-        <AnexosOPSection oplId={opl.id} />
+          {/* ═════════ Coluna lateral: quem, quando, onde e quanto ═════════ */}
+          <aside className="acn-opl-col lateral">
 
-        <button className="acn-btn" style={{ background: '#94a3b8', width: '100%', marginTop: 14 }} onClick={onClose}>
-          Fechar
-        </button>
+            {/* ── Identificação ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab"><span>🔍 Identificação</span></header>
+              <div className="acn-opl-card-corpo acn-opl-campos">
+                <Campo label="Número OP"         value={opl.opl} />
+                <div className="acn-opl-campo">
+                  <div className="acn-opl-rot">Origem da venda</div>
+                  {podeEditarOrigem(usuario) ? (
+                    <select className={'acn-input acn-opl-sel' + (opl.origem_venda ? '' : ' pendente')} value={opl.origem_venda || ''} onChange={e => trocarOrigem(e.target.value)}>
+                      {!opl.origem_venda && <option value="">— informar —</option>}
+                      {ORIGENS.map(o => <option key={o.valor} value={o.valor}>{o.emoji} {o.label}</option>)}
+                    </select>
+                  ) : (
+                    <OrigemVendaBadge origem={opl.origem_venda} />
+                  )}
+                </div>
+                <Campo label="Empresa"           value={opl.faturamento_empresa} />
+                <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
+                <Campo label="Cliente"           value={opl.cliente_nome} full />
+                <Campo label="Cliente final"     value={opl.cliente_final} field="cliente_final" />
+                <Campo label="Vendedor"          value={opl.vendedor} field="vendedor" />
+                <Campo label="Canal de venda"    value={opl.canal_venda} field="canal_venda" />
+                <Campo label="Edital"            value={opl.edital} field="edital" />
+                <Campo label="Nº da proposta"    value={opl.proposta} field="proposta" />
+                {opl.crm_oportunidade_id && (
+                  <div className="acn-opl-campo">
+                    <div className="acn-opl-rot">Proposta</div>
+                    <button type="button" className="acn-opl-link" onClick={() => abrirVinculo({ tipo: 'pv', id: opl.crm_oportunidade_id, descricao: opl.opl })}>🔗 Proposta CRM</button>
+                  </div>
+                )}
+                <Campo label="NF-e (material)"   value={opl.numero_nf} />
+                {opl.numero_nf_servico && <Campo label="NFS-e (serviço)" value={opl.numero_nf_servico} />}
+                <Campo label="Criado por"        value={opl.criado_por_nome || opl.criado_por} />
+                {/* a coluna é data_criacao; "criado_em" não existe em oples e o campo saía sempre vazio (29/09/2026) */}
+                <Campo label="Cadastrado em"     value={fmtDtH(opl.data_criacao || opl.criado_em)} />
+              </div>
+            </section>
+
+            {/* ── Prazos ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab"><span>📅 Prazos</span></header>
+              <div className="acn-opl-card-corpo acn-opl-prazos">
+                {prazo('Data de entrada', opl.data_entrada, 'data_entrada')}
+                {prazo('Recebimento do veículo', opl.data_chegada_veiculo, 'data_chegada_veiculo')}
+                {prazo('Aceite do cliente', opl.data_aceite_cliente, 'data_aceite_cliente')}
+                {prazo('Prazo entrega produção', opl.prazo_entrega_producao, 'prazo_entrega_producao')}
+                {prazo('Prazo entrega comercial', opl.prazo_entrega_comercial, 'prazo_entrega_comercial')}
+                {prazo('Previsão de entrega', opl.data_prevista_entrega, 'data_prevista_entrega', entregaAtrasada)}
+                {!opl.data_entrada && !opl.data_chegada_veiculo && !opl.data_aceite_cliente && !opl.prazo_entrega_producao && !opl.prazo_entrega_comercial && !opl.data_prevista_entrega && (
+                  <div className="acn-ajuda">Nenhum prazo registrado.</div>
+                )}
+                <Campo label="🛡️ Prazo de Garantia" value={opl.prazo_garantia} field="prazo_garantia" />
+              </div>
+            </section>
+
+            {/* ── Veículo (ou envio) e rota da entrega ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab"><span>{soEnvio(opl.fluxo_entrega) ? '📦 Envio' : '🚗 Veículo e entrega'}</span></header>
+              <div className="acn-opl-card-corpo">
+                {/* quem paga o frete só aparece em OP que sai daqui embalada */}
+                {(terminaEmEnvio(opl.fluxo_entrega) || opl.tipo_projeto === TIPO_VENDA_ENVIO) && (
+                  <div className="acn-opl-bloco"><SeloFrete o={opl} /></div>
+                )}
+                <div className="acn-opl-campos">
+                  <Campo label="Veículo (catálogo)"        value={fichaVeiculo ? textoVeiculo(fichaVeiculo) : null} field="veiculo_id" full />
+                  <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
+                  <Campo label="Chassi"                    value={opl.chassi} field="chassi" />
+                  <Campo label="Placa"                     value={opl.placa} field="placa" />
+                  <Campo label="Equipamento / Veículo"     value={opl.veiculo} field="veiculo" />
+                  <Campo label="Local de instalação"       value={opl.local_instalacao} field="local_instalacao" />
+                  <Campo label={soEnvio(opl.fluxo_entrega) ? "Quantidade" : "Qtd. Veículos"} value={opl.quantidade} field="quantidade" />
+                  {/* Rota da entrega: fluxo, destino e frete (cadastrados na criação e na edição) */}
+                  <Campo label="🚦 Fluxo de entrega"       value={opl.fluxo_entrega ? fluxoLabel(opl.fluxo_entrega) : null} field="fluxo_entrega" />
+                  <Campo label="Cidade / UF de entrega"    value={[opl.destino_cidade, opl.destino_uf].filter(Boolean).join(' / ') || null} field="destino_cidade" />
+                  <Campo label="CEP de entrega"            value={opl.destino_cep} field="destino_cep" />
+                  <Campo label="🚚 Frete (CIF/FOB)"        value={opl.frete_responsavel} field="frete_responsavel" />
+                  <Campo label="Observações do envio"      value={opl.envio_obs} field="envio_obs" full />
+                </div>
+              </div>
+            </section>
+
+            {/* ── Quem cuida: responsáveis, equipe e status por setor ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab"><span>👥 Responsáveis e situação por setor</span></header>
+              <div className="acn-opl-card-corpo">
+                <div className="acn-opl-campos">
+                  <Campo label="Comercial"    value={opl.responsavel_comercial || opl.criado_por_nome} field="responsavel_comercial" />
+                  <Campo label="Engenharia"   value={opl.responsavel_engenharia} field="responsavel_engenharia" />
+                  <Campo label="Almoxarifado" value={opl.responsavel_almox} field="responsavel_almox" />
+                  <Campo label="Produção"     value={opl.responsavel_producao} field="responsavel_producao" />
+                  <Campo label="Fiscal"       value={opl.responsavel_fiscal} field="responsavel_fiscal" />
+                  <Campo label="Qualidade"    value={opl.responsavel_qualidade} field="responsavel_qualidade" />
+                </div>
+                <div className="acn-opl-campos acn-opl-status-setor">
+                  <Campo label="Status geral" value={opl.status_geral} field="status_geral" />
+                  <Campo label="Status BOM"   value={opl.status_bom} field="status_bom" />
+                  <Campo label="Status Almox" value={opl.status_almox} field="status_almox" />
+                </div>
+                {/* Quem trabalhou na adaptação e na serralheria (30/09/2026): é o apontamento em que a comissão dos técnicos se apoia; pode ser corrigido daqui até o Fiscal faturar (ver EquipeDaOp.tsx). */}
+                <div className="acn-opl-bloco"><div className="acn-opl-rot">🛠 Quem trabalhou na OP</div><EquipeDaOpResumo opl={opl} currentUser={usuario} /></div>
+              </div>
+            </section>
+
+            {/* ── Dinheiro: valores e faturamento ── */}
+            {(mostrarFinanceiro || mostrarFaturamento) && (
+              <section className="acn-opl-card">
+                <header className="acn-opl-card-cab"><span>💰 Financeiro e faturamento</span></header>
+                <div className="acn-opl-card-corpo">
+                  {mostrarFinanceiro && (currentUser?.ver_valores === false ? (
+                    <div className="acn-opl-aviso neutro">🔒 Valores financeiros restritos — sem permissão de visualização.</div>
+                  ) : (
+                    <div className="acn-opl-campos">
+                      <Campo label="Valor Total"            value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} field="valor_total" />
+                      <Campo label="Valor M.O."             value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} field="valor_mao_de_obra" />
+                      <Campo label="Valor M.O. Serralheria" value={opl.valor_mao_de_obra_serralheria != null ? fmtR$(opl.valor_mao_de_obra_serralheria) : null} field="valor_mao_de_obra_serralheria" />
+                      <Campo label="Faturamento"            value={opl.faturamento_empresa} field="faturamento_empresa" />
+                    </div>
+                  ))}
+                  {mostrarFaturamento && (
+                    <div className="acn-opl-campos">
+                      <Campo label="CNPJ / CPF de faturamento"   value={opl.cnpj_faturamento} field="cnpj_faturamento" />
+                      <Campo label="Razão social de faturamento" value={opl.razao_social_faturamento} field="razao_social_faturamento" />
+                      <Campo label="🏷️ Centro de custo"          value={opl.centro_custo} field="centro_custo" />
+                      <Campo label="Observações de faturamento"  value={opl.observacoes_faturamento} field="observacoes_faturamento" full />
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   );
