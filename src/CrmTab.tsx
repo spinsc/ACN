@@ -50,6 +50,7 @@ import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { OndeEstaCelula } from './OndeEstaAgora';
+import ResumoLoteOpl from './ResumoLoteOpl';
 import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias, resumoDasOps } from './EtapasOp';
 import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
 import { VeiculoDaOp } from './VeiculoCadastro';
@@ -300,6 +301,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
   // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
   const [lotesExpandidosOpls, setLotesExpandidosOpls] = useState<Record<string,boolean>>({});
+  const [resumoLoteBase, setResumoLoteBase] = useState<string | null>(null);   // lote cujo cartão de resumo está aberto (08/10/2026)
   const [oplEditando, setOplEditando]   = useState<any|null>(null);   // OPL sendo editada
   const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
   const [oplFormEdit, setOplFormEdit]   = useState<any>({});
@@ -3199,10 +3201,21 @@ function ColunaRolavel({ children }: any) {
         // regra do botão individual (só as que aguardam a liberação comercial;
         // ignora as demais).
         const LIBERAVEIS_FISCAL = [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL];
-        const liberarFiscalEmLote = async () => {
-          const alvos = oplsEmAberto.filter((o: any) => oplsSelecionadas.has(o.id) && LIBERAVEIS_FISCAL.includes(o.status_geral));
-          if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está pronta para liberação ao Fiscal.'); return; }
-          if (!await confirmar(`Liberar ${alvos.length} OP(s) selecionada(s) para o Fiscal emitir a NF?`)) return;
+        // Pedido de compra do LOTE inteiro (08/10/2026): um pedido só, ligado à OP "mãe" (a primeira unidade) e com a base do lote em "opl"; a descrição diz quantas unidades e quais são.
+        const pedirCompraDoLote = (base: string, irmaos: any[]) => {
+          const rep = irmaos[0];
+          const nomes = irmaos.map((o: any) => o.opl).sort((a: any, b: any) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }));
+          setModalCompras({ id: rep.crm_oportunidade_id || null,
+            titulo: `Lote ${base} — ${irmaos.length} unidades — ${rep.cliente_nome || rep.modelo || ''}`.replace(/ — $/, ''),
+            orgao: null, _oplText: base, _oplId: rep.id,
+            _oplDescricao: `Lote ${base} (${irmaos.length} unidades: ${nomes.length > 4 ? nomes.slice(0, 2).join(', ') + ' … ' + nomes[nomes.length - 1] : nomes.join(', ')}) — ${rep.cliente_nome || rep.modelo || ''}`.replace(/ — $/, '') });
+        };
+        // 08/10/2026: também serve ao botão do LOTE (idsDoLote = as unidades daquele lote, sem precisar marcar uma por uma); sem ele, vale a seleção por caixinha, como sempre
+        const liberarFiscalEmLote = async (idsDoLote?: Set<string>) => {
+          const escopo = idsDoLote || oplsSelecionadas;
+          const alvos = oplsEmAberto.filter((o: any) => escopo.has(o.id) && LIBERAVEIS_FISCAL.includes(o.status_geral));
+          if (alvos.length === 0) { alert(idsDoLote ? 'Nenhuma unidade deste lote está pronta para liberação ao Fiscal.' : 'Nenhuma das OPs selecionadas está pronta para liberação ao Fiscal.'); return; }
+          if (!await confirmar(idsDoLote ? `Liberar as ${alvos.length} unidade(s) prontas deste lote para o Fiscal emitir a NF?` : `Liberar ${alvos.length} OP(s) selecionada(s) para o Fiscal emitir a NF?`)) return;
           setAplicandoLoteOpls(true);
           const agora = new Date().toISOString();
           // 7.62: o erro de cada OP era ignorado — a barra fechava como se todas tivessem sido liberadas. Agora diz quais não foram (e só registra no histórico as que foram).
@@ -3220,7 +3233,7 @@ function ColunaRolavel({ children }: any) {
             if (errLogLib) semHistoricoLib.push(`${o.opl}: ${errLogLib.message}`);
           }
           setAplicandoLoteOpls(false);
-          setOplsSelecionadas(new Set());
+          if (!idsDoLote) setOplsSelecionadas(new Set());
           fetchOplsEmAberto();
           if (falhasLib.length) mostrarAviso(`Algumas OPs não foram liberadas\n${falhasLib.join('\n')}`, 'erro');
           if (semHistoricoLib.length) mostrarAviso(`As OPs foram liberadas, mas o registro no histórico de algumas não foi gravado\n${semHistoricoLib.join('\n')}`, 'atencao');
@@ -3524,6 +3537,20 @@ function ColunaRolavel({ children }: any) {
                                     onClick={()=>abrirModalLote(irmaos)}>
                                     Lote
                                   </Botao>
+                                  <Botao pequeno icone={mdiClipboardTextOutline} title="Resumo do lote como uma coisa só: etapas, valores e itens vendidos"
+                                    onClick={()=>setResumoLoteBase(base)}>
+                                    Resumo
+                                  </Botao>
+                                  <Botao pequeno icone={mdiPackageVariantClosed} title="Um pedido de compra para o lote inteiro"
+                                    onClick={()=>pedirCompraDoLote(base, irmaos)}>
+                                    Compra
+                                  </Botao>
+                                  {irmaos.some((o:any) => LIBERAVEIS_FISCAL.includes(o.status_geral)) && (
+                                    <Botao pequeno variante="primario" icone={mdiSendOutline} disabled={aplicandoLoteOpls} title="Libera para o Fiscal as unidades do lote que aguardam a liberação comercial"
+                                      onClick={()=>liberarFiscalEmLote(new Set(irmaos.map((o:any) => o.id)))}>
+                                      Fiscal
+                                    </Botao>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -3537,11 +3564,23 @@ function ColunaRolavel({ children }: any) {
               </div>
             )}
 
+            {resumoLoteBase && (() => {
+              const irmaosDoLote = oplsEmAberto.filter((o: any) => (o.opl || '').replace(/\/\d+$/, '') === resumoLoteBase);
+              if (irmaosDoLote.length === 0) return null;
+              const maisParadaLote = irmaosDoLote.map((o: any) => desdeOpls[o.id]).filter(Boolean).sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime())[0];
+              return (
+                <ResumoLoteOpl base={resumoLoteBase} irmaos={irmaosDoLote} desde={maisParadaLote ? textoDias(diasDesde(maisParadaLote.data)) : ''}
+                  onClose={() => setResumoLoteBase(null)}
+                  onCompra={() => { setResumoLoteBase(null); pedirCompraDoLote(resumoLoteBase, irmaosDoLote); }}
+                  onLiberarFiscal={() => liberarFiscalEmLote(new Set(irmaosDoLote.map((o: any) => o.id)))}
+                  onAbrirUnidade={(o: any) => { setResumoLoteBase(null); setOplDoCardAberta(o); }} />
+              );
+            })()}
             {/* ── Barra de ação em lote — seleção livre por checkbox, não precisa ser do mesmo lote/base ── */}
             {oplsSelecionadas.size > 0 && (
               <div className="acn-crm-lote-barra">
                 <strong>{oplsSelecionadas.size} selecionada{oplsSelecionadas.size!==1?'s':''}</strong>
-                <Botao pequeno variante="primario" icone={mdiSendOutline} disabled={aplicandoLoteOpls} onClick={liberarFiscalEmLote}>
+                <Botao pequeno variante="primario" icone={mdiSendOutline} disabled={aplicandoLoteOpls} onClick={() => liberarFiscalEmLote()}>
                   {aplicandoLoteOpls ? 'Aplicando...' : 'Liberar Fiscal em Lote'}
                 </Botao>
                 <Botao pequeno variante="primario" icone={mdiCheckCircleOutline}
