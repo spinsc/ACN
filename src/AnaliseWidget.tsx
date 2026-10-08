@@ -204,12 +204,32 @@ const fmtDTAno = (v: string) => {
   try { return new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return v; }
 };
 
-/** Marca discreta ao lado de "por Fulano · data": só aparece se o parecer foi editado depois de concluído; o mouse em cima diz quem e quando. */
+/** Quem e quando do parecer. Pedido do usuário em 07/10/2026: depois de uma edição, o autor, a data e a hora mostrados são os da EDIÇÃO (e não os da criação da análise).
+ *  `outraPessoa` só é verdadeiro se quem editou não é quem fez a análise — hoje só o autor edita (regra de 07/10/2026), então isso só acontece se a regra mudar; fica pronto. */
+export function autoriaDoParecer(setor: any) {
+  const editada = !!setor?.notas_editado_em;
+  const autor = String(setor?.analisado_por || '');
+  const editor = String(setor?.notas_editado_por || '');
+  return {
+    editada,
+    autor,
+    // mesma pessoa que fez a análise: vale o nome como ele foi gravado na análise (a edição pode ter vindo com outra caixa de letras)
+    quem: (editada && editor && autor && editor.trim().toLowerCase() !== autor.trim().toLowerCase()) ? editor : (autor || editor),
+    quando: editada ? setor.notas_editado_em : setor?.analisado_em,
+    outraPessoa: editada && !!editor && !!autor && editor.trim().toLowerCase() !== autor.trim().toLowerCase(),
+  };
+}
+
+/** Marca discreta ao lado de "por Fulano · data": só aparece se o parecer foi editado depois de concluído; o mouse em cima diz quem e quando.
+ *  Se quem editou NÃO é o autor da análise, acrescenta (bem de leve) de quem foi a análise original. */
 export function MarcaEditada({ setor }: any) {
-  if (!setor?.notas_editado_em) return null;
+  const a = autoriaDoParecer(setor);
+  if (!a.editada) return null;
   return (
-    <span title={`Parecer editado por ${setor.notas_editado_por || '—'} em ${fmtDTAno(setor.notas_editado_em)}`}
-      style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic', cursor:'help' }}>· editada</span>
+    <span title={`Parecer editado por ${a.quem || '—'} em ${fmtDTAno(setor.notas_editado_em)}${a.outraPessoa ? ` · análise feita por ${a.autor}` : ''}`}
+      style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic', cursor:'help' }}>
+      · editada{a.outraPessoa && <span style={{ color:'#cbd5e1' }}> · análise de {a.autor}</span>}
+    </span>
   );
 }
 
@@ -538,11 +558,11 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                     <span style={{ fontSize:10, fontWeight:700, color: s.status==='analisado'?'#166534':'#92400e', flex:1 }}>
                       {SETOR_LABEL[s.setor] || s.setor}
                     </span>
-                    {s.status==='analisado' && s.analisado_por && (
-                      <span style={{ fontSize:8, color:'#166534' }}>✓ {s.analisado_por}</span>
+                    {s.status==='analisado' && autoriaDoParecer(s).quem && (
+                      <span style={{ fontSize:8, color:'#166534' }}>✓ {autoriaDoParecer(s).quem}</span>
                     )}
-                    {s.status==='analisado' && s.analisado_em && (
-                      <span style={{ fontSize:8, color:'#4ade80' }}>{fmtDT(s.analisado_em)}</span>
+                    {s.status==='analisado' && autoriaDoParecer(s).quando && (
+                      <span style={{ fontSize:8, color:'#4ade80' }}>{fmtDT(autoriaDoParecer(s).quando)}</span>
                     )}
                     {s.status==='analisado' && <MarcaEditada setor={s} />}
                   </div>
@@ -595,8 +615,8 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                   <div key={s.id} style={{ fontSize:10, background:'#dcfce7', color:'#166534', borderRadius:6, padding:'6px 10px', border:'1px solid #86efac' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                       <span style={{ fontWeight:700 }}>✅ {SETOR_LABEL[s.setor]||s.setor}</span>
-                      {s.analisado_por && <span style={{ fontSize:9, color:'#15803d' }}>por {s.analisado_por}</span>}
-                      {s.analisado_em && <span style={{ fontSize:9, color:'#22c55e' }}>{fmtDT(s.analisado_em)}</span>}
+                      {autoriaDoParecer(s).quem && <span style={{ fontSize:9, color:'#15803d' }}>por {autoriaDoParecer(s).quem}</span>}
+                      {autoriaDoParecer(s).quando && <span style={{ fontSize:9, color:'#22c55e' }}>{fmtDT(autoriaDoParecer(s).quando)}</span>}
                       <MarcaEditada setor={s} />
                     </div>
                     {/* O parecer e o que interessa ler aqui: fundo branco, corpo de

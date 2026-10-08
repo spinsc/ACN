@@ -4313,7 +4313,7 @@ Lista passada pelo usuário em 07/10/2026, com as dúvidas tiradas na hora e o t
 | 15 | Menção em tarefa/compromisso da agenda | ⬜ | |
 | 16 | Participantes em agendamento/tarefa/compromisso (agenda e calendário deles) | ⬜ | |
 | 17 | CQ: serial dos itens instalados (OP adaptada) | ⬜ | |
-| 18 | Análise: edição mostra data/hora/autor da edição | ⬜ | |
+| 18 | Análise: edição mostra data/hora/autor da edição | ✅ 08/10/2026 | Depois de editado, o parecer da análise mostra o autor, a data e a hora da EDIÇÃO (três lugares: painel da licitação/CRM e a caixa de análises), com a marca discreta "editada"; se quem editou não for quem fez a análise, a marca acrescenta bem de leve "análise de Fulano" (hoje só o autor edita, então isso só aparece se a regra mudar). Testado a regra em 4 casos (sem edição, editada pelo autor com outra caixa de letras, por outra pessoa, sem nome do editor). |
 
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex — **bloqueada** (medido em 02/10/2026)
 

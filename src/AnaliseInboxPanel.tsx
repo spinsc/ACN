@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
-import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise, MarcaEditada, ParecerEditavel } from './AnaliseWidget';
+import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise, MarcaEditada, ParecerEditavel, autoriaDoParecer } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel Inbox de Análises Orçamentárias
@@ -350,7 +350,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                             </span>
                             {concluido && setor.analisado_por && (
                               <span style={{ fontSize:9, color:'#64748b' }}>
-                                por {setor.analisado_por} · {fmtDT(setor.analisado_em)}
+                                por {autoriaDoParecer(setor).quem} · {fmtDT(autoriaDoParecer(setor).quando)}
                               </span>
                             )}
                             {concluido && <MarcaEditada setor={setor} />}
