@@ -177,6 +177,9 @@ const formOpFromOp = (op: any) => ({
   valor_acn:        fmtValorEdit(op?.valor_acn),
 });
 
+// Iniciais do nome ("João da Silva" → "JS") para a bolinha de responsável do card
+const iniciaisDe = (nome: any) => { const p = String(nome || '').trim().split(/\s+/).filter(w => w.length > 2 || /^[A-ZÀ-Ü]/.test(w)); return ((p[0]?.[0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() || '?'; };
+
 // Máscara de formato XXXX.XXXX para número de OP
 function mascaraOp(valor: string): string {
   const num = valor.replace(/\D/g, '').slice(0, 8);
@@ -396,7 +399,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // Aguardando Faturamento) — formato 'YYYY-MM', vazio = todos os meses.
   const [mesFiltroPipeline, setMesFiltroPipeline] = useState('');
   // ── cards colapsados (Set de IDs) ──
-  const [cardsExpandidos, setCardsExpandidos] = useState<Set<string>>(new Set());
   // ── modal Nova OP/OS ──
   const [modalNovaOpOs, setModalNovaOpOs]   = useState<{ crmCard?: any } | null>(null);
   // Números das OPs já ligadas a cada card (id do card -> ['A1234.0926', ...]).
@@ -2248,17 +2250,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const tvend  = totalVendidoOp(op.id);
     const tfat   = totalFaturadoOp(op.id);
     const naoLido = cardsNaoLidos.has(String(op.id));
-    const expandido = cardsExpandidos.has(op.id);
-    const toggleExpand = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setCardsExpandidos(prev => {
-        const next = new Set(prev);
-        next.has(op.id) ? next.delete(op.id) : next.add(op.id);
-        return next;
-      });
-    };
     const isDetech = (op.faturamento_empresa || 'ACN') === 'Detech';
     const abrir = () => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); };
+    // Pedido do usuário em 07/10/2026: o card abre com um clique (no título ou em qualquer ponto fora dos botões) e mostra o essencial no próprio rosto — o "expandir" saiu. Card perdido/desistido segue sem abrir, como o menu já fazia.
+    const podeAbrir = !perdido && !desistiu;
     // OPs que este card já gerou. Não some com o "Lançar OP" porque há card com
     // mais de uma OP de verdade (4 de 53 em 29/09/2026: lotes e vendas
     // desmembradas), mas deixa de oferecer como se fosse a primeira e pede
@@ -2288,6 +2283,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const acoes = [
       { rotulo: 'Atualizar andamento', icone: mdiUpdate, onClick: () => abrirAndamento(op) },
       { rotulo: 'Abrir', icone: mdiFolderOpenOutline, onClick: abrir, oculto: perdido || desistiu },
+      { rotulo: 'Temperatura', icone: mdiThermometer, onClick: () => { setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }, oculto: funil !== 'venda_direta' || perdido || desistiu },
       { rotulo: opsDoCard.length ? 'Lançar outra OP' : 'Lançar OP', icone: mdiClipboardTextOutline, onClick: lancarOp, oculto: !ganho },
       { rotulo: 'Lançar OS', icone: mdiWrenchOutline, onClick: () => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }, oculto: !(ganho && funil === 'venda_direta') },
       { rotulo: 'Nova venda', icone: mdiPlus, onClick: () => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }, oculto: !ganho },
@@ -2305,36 +2301,90 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         draggable
         onDragStart={() => handleDragStart(op.id)}
         onDragEnd={handleDragEnd}
-        className={'acn-kcard acn-crm-card' + (naoLido ? ' nova' : '') + (dragging === op.id ? ' arrastando' : '') + (dragOverItem === op.id && dragging !== op.id ? ' sobre' : '')}
+        className={'acn-kcard acn-crm-card' + (podeAbrir ? ' abrivel' : '') + (naoLido ? ' nova' : '') + (dragging === op.id ? ' arrastando' : '') + (dragOverItem === op.id && dragging !== op.id ? ' sobre' : '')}
         title={naoLido ? 'Este registro tem alteração(ões) que você ainda não visualizou' : undefined}
+        onClick={podeAbrir ? (e => { if ((e.target as HTMLElement).closest('button, a, select, input, textarea, [data-nao-abrir]')) return; abrir(); }) : undefined}
       >
-        {/* ── Título (clique mostra os detalhes) ── */}
-        <h6 onClick={toggleExpand} className="acn-crm-titulo" title={op.titulo}>{op.titulo}</h6>
+        {/* ── Título: clique no título — ou em qualquer ponto do card, fora dos botões — abre o card ── */}
+        <h6 className="acn-crm-titulo" title={op.titulo} role={podeAbrir ? 'button' : undefined} tabIndex={podeAbrir ? 0 : undefined}
+          onKeyDown={podeAbrir ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } }) : undefined}>{op.titulo}</h6>
 
-        {/* ── Linha de apoio sempre visível ── */}
+        {/* ── Linha de apoio: empresa, tipo, temperatura, análise, markup e o menu ── */}
         <div className="acn-kmeta">
           <Tag>{isDetech ? 'DETECH' : 'ACN'}</Tag>
           {op.funil === 'licitacao' && <Tag>Licitação</Tag>}
+          {op.tipo_licitacao === 'ata' && <Tag>Ata</Tag>}
           {op.tipo_negocio && <Tag>{op.tipo_negocio}</Tag>}
-          {op.temperatura && (
+          {op.funil === 'venda_direta' && !perdido && !desistiu && (
+            <button type="button" className="acn-crm-temp-emoji acn-crm-temp-btn" data-nao-abrir
+              title={op.temperatura ? `Temperatura: ${op.temperatura} — clique para mudar` : 'Definir a temperatura do lead'}
+              aria-label={op.temperatura ? `Temperatura: ${op.temperatura}. Mudar` : 'Definir a temperatura'}
+              onClick={e => { e.stopPropagation(); setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }}>
+              {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : op.temperatura === 'frio' ? '🧊' : <Icone path={mdiThermometer} size={13} />}
+            </button>
+          )}
+          {op.funil !== 'venda_direta' && op.temperatura && (
             <span title={`Temperatura: ${op.temperatura}`} className="acn-crm-temp-emoji">
               {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
             </span>
           )}
-          {op.data_sessao && (
-            <span className="acn-num">{fmtData(op.data_sessao)}{op.hora_sessao ? ` · ${String(op.hora_sessao).slice(0,5)}` : ''}</span>
-          )}
+          <AnaliseStatusBadge origemId={op.id} />
           <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
                 max={markupPorOp[op.id].max} discreto
                 bandaCfg={op.tipo_negocio ? bandasMarkup[op.tipo_negocio] : undefined} />
             )}
-            <Botao pequeno variante="discreto" icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={toggleExpand}
-              title={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-label={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-expanded={expandido} />
+            {op.responsavel_nome && (
+              <span className="acn-crm-resp" title={`Responsável: ${op.responsavel_nome}`} aria-label={`Responsável: ${op.responsavel_nome}`}>{iniciaisDe(op.responsavel_nome)}</span>
+            )}
             <MenuAcoes itens={acoes} rotulo="Ações do cartão" />
           </span>
         </div>
+
+        {/* ── Quem é: órgão e edital ── */}
+        {(op.orgao || op.numero_edital) && (
+          <div className="acn-fraco acn-crm-orgao" title={[op.numero_edital, op.orgao].filter(Boolean).join(' · ')}>
+            {op.numero_edital && <span className="acn-forte">{op.numero_edital}</span>}{op.numero_edital && op.orgao ? ' · ' : ''}{op.orgao}
+          </div>
+        )}
+
+        {/* ── Quanto e quando: valor, sessão e quantos dias faltam ── */}
+        <div className="acn-kmeta">
+          <span className="acn-num acn-forte">{fmtMoeda(op.valor_registrado)}</span>
+          <span className="dir-auto acn-crm-dir gap6">
+            {op.data_sessao && <span className="acn-num" title="Data da sessão">{fmtData(op.data_sessao)}{op.hora_sessao ? ` · ${String(op.hora_sessao).slice(0,5)}` : ''}</span>}
+            {dias !== null && !ganho && !perdido && (
+              <Selo familia={dias < 0 ? 'erro' : dias <= 3 ? 'atencao' : 'ok'} ponto={false}>
+                {dias < 0 ? `${Math.abs(dias)} d de atraso` : dias === 0 ? 'Hoje' : `em ${dias} d`}
+              </Selo>
+            )}
+          </span>
+        </div>
+
+        {/* ── Próximo contato e responsável ── */}
+        {op.prox_contato && (
+          <div className="acn-kmeta">
+            {op.prox_contato && (
+              <span className={'acn-crm-prox' + (op.prox_contato === hoje ? ' hoje' : op.prox_contato < hoje ? ' atrasado' : '')}
+                title={`Próximo contato${op.nome_contato ? ' com ' + op.nome_contato : ''}`}>
+                <Icone path={mdiCalendarOutline} size={12} /> {op.prox_contato === hoje ? 'Hoje' : op.prox_contato < hoje ? 'Atrasado · ' + fmtData(op.prox_contato) : fmtData(op.prox_contato)}
+                {op.hora_prox_contato && <> · {String(op.hora_prox_contato).slice(0, 5)}</>}
+                {op.nome_contato && <span className="acn-crm-leve"> · {op.nome_contato}</span>}
+              </span>
+            )}
+          </div>
+        )}
+
+        {chk && !ganho && !perdido && (
+          <div className="acn-kmeta" title="Checklist da etapa">
+            <div className="acn-crm-barra">
+              <div className={chk.done===chk.total ? 'ok' : undefined} style={{ width:`${(chk.done/chk.total)*100}%` }} />
+            </div>
+            <span className="acn-num">{chk.done}/{chk.total}</span>
+          </div>
+        )}
+
         {desistiu && op.motivo_desistencia && (
           <div className="acn-kmeta acn-crm-aviso-warn" title={op.motivo_desistencia}>Desistência: {op.motivo_desistencia}</div>
         )}
@@ -2365,7 +2415,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
         )}
 
-        {/* OP já lançada — quem olha o card vê que não precisa lançar de novo. Regra definida com o usuário em 01/10/2026 (R2): aparece em QUALQUER coluna em que o card tenha OP (antes só em "Vencido"; há cards em Faturado e Enviado em que o selo mostra a situação real da OP) */}
+        {/* OP já lançada — quem olha o card vê que não precisa lançar de novo. Regra definida com o usuário em 01/10/2026 (R2): aparece em QUALQUER coluna em que o card tenha OP */}
         {opsDoCard.length > 0 && (
           <div className="acn-kmeta">
             <Selo familia="ok" title={`OP(s) lançada(s) a partir deste card: ${opsDoCard.join(', ')}`}
@@ -2380,108 +2430,38 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
         )}
 
-        {/* ── Detalhes (visível só quando expandido) ── */}
-        {expandido && (
-        <div className="acn-crm-detalhes">
+        {ganho && op.tipo_licitacao === 'ata' && (
           <div className="acn-kmeta">
-            <Tag>{op.funil === 'licitacao' ? 'Licitação' : 'Venda direta'}</Tag>
-            {op.tipo_licitacao === 'ata' && <Tag>Ata reg. preços</Tag>}
-            <AnaliseStatusBadge origemId={op.id} />
+            <span>Adesões: <strong>{vds.length}</strong></span>
+            <span>Vendido: <strong>{fmtMoeda(tvend)}</strong></span>
+            {podeVerTotais && <span>Faturado: <strong>{fmtMoeda(tfat)}</strong></span>}
+            {op.data_validade_ata && (
+              <span className={diasAte(op.data_validade_ata)! < 30 ? 'acn-crm-aviso-bad' : undefined}>
+                Validade: {fmtData(op.data_validade_ata)}
+              </span>
+            )}
           </div>
-
-          {(op.orgao || op.numero_edital) && (
-            <div className="acn-kmeta">
-              {op.numero_edital && <span className="acn-forte">{op.numero_edital}</span>}
-              {op.orgao}
-            </div>
-          )}
-
-          {op.responsavel_nome && <div className="acn-kmeta">Responsável: {op.responsavel_nome}</div>}
-          {op.funil === 'venda_direta' && (
-            <div className="acn-kmeta">
-              {op.temperatura ? (
-                <Selo familia={op.temperatura === 'quente' ? 'erro' : op.temperatura === 'morno' ? 'marca' : 'info'}>
-                  {op.temperatura === 'quente' ? 'Quente' : op.temperatura === 'morno' ? 'Morno' : 'Frio'}
-                </Selo>
-              ) : <span>Sem temperatura</span>}
-              <Botao pequeno variante="discreto" icone={mdiPencilOutline} title="Editar temperatura" aria-label="Editar temperatura"
-                onClick={e => { e.stopPropagation(); setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }} />
-            </div>
-          )}
-          <div className="acn-kmeta" onClick={e => e.stopPropagation()}>
-            <span className="acn-crm-tipo-rot">Tipo:</span>
-            <select value={op.tipo_negocio || ''} onChange={e => atualizarTipoNegocio(op, e.target.value || null)}
-              title="Tipo de negócio — usado pra escolher a régua de markup certa"
-              className="acn-crm-tipo-sel">
-              <option value="">— não definido —</option>
-              {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          {op.prox_contato && (
-            <div className={'acn-kmeta acn-crm-prox' + (op.prox_contato === hoje ? ' hoje' : op.prox_contato < hoje ? ' atrasado' : '')}>
-              Próximo contato: {op.prox_contato === hoje ? 'hoje' : op.prox_contato < hoje ? 'atrasado ·' : ''} {op.prox_contato}
-              {op.hora_prox_contato && <span>· {op.hora_prox_contato}</span>}
-              {op.nome_contato && <span className="acn-crm-leve">· {op.nome_contato}</span>}
-            </div>
-          )}
-
-          <div className="acn-kmeta">
-            <span className="acn-num acn-forte">{fmtMoeda(op.valor_registrado)}</span>
-            <span className="dir-auto acn-crm-dir gap6">
-              {op.hora_sessao && <span className="acn-num">{String(op.hora_sessao).slice(0,5)}</span>}
-              {dias !== null && !ganho && !perdido && (
-                <Selo familia={dias < 0 ? 'erro' : dias <= 3 ? 'atencao' : 'ok'} ponto={false}>
-                  {dias < 0 ? `${Math.abs(dias)} d de atraso` : dias === 0 ? 'Hoje' : `em ${dias} d`}
-                </Selo>
-              )}
-            </span>
-          </div>
-
-          {chk && !ganho && !perdido && (
-            <div className="acn-kmeta" title="Checklist da etapa">
-              <div className="acn-crm-barra">
-                <div className={chk.done===chk.total ? 'ok' : undefined} style={{ width:`${(chk.done/chk.total)*100}%` }} />
-              </div>
-              <span className="acn-num">{chk.done}/{chk.total}</span>
-            </div>
-          )}
-
-          {ganho && op.tipo_licitacao === 'ata' && (
-            <div className="acn-kmeta">
-              <span>Adesões: <strong>{vds.length}</strong></span>
-              <span>Vendido: <strong>{fmtMoeda(tvend)}</strong></span>
-              {podeVerTotais && <span>Faturado: <strong>{fmtMoeda(tfat)}</strong></span>}
-              {op.data_validade_ata && (
-                <span className={diasAte(op.data_validade_ata)! < 30 ? 'acn-crm-aviso-bad' : undefined}>
-                  Validade: {fmtData(op.data_validade_ata)}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Previsão de entrega de compra */}
-          {ganho && (() => {
-            const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
-            const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
-            const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
-            if (comprado) return (
-              <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
-                onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}>
-                Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-              </Botao></div>
-            );
-            if (pendente) return (
-              <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
-                onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: pendente.id, descricao: pendente.numero_pedido }); }}>
-                Compra em andamento
-              </Botao></div>
-            );
-            return null;
-          })()}
-
-          <div data-acn-rebaixar><CrmAnexosWidget op={op} currentUser={currentUser} /></div>
-        </div>
         )}
+
+        {/* Previsão de entrega de compra */}
+        {ganho && (() => {
+          const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
+          const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
+          const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
+          if (comprado) return (
+            <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
+              onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}>
+              Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+            </Botao></div>
+          );
+          if (pendente) return (
+            <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
+              onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: pendente.id, descricao: pendente.numero_pedido }); }}>
+              Compra em andamento
+            </Botao></div>
+          );
+          return null;
+        })()}
       </div>
     );
   };
@@ -4437,6 +4417,29 @@ function ColunaRolavel({ children }: any) {
                     ))}
                   </select>
                 </div>
+
+                {/* 07/10/2026: o que só existia no "expandir" do card do quadro — tipo de negócio (escolhe a régua de markup), temperatura e os anexos do card */}
+                {(() => {
+                  const opAtual = ops.find((o: any) => o.id === modalAbrir.id) || modalAbrir;
+                  return (
+                    <div style={{ marginBottom:10 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Tipo de negócio <span style={{ fontWeight:600, color:'#94a3b8' }}>· escolhe a régua de markup</span></div>
+                      <select value={opAtual.tipo_negocio || ''} onChange={e => atualizarTipoNegocio(opAtual, e.target.value || null)}
+                        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                        <option value="">— não definido —</option>
+                        {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      {modalAbrir.funil === 'venda_direta' && (
+                        <div style={{ marginTop:6, display:'flex', alignItems:'center', gap:8, fontSize:10 }}>
+                          <span style={{ fontWeight:700, color:'#475569' }}>Temperatura:</span>
+                          <span>{opAtual.temperatura === 'quente' ? '🔥 Quente' : opAtual.temperatura === 'morno' ? '🌤️ Morno' : opAtual.temperatura === 'frio' ? '🧊 Frio' : 'não definida'}</span>
+                          <Botao pequeno variante="discreto" icone={mdiPencilOutline} onClick={() => { setModalEditarTemp(opAtual); setTempEditSel(opAtual.temperatura || ''); }}>Mudar</Botao>
+                        </div>
+                      )}
+                      <div style={{ marginTop:8 }}><CrmAnexosWidget op={modalAbrir} currentUser={currentUser} /></div>
+                    </div>
+                  );
+                })()}
 
                 {isGanho(getEst(formOp.estagio_id)) && (
                   <div style={campoDestaque('empresa_vencedora')}>

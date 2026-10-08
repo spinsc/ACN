@@ -2540,3 +2540,16 @@ body.dark .acn-crm-col-valor { color: #8fd3a5; }
 .acn-kb-lote { border-left: 3px solid var(--acn-brand); }
 .acn-kb-lote-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .acn-kb-lote-os { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-neutral-soft); }
+
+/* ── Comercial · card do quadro que abre com um clique, com o essencial no rosto (07/10/2026) ── */
+.acn-crm-card.abrivel { cursor: pointer; }
+.acn-crm-card.abrivel:hover { border-color: var(--acn-brand); box-shadow: 0 1px 6px rgba(15, 23, 42, .12); }
+.acn-crm-card .acn-crm-titulo { margin: 0; }
+.acn-crm-card.abrivel .acn-crm-titulo:hover { color: var(--acn-brand); text-decoration: underline; }
+button.acn-crm-temp-btn { border: 0; background: none; padding: 0 2px; cursor: pointer; border-radius: 4px; color: var(--acn-muted); }
+button.acn-crm-temp-btn:hover { background: var(--acn-neutral-soft); }
+.acn-crm-orgao { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acn-crm-prox { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; color: var(--acn-info); min-width: 0; }
+.acn-crm-prox.hoje { color: var(--acn-warn); }
+.acn-crm-prox.atrasado { color: var(--acn-bad); }
+.acn-crm-resp { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--acn-info-soft); color: var(--acn-info); font-size: 10px; font-weight: 700; flex-shrink: 0; }

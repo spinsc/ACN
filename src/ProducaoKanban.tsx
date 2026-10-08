@@ -17,6 +17,7 @@ import KanbanColuna from './KanbanColuna';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { temSerralheria } from './FluxoEntrega';
 import { OrigemVendaBadge } from './OrigemVenda';
+import { LinkOpl } from './AcnTabShared';
 import { Botao, Selo, Tag, hojeISO, diaISO } from './Interface';
 import { mdiSwapVertical, mdiMessageTextOutline, mdiAccountGroupOutline, mdiPlay, mdiCheck, mdiTrayArrowDown, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 
@@ -95,7 +96,8 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
     return (
       <div key={o.id} className={'acn-kcard' + (retrabalho ? ' alerta' : emProd ? ' andamento' : '')}>
         <div className="acn-kmeta">
-          <span className="acn-mono acn-forte">{o.opl}</span>
+          {/* 07/10/2026: o número da OP abre o card da OP (como no Comercial, onde o card abre com um clique) */}
+          <LinkOpl opl={o} currentUser={currentUser} />
           <OrigemVendaBadge origem={o.origem_venda} />
           {o.prioridade_dia != null && <Tag title="Prioridade no dia">{o.prioridade_dia}º</Tag>}
           {temSerralheria(o) && <Tag title="Passa pela serralheria">Serralheria</Tag>}
