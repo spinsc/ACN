@@ -18,7 +18,8 @@ import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial } from './
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
-import FormacaoPrecosTab from './FormacaoPrecosTab';
+import FormacaoPrecosTab, { calcItem } from './FormacaoPrecosTab';
+import { estruturaFormacao } from './FormacaoCalculo';
 import { useAlturaDeCards } from './KanbanColuna';
 import { useCelular, useToque, SeletorEtapas, etapaInicial } from './Celular';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
@@ -243,6 +244,16 @@ function CotacoesCrmPanelCrm({ oportunidadeId, currentUser }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
+// Pedido do usuário em 07/10/2026: no kanban, ao lado do nome de cada etapa, o total dos preços formados dos cards daquela coluna. Preço formado do card = total de vendas da formação-alvo dele
+// (a vencedora; sem vencedora, a de maior versão — a mesma que o selo de markup usa). Card sem formação não soma.
+const totalDaFormacao = (c: any): number | null => {
+  try { return estruturaFormacao(c.itens || [], c.parametros_globais || {}, calcItem).geral.totVendas; } catch { return null; }
+};
+// R$ 950 · R$ 120,5 mil · R$ 1,25 mi — cabe no cabeçalho da coluna; o valor exato vai no mouse-sobre
+const fmtCompacto = (v: number) => v >= 1e6 ? 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi'
+  : v >= 1e3 ? 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'
+  : 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+
 export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }: { currentUser: any; autoOpenOpId?: string|null; onAutoOpenConsumed?: () => void }) {
   // ── permissões ──
   const pcrm = currentUser?.permissoes_crm || [];
@@ -493,7 +504,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
     const { data: oplsDosCards, error: errOplsCards } = await supabase
       .from('oples').select('id,opl,status_geral,crm_oportunidade_id,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
-    if (errOplsCards) { carregarMarkupPorProcesso('crm').then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
+    if (errOplsCards) { carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
     const porCard: Record<string, string[]> = {};
     (oplsDosCards || []).forEach((o: any) => {
       const k = String(o.crm_oportunidade_id);
@@ -513,7 +524,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       setOplsInfoPorCard(info);
     }).catch(e => console.error('Selo "onde está" dos cards:', e));
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
-    carregarMarkupPorProcesso('crm').then(setMarkupPorOp);
+    carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp);
     carregarBandasMarkupPorTipo().then(setBandasMarkup);
     if (!silent) setLoading(false);
   }, []);
@@ -2708,6 +2719,15 @@ function ColunaRolavel({ children }: any) {
               <i style={{ background: col.bg }} />
               <span title={col.label}>{col.label}</span>
               <em>{cards.length}</em>
+              {(() => {
+                const comFormacao = cards.filter(o => (markupPorOp[o.id]?.total || 0) > 0);
+                const total = comFormacao.reduce((s, o) => s + (markupPorOp[o.id]?.total || 0), 0);
+                return total > 0 ? (
+                  <span className="acn-num acn-crm-col-valor" title={`Preços formados somados: ${fmtMoeda(total)} (${comFormacao.length} de ${cards.length} cards têm formação de preços)`}>
+                    {fmtCompacto(total)}
+                  </span>
+                ) : null;
+              })()}
               <span className="acn-crm-col-acoes">
                 {col.tipo === 'ganho' && (
                   <Selo familia="neutro" ponto={false}>

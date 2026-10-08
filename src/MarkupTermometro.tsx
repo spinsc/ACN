@@ -160,9 +160,10 @@ export function cotacaoAlvo(cotacoes: any[]): any | null {
 }
 
 // ── Carrega o mapa processoId -> markup médio, para um tipo (crm|licitacao) ──
-export type MarkupProcesso = { pct: number; min: number; max: number };
+// `total` (opcional): valor total do preço formado (total de vendas) da formação-alvo do processo, calculado por quem chama (a conta da formação mora na tela de Formação de Preços); o kanban do Comercial soma por coluna.
+export type MarkupProcesso = { pct: number; min: number; max: number; total?: number | null };
 
-export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Promise<Record<string, MarkupProcesso>> {
+export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao', totalDe?: (cotacao: any) => number | null): Promise<Record<string, MarkupProcesso>> {
   const { data: vinc } = await supabase
     .from('cotacoes_precos_vinculos')
     .select('cotacao_id, processo_id')
@@ -172,7 +173,7 @@ export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Prom
   const cotacaoIds = [...new Set(vinc.map((v: any) => v.cotacao_id))];
   const { data: cotacoes } = await supabase
     .from('cotacoes_precos')
-    .select('id, itens, vencedora, versao')
+    .select('id, itens, vencedora, versao, parametros_globais')
     .in('id', cotacaoIds);
   const cotacaoPorId: Record<string, any> = {};
   (cotacoes || []).forEach((c: any) => { cotacaoPorId[c.id] = c; });
@@ -191,7 +192,7 @@ export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Prom
     const pct = markupPonderadoItens(alvo.itens);
     if (pct === null) return;
     const faixa = faixaMarkupItens(alvo.itens);
-    resultado[processoId] = { pct, min: faixa?.min ?? pct, max: faixa?.max ?? pct };
+    resultado[processoId] = { pct, min: faixa?.min ?? pct, max: faixa?.max ?? pct, ...(totalDe ? { total: totalDe(alvo) } : {}) };
   });
   return resultado;
 }

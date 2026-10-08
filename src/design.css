@@ -2515,3 +2515,7 @@ html body .acn-input.acn-fp-pf-busca { flex: 1 1 260px; min-width: 220px; max-wi
 /* ── Formação aberta · versão final à vista (07/10/2026) ── */
 .acn-fp-sel-atual { flex: 1 1 280px; min-width: 0; max-width: 560px; padding: 6px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); font-weight: 600; color: var(--acn-info); background: var(--acn-info-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acn-fp-sel-atual.vencedora { border-color: var(--acn-warn); }
+
+/* ── Comercial · total de preços formados no cabeçalho da coluna (07/10/2026) ── */
+.acn-crm-col-valor { margin-left: 2px; font-size: 11px; font-weight: 700; color: var(--acn-ok); white-space: nowrap; }
+body.dark .acn-crm-col-valor { color: #8fd3a5; }
