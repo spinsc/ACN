@@ -919,7 +919,7 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
 // Quadro no formulário da licitação (lado esquerdo): valor de cada lote e o
-// unitário do lote (soma dos unitários dos itens) da ÚLTIMA versão da formação
+// unitário do lote (total ÷ soma das quantidades dos itens) da ÚLTIMA versão da formação
 // de preços vinculada. Só leitura; atualiza sozinho quando a formação é salva.
 function QuadroFormacaoLicitacao({ licitacaoId }: any) {
   const [cot, setCot] = useState<any>(null);
@@ -959,7 +959,7 @@ function QuadroFormacaoLicitacao({ licitacaoId }: any) {
         <thead>
           <tr>
             <th className="esq">Lote</th>
-            <th className="dir" title="Soma do unitário de cada item do lote">Valor unitário</th>
+            <th className="dir" title="Total do lote ÷ soma das quantidades dos itens">Valor unitário</th>
             <th className="dir">Valor do lote</th>
           </tr>
         </thead>

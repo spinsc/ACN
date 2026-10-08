@@ -1475,7 +1475,7 @@ function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, 
                   <tr className={'acn-fp-rs-lote' + (lc.nome === loteAtivo ? ' ativo' : '')}>
                     <td className="acn-fp-rs-lote-nome"><Icone path={mdiPackageVariantClosed} size={13} /> {lc.nome}</td>
                     <td className="dir acn-fraco">{lc.itens.length} {lc.itens.length === 1 ? 'item' : 'itens'}</td>
-                    <td className="dir acn-forte" title="Soma do unitário de cada item do lote (1 unidade de cada)">{fmtR(lc.unit.totVendas)}</td>
+                    <td className="dir acn-forte" title={`Total do lote ÷ soma das quantidades dos itens (${lc.qtd})`}>{fmtR(lc.unit.totVendas)}</td>
                     <td className="dir acn-forte acn-txt-info">{fmtR(lc.total.totVendas)}</td>
                     {!isVendedor && <td className={'dir acn-forte ' + tomMargem(lc.total.totMargem)}>{fmtR(lc.total.totMargem)}</td>}
                     {!isVendedor && <td className="dir acn-forte">{fmtPct(lc.total.lucroPct)}</td>}
@@ -1610,7 +1610,7 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
       <div>${escHtmlF(titulo)}${categoria ? ' · ' + escHtmlF(categoria) : ''}${versao ? ' · v' + versao : ''} · ${new Date().toLocaleDateString('pt-BR')}</div>
       <table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${corpo}</tbody></table>
       <p style="margin-top:10px">${extras.join(' &nbsp;·&nbsp; ')}</p>
-      <p style="color:#64748b;font-size:9px">Unitário de item sem subgrupo = total dos produtos ÷ o número do "Dividir por". Unitário do lote = soma dos unitários dos itens; unitário de item com subgrupos = médio (total ÷ quantidade).</p>
+      <p style="color:#64748b;font-size:9px">Unitário de item sem subgrupo = total dos produtos ÷ o número do "Dividir por". Unitário do lote = total do lote ÷ soma das quantidades dos itens; unitário de item com subgrupos = médio (total ÷ quantidade).</p>
       </body></html>`);
     w.document.close();
     setTimeout(() => w.print(), 300);
@@ -2799,7 +2799,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           yCursor += 2;
         });
         if (variosLotes) {
-          linhaPdf(`TOTAL ${lc.nome}: unitário (1 de cada item) ${fmtR(lc.unit.totVendas)} · total ${fmtR(lc.total.totVendas)}${isVendedor ? '' : ` · margem ${fmtR(lc.total.totMargem)} · lucro ${fmtPct(lc.total.lucroPct)}`}`, [30, 58, 95]);
+          linhaPdf(`TOTAL ${lc.nome}: unitário (total ÷ ${lc.qtd} un.) ${fmtR(lc.unit.totVendas)} · total ${fmtR(lc.total.totVendas)}${isVendedor ? '' : ` · margem ${fmtR(lc.total.totMargem)} · lucro ${fmtPct(lc.total.lucroPct)}`}`, [30, 58, 95]);
           yCursor += 3;
         }
       });

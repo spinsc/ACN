@@ -15,8 +15,10 @@
 //    quantidade do item = soma dos subgrupos; total = soma dos subgrupos;
 //    unitário do item = MÉDIO (total ÷ quantidade), que é o preço unitário
 //    que vai na proposta da licitação.
-//  • Lote: total = soma dos itens; unitário = SOMA DOS UNITÁRIOS dos itens
-//    (1 unidade de cada item do lote).
+//  • Lote: total = soma dos itens; unitário = TOTAL DO LOTE ÷ SOMA DAS QUANTIDADES
+//    dos itens (média por unidade). Regra trocada em 07/10/2026, a pedido do
+//    usuário: antes era a soma dos unitários dos itens (1 de cada), que não fechava
+//    com o total quando os itens tinham quantidades diferentes.
 //  • "Multiplicador geral" (Parâmetros Globais) continua à parte: multiplica a
 //    formação inteira no quadro próprio.
 //
@@ -77,7 +79,7 @@ export function somarTotais(lista: Totais[]): Totais {
 
 export type SubgrupoCalc = { nome: string; qtd: number; indices: number[]; unit: Totais; total: Totais };
 export type ItemCalc = { lote: string; nome: string; qtd: number; indices: number[]; subgrupos: SubgrupoCalc[]; unit: Totais; total: Totais };
-export type LoteCalc = { nome: string; itens: ItemCalc[]; unit: Totais; total: Totais };
+export type LoteCalc = { nome: string; itens: ItemCalc[]; qtd: number; unit: Totais; total: Totais };
 export type EstruturaFormacao = { results: any[]; lotes: LoteCalc[]; itens: ItemCalc[]; geral: Totais };
 
 /**
@@ -126,7 +128,9 @@ export function estruturaFormacao(componentes: any[], params: any, calc: (it: an
       todosItens.push(item);
       return item;
     });
-    return { nome: l, itens, unit: somarTotais(itens.map(x => x.unit)), total: somarTotais(itens.map(x => x.total)) };
+    const total = somarTotais(itens.map(x => x.total));
+    const qtd = itens.reduce((s, x) => s + x.qtd, 0) || 1;
+    return { nome: l, itens, qtd, unit: escalar(total, 1 / qtd), total };
   });
 
   return { results, lotes, itens: todosItens, geral: somarTotais(lotes.map(x => x.total)) };
