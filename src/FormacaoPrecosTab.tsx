@@ -1938,6 +1938,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     return `${partes.join(' · ')}${m.status === 'finalizada' ? ' 🔒' : ''}${m.vencedora ? ' 🏆' : ''}`;
   };
 
+  // Pedido do usuário em 07/10/2026: com a formação aberta só a VERSÃO FINAL fica à vista; as demais versões ficam num botão "Versões" (lista, resumo e troca da final). "Versão final" = a
+  // marcada como vencedora; sem vencedora, a de maior número (a mais recente, em caso de empate) — a mesma regra do termômetro de markup (cotacaoAlvo, MarkupTermometro.tsx).
+  // Uma formação = um grupo de versões ligado pela raiz (versao_raiz_id; a v1 é a própria raiz).
+  const raizDe = (m: any) => m?.versao_raiz_id || m?.id;
+  const versaoFinalDe = (lista: any[]) => (lista || []).find((m: any) => m.vencedora)
+    || [...(lista || [])].sort((a: any, b: any) => (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+  const [modalVersoes, setModalVersoes] = useState(false);
+  const [resumoVersao, setResumoVersao]   = useState<any>(null);
+
   const carregarFormacoesVinculo = useCallback(async () => {
     if (!vinculo?.id) return;
     setCarregandoVinculo(true);
@@ -2071,8 +2080,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (editandoId) { autoCarregouRef.current = chave; return; }
     if (!formacoesVinculo.length) return; // ainda carregando, ou nenhuma ainda
     autoCarregouRef.current = chave;
-    carregarModelo(formacoesVinculo[0]);
-    setEditandoId(formacoesVinculo[0].id);
+    // a formação mais recente (formacoesVinculo vem por criado_em desc) e, dentro dela, a versão final
+    const inicial = versaoFinalDe(formacoesVinculo.filter((x: any) => raizDe(x) === raizDe(formacoesVinculo[0]))) || formacoesVinculo[0];
+    carregarModelo(inicial);
+    setEditandoId(inicial.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formacoesVinculo, vinculo?.id]);
 
@@ -3010,6 +3021,32 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     alert('Versão marcada como vencedora!');
   });
 
+  // Torna uma versão (inclusive antiga) a FINAL da formação: marca vencedora nela e desmarca nas outras do grupo — o mesmo gesto do botão "Marcar Vencedora", mas para qualquer versão da lista.
+  // Só versão finalizada pode ser a final (rascunho é trabalho em andamento).
+  const tornarVersaoFinal = umaVez('versao-final', async (m: any) => {
+    if (!m) return;
+    if (m.status !== 'finalizada') { alert('Só uma versão finalizada pode ser a versão final.'); return; }
+    if (!await confirmar(`Tornar a v${m.versao || 1} a versão FINAL desta formação?\n\nÉ ela que passa a valer: abre primeiro, vale para o preço formado do card e para o termômetro de markup. As outras versões continuam guardadas em "Versões".`)) return;
+    const raizId = raizDe(m);
+    const { error: erroDesmarcar } = await supabase.from('cotacoes_precos').update({ vencedora: false }).or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
+    if (erroDesmarcar) { alert('Não foi possível trocar a versão final: ' + erroDesmarcar.message + '\n\nNada foi alterado.'); return; }
+    const { error: erroMarcar } = await supabase.from('cotacoes_precos').update({ vencedora: true }).eq('id', m.id);
+    if (erroMarcar) { alert('A marca da versão final anterior foi retirada, mas a v' + (m.versao || 1) + ' NÃO pôde ser marcada (' + erroMarcar.message + '). Tente de novo.'); await carregarFormacoesVinculo(); return; }
+    // estes UPDATEs também disparam o gatilho de atualizado_em: renova o token da versão aberta, senão o próximo "Salvar" acusaria conflito dela consigo mesma
+    if (editandoId) {
+      const { data: cur } = await supabase.from('cotacoes_precos').select('atualizado_em, atualizado_por, vencedora').eq('id', editandoId).maybeSingle();
+      if (cur) { setTravaAtualizadoEm(cur.atualizado_em); setUltimaAlteracao({ em: cur.atualizado_em, por: cur.atualizado_por }); setVencedoraAtual(!!cur.vencedora); }
+    }
+    const { error: erroLog } = await supabase.from('cotacoes_precos_log').insert([{
+      cotacao_id: m.id, tipo: 'vencedora_marcada',
+      descricao: `Versão ${m.versao || 1} passou a ser a versão final (vencedora) da formação.`,
+      usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+    }]);
+    if (erroLog) console.warn('Falha ao registrar a troca da versão final no histórico:', erroLog.message);
+    await carregarFormacoesVinculo();
+    alert('A v' + (m.versao || 1) + ' agora é a versão final.');
+  });
+
   // Carrega o histórico completo (versões do grupo + log de alterações de
   // todas elas) pra exibir no modal.
   const abrirHistorico = async () => {
@@ -3135,28 +3172,27 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 <span className="acn-ajuda">Carregando formações vinculadas...</span>
               ) : (
                 <>
-                  {formacoesVinculo.length > 0 && (
-                    <span className="acn-fp-sel-rot">
-                      Versões ({formacoesVinculo.length})
-                    </span>
-                  )}
-                  {/* Versões num seletor (antes eram "pílulas" lado a lado, que
-                      com várias versões ocupavam várias linhas). Mesmo
-                      carregamento de antes — ver trocarVersao. */}
                   {formacoesVinculo.length > 0 && (() => {
+                    // Pedido do usuário em 07/10/2026: só a versão final fica à vista; as outras ficam no botão "Versões" (antes: um seletor com todas).
                     const atual = formacoesVinculo.find((m: any) => m.id === editandoId);
-                    return (
-                      <select value={atual ? atual.id : ''} onChange={e => trocarVersao(e.target.value)}
-                        title={atual ? rotuloFormacao(atual) : 'Escolha a versão'}
-                        className={'acn-input acn-fp-sel-campo' + (atual?.vencedora ? ' vencedora' : '')}>
-                        {!atual && (
-                          <option value="">{editandoId ? '— outra formação carregada —' : '— Nova formação (ainda não salva) —'}</option>
-                        )}
-                        {formacoesVinculo.map((m: any) => (
-                          <option key={m.id} value={m.id}>{rotuloFormacao(m)}</option>
-                        ))}
-                      </select>
-                    );
+                    const final = atual ? versaoFinalDe(formacoesVinculo.filter((x: any) => raizDe(x) === raizDe(atual))) : null;
+                    const antiga = !!atual && !!final && final.id !== atual.id;
+                    return (<>
+                      <span className="acn-fp-sel-rot">{antiga ? 'Versão aberta' : 'Versão final'}</span>
+                      <span className={'acn-fp-sel-atual' + (atual?.vencedora ? ' vencedora' : '')} title={atual ? rotuloFormacao(atual) : ''}>
+                        {atual ? rotuloFormacao(atual) : (editandoId ? '— outra formação carregada —' : '— Nova formação (ainda não salva) —')}
+                      </span>
+                      {antiga && (
+                        <Botao pequeno icone={mdiTrophyOutline} onClick={() => trocarVersao(final.id)} title={'Voltar para a versão final: ' + rotuloFormacao(final)}>
+                          Ir para a final (v{final.versao || 1})
+                        </Botao>
+                      )}
+                      {formacoesVinculo.length > 1 && (
+                        <Botao pequeno icone={mdiHistory} onClick={() => setModalVersoes(true)} title="Lista das versões desta formação (e das outras formações deste processo): abrir, ver o resumo e trocar a versão final">
+                          Versões ({formacoesVinculo.length})
+                        </Botao>
+                      )}
+                    </>);
                   })()}
                   {editandoId && formacoesVinculo.some((m: any) => m.id === editandoId) && temPoderDeGerente(currentUser) && (
                     <Botao variante="perigo-sec" pequeno icone={mdiLinkVariantOff} onClick={desvincularFormacao}
@@ -3700,6 +3736,76 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 </div>
               </div>
             </div>
+          )}
+
+          {modalVersoes && (() => {
+            // Lista das versões ligadas a este processo, agrupadas por formação (a mais recente primeiro) e, dentro de cada uma, da maior versão para a menor.
+            const grupos: Record<string, any[]> = {};
+            formacoesVinculo.forEach((m: any) => { (grupos[raizDe(m)] ||= []).push(m); });
+            const ordenados = Object.values(grupos)
+              .map(g => [...g].sort((a: any, b: any) => (b.versao || 1) - (a.versao || 1)))
+              .sort((a, b) => String(b[0]?.criado_em).localeCompare(String(a[0]?.criado_em)));
+            return (
+              <div className="modal-overlay acn-fp-overlay" onClick={e => { if (e.target === e.currentTarget) setModalVersoes(false); }}>
+                <div className="modal-box acn-modal-cadastro acn-fp-jan acn-fp-hist-jan" role="dialog" aria-label="Versões da formação">
+                  <div className="acn-modal-cab">
+                    <span className="modal-title"><Icone path={mdiHistory} size={18} />Versões da formação</span>
+                  </div>
+                  <div className="acn-modal-corpo">
+                    <div className="acn-ajuda">A versão final é a que abre primeiro e vale para o preço formado do card. Para trocar, use "Tornar final" na versão desejada (só versões finalizadas).</div>
+                    {ordenados.map((g: any[]) => {
+                      const final = versaoFinalDe(g);
+                      return (
+                        <div key={raizDe(g[0])} className="acn-fp-pf-tabela">
+                          <table className="acn-tabela acn-densa">
+                            <thead>
+                              <tr>
+                                <th className="esq">Versão</th><th className="esq">Autor</th><th className="esq">Data</th>
+                                <th className="esq">Situação</th><th className="dir">Total de vendas</th><th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {g.map((m: any) => {
+                                const tot = estruturaFormacao(m.itens || [], m.parametros_globais || {}, calcItem).geral.totVendas;
+                                const ehFinal = final?.id === m.id;
+                                return (
+                                  <tr key={m.id} className={m.id === editandoId ? 'acn-fp-hist-atual' : undefined}>
+                                    <td className="acn-forte">v{m.versao || 1}{(m.nome || '').trim() ? ' · ' + m.nome : ''}{m.id === editandoId ? ' (aberta)' : ''}</td>
+                                    <td>{m.criado_por || '—'}</td>
+                                    <td>{m.criado_em ? new Date(m.criado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}</td>
+                                    <td>
+                                      {ehFinal && <Selo familia="atencao" ponto={false}><Icone path={mdiTrophyOutline} size={12} /> Final</Selo>}{' '}
+                                      <Selo familia={m.status === 'finalizada' ? 'ok' : 'neutro'} ponto={false}>{m.status === 'finalizada' ? 'Finalizada' : 'Rascunho'}</Selo>
+                                    </td>
+                                    <td className="dir acn-num">{fmtR(tot)}</td>
+                                    <td className="dir">
+                                      <Botao pequeno icone={mdiEyeOutline} onClick={() => setResumoVersao(m)}>Resumo</Botao>{' '}
+                                      {m.id !== editandoId && <Botao pequeno onClick={() => { setModalVersoes(false); trocarVersao(m.id); }}>Abrir</Botao>}{' '}
+                                      {!ehFinal && m.status === 'finalizada' && <Botao pequeno variante="primario" icone={mdiTrophyOutline} onClick={() => tornarVersaoFinal(m)}>Tornar final</Botao>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="acn-modal-rodape">
+                    <Botao onClick={() => setModalVersoes(false)}>Fechar</Botao>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          {resumoVersao && (
+            <ResumoFormacaoModal
+              estrutura={estruturaFormacao(resumoVersao.itens || [], resumoVersao.parametros_globais || {}, calcItem)} isVendedor={isVendedor}
+              titulo={resumoVersao.nome || rotulo || 'Formação de Preços'} categoria={categoriaDe(resumoVersao) === SEM_CATEGORIA ? '' : categoriaDe(resumoVersao)}
+              versao={resumoVersao.versao || 1} multiplicador={1} plataforma={null}
+              onClose={() => setResumoVersao(null)}
+            />
           )}
         </div>
       )}
