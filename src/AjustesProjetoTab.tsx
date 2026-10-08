@@ -57,7 +57,7 @@ export default function AjustesProjetoTab({ currentUser }) {
 
   const carregarMinhas = async () => {
     let q = supabase.from('demandas_avulsas')
-      .select('id,titulo,setor,status,prioridade,prazo,criado_em,criado_por,criado_por_nome,responsavel_nome,vinculo_descricao')
+      .select('id,titulo,setor,status,prioridade,prazo,criado_em,criado_por,criado_por_nome,responsavel_nome,vinculo_descricao,membros,grupo_id')
       .order('criado_em', { ascending: false }).limit(300);
     const alcance = emailsVisiveis();
     if (filtroUsuario) q = q.eq('criado_por', filtroUsuario);
@@ -65,7 +65,18 @@ export default function AjustesProjetoTab({ currentUser }) {
     const { data, error } = await q;
     if (error) { setErroMinhas('Não foi possível ler as demandas (' + error.message + '). A lista abaixo pode estar desatualizada.'); return; }
     setErroMinhas('');
-    setMinhas(data || []);
+    let lista = data || [];
+    // 08/10/2026: quem foi marcado como ENVOLVIDO numa demanda (de qualquer setor) a vê aqui, mesmo sem ter aberto — como os membros de um card do Trello
+    if (!filtroUsuario && currentUser?.email) {
+      const { data: env, error: erroEnv } = await supabase.from('demandas_avulsas')
+        .select('id,titulo,setor,status,prioridade,prazo,criado_em,criado_por,criado_por_nome,responsavel_nome,vinculo_descricao,membros,grupo_id').contains('membros', [{ email: currentUser.email }])
+        .order('criado_em', { ascending: false }).limit(300);
+      if (erroEnv) { setErroMinhas('Não foi possível ler as demandas em que você é envolvido (' + erroEnv.message + ').'); }
+      const ja = new Set(lista.map((x: any) => x.id));
+      lista = [...lista, ...(env || []).filter((x: any) => !ja.has(x.id)).map((x: any) => ({ ...x, _envolvido: true }))]
+        .sort((a: any, b: any) => String(b.criado_em).localeCompare(String(a.criado_em)));
+    }
+    setMinhas(lista);
   };
 
   useEffect(() => {
@@ -181,7 +192,7 @@ export default function AjustesProjetoTab({ currentUser }) {
         <div className="sec-hdr">
           <span>
             {escopo.modo === 'todas' ? 'Demandas abertas por todos' :
-             escopo.modo === 'setor' ? 'Demandas do meu setor' : 'Demandas que eu abri'}
+             escopo.modo === 'setor' ? 'Demandas do meu setor' : 'Demandas que eu abri ou em que sou envolvido'}
             {' '}({minhasVisiveis.length})
           </span>
           <div className="acn-cab-filtros">
@@ -216,7 +227,12 @@ export default function AjustesProjetoTab({ currentUser }) {
                     <tr key={d.id}>
                       <td className="acn-nowrap">{fmtDt(d.criado_em)}</td>
                       <td>{d.criado_por_nome || '—'}</td>
-                      <td className="acn-texto-longo acn-dg-texto">{d.titulo || '—'}</td>
+                      <td className="acn-texto-longo acn-dg-texto">
+                        {d.titulo || '—'}
+                        {d._envolvido && <> <Selo familia="info" ponto={false} title="Você foi marcado como envolvido nesta demanda">envolvido</Selo></>}
+                        {d.grupo_id && <> <Selo familia="marca" ponto={false} title="Demanda composta: cada setor tem a sua parte (esta linha é a parte deste setor)">composta</Selo></>}
+                        {Array.isArray(d.membros) && d.membros.length > 0 && <span className="acn-fraco" title={'Envolvidos: ' + d.membros.map((m: any) => m.nome || m.email).join(', ')}> 👥 {d.membros.length}</span>}
+                      </td>
                       <td>{d.setor || '—'}</td>
                       <td className="acn-fraco">{d.vinculo_descricao || '—'}</td>
                       <td>{d.responsavel_nome || '—'}</td>

@@ -10,6 +10,8 @@ import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from './PinturaSerralheria';
 import { CamposSolicitacaoCompra, solicitacaoCompraVazia, validarSolicitacaoCompra, enviarSolicitacaoCompra } from './SolicitacaoCompra';
 import { useCentroObrigatorio } from './CentroCustoUso';
+import { ParticipantesPicker, notificarParticipantes } from './Participantes';
+import { MembrosResumo, MembrosDaDemanda, GrupoDaDemanda, DescricoesDosArquivos, DescricaoDoAnexo, chaveArquivo } from './DemandaExtras';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
@@ -458,6 +460,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   // ── Admin: reabrir demanda concluída/cancelada por engano ──
   const ehAdmin = currentUser?.perfil === 'Admin';
+  // quem pode mexer nos envolvidos e nas descrições dos anexos: Admin, quem criou a demanda, o responsável ou um envolvido
+  const meuEmail = String(currentUser?.email || '').trim().toLowerCase();
+  const podeMexerNaDemanda = ehAdmin || (!!meuEmail && String(d.criado_por || '').trim().toLowerCase() === meuEmail)
+    || (!!currentUser?.nome && (currentUser.nome === d.criado_por_nome || currentUser.nome === d.responsavel_nome))
+    || (Array.isArray(d.membros) && d.membros.some((m: any) => String(m?.email || '').trim().toLowerCase() === meuEmail));
   const [mostrarReabrir, setMostrarReabrir] = useState(false);
   const [reabrirForm, setReabrirForm] = useState({ status: 'Pendente', motivo: '' });
   const reabrirDemanda = async () => {
@@ -765,6 +772,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
 
+          {/* ── Demanda composta e envolvidos (08/10/2026) ── */}
+          <GrupoDaDemanda demanda={d} />
+          <MembrosDaDemanda demanda={d} currentUser={currentUser} podeEditar={!ENCERRADA(d.status) && podeMexerNaDemanda}
+            onSaved={() => { reload(); onRefresh(); }} />
+
           {/* ── Centro de custo (setor Compras) ── */}
           {camposSetor.centroCusto && (
             <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'6px 10px',
@@ -1065,7 +1077,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                 {anexos.map(a => (
-                  <div key={a.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:4 }}>
+                  <div key={a.id} style={{ display:'flex', alignItems:'center', flexWrap:'wrap', gap:8, padding:'5px 8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:4 }}>
                     <span style={{ fontSize:14 }}>{a.tipo === 'foto' ? '🖼️' : '📄'}</span>
                     <a href={a.url} target="_blank" rel="noreferrer"
                       style={{ flex:1, fontSize:11, color:'#2563eb', fontWeight:600, wordBreak:'break-all' }}>
@@ -1074,6 +1086,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                     <span style={{ fontSize:9, color:'#9ca3af', flexShrink:0 }}>{a.criado_por}</span>
                     <button onClick={() => excluirAnexo(a.id)}
                       style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12 }}>✕</button>
+                    <DescricaoDoAnexo anexo={a} pode={podeMexerNaDemanda || a.criado_por === currentUser?.nome} onSaved={reload} />
                   </div>
                 ))}
               </div>
@@ -1135,6 +1148,20 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
   const [pintura, setPintura] = useState({ pintura: false, pintura_tipo: '' });
   const [setorAlvo, setSetorAlvo] = useState(setor || setoresDestino?.[0] || '');
+  // 08/10/2026 (pedidos do usuário): (1) vários setores = demanda composta, com uma PARTE por setor; (2) colaboradores envolvidos, como no Trello; (3) descrição de cada anexo.
+  const [setoresAlvo, setSetoresAlvo] = useState<string[]>([setor || setoresDestino?.[0] || '']);
+  const [membros, setMembros] = useState<any[]>([]);
+  const [descAnexos, setDescAnexos] = useState<Record<string, string>>({});
+  const composta = setoresAlvo.length > 1;
+  // Compras é uma solicitação de compra com formulário próprio: não se mistura com outros setores
+  const alternarSetor = (s: string) => {
+    if (s === 'Compras') { setSetoresAlvo(['Compras']); setSetorAlvo('Compras'); return; }
+    const base = setoresAlvo.filter(x => x !== 'Compras');
+    const novo = base.includes(s) ? base.filter(x => x !== s) : [...base, s];
+    if (!novo.length) return;
+    setSetoresAlvo(novo); setSetorAlvo(novo[0]);
+    if (novo.length > 1) { setQtdEtapas(1); setEtapas(prev => prev.slice(0, 1)); }   // demanda composta: cada setor define o seu responsável; sem etapas internas
+  };
   const [qtdEtapas, setQtdEtapas] = useState(1);
   const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
   const [vinculos, setVinculos] = useState<VinculoValue[]>(vinculoInicial ? [vinculoInicial] : []);
@@ -1233,15 +1260,36 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       payload.responsavel_email = etapas[0].responsavel_email || emails[etapas[0].responsavel_nome] || null;
       payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
     }
-    const { data: nova } = await supabase.from('demandas_avulsas').insert([payload]).select('id').single();
-    if (nova?.id && anexos.length) {
+    // 08/10/2026: demanda para vários setores = uma PARTE por setor (linha própria em demandas_avulsas), ligadas pelo mesmo grupo_id; uma só = como sempre
+    const alvos = composta ? setoresAlvo : [setorAlvo];
+    const grupoId = composta ? crypto.randomUUID() : null;
+    const criadas: any[] = []; const falhasSetor: string[] = [];
+    for (const s of alvos) {
+      const cs = camposDoSetor(s);
+      const parte: any = {
+        ...payload, setor: s, grupo_id: grupoId, membros,
+        centro_custo_id: cs.centroCusto ? centroCustoId : null, centro_custo: cs.centroCusto ? nomeCentro(centroCustoId) : null,
+        pintura: cs.pintura ? !!pintura.pintura : false,
+        pintura_tipo: cs.pintura && pintura.pintura ? (pintura.pintura_tipo || '').trim() || null : null,
+      };
+      if (composta) { parte.etapas = []; parte.responsavel_nome = null; parte.responsavel_email = null; parte.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null; }
+      const { data: n, error: erroParte } = await supabase.from('demandas_avulsas').insert([parte]).select('id,setor').single();
+      if (erroParte || !n) falhasSetor.push(s + (erroParte ? ': ' + erroParte.message : '')); else criadas.push(n);
+    }
+    if (!criadas.length) { setSalvando(false); alert('Não foi possível criar a demanda: ' + falhasSetor.join('; ')); return; }
+    if (falhasSetor.length) alert('Estas partes NÃO foram criadas: ' + falhasSetor.join('; ') + '. As demais foram criadas.');
+    const nova = criadas[0];
+    if (anexos.length) {
       const falhas: string[] = [];
       for (const f of anexos) {
-        const url = await uploadAnexo(f, nova.id);
+        const url = await uploadAnexo(f, nova.id);   // sobe uma vez; cada parte aponta para o mesmo arquivo
         if (!url) { falhas.push(f.name); continue; }
-        await supabase.from('demanda_avulsa_anexos').insert([{
-          demanda_id: nova.id, nome: f.name, url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
-        }]);
+        for (const c of criadas) {
+          await supabase.from('demanda_avulsa_anexos').insert([{
+            demanda_id: c.id, nome: f.name, url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
+            descricao: (descAnexos[chaveArquivo(f)] || '').trim() || null,
+          }]);
+        }
       }
       if (falhas.length) alert('A demanda foi criada, mas estes anexos não foram enviados: ' + falhas.join(', '));
     }
@@ -1254,15 +1302,23 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
         contextoId:        String(nova.id),
         contextoDescricao: form.titulo || 'Demanda Avulsa',
         campo:             'descricao',
-        abaDestino:        setorAlvo.toLowerCase(),
+        abaDestino:        String(nova.setor || setorAlvo).toLowerCase(),
       });
+    }
+    // envolvidos: avisa cada um uma vez (a demanda composta tem várias partes, mas o aviso é um só, na primeira)
+    if (membros.length) {
+      const falhasAviso = await notificarParticipantes({
+        novos: membros, autor: currentUser, contexto: 'demanda_avulsa', contextoId: String(nova.id), descricao: form.titulo || 'Demanda',
+        abaDestino: String(nova.setor || setorAlvo).toLowerCase(), trecho: `Você foi adicionado como envolvido na demanda "${form.titulo}"`,
+      });
+      if (falhasAviso.length) alert('A demanda foi criada, mas não consegui avisar: ' + falhasAviso.join('; '));
     }
     // Painel "de despacho" (tem setoresDestino) — avisa o setor destino, mesmo
     // aviso que o sistema antigo ("Enviar Demanda para Setor") já mandava.
     if (setoresDestino && setoresDestino.length > 1) {
       const nomeCriador = currentUser?.nome || currentUser?.email || 'Usuário';
       const ops = vinculos.filter(v => v.tipo === 'op').map(v => String(v.descricao || '').split(' — ')[0]);
-      notificarEvento('demanda_criada_setor', msg.demandaCriada(setorAlvo, ops.join(', '), form.titulo, nomeCriador), setorAlvo);
+      for (const c of criadas) notificarEvento('demanda_criada_setor', msg.demandaCriada(c.setor, ops.join(', '), form.titulo, nomeCriador), c.setor);
     }
     setSalvando(false);
     onSaved();
@@ -1284,19 +1340,26 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           {setoresDestino && setoresDestino.length > 1 && (
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
-                Setor de Destino *
+                Setor(es) de destino * <span style={{ fontWeight:400, textTransform:'none' }}>— escolha um ou vários</span>
               </label>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {setoresDestino.map(s => (
-                  <button key={s} onClick={() => setSetorAlvo(s)}
-                    style={{ padding:'6px 12px', border:`1.5px solid ${setorAlvo===s?'#2563eb':'#d1d5db'}`,
-                      background: setorAlvo===s ? '#dbeafe' : '#fff',
-                      color: setorAlvo===s ? '#1d4ed8' : '#374151',
+                  <button key={s} onClick={() => alternarSetor(s)} aria-pressed={setoresAlvo.includes(s)}
+                    style={{ padding:'6px 12px', border:`1.5px solid ${setoresAlvo.includes(s)?'#2563eb':'#d1d5db'}`,
+                      background: setoresAlvo.includes(s) ? '#dbeafe' : '#fff',
+                      color: setoresAlvo.includes(s) ? '#1d4ed8' : '#374151',
                       borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
                     {s}
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {composta && (
+            <div style={{ border:'1px solid #c7d2fe', background:'#eef2ff', borderRadius:6, padding:'7px 10px', fontSize:11, color:'#3730a3' }}>
+              🧩 <strong>Demanda composta para {setoresAlvo.length} setores ({setoresAlvo.join(', ')}).</strong> Cada setor recebe a SUA parte, com responsável e andamento próprios; quem criou acompanha todas as partes e a demanda só fecha quando todas concluem.
+              {' '}O responsável de cada parte é definido por cada setor.
             </div>
           )}
 
@@ -1351,6 +1414,10 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
             </div>
           </div>
 
+          {/* Colaboradores envolvidos (como os membros de um card do Trello): aparecem na demanda, são avisados e a veem em "Minhas solicitações" */}
+          <ParticipantesPicker value={membros} onChange={setMembros} donoEmail={currentUser?.email}
+            rotulo="Colaboradores envolvidos (opcional — são avisados e veem a demanda)" />
+
           {/* Vínculo opcional a um processo já em andamento */}
           <div>
             <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
@@ -1365,10 +1432,11 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
               Anexos (opcional)
             </label>
             <EscolherAnexos arquivos={anexos} onChange={setAnexos} />
+            <DescricoesDosArquivos arquivos={anexos} descricoes={descAnexos} onChange={setDescAnexos} />
           </div>
 
           {/* Seletor de quantidade de etapas */}
-          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:12 }}>
+          <div style={{ display: composta ? 'none' : undefined, background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:12 }}>
             <label style={{ fontSize:9, fontWeight:700, color:'#166534', display:'block', marginBottom:8, textTransform:'uppercase' }}>
               Quantidade de Etapas
             </label>
@@ -1393,8 +1461,8 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                     ETAPA {i + 1} de {qtdEtapas}
                   </div>
                 )}
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-                  <div>
+                <div style={{ display:'grid', gridTemplateColumns: composta ? '1fr' : '1fr 1fr', gap:8, marginBottom:8 }}>
+                  <div style={{ display: composta ? 'none' : undefined }}>
                     <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
                       Responsável{qtdEtapas > 1 ? ' *' : ''}
                     </label>
@@ -1441,7 +1509,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
           <button onClick={salvar} disabled={salvando}
             style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? 'Salvando...' : setorAlvo === 'Compras' ? 'Enviar para Compras' : `+ Criar${qtdEtapas > 1 ? ` (${qtdEtapas} etapas)` : ''}`}
+            {salvando ? 'Salvando...' : setorAlvo === 'Compras' ? 'Enviar para Compras' : composta ? `+ Criar para ${setoresAlvo.length} setores` : `+ Criar${qtdEtapas > 1 ? ` (${qtdEtapas} etapas)` : ''}`}
           </button>
         </div>
       </div>
@@ -1452,7 +1520,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DA LISTA
 // ─────────────────────────────────────────────────────────────────────────────
-function DemandaCard({ d, onClick }) {
+function DemandaCard({ d, onClick, grupo }: any) {
   const alerta = alertClass(d.prazo, d.status);
   const diasV = diasParaVencer(d.prazo);
   const corBorda = alerta === 'vencida' ? '#dc2626' : alerta === 'urgente' ? '#d97706' : STATUS_COR[d.status] || '#e2e8f0';
@@ -1495,6 +1563,12 @@ function DemandaCard({ d, onClick }) {
                 {vinculosDaDemanda(d).length > 1 && ` +${vinculosDaDemanda(d).length - 1}`}
               </span>
             )}
+            {grupo && grupo.total > 1 && (
+              <span title="Demanda composta: uma parte por setor" style={{ background:'#eef2ff', color:'#3730a3', border:'1px solid #c7d2fe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+                🧩 {grupo.concluidas}/{grupo.total} setores
+              </span>
+            )}
+            <MembrosResumo d={d} />
             {(d.itens || []).length > 0 && (
               <span style={{ background:'#f5f3ff', color:'#6d28d9', border:'1px solid #ddd6fe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
                 📦 {d.itens.length} ite{d.itens.length > 1 ? 'ns' : 'm'}
@@ -1551,6 +1625,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
   const [modalNova, setModalNova] = useState(false);
   const [vinculoParaNova, setVinculoParaNova] = useState<VinculoValue | null>(null);
   const [selected, setSelected] = useState<any | null>(null);
+  const [grupos, setGrupos] = useState<Record<string, { total: number; concluidas: number }>>({});   // demanda composta: quantas partes já concluíram
 
   // Abre "Nova Demanda" já com um vínculo pronto quando disparado de fora.
   useEffect(() => {
@@ -1567,6 +1642,13 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
       .select('*').eq('setor', setor)
       .order('criado_em', { ascending: false });
     setDemandas(data || []);
+    const gids = [...new Set((data || []).map((x: any) => x.grupo_id).filter(Boolean))];
+    if (gids.length) {
+      const { data: partes } = await supabase.from('demandas_avulsas').select('grupo_id,status').in('grupo_id', gids);
+      const m: Record<string, { total: number; concluidas: number }> = {};
+      (partes || []).filter((x: any) => x.status !== 'Cancelada').forEach((x: any) => { const g = (m[x.grupo_id] ||= { total: 0, concluidas: 0 }); g.total++; if (x.status === 'Concluída') g.concluidas++; });
+      setGrupos(m);
+    } else setGrupos({});
     if (!silent) setLoading(false);
   }, [setor]);
 
@@ -1693,7 +1775,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
           </div>
         ) : (
           lista.map(d => (
-            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} />
+            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} grupo={d.grupo_id ? grupos[d.grupo_id] : undefined} />
           ))
         )}
       </div>
