@@ -13,6 +13,7 @@
 //      "com pendência".
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
 import { SelectBusca } from './Interface';
@@ -313,7 +314,7 @@ export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; 
             <input value={l.descricao || ''} placeholder="Descrição" aria-label="Descrição na BOM"
               onChange={e => set(i, { descricao: e.target.value })}
               style={{ width: 150, padding: '5px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10 }} />
-            <button type="button" aria-label="Remover linha" title="Remover" onClick={() => onChange(lista.length > 1 ? lista.filter((_, j) => j !== i) : [linhaBomVazia()])}
+            <button type="button" aria-label="Remover linha" title="Remover" onClick={async () => { if (!await confirmarRemocao('esta linha da lista')) return; onChange(lista.length > 1 ? lista.filter((_, j) => j !== i) : [linhaBomVazia()]); }}
               style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 13 }}>✕</button>
           </div>
         ))}

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import { EXT_PLANILHAS } from './FormatosArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
@@ -2090,7 +2091,7 @@ OK = ACN   |   Cancelar = DETECH`;
                         onChange={()=>setForm(f=>({...f,acessorios:f.acessorios.map((x,j)=>j===i?{...x,presente:!x.presente}:x)}))} />
                       {a.descricao}
                       <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover acessório"
-                        onClick={()=>setForm(f=>({...f,acessorios:f.acessorios.filter((_,j)=>j!==i)}))} />
+                        onClick={async ()=>{ if (!await confirmarRemocao('o acessório "' + a.descricao + '"')) return; setForm(f=>({...f,acessorios:f.acessorios.filter((_,j)=>j!==i)})); }} />
                     </label>
                   ))}
                 </div>
@@ -2559,7 +2560,7 @@ OK = ACN   |   Cancelar = DETECH`;
                           </td>
                           <td>
                             <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item"
-                              onClick={()=>setLocalItens(p=>p.filter((_,i)=>i!==idx))} />
+                              onClick={async ()=>{ if (!await confirmarRemocao('este item')) return; setLocalItens(p=>p.filter((_,i)=>i!==idx)); }} />
                           </td>
                         </tr>
                       ))}
@@ -2736,7 +2737,7 @@ OK = ACN   |   Cancelar = DETECH`;
                               {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
                             </td>
                             <td>
-                              <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item" onClick={()=>setOrcProdItens(p=>p.filter((_,i)=>i!==idx))} />
+                              <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item" onClick={async ()=>{ if (!await confirmarRemocao('este item do orçamento')) return; setOrcProdItens(p=>p.filter((_,i)=>i!==idx)); }} />
                             </td>
                           </tr>
                         ))}

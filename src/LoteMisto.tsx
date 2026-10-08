@@ -16,6 +16,7 @@
 // personalizado, um grupo por carro).
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
+import { confirmarRemocao } from './Feedback';
 import { itensPreenchidos } from './DemandaItens';
 import { ItensVendidosEditor } from './OpItens';
 
@@ -92,7 +93,7 @@ export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false
                   onChange={e => set(i, 'valor', e.target.value)} style={{ width: 90, fontSize: fs }} />
               </label>
               {grupos.length > 1 && (
-                <button type="button" onClick={() => onChange(grupos.filter((_, j) => j !== i))} title={`Remover grupo ${LETRA(i)}`}
+                <button type="button" onClick={async () => { if (!await confirmarRemocao('o grupo ' + LETRA(i) + ' do lote')) return; onChange(grupos.filter((_, j) => j !== i)); }} title={`Remover grupo ${LETRA(i)}`}
                   style={{ background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 4, fontSize: fs - 1, padding: '1px 6px', cursor: 'pointer' }}>
                   🗑
                 </button>

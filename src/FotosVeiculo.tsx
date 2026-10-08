@@ -14,6 +14,7 @@
 // criar a OP primeiro e voltar depois para anexar (que é o que ninguém faz).
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 
 const BUCKET = 'acn-media';
@@ -73,7 +74,7 @@ export default function FotosVeiculo({ valor = [], onChange, currentUser, pasta 
     if (novas.length) onChange([...fotos, ...novas]);
   };
 
-  const remover = (i) => onChange(fotos.filter((_, j) => j !== i));
+  const remover = async (i) => { if (!await confirmarRemocao('esta foto')) return; onChange(fotos.filter((_, j) => j !== i)); };
 
   return (
     <div style={{ border: '1px solid #e2e8f0', background: '#f8fafc', borderRadius: 6,

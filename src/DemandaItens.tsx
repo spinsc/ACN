@@ -13,6 +13,7 @@
 // onde as telas antigas procuram.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
@@ -151,7 +152,12 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
       set(i, { nome: s.nome, item_id: s.id, produto_id: null, produto_codigo: s.codigo || null, estrutura: [] });
     }
   };
-  const remover = (i: number) => onChange(itens.length > 1 ? itens.filter((_, j) => j !== i) : [itemVazio()]);
+  // 07/10/2026: pergunta antes de tirar uma linha que já foi preenchida (linha em branco sai direto)
+  const remover = async (i: number) => {
+    const vazia = JSON.stringify({ ...itens[i], id: undefined, _id: undefined }) === JSON.stringify({ ...itemVazio(), id: undefined, _id: undefined });
+    if (!await confirmarRemocao('este item da lista', vazia)) return;
+    onChange(itens.length > 1 ? itens.filter((_, j) => j !== i) : [itemVazio()]);
+  };
   return (
     <div>
       <label style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{titulo}</label>
@@ -365,7 +371,7 @@ export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[
             <span key={v.tipo + v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
               border: '1px solid #93c5fd', background: '#eff6ff', borderRadius: 12, fontSize: 10 }}>
               <strong style={{ color: '#1d4ed8' }}>{TIPO_LABEL[v.tipo] || v.tipo}</strong> {v.descricao}
-              <button type="button" onClick={() => onChange(vinculos.filter((_, j) => j !== i))} aria-label={`Remover vínculo ${v.descricao}`}
+              <button type="button" onClick={async () => { if (!await confirmarRemocao('o vínculo "' + v.descricao + '"')) return; onChange(vinculos.filter((_, j) => j !== i)); }} aria-label={`Remover vínculo ${v.descricao}`}
                 style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11, padding: 0 }}>✕</button>
             </span>
           ))}

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
@@ -1602,6 +1603,7 @@ function PainelNotificacoes() {
     setNovoResp({ perfil: '', usuario_id: '' }); carregarResponsaveis();
   };
   const removerResponsavel = async (id: string) => {
+    if (!await confirmarRemocao('este responsável da lista de avisos')) return;
     await supabase.from('notificacoes_responsaveis').delete().eq('id', id);
     carregarResponsaveis();
   };

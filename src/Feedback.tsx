@@ -107,6 +107,12 @@ export function confirmar(mensagem: any): Promise<boolean> {
     avisar();
   });
 }
+/** Pergunta antes de remover algo que a pessoa preencheu numa lista de formulário (linha de item, telefone, acessório, foto escolhida, vínculo...).
+ *  Pedido do usuário em 07/10/2026: toda exclusão do sistema pede confirmação. `vazio` = a linha ainda não tem nada preenchido: sai sem perguntar (não há o que perder). */
+export async function confirmarRemocao(oQue: string, vazio = false): Promise<boolean> {
+  if (vazio) return true;
+  return confirmar('Remover ' + oQue + '?');
+}
 export function pedirTexto(mensagem: any, padrao?: any): Promise<string | null> {
   return new Promise(resolve => {
     pedidos = [...pedidos, { id: ++seq, tipo: 'texto', texto: String(mensagem ?? ''), padrao: padrao == null ? '' : String(padrao), perigo: false, resolver: resolve, ...guardarFoco() }];

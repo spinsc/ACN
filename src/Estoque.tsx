@@ -20,6 +20,7 @@
 // saldo caiu para 8 → pede 42. Evita pedir de novo na semana seguinte.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
@@ -1531,7 +1532,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
                   <input type="number" min={0} step="any" style={inp} value={l.quantidade}
                     onChange={e => set(i, { quantidade: e.target.value })} placeholder="Qtd" />
                 </div>
-                <button onClick={() => setLinhas(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [linhaRetiradaVazia()])}
+                <button onClick={async () => { if (!await confirmarRemocao('esta linha da retirada')) return; setLinhas(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [linhaRetiradaVazia()]); }}
                   title="Remover linha"
                   style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', fontSize: 11 }}>✕</button>
               </div>

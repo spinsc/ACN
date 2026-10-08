@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
@@ -1066,7 +1067,7 @@ Embalar e enviar assim mesmo?`)) return;
                         <input className="acn-input" placeholder="Serial ACN" value={x.serial}
                           onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'serial', e.target.value)} />
                         <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover linha" aria-label="Remover linha"
-                          onClick={() => setEmbForm(f => ({ ...f, itens: f.itens.length > 1 ? f.itens.filter((_, j) => j !== i) : [{ produto:'', serial:'' }] }))} />
+                          onClick={async () => { if (!await confirmarRemocao('esta linha do volume', !(x.produto || x.serial))) return; setEmbForm(f => ({ ...f, itens: f.itens.length > 1 ? f.itens.filter((_, j) => j !== i) : [{ produto:'', serial:'' }] })); }} />
                       </div>
                     ))}
                   </div>

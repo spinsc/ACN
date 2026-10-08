@@ -22,6 +22,7 @@
 //     Almoxarifado dão a posição (e recebem uma menção).
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { horasUteis } from './utils/horasUteis';
 import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
@@ -494,7 +495,7 @@ export function EscolherAnexos({ arquivos, onChange }: { arquivos: File[]; onCha
             <div key={i} className="acn-flx-arquivo">
               <span className="acn-flx-arquivo-nome">📄 {f.name}</span>
               <span className="acn-ajuda">{(f.size / 1024).toFixed(0)} KB</span>
-              <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => onChange(arquivos.filter((_, j) => j !== i))} aria-label={`Remover ${f.name}`} />
+              <Botao pequeno variante="discreto" icone={mdiClose} onClick={async () => { if (!await confirmarRemocao('o arquivo "' + f.name + '"')) return; onChange(arquivos.filter((_, j) => j !== i)); }} aria-label={`Remover ${f.name}`} />
             </div>
           ))}
         </div>

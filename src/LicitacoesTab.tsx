@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ModalSolicitarAnalise, AnaliseStatusPanel } from './AnaliseWidget';
@@ -468,7 +469,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
               <option>Celular</option><option>Fixo</option><option>WhatsApp</option>
             </select>
             {(form.telefones||[]).length > 1 && (
-              <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover telefone" aria-label="Remover telefone" onClick={()=>removeTel(i)} />
+              <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover telefone" aria-label="Remover telefone" onClick={async ()=>{ if (!await confirmarRemocao('este telefone')) return; removeTel(i); }} />
             )}
           </div>
         ))}

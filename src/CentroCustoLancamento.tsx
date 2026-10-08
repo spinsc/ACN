@@ -14,6 +14,7 @@
 //  • a sobra de centavos do rateio vai para a parte de MAIOR percentual (a primeira, se empatar), para a soma fechar exata.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -259,7 +260,7 @@ export function ModalLancarDespesa({ centro, currentUser, onClose, onSalvo }: an
                     <input className="acn-input acn-cc-pct" inputMode="decimal" value={p.pct} onChange={e => setParte(i, 'pct', e.target.value)} aria-label={`Percentual da parte ${i + 1}`} />
                     <span className="acn-fraco">%</span>
                     <span className="acn-cc-parte-valor acn-nowrap">{previa ? reais(previa[i].valor) : ''}</span>
-                    <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Remover a parte ${i + 1}`} title="Remover" disabled={partes.length <= 2} onClick={() => setPartes(ps => ps.filter((_, j) => j !== i))} />
+                    <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Remover a parte ${i + 1}`} title="Remover" disabled={partes.length <= 2} onClick={async () => { if (!await confirmarRemocao('a parte ' + (i + 1) + ' do rateio')) return; setPartes(ps => ps.filter((_, j) => j !== i)); }} />
                   </div>
                 ))}
                 <div className="acn-acoes-linha quebra">

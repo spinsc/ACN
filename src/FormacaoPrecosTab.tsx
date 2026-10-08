@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
@@ -2181,7 +2182,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     });
   };
 
-  const remItem  = (id) => {
+  const remItem  = async (id) => {
+    // 07/10/2026 (pedido do usuário): tirar um item da formação também pergunta — mesmo com ela ainda em montagem. Linha em branco (sem produto e sem custo) sai direto.
+    const aRemover = itens.find(x => x._id === id);
+    const emBranco = !!aRemover && !String(aRemover.produto || '').trim() && !Number(aRemover.custo_unit);
+    if (!await confirmarRemocao('o item "' + (aRemover?.produto || 'sem nome') + '" desta formação', emBranco)) return;
     if (statusCotacao === 'finalizada') {
       const item = itens.find(x => x._id === id);
       if (item) registrarLog('item_removido', `[${loteDe(item)} › ${grupoDe(item)}] Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);

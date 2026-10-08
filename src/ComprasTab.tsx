@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas, resolverMencoesDeTodos } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
@@ -134,7 +135,7 @@ function ComposicaoCotacao({ form, setForm }: any) {
             <input className="acn-input acn-cmp-comp-sval" value={s.valor} placeholder="Valor" inputMode="decimal"
               onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, valor: e.target.value } : x))} aria-label="Valor do serviço" />
             <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover serviço"
-              onClick={()=>set('servicos', servicos.filter((_: any, j: number) => j !== i))} />
+              onClick={async ()=>{ if (!await confirmarRemocao('este serviço')) return; set('servicos', servicos.filter((_: any, j: number) => j !== i)); }} />
           </div>
         ))}
         <Botao pequeno icone={mdiPlus} onClick={()=>set('servicos', [...servicos, { descricao:'', valor:'' }])}>Serviço</Botao>

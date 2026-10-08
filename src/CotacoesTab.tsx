@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -1143,7 +1144,7 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
     setResultados([]);
   };
 
-  const removeItem = (id) => setSelecionados(prev => prev.filter(s => s.produto.id !== id));
+  const removeItem = async (id) => { if (!await confirmarRemocao('este produto da cotação')) return; setSelecionados(prev => prev.filter(s => s.produto.id !== id)); };
   const setQt = (id, qt) =>
     setSelecionados(prev => prev.map(s => s.produto.id === id ? { ...s, qt: Math.max(1, Number(qt)||1) } : s));
 

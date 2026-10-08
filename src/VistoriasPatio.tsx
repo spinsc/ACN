@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
@@ -530,7 +531,7 @@ export default function VistoriasPatio({ currentUser }) {
                 {fotos.map((f,i) => (
                   <div key={i} className="acn-vis-miniatura">
                     <img src={URL.createObjectURL(f)} alt="foto" className="acn-vis-mini" />
-                    <button type="button" className="acn-vis-x" title="Tirar esta foto" onClick={()=>setFotos(p=>p.filter((_,j)=>j!==i))}>x</button>
+                    <button type="button" className="acn-vis-x" title="Tirar esta foto" onClick={async ()=>{ if (!await confirmarRemocao('esta foto')) return; setFotos(p=>p.filter((_,j)=>j!==i)); }}>x</button>
                   </div>
                 ))}
                 {fotos.length < 6 && (

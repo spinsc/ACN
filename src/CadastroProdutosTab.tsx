@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
@@ -468,7 +469,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
     setUploadingFoto(false);
   };
 
-  const removeFoto = (idx: number) => setFotos(prev => prev.filter((_, i) => i !== idx));
+  const removeFoto = async (idx: number) => { if (!await confirmarRemocao('esta foto')) return; setFotos(prev => prev.filter((_, i) => i !== idx)); };
 
   const uploadCatalogo = async (file: File) => {
     setUploadingCatalogo(true);
@@ -576,7 +577,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
     return resumo;
   };
 
-  const removeItem = (idx: number) => setLinhas(prev => prev.filter((_, i) => i !== idx));
+  const removeItem = async (idx: number) => { if (!await confirmarRemocao('este item do produto')) return; setLinhas(prev => prev.filter((_, i) => i !== idx)); };
 
   const setLinha = (idx: number, k: string, v: any) =>
     setLinhas(prev => prev.map((l, i) => i === idx ? { ...l, [k]: v } : l));

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { createClient } from '@supabase/supabase-js';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
@@ -568,7 +569,7 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
                         {fmtData(p.data_fim_garantia)}
                       </td>
                       <td style={{ padding:'2px' }}>
-                        <button onClick={() => setProdGar(g => g.filter((_, j) => j !== i))}
+                        <button onClick={async () => { if (!await confirmarRemocao('este produto da garantia')) return; setProdGar(g => g.filter((_, j) => j !== i)); }}
                           style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, lineHeight:1 }}>✕</button>
                       </td>
                     </tr>

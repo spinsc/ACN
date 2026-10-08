@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
@@ -531,7 +532,9 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     if (data) { setSalaAtiva(data); salaAtivaRef.current = data; fetchSalas(); }
   };
 
-  const removerMembroGrupo = (id: string) => {
+  const removerMembroGrupo = async (id: string) => {
+    const quem = (salaAtiva.membros || []).find((m: any) => String(m.id) === String(id));
+    if (!await confirmarRemocao((quem?.nome ? '"' + quem.nome + '"' : 'este membro') + ' do grupo')) return;
     const novos = (salaAtiva.membros || []).filter((m: any) => String(m.id) !== String(id));
     atualizarMembrosGrupo(novos);
   };

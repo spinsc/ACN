@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect } from 'react';
 import { ClienteAutocomplete, fmtTelefones, fmtEmails } from './ClienteUtils';
 import RichTextInput from './RichTextInput';
@@ -42,7 +43,7 @@ function TelefoneList({ list, setList, readonly }) {
           </select>
           {!readonly && list.length > 1 && (
             <Botao pequeno variante="perigo-sec"
-              onClick={() => setList(l => l.filter((_,j) => j!==i))}>×</Botao>
+              onClick={async () => { if (!await confirmarRemocao('este telefone', !t.numero)) return; setList(l => l.filter((_,j) => j!==i)); }}>×</Botao>
           )}
         </div>
       ))}
@@ -71,7 +72,7 @@ function EmailList({ list, setList, readonly }) {
           </select>
           {!readonly && list.length > 1 && (
             <Botao pequeno variante="perigo-sec"
-              onClick={() => setList(l => l.filter((_,j) => j!==i))}>×</Botao>
+              onClick={async () => { if (!await confirmarRemocao('este e-mail', !e.email)) return; setList(l => l.filter((_,j) => j!==i)); }}>×</Botao>
           )}
         </div>
       ))}

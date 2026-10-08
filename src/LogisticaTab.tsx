@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
@@ -1798,7 +1799,7 @@ export default function LogisticaTab({ currentUser }) {
     setFotos(prev => [...prev, ...files].slice(0, 6));
   };
 
-  const removerFoto = (i) => setFotos(prev => prev.filter((_,idx)=>idx!==i));
+  const removerFoto = async (i) => { if (!await confirmarRemocao('esta foto')) return; setFotos(prev => prev.filter((_,idx)=>idx!==i)); };
 
   const salvar = async () => {
     if (!form.descricao || !form.remetente) { alert('Preencha remetente e descricao!'); return; }
