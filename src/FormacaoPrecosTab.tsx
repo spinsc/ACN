@@ -498,7 +498,8 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
     if (!(custoUnitBrl > 0)) { alert('Informe o custo do produto antes — sem custo não há markup.'); return; }
     const razao = pv * (1 - difal) / custoUnitBrl;
     const valor = modoTabela ? (1 - razao) * 100 : (razao - 1) * 100;
-    onAplicar(String(Math.round(valor * 100) / 100));
+    // 08/10/2026 (pedido do usuário): markup com 4 casas depois da vírgula — com 2 casas o preço digitado não fechava exato (ex.: R$ 100,00 virava R$ 99,99).
+    onAplicar(String(Math.round(valor * 10000) / 10000));
     setPreco('');
   };
   return (
@@ -552,7 +553,7 @@ function CalcMarkupReverso() {
         <Botao variante="primario" onClick={calcular}>Calcular</Botao>
         {resultado != null && (
           <div className="acn-fp-calc-res" data-acn-familia={resultado >= 0 ? 'ok' : 'erro'}>
-            Markup = {fmtPct(resultado)}
+            Markup = {resultado.toFixed(4).replace('.', ',')}%
           </div>
         )}
       </div>
@@ -958,7 +959,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           <input type="number"
             className={'acn-input acn-fp-ir-campo acn-fp-num' + (usarMarkupGlobal ? ' acn-fp-mk-global' : item.markup_pct < 0 ? ' acn-fp-neg' : '')}
             aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
-            step="0.1" value={item.markup_pct}
+            step="0.0001" value={item.markup_pct}
             onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
             readOnly={!!usarMarkupGlobal}
             title={usarMarkupGlobal ? 'Vale o markup global. Clique para liberar a edição item a item.' : undefined}
@@ -3381,7 +3382,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 { label:'DIFAL %',        k:'difal_pct',      step:'0.1' },
                 { label:'Imposto %',      k:'imposto_pct',    step:'0.1' },
                 { label:'Custo Fixo %',  k:'custo_fixo_pct', step:'0.1' },
-                { label:'Markup Global %',k:'markup_pct',     step:'0.1' },
+                { label:'Markup Global %',k:'markup_pct',     step:'0.0001' },
                 // Multiplica a formação INTEIRA (quantas vezes ela é vendida).
                 // Chamava "Qtd. Lote" e confundia com o Lote do edital.
                 { label:'Multiplicador geral', k:'lote_qtd',  step:'1' },
