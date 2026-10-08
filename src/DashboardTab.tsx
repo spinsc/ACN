@@ -45,7 +45,7 @@ import {
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
   mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh,
 } from '@mdi/js';
-import { CabecalhoTela, Botao, Selo } from './Interface';
+import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
 import { gruposParaRecolher } from './utils/menuLateral';
 
@@ -933,6 +933,36 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   }, [dark]);
 
   const [realizados, setRealizados] = useState<Record<string, number | null>>({});
+  // Pedido do usuário em 07/10/2026: o Telecom não aparecia no dashboard. Ele não tem tempo de execução como os outros setores (não recebe demanda de fabricação: recebe pedidos de análise técnica
+  // das licitações e dos cards do CRM), então aqui vai CONTAGEM em vez de tempo, como o usuário escolheu: pendentes, com a disputa já vencida, com disputa nos próximos 7 dias e concluídas em 30 dias.
+  const [telecom, setTelecom] = useState<{ pendentes: number; vencidas: number; proximas: number; concluidas30: number } | null>(null);
+  const [erroTelecom, setErroTelecom] = useState('');
+  const buscarTelecom = async () => {
+    setErroTelecom('');
+    const { data, error } = await supabase.from('analise_setores')
+      .select('id, status, analisado_em, analise_solicitacoes(origem, origem_id, status)')
+      .eq('setor', 'Telecom').in('status', ['pendente', 'analisado']);
+    if (error) { setErroTelecom(error.message); return; }
+    const agora = Date.now(), em7 = agora + 7 * 86400000, ha30 = agora - 30 * 86400000;
+    const lista = data || [];
+    const pend = lista.filter((i: any) => i.status === 'pendente' && i.analise_solicitacoes?.status === 'em_andamento');
+    const concluidas30 = lista.filter((i: any) => i.status === 'analisado' && i.analisado_em && new Date(i.analisado_em).getTime() >= ha30).length;
+    // data de disputa do processo de origem (mesma regra da lista do Telecom, em AnaliseWidget): licitação = data_disputa (com hora); card do CRM = data_sessao (só o dia)
+    const idsDe = (o: string) => [...new Set(pend.map((i: any) => i.analise_solicitacoes).filter((x: any) => x?.origem === o && x?.origem_id).map((x: any) => x.origem_id))];
+    const lic = idsDe('licitacao'), crm = idsDe('crm');
+    const [rl, rc] = await Promise.all([
+      lic.length ? supabase.from('licitacoes').select('id,data_disputa').in('id', lic) : Promise.resolve({ data: [], error: null }),
+      crm.length ? supabase.from('crm_oportunidades').select('id,data_sessao').in('id', crm) : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (rl.error || rc.error) { setErroTelecom((rl.error || rc.error).message); return; }
+    const quando: Record<string, number> = {};
+    (rl.data || []).forEach((l: any) => { if (l.data_disputa) quando[l.id] = new Date(l.data_disputa).getTime(); });
+    (rc.data || []).forEach((c: any) => { if (c.data_sessao) quando[c.id] = new Date(String(c.data_sessao).slice(0, 10) + 'T23:59:59').getTime(); });
+    let vencidas = 0, proximas = 0;
+    pend.forEach((i: any) => { const q = quando[i.analise_solicitacoes?.origem_id]; if (q == null) return; if (q < agora) vencidas++; else if (q <= em7) proximas++; });
+    setTelecom({ pendentes: pend.length, vencidas, proximas, concluidas30 });
+  };
+  useEffect(() => { buscarTelecom(); }, []);
   const chartRef  = useRef<Chart | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -1534,7 +1564,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 <CabecalhoTela
                   titulo="Dashboard"
                   subtitulo="Lead time médio por setor · período atual"
-                  acoes={<Botao variante="secundario" icone={mdiRefresh} onClick={buscarRealizados}>Atualizar</Botao>}
+                  acoes={<Botao variante="secundario" icone={mdiRefresh} onClick={() => { buscarRealizados(); buscarTelecom(); }}>Atualizar</Botao>}
                 />
                 {/* Resumo de status dos setores — mesma regra de getStatus() usada na tabela abaixo */}
                 {(() => {
@@ -1611,6 +1641,33 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                         })}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Telecom: análises técnicas (contagem; ver o comentário em buscarTelecom) */}
+                <div className="sec-card">
+                  <div className="sec-hdr">
+                    <span style={{ display:'flex', alignItems:'center', gap:8 }}>Telecom — análises técnicas <Selo familia="neutro" ponto={false}>contagem</Selo></span>
+                  </div>
+                  <div className="sec-body">
+                    {erroTelecom && <Faixa tom="erro" acao={<Botao pequeno onClick={buscarTelecom}>Tentar de novo</Botao>}>Não foi possível ler as análises do Telecom ({erroTelecom}).</Faixa>}
+                    {!erroTelecom && !telecom && <div className="acn-fraco">Carregando…</div>}
+                    {telecom && (
+                      <div className="acn-kpis">
+                        {[
+                          { label: 'Pendentes',          valor: telecom.pendentes,    sub: 'aguardando parecer do Telecom', cor: 'var(--acn-info)' },
+                          { label: 'Disputa vencida',    valor: telecom.vencidas,     sub: 'pendentes com a data já passada', cor: 'var(--acn-bad)' },
+                          { label: 'Disputa em 7 dias',  valor: telecom.proximas,     sub: 'pendentes com data próxima',    cor: 'var(--acn-warn)' },
+                          { label: 'Concluídas (30 d)',  valor: telecom.concluidas30, sub: 'pareceres dos últimos 30 dias', cor: 'var(--acn-ok)' },
+                        ].map(c => (
+                          <div key={c.label} className="acn-kpi">
+                            <span className="rot"><i style={{ background: c.cor }} />{c.label}</span>
+                            <span className="val acn-num">{c.valor}</span>
+                            <span className="sub">{c.sub}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

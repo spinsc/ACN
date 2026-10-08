@@ -4303,7 +4303,7 @@ Lista passada pelo usuário em 07/10/2026, com as dúvidas tiradas na hora e o t
 | 5 | Kanban do Comercial: reformulação (clique no título abre; achar o que simplificar) — e replicar onde valer | ⬜ | |
 | 6 | Editar uma atualização (andamento) em Licitações e Comercial | ⬜ | |
 | 7 | Excluir card em Comercial e Licitações (Admin; gerente só do próprio setor) | ⬜ | |
-| 8 | Dashboard geral: Telecom | ⬜ | |
+| 8 | Dashboard geral: Telecom | ✅ 08/10/2026 | Painel "Telecom — análises técnicas" no dashboard geral (aba de KPIs por setor), em contagem: pendentes, disputa vencida, disputa em 7 dias e concluídas em 30 dias (o Telecom recebe análise técnica, não demanda de fabricação, por isso não há tempo de execução). Testado com dados simulados: 3 / 1 / 1 / 1 conferidos; erro de leitura mostra faixa com "Tentar de novo". |
 | 9 | Estoque por categoria (lista própria, configurada pelo Almoxarifado) | ⬜ | |
 | 10 | SAC: Kanban como visão de partida | ✅ 08/10/2026 | Chave de lembrança nova (`acn-sac-visao-v2`) para todos começarem no Kanban; quem escolher a lista depois tem a escolha lembrada. Testado: a tela abre com o chip Kanban ativo. |
 | 11 | SAC: lote de OS (um card no kanban) | ⬜ | |
