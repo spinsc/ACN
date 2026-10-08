@@ -16,6 +16,7 @@ import { confirmar, pedirTexto } from './Feedback';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 import Icone from './Icone';
+import SacResumoOS from './SacResumoOS';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
 
@@ -221,6 +222,7 @@ export default function SacTab({ currentUser }) {
   const [filtroEmpresa, setFiltroEmpresa]     = useState('');
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
+  const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
 
   // Cadastros estados
   const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'|'tipos_servico'>('equipamentos');
@@ -1828,7 +1830,9 @@ OK = ACN   |   Cancelar = DETECH`;
                           const o = item.o;
                           const valor = valorDaOS(o);
                           return (
-                            <div key={o.id} className={'acn-kb-card' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '')}>
+                            <div key={o.id} className={'acn-kb-card abrivel' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '')}
+                              title="Clique para ver o resumo completo da OS"
+                              onClick={e => { if ((e.target as HTMLElement).closest('button, a, select, input, textarea, [data-nao-abrir]')) return; setResumoOS(o); }}>
                               <div className="acn-kb-topo">
                                 <strong className="acn-forte">{o.numero_os}</strong>
                                 <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
@@ -2962,6 +2966,7 @@ OK = ACN   |   Cancelar = DETECH`;
       )}
 
       {/* MODAL ACOMPANHAMENTO DA OS */}
+      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} onClose={() => setResumoOS(null)} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
       {modalAcomp && (
         <OplAcompModal
           referenciaId={String(modalAcomp.id)}
