@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmarRemocao } from './Feedback';
+import { Botao } from './Interface';
 
 export type Participante = { email: string; nome: string };
 
@@ -116,5 +117,35 @@ export function ListaParticipantes({ item, usuario }: { item: any; usuario?: any
     <span title={ps.map(p => p.nome).join(', ')}>
       👥 {ps.map(p => p.nome).join(', ')}{usuario && ehParticipante(item, usuario) ? ' (você)' : ''}
     </span>
+  );
+}
+
+/** Janela para mudar os participantes de um item que já existe (tarefa, agendamento...). `onSalvar(lista)` grava e devolve uma mensagem de erro (ou vazio); a janela só fecha se gravou. */
+export function ModalEditarParticipantes({ titulo, inicial, donoEmail, onSalvar, onClose }: {
+  titulo: string; inicial: Participante[]; donoEmail?: string; onSalvar: (lista: Participante[]) => Promise<string | void>; onClose: () => void;
+}) {
+  const [lista, setLista] = useState<Participante[]>(inicial || []);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+  const salvar = async () => {
+    setSalvando(true); setErro('');
+    const msg = await onSalvar(lista);
+    setSalvando(false);
+    if (msg) { setErro(String(msg)); return; }
+    onClose();
+  };
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 460 }} role="dialog" aria-label="Participantes">
+        <div className="modal-title">👥 Participantes — {titulo}</div>
+        <div className="acn-ajuda" style={{ marginBottom: 8 }}>Quem é adicionado vê este item na agenda e no calendário e recebe um aviso. Só o dono do item (e a gerência) edita.</div>
+        <ParticipantesPicker value={lista} onChange={setLista} donoEmail={donoEmail} rotulo="Participantes" />
+        {erro && <div className="acn-txt-erro" style={{ marginTop: 8 }}>{erro}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+          <Botao onClick={onClose} disabled={salvando}>Cancelar</Botao>
+          <Botao variante="primario" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</Botao>
+        </div>
+      </div>
+    </div>
   );
 }

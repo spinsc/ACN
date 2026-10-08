@@ -9,6 +9,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import { ParticipantesPicker, ModalEditarParticipantes, ListaParticipantes, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { Faixa, MenuAcoes } from './Interface';
 import { LinkOpl } from './AcnTabShared';
 import { ModalAnexosTarefa, contarAnexosDasTarefas } from './TarefaAnexos';
@@ -134,12 +136,14 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
   const [titulo, setTitulo] = useState('');
   const [responsavel, setResponsavel] = useState(currentUser?.nome || '');
   const [opSelecionada, setOpSelecionada] = useState<any>(null);
+  const [participantes, setParticipantes] = useState<any[]>([]);   // pedido do usuário em 07/10/2026: quem mais participa
   const [salvando, setSalvando] = useState(false);
 
   const criar = async () => {
     if (!titulo.trim()) { alert('Informe o título da tarefa.'); return; }
     setSalvando(true);
-    const { error } = await supabase.from('engenharia_horas_tarefas').insert([{
+    const { data: criada, error } = await supabase.from('engenharia_horas_tarefas').insert([{
+      participantes,
       opl_id: opSelecionada?.id || null,
       numero_opl: opSelecionada?.opl || null,
       titulo: titulo.trim(),
@@ -147,9 +151,15 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
       status: 'nao_iniciada',
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
-    }]);
+    }]).select('id').single();
     setSalvando(false);
     if (error) { alert('Erro: ' + error.message); return; }
+    // @menção no título e aviso aos participantes (a tarefa já está salva: se um aviso falhar, diz quem não foi avisado)
+    await salvarMencoes({ texto: titulo, mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
+      contexto: 'tarefa_engenharia', contextoId: String(criada?.id || ''), contextoDescricao: 'Tarefa da Engenharia: ' + titulo.trim(), campo: 'titulo', abaDestino: 'engenharia' });
+    const falhas = await notificarParticipantes({ novos: novosParticipantes([], participantes), autor: currentUser, contexto: 'tarefa_engenharia', contextoId: String(criada?.id || ''),
+      descricao: 'Tarefa da Engenharia: ' + titulo.trim(), abaDestino: 'calendario', trecho: 'Você foi adicionado à tarefa "' + titulo.trim() + '"' });
+    if (falhas.length) alert('A tarefa foi criada, mas não foi possível avisar: ' + falhas.join('; '));
     onCriado();
   };
 
@@ -159,8 +169,7 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
         <div className="modal-title">+ Nova Tarefa</div>
 
         <label className="acn-label">Título da Tarefa *</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 8 }}
-          placeholder="Ex: Revisão de desenho técnico" value={titulo} onChange={e => setTitulo(e.target.value)} autoFocus />
+        <MencaoTextarea value={titulo} onChange={v => setTitulo(v.replace(/\n/g, ' '))} rows={1} placeholder="Ex: Revisão de desenho técnico — @Nome para mencionar alguém" style={{ marginBottom: 8 }} />
 
         <label className="acn-label">Responsável</label>
         <div style={{ marginBottom: 8 }}>
@@ -169,6 +178,8 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
 
         <label className="acn-label">Vincular a uma OP/OS (opcional)</label>
         <BuscaOplTarefa selecionada={opSelecionada} onSelecionar={setOpSelecionada} />
+
+        <ParticipantesPicker value={participantes} onChange={setParticipantes} donoEmail={currentUser?.email} />
 
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando} onClick={criar}>
@@ -259,6 +270,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
   const [modalObs, setModalObs] = useState(false);
   const [modalOpl, setModalOpl] = useState(false);
   const [modalAnexos, setModalAnexos] = useState(false);
+  const [modalParticipantes, setModalParticipantes] = useState(false);
   const temObs = !!String(tarefa.observacoes || '').trim();
   // contagem vem da lista (uma consulta para todas as tarefas, não uma por linha)
   const qtdAnexos = tarefa._anexos || 0;
@@ -326,6 +338,9 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
               )}
             </>
           )}
+          {participantesDe(tarefa).length > 0 && (
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}><ListaParticipantes item={tarefa} usuario={currentUser} /></div>
+          )}
           {tarefa.numero_opl && (
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
               🔗 <LinkOpl opl={tarefa.numero_opl} currentUser={currentUser} color="#94a3b8" discreto />
@@ -372,6 +387,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
               // tarefa concluída também anexa: desenho e foto do resultado
               // costumam aparecer depois que ela fecha (24/09/2026)
               { rotulo: qtdAnexos ? `📎 Anexos (${qtdAnexos})` : '📎 Anexar arquivo', onClick: () => setModalAnexos(true) },
+              { rotulo: participantesDe(tarefa).length ? `👥 Participantes (${participantesDe(tarefa).length})` : '👥 Participantes', onClick: () => setModalParticipantes(true) },
             ]} />
           </div>
         </td>
@@ -401,6 +417,19 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
       {modalAnexos && createPortal(
         <ModalAnexosTarefa tarefa={tarefa} currentUser={currentUser}
           onClose={() => setModalAnexos(false)} onMudou={onAtualizado} />,
+        document.body,
+      )}
+      {modalParticipantes && createPortal(
+        <ModalEditarParticipantes titulo={tarefa.titulo} inicial={participantesDe(tarefa)} donoEmail={tarefa.criado_por}
+          onClose={() => setModalParticipantes(false)}
+          onSalvar={async (lista) => {
+            const { error } = await supabase.from('engenharia_horas_tarefas').update({ participantes: lista, atualizado_em: new Date().toISOString() }).eq('id', tarefa.id);
+            if (error) return 'Não foi possível salvar: ' + error.message;
+            const falhas = await notificarParticipantes({ novos: novosParticipantes(participantesDe(tarefa), lista), autor: currentUser, contexto: 'tarefa_engenharia', contextoId: String(tarefa.id),
+              descricao: 'Tarefa da Engenharia: ' + String(tarefa.titulo || '').trim(), abaDestino: 'calendario', trecho: 'Você foi adicionado à tarefa "' + String(tarefa.titulo || '').trim() + '"' });
+            onAtualizado();
+            if (falhas.length) return 'Salvo, mas não foi possível avisar: ' + falhas.join('; ');
+          }} />,
         document.body,
       )}
       {modalPausar && createPortal(

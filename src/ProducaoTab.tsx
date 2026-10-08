@@ -18,6 +18,7 @@ import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
+import { ParticipantesPicker, novosParticipantes, notificarParticipantes } from './Participantes';
 import Icone from './Icone';
 import { carregarPendencias } from './OpPendencias';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
@@ -197,7 +198,7 @@ function CalendarioManutencao({ currentUser }) {
   const [agendamentos, setAgendamentos] = useState([]);
   const [aguardando, setAguardando] = useState([]);
   const [modalAgendar, setModalAgendar] = useState(null);
-  const [formAg, setFormAg] = useState({ data:'', periodo:'Manhã', obs:'' });
+  const [formAg, setFormAg] = useState<any>({ data:'', periodo:'Manhã', obs:'', participantes: [] });   // participantes: pedido do usuário em 07/10/2026
   const [salvando, setSalvando] = useState(false);
   const [vistaLista, setVistaLista] = useState(false);
   const [sacOrdens, setSacOrdens]   = useState([]);
@@ -240,7 +241,7 @@ function CalendarioManutencao({ currentUser }) {
       opl_id: opl.id, numero_opl: opl.opl, chassi: opl.chassi,
       cliente_nome: opl.cliente_nome, modelo: opl.modelo,
       data_agendamento: formAg.data, periodo: formAg.periodo,
-      observacoes: formAg.obs, agendado_por: currentUser?.nome,
+      observacoes: formAg.obs, agendado_por: currentUser?.nome, participantes: formAg.participantes || [],
     }]).select('id');
     if (errAg) { alert('Erro ao agendar: ' + errAg.message); setSalvando(false); return; }
     const { error: errOpl } = await supabase.from('oples').update({
@@ -265,7 +266,10 @@ function CalendarioManutencao({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
     }]);
     if (errLog) alert('A manutenção foi agendada, mas o histórico de movimentação não foi gravado: ' + errLog.message);
-    setModalAgendar(null); setFormAg({ data:'', periodo:'Manhã', obs:'' }); setSalvando(false);
+    const falhasAviso = await notificarParticipantes({ novos: novosParticipantes([], formAg.participantes || []), autor: currentUser, contexto: 'agendamento_manutencao', contextoId: String(criado?.[0]?.id || ''),
+      descricao: 'Manutenção agendada: OP ' + opl.opl, abaDestino: 'calendario', trecho: 'Você foi adicionado ao agendamento da manutenção da OP ' + opl.opl + ' em ' + new Date(formAg.data + 'T00:00:00').toLocaleDateString('pt-BR') + ' (' + formAg.periodo + ')' });
+    if (falhasAviso.length) alert('O agendamento foi gravado, mas não foi possível avisar: ' + falhasAviso.join('; '));
+    setModalAgendar(null); setFormAg({ data:'', periodo:'Manhã', obs:'', participantes: [] }); setSalvando(false);
     load();
   });
 
@@ -350,7 +354,7 @@ function CalendarioManutencao({ currentUser }) {
                   {semDado(o.chassi) ? <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem chassi</span> : <span className="acn-prod-ic"><Icone path={mdiWrench} size={12} /> {o.chassi}</span>}
                 </div>
                 <Botao variante="primario" icone={mdiCalendarOutline}
-                  onClick={()=>{ setModalAgendar(o); setFormAg({ data:'', periodo:'Manhã', obs:'' }); }}>AGENDAR</Botao>
+                  onClick={()=>{ setModalAgendar(o); setFormAg({ data:'', periodo:'Manhã', obs:'', participantes: [] }); }}>AGENDAR</Botao>
               </div>
             ))}
           </div>
@@ -487,6 +491,7 @@ function CalendarioManutencao({ currentUser }) {
                   value={formAg.obs} onChange={e=>setFormAg(f=>({...f,obs:e.target.value}))}
                   placeholder="Defeitos relatados, histórico, etc." />
               </div>
+              <ParticipantesPicker value={formAg.participantes || []} onChange={v => setFormAg(f => ({ ...f, participantes: v }))} donoEmail={currentUser?.email} />
             </div>
             <div className="acn-modal-rodape">
               <Botao onClick={()=>setModalAgendar(null)}>Cancelar</Botao>

@@ -28,6 +28,8 @@ const SETORES = [
 ];
 const SETOR_FAMILIA: Record<string, string> = SETORES.reduce((a, s) => ({ ...a, [s.id]: s.familia }), {} as any);
 const FAMILIA_CRM = 'atencao';
+// 07/10/2026: o calendário também mostra as tarefas (Financeiro, Engenharia) e os agendamentos de manutenção em que a pessoa é dona ou participante — leitura só (editam nas suas telas).
+const FAMILIA_FIN = 'neutro', FAMILIA_ENG_TAREFA = 'ok', FAMILIA_AGEND = 'atencao';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -162,7 +164,9 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 <div className="acn-ajuda">
                   {ev.tipo === 'compromisso'
                     ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 {ev.raw.usuario_nome || ev.raw.usuario_email}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
-                    : <>📇 Contato CRM · 👤 {ev.raw.responsavel_nome || '—'} {ev.raw.nome_contato ? `· ${ev.raw.nome_contato}` : ''}</>}
+                    : ev.tipo === 'crm'
+                      ? <>📇 Contato CRM · 👤 {ev.raw.responsavel_nome || '—'} {ev.raw.nome_contato ? `· ${ev.raw.nome_contato}` : ''}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
+                      : ev.detalhe}
                 </div>
               </div>
               {ev.tipo === 'compromisso' && (ehDonoDoItem(ev.raw, currentUser) || ehAdminOuGerente(currentUser)) && (
@@ -219,11 +223,14 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
   const [verTodos, setVerTodos]   = useState(false);
   const [compromissos, setCompromissos] = useState<any[]>([]);
   const [contatosCrm, setContatosCrm]   = useState<any[]>([]);
+  const [tarefasFin, setTarefasFin]       = useState<any[]>([]);
+  const [tarefasEng, setTarefasEng]       = useState<any[]>([]);
+  const [agendManut, setAgendManut]       = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [diaAberto, setDiaAberto] = useState<{ data: Date; hora?: string } | null>(null);
 
   // O que a tela não conseguiu ler (Etapa 7.39, 04/10/2026): mensagem do banco por lista; vazio = leu.
-  const [falhas, setFalhas] = useState({ comp: '', crm: '' });
+  const [falhas, setFalhas] = useState({ comp: '', crm: '', fin: '', eng: '', agm: '' });
 
   // Compromissos de todos: só gerentes; os demais veem só os próprios.
   // Regra do usuário em 04/10/2026 (Etapa 7.39): Admin e qualquer perfil "Gerente …". A lista antiga tinha só 'Admin',
@@ -253,17 +260,41 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
       .not('prox_contato', 'is', null)
       .gte('prox_contato', isoDate(rangeInicio)).lte('prox_contato', isoDate(rangeFim))
       .order('prox_contato', { ascending: true });
-    if (!isGerente || !verTodos) qCrm = qCrm.eq('responsavel_nome', currentUser?.nome);
+    // meus = os que sou responsável OU em que fui adicionado como participante (07/10/2026); o nome vai entre aspas para vírgula/ponto no nome não quebrar o filtro
+    const comoParticipante = 'participantes.cs.' + JSON.stringify([{ email: currentUser?.email }]);
+    const meuNomeFiltro = '"' + String(currentUser?.nome || '').replace(/"/g, '') + '"';
+    if (!isGerente || !verTodos) qCrm = qCrm.or('responsavel_nome.eq.' + meuNomeFiltro + ',' + comoParticipante);
     // Contatos de CRM só entram na visão "Todos os setores" ou "Comercial"
     const incluirCrm = setorFiltro === 'todos' || setorFiltro === 'comercial';
 
-    const [rComp, rCrm] = await Promise.all([qComp.limit(500), incluirCrm ? qCrm.limit(500) : Promise.resolve({ data: [] })]);
+    // tarefas do Financeiro (vencimento), tarefas da Engenharia (início, ou criação se ainda não começou) e agendamentos de manutenção (data do agendamento) — só na visão "Todos os setores"
+    // (Engenharia também no filtro Engenharia); as concluídas não entram
+    const todos = setorFiltro === 'todos';
+    let qFin = supabase.from('financeiro_tarefas').select('id,titulo,data_vencimento,etapa,responsavel_nome,criado_por,participantes')
+      .not('data_vencimento', 'is', null).gte('data_vencimento', isoDate(rangeInicio)).lte('data_vencimento', isoDate(rangeFim)).neq('etapa', 'Concluído');
+    if (!isGerente || !verTodos) qFin = qFin.or('responsavel_nome.eq.' + meuNomeFiltro + ',' + comoParticipante);
+    let qEng = supabase.from('engenharia_horas_tarefas').select('id,titulo,status,responsavel_nome,criado_por,criado_em,data_inicio,numero_opl,participantes')
+      .neq('status', 'concluida').gte('criado_em', new Date(rangeInicio.getFullYear(), rangeInicio.getMonth() - 2, 1).toISOString());
+    if (!isGerente || !verTodos) qEng = qEng.or('responsavel_nome.eq.' + meuNomeFiltro + ',' + comoParticipante);
+    let qAgm = supabase.from('agendamentos_manutencao').select('id,numero_opl,cliente_nome,modelo,data_agendamento,periodo,agendado_por,participantes')
+      .gte('data_agendamento', isoDate(rangeInicio)).lte('data_agendamento', isoDate(rangeFim));
+    if (!isGerente || !verTodos) qAgm = qAgm.or('agendado_por.eq.' + meuNomeFiltro + ',' + comoParticipante);
+    const vazio = { data: [], error: null };
+    const [rComp, rCrm, rFin, rEng, rAgm] = await Promise.all([
+      qComp.limit(500), incluirCrm ? qCrm.limit(500) : Promise.resolve({ data: [] }),
+      todos ? qFin.limit(500) : Promise.resolve(vazio), (todos || setorFiltro === 'engenharia') ? qEng.limit(500) : Promise.resolve(vazio), todos ? qAgm.limit(500) : Promise.resolve(vazio),
+    ]);
     // Leitura que falha não pode virar "calendário vazio" (Etapa 7.39): antes o erro era ignorado e o mês aparecia sem nenhum
     // evento, sem aviso. Os eventos dependem do período mostrado, então os da leitura que falhou saem da grade (não ficam os
     // de outro mês) e uma faixa vermelha diz o que não foi lido.
     setCompromissos(rComp.error ? [] : (rComp.data || []));
     setContatosCrm(rCrm.error ? [] : (rCrm.data || []));
-    setFalhas({ comp: rComp.error?.message || '', crm: rCrm.error?.message || '' });
+    setTarefasFin(rFin.error ? [] : (rFin.data || []));
+    // tarefa da Engenharia cai no dia do início (ou da criação, se ainda não começou); só entra o que cai no período mostrado
+    const diaTarefaEng = (x: any) => isoDate(new Date(x.data_inicio || x.criado_em));
+    setTarefasEng(rEng.error ? [] : (rEng.data || []).filter((x: any) => diaTarefaEng(x) >= isoDate(rangeInicio) && diaTarefaEng(x) <= isoDate(rangeFim)));
+    setAgendManut(rAgm.error ? [] : (rAgm.data || []));
+    setFalhas({ comp: rComp.error?.message || '', crm: rCrm.error?.message || '', fin: rFin.error?.message || '', eng: rEng.error?.message || '', agm: rAgm.error?.message || '' });
     setLoading(false);
   }, [rangeInicio.getTime(), rangeFim.getTime(), setorFiltro, verTodos, isGerente, currentUser?.email, currentUser?.nome]);
 
@@ -291,11 +322,31 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
         familia: FAMILIA_CRM, raw: o,
       });
     });
+    tarefasFin.forEach(x => {
+      (map[x.data_vencimento] ||= []).push({
+        tipo: 'tarefa_financeiro', id: x.id, titulo: x.titulo, hora: null, horaOrdem: -1, familia: FAMILIA_FIN, raw: x,
+        detalhe: <>💲 Tarefa do Financeiro · vence neste dia · 👤 {x.responsavel_nome || '—'}{participantesDe(x).length > 0 && <> · <ListaParticipantes item={x} usuario={currentUser} /></>}</>,
+      });
+    });
+    tarefasEng.forEach(x => {
+      const d = new Date(x.data_inicio || x.criado_em);
+      (map[isoDate(d)] ||= []).push({
+        tipo: 'tarefa_engenharia', id: x.id, titulo: x.titulo, hora: x.data_inicio ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : null,
+        horaOrdem: x.data_inicio ? d.getHours() * 60 + d.getMinutes() : -1, familia: FAMILIA_ENG_TAREFA, raw: x,
+        detalhe: <>🛠️ Tarefa da Engenharia · {x.data_inicio ? 'iniciada neste dia' : 'criada neste dia'}{x.numero_opl ? ` · OP ${x.numero_opl}` : ''} · 👤 {x.responsavel_nome || '—'}{participantesDe(x).length > 0 && <> · <ListaParticipantes item={x} usuario={currentUser} /></>}</>,
+      });
+    });
+    agendManut.forEach(x => {
+      (map[String(x.data_agendamento).slice(0, 10)] ||= []).push({
+        tipo: 'agendamento', id: x.id, titulo: 'Manutenção — OP ' + (x.numero_opl || '—') + (x.cliente_nome ? ' · ' + x.cliente_nome : ''), hora: null, horaOrdem: -1, familia: FAMILIA_AGEND, raw: x,
+        detalhe: <>🔧 Agendamento de manutenção · {x.periodo || ''}{x.modelo ? ' · ' + x.modelo : ''} · 👤 {x.agendado_por || '—'}{participantesDe(x).length > 0 && <> · <ListaParticipantes item={x} usuario={currentUser} /></>}</>,
+      });
+    });
     Object.values(map).forEach(list => list.sort((a, b) => a.horaOrdem - b.horaOrdem));
     return map;
-  }, [compromissos, contatosCrm]);
+  }, [compromissos, contatosCrm, tarefasFin, tarefasEng, agendManut, currentUser?.email]);
 
-  const totalEventos = compromissos.length + contatosCrm.length;
+  const totalEventos = compromissos.length + contatosCrm.length + tarefasFin.length + tarefasEng.length + agendManut.length;
 
   // ── Navegação ─────────────────────────────────────────────────────────────
   const irHoje = () => setCursor(new Date());
@@ -327,9 +378,9 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
       </div>
 
       <div className="sec-body">
-        {(falhas.comp || falhas.crm) && (
+        {(falhas.comp || falhas.crm || falhas.fin || falhas.eng || falhas.agm) && (
           <Faixa tom="erro">
-            Não foi possível ler {[falhas.comp && `os compromissos (${falhas.comp})`, falhas.crm && `os contatos do CRM (${falhas.crm})`].filter(Boolean).join('; ')}. O calendário abaixo pode estar incompleto.
+            Não foi possível ler {[falhas.comp && `os compromissos (${falhas.comp})`, falhas.crm && `os contatos do CRM (${falhas.crm})`, falhas.fin && `as tarefas do Financeiro (${falhas.fin})`, falhas.eng && `as tarefas da Engenharia (${falhas.eng})`, falhas.agm && `os agendamentos de manutenção (${falhas.agm})`].filter(Boolean).join('; ')}. O calendário abaixo pode estar incompleto.
           </Faixa>
         )}
         {/* Filtro de setor */}

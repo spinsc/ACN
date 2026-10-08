@@ -43,6 +43,7 @@ import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
 import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
+import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { podeExcluirCardComercial, bloqueiosDeExclusao } from './ExclusaoDeCard';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
@@ -108,6 +109,7 @@ const VAZIO_OP: any = {
   contato_email:  '',
   prox_contato:      '',
   hora_prox_contato: '',
+  participantes:     [],   // quem mais acompanha o contato (07/10/2026): aparece na agenda/calendário deles
   // ── quadro Lead (Fase 2) ──
   data_aceite_cliente:     '',
   cliente_final:           '',
@@ -899,12 +901,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
       hora_prox_contato: limpar(formOp.hora_prox_contato) || null,
+      participantes:     Array.isArray(formOp.participantes) ? formOp.participantes : [],
     };
     if (!p.estagio_id) {
       const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e));
       if (first) p.estagio_id = first.id;
     }
     let saveError = null;
+    let idSalvo: string | null = modalOp?.id || null;
     if (modalOp?.id) {
       const { error } = await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalOp.id);
       saveError = error;
@@ -912,7 +916,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     } else {
       const { data: inserido, error } = await supabase.from('crm_oportunidades').insert(p).select('id').single();
       saveError = error;
-      if (!error && inserido) logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: inserido.id, changeType: 'CREATE', newRow: p, user: currentUser });
+      if (!error && inserido) { idSalvo = inserido.id; logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: inserido.id, changeType: 'CREATE', newRow: p, user: currentUser }); }
     }
     setSalvando(false);
     if (saveError) {
@@ -920,6 +924,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       alert('Erro ao salvar: ' + (saveError.message || JSON.stringify(saveError)));
       return;
     }
+    if (idSalvo) await avisarParticipantesDoCard(idSalvo, modalOp, formOp, p.titulo);
     setModalOp(null);
     await load();
   });
@@ -1701,6 +1706,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
       hora_prox_contato: limpar(formOp.hora_prox_contato) || null,
+      participantes:     Array.isArray(formOp.participantes) ? formOp.participantes : [],
       faturamento_empresa: formOp.faturamento_empresa || 'ACN',
       // ── quadro Lead (Fase 2) ──
       data_aceite_cliente:     limpar(formOp.data_aceite_cliente),
@@ -1736,6 +1742,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       oldRow: modalAbrir, newRow: p, user: currentUser,
       formatters: { estagio_id: (v) => getEst(v)?.nome || '—' },
     });
+    await avisarParticipantesDoCard(modalAbrir.id, modalAbrir, formOp, p.titulo);
     let oplCriada: string|null = null;
     let avisoOp: { tom: 'atencao'|'erro'; texto: string }|null = null;
     if (entrouEmVencidoAgora && formOp.empresa_vencedora) {
@@ -2197,6 +2204,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // EXCLUIR OP
   // ─────────────────────────────────────────────────────────────────────────
+  // Avisa quem entrou agora como participante do contato do card (07/10/2026). O card já está salvo: se um aviso falhar, diz quem não foi avisado. Abre o próprio card ao clicar no aviso (contexto 'crm').
+  const avisarParticipantesDoCard = async (idCard: string, anterior: any, atual: any, titulo: any) => {
+    const falhas = await notificarParticipantes({
+      novos: novosParticipantes(participantesDe(anterior), participantesDe(atual)), autor: currentUser, contexto: 'crm', contextoId: String(idCard),
+      descricao: 'CRM: ' + (titulo || '—'), abaDestino: 'crm',
+      trecho: 'Você foi adicionado ao card "' + (titulo || '—') + '"' + (atual?.prox_contato ? ' (próximo contato em ' + atual.prox_contato + (atual.hora_prox_contato ? ' às ' + atual.hora_prox_contato : '') + ')' : ''),
+    });
+    if (falhas.length) mostrarAviso('O card foi salvo, mas não foi possível avisar: ' + falhas.join('; '), 'atencao');
+  };
+
   const excluirOp = async (op: any) => {
     // Regra de 07/10/2026 (pedido do usuário): só Admin e o Gerente Comercial excluem um card; e com OP/OS lançada, vendas registradas ou formação de preços vinculada o card NÃO é excluído (ver ExclusaoDeCard.ts).
     if (!podeExcluirCardComercial(currentUser)) { mostrarAviso('Só o Admin e o Gerente Comercial podem excluir um card.', 'atencao'); return; }
@@ -3681,6 +3698,7 @@ function ColunaRolavel({ children }: any) {
                       value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
                   </div>
                 </div>
+                <ParticipantesPicker value={participantesDe(formOp)} onChange={v => setFormOp(f => ({...f, participantes: v}))} donoEmail={currentUser?.email} rotulo="Quem mais acompanha este contato (aparece na agenda deles)" />
               </div>
 
               {/* ── Empresa / Faturamento ── */}
@@ -4496,6 +4514,9 @@ function ColunaRolavel({ children }: any) {
                       <input type="time" className="acn-input" style={{ width:'100%' }}
                         value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
                     </div>
+                  </div>
+                  <div style={{ marginTop:6 }}>
+                    <ParticipantesPicker value={participantesDe(formOp)} onChange={v => setFormOp(f => ({...f, participantes: v}))} donoEmail={currentUser?.email} rotulo="Quem mais acompanha este contato (aparece na agenda deles)" />
                   </div>
                 </div>
               </div>

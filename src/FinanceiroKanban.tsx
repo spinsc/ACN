@@ -22,6 +22,8 @@ import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { Faixa, Botao, Selo, Tag } from './Interface';
 import Icone from './Icone';
 import {
@@ -321,6 +323,7 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
   const [recorrencia, setRecorrencia] = useState(tarefa?.recorrencia || '');
   const [recAtiva, setRecAtiva] = useState(tarefa?.recorrencia_ativa !== false);
   const [salvando, setSalvando] = useState(false);
+  const [participantes, setParticipantes] = useState<any[]>(participantesDe(tarefa));   // pedido do usuário em 07/10/2026: quem mais participa (aparece no calendário deles)
   // diário da tarefa: cada anotação fica com quem escreveu e quando
   const [obs, setObs] = useState(Array.isArray(tarefa?.observacoes) ? tarefa.observacoes : []);
   const [novaObs, setNovaObs] = useState('');
@@ -346,6 +349,15 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
       responsavel_nome: responsavel.trim() || null, data_vencimento: vencimento || null,
       tipo_id: tipoId || null, recorrencia: recorrencia || null,
       recorrencia_ativa: recorrencia ? recAtiva : true,
+      participantes,
+    };
+    // @menção na descrição e aviso aos participantes que entraram agora; a tarefa já está salva: se um aviso falhar, diz quem não foi avisado
+    const avisarDepois = async (idItem: string) => {
+      await salvarMencoes({ texto: titulo + ' ' + descricao, mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
+        contexto: 'tarefa_financeiro', contextoId: idItem, contextoDescricao: 'Tarefa do Financeiro: ' + titulo.trim(), campo: 'descricao', abaDestino: 'financeiro' });
+      const falhas = await notificarParticipantes({ novos: novosParticipantes(participantesDe(tarefa), participantes), autor: currentUser, contexto: 'tarefa_financeiro', contextoId: idItem,
+        descricao: 'Tarefa do Financeiro: ' + titulo.trim(), abaDestino: 'calendario', trecho: 'Você foi adicionado à tarefa "' + titulo.trim() + '"' + (vencimento ? ' (vence em ' + fmtDt(vencimento) + ')' : '') });
+      if (falhas.length) alert('A tarefa foi salva, mas não foi possível avisar: ' + falhas.join('; '));
     };
     if (editando) {
       const patch = { ...comum, atualizado_em: new Date().toISOString() };
@@ -354,13 +366,15 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
       if (error) { alert('Não foi possível salvar: ' + error.message); return; }
       logChange({ module: 'financeiro', entityType: 'financeiro_tarefas', entityId: tarefa.id, changeType: 'UPDATE',
         oldRow: tarefa, newRow: { ...tarefa, ...patch }, user: currentUser });
+      await avisarDepois(String(tarefa.id));
     } else {
-      const { error } = await supabase.from('financeiro_tarefas').insert([{
+      const { data: criada, error } = await supabase.from('financeiro_tarefas').insert([{
         ...comum, etapa: 'A Fazer', observacoes: [],
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
-      }]);
+      }]).select('id').single();
       setSalvando(false);
       if (error) { alert('Não foi possível criar: ' + error.message); return; }
+      await avisarDepois(String(criada?.id || ''));
     }
     onSalvo();
   };
@@ -379,9 +393,9 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
           </div>
           <div className="form-group">
             <label className="acn-label" htmlFor="kb-desc">Descrição</label>
-            <textarea id="kb-desc" className="acn-input" rows={3}
-              value={descricao} onChange={e => setDescricao(e.target.value)} />
+            <MencaoTextarea value={descricao} onChange={v => setDescricao(v)} rows={3} placeholder="@Nome para mencionar alguém" />
           </div>
+          <ParticipantesPicker value={participantes} onChange={setParticipantes} donoEmail={tarefa?.criado_por || currentUser?.email} />
           <div className="acn-kb-grade">
             <div className="form-group">
               <label className="acn-label">Responsável</label>
@@ -723,7 +737,7 @@ export default function FinanceiroKanban({ currentUser }) {
         tipo_id: tarefa.tipo_id || null,
         responsavel_nome: tarefa.responsavel_nome, responsavel_email: tarefa.responsavel_email,
         data_vencimento: venc, recorrencia: tarefa.recorrencia, recorrencia_ativa: true,
-        gerada_de_id: tarefa.id,
+        gerada_de_id: tarefa.id, participantes: tarefa.participantes || [],
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
         observacoes: [],
       }]);
