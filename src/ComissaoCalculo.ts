@@ -102,7 +102,14 @@ export async function calcularComissaoTecnicos({ funcionarios, inicio, fim, modo
       // devolvesse naquele momento, e mudava sozinha quando a consulta mudava
       ? await supabase.from('responsaveis_producao').select('*').in('referencia_id', idsRelevantes).order('criado_em').order('id')
       : { data: [] as any[] };
-    const responsaveis: any[] = respData || [];
+    // 08/10/2026 (PV 1325): a mesma linha (OP/OS + técnico + função) gravada duas vezes — a Produção semeava a lista ao iniciar e uma segunda gravação, 2 s depois,
+    // repetia a semeadura — fazia o item do lote entrar 2x para o mesmo técnico e a comissão sair em dobro. Aqui a repetição conta uma vez só.
+    const vistosResp = new Set<string>();
+    const responsaveis: any[] = (respData || []).filter((r: any) => {
+      const k = [r.referencia_id, r.tecnico_id, r.papel].join('|');
+      if (vistosResp.has(k)) return false;
+      vistosResp.add(k); return true;
+    });
 
     const mapa: Record<string, any> = {};
     const addItem = (tecId: string, item: any) => {

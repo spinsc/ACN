@@ -318,3 +318,21 @@ export function EquipeDaOpResumo({ opl, currentUser }) {
     </div>
   );
 }
+
+/**
+ * Grava linhas em responsaveis_producao SEM repetir quem já está na lista da mesma OP/OS (mesmo tipo, referência, técnico e função).
+ * 08/10/2026: a semeadura ao iniciar a produção podia rodar duas vezes e duplicar a linha (PV 1325: 6 casos no banco), o que dobrava a comissão do técnico.
+ */
+export async function inserirResponsaveisSemRepetir(linhas: any[]): Promise<{ error: any }> {
+  if (!linhas || !linhas.length) return { error: null };
+  const ids = [...new Set(linhas.map(l => l.referencia_id))];
+  const { data: ja, error: erroLer } = await supabase.from('responsaveis_producao').select('tipo,referencia_id,tecnico_id,papel').in('referencia_id', ids);
+  if (erroLer) return { error: erroLer };
+  const chave = (l: any) => [l.tipo, l.referencia_id, l.tecnico_id, l.papel].join('|');
+  const existentes = new Set((ja || []).map(chave));
+  const vistas = new Set<string>();
+  const novas = linhas.filter(l => { const k = chave(l); if (existentes.has(k) || vistas.has(k)) return false; vistas.add(k); return true; });
+  if (!novas.length) return { error: null };
+  const { error } = await supabase.from('responsaveis_producao').insert(novas);
+  return { error };
+}

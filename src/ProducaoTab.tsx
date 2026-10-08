@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
-import { EquipeDaOpModal } from './EquipeDaOp';
+import { EquipeDaOpModal, inserirResponsaveisSemRepetir } from './EquipeDaOp';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, VeiculoOuEnvio, VeiculoCompacto } from './AcnTabShared';
 import { ModalAnexos, useContagemAnexos } from './OplAnexosWidget';
@@ -789,7 +789,7 @@ function PainelSacVeicular({ currentUser }) {
       upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
     ].filter(Boolean);
     if (seedResponsaveis.length > 0) {
-      const { error: erroSeedManu } = await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r: any) => ({
+      const { error: erroSeedManu } = await inserirResponsaveisSemRepetir(seedResponsaveis.map((r: any) => ({
         tipo: 'os', referencia_id: os.id, papel: 'responsavel',
         tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
         adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
@@ -824,7 +824,7 @@ function PainelSacVeicular({ currentUser }) {
     const nome = papel === 'responsavel' ? novoRespNomeOS : novoApoioNomeOS;
     const id   = papel === 'responsavel' ? novoRespIdOS   : novoApoioIdOS;
     if (!nome.trim()) { alert('Selecione um técnico.'); return; }
-    const { error: erroAdd } = await supabase.from('responsaveis_producao').insert([{
+    const { error: erroAdd } = await inserirResponsaveisSemRepetir([{
       tipo: 'os', referencia_id: os.id, papel, tecnico_id: id, tecnico_nome: nome,
       adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
     }]);
@@ -2049,7 +2049,7 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
         upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
       ].filter(Boolean);
       if (seed.length > 0) {
-        const { error: erroSeed } = await supabase.from('responsaveis_producao').insert(seed.map(r => ({
+        const { error: erroSeed } = await inserirResponsaveisSemRepetir(seed.map(r => ({
           tipo: 'op', referencia_id: alvo.id, papel: 'responsavel',
           tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
           adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
@@ -2336,7 +2336,7 @@ export default function ProducaoTab({ currentUser }) {
       upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
     ].filter(Boolean);
     if (seedResponsaveis.length > 0) {
-      const { error: erroSeed } = await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r:any) => ({
+      const { error: erroSeed } = await inserirResponsaveisSemRepetir(seedResponsaveis.map((r:any) => ({
         tipo: 'op', referencia_id: opl.id, papel: 'responsavel',
         tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
         adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
