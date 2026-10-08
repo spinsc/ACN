@@ -2735,10 +2735,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
    * pipeline das dispensas; escolher um período mostra o pipeline do período;
    * e os quatro cartões continuam de pé em qualquer um dos casos.
    */
-  const baseSemStatus = licitacoes
+  const baseSemStatusSemMarkup = licitacoes
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
     .filter(l => !filtroTemp || l.temperatura === filtroTemp)
-    .filter(l => !filtroMarkup || idFaixaMarkup(markupPorLicit[l.id]?.pct) === filtroMarkup)
     .filter(l => filtroAnaliseSetor === 'todas' || (analisesPendentesPorLicit[l.id]||[]).includes(filtroAnaliseSetor))
     .filter(l => {
       if (!filtroPeriodoDe && !filtroPeriodoAte) return true;
@@ -2748,6 +2747,13 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       if (filtroPeriodoAte && disp > new Date(filtroPeriodoAte + 'T23:59:59')) return false;
       return true;
     });
+  const baseSemStatus = baseSemStatusSemMarkup
+    .filter(l => !filtroMarkup || idFaixaMarkup(markupPorLicit[l.id]?.pct) === filtroMarkup);
+  // 08/10/2026: o número entre parênteses de cada faixa de markup contava TODAS as licitações, ignorando os outros filtros (status, tipo, temperatura, análise,
+  // período) — não batia com o que a lista mostrava ao escolher a faixa. Agora conta o que a lista mostraria: todos os filtros, menos o próprio markup.
+  const qtdPorFaixaMarkup = (id: string) => baseSemStatusSemMarkup
+    .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
+    .filter(l => idFaixaMarkup(markupPorLicit[l.id]?.pct) === id).length;
 
   const lista = listaRecentes || baseSemStatus
     .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
@@ -2879,7 +2885,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
             <select className="acn-input acn-lic-auto" value={filtroMarkup} onChange={e=>setFiltroMarkup(e.target.value)} aria-label="Faixa de markup">
               <option value="">Todas as faixas</option>
               {OPCOES_FAIXA_MARKUP.filter(f => f.id !== 'sem_regua').map(f => {
-                const n = licitacoes.filter(l => idFaixaMarkup(markupPorLicit[l.id]?.pct) === f.id).length;
+                const n = qtdPorFaixaMarkup(f.id);
                 return (n > 0 || filtroMarkup === f.id) ? <option key={f.id} value={f.id}>{f.label} ({n})</option> : null;
               })}
             </select>

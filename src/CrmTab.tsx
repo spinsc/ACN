@@ -609,13 +609,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   );
   // faixa de markup do card (a mesma do selo: corte do tipo de negócio dele; sem preço formado = "neutro")
   const faixaDoCard = (o: any) => idFaixaMarkup(markupPorOp[o.id]?.pct, o.tipo_negocio ? bandasMarkup[o.tipo_negocio] : undefined);
-  const opsFiltradas   = opsFunil.filter(o => {
+  const passaSemMarkup = (o: any) => {
     if (filtResp && o.responsavel_nome !== filtResp) return false;
     if (filtTemp && o.temperatura !== filtTemp) return false;
     if (filtTipoNegocio && o.tipo_negocio !== filtTipoNegocio) return false;
-    if (filtMarkup && faixaDoCard(o) !== filtMarkup) return false;
     return combinaBusca([o.titulo, o.orgao, o.numero_edital], busca);
-  });
+  };
+  const opsFiltradas   = opsFunil.filter(o => passaSemMarkup(o) && (!filtMarkup || faixaDoCard(o) === filtMarkup));
+  // 08/10/2026: o número de cada faixa de markup contava o funil inteiro, ignorando responsável, temperatura, tipo e busca — não batia com o quadro. Agora conta o que o quadro mostraria (todos os filtros, menos o próprio markup).
+  const qtdPorFaixaMarkup = (id: string) => opsFunil.filter(o => passaSemMarkup(o) && faixaDoCard(o) === id).length;
 
   // Quais cards do quadro têm alteração ainda não vista por este usuário — 2
   // consultas em lote (não N), pra colorir a lateral do card (ver renderCard).
@@ -2280,9 +2282,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     };
 
     // Ações do cartão: "Atualizar" e as demais ficam no menu ⋯ (mesmas regras de antes)
+    // 08/10/2026 (pedido do usuário): sem a entrada "Abrir" no menu ⋯ — o clique no card (ou no título) já abre, nas mesmas condições (podeAbrir).
     const acoes = [
       { rotulo: 'Atualizar andamento', icone: mdiUpdate, onClick: () => abrirAndamento(op) },
-      { rotulo: 'Abrir', icone: mdiFolderOpenOutline, onClick: abrir, oculto: perdido || desistiu },
       { rotulo: 'Temperatura', icone: mdiThermometer, onClick: () => { setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }, oculto: funil !== 'venda_direta' || perdido || desistiu },
       { rotulo: opsDoCard.length ? 'Lançar outra OP' : 'Lançar OP', icone: mdiClipboardTextOutline, onClick: lancarOp, oculto: !ganho },
       { rotulo: 'Lançar OS', icone: mdiWrenchOutline, onClick: () => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }, oculto: !(ganho && funil === 'venda_direta') },
@@ -3022,11 +3024,11 @@ function ColunaRolavel({ children }: any) {
           {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         {filtTipoNegocio && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltTipoNegocio('')} title="Limpar tipo" aria-label="Limpar tipo" />}
-        {/* Filtro por faixa de markup (as mesmas faixas do selo do card; o número entre parênteses é quantos cards do funil caem em cada uma) */}
+        {/* Filtro por faixa de markup (as mesmas faixas do selo do card; o número entre parênteses é quantos cards o quadro mostraria em cada uma, com os outros filtros aplicados) */}
         <select className="acn-input acn-crm-sel170" value={filtMarkup} onChange={e => setFiltMarkup(e.target.value)} aria-label="Faixa de markup">
           <option value="">Todas as faixas de markup</option>
           {OPCOES_FAIXA_MARKUP.map(f => {
-            const n = opsFunil.filter(o => faixaDoCard(o) === f.id).length;
+            const n = qtdPorFaixaMarkup(f.id);
             return (n > 0 || filtMarkup === f.id) ? <option key={f.id} value={f.id}>{f.label} ({n})</option> : null;
           })}
         </select>
