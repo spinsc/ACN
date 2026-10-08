@@ -51,6 +51,7 @@ import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type G
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { OndeEstaCelula } from './OndeEstaAgora';
 import ResumoLoteOpl from './ResumoLoteOpl';
+import { podeFaturarAntes, liberarFaturamentoAntecipado } from './FaturamentoAntecipado';
 import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias, resumoDasOps } from './EtapasOp';
 import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
 import { VeiculoDaOp } from './VeiculoCadastro';
@@ -302,6 +303,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
   const [lotesExpandidosOpls, setLotesExpandidosOpls] = useState<Record<string,boolean>>({});
   const [resumoLoteBase, setResumoLoteBase] = useState<string | null>(null);   // lote cujo cartão de resumo está aberto (08/10/2026)
+  const [resumoLoteCompleto, setResumoLoteCompleto] = useState<any[] | null>(null);   // as OPs do lote com TODAS as colunas (a lista traz só as da tabela: sem valores nem itens vendidos)
+  useEffect(() => {
+    if (!resumoLoteBase) { setResumoLoteCompleto(null); return; }
+    let vivo = true;
+    supabase.from('oples').select('*').or(`opl.eq.${resumoLoteBase},opl.like.${resumoLoteBase}/%`).not('status_geral', 'in', '("Faturado","Cancelado")')
+      .then(({ data }) => { if (vivo) setResumoLoteCompleto(data || null); });
+    return () => { vivo = false; };
+  }, [resumoLoteBase]);
   const [oplEditando, setOplEditando]   = useState<any|null>(null);   // OPL sendo editada
   const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
   const [oplFormEdit, setOplFormEdit]   = useState<any>({});
@@ -1416,7 +1425,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data, error: errLista } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,veiculo_id,' + COLUNAS_MARCOS_OP)
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,veiculo_id,fat_antecipado_em,fat_antecipado_por,fat_antecipado_motivo,data_emissao_nf,' + COLUNAS_MARCOS_OP)
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     // 7.62: a leitura que falhava virava "Nenhuma OP em aberto" — e sumia com a lista que já estava na tela
@@ -3202,6 +3211,19 @@ function ColunaRolavel({ children }: any) {
         // ignora as demais).
         const LIBERAVEIS_FISCAL = [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL];
         // Pedido de compra do LOTE inteiro (08/10/2026): um pedido só, ligado à OP "mãe" (a primeira unidade) e com a base do lote em "opl"; a descrição diz quantas unidades e quais são.
+        // Faturar ANTES de terminar a adaptação (08/10/2026, desenho aprovado pelo usuário): pede a justificativa e marca as OPs; o Fiscal as vê no quadro de faturamento antecipado.
+        const faturarAntes = async (ops: any[]) => {
+          const elegiveis = ops.filter(podeFaturarAntes);
+          if (!elegiveis.length) { alert('Nenhuma destas OPs pode ser liberada antes: já passaram da etapa de liberação ou já foram liberadas.'); return; }
+          const quem = elegiveis.length === 1 ? `a OP ${elegiveis[0].opl}` : `${elegiveis.length} OPs`;
+          const motivo = await pedirTexto(`Liberar ${quem} para o Fiscal faturar ANTES de terminar a adaptação.\n\nA OP continua na produção; só a nota é antecipada. Justificativa (obrigatória):`);
+          if (motivo == null) return;
+          if (!motivo.trim()) { alert('Informe a justificativa.'); return; }
+          const r = await liberarFaturamentoAntecipado(elegiveis, motivo.trim(), currentUser);
+          fetchOplsEmAberto();
+          if (r.falhas.length) mostrarAviso(`Algumas OPs não foram liberadas\n${r.falhas.join('\n')}`, 'erro');
+          if (r.ok.length) alert(`${r.ok.length} OP(s) liberada(s) ao Fiscal para faturar antes. A adaptação continua.`);
+        };
         const pedirCompraDoLote = (base: string, irmaos: any[]) => {
           const rep = irmaos[0];
           const nomes = irmaos.map((o: any) => o.opl).sort((a: any, b: any) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }));
@@ -3440,6 +3462,16 @@ function ColunaRolavel({ children }: any) {
                                     LIBERAR FISCAL
                                   </Botao>
                                 )}
+                                {podeFaturarAntes(o) && (
+                                  <Botao pequeno icone={mdiSendOutline} title="Libera o Fiscal para faturar antes de terminar a adaptação (pede justificativa)" onClick={() => faturarAntes([o])}>
+                                    FATURAR ANTES
+                                  </Botao>
+                                )}
+                                {o.fat_antecipado_em && !aguardaLiberacaoComercial(o.status_geral) && o.status_geral !== 'Aguarda Emissao NF' && o.status_geral !== 'Faturado e Disponivel para Entrega' && (
+                                  <Selo familia="atencao" ponto={false} title={`Faturamento antecipado liberado por ${o.fat_antecipado_por || '—'}: ${o.fat_antecipado_motivo || ''}`}>
+                                    FAT. ANTECIPADO{o.data_emissao_nf ? ' · NF emitida' : ' · aguarda nota'}
+                                  </Selo>
+                                )}
                                 {o.status_geral === 'Devolvida Comercial' && (() => {
                                   const d = destinoDaDevolucao(o);
                                   return (
@@ -3545,6 +3577,12 @@ function ColunaRolavel({ children }: any) {
                                     onClick={()=>pedirCompraDoLote(base, irmaos)}>
                                     Compra
                                   </Botao>
+                                  {irmaos.some(podeFaturarAntes) && (
+                                    <Botao pequeno icone={mdiSendOutline} title="Libera o Fiscal para faturar o lote antes de terminar a adaptação (pede justificativa)"
+                                      onClick={()=>faturarAntes(irmaos)}>
+                                      Fat. antes
+                                    </Botao>
+                                  )}
                                   {irmaos.some((o:any) => LIBERAVEIS_FISCAL.includes(o.status_geral)) && (
                                     <Botao pequeno variante="primario" icone={mdiSendOutline} disabled={aplicandoLoteOpls} title="Libera para o Fiscal as unidades do lote que aguardam a liberação comercial"
                                       onClick={()=>liberarFiscalEmLote(new Set(irmaos.map((o:any) => o.id)))}>
@@ -3565,14 +3603,14 @@ function ColunaRolavel({ children }: any) {
             )}
 
             {resumoLoteBase && (() => {
-              const irmaosDoLote = oplsEmAberto.filter((o: any) => (o.opl || '').replace(/\/\d+$/, '') === resumoLoteBase);
+              const irmaosDoLote = (resumoLoteCompleto && resumoLoteCompleto.length) ? resumoLoteCompleto : oplsEmAberto.filter((o: any) => (o.opl || '').replace(/\/\d+$/, '') === resumoLoteBase);
               if (irmaosDoLote.length === 0) return null;
               const maisParadaLote = irmaosDoLote.map((o: any) => desdeOpls[o.id]).filter(Boolean).sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime())[0];
               return (
                 <ResumoLoteOpl base={resumoLoteBase} irmaos={irmaosDoLote} desde={maisParadaLote ? textoDias(diasDesde(maisParadaLote.data)) : ''}
                   onClose={() => setResumoLoteBase(null)}
                   onCompra={() => { setResumoLoteBase(null); pedirCompraDoLote(resumoLoteBase, irmaosDoLote); }}
-                  onLiberarFiscal={() => liberarFiscalEmLote(new Set(irmaosDoLote.map((o: any) => o.id)))}
+                  onLiberarFiscal={async () => { await liberarFiscalEmLote(new Set(irmaosDoLote.map((o: any) => o.id))); setResumoLoteBase(null); }}
                   onAbrirUnidade={(o: any) => { setResumoLoteBase(null); setOplDoCardAberta(o); }} />
               );
             })()}

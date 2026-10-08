@@ -5,7 +5,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
-import { statusAposCqAprovado, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { statusAposCqAprovado, aguardaLiberacaoComercial, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { Botao, Faixa } from './Interface';
 import { itensConjunto } from './ConfigEstrutura';
 import Icone from './Icone';
@@ -209,6 +209,8 @@ export default function QualidadeTab({ currentUser }) {
         resultado_cq: 'Aprovado',
         cq_auditor: currentUser?.nome,
         ...(tempoCq != null ? { tempo_qualidade_horas: tempoCq } : {}),
+        // faturamento antecipado: a liberação do Comercial já foi dada antes; a hora dela é o ponto de partida do tempo do Fiscal
+        ...(row.fat_antecipado_em ? { data_liberacao_comercial: row.data_liberacao_comercial || row.fat_antecipado_em } : {}),
       };
       const { error } = await supabase.from('oples').update(novoRow).eq('id', row.id);
       if (error) { alert('Erro ao aprovar a OP: ' + error.message + '\nA auditoria foi registrada, mas a OP continua aguardando o CQ: tente de novo (uma nova auditoria será registrada).'); setUploading(false); return; }
@@ -218,7 +220,7 @@ export default function QualidadeTab({ currentUser }) {
       const { error: errLog } = await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
         evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}` +
-          (!aguardaLiberacaoComercial(statusNovo) ? ' — segue para embalagem e cotação de frete.' : ''),
+          (statusNovo === STATUS_EMBALAGEM ? ' — segue para embalagem e cotação de frete.' : row.fat_antecipado_em ? (row.data_emissao_nf ? ' — faturamento antecipado: a nota já foi emitida, segue direto para a entrega.' : ' — faturamento antecipado: segue direto para o Fiscal emitir a nota.') : ''),
         status_anterior: 'Aguardando CQ', status_novo: statusNovo,
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);

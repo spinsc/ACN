@@ -148,7 +148,14 @@ export function filaDaOp(o: any): DestinoFila {
 /** Depois do CQ aprovado: fluxo que termina em envio vai para a embalagem
  *  (que abre a cotação de frete) em vez de esperar liberação comercial. */
 export function statusAposCqAprovado(o: any): string {
-  return serralheriaSegueParaAdaptacao(o) ? STATUS_EMBALAGEM : STATUS_AGUARDANDO_LIBERACAO_COMERCIAL;
+  return serralheriaSegueParaAdaptacao(o) ? STATUS_EMBALAGEM : statusDeLiberacaoComercial(o);
+}
+
+/** Para onde a OP vai quando chega a hora de a liberação comercial acontecer. Normalmente espera o Comercial liberar; com FATURAMENTO ANTECIPADO (08/10/2026, oples.fat_antecipado_em)
+ *  o Comercial já liberou antes: com a nota já registrada pelo Fiscal vai direto para a entrega; sem nota, direto para a fila do Fiscal. */
+export function statusDeLiberacaoComercial(o: any): string {
+  if (!o?.fat_antecipado_em) return STATUS_AGUARDANDO_LIBERACAO_COMERCIAL;
+  return o.data_emissao_nf ? 'Faturado e Disponivel para Entrega' : 'Aguarda Emissao NF';
 }
 
 /** Tipo de Projeto que JÁ define a rota: kit vendido para envio. Com ele o

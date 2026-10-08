@@ -12,7 +12,7 @@ import { creditarCompraRecebida, fmtQtd } from './Estoque';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
-import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -752,7 +752,7 @@ function FretesPanel({ currentUser }: any) {
           criado_em: new Date().toISOString(),
         });
         if (opl?.status_geral === 'Aguardando Cotacao Frete') {
-          const statusNovo = STATUS_AGUARDANDO_LIBERACAO_COMERCIAL;
+          const statusNovo = statusDeLiberacaoComercial(opl);
           await supabase.from('oples').update({ status_geral: statusNovo }).eq('id', opl.id);
           logChange({ module: 'logistica', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
             oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: statusNovo }, user: currentUser });

@@ -11,6 +11,7 @@ import { Botao, Selo, Tag, MenuAcoes } from './Interface';
 import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose, mdiAccountMultipleOutline } from '@mdi/js';
 import { EquipeDaOpModal, situacaoDaEquipe, faltaApontar } from './EquipeDaOp';
 import { podeEditarEquipeDaOp } from './utils/permissoes';
+import { FiscalAntecipadas } from './FaturamentoAntecipado';
 
 const semDado = (v) => !v || !String(v).trim();
 const STATUS_FATURADA = ['Faturado e Disponivel para Entrega', 'Faturado'];
@@ -464,6 +465,8 @@ export default function FiscalTab({ currentUser }) {
   // como no PCP — a devolução é a saída de exceção, não o caminho normal.
   return (
     <div>
+      {/* Faturamento antecipado (08/10/2026): OPs que o Comercial liberou para faturar antes de terminar a adaptação */}
+      <FiscalAntecipadas currentUser={currentUser} />
       {/* RESUMO — notas pendentes / emitidas (OPs + OS veiculares, tudo que está na fila agora) */}
       <div className="acn-kpis">
         <div className="acn-kpi">

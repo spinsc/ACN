@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
-import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -367,7 +367,7 @@ Embalar e enviar assim mesmo?`)) return;
     const baixaEmb = conferencia.length
       ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser })
       : null;
-    const gravouOp = await setAlmox(opl, 'Kit OK', freteComCliente ? STATUS_AGUARDANDO_LIBERACAO_COMERCIAL : 'Aguardando Cotacao Frete',
+    const gravouOp = await setAlmox(opl, 'Kit OK', freteComCliente ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete',
       [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · '), {
       ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
       seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
