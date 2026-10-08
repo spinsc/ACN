@@ -1065,7 +1065,7 @@ export function textoDaBaixa(resumo: any) {
 export async function carregarItensControlados() {
   const { data } = await supabase.from('cadastro_itens')
     .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,ativo,origem_producao,setor_fabricante,'
-      + 'tem_inacabado,estoque_inacabado,inacabado_minimo,inacabado_ideal,servico_acabamento,servico_bruto')
+      + 'tem_inacabado,estoque_inacabado,inacabado_minimo,inacabado_ideal,servico_acabamento,servico_bruto,categoria_estoque_id')
     .eq('controla_estoque', true).order('nome');
   return data || [];
 }
@@ -1774,6 +1774,94 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
   );
 }
 
+/** Janela das categorias do estoque (Almoxarifado): criar, renomear, mudar a ordem e apagar. Apagar uma categoria não apaga item nenhum: os itens dela ficam "sem categoria". */
+function ModalCategoriasEstoque({ categorias, itens, currentUser, onClose, onMudou }: any) {
+  const [novo, setNovo] = useState('');
+  const [editando, setEditando] = useState<{ id: string; nome: string } | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const nomeJaExiste = (nome: string, ignorarId?: string) => categorias.some((c: any) => c.id !== ignorarId && c.nome.trim().toLowerCase() === nome.trim().toLowerCase());
+
+  const criar = async () => {
+    const nome = novo.trim();
+    if (!nome) return;
+    if (nomeJaExiste(nome)) { alert('Já existe uma categoria com esse nome.'); return; }
+    setOcupado(true);
+    const ordem = Math.max(0, ...categorias.map((c: any) => c.ordem || 0)) + 1;
+    const { error } = await supabase.from('estoque_categorias').insert([{ nome, ordem, criado_por_nome: currentUser?.nome || currentUser?.email || null }]);
+    setOcupado(false);
+    if (error) { alert('Não foi possível criar a categoria: ' + error.message); return; }
+    setNovo(''); onMudou();
+  };
+  const renomear = async () => {
+    if (!editando) return;
+    const nome = editando.nome.trim();
+    if (!nome) return;
+    if (nomeJaExiste(nome, editando.id)) { alert('Já existe uma categoria com esse nome.'); return; }
+    setOcupado(true);
+    const { error } = await supabase.from('estoque_categorias').update({ nome }).eq('id', editando.id);
+    setOcupado(false);
+    if (error) { alert('Não foi possível renomear: ' + error.message); return; }
+    setEditando(null); onMudou();
+  };
+  // troca a ordem com a vizinha: regrava as duas
+  const mover = async (idx: number, delta: number) => {
+    const a = categorias[idx], b = categorias[idx + delta];
+    if (!a || !b) return;
+    setOcupado(true);
+    const ordA = a.ordem ?? idx, ordB = b.ordem ?? (idx + delta);
+    const r1 = await supabase.from('estoque_categorias').update({ ordem: ordB === ordA ? ordA + delta : ordB }).eq('id', a.id);
+    const r2 = await supabase.from('estoque_categorias').update({ ordem: ordA }).eq('id', b.id);
+    setOcupado(false);
+    if (r1.error || r2.error) { alert('Não foi possível mudar a ordem: ' + (r1.error || r2.error).message); }
+    onMudou();
+  };
+  const apagar = async (c: any) => {
+    const n = itens.filter((i: any) => i.categoria_estoque_id === c.id).length;
+    if (!await confirmar(`Apagar a categoria "${c.nome}"?\n\n${n ? `${n} item(ns) dela ficam sem categoria (nenhum item é apagado).` : 'Nenhum item usa esta categoria.'}`)) return;
+    setOcupado(true);
+    const { error } = await supabase.from('estoque_categorias').delete().eq('id', c.id);
+    setOcupado(false);
+    if (error) { alert('Não foi possível apagar a categoria: ' + error.message); return; }
+    onMudou();
+  };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 2100 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 460 }} role="dialog" aria-label="Categorias do estoque">
+        <div className="modal-title">🗂️ Categorias do estoque</div>
+        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+          Só para organizar a lista de itens sob controle (não é a categoria fiscal do cadastro de itens). A categoria de cada item é escolhida na própria lista.
+        </div>
+        {categorias.length === 0 && <div className="acn-empty">Nenhuma categoria ainda. Crie a primeira abaixo.</div>}
+        {categorias.map((c: any, idx: number) => (
+          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
+            {editando?.id === c.id ? (<>
+              <input className="acn-input" style={{ flex: 1 }} autoFocus value={editando.nome} onChange={e => setEditando({ id: c.id, nome: e.target.value })}
+                onKeyDown={e => { if (e.key === 'Enter') renomear(); }} />
+              <button className="acn-btn" style={{ background: '#16a34a' }} disabled={ocupado} onClick={renomear}>Salvar</button>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setEditando(null)}>Cancelar</button>
+            </>) : (<>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.nome} <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 10 }}>· {itens.filter((i: any) => i.categoria_estoque_id === c.id).length} itens</span></span>
+              <button title="Subir" aria-label={'Subir ' + c.nome} disabled={ocupado || idx === 0} onClick={() => mover(idx, -1)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>▲</button>
+              <button title="Descer" aria-label={'Descer ' + c.nome} disabled={ocupado || idx === categorias.length - 1} onClick={() => mover(idx, 1)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>▼</button>
+              <button title="Renomear" aria-label={'Renomear ' + c.nome} onClick={() => setEditando({ id: c.id, nome: c.nome })} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>✎</button>
+              <button title="Apagar" aria-label={'Apagar ' + c.nome} disabled={ocupado} onClick={() => apagar(c)} style={{ border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', borderRadius: 4, cursor: 'pointer' }}>✕</button>
+            </>)}
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+          <input className="acn-input" style={{ flex: 1 }} placeholder="Nova categoria (ex.: Parafusos)" value={novo} onChange={e => setNovo(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') criar(); }} />
+          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={ocupado || !novo.trim()} onClick={criar}>Criar</button>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PainelEstoque({ currentUser }: any) {
   const [itens, setItens] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -1791,12 +1879,19 @@ export function PainelEstoque({ currentUser }: any) {
   const [movimentos, setMovimentos] = useState<any[]>([]);
   const [verExtrato, setVerExtrato] = useState(false);
   const [reservas, setReservas] = useState<Map<string, number>>(new Map());
+  // Categorias do estoque (pedido do usuário em 07/10/2026): lista própria do Almoxarifado, separada da categoria fiscal do cadastro de itens.
+  const [categorias, setCategorias] = useState<any[]>([]);
+  const [erroCategorias, setErroCategorias] = useState('');
+  const [filtroCat, setFiltroCat] = useState('');          // '' = todas · 'sem' = sem categoria · senão o id da categoria
+  const [gerindoCats, setGerindoCats] = useState(false);
   const pode = podeGerirEstoque(currentUser);
 
   const recarregar = async () => {
     setCarregando(true);
     setItens(await carregarItensControlados());
     setReservas(await reservadoPorItem());
+    const { data: cats, error: errCats } = await supabase.from('estoque_categorias').select('*').eq('ativo', true).order('ordem').order('nome');
+    if (errCats) setErroCategorias(errCats.message); else { setErroCategorias(''); setCategorias(cats || []); }
     const { data } = await supabase.from('estoque_movimentos')
       .select('id,item_nome,tipo,quantidade,saldo_depois,motivo,retirado_por_nome,vinculo_descricao,criado_por_nome,criado_em')
       .order('criado_em', { ascending: false }).limit(15);
@@ -1901,7 +1996,22 @@ export function PainelEstoque({ currentUser }: any) {
     recarregar();
   };
 
-  const lista = itens.filter(i => combinaBusca([i.nome, i.codigo], busca));
+  // Muda a categoria de estoque de um item (só quem gere o estoque). Confere o erro e só atualiza a tela se gravou.
+  const trocarCategoria = async (item: any, categoriaId: string) => {
+    const novo = categoriaId || null;
+    const { error } = await supabase.from('cadastro_itens').update({ categoria_estoque_id: novo }).eq('id', item.id);
+    if (error) { alert('Não foi possível trocar a categoria: ' + error.message); return; }
+    setItens(lista => lista.map(x => x.id === item.id ? { ...x, categoria_estoque_id: novo } : x));
+  };
+
+  const filtradaPorBusca = itens.filter(i => combinaBusca([i.nome, i.codigo], busca));
+  const lista = filtradaPorBusca.filter(i => !filtroCat || (filtroCat === 'sem' ? !i.categoria_estoque_id : i.categoria_estoque_id === filtroCat));
+  // grupos da tabela: cada categoria na ordem escolhida pelo Almoxarifado, e "Sem categoria" por último; sem nenhuma categoria criada, a tabela segue sem cabeçalhos de grupo como antes
+  const nomeDaCategoria = (id: string) => categorias.find(c => c.id === id)?.nome;
+  const grupos = categorias.length === 0 ? [{ id: '', nome: '', itens: lista }] : [
+    ...categorias.map(c => ({ id: c.id, nome: c.nome, itens: lista.filter(i => i.categoria_estoque_id === c.id) })),
+    { id: 'sem', nome: 'Sem categoria', itens: lista.filter(i => !i.categoria_estoque_id || !nomeDaCategoria(i.categoria_estoque_id)) },
+  ].filter(g => g.itens.length > 0);
   const abaixo = itens.filter(i => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(i).chave));
 
   return (
@@ -1919,6 +2029,13 @@ export function PainelEstoque({ currentUser }: any) {
               title="Conferir todos os itens controlados e abrir o que estiver faltando"
               style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#b45309', color: '#fff', cursor: varrendo ? 'wait' : 'pointer' }}>
               {varrendo ? 'Conferindo…' : '🔎 Conferir mínimos'}
+            </button>
+          )}
+          {pode && (
+            <button onClick={e => { e.stopPropagation(); setGerindoCats(true); }}
+              title="Criar, renomear, ordenar e apagar as categorias do estoque"
+              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: '1px solid #16a34a', borderRadius: 4, background: '#fff', color: '#15803d', cursor: 'pointer' }}>
+              🗂️ Categorias
             </button>
           )}
           {pode && itens.length > 0 && (
@@ -1958,6 +2075,24 @@ export function PainelEstoque({ currentUser }: any) {
           </div>
         )}
 
+        {erroCategorias && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>
+            Não foi possível ler as categorias do estoque ({erroCategorias}). A lista abaixo aparece sem separação por categoria.{' '}
+            <button onClick={recarregar} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+          </div>
+        )}
+        {categorias.length > 0 && itens.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Categoria</span>
+            <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} aria-label="Filtrar por categoria"
+              style={{ padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11 }}>
+              <option value="">Todas ({filtradaPorBusca.length})</option>
+              {categorias.map(c => <option key={c.id} value={c.id}>{c.nome} ({filtradaPorBusca.filter(i => i.categoria_estoque_id === c.id).length})</option>)}
+              {filtradaPorBusca.some(i => !i.categoria_estoque_id) && <option value="sem">Sem categoria ({filtradaPorBusca.filter(i => !i.categoria_estoque_id).length})</option>}
+            </select>
+            {filtroCat && <button onClick={() => setFiltroCat('')} style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11 }}>✕ limpar</button>}
+          </div>
+        )}
         {itens.length > 6 && (
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar a lista..."
             style={{ width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11, marginBottom: 8, boxSizing: 'border-box' }} />
@@ -1973,13 +2108,27 @@ export function PainelEstoque({ currentUser }: any) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
             <thead>
               <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                {['Código', 'Item', 'Saldo', 'Reservado', 'Disponível', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
+                {['Código', 'Item', ...(pode && categorias.length ? ['Categoria'] : []), 'Saldo', 'Reservado', 'Disponível', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
                   <th key={h} style={{ padding: '4px 7px', fontSize: 9, fontWeight: 700, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {lista.map(i => {
+              {grupos.length === 0 && (
+                <tr><td colSpan={10} style={{ padding: 10, textAlign: 'center', color: '#94a3b8' }}>Nenhum item nesta categoria{busca.trim() ? ' com esse filtro' : ''}.</td></tr>
+              )}
+              {grupos.map(g => (<React.Fragment key={g.id || 'todos'}>
+              {g.nome && (
+                <tr>
+                  <td colSpan={10} style={{ padding: '7px 7px 3px', fontSize: 10, fontWeight: 800, color: '#15803d', background: '#f0fdf4', borderTop: '2px solid #bbf7d0' }}>
+                    {g.nome} <span style={{ fontWeight: 600, color: '#64748b' }}>· {g.itens.length} {g.itens.length === 1 ? 'item' : 'itens'}
+                      {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length > 0
+                        && <b style={{ color: '#b45309' }}> · {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length} precisando de reposição</b>}
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {g.itens.map(i => {
                 const s = situacaoEstoque(i);
                 return (
                   <tr key={i.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -1997,6 +2146,15 @@ export function PainelEstoque({ currentUser }: any) {
                         </div>
                       )}
                     </td>
+                    {pode && categorias.length > 0 && (
+                      <td style={{ padding: '4px 7px' }}>
+                        <select value={i.categoria_estoque_id || ''} onChange={e => trocarCategoria(i, e.target.value)} aria-label={'Categoria de ' + i.nome}
+                          style={{ padding: '2px 4px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 10, maxWidth: 150 }}>
+                          <option value="">— sem categoria —</option>
+                          {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        </select>
+                      </td>
+                    )}
                     <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
                     {/* saldo é o que está na prateleira; disponível é o que ainda
                         não tem dono. A diferença é o que outra OP já levou no papel. */}
@@ -2032,6 +2190,7 @@ export function PainelEstoque({ currentUser }: any) {
                   </tr>
                 );
               })}
+              </React.Fragment>))}
             </tbody>
           </table>
         )}
@@ -2082,6 +2241,11 @@ export function PainelEstoque({ currentUser }: any) {
 
       {retirando && (
         <ModalRetirada currentUser={currentUser} onClose={() => setRetirando(false)} onFeito={recarregar} />
+      )}
+
+      {gerindoCats && (
+        <ModalCategoriasEstoque categorias={categorias} itens={itens} currentUser={currentUser}
+          onClose={() => setGerindoCats(false)} onMudou={recarregar} />
       )}
 
       {definindo && (
