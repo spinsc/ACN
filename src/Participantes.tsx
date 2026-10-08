@@ -99,11 +99,24 @@ export function ParticipantesPicker({ value, onChange, donoEmail, rotulo = 'Quem
       {erro
         ? <div className="acn-ajuda acn-txt-erro">Não foi possível ler a lista de usuários ({erro}).</div>
         : (
-          <select className="acn-input" value="" aria-label="Adicionar participante"
-            onChange={e => { const u = usuarios.find((x: any) => String(x.id) === e.target.value); if (u) onChange([...escolhidos, { email: u.email, nome: u.nome }]); }}>
-            <option value="">+ Adicionar pessoa…</option>
-            {disponiveis.map((u: any) => <option key={u.id} value={String(u.id)}>{u.nome}</option>)}
-          </select>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className="acn-input" style={{ flex: 1, minWidth: 160 }} value="" aria-label="Adicionar participante"
+              onChange={e => { const u = usuarios.find((x: any) => String(x.id) === e.target.value); if (u) onChange([...escolhidos, { email: u.email, nome: u.nome }]); }}>
+              <option value="">+ Adicionar pessoa…</option>
+              {disponiveis.map((u: any) => <option key={u.id} value={String(u.id)}>{u.nome}</option>)}
+            </select>
+            {/* 08/10/2026 (pedido do usuário): selecionar todos de uma vez (quem já está na lista e o dono do item não entram duas vezes) */}
+            {disponiveis.length > 1 && (
+              <Botao pequeno type="button" onClick={() => onChange([...escolhidos, ...disponiveis.map((u: any) => ({ email: u.email, nome: u.nome }))])}
+                title={'Adiciona as ' + disponiveis.length + ' pessoas que ainda não estão na lista'}>
+                Selecionar todos ({disponiveis.length})
+              </Botao>
+            )}
+            {escolhidos.length > 1 && (
+              <Botao pequeno variante="discreto" type="button" onClick={async () => { if (!await confirmarRemocao('todos os ' + escolhidos.length + ' participantes')) return; onChange([]); }}
+                title="Tira todos da lista">Limpar</Botao>
+            )}
+          </div>
         )}
     </div>
   );
