@@ -369,7 +369,8 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
   const [opBuscaCompra, setOpBuscaCompra] = useState('');
   const [opResultadosCompra, setOpResultadosCompra] = useState<any[]>([]);
-  const [anexosCotacao, setAnexosCotacao] = useState<{nome:string,url:string}[]>([]);
+  // descricao do anexo (08/10/2026, pedido do usuário): texto livre que explica o arquivo; vai junto na lista JSON demandas_setoriais.anexos
+  const [anexosCotacao, setAnexosCotacao] = useState<{nome:string,url:string,descricao?:string}[]>([]);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const canVerValorCompra = ['Admin','Gerente','Compras'].includes(currentUser?.perfil);
   // 7.53: leitura que falha não pode parecer "nenhuma demanda", e um clique duplo em Iniciar/Concluir/Pausar/Salvar gravava duas vezes
@@ -1114,7 +1115,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
                 <div className="acn-selos">
                   <strong>Anexos: </strong>
                   {modalVer.anexos.map((a:any, i:number) => (
-                    <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-tag"><Icone path={mdiPaperclip} size={12} /> {a.nome || 'arquivo'}</a>
+                    <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+                      <a href={a.url} target="_blank" rel="noreferrer" className="acn-tag"><Icone path={mdiPaperclip} size={12} /> {a.nome || 'arquivo'}</a>
+                      {a.descricao && <span className="acn-ajuda" style={{ whiteSpace: 'pre-wrap' }}>{a.descricao}</span>}
+                    </span>
                   ))}
                 </div>
               )}
@@ -1205,6 +1209,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
                       </a>
                     ))}
                   </div>
+                  {anexosCotacao.map((a,i) => (
+                    <input key={'d'+i} className="acn-input" aria-label={'Descrição de ' + a.nome} placeholder={'Descrição de "' + a.nome + '" (opcional) — o que é este arquivo?'}
+                      value={a.descricao || ''} onChange={e => setAnexosCotacao(prev => prev.map((x, j) => j === i ? { ...x, descricao: e.target.value } : x))} />
+                  ))}
                   <input type="file" id="anexo-cotacao-input" hidden
                     onChange={e=>{const f=e.target.files?.[0]; if(f) uploadAnexoCotacao(f, modalConcluirCompra.id); e.target.value='';}} />
                   <Botao pequeno icone={mdiPaperclip} disabled={enviandoAnexo}
