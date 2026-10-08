@@ -4290,6 +4290,31 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 
 **O que ficou de fora:** o **card aberto** (painel da esquerda e abas da direita — 12e40 e 12e41) e a janela de **lançamento em lote de chassi/placa** (12e41); o editor de texto do andamento ainda tem `style` de tamanho de fonte (`RichTextInput` é componente compartilhado, fica para a fatia dos componentes compartilhados).
 
+### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
+
+Lista passada pelo usuário em 07/10/2026, com as dúvidas tiradas na hora e o trabalho feito de forma autônoma, **um commit e um push por item**. Decisões do usuário nessa conversa: markup = as faixas atuais (Markup baixo, Apertado, Bom, Na meta, Overmarkup, Sem cotação); "versão final" = a vencedora, e sem vencedora a de maior versão; editar atualização = só o autor e quem tem a marca DEV; excluir card com OP lançada ou formação vinculada = bloqueia e avisa; Telecom no dashboard = contagem (não tempo); estoque = lista de categorias própria do Almoxarifado; SAC lote = criar N OS de uma vez, agrupadas, com um card só no kanban (fica na etapa da OS mais atrasada); participantes = compromissos da agenda, tarefas do Financeiro, tarefas da Engenharia, agendamentos de manutenção e próximo contato do CRM, com notificação; CQ = serial de cada item vendido da OP menos os do conjunto elétrico, obrigatório com "sem serial" justificado; análise = continua só o autor editando; nota final publicada sozinha ao terminar.
+
+| # | Item | Situação | O que foi feito |
+|---|---|---|---|
+| 1 | Filtro por faixa de markup em Licitações e Comercial | ⬜ | |
+| 2 | Preços Formados: pesquisa por texto | ⬜ | |
+| 3 | Formação aberta: só a versão final visível; as outras num botão "Versões" (lista, resumo, trocar a final) | ⬜ | |
+| 4 | Kanban do Comercial: total de preços formados ao lado do status da coluna | ⬜ | |
+| 5 | Kanban do Comercial: reformulação (clique no título abre; achar o que simplificar) — e replicar onde valer | ⬜ | |
+| 6 | Editar uma atualização (andamento) em Licitações e Comercial | ⬜ | |
+| 7 | Excluir card em Comercial e Licitações (Admin; gerente só do próprio setor) | ⬜ | |
+| 8 | Dashboard geral: Telecom | ⬜ | |
+| 9 | Estoque por categoria (lista própria, configurada pelo Almoxarifado) | ⬜ | |
+| 10 | SAC: Kanban como visão de partida | ✅ 08/10/2026 | Chave de lembrança nova (`acn-sac-visao-v2`) para todos começarem no Kanban; quem escolher a lista depois tem a escolha lembrada. Testado: a tela abre com o chip Kanban ativo. |
+| 11 | SAC: lote de OS (um card no kanban) | ⬜ | |
+| 12 | Compras da OP: status e previsão de chegada dentro do card da OP | ⬜ | |
+| 13 | Confirmação em toda exclusão do sistema | ⬜ | |
+| 14 | Card da OPL: reformulação de apresentação (UX/UI) | ⬜ | |
+| 15 | Menção em tarefa/compromisso da agenda | ⬜ | |
+| 16 | Participantes em agendamento/tarefa/compromisso (agenda e calendário deles) | ⬜ | |
+| 17 | CQ: serial dos itens instalados (OP adaptada) | ⬜ | |
+| 18 | Análise: edição mostra data/hora/autor da edição | ⬜ | |
+
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex — **bloqueada** (medido em 02/10/2026)
 
 **Remedido em 06/10/2026** (depois da 12e11 a 12e14 — Tarefas do Financeiro, Almoxarifado, Engenharia e PCP; mesma conta, em `src/*.ts*` e `src/utils`): **83.791 linhas, 6.685 `style` inline (7.257 em 05/10), 7.155 cores soltas (7.619), 975 `<button>` crus (1.071), 360 `acn-btn` (430) e 890 usos de componentes do sistema (714)**; **96 arquivos** ainda têm estilo solto. Dos 6.685, **os maiores seguem os mesmos**: Admin 541, CRM 528, Formação de Preços 521, Produção 380, Licitações 347, Compras 338, Cotações 322, `AcnTabShared` 267, `DemandaAvulsaPanel` 238, `CadastroProdutosTab` 218, `VeiculosNfcTab` 195, `Estoque` 178, `SetorDemandaTab` 172 e `NovaOpOsModal` 166 — **as telas médias (PCP, Engenharia, Almoxarifado) estão fechadas; sobram as grandes e os componentes compartilhados** (os mais pesados: `AcnTabShared`, `DemandaAvulsaPanel`, `Estoque`, `NovaOpOsModal`, que aparecem dentro de várias telas já migradas).

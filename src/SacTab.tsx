@@ -211,8 +211,10 @@ export default function SacTab({ currentUser }) {
   const [loading, setLoading]           = useState(false);
   const [filtroStatus, setFiltroStatus]       = useState('');
   // Visão da aba Ordens de Serviço: a lista de sempre ou o quadro Kanban de 3 colunas (pedido do usuário em 05/10/2026). A escolha fica lembrada neste computador.
-  const [visaoOS, setVisaoOS] = useState<'lista' | 'kanban'>(() => { try { return localStorage.getItem('acn-sac-visao') === 'kanban' ? 'kanban' : 'lista'; } catch { return 'lista'; } });
-  const trocarVisaoOS = (v: string) => { setVisaoOS(v as any); try { localStorage.setItem('acn-sac-visao', v); } catch { /* sem armazenamento: vale só nesta sessão */ } };
+  // Pedido do usuário em 07/10/2026: o Kanban passa a ser a visão de partida (antes era a lista). Chave nova ("-v2") de propósito: a antiga guardava "lista" para quem só tinha aberto a tela, e
+  // seguiria forçando a lista; com a chave nova todo mundo começa no Kanban e a escolha de cada um volta a ser lembrada a partir daí.
+  const [visaoOS, setVisaoOS] = useState<'lista' | 'kanban'>(() => { try { return localStorage.getItem('acn-sac-visao-v2') === 'lista' ? 'lista' : 'kanban'; } catch { return 'kanban'; } });
+  const trocarVisaoOS = (v: string) => { setVisaoOS(v as any); try { localStorage.setItem('acn-sac-visao-v2', v); } catch { /* sem armazenamento: vale só nesta sessão */ } };
   const [filtroTipo, setFiltroTipo]         = useState('');
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [filtroEmpresa, setFiltroEmpresa]     = useState('');
