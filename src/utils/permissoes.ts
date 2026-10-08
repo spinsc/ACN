@@ -188,3 +188,13 @@ export function ehAutorDaAnalise(usuarioAtual: any, setor: any): boolean {
 export function podeEditarParecerDaAnalise(usuarioAtual: any, setor: any): boolean {
   return setor?.status === 'analisado' && ehAutorDaAnalise(usuarioAtual, setor);
 }
+
+// ── Atualização (andamento) dos cards de Comercial e Licitações (07/10/2026, decidido com o usuário) ───────────────────────────────────────────
+// Editar uma atualização já registrada: só o AUTOR dela e quem tem a marca DEV (a mesma regra dos avisos do sistema). Admin e gerente, por si, não editam a palavra de outra pessoa.
+// O autor é comparado por nome ou e-mail, sem diferenciar maiúscula (crm_historico guarda só o nome; licitacao_documentos guarda os dois).
+export function podeEditarAtualizacao(usuarioAtual: any, autorNome?: any, autorEmail?: any): boolean {
+  if (ehDev(usuarioAtual)) return true;
+  const eu = [usuarioAtual?.nome, usuarioAtual?.email].map(v => String(v || '').trim().toLowerCase()).filter(Boolean);
+  const autor = [autorNome, autorEmail].map(v => String(v || '').trim().toLowerCase()).filter(Boolean);
+  return eu.some(v => autor.includes(v));
+}

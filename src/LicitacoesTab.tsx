@@ -17,6 +17,8 @@ import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput'
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
 import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO } from './Interface';
+import { podeEditarAtualizacao } from './utils/permissoes';
+import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
@@ -1354,10 +1356,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   });
 
   // ── Editar andamento existente ────────────────────────────────────────────
+  // Regra de 07/10/2026 (decidida com o usuário, igual à do Comercial): só o AUTOR da atualização e quem tem a marca DEV editam; a edição guarda quem e quando (editado_em/editado_por) para a marca
+  // "editada". Antes qualquer pessoa que abrisse a licitação editava o texto de outra, sem deixar rastro.
   const salvarEdicaoAndamento = umaVez('edicao-andamento', async () => {
     if (!editandoDocId) return;
+    const alvo = andDocs.find((x: any) => x.id === editandoDocId);
+    if (alvo && !podeEditarAtualizacao(currentUser, alvo.criado_por_nome, alvo.criado_por)) { alert('Só quem escreveu a atualização (ou a equipe DEV) pode editá-la.'); return; }
+    const agoraEd = new Date().toISOString();
     const { error } = await supabase.from('licitacao_documentos')
-      .update({ conteudo: editandoDocTexto, atualizado_em: new Date().toISOString() })
+      .update({ conteudo: editandoDocTexto, atualizado_em: agoraEd, editado_em: agoraEd, editado_por: currentUser?.nome || currentUser?.email || 'Usuário' })
       .eq('id', editandoDocId);
     if (error) { alert('Erro: ' + error.message); return; }
     await salvarMencoes({
@@ -1803,12 +1810,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                           <div className="acn-ajuda acn-lic-and-meta">
                             <span><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'}</span>
                             <span><Icone path={mdiClockOutline} size={12} />{fmtDT(d.criado_em)}</span>
+                            <MarcaAtualizacaoEditada editadoEm={d.editado_em} editadoPor={d.editado_por} />
                           </div>
                         </>
                       )}
                     </div>
                     <div className="acn-lic-and-acoes">
-                      {editandoDocId !== d.id && (
+                      {editandoDocId !== d.id && podeEditarAtualizacao(currentUser, d.criado_por_nome, d.criado_por) && (
                         <Botao variante="discreto" pequeno icone={mdiPencilOutline} title="Editar" aria-label="Editar"
                           onClick={() => { setEditandoDocId(d.id); setEditandoDocTexto(d.conteudo||''); }} />
                       )}

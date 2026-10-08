@@ -40,7 +40,8 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiNoteTextOutline, mdiFileDocumentOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
-import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
+import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
+import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
@@ -772,6 +773,27 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setAndamentoHistorico([]);
     await lerAndamentoCrm(op.id);
   };
+
+  // Editar uma atualização já registrada (pedido do usuário em 07/10/2026; só o autor e a marca DEV, ver podeEditarAtualizacao). Vale para as duas listas (janela de andamento e aba do card aberto):
+  // grava o texto novo + editado_em/editado_por, sem mexer na data de criação, e confere o erro (a tela só volta ao normal se gravou).
+  const [editandoAndId, setEditandoAndId] = useState<string | null>(null);
+  const [editandoAndTexto, setEditandoAndTexto] = useState('');
+  const salvarEdicaoAndCrm = umaVez('edicao-andamento-crm', async () => {
+    if (!editandoAndId || !editandoAndTexto.trim()) return;
+    const id = editandoAndId, texto = editandoAndTexto.trim();
+    const opId = modalAndamento?.id || modalAbrir?.id;
+    const { error } = await supabase.from('crm_historico')
+      .update({ texto, editado_em: new Date().toISOString(), editado_por: currentUser?.nome || currentUser?.email || 'Usuário' }).eq('id', id);
+    if (error) { mostrarAviso(`Não foi possível salvar a edição\n${error.message}`, 'erro'); return; }
+    await salvarMencoes({
+      texto, mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || 'Sistema',
+      contexto: 'crm', contextoId: String(opId), contextoDescricao: `CRM: ${(modalAndamento || modalAbrir)?.titulo || '—'}`,
+      campo: 'andamento_crm', abaDestino: 'crm',
+    });
+    setEditandoAndId(null); setEditandoAndTexto('');
+    if (modalAndamento) await lerAndamentoCrm(modalAndamento.id);
+    if (modalAbrir) await fetchAbrirTabContent(modalAbrir, 'andamento');
+  });
 
   const salvarAndamentoCrm = umaVez('andamento-crm', async () => {
     if (!novoAndamento.trim() || !modalAndamento) return;
@@ -3979,13 +4001,23 @@ function ColunaRolavel({ children }: any) {
                 )}
                 {andamentoHistorico.map((h,i)=>(
                   <div key={h.id||i} className="acn-crm-and-item">
-                    {pareceHtmlFormatado(h.texto)
-                      ? <div className="acn-crm-and-txt" dangerouslySetInnerHTML={{ __html: h.texto }} />
-                      : <div className="acn-crm-and-txt"><Linkify text={h.texto} /></div>}
-                    <div className="acn-ajuda acn-crm-and-meta">
-                      <span><Icone path={mdiAccountOutline} size={12} />{h.usuario_nome||'—'}</span>
-                      <span><Icone path={mdiClockOutline} size={12} />{h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
-                    </div>
+                    {editandoAndId === h.id ? (
+                      <EdicaoDeAtualizacao rico texto={editandoAndTexto} onChange={setEditandoAndTexto}
+                        onSalvar={salvarEdicaoAndCrm} onCancelar={() => { setEditandoAndId(null); setEditandoAndTexto(''); }} />
+                    ) : (<>
+                      {pareceHtmlFormatado(h.texto)
+                        ? <div className="acn-crm-and-txt" dangerouslySetInnerHTML={{ __html: h.texto }} />
+                        : <div className="acn-crm-and-txt"><Linkify text={h.texto} /></div>}
+                      <div className="acn-ajuda acn-crm-and-meta">
+                        <span><Icone path={mdiAccountOutline} size={12} />{h.usuario_nome||'—'}</span>
+                        <span><Icone path={mdiClockOutline} size={12} />{h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                        <MarcaAtualizacaoEditada editadoEm={h.editado_em} editadoPor={h.editado_por} />
+                        {podeEditarAtualizacao(currentUser, h.usuario_nome) && (
+                          <Botao variante="discreto" pequeno icone={mdiPencilOutline} title="Editar esta atualização" aria-label="Editar esta atualização"
+                            onClick={() => { setEditandoAndId(h.id); setEditandoAndTexto(h.texto || ''); }} />
+                        )}
+                      </div>
+                    </>)}
                   </div>
                 ))}
               </div>
@@ -4640,17 +4672,27 @@ function ColunaRolavel({ children }: any) {
                           background: itemNaoLido(h.id) ? '#fefce8' : '#fff',
                           border: `1px solid ${itemNaoLido(h.id) ? '#fde047' : '#e2e8f0'}`,
                           borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                            <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}><Linkify text={h.texto} /></div>
-                            {currentUser?.perfil==='Admin' && (
-                              <button onClick={() => excluirAbrirDoc(h.id,'crm_historico')}
-                                style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
-                            )}
-                          </div>
-                          <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                            <span>👤 {h.usuario_nome||'—'}</span>
-                            <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
-                          </div>
+                          {editandoAndId === h.id ? (
+                            <EdicaoDeAtualizacao texto={editandoAndTexto} onChange={setEditandoAndTexto}
+                              onSalvar={salvarEdicaoAndCrm} onCancelar={() => { setEditandoAndId(null); setEditandoAndTexto(''); }} />
+                          ) : (<>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                              <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}><Linkify text={h.texto} /></div>
+                              {podeEditarAtualizacao(currentUser, h.usuario_nome) && (
+                                <button onClick={() => { setEditandoAndId(h.id); setEditandoAndTexto(h.texto || ''); }} title="Editar esta atualização" aria-label="Editar esta atualização"
+                                  style={{ background:'none', border:'none', color:'#64748b', fontSize:11, cursor:'pointer', marginLeft:6 }}>✎</button>
+                              )}
+                              {currentUser?.perfil==='Admin' && (
+                                <button onClick={() => excluirAbrirDoc(h.id,'crm_historico')}
+                                  style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
+                              )}
+                            </div>
+                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                              <span>👤 {h.usuario_nome||'—'}</span>
+                              <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                              <MarcaAtualizacaoEditada editadoEm={h.editado_em} editadoPor={h.editado_por} />
+                            </div>
+                          </>)}
                         </div>
                       ))}
                     </div>
