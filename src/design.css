@@ -2519,3 +2519,11 @@ html body .acn-input.acn-fp-pf-busca { flex: 1 1 260px; min-width: 220px; max-wi
 /* ── Comercial · total de preços formados no cabeçalho da coluna (07/10/2026) ── */
 .acn-crm-col-valor { margin-left: 2px; font-size: 11px; font-weight: 700; color: var(--acn-ok); white-space: nowrap; }
 body.dark .acn-crm-col-valor { color: #8fd3a5; }
+
+/* ── CQ · seriais dos itens instalados (07/10/2026) ── */
+.acn-cq-seriais { max-height: 300px; overflow-y: auto; gap: 10px; }
+.acn-cq-serial { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--acn-line); }
+.acn-cq-serial:last-child { border-bottom: 0; padding-bottom: 0; }
+.acn-cq-serial-cab { display: flex; align-items: center; gap: 10px; }
+.acn-cq-serial-cab > span:first-child { flex: 1; min-width: 0; }
+.acn-cq-semserial { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-muted); cursor: pointer; white-space: nowrap; }
