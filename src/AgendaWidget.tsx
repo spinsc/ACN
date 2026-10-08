@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import { ParticipantesPicker, ListaParticipantes, participantesDe, ehDonoDoItem, filtroDonoOuParticipante, novosParticipantes, notificarParticipantes } from './Participantes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -68,19 +70,29 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataHora, setDataHora] = useState('');
+  const [participantes, setParticipantes] = useState<any[]>([]);   // pedido do usuário em 07/10/2026: quem mais participa
   const [salvando, setSalvando] = useState(false);
 
   const salvar = async () => {
     if (!titulo.trim() || !dataHora) return;
     setSalvando(true);
-    await supabase.from('agenda_compromissos').insert([{
+    // 07/10/2026: o resultado da gravação não era conferido — com ela recusada, o formulário fechava como se tivesse salvo. Agora avisa e mantém o que foi digitado.
+    const { data: novo, error } = await supabase.from('agenda_compromissos').insert([{
       setor,
       usuario_email: currentUser?.email,
       usuario_nome:  currentUser?.nome || currentUser?.email,
       titulo:        titulo.trim(),
       descricao:     descricao.trim() || null,
       data_hora:     new Date(dataHora).toISOString(),
-    }]);
+      participantes,
+    }]).select('id').single();
+    if (error) { alert('Não foi possível salvar o compromisso: ' + error.message); setSalvando(false); return; }
+    // @menção na descrição e aviso aos participantes: o compromisso já existe; se um aviso falhar, o compromisso fica salvo e o aviso diz quem não foi avisado
+    await salvarMencoes({ texto: (titulo + ' ' + descricao), mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
+      contexto: 'agenda', contextoId: String(novo?.id || ''), contextoDescricao: 'Agenda: ' + titulo.trim(), campo: 'descricao', abaDestino: 'calendario' });
+    const falhas = await notificarParticipantes({ novos: novosParticipantes([], participantes), autor: currentUser, contexto: 'agenda', contextoId: String(novo?.id || ''),
+      descricao: 'Agenda: ' + titulo.trim(), abaDestino: 'calendario', trecho: 'Você foi adicionado ao compromisso "' + titulo.trim() + '" em ' + new Date(dataHora).toLocaleString('pt-BR') });
+    if (falhas.length) alert('O compromisso foi salvo, mas não foi possível avisar: ' + falhas.join('; '));
     setSalvando(false);
     onSalvo();
   };
@@ -97,13 +109,11 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
         style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
           padding:'5px 8px', fontSize:10, marginBottom:6, boxSizing:'border-box', outline:'none' }}
       />
-      <textarea
-        value={descricao} onChange={e => setDescricao(e.target.value)}
-        placeholder="Descrição (opcional)"
+      <MencaoTextarea
+        value={descricao} onChange={v => setDescricao(v)}
+        placeholder="Descrição (opcional) — @Nome para mencionar alguém"
         rows={2}
-        style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
-          padding:'5px 8px', fontSize:10, marginBottom:6, boxSizing:'border-box',
-          resize:'none', outline:'none', fontFamily:'inherit' }}
+        style={{ fontSize:10, marginBottom:6 }}
       />
       <input
         type="datetime-local" value={dataHora}
@@ -112,6 +122,9 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
         style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
           padding:'5px 8px', fontSize:10, marginBottom:8, boxSizing:'border-box', outline:'none' }}
       />
+      <div style={{ marginBottom:8 }}>
+        <ParticipantesPicker value={participantes} onChange={setParticipantes} donoEmail={currentUser?.email} />
+      </div>
       <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
         <button onClick={onCancel}
           style={{ background:'#f1f5f9', border:'none', borderRadius:4,
@@ -132,7 +145,7 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE COMPROMISSO
 // ─────────────────────────────────────────────────────────────────────────────
-function CompromissoCard({ item, onConcluir, onExcluir, podeEditar }) {
+function CompromissoCard({ item, onConcluir, onExcluir, podeEditar, usuario }) {
   const minutos = minutosRestantes(item.data_hora);
   const nivel = alertLevel(minutos);
   const style = ALERT_STYLES[nivel];
@@ -166,6 +179,9 @@ function CompromissoCard({ item, onConcluir, onExcluir, podeEditar }) {
             📅 {fmtDH(item.data_hora)}
             {item.usuario_nome && (
               <span style={{ marginLeft:8, color:'#94a3b8' }}>👤 {item.usuario_nome}</span>
+            )}
+            {participantesDe(item).length > 0 && (
+              <span style={{ marginLeft:8, color:'#94a3b8' }}><ListaParticipantes item={item} usuario={usuario} /></span>
             )}
           </div>
         </div>
@@ -233,7 +249,8 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
     } else if (modoView === 'equipe' && isGerente) {
       q = q.in('usuario_email', (equipeEmails && equipeEmails.length) ? equipeEmails : ['__nenhum__']);
     } else if (!(modoView === 'todos' && isGerente)) {
-      q = q.eq('usuario_email', currentUser?.email);
+      // meus = os que criei OU em que fui adicionado como participante (07/10/2026)
+      q = q.or(filtroDonoOuParticipante('usuario_email', currentUser?.email));
     }
     if (!mostrarConcluidos) {
       q = q.eq('concluido', false);
@@ -383,8 +400,8 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
           // rola internamente e o layout ao redor fica estável.
           <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 2 }}>
             {compromissos.map(c => (
-              <CompromissoCard key={c.id} item={c} onConcluir={concluir} onExcluir={excluir}
-                podeEditar={!agendaPublica || c.usuario_email === currentUser?.email} />
+              <CompromissoCard key={c.id} item={c} onConcluir={concluir} onExcluir={excluir} usuario={currentUser}
+                podeEditar={ehDonoDoItem(c, currentUser) || isGerente} />
             ))}
           </div>
         )}

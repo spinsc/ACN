@@ -2527,3 +2527,10 @@ body.dark .acn-crm-col-valor { color: #8fd3a5; }
 .acn-cq-serial-cab { display: flex; align-items: center; gap: 10px; }
 .acn-cq-serial-cab > span:first-child { flex: 1; min-width: 0; }
 .acn-cq-semserial { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-muted); cursor: pointer; white-space: nowrap; }
+
+/* ── Participantes de compromissos, tarefas e agendamentos (07/10/2026) ── */
+.acn-participantes { display: flex; flex-direction: column; gap: 4px; }
+.acn-participantes-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.acn-participante-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 12px; background: var(--acn-info-soft); color: var(--acn-info); font-size: 12px; font-weight: 600; }
+.acn-participante-chip button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 11px; padding: 0 3px; opacity: .7; }
+.acn-participante-chip button:hover { opacity: 1; }

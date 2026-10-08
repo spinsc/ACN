@@ -6,6 +6,8 @@ import { Faixa, Botao, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiCalendarMonthOutline, mdiAccountGroupOutline, mdiAccountOutline } from '@mdi/js';
 import { ehAdminOuGerente } from './utils/permissoes';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import { ParticipantesPicker, ListaParticipantes, participantesDe, ehDonoDoItem, filtroDonoOuParticipante, novosParticipantes, notificarParticipantes } from './Participantes';
 
 // Etapa 12e5 (04/10/2026): a parte visual desta tela passou para as peças do design system (Chips, Botao, Faixa, a janela do sistema
 // e as classes acn-cal-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os cliques, as gravações, as leituras,
@@ -66,8 +68,10 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
   const [setor, setSetor] = useState('geral');
   const [hora, setHora] = useState(horaInicial || '09:00');
   const [salvando, setSalvando] = useState(false);
+  const [participantes, setParticipantes] = useState<any[]>([]);          // pedido do usuário em 07/10/2026
+  const [participantesAntes, setParticipantesAntes] = useState<any[]>([]); // para avisar só quem entrou agora
 
-  const limparForm = () => { setTitulo(''); setDescricao(''); setSetor('geral'); setHora('09:00'); setEditandoId(null); };
+  const limparForm = () => { setTitulo(''); setDescricao(''); setSetor('geral'); setHora('09:00'); setEditandoId(null); setParticipantes([]); setParticipantesAntes([]); };
 
   const salvar = async () => {
     if (!titulo.trim() || !hora) return;
@@ -76,11 +80,11 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
     // Etapa 7.39 (04/10/2026): o resultado da gravação não era conferido. Com ela recusada, o formulário fechava, o que foi
     // digitado se perdia e o calendário recarregava como se o compromisso tivesse sido salvo. Agora avisa o erro e o formulário
     // continua aberto com o texto.
-    const { error } = editandoId
+    const { data: gravado, error } = editandoId
       ? await supabase.from('agenda_compromissos').update({
           titulo: titulo.trim(), descricao: descricao.trim() || null,
-          setor, data_hora: dataHoraISO,
-        }).eq('id', editandoId)
+          setor, data_hora: dataHoraISO, participantes,
+        }).eq('id', editandoId).select('id').single()
       : await supabase.from('agenda_compromissos').insert([{
           setor,
           usuario_email: currentUser?.email,
@@ -88,8 +92,16 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
           titulo:        titulo.trim(),
           descricao:     descricao.trim() || null,
           data_hora:     dataHoraISO,
-        }]);
+          participantes,
+        }]).select('id').single();
     if (error) { alert('Não foi possível salvar o compromisso: ' + error.message); setSalvando(false); return; }
+    // @menção na descrição e aviso aos participantes que entraram agora (o compromisso já está salvo: se o aviso falhar, diz quem não foi avisado)
+    const idItem = String(gravado?.id || editandoId || '');
+    await salvarMencoes({ texto: (titulo + ' ' + descricao), mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
+      contexto: 'agenda', contextoId: idItem, contextoDescricao: 'Agenda: ' + titulo.trim(), campo: 'descricao', abaDestino: 'calendario' });
+    const falhas = await notificarParticipantes({ novos: novosParticipantes(participantesAntes, participantes), autor: currentUser, contexto: 'agenda', contextoId: idItem,
+      descricao: 'Agenda: ' + titulo.trim(), abaDestino: 'calendario', trecho: 'Você foi adicionado ao compromisso "' + titulo.trim() + '" em ' + data.toLocaleDateString('pt-BR') + ' às ' + hora });
+    if (falhas.length) alert('O compromisso foi salvo, mas não foi possível avisar: ' + falhas.join('; '));
     setSalvando(false);
     limparForm();
     setCriando(false);
@@ -102,6 +114,7 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
     setDescricao(ev.raw.descricao || '');
     setSetor(ev.raw.setor || 'geral');
     setHora(ev.hora || '09:00');
+    setParticipantes(participantesDe(ev.raw)); setParticipantesAntes(participantesDe(ev.raw));
     setCriando(true);
   };
 
@@ -148,11 +161,11 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 )}
                 <div className="acn-ajuda">
                   {ev.tipo === 'compromisso'
-                    ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 {ev.raw.usuario_nome || ev.raw.usuario_email}</>
+                    ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 {ev.raw.usuario_nome || ev.raw.usuario_email}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
                     : <>📇 Contato CRM · 👤 {ev.raw.responsavel_nome || '—'} {ev.raw.nome_contato ? `· ${ev.raw.nome_contato}` : ''}</>}
                 </div>
               </div>
-              {ev.tipo === 'compromisso' && (
+              {ev.tipo === 'compromisso' && (ehDonoDoItem(ev.raw, currentUser) || ehAdminOuGerente(currentUser)) && (
                 <div className="acn-acoes-linha">
                   <Botao pequeno onClick={() => iniciarEdicao(ev)} title="Editar">✎</Botao>
                   {!ev.raw.concluido && (
@@ -170,8 +183,8 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 {editandoId ? '✎ Editar Compromisso' : '📅 Novo Compromisso'}
               </div>
               <input className="acn-input" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título *" />
-              <textarea className="acn-input" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição (opcional)"
-                rows={2} />
+              <MencaoTextarea value={descricao} onChange={v => setDescricao(v)} placeholder="Descrição (opcional) — @Nome para mencionar alguém" rows={2} />
+              <ParticipantesPicker value={participantes} onChange={setParticipantes} donoEmail={currentUser?.email} />
               <div className="acn-cal-linha-form">
                 <select className="acn-input" value={setor} onChange={e => setSetor(e.target.value)}>
                   {SETORES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -230,7 +243,8 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
     let qComp = supabase.from('agenda_compromissos').select('*')
       .gte('data_hora', inicioISO).lte('data_hora', fimISO)
       .order('data_hora', { ascending: true });
-    if (!isGerente || !verTodos) qComp = qComp.eq('usuario_email', currentUser?.email);
+    // meus = os que criei OU em que fui adicionado como participante (07/10/2026)
+    if (!isGerente || !verTodos) qComp = qComp.or(filtroDonoOuParticipante('usuario_email', currentUser?.email));
     if (setorFiltro !== 'todos') qComp = qComp.eq('setor', setorFiltro);
 
     let qCrm = supabase.from('crm_oportunidades')
