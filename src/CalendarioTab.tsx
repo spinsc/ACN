@@ -63,7 +63,8 @@ const fmtDiaLongo = (d: Date) => d.toLocaleDateString('pt-BR', {
 // MODAL: DETALHE DO DIA + NOVO COMPROMISSO
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onClose, onChanged }: any) {
-  const [criando, setCriando] = useState(eventos.length === 0);
+  // na lateral, dia vazio mostra "Nenhum evento" e o botão de novo compromisso; o formulário só abre direto quando se clica numa hora da semana (08/10/2026)
+  const [criando, setCriando] = useState(!!horaInicial && eventos.length === 0);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -137,8 +138,9 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
   };
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro">
+    // 08/10/2026 (pedido do usuário): clicar no dia mostra a lista dos compromissos NA LATERAL da tela, sem janela no meio e sem tampar o calendário — dá para clicar em outro dia com a lista aberta.
+    <div className="acn-cal-lateral" role="complementary" aria-label={'Compromissos de ' + fmtDiaLongo(data)}>
+      <div className="acn-cal-lateral-caixa">
         <div className="acn-modal-cab">
           <span className="modal-title"><Icone path={mdiCalendarMonthOutline} size={18} /> {fmtDiaLongo(data)}</span>
           <Botao variante="discreto" pequeno onClick={onClose}>✕</Botao>
@@ -196,7 +198,7 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 <input className="acn-input acn-cal-hora-campo" type="time" value={hora} onChange={e => setHora(e.target.value)} />
               </div>
               <div className="acn-acoes-linha">
-                <Botao onClick={() => { limparForm(); setCriando(eventos.length === 0); }}>Cancelar</Botao>
+                <Botao onClick={() => { limparForm(); setCriando(false); }}>Cancelar</Botao>
                 <Botao variante="primario" onClick={salvar} disabled={salvando || !titulo.trim() || !hora}>
                   {salvando ? 'Salvando...' : '✅ Salvar'}
                 </Botao>
@@ -362,7 +364,7 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
     : `${dias[0].getDate()} ${MESES[dias[0].getMonth()].slice(0,3)} – ${dias[6].getDate()} ${MESES[dias[6].getMonth()].slice(0,3)} de ${dias[6].getFullYear()}`;
 
   return (
-    <div className="sec-card">
+    <div className={'sec-card' + (diaAberto ? ' acn-cal-com-lateral' : '')}>
       <div className="sec-hdr no-collapse">
         <span className="acn-cab-titulo"><Icone path={mdiCalendarMonthOutline} size={16} /> Calendário {loading ? '· carregando…' : totalEventos > 0 ? `· ${totalEventos} evento${totalEventos !== 1 ? 's' : ''}` : ''}</span>
         <div className="acn-cab-filtros">
@@ -417,6 +419,7 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
 
       {diaAberto && (
         <ModalDia
+          key={isoDate(diaAberto.data) + '|' + (diaAberto.hora || '')}
           data={diaAberto.data}
           horaInicial={diaAberto.hora}
           eventos={eventosPorDia[isoDate(diaAberto.data)] || []}

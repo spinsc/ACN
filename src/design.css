@@ -2617,3 +2617,9 @@ body.dark .acn-opl-texto.azul, body.dark .acn-opl-texto.verde, body.dark .acn-op
   .acn-opl-corpo { grid-template-columns: 1fr; padding: 10px 12px 20px; }
   .acn-opl-cab { flex-wrap: wrap; }
 }
+
+/* Calendário: lista do dia na lateral (08/10/2026). Não tampa a tela: no computador o calendário ganha uma folga à direita e continua clicável. */
+.acn-cal-lateral { position: fixed; top: 0; right: 0; bottom: 0; z-index: 900; width: min(440px, 100vw); display: flex; background: var(--acn-surface); border-left: 1px solid var(--acn-line); box-shadow: -6px 0 24px rgba(15, 23, 42, .14); }
+.acn-cal-lateral-caixa { display: flex; flex-direction: column; width: 100%; min-height: 0; }
+.acn-cal-lateral-caixa .acn-modal-corpo { flex: 1; min-height: 0; overflow-y: auto; }
+@media (min-width: 1000px) { .sec-card.acn-cal-com-lateral { margin-right: 452px; } }
