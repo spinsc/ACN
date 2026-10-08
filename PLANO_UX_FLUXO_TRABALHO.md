@@ -4307,7 +4307,7 @@ Lista passada pelo usuário em 07/10/2026, com as dúvidas tiradas na hora e o t
 | 9 | Estoque por categoria (lista própria, configurada pelo Almoxarifado) | ⬜ | |
 | 10 | SAC: Kanban como visão de partida | ✅ 08/10/2026 | Chave de lembrança nova (`acn-sac-visao-v2`) para todos começarem no Kanban; quem escolher a lista depois tem a escolha lembrada. Testado: a tela abre com o chip Kanban ativo. |
 | 11 | SAC: lote de OS (um card no kanban) | ⬜ | |
-| 12 | Compras da OP: status e previsão de chegada dentro do card da OP | ⬜ | |
+| 12 | Compras da OP: status e previsão de chegada dentro do card da OP | ✅ 08/10/2026 | Em "Compras vinculadas" do card da OP (`OplDetalheModal`), cada compra mostra, ao lado do status, "Chega dd/mm" (vermelho "atrasada" se a data passou) ou "sem previsão"; recebida e descartada não mostram. Leitura que falha agora avisa em vez de parecer "sem compras". Testado com 4 compras simuladas (futura, atrasada, sem previsão, recebida). A seção será reagrupada na reformulação do card (item 14). |
 | 13 | Confirmação em toda exclusão do sistema | ⬜ | |
 | 14 | Card da OPL: reformulação de apresentação (UX/UI) | ⬜ | |
 | 15 | Menção em tarefa/compromisso da agenda | ⬜ | |

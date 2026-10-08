@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
-import { diaBR } from './Interface';
+import { diaBR, hojeISO } from './Interface';
 import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 
 // O dossiê importa OplProgressBar deste arquivo; para não fechar um ciclo de
@@ -626,6 +626,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [loading, setLoading] = useState(false);
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
+  const [erroCompras, setErroCompras] = useState('');
   /**
    * A OP é lida do banco toda vez que o modal abre (28/09/2026).
    *
@@ -658,9 +659,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       opl?.crm_oportunidade_id ? `oportunidade_id.eq.${opl.crm_oportunidade_id}` : null,
     ].filter(Boolean).join(',');
     if (!filtros) { setComprasVinculadas([]); return; }
-    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra')
+    // Pedido do usuário em 07/10/2026: o status da compra e a previsão de chegada da mercadoria aparecem dentro do card da OP (a previsão é a data_prevista_recebimento que o Compras preenche).
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra,data_prevista_recebimento')
       .or(filtros).order('data_criacao', { ascending: false })
-      .then(({ data }) => setComprasVinculadas(data || []));
+      .then(({ data, error }) => {
+        // leitura que falha não pode parecer "sem compras vinculadas"
+        setErroCompras(error ? error.message : '');
+        if (!error) setComprasVinculadas(data || []);
+      });
   }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
 
   // A ficha do veículo do catálogo (marca, nome e faixa de anos) — a OP guarda só o código dela.
@@ -1092,6 +1098,11 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         )}
 
         {/* ── Compras Vinculadas ── */}
+        {erroCompras && (
+          <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:'7px 10px', fontSize:10, color:'#b91c1c', marginBottom:10 }}>
+            Não foi possível ler as compras vinculadas ({erroCompras}). Isso não quer dizer que não existam.
+          </div>
+        )}
         {comprasVinculadas.length > 0 && (
           <>
             <Sec title="📦 Compras Vinculadas" />
@@ -1108,6 +1119,18 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                     {currentUser?.ver_valores !== false && c.valor_compra != null && (
                       <span style={{ fontSize: 10, color: '#166534', fontWeight: 700 }}>{fmtR$(c.valor_compra)}</span>
                     )}
+                    {(() => {
+                      // Recebida ou descartada não tem mais "chegada" a esperar; nas demais, a previsão vira data (vermelha se já passou) ou "sem previsão"
+                      const encerrada = c.status_compra === 'Recebido' || c.status_compra === 'Descartada';
+                      if (encerrada) return null;
+                      const prev = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : '';
+                      const atrasada = !!prev && prev < hojeISO();
+                      return (
+                        <span title="Previsão de chegada da mercadoria" style={{ fontSize: 9, fontWeight: 700, color: !prev ? '#94a3b8' : atrasada ? '#b91c1c' : '#475569' }}>
+                          {prev ? `Chega ${prev.split('-').reverse().join('/')}${atrasada ? ' (atrasada)' : ''}` : 'sem previsão'}
+                        </span>
+                      );
+                    })()}
                     <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', background: '#e2e8f0', borderRadius: 10, padding: '2px 8px' }}>
                       {c.status_compra}
                     </span>
