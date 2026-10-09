@@ -10,6 +10,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { Botao, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiLinkVariant, mdiClose } from '@mdi/js';
 
 export interface VinculoValue { tipo: string; id: string; descricao: string; }
 
@@ -136,62 +139,43 @@ export function VinculoPicker({ value, onSelect, onClear }: {
     setQ(''); setSugestoes([]); setAberto(false);
   };
 
+  // 12e52 (09/10/2026): só aparência — os cinco tipos viraram o seletor do guia (Chips) e o realce ao passar o mouse nas sugestões passou para o CSS
   if (value) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-        border: '1px solid #93c5fd', background: '#eff6ff', borderRadius: 6, fontSize: 11 }}>
-        <span style={{ fontWeight: 700, color: '#1d4ed8', flexShrink: 0 }}>🔗 {TIPO_LABEL[value.tipo] || value.tipo}</span>
-        <span style={{ color: '#1e293b', flex: 1, wordBreak: 'break-word' }}>{value.descricao}</span>
-        <button type="button" onClick={onClear}
-          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>
-          ✕
-        </button>
+      <div className="acn-vcp-escolhido">
+        <span className="acn-vcp-tipo"><Icone path={mdiLinkVariant} size={14} />{TIPO_LABEL[value.tipo] || value.tipo}</span>
+        <span className="acn-vcp-desc">{value.descricao}</span>
+        <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Remover vínculo" onClick={onClear} />
       </div>
     );
   }
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
-        {TIPOS.map(t => (
-          <button key={t.id} type="button" onClick={() => trocarTipo(t.id)}
-            style={{ fontSize: 9, fontWeight: 700, padding: '3px 9px', borderRadius: 4, cursor: 'pointer',
-              border: `1.5px solid ${tipo === t.id ? '#2563eb' : '#d1d5db'}`,
-              background: tipo === t.id ? '#dbeafe' : '#fff',
-              color: tipo === t.id ? '#1d4ed8' : '#6b7280' }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+    <div ref={wrapRef} className="acn-vcp">
+      <Chips ativo={tipo} onChange={trocarTipo} rotulo="Tipo de vínculo" className="acn-vcp-tipos"
+        itens={TIPOS.map(t => ({ id: t.id, rotulo: t.label }))} />
       {tipo ? (
         <input
+          className="acn-input acn-vcp-busca"
           value={q}
           onChange={e => handleChange(e.target.value)}
           placeholder={`Buscar ${TIPO_LABEL[tipo]}...`}
-          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #d1d5db',
-            borderRadius: 4, fontSize: 11 }}
           autoComplete="off"
           autoFocus
         />
       ) : (
-        <div style={{ fontSize: 11, color: '#94a3b8' }}>Nenhum vínculo. Escolha o tipo acima se quiser ligar a um processo.</div>
+        <div className="acn-ajuda">Nenhum vínculo. Escolha o tipo acima se quiser ligar a um processo.</div>
       )}
       {aberto && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-          background: 'white', border: '1px solid #d1d5db', borderRadius: 6,
-          boxShadow: '0 4px 12px #0002', marginTop: 2, maxHeight: 220, overflowY: 'auto' }}>
+        <div className="acn-vcp-lista">
           {sugestoes.map(item => (
-            <div key={item.id}
-              style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#1e293b' }}
-              onMouseDown={() => selecionar(item)}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
+            <div key={item.id} className="acn-vcp-item" onMouseDown={() => selecionar(item)}>
               {item.descricao}
             </div>
           ))}
-          {buscando && <div style={{ padding: 8, fontSize: 10, color: '#94a3b8', textAlign: 'center' }}>Buscando...</div>}
+          {buscando && <div className="acn-vcp-msg">Buscando...</div>}
           {!buscando && sugestoes.length === 0 && q.length >= 2 && (
-            <div style={{ padding: 8, fontSize: 10, color: '#94a3b8', textAlign: 'center' }}>Nada encontrado.</div>
+            <div className="acn-vcp-msg">Nada encontrado.</div>
           )}
         </div>
       )}

@@ -19,6 +19,9 @@ import React from 'react';
 import { confirmarRemocao } from './Feedback';
 import { itensPreenchidos } from './DemandaItens';
 import { ItensVendidosEditor } from './OpItens';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPlus, mdiCheck, mdiTrashCanOutline } from '@mdi/js';
 
 export type GrupoLote = { qtd: number; servicos: string; valor: string; itens: any[] };
 
@@ -65,57 +68,52 @@ export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false
 }) {
   const soma = grupos.reduce((s, g) => s + (Number(g.qtd) || 0), 0);
   const set = (i: number, k: keyof GrupoLote, v: any) => onChange(grupos.map((g, j) => j === i ? { ...g, [k]: v } : g));
-  const fs = compacto ? 10 : 11;
   let inicio = 1;
+  // 12e52 (09/10/2026): só aparência — o roxo dos grupos mora no design.css (--acn-lot-cor, mais claro no tema escuro) e o tamanho
+  // do texto do modo compacto passou para uma classe (antes era uma conta de fonte dentro do JSX)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className={'acn-lot' + (compacto ? ' compacto' : '')}>
       {grupos.map((g, i) => {
         const de = inicio, ate = inicio + (Number(g.qtd) || 0) - 1;
         inicio = ate + 1;
         return (
-          <div key={i} style={{ border: '1px solid #c4b5fd', borderRadius: 6, padding: 8, background: '#fff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: fs, fontWeight: 900, color: '#fff', background: '#7c3aed', borderRadius: 4, padding: '0 7px' }}>
+          <div key={i} className="acn-lot-grupo">
+            <div className="acn-lot-cab">
+              <span className="acn-lot-selo">
                 Grupo {LETRA(i)}
               </span>
-              <span style={{ fontSize: fs - 1, color: '#6b21a8' }}>
+              <span className="acn-lot-faixa">
                 {g.qtd > 0 ? (de === ate ? `unidade /${String(de).padStart(2, '0')}` : `unidades /${String(de).padStart(2, '0')} a /${String(ate).padStart(2, '0')}`) : '—'}
               </span>
-              <label style={{ fontSize: fs - 1, color: '#475569', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <label className="acn-lot-rot acn-lot-rot-1">
                 Qtd.
-                <input type="number" min={1} className="acn-input" value={g.qtd}
-                  onChange={e => set(i, 'qtd', Math.max(0, parseInt(e.target.value) || 0))}
-                  style={{ width: 54, fontSize: fs }} />
+                <input type="number" min={1} className="acn-input acn-lot-qtd" value={g.qtd}
+                  onChange={e => set(i, 'qtd', Math.max(0, parseInt(e.target.value) || 0))} />
               </label>
-              <label style={{ fontSize: fs - 1, color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <label className="acn-lot-rot">
                 Valor/un. (R$)
-                <input className="acn-input" value={g.valor} placeholder="opcional"
-                  onChange={e => set(i, 'valor', e.target.value)} style={{ width: 90, fontSize: fs }} />
+                <input className="acn-input acn-lot-valor" value={g.valor} placeholder="opcional"
+                  onChange={e => set(i, 'valor', e.target.value)} />
               </label>
               {grupos.length > 1 && (
-                <button type="button" onClick={async () => { if (!await confirmarRemocao('o grupo ' + LETRA(i) + ' do lote')) return; onChange(grupos.filter((_, j) => j !== i)); }} title={`Remover grupo ${LETRA(i)}`}
-                  style={{ background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 4, fontSize: fs - 1, padding: '1px 6px', cursor: 'pointer' }}>
-                  🗑
-                </button>
+                <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={async () => { if (!await confirmarRemocao('o grupo ' + LETRA(i) + ' do lote')) return; onChange(grupos.filter((_, j) => j !== i)); }} title={`Remover grupo ${LETRA(i)}`} />
               )}
             </div>
-            <textarea className="acn-input" rows={2} value={g.servicos}
+            <textarea className="acn-input acn-lot-servicos" rows={2} value={g.servicos}
               placeholder={i === 0 ? 'Ex.: Barra giroflex, 4 SlimLED, rádio' : 'Ex.: Barra giroflex, 4 SlimLED, rádio + cela'}
-              onChange={e => set(i, 'servicos', e.target.value)}
-              style={{ width: '100%', resize: 'vertical', fontSize: fs, boxSizing: 'border-box', marginBottom: 6 }} />
+              onChange={e => set(i, 'servicos', e.target.value)} />
             <ItensVendidosEditor itens={g.itens || []} onChange={v => set(i, 'itens', v)}
               crmId={crmId} licitacaoId={licitacaoId} unidades={Number(g.qtd) || 1} />
           </div>
         );
       })}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button type="button"
-          onClick={() => onChange([...grupos, { qtd: Math.max(1, quantidade - soma), servicos: '', valor: '', itens: [] }])}
-          style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px dashed #7c3aed', borderRadius: 5, fontSize: fs, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>
-          + Grupo
-        </button>
-        <span style={{ fontSize: fs - 1, fontWeight: 700, color: soma === quantidade ? '#15803d' : '#dc2626' }}>
-          {soma === quantidade ? `✓ ${soma} de ${quantidade} veículos` : `Soma ${soma} de ${quantidade} veículos`}
+      <div className="acn-lot-rodape">
+        <Botao pequeno icone={mdiPlus}
+          onClick={() => onChange([...grupos, { qtd: Math.max(1, quantidade - soma), servicos: '', valor: '', itens: [] }])}>
+          Grupo
+        </Botao>
+        <span className={'acn-lot-soma ' + (soma === quantidade ? 'ok' : 'erro')}>
+          {soma === quantidade ? <><Icone path={mdiCheck} size={13} />{` ${soma} de ${quantidade} veículos`}</> : `Soma ${soma} de ${quantidade} veículos`}
         </span>
       </div>
     </div>

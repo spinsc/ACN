@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Botao, Selo } from './Interface';
+import Icone from './Icone';
+import { mdiAccountGroupOutline, mdiPuzzleOutline, mdiAccountOutline, mdiPencilOutline, mdiPlus } from '@mdi/js';
 import { ModalEditarParticipantes, notificarParticipantes, novosParticipantes } from './Participantes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,7 +24,7 @@ export const chaveArquivo = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
 export function MembrosResumo({ d }: any) {
   const ms = membrosDe(d);
   if (!ms.length) return null;
-  return <span title={'Envolvidos: ' + ms.map(m => m.nome).join(', ')} style={{ fontSize: 9, color: '#475569', fontWeight: 700 }}>👥 {ms.length}</span>;
+  return <span title={'Envolvidos: ' + ms.map(m => m.nome).join(', ')} className="acn-dex-resumo"><Icone path={mdiAccountGroupOutline} size={13} /> {ms.length}</span>;
 }
 
 /** Bloco do detalhe: quem está envolvido + botão para mudar a lista (grava e avisa quem entrou agora). */
@@ -44,9 +46,9 @@ export function MembrosDaDemanda({ demanda, tabela = 'demandas_avulsas', context
   };
   if (!ms.length && !podeEditar) return null;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 10px', border: '1px solid #e2e8f0', background: '#f8fafc', borderRadius: 6, fontSize: 11 }}>
-      <span style={{ fontWeight: 700, color: '#475569' }}>👥 Envolvidos</span>
-      {ms.length ? ms.map(m => <span key={m.email} className="acn-participante-chip">{m.nome}</span>) : <span style={{ color: '#94a3b8' }}>ninguém além do responsável</span>}
+    <div className="acn-dex-caixa">
+      <span className="acn-dex-tit"><Icone path={mdiAccountGroupOutline} size={14} /> Envolvidos</span>
+      {ms.length ? ms.map(m => <span key={m.email} className="acn-participante-chip">{m.nome}</span>) : <span className="acn-ajuda">ninguém além do responsável</span>}
       {podeEditar && <Botao pequeno variante="discreto" onClick={() => setAberto(true)}>{ms.length ? 'Editar' : '+ Adicionar'}</Botao>}
       {aberto && <ModalEditarParticipantes titulo={demanda.titulo || 'Demanda'} inicial={ms} donoEmail={demanda.criado_por} onSalvar={salvar} onClose={() => setAberto(false)} />}
     </div>
@@ -67,16 +69,16 @@ export function GrupoDaDemanda({ demanda }: any) {
   const ativas = partes.filter(p => p.status !== 'Cancelada');
   const feitas = ativas.filter(p => p.status === 'Concluída').length;
   return (
-    <div style={{ border: '1px solid #c7d2fe', background: '#eef2ff', borderRadius: 6, padding: '8px 10px', fontSize: 11 }}>
-      <div style={{ fontWeight: 700, color: '#3730a3', marginBottom: 4 }}>
-        🧩 Demanda composta — {feitas} de {ativas.length} setores concluíram a sua parte{feitas === ativas.length ? ' · TUDO CONCLUÍDO' : ''}
+    <div className="acn-dex-grupo">
+      <div className="acn-dex-grupo-tit">
+        <Icone path={mdiPuzzleOutline} size={14} /> Demanda composta — {feitas} de {ativas.length} setores concluíram a sua parte{feitas === ativas.length ? ' · TUDO CONCLUÍDO' : ''}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div className="acn-dex-partes">
         {partes.map(p => (
-          <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: p.id === demanda.id ? 700 : 400 }}>
-            <span style={{ minWidth: 110 }}>{p.setor}{p.id === demanda.id ? ' (esta)' : ''}</span>
+          <div key={p.id} className={'acn-dex-parte' + (p.id === demanda.id ? ' atual' : '')}>
+            <span className="acn-dex-setor">{p.setor}{p.id === demanda.id ? ' (esta)' : ''}</span>
             <Selo familia={p.status === 'Concluída' ? 'ok' : p.status === 'Em Andamento' ? 'info' : p.status === 'Cancelada' ? 'neutro' : 'atencao'} ponto={false}>{p.status}</Selo>
-            <span style={{ color: '#64748b' }}>{p.responsavel_nome ? '👤 ' + p.responsavel_nome : 'sem responsável ainda'}</span>
+            <span className="acn-ajuda">{p.responsavel_nome ? <><Icone path={mdiAccountOutline} size={13} /> {p.responsavel_nome}</> : 'sem responsável ainda'}</span>
           </div>
         ))}
       </div>
@@ -88,9 +90,9 @@ export function GrupoDaDemanda({ demanda }: any) {
 export function DescricoesDosArquivos({ arquivos, descricoes, onChange }: any) {
   if (!arquivos?.length) return null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+    <div className="acn-dex-descs">
       {arquivos.map((f: File) => (
-        <input key={chaveArquivo(f)} className="acn-input" style={{ fontSize: 11 }} aria-label={'Descrição de ' + f.name}
+        <input key={chaveArquivo(f)} className="acn-input acn-dex-desc" aria-label={'Descrição de ' + f.name}
           placeholder={`Descrição de "${f.name}" (opcional) — o que é este arquivo?`}
           value={descricoes[chaveArquivo(f)] || ''} onChange={e => onChange({ ...descricoes, [chaveArquivo(f)]: e.target.value })} />
       ))}
@@ -113,8 +115,8 @@ export function DescricaoDoAnexo({ anexo, pode, onSaved }: any) {
   };
   if (editando) {
     return (
-      <div style={{ display: 'flex', gap: 4, width: '100%' }}>
-        <input className="acn-input" style={{ flex: 1, fontSize: 11 }} autoFocus aria-label={'Descrição de ' + anexo.nome} value={texto} placeholder="O que é este arquivo?"
+      <div className="acn-dex-edita">
+        <input className="acn-input acn-dex-edita-campo" autoFocus aria-label={'Descrição de ' + anexo.nome} value={texto} placeholder="O que é este arquivo?"
           onChange={e => setTexto(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar(); if (e.key === 'Escape') { setTexto(anexo.descricao || ''); setEditando(false); } }} />
         <Botao pequeno variante="primario" onClick={salvar} disabled={salvando}>{salvando ? '...' : 'Salvar'}</Botao>
         <Botao pequeno variante="discreto" onClick={() => { setTexto(anexo.descricao || ''); setEditando(false); }}>Cancelar</Botao>
@@ -122,11 +124,11 @@ export function DescricaoDoAnexo({ anexo, pode, onSaved }: any) {
     );
   }
   return (
-    <div style={{ fontSize: 10, color: anexo.descricao ? '#475569' : '#94a3b8', width: '100%', display: 'flex', gap: 6, alignItems: 'baseline' }}>
-      <span style={{ flex: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{anexo.descricao || (pode ? '' : '')}</span>
-      {pode && <button type="button" onClick={() => setEditando(true)} style={{ background: 'none', border: 'none', padding: 0, color: '#94a3b8', cursor: 'pointer', textDecoration: 'underline', fontSize: 9 }}>
-        {anexo.descricao ? '✎ editar descrição' : '+ descrição'}
-      </button>}
+    <div className={'acn-dex-desc-linha' + (anexo.descricao ? '' : ' vazia')}>
+      <span className="acn-dex-desc-txt">{anexo.descricao || ''}</span>
+      {pode && <Botao variante="discreto" pequeno className="acn-dex-link" icone={anexo.descricao ? mdiPencilOutline : mdiPlus} onClick={() => setEditando(true)}>
+        {anexo.descricao ? 'editar descrição' : 'descrição'}
+      </Botao>}
     </div>
   );
 }

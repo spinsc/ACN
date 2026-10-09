@@ -3245,3 +3245,67 @@ body.dark .acn-pin { --acn-pin-cor: #fdba74; }
 .acn-fct-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); }
 .acn-fct-linha .acn-chips { justify-self: start; }
 .acn-pin-marca svg, .acn-fct-tit svg { display: inline-block !important; vertical-align: -2px; }
+
+/* Componentes pequenos, parte 2 (12e52, 09/10/2026): seletor de vínculo, grupos do lote misto, faixa "Onde está agora" (e a célula da
+   lista) e as peças das demandas (envolvidos, demanda composta, descrição de anexo). Só aparência. O roxo do lote misto mora aqui
+   (--acn-lot-cor) e a cor da faixa "Onde está agora" vem dos tokens do guia por [data-oea]; os dois com tom próprio no tema escuro. */
+.acn-vcp { position: relative; }
+.acn-vcp-tipos { margin-bottom: 6px; }
+.acn-vcp-busca { width: 100%; box-sizing: border-box; }
+.acn-vcp-escolhido { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 35%, transparent); border-radius: var(--acn-r2); }
+.acn-vcp-tipo { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-weight: 700; color: var(--acn-info); }
+.acn-vcp-desc { flex: 1; color: var(--acn-ink); word-break: break-word; }
+.acn-vcp-lista { position: absolute; top: 100%; left: 0; right: 0; z-index: 50; max-height: 220px; margin-top: 2px; overflow-y: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: var(--acn-shadow-2, 0 4px 12px rgba(0, 0, 0, .15)); }
+.acn-vcp-item { padding: 7px 10px; font-size: 13px; color: var(--acn-ink); cursor: pointer; border-bottom: 1px solid var(--acn-line); }
+.acn-vcp-item:hover { background: var(--acn-info-soft); }
+.acn-vcp-msg { padding: 8px; text-align: center; font-size: 12px; color: var(--acn-muted); }
+.acn-lot { --acn-lot-cor: #7c3aed; --acn-lot-cor-escura: #6b21a8; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.acn-lot.compacto { font-size: 11px; }
+body.dark .acn-lot { --acn-lot-cor: #a78bfa; --acn-lot-cor-escura: #c4b5fd; }
+.acn-lot .acn-input { font-size: inherit; }
+.acn-lot-grupo { padding: 8px; background: var(--acn-surface); border: 1px solid color-mix(in srgb, var(--acn-lot-cor) 45%, transparent); border-radius: 6px; }
+.acn-lot-cab { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+.acn-lot-selo { padding: 0 7px; font-weight: 900; color: #fff; background: var(--acn-lot-cor); border-radius: 4px; }
+body.dark .acn-lot-selo { color: #1e1b4b; }
+.acn-lot-faixa { font-size: .92em; color: var(--acn-lot-cor-escura); }
+.acn-lot-rot { display: flex; align-items: center; gap: 4px; font-size: .92em; color: var(--acn-text); }
+.acn-lot-rot-1 { margin-left: auto; }
+.acn-lot-qtd { width: 54px; }
+.acn-lot-valor { width: 90px; }
+.acn-lot-servicos { width: 100%; box-sizing: border-box; margin-bottom: 6px; resize: vertical; }
+.acn-lot-rodape { display: flex; align-items: center; gap: 8px; }
+.acn-lot-soma { display: inline-flex; align-items: center; gap: 3px; font-size: .92em; font-weight: 700; }
+.acn-lot-soma.ok { color: var(--acn-ok); }
+.acn-lot-soma.erro { color: var(--acn-bad); }
+.acn-oea { --acn-oea-cor: var(--acn-info); margin: 10px 0 0; padding: 9px 12px; background: color-mix(in srgb, var(--acn-oea-cor) 6%, transparent); border: 1px solid color-mix(in srgb, var(--acn-oea-cor) 27%, transparent); border-left: 4px solid var(--acn-oea-cor); border-radius: 8px; }
+.acn-oea[data-oea="cancelada"] { --acn-oea-cor: var(--acn-neutral); }
+.acn-oea[data-oea="concluida"] { --acn-oea-cor: var(--acn-ok); }
+.acn-oea[data-oea="retrabalho"] { --acn-oea-cor: var(--acn-warn); }
+.acn-oea-tit { font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-muted); }
+.acn-oea-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; margin-top: 4px; font-size: 13px; }
+.acn-oea-onde strong { color: var(--acn-oea-cor); }
+.acn-oea-chip { white-space: nowrap; }
+.acn-oea-fraco { color: var(--acn-muted); }
+.acn-oea-cel { --acn-oea-cel-cor: var(--acn-info); min-width: 96px; font-size: 11px; line-height: 1.35; }
+.acn-oea-cel[data-oea-cel="retrabalho"] { --acn-oea-cel-cor: var(--acn-warn); }
+.acn-oea-cel-setor { font-weight: 700; color: var(--acn-oea-cel-cor); white-space: nowrap; }
+.acn-oea-cel-quando { color: var(--acn-text); white-space: nowrap; }
+.acn-oea-cel-pend { font-weight: 700; color: var(--acn-warn); white-space: nowrap; }
+.acn-dex-resumo { font-size: 11px; font-weight: 700; color: var(--acn-text); }
+.acn-dex-caixa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; font-size: 12px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-dex-tit { font-weight: 700; color: var(--acn-text); }
+.acn-dex-grupo { padding: 8px 10px; font-size: 12px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 30%, transparent); border-radius: var(--acn-r2); }
+.acn-dex-grupo-tit { margin-bottom: 4px; font-weight: 700; color: var(--acn-info); }
+.acn-dex-partes { display: flex; flex-direction: column; gap: 3px; }
+.acn-dex-parte { display: flex; align-items: center; gap: 8px; }
+.acn-dex-parte.atual { font-weight: 700; }
+.acn-dex-setor { min-width: 110px; }
+.acn-dex-descs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.acn-dex-desc { font-size: 12px; }
+.acn-dex-edita { display: flex; gap: 4px; width: 100%; }
+.acn-dex-edita-campo { flex: 1; font-size: 12px; }
+.acn-dex-desc-linha { display: flex; align-items: baseline; gap: 6px; width: 100%; font-size: 11px; color: var(--acn-text); }
+.acn-dex-desc-linha.vazia { color: var(--acn-muted); }
+.acn-dex-desc-txt { flex: 1; white-space: pre-wrap; word-break: break-word; }
+html body .acn-b.acn-dex-link { min-height: 0; padding: 0 4px; font-size: 11px; color: var(--acn-muted); text-decoration: underline; }
+.acn-vcp-tipo svg, .acn-dex-tit svg, .acn-dex-resumo svg, .acn-dex-grupo-tit svg, .acn-dex-parte svg, .acn-oea svg, .acn-oea-cel svg, .acn-lot-soma svg { display: inline-block !important; vertical-align: -2px; }
