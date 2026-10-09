@@ -37,7 +37,7 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 | — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
 | — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
 
-**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e45 — **3.530 `style` inline, 545 botões crus e 4.397 cores soltas, em 97 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); o CRM (12e40 a 12e42), o `OpItens` (12e43), o `DemandaItens` (12e44) e o `ClienteUtils` (12e45) saíram da lista. Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135, `AnaliseWidget` 109.
+**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e46 — **3.422 `style` inline, 533 botões crus e 4.269 cores soltas, em 97 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); saíram da lista o CRM (12e40 a 12e42), o `OpItens` (12e43), o `DemandaItens` (12e44), o `ClienteUtils` (12e45) e o `AnaliseWidget` (12e46). Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135.
 
 ---
 
@@ -4450,6 +4450,30 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 - **Teste de defeito plantado:** numa cópia, o seletor que sempre escolhe PF, o campo de CPF que grava no telefone, o "Criar e Selecionar" que só fecha, a sugestão que não seleciona, o "Selecionar" da janela que só fecha, o "Criar novo" que só fecha e o "Não salvar" que salva — **os sete foram apontados** (o último só depois de eu fazer o cenário "não salvar" também conferir o que seria gravado).
 
 **O que ficou de fora:** nada deste arquivo; o `inputStyle` do autocomplete (estilo vindo do chamador) foi mantido como propriedade, hoje sem uso por nenhuma tela.
+
+#### ✅ 12e46 — Componentes compartilhados, fatia 4 (`AnaliseWidget`: o painel de análise do card, o selo de progresso, "Solicitar Análise", o parecer editável e o widget de cada setor)
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois da 12e45). **Nenhuma regra mudou.**
+
+**O que foi feito** (`AnaliseWidget.tsx` e `design.css`, 108 regras novas `acn-ana-*` e `[data-setor]`; **nenhuma regra, consulta, gravação ou texto foi mexido**; método da página de prévia, descrito na 12e43):
+
+- **A cor de cada setor** (Comercial, Telecom, Engenharia, Orçamento, Chicotes, Serralheria, Produção e Laboratório) **saiu do código** (era um mapa de hexadecimais usado em vários lugares do arquivo) e **foi para o `design.css`**: o setor vai num atributo (`data-setor`) e o estilo lê a cor dele. O `AnaliseInboxPanel` e o `OplAcompModal` têm um mapa igual, que a fatia deles já pode aproveitar.
+- **O painel de análise do card** (aba "Análise" do CRM e das Licitações): o quadro azul "Solicitar Análise Técnica/Comercial" com o botão do sistema; a **solicitação em andamento** (quem pediu e quando, "2/3 setores", a barra de progresso e o "Cancelar" — só para quem pode); cada **setor** em quadro verde (feito) ou âmbar (pendente), com o parecer, o autor, a data e a marca "· editada", o campo de observações e o botão "Análise Finalizada"; as **finalizadas** e as **canceladas** em blocos que abrem e fecham (com o motivo do cancelamento e os setores em etiquetas).
+- **"Solicitar Análise"** (janela): no molde das janelas do guia, os setores em grupos, cada opção com a **cor do setor ao ser marcada**, "Já solicitado" para o que já foi pedido, e "Cancelar | Solicitar Análise (N setores)".
+- **O selo de progresso** ("Análise 1/3", "Análise OK") nos cards: o selo do sistema.
+- **O parecer editável** (só para o autor da análise): o atalho "Editar parecer / Adicionar observação" e o editor com "Salvar | Cancelar".
+- **O widget de cada setor** (Comercial, Telecom…): a borda e o título na cor do setor, o contador de pendentes, a **ordenação por data de disputa** (só o Telecom), cada análise com a etiqueta Licitação/CRM, o título que abre o processo, a data de disputa, "Abrir", e — ao abrir — os arquivos comuns, as notas e o botão **"Marcar como Analisado"** na cor do setor.
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Dois acertos achados pela captura de tela:** o ícone do sistema vem "em bloco" (o estilo está no próprio elemento) e, **dentro de texto corrido** (o parecer) **e do título dos blocos que abrem**, ficava numa linha sozinha — corrigido na classe; e o "Cancelar" da solicitação e o do editor de parecer têm o mesmo texto, o que o roteiro de teste precisou distinguir (pelo título do botão).
+
+**Resultado no código:** `style` inline **109 → 1** (a largura da barra de progresso, que é calculada na hora), `<button>` **12 → 0**, cores soltas **128 → 0**, linhas **956 → 877**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos.
+
+**Como foi testado** (página de prévia; leituras do banco simuladas — solicitações ativa, finalizada e cancelada, pendências do Telecom com data de disputa de licitação e de CRM, arquivos —; fotografia de texto, controles, valores, dicas, **o que o componente devolve ao chamador** e **o corpo que seria gravado**; da versão **da 12e45** × a migrada; **a antiga fotografada duas vezes, igual**): **66 de 66 iguais**, em 15 cenários — a marca de editada, o parecer do autor e de outra pessoa (editar, digitar, **salvar — com o corpo gravado** —, cancelar), a janela de solicitar (escolher setores, **solicitar — com o corpo gravado**, sem setor, fechar), o selo (1/3, tudo feito, nada), o painel (digitar o parecer, **concluir o setor — com o corpo gravado**, editar um parecer, **cancelar a solicitação — pergunta o motivo e grava**) e vazio, e o widget do Telecom (ordenar, abrir o processo pelo botão e pelo título, expandir, **marcar como analisado — com o corpo gravado**, recolher) e do Comercial vazio, e os temas escuros.
+- **Equivalências declaradas:** os emojis (🔍 ✅ ⏳ 📝 📎 📄 🏛️ 🤝 🗓 🔗) e os símbolos (✓ ✎ ⊘ ▸ ▾ ▲ ▼ +) viraram ícones; o botão de recolher o widget e a seta de cada análise são ícones (a seta dos cards continua clicável pelo cabeçalho); o "Salvar" do parecer (verde) e o "Análise Finalizada" passaram para o primário do guia; a etiqueta "CRM" e a "data de disputa" mantiveram o roxo, e "Licitação" o azul-escuro, como antes.
+- **Teste de defeito plantado:** numa cópia, o "Salvar" do parecer que só fecha, a caixinha de setor que marca outro setor, o "Solicitar" que só fecha, o "Análise Finalizada" que cancela a solicitação, o "Cancelar" que não pede o motivo, o "Abrir" com o processo e o tipo trocados e o "Marcar como Analisado" que só recolhe — **os sete foram apontados** (o do parecer só depois de eu consertar o clique do roteiro, que não achava o botão pelo título — **antes disso a fotografia estava "igual" porque não chegava a editar**; refeita a referência, ela passou a conferir o corpo gravado).
+
+**O que ficou de fora:** o `AnaliseInboxPanel` (a caixa de entrada das análises, 46 `style`), que é a próxima fatia.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 

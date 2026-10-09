@@ -3,7 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente, podeEditarParecerDaAnalise } from './utils/permissoes';
 import { pedirTexto, confirmar } from './Feedback';
-import { diaBR } from './Interface';
+import { diaBR, Botao, Selo } from './Interface';
+import Icone from './Icone';
+import { mdiPencilOutline, mdiClose, mdiCheck, mdiTimerSand, mdiMagnify, mdiPlus, mdiCancel, mdiCheckCircleOutline, mdiNoteTextOutline, mdiPaperclip, mdiFileDocumentOutline, mdiGavel, mdiHandshakeOutline, mdiCalendarClockOutline, mdiLinkVariant, mdiChevronUp, mdiChevronDown, mdiChevronRight } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES DE SETORES
@@ -45,16 +47,7 @@ export const SETOR_LABEL: Record<string, string> = {
   Laboratorio:'Laboratório',
 };
 
-const SETOR_COR: Record<string, string> = {
-  Comercial:  '#2563eb',
-  Telecom:    '#0891b2',
-  Engenharia: '#16a34a',
-  Orcamento:  '#b45309',
-  Chicotes:   '#7c3aed',
-  Serralheria:'#ea580c',
-  Producao:   '#d97706',
-  Laboratorio:'#dc2626',
-};
+// 12e46 (09/10/2026): a cor de cada setor saiu daqui para o design.css ([data-setor="…"] define --acn-setor); a aparência vive nas classes acn-ana-*
 
 const BUCKET = 'acn-media';
 
@@ -227,8 +220,8 @@ export function MarcaEditada({ setor }: any) {
   if (!a.editada) return null;
   return (
     <span title={`Parecer editado por ${a.quem || '—'} em ${fmtDTAno(setor.notas_editado_em)}${a.outraPessoa ? ` · análise feita por ${a.autor}` : ''}`}
-      style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic', cursor:'help' }}>
-      · editada{a.outraPessoa && <span style={{ color:'#cbd5e1' }}> · análise de {a.autor}</span>}
+      className="acn-ana-marca">
+      · editada{a.outraPessoa && <span className="acn-ana-marca-outra"> · análise de {a.autor}</span>}
     </span>
   );
 }
@@ -245,12 +238,11 @@ export function ParecerEditavel({ setor, solicitacao, currentUser, onSaved, chil
       <>
         {children}
         {pode && (
-          <button type="button" onClick={() => { setTexto(setor.notas || ''); setEditando(true); }}
-            title="Só quem fez esta análise pode editar o parecer"
-            style={{ display:'block', background:'none', border:'none', padding:0, marginTop:3, fontSize:9, color:'#94a3b8',
-              cursor:'pointer', textDecoration:'underline' }}>
-            ✎ {setor.notas ? 'Editar parecer' : 'Adicionar observação'}
-          </button>
+          <Botao variante="discreto" pequeno icone={mdiPencilOutline} className="acn-ana-editar"
+            onClick={() => { setTexto(setor.notas || ''); setEditando(true); }}
+            title="Só quem fez esta análise pode editar o parecer">
+            {setor.notas ? 'Editar parecer' : 'Adicionar observação'}
+          </Botao>
         )}
       </>
     );
@@ -266,22 +258,15 @@ export function ParecerEditavel({ setor, solicitacao, currentUser, onSaved, chil
     onSaved?.();
   };
   return (
-    <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
-      <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={4} autoFocus
-        aria-label="Editar o parecer da análise"
-        style={{ width:'100%', boxSizing:'border-box', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4,
-          fontSize:11, lineHeight:1.55, resize:'vertical', fontFamily:'inherit', background:'#fff', color:'#334155' }} />
-      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-        <button type="button" onClick={salvar} disabled={salvando || igual}
-          style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'4px 12px', fontWeight:700, fontSize:10,
-            cursor: salvando || igual ? 'default' : 'pointer', opacity: salvando || igual ? .5 : 1 }}>
+    <div className="acn-ana-edicao">
+      <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={4} autoFocus className="acn-input"
+        aria-label="Editar o parecer da análise" />
+      <div className="acn-ana-edicao-botoes">
+        <Botao variante="primario" pequeno onClick={salvar} disabled={salvando || igual}>
           {salvando ? 'Salvando...' : 'Salvar'}
-        </button>
-        <button type="button" onClick={() => setEditando(false)} disabled={salvando}
-          style={{ background:'#fff', color:'#475569', border:'1px solid #cbd5e1', borderRadius:4, padding:'4px 10px', fontSize:10, cursor:'pointer' }}>
-          Cancelar
-        </button>
-        <span style={{ fontSize:9, color:'#94a3b8' }}>O parecer fica marcado como editado.</span>
+        </Botao>
+        <Botao pequeno onClick={() => setEditando(false)} disabled={salvando}>Cancelar</Botao>
+        <span className="acn-ajuda">O parecer fica marcado como editado.</span>
       </div>
     </div>
   );
@@ -352,63 +337,52 @@ export function ModalSolicitarAnalise({
     onClose();
   };
 
+  const qtdNovos = selecionados.filter(s => !existentes.includes(s)).length;
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:2000,
-      display:'flex', alignItems:'center', justifyContent:'center' }} onClick={onClose}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(520px,96vw)', padding:'20px 22px',
-        boxShadow:'0 12px 40px #0005', maxHeight:'90vh', overflowY:'auto' }} onClick={e=>e.stopPropagation()}>
+    <div className="modal-overlay acn-ana-ov" onClick={onClose}>
+      <div className="modal-box acn-modal-cadastro acn-ana-jan" role="dialog" aria-label="Solicitar análise" onClick={e=>e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:13, color:'#1e293b' }}>🔍 Solicitar Análise</div>
-            <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>{origemTitulo}</div>
+        <div className="acn-modal-cab">
+          <div className="acn-ana-cab-txt">
+            <span className="modal-title"><Icone path={mdiMagnify} size={18} />Solicitar Análise</span>
+            <div className="acn-ajuda">{origemTitulo}</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, color:'#94a3b8', cursor:'pointer' }}>✕</button>
+          <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={onClose} />
         </div>
 
-        <div style={{ fontSize:11, color:'#374151', marginBottom:12 }}>
-          Selecione os setores que devem analisar este processo. Cada setor receberá a demanda em sua aba correspondente.
-        </div>
+        <div className="acn-modal-corpo">
+          <div className="acn-ajuda acn-ana-intro">
+            Selecione os setores que devem analisar este processo. Cada setor receberá a demanda em sua aba correspondente.
+          </div>
 
-        {ANALISE_GRUPOS.map(g => (
-          <div key={g.grupo} style={{ marginBottom:14 }}>
-            <div style={{ fontSize:9, fontWeight:800, color:'#6b7280', textTransform:'uppercase', letterSpacing:'.6px', marginBottom:8 }}>{g.grupo}</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-              {g.opcoes.map(op => {
-                const jaAtivo = existentes.includes(op.id);
-                const sel = selecionados.includes(op.id);
-                return (
-                  <label key={op.id} style={{
-                    display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
-                    border:`1.5px solid ${sel ? SETOR_COR[op.id] : jaAtivo ? '#e2e8f0' : '#e2e8f0'}`,
-                    borderRadius:6, cursor: jaAtivo ? 'not-allowed' : 'pointer',
-                    background: sel ? SETOR_COR[op.id]+'12' : jaAtivo ? '#f8fafc' : '#fff',
-                    opacity: jaAtivo ? .55 : 1,
-                  }}>
-                    <input type="checkbox" checked={sel || jaAtivo} disabled={jaAtivo}
-                      onChange={() => !jaAtivo && toggle(op.id)}
-                      style={{ width:15, height:15, accentColor: SETOR_COR[op.id] }} />
-                    <span style={{ fontSize:11, fontWeight:600, color: sel ? SETOR_COR[op.id] : '#374151' }}>{op.label}</span>
-                    {jaAtivo && <span style={{ marginLeft:'auto', fontSize:9, color:'#f59e0b', fontWeight:700 }}>⏳ Já solicitado</span>}
-                    {!jaAtivo && (
-                      <span style={{ marginLeft:'auto', width:8, height:8, borderRadius:'50%', background: SETOR_COR[op.id], opacity: sel?.5:0 }} />
-                    )}
-                  </label>
-                );
-              })}
+          {ANALISE_GRUPOS.map(g => (
+            <div key={g.grupo} className="acn-ana-grupo">
+              <div className="acn-quadro-titulo">{g.grupo}</div>
+              <div className="acn-ana-ops">
+                {g.opcoes.map(op => {
+                  const jaAtivo = existentes.includes(op.id);
+                  const sel = selecionados.includes(op.id);
+                  return (
+                    <label key={op.id} data-setor={op.id} className={'acn-ana-op' + (sel ? ' sel' : '') + (jaAtivo ? ' ja' : '')}>
+                      <input type="checkbox" checked={sel || jaAtivo} disabled={jaAtivo}
+                        onChange={() => !jaAtivo && toggle(op.id)} />
+                      <span className="acn-ana-op-nome">{op.label}</span>
+                      {jaAtivo && <span className="acn-ana-ja"><Icone path={mdiTimerSand} size={12} /> Já solicitado</span>}
+                      {!jaAtivo && <span className="acn-ana-ponto" />}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
-        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
-          <button onClick={onClose} style={{ padding:'7px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#f8fafc', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando || selecionados.filter(s=>!existentes.includes(s)).length===0}
-            style={{ padding:'7px 20px', background:'#1e3a5f', color:'#fff', border:'none', borderRadius:6,
-              fontWeight:700, fontSize:11, cursor:'pointer',
-              opacity: selecionados.filter(s=>!existentes.includes(s)).length ? 1 : .45 }}>
-            {salvando ? 'Solicitando...' : `✓ Solicitar Análise (${selecionados.filter(s=>!existentes.includes(s)).length} setor${selecionados.filter(s=>!existentes.includes(s)).length!==1?'es':''})`}
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" icone={salvando ? undefined : mdiCheck} onClick={salvar} disabled={salvando || qtdNovos === 0}>
+            {salvando ? 'Solicitando...' : `Solicitar Análise (${qtdNovos} setor${qtdNovos !== 1 ? 'es' : ''})`}
+          </Botao>
         </div>
       </div>
     </div>
@@ -444,14 +418,9 @@ export function AnaliseStatusBadge({ origemId }: { origemId: string }) {
 
   const done = info.feitos === info.total;
   return (
-    <span style={{
-      fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:3,
-      background: done ? '#dcfce7' : '#fef9c3',
-      color: done ? '#166534' : '#92400e',
-      border: `1px solid ${done ? '#86efac' : '#fde047'}`,
-    }}>
-      {done ? '✅ Análise OK' : `🔍 Análise ${info.feitos}/${info.total}`}
-    </span>
+    <Selo familia={done ? 'ok' : 'atencao'} ponto={false}>
+      <Icone path={done ? mdiCheckCircleOutline : mdiMagnify} size={11} />{done ? 'Análise OK' : `Análise ${info.feitos}/${info.total}`}
+    </Selo>
   );
 }
 
@@ -497,7 +466,7 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
     load();
   };
 
-  if (loading) return <div style={{ color:'#9ca3af', fontSize:11, padding:20, textAlign:'center' }}>Carregando...</div>;
+  if (loading) return <div className="acn-empty">Carregando...</div>;
 
   const ativas = solicitacoes.filter(s => s.status === 'em_andamento');
   const finalizadas = solicitacoes.filter(s => s.status === 'finalizada');
@@ -505,17 +474,14 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
   const cancelar = async (sol: any) => { if (await cancelarSolicitacaoAnalise(sol, currentUser)) load(); };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+    <div className="acn-ana-painel">
       {/* Nova solicitação */}
-      <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <div className="acn-quadro tom-info acn-ana-nova">
         <div>
-          <div style={{ fontWeight:700, fontSize:11, color:'#0369a1' }}>🔍 Solicitar Análise Técnica/Comercial</div>
-          <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>Demande a análise para os setores necessários.</div>
+          <div className="acn-ana-nova-tit"><Icone path={mdiMagnify} size={15} />Solicitar Análise Técnica/Comercial</div>
+          <div className="acn-ajuda">Demande a análise para os setores necessários.</div>
         </div>
-        <button onClick={onSolicitarNova}
-          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:5, padding:'6px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-          + Solicitar
-        </button>
+        <Botao variante="primario" pequeno icone={mdiPlus} onClick={onSolicitarNova}>Solicitar</Botao>
       </div>
 
       {/* Solicitações ativas */}
@@ -524,74 +490,60 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
         const qtdFeita = setores.filter((s:any) => s.status === 'analisado').length;
         const pct = setores.length ? Math.round((qtdFeita/setores.length)*100) : 0;
         return (
-          <div key={sol.id} style={{ border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden' }}>
-            <div style={{ background:'#f8fafc', padding:'8px 12px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #f1f5f9' }}>
+          <div key={sol.id} className="acn-ana-sol">
+            <div className="acn-ana-sol-cab">
               <div>
-                <span style={{ fontSize:10, fontWeight:700, color:'#1e293b' }}>Solicitação em andamento</span>
-                <span style={{ fontSize:9, color:'#64748b', marginLeft:8 }}>por {sol.criado_por} · {fmtDT(sol.criado_em)}</span>
+                <span className="acn-forte">Solicitação em andamento</span>
+                <span className="acn-ajuda acn-ana-sol-quem">por {sol.criado_por} · {fmtDT(sol.criado_em)}</span>
               </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ fontSize:9, color:'#374151', fontWeight:700 }}>{qtdFeita}/{setores.length} setores</div>
-                <div style={{ width:60, height:6, background:'#e2e8f0', borderRadius:3, overflow:'hidden' }}>
-                  <div style={{ width:`${pct}%`, height:'100%', background: pct===100?'#16a34a':'#f59e0b', borderRadius:3 }} />
-                </div>
+              <div className="acn-ana-sol-prog">
+                <div className="acn-ana-sol-qtd">{qtdFeita}/{setores.length} setores</div>
+                <div className="acn-ana-barra"><i className={pct === 100 ? 'ok' : undefined} style={{ width: `${pct}%` }} /></div>
                 {podeCancelarAnalise(sol, currentUser) && (
-                  <button onClick={() => cancelar(sol)} title="Cancelar esta solicitação (pede o motivo)"
-                    style={{ background:'#fff', color:'#b91c1c', border:'1px solid #fca5a5', borderRadius:4,
-                      padding:'2px 8px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                    ⊘ Cancelar
-                  </button>
+                  <Botao variante="perigo-sec" pequeno icone={mdiCancel} onClick={() => cancelar(sol)} title="Cancelar esta solicitação (pede o motivo)">
+                    Cancelar
+                  </Botao>
                 )}
               </div>
             </div>
 
             {/* Setores com botão de finalizar para os pendentes */}
-            <div style={{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:6 }}>
+            <div className="acn-ana-setores">
               {setores.map((s:any) => (
-                <div key={s.id} style={{
-                  border: `1px solid ${s.status==='analisado' ? '#86efac' : '#fde047'}`,
-                  borderRadius:6, padding:'6px 10px',
-                  background: s.status==='analisado' ? '#dcfce7' : '#fffdf0',
-                }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <span style={{ fontSize:10 }}>{s.status==='analisado' ? '✅' : '⏳'}</span>
-                    <span style={{ fontSize:10, fontWeight:700, color: s.status==='analisado'?'#166534':'#92400e', flex:1 }}>
+                <div key={s.id} className={'acn-ana-setor ' + (s.status==='analisado' ? 'feito' : 'pend')}>
+                  <div className="acn-ana-setor-cab">
+                    <Icone path={s.status==='analisado' ? mdiCheckCircleOutline : mdiTimerSand} size={14} />
+                    <span className="acn-ana-setor-nome">
                       {SETOR_LABEL[s.setor] || s.setor}
                     </span>
                     {s.status==='analisado' && autoriaDoParecer(s).quem && (
-                      <span style={{ fontSize:8, color:'#166534' }}>✓ {autoriaDoParecer(s).quem}</span>
+                      <span className="acn-ana-quem"><Icone path={mdiCheck} size={11} /> {autoriaDoParecer(s).quem}</span>
                     )}
                     {s.status==='analisado' && autoriaDoParecer(s).quando && (
-                      <span style={{ fontSize:8, color:'#4ade80' }}>{fmtDT(autoriaDoParecer(s).quando)}</span>
+                      <span className="acn-ana-quando">{fmtDT(autoriaDoParecer(s).quando)}</span>
                     )}
                     {s.status==='analisado' && <MarcaEditada setor={s} />}
                   </div>
                   {s.status==='analisado' && (
                     <ParecerEditavel setor={s} solicitacao={sol} currentUser={currentUser} onSaved={() => load(true)}>
                       {s.notas && (
-                        <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
-                          whiteSpace:'pre-wrap', wordBreak:'break-word' }}>📝 {s.notas}</div>
+                        <div className="acn-ana-parecer"><Icone path={mdiNoteTextOutline} size={13} /> {s.notas}</div>
                       )}
                     </ParecerEditavel>
                   )}
                   {s.status !== 'analisado' && (
-                    <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
-                      <textarea
+                    <div className="acn-ana-obs">
+                      <textarea className="acn-input"
                         value={obsSetor[s.id] || ''}
                         onChange={e => setObsSetor(p => ({ ...p, [s.id]: e.target.value }))}
                         placeholder="Observações da análise (opcional)..."
                         rows={4}
-                        style={{ width:'100%', boxSizing:'border-box', padding:'6px 8px', border:'1px solid #fde047',
-                          borderRadius:4, fontSize:11, lineHeight:1.55, resize:'vertical', fontFamily:'inherit' }}
                       />
-                      <button
+                      <Botao variante="primario" pequeno icone={finalizando === s.id ? mdiTimerSand : mdiCheckCircleOutline}
                         onClick={() => concluirSetor(s, sol)}
-                        disabled={finalizando === s.id}
-                        style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4,
-                          padding:'5px 12px', fontWeight:700, fontSize:10, cursor:'pointer',
-                          opacity: finalizando === s.id ? .6 : 1, alignSelf:'flex-start' }}>
-                        {finalizando === s.id ? '⏳ Salvando...' : '✅ Análise Finalizada'}
-                      </button>
+                        disabled={finalizando === s.id}>
+                        {finalizando === s.id ? 'Salvando...' : 'Análise Finalizada'}
+                      </Botao>
                     </div>
                   )}
                 </div>
@@ -603,20 +555,18 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
 
       {/* Histórico finalizado */}
       {finalizadas.length > 0 && (
-        <details open>
-          <summary style={{ fontSize:10, color:'#6b7280', cursor:'pointer', userSelect:'none' }}>
-            ✅ {finalizadas.length} análise{finalizadas.length>1?'s':''} finalizada{finalizadas.length>1?'s':''}
-          </summary>
+        <details open className="acn-ana-det">
+          <summary><Icone path={mdiCheckCircleOutline} size={13} /> {finalizadas.length} análise{finalizadas.length>1?'s':''} finalizada{finalizadas.length>1?'s':''}</summary>
           {finalizadas.map(sol => (
-            <div key={sol.id} style={{ marginTop:6, border:'1px solid #dcfce7', borderRadius:5, padding:'6px 10px', background:'#f0fdf4' }}>
-              <div style={{ fontSize:9, color:'#166534', marginBottom:4 }}>Solicitado por {sol.criado_por} · {fmtDT(sol.criado_em)}</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div key={sol.id} className="acn-ana-fin">
+              <div className="acn-ana-fin-quem">Solicitado por {sol.criado_por} · {fmtDT(sol.criado_em)}</div>
+              <div className="acn-ana-fin-lista">
                 {(sol.analise_setores||[]).map((s:any) => (
-                  <div key={s.id} style={{ fontSize:10, background:'#dcfce7', color:'#166534', borderRadius:6, padding:'6px 10px', border:'1px solid #86efac' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-                      <span style={{ fontWeight:700 }}>✅ {SETOR_LABEL[s.setor]||s.setor}</span>
-                      {autoriaDoParecer(s).quem && <span style={{ fontSize:9, color:'#15803d' }}>por {autoriaDoParecer(s).quem}</span>}
-                      {autoriaDoParecer(s).quando && <span style={{ fontSize:9, color:'#22c55e' }}>{fmtDT(autoriaDoParecer(s).quando)}</span>}
+                  <div key={s.id} className="acn-ana-fin-setor">
+                    <div className="acn-ana-fin-cab">
+                      <span className="acn-ana-fin-nome"><Icone path={mdiCheckCircleOutline} size={13} /> {SETOR_LABEL[s.setor]||s.setor}</span>
+                      {autoriaDoParecer(s).quem && <span className="acn-ana-fin-meta">por {autoriaDoParecer(s).quem}</span>}
+                      {autoriaDoParecer(s).quando && <span className="acn-ana-fin-meta">{fmtDT(autoriaDoParecer(s).quando)}</span>}
                       <MarcaEditada setor={s} />
                     </div>
                     {/* O parecer e o que interessa ler aqui: fundo branco, corpo de
@@ -624,13 +574,11 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                         9px italico, do mesmo tamanho do rotulo do setor. */}
                     <ParecerEditavel setor={s} solicitacao={sol} currentUser={currentUser} onSaved={() => load(true)}>
                       {s.notas ? (
-                        <div style={{ marginTop:5, fontSize:11, color:'#14532d', lineHeight:1.55,
-                          whiteSpace:'pre-wrap', wordBreak:'break-word',
-                          background:'#fff', border:'1px solid #bbf7d0', borderRadius:5, padding:'7px 9px' }}>
+                        <div className="acn-ana-fin-txt">
                           {s.notas}
                         </div>
                       ) : (
-                        <div style={{ marginTop:4, fontSize:10, color:'#15803d', fontStyle:'italic' }}>
+                        <div className="acn-ana-fin-sem">
                           Este setor concluiu sem escrever observação.
                         </div>
                       )}
@@ -644,23 +592,20 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
       )}
 
       {canceladas.length > 0 && (
-        <details>
-          <summary style={{ fontSize:10, color:'#6b7280', cursor:'pointer', userSelect:'none' }}>
-            ⊘ {canceladas.length === 1 ? '1 solicitação cancelada' : canceladas.length + ' solicitações canceladas'}
-          </summary>
+        <details className="acn-ana-det">
+          <summary><Icone path={mdiCancel} size={13} /> {canceladas.length === 1 ? '1 solicitação cancelada' : canceladas.length + ' solicitações canceladas'}</summary>
           {canceladas.map(sol => (
-            <div key={sol.id} style={{ marginTop:6, border:'1px solid #fecaca', borderRadius:5, padding:'6px 10px', background:'#fef2f2' }}>
-              <div style={{ fontSize:9, color:'#991b1b' }}>
+            <div key={sol.id} className="acn-ana-canc">
+              <div className="acn-ana-canc-quem">
                 Solicitado por {sol.criado_por} · {fmtDT(sol.criado_em)} — cancelada por <strong>{sol.cancelada_por || '—'}</strong>{sol.cancelada_em ? ' em ' + fmtDT(sol.cancelada_em) : ''}
               </div>
               {sol.motivo_cancelamento && (
-                <div style={{ fontSize:10, color:'#7f1d1d', marginTop:3, whiteSpace:'pre-wrap' }}>Motivo: {sol.motivo_cancelamento}</div>
+                <div className="acn-ana-canc-motivo">Motivo: {sol.motivo_cancelamento}</div>
               )}
-              <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:4 }}>
+              <div className="acn-ana-chips">
                 {(sol.analise_setores||[]).map((s:any) => (
-                  <span key={s.id} style={{ fontSize:9, padding:'1px 6px', borderRadius:8,
-                    background: s.status==='analisado' ? '#dcfce7' : '#fee2e2', color: s.status==='analisado' ? '#166534' : '#991b1b' }}>
-                    {s.status==='analisado' ? '✅' : '⊘'} {SETOR_LABEL[s.setor]||s.setor}
+                  <span key={s.id} className={'acn-ana-chip ' + (s.status==='analisado' ? 'feito' : 'cancel')}>
+                    <Icone path={s.status==='analisado' ? mdiCheckCircleOutline : mdiCancel} size={11} /> {SETOR_LABEL[s.setor]||s.setor}
                   </span>
                 ))}
               </div>
@@ -670,7 +615,7 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
       )}
 
       {!ativas.length && !finalizadas.length && !canceladas.length && (
-        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>
+        <div className="acn-empty">
           Nenhuma análise solicitada ainda para este processo.
         </div>
       )}
@@ -780,8 +725,6 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
     setUploadando(null);
   };
 
-  const cor = SETOR_COR[setor] || '#374151';
-
   // Lista na ordem escolhida (só Telecom; nos outros setores segue a ordem de sempre)
   const lista = (() => {
     if (setor !== 'Telecom' || ordem === 'padrao') return analises;
@@ -796,45 +739,41 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
   })();
 
   return (
-    <div style={{ margin:'0 0 16px 0', border:`1px solid ${cor}30`, borderLeft:`4px solid ${cor}`, borderRadius:6, background:'#fff', overflow:'hidden' }}>
+    <div className="acn-ana-widget" data-setor={setor}>
       {/* Header */}
-      <div style={{ background:`${cor}08`, padding:'8px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer', borderBottom:`1px solid ${cor}20` }}
-        onClick={()=>setCollapsed(c=>!c)}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontWeight:700, fontSize:11, color:cor }}>🔍 Análise de Licitações / CRM</span>
+      <div className="acn-ana-w-cab" onClick={()=>setCollapsed(c=>!c)}>
+        <div className="acn-ana-w-esq">
+          <span className="acn-ana-w-tit"><Icone path={mdiMagnify} size={15} /> Análise de Licitações / CRM</span>
           {analises.length > 0 && !collapsed && (
-            <span style={{ background:cor, color:'#fff', borderRadius:10, padding:'1px 8px', fontSize:9, fontWeight:800 }}>
+            <span className="acn-ana-w-pill">
               {analises.length} pendente{analises.length>1?'s':''}
             </span>
           )}
           {analises.length > 0 && collapsed && (
-            <span style={{ background:'#fef9c3', color:'#92400e', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, border:'1px solid #fde047' }}>
-              ⏳ {analises.length}
+            <span className="acn-ana-w-pill amarelo">
+              <Icone path={mdiTimerSand} size={11} /> {analises.length}
             </span>
           )}
         </div>
-        <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-          style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, color:'#94a3b8', padding:'0 2px' }}>
-          {collapsed ? '▸' : '▾'}
-        </button>
+        <Botao variante="discreto" pequeno icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-expanded={!collapsed}
+          onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
       </div>
 
       {!collapsed && (
-        <div style={{ padding:'10px 14px' }}>
+        <div className="acn-ana-w-corpo">
           {loading ? (
-            <div style={{ color:'#9ca3af', fontSize:11, padding:'8px 0' }}>Carregando análises...</div>
+            <div className="acn-ana-w-vazio">Carregando análises...</div>
           ) : analises.length === 0 ? (
-            <div style={{ color:'#9ca3af', fontSize:11, padding:'8px 0', textAlign:'center' }}>
+            <div className="acn-ana-w-vazio centro">
               Nenhuma análise pendente para {SETOR_LABEL[setor]||setor}.
             </div>
           ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            <div className="acn-ana-w-lista">
               {setor === 'Telecom' && analises.length > 1 && (
-                <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:10, color:'#475569' }}>
-                  <label htmlFor="analise-ordem" style={{ fontWeight:700 }}>Ordenar por</label>
-                  <select id="analise-ordem" value={ordem}
-                    onChange={e => { setOrdem(e.target.value); try { localStorage.setItem('acn-analise-ordem', e.target.value); } catch {} }}
-                    style={{ padding:'3px 6px', border:`1px solid ${cor}50`, borderRadius:4, fontSize:10 }}>
+                <div className="acn-ana-ordenar">
+                  <label htmlFor="analise-ordem" className="acn-forte">Ordenar por</label>
+                  <select id="analise-ordem" value={ordem} className="acn-input"
+                    onChange={e => { setOrdem(e.target.value); try { localStorage.setItem('acn-analise-ordem', e.target.value); } catch {} }}>
                     <option value="padrao">Padrão</option>
                     <option value="disputa_recente">Data de disputa — mais recente primeiro</option>
                     <option value="disputa_antiga">Data de disputa — menos recente primeiro</option>
@@ -847,100 +786,82 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
                 const isExp = expandido === item.id;
                 const isLicit = sol?.origem === 'licitacao';
                 const anx = (solId && anexos[solId]) || [];
+                const abre = !!(onAbrirOrigem && sol?.origem_id);
 
                 return (
-                  <div key={item.id} style={{ border:`1px solid ${cor}30`, borderRadius:5, overflow:'hidden' }}>
+                  <div key={item.id} className="acn-ana-item">
                     {/* Card header */}
-                    <div style={{ background:`${cor}08`, padding:'8px 12px',
-                        display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                      <div style={{ minWidth:0, flex:1, cursor:'pointer' }} onClick={()=>setExpandido(isExp ? null : item.id)}>
+                    <div className="acn-ana-item-cab">
+                      <div className="acn-ana-item-esq" onClick={()=>setExpandido(isExp ? null : item.id)}>
                         <span
                           onClick={e => { e.stopPropagation(); onAbrirOrigem && sol?.origem_id && onAbrirOrigem(sol.origem, sol.origem_id); }}
-                          style={{ fontSize:9, fontWeight:800, padding:'1px 6px', borderRadius:3, marginRight:6,
-                            background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff',
-                            cursor: onAbrirOrigem && sol?.origem_id ? 'pointer' : 'default',
-                            textDecoration: onAbrirOrigem && sol?.origem_id ? 'underline' : 'none' }}>
-                          {isLicit ? '🏛️ Licitação' : '🤝 CRM'}
+                          className={'acn-ana-tag ' + (isLicit ? 'licit' : 'crm') + (abre ? ' link' : '')}>
+                          <Icone path={isLicit ? mdiGavel : mdiHandshakeOutline} size={12} /> {isLicit ? 'Licitação' : 'CRM'}
                         </span>
                         {/* Título clicável abre o processo correspondente */}
                         <span
                           onClick={e => { e.stopPropagation(); onAbrirOrigem && sol?.origem_id && onAbrirOrigem(sol.origem, sol.origem_id); }}
-                          style={{ fontSize:11, fontWeight:700,
-                            color: onAbrirOrigem && sol?.origem_id ? '#1d4ed8' : '#1e293b',
-                            textDecoration: onAbrirOrigem && sol?.origem_id ? 'underline' : 'none',
-                            cursor: onAbrirOrigem && sol?.origem_id ? 'pointer' : 'default',
-                          }}>
-                          {sol?.origem_numero && <span style={{ color:'#6b7280', marginRight:4 }}>{sol.origem_numero}</span>}
+                          className={'acn-ana-titulo' + (abre ? ' link' : '')}>
+                          {sol?.origem_numero && <span className="acn-ana-numero">{sol.origem_numero}</span>}
                           {sol?.origem_titulo || '—'}
                         </span>
                       </div>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, marginLeft:8 }}>
+                      <div className="acn-ana-item-dir">
                         {setor === 'Telecom' && disputas[sol?.origem_id] && (
-                          <span style={{ fontSize:9, color:'#7c3aed', fontWeight:700 }} title="Data de disputa do processo">🗓 Disputa {disputas[sol.origem_id].texto}</span>
+                          <span className="acn-ana-disputa" title="Data de disputa do processo"><Icone path={mdiCalendarClockOutline} size={12} /> Disputa {disputas[sol.origem_id].texto}</span>
                         )}
-                        <span style={{ fontSize:9, color:'#9ca3af' }}>
+                        <span className="acn-ajuda">
                           {sol?.criado_em ? new Date(sol.criado_em).toLocaleDateString('pt-BR') : ''}
                         </span>
-                        {onAbrirOrigem && sol?.origem_id && (
-                          <button
-                            onClick={e => { e.stopPropagation(); onAbrirOrigem(sol.origem, sol.origem_id); }}
-                            style={{ background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff', border:'none',
-                              borderRadius:3, padding:'2px 7px', fontSize:8, cursor:'pointer', fontWeight:700, flexShrink:0 }}>
-                            🔗 Abrir
-                          </button>
+                        {abre && (
+                          <Botao pequeno icone={mdiLinkVariant} onClick={e => { e.stopPropagation(); onAbrirOrigem(sol.origem, sol.origem_id); }}>
+                            Abrir
+                          </Botao>
                         )}
-                        <span style={{ fontSize:11, color:'#94a3b8', cursor:'pointer' }} onClick={()=>setExpandido(isExp ? null : item.id)}>{isExp ? '▲' : '▼'}</span>
+                        <span className="acn-ana-seta" onClick={()=>setExpandido(isExp ? null : item.id)}><Icone path={isExp ? mdiChevronUp : mdiChevronDown} size={14} /></span>
                       </div>
                     </div>
 
                     {/* Card body */}
                     {isExp && (
-                      <div style={{ padding:'12px 14px', background:'#fff', borderTop:`1px solid ${cor}15` }}>
+                      <div className="acn-ana-item-corpo">
 
                         {/* ── ARQUIVOS COMUNS ── */}
-                        <div style={{ marginBottom:12 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:'#374151', marginBottom:6 }}>📎 Arquivos (comuns a todos os setores)</div>
-                          <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:6 }}>
+                        <div className="acn-ana-bloco">
+                          <div className="acn-ana-bloco-tit"><Icone path={mdiPaperclip} size={13} /> Arquivos (comuns a todos os setores)</div>
+                          <div className="acn-ana-arqs">
                             {anx.length === 0 && (
-                              <span style={{ fontSize:10, color:'#9ca3af' }}>Nenhum arquivo ainda.</span>
+                              <span className="acn-ajuda">Nenhum arquivo ainda.</span>
                             )}
                             {anx.map((a:any) => (
-                              <a key={a.id} href={a.url} target="_blank" rel="noreferrer"
-                                style={{ fontSize:9, background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe',
-                                  borderRadius:4, padding:'3px 8px', textDecoration:'none', display:'flex', alignItems:'center', gap:3 }}>
-                                📄 {a.nome}
-                                {a.criado_por && <span style={{ color:'#94a3b8', fontSize:8 }}>· {a.criado_por}</span>}
+                              <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="acn-ana-arq">
+                                <Icone path={mdiFileDocumentOutline} size={13} /> {a.nome}
+                                {a.criado_por && <span className="acn-ana-arq-por">· {a.criado_por}</span>}
                               </a>
                             ))}
                           </div>
-                          <label style={{ fontSize:10, color:cor, cursor:'pointer', fontWeight:600,
-                            opacity: uploadando===solId ? .5 : 1 }}>
-                            {uploadando===solId ? '⏳ Enviando...' : '+ Adicionar arquivo'}
+                          <label className={'acn-ana-upload' + (uploadando===solId ? ' ocupado' : '')}>
+                            {uploadando===solId ? 'Enviando...' : '+ Adicionar arquivo'}
                             <input type="file" hidden multiple disabled={uploadando===solId}
                               onChange={e => { if (e.target.files?.length && solId) uploadAnexo(solId, e.target.files); e.target.value=''; }} />
                           </label>
                         </div>
 
                         {/* ── NOTAS ── */}
-                        <div style={{ marginBottom:12 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:'#374151', marginBottom:4 }}>📝 Notas / Observações</div>
-                          <textarea
+                        <div className="acn-ana-bloco">
+                          <div className="acn-ana-bloco-tit"><Icone path={mdiNoteTextOutline} size={13} /> Notas / Observações</div>
+                          <textarea className="acn-input"
                             value={notas[item.id] ?? (item.notas || '')}
                             onChange={e => setNotas(n => ({ ...n, [item.id]: e.target.value }))}
                             placeholder="Adicione observações da sua análise..."
-                            rows={3}
-                            style={{ width:'100%', boxSizing:'border-box', padding:'6px 8px',
-                              border:`1px solid ${cor}40`, borderRadius:4, fontSize:11,
-                              resize:'vertical', fontFamily:'inherit' }} />
+                            rows={3} />
                         </div>
 
                         {/* ── BOTÃO ANALISADO ── */}
-                        <button onClick={() => marcarAnalisado(item)} disabled={aprovando===item.id}
-                          style={{ background:cor, color:'#fff', border:'none', borderRadius:5,
-                            padding:'8px 22px', fontWeight:800, fontSize:11, cursor:'pointer', width:'100%',
-                            opacity: aprovando===item.id ? .6 : 1 }}>
-                          {aprovando===item.id ? '⏳ Salvando...' : '✅ Marcar como Analisado'}
-                        </button>
+                        <Botao variante="primario" className="acn-ana-marcar" icone={aprovando===item.id ? mdiTimerSand : mdiCheckCircleOutline}
+                          onClick={() => marcarAnalisado(item)} disabled={aprovando===item.id}>
+                          {aprovando===item.id ? 'Salvando...' : 'Marcar como Analisado'}
+                        </Botao>
                       </div>
                     )}
                   </div>
