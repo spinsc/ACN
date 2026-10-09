@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { Botao, Chips, Tag, Selo } from './Interface';
+import Icone from './Icone';
+import { mdiBellOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckCircleOutline, mdiTimerSand, mdiCancel, mdiBriefcaseOutline, mdiGavel, mdiNoteTextOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise, MarcaEditada, ParecerEditavel, autoriaDoParecer } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,16 +13,7 @@ import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAna
 // Permite que o analista finalize setores individualmente
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SETOR_COR: Record<string, string> = {
-  Comercial:   '#2563eb',
-  Telecom:     '#0891b2',
-  Engenharia:  '#16a34a',
-  Orcamento:   '#b45309',
-  Chicotes:    '#7c3aed',
-  Serralheria: '#ea580c',
-  Producao:    '#d97706',
-  Laboratorio: '#dc2626',
-};
+// 12e47 (09/10/2026): a cor de cada setor vem do design.css ([data-setor] define --acn-setor, criado na 12e46); a gaveta usa as classes acn-gav-* (comuns às Menções) e acn-ain-*
 
 const fmtDT = (v: string) => {
   if (!v) return '—';
@@ -152,69 +146,43 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
 
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 3000,
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
-    }}
+    <div className="acn-gav acn-gav-analise"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
 
       {/* Backdrop semitransparente */}
-      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.35)' }} onClick={onClose} />
+      <div className="acn-gav-fundo" onClick={onClose} />
 
       {/* Painel lateral direito */}
-      <div style={{
-        position: 'relative', zIndex: 1,
-        width: 480, maxWidth: '95vw', height: '100vh',
-        background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,.18)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
+      <div className="acn-gav-painel" role="dialog" aria-label="Análises">
 
         {/* Cabeçalho */}
-        <div style={{ background:'#b45309', color:'white', padding:'14px 16px', flexShrink:0 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div className="acn-gav-cab">
+          <div className="acn-gav-cab-linha">
             <div>
-              <div style={{ fontWeight:700, fontSize:14 }}>🔔 Análises</div>
-              <div style={{ fontSize:10, opacity:.85, marginTop:2 }}>
+              <div className="acn-gav-tit"><Icone path={mdiBellOutline} size={18} />Análises</div>
+              <div className="acn-gav-sub">
                 {pendentesGlobal > 0
                   ? `${pendentesGlobal} solicitação(ões) aguardando análise`
                   : 'Nenhuma pendência no momento'}
               </div>
             </div>
-            <button onClick={onClose}
-              style={{ background:'rgba(255,255,255,.2)', border:'none', color:'white',
-                borderRadius:4, width:28, height:28, cursor:'pointer', fontSize:14, fontWeight:700 }}>
-              ✕
-            </button>
+            <Botao variante="discreto" pequeno icone={mdiClose} className="acn-gav-x" aria-label="Fechar" title="Fechar" onClick={onClose} />
           </div>
 
           {/* Filtro */}
-          <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
-            {(['pendente','concluidas','tudo'] as const).map(f => (
-              <button key={f} onClick={() => setFiltro(f)}
-                style={{
-                  fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
-                  background: filtro===f ? 'white' : 'rgba(255,255,255,.2)',
-                  color:      filtro===f ? '#b45309' : 'white',
-                  border: 'none',
-                }}>
-                {f === 'pendente' ? 'Pendentes' : f === 'concluidas' ? 'Concluídas' : 'Todas'}
-              </button>
-            ))}
+          <div className="acn-gav-filtros">
+            <Chips ativo={filtro} onChange={id => setFiltro(id as any)} rotulo="Situação das análises"
+              itens={[{ id: 'pendente', rotulo: 'Pendentes' }, { id: 'concluidas', rotulo: 'Concluídas' }, { id: 'tudo', rotulo: 'Todas' }]} />
             {setorOpcoes.length > 1 && (
-              <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
-                style={{
-                  fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:4, cursor:'pointer',
-                  background: setorFiltro==='todos' ? 'rgba(255,255,255,.2)' : 'white',
-                  color:      setorFiltro==='todos' ? 'white' : '#b45309',
-                  border: 'none', marginLeft:'auto',
-                }}>
+              <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)} className="acn-input acn-gav-sel">
                 {/* Popup de opções é renderizado pelo SO com fundo claro, não
                     pelo nosso CSS — sem cor própria aqui herdaria o branco do
-                    <select> fechado e ficaria ilegível. Fixo escuro-sobre-claro
-                    nas próprias <option>, independente da cor do controle fechado. */}
-                <option value="todos" style={{ color:'#1e293b', background:'#fff' }}>Todos os setores</option>
+                    <select> fechado e ficaria ilegível. O design.css fixa
+                    escuro-sobre-claro nas próprias <option> (.acn-gav-sel option),
+                    independente da cor do controle fechado. */}
+                <option value="todos">Todos os setores</option>
                 {setorOpcoes.map(s => (
-                  <option key={s} value={s} style={{ color:'#1e293b', background:'#fff' }}>{SETOR_LABEL[s] || s}</option>
+                  <option key={s} value={s}>{SETOR_LABEL[s] || s}</option>
                 ))}
               </select>
             )}
@@ -222,14 +190,14 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
         </div>
 
         {/* Lista */}
-        <div style={{ flex:1, overflowY:'auto', padding:'12px 14px' }}>
+        <div className="acn-gav-lista">
           {loading && (
-            <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:11 }}>Carregando...</div>
+            <div className="acn-empty">Carregando...</div>
           )}
           {!loading && analisesFiltradas.length === 0 && (
-            <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
-              <div style={{ fontSize:11 }}>
+            <div className="acn-empty acn-gav-vazio">
+              <Icone path={mdiCheckCircleOutline} size={32} />
+              <div>
                 {setorFiltro !== 'todos' ? `Nenhuma análise de ${SETOR_LABEL[setorFiltro] || setorFiltro} aqui.`
                   : filtro === 'pendente' ? 'Nenhuma análise pendente!'
                   : filtro === 'concluidas' ? 'Nenhuma análise concluída ainda.'
@@ -242,47 +210,35 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
             const setores: any[] = sol.analise_setores || [];
             const pendentes = setores.filter(s => s.status !== 'analisado').length;
             const exp = expandido[sol.id] !== false; // padrão expandido
-            const origem = sol.origem === 'licitacao' ? '🏛️ Licitação' : sol.origem === 'crm' ? '💼 CRM' : sol.origem;
+            const origem = sol.origem === 'licitacao' ? 'Licitação' : sol.origem === 'crm' ? 'CRM' : sol.origem;
             const solConcluida = sol.status === 'finalizada';
             const solCancelada = sol.status === 'cancelada';
 
             return (
-              <div key={sol.id} style={{
-                border: `1px solid ${solCancelada ? '#fecaca' : solConcluida ? '#d1fae5' : '#fde68a'}`,
-                borderRadius: 8, marginBottom: 10, overflow:'hidden',
-                background: solCancelada ? '#fef2f2' : solConcluida ? '#f0fdf4' : '#fffbeb',
-              }}>
+              <div key={sol.id} className={'acn-ain-sol ' + (solCancelada ? 'cancelada' : solConcluida ? 'concluida' : 'andamento')}>
 
                 {/* Cabeçalho do card */}
-                <div
-                  style={{ padding:'10px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}
+                <div className="acn-ain-sol-cab"
                   onClick={() => setExpandido(prev => ({ ...prev, [sol.id]: !exp }))}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:'#64748b',
-                        background:'#e2e8f0', borderRadius:3, padding:'1px 6px' }}>
-                        {origem}
-                      </span>
+                  <div className="acn-ain-sol-corpo">
+                    <div className="acn-ain-sol-tags">
+                      <Tag><Icone path={sol.origem === 'licitacao' ? mdiGavel : mdiBriefcaseOutline} size={11} /> {origem}</Tag>
                       {sol.origem_numero && (
-                        <span style={{ fontSize:9, color:'#475569' }}>#{sol.origem_numero}</span>
+                        <span className="acn-ajuda">#{sol.origem_numero}</span>
                       )}
-                      <span style={{
-                        fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:3,
-                        background: solCancelada ? '#fee2e2' : solConcluida ? '#d1fae5' : '#fef3c7',
-                        color:      solCancelada ? '#991b1b' : solConcluida ? '#065f46' : '#92400e',
-                      }}>
-                        {solCancelada ? '⊘ Cancelada' : solConcluida ? '✅ Concluída' : `⏳ ${pendentes} pendente(s)`}
-                      </span>
+                      <Selo familia={solCancelada ? 'erro' : solConcluida ? 'ok' : 'atencao'} ponto={false}>
+                        <Icone path={solCancelada ? mdiCancel : solConcluida ? mdiCheckCircleOutline : mdiTimerSand} size={11} />{solCancelada ? 'Cancelada' : solConcluida ? 'Concluída' : `${pendentes} pendente(s)`}
+                      </Selo>
                     </div>
-                    <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', marginTop:3 }}>
+                    <div className="acn-ain-sol-tit">
                       {sol.origem_titulo || '(sem título)'}
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:3, flexWrap:'wrap' }}>
-                      <span style={{ fontSize:9, color:'#94a3b8' }}>
+                    <div className="acn-ain-sol-acoes">
+                      <span className="acn-ajuda">
                         Solicitado em {fmtDT(sol.criado_em)} por {sol.criado_por || '—'}
                       </span>
                       {onNavigate && (
-                        <button
+                        <Botao pequeno icone={sol.origem === 'crm' ? mdiBriefcaseOutline : mdiGavel}
                           onClick={e => {
                             e.stopPropagation();
                             // Deep-link — mesmo mecanismo usado em Menções e no
@@ -292,74 +248,59 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                               window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: sol.origem, origemId: sol.origem_id } }));
                             }
                             onNavigate(sol.origem === 'crm' ? 'crm' : 'licitacoes');
-                          }}
-                          style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:4, border:'none',
-                            background: sol.origem === 'crm' ? '#0891b2' : '#7c3aed',
-                            color:'white', cursor:'pointer' }}>
-                          {sol.origem === 'crm' ? '💼 Abrir no CRM' : '🏛️ Abrir Licitações'}
-                        </button>
+                          }}>
+                          {sol.origem === 'crm' ? 'Abrir no CRM' : 'Abrir Licitações'}
+                        </Botao>
                       )}
                       {podeCancelarAnalise(sol, currentUser) && (
-                        <button
+                        <Botao pequeno variante="perigo-sec" icone={mdiCancel}
                           onClick={async e => {
                             e.stopPropagation();
                             if (await cancelarSolicitacaoAnalise(sol, currentUser)) { await load(); await refreshCount(); }
                           }}
-                          title="Cancelar esta solicitação (pede o motivo)"
-                          style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:4,
-                            border:'1px solid #fca5a5', background:'#fff', color:'#b91c1c', cursor:'pointer' }}>
-                          ⊘ Cancelar
-                        </button>
+                          title="Cancelar esta solicitação (pede o motivo)">
+                          Cancelar
+                        </Botao>
                       )}
                     </div>
                     {solCancelada && (
-                      <div style={{ fontSize:9, color:'#991b1b', marginTop:3 }}>
+                      <div className="acn-ain-canc">
                         Cancelada por <strong>{sol.cancelada_por || '—'}</strong>{sol.cancelada_em ? ' em ' + fmtDT(sol.cancelada_em) : ''}
                         {sol.motivo_cancelamento ? ' — ' + sol.motivo_cancelamento : ''}
                       </div>
                     )}
                   </div>
-                  <span style={{ fontSize:12, color:'#94a3b8' }}>{exp ? '▲' : '▼'}</span>
+                  <span className="acn-ain-seta"><Icone path={exp ? mdiChevronUp : mdiChevronDown} size={16} /></span>
                 </div>
 
                 {/* Setores */}
                 {exp && (
-                  <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+                  <div className="acn-ain-setores">
                     {setores.length === 0 && (
-                      <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhum setor cadastrado para esta análise.</div>
+                      <div className="acn-ajuda">Nenhum setor cadastrado para esta análise.</div>
                     )}
                     {setores.filter(s => veTodosSetores || setorOpcoes.includes(s.setor)).map(setor => {
                       const concluido = setor.status === 'analisado';
                       const cancelado = setor.status === 'cancelado' || (solCancelada && !concluido);
                       const salvandoSetor = salvando[setor.id];
-                      const cor = SETOR_COR[setor.setor] || '#64748b';
                       const label = SETOR_LABEL[setor.setor] || setor.setor;
 
                       return (
-                        <div key={setor.id} style={{
-                          border: `1px solid ${concluido ? '#d1fae5' : '#e2e8f0'}`,
-                          borderLeft: `3px solid ${cor}`,
-                          borderRadius: 6, padding:'8px 10px',
-                          background: concluido ? '#f0fdf4' : 'white',
-                        }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <span style={{
-                              fontSize:10, fontWeight:700, color: concluido ? '#065f46' : cor,
-                            }}>
-                              {concluido ? '✅' : cancelado ? '⊘' : '⏳'} {label}{cancelado ? ' (cancelado)' : ''}
+                        <div key={setor.id} data-setor={setor.setor} className={'acn-ain-setor' + (concluido ? ' feito' : '')}>
+                          <div className="acn-ain-setor-cab">
+                            <span className="acn-ain-setor-nome">
+                              <Icone path={concluido ? mdiCheckCircleOutline : cancelado ? mdiCancel : mdiTimerSand} size={13} /> {label}{cancelado ? ' (cancelado)' : ''}
                             </span>
                             {concluido && setor.analisado_por && (
-                              <span style={{ fontSize:9, color:'#64748b' }}>
+                              <span className="acn-ajuda">
                                 por {autoriaDoParecer(setor).quem} · {fmtDT(autoriaDoParecer(setor).quando)}
                               </span>
                             )}
                             {concluido && <MarcaEditada setor={setor} />}
                             {concluido && !solCancelada && (
-                              <button onClick={() => reabrirSetor(setor)}
-                                style={{ marginLeft:'auto', fontSize:8, color:'#94a3b8', background:'none',
-                                  border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 6px', cursor:'pointer' }}>
+                              <Botao variante="discreto" pequeno className="acn-ain-reabrir" onClick={() => reabrirSetor(setor)}>
                                 Reabrir
-                              </button>
+                              </Botao>
                             )}
                           </div>
 
@@ -367,9 +308,8 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                           {concluido && (
                             <ParecerEditavel setor={setor} solicitacao={sol} currentUser={currentUser} onSaved={() => load()}>
                               {setor.notas && (
-                                <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
-                                  whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                                  📝 {setor.notas}
+                                <div className="acn-ain-parecer">
+                                  <Icone path={mdiNoteTextOutline} size={13} /> {setor.notas}
                                 </div>
                               )}
                             </ParecerEditavel>
@@ -377,27 +317,18 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
 
                           {/* Campo nota + botão concluir (apenas pendentes) */}
                           {!concluido && !cancelado && (
-                            <div style={{ marginTop:6 }}>
-                              <textarea
+                            <div className="acn-ain-obs">
+                              <textarea className="acn-input"
                                 value={notas[setor.id] || ''}
                                 onChange={e => setNotas(prev => ({ ...prev, [setor.id]: e.target.value }))}
                                 placeholder="Observação / resultado da análise (opcional)..."
                                 rows={4}
-                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db',
-                                  borderRadius:4, fontSize:11, lineHeight:1.55, boxSizing:'border-box',
-                                  marginBottom:6, resize:'vertical', fontFamily:'inherit' }}
                               />
-                              <button
+                              <Botao variante="primario" pequeno icone={salvandoSetor ? mdiTimerSand : mdiCheckCircleOutline}
                                 onClick={() => concluirSetor(sol, setor)}
-                                disabled={salvandoSetor}
-                                style={{
-                                  fontSize:9, fontWeight:700, padding:'4px 12px', borderRadius:4,
-                                  background: salvandoSetor ? '#94a3b8' : '#16a34a',
-                                  color:'white', border:'none', cursor:'pointer',
-                                  opacity: salvandoSetor ? .7 : 1,
-                                }}>
-                                {salvandoSetor ? '⏳ Salvando...' : '✅ Concluir este setor'}
-                              </button>
+                                disabled={salvandoSetor}>
+                                {salvandoSetor ? 'Salvando...' : 'Concluir este setor'}
+                              </Botao>
                             </div>
                           )}
                         </div>
@@ -411,16 +342,11 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
         </div>
 
         {/* Rodapé */}
-        <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 14px', flexShrink:0,
-          display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f8fafc' }}>
-          <span style={{ fontSize:9, color:'#94a3b8' }}>
+        <div className="acn-gav-rodape">
+          <span className="acn-ajuda">
             {analisesFiltradas.length} registro(s) exibido(s)
           </span>
-          <button onClick={load}
-            style={{ fontSize:9, fontWeight:700, padding:'4px 12px', borderRadius:4,
-              background:'#b45309', color:'white', border:'none', cursor:'pointer' }}>
-            🔄 Atualizar
-          </button>
+          <Botao variante="primario" pequeno icone={mdiRefresh} onClick={load}>Atualizar</Botao>
         </div>
       </div>
     </div>

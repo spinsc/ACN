@@ -37,7 +37,7 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 | — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
 | — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
 
-**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e46 — **3.422 `style` inline, 533 botões crus e 4.269 cores soltas, em 97 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); saíram da lista o CRM (12e40 a 12e42), o `OpItens` (12e43), o `DemandaItens` (12e44), o `ClienteUtils` (12e45) e o `AnaliseWidget` (12e46). Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135.
+**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e47 — **3.327 `style` inline, 515 botões crus e 4.154 cores soltas, em 95 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); saíram da lista o CRM (12e40 a 12e42), o `OpItens` (12e43), o `DemandaItens` (12e44), o `ClienteUtils` (12e45), o `AnaliseWidget` (12e46) e as duas gavetas do cabeçalho (12e47). Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135.
 
 ---
 
@@ -4474,6 +4474,25 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 - **Teste de defeito plantado:** numa cópia, o "Salvar" do parecer que só fecha, a caixinha de setor que marca outro setor, o "Solicitar" que só fecha, o "Análise Finalizada" que cancela a solicitação, o "Cancelar" que não pede o motivo, o "Abrir" com o processo e o tipo trocados e o "Marcar como Analisado" que só recolhe — **os sete foram apontados** (o do parecer só depois de eu consertar o clique do roteiro, que não achava o botão pelo título — **antes disso a fotografia estava "igual" porque não chegava a editar**; refeita a referência, ela passou a conferir o corpo gravado).
 
 **O que ficou de fora:** o `AnaliseInboxPanel` (a caixa de entrada das análises, 46 `style`), que é a próxima fatia.
+
+#### ✅ 12e47 — Componentes compartilhados, fatia 5 (as duas gavetas do cabeçalho: `AnaliseInboxPanel` — "Análises" — e `MencoesInboxPanel` — "Minhas Menções")
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois da 12e46). **Nenhuma regra mudou.**
+
+**O que foi feito** (`AnaliseInboxPanel.tsx`, `MencoesInboxPanel.tsx` e `design.css`, 59 regras novas `acn-gav-*` (a gaveta, comum às duas), `acn-ain-*` e `acn-men-*`; **nenhuma consulta, gravação, regra de quem vê o quê ou texto foi mexido**; método da página de prévia, descrito na 12e43):
+
+- **A gaveta** (o painel que abre pela direita, ao clicar no sino ou no balão do cabeçalho): o fundo escurecido, o painel de 480 px, o cabeçalho colorido (âmbar nas Análises, azul nas Menções) com o título, o resumo e o fechar, **os filtros** (Pendentes | Concluídas | Todas — agora o seletor do sistema — e o filtro de setor), a lista que rola, o estado vazio e o rodapé "N registros exibidos | Atualizar". O realce das opções do filtro de setor (escuro sobre claro, porque o popup é do navegador) foi para o `design.css`, com o motivo comentado.
+- **Análises:** cada solicitação em cartão (âmbar andamento, verde concluída, vermelho cancelada) com a origem (CRM/Licitação), o número, o selo "N pendente(s)/Concluída/Cancelada", o título, quem pediu, "Abrir no CRM / Abrir Licitações", "Cancelar" (só para quem pode) e, abrindo, **cada setor na cor do setor** (a da 12e46) com o parecer, "Reabrir", a observação e "Concluir este setor".
+- **Menções:** cada menção em cartão (azul = nova, cinza = lida, verde = resolvida), com a bolinha de quem mencionou, "@você por …", a data, o tipo, a descrição que abre o registro, o trecho em itálico e as ações — "Comercial →", "Marcar lida", "Responder" (que abre a caixa de resposta e "Enviar resposta"), "Marcar como resolvida" e, nas resolvidas, "Reabrir"; mais **"Marcar todas como resolvidas" e "Todas lidas"** no cabeçalho.
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Resultado no código:** `style` inline **95 → 0** (46 + 49), `<button>` **18 → 0** (7 + 11), cores soltas **115 → 0**, linhas **1.032 → 861**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos.
+
+**Como foi testado** (página de prévia; leituras do banco simuladas — três solicitações de análise e três menções —; fotografia de texto, controles, valores, **o que o componente devolve ao chamador** (inclusive os eventos de "abrir o registro" que o painel dispara) e **o corpo que seria gravado**; da versão **da 12e46** × a migrada; **a antiga fotografada duas vezes, igual**): **62 de 62 iguais**, em 11 cenários — Análises (pendentes, concluídas, todas, filtrar por setor; abrir o processo; digitar e **concluir o setor**, **reabrir**, editar o parecer, **cancelar a solicitação — pergunta o motivo e grava**; atualizar; fechar; vazio; usuário só com a aba do CRM, sem filtro de setor) e Menções (pendentes, resolvidas, todas, filtrar por aba; **marcar lida, todas lidas, todas resolvidas, reabrir, resolver, responder — que grava na tela de origem e resolve a menção —**, abrir o registro; fechar; vazio), e os temas escuros.
+- **Equivalências declaradas:** os emojis (🔔 💬 💼 🏛️ ✅ ⏳ 📝 🔄) e os símbolos (✓ ✕ ⊘ ↩ ↺ ➤) viraram ícones; as três opções de filtro viraram o seletor do sistema (com o estado "pressionado"); o realce de "nova" nas menções (roxo) ficou azul e o cabeçalho das menções (índigo) ficou azul do guia; o "Abrir no CRM" (azul-turquesa) e o "Abrir Licitações" (roxo) viraram o botão comum do guia.
+- **Teste de defeito plantado:** numa cópia, "Concluir este setor" que reabre, "Reabrir" que conclui, "Abrir no CRM" que navega para as Licitações, o filtro que sempre escolhe "Todas", "Marcar todas como resolvidas" que só marca como lidas, "Marcar lida" que resolve, "Enviar resposta" que só marca como lida e "Reabrir" da menção que resolve — **os oito foram apontados**.
+
+**O que ficou de fora:** o `OplAcompModal` (também com o mapa de cores por setor; é a próxima fatia) e o `AgendaWidget` e o `AvisoSistemaWidget`, que aparecem no mesmo cabeçalho e ficam para as fatias seguintes.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 

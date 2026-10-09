@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
+import { Botao, Chips, Tag } from './Interface';
+import Icone from './Icone';
+import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel Inbox de Menções (@usuário)
@@ -307,91 +310,58 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
     if (m.aba_destino && onNavigate) onNavigate(m.aba_destino);
   };
 
+  // 12e47 (09/10/2026): só a aparência — a gaveta usa as classes acn-gav-* (comuns às Análises) e acn-men-*
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 3100,
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
-    }}
+    <div className="acn-gav acn-gav-mencao"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
 
       {/* Backdrop */}
-      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.35)' }} onClick={onClose} />
+      <div className="acn-gav-fundo" onClick={onClose} />
 
       {/* Painel lateral direito */}
-      <div style={{
-        position: 'relative', zIndex: 1,
-        width: 480, maxWidth: '95vw', height: '100vh',
-        background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,.18)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
+      <div className="acn-gav-painel" role="dialog" aria-label="Minhas menções">
 
         {/* Cabeçalho */}
-        <div style={{ background:'#6366f1', color:'white', padding:'14px 16px', flexShrink:0 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div className="acn-gav-cab">
+          <div className="acn-gav-cab-linha">
             <div>
-              <div style={{ fontWeight:700, fontSize:14 }}>💬 Minhas Menções</div>
-              <div style={{ fontSize:10, opacity:.85, marginTop:2 }}>
+              <div className="acn-gav-tit"><Icone path={mdiMessageTextOutline} size={18} />Minhas Menções</div>
+              <div className="acn-gav-sub">
                 {pendentesGlobal > 0
                   ? `${pendentesGlobal} pendente(s) — ainda não resolvida(s)`
                   : 'Nenhuma menção pendente'}
               </div>
             </div>
-            <button onClick={onClose}
-              style={{ background:'rgba(255,255,255,.2)', border:'none', color:'white',
-                borderRadius:4, width:28, height:28, cursor:'pointer', fontSize:14, fontWeight:700, flexShrink:0 }}>
-              ✕
-            </button>
+            <Botao variante="discreto" pequeno icone={mdiClose} className="acn-gav-x" aria-label="Fechar" title="Fechar" onClick={onClose} />
           </div>
 
           {/* Ações em massa */}
           {(naoLidasCount > 0 || pendentesCount > 0) && (
-            <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+            <div className="acn-gav-massa">
               {pendentesCount > 0 && (
-                <button onClick={marcarTodasResolvidas}
-                  style={{ fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4,
-                    background:'#22c55e', color:'white', border:'none', cursor:'pointer' }}>
-                  ✓ Marcar todas como resolvidas
-                </button>
+                <Botao pequeno variante="primario" icone={mdiCheck} onClick={marcarTodasResolvidas}>Marcar todas como resolvidas</Botao>
               )}
               {naoLidasCount > 0 && (
-                <button onClick={marcarTodasLidas}
-                  style={{ fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4,
-                    background:'rgba(255,255,255,.2)', color:'white', border:'none', cursor:'pointer' }}>
-                  ✓ Todas lidas
-                </button>
+                <Botao pequeno icone={mdiCheckAll} onClick={marcarTodasLidas}>Todas lidas</Botao>
               )}
             </div>
           )}
 
           {/* Filtro */}
-          <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
-            {(['pendentes','resolvidas','todas'] as const).map(f => (
-              <button key={f} onClick={() => setFiltro(f)}
-                style={{
-                  fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
-                  background: filtro===f ? 'white' : 'rgba(255,255,255,.2)',
-                  color:      filtro===f ? '#6366f1' : 'white',
-                  border: 'none',
-                }}>
-                {f === 'pendentes' ? 'Pendentes' : f === 'resolvidas' ? 'Resolvidas' : 'Todas'}
-              </button>
-            ))}
+          <div className="acn-gav-filtros">
+            <Chips ativo={filtro} onChange={id => setFiltro(id as any)} rotulo="Situação das menções"
+              itens={[{ id: 'pendentes', rotulo: 'Pendentes' }, { id: 'resolvidas', rotulo: 'Resolvidas' }, { id: 'todas', rotulo: 'Todas' }]} />
             {setorOpcoes.length > 1 && (
-              <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
-                style={{
-                  fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:4, cursor:'pointer',
-                  background: setorFiltro==='todos' ? 'rgba(255,255,255,.2)' : 'white',
-                  color:      setorFiltro==='todos' ? 'white' : '#6366f1',
-                  border: 'none', marginLeft:'auto',
-                }}>
+              <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)} className="acn-input acn-gav-sel">
                 {/* O popup de opções é renderizado pelo navegador/SO com fundo
                     claro, não pelo nosso CSS — sem cor própria aqui, herdaria o
                     branco do <select> fechado e ficaria ilegível (texto branco
-                    em fundo claro). Fixo escuro-sobre-claro nas próprias
-                    <option>, independente da cor do controle fechado. */}
-                <option value="todos" style={{ color:'#1e293b', background:'#fff' }}>Todos os setores</option>
+                    em fundo claro). O design.css fixa escuro-sobre-claro nas
+                    próprias <option> (.acn-gav-sel option), independente da
+                    cor do controle fechado. */}
+                <option value="todos">Todos os setores</option>
                 {setorOpcoes.map(k => (
-                  <option key={k} value={k} style={{ color:'#1e293b', background:'#fff' }}>{ABA_LABEL[k]}</option>
+                  <option key={k} value={k}>{ABA_LABEL[k]}</option>
                 ))}
               </select>
             )}
@@ -399,14 +369,14 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         </div>
 
         {/* Lista */}
-        <div style={{ flex:1, overflowY:'auto', padding:'12px 14px' }}>
+        <div className="acn-gav-lista">
           {loading && (
-            <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:11 }}>Carregando...</div>
+            <div className="acn-empty">Carregando...</div>
           )}
           {!loading && mencoes.length === 0 && (
-            <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>💬</div>
-              <div style={{ fontSize:11 }}>
+            <div className="acn-empty acn-gav-vazio">
+              <Icone path={mdiMessageTextOutline} size={32} />
+              <div>
                 {filtro === 'pendentes' ? 'Nenhuma menção pendente — tudo resolvido!'
                   : filtro === 'resolvidas' ? 'Nenhuma menção resolvida ainda.'
                   : 'Nenhuma menção registrada.'}
@@ -420,132 +390,79 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
             const isMarcando = marcando[m.id];
 
             return (
-              <div key={m.id} style={{
-                border: `1px solid ${m.resolvida ? '#86efac' : m.lida ? '#e2e8f0' : '#c7d2fe'}`,
-                borderLeft: `3px solid ${m.resolvida ? '#22c55e' : m.lida ? '#cbd5e1' : '#6366f1'}`,
-                borderRadius: 8, marginBottom: 8, padding:'10px 12px',
-                background: m.resolvida ? '#f0fdf4' : m.lida ? '#f8fafc' : '#f5f3ff',
-                opacity: m.resolvida ? .75 : 1,
-              }}>
+              <div key={m.id} className={'acn-men-card ' + (m.resolvida ? 'resolvida' : m.lida ? 'lida' : 'nova')}>
                 {/* Linha 1: quem mencionou + quando */}
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <span style={{
-                      width:24, height:24, borderRadius:'50%',
-                      background: m.lida ? '#94a3b8' : '#6366f1',
-                      color:'white', display:'flex', alignItems:'center', justifyContent:'center',
-                      fontSize:9, fontWeight:700, flexShrink:0,
-                    }}>
+                <div className="acn-men-l1">
+                  <div className="acn-men-quem">
+                    <span className="acn-men-avatar">
                       {(m.mencionante_nome || '?')[0]}
                     </span>
-                    <span style={{ fontSize:10, fontWeight:700, color: m.lida ? '#64748b' : '#4338ca' }}>
+                    <span className="acn-men-voce">
                       @você
                     </span>
-                    <span style={{ fontSize:9, color:'#94a3b8' }}>
+                    <span className="acn-ajuda">
                       por <strong>{m.mencionante_nome || '—'}</strong>
                     </span>
                   </div>
-                  <span style={{ fontSize:9, color:'#94a3b8' }}>{fmtDT(m.criado_em)}</span>
+                  <span className="acn-ajuda">{fmtDT(m.criado_em)}</span>
                 </div>
 
                 {/* Linha 2: contexto + descrição */}
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6, flexWrap:'wrap' }}>
-                  <span style={{
-                    fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:3,
-                    background: m.lida ? '#e2e8f0' : '#e0e7ff', color: m.lida ? '#64748b' : '#4338ca',
-                  }}>
-                    {ctxLabel}
-                  </span>
+                <div className="acn-men-l2">
+                  <Tag>{ctxLabel}</Tag>
                   {m.contexto_descricao && (
                     m.contexto_id ? (
-                      <span onClick={() => abrirRegistro(m)}
-                        style={{ fontSize:9, color:'#4338ca', fontWeight:700, textDecoration:'underline', cursor:'pointer' }}>
+                      <span onClick={() => abrirRegistro(m)} className="acn-men-desc link">
                         {m.contexto_descricao}
                       </span>
                     ) : (
-                      <span style={{ fontSize:9, color:'#475569', fontWeight:600 }}>{m.contexto_descricao}</span>
+                      <span className="acn-men-desc">{m.contexto_descricao}</span>
                     )
                   )}
                   {m.campo && (
-                    <span style={{ fontSize:9, color:'#94a3b8' }}>campo: {m.campo}</span>
+                    <span className="acn-ajuda">campo: {m.campo}</span>
                   )}
                 </div>
 
                 {/* Trecho do texto */}
                 {m.texto_trecho && (
-                  <div style={{
-                    fontSize:10, color:'#1e293b', background: m.lida ? '#f1f5f9' : '#ede9fe',
-                    borderRadius:4, padding:'5px 8px', marginBottom:6,
-                    borderLeft:'2px solid #818cf8', fontStyle:'italic',
-                    whiteSpace:'pre-wrap', wordBreak:'break-word',
-                  }}>
+                  <div className="acn-men-trecho">
                     {m.texto_trecho.length > 200 ? m.texto_trecho.slice(0, 200) + '…' : m.texto_trecho}
                   </div>
                 )}
 
                 {/* Ações */}
-                <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                <div className="acn-men-acoes">
                   {m.aba_destino && onNavigate && (
-                    <button
-                      onClick={() => abrirRegistro(m)}
-                      style={{
-                        fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4,
-                        background:'#6366f1', color:'white', border:'none', cursor:'pointer',
-                      }}>
+                    <Botao pequeno variante="primario" onClick={() => abrirRegistro(m)}>
                       {abaLabel} →
-                    </button>
+                    </Botao>
                   )}
                   {!m.lida && !m.resolvida && (
-                    <button
-                      onClick={() => marcarLida(m)}
-                      disabled={isMarcando}
-                      style={{
-                        fontSize:9, padding:'3px 10px', borderRadius:4, cursor:'pointer',
-                        background:'none', color:'#6366f1', border:'1px solid #c7d2fe',
-                        opacity: isMarcando ? .6 : 1,
-                      }}>
-                      {isMarcando ? '...' : '✓ Marcar lida'}
-                    </button>
+                    <Botao pequeno icone={isMarcando ? undefined : mdiCheck} onClick={() => marcarLida(m)} disabled={isMarcando}>
+                      {isMarcando ? '...' : 'Marcar lida'}
+                    </Botao>
                   )}
                   {m.lida && !m.resolvida && (
-                    <span style={{ fontSize:9, color:'#94a3b8' }}>✓ Lida</span>
+                    <span className="acn-ajuda acn-men-lida"><Icone path={mdiCheck} size={12} /> Lida</span>
                   )}
                   {!m.resolvida && !CONTEXTOS_SEM_RESPOSTA.has(m.contexto) && (
-                    <button
-                      onClick={() => setRespondendoId(id => id === m.id ? null : m.id)}
-                      style={{
-                        fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
-                        background: respondendoId===m.id ? '#e0e7ff' : 'none', color:'#4338ca', border:'1px solid #c7d2fe',
-                      }}>
-                      ↩ {respondendoId===m.id ? 'Cancelar resposta' : 'Responder'}
-                    </button>
+                    <Botao pequeno icone={mdiReply} onClick={() => setRespondendoId(id => id === m.id ? null : m.id)}>
+                      {respondendoId===m.id ? 'Cancelar resposta' : 'Responder'}
+                    </Botao>
                   )}
                   {!m.resolvida ? (
-                    <button
-                      onClick={() => marcarResolvida(m)}
-                      disabled={isMarcando}
-                      style={{
-                        fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
-                        background:'#22c55e', color:'white', border:'none',
-                        opacity: isMarcando ? .6 : 1,
-                      }}>
-                      {isMarcando ? '...' : '✓ Marcar como resolvida'}
-                    </button>
+                    <Botao pequeno variante="primario" icone={isMarcando ? undefined : mdiCheck} onClick={() => marcarResolvida(m)} disabled={isMarcando}>
+                      {isMarcando ? '...' : 'Marcar como resolvida'}
+                    </Botao>
                   ) : (
                     <>
-                      <span style={{ fontSize:9, color:'#16a34a', fontWeight:700 }}>
-                        ✓ Resolvida{m.resolvida_por ? ` por ${m.resolvida_por}` : ''}
+                      <span className="acn-men-resolvida">
+                        <Icone path={mdiCheck} size={12} /> Resolvida{m.resolvida_por ? ` por ${m.resolvida_por}` : ''}
                       </span>
-                      <button
-                        onClick={() => reabrirMencao(m)}
-                        disabled={isMarcando}
-                        style={{
-                          fontSize:9, padding:'3px 10px', borderRadius:4, cursor:'pointer',
-                          background:'none', color:'#94a3b8', border:'1px solid #e2e8f0',
-                          opacity: isMarcando ? .6 : 1,
-                        }}>
-                        {isMarcando ? '...' : '↺ Reabrir'}
-                      </button>
+                      <Botao pequeno variante="discreto" icone={isMarcando ? undefined : mdiUndoVariant} onClick={() => reabrirMencao(m)} disabled={isMarcando}>
+                        {isMarcando ? '...' : 'Reabrir'}
+                      </Botao>
                     </>
                   )}
                 </div>
@@ -553,27 +470,20 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                 {/* Compositor de resposta — grava na tela de origem (CRM,
                     Licitação, Compras, SAC...) e resolve a menção sozinho. */}
                 {respondendoId === m.id && (
-                  <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid #e0e7ff' }}>
-                    <textarea
+                  <div className="acn-men-resposta">
+                    <textarea className="acn-input"
                       autoFocus
                       value={textosResposta[m.id] || ''}
                       onChange={e => setTextosResposta(prev => ({ ...prev, [m.id]: e.target.value }))}
                       placeholder="Escreva sua resposta... ela vai aparecer direto na tela de origem"
                       rows={2}
-                      style={{ width:'100%', padding:'6px 8px', border:'1px solid #c7d2fe', borderRadius:4,
-                        fontSize:10, resize:'vertical', fontFamily:'inherit', boxSizing:'border-box' }}
                     />
-                    <div style={{ display:'flex', gap:6, marginTop:6 }}>
-                      <button
+                    <div>
+                      <Botao variante="primario" pequeno icone={enviando[m.id] ? undefined : mdiSend}
                         onClick={() => enviarResposta(m)}
-                        disabled={enviando[m.id] || !(textosResposta[m.id] || '').trim()}
-                        style={{
-                          fontSize:9, fontWeight:700, padding:'4px 12px', borderRadius:4, cursor:'pointer',
-                          background:'#4338ca', color:'white', border:'none',
-                          opacity: enviando[m.id] || !(textosResposta[m.id]||'').trim() ? .6 : 1,
-                        }}>
-                        {enviando[m.id] ? 'Enviando...' : '➤ Enviar resposta'}
-                      </button>
+                        disabled={enviando[m.id] || !(textosResposta[m.id] || '').trim()}>
+                        {enviando[m.id] ? 'Enviando...' : 'Enviar resposta'}
+                      </Botao>
                     </div>
                   </div>
                 )}
@@ -583,18 +493,11 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         </div>
 
         {/* Rodapé */}
-        <div style={{
-          borderTop:'1px solid #e2e8f0', padding:'10px 14px', flexShrink:0,
-          display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f8fafc',
-        }}>
-          <span style={{ fontSize:9, color:'#94a3b8' }}>
+        <div className="acn-gav-rodape">
+          <span className="acn-ajuda">
             {mencoes.length} menção(ões) exibida(s)
           </span>
-          <button onClick={load}
-            style={{ fontSize:9, fontWeight:700, padding:'4px 12px', borderRadius:4,
-              background:'#6366f1', color:'white', border:'none', cursor:'pointer' }}>
-            🔄 Atualizar
-          </button>
+          <Botao variante="primario" pequeno icone={mdiRefresh} onClick={load}>Atualizar</Botao>
         </div>
       </div>
     </div>
