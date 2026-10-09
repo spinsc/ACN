@@ -1,6 +1,9 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Botao, Chips, Selo, Faixa } from './Interface';
+import Icone from './Icone';
+import { mdiMagnify, mdiPlus, mdiAccountOutline, mdiDomain, mdiCheck, mdiAlertOutline, mdiFileDocumentOutline, mdiCellphone, mdiMapMarkerOutline, mdiEmailOutline, mdiContentSaveOutline, mdiRefresh } from '@mdi/js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 export const fmtTelefones = (t: any[]) =>
@@ -93,113 +96,88 @@ export function ClienteCriarRapidoModal({ nomeInicial = '', tipoInicial = 'PF', 
     onClose();
   };
 
+  // 12e45 (09/10/2026): só a aparência (classes acn-clu-* em design.css); os campos, a validação e a gravação são os de antes
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:3000,
-      display:'flex', alignItems:'center', justifyContent:'center' }}
+    <div className="modal-overlay acn-clu-ov"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'white', borderRadius:10, width:'min(480px,96vw)',
-        padding:'18px 20px', boxShadow:'0 12px 48px #0005' }}>
-
-        <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:14 }}>
-          ✚ Cadastrar Novo Cliente
+      <div className="modal-box acn-modal-cadastro acn-clu-jan" role="dialog" aria-label="Cadastrar novo cliente">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiPlus} size={18} />Cadastrar Novo Cliente</span>
         </div>
+        <div className="acn-modal-corpo acn-form-cheio">
 
-        {/* Tipo */}
-        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-          {(['PF','PJ'] as const).map(t => (
-            <button key={t} onClick={() => setTipo(t)}
-              style={{ flex:1, padding:'7px', border:`2px solid ${tipo===t ? '#0f766e' : '#e5e7eb'}`,
-                borderRadius:6, background: tipo===t ? '#f0fdf4' : 'white',
-                fontWeight:700, fontSize:11, cursor:'pointer',
-                color: tipo===t ? '#0f766e' : '#6b7280' }}>
-              {t === 'PF' ? '👤 Pessoa Física' : '🏢 Pessoa Jurídica'}
-            </button>
-          ))}
-        </div>
+          {/* Tipo */}
+          <Chips ativo={tipo} onChange={id => setTipo(id as 'PF' | 'PJ')} rotulo="Tipo de cliente"
+            itens={[{ id: 'PF', rotulo: 'Pessoa Física', icone: mdiAccountOutline }, { id: 'PJ', rotulo: 'Pessoa Jurídica', icone: mdiDomain }]} />
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 12px' }}>
-          {/* Nome */}
-          <div style={{ gridColumn:'1/-1' }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-              {tipo === 'PJ' ? 'Razão Social / Nome Fantasia *' : 'Nome Completo *'}
-            </div>
-            <input value={nome} onChange={e => setNome(e.target.value)} autoFocus
-              placeholder={tipo === 'PJ' ? 'Razão Social...' : 'Nome completo...'}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}
-            />
-          </div>
-
-          {/* Documento */}
-          <div>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-              {tipo === 'PJ' ? 'CNPJ' : 'CPF'}
-            </div>
-            <input value={documento} onChange={e => setDocumento(e.target.value)}
-              placeholder={tipo === 'PJ' ? '00.000.000/0001-00' : '000.000.000-00'}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}
-            />
-          </div>
-
-          {/* Telefone */}
-          <div>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Telefone / WhatsApp</div>
-            <input value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000"
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}
-            />
-          </div>
-
-          {/* Email */}
-          <div style={{ gridColumn:'1/-1' }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>E-mail</div>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="contato@empresa.com"
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}
-            />
-          </div>
-
-          {/* PF: empresa vinculada (autocomplete PJ) */}
-          {tipo === 'PF' && (
-            <div style={{ gridColumn:'1/-1' }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                Empresa Vinculada <span style={{ color:'#94a3b8', fontWeight:400 }}>(opcional — vínculo com PJ do cadastro)</span>
+          <div className="acn-clu-grade">
+            {/* Nome */}
+            <div className="acn-clu-cheio">
+              <div className="acn-label">
+                {tipo === 'PJ' ? 'Razão Social / Nome Fantasia *' : 'Nome Completo *'}
               </div>
-              <ClienteAutocomplete
-                value={empresaNome}
-                onChange={v => { setEmpresaNome(v); setEmpresaId(null); }}
-                onSelect={c => { setEmpresaNome(c.nome); setEmpresaId(c.id); setEmpresa(c.nome); }}
-                placeholder="Buscar empresa cadastrada..."
-                tipoFilter="PJ"
-              />
-              {empresaId && (
-                <div style={{ fontSize:8, color:'#059669', marginTop:2 }}>✓ Vinculado ao cadastro da empresa</div>
-              )}
+              <input className="acn-input" value={nome} onChange={e => setNome(e.target.value)} autoFocus
+                placeholder={tipo === 'PJ' ? 'Razão Social...' : 'Nome completo...'} />
             </div>
-          )}
 
-          {/* PJ: campo de empresa (nome fantasia / complemento) */}
-          {tipo === 'PJ' && (
-            <div style={{ gridColumn:'1/-1' }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Nome Fantasia / Marca</div>
-              <input value={empresa} onChange={e => setEmpresa(e.target.value)} placeholder="Nome fantasia (opcional)"
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}
-              />
+            {/* Documento */}
+            <div>
+              <div className="acn-label">
+                {tipo === 'PJ' ? 'CNPJ' : 'CPF'}
+              </div>
+              <input className="acn-input" value={documento} onChange={e => setDocumento(e.target.value)}
+                placeholder={tipo === 'PJ' ? '00.000.000/0001-00' : '000.000.000-00'} />
             </div>
-          )}
-        </div>
 
-        <div style={{ fontSize:8, color:'#94a3b8', marginTop:10, marginBottom:14 }}>
-          Dados extras (endereço, mais telefones etc.) podem ser completados no Cadastro de Clientes depois.
-        </div>
+            {/* Telefone */}
+            <div>
+              <div className="acn-label">Telefone / WhatsApp</div>
+              <input className="acn-input" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000" />
+            </div>
 
-        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose}
-            style={{ padding:'6px 14px', background:'#f1f5f9', border:'none', borderRadius:5, fontSize:10, cursor:'pointer', color:'#64748b', fontWeight:600 }}>
-            Cancelar
-          </button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'6px 16px', background: salvando ? '#94a3b8' : '#0f766e', border:'none', borderRadius:5,
-              fontSize:10, cursor:'pointer', color:'white', fontWeight:700, opacity: salvando ? .6 : 1 }}>
-            {salvando ? 'Salvando...' : '✓ Criar e Selecionar'}
-          </button>
+            {/* Email */}
+            <div className="acn-clu-cheio">
+              <div className="acn-label">E-mail</div>
+              <input className="acn-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="contato@empresa.com" />
+            </div>
+
+            {/* PF: empresa vinculada (autocomplete PJ) */}
+            {tipo === 'PF' && (
+              <div className="acn-clu-cheio">
+                <div className="acn-label">
+                  Empresa Vinculada <span className="acn-clu-opcional">(opcional — vínculo com PJ do cadastro)</span>
+                </div>
+                <ClienteAutocomplete
+                  value={empresaNome}
+                  onChange={v => { setEmpresaNome(v); setEmpresaId(null); }}
+                  onSelect={c => { setEmpresaNome(c.nome); setEmpresaId(c.id); setEmpresa(c.nome); }}
+                  placeholder="Buscar empresa cadastrada..."
+                  tipoFilter="PJ"
+                />
+                {empresaId && (
+                  <div className="acn-txt-ok acn-clu-vinculado"><Icone path={mdiCheck} size={12} />Vinculado ao cadastro da empresa</div>
+                )}
+              </div>
+            )}
+
+            {/* PJ: campo de empresa (nome fantasia / complemento) */}
+            {tipo === 'PJ' && (
+              <div className="acn-clu-cheio">
+                <div className="acn-label">Nome Fantasia / Marca</div>
+                <input className="acn-input" value={empresa} onChange={e => setEmpresa(e.target.value)} placeholder="Nome fantasia (opcional)" />
+              </div>
+            )}
+          </div>
+
+          <div className="acn-ajuda">
+            Dados extras (endereço, mais telefones etc.) podem ser completados no Cadastro de Clientes depois.
+          </div>
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" icone={salvando ? undefined : mdiCheck} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : 'Criar e Selecionar'}
+          </Botao>
         </div>
       </div>
     </div>
@@ -275,78 +253,61 @@ export function ClienteAutocomplete({
   const tipoLabel = tipoFilter === 'PJ' ? 'empresa' : tipoFilter === 'PF' ? 'pessoa' : 'cliente';
 
   return (
-    <div ref={wrapRef} style={{ position:'relative', display:'flex', gap:4 }}>
+    <div ref={wrapRef} className="acn-clu-auto">
       <input
-        className="acn-input"
-        style={{ flex:1, ...inputStyle }}
+        className="acn-input acn-clu-campo"
+        style={inputStyle}
         value={value}
         onChange={e => handleChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"
       />
-      <button type="button" className="acn-btn"
-        style={{ background:'#475569', fontSize:11, padding:'0 10px', flexShrink:0 }}
+      <Botao type="button" icone={mdiMagnify} className="acn-clu-lupa"
         title="Buscar no cadastro"
         onClick={() => setModalBusca(true)}
-        disabled={disabled}>
-        🔍
-      </button>
+        disabled={disabled} />
 
       {/* Erro */}
       {erroTabela && (
-        <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:999,
-          background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6,
-          padding:'6px 10px', fontSize:10, color:'#dc2626', marginTop:2 }}>
-          ⚠️ Erro ao buscar: {erroTabela}
+        <div className="acn-clu-erro">
+          <Icone path={mdiAlertOutline} size={14} />Erro ao buscar: {erroTabela}
         </div>
       )}
 
       {/* Dropdown sugestões */}
       {aberto && (sugestoes.length > 0 || (value.length >= 2 && !buscando)) && (
-        <div style={{ position:'absolute', top:'100%', left:0, right:32, zIndex:999,
-          background:'white', border:'1px solid #d1d5db', borderRadius:6,
-          boxShadow:'0 4px 12px #0002', marginTop:2, maxHeight:280, overflowY:'auto' }}>
+        <div className="acn-clu-sugestoes">
 
           {sugestoes.map(c => (
-            <div key={c.id}
-              style={{ padding:'8px 12px', cursor:'pointer', borderBottom:'1px solid #f1f5f9' }}
-              onMouseDown={() => selecionar(c)}
-              onMouseEnter={e => (e.currentTarget.style.background='#f0f9ff')}
-              onMouseLeave={e => (e.currentTarget.style.background='white')}>
-              <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', display:'flex', alignItems:'center', gap:6 }}>
-                <span style={{ fontSize:9, background: c.tipo==='PJ' ? '#dbeafe' : '#f0fdf4',
-                  color: c.tipo==='PJ' ? '#1e40af' : '#065f46',
-                  padding:'1px 5px', borderRadius:8, fontWeight:700 }}>{c.tipo}</span>
+            <div key={c.id} className="acn-clu-sug" onMouseDown={() => selecionar(c)}>
+              <div className="acn-clu-sug-nome">
+                <Selo familia={c.tipo === 'PJ' ? 'info' : 'ok'} ponto={false}>{c.tipo}</Selo>
                 {c.nome}
               </div>
-              <div style={{ fontSize:10, color:'#64748b', marginTop:1, display:'flex', gap:10, flexWrap:'wrap' }}>
-                {c.empresa && <span>🏢 {c.empresa}</span>}
-                {c.documento && <span>📄 {c.documento}</span>}
-                {fmtTelefones(c.telefones) && <span>📱 {fmtTelefones(c.telefones)}</span>}
-                {c.cidade && <span>📍 {c.cidade}</span>}
+              <div className="acn-ajuda acn-clu-sug-det">
+                {c.empresa && <span><Icone path={mdiDomain} size={12} /> {c.empresa}</span>}
+                {c.documento && <span><Icone path={mdiFileDocumentOutline} size={12} /> {c.documento}</span>}
+                {fmtTelefones(c.telefones) && <span><Icone path={mdiCellphone} size={12} /> {fmtTelefones(c.telefones)}</span>}
+                {c.cidade && <span><Icone path={mdiMapMarkerOutline} size={12} /> {c.cidade}</span>}
               </div>
             </div>
           ))}
 
           {buscando && (
-            <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Buscando...</div>
+            <div className="acn-ajuda acn-clu-buscando">Buscando...</div>
           )}
 
           {/* Opção: Criar novo */}
           {permitirCriar && value.trim().length >= 2 && (
-            <div
-              style={{ padding:'8px 12px', cursor:'pointer', borderTop:'1px solid #e2e8f0',
-                background:'#f0fdf4', display:'flex', alignItems:'center', gap:8 }}
-              onMouseDown={() => { setAberto(false); setModalCriar(true); }}
-              onMouseEnter={e => (e.currentTarget.style.background='#dcfce7')}
-              onMouseLeave={e => (e.currentTarget.style.background='#f0fdf4')}>
-              <span style={{ fontSize:14, color:'#0f766e', fontWeight:700 }}>✚</span>
+            <div className="acn-clu-sug criar"
+              onMouseDown={() => { setAberto(false); setModalCriar(true); }}>
+              <Icone path={mdiPlus} size={16} />
               <div>
-                <div style={{ fontSize:11, fontWeight:700, color:'#0f766e' }}>
+                <div className="acn-clu-criar-tit">
                   Criar {tipoLabel} "{value}"
                 </div>
-                <div style={{ fontSize:9, color:'#059669' }}>Cadastrar novo e selecionar automaticamente</div>
+                <div className="acn-clu-criar-sub">Cadastrar novo e selecionar automaticamente</div>
               </div>
             </div>
           )}
@@ -406,69 +367,62 @@ export function ClienteBuscaModal({
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 980, width:'96vw', maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
-        <div className="modal-title">
-          🔍 Buscar {tipoFilter === 'PJ' ? 'Empresa (PJ)' : tipoFilter === 'PF' ? 'Pessoa Física (PF)' : 'Cliente'}
+      <div className="modal-box acn-modal-cadastro acn-clu-busca-jan" role="dialog" aria-label="Buscar cliente">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiMagnify} size={18} />Buscar {tipoFilter === 'PJ' ? 'Empresa (PJ)' : tipoFilter === 'PF' ? 'Pessoa Física (PF)' : 'Cliente'}</span>
         </div>
-        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-          <input className="acn-input" style={{ flex:1 }}
-            placeholder="Buscar por nome, CNPJ/CPF, empresa, cidade..."
-            value={busca} onChange={e => setBusca(e.target.value)} autoFocus
-          />
-          {permitirCriar && onCriar && (
-            <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 14px', flexShrink:0 }}
-              onClick={onCriar}>
-              ✚ Criar novo
-            </button>
-          )}
-        </div>
+        <div className="acn-modal-corpo acn-clu-busca-corpo">
+          <div className="acn-clu-busca-barra">
+            <input className="acn-input acn-clu-campo"
+              placeholder="Buscar por nome, CNPJ/CPF, empresa, cidade..."
+              value={busca} onChange={e => setBusca(e.target.value)} autoFocus
+            />
+            {permitirCriar && onCriar && (
+              <Botao variante="primario" icone={mdiPlus} onClick={onCriar}>Criar novo</Botao>
+            )}
+          </div>
 
-        <div style={{ flex:1, overflowY:'auto', marginBottom:12 }}>
-          {loading ? (
-            <div style={{ textAlign:'center', color:'#94a3b8', padding:24 }}>Carregando...</div>
-          ) : lista.length === 0 ? (
-            <div style={{ textAlign:'center', color:'#94a3b8', padding:24 }}>
-              {busca.length > 0 ? 'Nenhum resultado. Use o botão "Criar novo" para cadastrar.' : 'Nenhum cliente encontrado.'}
-            </div>
-          ) : (
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-              <thead>
-                <tr style={{ background:'#f1f5f9' }}>
-                  {['Tipo','Nome','Empresa / Doc.','Telefone','Email','Cidade',''].map(h => (
-                    <th key={h} style={{ padding:'7px 9px', textAlign:'left', fontWeight:700, fontSize:10, color:'#475569' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {lista.map(c => (
-                  <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                    <td style={{ padding:'8px 9px' }}>
-                      <span style={{ fontSize:9, background: c.tipo==='PJ' ? '#dbeafe' : '#f0fdf4',
-                        color: c.tipo==='PJ' ? '#1e40af' : '#065f46',
-                        padding:'2px 6px', borderRadius:10, fontWeight:700 }}>{c.tipo}</span>
-                    </td>
-                    <td style={{ padding:'8px 9px', fontWeight:700, color:'#1e293b' }}>{c.nome}</td>
-                    <td style={{ padding:'8px 9px', color:'#475569', fontSize:10 }}>
-                      {c.empresa && <div>{c.empresa}</div>}
-                      {c.documento && <div style={{ color:'#94a3b8' }}>{c.documento}</div>}
-                    </td>
-                    <td style={{ padding:'8px 9px', color:'#475569' }}>{fmtTelefones(c.telefones) || '—'}</td>
-                    <td style={{ padding:'8px 9px', color:'#475569', maxWidth:130, wordBreak:'break-word' }}>
-                      {fmtEmails(c.emails) || '—'}
-                    </td>
-                    <td style={{ padding:'8px 9px', color:'#475569' }}>{c.cidade || '—'}</td>
-                    <td style={{ padding:'8px 9px' }}>
-                      <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }} onClick={() => onSelect(c)}>
-                        Selecionar
-                      </button>
-                    </td>
+          <div className="acn-clu-busca-lista">
+            {loading ? (
+              <div className="acn-empty">Carregando...</div>
+            ) : lista.length === 0 ? (
+              <div className="acn-empty">
+                {busca.length > 0 ? 'Nenhum resultado. Use o botão "Criar novo" para cadastrar.' : 'Nenhum cliente encontrado.'}
+              </div>
+            ) : (
+              <table className="acn-tabela">
+                <thead>
+                  <tr>
+                    {['Tipo','Nome','Empresa / Doc.','Telefone','Email','Cidade',''].map(h => (
+                      <th key={h}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {lista.map(c => (
+                    <tr key={c.id}>
+                      <td><Selo familia={c.tipo === 'PJ' ? 'info' : 'ok'} ponto={false}>{c.tipo}</Selo></td>
+                      <td className="acn-forte">{c.nome}</td>
+                      <td className="acn-clu-busca-emp">
+                        {c.empresa && <div>{c.empresa}</div>}
+                        {c.documento && <div className="acn-fraco">{c.documento}</div>}
+                      </td>
+                      <td>{fmtTelefones(c.telefones) || '—'}</td>
+                      <td className="acn-clu-busca-email">{fmtEmails(c.emails) || '—'}</td>
+                      <td>{c.cidade || '—'}</td>
+                      <td>
+                        <Botao pequeno variante="primario" onClick={() => onSelect(c)}>Selecionar</Botao>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-        <button className="acn-btn" style={{ background:'#94a3b8', alignSelf:'flex-end' }} onClick={onClose}>Fechar</button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Fechar</Botao>
+        </div>
       </div>
     </div>
   );
@@ -617,59 +571,65 @@ export function ClienteSalvarModal({ formData, clienteId, onClose }: SalvarProps
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 980 }}>
+      <div className="modal-box acn-modal-cadastro acn-clu-salvar-jan" role="dialog" aria-label={modo === 'novo' ? 'Salvar cliente no cadastro' : 'Atualizar cadastro do cliente'}>
         {modo === 'novo' ? (
           <>
-            <div className="modal-title">💾 Salvar Cliente no Cadastro?</div>
-            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'10px 14px', marginBottom:16, fontSize:12 }}>
-              <strong>{nome}</strong> não está no cadastro de clientes.<br />
-              <span style={{ color:'#475569', fontSize:11 }}>Deseja salvar para agilizar futuros lançamentos?</span>
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiContentSaveOutline} size={18} />Salvar Cliente no Cadastro?</span>
             </div>
-            <div style={{ fontSize:11, color:'#475569', marginBottom:14 }}>
-              {formData.cpf_cnpj && <div>📄 {formData.cpf_cnpj}</div>}
-              {formData.telefone && <div>📱 {formData.telefone}</div>}
-              {formData.email    && <div>✉️ {formData.email}</div>}
-              {formData.endereco && <div>📍 {formData.endereco}</div>}
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-quadro tom-info acn-clu-quadro">
+                <div><strong>{nome}</strong> não está no cadastro de clientes.</div>
+                <div className="acn-ajuda">Deseja salvar para agilizar futuros lançamentos?</div>
+              </div>
+              <div className="acn-clu-dados">
+                {formData.cpf_cnpj && <div><Icone path={mdiFileDocumentOutline} size={14} /> {formData.cpf_cnpj}</div>}
+                {formData.telefone && <div><Icone path={mdiCellphone} size={14} /> {formData.telefone}</div>}
+                {formData.email    && <div><Icone path={mdiEmailOutline} size={14} /> {formData.email}</div>}
+                {formData.endereco && <div><Icone path={mdiMapMarkerOutline} size={14} /> {formData.endereco}</div>}
+              </div>
             </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <button className="acn-btn" style={{ background:'#0f766e', flex:1 }} onClick={salvarNovo} disabled={salvando}>
-                {salvando ? 'Salvando...' : '✓ Salvar no cadastro'}
-              </button>
-              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Não salvar</button>
+            <div className="acn-modal-rodape">
+              <Botao variante="primario" icone={salvando ? undefined : mdiCheck} onClick={salvarNovo} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'Salvar no cadastro'}
+              </Botao>
+              <Botao onClick={onClose}>Não salvar</Botao>
             </div>
           </>
         ) : (
           <>
-            <div className="modal-title">🔄 Atualizar Cadastro do Cliente?</div>
-            <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>
-              Foram detectadas diferenças em <strong>{clienteExist?.nome}</strong>:
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiRefresh} size={18} />Atualizar Cadastro do Cliente?</span>
             </div>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11, marginBottom:14 }}>
-              <thead>
-                <tr style={{ background:'#f1f5f9' }}>
-                  <th style={{ padding:'5px 8px', textAlign:'left', fontWeight:700, color:'#475569' }}>Campo</th>
-                  <th style={{ padding:'5px 8px', textAlign:'left', fontWeight:700, color:'#ef4444' }}>Atual</th>
-                  <th style={{ padding:'5px 8px', textAlign:'left', fontWeight:700, color:'#0f766e' }}>Novo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {diffs.map((d, i) => (
-                  <tr key={i} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                    <td style={{ padding:'6px 8px', fontWeight:600, color:'#374151' }}>{d.campo}</td>
-                    <td style={{ padding:'6px 8px', color:'#9ca3af', textDecoration:'line-through' }}>{d.antigo}</td>
-                    <td style={{ padding:'6px 8px', color:'#0f766e', fontWeight:600 }}>{d.novo}</td>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Foram detectadas diferenças em <strong>{clienteExist?.nome}</strong>:
+              </div>
+              <table className="acn-tabela">
+                <thead>
+                  <tr>
+                    <th>Campo</th>
+                    <th className="acn-clu-atual">Atual</th>
+                    <th className="acn-clu-novo">Novo</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ background:'#fefce8', border:'1px solid #fde68a', borderRadius:4, padding:'7px 10px', fontSize:10, color:'#92400e', marginBottom:14 }}>
-              ℹ️ Telefones e emails novos serão adicionados (não substituídos) na lista do cliente.
+                </thead>
+                <tbody>
+                  {diffs.map((d, i) => (
+                    <tr key={i}>
+                      <td className="acn-forte">{d.campo}</td>
+                      <td className="acn-clu-antigo">{d.antigo}</td>
+                      <td className="acn-clu-novo-valor">{d.novo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Faixa tom="atencao">Telefones e emails novos serão adicionados (não substituídos) na lista do cliente.</Faixa>
             </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <button className="acn-btn" style={{ background:'#0f766e', flex:1 }} onClick={atualizarExistente} disabled={salvando}>
-                {salvando ? 'Atualizando...' : '✓ Atualizar cadastro'}
-              </button>
-              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Não atualizar</button>
+            <div className="acn-modal-rodape">
+              <Botao variante="primario" icone={salvando ? undefined : mdiCheck} onClick={atualizarExistente} disabled={salvando}>
+                {salvando ? 'Atualizando...' : 'Atualizar cadastro'}
+              </Botao>
+              <Botao onClick={onClose}>Não atualizar</Botao>
             </div>
           </>
         )}

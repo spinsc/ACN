@@ -37,7 +37,7 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 | — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
 | — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
 
-**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e44 — **3.614 `style` inline, 556 botões crus e 4.482 cores soltas, em 98 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); o CRM (12e40 a 12e42), o `OpItens` (12e43) e o `DemandaItens` (12e44) zeraram ou quase. Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135, `AnaliseWidget` 109.
+**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e45 — **3.530 `style` inline, 545 botões crus e 4.397 cores soltas, em 97 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); o CRM (12e40 a 12e42), o `OpItens` (12e43), o `DemandaItens` (12e44) e o `ClienteUtils` (12e45) saíram da lista. Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135, `AnaliseWidget` 109.
 
 ---
 
@@ -4428,6 +4428,28 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 - **Teste de defeito plantado:** numa cópia, o modelo que não traz a estrutura, o remover item que apaga os outros, o rótulo "Preencher/Ajustar valores" trocado, o remover vínculo que apaga os outros, o total da linha sem a quantidade e a fabricação que não diz "por OP" com 2 OPs — **os seis foram apontados** (o último só depois de eu acrescentar o cenário de 2 OPs, que não existia).
 
 **O que ficou de fora:** o `VinculoPicker` (o seletor de tipo de vínculo que aparece no editor de vínculos) e o `ProdutoArquivos` (arquivos do produto, na leitura) são componentes de outros arquivos e seguem com o visual deles; a lógica de gerar as demandas e de sugerir fabricação não foi tocada.
+
+#### ✅ 12e45 — Componentes compartilhados, fatia 3 (`ClienteUtils`: o autocomplete de cliente, a janela de busca, o criar rápido e o aviso de salvar/atualizar o cadastro)
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois da 12e44). **Nenhuma regra mudou.**
+
+**O que foi feito** (`ClienteUtils.tsx` e `design.css`, 38 regras novas `acn-clu-*`; **nenhuma consulta, gravação, validação ou texto foi mexido**; método da página de prévia, descrito na 12e43):
+
+- **O autocomplete de cliente** (o campo "Cliente" do CRM, da OP, das demandas…): o campo do sistema com a lupa (botão do sistema só com ícone, "Buscar no cadastro"), a lista de sugestões (selo PJ/PF, nome, e a empresa, o documento, o telefone e a cidade com ícone; o realce ao passar o mouse agora é do estilo), a opção verde **"Criar cliente "…""** e o aviso de erro de leitura.
+- **A janela "Buscar Cliente / Empresa (PJ) / Pessoa Física (PF)":** no molde das janelas do guia, com a barra de busca, o "Criar novo", a **tabela do sistema** (tipo em selo, nome, empresa/documento, telefone, e-mail, cidade, "Selecionar") e o "Fechar".
+- **"Cadastrar Novo Cliente"** (criar rápido): o seletor **Pessoa Física | Pessoa Jurídica** agora é o do sistema (`Chips`), os campos em duas colunas, a empresa vinculada (para pessoa física) e "Cancelar | Criar e Selecionar".
+- **"Salvar Cliente no Cadastro?" e "Atualizar Cadastro do Cliente?"** (o aviso de quando o cliente digitado não existe ou mudou): o quadro azul de pergunta, os dados com ícone, a **tabela de diferenças** (o valor de antes riscado e o novo em verde) e a faixa de atenção "Telefones e emails novos serão adicionados…".
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Um erro pego no caminho (e o aprendizado):** as classes nasceram como `acn-cli-*`, **prefixo que a tela de Clientes (12e7) já usa** — `acn-cli-jan`, `acn-cli-tipo`, `acn-cli-busca`… — e as minhas, escritas depois no `design.css`, **mudariam a janela de cadastro de clientes** (largura de 640 para 480). Achei antes de publicar (a captura saiu estranha), **renomeei para `acn-clu-*`** e **passei a conferir, antes de criar um prefixo, se ele já é usado** em outra tela (feito também para os de hoje: `acn-opit`, `acn-dmi`, `acn-crm-ab` e `acn-crm-lote` são só de um arquivo cada). **A página de prévia também foi corrigida:** o CSS base das janelas (`.modal-overlay`/`.modal-box`) mora num `<style>` dentro do `DashboardTab` e não vinha na prévia — as janelas apareciam transparentes nas capturas (o texto comparado nunca foi afetado); agora a prévia lê esse trecho do arquivo e as capturas das janelas saem como no sistema.
+
+**Resultado no código:** `style` inline **84 → 0**, `<button>` **11 → 0**, `acn-btn` **8 → 0**, cores soltas **85 → 0**, linhas **680 → 640**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos.
+
+**Como foi testado** (página de prévia; leituras do banco simuladas — clientes PJ e PF, com e sem telefone e e-mail —; fotografia de texto, controles, valores, dicas, **o que o componente devolve ao chamador** e **o corpo que seria gravado**; da versão **da 12e44** × a migrada; **a antiga fotografada duas vezes, igual**): **76 de 76 iguais**, em 17 cenários — o autocomplete (digitar, as sugestões e o "Criar cliente", escolher, a janela de busca, buscar, selecionar pela janela, criar pelo dropdown, só PJ sem "criar", e a leitura que falha), a janela de busca (todos, só PJ, sem cliente nenhum, "Criar novo", "Fechar"), o criar rápido (pessoa física e jurídica, preencher, **criar — com o corpo gravado**, trocar o tipo, cancelar, sem nome) e o aviso de salvar (cliente novo: salvar e "não salvar"; cliente existente com diferenças: **atualizar — com o corpo gravado**), e os temas escuros.
+- **Equivalências declaradas:** os emojis (🔍 ✚ 👤 🏢 📄 📱 📍 ✉️ ℹ️ 🔄 💾) e o ✓ viraram ícones; o seletor PF/PJ ganhou o estado "pressionado" (o do sistema; antes eram botões comuns); a barra do aviso amarelo e o quadro azul passaram para os tons do guia; os botões "Selecionar", "Criar novo" e "Criar e Selecionar" (verde-azulado) passaram para o primário do guia, e a lupa (cinza escuro) para o secundário.
+- **Teste de defeito plantado:** numa cópia, o seletor que sempre escolhe PF, o campo de CPF que grava no telefone, o "Criar e Selecionar" que só fecha, a sugestão que não seleciona, o "Selecionar" da janela que só fecha, o "Criar novo" que só fecha e o "Não salvar" que salva — **os sete foram apontados** (o último só depois de eu fazer o cenário "não salvar" também conferir o que seria gravado).
+
+**O que ficou de fora:** nada deste arquivo; o `inputStyle` do autocomplete (estilo vindo do chamador) foi mantido como propriedade, hoje sem uso por nenhuma tela.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 

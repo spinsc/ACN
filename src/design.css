@@ -2839,3 +2839,43 @@ html body .acn-b.acn-dmi-chip-x { padding: 0 2px; min-height: 0; }
 .acn-quadro.acn-dmi-fab { margin: 0 0 10px; gap: 6px; padding: 8px 10px; }
 .acn-dmi-fab-bt { justify-self: start; font-weight: 800; }
 .acn-dmi-fab-corpo { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+
+/* ClienteUtils — autocomplete, janela de busca, criar rápido e o aviso de salvar/atualizar cliente (12e45, 09/10/2026). Só aparência. */
+.acn-clu-auto { position: relative; display: flex; gap: 4px; }
+html body .acn-input.acn-clu-campo { flex: 1; min-width: 0; }
+.acn-clu-lupa { flex-shrink: 0; }
+.acn-clu-erro { position: absolute; top: 100%; left: 0; right: 0; z-index: 999; display: flex; align-items: center; gap: 6px; margin-top: 2px; padding: 6px 10px; font-size: 12px; color: var(--acn-bad); background: var(--acn-bad-soft); border: 1px solid color-mix(in srgb, var(--acn-bad) 40%, transparent); border-radius: var(--acn-r2); }
+.acn-clu-sugestoes { position: absolute; top: 100%; left: 0; right: 32px; z-index: 999; margin-top: 2px; max-height: 280px; overflow-y: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: 0 4px 12px rgba(23, 33, 43, .18); }
+body.dark .acn-clu-sugestoes { background: #1e293b; border-color: #334155; }
+.acn-clu-sug { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--acn-line); }
+.acn-clu-sug:hover { background: var(--acn-info-soft); }
+.acn-clu-sug-nome { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+body.dark .acn-clu-sug-nome { color: #f1f5f9; }
+.acn-clu-sug-det { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 1px; }
+.acn-clu-sug-det > span { display: inline-flex; align-items: center; gap: 3px; }
+.acn-clu-buscando { padding: 8px; text-align: center; }
+.acn-clu-sug.criar { display: flex; align-items: center; gap: 8px; color: var(--acn-ok); background: var(--acn-ok-soft); border-top: 1px solid var(--acn-line); border-bottom: 0; }
+.acn-clu-sug.criar:hover { background: color-mix(in srgb, var(--acn-ok) 22%, var(--acn-surface)); }
+.acn-clu-criar-tit { font-size: 12px; font-weight: 700; }
+.acn-clu-criar-sub { font-size: 11px; }
+html body .modal-overlay.acn-clu-ov { z-index: 3000; }
+html body .modal-box.acn-modal-cadastro.acn-clu-jan { width: min(480px, 96vw); max-width: 480px; }
+.acn-clu-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.acn-clu-grade .acn-input { width: 100%; box-sizing: border-box; }
+.acn-clu-cheio { grid-column: 1 / -1; }
+.acn-clu-opcional { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--acn-muted); }
+.acn-clu-vinculado { display: flex; align-items: center; gap: 3px; margin-top: 2px; font-size: 11px; }
+html body .modal-box.acn-modal-cadastro.acn-clu-busca-jan { width: min(980px, 96vw); max-width: 980px; max-height: 85vh; }
+.acn-clu-busca-corpo { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.acn-clu-busca-barra { display: flex; gap: 8px; }
+.acn-clu-busca-lista { flex: 1; min-height: 0; overflow-y: auto; }
+.acn-clu-busca-emp { font-size: 12px; }
+.acn-clu-busca-email { max-width: 140px; word-break: break-word; }
+html body .modal-box.acn-modal-cadastro.acn-clu-salvar-jan { width: min(560px, 96vw); max-width: 560px; }
+.acn-quadro.acn-clu-quadro { margin: 0; gap: 4px; }
+.acn-clu-dados { display: grid; gap: 4px; font-size: 13px; color: var(--acn-text); }
+.acn-clu-dados > div { display: flex; align-items: center; gap: 5px; }
+.acn-tabela th.acn-clu-atual { color: var(--acn-bad); }
+.acn-tabela th.acn-clu-novo { color: var(--acn-ok); }
+.acn-clu-antigo { color: var(--acn-muted); text-decoration: line-through; }
+.acn-clu-novo-valor { color: var(--acn-ok); font-weight: 600; }
