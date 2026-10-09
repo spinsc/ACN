@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPaperclip, mdiClose, mdiClipboardTextOutline, mdiCurrencyUsd, mdiFileDocumentOutline, mdiImageOutline, mdiCheckCircleOutline, mdiFolderOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -10,26 +13,20 @@ import { confirmar } from './Feedback';
 const fmtDT = (v: string) =>
   v ? new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
 
+// 12e49 (09/10/2026): o ícone vem de TIPO_ICONE (antes era um emoji dentro do rótulo) e a cor de cada tipo saiu daqui para o design.css ([data-anx-opl] define --acn-anx-cor)
 const TIPO_LABEL: Record<string, string> = {
-  'proposta':          '📋 Proposta',
-  'orcamento':         '💰 Orçamento',
-  'documento':         '📄 Documento',
-  'foto':              '🖼️ Foto',
-  'checklist_entrega': '✅ Checklist Entrega',
-};
-const TIPO_COR: Record<string, string> = {
-  'proposta':          '#0891b2',
-  'orcamento':         '#059669',
-  'documento':         '#2563eb',
-  'foto':              '#7c3aed',
-  'checklist_entrega': '#16a34a',
+  'proposta':          'Proposta',
+  'orcamento':         'Orçamento',
+  'documento':         'Documento',
+  'foto':              'Foto',
+  'checklist_entrega': 'Checklist Entrega',
 };
 const TIPO_ICONE: Record<string, string> = {
-  'proposta':          '📋',
-  'orcamento':         '💰',
-  'documento':         '📄',
-  'foto':              '🖼️',
-  'checklist_entrega': '✅',
+  'proposta':          mdiClipboardTextOutline,
+  'orcamento':         mdiCurrencyUsd,
+  'documento':         mdiFileDocumentOutline,
+  'foto':              mdiImageOutline,
+  'checklist_entrega': mdiCheckCircleOutline,
 };
 
 function sanitizeFileName(name: string): string {
@@ -103,93 +100,88 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
 
   const isChecklistMode = tipoFixo === 'checklist_entrega';
 
+  const tituloModal = isChecklistMode ? 'Checklist de Entrega' : tipoFixo === 'proposta' ? 'Propostas' : tipoFixo === 'orcamento' ? 'Orçamentos' : 'Arquivos';
+  const iconeModal = isChecklistMode ? mdiCheckCircleOutline : tipoFixo === 'proposta' ? mdiClipboardTextOutline : tipoFixo === 'orcamento' ? mdiCurrencyUsd : mdiPaperclip;
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}
+    <div className="modal-overlay acn-anx-ov"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(580px,96vw)', maxHeight:'80vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
+      <div className="modal-box acn-modal-cadastro acn-anx-jan" role="dialog" aria-label={tituloModal}>
 
         {/* Header */}
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-          <div>
-            <div style={{ fontWeight:700, fontSize:13 }}>
-              {isChecklistMode ? '✅ Checklist de Entrega' : tipoFixo === 'proposta' ? '📋 Propostas' : tipoFixo === 'orcamento' ? '💰 Orçamentos' : '📎 Arquivos'} — {opl.opl}
-            </div>
-            <div style={{ fontSize:10, color:'#6b7280' }}>
+        <div className="acn-modal-cab">
+          <div className="acn-anx-cab-txt">
+            <span className="modal-title">
+              <Icone path={iconeModal} size={18} />{tituloModal} — {opl.opl}
+            </span>
+            <div className="acn-ajuda">
               {opl.chassi ? `Chassi: ${opl.chassi}` : ''} {opl.tipo_projeto ? `· ${opl.tipo_projeto}` : ''}
             </div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#6b7280' }}>✕</button>
+          <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" onClick={onClose} />
         </div>
 
         {/* Upload */}
-        <div style={{ padding:'10px 16px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc', flexShrink:0 }}>
-          <label style={{ display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
-            background: TIPO_COR[tipoFixo || 'documento'] ?? '#2563eb', color:'#fff',
-            border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700 }}>
-            {uploading ? 'Enviando...'
-              : isChecklistMode ? '📎 Anexar Checklist (PDF)'
-              : tipoFixo === 'proposta' ? '📋 Anexar Proposta (Word / planilha)'
-              : tipoFixo === 'orcamento' ? '💰 Anexar Orçamento (Word / planilha)'
-              : '📎 Anexar Arquivo'}
-            <input ref={fileRef} type="file" multiple
-              accept={isChecklistMode ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt` : `.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.gif,.webp,.txt`}
-              onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
-              style={{ display:'none' }} disabled={uploading} />
-          </label>
-          {isChecklistMode && (
-            <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Aceita apenas PDF</span>
-          )}
-          {(tipoFixo === 'proposta' || tipoFixo === 'orcamento') && (
-            <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Word (.doc/.docx), PDF e planilhas (.xlsx, .xlsm, .xlsb, .xls, .ods, .csv...)</span>
-          )}
+        <div className="acn-anx-upload">
+          <div className="acn-anx-envio">
+            <label className={'acn-b acn-b-primario acn-anx-anexar' + (uploading ? ' ocupado' : '')} data-anx-opl={tipoFixo || 'documento'}>
+              {uploading ? 'Enviando...'
+                : isChecklistMode ? <><Icone path={mdiPaperclip} size={14} />Anexar Checklist (PDF)</>
+                : tipoFixo === 'proposta' ? <><Icone path={mdiClipboardTextOutline} size={14} />Anexar Proposta (Word / planilha)</>
+                : tipoFixo === 'orcamento' ? <><Icone path={mdiCurrencyUsd} size={14} />Anexar Orçamento (Word / planilha)</>
+                : <><Icone path={mdiPaperclip} size={14} />Anexar Arquivo</>}
+              <input ref={fileRef} type="file" multiple
+                accept={isChecklistMode ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt` : `.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.gif,.webp,.txt`}
+                onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
+                hidden disabled={uploading} />
+            </label>
+            {isChecklistMode && (
+              <span className="acn-ajuda">Aceita apenas PDF</span>
+            )}
+            {(tipoFixo === 'proposta' || tipoFixo === 'orcamento') && (
+              <span className="acn-ajuda">Word (.doc/.docx), PDF e planilhas (.xlsx, .xlsm, .xlsb, .xls, .ods, .csv...)</span>
+            )}
+          </div>
         </div>
 
         {/* Lista de anexos */}
-        <div style={{ flex:1, overflowY:'auto', padding:12 }}>
+        <div className="acn-modal-corpo acn-anx-lista">
           {loading ? (
-            <div style={{ textAlign:'center', color:'#6b7280', fontSize:11, padding:20 }}>Carregando...</div>
+            <div className="acn-empty">Carregando...</div>
           ) : anexos.length === 0 ? (
-            <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+            <div className="acn-empty">
               {isChecklistMode ? 'Nenhum checklist anexado.' : 'Nenhum arquivo anexado.'}
             </div>
           ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div className="acn-anx-itens">
               {/* Filtros por tipo (somente modo geral) */}
               {!isChecklistMode && (
-                <div style={{ display:'flex', gap:4, marginBottom:6, flexWrap:'wrap' }}>
+                <div className="acn-anx-pills">
                   {[...new Set(anexos.map(a => a.tipo))].map(t => (
-                    <span key={t} style={{ background: TIPO_COR[t]+'18', color:TIPO_COR[t], border:`1px solid ${TIPO_COR[t]}30`,
-                      borderRadius:10, padding:'1px 8px', fontSize:9, fontWeight:700 }}>
-                      {TIPO_LABEL[t] || t} ({anexos.filter(a=>a.tipo===t).length})
+                    <span key={t} className="acn-anx-pill" data-anx-opl={t}>
+                      <Icone path={TIPO_ICONE[t] || mdiFileDocumentOutline} size={11} /> {TIPO_LABEL[t] || t} ({anexos.filter(a=>a.tipo===t).length})
                     </span>
                   ))}
                 </div>
               )}
 
               {anexos.map(a => (
-                <div key={a.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px',
-                  background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6 }}>
-                  <span style={{ fontSize:16, flexShrink:0 }}>
-                    {TIPO_ICONE[a.tipo] || '📄'}
+                <div key={a.id} className="acn-anx-item">
+                  <span className="acn-anx-tag grande">
+                    <Icone path={TIPO_ICONE[a.tipo] || mdiFileDocumentOutline} size={18} />
                   </span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <a href={a.url} target="_blank" rel="noreferrer"
-                      style={{ fontSize:11, color:'#2563eb', fontWeight:600, wordBreak:'break-all', textDecoration:'none' }}>
+                  <div className="acn-anx-info">
+                    <a href={a.url} target="_blank" rel="noreferrer" className="acn-anx-nome">
                       {a.nome}
                     </a>
-                    <div style={{ fontSize:9, color:'#9ca3af', marginTop:1 }}>
+                    <div className="acn-ajuda">
                       {a.setor} · {a.criado_por} · {fmtDT(a.criado_em)}
                     </div>
                   </div>
-                  <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                    <a href={a.url} target="_blank" rel="noreferrer"
-                      style={{ background:'#2563eb', color:'#fff', borderRadius:4, padding:'3px 8px', fontSize:9, fontWeight:700, textDecoration:'none' }}>
+                  <div className="acn-anx-acoes">
+                    <a href={a.url} target="_blank" rel="noreferrer" className="acn-b acn-b-primario acn-b-p">
                       Abrir
                     </a>
-                    <button onClick={() => excluir(a.id)}
-                      style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'3px 6px', fontSize:9, cursor:'pointer' }}>
-                      ✕
-                    </button>
+                    <Botao variante="perigo-sec" pequeno icone={mdiClose} aria-label="Remover arquivo" onClick={() => excluir(a.id)} />
                   </div>
                 </div>
               ))}
@@ -197,9 +189,9 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
           )}
         </div>
 
-        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
-          <span style={{ fontSize:9, color:'#9ca3af' }}>{anexos.length} arquivo{anexos.length !== 1 ? 's' : ''}</span>
-          <button onClick={onClose} style={{ padding:'5px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Fechar</button>
+        <div className="acn-modal-rodape acn-anx-rodape">
+          <span className="acn-ajuda">{anexos.length} arquivo{anexos.length !== 1 ? 's' : ''}</span>
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -269,43 +261,30 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
   const isProposta  = tipoFixo === 'proposta';
   const isOrcamento = tipoFixo === 'orcamento';
 
-  const btnLabel   = uploading ? '...'
-    : isChecklist  ? '✅ PDF'
-    : isProposta   ? '📋 Prop.'
-    : isOrcamento  ? '💰 Orc.'
-    : '📎';
-  const btnBg      = TIPO_COR[tipoFixo || 'documento'] ?? '#475569';
+  const btnIcone   = isChecklist ? mdiCheckCircleOutline : isProposta ? mdiClipboardTextOutline : isOrcamento ? mdiCurrencyUsd : mdiPaperclip;
+  const btnTexto   = uploading ? '...' : isChecklist ? 'PDF' : isProposta ? 'Prop.' : isOrcamento ? 'Orc.' : '';
   const acceptAttr = isChecklist ? '.pdf'
     : (isProposta || isOrcamento) ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt`
     : `.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,${EXT_PLANILHAS},.txt`;
 
   return (
     <>
-      <div style={{ display:'flex', gap:3, alignItems:'center' }}>
+      <div className="acn-anx-mini">
         {/* Botão Anexar */}
         <label title={TIPO_LABEL[tipoFixo || 'documento'] || 'Anexar arquivo'}
-          style={{ display:'inline-flex', alignItems:'center', gap:3, cursor: uploading ? 'wait' : 'pointer',
-            background: btnBg,
-            color:'#fff', border:'none', borderRadius:4,
-            padding: compact ? '3px 7px' : '5px 10px',
-            fontSize: compact ? 9 : 10, fontWeight:700, lineHeight:1, opacity: uploading ? .6 : 1 }}>
-          {btnLabel}
+          className={'acn-b acn-b-primario acn-anx-anexar' + (compact ? ' acn-b-p' : '') + (uploading ? ' ocupado' : '')} data-anx-opl={tipoFixo || 'documento'}>
+          {!uploading && <Icone path={btnIcone} size={compact ? 13 : 15} />}{btnTexto}
           <input ref={fileRef} type="file" multiple
             accept={acceptAttr}
             onChange={e => { if (e.target.files?.length) uploadDireto(e.target.files); }}
-            style={{ display:'none' }} disabled={uploading} />
+            hidden disabled={uploading} />
         </label>
 
         {/* Botão Ver arquivos */}
-        <button onClick={() => setModal(true)} title="Ver arquivos"
-          style={{ background: count && count > 0 ? (TIPO_COR[tipoFixo || ''] || '#2563eb') : '#e2e8f0',
-            color: count && count > 0 ? '#fff' : '#6b7280',
-            border:'none', borderRadius:4,
-            padding: compact ? '3px 7px' : '5px 10px',
-            fontSize: compact ? 9 : 10, fontWeight:700, cursor:'pointer', lineHeight:1,
-            display:'flex', alignItems:'center', gap:3 }}>
-          {TIPO_ICONE[tipoFixo || ''] || '📂'} {count !== null ? count : '…'}
-        </button>
+        <Botao pequeno={compact} variante={count && count > 0 ? 'primario' : 'secundario'} className="acn-anx-ver" data-anx-opl={tipoFixo || ''}
+          icone={TIPO_ICONE[tipoFixo || ''] || mdiFolderOutline} onClick={() => setModal(true)} title="Ver arquivos">
+          {count !== null ? count : '…'}
+        </Botao>
       </div>
 
       {modal && (

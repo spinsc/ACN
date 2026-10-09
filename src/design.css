@@ -3128,3 +3128,42 @@ html body .acn-b.acn-cta-banner-x { color: #fff; }
 .acn-cta-banner-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); }
 .acn-cta-banner-quando { font-size: 12px; font-weight: 700; color: var(--acn-cta-cor); }
 .acn-cta-banner-det { font-size: 12px; color: var(--acn-muted); }
+
+/* Anexos do card do CRM e da OP (12e49, 09/10/2026): janela de documentos e imagens e os botões compactos. Só aparência.
+   A cor de cada tipo de arquivo mora aqui: [data-anx-crm] e [data-anx-opl] definem --acn-anx-cor (antes eram mapas de hexadecimais no código). */
+[data-anx-crm="edital"] { --acn-anx-cor: #7c3aed; }
+[data-anx-crm="proposta"] { --acn-anx-cor: #0891b2; }
+[data-anx-crm="ata"] { --acn-anx-cor: #059669; }
+[data-anx-crm="contrato"] { --acn-anx-cor: #b45309; }
+[data-anx-crm="foto"] { --acn-anx-cor: #be185d; }
+[data-anx-crm="outro"] { --acn-anx-cor: #475569; }
+[data-anx-opl="proposta"] { --acn-anx-cor: #0891b2; }
+[data-anx-opl="orcamento"] { --acn-anx-cor: #059669; }
+[data-anx-opl="documento"] { --acn-anx-cor: #2563eb; }
+[data-anx-opl="foto"] { --acn-anx-cor: #7c3aed; }
+[data-anx-opl="checklist_entrega"] { --acn-anx-cor: #16a34a; }
+html body .modal-overlay.acn-anx-ov { z-index: 2000; }
+html body .modal-box.acn-modal-cadastro.acn-anx-jan { width: min(620px, 96vw); max-width: 620px; max-height: 85vh; }
+.acn-anx-cab-txt { display: grid; gap: 2px; }
+.acn-anx-upload { display: grid; gap: 8px; padding: 10px 16px; flex-shrink: 0; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-anx-envio { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+html body label.acn-b.acn-anx-anexar { cursor: pointer; background: var(--acn-anx-cor, var(--acn-info)); border-color: var(--acn-anx-cor, var(--acn-info)); color: #fff; }
+html body label.acn-b.acn-anx-anexar.ocupado { cursor: wait; opacity: .6; }
+.acn-anx-filtro { padding: 6px 16px; flex-shrink: 0; border-bottom: 1px solid var(--acn-line); }
+.acn-anx-lista { flex: 1; min-height: 0; overflow-y: auto; }
+.acn-anx-itens { display: flex; flex-direction: column; gap: 6px; }
+.acn-anx-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-left: 3px solid var(--acn-anx-cor, var(--acn-line)); border-radius: var(--acn-r2); }
+.acn-anx-img { width: 32px; height: 32px; flex-shrink: 0; object-fit: cover; border-radius: 4px; }
+.acn-anx-tag { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; padding: 2px 5px; color: var(--acn-anx-cor, var(--acn-muted)); background: color-mix(in srgb, var(--acn-anx-cor, var(--acn-muted)) 12%, transparent); border-radius: 3px; }
+.acn-anx-tag.grande { padding: 0; background: none; color: var(--acn-muted); }
+.acn-anx-info { flex: 1; min-width: 0; }
+.acn-anx-nome { font-size: 13px; font-weight: 600; word-break: break-all; text-decoration: none; color: var(--acn-info); }
+.acn-anx-acoes { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+.acn-anx-acoes a.acn-b { text-decoration: none; color: #fff; }
+.acn-anx-rodape { justify-content: space-between; align-items: center; }
+.acn-anx-pills { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+.acn-anx-pill { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; font-size: 11px; font-weight: 700; color: var(--acn-anx-cor); background: color-mix(in srgb, var(--acn-anx-cor) 10%, transparent); border: 1px solid color-mix(in srgb, var(--acn-anx-cor) 20%, transparent); border-radius: 10px; }
+.acn-anx-mini { display: flex; gap: 3px; align-items: center; }
+html body .acn-b.acn-anx-ver[data-anx-opl="proposta"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="orcamento"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="documento"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="foto"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="checklist_entrega"]:not(.acn-b-secundario) { background: var(--acn-anx-cor); border-color: var(--acn-anx-cor); color: #fff; }
+html body label.acn-b.acn-anx-anexar svg, .acn-anx-contagem svg { display: inline-block !important; vertical-align: -2px; }
+.acn-anx-pill svg, .acn-anx-nome svg { display: inline-block !important; vertical-align: -2px; }

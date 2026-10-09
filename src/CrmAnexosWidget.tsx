@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
+import { Botao, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiPaperclip, mdiClose, mdiClipboardTextOutline, mdiBriefcaseOutline, mdiNoteTextOutline, mdiHandshakeOutline, mdiImageOutline, mdiFileDocumentOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -12,13 +15,14 @@ import { confirmar } from './Feedback';
 // restrição real nenhuma (usuário pediu explicitamente depois de um docx
 // mais novo ter "falhado" — a causa real era o limite de 10MB do bucket,
 // já corrigido pra 50MB; nunca houve de fato uma restrição de formato).
+// 12e49 (09/10/2026): o ícone vem do campo `icone` (antes era um emoji dentro do rótulo) e a cor de cada tipo saiu daqui para o design.css ([data-anx-crm] define --acn-anx-cor)
 const TIPOS = [
-  { id: 'edital',   label: '📋 Edital',          cor: '#7c3aed', accept: '*' },
-  { id: 'proposta', label: '💼 Proposta',         cor: '#0891b2', accept: '*' },
-  { id: 'ata',      label: '📝 Ata / Resultado',  cor: '#059669', accept: '*' },
-  { id: 'contrato', label: '🤝 Contrato',         cor: '#b45309', accept: '*' },
-  { id: 'foto',     label: '🖼️ Foto / Imagem',   cor: '#be185d', accept: '*' },
-  { id: 'outro',    label: '📄 Outro',            cor: '#475569', accept: '*' },
+  { id: 'edital',   label: 'Edital',          icone: mdiClipboardTextOutline, accept: '*' },
+  { id: 'proposta', label: 'Proposta',        icone: mdiBriefcaseOutline,     accept: '*' },
+  { id: 'ata',      label: 'Ata / Resultado', icone: mdiNoteTextOutline,      accept: '*' },
+  { id: 'contrato', label: 'Contrato',        icone: mdiHandshakeOutline,     accept: '*' },
+  { id: 'foto',     label: 'Foto / Imagem',   icone: mdiImageOutline,         accept: '*' },
+  { id: 'outro',    label: 'Outro',           icone: mdiFileDocumentOutline,  accept: '*' },
 ];
 
 const getTipo = (id: string) => TIPOS.find(t => t.id === id) || TIPOS[TIPOS.length - 1];
@@ -115,131 +119,88 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
   const anexosFiltrados = filtroTipo === 'todos' ? anexos : anexos.filter(a => a.tipo === filtroTipo);
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:2000,
-      display:'flex', alignItems:'center', justifyContent:'center' }}
+    <div className="modal-overlay acn-anx-ov"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'white', borderRadius:8, width:'min(620px,96vw)',
-        maxHeight:'85vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
+      <div className="modal-box acn-modal-cadastro acn-anx-jan" role="dialog" aria-label="Documentos e imagens">
 
         {/* Header */}
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
-          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
-            <div>
-              <div style={{ fontWeight:700, fontSize:13, color:'#1e293b' }}>📎 Documentos e Imagens</div>
-              <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
-                {op.titulo} {op.numero_edital ? `· ${op.numero_edital}` : ''}
-              </div>
+        <div className="acn-modal-cab">
+          <div className="acn-anx-cab-txt">
+            <span className="modal-title"><Icone path={mdiPaperclip} size={18} />Documentos e Imagens</span>
+            <div className="acn-ajuda">
+              {op.titulo} {op.numero_edital ? `· ${op.numero_edital}` : ''}
             </div>
-            <button onClick={onClose}
-              style={{ background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#94a3b8' }}>✕</button>
           </div>
+          <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" onClick={onClose} />
         </div>
 
         {/* Upload */}
-        <div style={{ padding:'10px 16px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc', flexShrink:0 }}>
+        <div className="acn-anx-upload">
           {/* Seletor de tipo */}
-          <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:8 }}>
-            {TIPOS.map(t => (
-              <button key={t.id} onClick={() => setTipoSel(t.id)}
-                style={{ fontSize:8, padding:'2px 8px', borderRadius:12, fontWeight:700, border:'none', cursor:'pointer',
-                  background: tipoSel===t.id ? t.cor : '#e2e8f0',
-                  color:      tipoSel===t.id ? 'white' : '#64748b',
-                }}>
-                {t.label}
-              </button>
-            ))}
+          <Chips ativo={tipoSel} onChange={setTipoSel} rotulo="Tipo do arquivo a anexar"
+            itens={TIPOS.map(t => ({ id: t.id, rotulo: t.label, icone: t.icone }))} />
+          <div className="acn-anx-envio">
+            <label className={'acn-b acn-b-primario acn-anx-anexar' + (uploading ? ' ocupado' : '')} data-anx-crm={tipoSel}>
+              {uploading ? 'Enviando...' : `${tipoAtual.label} — Anexar`}
+              <input ref={fileRef} type="file" multiple
+                onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
+                hidden disabled={uploading} />
+            </label>
+            <span className="acn-ajuda">
+              {tipoAtual.accept.replace(/\*/g, 'todos os formatos')}
+            </span>
           </div>
-          <label style={{
-            display:'inline-flex', alignItems:'center', gap:6, cursor: uploading ? 'wait' : 'pointer',
-            background: tipoAtual.cor, color:'white', border:'none', borderRadius:6,
-            padding:'6px 14px', fontSize:10, fontWeight:700, opacity: uploading ? .6 : 1,
-          }}>
-            {uploading ? 'Enviando...' : `${tipoAtual.label} — Anexar`}
-            <input ref={fileRef} type="file" multiple
-              onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
-              style={{ display:'none' }} disabled={uploading} />
-          </label>
-          <span style={{ marginLeft:10, fontSize:9, color:'#94a3b8' }}>
-            {tipoAtual.accept.replace(/\*/g, 'todos os formatos')}
-          </span>
         </div>
 
         {/* Filtro por tipo */}
         {anexos.length > 0 && (
-          <div style={{ padding:'6px 16px', borderBottom:'1px solid #f1f5f9', display:'flex', gap:5, flexWrap:'wrap', flexShrink:0 }}>
-            <button onClick={() => setFiltroTipo('todos')}
-              style={{ fontSize:8, padding:'2px 8px', borderRadius:12, fontWeight:700, border:'none', cursor:'pointer',
-                background: filtroTipo==='todos' ? '#1e293b' : '#e2e8f0',
-                color:      filtroTipo==='todos' ? 'white' : '#64748b' }}>
-              Todos ({anexos.length})
-            </button>
-            {TIPOS.filter(t => anexos.some(a => a.tipo === t.id)).map(t => {
-              const n = anexos.filter(a => a.tipo === t.id).length;
-              return (
-                <button key={t.id} onClick={() => setFiltroTipo(t.id)}
-                  style={{ fontSize:8, padding:'2px 8px', borderRadius:12, fontWeight:700, border:'none', cursor:'pointer',
-                    background: filtroTipo===t.id ? t.cor : '#e2e8f0',
-                    color:      filtroTipo===t.id ? 'white' : '#64748b' }}>
-                  {t.label} ({n})
-                </button>
-              );
-            })}
+          <div className="acn-anx-filtro">
+            <Chips ativo={filtroTipo} onChange={setFiltroTipo} rotulo="Filtrar por tipo"
+              itens={[{ id: 'todos', rotulo: `Todos (${anexos.length})` },
+                ...TIPOS.filter(t => anexos.some(a => a.tipo === t.id)).map(t => ({ id: t.id, rotulo: `${t.label} (${anexos.filter(a => a.tipo === t.id).length})`, icone: t.icone }))]} />
           </div>
         )}
 
         {/* Lista */}
-        <div style={{ flex:1, overflowY:'auto', padding:12 }}>
+        <div className="acn-modal-corpo acn-anx-lista">
           {loading ? (
-            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Carregando...</div>
+            <div className="acn-empty">Carregando...</div>
           ) : anexosFiltrados.length === 0 ? (
-            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:24 }}>
+            <div className="acn-empty">
               {filtroTipo === 'todos' ? 'Nenhum arquivo anexado ainda.' : `Nenhum arquivo do tipo "${getTipo(filtroTipo).label}".`}
             </div>
           ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+            <div className="acn-anx-itens">
               {anexosFiltrados.map(a => {
                 const t = getTipo(a.tipo);
                 const isImg = a.mime_type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(a.nome);
                 return (
-                  <div key={a.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px',
-                    background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6,
-                    borderLeft:`3px solid ${t.cor}` }}>
+                  <div key={a.id} className="acn-anx-item" data-anx-crm={t.id}>
                     {/* Preview imagem */}
                     {isImg && (
-                      <img src={a.url} alt={a.nome}
-                        style={{ width:32, height:32, objectFit:'cover', borderRadius:4, flexShrink:0 }}
+                      <img src={a.url} alt={a.nome} className="acn-anx-img"
                         onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
                       />
                     )}
                     {/* Ícone tipo */}
                     {!isImg && (
-                      <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, flexShrink:0,
-                        background:`${t.cor}18`, color:t.cor }}>
-                        {t.label.split(' ')[0]}
-                      </span>
+                      <span className="acn-anx-tag"><Icone path={t.icone} size={14} /></span>
                     )}
                     {/* Info */}
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <a href={a.url} target="_blank" rel="noreferrer"
-                        style={{ fontSize:11, color:'#2563eb', fontWeight:600, wordBreak:'break-all', textDecoration:'none' }}>
+                    <div className="acn-anx-info">
+                      <a href={a.url} target="_blank" rel="noreferrer" className="acn-anx-nome">
                         {a.nome}
                       </a>
-                      <div style={{ fontSize:8, color:'#94a3b8', marginTop:1 }}>
+                      <div className="acn-ajuda">
                         {fmtBytes(a.tamanho)} · {a.criado_por} · {fmtDT(a.criado_em)}
                       </div>
                     </div>
                     {/* Ações */}
-                    <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                      <a href={a.url} target="_blank" rel="noreferrer"
-                        style={{ background:'#2563eb', color:'white', borderRadius:4, padding:'3px 8px',
-                          fontSize:9, fontWeight:700, textDecoration:'none' }}>
+                    <div className="acn-anx-acoes">
+                      <a href={a.url} target="_blank" rel="noreferrer" className="acn-b acn-b-primario acn-b-p">
                         Abrir
                       </a>
-                      <button onClick={() => excluir(a.id, a.url)}
-                        style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626',
-                          borderRadius:4, padding:'3px 6px', fontSize:9, cursor:'pointer' }}>
-                        ✕
-                      </button>
+                      <Botao variante="perigo-sec" pequeno icone={mdiClose} aria-label="Remover arquivo" onClick={() => excluir(a.id, a.url)} />
                     </div>
                   </div>
                 );
@@ -249,14 +210,9 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0', display:'flex',
-          justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
-          <span style={{ fontSize:9, color:'#94a3b8' }}>{anexos.length} arquivo{anexos.length !== 1 ? 's' : ''}</span>
-          <button onClick={onClose}
-            style={{ padding:'5px 16px', border:'1px solid #d1d5db', borderRadius:6,
-              background:'white', fontSize:11, cursor:'pointer' }}>
-            Fechar
-          </button>
+        <div className="acn-modal-rodape acn-anx-rodape">
+          <span className="acn-ajuda">{anexos.length} arquivo{anexos.length !== 1 ? 's' : ''}</span>
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -290,17 +246,11 @@ export default function CrmAnexosWidget({
 
   return (
     <>
-      <button
+      <Botao pequeno variante={temArquivo ? 'primario' : 'secundario'} icone={mdiPaperclip} className="acn-anx-contagem"
         onClick={() => setModal(true)}
-        title={temArquivo ? `${count} arquivo${count !== 1 ? 's' : ''} anexado${count !== 1 ? 's' : ''}` : 'Anexar documentos'}
-        className="acn-btn"
-        style={{
-          background: temArquivo ? '#7c3aed' : '#94a3b8',
-          display: 'inline-flex', alignItems: 'center', gap: 3,
-        }}
-      >
-        📎 {count !== null ? count : '…'}
-      </button>
+        title={temArquivo ? `${count} arquivo${count !== 1 ? 's' : ''} anexado${count !== 1 ? 's' : ''}` : 'Anexar documentos'}>
+        {count !== null ? count : '…'}
+      </Botao>
 
       {modal && (
         <ModalAnexos
