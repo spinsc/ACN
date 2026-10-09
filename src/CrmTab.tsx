@@ -38,7 +38,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiPhoneOutline, mdiDomain, mdiAlertOutline,
   mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff,
   mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel,
-  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip } from '@mdi/js';
+  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip, mdiArrowDown } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
@@ -4369,17 +4369,16 @@ function ColunaRolavel({ children }: any) {
       )}
       {/* ══════ MODAL ABRIR — split-screen ══════ */}
       {modalAbrir && abrirMinimized && (
-        <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:1200, background:'#1e3a5f', color:'#fff',
-          display:'flex', alignItems:'center', padding:'8px 14px', gap:10, boxShadow:'0 -2px 12px #0004' }}>
-          <div style={{ flex:1, fontSize:11, fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-            {modalAbrir.funil === 'licitacao' ? '🏛️' : '💼'} {modalAbrir.titulo}
+        // 12e42 (09/10/2026): só a aparência — a barra no molde da das Licitações; restaurar e fechar fazem o mesmo de antes
+        <div className="acn-crm-ab-min">
+          <div className="acn-crm-ab-min-txt">
+            <Icone path={modalAbrir.funil === 'licitacao' ? mdiGavel : mdiBriefcaseOutline} size={16} />
+            <span>{modalAbrir.titulo}</span>
           </div>
-          <button onClick={() => setAbrirMinimized(false)}
-            style={{ background:'#2563eb', border:'none', color:'#fff', borderRadius:4, padding:'4px 10px', fontSize:10, cursor:'pointer', fontWeight:700 }}>
-            ⬆ Restaurar
-          </button>
-          <button onClick={fecharModalAbrir}
-            style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+          <div className="acn-crm-ab-min-acoes">
+            <Botao pequeno variante="primario" icone={mdiChevronUp} onClick={() => setAbrirMinimized(false)}>Restaurar</Botao>
+            <Botao pequeno variante="discreto" icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModalAbrir} />
+          </div>
         </div>
       )}
       {oplDoCardAberta && (
@@ -4833,82 +4832,79 @@ function ColunaRolavel({ children }: any) {
     {/* ── Modal Editar OPL (aba OPLs em Aberto) ── */}
 
     {/* ── Modal Lançamento em Lote (chassi/placa/CNPJ por unidade desmembrada) ── */}
+    {/* 12e42 (09/10/2026): só a aparência — janela no molde do guia (acn-modal-cadastro). Os campos, o "colar do Excel", o veículo do lote e a gravação são os de antes. */}
     {modalLote && (
-      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center' }}
+      <div className="modal-overlay acn-crm-overlay acn-crm-ov-lote"
         onClick={e => { if (e.target===e.currentTarget) setModalLote(null); }}>
-        <div style={{ background:'white', borderRadius:8, width:'min(700px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
-          <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:4 }}>
-            🚗 Lançar Chassi/Placa/CNPJ — Lote {modalLote[0]?.opl.replace(/\/\d+$/, '')}
+        <div className="modal-box acn-modal-cadastro acn-crm-jan acn-crm-lote" role="dialog" aria-label="Lançar chassi, placa e CNPJ do lote">
+          <div className="acn-modal-cab">
+            <span className="modal-title"><Icone path={mdiCar} size={18} />Lançar Chassi/Placa/CNPJ — Lote {modalLote[0]?.opl.replace(/\/\d+$/, '')}</span>
           </div>
-          <div style={{ fontSize:9, color:'#94a3b8', marginBottom:12 }}>
-            {modalLote.length} unidades. Cada veículo pode ter seu próprio CNPJ de faturamento, diferente do cliente.
-          </div>
-
-          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:10, marginBottom:10 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#075985', marginBottom:4 }}>🚗 Veículo de todas as unidades</div>
-            <VeiculoDaOp veiculoId={veiculoComumDoLote()} currentUser={currentUser} onChange={aplicarVeiculoNoLote} />
-            <div style={{ fontSize:8, color:'#64748b', marginTop:4 }}>
-              {veiculoComumDoLote()
-                ? `Vale para as ${modalLote.length} unidades e preenche o Modelo. Chassi e placa abaixo são por unidade e podem ficar vazios (carro 0 km).`
-                : 'As unidades estão com veículos diferentes (ou sem veículo): escolher aqui aplica o mesmo a todas.'}
+          <div className="acn-modal-corpo acn-form-cheio">
+            <div className="acn-ajuda">
+              {modalLote.length} unidades. Cada veículo pode ter seu próprio CNPJ de faturamento, diferente do cliente.
             </div>
-          </div>
 
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:14 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Colar do Excel (Ctrl+C na planilha, Ctrl+V aqui)</div>
-            <div style={{ fontSize:8, color:'#94a3b8', marginBottom:6 }}>
-              Só chassi (uma coluna) → distribui em ordem entre as unidades ainda sem chassi e sem placa (0KM sem vínculo).
-              Placa + Chassi (duas colunas, em qualquer ordem) → casa cada linha com a unidade que já tem aquela placa cadastrada,
-              não importa a ordem.
-            </div>
-            <textarea className="acn-input" rows={3} placeholder={'Ex. só chassi:\n9BW...\n9BW...\n\nEx. placa + chassi:\nABC1D23\t9BW...\nDEF4G56\t9BW...'}
-              value={loteColar} onChange={e=>setLoteColar(e.target.value)}
-              style={{ width:'100%', resize:'vertical', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize:10 }} />
-            <button onClick={aplicarColaChassis}
-              style={{ marginTop:6, fontSize:9, padding:'4px 10px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-              ⬇ Aplicar às unidades abaixo
-            </button>
-          </div>
-
-          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
-            {modalLote.map(o => (
-              <div key={o.id} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:10 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:'#0891b2', marginBottom:6 }}>
-                  {o.opl}
-                  <span style={{ fontWeight:400, color:'#64748b' }}> · {loteForm[o.id]?.modelo || 'sem modelo'}</span>
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:6 }}>
-                  <div>
-                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Chassi</div>
-                    <input className="acn-input" value={loteForm[o.id]?.chassi||''} onChange={e=>setLoteCampo(o.id,'chassi',e.target.value)} style={{ width:'100%' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Placa</div>
-                    <input className="acn-input" value={loteForm[o.id]?.placa||''} onChange={e=>setLoteCampo(o.id,'placa',e.target.value)} style={{ width:'100%' }} />
-                  </div>
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8 }}>
-                  <div>
-                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>CNPJ Faturamento</div>
-                    <input className="acn-input" placeholder="Pode ser diferente do cliente"
-                      value={loteForm[o.id]?.cnpj_faturamento||''} onChange={e=>setLoteCampo(o.id,'cnpj_faturamento',e.target.value)} style={{ width:'100%' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Razão Social Faturamento</div>
-                    <input className="acn-input"
-                      value={loteForm[o.id]?.razao_social_faturamento||''} onChange={e=>setLoteCampo(o.id,'razao_social_faturamento',e.target.value)} style={{ width:'100%' }} />
-                  </div>
-                </div>
+            <div className="acn-quadro tom-info acn-crm-lote-quadro">
+              <div className="acn-quadro-titulo acn-crm-lote-tit"><Icone path={mdiCar} size={14} />Veículo de todas as unidades</div>
+              <VeiculoDaOp veiculoId={veiculoComumDoLote()} currentUser={currentUser} onChange={aplicarVeiculoNoLote} />
+              <div className="acn-ajuda">
+                {veiculoComumDoLote()
+                  ? `Vale para as ${modalLote.length} unidades e preenche o Modelo. Chassi e placa abaixo são por unidade e podem ficar vazios (carro 0 km).`
+                  : 'As unidades estão com veículos diferentes (ou sem veículo): escolher aqui aplica o mesmo a todas.'}
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-            <button onClick={() => setModalLote(null)} style={{ padding:'7px 16px', border:'1px solid #e2e8f0', borderRadius:5, background:'#f8fafc', cursor:'pointer', fontSize:11 }}>Cancelar</button>
-            <button onClick={salvarLote} disabled={loteSalvando}
-              style={{ padding:'7px 18px', border:'none', borderRadius:5, background:'#7c3aed', color:'white', fontWeight:700, cursor:'pointer', fontSize:11, opacity:loteSalvando?.6:1 }}>
-              {loteSalvando ? 'Salvando...' : `💾 Salvar ${modalLote.length} Unidades`}
-            </button>
+            <div className="acn-quadro acn-crm-lote-quadro">
+              <div className="acn-quadro-titulo">Colar do Excel (Ctrl+C na planilha, Ctrl+V aqui)</div>
+              <div className="acn-ajuda">
+                Só chassi (uma coluna) → distribui em ordem entre as unidades ainda sem chassi e sem placa (0KM sem vínculo).
+                Placa + Chassi (duas colunas, em qualquer ordem) → casa cada linha com a unidade que já tem aquela placa cadastrada,
+                não importa a ordem.
+              </div>
+              <textarea className="acn-input acn-crm-lote-cola" rows={3} placeholder={'Ex. só chassi:\n9BW...\n9BW...\n\nEx. placa + chassi:\nABC1D23\t9BW...\nDEF4G56\t9BW...'}
+                value={loteColar} onChange={e=>setLoteColar(e.target.value)} />
+              <Botao pequeno icone={mdiArrowDown} onClick={aplicarColaChassis}>Aplicar às unidades abaixo</Botao>
+            </div>
+
+            <div className="acn-crm-lote-lista">
+              {modalLote.map(o => (
+                <div key={o.id} className="acn-quadro acn-crm-lote-unidade">
+                  <div className="acn-crm-lote-uni-tit">
+                    {o.opl}
+                    <span className="acn-fraco"> · {loteForm[o.id]?.modelo || 'sem modelo'}</span>
+                  </div>
+                  <div className="acn-crm-lote-grade">
+                    <div>
+                      <div className="acn-label">Chassi</div>
+                      <input className="acn-input" value={loteForm[o.id]?.chassi||''} onChange={e=>setLoteCampo(o.id,'chassi',e.target.value)} />
+                    </div>
+                    <div>
+                      <div className="acn-label">Placa</div>
+                      <input className="acn-input" value={loteForm[o.id]?.placa||''} onChange={e=>setLoteCampo(o.id,'placa',e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="acn-crm-lote-grade faturamento">
+                    <div>
+                      <div className="acn-label">CNPJ Faturamento</div>
+                      <input className="acn-input" placeholder="Pode ser diferente do cliente"
+                        value={loteForm[o.id]?.cnpj_faturamento||''} onChange={e=>setLoteCampo(o.id,'cnpj_faturamento',e.target.value)} />
+                    </div>
+                    <div>
+                      <div className="acn-label">Razão Social Faturamento</div>
+                      <input className="acn-input"
+                        value={loteForm[o.id]?.razao_social_faturamento||''} onChange={e=>setLoteCampo(o.id,'razao_social_faturamento',e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="acn-modal-rodape">
+            <Botao onClick={() => setModalLote(null)}>Cancelar</Botao>
+            <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarLote} disabled={loteSalvando}>
+              {loteSalvando ? 'Salvando...' : `Salvar ${modalLote.length} Unidades`}
+            </Botao>
           </div>
         </div>
       </div>

@@ -2693,3 +2693,26 @@ body.dark .acn-crm-ab-item-txt { color: #e2e8f0; }
 /* o fundo escuro e a raiz do card aberto (12e41): acima do card minimizado e do resto da tela */
 .acn-crm-ab-fundo { position: fixed; inset: 0; z-index: 1100; display: flex; background: rgba(0, 0, 0, .53); }
 .acn-crm-ab-raiz { display: flex; width: 100%; height: 100%; }
+
+/* Janela "Lançar Chassi/Placa/CNPJ — Lote" (12e42, 09/10/2026): fica acima do card aberto (que está em 1100). Só aparência. */
+html body .modal-overlay.acn-crm-overlay.acn-crm-ov-lote { z-index: 1200; }
+html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-lote { width: min(700px, 96vw); max-width: 700px; max-height: 90vh; }
+.acn-quadro.acn-crm-lote-quadro { margin: 0; gap: 6px; }
+.acn-crm-lote-tit { display: flex; align-items: center; gap: 4px; }
+html body .acn-input.acn-crm-lote-cola { width: 100%; box-sizing: border-box; resize: vertical; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; }
+.acn-crm-lote-quadro > .acn-b { justify-self: start; }
+.acn-crm-lote-lista { display: flex; flex-direction: column; gap: 8px; }
+.acn-quadro.acn-crm-lote-unidade { margin: 0; gap: 6px; background: var(--acn-surface); }
+.acn-crm-lote-uni-tit { font-size: 13px; font-weight: 700; color: var(--acn-info); }
+.acn-crm-lote-uni-tit .acn-fraco { font-weight: 400; }
+.acn-crm-lote-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acn-crm-lote-grade.faturamento { grid-template-columns: 1fr 2fr; }
+.acn-crm-lote-grade .acn-input { width: 100%; box-sizing: border-box; }
+@media (max-width: 560px) { .acn-crm-lote-grade, .acn-crm-lote-grade.faturamento { grid-template-columns: 1fr; } }
+/* o card aberto minimizado (12e42): barra no pé da tela, acima dos demais cards (1100) */
+.acn-crm-ab-min { position: fixed; bottom: 0; left: 0; right: 0; z-index: 1200; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; background: var(--acn-surface); border-top: 2px solid var(--acn-brand); box-shadow: 0 -2px 12px rgba(23, 33, 43, .18); }
+body.dark .acn-crm-ab-min { background: #1e293b; }
+.acn-crm-ab-min-txt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-crm-ab-min-txt > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.dark .acn-crm-ab-min-txt { color: #e2e8f0; }
+.acn-crm-ab-min-acoes { display: flex; gap: 8px; flex-shrink: 0; }

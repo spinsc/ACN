@@ -26,7 +26,7 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 
 | # | O que | Estado |
 |---|---|---|
-| 1 | **Etapa 12:** CRM 12e40 (painel esquerdo do card aberto — ✅ 08/10/2026), 12e41 (abas da direita — ✅ 08/10/2026) e 12e42 (janela de lançamento em lote de chassi/placa) | 🟡 12e40 ✅ · 12e41 ✅ · 12e42 ⬜ |
+| 1 | **Etapa 12:** CRM 12e40 (painel esquerdo do card aberto), 12e41 (abas da direita) e 12e42 (janela de lançamento em lote de chassi/placa e a barra do card minimizado) — **tela do CRM concluída** | ✅ 08 e 09/10/2026 |
 | 2 | **Etapa 12:** Admin (541 `style` inline), componentes compartilhados (`DemandaAvulsaPanel` 242, `AcnTabShared` 180, `NovaOpOsModal` 166, `AnaliseWidget` 109, `ChatWidget` 135, `ContactosSection` 152) e as telas que sobraram (`CadastroProdutosTab` 218, `Estoque` 209, `VeiculosNfcTab` 195, `HorasTarefasTab` 127, `CadastroItensTab` 119 e as demais) — medido hoje: **4.192 `style` inline, 598 botões crus, 100 arquivos** | ⬜ |
 | 3 | **Etapa 13** (aposentar `TonsVisuais` e o modo escuro cor por cor): só quando o item 2 atingir a medida de "pronto" | ⬜ |
 | 4 | **R1 + R8 + R3** — fluxo da OP até a Engenharia (campos obrigatórios, perguntas do carro na abertura, contador de devolvidas + aviso). *Suposição a confirmar:* "gerente de quem abriu" = o gerente cujo setor está no mapa `EQUIPE_DO_GERENTE` (`utils/permissoes.ts`); não existe vínculo individual no cadastro | ⬜ |
@@ -4362,6 +4362,26 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 **Achado (não mexi — a confirmar):** no card aberto, a aba **"Formação de Preços" também mostra, embaixo da formação, o quadro "Adicionar em Formação de Preços" com a lista de documentos dessa categoria e a área livre** (a condição das "demais abas" não exclui a Formação). Isso já era assim antes da migração; parece sobra e não função, e **a tela das Licitações não faz isso**. Mantido como estava; se for sobra, é um `&& abrirTabDir !== 'formacao_precos'` numa linha.
 
 **O que ficou de fora:** a janela de **lançamento em lote de chassi/placa** (12e42); o editor de texto do andamento aberto para edição (`EdicaoDeAtualizacao`/`MencaoTextarea`/`RichTextInput`, componentes compartilhados), o `AnaliseStatusPanel` e a `NotaLivreEditor` (essa já tinha sido migrada na 12e35) seguem como estavam.
+
+#### ✅ 12e42 — CRM, fatia 8 (`CrmTab`: a janela "Lançar Chassi/Placa/CNPJ — Lote" e a barra do card minimizado) — fecha o CRM
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois da 12e41). **Nenhuma regra mudou.**
+
+**O que foi feito** (`CrmTab.tsx` e `design.css`, 23 regras novas `acn-crm-lote-*` / `acn-crm-ab-min*`; **nenhum campo, texto, regra de "colar do Excel", consulta ou gravação foi mexido**):
+
+- **A janela do lote**, no molde das janelas do guia (`acn-modal-cadastro`: cabeçalho com ícone de carro, corpo, rodapé), **acima do card aberto** como antes: o quadro azul "Veículo de todas as unidades" (o seletor de veículo é o componente compartilhado, não mexido), o quadro "Colar do Excel" (explicação, caixa em letra de largura fixa e o botão "Aplicar às unidades abaixo" com seta em ícone), **um quadro por unidade** (OP e modelo no título; Chassi e Placa lado a lado; CNPJ e Razão Social do faturamento) e o rodapé "Cancelar | Salvar N Unidades". Clicar no fundo continua fechando; no celular as colunas empilham.
+- **A barra do card minimizado**, no molde da das Licitações (fundo do tema com a faixa verde no topo): ícone de pasta ou de martelo conforme o funil, título do card, "Restaurar" (primário) e fechar (só ícone, com nome).
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Resultado no código:** `style` inline **45 → 12**, `<button>` **10 → 5**, cores soltas **34 → 6**, linhas **4.964 → 4.960**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos (ícone novo: `mdiArrowDown`). **Somando as três fatias de hoje e a 12e40, o `CrmTab` foi de 157 para 12 `style` soltos** (os que sobram são medidas calculadas na hora — a largura das colunas e da barra do checklist, a posição do termômetro — e a linha "Carregando CRM…"), e **de 27 para 5 `<button>` crus** (o botão de temperatura do cartão e as escolhas de temperatura das duas janelas, que carregam `data-temp` como as da Licitação; os três botões de sub-etapa — andamento, suspenso, aguardando — do cartão; e o "+ Adicionar" do quadro, todos com classe própria do kanban).
+
+**Como foi testado** (navegador, **gravações bloqueadas**; lote de 2 unidades **simulado** na leitura das "OPs em aberto"; fotografia da janela — texto por elemento, controles, valores, e **o corpo que seria gravado** — da versão **da 12e41** × a migrada, e a antiga repetida antes de valer como referência):
+- **13 de 13 iguais** (a janela aberta, o "colar placa + chassi" antes e depois de aplicar, a janela reaberta, **todos os campos preenchidos com valor diferente cada** — o corpo gravado mostra a coluna de cada um —, **salvar as duas unidades**, **uma unidade que falha** — a janela fica aberta e o aviso diz qual —, clicar no fundo e "Cancelar").
+- **Card minimizado:** o mesmo roteiro de 6 verificações **na versão antiga e na nova** (minimizar esconde o card; a barra no pé da tela, de ponta a ponta, com o título e dois botões; restaurar; fechar pela barra): **6 de 6 nas duas**.
+- **Equivalências declaradas:** o emoji 🚗 do título, o ⬇ do botão e o 💾 do salvar viraram ícones; a cor do botão "Salvar" (roxo) e do "Aplicar" (azul) passou para a do guia; a barra do minimizado deixou de ser azul-escura (como a das Licitações).
+- **Teste de defeito plantado:** numa cópia, o título errado, o "Salvar" que só fecha, o Chassi que grava na Placa, o CNPJ que grava na Razão Social, o "Aplicar" que não aplica e o clicar no fundo que não fecha — **os seis foram apontados** (em dois testes, porque o "Salvar" que só fecha escondia os passos seguintes: o CNPJ e o fundo foram apontados no segundo, isolados).
+
+**O que ficou de fora:** o `VeiculoDaOp` (seletor de veículo, componente de outro arquivo) segue com o visual dele; o quadro do kanban e os termômetros de temperatura (migrados nas 12e35 e 12e38) ficaram como estavam.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 
