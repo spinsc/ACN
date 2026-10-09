@@ -1,7 +1,9 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { hojeISO, diaISO } from './Interface';
+import { hojeISO, diaISO, Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPhoneOutline, mdiCalendarOutline, mdiClockOutline, mdiAccountOutline, mdiClose } from '@mdi/js';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function hojeStr() {
@@ -32,29 +34,24 @@ function dismiss(id: string, tipo: string) {
 }
 
 // ─── BANNER (1 dia antes / no dia) ─────────────────────────────────────────────
-function BannerComercial({ contatos, titulo, cor, corBg, onClose, offsetBottom }) {
+// 12e48 (09/10/2026): o tom (vermelho = hoje, âmbar = amanhã) e o "empilhar acima do de hoje" viraram classes (antes eram cor e posição passadas em estilo)
+function BannerComercial({ contatos, titulo, icone, tom, onClose, acima }) {
   return (
-    <div style={{
-      position: 'fixed', bottom: offsetBottom, right: 20, zIndex: 8000,
-      width: 'min(360px, 95vw)',
-      background: '#fff', border: `2px solid ${cor}`,
-      borderRadius: 10, boxShadow: '0 8px 32px #0003', overflow: 'hidden',
-    }}>
-      <div style={{ background: cor, color: '#fff', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontWeight: 800, fontSize: 12 }}>{titulo} ({contatos.length})</div>
-        <button onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+    <div className={'acn-cta-banner comercial ' + tom + (acima ? ' acima' : '')}>
+      <div className="acn-cta-banner-cab">
+        <div className="acn-cta-banner-tit"><Icone path={icone} size={14} /> {titulo} ({contatos.length})</div>
+        <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cta-banner-x" aria-label="Fechar" title="Fechar" onClick={onClose} />
       </div>
-      <div style={{ padding: '10px 14px', maxHeight: 220, overflowY: 'auto', background: corBg }}>
+      <div className="acn-cta-banner-corpo">
         {contatos.map(c => (
-          <div key={c.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #0001' }}>
-            <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b' }}>{c.titulo}</div>
-            <div style={{ fontSize: 10, color: cor, fontWeight: 700 }}>
-              📅 {c.prox_contato}
-              {c.hora_prox_contato && <span> ⏰ {fmtHora(c.hora_prox_contato)}</span>}
+          <div key={c.id} className="acn-cta-banner-item">
+            <div className="acn-cta-banner-nome">{c.titulo}</div>
+            <div className="acn-cta-banner-quando">
+              <Icone path={mdiCalendarOutline} size={12} /> {c.prox_contato}
+              {c.hora_prox_contato && <span> <Icone path={mdiClockOutline} size={12} /> {fmtHora(c.hora_prox_contato)}</span>}
             </div>
-            {c.responsavel_nome && <div style={{ fontSize: 10, color: '#64748b' }}>👤 Vendedor: {c.responsavel_nome}</div>}
-            {c.nome_contato && <div style={{ fontSize: 10, color: '#64748b' }}>Contato: {c.nome_contato}{c.contato ? ` · ${c.contato}` : ''}</div>}
+            {c.responsavel_nome && <div className="acn-cta-banner-det"><Icone path={mdiAccountOutline} size={12} /> Vendedor: {c.responsavel_nome}</div>}
+            {c.nome_contato && <div className="acn-cta-banner-det">Contato: {c.nome_contato}{c.contato ? ` · ${c.contato}` : ''}</div>}
           </div>
         ))}
       </div>
@@ -121,10 +118,10 @@ export default function ContatoComercialAlertWidget({ currentUser }) {
   return (
     <>
       {showHoje && alertasHoje.length > 0 && (
-        <BannerComercial contatos={alertasHoje} titulo="📞 Contato comercial HOJE" cor="#dc2626" corBg="#fef2f2" onClose={fecharHoje} offsetBottom={20} />
+        <BannerComercial contatos={alertasHoje} titulo="Contato comercial HOJE" icone={mdiPhoneOutline} tom="erro" onClose={fecharHoje} />
       )}
       {showAmanha && alertasAmanha.length > 0 && (
-        <BannerComercial contatos={alertasAmanha} titulo="📅 Contato comercial amanhã" cor="#d97706" corBg="#fffbeb" onClose={fecharAmanha} offsetBottom={showHoje && alertasHoje.length > 0 ? 210 : 20} />
+        <BannerComercial contatos={alertasAmanha} titulo="Contato comercial amanhã" icone={mdiCalendarOutline} tom="atencao" onClose={fecharAmanha} acima={showHoje && alertasHoje.length > 0} />
       )}
     </>
   );

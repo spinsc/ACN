@@ -37,7 +37,7 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 | — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
 | — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
 
-**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e47 — **3.327 `style` inline, 515 botões crus e 4.154 cores soltas, em 95 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); saíram da lista o CRM (12e40 a 12e42), o `OpItens` (12e43), o `DemandaItens` (12e44), o `ClienteUtils` (12e45), o `AnaliseWidget` (12e46) e as duas gavetas do cabeçalho (12e47). Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135.
+**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e48 — **3.240 `style` inline, 505 botões crus e 4.074 cores soltas, em 91 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); saíram da lista o CRM (12e40 a 12e42), `OpItens`, `DemandaItens`, `ClienteUtils`, `AnaliseWidget`, as gavetas Análises/Menções (12e43 a 12e47) e o acompanhamento da OP, os avisos de OP e os dois alertas de contato (12e48). Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135.
 
 ---
 
@@ -4493,6 +4493,25 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 - **Teste de defeito plantado:** numa cópia, "Concluir este setor" que reabre, "Reabrir" que conclui, "Abrir no CRM" que navega para as Licitações, o filtro que sempre escolhe "Todas", "Marcar todas como resolvidas" que só marca como lidas, "Marcar lida" que resolve, "Enviar resposta" que só marca como lida e "Reabrir" da menção que resolve — **os oito foram apontados**.
 
 **O que ficou de fora:** o `OplAcompModal` (também com o mapa de cores por setor; é a próxima fatia) e o `AgendaWidget` e o `AvisoSistemaWidget`, que aparecem no mesmo cabeçalho e ficam para as fatias seguintes.
+
+#### ✅ 12e48 — Componentes compartilhados, fatia 6 (o acompanhamento da OP, os avisos de OP e os dois alertas de contato)
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois da 12e47). **Nenhuma regra mudou.**
+
+**O que foi feito** (`OplAcompModal.tsx`, `AvisosOpPanel.tsx`, `ContatoAlertWidget.tsx`, `ContatoComercialAlertWidget.tsx` e `design.css`, 71 regras novas `acn-aco-*`, `acn-avo-*` e `acn-cta-*`; **nenhuma consulta, gravação, regra de aviso ou texto foi mexido**; método da página de prévia, descrito na 12e43 — aqui com o **relógio parado** para os alertas que dependem da hora):
+
+- **Acompanhamentos da OP/OS/compra** (a janela aberta pelo botão de acompanhar): no molde das janelas do guia; o cabeçalho **na cor do setor** (a cor saiu do código para o `design.css`, por `[data-acomp-setor]`; **setor fora da lista, ou com acento como "Produção", segue com a cor padrão**, como antes), a contagem de registros, a lista de registros — cada um com a etiqueta do setor, a inicial de quem registrou, o nome, a data e o texto com os links —, os **recados rápidos** de 1 clique (quando existem), a caixa de texto com @menção e "Fechar | Registrar".
+- **Avisos de OP** (botão "Avisos" do topo): a mesma gaveta das Análises e Menções (12e47), com "Limpar todos", "Limpar este aviso" e "Abrir OP"; a OP aberta por cima continua acima da gaveta.
+- **Alertas de contato do CRM:** a janela vermelha "CONTATO EM 15 MINUTOS!" (com "Entendido") e o banner âmbar "N contatos em 2 dias", e os banners do alerta comercial ("Contato comercial HOJE", vermelho, e "amanhã", âmbar — **o de amanhã sobe acima do de hoje quando os dois aparecem**, agora por classe e não por posição escrita no código).
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Resultado no código:** `style` inline **87 → 0** (29 + 25 + 23 + 10), `<button>` **10 → 0**, cores soltas **80 → 0**, linhas **777 → 702**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos.
+
+**Como foi testado** (página de prévia; leituras do banco simuladas, **relógio parado em 09/10/2026 10:00**; fotografia de texto, controles, valores, **o que o componente devolve ao chamador**, o que fica lembrado na sessão e **o corpo que seria gravado**; da versão **da 12e47** × a migrada; **a antiga fotografada duas vezes, igual**): **58 de 58 iguais**, em 13 cenários — o acompanhamento (3 registros com setores de cores diferentes e um fora da lista; **recado rápido e registrar — com o corpo gravado e as notificações**; fechar; vazio; setor sem recados; **erro ao gravar — avisa e o texto fica**; OS com setor acentuado), os avisos (abrir a OP que não existe, limpar um, **limpar todos — com a pergunta e o corpo gravado**, fechar, vazio), os dois alertas (o popup só dentro da janela de 15 minutos, o banner de 2 dias, fechar um e outro, e **quais ficam lembrados**) e os temas escuros.
+- **Equivalências declaradas:** os emojis (💬 📝 📢 🗑 🔧 🔔 ⏰ 📅 👤 📱 🏛️ 📞) e o ✓ ✕ + viraram ícones; o "Limpar todos" e os botões dos alertas passaram para os botões do guia (o "Entendido" é o vermelho do guia); os recados rápidos mantêm o contorno na cor do setor.
+- **Teste de defeito plantado:** numa cópia, o recado rápido que não manda o texto, o "Registrar" sempre habilitado, o "Fechar" que registra, o "Abrir OP" que apaga o aviso, o "Entendido" e o "✕" do banner que não fecham, e o botão de limpar um aviso que limpa todos — **os sete foram apontados** (o último só **isolado**, porque no teste conjunto o defeito do "Abrir OP" escondia o dele). **Dois defeitos só de cor/posição** (o banner de hoje em âmbar e o empilhamento) **a fotografia de texto não vê**: conferidos pela captura de tela, em que o de hoje sai vermelho e o de amanhã aparece acima.
+
+**O que ficou de fora:** o `AgendaWidget` e o `AvisoSistemaWidget` (também do cabeçalho), `LoginTab` e as demais.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 

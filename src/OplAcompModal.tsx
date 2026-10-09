@@ -19,21 +19,11 @@ import { supabase } from './supabaseClient';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiMessageTextOutline, mdiNoteTextOutline, mdiPlus } from '@mdi/js';
 
-const SETOR_COR: Record<string, string> = {
-  Comercial:     '#2563eb',
-  Engenharia:    '#7c3aed',
-  PCP:           '#0891b2',
-  Almoxarifado:  '#92400e',
-  Producao:      '#16a34a',
-  Qualidade:     '#dc2626',
-  Fiscal:        '#0f766e',
-  Logistica:     '#9a3412',
-  SAC:           '#0369a1',
-  CRM:           '#6366f1',
-  Compras:       '#d97706',
-  RH:            '#7c3aed',
-};
+// 12e48 (09/10/2026): a cor de cada setor saiu daqui para o design.css ([data-acomp-setor="…"] define --acn-aco-cor; setor fora da lista fica com a cor padrão, como antes). Atenção: as chaves são sem acento ("Producao"), como sempre foram.
 
 const ABA_DESTINO: Record<string, string> = {
   op: 'producao',
@@ -141,143 +131,100 @@ export default function OplAcompModal({
     } catch { return v; }
   };
 
-  const cor = SETOR_COR[setor] || '#6366f1';
-
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{
-        maxWidth: 600, width: '95vw', maxHeight: '90vh',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
+      <div className="modal-box acn-modal-cadastro acn-aco-jan" data-acomp-setor={setor} role="dialog" aria-label="Acompanhamentos">
         {/* Cabeçalho */}
-        <div className="modal-title" style={{ background: cor, color: 'white', margin: '-14px -14px 14px', padding: '12px 16px', borderRadius: '6px 6px 0 0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>💬 Acompanhamentos</div>
-              <div style={{ fontSize: 10, opacity: .85, marginTop: 2 }}>{referenciaDesc} — {setor}</div>
-            </div>
-            <span style={{
-              fontSize: 9, background: 'rgba(255,255,255,.2)', padding: '2px 8px',
-              borderRadius: 10, fontWeight: 700,
-            }}>
-              {lista.length} registro(s)
-            </span>
+        <div className="acn-aco-cab">
+          <div>
+            <div className="acn-aco-tit"><Icone path={mdiMessageTextOutline} size={17} />Acompanhamentos</div>
+            <div className="acn-aco-sub">{referenciaDesc} — {setor}</div>
           </div>
+          <span className="acn-aco-qtd">
+            {lista.length} registro(s)
+          </span>
         </div>
 
-        {/* Lista de registros */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 80, maxHeight: 340, marginBottom: 12 }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 24, color: '#94a3b8', fontSize: 11 }}>
-              Carregando...
-            </div>
-          ) : lista.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>
-              <div style={{ fontSize: 28, marginBottom: 6 }}>💬</div>
-              <div style={{ fontSize: 11 }}>Nenhum acompanhamento registrado ainda.</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {lista.map(item => {
-                const itemCor = SETOR_COR[item.setor] || '#6366f1';
-                return (
-                  <div key={item.id} style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderLeft: `3px solid ${itemCor}`,
-                    borderRadius: 6, padding: '8px 12px',
-                  }}>
+        <div className="acn-modal-corpo acn-aco-corpo">
+          {/* Lista de registros */}
+          <div className="acn-aco-lista">
+            {loading ? (
+              <div className="acn-empty">
+                Carregando...
+              </div>
+            ) : lista.length === 0 ? (
+              <div className="acn-empty acn-aco-vazio">
+                <Icone path={mdiMessageTextOutline} size={28} />
+                <div>Nenhum acompanhamento registrado ainda.</div>
+              </div>
+            ) : (
+              <div className="acn-aco-itens">
+                {lista.map(item => (
+                  <div key={item.id} className="acn-aco-item" data-acomp-setor={item.setor}>
                     {/* Linha de metadados */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <span style={{
-                          fontSize: 8, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
-                          background: itemCor, color: 'white', letterSpacing: .3,
-                        }}>
+                    <div className="acn-aco-meta">
+                      <div className="acn-aco-meta-esq">
+                        <span className="acn-aco-setor">
                           {item.setor || '—'}
                         </span>
-                        <span style={{
-                          width: 22, height: 22, borderRadius: '50%', display: 'inline-flex',
-                          alignItems: 'center', justifyContent: 'center',
-                          background: itemCor, color: 'white', fontSize: 9, fontWeight: 700, flexShrink: 0,
-                        }}>
+                        <span className="acn-aco-avatar">
                           {(item.usuario_nome || '?')[0].toUpperCase()}
                         </span>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#1e293b' }}>
+                        <span className="acn-aco-nome">
                           {item.usuario_nome || '—'}
                         </span>
                       </div>
-                      <span style={{ fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                      <span className="acn-ajuda acn-aco-quando">
                         {fmtDT(item.criado_em)}
                       </span>
                     </div>
 
                     {/* Texto */}
-                    <div style={{
-                      fontSize: 11, color: '#334155',
-                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                      lineHeight: 1.5,
-                    }}>
+                    <div className="acn-aco-texto">
                       <Linkify text={item.texto} />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Novo acompanhamento */}
-        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 10 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: .4, marginBottom: 4 }}>
-            📝 Novo acompanhamento
-          </div>
-
-          {/* Recados de 1 clique: registram e notificam na hora, sem digitar. */}
-          {sugestoes && sugestoes.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 4 }}>
-                Recado rápido — registra e avisa os envolvidos em 1 clique:
-              </div>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {sugestoes.map(sug => (
-                  <button key={sug} onClick={() => salvar(sug)} disabled={salvando} title={sug}
-                    style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 14,
-                      cursor: salvando ? 'default' : 'pointer', border: '1px solid ' + cor,
-                      background: '#fff', color: cor, opacity: salvando ? .5 : 1 }}>
-                    {sug}
-                  </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          <MencaoTextarea
-            value={texto}
-            onChange={setTexto}
-            rows={3}
-            placeholder="Descreva o andamento, decisão ou pendência... use @Nome para mencionar"
-          />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-            <button
-              className="acn-btn"
-              style={{ background: '#94a3b8', fontSize: 10, padding: '4px 14px' }}
-              onClick={onClose}
-            >
-              Fechar
-            </button>
-            <button
-              className="acn-btn"
-              style={{
-                background: cor, fontSize: 10, padding: '4px 14px',
-                opacity: texto.trim() && !salvando ? 1 : 0.5,
-              }}
-              onClick={() => salvar()}
-              disabled={!texto.trim() || salvando}
-            >
-              {salvando ? 'Salvando...' : '+ Registrar'}
-            </button>
+            )}
           </div>
+
+          {/* Novo acompanhamento */}
+          <div className="acn-aco-novo">
+            <div className="acn-quadro-titulo acn-aco-novo-tit">
+              <Icone path={mdiNoteTextOutline} size={13} />Novo acompanhamento
+            </div>
+
+            {/* Recados de 1 clique: registram e notificam na hora, sem digitar. */}
+            {sugestoes && sugestoes.length > 0 && (
+              <div className="acn-aco-sugestoes">
+                <div className="acn-ajuda">
+                  Recado rápido — registra e avisa os envolvidos em 1 clique:
+                </div>
+                <div className="acn-aco-chips">
+                  {sugestoes.map(sug => (
+                    <Botao key={sug} pequeno className="acn-aco-sug" onClick={() => salvar(sug)} disabled={salvando} title={sug}>
+                      {sug}
+                    </Botao>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <MencaoTextarea
+              value={texto}
+              onChange={setTexto}
+              rows={3}
+              placeholder="Descreva o andamento, decisão ou pendência... use @Nome para mencionar"
+            />
+          </div>
+        </div>
+
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Fechar</Botao>
+          <Botao variante="primario" className="acn-aco-registrar" icone={salvando ? undefined : mdiPlus} onClick={() => salvar()} disabled={!texto.trim() || salvando}>
+            {salvando ? 'Salvando...' : 'Registrar'}
+          </Botao>
         </div>
       </div>
     </div>

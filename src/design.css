@@ -3054,3 +3054,77 @@ html body .acn-ain-parecer svg { display: inline-block !important; vertical-alig
 .acn-men-resolvida { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 700; color: var(--acn-ok); }
 .acn-men-resposta { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--acn-line); }
 .acn-men-resposta .acn-input { width: 100%; box-sizing: border-box; resize: vertical; }
+
+/* Acompanhamentos da OP, avisos de OP e alertas de contato (12e48, 09/10/2026). Só aparência.
+   A cor de cada setor do acompanhamento mora aqui: [data-acomp-setor] define --acn-aco-cor (antes era um mapa de hexadecimais no código). */
+.acn-aco-jan, .acn-aco-item { --acn-aco-cor: #6366f1; }
+[data-acomp-setor="Comercial"] { --acn-aco-cor: #2563eb; }
+[data-acomp-setor="Engenharia"] { --acn-aco-cor: #7c3aed; }
+[data-acomp-setor="PCP"] { --acn-aco-cor: #0891b2; }
+[data-acomp-setor="Almoxarifado"] { --acn-aco-cor: #92400e; }
+[data-acomp-setor="Producao"] { --acn-aco-cor: #16a34a; }
+[data-acomp-setor="Qualidade"] { --acn-aco-cor: #dc2626; }
+[data-acomp-setor="Fiscal"] { --acn-aco-cor: #0f766e; }
+[data-acomp-setor="Logistica"] { --acn-aco-cor: #9a3412; }
+[data-acomp-setor="SAC"] { --acn-aco-cor: #0369a1; }
+[data-acomp-setor="CRM"] { --acn-aco-cor: #6366f1; }
+[data-acomp-setor="Compras"] { --acn-aco-cor: #d97706; }
+[data-acomp-setor="RH"] { --acn-aco-cor: #7c3aed; }
+html body .modal-box.acn-modal-cadastro.acn-aco-jan { width: min(600px, 95vw); max-width: 600px; max-height: 90vh; }
+.acn-aco-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; flex-shrink: 0; color: #fff; background: var(--acn-aco-cor); }
+.acn-aco-tit { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; }
+.acn-aco-sub { margin-top: 2px; font-size: 12px; opacity: .88; }
+.acn-aco-qtd { padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; background: rgba(255, 255, 255, .2); border-radius: 10px; }
+.acn-aco-corpo { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.acn-aco-lista { flex: 1; min-height: 80px; max-height: 340px; overflow-y: auto; }
+.acn-aco-vazio { display: grid; justify-items: center; gap: 6px; padding: 28px 16px; }
+.acn-aco-itens { display: flex; flex-direction: column; gap: 6px; }
+.acn-aco-item { padding: 8px 12px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-left: 3px solid var(--acn-aco-cor, #6366f1); border-radius: var(--acn-r2); }
+.acn-aco-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.acn-aco-meta-esq { display: flex; gap: 6px; align-items: center; }
+.acn-aco-setor { padding: 1px 6px; font-size: 10px; font-weight: 700; letter-spacing: .3px; color: #fff; background: var(--acn-aco-cor, #6366f1); border-radius: 3px; }
+.acn-aco-avatar { width: 22px; height: 22px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; background: var(--acn-aco-cor, #6366f1); border-radius: 50%; }
+.acn-aco-nome { font-size: 12px; font-weight: 700; color: var(--acn-ink); }
+.acn-aco-quando { white-space: nowrap; }
+.acn-aco-texto { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--acn-text); }
+.acn-aco-novo { padding-top: 10px; border-top: 1px solid var(--acn-line); }
+.acn-aco-novo-tit { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.acn-aco-sugestoes { margin-bottom: 8px; display: grid; gap: 4px; }
+.acn-aco-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+html body .acn-b.acn-aco-sug { border-radius: 14px; color: var(--acn-aco-cor); border-color: var(--acn-aco-cor); background: var(--acn-surface); }
+html body .acn-b.acn-aco-registrar { background: var(--acn-aco-cor); border-color: var(--acn-aco-cor); color: #fff; }
+.acn-gav-avisos { z-index: 3100; --acn-gav-cor: var(--acn-brand); }
+.acn-gav-avisos .acn-gav-painel { width: 440px; }
+.acn-avo-botoes { display: flex; gap: 6px; align-items: center; }
+.acn-avo-item { margin-bottom: 8px; padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-left: 3px solid var(--acn-brand); border-radius: var(--acn-r2); }
+.acn-avo-cab { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-avo-desc { font-size: 12px; font-weight: 800; color: var(--acn-brand-ink, var(--acn-brand)); }
+.acn-avo-quando { margin-left: auto; }
+.acn-avo-texto { margin-top: 3px; font-size: 13px; line-height: 1.4; color: var(--acn-ink); }
+.acn-avo-pe { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.acn-avo-abrir { margin-left: auto; }
+.acn-avo-sobre { position: relative; z-index: 2; }
+html body .modal-overlay.acn-cta-ov { z-index: 9999; background: rgba(0, 0, 0, .6); }
+html body .modal-box.acn-modal-cadastro.acn-cta-jan { width: min(440px, 95vw); max-width: 440px; }
+.acn-cta-cab { display: flex; align-items: center; gap: 10px; padding: 14px 18px; color: #fff; background: var(--acn-bad); }
+.acn-cta-tit { font-size: 15px; font-weight: 800; }
+.acn-cta-sub { font-size: 12px; opacity: .92; }
+.acn-cta-lista { max-height: 320px; }
+.acn-cta-item { margin-bottom: 8px; padding: 10px 14px; background: var(--acn-bad-soft); border: 1.5px solid color-mix(in srgb, var(--acn-bad) 45%, transparent); border-radius: var(--acn-r3); }
+.acn-cta-item-tit { font-size: 14px; font-weight: 800; color: var(--acn-ink); }
+.acn-cta-quando { margin-top: 3px; font-size: 12px; font-weight: 700; color: var(--acn-bad); }
+.acn-cta-linha { margin-top: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-cta-quando svg, .acn-cta-linha svg, .acn-cta-banner-quando svg, .acn-cta-banner-det svg, .acn-cta-banner-tit svg { display: inline-block !important; vertical-align: -2px; }
+.acn-cta-banner { position: fixed; bottom: 20px; right: 20px; z-index: 8000; width: min(360px, 95vw); overflow: hidden; background: var(--acn-surface); border: 2px solid var(--acn-cta-cor); border-radius: var(--acn-r4); box-shadow: 0 8px 32px rgba(0, 0, 0, .2); }
+.acn-cta-banner.atencao { --acn-cta-cor: var(--acn-warn); --acn-cta-fundo: var(--acn-warn-soft); }
+.acn-cta-banner.erro { --acn-cta-cor: var(--acn-bad); --acn-cta-fundo: var(--acn-bad-soft); }
+.acn-cta-banner.acima { bottom: 210px; }
+.acn-cta-banner-cab { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; color: #fff; background: var(--acn-cta-cor); }
+.acn-cta-banner-tit { font-size: 13px; font-weight: 800; }
+html body .acn-b.acn-cta-banner-x { color: #fff; }
+.acn-cta-banner-corpo { max-height: 200px; overflow-y: auto; padding: 10px 14px; }
+.acn-cta-banner.comercial .acn-cta-banner-corpo { max-height: 220px; background: var(--acn-cta-fundo); }
+.acn-cta-banner-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--acn-line); }
+.acn-cta-banner-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-cta-banner-quando { font-size: 12px; font-weight: 700; color: var(--acn-cta-cor); }
+.acn-cta-banner-det { font-size: 12px; color: var(--acn-muted); }

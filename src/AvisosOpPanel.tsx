@@ -13,6 +13,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { OplDetalheModal } from './AcnTabShared';
 import { confirmar } from './Feedback';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiBullhornOutline, mdiTrashCanOutline, mdiClose, mdiWrenchOutline } from '@mdi/js';
 
 export const CONTEXTO_AVISO_OP = 'op_adaptacao';
 
@@ -81,60 +84,53 @@ export default function AvisosOpPanel({ currentUser, onClose, onCountChange }: a
     else alert('Esta OP não foi encontrada (pode ter sido excluída).');
   };
 
+  // 12e48 (09/10/2026): só a aparência — a gaveta usa as classes acn-gav-* (as mesmas das Análises e Menções, 12e47) e acn-avo-*
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3100, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end' }}
+    <div className="acn-gav acn-gav-avisos"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)' }} onClick={onClose} />
+      <div className="acn-gav-fundo" onClick={onClose} />
 
-      <div style={{ position: 'relative', zIndex: 1, width: 440, maxWidth: '95vw', height: '100vh', background: '#fff',
-        boxShadow: '-4px 0 24px rgba(0,0,0,.18)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="acn-gav-painel" role="dialog" aria-label="Avisos de OP">
 
-        <div style={{ background: '#0e7490', color: '#fff', padding: '14px 16px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div className="acn-gav-cab">
+          <div className="acn-gav-cab-linha">
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>📢 Avisos de OP</div>
-              <div style={{ fontSize: 10, opacity: .85, marginTop: 2 }}>
+              <div className="acn-gav-tit"><Icone path={mdiBullhornOutline} size={18} />Avisos de OP</div>
+              <div className="acn-gav-sub">
                 {avisos.length ? `${avisos.length} aviso(s) de andamento das OPs` : 'Nenhum aviso no momento'}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button onClick={limparTodos} disabled={!avisos.length || limpando}
-                style={{ background: '#fff', color: '#0e7490', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 10, fontWeight: 800,
-                  cursor: avisos.length ? 'pointer' : 'default', opacity: avisos.length ? 1 : .5 }}>
-                {limpando ? 'Limpando…' : '🗑 Limpar todos'}
-              </button>
-              <button onClick={onClose}
-                style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: '#fff', borderRadius: 4, width: 28, height: 28, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
-                ✕
-              </button>
+            <div className="acn-avo-botoes">
+              <Botao pequeno icone={mdiTrashCanOutline} onClick={limparTodos} disabled={!avisos.length || limpando}>
+                {limpando ? 'Limpando…' : 'Limpar todos'}
+              </Botao>
+              <Botao variante="discreto" pequeno icone={mdiClose} className="acn-gav-x" aria-label="Fechar" title="Fechar" onClick={onClose} />
             </div>
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
-          {loading && <div style={{ textAlign: 'center', padding: 32, color: '#94a3b8', fontSize: 11 }}>Carregando...</div>}
+        <div className="acn-gav-lista">
+          {loading && <div className="acn-empty">Carregando...</div>}
           {!loading && avisos.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
-              <div style={{ fontSize: 30, marginBottom: 8 }}>📢</div>
-              <div style={{ fontSize: 11 }}>Quando uma OP que envolve você andar (início, conclusão, retrabalho, recados da adaptação), o aviso aparece aqui.</div>
+            <div className="acn-empty acn-gav-vazio">
+              <Icone path={mdiBullhornOutline} size={30} />
+              <div>Quando uma OP que envolve você andar (início, conclusão, retrabalho, recados da adaptação), o aviso aparece aqui.</div>
             </div>
           )}
           {avisos.map(a => (
-            <div key={a.id} style={{ border: '1px solid #e2e8f0', borderLeft: '3px solid #0891b2', borderRadius: 6, padding: '8px 10px', marginBottom: 8, background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: '#0e7490' }}>{a.contexto_descricao || 'OP'}</span>
-                <span style={{ fontSize: 9, color: '#94a3b8', marginLeft: 'auto' }}>{fmtDT(a.criado_em)}</span>
-                <button onClick={() => limparUm(a)} title="Limpar este aviso"
-                  style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕</button>
+            <div key={a.id} className="acn-avo-item">
+              <div className="acn-avo-cab">
+                <span className="acn-avo-desc">{a.contexto_descricao || 'OP'}</span>
+                <span className="acn-ajuda acn-avo-quando">{fmtDT(a.criado_em)}</span>
+                <Botao variante="discreto" pequeno icone={mdiClose} onClick={() => limparUm(a)} title="Limpar este aviso" />
               </div>
-              <div style={{ fontSize: 11, color: '#1e293b', marginTop: 3, lineHeight: 1.4 }}>{a.texto_trecho}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
-                <span style={{ fontSize: 9, color: '#64748b' }}>por {a.mencionante_nome || 'Sistema'}</span>
+              <div className="acn-avo-texto">{a.texto_trecho}</div>
+              <div className="acn-avo-pe">
+                <span className="acn-ajuda">por {a.mencionante_nome || 'Sistema'}</span>
                 {a.contexto_id && (
-                  <button onClick={() => abrirOp(a)}
-                    style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, border: 'none', background: '#0891b2', color: '#fff', cursor: 'pointer' }}>
-                    🔧 Abrir OP
-                  </button>
+                  <Botao pequeno icone={mdiWrenchOutline} className="acn-avo-abrir" onClick={() => abrirOp(a)}>
+                    Abrir OP
+                  </Botao>
                 )}
               </div>
             </div>
@@ -143,7 +139,7 @@ export default function AvisosOpPanel({ currentUser, onClose, onCountChange }: a
       </div>
 
       {opAberta && (
-        <div style={{ position: 'relative', zIndex: 2 }}>
+        <div className="acn-avo-sobre">
           <OplDetalheModal opl={opAberta} onClose={() => setOpAberta(null)} currentUser={currentUser} />
         </div>
       )}

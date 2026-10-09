@@ -1,7 +1,9 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { hojeISO, diaISO } from './Interface';
+import { hojeISO, diaISO, Botao } from './Interface';
+import Icone from './Icone';
+import { mdiBellRingOutline, mdiCalendarOutline, mdiClockOutline, mdiAccountOutline, mdiCellphone, mdiDomain, mdiCheck, mdiClose } from '@mdi/js';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function hojeStr() {
@@ -43,53 +45,42 @@ function dismiss(id: string, tipo: string) {
 }
 
 // ─── POPUP 15 MINUTOS ─────────────────────────────────────────────────────────
+// 12e48 (09/10/2026): só a aparência (classes acn-cta-* em design.css); a janela de 15 minutos e o banner de 2 dias dizem e fazem o mesmo de antes
 function Popup15Min({ contatos, onClose }) {
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: '#0009', zIndex: 9999,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 12, width: 'min(440px, 95vw)',
-        boxShadow: '0 20px 60px #0005', overflow: 'hidden',
-      }}>
+    <div className="modal-overlay acn-cta-ov">
+      <div className="modal-box acn-modal-cadastro acn-cta-jan" role="alertdialog" aria-label="Contato em 15 minutos">
         {/* Header */}
-        <div style={{ background: '#dc2626', color: '#fff', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 28 }}>🔔</span>
+        <div className="acn-cta-cab">
+          <Icone path={mdiBellRingOutline} size={30} />
           <div>
-            <div style={{ fontWeight: 800, fontSize: 14 }}>CONTATO EM 15 MINUTOS!</div>
-            <div style={{ fontSize: 10, opacity: 0.9 }}>Você tem {contatos.length} contato{contatos.length > 1 ? 's' : ''} agendado{contatos.length > 1 ? 's' : ''} agora</div>
+            <div className="acn-cta-tit">CONTATO EM 15 MINUTOS!</div>
+            <div className="acn-cta-sub">Você tem {contatos.length} contato{contatos.length > 1 ? 's' : ''} agendado{contatos.length > 1 ? 's' : ''} agora</div>
           </div>
         </div>
 
         {/* Lista */}
-        <div style={{ padding: '14px 18px', maxHeight: 320, overflowY: 'auto' }}>
+        <div className="acn-modal-corpo acn-cta-lista">
           {contatos.map(c => (
-            <div key={c.id} style={{
-              border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 14px',
-              marginBottom: 8, background: '#fef2f2',
-            }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{c.titulo}</div>
-              <div style={{ fontSize: 10, color: '#dc2626', fontWeight: 700, marginTop: 3 }}>
-                ⏰ {fmtHora(c.hora_prox_contato)} — {c.prox_contato}
+            <div key={c.id} className="acn-cta-item">
+              <div className="acn-cta-item-tit">{c.titulo}</div>
+              <div className="acn-cta-quando">
+                <Icone path={mdiClockOutline} size={12} /> {fmtHora(c.hora_prox_contato)} — {c.prox_contato}
               </div>
               {c.nome_contato && (
-                <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
-                  👤 {c.nome_contato}
-                  {c.contato && <span> · 📱 {c.contato}</span>}
+                <div className="acn-cta-linha">
+                  <Icone path={mdiAccountOutline} size={12} /> {c.nome_contato}
+                  {c.contato && <span> · <Icone path={mdiCellphone} size={12} /> {c.contato}</span>}
                 </div>
               )}
-              {c.orgao && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>🏛️ {c.orgao}</div>}
+              {c.orgao && <div className="acn-cta-linha"><Icone path={mdiDomain} size={12} /> {c.orgao}</div>}
             </div>
           ))}
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '10px 18px', borderTop: '1px solid #fee2e2', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose}
-            style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 22px', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
-            ✓ Entendido
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao variante="perigo" icone={mdiCheck} onClick={onClose}>Entendido</Botao>
         </div>
       </div>
     </div>
@@ -99,28 +90,22 @@ function Popup15Min({ contatos, onClose }) {
 // ─── BANNER 2 DIAS ────────────────────────────────────────────────────────────
 function Banner2Dias({ contatos, onClose }) {
   return (
-    <div style={{
-      position: 'fixed', bottom: 20, right: 20, zIndex: 8000,
-      width: 'min(360px, 95vw)',
-      background: '#fff', border: '2px solid #f59e0b',
-      borderRadius: 10, boxShadow: '0 8px 32px #0003', overflow: 'hidden',
-    }}>
-      <div style={{ background: '#f59e0b', color: '#fff', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontWeight: 800, fontSize: 12 }}>
-          📅 {contatos.length} contato{contatos.length > 1 ? 's' : ''} em 2 dias
+    <div className="acn-cta-banner atencao">
+      <div className="acn-cta-banner-cab">
+        <div className="acn-cta-banner-tit">
+          <Icone path={mdiCalendarOutline} size={14} /> {contatos.length} contato{contatos.length > 1 ? 's' : ''} em 2 dias
         </div>
-        <button onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cta-banner-x" aria-label="Fechar" title="Fechar" onClick={onClose} />
       </div>
-      <div style={{ padding: '10px 14px', maxHeight: 200, overflowY: 'auto' }}>
+      <div className="acn-cta-banner-corpo">
         {contatos.map(c => (
-          <div key={c.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #fef3c7' }}>
-            <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b' }}>{c.titulo}</div>
-            <div style={{ fontSize: 10, color: '#d97706', fontWeight: 700 }}>
-              📅 {c.prox_contato}
-              {c.hora_prox_contato && <span> ⏰ {fmtHora(c.hora_prox_contato)}</span>}
+          <div key={c.id} className="acn-cta-banner-item">
+            <div className="acn-cta-banner-nome">{c.titulo}</div>
+            <div className="acn-cta-banner-quando">
+              <Icone path={mdiCalendarOutline} size={12} /> {c.prox_contato}
+              {c.hora_prox_contato && <span> <Icone path={mdiClockOutline} size={12} /> {fmtHora(c.hora_prox_contato)}</span>}
             </div>
-            {c.nome_contato && <div style={{ fontSize: 10, color: '#64748b' }}>👤 {c.nome_contato}{c.contato ? ` · ${c.contato}` : ''}</div>}
+            {c.nome_contato && <div className="acn-cta-banner-det"><Icone path={mdiAccountOutline} size={12} /> {c.nome_contato}{c.contato ? ` · ${c.contato}` : ''}</div>}
           </div>
         ))}
       </div>
