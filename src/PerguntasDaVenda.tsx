@@ -22,6 +22,9 @@ import {
 } from './ConfigEstrutura';
 import { supabase } from './supabaseClient';
 import { sugerirBom } from './OpItens';
+import { Botao, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiCarOutline, mdiCheck } from '@mdi/js';
 
 export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteMisto = false,
                                    respostas, onChange }) {
@@ -65,50 +68,44 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
   const totalUnidades = Math.max(1, Number(unidades) || 1);
   const mostrarPorUnidade = loteMisto && totalUnidades > 1;
 
+  // 12e54 (09/10/2026): só aparência — as respostas de cada pergunta viraram o seletor do guia (Chips) e o roxo do bloco mora no design.css (--acn-pdv-cor)
   const Bloco = ({ un, titulo }) => {
     const r = respostasDe(un);
     const pendentes = perguntasPendentes(perguntas, r);
     const respondidas = perguntas.filter(p => r[p.id]);
     return (
-      <div style={{ marginBottom: 8 }}>
-        {titulo && <div style={{ fontSize: 10, fontWeight: 800, color: '#5b21b6', marginBottom: 4 }}>{titulo}</div>}
+      <div className="acn-pdv-bloco">
+        {titulo && <div className="acn-pdv-tit">{titulo}</div>}
         {pendentes.map(p => (
-          <div key={p.id} style={{ marginBottom: 6 }}>
-            <div style={{ fontSize: 11, fontWeight: 700 }}>
+          <div key={p.id} className="acn-pdv-pergunta">
+            <div className="acn-pdv-texto">
               {p.texto}
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>
+              <span className="acn-pdv-item">
                 ({p.cadastro_itens?.nome})
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
-              {(p.opcoes || []).map(o => (
-                <button key={o.id} type="button" onClick={() => responder(un, p.id, o.id)}
-                  style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-                    border: '1px solid ' + (r[p.id] === o.id ? '#7c3aed' : '#cbd5e1'),
-                    background: r[p.id] === o.id ? '#ede9fe' : '#fff',
-                    color: r[p.id] === o.id ? '#6b21a8' : '#475569' }}>
-                  {o.rotulo}
-                </button>
-              ))}
-            </div>
+            {(p.opcoes || []).length > 0 && (
+              <Chips ativo={r[p.id] || ''} onChange={(id) => responder(un, p.id, id)} rotulo={p.texto}
+                itens={(p.opcoes || []).map(o => ({ id: o.id, rotulo: o.rotulo }))} />
+            )}
           </div>
         ))}
         {respondidas.length > 0 && (
-          <div style={{ fontSize: 9.5, color: '#475569' }}>
+          <div className="acn-pdv-resp">
             {respondidas.map(p => {
               const o = (p.opcoes || []).find(x => x.id === r[p.id]);
               const ehAuto = auto[p.id] === r[p.id];
               return (
-                <span key={p.id} style={{ marginRight: 10 }}>
-                  ✓ {p.texto} <b>{o?.rotulo || '—'}</b>
-                  {ehAuto && <span style={{ color: '#15803d' }}> (o sistema já sabia)</span>}
+                <span key={p.id} className="acn-pdv-resp-item">
+                  <Icone path={mdiCheck} size={12} /> {p.texto} <b>{o?.rotulo || '—'}</b>
+                  {ehAuto && <span className="acn-pdv-auto"> (o sistema já sabia)</span>}
                   {!ehAuto && (
-                    <button type="button" onClick={() => {
+                    <Botao variante="discreto" pequeno className="acn-pdv-link" onClick={() => {
                       const base = { ...(respostas?.[un] || {}) }; delete base[p.id];
                       onChange?.({ ...(respostas || {}), [un]: base });
-                    }} style={{ border: 'none', background: 'none', color: '#7c3aed', fontSize: 9, cursor: 'pointer' }}>
+                    }}>
                       trocar
-                    </button>
+                    </Botao>
                   )}
                 </span>
               );
@@ -120,13 +117,12 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
   };
 
   return (
-    <div style={{ marginBottom: 12, background: '#faf5ff', border: '1px solid #ddd6fe',
-      borderRadius: 7, padding: '9px 11px' }}>
-      <div style={{ fontSize: 9, fontWeight: 800, color: '#5b21b6', marginBottom: 6 }}>
-        🚗 SOBRE O CARRO — o que muda a instalação
+    <div className="acn-pdv">
+      <div className="acn-pdv-cab">
+        <Icone path={mdiCarOutline} size={14} /> SOBRE O CARRO — o que muda a instalação
       </div>
       {!veiculoId && (
-        <div style={{ fontSize: 10, color: '#b45309', marginBottom: 6 }}>
+        <div className="acn-pdv-aviso">
           Escolha o veículo acima: sem saber o carro, o material da instalação não é calculado.
         </div>
       )}
@@ -134,23 +130,21 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
       <Bloco un={0} titulo={mostrarPorUnidade ? 'CARRO 01' : null} />
 
       {mostrarPorUnidade && Array.from({ length: totalUnidades - 1 }, (_, k) => k + 1).map(un => (
-        <div key={un} style={{ borderTop: '1px solid #ede9fe', paddingTop: 5 }}>
+        <div key={un} className="acn-pdv-unidade">
           {abertas[un] ? (
             <Bloco un={un} titulo={`CARRO ${String(un + 1).padStart(2, '0')}`} />
           ) : (
-            <div style={{ fontSize: 10, color: '#6b21a8' }}>
+            <div className="acn-pdv-igual">
               Carro {String(un + 1).padStart(2, '0')}: <b>igual ao 01</b>
-              <button type="button" onClick={() => setAbertas(a => ({ ...a, [un]: true }))}
-                style={{ border: 'none', background: 'none', color: '#7c3aed', fontSize: 9,
-                  fontWeight: 700, cursor: 'pointer' }}>
+              <Botao variante="discreto" pequeno className="acn-pdv-link" onClick={() => setAbertas(a => ({ ...a, [un]: true }))}>
                 responder diferente
-              </button>
+              </Botao>
             </div>
           )}
         </div>
       ))}
 
-      <div style={{ fontSize: 9, color: '#6b7280', marginTop: 4 }}>
+      <div className="acn-pdv-nota">
         Estas respostas montam o material de instalação da OP. A Engenharia confere depois.
       </div>
     </div>

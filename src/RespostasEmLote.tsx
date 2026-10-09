@@ -27,6 +27,9 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { Botao, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiCarOutline, mdiAlertOutline } from '@mdi/js';
 import {
   perguntasDeVariosItens, respostasAutomaticas, itensConjunto, vendaTemConjunto,
   podarRespostas, respostasDasOps,
@@ -45,6 +48,7 @@ const resumoOps = (ops) => {
 };
 
 // escopo de módulo de propósito: declarado dentro do componente, remontaria os botões a cada clique
+// 12e54 (09/10/2026): só aparência — as respostas viraram o seletor do guia (Chips); a pergunta cuja resposta o sistema já sabe trava o seletor
 function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
   const podadas = podarRespostas(perguntas, efetivas);
   const escolhidas = new Set(Object.values(podadas).filter(Boolean));
@@ -56,26 +60,19 @@ function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
         const ehAuto = !!auto[p.id] && auto[p.id] === atual;
         const nota = resumo ? resumo(p) : '';
         return (
-          <div key={p.id} style={{ marginBottom: 9, marginLeft: p.opcao_pai_id ? 14 : 0,
-            borderLeft: p.opcao_pai_id ? '2px solid #e0e7ff' : 'none', paddingLeft: p.opcao_pai_id ? 8 : 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700 }}>
+          <div key={p.id} className={'acn-rpl-pergunta' + (p.opcao_pai_id ? ' filha' : '')}>
+            <div className="acn-rpl-texto">
               {p.texto}
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>({p.cadastro_itens?.nome})</span>
-              {ehAuto && <span style={{ fontSize: 9, color: '#15803d', fontWeight: 700, marginLeft: 6 }}>o sistema já sabia</span>}
+              <span className="acn-rpl-item">({p.cadastro_itens?.nome})</span>
+              {ehAuto && <span className="acn-rpl-auto">o sistema já sabia</span>}
             </div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
-              {(p.opcoes || []).map(o => (
-                <button key={o.id} type="button" disabled={ehAuto} onClick={() => onEscolher(p, o)}
-                  style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: ehAuto ? 'default' : 'pointer',
-                    border: '1px solid ' + (atual === o.id ? '#7c3aed' : '#cbd5e1'),
-                    background: atual === o.id ? '#ede9fe' : '#fff',
-                    color: atual === o.id ? '#6b21a8' : '#475569', opacity: ehAuto && atual !== o.id ? .45 : 1 }}>
-                  {o.rotulo}
-                </button>
-              ))}
-              {!(p.opcoes || []).length && <span style={{ fontSize: 9.5, color: '#f59e0b' }}>pergunta sem respostas cadastradas</span>}
-            </div>
-            {nota && <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>{nota}</div>}
+            {(p.opcoes || []).length > 0 && (
+              <Chips ativo={atual || ''} desativado={ehAuto} rotulo={p.texto}
+                onChange={(id) => onEscolher(p, (p.opcoes || []).find(x => x.id === id))}
+                itens={(p.opcoes || []).map(o => ({ id: o.id, rotulo: o.rotulo }))} />
+            )}
+            {!(p.opcoes || []).length && <span className="acn-rpl-sem">pergunta sem respostas cadastradas</span>}
+            {nota && <div className="acn-rpl-nota">{nota}</div>}
           </div>
         );
       })}
@@ -228,86 +225,88 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
   const total = aplicaveis.length;
 
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 2400 }}>
-      <div className="modal-box" style={{ maxWidth: 780, width: '96vw', maxHeight: '92vh', overflowY: 'auto' }}>
-        <div className="modal-title">🚗 Responder as perguntas sobre o carro</div>
-        <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 8 }}>
-          {resumoOps(ops || [])}. Estas respostas escolhem o material de instalação que a conferência da BOM calcula
-          para o carro. Quem responde é, normalmente, o vendedor na abertura da OP; esta tela serve para as OPs abertas antes de a pergunta existir.
+    <div className="modal-overlay acn-rpl-ov">
+      <div className="modal-box acn-modal-cadastro acn-rpl-jan" role="dialog" aria-label="Responder as perguntas sobre o carro">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiCarOutline} size={18} />Responder as perguntas sobre o carro</span>
+        </div>
+        <div className="acn-modal-corpo acn-rpl-corpo">
+          <div className="acn-ajuda">
+            {resumoOps(ops || [])}. Estas respostas escolhem o material de instalação que a conferência da BOM calcula
+            para o carro. Quem responde é, normalmente, o vendedor na abertura da OP; esta tela serve para as OPs abertas antes de a pergunta existir.
+          </div>
+
+          {carregando && <div className="acn-rpl-info">Lendo as perguntas dos itens vendidos…</div>}
+          {falha && <div className="acn-rpl-erro">{falha}</div>}
+
+          {!carregando && !falha && (
+            <>
+              {(ignoradas.semVeiculo > 0 || ignoradas.semConjunto > 0) && (
+                <div className="acn-rpl-aviso">
+                  {ignoradas.semVeiculo > 0 && <div>{ignoradas.semVeiculo} OP(s) ficam de fora: sem veículo do catálogo.</div>}
+                  {ignoradas.semConjunto > 0 && <div>{ignoradas.semConjunto} OP(s) ficam de fora: a venda não leva o Conjunto Elétrico (sem ele não há material a montar).</div>}
+                </div>
+              )}
+
+              {!total && <div className="acn-rpl-info neutro">Nenhuma das OPs tem veículo do catálogo e Conjunto Elétrico na venda.</div>}
+
+              {total > 0 && !perguntas.length && (
+                <div className="acn-rpl-info neutro">
+                  Nenhum item vendido destas OPs tem pergunta cadastrada. Cadastre em Administração → Estruturas (Passo 3 do manual).
+                </div>
+              )}
+
+              {total > 0 && perguntas.length > 0 && (
+                <>
+                  <div className="acn-rpl-padrao">
+                    <div className="acn-rpl-padrao-tit">
+                      PARA TODAS AS {total} OPs
+                    </div>
+                    <ListaDePerguntas perguntas={perguntas} efetivas={efetivaPadrao} auto={autoComum}
+                      onEscolher={escolherPadrao} resumo={resumoSalvo} />
+                  </div>
+
+                  <details className="acn-rpl-detalhes" open={Object.keys(excecoes).length > 0}>
+                    <summary className="acn-rpl-resumo">
+                      Algum carro responde diferente? {Object.keys(excecoes).length > 0 && `(${Object.keys(excecoes).length} exceção(ões))`}
+                    </summary>
+                    <div className="acn-rpl-lista">
+                      {aplicaveis.map(o => {
+                        const ps = perguntasDaOp(perguntas, o);
+                        const ex = excecoes[o.id];
+                        return (
+                          <div key={o.id} className="acn-rpl-linha">
+                            <div className="acn-rpl-linha-cab">
+                              <span className="acn-rpl-linha-nome"><b>{o.opl}</b> <span className={ex ? 'acn-rpl-dif' : 'acn-rpl-igual'}>{ex ? 'responde diferente' : 'igual ao padrão'}</span></span>
+                              {ex && <Botao variante="discreto" pequeno className="acn-rpl-link" onClick={() => voltarAoPadrao(o)}>voltar ao padrão</Botao>}
+                              {!abertas[o.id] && <Botao variante="discreto" pequeno className="acn-rpl-link" onClick={() => setAbertas(a => ({ ...a, [o.id]: true }))}>responder diferente</Botao>}
+                            </div>
+                            {abertas[o.id] && (
+                              <div className="acn-rpl-exc">
+                                <ListaDePerguntas perguntas={ps}
+                                  efetivas={{ ...autoDaOp(o), ...restringir(ps, padrao), ...restringir(ps, ex || {}) }}
+                                  auto={autoDaOp(o)} onEscolher={(p, op) => escolherExcecao(o, p, op)} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </>
+              )}
+            </>
+          )}
+
+          {erro && <div className="acn-rpl-erro caixa">{erro}</div>}
         </div>
 
-        {carregando && <div style={{ fontSize: 11, color: '#4338ca' }}>Lendo as perguntas dos itens vendidos…</div>}
-        {falha && <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 8 }}>{falha}</div>}
-
-        {!carregando && !falha && (
-          <>
-            {(ignoradas.semVeiculo > 0 || ignoradas.semConjunto > 0) && (
-              <div style={{ fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '6px 9px', marginBottom: 8 }}>
-                {ignoradas.semVeiculo > 0 && <div>{ignoradas.semVeiculo} OP(s) ficam de fora: sem veículo do catálogo.</div>}
-                {ignoradas.semConjunto > 0 && <div>{ignoradas.semConjunto} OP(s) ficam de fora: a venda não leva o Conjunto Elétrico (sem ele não há material a montar).</div>}
-              </div>
-            )}
-
-            {!total && <div style={{ fontSize: 11, color: '#64748b' }}>Nenhuma das OPs tem veículo do catálogo e Conjunto Elétrico na venda.</div>}
-
-            {total > 0 && !perguntas.length && (
-              <div style={{ fontSize: 11, color: '#64748b' }}>
-                Nenhum item vendido destas OPs tem pergunta cadastrada. Cadastre em Administração → Estruturas (Passo 3 do manual).
-              </div>
-            )}
-
-            {total > 0 && perguntas.length > 0 && (
-              <>
-                <div style={{ background: '#faf5ff', border: '1px solid #ddd6fe', borderRadius: 7, padding: '9px 11px', marginBottom: 10 }}>
-                  <div style={{ fontSize: 9.5, fontWeight: 800, color: '#5b21b6', marginBottom: 6 }}>
-                    PARA TODAS AS {total} OPs
-                  </div>
-                  <ListaDePerguntas perguntas={perguntas} efetivas={efetivaPadrao} auto={autoComum}
-                    onEscolher={escolherPadrao} resumo={resumoSalvo} />
-                </div>
-
-                <details style={{ marginBottom: 10 }} open={Object.keys(excecoes).length > 0}>
-                  <summary style={{ fontSize: 10.5, fontWeight: 700, color: '#4338ca', cursor: 'pointer' }}>
-                    Algum carro responde diferente? {Object.keys(excecoes).length > 0 && `(${Object.keys(excecoes).length} exceção(ões))`}
-                  </summary>
-                  <div style={{ maxHeight: 260, overflowY: 'auto', marginTop: 6, border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px' }}>
-                    {aplicaveis.map(o => {
-                      const ps = perguntasDaOp(perguntas, o);
-                      const ex = excecoes[o.id];
-                      return (
-                        <div key={o.id} style={{ borderBottom: '1px solid #f1f5f9', padding: '4px 0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5 }}>
-                            <span style={{ flex: 1 }}><b>{o.opl}</b> <span style={{ color: ex ? '#7c3aed' : '#64748b' }}>{ex ? 'responde diferente' : 'igual ao padrão'}</span></span>
-                            {ex && <button type="button" onClick={() => voltarAoPadrao(o)}
-                              style={{ border: 'none', background: 'none', color: '#7c3aed', fontSize: 9.5, fontWeight: 700, cursor: 'pointer' }}>voltar ao padrão</button>}
-                            {!abertas[o.id] && <button type="button" onClick={() => setAbertas(a => ({ ...a, [o.id]: true }))}
-                              style={{ border: 'none', background: 'none', color: '#7c3aed', fontSize: 9.5, fontWeight: 700, cursor: 'pointer' }}>responder diferente</button>}
-                          </div>
-                          {abertas[o.id] && (
-                            <div style={{ margin: '6px 0 4px 10px' }}>
-                              <ListaDePerguntas perguntas={ps}
-                                efetivas={{ ...autoDaOp(o), ...restringir(ps, padrao), ...restringir(ps, ex || {}) }}
-                                auto={autoDaOp(o)} onEscolher={(p, op) => escolherExcecao(o, p, op)} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
-              </>
-            )}
-          </>
-        )}
-
-        {erro && <div style={{ fontSize: 10.5, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '6px 9px', marginBottom: 8 }}>{erro}</div>}
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button className="acn-btn" style={{ background: '#7c3aed', flex: 1, opacity: salvando ? .6 : 1 }}
+        <div className="acn-modal-rodape">
+          <Botao variante="primario" className="acn-rpl-salvar"
             onClick={salvar} disabled={salvando || carregando || !total || !perguntas.length}>
             {salvando ? 'Gravando…' : `Salvar as respostas em ${total} OP(s)`}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose} disabled={salvando}>Fechar</button>
+          </Botao>
+          <Botao onClick={onClose} disabled={salvando}>Fechar</Botao>
         </div>
       </div>
     </div>,
@@ -336,8 +335,8 @@ export function AvisoRespostasDiferentes({ ops, refOpl, versao = 0 }) {
   }, [chave]);
   if (grupos < 2) return null;
   return (
-    <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '7px 10px', marginBottom: 6, fontSize: 10.5, color: '#92400e' }}>
-      ⚠ As OPs marcadas têm <b>respostas diferentes sobre o carro</b> ({grupos} combinações). O material calculado abaixo é o da <b>{refOpl}</b>,
+    <div className="acn-rpl-aviso acn-rpl-aviso-lote">
+      <Icone path={mdiAlertOutline} size={14} /> As OPs marcadas têm <b>respostas diferentes sobre o carro</b> ({grupos} combinações). O material calculado abaixo é o da <b>{refOpl}</b>,
       e a mesma BOM vai para todas — desmarque as que respondem diferente e libere-as à parte.
     </div>
   );

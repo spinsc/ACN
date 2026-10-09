@@ -650,10 +650,10 @@ body.dark .acn-main table td span:not(.acn-badge),
 body.dark .acn-main table td p,
 body.dark .acn-main table td div { color:inherit !important; }
 body.dark .sec-body p,
-body.dark .sec-body span:not(.acn-badge),
+body.dark .sec-body span:not(.acn-badge):not([class*="acn-"]),
 body.dark .sec-body strong { color:inherit !important; }
 body.dark .modal-box p,
-body.dark .modal-box span:not(.acn-badge),
+body.dark .modal-box span:not(.acn-badge):not([class*="acn-"]),
 body.dark .modal-box strong,
 body.dark .modal-box label { color:inherit !important; }
 

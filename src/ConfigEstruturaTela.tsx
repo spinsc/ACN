@@ -16,14 +16,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
-import { SelectBusca } from './Interface';
+import { SelectBusca, Botao, Selo } from './Interface';
+import Icone from './Icone';
+import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiAlertOutline, mdiClose, mdiPlus } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { perguntasDoItem, materiaisDoVeiculo, itensAtivosDoCatalogo } from './ConfigEstrutura';
 import { ehAdminOuGerente } from './utils/permissoes';
-
-const campo = { padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
-                fontSize: 11, boxSizing: 'border-box', width: '100%' };
-const rotulo = { fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 3 };
 
 function useItens() {
   const [itens, setItens] = useState([]);
@@ -53,19 +51,21 @@ export default function ConfigEstruturaTela({ currentUser }) {
   useEffect(() => { recPerguntas(); recMateriais(); }, [itemId]);
   useEffect(() => { recMateriais(); }, [veiculoId]);
 
+  // 12e54 (09/10/2026): só aparência — o roxo-azulado dos títulos virou o tom do guia, os botões miúdos viraram os botões do guia (pequenos) e o recuo das
+  // perguntas filhas passou para [data-nivel] no design.css (antes era uma conta de margem escrita no JSX); o que cada botão grava não mudou
   return (
-    <div className="sec-card" style={{ marginTop: 12 }}>
-      <div className="sec-hdr" style={{ background: '#eef2ff', borderBottom: '2px solid #4f46e5' }}>
-        <span style={{ color: '#4338ca' }}>🧩 Estrutura de instalação</span>
+    <div className="sec-card acn-cet">
+      <div className="sec-hdr">
+        <span className="acn-cet-tit"><Icone path={mdiPuzzleOutline} size={16} />Estrutura de instalação</span>
       </div>
       <div className="sec-body">
-        <div style={{ fontSize: 10, color: '#3730a3', marginBottom: 8 }}>
+        <div className="acn-ajuda acn-cet-intro">
           A <b>pergunta</b> fica no item e vale em qualquer carro. O <b>material</b> que cada resposta
           consome fica no carro. Assim "tem hack de teto?" é cadastrada uma vez só, e cada veículo
           diz qual suporte usa.
         </div>
 
-        <label style={rotulo}>ITEM VENDIDO</label>
+        <label className="acn-label">ITEM VENDIDO</label>
         <SelectBusca opcoes={opcoesDeItem(itens)} valor={itemId} onChange={setItemId}
           placeholder="Procure o item (nome ou código)" />
 
@@ -78,8 +78,8 @@ export default function ConfigEstruturaTela({ currentUser }) {
                 <PerguntasDoItem itemId={itemId} perguntas={perguntas} itens={itens}
                   pode={pode} currentUser={currentUser} aoMudar={recPerguntas} />
 
-                <div style={{ marginTop: 14, paddingTop: 10, borderTop: '2px solid #e0e7ff' }}>
-                  <label style={rotulo}>MATERIAL DESTE ITEM EM QUAL CARRO</label>
+                <div className="acn-cet-material">
+                  <label className="acn-label">MATERIAL DESTE ITEM EM QUAL CARRO</label>
                   <SelectVeiculo valor={veiculoId} onChange={setVeiculoId} currentUser={currentUser} />
                   {veiculoId && (
                     <MaterialNoVeiculo veiculoId={veiculoId} itemId={itemId} materiais={materiais}
@@ -102,9 +102,9 @@ function MarcaConjunto({ item }) {
   // escolhe mais aqui (o banco recusa qualquer outro). A tela só explica, e só no próprio 1687.
   if (String(item?.codigo) !== '1687') return null;
   return (
-    <div style={{ marginTop: 8, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '7px 10px' }}>
-      <div style={{ fontSize: 10.5 }}>🔒 <b>Este é o Conjunto Elétrico</b> — o único do sistema (código 1687)</div>
-      <div style={{ fontSize: 9, color: '#78350f', marginTop: 3 }}>
+    <div className="acn-cet-aviso">
+      <div className="acn-cet-aviso-tit"><Icone path={mdiLockOutline} size={14} /> <b>Este é o Conjunto Elétrico</b> — o único do sistema (código 1687)</div>
+      <div className="acn-cet-aviso-txt">
         Representa suportes, chicotes, parafusos e afins na nota e no PV. A presença dele na venda é o que <b>liga</b> a
         montagem automática do material de cada item. Venda sem ele — cliente que usa peça de terceiro — não monta nada.
         O material fica cadastrado nos <b>outros itens vendidos</b>, carro a carro; este item não tem estrutura própria.
@@ -165,56 +165,50 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar 
   };
 
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', marginBottom: 5 }}>
+    <div className="acn-cet-perguntas">
+      <div className="acn-cet-sec">
         PERGUNTAS DESTE ITEM ({perguntas.length}) — valem em qualquer carro
       </div>
       {!perguntas.length && (
-        <div style={{ fontSize: 10, color: '#94a3b8' }}>
+        <div className="acn-ajuda">
           Nenhuma. Se a instalação deste item não varia conforme o carro, não precisa de pergunta.
         </div>
       )}
       {perguntas.map(p => (
-        <div key={p.id} style={{ marginLeft: nivelDe(p) * 16, borderLeft: p.opcao_pai_id ? '2px solid #e0e7ff' : 'none',
-          paddingLeft: p.opcao_pai_id ? 8 : 0, marginBottom: 7 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, flex: 1 }}>❓ {p.texto}</span>
+        <div key={p.id} className={'acn-cet-perg' + (p.opcao_pai_id ? ' filha' : '')} data-nivel={nivelDe(p)}>
+          <div className="acn-cet-perg-cab">
+            <span className="acn-cet-perg-txt"><Icone path={mdiHelpCircleOutline} size={14} /> {p.texto}</span>
             {pode && (
               <>
-                <button onClick={() => addOpcao(p.id, (p.opcoes || []).length)}
-                  style={{ fontSize: 9, padding: '1px 7px', border: '1px solid #4f46e5', borderRadius: 4,
-                    background: '#fff', color: '#4338ca', cursor: 'pointer' }}>+ resposta</button>
-                <button onClick={() => apagar('item_perguntas', p.id, `a pergunta "${p.texto}"`)}
-                  style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>
+                <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
+                  onClick={() => addOpcao(p.id, (p.opcoes || []).length)}>resposta</Botao>
+                <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a pergunta "${p.texto}"`}
+                  onClick={() => apagar('item_perguntas', p.id, `a pergunta "${p.texto}"`)} />
               </>
             )}
           </div>
           {!(p.opcoes || []).length && (
-            <div style={{ fontSize: 9.5, color: '#f59e0b', marginLeft: 14 }}>⚠ sem respostas — não faz nada ainda</div>
+            <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> sem respostas — não faz nada ainda</div>
           )}
           {(p.opcoes || []).map(o => (
-            <div key={o.id} style={{ marginLeft: 14, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10.5, flex: 1 }}>
-                ▸ {o.rotulo}
+            <div key={o.id} className="acn-cet-opcao">
+              <span className="acn-cet-opcao-txt">
+                <Icone path={mdiChevronRight} size={13} /> {o.rotulo}
                 {(o.auto_quando_itens || []).length > 0 && (
-                  <span style={{ fontSize: 8, background: '#fef3c7', color: '#b45309', borderRadius: 3,
-                    padding: '0 4px', marginLeft: 5, fontWeight: 800 }}>
+                  <Selo familia="atencao" ponto={false}>
                     automática ({o.auto_quando_itens.length})
-                  </span>
+                  </Selo>
                 )}
               </span>
               {pode && (
                 <>
-                  <button onClick={() => definirRegra(o)}
-                    style={{ fontSize: 8.5, padding: '1px 6px', border: '1px solid #fcd34d', borderRadius: 4,
-                      background: '#fff', color: '#b45309', cursor: 'pointer' }}>regra</button>
+                  <Botao pequeno variante="secundario" className="acn-cet-mini" onClick={() => definirRegra(o)}>regra</Botao>
                   {!temFilha(o.id) && (
-                    <button onClick={() => addPergunta(o.id)}
-                      style={{ fontSize: 8.5, padding: '1px 6px', border: '1px solid #c7d2fe', borderRadius: 4,
-                        background: '#fff', color: '#4338ca', cursor: 'pointer' }}>+ pergunta</button>
+                    <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
+                      onClick={() => addPergunta(o.id)}>pergunta</Botao>
                   )}
-                  <button onClick={() => apagar('item_pergunta_opcoes', o.id, `a resposta "${o.rotulo}"`)}
-                    style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>
+                  <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a resposta "${o.rotulo}"`}
+                    onClick={() => apagar('item_pergunta_opcoes', o.id, `a resposta "${o.rotulo}"`)} />
                 </>
               )}
             </div>
@@ -222,11 +216,9 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar 
         </div>
       ))}
       {pode && (
-        <button onClick={() => addPergunta(null)}
-          style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: '1px solid #4f46e5',
-            borderRadius: 4, background: '#fff', color: '#4338ca', cursor: 'pointer', marginTop: 3 }}>
-          + pergunta
-        </button>
+        <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini acn-cet-nova" onClick={() => addPergunta(null)}>
+          pergunta
+        </Botao>
       )}
     </div>
   );
@@ -266,67 +258,64 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
   const porResposta = materiais.filter(m => m.opcao_id);
 
   const Linha = ({ m }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, padding: '2px 0' }}>
-      <span style={{ fontWeight: 800, color: m.acao === 'remover' ? '#b91c1c' : '#0f766e', minWidth: 60 }}>
+    <div className="acn-cet-linha">
+      <span className={'acn-cet-acao' + (m.acao === 'remover' ? ' remover' : '')}>
         {m.acao === 'remover' ? '− tira' : '+ usa'} {m.quantidade}
       </span>
-      <span style={{ flex: 1 }}>
+      <span className="acn-cet-mat-nome">
         {m.material?.codigo ? <b>{m.material.codigo} — </b> : null}{m.material?.nome || '(item)'}
         {m.material?.controla_estoque && (
-          <span style={{ fontSize: 8, background: '#dcfce7', color: '#15803d', borderRadius: 3,
-            padding: '0 4px', marginLeft: 5, fontWeight: 800 }}>estoque</span>
+          <Selo familia="ok" ponto={false}>estoque</Selo>
         )}
       </span>
-      {pode && <button onClick={() => apagar(m.id)}
-        style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>}
+      {pode && <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label="Apagar esta linha de material"
+        onClick={() => apagar(m.id)} />}
     </div>
   );
 
   return (
-    <div style={{ marginTop: 10, border: '1px solid #c7d2fe', borderRadius: 7, padding: 10, background: '#fafaff' }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', marginBottom: 4 }}>
+    <div className="acn-cet-mat">
+      <div className="acn-cet-sec">
         SEMPRE, NESTE CARRO ({fixos.length})
       </div>
-      {!fixos.length && <div style={{ fontSize: 10, color: '#94a3b8' }}>Nenhum material fixo.</div>}
+      {!fixos.length && <div className="acn-ajuda">Nenhum material fixo.</div>}
       {fixos.map(m => <Linha key={m.id} m={m} />)}
 
       {porResposta.length > 0 && (
         <>
-          <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', margin: '10px 0 4px' }}>
+          <div className="acn-cet-sec espaco">
             CONFORME A RESPOSTA ({porResposta.length})
           </div>
           {porResposta.map(m => (
             <div key={m.id}>
-              <div style={{ fontSize: 9, color: '#6366f1', marginTop: 3 }}>{rotuloDaOpcao(m.opcao_id)}</div>
-              <div style={{ marginLeft: 10 }}><Linha m={m} /></div>
+              <div className="acn-cet-rot">{rotuloDaOpcao(m.opcao_id)}</div>
+              <div className="acn-cet-ind"><Linha m={m} /></div>
             </div>
           ))}
         </>
       )}
 
       {pode && (
-        <div style={{ marginTop: 10, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px' }}>
-          <label style={rotulo}>＋ MATERIAL QUE ESTE ITEM CONSOME NESTE CARRO</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 70px 110px minmax(0,1.6fr) auto', gap: 6, alignItems: 'center' }}>
+        <div className="acn-cet-form">
+          <label className="acn-label"><Icone path={mdiPlus} size={13} /> MATERIAL QUE ESTE ITEM CONSOME NESTE CARRO</label>
+          <div className="acn-cet-grade">
             <SelectBusca opcoes={opcoesDeItem(itens)} valor={novo.material_item_id}
               onChange={v => setNovo(f => ({ ...f, material_item_id: v }))} placeholder="Material" />
-            <input style={campo} inputMode="decimal" value={novo.quantidade}
+            <input className="acn-input" inputMode="decimal" value={novo.quantidade}
               onChange={e => setNovo(f => ({ ...f, quantidade: e.target.value }))} placeholder="Qtd" />
-            <select style={campo} value={novo.acao} onChange={e => setNovo(f => ({ ...f, acao: e.target.value }))}>
+            <select className="acn-input" value={novo.acao} onChange={e => setNovo(f => ({ ...f, acao: e.target.value }))}>
               <option value="adicionar">usa</option>
               <option value="remover">tira da lista</option>
             </select>
-            <select style={campo} value={novo.opcao_id} onChange={e => setNovo(f => ({ ...f, opcao_id: e.target.value }))}>
+            <select className="acn-input" value={novo.opcao_id} onChange={e => setNovo(f => ({ ...f, opcao_id: e.target.value }))}>
               <option value="">sempre, neste carro</option>
               {perguntas.flatMap(p => (p.opcoes || []).map(o => (
                 <option key={o.id} value={o.id}>{p.texto} → {o.rotulo}</option>
               )))}
             </select>
-            <button onClick={add}
-              style={{ fontSize: 9, fontWeight: 700, padding: '5px 12px', border: 'none', borderRadius: 4,
-                background: '#4f46e5', color: '#fff', cursor: 'pointer' }}>Adicionar</button>
+            <Botao pequeno variante="primario" onClick={add}>Adicionar</Botao>
           </div>
-          <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+          <div className="acn-ajuda">
             "tira da lista" é para a regra que <b>desfaz</b>. Quantidade 0 tira o item inteiro.
           </div>
         </div>
