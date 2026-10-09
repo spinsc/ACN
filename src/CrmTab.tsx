@@ -38,7 +38,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiPhoneOutline, mdiDomain, mdiAlertOutline,
   mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff,
   mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel,
-  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus } from '@mdi/js';
+  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
@@ -951,15 +951,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // (mesmo marcador usado nos campos do formulário e no card do quadro) — a
   // aba "auditoria" abaixo só existe pra quem quiser ver o histórico completo,
   // não é o mecanismo principal de aviso.
-  const tabLabel = (key: string, label: string) => camposNaoLidos.has(key) ? `${label} 🟡` : label;
+  // 12e41 (08/10/2026): o rótulo é só o nome; o ícone e o pontinho de "não visto" são desenhados pela barra de abas (antes o 🟡 ia dentro do texto)
   const TABS_CRM = [
-    { key:'andamento',    label: tabLabel('andamento', '📝 Andamento') },
-    { key:'cotacoes',     label:'💰 Cotações' },
-    { key:'formacao_precos', label:'💲 Formação de Preços' },
-    { key:'processo',     label: tabLabel('processo', '📂 Arquivos') },
-    { key:'custos',       label: tabLabel('custos', '💰 Custos e Docs Técnicos') },
-    { key:'informacoes',  label: tabLabel('informacoes', 'ℹ️ Informações Importantes') },
-    { key:'analise',      label:'🔬 Análise' },
+    { key:'andamento',    label:'Andamento', icone: mdiNoteTextOutline, naoLida: camposNaoLidos.has('andamento') },
+    { key:'cotacoes',     label:'Cotações', icone: mdiCashMultiple, naoLida: false },
+    { key:'formacao_precos', label:'Formação de Preços', icone: mdiCurrencyUsd, naoLida: false },
+    { key:'processo',     label:'Arquivos', icone: mdiFolderOpenOutline, naoLida: camposNaoLidos.has('processo') },
+    { key:'custos',       label:'Custos e Docs Técnicos', icone: mdiToolboxOutline, naoLida: camposNaoLidos.has('custos') },
+    { key:'informacoes',  label:'Informações Importantes', icone: mdiInformationOutline, naoLida: camposNaoLidos.has('informacoes') },
+    { key:'analise',      label:'Análise', icone: mdiMicroscope, naoLida: false },
   ] as const;
 
   useEffect(() => {
@@ -4389,8 +4389,8 @@ function ColunaRolavel({ children }: any) {
         </div>
       )}
       {modalAbrir && !abrirMinimized && (
-        <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1100, display:'flex' }}>
-          <div ref={abrirContainerRef} style={{ display:'flex', width:'100%', height:'100%' }}>
+        <div className="acn-crm-ab-fundo">
+          <div ref={abrirContainerRef} className="acn-crm-ab-raiz">
 
             {/* ── ESQUERDO: formulário editável ── */}
             {/* 12e40 (08/10/2026): só a aparência — classes acn-crm-ab-* no lugar do estilo solto, botões do sistema, campos acn-input. Os campos, textos, regras e gravações são os de antes. */}
@@ -4608,34 +4608,26 @@ function ColunaRolavel({ children }: any) {
             </div>
 
             {/* ── DIREITO: abas de documentos ── */}
-            <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden', ...abrirEstSplit.direita }}>
+            {/* 12e41 (08/10/2026): só a aparência — barra de abas do sistema, quadros e listas no molde das Licitações. As leituras, gravações, permissões e textos de erro são os de antes. */}
+            <div className="acn-crm-ab-dir" style={abrirEstSplit.direita}>
 
               {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
-              <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
-                {TABS_CRM.map(t => (
-                  <button key={t.key} onClick={() => setAbrirTabDir(t.key)}
-                    style={{ flex:'0 0 auto', padding:'8px 10px', border:'none',
-                      borderBottom: abrirTabDir===t.key ? '2px solid #0369a1' : '2px solid transparent',
-                      background:'none', fontWeight: abrirTabDir===t.key ? 700 : 400,
-                      color: abrirTabDir===t.key ? '#0369a1' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
-                    {t.label}
-                  </button>
-                ))}
+              <div className="acn-crm-ab-abas-barra">
+                <Abas className="acn-crm-ab-abas" ativa={abrirTabDir} onChange={(k) => setAbrirTabDir(k)}
+                  itens={TABS_CRM.map(t => ({ id: t.key, icone: t.icone, classe: t.naoLida ? 'destacada' : '',
+                    rotulo: <>{t.label}{t.naoLida && <i className="acn-crm-ab-aba-ponto" title="Alteração que você ainda não viu" />}</> }))} />
                 {abrirModoSplit === 'direita' && (
-                  <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, padding:'0 8px' }}>
-                    <span title={modalAbrir.titulo} style={{ fontSize:10, fontWeight:700, color:'#334155', maxWidth:260,
-                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{modalAbrir.titulo}</span>
+                  <div className="acn-crm-ab-abas-fim">
+                    <span title={modalAbrir.titulo} className="acn-crm-ab-abas-nome">{modalAbrir.titulo}</span>
                     <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} />
-                    <button onClick={() => setAbrirMinimized(true)} title="Minimizar"
-                      style={{ background:'none', border:'none', color:'#475569', fontSize:14, cursor:'pointer', padding:'2px 5px' }}>─</button>
-                    <button onClick={fecharModalAbrir} title="Fechar"
-                      style={{ background:'none', border:'none', color:'#475569', fontSize:16, cursor:'pointer', padding:'2px 5px' }}>✕</button>
+                    <Botao variante="discreto" pequeno icone={mdiMinus} title="Minimizar" aria-label="Minimizar" onClick={() => setAbrirMinimized(true)} />
+                    <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModalAbrir} />
                   </div>
                 )}
               </div>
 
               {/* Conteúdo */}
-              <div style={{ flex:1, overflowY:'auto', padding:14 }}>
+              <div className="acn-crm-ab-dir-corpo">
 
                 {/* ── COTAÇÕES ── */}
                 {abrirTabDir === 'cotacoes' && (
@@ -4647,7 +4639,7 @@ function ColunaRolavel({ children }: any) {
 
                 {/* ── FORMAÇÃO DE PREÇOS (embutida, já vinculada a este processo) ── */}
                 {(abrirTabDir === 'formacao_precos' || formacaoMontadaId === modalAbrir.id) && (
-                  <div style={abrirTabDir === 'formacao_precos' ? undefined : { display:'none' }}>
+                  <div className={abrirTabDir === 'formacao_precos' ? undefined : 'acn-crm-ab-oculto'}>
                     <FormacaoPrecosTab
                       key={modalAbrir.id}
                       currentUser={currentUser}
@@ -4660,7 +4652,7 @@ function ColunaRolavel({ children }: any) {
 
                 {/* ── ANÁLISE ── */}
                 {abrirTabDir === 'analise' && (
-                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  <div className="acn-crm-ab-aba">
 
                     {/* Solicitações com setores, pareceres e cancelamento — o
                         mesmo painel da Licitação (antes aqui só havia o badge
@@ -4674,73 +4666,56 @@ function ColunaRolavel({ children }: any) {
                       onSolicitarNova={() => setModalSolicitarAnalise(modalAbrir)}
                     />
 
-                    <hr style={{ border:'none', borderTop:'1px solid #e2e8f0', margin:'2px 0' }} />
+                    <hr className="acn-crm-ab-sep" />
 
                     {/* Área livre — nota + anexos */}
-                    <div style={{ background:'#faf5ff', border:'1px solid #d8b4fe', borderRadius:6, padding:10 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#7c3aed', marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>
-                        📝 Notas / Observações
+                    <div className="acn-quadro acn-crm-ab-quadro">
+                      <div className="acn-quadro-titulo acn-crm-ab-quadro-tit">
+                        <Icone path={mdiNoteTextOutline} size={14} />Notas / Observações
                       </div>
-                      <textarea
+                      <textarea className="acn-input"
                         value={abrirUploadDesc}
                         onChange={e => setAbrirUploadDesc(e.target.value)}
                         placeholder="Adicione observações da sua análise..."
                         rows={4}
-                        style={{ width:'100%', padding:'7px 9px', border:'1px solid #d8b4fe', borderRadius:4,
-                          fontSize:11, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit',
-                          background:'#fff', marginBottom:6 }}
                       />
-                      <div style={{ marginBottom:6 }}>
-                        <label style={{ fontSize:10, color:'#6b7280', display:'block', marginBottom:3 }}>📎 Anexar arquivo (opcional)</label>
-                        <input ref={abrirUploadRef} type="file"
-                          onChange={e => setAbrirUploadFile(e.target.files?.[0]||null)}
-                          style={{ fontSize:10, width:'100%' }} />
+                      <div className="acn-crm-ab-anexar">
+                        <label className="acn-label acn-crm-ab-rot-icone"><Icone path={mdiPaperclip} size={12} /> Anexar arquivo (opcional)</label>
+                        <input ref={abrirUploadRef} type="file" className="acn-crm-ab-arquivo"
+                          onChange={e => setAbrirUploadFile(e.target.files?.[0]||null)} />
                       </div>
-                      <button onClick={salvarAbrirDoc}
-                        disabled={abrirSalvandoDoc || (!abrirUploadFile && !abrirUploadDesc.trim())}
-                        style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4,
-                          padding:'5px 16px', fontWeight:700, fontSize:10, cursor:'pointer',
-                          opacity:(!abrirUploadFile&&!abrirUploadDesc.trim())?.5:1 }}>
-                        {abrirSalvandoDoc ? 'Salvando...' : '💾 Salvar Análise'}
-                      </button>
+                      <Botao variante="primario" pequeno icone={mdiContentSaveOutline} onClick={salvarAbrirDoc}
+                        disabled={abrirSalvandoDoc || (!abrirUploadFile && !abrirUploadDesc.trim())}>
+                        {abrirSalvandoDoc ? 'Salvando...' : 'Salvar Análise'}
+                      </Botao>
                     </div>
 
                     {/* Lista de registros salvos */}
                     {faixaErroAbrir}
                     {abrirDocs.length > 0 && (
-                      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:.4 }}>
-                          Histórico ({abrirDocs.length})
-                        </div>
+                      <div className="acn-crm-ab-lista">
+                        <div className="acn-quadro-titulo">Histórico ({abrirDocs.length})</div>
                         {abrirDocs.map((d,i) => (
-                          <div key={d.id||i} style={{
-                            background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
-                            border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`,
-                            borderRadius:5, padding:'8px 10px', borderLeft:'3px solid #7c3aed' }}>
-                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:6 }}>
-                              <div style={{ flex:1 }}>
-                                {d.conteudo && (
-                                  <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', marginBottom: d.url ? 4 : 0 }}>
-                                    <Linkify text={d.conteudo} />
-                                  </div>
-                                )}
-                                {d.url && (
-                                  <a href={d.url} target="_blank" rel="noopener noreferrer"
-                                    style={{ fontSize:10, color:'#7c3aed', wordBreak:'break-all', display:'flex', alignItems:'center', gap:3 }}>
-                                    📎 {d.nome || 'Arquivo'}
-                                  </a>
-                                )}
-                              </div>
-                              {currentUser?.perfil==='Admin' && (
-                                <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos',
-                                  (d.conteudo ? d.conteudo.slice(0,60) + (d.conteudo.length>60?'…':'') : d.nome) || 'este registro')}
-                                  style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', flexShrink:0 }}>✕</button>
+                          <div key={d.id||i} className={'acn-crm-ab-item' + (itemNaoLido(d.id) ? ' nao-lido' : '')}>
+                            <div className="acn-crm-ab-item-corpo">
+                              {d.conteudo && (
+                                <div className="acn-crm-ab-item-txt"><Linkify text={d.conteudo} /></div>
                               )}
+                              {d.url && (
+                                <a href={d.url} target="_blank" rel="noopener noreferrer" className="acn-crm-ab-item-arq">
+                                  <Icone path={mdiPaperclip} size={13} />{d.nome || 'Arquivo'}
+                                </a>
+                              )}
+                              <div className="acn-ajuda acn-crm-ab-item-meta">
+                                <span><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'}</span>
+                                <span><Icone path={mdiClockOutline} size={12} />{d.criado_em ? new Date(d.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                              </div>
                             </div>
-                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                              <span>👤 {d.criado_por_nome||'—'}</span>
-                              <span>🕒 {d.criado_em ? new Date(d.criado_em).toLocaleString('pt-BR') : '—'}</span>
-                            </div>
+                            {currentUser?.perfil==='Admin' && (
+                              <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Excluir este registro" aria-label="Excluir este registro"
+                                onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos',
+                                  (d.conteudo ? d.conteudo.slice(0,60) + (d.conteudo.length>60?'…':'') : d.nome) || 'este registro')} />
+                            )}
                           </div>
                         ))}
                       </div>
@@ -4753,47 +4728,46 @@ function ColunaRolavel({ children }: any) {
 
                 {/* ── ANDAMENTO ── */}
                 {abrirTabDir === 'andamento' && (
-                  <div>
-                    <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:10, marginBottom:10 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#6d28d9', marginBottom:5 }}>✏️ Nova atualização</div>
+                  <div className="acn-crm-ab-aba">
+                    <div className="acn-quadro tom-ok acn-crm-ab-quadro">
+                      <div className="acn-crm-ab-nova-tit"><Icone path={mdiPencilOutline} size={14} />Nova atualização</div>
                       <MencaoTextarea value={abrirNovoText} onChange={v => setAbrirNovoText(v)}
                         placeholder="Descreva o andamento... use @Nome para mencionar alguém"
-                        rows={3} style={{ border:'1px solid #c4b5fd', fontSize:11, marginBottom:6 }} />
-                      <button onClick={salvarAbrirAndamento} disabled={abrirSalvandoDoc || !abrirNovoText.trim()}
-                        style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
-                          fontWeight:700, fontSize:10, cursor:'pointer', opacity:abrirNovoText.trim()?1:.5 }}>
-                        {abrirSalvandoDoc ? 'Salvando...' : '+ Registrar'}
-                      </button>
+                        rows={3} style={{ fontSize:12 }} />
+                      <Botao variante="primario" pequeno icone={mdiPlus} onClick={salvarAbrirAndamento} disabled={abrirSalvandoDoc || !abrirNovoText.trim()}>
+                        {abrirSalvandoDoc ? 'Salvando...' : 'Registrar'}
+                      </Botao>
                     </div>
                     {faixaErroAbrir}
-                    <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
+                    <div className="acn-crm-ab-lista">
                       {abrirAndamentoHist.length === 0 && !erroAbrir && (
-                        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:'10px 0' }}>Nenhuma atualização registrada ainda.</div>
+                        <div className="acn-empty acn-crm-ab-vazio">Nenhuma atualização registrada ainda.</div>
                       )}
                       {abrirAndamentoHist.map((h,i) => (
-                        <div key={h.id||i} style={{ padding:'8px 10px',
-                          background: itemNaoLido(h.id) ? '#fefce8' : '#fff',
-                          border: `1px solid ${itemNaoLido(h.id) ? '#fde047' : '#e2e8f0'}`,
-                          borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
+                        <div key={h.id||i} className={'acn-crm-ab-item andamento' + (itemNaoLido(h.id) ? ' nao-lido' : '')}>
                           {editandoAndId === h.id ? (
-                            <EdicaoDeAtualizacao texto={editandoAndTexto} onChange={setEditandoAndTexto}
-                              onSalvar={salvarEdicaoAndCrm} onCancelar={() => { setEditandoAndId(null); setEditandoAndTexto(''); }} />
+                            <div className="acn-crm-ab-item-corpo">
+                              <EdicaoDeAtualizacao texto={editandoAndTexto} onChange={setEditandoAndTexto}
+                                onSalvar={salvarEdicaoAndCrm} onCancelar={() => { setEditandoAndId(null); setEditandoAndTexto(''); }} />
+                            </div>
                           ) : (<>
-                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                              <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}><Linkify text={h.texto} /></div>
+                            <div className="acn-crm-ab-item-corpo">
+                              <div className="acn-crm-ab-item-txt"><Linkify text={h.texto} /></div>
+                              <div className="acn-ajuda acn-crm-ab-item-meta">
+                                <span><Icone path={mdiAccountOutline} size={12} />{h.usuario_nome||'—'}</span>
+                                <span><Icone path={mdiClockOutline} size={12} />{h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                                <MarcaAtualizacaoEditada editadoEm={h.editado_em} editadoPor={h.editado_por} />
+                              </div>
+                            </div>
+                            <div className="acn-crm-ab-item-acoes">
                               {podeEditarAtualizacao(currentUser, h.usuario_nome) && (
-                                <button onClick={() => { setEditandoAndId(h.id); setEditandoAndTexto(h.texto || ''); }} title="Editar esta atualização" aria-label="Editar esta atualização"
-                                  style={{ background:'none', border:'none', color:'#64748b', fontSize:11, cursor:'pointer', marginLeft:6 }}>✎</button>
+                                <Botao variante="discreto" pequeno icone={mdiPencilOutline} title="Editar esta atualização" aria-label="Editar esta atualização"
+                                  onClick={() => { setEditandoAndId(h.id); setEditandoAndTexto(h.texto || ''); }} />
                               )}
                               {currentUser?.perfil==='Admin' && (
-                                <button onClick={() => excluirAbrirDoc(h.id,'crm_historico')}
-                                  style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
+                                <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Excluir esta atualização" aria-label="Excluir esta atualização"
+                                  onClick={() => excluirAbrirDoc(h.id,'crm_historico')} />
                               )}
-                            </div>
-                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                              <span>👤 {h.usuario_nome||'—'}</span>
-                              <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
-                              <MarcaAtualizacaoEditada editadoEm={h.editado_em} editadoPor={h.editado_por} />
                             </div>
                           </>)}
                         </div>
@@ -4806,54 +4780,42 @@ function ColunaRolavel({ children }: any) {
 
                 {/* ── DEMAIS ABAS (documentos) ── */}
                 {abrirTabDir !== 'andamento' && abrirTabDir !== 'analise' && abrirTabDir !== 'cotacoes' && (
-                  <div>
-                    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:10 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:6 }}>
-                        + Adicionar em {TABS_CRM.find(t=>t.key===abrirTabDir)?.label}
+                  <div className="acn-crm-ab-aba">
+                    <div className="acn-quadro acn-crm-ab-quadro">
+                      <div className="acn-quadro-titulo acn-crm-ab-quadro-tit">
+                        <Icone path={mdiPlus} size={14} />Adicionar em {TABS_CRM.find(t=>t.key===abrirTabDir)?.label}
                       </div>
-                      <div style={{ marginBottom:6 }}>
-                        <input ref={abrirUploadRef} type="file"
-                          onChange={e => setAbrirUploadFile(e.target.files?.[0]||null)}
-                          style={{ fontSize:10, width:'100%', marginBottom:4 }} />
-                        <input placeholder="Legenda / descrição (opcional)"
-                          value={abrirUploadDesc} onChange={e => setAbrirUploadDesc(e.target.value)}
-                          style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
-                      </div>
-                      <button onClick={salvarAbrirDoc} disabled={abrirSalvandoDoc || (!abrirUploadFile && !abrirUploadDesc.trim())}
-                        style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
-                          fontWeight:700, fontSize:10, cursor:'pointer', opacity:(!abrirUploadFile&&!abrirUploadDesc.trim())?.5:1 }}>
-                        {abrirSalvandoDoc ? 'Salvando...' : '+ Salvar'}
-                      </button>
+                      <input ref={abrirUploadRef} type="file" className="acn-crm-ab-arquivo"
+                        onChange={e => setAbrirUploadFile(e.target.files?.[0]||null)} />
+                      <input className="acn-input" placeholder="Legenda / descrição (opcional)"
+                        value={abrirUploadDesc} onChange={e => setAbrirUploadDesc(e.target.value)} />
+                      <Botao variante="primario" pequeno icone={mdiPlus} onClick={salvarAbrirDoc} disabled={abrirSalvandoDoc || (!abrirUploadFile && !abrirUploadDesc.trim())}>
+                        {abrirSalvandoDoc ? 'Salvando...' : 'Salvar'}
+                      </Botao>
                     </div>
                     {faixaErroAbrir}
-                    <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
+                    <div className="acn-crm-ab-lista">
                       {abrirDocs.length === 0 && !erroAbrir && (
-                        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:16 }}>Nenhum documento registrado.</div>
+                        <div className="acn-empty acn-crm-ab-vazio">Nenhum documento registrado.</div>
                       )}
                       {abrirDocs.map((d,i) => (
-                        <div key={d.id||i} style={{
-                          background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
-                          border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`,
-                          borderRadius:5, padding:'8px 10px' }}>
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                            <div style={{ flex:1 }}>
-                              {d.url && (
-                                <a href={d.url} target="_blank" rel="noopener noreferrer"
-                                  style={{ fontSize:11, color:'#0369a1', fontWeight:600, display:'block', marginBottom:2 }}>
-                                  📎 {d.nome || 'Arquivo'}
-                                </a>
-                              )}
-                              {d.conteudo && <div style={{ fontSize:10, color:'#475569', whiteSpace:'pre-wrap' }}><Linkify text={d.conteudo} /></div>}
-                            </div>
-                            {currentUser?.perfil==='Admin' && (
-                              <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos')}
-                                style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
+                        <div key={d.id||i} className={'acn-crm-ab-item' + (itemNaoLido(d.id) ? ' nao-lido' : '')}>
+                          <div className="acn-crm-ab-item-corpo">
+                            {d.url && (
+                              <a href={d.url} target="_blank" rel="noopener noreferrer" className="acn-crm-ab-item-arq">
+                                <Icone path={mdiPaperclip} size={13} />{d.nome || 'Arquivo'}
+                              </a>
                             )}
+                            {d.conteudo && <div className="acn-crm-ab-item-txt"><Linkify text={d.conteudo} /></div>}
+                            <div className="acn-ajuda acn-crm-ab-item-meta">
+                              <span><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'}</span>
+                              <span><Icone path={mdiClockOutline} size={12} />{d.criado_em ? new Date(d.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                            </div>
                           </div>
-                          <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                            <span>👤 {d.criado_por_nome||'—'}</span>
-                            <span>🕒 {d.criado_em ? new Date(d.criado_em).toLocaleString('pt-BR') : '—'}</span>
-                          </div>
+                          {currentUser?.perfil==='Admin' && (
+                            <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Excluir este registro" aria-label="Excluir este registro"
+                              onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos')} />
+                          )}
                         </div>
                       ))}
                     </div>

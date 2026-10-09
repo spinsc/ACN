@@ -2652,3 +2652,44 @@ html body .acn-label.acn-crm-ab-rot-icone { display: flex; align-items: center; 
 .acn-crm-ab-divisor { width: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: col-resize; background: var(--acn-line); transition: background .15s; }
 .acn-crm-ab-divisor.arrastando { background: var(--acn-info-soft); }
 .acn-crm-ab-divisor i { width: 2px; height: 40px; border-radius: 1px; background: var(--acn-muted); opacity: .5; }
+
+/* Card aberto do CRM — painel direito, as abas (12e41, 08/10/2026). Só aparência; as leituras, gravações e permissões são as de antes. */
+.acn-crm-ab-dir { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--acn-canvas); }
+body.dark .acn-crm-ab-dir { background: #0f172a; }
+.acn-crm-ab-abas-barra { display: flex; align-items: flex-start; flex-shrink: 0; padding: 0 12px; background: var(--acn-surface); border-bottom: 1px solid var(--acn-line); }
+body.dark .acn-crm-ab-abas-barra { background: #1e293b; border-color: #334155; }
+html body .acn-abas.acn-crm-ab-abas { flex: 1; flex-wrap: wrap !important; overflow-x: visible; gap: 0 16px; border-bottom: 0; }
+.acn-crm-ab-abas .acn-aba { font-size: 12px; white-space: nowrap; }
+.acn-crm-ab-abas .acn-aba.destacada { padding-left: 6px; padding-right: 6px; font-weight: 700; color: #92400e; background: #fef9c3; }
+body.dark .acn-crm-ab-abas .acn-aba.destacada { color: #fde68a; background: rgba(212, 161, 6, .2); }
+.acn-crm-ab-aba-ponto { display: inline-block; width: 7px; height: 7px; margin-left: 5px; border-radius: 50%; vertical-align: middle; background: var(--acn-bad); box-shadow: 0 0 0 2px var(--acn-bad-soft); }
+.acn-crm-ab-abas-fim { display: flex; align-items: center; gap: 6px; margin-left: auto; padding: 4px 0 4px 8px; }
+.acn-crm-ab-abas-nome { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--acn-text); }
+.acn-crm-ab-dir-corpo { flex: 1; overflow-y: auto; padding: 14px; }
+.acn-crm-ab-oculto { display: none; }
+.acn-crm-ab-aba { display: flex; flex-direction: column; gap: 10px; }
+.acn-quadro.acn-crm-ab-quadro { margin: 0; gap: 6px; }
+.acn-crm-ab-quadro-tit, .acn-crm-ab-nova-tit { display: flex; align-items: center; gap: 4px; }
+.acn-crm-ab-nova-tit { font-size: 12px; font-weight: 700; color: var(--acn-ok); }
+.acn-crm-ab-quadro > .acn-b { align-self: flex-start; }
+.acn-crm-ab-anexar { display: grid; gap: 3px; }
+.acn-crm-ab-arquivo { width: 100%; font-size: 12px; }
+.acn-crm-ab-sep { width: 100%; border: 0; border-top: 1px solid var(--acn-line); margin: 2px 0; }
+.acn-crm-ab-lista { display: flex; flex-direction: column; gap: 8px; }
+.acn-crm-ab-vazio { text-align: center; }
+.acn-crm-ab-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-crm-ab-item.andamento { border-left: 3px solid var(--acn-info); }
+.acn-crm-ab-item.nao-lido { background: #fefce8; border-color: #d4a106; }
+body.dark .acn-crm-ab-item { background: #1e293b; border-color: #334155; }
+body.dark .acn-crm-ab-item.andamento { border-left-color: #60a5fa; }
+body.dark .acn-crm-ab-item.nao-lido { background: rgba(212, 161, 6, .14); border-color: #d4a106; }
+.acn-crm-ab-item-corpo { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.acn-crm-ab-item-txt { font-size: 13px; line-height: 1.5; color: var(--acn-ink); white-space: pre-wrap; word-break: break-word; }
+body.dark .acn-crm-ab-item-txt { color: #e2e8f0; }
+.acn-crm-ab-item-arq { display: inline-flex; align-items: center; gap: 4px; justify-self: start; font-size: 12px; font-weight: 600; color: var(--acn-info); word-break: break-all; }
+.acn-crm-ab-item-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+.acn-crm-ab-item-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.acn-crm-ab-item-acoes { display: flex; gap: 4px; flex-shrink: 0; margin-left: 6px; }
+/* o fundo escuro e a raiz do card aberto (12e41): acima do card minimizado e do resto da tela */
+.acn-crm-ab-fundo { position: fixed; inset: 0; z-index: 1100; display: flex; background: rgba(0, 0, 0, .53); }
+.acn-crm-ab-raiz { display: flex; width: 100%; height: 100%; }
