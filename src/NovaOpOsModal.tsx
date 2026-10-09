@@ -441,6 +441,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    oportunidadeVinculada?.id || null,
+          // 09/10/2026 (pedido do usuário): a OP lançada a partir de uma licitação Vencida guarda de qual licitação veio — o prefill da Licitação (botão "Lançar OP" e "Gerar OP"
+          // do pedido) já trazia o id, mas ele só servia para carregar os itens da formação de preços e nunca era gravado
+          licitacao_id:           form.licitacao_id || null,
           servico_terceiro:       !ehVendaEnvio && !!form.servico_terceiro,
           ...(!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length > 0
             ? { tipos_servico_terceiro: form.tipos_servico_terceiro }

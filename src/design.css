@@ -3651,3 +3651,6 @@ html body .acn-b.acn-avs-publicar:disabled { opacity: .4; }
 .acn-avs-acoes { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 html body .acn-b.acn-avs-ed, html body .acn-b.acn-avs-ex { height: auto; min-height: 0; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; line-height: normal; }
 html body .acn-b.acn-avs-ed { background: var(--acn-brand-soft); color: var(--acn-brand-ink); border-color: color-mix(in srgb, var(--acn-brand) 40%, transparent); }
+
+/* ── Lançar OP da licitação Vencida (09/10/2026): as OPs que a licitação já gerou, ao lado do botão ── */
+.acn-lic-ops { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

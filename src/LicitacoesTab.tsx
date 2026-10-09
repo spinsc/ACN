@@ -23,7 +23,8 @@ import { podeEditarAtualizacao } from './utils/permissoes';
 import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
-import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
+import NovaOpOsModal from './NovaOpOsModal';
+import { mdiClipboardTextOutline, mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
   mdiChevronDown, mdiChevronRight, mdiPencilOutline, mdiEmailOutline, mdiCellphone, mdiPhoneOutline, mdiPaperclip, mdiAccountOutline, mdiClockOutline,
   mdiContentSaveOutline, mdiAlertOutline, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline, mdiFormatStrikethrough, mdiPalette, mdiFormatColorHighlight,
   mdiLinkVariant, mdiImageOutline, mdiTablePlus, mdiTableRemove, mdiWindowMinimize, mdiTrophyOutline, mdiCheckCircleOutline, mdiPackageVariantClosed,
@@ -1530,6 +1531,79 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ainda é o antigo — por isso vale também o painel de ações da vitória.
   const ehVencida = s === 'Vencida' || showAcoesVencida;
 
+  // ── Lançar OP a partir da licitação Vencida ───────────────────────────────
+  // Pedido do usuário em 09/10/2026: a licitação Vencida segue o mesmo caminho do Comercial para criar a OP ("Lançar OP" do card: abre a Nova OP já preenchida, a pessoa
+  // confere e salva). Antes só dava pelo "Contrato e Entregas", depois de cadastrar itens e pedidos — e nenhuma das 7 licitações vencidas de hoje tinha isso.
+  // Decidido com o usuário: botão manual (não nasce sozinha); o PV é digitado na própria Nova OP (a licitação não tem campo de PV); a OP grava `licitacao_id`.
+  // Daí saem a lista das OPs que esta licitação já gerou e o aviso antes de lançar uma segunda (como o "Lançar outra OP" do Comercial).
+  const [novaOpAberta, setNovaOpAberta] = useState(false);
+  const [opsDaLicit, setOpsDaLicit] = useState<string[]>([]);
+  const lerOpsDaLicit = async (): Promise<string[] | null> => {
+    const [a, b] = await Promise.all([
+      supabase.from('oples').select('opl').eq('licitacao_id', licit.id),
+      supabase.from('licitacao_pedidos').select('opl').eq('licitacao_id', licit.id).not('opl', 'is', null),
+    ]);
+    if (a.error || b.error) return null;
+    const base = (x: any) => String(x?.opl || '').replace(/\/\d+$/, '');   // lote (/01, /02…): conta pelo número base
+    return [...new Set([...(a.data || []).map(base), ...(b.data || []).map(base)].filter(Boolean))].sort();
+  };
+  useEffect(() => {
+    if (!ehVencida) return;
+    let vivo = true;
+    lerOpsDaLicit().then(l => { if (vivo && l) setOpsDaLicit(l); });
+    return () => { vivo = false; };
+  }, [licit.id, ehVencida]);
+  const lancarOp = umaVez('lancar-op', async () => {
+    const ja = await lerOpsDaLicit();
+    // sem conseguir conferir se já existe OP, não abre (podia lançar em duplicidade)
+    if (ja === null) { mostrarAviso('Não foi possível conferir as OPs desta licitação\nTente de novo em instantes.', 'erro'); return; }
+    setOpsDaLicit(ja);
+    if (ja.length) {
+      const txt = ja.length === 1 ? `a OP ${ja[0]}` : `as OPs ${ja.join(', ')}`;
+      if (!await confirmar(`Esta licitação já tem ${txt}.\n\nLançar mais uma OP para a mesma licitação?`)) return;
+    }
+    const f = formEdit;   // o valor atual do formulário (`licit` é a cópia da abertura)
+    const fe = String(f.faturamento_empresa || '');
+    const objeto = String(licit.tipo_objeto || licit.objeto_principal || '').trim();
+    const prefill: any = {
+      cliente_nome:   licit.nome_projeto || '',          // coluna legada: é o NOME DO ÓRGÃO (a mesma leitura do "Gerar OP" do pedido)
+      origem_venda:   'licitacao',
+      licitacao_id:   licit.id,                           // liga a OP à licitação e habilita "Carregar da formação oficial" nos itens vendidos
+      fluxo_entrega:  f.fluxo_entrega || '',
+      destino_cidade: f.destino_cidade || '', destino_uf: f.destino_uf || '', destino_cep: f.destino_cep || '',
+      // "ACN e Detech" não diz qual das duas fatura: fica no padrão do formulário para a pessoa escolher
+      ...(fe === 'ACN' || fe === 'Detech' ? { empresa: fe } : {}),
+      // o prazo da licitação é texto livre ("30 dias após o empenho"), não data: vai nas observações, e a data da OP a pessoa informa
+      observacoes: [`Licitação ${licit.numero || ''}`.trim(), objeto || null, f.prazo_entrega ? `Prazo da licitação: ${f.prazo_entrega}` : null].filter(Boolean).join(' · '),
+    };
+    try { localStorage.setItem('acn_nova_op_prefill', JSON.stringify(prefill)); } catch { /* o prefill é conveniência: se falhar, a Nova OP abre em branco */ }
+    setNovaOpAberta(true);
+  });
+  const aoLancarOp = async (op: any) => {
+    if (!op?.id) return;
+    const base = String(op.opl || '').replace(/\/\d+$/, '');
+    // o histórico é lido de novo do banco: `licit` é a cópia da abertura e pode estar velha (ex.: a licitação acabou de virar Vencida nesta mesma janela)
+    const { data: atual, error: errLer } = await supabase.from('licitacoes').select('historico').eq('id', licit.id).maybeSingle();
+    if (errLer || !atual) {
+      mostrarAviso(`A OP ${base} foi criada\nMas não deu para registrar no histórico da licitação${errLer ? ` (${errLer.message})` : ''}.`, 'atencao');
+    } else {
+      const agora = new Date().toISOString();
+      const hist = [...(Array.isArray(atual.historico) ? atual.historico : []), { status: 'OP lançada', usuario: currentUser?.nome, data: agora, obs: `OP ${base}` }];
+      const { error } = await supabase.from('licitacoes').update({ historico: hist, atualizado_em: agora }).eq('id', licit.id);
+      if (error) mostrarAviso(`A OP ${base} foi criada\nMas não deu para registrar no histórico da licitação (${error.message}).`, 'atencao');
+      else setLicit((l: any) => ({ ...l, historico: hist }));
+    }
+    const l = await lerOpsDaLicit();
+    if (l) setOpsDaLicit(l);
+    onRefresh();
+  };
+  const opsLancadas = opsDaLicit.length > 0 && (
+    <div className="acn-lic-ops">
+      <span className="acn-ajuda">OPs lançadas:</span>
+      {opsDaLicit.map(n => <Selo key={n} familia="ok" ponto={false}>{n}</Selo>)}
+    </div>
+  );
+
   const botaoProximoStatus = () => {
     if (s === 'Aberta' && isAnalista) return { label:'Iniciar Andamento', next:'Em Andamento' };   // o foguete agora é o ícone do botão
     return null;
@@ -1886,6 +1960,12 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 onClose={() => setModalCompraAberto(false)} onCriada={aoCriarCompraLicit} />
             )}
 
+            {novaOpAberta && (
+              <NovaOpOsModal isOpen currentUser={currentUser}
+                onClose={() => setNovaOpAberta(false)}
+                onSaved={(op: any) => aoLancarOp(op)} />
+            )}
+
             {showAcoesVencida && (
               <div className="acn-quadro tom-ok acn-lic-vencida">
                 <div className="acn-lic-vencida-tit"><Icone path={mdiTrophyOutline} size={18} />VENCIDA! Emita os documentos:</div>
@@ -1896,6 +1976,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     Emitir Pedido de Compra
                   </Botao>
                 )}
+                <Botao icone={mdiClipboardTextOutline} className="acn-botao-cheio" onClick={lancarOp}>
+                  Lançar OP
+                </Botao>
+                {opsLancadas}
                 <Botao icone={mdiPackageVariantClosed} className="acn-botao-cheio" onClick={() => { setTabDir('entregas'); if (modoSplit === 'esquerda') setModoSplit('dividido'); }}>
                   Contrato e Entregas — registrar pedidos e gerar OPs
                 </Botao>
@@ -1933,6 +2017,14 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <Botao variante="primario" icone={mdiContentSaveOutline} className="acn-lic-salvar" onClick={salvarForm} disabled={salvandoForm}>
                   {salvandoForm ? 'Salvando...' : 'Salvar Alterações'}
                 </Botao>
+
+                {/* Licitação Vencida: lançar a OP pelo mesmo caminho do Comercial (09/10/2026) */}
+                {ehVencida && (
+                  <>
+                    <Botao icone={mdiClipboardTextOutline} onClick={lancarOp}>Lançar OP</Botao>
+                    {opsLancadas}
+                  </>
+                )}
 
                 {btnProximo && (
                   <Botao icone={mdiRocketLaunchOutline} onClick={() => setConfirmStatus(btnProximo.next)}>
