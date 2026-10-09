@@ -3509,3 +3509,34 @@ html body .acn-b.acn-vcd-modo { height: auto; min-height: 0; margin-left: auto; 
 .acn-vcd-fichas-corpo { overflow-x: auto; }
 .acn-vcd-busca { width: 300px; max-width: 100%; }
 .acn-fip-tit svg, .acn-fv-tit svg, .acn-fip-passo svg, .acn-vcd-fichas svg { display: inline-block !important; vertical-align: -2px; }
+
+/* Campos de texto compartilhados (12e56, 09/10/2026): caixa de texto com @menção, campo com formatação (e a barra que aparece ao selecionar), a lista
+   de sugestões de menção (usada pelos dois), os participantes e a edição de atualização. Só aparência. */
+.acn-mtx-raiz { position: relative; width: 100%; }
+html body textarea.acn-input.acn-mtx { width: 100%; padding: 6px 8px; box-sizing: border-box; resize: vertical; font-family: inherit; font-size: 12px; line-height: 1.5; }
+.acn-sug { max-height: 240px; overflow-y: auto; background: var(--acn-surface); border: 1.5px solid color-mix(in srgb, var(--acn-info) 35%, transparent); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .2); }
+.acn-sug-tit { padding: 5px 10px; font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--acn-info); background: var(--acn-info-soft); border-bottom: 1px solid color-mix(in srgb, var(--acn-info) 25%, transparent); border-radius: 8px 8px 0 0; }
+.acn-sug-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; color: var(--acn-ink); cursor: pointer; background: var(--acn-surface); border-bottom: 1px solid var(--acn-line-soft); }
+.acn-sug-item:hover { background: var(--acn-info-soft); }
+.acn-sug-av { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; font-size: 12px; font-weight: 700; color: #fff; background: var(--acn-brand); border-radius: 50%; }
+.acn-sug-nome { font-weight: 600; }
+.acn-sug-tit svg { display: inline-block !important; vertical-align: -2px; }
+.acn-rti-raiz { position: relative; }
+.acn-rti { padding: 5px 8px; font-size: 12px; color: var(--acn-text); word-break: break-word; white-space: pre-wrap; overflow: visible; box-sizing: border-box; outline: none; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 4px; }
+.acn-rti:focus { border-color: var(--acn-brand); }
+.acn-rti.uma-linha { white-space: nowrap; overflow: hidden; }
+.acn-rti.desativado { background: var(--acn-surface-2); }
+[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--acn-muted); pointer-events: none; }
+.acn-rti-barra { position: fixed; z-index: 2000; display: flex; gap: 1px; padding: 3px; transform: translateX(-50%); background: #1e293b; border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
+html body .acn-b.acn-rti-bt { height: auto; min-height: 0; padding: 5px 8px; font-size: 12px; line-height: 1; color: #fff; background: transparent; border: 0; }
+html body .acn-b.acn-rti-bt:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+html body .acn-b.acn-rti-bt.negrito { font-weight: 700; }
+html body .acn-b.acn-rti-bt.sublinhado { text-decoration: underline; }
+html body .acn-b.acn-rti-bt.tachado { text-decoration: line-through; }
+.acn-ptp-linha { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-ptp-sel { flex: 1; min-width: 160px; }
+html body .modal-box.acn-modal-cadastro.acn-ptp-jan { width: min(460px, 95vw); max-width: 460px; }
+html body .acn-participante-chip .acn-b.acn-ptp-x { width: 16px; height: 16px; min-height: 0; padding: 0; color: inherit; opacity: .7; }
+html body .acn-participante-chip .acn-b.acn-ptp-x:hover:not(:disabled) { opacity: 1; }
+.acn-ate-marca { font-style: italic; cursor: help; opacity: .8; }
+.acn-ate-acoes { display: flex; gap: 6px; margin-top: 6px; }

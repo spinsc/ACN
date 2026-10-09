@@ -8,6 +8,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { combinaBusca } from './SearchUtils';
+import Icone from './Icone';
+import { mdiAccountOutline } from '@mdi/js';
 
 // ── Cache singleton – carrega 1x e compartilha entre todas as instâncias ─────
 let _cache: any[]         = [];
@@ -305,8 +307,10 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
     }, 10);
   };
 
+  // 12e56 (09/10/2026): só aparência — o campo é o do guia (acn-input) e a lista de sugestões, que também é a do RichTextInput, ganhou classes (acn-sug-*) e o
+  // realce ao passar o mouse passou para o CSS; `style` (de quem chama) e `dropStyle` (a posição calculada) seguem valendo, repassados como antes
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div className="acn-mtx-raiz">
       <textarea
         ref={taRef}
         value={value}
@@ -314,60 +318,28 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
         onKeyUp={handleKeyUp}
         rows={rows}
         placeholder={placeholder ?? 'Digite... use @Nome para mencionar alguém'}
-        style={{
-          width: '100%', padding: '6px 8px',
-          border: '1px solid #d1d5db', borderRadius: 4,
-          fontSize: 10, boxSizing: 'border-box',
-          resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5,
-          ...style,
-        }}
+        className="acn-input acn-mtx"
+        style={style}
       />
 
       {/* Dropdown — renderizado via portal em fixed para escapar de overflow:hidden */}
       {showDrop && sugestoes.length > 0 && typeof document !== 'undefined' &&
         (() => {
           const el = (
-            <div
-              ref={dropRef}
-              style={{
-                ...dropStyle,
-                background: '#fff',
-                border: '1.5px solid #c7d2fe',
-                borderRadius: 8,
-                boxShadow: '0 8px 28px rgba(0,0,0,.2)',
-                maxHeight: 240,
-                overflowY: 'auto',
-              }}
-            >
-              <div style={{
-                padding: '5px 10px', fontSize: 9, color: '#6366f1', fontWeight: 700,
-                borderBottom: '1px solid #e0e7ff', background: '#f5f3ff',
-                borderRadius: '8px 8px 0 0', letterSpacing: .3,
-              }}>
-                👤 MENCIONAR USUÁRIO
+            <div ref={dropRef} className="acn-sug" style={dropStyle}>
+              <div className="acn-sug-tit">
+                <Icone path={mdiAccountOutline} size={12} /> MENCIONAR USUÁRIO
               </div>
               {sugestoes.map(u => (
                 <div
                   key={u.id}
+                  className="acn-sug-item"
                   onMouseDown={e => { e.preventDefault(); selecionar(u); }}
-                  style={{
-                    padding: '8px 12px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    fontSize: 11, borderBottom: '1px solid #f1f5f9',
-                    background: '#fff',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#eef2ff')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                 >
-                  <span style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: '#6366f1', color: 'white', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700,
-                  }}>
+                  <span className="acn-sug-av">
                     {(u.nome || '?')[0].toUpperCase()}
                   </span>
-                  <span style={{ fontWeight: 600 }}>@{u.nome}</span>
+                  <span className="acn-sug-nome">@{u.nome}</span>
                 </div>
               ))}
             </div>

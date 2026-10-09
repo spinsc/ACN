@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmarRemocao } from './Feedback';
 import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiClose, mdiAccountGroupOutline } from '@mdi/js';
 
 export type Participante = { email: string; nome: string };
 
@@ -90,8 +92,8 @@ export function ParticipantesPicker({ value, onChange, donoEmail, rotulo = 'Quem
           {escolhidos.map(p => (
             <span key={p.email} className="acn-participante-chip">
               {p.nome}
-              <button type="button" aria-label={'Tirar ' + p.nome + ' dos participantes'} title="Tirar"
-                onClick={async () => { if (!await confirmarRemocao(p.nome + ' dos participantes')) return; onChange(escolhidos.filter(x => !igual(x.email, p.email))); }}>✕</button>
+              <Botao variante="discreto" pequeno icone={mdiClose} className="acn-ptp-x" aria-label={'Tirar ' + p.nome + ' dos participantes'} title="Tirar"
+                onClick={async () => { if (!await confirmarRemocao(p.nome + ' dos participantes')) return; onChange(escolhidos.filter(x => !igual(x.email, p.email))); }} />
             </span>
           ))}
         </div>
@@ -99,8 +101,8 @@ export function ParticipantesPicker({ value, onChange, donoEmail, rotulo = 'Quem
       {erro
         ? <div className="acn-ajuda acn-txt-erro">Não foi possível ler a lista de usuários ({erro}).</div>
         : (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <select className="acn-input" style={{ flex: 1, minWidth: 160 }} value="" aria-label="Adicionar participante"
+          <div className="acn-ptp-linha">
+            <select className="acn-input acn-ptp-sel" value="" aria-label="Adicionar participante"
               onChange={e => { const u = usuarios.find((x: any) => String(x.id) === e.target.value); if (u) onChange([...escolhidos, { email: u.email, nome: u.nome }]); }}>
               <option value="">+ Adicionar pessoa…</option>
               {disponiveis.map((u: any) => <option key={u.id} value={String(u.id)}>{u.nome}</option>)}
@@ -128,7 +130,7 @@ export function ListaParticipantes({ item, usuario }: { item: any; usuario?: any
   if (!ps.length) return null;
   return (
     <span title={ps.map(p => p.nome).join(', ')}>
-      👥 {ps.map(p => p.nome).join(', ')}{usuario && ehParticipante(item, usuario) ? ' (você)' : ''}
+      <Icone path={mdiAccountGroupOutline} size={13} /> {ps.map(p => p.nome).join(', ')}{usuario && ehParticipante(item, usuario) ? ' (você)' : ''}
     </span>
   );
 }
@@ -147,14 +149,19 @@ export function ModalEditarParticipantes({ titulo, inicial, donoEmail, onSalvar,
     if (msg) { setErro(String(msg)); return; }
     onClose();
   };
+  // 12e56 (09/10/2026): só aparência — a janela passou para o molde do guia (cabeçalho, corpo e rodapé); o que grava e quando fecha não mudou
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 460 }} role="dialog" aria-label="Participantes">
-        <div className="modal-title">👥 Participantes — {titulo}</div>
-        <div className="acn-ajuda" style={{ marginBottom: 8 }}>Quem é adicionado vê este item na agenda e no calendário e recebe um aviso. Só o dono do item (e a gerência) edita.</div>
-        <ParticipantesPicker value={lista} onChange={setLista} donoEmail={donoEmail} rotulo="Participantes" />
-        {erro && <div className="acn-txt-erro" style={{ marginTop: 8 }}>{erro}</div>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+      <div className="modal-box acn-modal-cadastro acn-ptp-jan" role="dialog" aria-label="Participantes">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiAccountGroupOutline} size={18} />Participantes — {titulo}</span>
+        </div>
+        <div className="acn-modal-corpo">
+          <div className="acn-ajuda">Quem é adicionado vê este item na agenda e no calendário e recebe um aviso. Só o dono do item (e a gerência) edita.</div>
+          <ParticipantesPicker value={lista} onChange={setLista} donoEmail={donoEmail} rotulo="Participantes" />
+          {erro && <div className="acn-txt-erro">{erro}</div>}
+        </div>
+        <div className="acn-modal-rodape">
           <Botao onClick={onClose} disabled={salvando}>Cancelar</Botao>
           <Botao variante="primario" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</Botao>
         </div>

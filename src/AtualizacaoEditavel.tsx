@@ -16,7 +16,7 @@ export function MarcaAtualizacaoEditada({ editadoEm, editadoPor }: { editadoEm?:
   if (!editadoEm) return null;
   return (
     <span title={`Editada${editadoPor ? ' por ' + editadoPor : ''} em ${fmtDataHora(editadoEm)}`}
-      style={{ fontStyle: 'italic', cursor: 'help', opacity: .8 }}>· editada</span>
+      className="acn-ate-marca">· editada</span>
   );
 }
 
@@ -25,9 +25,9 @@ export function EdicaoDeAtualizacao({ texto, onChange, rico = false, onSalvar, o
   return (
     <div>
       {rico
-        ? <RichTextInput mencoes value={texto} onChange={onChange} minHeight={54} style={{ fontSize: 11 }} />
-        : <MencaoTextarea value={texto} onChange={onChange} rows={3} placeholder="Edite a atualização… use @Nome para mencionar alguém" style={{ fontSize: 11 }} />}
-      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        ? <RichTextInput mencoes value={texto} onChange={onChange} minHeight={54} />
+        : <MencaoTextarea value={texto} onChange={onChange} rows={3} placeholder="Edite a atualização… use @Nome para mencionar alguém" />}
+      <div className="acn-ate-acoes">
         <Botao variante="primario" pequeno onClick={onSalvar} disabled={salvando || !String(texto || '').replace(/<[^>]*>/g, '').trim()}>
           {salvando ? 'Salvando...' : 'Salvar edição'}
         </Botao>

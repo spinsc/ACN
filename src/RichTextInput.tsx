@@ -22,6 +22,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useUsers } from './MencaoTextarea';
 import { combinaBusca } from './SearchUtils';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiAccountOutline, mdiPalette } from '@mdi/js';
 
 // Só reconhece como HTML já formatado se tiver uma das tags que este editor
 // (ou o execCommand por trás dele) realmente produz — um texto legado tipo
@@ -32,11 +35,6 @@ export const pareceHtmlFormatado = (s: string) => /<\/?(b|i|u|strike|span|br|div
 export const htmlSeguro = (s: string) => {
   const bruto = s || '';
   return pareceHtmlFormatado(bruto) ? bruto : bruto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-};
-
-const btnStyle: React.CSSProperties = {
-  background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer',
-  fontSize: 11, padding: '5px 8px', borderRadius: 4, lineHeight: 1,
 };
 
 // Acha o {node, offset} do DOM correspondente a um offset de texto plano
@@ -183,13 +181,15 @@ export default function RichTextInput({
   const handleInput = () => { emitChange(); verificarMencao(); };
   const handleKeyUp = (e: any) => { mostrarToolbarNaSelecao(); if (mencoes && e.key !== 'Escape') verificarMencao(); };
 
+  // 12e56 (09/10/2026): só aparência — o campo, a barra de formatação e a lista de @menção ganharam classes no design.css (a dica "placeholder" também saiu
+  // do <style> embutido). `minHeight` (parâmetro), `style` (de quem chama) e as posições da barra e da lista (calculadas na hora) continuam inline, de propósito
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="acn-rti-raiz">
       <div
         ref={editorRef}
         contentEditable={!disabled}
         suppressContentEditableWarning
-        className={className}
+        className={'acn-rti' + (singleLine ? ' uma-linha' : '') + (disabled ? ' desativado' : '') + (className ? ' ' + className : '')}
         onInput={handleInput}
         onMouseUp={mostrarToolbarNaSelecao}
         onKeyUp={handleKeyUp}
@@ -197,53 +197,33 @@ export default function RichTextInput({
         onBlur={() => setTimeout(() => setToolbar(null), 150)}
         onKeyDown={handleKeyDown}
         data-placeholder={placeholder}
-        style={{
-          minHeight: singleLine ? undefined : minHeight, padding: '5px 8px', border: '1px solid #d1d5db',
-          borderRadius: 4, fontSize: 10, outline: 'none', background: disabled ? '#f1f5f9' : '#fff',
-          color: '#374151', wordBreak: 'break-word',
-          whiteSpace: singleLine ? 'nowrap' : 'pre-wrap', overflow: singleLine ? 'hidden' : 'visible',
-          boxSizing: 'border-box', ...style,
-        }}
+        style={{ minHeight: singleLine ? undefined : minHeight, ...style }}
       />
       {toolbar && !disabled && (
-        <div
-          style={{
-            position: 'fixed', left: toolbar.x, top: toolbar.y - 40, transform: 'translateX(-50%)',
-            background: '#1e293b', borderRadius: 6, padding: 3, display: 'flex', gap: 1, zIndex: 2000,
-            boxShadow: '0 4px 14px rgba(0,0,0,.3)',
-          }}
-        >
-          <button title="Negrito" onMouseDown={e => { e.preventDefault(); aplicar('bold'); }} style={{ ...btnStyle, fontWeight: 700 }}>B</button>
-          <button title="Sublinhado" onMouseDown={e => { e.preventDefault(); aplicar('underline'); }} style={{ ...btnStyle, textDecoration: 'underline' }}>S</button>
-          <button title="Tachado" onMouseDown={e => { e.preventDefault(); aplicar('strikeThrough'); }} style={{ ...btnStyle, textDecoration: 'line-through' }}>X</button>
-          <button title="Cor do texto" onMouseDown={e => { e.preventDefault(); salvarSelecao(); corRef.current?.click(); }} style={btnStyle}>🎨</button>
-          <input ref={corRef} type="color" style={{ display: 'none' }} onChange={e => aplicar('foreColor', e.target.value)} />
+        <div className="acn-rti-barra" style={{ left: toolbar.x, top: toolbar.y - 40 }}>
+          <Botao variante="discreto" pequeno className="acn-rti-bt negrito" title="Negrito" onMouseDown={e => { e.preventDefault(); aplicar('bold'); }}>B</Botao>
+          <Botao variante="discreto" pequeno className="acn-rti-bt sublinhado" title="Sublinhado" onMouseDown={e => { e.preventDefault(); aplicar('underline'); }}>S</Botao>
+          <Botao variante="discreto" pequeno className="acn-rti-bt tachado" title="Tachado" onMouseDown={e => { e.preventDefault(); aplicar('strikeThrough'); }}>X</Botao>
+          <Botao variante="discreto" pequeno className="acn-rti-bt" icone={mdiPalette} title="Cor do texto" onMouseDown={e => { e.preventDefault(); salvarSelecao(); corRef.current?.click(); }} />
+          <input ref={corRef} type="color" hidden onChange={e => aplicar('foreColor', e.target.value)} />
         </div>
       )}
       {mencoes && showDrop && sugestoes.length > 0 && typeof document !== 'undefined' && createPortal(
-        <div ref={dropRef} style={{ ...dropStyle, background: '#fff', border: '1.5px solid #c7d2fe', borderRadius: 8,
-          boxShadow: '0 8px 28px rgba(0,0,0,.2)', maxHeight: 240, overflowY: 'auto' }}>
-          <div style={{ padding: '5px 10px', fontSize: 9, color: '#6366f1', fontWeight: 700, borderBottom: '1px solid #e0e7ff',
-            background: '#f5f3ff', borderRadius: '8px 8px 0 0', letterSpacing: .3 }}>
-            👤 MENCIONAR USUÁRIO
+        <div ref={dropRef} className="acn-sug" style={dropStyle}>
+          <div className="acn-sug-tit">
+            <Icone path={mdiAccountOutline} size={12} /> MENCIONAR USUÁRIO
           </div>
           {sugestoes.map((u: any) => (
-            <div key={u.id} onMouseDown={e => { e.preventDefault(); selecionarMencao(u); }}
-              style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                fontSize: 11, borderBottom: '1px solid #f1f5f9', background: '#fff' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#eef2ff')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-              <span style={{ width: 28, height: 28, borderRadius: '50%', background: '#6366f1', color: 'white', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+            <div key={u.id} className="acn-sug-item" onMouseDown={e => { e.preventDefault(); selecionarMencao(u); }}>
+              <span className="acn-sug-av">
                 {(u.nome || '?')[0].toUpperCase()}
               </span>
-              <span style={{ fontWeight: 600 }}>@{u.nome}</span>
+              <span className="acn-sug-nome">@{u.nome}</span>
             </div>
           ))}
         </div>,
         document.body,
       )}
-      <style>{`[data-placeholder]:empty::before { content: attr(data-placeholder); color:#9ca3af; pointer-events:none; }`}</style>
     </div>
   );
 }
