@@ -21,31 +21,33 @@ import { supabase } from './supabaseClient';
 import { itensPreenchidos, vinculosDaDemanda } from './DemandaItens';
 import { criarRequisicaoCompra } from './ComprasFluxo';
 import { notificarEvento } from './whatsappHelper';
+import { Selo } from './Interface';
+import Icone from './Icone';
+import { mdiPalette } from '@mdi/js';
 
 export const ehSerralheria = (setor: any) =>
   String(setor || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase() === 'serralheria';
 
 /** Campos de pintura no formulário da demanda (só aparece para Serralheria) */
+// 12e51 (09/10/2026): só aparência — a cor laranja da pintura mora no design.css (--acn-pin-cor), com tom mais claro no tema escuro
 export function PinturaCampos({ valor, onChange, somenteLeitura = false }) {
   const tem = !!valor?.pintura;
   return (
-    <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: somenteLeitura ? 'default' : 'pointer' }}>
+    <div className="acn-pin">
+      <label className={'acn-pin-marca' + (somenteLeitura ? ' leitura' : '')}>
         <input type="checkbox" checked={tem} disabled={somenteLeitura}
           onChange={e => onChange({ pintura: e.target.checked, pintura_tipo: e.target.checked ? (valor?.pintura_tipo || '') : '' })} />
-        <span style={{ fontSize: 11, fontWeight: 800, color: '#9a3412' }}>🎨 Esta peça vai precisar de pintura</span>
+        <span><Icone path={mdiPalette} size={14} />Esta peça vai precisar de pintura</span>
       </label>
       {tem && (
-        <div style={{ marginTop: 7 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', marginBottom: 3 }}>
+        <div className="acn-pin-corpo">
+          <div className="acn-pin-rot">
             Tipo da pintura — o comprador vai ler isto para cotar
           </div>
-          <textarea rows={2} disabled={somenteLeitura} value={valor?.pintura_tipo || ''}
+          <textarea rows={2} className="acn-input acn-pin-texto" disabled={somenteLeitura} value={valor?.pintura_tipo || ''}
             onChange={e => onChange({ pintura: true, pintura_tipo: e.target.value })}
-            placeholder="ex.: pintura eletrostática preta; precisa de jato de areia antes"
-            style={{ width: '100%', padding: '5px 8px', border: '1px solid #fdba74', borderRadius: 4,
-              fontSize: 11, resize: 'vertical', boxSizing: 'border-box', background: somenteLeitura ? '#fff' : undefined }} />
-          <div style={{ fontSize: 9, color: '#c2410c', marginTop: 3 }}>
+            placeholder="ex.: pintura eletrostática preta; precisa de jato de areia antes" />
+          <div className="acn-pin-ajuda">
             O pedido ao Compras nasce sozinho quando a Serralheria concluir esta demanda.
           </div>
         </div>
@@ -59,12 +61,9 @@ export function PinturaSelo({ d }) {
   if (!d?.pintura) return null;
   const feito = !!d.pintura_pedido_id;
   return (
-    <span title={d.pintura_tipo || 'Pintura'}
-      style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
-        background: feito ? '#dcfce7' : '#ffedd5', color: feito ? '#15803d' : '#9a3412',
-        border: `1px solid ${feito ? '#86efac' : '#fdba74'}` }}>
-      🎨 {feito ? 'pintura no Compras' : 'com pintura'}
-    </span>
+    <Selo familia={feito ? 'ok' : 'atencao'} ponto={false} title={d.pintura_tipo || 'Pintura'}>
+      <Icone path={mdiPalette} size={12} /> {feito ? 'pintura no Compras' : 'com pintura'}
+    </Selo>
   );
 }
 

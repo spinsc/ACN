@@ -14,6 +14,7 @@ import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { notificarEvento, msg } from './whatsappHelper';
 import { liberarReservaDaOp } from './Estoque';
+import { Botao } from './Interface';
 
 export const DESTINOS_DEVOLUCAO = {
   almox: {
@@ -71,35 +72,39 @@ export function ModalDevolverOp({ opl, setorOrigem, destinos = ['almox', 'engenh
     if (erro) { alert('Não foi possível devolver: ' + erro.message); return; }
     onFeito();
   };
+  // 12e51 (09/10/2026): só aparência — a janela passou para o molde do guia; destino, motivo obrigatório e o que é gravado não mudaram
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 480 }}>
-        <div className="modal-title">Devolver OP {opl.opl}</div>
-        <label className="acn-label">Para onde?</label>
-        <div role="radiogroup" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-          {destinos.map(k => {
-            const d = DESTINOS_DEVOLUCAO[k];
-            const sel = destino === k;
-            return (
-              <label key={k} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
-                border: `1.5px solid ${sel ? '#ef4444' : '#e2e8f0'}`, background: sel ? '#fef2f2' : '#fff' }}>
-                <input type="radio" name="destino-devolucao" checked={sel} onChange={() => setDestino(k)} style={{ marginTop: 2 }} />
-                <span>
-                  <strong style={{ fontSize: 12, color: sel ? '#b91c1c' : '#1e293b' }}>{d.rotulo}</strong>
-                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{d.ajuda}</div>
-                </span>
-              </label>
-            );
-          })}
+      <div className="modal-box acn-modal-cadastro acn-dvo-jan" role="dialog" aria-label={`Devolver OP ${opl.opl}`}>
+        <div className="acn-modal-cab">
+          <span className="modal-title">Devolver OP {opl.opl}</span>
         </div>
-        <label className="acn-label">Motivo / problema identificado *</label>
-        <textarea className="acn-input" rows={3} autoFocus value={motivo} onChange={e => setMotivo(e.target.value)} aria-label="Motivo da devolução"
-          style={{ width: '100%', resize: 'vertical', marginBottom: 10 }} placeholder="Ex.: serial errado na unidade /02" />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="acn-btn" style={{ background: '#ef4444', flex: 1, opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={confirmar}>
+        <div className="acn-modal-corpo">
+          <label className="acn-label">Para onde?</label>
+          <div role="radiogroup" className="acn-dvo-opcoes">
+            {destinos.map(k => {
+              const d = DESTINOS_DEVOLUCAO[k];
+              const sel = destino === k;
+              return (
+                <label key={k} className={'acn-dvo-opcao' + (sel ? ' sel' : '')}>
+                  <input type="radio" name="destino-devolucao" checked={sel} onChange={() => setDestino(k)} />
+                  <span>
+                    <strong>{d.rotulo}</strong>
+                    <div className="acn-ajuda">{d.ajuda}</div>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <label className="acn-label">Motivo / problema identificado *</label>
+          <textarea className="acn-input acn-dvo-motivo" rows={3} autoFocus value={motivo} onChange={e => setMotivo(e.target.value)} aria-label="Motivo da devolução"
+            placeholder="Ex.: serial errado na unidade /02" />
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao variante="perigo" className="acn-dvo-confirma" disabled={salvando} onClick={confirmar}>
             {salvando ? 'Devolvendo...' : 'CONFIRMAR DEVOLUÇÃO'}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>

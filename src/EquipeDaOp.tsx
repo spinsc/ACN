@@ -22,7 +22,8 @@
 //   • nada é apagado em silêncio: cada troca vira linha no histórico da OP, com quem mexeu.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
-import { mdiTrashCanOutline, mdiPlus, mdiPencilOutline } from '@mdi/js';
+import { mdiTrashCanOutline, mdiPlus, mdiPencilOutline, mdiAccountGroupOutline } from '@mdi/js';
+import Icone from './Icone';
 import { supabase } from './supabaseClient';
 import { Botao, Faixa, Selo } from './Interface';
 import { confirmar } from './Feedback';
@@ -194,8 +195,11 @@ export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }
 
   return (
     <div className="modal-overlay" onClick={() => !ocupado && aoFechar?.()}>
-      <div className="modal-box" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-title">👥 Equipe — OP {oplProp?.opl}</div>
+      <div className="modal-box acn-modal-cadastro acn-eqp-jan" role="dialog" aria-label="Equipe da OP" onClick={e => e.stopPropagation()}>
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiAccountGroupOutline} size={18} />Equipe — OP {oplProp?.opl}</span>
+        </div>
+        <div className="acn-modal-corpo acn-eqp-corpo">
         <div className="acn-equipe-ajuda">
           Quem trabalhou nesta OP. A comissão de cada um sai daqui quando o Fiscal fatura.
         </div>
@@ -248,7 +252,7 @@ export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }
                   })}
               {pode && (
                 <div className="acn-equipe-add">
-                  <ColaboradorSelect value={novo[p.papel]} placeholder={p.placeholder} className="acn-input" style={{ flex: 1 }}
+                  <ColaboradorSelect value={novo[p.papel]} placeholder={p.placeholder} className="acn-input acn-eqp-sel"
                     onChange={nome => setNovo(n => ({ ...n, [p.papel]: nome }))} />
                   <Botao pequeno variante="secundario" icone={mdiPlus} disabled={ocupado || !novo[p.papel]}
                     onClick={() => adicionar(p)}>Adicionar</Botao>
@@ -269,8 +273,10 @@ export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }
           </label>
         )}
 
-        <div style={{ marginTop: 16 }}>
-          <Botao variante="secundario" style={{ width: '100%' }} onClick={aoFechar} disabled={ocupado}>Fechar</Botao>
+        </div>
+
+        <div className="acn-modal-rodape">
+          <Botao variante="secundario" className="acn-eqp-fechar" onClick={aoFechar} disabled={ocupado}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -291,25 +297,26 @@ export function EquipeDaOpResumo({ opl, currentUser }) {
   const nomes = (papel) => dados.linhas.filter(l => l.papel === papel).map(l => l.tecnico_nome);
   const travada = equipeTravada(dados.op || opl);
   const podeEditar = podeEditarEquipeDaOp(usuario) && !travada;
+  // 12e51 (09/10/2026): só aparência — as três colunas viram uma coluna só em tela estreita (antes ficavam espremidas)
   const coluna = (titulo, lista) => (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{titulo}</div>
-      <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{lista.length ? lista.join(', ') : '—'}</div>
+    <div className="acn-eqp-col">
+      <div className="acn-eqp-col-tit">{titulo}</div>
+      <div className="acn-eqp-col-val">{lista.length ? lista.join(', ') : '—'}</div>
     </div>
   );
   return (
     <div data-equipe-resumo>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+      <div className="acn-eqp-cols">
         {coluna('Adaptação — responsáveis', nomes('responsavel'))}
         {coluna('Adaptação — apoios', nomes('apoio'))}
         {coluna('Serralheria', nomes('serralheria'))}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div className="acn-eqp-acoes">
         {podeEditar && (
           <Botao pequeno variante="secundario" icone={mdiPencilOutline} onClick={() => setAbrindo(true)}>Editar equipe</Botao>
         )}
         {travada && (
-          <span style={{ fontSize: 10, color: '#94a3b8' }}>Equipe travada: a OP já foi faturada.</span>
+          <span className="acn-ajuda">Equipe travada: a OP já foi faturada.</span>
         )}
       </div>
       {abrindo && (

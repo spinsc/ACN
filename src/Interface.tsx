@@ -47,11 +47,12 @@ export function Abas({ itens, ativa, onChange, className }: { itens: ItemAba[]; 
 }
 
 // ── Seletor em pílulas (Tabela/Kanban, filas, períodos) ───────────────────────
-export function Chips({ itens, ativo, onChange, rotulo, className }: { itens: ItemAba[]; ativo: string; onChange: (id: string) => void; rotulo?: string; className?: string }) {
+// 12e51 (09/10/2026): `desativado` trava os botões (a configuração do veículo por tipo de venda trava para quem não é Admin/gerente e enquanto grava)
+export function Chips({ itens, ativo, onChange, rotulo, className, desativado }: { itens: ItemAba[]; ativo: string; onChange: (id: string) => void; rotulo?: string; className?: string; desativado?: boolean }) {
   return (
     <div className={'acn-chips' + (className ? ' ' + className : '')} role="group" aria-label={rotulo}>
       {itens.map(it => (
-        <button key={it.id} type="button" aria-pressed={ativo === it.id} title={it.titulo}
+        <button key={it.id} type="button" aria-pressed={ativo === it.id} title={it.titulo} disabled={desativado}
           className={ativo === it.id ? 'on' : ''} onClick={() => onChange(it.id)}>
           {it.icone && <Icone path={it.icone} size={15} />}
           {it.rotulo}

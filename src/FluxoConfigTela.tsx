@@ -13,6 +13,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { FLUXOS } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
+import { Chips } from './Interface';
+import Icone from './Icone';
+import { mdiTrafficLight } from '@mdi/js';
 
 const MODOS = [
   { valor: 'oculto',      rotulo: 'Não pergunta',  ajuda: 'O campo de veículo nem aparece. Fica o modelo em texto livre.' },
@@ -42,38 +45,26 @@ export default function FluxoConfigTela({ currentUser }) {
     if (error) { alert('Não foi possível salvar: ' + error.message); recarregar(); }
   };
 
+  // 12e51 (09/10/2026): só aparência — os três botões de cada tipo de venda viraram o seletor do guia (Chips); quem pode mudar e o que é gravado não mudaram
   return (
-    <div className="sec-card" style={{ marginTop: 12 }}>
-      <div className="sec-hdr" style={{ background: '#f0f9ff', borderBottom: '2px solid #0284c7' }}>
-        <span style={{ color: '#0369a1' }}>🚦 Veículo por tipo de venda</span>
+    <div className="sec-card acn-fct">
+      <div className="sec-hdr">
+        <span className="acn-fct-tit"><Icone path={mdiTrafficLight} size={16} />Veículo por tipo de venda</span>
       </div>
       <div className="sec-body">
-        <div style={{ fontSize: 10, color: '#075985', marginBottom: 10 }}>
+        <div className="acn-ajuda acn-fct-intro">
           Define, para cada tipo de venda, se o formulário da OP pergunta o veículo do catálogo.
           Quando o veículo está ligado, o campo de <b>modelo em texto livre some</b> — são a mesma
           informação, e dois campos pedindo o mesmo só confundem quem preenche.
         </div>
 
         {FLUXOS.map(f => (
-          <div key={f.valor} style={{ padding: '8px 0', borderTop: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: 11, fontWeight: 700 }}>{f.label}</div>
-            <div style={{ fontSize: 9, color: '#64748b', marginBottom: 4 }}>{f.ajuda}</div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {MODOS.map(m => {
-                const ativo = (config[f.valor] || 'opcional') === m.valor;
-                return (
-                  <button key={m.valor} type="button" disabled={!pode || salvando === f.valor}
-                    onClick={() => trocar(f.valor, m.valor)} title={m.ajuda}
-                    style={{ fontSize: 9.5, fontWeight: 700, padding: '3px 11px', borderRadius: 4,
-                      cursor: pode ? 'pointer' : 'default',
-                      border: '1px solid ' + (ativo ? '#0284c7' : '#cbd5e1'),
-                      background: ativo ? '#e0f2fe' : '#fff',
-                      color: ativo ? '#0369a1' : '#64748b' }}>
-                    {m.rotulo}
-                  </button>
-                );
-              })}
-            </div>
+          <div key={f.valor} className="acn-fct-linha">
+            <div className="acn-fct-nome">{f.label}</div>
+            <div className="acn-ajuda">{f.ajuda}</div>
+            <Chips ativo={config[f.valor] || 'opcional'} onChange={modo => trocar(f.valor, modo)}
+              desativado={!pode || salvando === f.valor} rotulo={`Veículo em: ${f.label}`}
+              itens={MODOS.map(m => ({ id: m.valor, rotulo: m.rotulo, titulo: m.ajuda }))} />
           </div>
         ))}
       </div>
