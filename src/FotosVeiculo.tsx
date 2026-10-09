@@ -16,6 +16,9 @@
 import React, { useState, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiCameraOutline, mdiClose } from '@mdi/js';
 
 const BUCKET = 'acn-media';
 
@@ -76,39 +79,34 @@ export default function FotosVeiculo({ valor = [], onChange, currentUser, pasta 
 
   const remover = async (i) => { if (!await confirmarRemocao('esta foto')) return; onChange(fotos.filter((_, j) => j !== i)); };
 
+  // 12e55 (09/10/2026): só aparência — a miniatura de cada foto tem o botão de tirar redondo no canto (Botao com a classe acn-fv-x)
   return (
-    <div style={{ border: '1px solid #e2e8f0', background: '#f8fafc', borderRadius: 6,
-      padding: '8px 10px', marginBottom: 10 }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>
-        📷 Fotos do carro {fotos.length > 0 && `(${fotos.length})`}
+    <div className="acn-fv">
+      <div className="acn-fv-tit">
+        <Icone path={mdiCameraOutline} size={14} /> Fotos do carro {fotos.length > 0 && `(${fotos.length})`}
       </div>
-      <div style={{ fontSize: 9, color: '#64748b', marginBottom: 6 }}>
+      <div className="acn-ajuda acn-fv-ajuda">
         Como o carro chegou. Vale a frente, a lateral, a placa do chassi e qualquer avaria que já veio —
         é o que a Produção e a Qualidade vão olhar depois.
       </div>
 
       {fotos.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 7 }}>
+        <div className="acn-fv-grade">
           {fotos.map((f, i) => (
-            <div key={f.url} style={{ position: 'relative', width: 78, height: 78, borderRadius: 5,
-              overflow: 'hidden', border: '1px solid #cbd5e1', background: '#fff' }}>
+            <div key={f.url} className="acn-fv-foto">
               <a href={f.url} target="_blank" rel="noopener noreferrer" title={`${f.nome} — abrir`}>
-                <img src={f.url} alt={f.nome}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <img src={f.url} alt={f.nome} className="acn-fv-img" />
               </a>
-              <button type="button" onClick={() => remover(i)} title="Tirar esta foto"
-                style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%',
-                  border: 'none', background: 'rgba(15,23,42,.72)', color: '#fff', fontSize: 11,
-                  cursor: 'pointer', lineHeight: '18px', padding: 0 }}>✕</button>
+              <Botao variante="discreto" pequeno icone={mdiClose} className="acn-fv-x" onClick={() => remover(i)} title="Tirar esta foto" />
             </div>
           ))}
         </div>
       )}
 
       <input ref={entrada} type="file" accept="image/*" capture="environment" multiple
-        onChange={subir} disabled={subindo} style={{ fontSize: 10 }} />
-      {subindo && <div style={{ fontSize: 9, color: '#0f766e', marginTop: 3 }}>Subindo…</div>}
-      {erro && <div style={{ fontSize: 9, color: '#b91c1c', marginTop: 3 }}>{erro}</div>}
+        onChange={subir} disabled={subindo} className="acn-fv-entrada" />
+      {subindo && <div className="acn-fv-subindo">Subindo…</div>}
+      {erro && <div className="acn-fv-erro">{erro}</div>}
     </div>
   );
 }
@@ -118,13 +116,11 @@ export function FotosVeiculoVer({ fotos = [], tamanho = 64 }) {
   const lista = Array.isArray(fotos) ? fotos : [];
   if (!lista.length) return null;
   return (
-    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+    <div className="acn-fv-ver">
       {lista.map(f => (
         <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer"
           title={`${f.nome || 'foto'}${f.criado_por_nome ? ` — ${f.criado_por_nome}` : ''}`}>
-          <img src={f.url} alt={f.nome || 'foto do carro'}
-            style={{ width: tamanho, height: tamanho, objectFit: 'cover', borderRadius: 4,
-              border: '1px solid #cbd5e1', display: 'block' }} />
+          <img src={f.url} alt={f.nome || 'foto do carro'} width={tamanho} height={tamanho} className="acn-fv-ver-img" />
         </a>
       ))}
     </div>

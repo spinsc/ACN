@@ -10,10 +10,11 @@
 // de a FIPE conhecer — daí o "cadastrar à mão" ao lado.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
-import { mdiPencilOutline } from '@mdi/js';
+import { mdiPencilOutline, mdiCarOutline, mdiPlus, mdiCheck } from '@mdi/js';
+import Icone from './Icone';
 import { supabase } from './supabaseClient';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
-import { SelectBusca, Botao, Faixa, Selo } from './Interface';
+import { SelectBusca, Botao, Faixa, Selo, Chips } from './Interface';
 import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
 import { temPoderDeGerente } from './utils/permissoes';
@@ -52,10 +53,6 @@ export function agruparModelos(linhas) {
   }
   return [...grupos.values()].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 }
-
-const campo = { width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1',
-                borderRadius: 4, fontSize: 11, boxSizing: 'border-box' };
-const rotulo = { fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 2 };
 
 /**
  * CADASTRAR OU EDITAR A FICHA (editar: 30/09/2026)
@@ -259,187 +256,175 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar, veiculo
     aoSalvar?.(data);
   };
 
+  // 12e55 (09/10/2026): só aparência — a janela passou para o molde do guia (cabeçalho, corpo que rola e rodapé); o seletor de tipo é o do guia (Chips) e os
+  // anos da FIPE continuam sendo botões que preenchem "Ano de" e "Ano até" (todos os que combinam ficam marcados, como antes); o que grava e as conferências não mudaram
   return (
     <div className="modal-overlay" onClick={() => !salvando && aoFechar?.()}>
-      <div className="modal-box" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-title">{editando ? '✏️ Editar veículo' : '🚗 Cadastrar veículo'}</div>
+      <div className="modal-box acn-modal-cadastro acn-vcd-jan" role="dialog" aria-label={editando ? 'Editar veículo' : 'Cadastrar veículo'} onClick={e => e.stopPropagation()}>
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={editando ? mdiPencilOutline : mdiCarOutline} size={18} />{editando ? 'Editar veículo' : 'Cadastrar veículo'}</span>
+        </div>
 
-        {editando && (
-          <div style={{ margin: '8px 0' }}>
+        <div className="acn-modal-corpo acn-vcd-corpo">
+          {editando && (
             <Faixa tom="info">
               <strong>{textoVeiculo(veiculo)}</strong>
               {' · '}{opsLigadas.length} OP(s) ligada(s)
               {veiculo.criado_por_nome ? ` · cadastrado por ${veiculo.criado_por_nome}` : ''}
-              <div style={{ fontSize: 11, marginTop: 2 }}>
+              <div className="acn-vcd-faixa-sub">
                 Para corrigir só o nome, os anos ou a observação, basta mexer nos campos. Escolher na
                 FIPE serve para trocar a versão.
               </div>
             </Faixa>
-          </div>
-        )}
+          )}
 
-        <div style={{ display: 'flex', gap: 6, margin: '10px 0' }}>
-          {TIPOS_VEICULO.map(t => (
-            <button key={t.chave} onClick={() => { tocouTipo.current = true; setTipo(t.chave); }}
-              style={{ flex: 1, padding: '5px 0', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                border: '1px solid ' + (tipo === t.chave ? '#2563eb' : '#cbd5e1'),
-                background: tipo === t.chave ? '#eff6ff' : '#fff',
-                color: tipo === t.chave ? '#1d4ed8' : '#64748b' }}>
-              {t.rotulo}
-            </button>
-          ))}
-        </div>
+          <Chips ativo={tipo} onChange={(id) => { tocouTipo.current = true; setTipo(id); }} rotulo="Tipo de veículo" className="acn-vcd-tipos"
+            itens={TIPOS_VEICULO.map(t => ({ id: t.chave, rotulo: t.rotulo }))} />
 
-        {!manual ? (
-          <>
-            <label style={rotulo}>MARCA</label>
-            <SelectBusca opcoes={marcas.map(m => ({ valor: m.id, rotulo: m.nome }))}
-              valor={marcaId} onChange={setMarcaId} placeholder="Procure a marca" />
-            <div style={{ height: 8 }} />
-
-            {marcaId && (
-              <>
-                <label style={rotulo}>
-                  MODELO — {modelos.length} modelo(s)
-                  {totalVersoesFipe > modelos.length && `, de ${totalVersoesFipe} linhas da FIPE`}
-                </label>
-                <SelectBusca opcoes={modelos.map(m => ({ valor: m.id, rotulo: m.nome }))}
-                  valor={modeloId} onChange={escolherModelo} placeholder="Procure o modelo" />
-                {modeloEscolhido?.versoes?.length > 1 && (
-                  <div style={{ fontSize: 9, color: '#6b7280', marginTop: 3 }}>
-                    Junta {modeloEscolhido.versoes.length} linhas da FIPE que só mudam de motor, câmbio ou portas
-                    — isso não muda onde o acessório é preso. Os anos abaixo são de todas elas.
-                  </div>
-                )}
-                {/* Licitação e nota às vezes pedem o nome exato como está na
-                    FIPE. Fica escondido até alguém precisar. */}
-                {modeloEscolhido?.versoes?.length > 1 && (
-                  <details style={{ marginTop: 4 }}>
-                    <summary style={{ fontSize: 9, color: '#2563eb', cursor: 'pointer' }}>
-                      Preciso do nome exato da FIPE
-                    </summary>
-                    <select className="acn-input" style={{ width: '100%', marginTop: 4, fontSize: 10 }}
-                      value={versaoFipeId} onChange={e => escolherVersaoFipe(e.target.value)}>
-                      <option value="">— usar “{modeloEscolhido.nome}” —</option>
-                      {modeloEscolhido.versoes.map(v => (
-                        <option key={v.id} value={v.id}>{v.nome.trim()}</option>
-                      ))}
-                    </select>
-                  </details>
-                )}
-                <div style={{ height: 8 }} />
-              </>
-            )}
-
-            {buscandoAnos && (
-              <div style={{ fontSize: 10, color: '#1d4ed8' }}>
-                Buscando os anos na FIPE
-                {progresso ? ` — ${progresso.feitas} de ${progresso.total} versões. Os anos vão aparecendo abaixo.` : '…'}
+          {!manual ? (
+            <>
+              <div className="acn-vcd-campo">
+                <label className="acn-label">MARCA</label>
+                <SelectBusca opcoes={marcas.map(m => ({ valor: m.id, rotulo: m.nome }))}
+                  valor={marcaId} onChange={setMarcaId} placeholder="Procure a marca" />
               </div>
-            )}
-            {erroAnos && <div style={{ fontSize: 10, color: '#b91c1c' }}>{erroAnos}</div>}
 
-            {anosVisiveis.length > 0 && (
-              <div style={{ marginBottom: 8 }}>
-                <label style={rotulo}>ANOS QUE A FIPE CONHECE — clique para usar</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {anosVisiveis.map(a => (
-                    <button key={a.codigo_fipe} type="button"
-                      onClick={() => setForm(f => ({ ...f, ano_de: String(a.ano || ''), ano_ate: String(a.ano || '') }))}
-                      style={{ fontSize: 9, padding: '2px 7px', borderRadius: 10, cursor: 'pointer',
-                        border: '1px solid ' + (String(form.ano_de) === String(a.ano) ? '#2563eb' : '#e2e8f0'),
-                        background: String(form.ano_de) === String(a.ano) ? '#eff6ff' : '#fff' }}>
-                      {a.nome}
-                    </button>
-                  ))}
+              {marcaId && (
+                <div className="acn-vcd-campo">
+                  <label className="acn-label">
+                    MODELO — {modelos.length} modelo(s)
+                    {totalVersoesFipe > modelos.length && `, de ${totalVersoesFipe} linhas da FIPE`}
+                  </label>
+                  <SelectBusca opcoes={modelos.map(m => ({ valor: m.id, rotulo: m.nome }))}
+                    valor={modeloId} onChange={escolherModelo} placeholder="Procure o modelo" />
+                  {modeloEscolhido?.versoes?.length > 1 && (
+                    <div className="acn-ajuda">
+                      Junta {modeloEscolhido.versoes.length} linhas da FIPE que só mudam de motor, câmbio ou portas
+                      — isso não muda onde o acessório é preso. Os anos abaixo são de todas elas.
+                    </div>
+                  )}
+                  {/* Licitação e nota às vezes pedem o nome exato como está na
+                      FIPE. Fica escondido até alguém precisar. */}
+                  {modeloEscolhido?.versoes?.length > 1 && (
+                    <details className="acn-vcd-det">
+                      <summary className="acn-vcd-sum">
+                        Preciso do nome exato da FIPE
+                      </summary>
+                      <select className="acn-input acn-vcd-versao"
+                        value={versaoFipeId} onChange={e => escolherVersaoFipe(e.target.value)}>
+                        <option value="">— usar “{modeloEscolhido.nome}” —</option>
+                        {modeloEscolhido.versoes.map(v => (
+                          <option key={v.id} value={v.id}>{v.nome.trim()}</option>
+                        ))}
+                      </select>
+                    </details>
+                  )}
                 </div>
-                {temAntigos && !verAntigos && (
-                  <button type="button" onClick={() => setVerAntigos(true)}
-                    style={{ marginTop: 4, background: 'none', border: 'none', color: '#2563eb',
-                      fontSize: 9, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
-                    ver anos anteriores a {ANO_CORTE}
-                  </button>
-                )}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <label style={rotulo}>MARCA *</label>
-            <input style={campo} value={form.marca}
-              onChange={e => setForm(f => ({ ...f, marca: e.target.value }))} placeholder="Ex.: Yamaha" />
-            <div style={{ height: 8 }} />
-          </>
-        )}
+              )}
 
-        <label style={rotulo}>NOME DO VEÍCULO * — encurte como a fábrica chama</label>
-        <input style={campo} maxLength={100} value={form.nome}
-          onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex.: Nivus" />
-        <div style={{ fontSize: 9, color: '#64748b', margin: '2px 0 8px' }}>
-          A FIPE devolve o nome completo da versão. Guarde o nome curto — é ele que aparece na OP
-          e que vai receber a estrutura de material.
-        </div>
+              {buscandoAnos && (
+                <div className="acn-vcd-info">
+                  Buscando os anos na FIPE
+                  {progresso ? ` — ${progresso.feitas} de ${progresso.total} versões. Os anos vão aparecendo abaixo.` : '…'}
+                </div>
+              )}
+              {erroAnos && <div className="acn-vcd-erro">{erroAnos}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div>
-            <label style={rotulo}>ANO DE</label>
-            <input style={campo} inputMode="numeric" value={form.ano_de}
-              onChange={e => setForm(f => ({ ...f, ano_de: e.target.value }))} placeholder="2022" />
+              {anosVisiveis.length > 0 && (
+                <div className="acn-vcd-campo">
+                  <label className="acn-label">ANOS QUE A FIPE CONHECE — clique para usar</label>
+                  <div className="acn-vcd-anos">
+                    {anosVisiveis.map(a => (
+                      <Botao key={a.codigo_fipe} pequeno className={'acn-vcd-ano' + (String(form.ano_de) === String(a.ano) ? ' on' : '')}
+                        aria-pressed={String(form.ano_de) === String(a.ano)}
+                        onClick={() => setForm(f => ({ ...f, ano_de: String(a.ano || ''), ano_ate: String(a.ano || '') }))}>
+                        {a.nome}
+                      </Botao>
+                    ))}
+                  </div>
+                  {temAntigos && !verAntigos && (
+                    <Botao variante="discreto" pequeno className="acn-vcd-link" onClick={() => setVerAntigos(true)}>
+                      ver anos anteriores a {ANO_CORTE}
+                    </Botao>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="acn-vcd-campo">
+              <label className="acn-label">MARCA *</label>
+              <input className="acn-input" value={form.marca}
+                onChange={e => setForm(f => ({ ...f, marca: e.target.value }))} placeholder="Ex.: Yamaha" />
+            </div>
+          )}
+
+          <div className="acn-vcd-campo">
+            <label className="acn-label">NOME DO VEÍCULO * — encurte como a fábrica chama</label>
+            <input className="acn-input" maxLength={100} value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex.: Nivus" />
+            <div className="acn-ajuda">
+              A FIPE devolve o nome completo da versão. Guarde o nome curto — é ele que aparece na OP
+              e que vai receber a estrutura de material.
+            </div>
           </div>
-          <div>
-            <label style={rotulo}>ANO ATÉ — vazio = em diante</label>
-            <input style={campo} inputMode="numeric" value={form.ano_ate}
-              onChange={e => setForm(f => ({ ...f, ano_ate: e.target.value }))} placeholder="2024" />
+
+          <div className="acn-vcd-anos2">
+            <div className="acn-vcd-campo">
+              <label className="acn-label">ANO DE</label>
+              <input className="acn-input" inputMode="numeric" value={form.ano_de}
+                onChange={e => setForm(f => ({ ...f, ano_de: e.target.value }))} placeholder="2022" />
+            </div>
+            <div className="acn-vcd-campo">
+              <label className="acn-label">ANO ATÉ — vazio = em diante</label>
+              <input className="acn-input" inputMode="numeric" value={form.ano_ate}
+                onChange={e => setForm(f => ({ ...f, ano_ate: e.target.value }))} placeholder="2024" />
+            </div>
           </div>
-        </div>
-        <div style={{ fontSize: 9, color: '#64748b', margin: '2px 0 8px' }}>
-          Se o carro não mudou entre os anos, cadastre a faixa inteira: "2022 a 2024" é um cadastro
-          só e vale para qualquer OP desses anos.
-        </div>
+          <div className="acn-ajuda">
+            Se o carro não mudou entre os anos, cadastre a faixa inteira: "2022 a 2024" é um cadastro
+            só e vale para qualquer OP desses anos.
+          </div>
 
-        <label style={rotulo}>OBSERVAÇÕES</label>
-        <input style={campo} value={form.observacoes}
-          onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Opcional" />
+          <div className="acn-vcd-campo">
+            <label className="acn-label">OBSERVAÇÕES</label>
+            <input className="acn-input" value={form.observacoes}
+              onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Opcional" />
+          </div>
 
-        {editando && (
-          <div style={{ marginTop: 10, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10.5 }}>
-            {opsLigadas.length === 0 ? (
-              <span style={{ color: '#64748b' }}>Nenhuma OP usa este veículo ainda.</span>
-            ) : opsAfetadas.length === 0 ? (
-              <span style={{ color: '#64748b' }}>
-                As {opsLigadas.length} OP(s) ligadas já mostram "{nomeNovo}" no campo Modelo.
-              </span>
-            ) : (
-              <label style={{ display: 'flex', gap: 6, alignItems: 'flex-start', cursor: 'pointer' }}>
-                <input type="checkbox" checked={trocarModeloDasOps} style={{ marginTop: 2 }}
-                  onChange={e => setTrocaOps(e.target.checked)} />
-                <span>
-                  Trocar também o campo <strong>Modelo</strong> de {opsAfetadas.length} das {opsLigadas.length} OP(s)
-                  ligadas para "{nomeNovo || '…'}".
-                  <span style={{ display: 'block', color: '#64748b', marginTop: 2 }}>
-                    Hoje elas mostram: {[...new Set(opsAfetadas.map(o => `"${o.modelo || 'vazio'}"`))].slice(0, 4).join(', ')}.
-                    Sem marcar, só a ficha muda e as OPs continuam com o texto antigo.
-                  </span>
+          {editando && (
+            <div className="acn-vcd-ops">
+              {opsLigadas.length === 0 ? (
+                <span className="acn-ajuda">Nenhuma OP usa este veículo ainda.</span>
+              ) : opsAfetadas.length === 0 ? (
+                <span className="acn-ajuda">
+                  As {opsLigadas.length} OP(s) ligadas já mostram "{nomeNovo}" no campo Modelo.
                 </span>
-              </label>
-            )}
-          </div>
-        )}
+              ) : (
+                <label className="acn-vcd-troca">
+                  <input type="checkbox" checked={trocarModeloDasOps}
+                    onChange={e => setTrocaOps(e.target.checked)} />
+                  <span>
+                    Trocar também o campo <strong>Modelo</strong> de {opsAfetadas.length} das {opsLigadas.length} OP(s)
+                    ligadas para "{nomeNovo || '…'}".
+                    <span className="acn-vcd-troca-sub">
+                      Hoje elas mostram: {[...new Set(opsAfetadas.map(o => `"${o.modelo || 'vazio'}"`))].slice(0, 4).join(', ')}.
+                      Sem marcar, só a ficha muda e as OPs continuam com o texto antigo.
+                    </span>
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
+        </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-          <button onClick={salvar} disabled={salvando}
-            style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4,
-              padding: '6px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-            {salvando ? '...' : editando ? '✓ Salvar' : '✓ Cadastrar'}
-          </button>
-          <button onClick={aoFechar} disabled={salvando}
-            style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 4,
-              background: '#fff', fontSize: 11, cursor: 'pointer' }}>Cancelar</button>
-          <button type="button" onClick={() => setManual(m => !m)}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#2563eb',
-              fontSize: 9.5, fontWeight: 700, cursor: 'pointer' }}>
+        <div className="acn-modal-rodape acn-vcd-rodape">
+          <Botao variante="primario" icone={salvando ? undefined : mdiCheck} onClick={salvar} disabled={salvando}>
+            {salvando ? '...' : editando ? 'Salvar' : 'Cadastrar'}
+          </Botao>
+          <Botao onClick={aoFechar} disabled={salvando}>Cancelar</Botao>
+          <Botao variante="discreto" pequeno className="acn-vcd-modo" onClick={() => setManual(m => !m)}>
             {manual ? '← voltar a procurar na FIPE' : editando ? 'não está na FIPE? soltar da FIPE e editar à mão' : 'não está na FIPE? cadastrar à mão'}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>
@@ -475,10 +460,11 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
   const fichaAtual = valor ? veiculos.find(v => v.id === valor) : null;
   const podeEditarFicha = !compacto && !!fichaAtual && temPoderDeGerente(currentUser);
 
+  // o `style` que quem chama passa (ex.: largura mínima na linha de cada unidade do lote) segue valendo, repassado à caixa
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', ...(style || {}) }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="acn-vcd-sel" style={style}>
+        <div className="acn-vcd-sel-campo">
           <SelectBusca
             opcoes={veiculos.map(v => ({ valor: v.id, rotulo: textoVeiculo(v),
               busca: [v.marca, v.modelo, v.nome_exibicao, v.ano_de, v.ano_ate] }))}
@@ -486,20 +472,16 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
             placeholder={placeholder || (compacto ? 'Veículo' : 'Procure o veículo (marca, modelo ou ano)')} />
         </div>
         {!compacto && (
-          <button type="button" onClick={() => setCadastrando(true)}
-            title="Cadastrar um veículo que ainda não está na lista"
-            style={{ fontSize: 9, fontWeight: 700, padding: '5px 9px', border: '1px solid #2563eb',
-              borderRadius: 4, background: '#fff', color: '#1d4ed8', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            + Novo
-          </button>
+          <Botao pequeno icone={mdiPlus} onClick={() => setCadastrando(true)}
+            title="Cadastrar um veículo que ainda não está na lista">
+            Novo
+          </Botao>
         )}
         {podeEditarFicha && (
-          <button type="button" onClick={() => setEditandoFicha(true)}
-            title="Corrigir o cadastro deste veículo: nome, versão, anos"
-            style={{ fontSize: 9, fontWeight: 700, padding: '5px 9px', border: '1px solid #64748b',
-              borderRadius: 4, background: '#fff', color: '#334155', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            ✏️ Editar
-          </button>
+          <Botao pequeno icone={mdiPencilOutline} onClick={() => setEditandoFicha(true)}
+            title="Corrigir o cadastro deste veículo: nome, versão, anos">
+            Editar
+          </Botao>
         )}
       </div>
       {editandoFicha && fichaAtual && (
@@ -576,13 +558,13 @@ export function PainelFichasVeiculos({ currentUser }) {
   const rotuloTipo = (t) => (TIPOS_VEICULO.find(x => x.chave === t) || {}).rotulo || t;
 
   return (
-    <div className="sec-card" style={{ marginTop: 12 }}>
+    <div className="sec-card acn-vcd-fichas">
       <div className="sec-hdr">
-        <span>🚗 Veículos cadastrados na casa <Selo familia="info" ponto={false}>{fichas ? visiveis.length : '…'}</Selo></span>
+        <span><Icone path={mdiCarOutline} size={16} /> Veículos cadastrados na casa <Selo familia="info" ponto={false}>{fichas ? visiveis.length : '…'}</Selo></span>
       </div>
-      <div className="sec-body" style={{ overflowX: 'auto' }}>
+      <div className="sec-body acn-vcd-fichas-corpo">
         <div className="acn-filtros">
-          <input className="acn-input" style={{ width: 300, maxWidth: '100%' }} placeholder="Marca, modelo, ano ou quem cadastrou"
+          <input className="acn-input acn-vcd-busca" placeholder="Marca, modelo, ano ou quem cadastrou"
             value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
         {fichas === null ? <div className="acn-empty">Carregando...</div>

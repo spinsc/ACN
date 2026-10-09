@@ -25,7 +25,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
-import { SelectBusca } from './Interface';
+import { SelectBusca, Botao } from './Interface';
+import Icone from './Icone';
+import { mdiCarOutline, mdiRefresh, mdiTimerSandEmpty } from '@mdi/js';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 const FIPE = 'https://parallelum.com.br/fipe/api/v1';
@@ -274,41 +276,40 @@ export function PainelFipeSync({ currentUser }) {
   const dias = diasDesde(sync?.rodou_em);
   const velho = dias == null || dias >= DIAS_ATE_ENVELHECER;
 
+  // 12e55 (09/10/2026): só aparência — o vermelho/verde do cabeçalho (catálogo velho ou em dia) virou o tom do título e do botão, por [data-fip] no design.css
   return (
-    <div className="sec-card" style={{ marginTop: 12 }}>
-      <div className="sec-hdr" style={{ background: velho ? '#fef2f2' : '#f0fdf4',
-        borderBottom: `2px solid ${velho ? '#dc2626' : '#16a34a'}` }}>
-        <span style={{ color: velho ? '#b91c1c' : '#15803d' }}>
-          🚗 Catálogo de veículos (Tabela FIPE)
+    <div className="sec-card acn-fip">
+      <div className="sec-hdr">
+        <span className="acn-fip-tit" data-fip={velho ? 'velho' : 'ok'}>
+          <Icone path={mdiCarOutline} size={16} /> Catálogo de veículos (Tabela FIPE)
         </span>
         {pode && (
-          <button onClick={e => { e.stopPropagation(); rodar(); }} disabled={rodando}
-            style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4,
-              background: velho ? '#dc2626' : '#16a34a', color: '#fff', cursor: rodando ? 'wait' : 'pointer' }}>
-            {rodando ? 'Atualizando…' : '↻ Atualizar da FIPE'}
-          </button>
+          <Botao pequeno variante={velho ? 'perigo' : 'primario'} icone={rodando ? undefined : mdiRefresh}
+            onClick={e => { e.stopPropagation(); rodar(); }} disabled={rodando}>
+            {rodando ? 'Atualizando…' : 'Atualizar da FIPE'}
+          </Botao>
         )}
       </div>
       <div className="sec-body">
-        <div style={{ fontSize: 11, color: '#334155' }}>
+        <div className="acn-fip-linha">
           {contagem.marcas} marcas e {contagem.modelos.toLocaleString('pt-BR')} modelos no banco.
           {sync?.rodou_em
             ? ` Última atualização há ${dias} dia(s), por ${sync.rodou_por || '—'}.`
             : ' Nunca foi atualizado.'}
         </div>
         {velho && (
-          <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 4 }}>
+          <div className="acn-fip-aviso">
             O catálogo passou de {DIAS_ATE_ENVELHECER} dias sem atualizar. Veículo lançado depois
             disso pode não aparecer na busca — use "Atualizar da FIPE".
           </div>
         )}
         {sync?.observacao && (
-          <div style={{ fontSize: 10, color: '#b45309', marginTop: 4 }}>{sync.observacao}</div>
+          <div className="acn-fip-obs">{sync.observacao}</div>
         )}
         {rodando && passo && (
-          <div style={{ fontSize: 10, color: '#1d4ed8', marginTop: 6 }}>⏳ {passo}</div>
+          <div className="acn-fip-passo"><Icone path={mdiTimerSandEmpty} size={13} /> {passo}</div>
         )}
-        <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 6 }}>
+        <div className="acn-ajuda acn-fip-nota">
           A atualização traz marcas e modelos. Os anos de cada modelo são buscados na primeira vez
           que aquele modelo é usado — baixar os anos de todos seria uma consulta por modelo,
           cerca de 15 mil.

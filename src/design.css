@@ -3457,3 +3457,55 @@ html body .acn-b.acn-cet-x { color: var(--acn-bad); }
 .acn-cet-grade { display: grid; grid-template-columns: minmax(0, 2fr) 70px 110px minmax(0, 1.6fr) auto; gap: 6px; align-items: center; }
 @media (max-width: 760px) { .acn-cet-grade { grid-template-columns: 1fr 1fr; } }
 .acn-pdv-cab svg, .acn-pdv-resp-item svg, .acn-cet-perg-txt svg, .acn-cet-opcao-txt svg, .acn-cet-alerta svg, .acn-cet-aviso-tit svg, .acn-rpl-aviso svg, .acn-cet-form svg { display: inline-block !important; vertical-align: -2px; }
+
+/* Veículos (12e55, 09/10/2026): painel da Tabela FIPE, fotos do carro na abertura da OP e o cadastro/edição/seleção de veículo. Só aparência.
+   O tom do painel da FIPE (catálogo velho = vermelho, em dia = verde) vem de [data-fip]; o botão de tirar foto fica redondo sobre a miniatura. */
+.acn-fip { margin-top: 12px; }
+.acn-fip-tit { display: inline-flex; align-items: center; gap: 6px; }
+.acn-fip-tit[data-fip="velho"] { color: var(--acn-bad); }
+.acn-fip-tit[data-fip="ok"] { color: var(--acn-ok); }
+.acn-fip-linha { font-size: 13px; color: var(--acn-text); }
+.acn-fip-aviso { margin-top: 4px; font-size: 12px; color: var(--acn-bad); }
+.acn-fip-obs { margin-top: 4px; font-size: 12px; color: var(--acn-warn); }
+.acn-fip-passo { margin-top: 6px; font-size: 12px; color: var(--acn-info); }
+.acn-fip-nota { margin-top: 6px; }
+.acn-fv { margin-bottom: 10px; padding: 8px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-fv-tit { margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-text); }
+.acn-fv-ajuda { margin-bottom: 6px; }
+.acn-fv-grade { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+.acn-fv-foto { position: relative; width: 78px; height: 78px; overflow: hidden; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 5px; }
+.acn-fv-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+html body .acn-b.acn-fv-x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; min-height: 0; padding: 0; color: #fff; background: rgba(15, 23, 42, .72); border-radius: 50%; }
+.acn-fv-entrada { font-size: 12px; }
+.acn-fv-subindo { margin-top: 3px; font-size: 11px; color: var(--acn-brand); }
+.acn-fv-erro { margin-top: 3px; font-size: 11px; color: var(--acn-bad); }
+.acn-fv-ver { display: flex; flex-wrap: wrap; gap: 5px; }
+.acn-fv-ver-img { display: block; object-fit: cover; border: 1px solid var(--acn-line); border-radius: 4px; }
+html body .modal-box.acn-modal-cadastro.acn-vcd-jan { width: min(560px, 96vw); max-width: 560px; }
+.acn-vcd-corpo { gap: 8px; }
+.acn-vcd-faixa-sub { margin-top: 2px; font-size: 12px; }
+.acn-vcd-tipos { display: flex; }
+.acn-vcd-tipos button { flex: 1; justify-content: center; }
+.acn-vcd-campo { display: grid; gap: 2px; }
+.acn-vcd-det { margin-top: 4px; }
+.acn-vcd-sum { font-size: 11px; color: var(--acn-info); cursor: pointer; }
+.acn-vcd-versao { width: 100%; margin-top: 4px; font-size: 12px; }
+.acn-vcd-info { font-size: 12px; color: var(--acn-info); }
+.acn-vcd-erro { font-size: 12px; color: var(--acn-bad); }
+.acn-vcd-anos { display: flex; flex-wrap: wrap; gap: 4px; }
+html body .acn-b.acn-vcd-ano { min-height: 0; height: auto; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 10px; }
+html body .acn-b.acn-vcd-ano.on { color: var(--acn-info); background: var(--acn-info-soft); border-color: var(--acn-info); }
+html body .acn-b.acn-vcd-link { height: auto; min-height: 0; margin-top: 4px; padding: 0 2px; font-size: 11px; color: var(--acn-info); text-decoration: underline; justify-self: start; }
+.acn-vcd-anos2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acn-vcd-ops { padding: 8px 10px; font-size: 12px; border: 1px solid var(--acn-line); border-radius: 4px; }
+.acn-vcd-troca { display: flex; align-items: flex-start; gap: 6px; cursor: pointer; }
+.acn-vcd-troca input { margin-top: 2px; }
+.acn-vcd-troca-sub { display: block; margin-top: 2px; color: var(--acn-muted); }
+.acn-vcd-rodape { align-items: center; justify-content: flex-start; }
+html body .acn-b.acn-vcd-modo { height: auto; min-height: 0; margin-left: auto; font-size: 11px; color: var(--acn-info); }
+.acn-vcd-sel { display: flex; align-items: center; gap: 6px; }
+.acn-vcd-sel-campo { flex: 1; min-width: 0; }
+.acn-vcd-fichas { margin-top: 12px; }
+.acn-vcd-fichas-corpo { overflow-x: auto; }
+.acn-vcd-busca { width: 300px; max-width: 100%; }
+.acn-fip-tit svg, .acn-fv-tit svg, .acn-fip-passo svg, .acn-vcd-fichas svg { display: inline-block !important; vertical-align: -2px; }
