@@ -7,6 +7,7 @@
 // devolve false e as telas renderizam exatamente como sempre.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useState } from 'react';
+import { Botao } from './Interface';
 
 export const MQ_CELULAR = '(hover: none) and (pointer: coarse) and (max-width: 639.98px)';
 
@@ -49,22 +50,19 @@ export function SeletorEtapas({ etapas, ativa, onChange }: any) {
     const el = ref.current?.querySelector('[data-ativa="1"]');
     el?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
   }, [ativa]);
+  // 12e58 (09/10/2026): só aparência — a faixa, as pílulas e o contador foram para o design.css (`acn-set-*`). Medido antes de mexer: o sistema já repintava estas
+  // pílulas em tempo de execução (branca com borda cinza, e a escolhida em verde-marca, quase sem a cor da etapa); agora o CSS diz isso por si — botão secundário/primário
+  // do guia no formato de pílula. A cor da etapa (dado) fica só no pontinho antes do título, como já é no cabeçalho das colunas do Kanban (KanbanColuna).
   return (
-    <div ref={ref} style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '2px 0 8px',
-      scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch' }}>
+    <div ref={ref} className="acn-set">
       {etapas.map(e => {
         const sel = e.id === ativa;
         return (
-          <button key={e.id} data-ativa={sel ? '1' : '0'} onClick={() => onChange(e.id)}
-            style={{ flexShrink: 0, scrollSnapAlign: 'center', display: 'flex', alignItems: 'center', gap: 6,
-              padding: '8px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-              border: `2px solid ${e.cor || '#64748b'}`,
-              background: sel ? (e.cor || '#64748b') : '#fff',
-              color: sel ? '#fff' : (e.cor || '#334155') }}>
+          <Botao key={e.id} variante={sel ? 'primario' : 'secundario'} data-ativa={sel ? '1' : '0'} onClick={() => onChange(e.id)} className="acn-set-bt">
+            {e.cor && <i className="acn-set-ponto" style={{ background: e.cor }} />}
             {e.titulo}
-            <span style={{ fontSize: 12, fontWeight: 800, borderRadius: 10, padding: '0 7px',
-              background: sel ? '#ffffff33' : `${e.cor || '#64748b'}1a` }}>{e.total}</span>
-          </button>
+            <span className="acn-set-n">{e.total}</span>
+          </Botao>
         );
       })}
     </div>

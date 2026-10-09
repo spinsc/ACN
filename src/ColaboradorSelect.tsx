@@ -105,16 +105,9 @@ export function ColaboradorSelect({
   if (value && !vistos.has(_chaveNome(value))) extras.push({ id: 'v-atual', nome: value, cargo: '' });
   const list = [...colaboradores, ...extras].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 
-  const baseStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '6px 8px',
-    border: '1px solid #d1d5db',
-    borderRadius: 4,
-    fontSize: 11,
-    boxSizing: 'border-box',
-    background: '#fff',
-    ...style,
-  };
+  // 12e58 (09/10/2026): só aparência — o estilo que era montado aqui (`baseStyle`: largura cheia, 11 px, borda e fundo) virou a classe do campo do guia com o tamanho
+  // pequeno de antes (`acn-cols`, no design.css); o `style` e a `className` de quem chama seguem valendo, repassados como antes.
+  const classes = 'acn-input acn-cols' + (className ? ' ' + className : '');
 
   // Enquanto carrega, mostra input desabilitado brevemente
   if (!loaded) {
@@ -123,8 +116,8 @@ export function ColaboradorSelect({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="Carregando colaboradores..."
-        style={{ ...baseStyle, color: '#9ca3af' }}
-        className={className}
+        style={style}
+        className={classes + ' carregando'}
       />
     );
   }
@@ -136,8 +129,8 @@ export function ColaboradorSelect({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        style={baseStyle}
-        className={className}
+        style={style}
+        className={classes}
         autoFocus={autoFocus}
         onKeyDown={onKeyDown}
       />
@@ -148,8 +141,8 @@ export function ColaboradorSelect({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      style={baseStyle}
-      className={className}
+      style={style}
+      className={classes}
       autoFocus={autoFocus}
       onKeyDown={onKeyDown}
     >

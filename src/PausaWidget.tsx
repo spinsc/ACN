@@ -16,6 +16,9 @@
 //   pausado boolean, data_pausa timestamptz, tempo_pausado_horas numeric
 import React, { useState, useEffect } from 'react';
 import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPlay, mdiPause } from '@mdi/js';
 
 // Tempo decorrido útil (já descontando pausas manuais e horário fora do
 // expediente) de uma etapa com `inicio`. Só liga o intervalo de 1s quando
@@ -41,10 +44,13 @@ export function useTempoUtil(inicio, pausado, dataPausa, tempoPausadoHoras) {
 
 // Botão Pausar/Retomar reutilizável — `onPausar`/`onRetomar` fazem o update
 // no banco (o chamador decide a tabela/registro).
+// 12e58 (09/10/2026): só aparência — virou o botão pequeno secundário do guia, com ícone. Medido antes de mexer: o sistema já repintava os dois botões (que no código eram
+// verde e âmbar) no verde-marca; o que o usuário via era um botão escuro igual ao "LIBERAR BOM" ao lado, e agora ele é secundário (a ação principal é o outro).
+// `fontSize` continua aceito só para não quebrar quem chama (ninguém passa); a letra agora é a do botão pequeno.
 export function BotaoPausar({ pausado, fontSize = 9, onPausar, onRetomar }) {
   return pausado
-    ? <button className="acn-btn" style={{ background: '#16a34a', fontSize }} onClick={onRetomar}>▶ Retomar</button>
-    : <button className="acn-btn" style={{ background: '#f59e0b', fontSize }} onClick={onPausar}>⏸ Pausar</button>;
+    ? <Botao pequeno icone={mdiPlay} data-estado="pausado" onClick={onRetomar}>Retomar</Botao>
+    : <Botao pequeno icone={mdiPause} data-estado="ativo" onClick={onPausar}>Pausar</Botao>;
 }
 
 // Helpers de update — reutilizados nos handlers de pausar/retomar de cada
@@ -65,11 +71,12 @@ export async function retomarOpl(supabase, opl) {
 // Badge "fora do expediente" -- só decorativo, mostra quando o horário
 // atual está fora de Seg-Sex 8h-17:45 (o cronômetro já não anda sozinho
 // nesse período, isso só deixa visível o porquê).
+// 12e58: o tamanho e a cor foram para o design.css (`acn-pausa-fora`); o texto de 8 px passou para 11 px. `fontSize` segue aceito e ignorado, como acima.
 export function BadgeForaExpediente({ fontSize = 8 }) {
   if (dentroDoExpediente()) return null;
   return (
-    <span style={{ fontSize, color: '#94a3b8', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-      ⏸ fora do expediente
+    <span className="acn-pausa-fora">
+      <Icone path={mdiPause} size={11} /> fora do expediente
     </span>
   );
 }

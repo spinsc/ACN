@@ -69,19 +69,11 @@ export function useUnread(
 /**
  * Badge visual de "não lido" — usar inline no card/linha
  */
+// 12e58 (09/10/2026): só aparência — a bolinha e o realce foram para o design.css (`acn-unr-*`). A animação `acn-pulse` que ficava aqui nunca existiu em lugar nenhum
+// (nenhum @keyframes com esse nome), então a bolinha nunca pulsou e não levei a linha.
 export function UnreadBadge({ show }: { show: boolean }) {
   if (!show) return null;
-  return (
-    <span style={{
-      display:'inline-block',
-      width:8, height:8,
-      borderRadius:'50%',
-      background:'#dc2626',
-      boxShadow:'0 0 0 2px #fee2e2',
-      flexShrink:0,
-      animation:'acn-pulse 2s infinite',
-    }} title="Atualizado — não lido" />
-  );
+  return <span className="acn-unr-bola" title="Atualizado — não lido" />;
 }
 
 /**
@@ -93,24 +85,8 @@ export function UnreadHighlight({ children, show, style = {} }: {
   style?: React.CSSProperties;
 }) {
   return (
-    <div style={{
-      position:'relative',
-      ...(show ? {
-        background:'#fef9c3',
-        boxShadow:'inset 3px 0 0 #f59e0b',
-        transition:'background .4s',
-      } : {}),
-      ...style,
-    }}>
-      {show && (
-        <div style={{
-          position:'absolute', top:4, right:4,
-          width:8, height:8, borderRadius:'50%',
-          background:'#dc2626',
-          boxShadow:'0 0 0 2px #fee2e2',
-          zIndex:2,
-        }} />
-      )}
+    <div className={'acn-unr-realce' + (show ? ' nao-lido' : '')} style={style}>
+      {show && <div className="acn-unr-ponto" />}
       {children}
     </div>
   );

@@ -3560,3 +3560,38 @@ html body .sec-body.acn-fer-tabela { overflow-x: auto; padding: 0; }
 .acn-fer-data { white-space: nowrap; }
 .acn-sco-prio { display: flex; gap: 6px; }
 html body .modal-overlay.acn-sco-fundo { z-index: 2600; }
+
+/* ── 12e58 (09/10/2026): peças pequenas compartilhadas — pausar/retomar, origem da venda, etapas do celular, modo dividido, "não lido" e colaborador ──
+   Medido antes de mexer: o sistema já repintava, em tempo de execução, a etiqueta da origem da venda, as pílulas das etapas do celular, o seletor de modo e os campos de
+   colaborador nos tons e tamanhos do guia (letra de 12 a 13 px, âmbar/azul/verde-marca). Estas regras dizem isso no próprio CSS — o que o usuário vê hoje não muda. */
+.acn-pausa-fora { font-size: 11px; color: var(--acn-muted); font-style: italic; white-space: nowrap; }
+.acn-pausa-fora svg { display: inline-block !important; vertical-align: -2px; }
+.acn-orv { font-size: 12px; font-weight: 900; border-radius: 3px; padding: 1px 6px; letter-spacing: .2px; white-space: nowrap; text-transform: uppercase; border: 1px solid transparent; }
+.acn-orv[data-origem=licitacao] { background: var(--acn-warn-soft); color: var(--acn-warn); border-color: color-mix(in srgb, var(--acn-warn) 22%, transparent); }
+.acn-orv[data-origem=venda_direta] { background: var(--acn-info-soft); color: var(--acn-info); border-color: color-mix(in srgb, var(--acn-info) 22%, transparent); }
+.acn-orv.tv { font-size: 18px; border-radius: 8px; padding: 4px 12px; letter-spacing: .5px; }
+.acn-orv.sem { font-size: 11px; font-weight: 800; padding: 1px 5px; letter-spacing: .18px; text-transform: none; border: 1px dashed #94a3b8; color: #64748b; }
+.acn-orv.sem.tv { font-size: 13px; border-radius: 6px; padding: 3px 10px; border-color: #64748b; color: #94a3b8; }
+.acn-orv svg { display: inline-block !important; vertical-align: -.15em; }
+.acn-set { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+html body .acn-b.acn-set-bt { flex-shrink: 0; scroll-snap-align: center; display: flex; align-items: center; gap: 6px; height: auto; min-height: 0; padding: 8px 12px; border-radius: 20px; border-width: 2px; font-size: 13px; font-weight: 700; }
+.acn-set-ponto { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .75); }
+.acn-set-n { font-size: 12px; font-weight: 800; border-radius: 10px; padding: 0 7px; background: var(--acn-line-soft); }
+.acn-set-bt.acn-b-primario .acn-set-n { background: rgba(255, 255, 255, .2); }
+.acn-msp { display: inline-flex; border-radius: 5px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--acn-line); }
+.acn-msp.escuro { border-color: rgba(255, 255, 255, .45); }
+html body .acn-b.acn-msp-bt { border: 1px solid transparent; border-radius: 0; cursor: pointer; padding: 2px 8px; font-size: 13px; line-height: 1.2; height: auto; min-height: 0; background: var(--acn-surface); color: var(--acn-ink); }
+html body .acn-b.acn-msp-bt[aria-pressed=true] { background: var(--acn-brand); color: #fff; }
+html body .acn-msp.escuro .acn-b.acn-msp-bt { background: transparent; color: #fff; }
+html body .acn-msp.escuro .acn-b.acn-msp-bt[aria-pressed=true] { background: #fff; color: #1e293b; }
+html body .acn-b.acn-msp-bt:hover:not(:disabled) { background: var(--acn-surface); color: var(--acn-ink); }
+html body .acn-b.acn-msp-bt[aria-pressed=true]:hover:not(:disabled) { background: var(--acn-brand); color: #fff; }
+html body .acn-msp.escuro .acn-b.acn-msp-bt:hover:not(:disabled) { background: transparent; color: #fff; }
+html body .acn-msp.escuro .acn-b.acn-msp-bt[aria-pressed=true]:hover:not(:disabled) { background: #fff; color: #1e293b; }
+body.dark .acn-msp.escuro .acn-b.acn-msp-bt[aria-pressed=true], body.dark .acn-msp.escuro .acn-b.acn-msp-bt[aria-pressed=true]:hover:not(:disabled) { background: var(--acn-brand); color: #fff; }
+.acn-unr-bola { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 2px #fee2e2; flex-shrink: 0; }
+.acn-unr-realce { position: relative; }
+.acn-unr-realce.nao-lido { background: #fef9c3; box-shadow: inset 3px 0 0 #f59e0b; transition: background .4s; }
+.acn-unr-ponto { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 2px #fee2e2; z-index: 2; }
+html body .acn-input.acn-cols { width: 100%; box-sizing: border-box; padding: 6px 8px; min-height: 0; font-size: 13px; border-radius: 4px; }
+html body .acn-input.acn-cols.carregando { color: var(--acn-muted); }

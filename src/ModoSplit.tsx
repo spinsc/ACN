@@ -11,6 +11,7 @@
 // de perda que já aconteceu em 08/09. Com display:none tudo continua vivo.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useCallback } from 'react';
+import { Botao } from './Interface';
 
 export type ModoSplit = 'dividido' | 'esquerda' | 'direita';
 
@@ -50,21 +51,16 @@ const OPCOES: { valor: ModoSplit; icone: string; titulo: string }[] = [
 ];
 
 /** Seletor de 3 botões. `escuro` = para cabeçalho colorido (texto branco). */
+// 12e58 (09/10/2026): só aparência — a moldura e as cores dos três botões (claro, ativo, e a versão `escuro` para cabeçalho colorido) foram para o design.css (`acn-msp-*`).
 export function SeletorModoSplit({ modo, onModo, escuro = false }: { modo: ModoSplit; onModo: (m: ModoSplit) => void; escuro?: boolean }) {
   return (
-    <div role="group" aria-label="Modo de exibição"
-      style={{ display: 'inline-flex', borderRadius: 5, overflow: 'hidden', flexShrink: 0,
-        border: `1px solid ${escuro ? 'rgba(255,255,255,.45)' : '#cbd5e1'}` }}>
+    <div role="group" aria-label="Modo de exibição" className={'acn-msp' + (escuro ? ' escuro' : '')}>
       {OPCOES.map(o => {
         const ativo = modo === o.valor;
         return (
-          <button key={o.valor} type="button" onClick={() => onModo(o.valor)}
-            title={o.titulo} aria-pressed={ativo}
-            style={{ border: 'none', cursor: 'pointer', padding: '2px 8px', fontSize: 13, lineHeight: 1.2,
-              background: ativo ? (escuro ? 'rgba(255,255,255,.9)' : '#1e3a5f') : (escuro ? 'transparent' : '#fff'),
-              color: ativo ? (escuro ? '#1e293b' : '#fff') : (escuro ? '#fff' : '#475569') }}>
+          <Botao key={o.valor} variante="discreto" pequeno onClick={() => onModo(o.valor)} title={o.titulo} aria-pressed={ativo} className="acn-msp-bt">
             {o.icone}
-          </button>
+          </Botao>
         );
       })}
     </div>

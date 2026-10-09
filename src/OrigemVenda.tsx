@@ -11,12 +11,16 @@
 // da OP (OplDetalheModal) por Comercial, Licitações, PCP, Gerentes e Admin.
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
+import Icone from './Icone';
+import { mdiBank, mdiHandshakeOutline } from '@mdi/js';
 
 export type OrigemVenda = 'licitacao' | 'venda_direta';
 
-export const ORIGENS: { valor: OrigemVenda; label: string; emoji: string; cor: string; fundo: string }[] = [
-  { valor: 'licitacao',    label: 'Licitação',    emoji: '🏛️', cor: '#7c2d12', fundo: '#fed7aa' },
-  { valor: 'venda_direta', label: 'Venda direta', emoji: '🤝', cor: '#1e3a8a', fundo: '#bfdbfe' },
+// 12e58 (09/10/2026): a etiqueta (OrigemVendaBadge) agora pinta pelas classes do design.css (`acn-orv`, por `[data-origem]`) e usa `icone` no lugar do emoji; `emoji`, `cor` e
+// `fundo` ficam aqui só porque a Nova OP/OS (NovaOpOsModal) ainda lê os três nos botões de escolher a origem — saem quando essa tela for migrada.
+export const ORIGENS: { valor: OrigemVenda; label: string; emoji: string; icone: string; cor: string; fundo: string }[] = [
+  { valor: 'licitacao',    label: 'Licitação',    emoji: '🏛️', icone: mdiBank,              cor: '#7c2d12', fundo: '#fed7aa' },
+  { valor: 'venda_direta', label: 'Venda direta', emoji: '🤝', icone: mdiHandshakeOutline, cor: '#1e3a8a', fundo: '#bfdbfe' },
 ];
 
 export const origemInfo = (v: any) => ORIGENS.find(o => o.valor === v) || null;
@@ -38,19 +42,14 @@ export function OrigemVendaBadge({ origem, tamanho = 'normal', ocultarSemOrigem 
   if (!info && ocultarSemOrigem) return null;
   if (!info) {
     return (
-      <span title="Origem da venda não informada — complete pelo detalhe da OP"
-        style={{ fontSize: tv ? 13 : 8, fontWeight: 800, borderRadius: tv ? 6 : 3, padding: tv ? '3px 10px' : '1px 5px',
-          border: '1px dashed ' + (tv ? '#64748b' : '#94a3b8'), color: tv ? '#94a3b8' : '#64748b', whiteSpace: 'nowrap' }}>
+      <span title="Origem da venda não informada — complete pelo detalhe da OP" className={'acn-orv sem' + (tv ? ' tv' : '')}>
         {tv ? 'ORIGEM ?' : 'origem ?'}
       </span>
     );
   }
   return (
-    <span title={'Origem da venda: ' + info.label}
-      style={{ fontSize: tv ? 18 : 9, fontWeight: 900, borderRadius: tv ? 8 : 3, padding: tv ? '4px 12px' : '1px 6px',
-        background: info.fundo, color: info.cor, letterSpacing: tv ? .5 : .2, whiteSpace: 'nowrap',
-        textTransform: 'uppercase', border: '1px solid ' + info.cor + '55' }}>
-      {info.emoji} {info.label}
+    <span title={'Origem da venda: ' + info.label} className={'acn-orv' + (tv ? ' tv' : '')} data-origem={info.valor}>
+      <Icone path={info.icone} size={tv ? 18 : 12} /> {info.label}
     </span>
   );
 }
