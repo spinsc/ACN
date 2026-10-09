@@ -103,3 +103,41 @@ com outras tarefas. O estado **não está na sua memória** — está no arquivo
   linhas mudaram.
 - Não repita trabalho de outra sessão em andamento (o plano cita, no achado C,
   a correção de `'Concluida'` das demandas setoriais, rodando à parte).
+
+## Modo noite (rotina automática) e ENCERRAMENTO — pedido do usuário em 08/10/2026
+
+**Quando vale:** o usuário disser "o mesmo plano de toda noite", "tudo automático" ou equivalente. Nesse modo **não se pára para perguntar o próximo passo**.
+
+**O ciclo, repetido sozinho:** (1) escolher o próximo passo pelo plano (ver a ordem abaixo); (2) implementar; (3) `npx vite build` verde e teste no navegador com gravação bloqueada,
+comparando o antes e o depois quando a etapa for visual; (4) atualizar este plano (etapa marcada ✅, o que foi feito, números reais, o que ficou de fora); (5) **commitar** (mensagem em
+português, com o trailer de co-autoria); (6) **dar `git push`** — o usuário autorizou o push a cada passo **nessa sessão** (08/10/2026); (7) **acompanhar o deploy** até terminar com sucesso
+(`gh run list`/`gh run watch`, sem confiar na primeira resposta da API: ela já falhou com erro 500 passageiro); **se falhar, corrigir e repetir até funcionar**, e só então (8) seguir
+para o próximo passo.
+
+**Parar:** quando o usuário mandar **"pare no próximo commit"** (ou parecido) durante o trabalho, terminar o passo em andamento — commit, push e conferência do deploy, que já estão
+testados — e **parar**, sem começar outro. Responder dizendo onde parou e o que seria o próximo passo.
+
+**Ordem do que fazer:** (a) o que já está decidido e é só código: as fatias que faltam da Etapa 12 (CRM 12e40 e 12e41; depois as telas grandes e os componentes compartilhados, das
+menores para as maiores, no método de sempre: fotografia e comportamento comparados nas duas versões); (b) as respostas já dadas pelo usuário que pedem construção: R1 + R8 + R3, R6, R7 e R17;
+(c) as perguntas guardadas de 07/10; (d) a Etapa 13, que só começa quando a medida de "pronto" (quase nenhum `style` inline de cor e nenhum botão cru fora dos impressos) for atingida.
+Em cada tela grande, **antes** da migração, a etapa 7.x de achados (bugs que passam em silêncio), como foi feito até aqui.
+
+**Dúvida de regra de negócio no meio da noite:** não parar. Escolher o caminho **mais conservador** (que não apaga, não bloqueia e não muda dado real), construir assim, e **registrar a suposição
+no plano marcada "a confirmar"**, para o usuário conferir de manhã. Dado real só o que a resposta dele já autoriza, com contagem; nunca apagar sem autorização explícita.
+
+**Nota de atualização do dia** (regra do projeto: uma por dia trabalhado, **mostrada a ele antes de publicar**): durante a noite **não publicar**; deixar o rascunho pronto em `scratchpad`
+e avisar no encerramento.
+
+### Encerramento — quando "tudo que tem no plano" estiver feito
+
+Está encerrado quando **tudo o que depende só de mim** estiver ✅: a Etapa 12 inteira, a Etapa 13, as respostas R1 + R8 + R3, R6, R7 e R17, e as perguntas guardadas de 07/10 resolvidas
+(com a suposição registrada, se não deu para perguntar). O que depende de outras pessoas **não impede** o encerramento, mas vai listado: R11 (o RH informa o percentual dos serralheiros),
+as 3 fichas de veículo de nome curto (a equipe corrige pela tela) e as suposições marcadas "a confirmar".
+
+**Ao encerrar, fazer, nesta ordem:**
+1. Atualizar o plano com o quadro final (o que foi feito, o que ficou esperando decisão ou outra pessoa).
+2. **Avisar o usuário** com a ferramenta `PushNotification` (carregue-a com `ToolSearch` se estiver como ferramenta adiada), texto curto, por exemplo:
+   *"ACN: o plano de UX/fluxo foi encerrado. Para iniciar a Garantia (G1), digite /garantia."*
+3. Na mensagem final da conversa, dizer em linguagem de processo: o que foi entregue, os números reais, o que ficou pendente com o usuário/RH/equipe, a nota do dia pronta para ele
+   conferir — e **terminar com: "Para iniciar a Garantia, digite `/garantia`."**
+4. **Não iniciar a Garantia sozinho:** ela tem decisões que o usuário precisa tomar com os setores (ver `PLANO_GARANTIA.md`). O comando `/garantia` conduz essa retomada.

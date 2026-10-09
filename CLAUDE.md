@@ -23,6 +23,10 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > fatia com uma etapa 7.x de achados antes. O `/ux-fluxo` segue pelas telas grandes, pelos componentes compartilhados
 > e pelas respostas que pedem desenho com o usuário (R1+R8+R3, R6, R7, R17); R4 e R9 estão
 > parciais (ver o quadro de "Respostas a aplicar").
+> **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:**
+> [PLANO_GARANTIA.md](PLANO_GARANTIA.md) — atendimento em garantia (G1 a G6), retomado pelo comando
+> `/garantia`. A rotina automática da noite (trabalhar, commitar, push e deploy, próximo passo; "pare no
+> próximo commit" interrompe) está descrita no `/ux-fluxo`.
 
 ---
 

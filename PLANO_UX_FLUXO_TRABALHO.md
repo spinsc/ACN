@@ -13,6 +13,32 @@ apresentar o mapa completo e as etapas propostas.
 
 ---
 
+## Rotina da noite e encerramento (pedido do usuário em 08/10/2026)
+
+**Rotina automática** (o mesmo plano de toda noite): trabalhar → testar → commitar → **dar push** (autorizado a cada passo nessa sessão) → acompanhar o deploy até o sucesso (falhou: corrigir e repetir)
+→ próximo passo. O usuário manda **"pare no próximo commit"** para interromper: termina-se o passo em andamento (commit, push e deploy) e para. O detalhe está no comando `/ux-fluxo`
+(seção "Modo noite").
+
+**Ao encerrar tudo o que depende só do Claude, ele AVISA o usuário** (`PushNotification` + mensagem final) **e diz: "Para iniciar a Garantia, digite `/garantia`."** A Garantia (`PLANO_GARANTIA.md`,
+etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com os setores.
+
+**Checklist do encerramento** (o que ainda falta, medido em 08/10/2026; marcar ✅ aqui conforme sair):
+
+| # | O que | Estado |
+|---|---|---|
+| 1 | **Etapa 12:** CRM 12e40 (painel esquerdo do card aberto) e 12e41 (abas da direita e lançamento em lote de chassi/placa) | ⬜ |
+| 2 | **Etapa 12:** Admin (541 `style` inline), componentes compartilhados (`DemandaAvulsaPanel` 242, `AcnTabShared` 180, `NovaOpOsModal` 166, `AnaliseWidget` 109, `ChatWidget` 135, `ContactosSection` 152) e as telas que sobraram (`CadastroProdutosTab` 218, `Estoque` 209, `VeiculosNfcTab` 195, `HorasTarefasTab` 127, `CadastroItensTab` 119 e as demais) — medido hoje: **4.192 `style` inline, 598 botões crus, 100 arquivos** | ⬜ |
+| 3 | **Etapa 13** (aposentar `TonsVisuais` e o modo escuro cor por cor): só quando o item 2 atingir a medida de "pronto" | ⬜ |
+| 4 | **R1 + R8 + R3** — fluxo da OP até a Engenharia (campos obrigatórios, perguntas do carro na abertura, contador de devolvidas + aviso). *Suposição a confirmar:* "gerente de quem abriu" = o gerente cujo setor está no mapa `EQUIPE_DO_GERENTE` (`utils/permissoes.ts`); não existe vínculo individual no cadastro | ⬜ |
+| 5 | **R6** — contador no menu do Compras + alçadas. *Suposição a confirmar:* "qualquer aprovador resolve", como decidido em 24/09 | ⬜ |
+| 6 | **R7** — `ver_valores` valendo na sessão (esconder de 4 pessoas; ligar a marca de Fernando e Luiz — 2 linhas, medir de novo antes) | ⬜ |
+| 7 | **R17** — CEP validado em todo campo de CEP | ⬜ |
+| 8 | **Perguntas guardadas de 07/10** (modo vendedor da Formação, "Responder" das Cotações, `numero_cotacao` sorteado, busca de produto que esconde erro, conferir notas duplicadas do CRM): resolver pelo caminho conservador e registrar a suposição | ⬜ |
+| — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
+| — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
+
+---
+
 ## Onde queremos chegar
 
 Hoje, saber "em que pé está este PV" exige abrir 3 a 5 telas diferentes
@@ -4314,6 +4340,27 @@ Lista passada pelo usuário em 07/10/2026, com as dúvidas tiradas na hora e o t
 | 16 | Participantes em agendamento/tarefa/compromisso (agenda e calendário deles) | ✅ 08/10/2026 | **Participantes** (pessoas envolvidas/cientes) em: compromissos da Agenda e do Calendário, tarefas do Financeiro (a próxima ocorrência de tarefa que se repete leva os mesmos), tarefas da Engenharia (na criação e no menu "Participantes"), agendamentos de manutenção (Produção) e próximo contato dos cards do Comercial (nos dois formulários do card). Migração `participantes_em_agenda_tarefas_e_agendamentos` (coluna `participantes` jsonb, padrão vazio, nas 5 tabelas; nenhuma linha existente mexida). Quem é adicionado **recebe aviso** na caixa de Menções (o do CRM abre o próprio card) e **vê o item na agenda e no calendário**; participante só enxerga (editar/excluir/concluir é do dono e da gerência). O **Calendário** passou a mostrar também as tarefas do Financeiro (no vencimento), as da Engenharia (no dia do início ou da criação) e os agendamentos de manutenção em que a pessoa é dona ou participante, e os contatos do CRM por participante; leitura que falha avisa. Componente novo `Participantes.tsx`. Testado: Calendário (participante só vê, sem botões; dono edita; lista exclui o dono e os inativos; gravação com a lista e o aviso conferidos), os 4 tipos de evento no mesmo dia, nova tarefa do Financeiro com participante (gravação + aviso), agenda do Comercial; os filtros `.or` foram validados contra o banco real em leitura. **Limite:** a tarefa da Engenharia não tem data própria — aparece no dia em que começou (ou foi criada). |
 | 17 | CQ: serial dos itens instalados (OP adaptada) | ✅ 08/10/2026 | Na auditoria do CQ (OP com itens vendidos) aparece a seção **"Seriais dos itens instalados"**: um campo por item **vendido da OP, menos os do conjunto elétrico** (o "CONJUNTO ELETRICO PV …", pelo cadastro `eh_conjunto_instalacao` ou pelo nome), com um serial **por unidade** (uma linha cada ou separados por vírgula), contador `n/N`, e a marca **"Sem serial" com o motivo obrigatório**. **Obrigatório para aprovar**: sem serial/motivo, quantidade diferente da vendida ou serial repetido, a aprovação é recusada com a mensagem do problema (reprovar não exige). Fica gravado na própria auditoria — migração `cq_seriais_dos_itens_instalados` (coluna `cq_auditorias.seriais_instalados`, nenhuma auditoria existente mexida). OS de manutenção veicular não tem itens vendidos e não muda. Testado com uma OP simulada (conjunto + 3 itens): a lista mostra só os 3, as recusas (repetido, sem motivo) e a aprovação com a gravação conferida. **Fica para o card da OP (item 14):** mostrar os seriais registrados. |
 | 18 | Análise: edição mostra data/hora/autor da edição | ✅ 08/10/2026 | Depois de editado, o parecer da análise mostra o autor, a data e a hora da EDIÇÃO (três lugares: painel da licitação/CRM e a caixa de análises), com a marca discreta "editada"; se quem editou não for quem fez a análise, a marca acrescenta bem de leve "análise de Fulano" (hoje só o autor edita, então isso só aparece se a regra mudar). Testado a regra em 4 casos (sem edição, editada pelo autor com outra caixa de letras, por outra pessoa, sem nome do editor). |
+
+### 📋 Entregas de 06 a 08/10/2026 fora das listas acima (pedidos avulsos do usuário na conversa)
+
+Registro feito em 08/10/2026 (a regra do projeto é o plano andar junto do código). Cada linha foi testada no navegador com gravação bloqueada (ou com dado simulado na leitura) e publicada.
+
+| Item | Data | O que foi feito |
+|---|---|---|
+| Comissões — visão **Produção, Serralheria e Adaptação** em Relatórios › Comissões | 06/10 | A conta dos técnicos saiu do RH para `ComissaoCalculo.ts` (sem mudar a lógica; o RH ficou idêntico em 5 cenários) e o relatório ganhou a segunda visão com PDF. A visão dos vendedores deixou de listar técnicos sem venda. |
+| **Parecer da análise editável só pelo autor**, com marca "editada" | 07/10 | Migração `analise_setores_parecer_editado` (`notas_editado_em/por`, vazias). Editar grava o histórico (`analise_logs`); reabrir/concluir zera a marca. |
+| DIFAL e Markup: clicar no campo travado libera a edição item a item | 07–08/10 | Pergunta, copia os globais para cada linha e libera a digitação. |
+| **Unitário do Lote** = total do lote ÷ soma das quantidades dos itens | 08/10 | Decisão do usuário (antes era a soma dos unitários dos itens). |
+| Contagem das faixas de markup acompanha os filtros; menu do card do Comercial sem "Abrir"; X de remover produto sempre pergunta | 08/10 | Contagem igual ao que a tela mostra (17 de 17 conferidos). |
+| **CQ:** aprovação falhava com número de OP com acento ou espaço | 08/10 | Só o nome do arquivo da assinatura é limpo. |
+| **Aviso "sistema atualizado"** no lugar do erro técnico de arquivo que sumiu depois de uma publicação | 08/10 | `VersaoNova.ts`; oferece atualizar a página, sem recarregar sozinho. |
+| **Markup com 4 casas**; **calendário** com a lista do dia na lateral; **SAC**: resumo completo da OS ao clicar no card do Kanban; **Abrir OS de veículo** com o cadastro de veículos da OP | 08/10 | Markup reverso passa a fechar o preço exato. |
+| **OPs em aberto, lote**: Resumo, Compra e Fiscal no lote inteiro; **Engenharia e PCP**: Resumo do lote e selo "carros iguais / itens diferentes" | 08/10 | `ResumoLoteOpl.tsx`; o resumo lê a OP completa (a lista traz só colunas da tabela). |
+| **Faturamento antecipado** (faturar sem terminar a adaptação) | 08/10 | Desenho aprovado: marca à parte (`fat_antecipado_*`, migração `oples_faturamento_antecipado`), justificativa, quadro no Fiscal; no CQ a OP pula a espera de liberação comercial. Teste 10 de 10. |
+| **Comissão do vendedor por tipo de venda** (Revenda, Venda, Pós-vendas) | 08/10 | Migração `rh_funcionarios_percentuais_por_tipo`; tela e PDF usam o percentual do tipo do card do CRM. |
+| **PV 1325**: item do lote contado duas vezes por técnico | 08/10 | Linha repetida em `responsaveis_producao`. O cálculo conta uma vez; a gravação da Produção não repete; **6 linhas apagadas com autorização (251 → 245)** e trava no banco (`responsaveis_producao_unica`). Total de outubro R$ 100,31 → R$ 87,61. |
+| **Demandas**: envolvidos (estilo Trello), demanda para vários setores (uma parte por setor, `grupo_id`) e descrição do anexo; **Selecionar todos** nos participantes | 08/10 | `DemandaExtras.tsx`; migrações `demandas_membros_grupo_descricao_anexo` e `remove_demandas_setoriais_membros` (coluna sem uso, removida com a confirmação do usuário). |
+| **Garantia** — desenho em `PLANO_GARANTIA.md` (G1 a G6) e o comando `/garantia` | 08/10 | Nada construído; começa pelo comando, depois do encerramento deste plano. |
 
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex — **bloqueada** (medido em 02/10/2026)
 
