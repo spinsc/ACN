@@ -67,7 +67,7 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
         dica="Valor é opcional: se não souber, o comprador completa." />
       <div className="form-group">
         <label className="acn-label">Prioridade</label>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div className="acn-sco-prio">
           {PRIORIDADES.map(p => (
             <Botao key={p} pequeno variante={valor.prioridade === p ? 'primario' : 'secundario'} aria-pressed={valor.prioridade === p}
               onClick={() => set('prioridade', p)}>{p}</Botao>
@@ -80,7 +80,7 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
       </div>
       <div className="form-group">
         <label className="acn-label">{centroObrigatorio ? 'Centro de custo *' : 'Centro de custo (opcional)'}</label>
-        <CentroCustoSelect value={valor.centroCustoId} onChange={v => set('centroCustoId', v)} style={{ width: '100%' }} />
+        <CentroCustoSelect value={valor.centroCustoId} onChange={v => set('centroCustoId', v)} className="acn-input" semEstilo />
         <div className="acn-ajuda">{centroObrigatorio ? 'Obrigatório: onde a compra será apontada.' : 'Onde a compra será apontada. Dá para deixar em branco e informar depois.'}</div>
         {/* Etapa 15c: aviso (só aviso) quando o centro já usou 80% do orçamento do mês ou do ano */}
         <AvisoSaldoCentro centroId={valor.centroCustoId} />
@@ -102,7 +102,7 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
       <div className="form-group">
         <label className="acn-label">Comprador responsável (opcional)</label>
         <ColaboradorSelect value={valor.comprador} onChange={v => set('comprador', v)} incluirUsuariosDaAba="compras"
-          placeholder="Deixe em branco para o Compras definir" style={{ width: '100%' }} />
+          placeholder="Deixe em branco para o Compras definir" />
       </div>
       <div className="form-group">
         <label className="acn-label">Anexos (opcional)</label>
@@ -172,8 +172,9 @@ export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra',
     onClose?.();
   };
 
+  // 12e57 (09/10/2026): só aparência — a camada da janela (acima das telas de Compras e do CRM) e a fila de prioridades saíram do style inline; o centro de custo passou a ser o campo do guia, como os demais da janela
   return (
-    <div className="modal-overlay" style={{ zIndex: 2600 }}>
+    <div className="modal-overlay acn-sco-fundo">
       <div className="modal-box acn-modal-cadastro acn-sac-jan acn-compra-jan">
         <div className="acn-modal-cab">
           <span className="modal-title">{titulo}</span>

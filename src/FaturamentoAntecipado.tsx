@@ -95,8 +95,9 @@ export function FiscalAntecipadas({ currentUser }: any) {
   };
 
   if (lista.length === 0) return null;
+  // 12e57 (09/10/2026): só aparência — a margem de cima da barra e a largura dos campos de nota saíram do style inline e foram para o design.css (a margem de baixo do cartão já é a do guia)
   return (
-    <div className="sec-card" style={{ marginBottom: 12 }}>
+    <div className="sec-card">
       <div className="sec-hdr no-collapse">
         <span className="acn-cab-titulo">Faturamento antecipado — adaptação em andamento <Selo familia="atencao" ponto={false}>{lista.length}</Selo></span>
       </div>
@@ -125,9 +126,9 @@ export function FiscalAntecipadas({ currentUser }: any) {
           </table>
         </div>
         {semNota.length > 0 && (
-          <div className="acn-com-barra" style={{ marginTop: 8 }}>
-            <input className="acn-input" style={{ width: 150 }} placeholder="NF-e (material)" value={nf} onChange={e => setNf(e.target.value)} />
-            <input className="acn-input" style={{ width: 150 }} placeholder="NFS-e (serviço)" value={nfServ} onChange={e => setNfServ(e.target.value)} />
+          <div className="acn-com-barra acn-fta-barra">
+            <input className="acn-input acn-fta-nf" placeholder="NF-e (material)" value={nf} onChange={e => setNf(e.target.value)} />
+            <input className="acn-input acn-fta-nf" placeholder="NFS-e (serviço)" value={nfServ} onChange={e => setNfServ(e.target.value)} />
             <Botao variante="primario" disabled={gravando || marcadas.size === 0} onClick={registrar}>
               {gravando ? '...' : `Registrar nota em ${marcadas.size} OP(s)`}
             </Botao>

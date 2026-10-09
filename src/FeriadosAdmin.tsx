@@ -57,18 +57,19 @@ export default function PainelFeriados({ currentUser }: { currentUser?: any }) {
     carregar();
   };
 
+  // 12e57 (09/10/2026): só aparência — o tamanho da ajuda, o alinhamento do formulário, a largura do campo Nome e a rolagem da tabela saíram do style inline (acn-fer-*)
   return (
     <div className="sec-card">
       <div className="sec-hdr"><span>Feriados</span></div>
-      <div className="sec-body acn-fraco" style={{ fontSize: 12 }}>
+      <div className="sec-body acn-fraco acn-fer-ajuda">
         Nesses dias o tempo das tarefas não conta como horário normal: trabalhar exige hora extra aprovada pelo gestor.
         Os feriados nacionais de 2026 e 2027 já vêm cadastrados; inclua os estaduais, municipais e as pontes em que a empresa folga.
       </div>
-      <div className="acn-filtros" style={{ alignItems: 'flex-end' }}>
+      <div className="acn-filtros acn-fer-form">
         <div><label className="acn-label">Data</label>
           <input type="date" className="acn-input" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} /></div>
-        <div style={{ flex: '1 1 220px' }}><label className="acn-label">Nome</label>
-          <input className="acn-input" style={{ width: '100%' }} value={form.nome} placeholder="Ex.: Aniversário de Blumenau"
+        <div className="acn-fer-nome"><label className="acn-label">Nome</label>
+          <input className="acn-input" value={form.nome} placeholder="Ex.: Aniversário de Blumenau"
             onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} /></div>
         <div><label className="acn-label">Tipo</label>
           <select className="acn-input" value={form.abrangencia} onChange={e => setForm(f => ({ ...f, abrangencia: e.target.value }))}>
@@ -80,7 +81,7 @@ export default function PainelFeriados({ currentUser }: { currentUser?: any }) {
         <Chips rotulo="Ano" ativo={ano} onChange={setAno}
           itens={anos.map(a => ({ id: a, rotulo: a, contagem: feriados.filter(f => String(f.data).startsWith(a)).length }))} />
       </div>
-      <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+      <div className="sec-body acn-fer-tabela">
         {carregando ? <div className="acn-empty">Carregando…</div> : doAno.length === 0 ? (
           <div className="acn-empty">Nenhum feriado cadastrado em {ano}.</div>
         ) : (
@@ -91,7 +92,7 @@ export default function PainelFeriados({ currentUser }: { currentUser?: any }) {
                 const dia = new Date(String(f.data).slice(0, 10) + 'T12:00:00');
                 return (
                   <tr key={f.id}>
-                    <td className="acn-num" style={{ whiteSpace: 'nowrap' }}>{dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                    <td className="acn-num acn-fer-data">{dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     <td className="acn-forte">{f.nome}</td>
                     <td><Tag>{ABRANGENCIAS[f.abrangencia] || f.abrangencia}</Tag></td>
                     <td><Botao variante="perigo-sec" pequeno onClick={() => remover(f)}>Remover</Botao></td>

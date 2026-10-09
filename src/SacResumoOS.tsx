@@ -42,17 +42,18 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento }: any) {
   const nomeDe = (x: any) => typeof x === 'string' ? x : (x?.descricao || x?.nome || x?.equipamento || x?.produto || JSON.stringify(x));
   const logsEng = lista(os.logs_acompanhamento_eng);
 
+  // 12e57 (09/10/2026): só aparência — a largura da janela, a altura do miolo e os espaçamentos das listas saíram do style inline e foram para o design.css (acn-srs-*)
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro acn-sac-resumo" role="dialog" aria-label={'Resumo da OS ' + os.numero_os} style={{ width: 'min(860px, 96vw)', maxWidth: 'min(860px, 96vw)' }}>
+      <div className="modal-box acn-modal-cadastro acn-sac-resumo" role="dialog" aria-label={'Resumo da OS ' + os.numero_os}>
         <div className="acn-modal-cab">
           <span className="modal-title">OS {os.numero_os} <Selo familia="neutro" ponto={false}>{os.status}</Selo> {os.empresa && <Selo familia="marca" ponto={false}>{os.empresa}</Selo>}</span>
-          <span style={{ display: 'flex', gap: 6 }}>
+          <span className="acn-srs-acoes">
             {onAcompanhamento && <Botao pequeno icone={mdiMessageTextOutline} onClick={onAcompanhamento}>Acompanhamento</Botao>}
             <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={onClose} />
           </span>
         </div>
-        <div className="acn-modal-corpo" style={{ maxHeight: '78vh' }}>
+        <div className="acn-modal-corpo acn-srs-corpo">
           <Grupo titulo="Serviço" linhas={[
             ['Tipo de serviço', os.tipo_servico], ['Tipo de projeto', os.tipo_projeto], ['Atendimento', os.tipo_avaliacao],
             ['Lote', os.lote_id ? (os.lote_descricao || 'Faz parte de um lote de OS') : ''], ['Setor de execução', os.setor_execucao],
@@ -66,11 +67,11 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento }: any) {
           ]}>
             {equipamentos.length > 0 && (
               <div><span className="acn-fraco">Lista de equipamentos ({equipamentos.length})</span>
-                <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>{equipamentos.map((x: any, i: number) => <li key={i}>{typeof x === 'string' ? x : [x.nome || x.equipamento, x.modelo, x.numero_serie && 'SN ' + x.numero_serie].filter(Boolean).join(' · ') || nomeDe(x)}</li>)}</ul>
+                <ul className="acn-srs-lista">{equipamentos.map((x: any, i: number) => <li key={i}>{typeof x === 'string' ? x : [x.nome || x.equipamento, x.modelo, x.numero_serie && 'SN ' + x.numero_serie].filter(Boolean).join(' · ') || nomeDe(x)}</li>)}</ul>
               </div>
             )}
             {acessorios.length > 0 && (
-              <div className="acn-ficha-linha"><span>Acessórios</span><span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <div className="acn-ficha-linha"><span>Acessórios</span><span className="acn-srs-selos">
                 {acessorios.map((a: any, i: number) => <Selo key={i} familia={a.presente === false ? 'erro' : 'ok'} ponto={false}>{a.presente === false ? '✗ ' : '✓ '}{nomeDe(a)}</Selo>)}
               </span></div>
             )}
@@ -119,7 +120,7 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento }: any) {
 
           {materiais.length > 0 && (
             <Grupo titulo="Materiais utilizados">
-              <ul style={{ margin: '0 0 0 18px', padding: 0 }}>{materiais.map((m: any, i: number) => <li key={i}>{typeof m === 'string' ? m : [m.descricao || m.nome, m.quantidade != null && '× ' + m.quantidade].filter(Boolean).join(' ')}</li>)}</ul>
+              <ul className="acn-srs-lista nu">{materiais.map((m: any, i: number) => <li key={i}>{typeof m === 'string' ? m : [m.descricao || m.nome, m.quantidade != null && '× ' + m.quantidade].filter(Boolean).join(' ')}</li>)}</ul>
             </Grupo>
           )}
 
@@ -137,7 +138,7 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento }: any) {
           {(arquivos.length > 0 || lista(os.fotos_entrada).length > 0 || lista(os.fotos_saida).length > 0 || os.assinatura_aprovacao_url || os.assinatura_saida_url) && (
             <div className="acn-quadro">
               <div className="acn-quadro-titulo">Arquivos e fotos</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="acn-srs-arquivos">
                 {arquivos.map((a: any, i: number) => <a key={'a' + i} href={a.url} target="_blank" rel="noreferrer">{a.nome || 'Arquivo ' + (i + 1)}</a>)}
                 {os.assinatura_aprovacao_url && <a href={os.assinatura_aprovacao_url} target="_blank" rel="noreferrer">Assinatura da aprovação</a>}
                 {os.assinatura_saida_url && <a href={os.assinatura_saida_url} target="_blank" rel="noreferrer">Assinatura da saída</a>}

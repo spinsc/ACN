@@ -3540,3 +3540,23 @@ html body .acn-participante-chip .acn-b.acn-ptp-x { width: 16px; height: 16px; m
 html body .acn-participante-chip .acn-b.acn-ptp-x:hover:not(:disabled) { opacity: 1; }
 .acn-ate-marca { font-style: italic; cursor: help; opacity: .8; }
 .acn-ate-acoes { display: flex; gap: 6px; margin-top: 6px; }
+
+/* ── 12e57 (09/10/2026): telas com layout solto — faturamento antecipado, resumo da OS do SAC, feriados e solicitação de compra ──
+   O que era style inline virou classe, com o mesmo valor; a margem de baixo do cartão do faturamento (12px) já é a do guia. */
+.acn-com-barra.acn-fta-barra { margin-top: 8px; }
+.acn-com-barra .acn-input.acn-fta-nf { width: 150px; }
+html body .modal-box.acn-modal-cadastro.acn-sac-resumo { width: min(860px, 96vw); max-width: min(860px, 96vw); }
+.acn-srs-acoes { display: flex; gap: 6px; }
+.acn-modal-corpo.acn-srs-corpo { max-height: 78vh; }
+.acn-srs-lista { margin: 4px 0 0 18px; padding: 0; }
+.acn-srs-lista.nu { margin-top: 0; }
+.acn-ficha-linha > .acn-srs-selos { display: flex; gap: 4px; flex-wrap: wrap; }
+.acn-srs-arquivos { display: flex; gap: 8px; flex-wrap: wrap; }
+html body .sec-body.acn-fer-ajuda { font-size: 12px; }
+.acn-filtros.acn-fer-form { align-items: flex-end; }
+.acn-fer-nome { flex: 1 1 220px; }
+.acn-fer-nome .acn-input { width: 100%; }
+html body .sec-body.acn-fer-tabela { overflow-x: auto; padding: 0; }
+.acn-fer-data { white-space: nowrap; }
+.acn-sco-prio { display: flex; gap: 6px; }
+html body .modal-overlay.acn-sco-fundo { z-index: 2600; }
