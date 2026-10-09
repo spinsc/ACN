@@ -37,7 +37,7 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 | — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
 | — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
 
-**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e43 — **3.673 `style` inline, 566 botões crus e 4.543 cores soltas, em 99 arquivos** (antes da 12e43: 3.755 / 576 / 4.628, em 100); o CRM saiu da lista (12e40 a 12e42: 157 → 12) e o `OpItens` zerou. Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135, `AnaliseWidget` 109.
+**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e44 — **3.614 `style` inline, 556 botões crus e 4.482 cores soltas, em 98 arquivos** (no começo da noite: 3.755 / 576 / 4.628, em 100); o CRM (12e40 a 12e42), o `OpItens` (12e43) e o `DemandaItens` (12e44) zeraram ou quase. Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135, `AnaliseWidget` 109.
 
 ---
 
@@ -4407,6 +4407,27 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 - **Teste de defeito plantado:** numa cópia, o "dividir" que divide o que não divide, a caixinha de separar que grava o contrário, o aviso "não cadastrado" invertido, o "somar" que substitui e o realce da diferença invertido no quadro de leitura — **quatro dos cinco foram apontados**; **o quinto (o realce em cor da linha com diferença) a fotografia de texto não vê**: conferi pela captura de tela (e foi por ela que apareceu que, com o quadro todo em laranja, a linha destacada sumia — corrigido deixando o quadro neutro).
 
 **O que ficou de fora:** `DemandaItens` (o editor de itens da demanda e a busca no cadastro, usados dentro destes quadros) segue com o visual dele — é a próxima fatia; o `SelectBusca` (em `Interface.tsx`) também.
+
+#### ✅ 12e44 — Componentes compartilhados, fatia 2 (`DemandaItens`: busca no cadastro, editor e leitura de itens, estrutura do produto, vínculos e fabricação interna)
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois da 12e43). **Nenhuma regra mudou.**
+
+**O que foi feito** (`DemandaItens.tsx` e `design.css`, 53 regras novas `acn-dmi-*`; **nenhuma regra de negócio, consulta, gravação ou texto foi mexido**; método da página de prévia, descrito na 12e43):
+
+- **A busca no cadastro** (o campo que sugere produtos, modelos e itens do catálogo): o campo do sistema e a lista de sugestões com o marcador "MODELO / PRODUTO / ITEM" (o ícone de quebra-cabeça no lugar do emoji) e o código em letra de largura fixa; o realce ao passar o mouse agora é do estilo (antes era escrito por código a cada passagem).
+- **O editor de itens** (usado nas demandas, no Compras, na criação da OP e na BOM): cada item como cartão (nome, quantidade, valor unitário quando há, remover só com ícone, descrição), "Cadastro: código" e **"estrutura com N item(ns)"** que abre a tabela da estrutura (por unidade e total), e o "+1 item" tracejado.
+- **A leitura dos itens** (detalhe da demanda): o quadro com o total, "Preencher/Ajustar valores" (primário quando falta valor), "Salvar valores | Cancelar", a quantidade, o código, a estrutura, o valor ou "sem valor", a descrição e os arquivos do produto. **O `flex-shrink: 0` da caixa (o conserto de 25/09/2026 para a lista não ser espremida) foi para a classe e está comentado lá.**
+- **Os vínculos** (editor e leitura): os "chips" azuis arredondados com o tipo e a descrição, o remover (com a pergunta) e o botão "+ Lote inteiro … (mais N OPs)"; na leitura, o chip clicável com o ícone de elo.
+- **A fabricação interna** (liberar BOM/kiting): o quadro com o botão que recolhe e abre ("Fabricação interna — chicotes e serralheria (opcional)", com a seta em ícone), o texto explicativo e a lista de cada setor.
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Resultado no código:** `style` inline **59 → 0**, `<button>` **10 → 0**, cores soltas **61 → 0**, linhas **534 → 517**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos.
+
+**Como foi testado** (página de prévia; leituras do banco simuladas — cadastro de produtos e itens, estrutura do kit, OPs do lote —; fotografia de texto, controles, valores, dicas e **o que o componente devolve ao chamador**, da versão **da 12e43** × a migrada; **a antiga fotografada duas vezes, igual**): **61 de 61 iguais**, em 11 cenários — o editor vazio (+1 item, editar, remover linha vazia sem pergunta) e cheio (estrutura abrir e fechar, **digitar e ver as sugestões, escolher um modelo — que traz a estrutura —, escolher um item do catálogo**, valor unitário, remover com a pergunta); a leitura com valor, estrutura e "sem valor" (preencher, digitar, salvar, cancelar) e só em leitura; os vínculos (a oferta do lote inteiro, incluir o lote, remover um vínculo) e em leitura; a fabricação interna fechada, aberta (3 OPs) e já com itens; e os temas escuro.
+- **Equivalências declaradas:** os emojis (🧩 📦 💲 🔗 🔌) e as setas ▲ ▼ ▶ ✓ viraram ícones; o "✕" de remover ganhou nome; a cor roxa do modelo, do "estrutura" e da fabricação passou para a do guia (marca); o quadro da fabricação deixou de ser roxo claro; o botão "Preencher valores" verde passou para o primário do guia.
+- **Teste de defeito plantado:** numa cópia, o modelo que não traz a estrutura, o remover item que apaga os outros, o rótulo "Preencher/Ajustar valores" trocado, o remover vínculo que apaga os outros, o total da linha sem a quantidade e a fabricação que não diz "por OP" com 2 OPs — **os seis foram apontados** (o último só depois de eu acrescentar o cenário de 2 OPs, que não existia).
+
+**O que ficou de fora:** o `VinculoPicker` (o seletor de tipo de vínculo que aparece no editor de vínculos) e o `ProdutoArquivos` (arquivos do produto, na leitura) são componentes de outros arquivos e seguem com o visual deles; a lógica de gerar as demandas e de sugerir fabricação não foi tocada.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 

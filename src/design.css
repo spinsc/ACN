@@ -2783,3 +2783,59 @@ html body .acn-input.acn-opit-obs.falta { border-color: var(--acn-bad); }
 @media (max-width: 560px) { .acn-opit-linha { flex-wrap: wrap; } html body .acn-input.acn-opit-desc { width: 100%; } }
 /* campos mais baixos dentro das linhas de tabela e de BOM (o campo padrão tem 32px) */
 html body .acn-opit-tabela .acn-input, html body .acn-opit-linha .acn-input { min-height: 28px; padding: 3px 7px; font-size: 12px; }
+
+/* DemandaItens — busca no cadastro, editor e leitura de itens, estrutura, vínculos e fabricação interna (12e44, 09/10/2026). Só aparência. */
+.acn-dmi-busca { position: relative; flex: 1; min-width: 0; }
+.acn-dmi-busca .acn-input { width: 100%; box-sizing: border-box; }
+.acn-dmi-sugestoes { position: absolute; top: 100%; left: 0; right: 0; z-index: 60; margin-top: 2px; max-height: 240px; overflow-y: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: 0 4px 12px rgba(23, 33, 43, .18); }
+body.dark .acn-dmi-sugestoes { background: #1e293b; border-color: #334155; }
+.acn-dmi-sug { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--acn-line); }
+.acn-dmi-sug:hover { background: var(--acn-info-soft); }
+.acn-dmi-tipo { display: inline-flex; align-items: center; gap: 3px; min-width: 64px; font-size: 11px; font-weight: 700; }
+.acn-dmi-tipo.produto { color: var(--acn-brand-ink, var(--acn-brand)); }
+.acn-dmi-tipo.item { color: var(--acn-info); }
+.acn-dmi-cod { font-size: 12px; color: var(--acn-muted); font-family: ui-monospace, 'IBM Plex Mono', monospace; }
+.acn-dmi-nome { flex: 1; }
+.acn-dmi-dica { margin: -2px 0 4px; }
+.acn-dmi-lista { display: flex; flex-direction: column; gap: 6px; }
+.acn-dmi-item { padding: 6px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-dmi-linha { display: flex; gap: 6px; align-items: center; }
+html body .acn-input.acn-dmi-qtd { width: 76px; flex-shrink: 0; }
+html body .acn-input.acn-dmi-val { width: 90px; flex-shrink: 0; }
+html body .acn-input.acn-dmi-desc { width: 100%; box-sizing: border-box; margin-top: 4px; }
+html body .acn-dmi-item .acn-input, html body .acn-dmi-view .acn-input { min-height: 28px; padding: 3px 8px; font-size: 12px; }
+.acn-dmi-meta { display: flex; gap: 8px; align-items: center; margin-top: 3px; font-size: 11px; color: var(--acn-muted); }
+.acn-dmi-estr-bt { color: var(--acn-brand-ink, var(--acn-brand)); }
+.acn-dmi-mais { margin-top: 6px; border-style: dashed; }
+.acn-dmi-estr { width: 100%; margin-top: 4px; border-collapse: collapse; font-size: 12px; }
+.acn-dmi-estr th { padding: 2px 4px; font-size: 11px; font-weight: 700; text-align: left; color: var(--acn-muted); }
+.acn-dmi-estr td { padding: 2px 4px; border-top: 1px solid var(--acn-line); }
+.acn-dmi-estr .dir { text-align: right; }
+.acn-dmi-estr .cod { font-family: ui-monospace, 'IBM Plex Mono', monospace; color: var(--acn-muted); }
+.acn-dmi-estr .forte { font-weight: 700; }
+/* o flex-shrink: 0 não é enfeite: com overflow:hidden, o flexbox deixaria a caixa encolher até zero dentro do painel de demanda (bug de 25/09/2026) */
+.acn-dmi-view { flex-shrink: 0; overflow: hidden; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-dmi-view-cab { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 10px; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-dmi-view-tit { flex: 1; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--acn-text); }
+.acn-dmi-view-item { padding: 6px 10px; font-size: 13px; }
+.acn-dmi-view-item + .acn-dmi-view-item { border-top: 1px solid var(--acn-line); }
+.acn-dmi-view-linha { display: flex; gap: 8px; align-items: baseline; }
+.acn-dmi-view-qtd { min-width: 40px; text-align: right; color: var(--acn-ink); }
+.acn-dmi-view-nome { flex: 1; }
+.acn-dmi-view-cod { margin-left: 6px; font-size: 11px; color: var(--acn-muted); }
+.acn-dmi-view-desc { margin-left: 48px; }
+.acn-dmi-view-arqs { margin-left: 48px; }
+html body .acn-input.acn-dmi-valedit { width: 96px; }
+.acn-dmi-valor { font-size: 12px; white-space: nowrap; color: var(--acn-muted); }
+.acn-dmi-valor.tem { color: var(--acn-ok); }
+.acn-dmi-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.acn-dmi-chips-edit { margin-bottom: 6px; }
+.acn-dmi-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; font-size: 12px; border: 1px solid color-mix(in srgb, var(--acn-info) 40%, transparent); background: var(--acn-info-soft); border-radius: 12px; }
+.acn-dmi-chip strong { color: var(--acn-info); }
+.acn-dmi-chip.link { padding: 3px 9px; cursor: pointer; }
+.acn-dmi-chip-desc { text-decoration: underline; }
+html body .acn-b.acn-dmi-chip-x { padding: 0 2px; min-height: 0; }
+.acn-dmi-lote { margin-bottom: 6px; }
+.acn-quadro.acn-dmi-fab { margin: 0 0 10px; gap: 6px; padding: 8px 10px; }
+.acn-dmi-fab-bt { justify-self: start; font-weight: 800; }
+.acn-dmi-fab-corpo { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }

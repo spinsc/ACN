@@ -21,6 +21,9 @@ import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPuzzleOutline, mdiPackageVariantClosed, mdiCurrencyUsd, mdiCheck, mdiLinkVariant, mdiClose, mdiChevronUp, mdiChevronDown, mdiChevronRight, mdiPowerPlugOutline } from '@mdi/js';
 
 // Fabricação interna: cada setor fabricante tem a sua categoria de produto
 // (os modelos ficam em Produtos e mercadorias, com a estrutura de cada um)
@@ -113,24 +116,21 @@ export function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categor
     ]);
     setAberto(true);
   };
+  // 12e44 (09/10/2026): só a aparência (classes acn-dmi-* em design.css); a busca, as sugestões e o que cada escolha devolve são os de antes
   return (
-    <div ref={wrap} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-      <input value={valor} placeholder={placeholder} autoComplete="off" aria-label="Nome do item"
+    <div ref={wrap} className="acn-dmi-busca">
+      <input value={valor} placeholder={placeholder} autoComplete="off" aria-label="Nome do item" className="acn-input"
         onChange={e => { onTexto(e.target.value); clearTimeout(timer.current); const v = e.target.value; timer.current = setTimeout(() => buscar(v), 300); }}
-        onFocus={() => sugestoes.length && setAberto(true)}
-        style={{ width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+        onFocus={() => sugestoes.length && setAberto(true)} />
       {aberto && sugestoes.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60, background: '#fff', border: '1px solid #d1d5db',
-          borderRadius: 6, boxShadow: '0 4px 12px #0002', marginTop: 2, maxHeight: 240, overflowY: 'auto' }}>
+        <div className="acn-dmi-sugestoes">
           {sugestoes.map(s => (
-            <div key={s.tipo + s.id} onMouseDown={() => { setAberto(false); onEscolher(s); }}
-              style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: 11, display: 'flex', gap: 6, alignItems: 'center' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: s.tipo === 'produto' ? '#7c3aed' : '#0369a1', minWidth: 52 }}>
-                {s.tipo === 'produto' ? (categoriaPreferida && s.categoria === categoriaPreferida ? '🧩 MODELO' : s.temEstrutura ? '🧩 PRODUTO' : 'PRODUTO') : 'ITEM'}
+            <div key={s.tipo + s.id} className="acn-dmi-sug" onMouseDown={() => { setAberto(false); onEscolher(s); }}>
+              <span className={'acn-dmi-tipo ' + s.tipo}>
+                {s.tipo === 'produto' ? (categoriaPreferida && s.categoria === categoriaPreferida ? <><Icone path={mdiPuzzleOutline} size={12} />MODELO</> : s.temEstrutura ? <><Icone path={mdiPuzzleOutline} size={12} />PRODUTO</> : 'PRODUTO') : 'ITEM'}
               </span>
-              {s.codigo && <span style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>{s.codigo}</span>}
-              <span style={{ flex: 1 }}>{s.nome}</span>
+              {s.codigo && <span className="acn-dmi-cod">{s.codigo}</span>}
+              <span className="acn-dmi-nome">{s.nome}</span>
             </div>
           ))}
         </div>
@@ -160,37 +160,33 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
   };
   return (
     <div>
-      <label style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{titulo}</label>
-      {dica && <div style={{ fontSize: 9, color: '#64748b', marginTop: -2, marginBottom: 4 }}>{dica}</div>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label className="acn-label">{titulo}</label>
+      {dica && <div className="acn-ajuda acn-dmi-dica">{dica}</div>}
+      <div className="acn-dmi-lista">
         {itens.map((it, i) => (
-          <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: 6, background: '#f8fafc' }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div key={i} className="acn-dmi-item">
+            <div className="acn-dmi-linha">
               <BuscaCadastro valor={it.nome} categoriaPreferida={categoriaPreferida}
                 placeholder={categoriaPreferida ? `Modelo (${categoriaPreferida}) ou nome do item` : 'Nome do item — digite ou busque no cadastro'}
                 onTexto={v => set(i, { nome: v, ...(it.produto_id || it.item_id ? { produto_id: null, item_id: null, produto_codigo: null, estrutura: [] } : {}) })}
                 onEscolher={s => escolher(i, s)} />
-              <input type="number" min="0" step="any" value={it.quantidade} aria-label="Quantidade"
-                onChange={e => set(i, { quantidade: e.target.value })}
-                style={{ width: 70, padding: '5px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+              <input type="number" min="0" step="any" value={it.quantidade} aria-label="Quantidade" className="acn-input acn-dmi-qtd"
+                onChange={e => set(i, { quantidade: e.target.value })} />
               {comValor && (
-                <input inputMode="decimal" value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário"
-                  onChange={e => set(i, { valor_unitario: e.target.value })}
-                  style={{ width: 80, padding: '5px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+                <input inputMode="decimal" value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário" className="acn-input acn-dmi-val"
+                  onChange={e => set(i, { valor_unitario: e.target.value })} />
               )}
-              <button type="button" onClick={() => remover(i)} title="Remover item" aria-label="Remover item"
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 13 }}>✕</button>
+              <Botao variante="discreto" pequeno icone={mdiClose} onClick={() => remover(i)} title="Remover item" aria-label="Remover item" />
             </div>
             <input value={it.descricao} onChange={e => set(i, { descricao: e.target.value })} placeholder="Descrição (opcional)" aria-label="Descrição do item"
-              style={{ width: '100%', marginTop: 4, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, boxSizing: 'border-box' }} />
+              className="acn-input acn-dmi-desc" />
             {(it.produto_codigo || it.estrutura?.length > 0) && (
-              <div style={{ fontSize: 9, color: '#7c3aed', marginTop: 3, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="acn-dmi-meta">
                 {it.produto_codigo && <span>Cadastro: {it.produto_codigo}</span>}
                 {it.estrutura?.length > 0 && (
-                  <button type="button" onClick={() => setAbertos(a => ({ ...a, [i]: !a[i] }))}
-                    style={{ background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 9, fontWeight: 700, padding: 0 }}>
-                    🧩 estrutura com {it.estrutura.length} item(ns) {abertos[i] ? '▲' : '▼'}
-                  </button>
+                  <Botao variante="discreto" pequeno icone={mdiPuzzleOutline} className="acn-dmi-estr-bt" onClick={() => setAbertos(a => ({ ...a, [i]: !a[i] }))}>
+                    estrutura com {it.estrutura.length} item(ns) <Icone path={abertos[i] ? mdiChevronUp : mdiChevronDown} size={12} />
+                  </Botao>
                 )}
               </div>
             )}
@@ -198,32 +194,29 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
           </div>
         ))}
       </div>
-      <button type="button" onClick={() => onChange([...itens, itemVazio()])}
-        style={{ marginTop: 6, background: '#fff', border: '1.5px dashed #94a3b8', color: '#475569', borderRadius: 4, padding: '4px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-        +1 item
-      </button>
+      <Botao pequeno className="acn-dmi-mais" onClick={() => onChange([...itens, itemVazio()])}>+1 item</Botao>
     </div>
   );
 }
 
 function TabelaEstrutura({ estrutura, quantidade }) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4, fontSize: 10 }}>
+    <table className="acn-dmi-estr">
       <thead>
-        <tr style={{ color: '#64748b' }}>
-          <th style={{ textAlign: 'left', padding: '2px 4px', fontWeight: 700 }}>Código</th>
-          <th style={{ textAlign: 'left', padding: '2px 4px', fontWeight: 700 }}>Item da estrutura</th>
-          <th style={{ textAlign: 'right', padding: '2px 4px', fontWeight: 700 }}>Por unidade</th>
-          <th style={{ textAlign: 'right', padding: '2px 4px', fontWeight: 700 }}>Total</th>
+        <tr>
+          <th>Código</th>
+          <th>Item da estrutura</th>
+          <th className="dir">Por unidade</th>
+          <th className="dir">Total</th>
         </tr>
       </thead>
       <tbody>
         {(estrutura || []).map((e, k) => (
-          <tr key={k} style={{ borderTop: '1px solid #ede9fe' }}>
-            <td style={{ padding: '2px 4px', fontFamily: 'monospace', color: '#64748b' }}>{e.codigo || '—'}</td>
-            <td style={{ padding: '2px 4px' }}>{e.nome}</td>
-            <td style={{ padding: '2px 4px', textAlign: 'right' }}>{fmtQ(num(e.quantidade))} {e.unidade}</td>
-            <td style={{ padding: '2px 4px', textAlign: 'right', fontWeight: 700 }}>{fmtQ(num(e.quantidade) * quantidade)} {e.unidade}</td>
+          <tr key={k}>
+            <td className="cod">{e.codigo || '—'}</td>
+            <td>{e.nome}</td>
+            <td className="dir">{fmtQ(num(e.quantidade))} {e.unidade}</td>
+            <td className="dir forte">{fmtQ(num(e.quantidade) * quantidade)} {e.unidade}</td>
           </tr>
         ))}
       </tbody>
@@ -251,60 +244,54 @@ export function ItensDemandaView({ itens, mostrarValor = false, onSalvarValores 
     setSalvando(false); setEditando(false);
   };
   return (
-    // flexShrink:0 não é enfeite. O overflow:hidden (que arredonda os cantos)
+    // O flex-shrink: 0 da caixa (em design.css, .acn-dmi-view) não é enfeite. O overflow:hidden (que arredonda os cantos)
     // faz o flexbox considerar que esta caixa pode encolher até zero, e o corpo
     // do painel de demanda é um flex em coluna. Sem isso, com o painel cheio, a
     // lista era espremida e só sobrava o cabeçalho — o serralheiro via
     // "Itens (1)" sem saber qual peça fabricar (bug relatado em 25/09/2026).
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-      <div style={{ background: '#f8fafc', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0',
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ flex: 1 }}>📦 Itens ({itens.length}){mostrarValor && total != null ? ` · total ${brl(total)}` : ''}</span>
+    <div className="acn-dmi-view">
+      <div className="acn-dmi-view-cab">
+        <span className="acn-dmi-view-tit"><Icone path={mdiPackageVariantClosed} size={14} />Itens ({itens.length}){mostrarValor && total != null ? ` · total ${brl(total)}` : ''}</span>
         {onSalvarValores && !editando && (
-          <button type="button" onClick={comecar}
-            style={{ background: faltaValor ? '#16a34a' : '#fff', color: faltaValor ? '#fff' : '#15803d', border: '1px solid #16a34a', borderRadius: 4, padding: '2px 9px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
-            💲 {faltaValor ? 'Preencher valores' : 'Ajustar valores'}
-          </button>
+          <Botao pequeno variante={faltaValor ? 'primario' : 'secundario'} icone={mdiCurrencyUsd} onClick={comecar}>
+            {faltaValor ? 'Preencher valores' : 'Ajustar valores'}
+          </Botao>
         )}
         {editando && (
           <>
-            <button type="button" onClick={salvar} disabled={salvando}
-              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 9px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
-              {salvando ? '...' : '✓ Salvar valores'}
-            </button>
-            <button type="button" onClick={() => setEditando(false)}
-              style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 4, padding: '2px 9px', fontSize: 9, cursor: 'pointer' }}>Cancelar</button>
+            <Botao pequeno variante="primario" icone={salvando ? undefined : mdiCheck} onClick={salvar} disabled={salvando}>
+              {salvando ? '...' : 'Salvar valores'}
+            </Botao>
+            <Botao pequeno onClick={() => setEditando(false)}>Cancelar</Botao>
           </>
         )}
       </div>
       {itens.map((it, i) => (
-        <div key={i} style={{ padding: '6px 10px', borderTop: i ? '1px solid #f1f5f9' : 'none', fontSize: 11 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-            <strong style={{ minWidth: 40, textAlign: 'right', color: '#1e293b' }}>{fmtQ(num(it.quantidade))}×</strong>
-            <span style={{ flex: 1 }}>
+        <div key={i} className="acn-dmi-view-item">
+          <div className="acn-dmi-view-linha">
+            <strong className="acn-dmi-view-qtd">{fmtQ(num(it.quantidade))}×</strong>
+            <span className="acn-dmi-view-nome">
               {it.nome}
-              {it.produto_codigo && <span style={{ color: '#64748b', fontSize: 9, marginLeft: 6 }}>{it.produto_codigo}</span>}
+              {it.produto_codigo && <span className="acn-dmi-view-cod">{it.produto_codigo}</span>}
             </span>
             {it.estrutura?.length > 0 && (
-              <button type="button" onClick={() => setAbertos(a => ({ ...a, [i]: !a[i] }))}
-                style={{ background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 9, fontWeight: 700 }}>
-                🧩 estrutura {abertos[i] ? '▲' : '▼'}
-              </button>
+              <Botao variante="discreto" pequeno icone={mdiPuzzleOutline} className="acn-dmi-estr-bt" onClick={() => setAbertos(a => ({ ...a, [i]: !a[i] }))}>
+                estrutura <Icone path={abertos[i] ? mdiChevronUp : mdiChevronDown} size={12} />
+              </Botao>
             )}
             {editando ? (
-              <input inputMode="decimal" value={valores[i] ?? ''} placeholder="R$ un." aria-label={`Valor unitário de ${it.nome}`}
-                onChange={e => setValores(v => v.map((x, k) => k === i ? e.target.value : x))}
-                style={{ width: 90, padding: '3px 6px', border: '1px solid #86efac', borderRadius: 4, fontSize: 11 }} />
+              <input inputMode="decimal" value={valores[i] ?? ''} placeholder="R$ un." aria-label={`Valor unitário de ${it.nome}`} className="acn-input acn-dmi-valedit"
+                onChange={e => setValores(v => v.map((x, k) => k === i ? e.target.value : x))} />
             ) : mostrarValor && (
-              <span style={{ fontSize: 10, color: it.valor_unitario != null && it.valor_unitario !== '' ? '#15803d' : '#94a3b8', whiteSpace: 'nowrap' }}>
+              <span className={'acn-dmi-valor' + (it.valor_unitario != null && it.valor_unitario !== '' ? ' tem' : '')}>
                 {it.valor_unitario != null && it.valor_unitario !== ''
                   ? `${brl(num(it.valor_unitario))} un. · ${brl(num(it.valor_unitario) * (num(it.quantidade) || 1))}`
                   : 'sem valor'}
               </span>
             )}
           </div>
-          {it.descricao && <div style={{ fontSize: 10, color: '#64748b', marginLeft: 48 }}>{it.descricao}</div>}
-          {it.produto_id && <div style={{ marginLeft: 48 }}><ProdutoArquivos produtoId={it.produto_id} somenteLeitura compacto /></div>}
+          {it.descricao && <div className="acn-ajuda acn-dmi-view-desc">{it.descricao}</div>}
+          {it.produto_id && <div className="acn-dmi-view-arqs"><ProdutoArquivos produtoId={it.produto_id} somenteLeitura compacto /></div>}
           {abertos[i] && <TabelaEstrutura estrutura={it.estrutura} quantidade={num(it.quantidade) || 1} />}
         </div>
       ))}
@@ -366,22 +353,20 @@ export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[
   return (
     <div>
       {vinculos.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+        <div className="acn-dmi-chips acn-dmi-chips-edit">
           {vinculos.map((v, i) => (
-            <span key={v.tipo + v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-              border: '1px solid #93c5fd', background: '#eff6ff', borderRadius: 12, fontSize: 10 }}>
-              <strong style={{ color: '#1d4ed8' }}>{TIPO_LABEL[v.tipo] || v.tipo}</strong> {v.descricao}
-              <button type="button" onClick={async () => { if (!await confirmarRemocao('o vínculo "' + v.descricao + '"')) return; onChange(vinculos.filter((_, j) => j !== i)); }} aria-label={`Remover vínculo ${v.descricao}`}
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11, padding: 0 }}>✕</button>
+            <span key={v.tipo + v.id} className="acn-dmi-chip">
+              <strong>{TIPO_LABEL[v.tipo] || v.tipo}</strong> {v.descricao}
+              <Botao variante="discreto" pequeno icone={mdiClose} className="acn-dmi-chip-x" aria-label={`Remover vínculo ${v.descricao}`}
+                onClick={async () => { if (!await confirmarRemocao('o vínculo "' + v.descricao + '"')) return; onChange(vinculos.filter((_, j) => j !== i)); }} />
             </span>
           ))}
         </div>
       )}
       {lote && (
-        <button type="button" onClick={adicionarLote}
-          style={{ marginBottom: 6, background: '#f0f9ff', border: '1px solid #7dd3fc', color: '#0369a1', borderRadius: 4, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+        <Botao pequeno className="acn-dmi-lote" onClick={adicionarLote}>
           + Lote inteiro {lote.base} (mais {lote.ops.length} OP{lote.ops.length > 1 ? 's' : ''})
-        </button>
+        </Botao>
       )}
       <VinculoPicker value={null} onSelect={v => { if (!jaTem(v)) onChange([...vinculos, v]); }} onClear={() => {}} />
     </div>
@@ -392,12 +377,11 @@ export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[
 export function VinculosView({ vinculos }: { vinculos: VinculoValue[] }) {
   if (!vinculos.length) return null;
   return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+    <div className="acn-dmi-chips">
       {vinculos.map(v => (
-        <span key={v.tipo + v.id} onClick={() => abrirVinculo(v)} role="link" tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter') abrirVinculo(v); }}
-          style={{ padding: '3px 9px', border: '1px solid #93c5fd', background: '#eff6ff', borderRadius: 12, fontSize: 10, cursor: 'pointer' }}>
-          🔗 <strong style={{ color: '#1d4ed8' }}>{TIPO_LABEL[v.tipo] || v.tipo}</strong> <span style={{ textDecoration: 'underline' }}>{v.descricao}</span>
+        <span key={v.tipo + v.id} onClick={() => abrirVinculo(v)} role="link" tabIndex={0} className="acn-dmi-chip link"
+          onKeyDown={e => { if (e.key === 'Enter') abrirVinculo(v); }}>
+          <Icone path={mdiLinkVariant} size={12} /> <strong>{TIPO_LABEL[v.tipo] || v.tipo}</strong> <span className="acn-dmi-chip-desc">{v.descricao}</span>
         </span>
       ))}
     </div>
@@ -470,14 +454,13 @@ export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1, pinturaSl
     if (!abriuSozinho.current && temFabricacao(valor)) { abriuSozinho.current = true; setAberto(true); }
   }, [valor]);
   return (
-    <div style={{ border: '1px solid #ddd6fe', background: '#faf5ff', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
-      <button type="button" onClick={() => setAberto(a => !a)} aria-expanded={aberto}
-        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, fontWeight: 800, color: '#6d28d9' }}>
-        {aberto ? '▼' : '▶'} 🔌 Fabricação interna — chicotes e serralheria (opcional)
-      </button>
+    <div className="acn-quadro acn-dmi-fab">
+      <Botao variante="discreto" pequeno className="acn-dmi-fab-bt" icone={aberto ? mdiChevronDown : mdiChevronRight} onClick={() => setAberto(a => !a)} aria-expanded={aberto}>
+        <Icone path={mdiPowerPlugOutline} size={14} />Fabricação interna — chicotes e serralheria (opcional)
+      </Botao>
       {aberto && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-          <div style={{ fontSize: 9, color: '#6b21a8' }}>
+        <div className="acn-dmi-fab-corpo">
+          <div className="acn-ajuda">
             Escolha o modelo e a quantidade{qtdOps > 1 ? ` por OP (vale para as ${qtdOps} OPs)` : ''}. Cada setor recebe uma demanda com os itens,
             a estrutura do modelo e as OPs vinculadas.
           </div>
