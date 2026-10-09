@@ -22,6 +22,9 @@ import {
   itensConjunto, vendaTemConjunto, podarRespostas,
 } from './ConfigEstrutura';
 import { RespostasEmLote } from './RespostasEmLote';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiCheck, mdiAlertOutline } from '@mdi/js';
 
 const num = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 const fmt = (v) => Number.isInteger(num(v)) ? String(num(v)) : num(v).toFixed(2).replace('.', ',');
@@ -102,15 +105,17 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
     })();
   }, [opl?.id, tick]);
 
+  // 12e53 (09/10/2026): só aparência — as caixas coloridas passaram a ter um "tom" (info, neutro, atenção, erro, ok) que o design.css pinta com os
+  // tons do guia (já mudam sozinhos no tema escuro); antes cada uma carregava três cores escritas no código
   const e = estado;
   if (e.carregando) {
-    return <Caixa cor="#eef2ff" borda="#c7d2fe" texto="#4338ca">Conferindo a configuração do veículo…</Caixa>;
+    return <Caixa tom="info">Conferindo a configuração do veículo…</Caixa>;
   }
 
   // Sem conjunto elétrico na venda: a estrutura não se aplica, e isso é normal.
   if (!e.temConjunto) {
     return (
-      <Caixa cor="#f8fafc" borda="#e2e8f0" texto="#475569">
+      <Caixa tom="neutro">
         <b>Sem Conjunto Elétrico nesta venda.</b> O material de instalação não é montado —
         é o caso de quem usa suporte e chicote de terceiros. A BOM segue preenchida à mão.
       </Caixa>
@@ -118,7 +123,7 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
   }
   if (e.semVeiculo) {
     return (
-      <Caixa cor="#fffbeb" borda="#fcd34d" texto="#92400e">
+      <Caixa tom="atencao">
         Esta venda leva Conjunto Elétrico, mas a OP <b>não tem veículo do catálogo</b>.
         Sem saber o carro não dá para montar o material — escolha o veículo na OP.
       </Caixa>
@@ -126,14 +131,14 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
   }
 
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div className="acn-aep">
       {e.semEstrutura?.length > 0 && (
-        <Caixa cor="#fef2f2" borda="#fecaca" texto="#7f1d1d">
-          <b>⚠ {e.semEstrutura.length} item(ns) nunca foram adaptados neste carro.</b>
-          <div style={{ marginTop: 3 }}>
+        <Caixa tom="erro">
+          <b><Icone path={mdiAlertOutline} size={14} /> {e.semEstrutura.length} item(ns) nunca foram adaptados neste carro.</b>
+          <div className="acn-aep-sub">
             {e.semEstrutura.map(v => `• ${v.nome}`).join('  ')}
           </div>
-          <div style={{ marginTop: 4, fontSize: 9.5 }}>
+          <div className="acn-aep-nota">
             O material deles não entra sozinho. Cadastre a composição em
             <b> Administração → Estruturas</b>, escolhendo o item e este veículo — a partir daí
             toda OP igual sai pronta.
@@ -142,26 +147,23 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
       )}
 
       {e.pendentes?.length > 0 && (
-        <Caixa cor="#fffbeb" borda="#fcd34d" texto="#92400e">
+        <Caixa tom="atencao">
           {e.pendentes.length} pergunta(s) sobre o carro sem resposta — normalmente respondidas
           pelo vendedor na abertura da OP. O material pode sair incompleto.
-          <div style={{ marginTop: 5 }}>
-            <button type="button" onClick={() => setResponder(true)}
-              style={{ fontSize: 9.5, fontWeight: 700, padding: '3px 11px', border: 'none', borderRadius: 4,
-                background: '#7c3aed', color: '#fff', cursor: 'pointer' }}>
+          <div className="acn-aep-acoes">
+            <Botao pequeno variante="primario" onClick={() => setResponder(true)}>
               Responder agora{(opsParaResponder || []).length > 1 ? ` (${opsParaResponder.length} OPs)` : ''}
-            </button>
+            </Botao>
           </div>
         </Caixa>
       )}
       {/* já respondidas: continua dando para rever (a OP pode ter mudado de ideia, ou a resposta foi dada com pressa) */}
       {!(e.pendentes?.length > 0) && e.totalPerguntas > 0 && (
-        <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 6 }}>
+        <div className="acn-aep-resp">
           Perguntas sobre o carro: todas respondidas.{' '}
-          <button type="button" onClick={() => setResponder(true)}
-            style={{ border: 'none', background: 'none', color: '#7c3aed', fontSize: 9.5, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+          <Botao variante="discreto" pequeno className="acn-aep-link" onClick={() => setResponder(true)}>
             rever respostas
-          </button>
+          </Botao>
         </div>
       )}
       {responder && (
@@ -170,11 +172,11 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
       )}
 
       {e.linhas?.length > 0 && (
-        <Caixa cor="#f0fdf4" borda="#bbf7d0" texto="#166534">
+        <Caixa tom="ok">
           <b>Material de instalação calculado ({e.linhas.length}):</b>
-          <div style={{ marginTop: 3 }}>
+          <div className="acn-aep-sub">
             {e.linhas.map(l => (
-              <div key={l.item_id} style={{ fontSize: 10 }}>
+              <div key={l.item_id} className="acn-aep-linha">
                 • {fmt(l.quantidade)} {l.unidade || 'UN'} — {l.codigo ? l.codigo + ' ' : ''}{l.nome}
               </div>
             ))}
@@ -183,25 +185,23 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
               sai da lista de separação e entra o conteúdo dele, marcado "do CONJUNTO ELETRICO". Quem recebe as linhas
               também recebe os ids do conjunto para tirar a linha dele da BOM (as OPs criadas antes do fluxo automático
               partiam da sugestão antiga, que ainda traz o 1687). */}
-          <button type="button" onClick={() => onUsar?.(
+          <Botao pequeno variante="primario" icone={mdiCheck} className="acn-aep-bom" onClick={() => onUsar?.(
               e.linhas.map(l => ({ ...l, descricao: l.descricao || `do ${e.conj?.[0]?.nome || 'CONJUNTO ELETRICO'}` })),
-              (e.conj || []).map(c => String(c.id)))}
-            style={{ marginTop: 6, fontSize: 9.5, fontWeight: 700, padding: '3px 11px', border: 'none',
-              borderRadius: 4, background: '#16a34a', color: '#fff', cursor: 'pointer' }}>
-            ✓ Jogar na BOM
-          </button>
+              (e.conj || []).map(c => String(c.id)))}>
+            Jogar na BOM
+          </Botao>
         </Caixa>
       )}
 
       {e.falta?.length > 0 && (
-        <Caixa cor="#fef2f2" borda="#fecaca" texto="#7f1d1d">
-          <b>⚠ Vai faltar material:</b>
+        <Caixa tom="erro">
+          <b><Icone path={mdiAlertOutline} size={14} /> Vai faltar material:</b>
           {e.falta.map(f => (
-            <div key={f.codigo + f.nome} style={{ fontSize: 10 }}>
+            <div key={f.codigo + f.nome} className="acn-aep-linha">
               • {f.nome}: precisa de {fmt(f.precisa)}, disponível {fmt(f.disponivel)} — faltam {fmt(f.falta)}
             </div>
           ))}
-          <div style={{ fontSize: 9, marginTop: 3 }}>
+          <div className="acn-aep-nota">
             Nada foi reservado nem pedido ainda — isso acontece quando o PCP liberar para o
             Almoxarifado. Mas agora já dá tempo de resolver.
           </div>
@@ -211,9 +211,8 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
   );
 }
 
-const Caixa = ({ cor, borda, texto, children }) => (
-  <div style={{ background: cor, border: `1px solid ${borda}`, borderRadius: 6,
-    padding: '7px 10px', fontSize: 10.5, color: texto, marginBottom: 6 }}>
+const Caixa = ({ tom, children }) => (
+  <div className="acn-aep-caixa" data-tom={tom}>
     {children}
   </div>
 );

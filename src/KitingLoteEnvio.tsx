@@ -10,6 +10,9 @@
 // por unidade e já abre com estes seriais.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPackageVariantClosed, mdiCheckCircleOutline } from '@mdi/js';
 
 type Linha = { opId: string; opl: string; produto: string; serial: string };
 
@@ -58,62 +61,65 @@ export function ModalKitingLoteEnvio({ base, ops, onClose, onConfirmar }: {
     setSalvando(false);
   };
   let ultimaOp = '';
+  // 12e53 (09/10/2026): só aparência — a janela passou para o molde do guia (cabeçalho, corpo que rola e rodapé); o campo vazio ganha o contorno
+  // vermelho por classe (antes a cor era escolhida dentro do JSX). Colar do Excel, a conta de preenchidas e as duas conferências não mudaram.
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 980, width: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-title">📦 Kiting 100% em lote — {base}</div>
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
-          Venda para Envio: informe o serial ACN de cada produto de cada unidade. Pode colar do Excel (produto e serial em colunas,
-          uma linha por produto). Confirmar dá Kit OK nas {ops.length} unidades; a embalagem continua por unidade e já abre com estes seriais.
+      <div className="modal-box acn-modal-cadastro acn-klt-jan" role="dialog" aria-label={`Kiting 100% em lote ${base}`}>
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiPackageVariantClosed} size={18} />Kiting 100% em lote — {base}</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-          <input className="acn-input" style={{ flex: 1, minWidth: 200 }} placeholder="Produto padrão (preenche as linhas sem produto)"
-            value={produtoPadrao} onChange={e => setProdutoPadrao(e.target.value)} aria-label="Produto padrão" />
-          <button className="acn-btn" style={{ background: '#475569' }} onClick={aplicarProdutoPadrao}>Aplicar</button>
-          <span style={{ fontSize: 11, fontWeight: 700, color: completas === linhas.length ? '#15803d' : '#b45309' }}>
-            {completas}/{linhas.length} preenchidas
-          </span>
+        <div className="acn-modal-corpo acn-klt-corpo">
+          <div className="acn-ajuda">
+            Venda para Envio: informe o serial ACN de cada produto de cada unidade. Pode colar do Excel (produto e serial em colunas,
+            uma linha por produto). Confirmar dá Kit OK nas {ops.length} unidades; a embalagem continua por unidade e já abre com estes seriais.
+          </div>
+          <div className="acn-klt-barra">
+            <input className="acn-input acn-klt-padrao" placeholder="Produto padrão (preenche as linhas sem produto)"
+              value={produtoPadrao} onChange={e => setProdutoPadrao(e.target.value)} aria-label="Produto padrão" />
+            <Botao onClick={aplicarProdutoPadrao}>Aplicar</Botao>
+            <span className={'acn-klt-cont ' + (completas === linhas.length ? 'ok' : 'falta')}>
+              {completas}/{linhas.length} preenchidas
+            </span>
+          </div>
+          <div className="acn-klt-tabela">
+            <table className="acn-tabela acn-compacta">
+              <thead>
+                <tr>
+                  <th>Unidade</th>
+                  <th>Produto</th>
+                  <th>Serial ACN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.map((l, i) => {
+                  const novaOp = l.opl !== ultimaOp;
+                  ultimaOp = l.opl;
+                  return (
+                    <tr key={i} className={novaOp ? 'nova' : ''}>
+                      <td className={'acn-klt-op' + (novaOp ? ' nova' : '')}>
+                        {novaOp ? l.opl : '↳'}
+                      </td>
+                      <td>
+                        <input className={'acn-input acn-klt-campo' + (l.produto.trim() ? '' : ' vazio')} value={l.produto} onChange={e => set(i, 'produto', e.target.value)} onPaste={e => colar(i, e)}
+                          aria-label={`Produto ${l.opl} linha ${i + 1}`} />
+                      </td>
+                      <td>
+                        <input className={'acn-input acn-klt-campo acn-klt-serial' + (l.serial.trim() ? '' : ' vazio')} value={l.serial} onChange={e => set(i, 'serial', e.target.value)} onPaste={e => colar(i, e)}
+                          aria-label={`Serial ${l.opl} linha ${i + 1}`} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div style={{ overflowY: 'auto', flex: 1, border: '1px solid #e2e8f0', borderRadius: 6 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>
-                <th style={{ textAlign: 'left', fontSize: 10, padding: '5px 8px' }}>Unidade</th>
-                <th style={{ textAlign: 'left', fontSize: 10, padding: '5px 8px' }}>Produto</th>
-                <th style={{ textAlign: 'left', fontSize: 10, padding: '5px 8px' }}>Serial ACN</th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((l, i) => {
-                const novaOp = l.opl !== ultimaOp;
-                ultimaOp = l.opl;
-                return (
-                  <tr key={i} style={{ borderTop: novaOp ? '2px solid #cbd5e1' : '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '3px 8px', fontSize: 11, fontWeight: novaOp ? 700 : 400, color: novaOp ? '#1e293b' : '#cbd5e1', whiteSpace: 'nowrap' }}>
-                      {novaOp ? l.opl : '↳'}
-                    </td>
-                    <td style={{ padding: '3px 4px' }}>
-                      <input value={l.produto} onChange={e => set(i, 'produto', e.target.value)} onPaste={e => colar(i, e)}
-                        aria-label={`Produto ${l.opl} linha ${i + 1}`}
-                        style={{ width: '100%', padding: '4px 6px', border: `1px solid ${l.produto.trim() ? '#d1d5db' : '#fca5a5'}`, borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
-                    </td>
-                    <td style={{ padding: '3px 4px' }}>
-                      <input value={l.serial} onChange={e => set(i, 'serial', e.target.value)} onPaste={e => colar(i, e)}
-                        aria-label={`Serial ${l.opl} linha ${i + 1}`}
-                        style={{ width: '100%', padding: '4px 6px', border: `1px solid ${l.serial.trim() ? '#d1d5db' : '#fca5a5'}`, borderRadius: 4, fontSize: 11,
-                          boxSizing: 'border-box', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button className="acn-btn" style={{ background: '#22c55e', flex: 1, opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={confirmar}>
-            {salvando ? 'Aplicando...' : `✅ Kit 100% nas ${ops.length} unidades`}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+        <div className="acn-modal-rodape">
+          <Botao variante="primario" className="acn-klt-ok" icone={salvando ? undefined : mdiCheckCircleOutline} disabled={salvando} onClick={confirmar}>
+            {salvando ? 'Aplicando...' : `Kit 100% nas ${ops.length} unidades`}
+          </Botao>
+          <Botao disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>

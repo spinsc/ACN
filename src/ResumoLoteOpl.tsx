@@ -57,16 +57,16 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
   const linha = (rot: string, v: any) => (vazio(v) ? null : <div className="acn-ficha-linha"><span>{rot}</span><span>{v}</span></div>);
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro" role="dialog" aria-label={'Resumo do lote ' + base} style={{ width: 'min(820px, 96vw)', maxWidth: 'min(820px, 96vw)' }}>
+      <div className="modal-box acn-modal-cadastro acn-rlo-jan" role="dialog" aria-label={'Resumo do lote ' + base}>
         <div className="acn-modal-cab">
           <span className="modal-title">Lote {base} <Selo familia="marca" ponto={false}>{dados.n} unidades</Selo></span>
-          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <span className="acn-rlo-acoes">
             {onCompra && <Botao pequeno icone={mdiPackageVariantClosed} onClick={onCompra} title="Um pedido de compra para o lote inteiro">Pedido de compra do lote</Botao>}
             {onLiberarFiscal && dados.prontasFiscal > 0 && <Botao pequeno variante="primario" icone={mdiSendOutline} onClick={onLiberarFiscal} title="Libera para o Fiscal as unidades que aguardam a liberação comercial">Liberar {dados.prontasFiscal} ao Fiscal</Botao>}
             <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={onClose} />
           </span>
         </div>
-        <div className="acn-modal-corpo" style={{ maxHeight: '78vh' }}>
+        <div className="acn-modal-corpo acn-rlo-corpo">
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">O lote</div>
             {linha('Cliente', rep.cliente_nome)}
@@ -81,7 +81,7 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
 
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Em que etapa está</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div className="acn-rlo-selos">
               {Object.entries(dados.porStatus).sort((a: any, b: any) => b[1] - a[1]).map(([s, q]: any) => <Selo key={s} familia="neutro" ponto={false}>{q}× {s}</Selo>)}
             </div>
             <div className="acn-ficha-linha"><span>Cadastro dos veículos</span>
@@ -115,7 +115,7 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
                 <thead><tr><th>OP</th><th>Etapa</th><th>Modelo</th><th>Chassi</th><th>Placa</th></tr></thead>
                 <tbody>{[...irmaos].sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })).map((o: any) => (
                   <tr key={o.id}>
-                    <td className="acn-forte">{onAbrirUnidade ? <button type="button" className="acn-link-btn" onClick={() => onAbrirUnidade(o)} style={{ background: 'none', border: 0, padding: 0, color: 'var(--acn-brand)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline' }}>{o.opl}</button> : o.opl}</td>
+                    <td className="acn-forte">{onAbrirUnidade ? <Botao variante="discreto" pequeno className="acn-rlo-abrir" onClick={() => onAbrirUnidade(o)}>{o.opl}</Botao> : o.opl}</td>
                     <td>{o.status_geral}</td><td>{o.modelo || <span className="acn-txt-erro">—</span>}</td><td>{o.chassi || <span className="acn-txt-erro">—</span>}</td><td>{o.placa || <span className="acn-txt-erro">—</span>}</td>
                   </tr>
                 ))}</tbody>

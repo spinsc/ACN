@@ -22,6 +22,9 @@ import { supabase } from './supabaseClient';
 import { vinculosDaOp } from './OpVinculos';
 import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiCheck, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline, mdiCheckCircleOutline } from '@mdi/js';
 
 /** Setores cuja demanda em aberto segura a OP. Engenharia e Laboratório ficam
  *  de fora de propósito: são apoio e nem sempre a OP depende deles para sair. */
@@ -112,10 +115,12 @@ async function marcarEtapa(op, vinculo, etapa, currentUser, onFeito) {
 }
 
 // ── Checklist discreto ───────────────────────────────────────────────────────
+// 12e53 (09/10/2026): só aparência — a cor (âmbar enquanto falta, verde quando fecha) mora no design.css por [data-pnd]; a barra de andamento
+// passou a ser um <progress> (antes era uma div com a largura escrita no código)
 const Passo = ({ ok, texto, quem }) => (
   <span title={quem ? `${quem.por} · ${new Date(quem.em).toLocaleString('pt-BR')}` : undefined}
-    style={{ fontSize: 9.5, color: ok ? '#16a34a' : '#94a3b8', whiteSpace: 'nowrap' }}>
-    {ok ? '☑' : '☐'} {texto}
+    className={'acn-pnd-passo' + (ok ? ' ok' : '')}>
+    <Icone path={ok ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline} size={13} /> {texto}
   </span>
 );
 
@@ -145,47 +150,39 @@ export function ChecklistPendencias({ op, vinculos, modo = 'ver', currentUser, o
   };
 
   return (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: compacto ? '5px 8px' : '7px 10px',
-      background: pct === 100 ? '#f0fdf4' : '#fffbeb', marginTop: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 800, color: pct === 100 ? '#15803d' : '#b45309', textTransform: 'uppercase' }}>
-          {pct === 100 ? '✅ Pendências resolvidas' : `Pendências de fabricação/compra — ${pct}%`}
+    <div className={'acn-pnd' + (compacto ? ' compacto' : '')} data-pnd={pct === 100 ? 'ok' : 'aberto'}>
+      <div className="acn-pnd-cab">
+        <span className="acn-pnd-tit">
+          {pct === 100 ? <><Icone path={mdiCheckCircleOutline} size={13} /> Pendências resolvidas</> : `Pendências de fabricação/compra — ${pct}%`}
         </span>
-        <div style={{ flex: 1, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden', minWidth: 60 }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#16a34a' : '#f59e0b' }} />
-        </div>
+        <progress className="acn-pnd-prog" value={pct} max={100} aria-label="Andamento das pendências" />
       </div>
       {todas.map(v => {
         const e = etapasDaPendencia(v, opAtual);
         const fechada = e.setor && e.recebido && e.liberado;
         return (
-          <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-            padding: '3px 0', borderTop: '1px solid #f1f5f9', opacity: fechada ? .65 : 1 }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, flex: '1 1 160px', minWidth: 120 }}>
-              <span style={{ color: '#7c3aed', fontWeight: 800 }}>{v.setor || '—'}</span> · {v.titulo}
+          <div key={v.id} className={'acn-pnd-linha' + (fechada ? ' fechada' : '')}>
+            <span className="acn-pnd-nome">
+              <span className="acn-pnd-setor">{v.setor || '—'}</span> · {v.titulo}
             </span>
             <Passo ok={e.setor}    texto="setor concluiu" />
             <Passo ok={e.recebido} texto="almox recebeu"  quem={e.quemRecebeu} />
             <Passo ok={e.liberado} texto="PCP liberou"    quem={e.quemLiberou} />
             {modo === 'almox' && e.setor && !e.recebido && (
-              <button onClick={() => agir(v, 'recebido')} disabled={salvando === v.id}
-                style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: 'none', borderRadius: 4,
-                  background: '#0f766e', color: '#fff', cursor: 'pointer' }}>
-                {salvando === v.id ? '...' : '✔ Recebi'}
-              </button>
+              <Botao pequeno variante="primario" icone={salvando === v.id ? undefined : mdiCheck} onClick={() => agir(v, 'recebido')} disabled={salvando === v.id}>
+                {salvando === v.id ? '...' : 'Recebi'}
+              </Botao>
             )}
             {modo === 'pcp' && e.setor && e.recebido && !e.liberado && (
-              <button onClick={() => agir(v, 'liberado')} disabled={salvando === v.id}
-                style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: 'none', borderRadius: 4,
-                  background: '#1d4ed8', color: '#fff', cursor: 'pointer' }}>
-                {salvando === v.id ? '...' : '✔ Liberar'}
-              </button>
+              <Botao pequeno variante="primario" icone={salvando === v.id ? undefined : mdiCheck} onClick={() => agir(v, 'liberado')} disabled={salvando === v.id}>
+                {salvando === v.id ? '...' : 'Liberar'}
+              </Botao>
             )}
             {modo === 'almox' && !e.setor && (
-              <span style={{ fontSize: 9, color: '#b45309' }}>aguardando o setor concluir</span>
+              <span className="acn-pnd-espera">aguardando o setor concluir</span>
             )}
             {modo === 'pcp' && !e.liberado && (
-              <span style={{ fontSize: 9, color: '#b45309' }}>
+              <span className="acn-pnd-espera">
                 {!e.setor ? 'aguardando o setor concluir' : !e.recebido ? 'aguardando o Almoxarifado receber' : ''}
               </span>
             )}

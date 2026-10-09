@@ -3309,3 +3309,60 @@ body.dark .acn-lot-selo { color: #1e1b4b; }
 .acn-dex-desc-txt { flex: 1; white-space: pre-wrap; word-break: break-word; }
 html body .acn-b.acn-dex-link { min-height: 0; padding: 0 4px; font-size: 11px; color: var(--acn-muted); text-decoration: underline; }
 .acn-vcp-tipo svg, .acn-dex-tit svg, .acn-dex-resumo svg, .acn-dex-grupo-tit svg, .acn-dex-parte svg, .acn-oea svg, .acn-oea-cel svg, .acn-lot-soma svg { display: inline-block !important; vertical-align: -2px; }
+
+/* Componentes pequenos, parte 3 (12e53, 09/10/2026): checklist de pendências da OP, conferência da estrutura na BOM, kiting 100% em lote
+   para Envio e as últimas peças do resumo do lote. Só aparência. A cor das caixas vem dos tons do guia por [data-pnd] e [data-tom]. */
+.acn-pnd { --acn-pnd-cor: var(--acn-warn); margin-top: 6px; padding: 7px 10px; background: var(--acn-warn-soft); border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-pnd.compacto { padding: 5px 8px; }
+.acn-pnd[data-pnd="ok"] { --acn-pnd-cor: var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-pnd-cab { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.acn-pnd-tit { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--acn-pnd-cor); }
+.acn-pnd-prog { flex: 1; min-width: 60px; height: 4px; appearance: none; -webkit-appearance: none; border: 0; border-radius: 2px; overflow: hidden; background: var(--acn-line); }
+.acn-pnd-prog::-webkit-progress-bar { background: var(--acn-line); border-radius: 2px; }
+.acn-pnd-prog::-webkit-progress-value { background: var(--acn-pnd-cor); border-radius: 2px; }
+.acn-pnd-prog::-moz-progress-bar { background: var(--acn-pnd-cor); border-radius: 2px; }
+.acn-pnd-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 3px 0; border-top: 1px solid var(--acn-line-soft); }
+.acn-pnd-linha.fechada { opacity: .65; }
+.acn-pnd-nome { flex: 1 1 160px; min-width: 120px; font-size: 12px; font-weight: 600; color: var(--acn-ink); }
+.acn-pnd-setor { font-weight: 800; color: #7c3aed; }
+body.dark .acn-pnd-setor { color: #a78bfa; }
+.acn-pnd-passo { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--acn-muted); white-space: nowrap; }
+.acn-pnd-passo.ok { color: var(--acn-ok); }
+.acn-pnd-espera { font-size: 11px; color: var(--acn-warn); }
+.acn-aep { margin-bottom: 8px; }
+.acn-aep-caixa { margin-bottom: 6px; padding: 7px 10px; font-size: 12px; color: var(--acn-ink); background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-aep-caixa[data-tom="info"] { background: var(--acn-info-soft); border-color: color-mix(in srgb, var(--acn-info) 30%, transparent); }
+.acn-aep-caixa[data-tom="atencao"] { background: var(--acn-warn-soft); border-color: color-mix(in srgb, var(--acn-warn) 35%, transparent); }
+.acn-aep-caixa[data-tom="erro"] { background: var(--acn-bad-soft); border-color: color-mix(in srgb, var(--acn-bad) 30%, transparent); }
+.acn-aep-caixa[data-tom="ok"] { background: var(--acn-ok-soft); border-color: color-mix(in srgb, var(--acn-ok) 30%, transparent); }
+.acn-aep-sub { margin-top: 3px; }
+.acn-aep-nota { margin-top: 4px; font-size: 11px; }
+.acn-aep-acoes { margin-top: 5px; }
+.acn-aep-bom { margin-top: 6px; }
+.acn-aep-linha { font-size: 12px; }
+.acn-aep-resp { margin-bottom: 6px; font-size: 11px; color: var(--acn-muted); }
+html body .acn-b.acn-aep-link { min-height: 0; padding: 0 2px; font-size: 11px; color: var(--acn-brand); text-decoration: underline; }
+html body .modal-box.acn-modal-cadastro.acn-klt-jan { width: min(980px, 96vw); max-width: 980px; max-height: 90vh; }
+.acn-klt-corpo { min-height: 0; }
+.acn-klt-barra { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-klt-padrao { flex: 1; min-width: 200px; }
+.acn-klt-cont { font-size: 12px; font-weight: 700; }
+.acn-klt-cont.ok { color: var(--acn-ok); }
+.acn-klt-cont.falta { color: var(--acn-warn); }
+.acn-klt-tabela { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-klt-tabela table { width: 100%; border-collapse: collapse; }
+.acn-klt-tabela thead th { position: sticky; top: 0; z-index: 1; background: var(--acn-surface-2); text-align: left; }
+.acn-klt-tabela tr.nova td { border-top: 2px solid var(--acn-line); }
+.acn-klt-op { white-space: nowrap; color: var(--acn-muted); opacity: .6; }
+.acn-klt-op.nova { font-weight: 700; color: var(--acn-ink); opacity: 1; }
+.acn-klt-campo { width: 100%; box-sizing: border-box; }
+.acn-klt-campo.vazio { border-color: var(--acn-bad); }
+html body.dark .acn-input.acn-klt-campo.vazio { border-color: var(--acn-bad) !important; }
+.acn-klt-serial { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; }
+html body .acn-b.acn-klt-ok { flex: 1; }
+html body .modal-box.acn-modal-cadastro.acn-rlo-jan { width: min(820px, 96vw); max-width: min(820px, 96vw); }
+.acn-rlo-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-rlo-corpo { max-height: 78vh; }
+.acn-rlo-selos { display: flex; gap: 6px; flex-wrap: wrap; }
+html body .acn-b.acn-rlo-abrir { min-height: 0; padding: 0; font: inherit; color: var(--acn-brand); text-decoration: underline; }
+.acn-pnd-tit svg, .acn-pnd-passo svg, .acn-aep-caixa svg { display: inline-block !important; vertical-align: -2px; }
