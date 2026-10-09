@@ -2623,3 +2623,32 @@ body.dark .acn-opl-texto.azul, body.dark .acn-opl-texto.verde, body.dark .acn-op
 .acn-cal-lateral-caixa { display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .acn-cal-lateral-caixa .acn-modal-corpo { flex: 1; min-height: 0; overflow-y: auto; }
 @media (min-width: 1000px) { .sec-card.acn-cal-com-lateral { margin-right: 452px; } }
+
+/* Card aberto do CRM — painel esquerdo (12e40, 08/10/2026). Só aparência; os campos e as regras são os de antes. */
+.acn-crm-ab-esq { display: flex; flex-direction: column; min-height: 0; background: var(--acn-surface); box-shadow: 2px 0 12px rgba(15, 23, 42, .15); }
+.acn-crm-ab-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 14px; flex-shrink: 0; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-crm-ab-funil { font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--acn-muted); }
+.acn-crm-ab-titulo { font-size: 14px; font-weight: 700; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-crm-ab-ir-op { margin-top: 6px; }
+.acn-crm-ab-acoes { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.acn-crm-ab-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px; }
+/* o destaque de campo não lido já traz a própria margem (inline); esta vale para os blocos sem ele */
+.acn-crm-ab-campo { display: grid; gap: 3px; min-width: 0; margin-bottom: 10px; }
+.acn-crm-ab-campo .acn-input, .acn-crm-ab-campo select, .acn-crm-ab-campo textarea { width: 100%; box-sizing: border-box; }
+.acn-crm-ab-campo textarea { resize: vertical; }
+.acn-crm-ab-campo .acn-chips { justify-self: start; }
+/* o ícone do sistema é sempre bloco: o rótulo que leva ícone vira linha flexível (o mesmo caminho das outras telas) */
+html body .acn-label.acn-crm-ab-rot-icone { display: flex; align-items: center; gap: 4px; }
+.acn-crm-ab-radios { display: flex; gap: 12px; flex-wrap: wrap; }
+.acn-crm-ab-radio { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.acn-crm-ab-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.acn-crm-ab-dica { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; color: var(--acn-muted); text-transform: none; letter-spacing: 0; }
+.acn-crm-ab-contato { padding: 8px 10px; margin-bottom: 8px; background: var(--acn-info-soft); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-crm-ab-contato-tit { margin-bottom: 6px; display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-info); }
+.acn-crm-ab-grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.acn-crm-ab-zap { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--acn-ok); text-decoration: none; }
+.acn-crm-ab-rodape { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 14px; flex-shrink: 0; border-top: 1px solid var(--acn-line); }
+.acn-crm-ab-rodape .acn-crm-ab-salvar { flex: 1; justify-content: center; }
+.acn-crm-ab-divisor { width: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: col-resize; background: var(--acn-line); transition: background .15s; }
+.acn-crm-ab-divisor.arrastando { background: var(--acn-info-soft); }
+.acn-crm-ab-divisor i { width: 2px; height: 40px; border-radius: 1px; background: var(--acn-muted); opacity: .5; }

@@ -38,7 +38,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiPhoneOutline, mdiDomain, mdiAlertOutline,
   mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff,
   mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel,
-  mdiNoteTextOutline, mdiFileDocumentOutline } from '@mdi/js';
+  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
@@ -4393,46 +4393,43 @@ function ColunaRolavel({ children }: any) {
           <div ref={abrirContainerRef} style={{ display:'flex', width:'100%', height:'100%' }}>
 
             {/* ── ESQUERDO: formulário editável ── */}
-            <div style={{ display:'flex', flexDirection:'column', background:'#fff', boxShadow:'2px 0 12px #0002', ...abrirEstSplit.esquerda }}>
+            {/* 12e40 (08/10/2026): só a aparência — classes acn-crm-ab-* no lugar do estilo solto, botões do sistema, campos acn-input. Os campos, textos, regras e gravações são os de antes. */}
+            <div className="acn-crm-ab-esq" style={abrirEstSplit.esquerda}>
               {/* Header */}
-              <div style={{ padding:'12px 14px', background:'#1e3a5f', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <div className="acn-crm-ab-cab">
                 <div>
-                  <div style={{ fontSize:9, opacity:.8, fontWeight:700, letterSpacing:.5 }}>
+                  <div className="acn-crm-ab-funil">
                     {modalAbrir.funil === 'licitacao' ? 'LICITAÇÃO CRM' : 'VENDA DIRETA'}
                   </div>
-                  <div style={{ fontSize:13, fontWeight:700 }}>{modalAbrir.titulo}</div>
-                  {modalAbrir.orgao && <div style={{ fontSize:9, opacity:.85 }}>{modalAbrir.orgao}</div>}
+                  <div className="acn-crm-ab-titulo">{modalAbrir.titulo}</div>
+                  {modalAbrir.orgao && <div className="acn-fraco">{modalAbrir.orgao}</div>}
                   {oplsDoCard.length > 0 && (() => {
                     const primeira = oplsDoCard[0];
                     const base = String(primeira.opl || '').replace(/\/\d+$/, '');
                     return (
-                      <button onClick={() => setOplDoCardAberta(primeira)}
-                        title={oplsDoCard.length > 1 ? `Abre a 1ª unidade — no detalhe há o "Resumo do lote" com as ${oplsDoCard.length}` : 'Abrir o detalhe da OP gerada por este PV'}
-                        style={{ marginTop:6, background:'#0891b2', color:'#fff', border:'none', borderRadius:5, padding:'4px 10px',
-                          fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                        🔧 Ir para a OP {oplsDoCard.length > 1 ? `${base} (${oplsDoCard.length} unidades)` : primeira.opl}
-                      </button>
+                      <Botao pequeno icone={mdiWrenchOutline} className="acn-crm-ab-ir-op" onClick={() => setOplDoCardAberta(primeira)}
+                        title={oplsDoCard.length > 1 ? `Abre a 1ª unidade — no detalhe há o "Resumo do lote" com as ${oplsDoCard.length}` : 'Abrir o detalhe da OP gerada por este PV'}>
+                        Ir para a OP {oplsDoCard.length > 1 ? `${base} (${oplsDoCard.length} unidades)` : primeira.opl}
+                      </Botao>
                     );
                   })()}
                 </div>
-                <div style={{ display:'flex', gap:4, alignItems:'center' }}>
-                  <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} escuro />
-                  <button onClick={() => setAbrirMinimized(true)}
-                    title="Minimizar" style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px', lineHeight:1 }}>─</button>
-                  <button onClick={fecharModalAbrir}
-                    style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+                <div className="acn-crm-ab-acoes">
+                  <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} />
+                  <Botao variante="discreto" pequeno icone={mdiMinus} aria-label="Minimizar" title="Minimizar" onClick={() => setAbrirMinimized(true)} />
+                  <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={fecharModalAbrir} />
                 </div>
               </div>
 
               {/* Formulário (scrollável) */}
-              <div style={{ flex:1, overflowY:'auto', padding:'10px 14px' }}>
+              <div className="acn-crm-ab-corpo">
 
                 {modalAbrir.funil === 'licitacao' && (
-                  <div style={{ marginBottom:8 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Tipo de Licitação</div>
-                    <div style={{ display:'flex', gap:12 }}>
+                  <div className="acn-crm-ab-campo">
+                    <div className="acn-label">Tipo de Licitação</div>
+                    <div className="acn-crm-ab-radios">
                       {([['ordinaria','📄 Ordinária'],['ata','📋 Ata de Registro']] as const).map(([t,label]) => (
-                        <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                        <label key={t} className="acn-crm-ab-radio">
                           <input type="radio" checked={formOp.tipo_licitacao===t} onChange={() => setFormOp(f => ({...f, tipo_licitacao:t}))} />
                           {label}
                         </label>
@@ -4455,11 +4452,10 @@ function ColunaRolavel({ children }: any) {
                   // a coluna existia (e o salvar já gravava), mas nunca teve campo na tela
                   { label:'Prazo de Entrega', key:'prazo_entrega_comercial', type:'date' },
                 ] as any[]).map(({ label, key, placeholder, type }) => (
-                  <div key={key} style={campoDestaque(key)}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>{label}</div>
-                    <input type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
-                      onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))}
-                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+                  <div key={key} className="acn-crm-ab-campo" style={campoDestaque(key)}>
+                    <div className="acn-label">{label}</div>
+                    <input className="acn-input" type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
+                      onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))} />
                   </div>
                 ))}
 
@@ -4472,24 +4468,21 @@ function ColunaRolavel({ children }: any) {
                 {(() => {
                   const pvTravado = !!String(modalAbrir?.numero_pv || '').trim() && !podeAlterarNumeroOplPv(currentUser);
                   return (
-                    <div style={campoDestaque('numero_pv')}>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
-                        Nº do PV (4 dígitos){pvTravado && <span style={{ color:'#94a3b8', fontWeight:600 }}> · 🔒 só admin/gerente altera</span>}
+                    <div className="acn-crm-ab-campo" style={campoDestaque('numero_pv')}>
+                      <div className="acn-label">
+                        Nº do PV (4 dígitos){pvTravado && <span className="acn-crm-ab-dica"> · <Icone path={mdiLockOutline} size={11} /> só admin/gerente altera</span>}
                       </div>
-                      <input type="text" value={formOp.numero_pv||''} placeholder="0000" maxLength={4}
+                      <input className="acn-input" type="text" value={formOp.numero_pv||''} placeholder="0000" maxLength={4}
                         disabled={pvTravado}
                         title={pvTravado ? 'PV já atribuído. Só administradores e gerentes podem alterar o número.' : undefined}
-                        onChange={e => setFormOp(f => ({...f, numero_pv: e.target.value.replace(/\D/g, '').slice(0, 4)}))}
-                        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box',
-                          ...(pvTravado ? { background:'#f1f5f9', color:'#475569', cursor:'not-allowed' } : {}) }} />
+                        onChange={e => setFormOp(f => ({...f, numero_pv: e.target.value.replace(/\D/g, '').slice(0, 4)}))} />
                     </div>
                   );
                 })()}
 
-                <div style={campoDestaque('estagio_id')}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Estágio</div>
-                  <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                <div className="acn-crm-ab-campo" style={campoDestaque('estagio_id')}>
+                  <div className="acn-label">Estágio</div>
+                  <select className="acn-input" value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}>
                     <option value="">— Selecione —</option>
                     {estagiosFunil.map(e => (
                       <option key={e.id} value={e.id}>{e.nome}</option>
@@ -4501,53 +4494,42 @@ function ColunaRolavel({ children }: any) {
                 {(() => {
                   const opAtual = ops.find((o: any) => o.id === modalAbrir.id) || modalAbrir;
                   return (
-                    <div style={{ marginBottom:10 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Tipo de negócio <span style={{ fontWeight:600, color:'#94a3b8' }}>· escolhe a régua de markup</span></div>
-                      <select value={opAtual.tipo_negocio || ''} onChange={e => atualizarTipoNegocio(opAtual, e.target.value || null)}
-                        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                    <div className="acn-crm-ab-campo">
+                      <div className="acn-label">Tipo de negócio <span className="acn-crm-ab-dica">· escolhe a régua de markup</span></div>
+                      <select className="acn-input" value={opAtual.tipo_negocio || ''} onChange={e => atualizarTipoNegocio(opAtual, e.target.value || null)}>
                         <option value="">— não definido —</option>
                         {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       {modalAbrir.funil === 'venda_direta' && (
-                        <div style={{ marginTop:6, display:'flex', alignItems:'center', gap:8, fontSize:10 }}>
-                          <span style={{ fontWeight:700, color:'#475569' }}>Temperatura:</span>
+                        <div className="acn-crm-ab-linha">
+                          <span className="acn-forte">Temperatura:</span>
                           <span>{opAtual.temperatura === 'quente' ? '🔥 Quente' : opAtual.temperatura === 'morno' ? '🌤️ Morno' : opAtual.temperatura === 'frio' ? '🧊 Frio' : 'não definida'}</span>
                           <Botao pequeno variante="discreto" icone={mdiPencilOutline} onClick={() => { setModalEditarTemp(opAtual); setTempEditSel(opAtual.temperatura || ''); }}>Mudar</Botao>
                         </div>
                       )}
-                      <div style={{ marginTop:8 }}><CrmAnexosWidget op={modalAbrir} currentUser={currentUser} /></div>
+                      <div><CrmAnexosWidget op={modalAbrir} currentUser={currentUser} /></div>
                     </div>
                   );
                 })()}
 
                 {isGanho(getEst(formOp.estagio_id)) && (
-                  <div style={campoDestaque('empresa_vencedora')}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Empresa Vencedora *</div>
-                    <div style={{ display:'flex', gap:6 }}>
-                      {(['ACN','DETECH'] as const).map(emp => (
-                        <button key={emp} type="button" onClick={() => setFormOp(f => ({...f, empresa_vencedora: emp}))}
-                          style={{ flex:1, padding:'6px', fontSize:10, fontWeight:700, borderRadius:4, border:'1.5px solid', cursor:'pointer',
-                            background: formOp.empresa_vencedora===emp ? (emp==='ACN'?'#dbeafe':'#f3e8ff') : 'white',
-                            color:       emp==='ACN' ? '#1e40af' : '#7c3aed',
-                            borderColor: emp==='ACN' ? '#3b82f6' : '#a855f7' }}>
-                          {emp}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="acn-crm-ab-campo" style={campoDestaque('empresa_vencedora')}>
+                    <div className="acn-label">Empresa Vencedora *</div>
+                    <Chips ativo={formOp.empresa_vencedora || ''} onChange={emp => setFormOp(f => ({...f, empresa_vencedora: emp}))} rotulo="Empresa vencedora"
+                      itens={[{ id: 'ACN', rotulo: 'ACN' }, { id: 'DETECH', rotulo: 'DETECH' }]} />
                   </div>
                 )}
 
                 {isPerdido(getEst(formOp.estagio_id)) && (
-                  <div style={campoDestaque('motivo_perda')}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Motivo da Perda</div>
-                    <textarea value={formOp.motivo_perda||''} onChange={e => setFormOp(f => ({...f, motivo_perda: e.target.value}))}
-                      rows={2} placeholder="Descreva o motivo..."
-                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box', resize:'vertical' }} />
+                  <div className="acn-crm-ab-campo" style={campoDestaque('motivo_perda')}>
+                    <div className="acn-label">Motivo da Perda</div>
+                    <textarea className="acn-input" value={formOp.motivo_perda||''} onChange={e => setFormOp(f => ({...f, motivo_perda: e.target.value}))}
+                      rows={2} placeholder="Descreva o motivo..." />
                   </div>
                 )}
 
-                <div style={campoDestaque('cliente_id')}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Cliente (opcional)</div>
+                <div className="acn-crm-ab-campo" style={campoDestaque('cliente_id')}>
+                  <div className="acn-label">Cliente (opcional)</div>
                   <ClienteAutocomplete
                     value={formOp._cliente_nome || ''}
                     onChange={v => setFormOp(f => ({ ...f, _cliente_nome: v, cliente_id: null }))}
@@ -4555,82 +4537,74 @@ function ColunaRolavel({ children }: any) {
                     placeholder="Vincular cliente..." />
                 </div>
 
-                <div style={{ ...campoDestaque('responsavel_nome'), marginBottom:10 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Responsável</div>
+                <div className="acn-crm-ab-campo" style={campoDestaque('responsavel_nome')}>
+                  <div className="acn-label">Responsável</div>
                   <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o operador" />
                 </div>
 
-                <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:5 }}>📞 CONTATO</div>
-                  <div style={campoDestaque('nome_contato')}>
-                    <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
-                    <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
+                <div className="acn-crm-ab-contato">
+                  <div className="acn-crm-ab-contato-tit"><Icone path={mdiPhoneOutline} size={13} /> Contato</div>
+                  <div className="acn-crm-ab-campo" style={campoDestaque('nome_contato')}>
+                    <div className="acn-label">Nome</div>
+                    <input className="acn-input" placeholder="Nome do contato"
                       value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
-                    <div style={campoDestaque('contato')}>
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Telefone</div>
-                      <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999"
+                  <div className="acn-crm-ab-grade2">
+                    <div className="acn-crm-ab-campo" style={campoDestaque('contato')}>
+                      <div className="acn-label">Telefone</div>
+                      <input className="acn-input" placeholder="(99) 99999-9999"
                         value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
                       {formOp.contato && (
-                        <a href={`https://wa.me/55${(formOp.contato||'').replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
-                          style={{ fontSize:8, color:'#16a34a', display:'flex', alignItems:'center', gap:3, marginTop:2, textDecoration:'none' }}>
+                        <a className="acn-crm-ab-zap" href={`https://wa.me/55${(formOp.contato||'').replace(/\D/g,'')}`} target="_blank" rel="noreferrer">
                           💬 WhatsApp
                         </a>
                       )}
                     </div>
-                    <div style={campoDestaque('contato_email')}>
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>E-mail</div>
-                      <input className="acn-input" style={{ width:'100%' }} placeholder="email@exemplo.com"
+                    <div className="acn-crm-ab-campo" style={campoDestaque('contato_email')}>
+                      <div className="acn-label">E-mail</div>
+                      <input className="acn-input" placeholder="email@exemplo.com"
                         value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
                     </div>
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-                    <div style={campoDestaque('prox_contato')}>
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>📅 Próximo Contato</div>
-                      <input type="date" className="acn-input" style={{ width:'100%' }}
+                  <div className="acn-crm-ab-grade2">
+                    <div className="acn-crm-ab-campo" style={campoDestaque('prox_contato')}>
+                      <div className="acn-label acn-crm-ab-rot-icone"><Icone path={mdiCalendarOutline} size={12} /> Próximo Contato</div>
+                      <input type="date" className="acn-input"
                         value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
                     </div>
-                    <div style={campoDestaque('hora_prox_contato')}>
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>⏰ Hora do Contato</div>
-                      <input type="time" className="acn-input" style={{ width:'100%' }}
+                    <div className="acn-crm-ab-campo" style={campoDestaque('hora_prox_contato')}>
+                      <div className="acn-label acn-crm-ab-rot-icone"><Icone path={mdiClockOutline} size={12} /> Hora do Contato</div>
+                      <input type="time" className="acn-input"
                         value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
                     </div>
                   </div>
-                  <div style={{ marginTop:6 }}>
+                  <div>
                     <ParticipantesPicker value={participantesDe(formOp)} onChange={v => setFormOp(f => ({...f, participantes: v}))} donoEmail={currentUser?.email} rotulo="Quem mais acompanha este contato (aparece na agenda deles)" />
                   </div>
                 </div>
               </div>
 
               {/* Footer */}
-              <div style={{ padding:'10px 14px', borderTop:'1px solid #e2e8f0', display:'flex', gap:6, flexShrink:0 }}>
-                <button onClick={salvarAbrirForm} disabled={salvando}
-                  style={{ flex:1, background:'#0f766e', color:'#fff', border:'none', borderRadius:5, padding:'7px 0', fontWeight:700, fontSize:11, cursor:'pointer', opacity:salvando?.6:1 }}>
-                  {salvando ? 'Salvando...' : '💾 Salvar Alterações'}
-                </button>
-                <button onClick={fecharModalAbrir}
-                  style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:5, padding:'7px 12px', fontSize:10, cursor:'pointer' }}>
-                  Fechar
-                </button>
-                <button onClick={() => setModalNovaOpOs({ crmCard: modalAbrir })}
-                  style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:5, padding:'7px 12px', fontSize:10, cursor:'pointer', fontWeight:700 }}>
-                  🔧 Nova OP / OS
-                </button>
+              <div className="acn-crm-ab-rodape">
+                <Botao variante="primario" icone={mdiContentSaveOutline} className="acn-crm-ab-salvar" onClick={salvarAbrirForm} disabled={salvando}>
+                  {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                </Botao>
+                <Botao onClick={fecharModalAbrir}>Fechar</Botao>
+                <Botao icone={mdiWrenchOutline} onClick={() => setModalNovaOpOs({ crmCard: modalAbrir })}>Nova OP / OS</Botao>
               </div>
             </div>
 
             {/* ── DIVIDER (drag resize) ── */}
             <div
+              className={'acn-crm-ab-divisor' + (abrirIsDragging ? ' arrastando' : '')}
               onMouseDown={e => {
                 e.preventDefault();
                 setAbrirIsDragging(true);
                 abrirDragStartX.current = e.clientX;
                 abrirDragStartW.current = abrirLeftWidth;
               }}
-              style={{ width:6, background: abrirIsDragging ? '#93c5fd' : '#e2e8f0', cursor:'col-resize',
-                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'background .15s', ...abrirEstSplit.divisor }}>
-              <div style={{ width:2, height:40, background:'#c0c0c0', borderRadius:1 }} />
+              style={abrirEstSplit.divisor}>
+              <i />
             </div>
 
             {/* ── DIREITO: abas de documentos ── */}
