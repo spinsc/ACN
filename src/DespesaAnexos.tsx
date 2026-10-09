@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar, mostrarAviso } from './Feedback';
 import { Botao } from './Interface';
+import Icone from './Icone';
 import { mdiTrashCanOutline, mdiPaperclip } from '@mdi/js';
 
 /** Sobe os arquivos e liga cada um a todas as despesas de `despesaIds`. Devolve a lista de erros (vazia = tudo certo). */
@@ -57,20 +58,20 @@ export function AnexosDespesa({ despesaId, currentUser, podeEditar }: any) {
     carregar();
   };
   return (
-    <div>
-      {erro && <div style={{ fontSize: 11, color: '#b91c1c' }}>Não foi possível ler os anexos: {erro}</div>}
-      {anexos === null ? <div style={{ fontSize: 11, color: '#64748b' }}>Carregando…</div>
-        : anexos.length === 0 ? <div style={{ fontSize: 11, color: '#64748b' }}>Nenhum anexo.</div>
+    <div className="acn-dsa">
+      {erro && <div className="acn-dsa-erro">Não foi possível ler os anexos: {erro}</div>}
+      {anexos === null ? <div className="acn-dsa-msg">Carregando…</div>
+        : anexos.length === 0 ? <div className="acn-dsa-msg">Nenhum anexo.</div>
         : anexos.map(a => (
-          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '3px 0', borderBottom: '1px solid #f1f5f9' }}>
-            <a href={a.url} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📎 {a.nome}</a>
+          <div key={a.id} className="acn-dsa-item">
+            <a href={a.url} target="_blank" rel="noreferrer" className="acn-dsa-nome"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a>
             {podeEditar && <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Remover ${a.nome}`} title="Remover" onClick={() => remover(a)} />}
           </div>
         ))}
       {podeEditar && (
-        <label className="acn-b acn-b-secundario acn-b-p" style={{ cursor: enviando ? 'wait' : 'pointer', marginTop: 6, display: 'inline-flex' }}>
-          <input type="file" multiple style={{ display: 'none' }} disabled={enviando} onChange={e => { enviar(e.target.files); e.target.value = ''; }} />
-          {enviando ? 'Enviando…' : '📎 Adicionar anexos'}
+        <label className={'acn-b acn-b-secundario acn-b-p acn-dsa-anexar' + (enviando ? ' ocupado' : '')}>
+          <input type="file" multiple hidden disabled={enviando} onChange={e => { enviar(e.target.files); e.target.value = ''; }} />
+          {enviando ? 'Enviando…' : <><Icone path={mdiPaperclip} size={14} />Adicionar anexos</>}
         </label>
       )}
     </div>

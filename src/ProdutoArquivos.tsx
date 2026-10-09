@@ -7,6 +7,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPaperclip, mdiClose, mdiPencilRulerOutline, mdiLoading } from '@mdi/js';
 
 export async function arquivosDoProduto(produtoId: string) {
   if (!produtoId) return [];
@@ -47,31 +50,30 @@ export function ProdutoArquivos({ produtoId, currentUser, somenteLeitura = false
   };
 
   if (somenteLeitura && !lista.length) return null;
+  // 12e50 (09/10/2026): só aparência — a cor roxa dos arquivos de projeto mora no design.css (--acn-par-cor), com tom mais claro no tema escuro
   return (
-    <div style={{ marginTop: compacto ? 4 : 8 }}>
+    <div className={'acn-par' + (compacto ? ' compacto' : '')}>
       {!compacto && (
-        <div style={{ fontSize: 9, fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 4 }}>
-          📐 Arquivos de projeto ({lista.length})
+        <div className="acn-par-tit">
+          <Icone path={mdiPencilRulerOutline} size={13} />Arquivos de projeto ({lista.length})
         </div>
       )}
       {!somenteLeitura && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px', border: '1px dashed #c4b5fd', borderRadius: 5,
-          cursor: enviando ? 'wait' : 'pointer', background: '#faf5ff', fontSize: 10, color: '#7c3aed', marginBottom: 4 }}>
-          <input type="file" multiple style={{ display: 'none' }} disabled={enviando}
+        <label className={'acn-par-anexar' + (enviando ? ' ocupado' : '')}>
+          <input type="file" multiple hidden disabled={enviando}
             onChange={async e => { if (e.target.files?.length) await enviar(e.target.files); e.target.value = ''; }} />
-          {enviando ? '⏳ Enviando...' : '📎 Anexar desenho, esquema, PDF...'}
+          {enviando ? <><Icone path={mdiLoading} size={13} />Enviando...</> : <><Icone path={mdiPaperclip} size={13} />Anexar desenho, esquema, PDF...</>}
         </label>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div className="acn-par-lista">
         {lista.map(a => (
-          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
-            <a href={a.url} target="_blank" rel="noreferrer" style={{ color: '#6d28d9', textDecoration: 'underline', flex: 1, wordBreak: 'break-all' }}>
-              📐 {a.nome}
+          <div key={a.id} className="acn-par-item">
+            <a href={a.url} target="_blank" rel="noreferrer" className="acn-par-nome">
+              <Icone path={mdiPencilRulerOutline} size={12} /> {a.nome}
             </a>
-            {!compacto && a.criado_por && <span style={{ color: '#94a3b8', fontSize: 9 }}>{a.criado_por}</span>}
+            {!compacto && a.criado_por && <span className="acn-par-quem">{a.criado_por}</span>}
             {!somenteLeitura && (
-              <button onClick={() => remover(a)} aria-label={`Remover ${a.nome}`}
-                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, padding: 0 }}>✕</button>
+              <Botao variante="discreto" pequeno icone={mdiClose} className="acn-par-x" aria-label={`Remover ${a.nome}`} onClick={() => remover(a)} />
             )}
           </div>
         ))}

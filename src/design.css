@@ -3167,3 +3167,40 @@ html body label.acn-b.acn-anx-anexar.ocupado { cursor: wait; opacity: .6; }
 html body .acn-b.acn-anx-ver[data-anx-opl="proposta"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="orcamento"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="documento"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="foto"]:not(.acn-b-secundario), html body .acn-b.acn-anx-ver[data-anx-opl="checklist_entrega"]:not(.acn-b-secundario) { background: var(--acn-anx-cor); border-color: var(--acn-anx-cor); color: #fff; }
 html body label.acn-b.acn-anx-anexar svg, .acn-anx-contagem svg { display: inline-block !important; vertical-align: -2px; }
 .acn-anx-pill svg, .acn-anx-nome svg { display: inline-block !important; vertical-align: -2px; }
+
+/* Anexos menores (12e50, 09/10/2026): janela de anexos da tarefa de engenharia, arquivos de projeto do produto e anexos da despesa
+   do centro de custo. Só aparência. A cor roxa dos arquivos de projeto mora aqui (--acn-par-cor), com um tom mais claro no tema escuro. */
+html body .modal-overlay.acn-tan-ov { z-index: 2100; }
+html body .modal-box.acn-modal-cadastro.acn-tan-jan { width: min(560px, 96vw); max-width: 560px; max-height: 90vh; }
+.acn-tan-cab-txt { display: grid; gap: 2px; }
+.acn-tan-topo { padding: 10px 16px; flex-shrink: 0; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-tan-zona { display: grid; gap: 2px; padding: 14px 12px; text-align: center; cursor: pointer; background: var(--acn-surface); border: 1.5px dashed var(--acn-line); border-radius: var(--acn-r3); }
+.acn-tan-zona:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
+.acn-tan-zona.arrastando { border-color: var(--acn-brand); background: color-mix(in srgb, var(--acn-brand) 8%, var(--acn-surface)); }
+.acn-tan-zona.ocupado { cursor: wait; }
+.acn-tan-zona-tit { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-tan-lista { flex: 1; min-height: 0; overflow-y: auto; }
+.acn-tan-item { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--acn-line); }
+.acn-tan-img { width: 34px; height: 34px; flex-shrink: 0; object-fit: cover; border-radius: 4px; }
+.acn-tan-icone { width: 34px; flex-shrink: 0; display: inline-flex; justify-content: center; color: var(--acn-muted); }
+.acn-tan-info { flex: 1; min-width: 0; }
+.acn-tan-nome { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--acn-info); text-decoration: none; }
+.acn-par { --acn-par-cor: #7c3aed; display: grid; gap: 4px; margin-top: 8px; }
+.acn-par.compacto { margin-top: 4px; }
+body.dark .acn-par { --acn-par-cor: #a78bfa; }
+.acn-par-tit { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: var(--acn-par-cor); text-transform: uppercase; letter-spacing: .6px; }
+.acn-par-anexar { display: flex; align-items: center; gap: 6px; padding: 6px 9px; font-size: 12px; color: var(--acn-par-cor); cursor: pointer; background: color-mix(in srgb, var(--acn-par-cor) 6%, var(--acn-surface)); border: 1px dashed color-mix(in srgb, var(--acn-par-cor) 45%, transparent); border-radius: 5px; }
+.acn-par-anexar.ocupado { cursor: wait; }
+.acn-par-lista { display: flex; flex-direction: column; gap: 2px; }
+.acn-par-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.acn-par-nome { flex: 1; color: var(--acn-par-cor); text-decoration: underline; word-break: break-all; }
+.acn-par-quem { font-size: 11px; color: var(--acn-muted); }
+html body .acn-b.acn-par-x { color: var(--acn-bad); }
+.acn-dsa { display: grid; }
+.acn-dsa-erro { font-size: 12px; color: var(--acn-bad); }
+.acn-dsa-msg { font-size: 12px; color: var(--acn-muted); }
+.acn-dsa-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; border-bottom: 1px solid var(--acn-line); }
+.acn-dsa-nome { flex: 1; min-width: 0; color: var(--acn-info); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html body label.acn-b.acn-dsa-anexar { display: inline-flex; justify-self: start; margin-top: 6px; cursor: pointer; }
+html body label.acn-b.acn-dsa-anexar.ocupado { cursor: wait; }
+.acn-tan-zona-tit svg, .acn-par-tit svg, .acn-par-anexar svg, .acn-par-nome svg, .acn-dsa-nome svg, .acn-dsa-anexar svg { display: inline-block !important; vertical-align: -2px; }

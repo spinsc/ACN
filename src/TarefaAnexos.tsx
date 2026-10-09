@@ -21,6 +21,9 @@ import { supabase } from './supabaseClient';
 import { contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { ehGestorEngenharia } from './HorasExtras';
+import { Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPaperclip, mdiPlus, mdiFileDocumentOutline } from '@mdi/js';
 
 const fmtDT = (v: string) =>
   v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -125,72 +128,74 @@ export function ModalAnexosTarefa({ tarefa, currentUser, onClose, onMudou }: any
 
   const ehImagem = (a: any) => String(a.tipo || '').startsWith('image/');
 
+  // 12e50 (09/10/2026): a janela passou para o molde das janelas do guia; a zona de soltar arquivo ganhou papel de botão e
+  // teclado (Enter/Espaço), que antes só existiam para quem usa o mouse. O que a janela grava, pergunta e devolve não mudou.
   return (
-    <div className="modal-overlay" style={{ zIndex: 2100 }}
+    <div className="modal-overlay acn-tan-ov"
       onClick={e => { if (e.target === e.currentTarget && !subindo) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 560, width: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-title">📎 Anexos — {tarefa.titulo}</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
-          Desenho, foto de referência, documento do que foi feito. Remover é de quem anexou
-          ou do gestor da Engenharia.
+      <div className="modal-box acn-modal-cadastro acn-tan-jan" role="dialog" aria-label="Anexos da tarefa">
+        <div className="acn-modal-cab">
+          <div className="acn-tan-cab-txt">
+            <span className="modal-title"><Icone path={mdiPaperclip} size={18} />Anexos — {tarefa.titulo}</span>
+            <div className="acn-ajuda">
+              Desenho, foto de referência, documento do que foi feito. Remover é de quem anexou
+              ou do gestor da Engenharia.
+            </div>
+          </div>
         </div>
 
-        <div
-          onDragOver={e => { e.preventDefault(); setArrastando(true); }}
-          onDragLeave={() => setArrastando(false)}
-          onDrop={e => { e.preventDefault(); setArrastando(false); enviar(e.dataTransfer.files); }}
-          onClick={() => !subindo && refArquivo.current?.click()}
-          style={{ border: `1.5px dashed ${arrastando ? '#0f766e' : '#cbd5e1'}`, borderRadius: 8,
-            background: arrastando ? '#f0fdfa' : '#f8fafc', padding: '14px 12px', textAlign: 'center',
-            cursor: subindo ? 'wait' : 'pointer', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>
-            {subindo ? `Enviando... (${subindo} restante${subindo > 1 ? 's' : ''})` : '＋ Anexar arquivo'}
+        <div className="acn-tan-topo">
+          <div
+            className={'acn-tan-zona' + (arrastando ? ' arrastando' : '') + (subindo ? ' ocupado' : '')}
+            role="button" tabIndex={0}
+            onDragOver={e => { e.preventDefault(); setArrastando(true); }}
+            onDragLeave={() => setArrastando(false)}
+            onDrop={e => { e.preventDefault(); setArrastando(false); enviar(e.dataTransfer.files); }}
+            onClick={() => !subindo && refArquivo.current?.click()}
+            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); !subindo && refArquivo.current?.click(); } }}>
+            <div className="acn-tan-zona-tit">
+              {subindo ? `Enviando... (${subindo} restante${subindo > 1 ? 's' : ''})` : <><Icone path={mdiPlus} size={14} />Anexar arquivo</>}
+            </div>
+            <div className="acn-ajuda">
+              Clique para escolher, ou arraste os arquivos aqui. Dá para mandar vários de uma vez.
+            </div>
+            <input ref={refArquivo} type="file" multiple hidden
+              onChange={e => e.target.files && enviar(e.target.files)} />
           </div>
-          <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2 }}>
-            Clique para escolher, ou arraste os arquivos aqui. Dá para mandar vários de uma vez.
-          </div>
-          <input ref={refArquivo} type="file" multiple style={{ display: 'none' }}
-            onChange={e => e.target.files && enviar(e.target.files)} />
         </div>
 
-        <div style={{ overflowY: 'auto', flex: 1 }}>
+        <div className="acn-modal-corpo acn-tan-lista">
           {carregando ? (
             <div className="acn-empty">Carregando...</div>
           ) : !anexos.length ? (
             <div className="acn-empty">Nenhum arquivo anexado ainda.</div>
           ) : anexos.map(a => (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px',
-              borderBottom: '1px solid #f1f5f9' }}>
+            <div key={a.id} className="acn-tan-item">
               {ehImagem(a) ? (
-                <img src={a.url} alt="" style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                <img src={a.url} alt="" className="acn-tan-img" />
               ) : (
-                <span style={{ width: 34, textAlign: 'center', fontSize: 18, flexShrink: 0 }}>📄</span>
+                <span className="acn-tan-icone"><Icone path={mdiFileDocumentOutline} size={20} /></span>
               )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <a href={a.url} target="_blank" rel="noreferrer"
-                  style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textDecoration: 'none',
-                    display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div className="acn-tan-info">
+                <a href={a.url} target="_blank" rel="noreferrer" className="acn-tan-nome">
                   {a.nome}
                 </a>
-                <div style={{ fontSize: 9, color: '#94a3b8' }}>
+                <div className="acn-ajuda">
                   {a.criado_por_nome || a.criado_por || '—'} · {fmtDT(a.criado_em)}
                   {fmtTam(a.tamanho) ? ` · ${fmtTam(a.tamanho)}` : ''}
                 </div>
               </div>
               {podeApagarAnexo(a, currentUser) && (
-                <button onClick={() => apagar(a)} title="Remover este arquivo"
-                  style={{ border: '1px solid #fecaca', background: '#fff', color: '#b91c1c', borderRadius: 4,
-                    padding: '2px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                <Botao variante="perigo-sec" pequeno onClick={() => apagar(a)} title="Remover este arquivo">
                   Remover
-                </button>
+                </Botao>
               )}
             </div>
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button className="acn-btn" style={{ background: '#94a3b8', marginLeft: 'auto' }}
-            disabled={!!subindo} onClick={onClose}>Fechar</button>
+        <div className="acn-modal-rodape">
+          <Botao disabled={!!subindo} onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
