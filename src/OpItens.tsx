@@ -16,7 +16,9 @@ import React, { useState } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
-import { SelectBusca } from './Interface';
+import { SelectBusca, Botao } from './Interface';
+import Icone from './Icone';
+import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
 
 const num = (v: any) => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -26,7 +28,7 @@ const num = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 const fmtQ = (v: any) => num(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
-const lbl = { fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' as const };
+// 12e43 (09/10/2026): a aparência vive em design.css (classes acn-opit-*); aqui ficam só as regras e os textos
 
 // ── 1. VENDIDO ───────────────────────────────────────────────────────────────
 
@@ -79,26 +81,22 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
     setAviso(`Quantidades divididas pelas ${unidades} unidades (as que não dividem exato ficaram como estavam).`);
   };
   return (
-    <div style={{ border: '1.5px solid #bfdbfe', background: '#f8fbff', borderRadius: 8, padding: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span style={{ ...lbl, color: '#1d4ed8', fontSize: 10 }}>📦 Itens vendidos *{unidades > 1 ? ` — por unidade (cada uma das ${unidades} OPs)` : ''}</span>
-        <span style={{ fontSize: 9, color: '#64748b' }}>Informa à Engenharia exatamente o que foi vendido.</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+    <div className="acn-quadro tom-info acn-opit-quadro">
+      <div className="acn-opit-cab">
+        <span className="acn-opit-tit info"><Icone path={mdiPackageVariantClosed} size={15} />Itens vendidos *{unidades > 1 ? ` — por unidade (cada uma das ${unidades} OPs)` : ''}</span>
+        <span className="acn-ajuda">Informa à Engenharia exatamente o que foi vendido.</span>
+        <span className="acn-opit-acoes">
           {temVinculo && (
-            <button type="button" onClick={carregar} disabled={carregando}
-              style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, border: '1px solid #2563eb', background: '#fff', color: '#1d4ed8', cursor: 'pointer' }}>
-              {carregando ? 'Carregando...' : '⬇ Carregar da formação oficial'}
-            </button>
+            <Botao pequeno icone={mdiArrowDown} onClick={carregar} disabled={carregando}>
+              {carregando ? 'Carregando...' : 'Carregar da formação oficial'}
+            </Botao>
           )}
           {unidades > 1 && itensPreenchidos(itens).length > 0 && (
-            <button type="button" onClick={dividir}
-              style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, border: '1px solid #94a3b8', background: '#fff', color: '#475569', cursor: 'pointer' }}>
-              ÷ Dividir por {unidades} unidades
-            </button>
+            <Botao pequeno onClick={dividir}>÷ Dividir por {unidades} unidades</Botao>
           )}
         </span>
       </div>
-      {aviso && <div style={{ fontSize: 10, color: '#1e40af', marginBottom: 6 }}>{aviso}</div>}
+      {aviso && <div className="acn-opit-aviso">{aviso}</div>}
       <ItensDemandaEditor itens={itens.length ? itens : [itemVazio()]} onChange={onChange} titulo="" />
     </div>
   );
@@ -188,26 +186,23 @@ export function CopiarBomDeOutraOp({ oplAtual, onCopiar }: any) {
 
   if (!aberto) {
     return (
-      <button type="button" onClick={abrir}
-        style={{ fontSize: 10, fontWeight: 700, padding: '4px 11px', borderRadius: 5, cursor: 'pointer',
-          border: '1px dashed #94a3b8', background: '#fff', color: '#475569', marginBottom: 8 }}>
-        📋 Copiar a lista de outra OP
-      </button>
+      <Botao pequeno className="acn-opit-copiar-abrir" icone={mdiClipboardTextOutline} onClick={abrir}>
+        Copiar a lista de outra OP
+      </Botao>
     );
   }
 
   return (
-    <div style={{ border: '1.5px solid #c7d2fe', background: '#eef2ff', borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <div style={{ ...lbl, color: '#3730a3', fontSize: 10, flex: 1 }}>📋 Copiar a lista de material de outra OP</div>
-        <button type="button" onClick={() => { setAberto(false); setEscolhidaId(''); }}
-          style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14 }}>✕</button>
+    <div className="acn-quadro acn-opit-quadro acn-opit-copiar">
+      <div className="acn-opit-cab entre">
+        <div className="acn-opit-tit"><Icone path={mdiClipboardTextOutline} size={15} />Copiar a lista de material de outra OP</div>
+        <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={() => { setAberto(false); setEscolhidaId(''); }} />
       </div>
 
       {carregando ? (
-        <div style={{ fontSize: 10, color: '#4338ca' }}>Procurando OPs com lista pronta…</div>
+        <div className="acn-ajuda">Procurando OPs com lista pronta…</div>
       ) : !ops.length ? (
-        <div style={{ fontSize: 10, color: '#64748b' }}>
+        <div className="acn-ajuda">
           Nenhuma outra OP tem lista de material montada ainda.
         </div>
       ) : (
@@ -223,34 +218,28 @@ export function CopiarBomDeOutraOp({ oplAtual, onCopiar }: any) {
             }))} />
 
           {origem && (
-            <div style={{ marginTop: 8 }}>
+            <div className="acn-opit-origem">
               {precisaAjuste && (
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer',
-                  fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid #fcd34d',
-                  borderRadius: 5, padding: '6px 8px', marginBottom: 7 }}>
-                  <input type="checkbox" checked={ajustar} onChange={e => setAjustar(e.target.checked)} style={{ marginTop: 1 }} />
+                <label className="acn-opit-ajuste">
+                  <input type="checkbox" checked={ajustar} onChange={e => setAjustar(e.target.checked)} />
                   <span>
                     A OP {origem.opl} é de <b>{qtdOrigem} unidade(s)</b> e esta é de <b>{qtdAtual}</b>.
                     Ajustar as quantidades na proporção. Desmarque se a lista de origem já for por unidade.
                   </span>
                 </label>
               )}
-              <div style={{ fontSize: 9.5, color: '#475569', marginBottom: 7 }}>
+              <div className="acn-ajuda">
                 {origem.bom_itens.length} item(ns):{' '}
                 {origem.bom_itens.slice(0, 4).map((l: any) => `${fmtQ(num(l.quantidade) * fator)}× ${l.nome}`).join(' · ')}
                 {origem.bom_itens.length > 4 ? ` … e mais ${origem.bom_itens.length - 4}` : ''}
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" onClick={() => { onCopiar(linhasCopiadas(), 'somar'); setAberto(false); }}
-                  style={{ fontSize: 10, fontWeight: 700, padding: '5px 12px', borderRadius: 5, cursor: 'pointer',
-                    border: 'none', background: '#4338ca', color: '#fff' }}>
+              <div className="acn-opit-botoes">
+                <Botao variante="primario" pequeno onClick={() => { onCopiar(linhasCopiadas(), 'somar'); setAberto(false); }}>
                   Somar à lista atual
-                </button>
-                <button type="button" onClick={() => { onCopiar(linhasCopiadas(), 'substituir'); setAberto(false); }}
-                  style={{ fontSize: 10, fontWeight: 700, padding: '5px 12px', borderRadius: 5, cursor: 'pointer',
-                    border: '1px solid #cbd5e1', background: '#fff', color: '#475569' }}>
+                </Botao>
+                <Botao pequeno onClick={() => { onCopiar(linhasCopiadas(), 'substituir'); setAberto(false); }}>
                   Substituir a lista
-                </button>
+                </Botao>
               </div>
             </div>
           )}
@@ -288,43 +277,38 @@ export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; 
   };
   const naoCad = bomPreenchida(lista).filter(l => l.nao_cadastrado).length;
   return (
-    <div style={{ border: '1.5px solid #bbf7d0', background: '#f7fdf9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span style={{ ...lbl, color: '#15803d', fontSize: 10 }}>🔩 BOM — material para executar (por unidade) *</span>
+    <div className="acn-quadro tom-ok acn-opit-quadro">
+      <div className="acn-opit-cab">
+        <span className="acn-opit-tit ok"><Icone path={mdiToolboxOutline} size={15} />BOM — material para executar (por unidade) *</span>
         {vendidos.length > 0 && (
-          <button type="button" onClick={sugerir} disabled={sugerindo} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, border: '1px solid #16a34a', background: '#fff', color: '#15803d', cursor: 'pointer' }}>
-            {sugerindo ? 'Montando...' : '✨ Sugerir pelo que foi vendido'}
-          </button>
+          <Botao pequeno className="acn-opit-fim" icone={mdiAutoFix} onClick={sugerir} disabled={sugerindo}>
+            {sugerindo ? 'Montando...' : 'Sugerir pelo que foi vendido'}
+          </Botao>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div className="acn-opit-linhas">
         {lista.map((l, i) => (
-          <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div key={i} className="acn-opit-linha">
             <BuscaCadastro valor={l.nome} placeholder="Item do cadastro (ou kit, que abre nos itens)"
               onTexto={v => set(i, { nome: v, item_id: null, codigo: '', nao_cadastrado: true })}
               onEscolher={s => escolher(i, s)} />
-            {l.codigo && <span style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{l.codigo}</span>}
+            {l.codigo && <span className="acn-opit-cod">{l.codigo}</span>}
             {String(l.nome || '').trim() && !l.item_id && (
-              <span title="Item fora do Cadastro de Itens — cadastre para controlar o estoque" style={{ fontSize: 9, fontWeight: 700, color: '#b45309', whiteSpace: 'nowrap' }}>não cadastrado</span>
+              <span title="Item fora do Cadastro de Itens — cadastre para controlar o estoque" className="acn-opit-naocad">não cadastrado</span>
             )}
-            <input type="number" min="0" step="any" value={l.quantidade} aria-label="Quantidade na BOM"
-              onChange={e => set(i, { quantidade: e.target.value })}
-              style={{ width: 64, padding: '5px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11 }} />
-            <span style={{ fontSize: 10, color: '#64748b', width: 26 }}>{l.unidade || 'UN'}</span>
-            <input value={l.descricao || ''} placeholder="Descrição" aria-label="Descrição na BOM"
-              onChange={e => set(i, { descricao: e.target.value })}
-              style={{ width: 150, padding: '5px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10 }} />
-            <button type="button" aria-label="Remover linha" title="Remover" onClick={async () => { if (!await confirmarRemocao('esta linha da lista')) return; onChange(lista.length > 1 ? lista.filter((_, j) => j !== i) : [linhaBomVazia()]); }}
-              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 13 }}>✕</button>
+            <input type="number" min="0" step="any" value={l.quantidade} aria-label="Quantidade na BOM" className="acn-input acn-opit-qtd"
+              onChange={e => set(i, { quantidade: e.target.value })} />
+            <span className="acn-opit-un">{l.unidade || 'UN'}</span>
+            <input value={l.descricao || ''} placeholder="Descrição" aria-label="Descrição na BOM" className="acn-input acn-opit-desc"
+              onChange={e => set(i, { descricao: e.target.value })} />
+            <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Remover linha" title="Remover"
+              onClick={async () => { if (!await confirmarRemocao('esta linha da lista')) return; onChange(lista.length > 1 ? lista.filter((_, j) => j !== i) : [linhaBomVazia()]); }} />
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-        <button type="button" onClick={() => onChange([...lista, linhaBomVazia()])}
-          style={{ background: '#fff', border: '1.5px dashed #94a3b8', color: '#475569', borderRadius: 4, padding: '4px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-          +1 item
-        </button>
-        {naoCad > 0 && <span style={{ fontSize: 10, color: '#b45309' }}>{naoCad} item(ns) fora do cadastro — dá para liberar, mas cadastre para controlar o estoque.</span>}
+      <div className="acn-opit-rodape">
+        <Botao pequeno onClick={() => onChange([...lista, linhaBomVazia()])}>+1 item</Botao>
+        {naoCad > 0 && <span className="acn-opit-naocad">{naoCad} item(ns) fora do cadastro — dá para liberar, mas cadastre para controlar o estoque.</span>}
       </div>
     </div>
   );
@@ -408,24 +392,22 @@ export function ConferenciaKit({ linhas, onChange, saldos = {} }: { linhas: any[
     return situacaoDaLinha(l, saldos).semSaldo ? l : { ...l, separado: num(l.planejado) };
   }));
   return (
-    <div style={{ border: `1.5px solid ${tudo ? '#bbf7d0' : '#fdba74'}`, background: tudo ? '#f7fdf9' : '#fffbf5', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-        <div style={{ ...lbl, color: tudo ? '#15803d' : '#c2410c', fontSize: 10 }}>
-          📦 Separação — {prontas} de {linhas.length} {tudo ? 'itens separados' : 'itens separados, faltam ' + (linhas.length - prontas)}
+    <div className={'acn-quadro acn-opit-quadro ' + (tudo ? 'tom-ok' : 'pendente')}>
+      <div className="acn-opit-cab entre">
+        <div className={'acn-opit-tit ' + (tudo ? 'ok' : 'atencao')}>
+          <Icone path={mdiPackageVariantClosed} size={15} />Separação — {prontas} de {linhas.length} {tudo ? 'itens separados' : 'itens separados, faltam ' + (linhas.length - prontas)}
         </div>
-        <button type="button" onClick={() => marcarTudo(!tudo)}
-          style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
-            border: '1px solid #cbd5e1', background: '#fff', color: '#475569' }}>
+        <Botao pequeno onClick={() => marcarTudo(!tudo)}>
           {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
-        </button>
+        </Botao>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-        <thead><tr style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>
-          <th style={{ width: 22 }}></th>
-          <th style={{ textAlign: 'left', padding: '2px 4px' }}>Item</th>
-          <th style={{ textAlign: 'right', padding: '2px 4px' }}>BOM</th>
-          <th style={{ textAlign: 'right', padding: '2px 4px' }}>Separado</th>
-          <th style={{ textAlign: 'left', padding: '2px 4px' }}>Observação</th>
+      <table className="acn-opit-tabela">
+        <thead><tr>
+          <th className="chk"></th>
+          <th>Item</th>
+          <th className="dir">BOM</th>
+          <th className="dir">Separado</th>
+          <th>Observação</th>
         </tr></thead>
         <tbody>
           {linhas.map((l, i) => {
@@ -434,39 +416,38 @@ export function ConferenciaKit({ linhas, onChange, saldos = {} }: { linhas: any[
             const st = situacaoDaLinha(l, saldos);
             const travado = st.semSaldo && !marcado;
             return (
-              <tr key={i} style={{ borderTop: '1px solid #f1f5f9', background: travado ? '#fef2f2' : difere ? '#fff7ed' : undefined }}>
-                <td style={{ padding: '3px 4px', textAlign: 'center' }}>
-                  <input type="checkbox" checked={!difere && marcado} disabled={travado}
+              <tr key={i} className={travado ? 'travado' : difere ? 'difere' : undefined}>
+                <td className="chk">
+                  <input type="checkbox" checked={!difere && marcado} disabled={travado} className="acn-opit-chk"
                     aria-label={`Separar ${l.nome}`}
                     title={travado ? 'Sem saldo no estoque para separar este item' : ''}
-                    onChange={e => set(i, { separado: e.target.checked ? num(l.planejado) : 0 })}
-                    style={{ cursor: travado ? 'not-allowed' : 'pointer', width: 15, height: 15 }} />
+                    onChange={e => set(i, { separado: e.target.checked ? num(l.planejado) : 0 })} />
                 </td>
-                <td style={{ padding: '3px 4px' }}>
-                  {l.nome}{l.codigo && <span style={{ color: '#94a3b8', fontSize: 9, marginLeft: 4 }}>{l.codigo}</span>}
-                  {!l.item_id && <span style={{ color: '#b45309', fontSize: 9, marginLeft: 4 }}>não cadastrado</span>}
-                  {l.descricao && <span style={{ color: '#94a3b8', fontSize: 9, marginLeft: 4 }}>{l.descricao}</span>}
-                  {st.semSaldo && <div style={{ color: '#b91c1c', fontSize: 9 }}>
+                <td>
+                  {l.nome}{l.codigo && <span className="acn-opit-peq">{l.codigo}</span>}
+                  {!l.item_id && <span className="acn-opit-peq aviso">não cadastrado</span>}
+                  {l.descricao && <span className="acn-opit-peq">{l.descricao}</span>}
+                  {st.semSaldo && <div className="acn-opit-semsaldo">
                     sem saldo: precisa de {fmtQ(st.aTirar)} e tem {fmtQ(st.saldo)} {st.unidade || l.unidade}
                   </div>}
                 </td>
-                <td style={{ padding: '3px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtQ(l.planejado)} {l.unidade}</td>
-                <td style={{ padding: '3px 4px', textAlign: 'right' }}>
+                <td className="dir sem-quebra">{fmtQ(l.planejado)} {l.unidade}</td>
+                <td className="dir">
                   <input type="number" min="0" step="any" value={l.separado} aria-label={`Separado de ${l.nome}`}
-                    onChange={e => set(i, { separado: e.target.value })}
-                    style={{ width: 64, padding: '3px 5px', border: `1px solid ${difere ? '#fb923c' : '#d1d5db'}`, borderRadius: 4, fontSize: 11, textAlign: 'right' }} />
+                    className={'acn-input acn-opit-sep' + (difere ? ' difere' : '')}
+                    onChange={e => set(i, { separado: e.target.value })} />
                 </td>
-                <td style={{ padding: '3px 4px' }}>
+                <td>
                   <input value={l.obs || ''} placeholder={difere ? 'Obrigatório: por que mudou?' : ''} aria-label={`Observação de ${l.nome}`}
-                    onChange={e => set(i, { obs: e.target.value })}
-                    style={{ width: '100%', padding: '3px 5px', border: `1px solid ${difere && !String(l.obs || '').trim() ? '#f87171' : '#e2e8f0'}`, borderRadius: 4, fontSize: 10, boxSizing: 'border-box' }} />
+                    className={'acn-input acn-opit-obs' + (difere && !String(l.obs || '').trim() ? ' falta' : '')}
+                    onChange={e => set(i, { obs: e.target.value })} />
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <div style={{ fontSize: 9, color: '#6b7280', marginTop: 5 }}>
+      <div className="acn-ajuda">
         Marcar e desmarcar não mexem no estoque. A baixa acontece quando você salva a separação.
       </div>
     </div>
@@ -479,46 +460,44 @@ export function QuadroItensOp({ opl }: { opl: any }) {
   const bom = opl?.bom_itens || [];
   const conf = opl?.kit_conferencia?.linhas || [];
   if (!vendidos.length && !bom.length) return null;
-  const th = { textAlign: 'left' as const, padding: '3px 6px', fontSize: 9, color: '#64748b', textTransform: 'uppercase' as const };
-  const td = { padding: '3px 6px', fontSize: 11, borderTop: '1px solid #f1f5f9' };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginBottom: 8 }}>
-      <div style={{ border: '1px solid #bfdbfe', borderRadius: 6, overflow: 'hidden' }}>
-        <div style={{ background: '#eff6ff', padding: '5px 8px', fontSize: 10, fontWeight: 800, color: '#1d4ed8' }}>📦 Vendido ({vendidos.length})</div>
+    <div className="acn-opit-grade">
+      <div className="acn-opit-box info">
+        <div className="acn-opit-box-cab"><Icone path={mdiPackageVariantClosed} size={14} />Vendido ({vendidos.length})</div>
         {vendidos.length ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}><tbody>
+          <table className="acn-opit-leitura"><tbody>
             {vendidos.map((v: any, i: number) => (
-              <tr key={i}><td style={{ ...td, width: 40, textAlign: 'right', fontWeight: 700 }}>{fmtQ(v.quantidade)}×</td>
-                <td style={td}>{v.nome}{v.descricao && <div style={{ fontSize: 9, color: '#64748b' }}>{v.descricao}</div>}</td></tr>
+              <tr key={i}><td className="qtd">{fmtQ(v.quantidade)}×</td>
+                <td>{v.nome}{v.descricao && <div className="acn-opit-peq bloco">{v.descricao}</div>}</td></tr>
             ))}
           </tbody></table>
-        ) : <div style={{ padding: 8, fontSize: 10, color: '#94a3b8' }}>Não informado (OP anterior à lista obrigatória).</div>}
+        ) : <div className="acn-opit-vazio">Não informado (OP anterior à lista obrigatória).</div>}
       </div>
-      <div style={{ border: '1px solid #bbf7d0', borderRadius: 6, overflow: 'hidden' }}>
-        <div style={{ background: '#f0fdf4', padding: '5px 8px', fontSize: 10, fontWeight: 800, color: '#15803d' }}>
-          🔩 BOM × separado no kit {opl?.kit_conferencia?.divergente && <span style={{ color: '#c2410c' }}>· com diferença</span>}
+      <div className="acn-opit-box ok">
+        <div className="acn-opit-box-cab">
+          <Icone path={mdiToolboxOutline} size={14} />BOM × separado no kit {opl?.kit_conferencia?.divergente && <span className="acn-opit-dif">· com diferença</span>}
         </div>
         {bom.length ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>BOM</th><th style={{ ...th, textAlign: 'right' }}>Separado</th></tr></thead>
+          <table className="acn-opit-leitura">
+            <thead><tr><th>Item</th><th className="dir">BOM</th><th className="dir">Separado</th></tr></thead>
             <tbody>
               {bom.map((b: any, i: number) => {
                 const c = conf[i] && conf[i].nome === b.nome ? conf[i] : null;
                 const difere = c && num(c.separado) !== num(b.quantidade);
                 return (
-                  <tr key={i} style={{ background: difere ? '#fff7ed' : undefined }}>
-                    <td style={td}>{b.nome}{b.codigo && <span style={{ color: '#94a3b8', fontSize: 9, marginLeft: 4 }}>{b.codigo}</span>}
-                      {c?.obs && <div style={{ fontSize: 9, color: '#c2410c' }}>{c.obs}</div>}</td>
-                    <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtQ(b.quantidade)} {b.unidade}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: difere ? 800 : 400, color: difere ? '#c2410c' : undefined }}>{c ? fmtQ(c.separado) : '—'}</td>
+                  <tr key={i} className={difere ? 'difere' : undefined}>
+                    <td>{b.nome}{b.codigo && <span className="acn-opit-peq">{b.codigo}</span>}
+                      {c?.obs && <div className="acn-opit-peq bloco dif">{c.obs}</div>}</td>
+                    <td className="dir sem-quebra">{fmtQ(b.quantidade)} {b.unidade}</td>
+                    <td className={'dir' + (difere ? ' dif' : '')}>{c ? fmtQ(c.separado) : '—'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        ) : <div style={{ padding: 8, fontSize: 10, color: '#94a3b8' }}>BOM ainda não liberada pela Engenharia.</div>}
+        ) : <div className="acn-opit-vazio">BOM ainda não liberada pela Engenharia.</div>}
         {opl?.kit_conferencia?.conferido_por && (
-          <div style={{ fontSize: 9, color: '#94a3b8', padding: '3px 8px' }}>
+          <div className="acn-ajuda acn-opit-conferido">
             Conferido por {opl.kit_conferencia.conferido_por}{opl.kit_conferencia.em_lote ? ' (em lote)' : ''}
           </div>
         )}

@@ -37,6 +37,8 @@ etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com 
 | — | **Dependem de outras pessoas (não impedem o encerramento):** R11 (RH informa o percentual dos serralheiros), as 3 fichas de veículo de nome curto (equipe corrige pela tela), as 2 datas suspeitas da R4 e as suposições marcadas "a confirmar" | ⏳ |
 | — | **Notas de atualização** de 07/10 e de 08/10: **não publicar à noite** (regra: mostrada a ele antes); deixar o rascunho pronto | ⏳ |
 
+**Andamento do item 2 (Etapa 12 — telas restantes):** medido em 09/10/2026, depois da 12e43 — **3.673 `style` inline, 566 botões crus e 4.543 cores soltas, em 99 arquivos** (antes da 12e43: 3.755 / 576 / 4.628, em 100); o CRM saiu da lista (12e40 a 12e42: 157 → 12) e o `OpItens` zerou. Os maiores que sobram: Admin 523, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `Estoque` 194, `AcnTabShared` 177, `NovaOpOsModal` 166, `ContactosSection` 152, `ChatWidget` 135, `AnaliseWidget` 109.
+
 ---
 
 ## Onde queremos chegar
@@ -4382,6 +4384,29 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 - **Teste de defeito plantado:** numa cópia, o título errado, o "Salvar" que só fecha, o Chassi que grava na Placa, o CNPJ que grava na Razão Social, o "Aplicar" que não aplica e o clicar no fundo que não fecha — **os seis foram apontados** (em dois testes, porque o "Salvar" que só fecha escondia os passos seguintes: o CNPJ e o fundo foram apontados no segundo, isolados).
 
 **O que ficou de fora:** o `VeiculoDaOp` (seletor de veículo, componente de outro arquivo) segue com o visual dele; o quadro do kanban e os termômetros de temperatura (migrados nas 12e35 e 12e38) ficaram como estavam.
+
+#### ✅ 12e43 — Componentes compartilhados, fatia 1 (`OpItens`: itens vendidos, BOM, copiar a lista de outra OP, conferência do kit e o quadro de leitura da OP)
+
+**Feito em:** 09/10/2026 (modo noite do `/ux-fluxo`, depois do CRM). **Nenhuma regra mudou.**
+
+**Método novo para os componentes** (vale para as próximas fatias de componentes compartilhados): uma **página de prévia só no computador de desenvolvimento** (`preview-componentes.html` e `src/__preview.tsx`, **fora do git** — listados em `.git/info/exclude`), que monta **um componente por vez com dados inventados**, no mesmo ambiente do app (os mesmos estilos e os mesmos ajustes de cor em tempo de execução: `TonsVisuais`, `ContrasteEscuro`…), e guarda o que o componente devolve ao chamador. Assim cada estado do componente é fotografado **igual nas duas versões**, sem depender de chegar até ele pelas telas.
+
+**O que foi feito** (`OpItens.tsx` e `design.css`, 62 regras novas `acn-opit-*`; **nenhuma regra de negócio, consulta ou texto foi mexido**):
+
+- **Itens vendidos** (usado na criação da OP e no CRM): o quadro azul do guia, o título com ícone, os botões "Carregar da formação oficial" e "÷ Dividir por N unidades" do sistema, o aviso em azul.
+- **BOM** (Engenharia): o quadro verde, cada linha com o campo do sistema (quantidade e descrição), o código em letra de largura fixa, o aviso "não cadastrado" e o botão de remover só com ícone (com o nome "Remover linha").
+- **Copiar a lista de outra OP:** o botão tracejado do sistema; o quadro aberto com o seletor, o aviso de ajuste de quantidades (amarelo, com a caixinha) e "Somar à lista atual | Substituir a lista".
+- **Conferência do kit** (Almoxarifado): a tabela de separação com a caixinha, o saldo ("sem saldo: precisa de … e tem …"), o campo "Separado" e a observação obrigatória (borda de atenção quando há diferença; **vermelha quando falta a observação**) — a linha com diferença continua destacada em laranja e a sem saldo em vermelho; **o quadro fica neutro enquanto a separação está incompleta** (só a borda é de atenção) para a linha com diferença se destacar.
+- **Quadro de leitura** (detalhe da OP): "Vendido" e "BOM × separado no kit", com a diferença em destaque.
+- Funciona nos dois temas (claro e escuro), conferido em captura de tela.
+
+**Resultado no código:** `style` inline **82 → 0**, `<button>` **10 → 0**, cores soltas **85 → 0**, linhas **529 → 508**. `npx vite build` ok; conferência de nomes não definidos (`oxlint`, `no-undef`) sem apontamentos.
+
+**Como foi testado** (página de prévia; leituras do banco simuladas; fotografia — texto por elemento, controles, valores, **o que o componente devolve ao chamador** e as dicas — da versão **da 12e42** × a migrada; **a antiga fotografada duas vezes, igual, antes de valer como referência**): **64 de 64 iguais**, em 12 cenários — itens vendidos vazio, em lote de 3 com vínculo (carregar da formação, dividir por unidade) e sem formação ligada (aviso); BOM (sugerir pelo que foi vendido, mais uma linha, editar, remover com a pergunta) e vazia; copiar (fechado, aberto, lista de OPs, lote de 3 pede ajuste, desmarcar o ajuste, somar e substituir, OP com a mesma quantidade) e sem OPs; conferência (marcar, diferença com observação, marcar tudo, desmarcar); quadro completo e só com BOM; e os dois quadros no tema escuro.
+- **Equivalências declaradas:** os emojis dos títulos e botões (📦 🔩 ✨ ⬇ 📋 ✕) viraram ícones; o "✕" de fechar o quadro de copiar ganhou o nome "Fechar"; o quadro "Copiar a lista…" deixou de ser índigo (ficou neutro); a cor do botão "Somar à lista atual" (índigo) passou para o primário do guia; os campos ganharam a altura e a borda do campo do sistema.
+- **Teste de defeito plantado:** numa cópia, o "dividir" que divide o que não divide, a caixinha de separar que grava o contrário, o aviso "não cadastrado" invertido, o "somar" que substitui e o realce da diferença invertido no quadro de leitura — **quatro dos cinco foram apontados**; **o quinto (o realce em cor da linha com diferença) a fotografia de texto não vê**: conferi pela captura de tela (e foi por ela que apareceu que, com o quadro todo em laranja, a linha destacada sumia — corrigido deixando o quadro neutro).
+
+**O que ficou de fora:** `DemandaItens` (o editor de itens da demanda e a busca no cadastro, usados dentro destes quadros) segue com o visual dele — é a próxima fatia; o `SelectBusca` (em `Interface.tsx`) também.
 
 ### 📋 Solicitações de 07/10/2026 (lista do usuário, trabalhada de madrugada)
 
