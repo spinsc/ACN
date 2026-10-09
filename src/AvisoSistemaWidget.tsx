@@ -4,13 +4,9 @@ import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { confirmar } from './Feedback';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
+import { Botao } from './Interface';
 
-// ─── paleta por criticidade ───────────────────────────────────────────────────
-const COR: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  baixa: { bg: '#fef9c3', border: '#ca8a04', text: '#854d0e', dot: '#eab308' },
-  media: { bg: '#ffedd5', border: '#ea580c', text: '#9a3412', dot: '#f97316' },
-  alta:  { bg: '#fee2e2', border: '#dc2626', text: '#991b1b', dot: '#dc2626' },
-};
+// A paleta por criticidade (baixa/média/alta: fundo, borda, texto e bolinha) mora no design.css, por `data-crit` (12e58→12e59, 09/10/2026).
 
 const CRIT_ORDER = { alta: 0, media: 1, baixa: 2 };
 
@@ -238,222 +234,175 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   if (!pos) return null;
 
   const topCrit = avisos[0]?.criticidade ?? 'baixa';
-  const cor     = avisos.length > 0 ? COR[topCrit] : { bg: '#f1f5f9', border: '#94a3b8', text: '#475569', dot: '#64748b' };
   const pulsar  = topCrit === 'alta' && avisos.length > 0;
 
-  const inpStyle: React.CSSProperties = {
-    width: '100%', padding: '5px 7px', border: '1px solid #cbd5e1',
-    borderRadius: 4, fontSize: 10, boxSizing: 'border-box', background: '#fff',
-  };
-
+  // 12e59 (09/10/2026): só aparência — o quadro saiu do style inline (e do <style> embutido, cujo @keyframes agora mora no design.css) e passou para classes `acn-avs-*`;
+  // os seis botões crus viraram o botão do guia. Medido antes de mexer: o sistema já repintava este quadro em tempo de execução (letra de 12 a 13 px, etiquetas e botões
+  // nos tons do guia, pino em verde-marca claro), então o CSS escreve esse resultado. Seguem inline só a posição do quadro (`left` e `top`, que o arrastar calcula) e,
+  // por aviso, a cor da criticidade, que vai por `data-crit` (a paleta baixa/média/alta mora no CSS).
   return (
-    <>
-      <style>{`
-        @keyframes aviso-pulse {
-          0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.5); }
-          50%      { box-shadow: 0 0 0 10px rgba(220,38,38,0); }
-        }
-        .aviso-pulse { animation: aviso-pulse 1.8s ease-in-out infinite; }
-        .aviso-widget { transition: none; }
-      `}</style>
+    <div className={`aviso-widget ${minimizado ? 'aviso-min' : 'aviso-aberto'}`} style={{ left: pos.x, top: pos.y }}>
 
-      <div className={`aviso-widget ${minimizado ? 'aviso-min' : 'aviso-aberto'}`} style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 1500, userSelect: 'none' }}>
+      {/* ── MINIMIZADO ── */}
+      {minimizado ? (
+        <Botao
+          variante="discreto"
+          onMouseDown={onHeaderMouseDown}
+          onClick={() => {
+            if (dragMoved.current) return;
+            setMinimizado(false);
+            setPos(POS_EXPANDIDO()); // desce o painel pra não cobrir o header
+          }}
+          className={'acn-avs-pino' + (pulsar ? ' aviso-pulse' : '')}
+          data-crit={avisos.length > 0 ? topCrit : 'vazio'}
+          title={avisos.length > 0 ? `${avisos.length} aviso(s) — arraste para mover` : 'Avisos do Sistema — arraste para mover'}
+        >
+          📌
+          {avisos.length > 0 && <span className="acn-avs-n">{avisos.length}</span>}
+        </Botao>
 
-        {/* ── MINIMIZADO ── */}
-        {minimizado ? (
-          <button
-            onMouseDown={onHeaderMouseDown}
-            onClick={() => {
-              if (dragMoved.current) return;
-              setMinimizado(false);
-              setPos(POS_EXPANDIDO()); // desce o painel pra não cobrir o header
-            }}
-            className={pulsar ? 'aviso-pulse' : ''}
-            title={avisos.length > 0 ? `${avisos.length} aviso(s) — arraste para mover` : 'Avisos do Sistema — arraste para mover'}
-            style={{
-              width: 46, height: 46, borderRadius: '50%',
-              border: `2.5px solid ${cor.border}`, background: cor.bg,
-              cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 20, boxShadow: '0 2px 10px rgba(0,0,0,.25)', position: 'relative',
-            }}
-          >
-            📌
-            {avisos.length > 0 && (
-              <span style={{
-                position: 'absolute', top: -5, right: -5,
-                background: cor.dot, color: '#fff', borderRadius: '50%',
-                width: 20, height: 20, fontSize: 10, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: '2px solid #fff',
-              }}>
-                {avisos.length}
-              </span>
-            )}
-          </button>
+      ) : (
+        /* ── EXPANDIDO ── */
+        <div ref={caixaRef} className="acn-avs-caixa">
 
-        ) : (
-          /* ── EXPANDIDO ── */
-          <div ref={caixaRef} style={{ width: 320, borderRadius: 10, overflow: 'hidden', boxShadow: '0 6px 30px rgba(0,0,0,.28)' }}>
-
-            {/* cabeçalho draggável */}
-            <div
-              onMouseDown={onHeaderMouseDown}
-              style={{
-                background: '#1e293b', color: '#f1f5f9', padding: '7px 10px',
-                cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-              }}
-            >
-              <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: .3 }}>📌 Avisos do Sistema</span>
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <span style={{ background: '#334155', color: '#94a3b8', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
-                  {avisos.length}
-                </span>
-                {/* botão novo aviso — só para quem tem permissão */}
-                {podePublicar && (
-                  <button
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={() => { if (mostraForm) { setEditId(null); setForm({ ...VAZIO_FORM }); } setMostraForm(f => !f); }}
-                    title={editId ? 'Cancelar a edição' : 'Novo Aviso'}
-                    style={{
-                      background: mostraForm ? '#dc2626' : '#16a34a',
-                      border: 'none', borderRadius: 4, color: '#fff',
-                      fontSize: 13, fontWeight: 900, cursor: 'pointer',
-                      lineHeight: 1, padding: '2px 7px',
-                    }}
-                  >
-                    {mostraForm ? '✕' : '+'}
-                  </button>
-                )}
-                <button
+          {/* cabeçalho draggável */}
+          <div onMouseDown={onHeaderMouseDown} className="acn-avs-cab">
+            <span className="acn-avs-tit">📌 Avisos do Sistema</span>
+            <div className="acn-avs-cab-acoes">
+              <span className="acn-avs-cont">{avisos.length}</span>
+              {/* botão novo aviso — só para quem tem permissão */}
+              {podePublicar && (
+                <Botao
+                  pequeno
+                  variante={mostraForm ? 'perigo' : 'primario'}
+                  className="acn-avs-mais"
                   onMouseDown={e => e.stopPropagation()}
-                  onClick={() => { setMinimizado(true); setMostraForm(false); setEditId(null); setPos(POS_MINIMIZADO()); }}
-                  title="Minimizar"
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 15, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}
+                  onClick={() => { if (mostraForm) { setEditId(null); setForm({ ...VAZIO_FORM }); } setMostraForm(f => !f); }}
+                  title={editId ? 'Cancelar a edição' : 'Novo Aviso'}
                 >
-                  —
-                </button>
-              </div>
-            </div>
-
-            {/* ── FORMULÁRIO INLINE ── */}
-            {mostraForm && (
-              <div style={{ background: '#0f172a', padding: '10px 12px', borderBottom: '2px solid #334155' }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 8 }}>
-                  {editId ? '✏️ Editar Aviso' : '📢 Novo Aviso'}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <input
-                    value={form.titulo}
-                    onChange={e => setForm({ ...form, titulo: e.target.value })}
-                    placeholder="Título *"
-                    style={inpStyle}
-                  />
-                  <textarea
-                    value={form.mensagem}
-                    onChange={e => setForm({ ...form, mensagem: e.target.value })}
-                    placeholder="Mensagem *"
-                    rows={3}
-                    style={{ ...inpStyle, resize: 'vertical' }}
-                  />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} style={inpStyle}>
-                      <option value="admin">Admin</option>
-                      <option value="diretoria">Diretoria</option>
-                    </select>
-                    <select value={form.criticidade} onChange={e => setForm({ ...form, criticidade: e.target.value })} style={inpStyle}>
-                      <option value="baixa">Baixa</option>
-                      <option value="media">Média</option>
-                      <option value="alta">Alta</option>
-                    </select>
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#cbd5e1', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={form.permanente}
-                      onChange={e => setForm({ ...form, permanente: e.target.checked, data_expiracao: '' })}
-                      style={{ accentColor: '#f97316' }}
-                    />
-                    📌 Manter permanentemente
-                  </label>
-                  {!form.permanente && (
-                    <input
-                      type="datetime-local"
-                      value={form.data_expiracao}
-                      onChange={e => setForm({ ...form, data_expiracao: e.target.value })}
-                      placeholder="Válido até"
-                      style={inpStyle}
-                    />
-                  )}
-                  <button
-                    onClick={salvar}
-                    disabled={salvando || !form.titulo?.trim() || !form.mensagem?.trim()}
-                    style={{
-                      background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4,
-                      padding: '6px 0', fontWeight: 800, fontSize: 11, cursor: 'pointer',
-                      opacity: (!form.titulo?.trim() || !form.mensagem?.trim()) ? .4 : 1,
-                    }}
-                  >
-                    {salvando ? (editId ? 'Salvando...' : 'Publicando...') : (editId ? '💾 Salvar alterações' : '📢 Publicar Aviso')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* lista de avisos */}
-            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-              {avisos.length === 0 && (
-                <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 11, background: '#f8fafc' }}>
-                  Nenhum aviso ativo no momento.
-                </div>
+                  {mostraForm ? '✕' : '+'}
+                </Botao>
               )}
-              {avisos.map((av, i) => {
-                const c = COR[av.criticidade] ?? COR.media;
-                return (
-                  <div
-                    key={av.id}
-                    style={{
-                      background: c.bg, borderLeft: `4px solid ${c.border}`, padding: '10px 12px',
-                      borderBottom: i < avisos.length - 1 ? '1px solid rgba(0,0,0,.07)' : 'none',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 5 }}>
-                      <span style={{ fontWeight: 700, fontSize: 11.5, color: c.text, lineHeight: 1.3 }}>{av.titulo}</span>
-                      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                        <span style={{ background: av.tipo === 'diretoria' ? '#1e293b' : '#0369a1', color: '#fff', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700 }}>
-                          {av.tipo === 'diretoria' ? '🏢 Diretoria' : '👮 Admin'}
-                        </span>
-                        <span style={{ background: c.border, color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 9, fontWeight: 700, textTransform: 'capitalize' }}>
-                          {av.criticidade}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 11, color: '#374151', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: 6 }}>
-                      <Linkify text={av.mensagem} />
-                    </div>
-                    <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                      <span>✍️ {av.criado_por_nome || '—'}{criadoEmLabel(av) ? ` · ${criadoEmLabel(av)}` : ''}</span>
-                      <span>{prazoLabel(av)}</span>
-                    </div>
-                    {/* editar e excluir: só o autor do aviso ou quem tem a marca DEV (02/10/2026) */}
-                    {podeMexerNoAviso(eu, av) && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
-                        <button onClick={() => iniciarEdicao(av)} title="Editar este aviso"
-                          style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
-                          ✏️ Editar
-                        </button>
-                        <button onClick={() => excluir(av)} title="Excluir este aviso"
-                          style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
-                          🗑 Excluir
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              <Botao
+                pequeno
+                variante="discreto"
+                className="acn-avs-min"
+                onMouseDown={e => e.stopPropagation()}
+                onClick={() => { setMinimizado(true); setMostraForm(false); setEditId(null); setPos(POS_MINIMIZADO()); }}
+                title="Minimizar"
+              >
+                —
+              </Botao>
             </div>
           </div>
-        )}
-      </div>
-    </>
+
+          {/* ── FORMULÁRIO INLINE ── */}
+          {mostraForm && (
+            <div className="acn-avs-form">
+              <div className="acn-avs-form-tit">
+                {editId ? '✏️ Editar Aviso' : '📢 Novo Aviso'}
+              </div>
+              <div className="acn-avs-campos">
+                <input
+                  value={form.titulo}
+                  onChange={e => setForm({ ...form, titulo: e.target.value })}
+                  placeholder="Título *"
+                  className="acn-avs-campo"
+                />
+                <textarea
+                  value={form.mensagem}
+                  onChange={e => setForm({ ...form, mensagem: e.target.value })}
+                  placeholder="Mensagem *"
+                  rows={3}
+                  className="acn-avs-campo"
+                />
+                <div className="acn-avs-par">
+                  <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} className="acn-avs-campo">
+                    <option value="admin">Admin</option>
+                    <option value="diretoria">Diretoria</option>
+                  </select>
+                  <select value={form.criticidade} onChange={e => setForm({ ...form, criticidade: e.target.value })} className="acn-avs-campo">
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </div>
+                <label className="acn-avs-perm">
+                  <input
+                    type="checkbox"
+                    checked={form.permanente}
+                    onChange={e => setForm({ ...form, permanente: e.target.checked, data_expiracao: '' })}
+                  />
+                  📌 Manter permanentemente
+                </label>
+                {!form.permanente && (
+                  <input
+                    type="datetime-local"
+                    value={form.data_expiracao}
+                    onChange={e => setForm({ ...form, data_expiracao: e.target.value })}
+                    placeholder="Válido até"
+                    className="acn-avs-campo"
+                  />
+                )}
+                <Botao
+                  variante="primario"
+                  pequeno
+                  className="acn-avs-publicar"
+                  onClick={salvar}
+                  disabled={salvando || !form.titulo?.trim() || !form.mensagem?.trim()}
+                >
+                  {salvando ? (editId ? 'Salvando...' : 'Publicando...') : (editId ? '💾 Salvar alterações' : '📢 Publicar Aviso')}
+                </Botao>
+              </div>
+            </div>
+          )}
+
+          {/* lista de avisos */}
+          <div className="acn-avs-lista">
+            {avisos.length === 0 && (
+              <div className="acn-avs-vazio">
+                Nenhum aviso ativo no momento.
+              </div>
+            )}
+            {avisos.map((av) => {
+              const crit = CRIT_ORDER[av.criticidade] !== undefined ? av.criticidade : 'media';
+              return (
+                <div key={av.id} className="acn-avs-item" data-crit={crit}>
+                  <div className="acn-avs-item-cab">
+                    <span className="acn-avs-item-tit">{av.titulo}</span>
+                    <div className="acn-avs-tags">
+                      <span className="acn-avs-tag">
+                        {av.tipo === 'diretoria' ? '🏢 Diretoria' : '👮 Admin'}
+                      </span>
+                      <span className="acn-avs-crit" data-crit={crit}>
+                        {av.criticidade}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="acn-avs-msg">
+                    <Linkify text={av.mensagem} />
+                  </div>
+                  <div className="acn-avs-meta">
+                    <span>✍️ {av.criado_por_nome || '—'}{criadoEmLabel(av) ? ` · ${criadoEmLabel(av)}` : ''}</span>
+                    <span>{prazoLabel(av)}</span>
+                  </div>
+                  {/* editar e excluir: só o autor do aviso ou quem tem a marca DEV (02/10/2026) */}
+                  {podeMexerNoAviso(eu, av) && (
+                    <div className="acn-avs-acoes">
+                      <Botao pequeno className="acn-avs-ed" onClick={() => iniciarEdicao(av)} title="Editar este aviso">
+                        ✏️ Editar
+                      </Botao>
+                      <Botao pequeno variante="perigo-sec" className="acn-avs-ex" onClick={() => excluir(av)} title="Excluir este aviso">
+                        🗑 Excluir
+                      </Botao>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
