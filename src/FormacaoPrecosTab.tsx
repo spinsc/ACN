@@ -2887,10 +2887,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (!senhaConfirm.trim()) { setErroSenha('Informe sua senha.'); return; }
     setRegistrandoVersao(true);
     setErroSenha('');
-    const { data: user, error: userErr } = await supabase.from('auth_usuarios')
-      .select('senha').eq('id', currentUser?.id).maybeSingle();
+    // Etapa 16c (10/10/2026): a senha é conferida no servidor (`auth_confirmar_senha` só responde sim ou não); antes a tela lia a senha em texto puro do banco.
+    const { data: senhaConfere, error: userErr } = await supabase.rpc('auth_confirmar_senha', { p_usuario_id: currentUser?.id, p_senha: senhaConfirm });
     if (userErr) { setErroSenha('Não foi possível conferir a senha: ' + userErr.message); setRegistrandoVersao(false); return; }   // 7.59: dizia "Senha incorreta."
-    if (!user || user.senha !== senhaConfirm) {
+    if (senhaConfere !== true) {
       setErroSenha('Senha incorreta.');
       setRegistrandoVersao(false);
       return;

@@ -3691,3 +3691,6 @@ html body .acn-b.acn-login-link:hover:not(:disabled) { color: var(--acn-brand-in
 .acn-login-rodape { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 13px; color: #999999; }
 .acn-login-rodape p { margin: 0; }
 .acn-login-rodape p + p { margin-top: 3px; }
+
+/* Etapa 16c (10/10/2026): campo "sua senha de Admin" ao definir a senha de outra pessoa (Usuários do Admin) */
+.acn-adm-senha-admin { width: 100%; }

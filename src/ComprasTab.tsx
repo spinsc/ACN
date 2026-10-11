@@ -1730,10 +1730,10 @@ export default function ComprasTab({ currentUser }) {
     if (!cotacao || !modalCotacoes) return;
     if (!senhaConfirmacao) { setErroSenha('Digite sua senha.'); return; }
     setVerificandoSenha(true);
-    const { data: usuarioAtual, error: erroUsu } = await supabase.from('auth_usuarios')
-      .select('senha').eq('id', currentUser?.id).maybeSingle();
+    // Etapa 16c (10/10/2026): a senha é conferida no servidor (`auth_confirmar_senha` só responde sim ou não); antes a tela lia a senha em texto puro do banco.
+    const { data: senhaConfere, error: erroUsu } = await supabase.rpc('auth_confirmar_senha', { p_usuario_id: currentUser?.id, p_senha: senhaConfirmacao });
     if (erroUsu) { setVerificandoSenha(false); setErroSenha('Não foi possível conferir a senha: ' + erroUsu.message); return; }   // 7.57: dizia "Senha incorreta."
-    if (!usuarioAtual || usuarioAtual.senha !== senhaConfirmacao) {
+    if (senhaConfere !== true) {
       setVerificandoSenha(false);
       setErroSenha('Senha incorreta.');
       return;

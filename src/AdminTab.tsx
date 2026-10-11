@@ -163,6 +163,8 @@ function PainelUsuarios() {
   const [modalEditar, setModalEditar] = useState(null);
   const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
+  // Etapa 16c (10/10/2026): definir a senha de OUTRA pessoa exige a senha de quem está definindo (um Admin) — conferida no servidor, que guarda só o resumo da nova.
+  const [senhaAdmin, setSenhaAdmin] = useState('');
 
   // Perfis disponíveis = padrão + qualquer extra criado no banco
   const perfisDisponiveis = [
@@ -212,8 +214,22 @@ function PainelUsuarios() {
       : [...f.abas_permitidas, id]
   }));
 
+  const definirSenhaPeloAdmin = async (usuarioId, nova) => {
+    const eu = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!senhaAdmin) { alert('Informe a sua senha (de Admin) para definir a senha de outra pessoa.'); return false; }
+    const { data, error } = await supabase.rpc('auth_admin_definir_senha', { p_admin_id: eu?.id, p_admin_senha: senhaAdmin, p_usuario_id: usuarioId, p_nova: nova });
+    if (error) { alert('Erro: ' + error.message); return false; }
+    if (!data?.ok) {
+      alert(data?.erro === 'sem_permissao' ? 'Sua senha de Admin não confere (ou você não é Admin).' : data?.erro === 'senha_curta' ? 'A senha precisa ter no mínimo 4 caracteres.' : 'Não foi possível definir a senha: ' + (data?.erro || 'erro'));
+      return false;
+    }
+    return true;
+  };
+
   const salvarEdicao = async () => {
     if (!editForm.nome || !editForm.email) { alert('Nome e e-mail são obrigatórios!'); return; }
+    // a senha vai primeiro: se a senha do Admin não conferir, nada do cadastro é gravado pela metade
+    if (editForm.novaSenha.length >= 4 && !(await definirSenhaPeloAdmin(modalEditar.id, editForm.novaSenha))) return;
     const updates = {
       nome: editForm.nome.toUpperCase(),
       email: editForm.email,
@@ -232,13 +248,12 @@ function PainelUsuarios() {
       recebe_alerta_analise: editForm.recebe_alerta_analise,
       gestor_id: editForm.gestor_id || null,
     };
-    if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
     if (error) { alert('Erro: ' + error.message); return; }
     // ver_valores salvo separadamente — requer coluna no BD:
     // ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS ver_valores boolean DEFAULT true;
     await supabase.from('auth_usuarios').update({ ver_valores: editForm.ver_valores }).eq('id', modalEditar.id);
-    setModalEditar(null); fetchUsuarios();
+    setSenhaAdmin(''); setModalEditar(null); fetchUsuarios();
   };
 
   // "Ver como" — pra o admin testar o sistema exatamente com o perfil/
@@ -284,8 +299,18 @@ function PainelUsuarios() {
 
   const salvar = async () => {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
-    const { error } = await supabase.from('auth_usuarios').insert([{ ...form, ativo: true }]);
+    if (form.senha.length < 4) { alert('A senha precisa ter no mínimo 4 caracteres.'); return; }
+    if (!senhaAdmin) { alert('Informe a sua senha (de Admin) para criar o usuário com senha.'); return; }
+    // confere a senha do Admin ANTES de criar, para não deixar um usuário criado sem senha por causa de um erro de digitação
+    const eu = JSON.parse(localStorage.getItem('user') || '{}');
+    const { data: adminConfere, error: erroConfere } = await supabase.rpc('auth_confirmar_senha', { p_usuario_id: eu?.id, p_senha: senhaAdmin });
+    if (erroConfere) { alert('Erro: ' + erroConfere.message); return; }
+    if (adminConfere !== true) { alert('Sua senha de Admin não confere.'); return; }
+    // a senha de verdade nunca vai para a tabela de usuários: o usuário nasce com um valor provisório sem uso e a senha é definida pela função do servidor (que guarda só o resumo)
+    const { data: novo, error } = await supabase.from('auth_usuarios').insert([{ ...form, senha: 'x-' + crypto.randomUUID(), ativo: true }]).select('id').single();
     if (error) { alert('Erro: ' + error.message); return; }
+    if (!(await definirSenhaPeloAdmin(novo.id, form.senha))) alert('O usuário foi criado, mas ficou SEM senha definida. Abra "Editar" nele e defina a senha.');
+    setSenhaAdmin('');
     setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, pode_enviar_avisos: false });
     setShowForm(false); fetchUsuarios();
   };
@@ -366,6 +391,13 @@ function PainelUsuarios() {
                   value={editForm.novaSenha}
                   onChange={e=>setEditForm(f=>({...f,novaSenha:e.target.value}))} />
               </div>
+              {editForm.novaSenha.length > 0 && (
+                <div style={{gridColumn:'1/-1'}}>
+                  <label className="acn-label">Sua senha de Admin (para confirmar a nova senha)</label>
+                  <input className="acn-input acn-adm-senha-admin" type="password" value={senhaAdmin}
+                    onChange={e=>setSenhaAdmin(e.target.value)} />
+                </div>
+              )}
             </div>
             {/* ABAS */}
             <div style={{marginBottom:10}}>
@@ -539,6 +571,9 @@ function PainelUsuarios() {
               <div className="form-group"><label className="acn-label">Senha *</label>
                 <input type="password" className="acn-input" style={{width:'100%'}} value={form.senha}
                   onChange={e=>setForm({...form,senha:e.target.value})} /></div>
+              <div className="form-group"><label className="acn-label">Sua senha de Admin * (para confirmar)</label>
+                <input type="password" className="acn-input acn-adm-senha-admin" value={senhaAdmin}
+                  onChange={e=>setSenhaAdmin(e.target.value)} /></div>
               <div className="form-group"><label className="acn-label">Perfil</label>
                 <select className="acn-input" style={{width:'100%'}} value={form.perfil}
                   onChange={e=>setForm({...form,perfil:e.target.value})}>

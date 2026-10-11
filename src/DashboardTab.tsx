@@ -906,15 +906,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (senhaForm.nova !== senhaForm.confirmar) { setSenhaMsg('error:As senhas não coincidem.'); return; }
     setSenhaLoading(true);
     try {
-      // Verifica senha atual no banco (exceto primeiro acesso)
-      if (!currentUser?.primeiro_acesso) {
-        const { data } = await supabase.from('auth_usuarios').select('senha').eq('id', currentUser.id).single();
-        if (data?.senha !== senhaForm.atual) { setSenhaMsg('error:Senha atual incorreta.'); setSenhaLoading(false); return; }
-      }
-      const { error } = await supabase.from('auth_usuarios')
-        .update({ senha: senhaForm.nova, primeiro_acesso: false, senha_temp: null, senha_temp_expiry: null })
-        .eq('id', currentUser.id);
+      // Etapa 16c (10/10/2026): a senha atual e a nova são conferidas e gravadas NO SERVIDOR (função `auth_trocar_senha`), que guarda só o resumo.
+      // Antes a tela lia a senha em texto puro do banco para comparar e gravava a nova em texto puro. O primeiro acesso, que dispensava a senha atual,
+      // agora também pede (a senha com que a pessoa acabou de entrar, a temporária ou a que o Admin deu): sem sessão no servidor, não há como saber
+      // que quem pede a troca é a própria pessoa, e dispensar a senha deixaria qualquer um trocar a senha de quem está em primeiro acesso.
+      const { data: resp, error } = await supabase.rpc('auth_trocar_senha', { p_usuario_id: currentUser.id, p_atual: senhaForm.atual, p_nova: senhaForm.nova });
       if (error) throw error;
+      if (!resp?.ok) {
+        setSenhaMsg(resp?.erro === 'senha_curta' ? 'error:Mínimo 4 caracteres.' : 'error:Senha atual incorreta.');
+        setSenhaLoading(false); return;
+      }
       // Atualiza localStorage
       const stored = JSON.parse(localStorage.getItem('user') || '{}');
       localStorage.setItem('user', JSON.stringify({ ...stored, primeiro_acesso: false }));
@@ -1711,12 +1712,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 background: senhaMsg.startsWith('ok:') ? '#f0fdf4' : '#fef2f2',
                 color: senhaMsg.startsWith('ok:') ? '#166534' : '#991b1b',
                 border: `1px solid ${senhaMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`}}>
-                {senhaMsg.startsWith('ok:') ? '✅ ' : '❌ '}{senhaMsg.slice(3)}
+                {senhaMsg.startsWith('ok:') ? '✅ ' : '❌ '}{/* 16c (10/10/2026): o texto de erro aparecia cortado ("or:Senha atual incorreta.") — o prefixo "error:" tem 6 letras e só 3 eram tiradas, o mesmo defeito do login (7.x) */}{senhaMsg.replace(/^(ok|error):/, '')}
               </div>
             )}
-            {!currentUser?.primeiro_acesso && (
+            {(
               <div style={{marginBottom:10}}>
-                <label className="acn-label">Senha Atual</label>
+                <label className="acn-label">{currentUser?.primeiro_acesso ? 'Senha com que você entrou' : 'Senha Atual'}</label>
                 <input className="acn-input" type="password" style={{width:'100%'}}
                   value={senhaForm.atual} onChange={e=>setSenhaForm(f=>({...f,atual:e.target.value}))} />
               </div>
