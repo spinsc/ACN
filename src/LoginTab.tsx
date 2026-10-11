@@ -115,14 +115,20 @@ export default function LoginTab() {
       const temp = gerarSenhaTemp();
       const expiry = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min
 
-      await supabase.from('auth_usuarios').update({
+      const { error: erroGravar } = await supabase.from('auth_usuarios').update({
         senha_temp: temp,
         senha_temp_expiry: expiry,
         primeiro_acesso: true,
       }).eq('id', usuario.id);
+      // Etapa 7.x (10/10/2026): a gravação não era conferida — se falhasse, a pessoa recebia no WhatsApp uma senha que não existia no
+      // banco e a tela dizia "enviada". Agora a tela avisa e o WhatsApp nem é disparado.
+      if (erroGravar) {
+        setResetMsg('error:Não foi possível gerar a senha temporária agora. Tente de novo em instantes. (' + erroGravar.message + ')');
+        setResetLoading(false); return;
+      }
 
       // Envia via WhatsApp
-      await fetch('https://qgemelnuqdilnggxmrdw.supabase.co/functions/v1/send-whatsapp', {
+      const resposta = await fetch('https://qgemelnuqdilnggxmrdw.supabase.co/functions/v1/send-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
         body: JSON.stringify({
@@ -130,6 +136,20 @@ export default function LoginTab() {
           mensagem: `*ACN Sinal Verde — Recuperação de Senha*\n\nOlá, ${usuario.nome}!\n\nSua senha temporária é: *${temp}*\n\nEla é válida por 30 minutos. Ao entrar, você será solicitado a criar uma nova senha.\n\nSe não foi você, ignore esta mensagem.`,
         }),
       });
+      // Etapa 7.x (10/10/2026): a função responde 200 mesmo quando o serviço de WhatsApp recusa a mensagem (o resultado vem em `resultados`),
+      // então só "resposta.ok" não basta. Resposta que não dá para ler segue como antes (considerada enviada) — só vira erro o que é claramente falha.
+      let enviou = resposta.ok;
+      if (resposta.ok) {
+        try {
+          const corpo = await resposta.json();
+          const lista = Array.isArray(corpo?.resultados) ? corpo.resultados : [];
+          if (lista.some((r: any) => r?.status === 'rejected' || r?.value?.ok === false)) enviou = false;
+        } catch { /* corpo ilegível: mantém como enviada */ }
+      }
+      if (!enviou) {
+        setResetMsg('error:A senha temporária foi gerada, mas o WhatsApp não conseguiu entregar a mensagem. Tente de novo ou contate o administrador.');
+        setResetLoading(false); return;
+      }
 
       setResetMsg('ok:Senha temporária enviada para o WhatsApp cadastrado! Verifique e use-a para entrar.');
     } catch (err) {
@@ -174,15 +194,17 @@ export default function LoginTab() {
                 color: resetMsg.startsWith('ok:') ? '#166534' : '#991b1b',
                 border: `1px solid ${resetMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`,
               }}>
-                {resetMsg.startsWith('ok:') ? '✅ ' : '❌ '}{resetMsg.slice(3)}
+                {/* Etapa 7.x (10/10/2026): o texto das mensagens de erro aparecia cortado no meio ("❌ or:E-mail não encontrado…") porque
+                    só 3 letras do prefixo eram tiradas e o de erro tem 6 ("error:") */}
+                {resetMsg.startsWith('ok:') ? '✅ ' : '❌ '}{resetMsg.replace(/^(ok|error):/, '')}
               </div>
             )}
 
             {!resetMsg.startsWith('ok:') && (
               <form onSubmit={handleEsqueci}>
                 <div style={{ marginBottom:16 }}>
-                  <label style={{ display:'block', fontSize:12, fontWeight:500, color:'#1a3a52', marginBottom:6 }}>E-mail de login</label>
-                  <input type="email" style={inputStyle} value={emailReset}
+                  <label htmlFor="login-esqueci-email" style={{ display:'block', fontSize:12, fontWeight:500, color:'#1a3a52', marginBottom:6 }}>E-mail de login</label>
+                  <input id="login-esqueci-email" type="email" style={inputStyle} value={emailReset}
                     onChange={e=>setEmailReset(e.target.value)} required disabled={resetLoading} />
                 </div>
                 <button type="submit" disabled={resetLoading} style={btnStyle(resetLoading?'#94a3b8':'#0f766e')}>
@@ -207,13 +229,14 @@ export default function LoginTab() {
 
             <form onSubmit={handleLogin}>
               <div style={{ marginBottom:18 }}>
-                <label style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>E-mail</label>
-                <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                {/* Etapa 7.x (10/10/2026): rótulos ligados aos campos (clicar em "E-mail"/"Senha" agora leva o cursor ao campo e o leitor de tela lê o nome) */}
+                <label htmlFor="login-email" style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>E-mail</label>
+                <input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)}
                   disabled={loading} style={inputStyle} />
               </div>
               <div style={{ marginBottom:20 }}>
-                <label style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>Senha</label>
-                <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+                <label htmlFor="login-senha" style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>Senha</label>
+                <input id="login-senha" type="password" value={password} onChange={e=>setPassword(e.target.value)}
                   disabled={loading} placeholder="••••••" style={inputStyle} />
               </div>
               <button type="submit" disabled={loading} style={btnStyle(loading?'#94a3b8':'#22c55e')}>
