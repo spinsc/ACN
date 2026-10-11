@@ -3,13 +3,6 @@ import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { Botao } from './Interface';
 
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
-
-function gerarSenhaTemp() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
-
 export default function LoginTab() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -22,139 +15,61 @@ export default function LoginTab() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMsg, setResetMsg]       = useState('');
 
+  // Etapa 16b (10/10/2026): a senha não é mais conferida aqui. O servidor confere (função `auth_login`, que compara o resumo da senha e
+  // devolve o usuário SEM nenhum segredo) e faz o que o código antigo fazia aqui: zerar a senha temporária e marcar o primeiro acesso quando
+  // ela foi usada, e guardar o último acesso (devolvendo o anterior). O usuário guardado no navegador tem os mesmos campos de antes.
+  // O e-mail agora é comparado por igualdade, sem diferenciar maiúscula (antes era `ilike`, em que % e _ valiam como curinga).
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const url = `https://qgemelnuqdilnggxmrdw.supabase.co/rest/v1/auth_usuarios?email=ilike.${encodeURIComponent(email.trim())}`;
-      const response = await fetch(url, {
-        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
-      });
-      const data = await response.json();
+      const { data, error: erroRpc } = await supabase.rpc('auth_login', { p_email: email.trim(), p_senha: password });
+      if (erroRpc) throw erroRpc;
 
-      if (!response.ok || !Array.isArray(data) || data.length === 0) {
-        setError('Usuário não encontrado'); setLoading(false); return;
+      if (!data?.ok) {
+        setError(data?.erro === 'inativo' ? 'Usuário inativo' : data?.erro === 'senha_incorreta' ? 'Senha incorreta' : 'Usuário não encontrado');
+        setLoading(false); return;
       }
 
-      const usuario = data[0];
-      if (!usuario.ativo) { setError('Usuário inativo'); setLoading(false); return; }
-
-      // Verifica senha normal ou senha temporária
-      const senhaOk = usuario.senha === password;
-      const agora = new Date();
-      const tempOk = usuario.senha_temp === password
-        && usuario.senha_temp_expiry
-        && new Date(usuario.senha_temp_expiry) > agora;
-
-      if (!senhaOk && !tempOk) { setError('Senha incorreta'); setLoading(false); return; }
-
-      // Se usou senha temp → forçar troca
-      const primeiroAcesso = tempOk || !!usuario.primeiro_acesso;
-      if (tempOk) {
-        await supabase.from('auth_usuarios').update({ primeiro_acesso: true, senha_temp: null, senha_temp_expiry: null }).eq('id', usuario.id);
-      }
-
-      // ultimoLoginAnterior = login anterior a este, guardado antes de sobrescrever —
-      // é o marco usado pelo filtro "Últimas Alterações" (Licitações) pra saber o que
-      // mudou desde a última vez que o usuário entrou no sistema.
-      const ultimoLoginAnterior = usuario.ultimo_login || null;
-      await supabase.from('auth_usuarios').update({ ultimo_login: agora.toISOString() }).eq('id', usuario.id);
-
-      localStorage.setItem('user', JSON.stringify({
-        id:                    usuario.id,
-        email:                 usuario.email,
-        nome:                  usuario.nome,
-        perfil:                usuario.perfil,
-        abas_permitidas:       usuario.abas_permitidas || [],
-        primeiro_acesso:       primeiroAcesso,
-        pode_autorizar_rh:     usuario.pode_autorizar_rh     || false,
-        permissoes_crm:        usuario.permissoes_crm        || [],
-        permissoes_rh:         usuario.permissoes_rh         || [],
-        recebe_alerta_analise: usuario.recebe_alerta_analise || false,
-        pode_enviar_avisos:    usuario.pode_enviar_avisos    || false,
-        // Quem aprova compra (30/09/2026): sem isto a marca nunca chegava ao navegador, e desde a regra de
-        // 24/09 o sistema tratava TODO MUNDO como não-aprovador — inclusive os quatro marcados no Admin.
-        pode_aprovar_compra:   usuario.pode_aprovar_compra   || false,
-        // Marca DEV (02/10/2026): quem pode mexer em qualquer aviso do sistema. Mesma lição da pode_aprovar_compra: se não entrar aqui, a marca nunca chega ao navegador.
-        eh_dev:                usuario.eh_dev                || false,
-        ultimo_login_anterior: ultimoLoginAnterior,
-      }));
+      localStorage.setItem('user', JSON.stringify(data.usuario));
 
       window.location.href = window.location.origin + '/ACN/';
     } catch (err) {
-      setError('Erro: ' + err.message);
+      setError('Erro: ' + String(err.message).replace(/^\w*Error:\s*/, ''));   // o cliente do banco antepõe "TypeError: " ao erro de rede
     } finally {
       setLoading(false);
     }
   };
 
+  // Etapa 16b (10/10/2026): a senha temporária agora nasce NO SERVIDOR (função `recuperar-senha`): ela guarda só o resumo e manda o WhatsApp.
+  // A tela nunca recebe a senha temporária — se recebesse, qualquer um pediria a recuperação do e-mail de outra pessoa e leria a senha.
+  // As regras continuam as de antes (6 caracteres, 30 minutos, usuário ativo, WhatsApp cadastrado); a novidade é "muito_cedo": não gera
+  // outra dentro de 1 minuto da anterior.
+  const MENSAGENS_RECUPERACAO = {
+    nao_encontrado: 'E-mail não encontrado no sistema.',
+    inativo: 'Usuário inativo.',
+    sem_whatsapp: 'Este usuário não tem WhatsApp cadastrado. Contate o administrador.',
+    muito_cedo: 'Uma senha temporária foi enviada há menos de 1 minuto. Confira o WhatsApp e aguarde um pouco antes de pedir outra.',
+    falha_gravar: 'Não foi possível gerar a senha temporária agora. Tente de novo em instantes.',
+    falha_envio: 'O WhatsApp não conseguiu entregar a mensagem. Tente de novo ou contate o administrador.',
+  };
   const handleEsqueci = async (e) => {
     e.preventDefault();
     setResetLoading(true);
     setResetMsg('');
 
     try {
-      const url = `https://qgemelnuqdilnggxmrdw.supabase.co/rest/v1/auth_usuarios?email=ilike.${encodeURIComponent(emailReset.trim())}`;
-      const response = await fetch(url, {
-        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
-      });
-      const data = await response.json();
-
-      if (!response.ok || !Array.isArray(data) || data.length === 0) {
-        setResetMsg('error:E-mail não encontrado no sistema.'); setResetLoading(false); return;
-      }
-
-      const usuario = data[0];
-      if (!usuario.ativo) { setResetMsg('error:Usuário inativo.'); setResetLoading(false); return; }
-      if (!usuario.whatsapp) {
-        setResetMsg('error:Este usuário não tem WhatsApp cadastrado. Contate o administrador.');
+      const { data, error: erroFn } = await supabase.functions.invoke('recuperar-senha', { body: { email: emailReset.trim() } });
+      if (erroFn) throw erroFn;
+      if (!data?.ok) {
+        setResetMsg('error:' + (MENSAGENS_RECUPERACAO[data?.erro] || MENSAGENS_RECUPERACAO.falha_gravar));
         setResetLoading(false); return;
       }
-
-      const temp = gerarSenhaTemp();
-      const expiry = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min
-
-      const { error: erroGravar } = await supabase.from('auth_usuarios').update({
-        senha_temp: temp,
-        senha_temp_expiry: expiry,
-        primeiro_acesso: true,
-      }).eq('id', usuario.id);
-      // Etapa 7.x (10/10/2026): a gravação não era conferida — se falhasse, a pessoa recebia no WhatsApp uma senha que não existia no
-      // banco e a tela dizia "enviada". Agora a tela avisa e o WhatsApp nem é disparado.
-      if (erroGravar) {
-        setResetMsg('error:Não foi possível gerar a senha temporária agora. Tente de novo em instantes. (' + erroGravar.message + ')');
-        setResetLoading(false); return;
-      }
-
-      // Envia via WhatsApp
-      const resposta = await fetch('https://qgemelnuqdilnggxmrdw.supabase.co/functions/v1/send-whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
-        body: JSON.stringify({
-          numero: usuario.whatsapp,
-          mensagem: `*ACN Sinal Verde — Recuperação de Senha*\n\nOlá, ${usuario.nome}!\n\nSua senha temporária é: *${temp}*\n\nEla é válida por 30 minutos. Ao entrar, você será solicitado a criar uma nova senha.\n\nSe não foi você, ignore esta mensagem.`,
-        }),
-      });
-      // Etapa 7.x (10/10/2026): a função responde 200 mesmo quando o serviço de WhatsApp recusa a mensagem (o resultado vem em `resultados`),
-      // então só "resposta.ok" não basta. Resposta que não dá para ler segue como antes (considerada enviada) — só vira erro o que é claramente falha.
-      let enviou = resposta.ok;
-      if (resposta.ok) {
-        try {
-          const corpo = await resposta.json();
-          const lista = Array.isArray(corpo?.resultados) ? corpo.resultados : [];
-          if (lista.some((r: any) => r?.status === 'rejected' || r?.value?.ok === false)) enviou = false;
-        } catch { /* corpo ilegível: mantém como enviada */ }
-      }
-      if (!enviou) {
-        setResetMsg('error:A senha temporária foi gerada, mas o WhatsApp não conseguiu entregar a mensagem. Tente de novo ou contate o administrador.');
-        setResetLoading(false); return;
-      }
-
       setResetMsg('ok:Senha temporária enviada para o WhatsApp cadastrado! Verifique e use-a para entrar.');
     } catch (err) {
-      setResetMsg('error:Erro ao processar: ' + err.message);
+      setResetMsg('error:Erro ao processar: ' + String(err.message).replace(/^\w*Error:\s*/, ''));
     } finally {
       setResetLoading(false);
     }
