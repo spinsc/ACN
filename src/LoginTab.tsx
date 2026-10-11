@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
+import { Botao } from './Interface';
 
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
 
@@ -159,41 +160,29 @@ export default function LoginTab() {
     }
   };
 
-  const inputStyle = {
-    width: '100%', padding: '12px', fontSize: '13px',
-    border: '1px solid #e0e0e0', borderRadius: '8px',
-    boxSizing: 'border-box' as const, backgroundColor: '#ffffff', color: '#1e293b',
-    colorScheme: 'light' as const,
-  };
-  const btnStyle = (color = '#22c55e') => ({
-    width: '100%', padding: '12px', fontSize: '14px', fontWeight: '500' as const,
-    color: '#ffffff', backgroundColor: color, border: 'none', borderRadius: '8px', cursor: 'pointer',
-  });
-
+  // 12e60 (10/10/2026): só aparência — o cartão, os campos, as mensagens e o rodapé passaram para o design.css (`acn-login-*`) e os quatro
+  // botões crus viraram o botão do guia. Medido antes de mexer: o sistema já repintava os botões em tempo de execução (o verde e o teal do
+  // código viravam o primário na cor-marca; o cinza de "trabalhando" e o contorno de "Voltar" viravam o secundário; o link, o tom escuro
+  // da marca), então o CSS novo dá o valor que a pessoa já via, e não o que estava escrito. Nenhuma consulta, gravação, regra ou texto mudou.
   return (
-    <div style={{ display:'flex', justifyContent:'center', alignItems:'center', minHeight:'100vh', backgroundColor:'#f8fafc', padding:'20px' }}>
-      <div style={{ width:'100%', maxWidth:'400px', padding:'40px', backgroundColor:'#ffffff', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.1)' }}>
+    <div className="acn-login">
+      <div className="acn-login-card">
 
-        <div style={{ textAlign:'center', marginBottom:'28px' }}>
-          <h1 style={{ fontSize:'24px', fontWeight:'700', color:'#0f766e', margin:'0 0 6px' }}>ACN <span style={{color:'#1e293b'}}>SINAL VERDE</span></h1>
-          <p style={{ fontSize:'12px', color:'#64748b', margin:0 }}>Sistema Operacional Unificado</p>
+        <div className="acn-login-cab">
+          <h1 className="acn-login-titulo">ACN <span>SINAL VERDE</span></h1>
+          <p className="acn-login-sub">Sistema Operacional Unificado</p>
         </div>
 
         {/* ── TELA ESQUECI SENHA ── */}
         {telaEsqueci ? (
           <>
-            <div style={{ fontSize:13, color:'#1e293b', fontWeight:600, marginBottom:12 }}>🔑 Recuperar Senha</div>
-            <p style={{ fontSize:12, color:'#64748b', marginBottom:16, lineHeight:1.5 }}>
+            <div className="acn-login-secao">🔑 Recuperar Senha</div>
+            <p className="acn-login-ajuda">
               Informe seu e-mail de login. Enviaremos uma senha temporária pelo WhatsApp cadastrado.
             </p>
 
             {resetMsg && (
-              <div style={{
-                padding:'10px 12px', borderRadius:8, marginBottom:14, fontSize:12,
-                background: resetMsg.startsWith('ok:') ? '#f0fdf4' : '#fef2f2',
-                color: resetMsg.startsWith('ok:') ? '#166534' : '#991b1b',
-                border: `1px solid ${resetMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`,
-              }}>
+              <div className="acn-login-msg" data-tipo={resetMsg.startsWith('ok:') ? 'ok' : 'erro'}>
                 {/* Etapa 7.x (10/10/2026): o texto das mensagens de erro aparecia cortado no meio ("❌ or:E-mail não encontrado…") porque
                     só 3 letras do prefixo eram tiradas e o de erro tem 6 ("error:") */}
                 {resetMsg.startsWith('ok:') ? '✅ ' : '❌ '}{resetMsg.replace(/^(ok|error):/, '')}
@@ -202,60 +191,58 @@ export default function LoginTab() {
 
             {!resetMsg.startsWith('ok:') && (
               <form onSubmit={handleEsqueci}>
-                <div style={{ marginBottom:16 }}>
-                  <label htmlFor="login-esqueci-email" style={{ display:'block', fontSize:12, fontWeight:500, color:'#1a3a52', marginBottom:6 }}>E-mail de login</label>
-                  <input id="login-esqueci-email" type="email" style={inputStyle} value={emailReset}
+                <div className="acn-login-campo recuperar">
+                  <label htmlFor="login-esqueci-email" className="acn-login-rotulo">E-mail de login</label>
+                  <input id="login-esqueci-email" type="email" className="acn-login-input" value={emailReset}
                     onChange={e=>setEmailReset(e.target.value)} required disabled={resetLoading} />
                 </div>
-                <button type="submit" disabled={resetLoading} style={btnStyle(resetLoading?'#94a3b8':'#0f766e')}>
+                <Botao type="submit" variante={resetLoading ? 'secundario' : 'primario'} className="acn-login-btn" disabled={resetLoading}>
                   {resetLoading ? '⏳ Enviando...' : '📱 Enviar senha temporária'}
-                </button>
+                </Botao>
               </form>
             )}
 
-            <button onClick={()=>{setTelaEsqueci(false);setResetMsg('');setEmailReset('');}}
-              style={{ width:'100%', marginTop:10, padding:'10px', fontSize:13, background:'none', border:'1px solid #e2e8f0', borderRadius:8, cursor:'pointer', color:'#64748b' }}>
+            <Botao variante="secundario" className="acn-login-voltar" onClick={()=>{setTelaEsqueci(false);setResetMsg('');setEmailReset('');}}>
               ← Voltar ao login
-            </button>
+            </Botao>
           </>
         ) : (
           /* ── TELA LOGIN ── */
           <>
             {error && (
-              <div style={{ background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:8, padding:12, marginBottom:16, fontSize:13, color:'#991b1b' }}>
+              <div className="acn-login-erro">
                 ❌ {error}
               </div>
             )}
 
             <form onSubmit={handleLogin}>
-              <div style={{ marginBottom:18 }}>
+              <div className="acn-login-campo">
                 {/* Etapa 7.x (10/10/2026): rótulos ligados aos campos (clicar em "E-mail"/"Senha" agora leva o cursor ao campo e o leitor de tela lê o nome) */}
-                <label htmlFor="login-email" style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>E-mail</label>
+                <label htmlFor="login-email" className="acn-login-rotulo">E-mail</label>
                 <input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)}
-                  disabled={loading} style={inputStyle} />
+                  disabled={loading} className="acn-login-input" />
               </div>
-              <div style={{ marginBottom:20 }}>
-                <label htmlFor="login-senha" style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>Senha</label>
+              <div className="acn-login-campo senha">
+                <label htmlFor="login-senha" className="acn-login-rotulo">Senha</label>
                 <input id="login-senha" type="password" value={password} onChange={e=>setPassword(e.target.value)}
-                  disabled={loading} placeholder="••••••" style={inputStyle} />
+                  disabled={loading} placeholder="••••••" className="acn-login-input" />
               </div>
-              <button type="submit" disabled={loading} style={btnStyle(loading?'#94a3b8':'#22c55e')}>
+              <Botao type="submit" variante={loading ? 'secundario' : 'primario'} className="acn-login-btn" disabled={loading}>
                 {loading ? '⏳ Entrando...' : '✓ Entrar'}
-              </button>
+              </Botao>
             </form>
 
-            <div style={{ textAlign:'center', marginTop:14 }}>
-              <button onClick={()=>setTelaEsqueci(true)}
-                style={{ background:'none', border:'none', fontSize:12, color:'#0f766e', cursor:'pointer', textDecoration:'underline' }}>
+            <div className="acn-login-esqueci">
+              <Botao variante="discreto" className="acn-login-link" onClick={()=>setTelaEsqueci(true)}>
                 Esqueci minha senha
-              </button>
+              </Botao>
             </div>
           </>
         )}
 
-        <div style={{ marginTop:28, paddingTop:16, borderTop:'1px solid #e0e0e0', textAlign:'center', fontSize:11, color:'#999' }}>
-          <p style={{margin:0}}>Ambiente de Produção | v24.0</p>
-          <p style={{margin:'3px 0 0'}}>© 2025 ACN Sistemas</p>
+        <div className="acn-login-rodape">
+          <p>Ambiente de Produção | v24.0</p>
+          <p>© 2025 ACN Sistemas</p>
         </div>
       </div>
     </div>

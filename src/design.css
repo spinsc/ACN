@@ -3654,3 +3654,40 @@ html body .acn-b.acn-avs-ed { background: var(--acn-brand-soft); color: var(--ac
 
 /* ── Lançar OP da licitação Vencida (09/10/2026): as OPs que a licitação já gerou, ao lado do botão ── */
 .acn-lic-ops { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* ── Tela de login (12e60, 10/10/2026): só aparência — os mesmos valores que o usuário já via, agora no CSS e não no style inline do componente.
+   O cartão é CLARO de propósito (cores próprias, não seguem o tema): é a porta do sistema e sempre foi assim; no escuro o sistema já
+   repintava o que ficava ilegível, e continua repintando (mede a cor real de cada peça). Os botões são o botão do guia, com o tamanho da tela
+   de entrada: "Entrar" e "Enviar senha temporária" na cor-marca (primário) e, enquanto trabalham, no tom neutro (secundário) — era o que o
+   sistema já mostrava, porque o cinza do código era repintado como secundário. ── */
+.acn-login { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: #f8fafc; }
+.acn-login-card { width: 100%; max-width: 400px; padding: 40px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1); }
+.acn-login-cab { text-align: center; margin-bottom: 28px; }
+.acn-login-titulo { font-size: 24px; font-weight: 700; color: #0f766e; margin: 0 0 6px; }
+.acn-login-titulo span { color: #1e293b; }
+.acn-login-sub { font-size: 12px; color: #64748b; margin: 0; }
+.acn-login-secao { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 12px; }
+.acn-login-ajuda { font-size: 12px; color: #64748b; margin: 0 0 16px; line-height: 1.5; }
+.acn-login-erro { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px; color: #991b1b; }
+.acn-login-msg { padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; font-size: 12px; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b; }
+.acn-login-msg[data-tipo=ok] { background: #f0fdf4; color: #166534; border-color: #86efac; }
+.acn-login-campo { margin-bottom: 18px; }
+.acn-login-campo.senha { margin-bottom: 20px; }
+.acn-login-campo.recuperar { margin-bottom: 16px; }
+.acn-login-rotulo { display: block; font-size: 13px; font-weight: 500; color: #1a3a52; margin-bottom: 7px; }
+.acn-login-campo.recuperar .acn-login-rotulo { font-size: 12px; margin-bottom: 6px; }
+.acn-login-input { width: 100%; padding: 12px; font-size: 13px; border: 1px solid #e0e0e0; border-radius: 8px; box-sizing: border-box; background-color: #ffffff; color: #1e293b; color-scheme: light; }
+html body .acn-b.acn-login-btn { display: inline-block; width: 100%; height: auto; padding: 12px; font-size: 14px; font-weight: 500; line-height: normal; border-radius: 8px; text-align: center; }
+html body .acn-b.acn-login-btn.acn-b-primario { border: 0; border-color: transparent; }
+html body .acn-b.acn-login-btn:disabled { opacity: 1; cursor: pointer; }
+html body .acn-b:is(.acn-login-btn, .acn-login-voltar, .acn-login-link) { align-items: normal; justify-content: normal; gap: normal; }
+/* a regra geral de botões (index.css) manda `nowrap` em todo botão, menos nos que traziam largura total ou fundo solto no style inline — era o caso destes quatro; o `:not(#acn)` dá a força para ganhar dela */
+html body .acn-b:is(.acn-login-btn, .acn-login-voltar, .acn-login-link):not(#acn) { white-space: normal; }
+html body .acn-b.acn-login-btn.acn-b-secundario { box-shadow: none; }
+html body .acn-b.acn-login-voltar { display: inline-block; width: 100%; height: auto; margin-top: 10px; padding: 10px; font-size: 13px; font-weight: 400; line-height: normal; border-radius: 8px; text-align: center; box-shadow: none; }
+.acn-login-esqueci { text-align: center; margin-top: 14px; }
+html body .acn-b.acn-login-link { display: inline-block; height: auto; padding: 1px 6px; border: 0; border-radius: 0; font-size: 12px; font-weight: 400; line-height: normal; color: var(--acn-brand-ink); text-decoration: underline; }
+html body .acn-b.acn-login-link:hover:not(:disabled) { color: var(--acn-brand-ink); }
+.acn-login-rodape { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 13px; color: #999999; }
+.acn-login-rodape p { margin: 0; }
+.acn-login-rodape p + p { margin-top: 3px; }
