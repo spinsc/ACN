@@ -2,13 +2,15 @@
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { Botao } from './Interface';
-import { guardarSessao, limparSessao } from './SessaoBanco';
+import { guardarSessao, limparSessao, EXIGIR_CRACHA } from './SessaoBanco';
 
 export default function LoginTab() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+  // aviso deixado pelo App quando a pessoa foi mandada de volta para cá (trava do crachá, 17b); mostrado uma vez
+  const [aviso] = useState(() => { try { const a = sessionStorage.getItem('acn_aviso_login'); if (a) sessionStorage.removeItem('acn_aviso_login'); return a || ''; } catch { return ''; } });
 
   // Esqueci minha senha
   const [telaEsqueci, setTelaEsqueci] = useState(false);
@@ -44,6 +46,11 @@ export default function LoginTab() {
         setLoading(false); return;
       }
 
+      // 17b: com a trava ligada, entrar SEM crachá não vale (o banco não aceitaria mais a chamada sem ele)
+      if (EXIGIR_CRACHA && !(data.sessao && data.sessao.access_token)) {
+        setError('Não foi possível concluir a entrada com segurança. Tente de novo em instantes.');
+        setLoading(false); return;
+      }
       if (data.sessao && data.sessao.access_token) guardarSessao(data.sessao); else limparSessao();   // sem crachá novo, nunca fica o de outra pessoa
       localStorage.setItem('user', JSON.stringify(data.usuario));
 
@@ -136,6 +143,10 @@ export default function LoginTab() {
         ) : (
           /* ── TELA LOGIN ── */
           <>
+            {aviso && !error && (
+              <div className="acn-login-aviso">{aviso}</div>
+            )}
+
             {error && (
               <div className="acn-login-erro">
                 ❌ {error}

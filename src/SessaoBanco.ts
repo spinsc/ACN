@@ -6,6 +6,10 @@
 // porque ele travava em navegadores antigos (iOS 10 / Safari 10). Aqui é só guardar três campos e renovar com uma chamada simples.
 const CHAVE_ARMAZENAMENTO = 'acn_sessao_banco';
 const URL_BASE = 'https://qgemelnuqdilnggxmrdw.supabase.co';
+// Etapa 17b (12/10/2026): interruptor da trava "sem crachá, sem entrar". DESLIGADO enquanto as tabelas ainda aceitam a chave pública; vira `true` na MESMA publicação
+// da primeira tabela fechada (todo mundo precisa ter entrado de novo antes, e quem estiver com o usuário guardado e sem crachá vê a tela de entrada).
+export const EXIGIR_CRACHA = false;
+
 const MARGEM_SEGUNDOS = 60;   // renova um minuto antes de vencer
 
 type Sessao = { access_token: string; refresh_token: string; expires_at: number };
@@ -22,6 +26,9 @@ function ler(): Sessao | null {
     return s && s.access_token && s.refresh_token && s.expires_at ? s : null;
   } catch { return null; }
 }
+
+/** Há um crachá guardado (mesmo vencido: a renovação o recupera)? */
+export function temSessao(): boolean { return !!ler(); }
 
 export function guardarSessao(s: { access_token: string; refresh_token: string; expires_at?: number; expires_in?: number }) {
   const expires_at = s.expires_at || (Math.floor(Date.now() / 1000) + (s.expires_in || 3600));
