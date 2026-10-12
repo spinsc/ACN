@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LoginTab from './LoginTab';
 import DashboardTab from './DashboardTab';
+import { limparSessao } from './SessaoBanco';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -22,6 +23,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    limparSessao();   // 17a: o crachá do banco sai junto
     // Se o admin estava "vendo como" outro usuário (AdminTab.tsx), sair
     // encerra tudo — não deixa a sessão original pendurada pra ser
     // restaurada depois por engano.

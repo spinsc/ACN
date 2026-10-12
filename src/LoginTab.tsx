@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { Botao } from './Interface';
+import { guardarSessao, limparSessao } from './SessaoBanco';
 
 export default function LoginTab() {
   const [email, setEmail]       = useState('');
@@ -25,14 +26,25 @@ export default function LoginTab() {
     setError('');
 
     try {
-      const { data, error: erroRpc } = await supabase.rpc('auth_login', { p_email: email.trim(), p_senha: password });
-      if (erroRpc) throw erroRpc;
+      // Etapa 17a (12/10/2026): quem confere é a função de servidor `entrar`, que além do usuário devolve o "crachá" do banco (sessão), guardado em SessaoBanco.ts.
+      // Se ela não responder (rede, servidor), a entrada cai para a conferência direta de antes (`auth_login`), sem crachá — nada exige o crachá ainda, então ninguém deixa de entrar.
+      let data: any = null;
+      try {
+        const r = await supabase.functions.invoke('entrar', { body: { email: email.trim(), senha: password } });
+        if (r.error || !r.data) throw r.error || new Error('sem resposta');
+        data = r.data;
+      } catch {
+        const r2 = await supabase.rpc('auth_login', { p_email: email.trim(), p_senha: password });
+        if (r2.error) throw r2.error;
+        data = r2.data;
+      }
 
       if (!data?.ok) {
         setError(data?.erro === 'inativo' ? 'Usuário inativo' : data?.erro === 'senha_incorreta' ? 'Senha incorreta' : 'Usuário não encontrado');
         setLoading(false); return;
       }
 
+      if (data.sessao && data.sessao.access_token) guardarSessao(data.sessao); else limparSessao();   // sem crachá novo, nunca fica o de outra pessoa
       localStorage.setItem('user', JSON.stringify(data.usuario));
 
       window.location.href = window.location.origin + '/ACN/';
