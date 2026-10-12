@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import { Faixa, Botao } from './Interface';
 import { ParticipantesPicker, ListaParticipantes, participantesDe, ehDonoDoItem, filtroDonoOuParticipante, novosParticipantes, notificarParticipantes } from './Participantes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +20,13 @@ const fmtDH = (v: string) => {
 const fmtDate = (v: string) => {
   if (!v) return '';
   return new Date(v).toLocaleDateString('pt-BR');
+};
+
+// Etapa 7.x (12/10/2026): o mínimo do campo de data e hora usava `toISOString()` (hora de Londres, 3 horas à frente de Brasília): às 10h só dava para escolher a partir das 13h.
+// Agora é o horário local de quem está usando, no formato do campo (AAAA-MM-DDTHH:mm).
+const agoraParaCampo = () => {
+  const d = new Date(); const p = (n: number) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
 };
 
 const minutosRestantes = (v: string) => {
@@ -72,9 +80,11 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
   const [dataHora, setDataHora] = useState('');
   const [participantes, setParticipantes] = useState<any[]>([]);   // pedido do usuário em 07/10/2026: quem mais participa
   const [salvando, setSalvando] = useState(false);
+  const emAndamento = useRef(false);   // Etapa 7.x (12/10/2026): um clique duplo em Salvar gravava o compromisso e os avisos duas vezes
 
   const salvar = async () => {
-    if (!titulo.trim() || !dataHora) return;
+    if (!titulo.trim() || !dataHora || emAndamento.current) return;
+    emAndamento.current = true;
     setSalvando(true);
     // 07/10/2026: o resultado da gravação não era conferido — com ela recusada, o formulário fechava como se tivesse salvo. Agora avisa e mantém o que foi digitado.
     const { data: novo, error } = await supabase.from('agenda_compromissos').insert([{
@@ -86,7 +96,7 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
       data_hora:     new Date(dataHora).toISOString(),
       participantes,
     }]).select('id').single();
-    if (error) { alert('Não foi possível salvar o compromisso: ' + error.message); setSalvando(false); return; }
+    if (error) { alert('Não foi possível salvar o compromisso: ' + error.message); setSalvando(false); emAndamento.current = false; return; }
     // @menção na descrição e aviso aos participantes: o compromisso já existe; se um aviso falhar, o compromisso fica salvo e o aviso diz quem não foi avisado
     await salvarMencoes({ texto: (titulo + ' ' + descricao), mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
       contexto: 'agenda', contextoId: String(novo?.id || ''), contextoDescricao: 'Agenda: ' + titulo.trim(), campo: 'descricao', abaDestino: 'calendario' });
@@ -94,6 +104,7 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
       descricao: 'Agenda: ' + titulo.trim(), abaDestino: 'calendario', trecho: 'Você foi adicionado ao compromisso "' + titulo.trim() + '" em ' + new Date(dataHora).toLocaleString('pt-BR') });
     if (falhas.length) alert('O compromisso foi salvo, mas não foi possível avisar: ' + falhas.join('; '));
     setSalvando(false);
+    emAndamento.current = false;
     onSalvo();
   };
 
@@ -118,7 +129,7 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
       <input
         type="datetime-local" value={dataHora}
         onChange={e => setDataHora(e.target.value)}
-        min={new Date().toISOString().slice(0,16)}
+        min={agoraParaCampo()}
         style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
           padding:'5px 8px', fontSize:10, marginBottom:8, boxSizing:'border-box', outline:'none' }}
       />
@@ -214,6 +225,7 @@ function CompromissoCard({ item, onConcluir, onExcluir, podeEditar, usuario }) {
 export default function AgendaWidget({ setor, currentUser }: { setor: string; currentUser: any }) {
   const [compromissos, setCompromissos] = useState<any[]>([]);
   const [loading, setLoading]           = useState(true);
+  const [erroLeitura, setErroLeitura]   = useState('');   // Etapa 7.x (12/10/2026): leitura que falha não pode parecer agenda vazia
   const [adicionando, setAdicionando]   = useState(false);
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   const [modoView, setModoView]         = useState<'meus'|'equipe'|'todos'>('meus');
@@ -260,7 +272,9 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
       q = q.gte('data_hora', intervalo[0]).lte('data_hora', intervalo[1]);
     }
 
-    const { data } = await q.limit(50);
+    const { data, error } = await q.limit(50);
+    if (error) { setErroLeitura(error.message || 'erro desconhecido'); setLoading(false); return; }   // mantém o que já estava na tela; a próxima leitura (30 s) ou o botão tenta de novo
+    setErroLeitura('');
     setCompromissos(data || []);
     setLoading(false);
   }, [setor, currentUser?.email, isGerente, agendaPublica, modoView, equipeEmails, mostrarConcluidos, periodo]);
@@ -274,15 +288,17 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
 
   const concluir = async (id: string) => {
     if (!await confirmar('Marcar este compromisso como concluído?')) return;
-    await supabase.from('agenda_compromissos').update({
+    const { error } = await supabase.from('agenda_compromissos').update({
       concluido: true, concluido_em: new Date().toISOString(),
     }).eq('id', id);
+    if (error) { alert('Não foi possível concluir o compromisso: ' + error.message); return; }   // Etapa 7.x (12/10/2026): antes a tela recarregava sem avisar
     carregar();
   };
 
   const excluir = async (id: string) => {
     if (!await confirmar('Excluir este compromisso?')) return;
-    await supabase.from('agenda_compromissos').delete().eq('id', id);
+    const { error } = await supabase.from('agenda_compromissos').delete().eq('id', id);
+    if (error) { alert('Não foi possível excluir o compromisso: ' + error.message); return; }   // Etapa 7.x (12/10/2026): antes a tela recarregava sem avisar
     carregar();
   };
 
@@ -381,15 +397,19 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
         )}
 
         {/* Lista */}
+        {erroLeitura && !loading && (
+          <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível carregar a agenda ({erroLeitura}).</Faixa>
+        )}
+
         {loading ? (
           <div style={{ fontSize:10, color:'#94a3b8', textAlign:'center', padding:'12px 0' }}>
             Carregando agenda...
           </div>
-        ) : compromissos.length === 0 ? (
+        ) : compromissos.length === 0 ? (erroLeitura ? null : (
           <div style={{ fontSize:10, color:'#cbd5e1', textAlign:'center', padding:'12px 0' }}>
             Nenhum compromisso agendado {periodo !== 'todos' ? 'neste período' : ''}
           </div>
-        ) : (
+        )) : (
           // maxHeight + scroll próprio -- sem isso, no modo "Todos" (até 50
           // compromissos de todo mundo) a lista crescia sem limite e "engolia"
           // a página: como o container pai é flex:1/overflowY:auto (ver
