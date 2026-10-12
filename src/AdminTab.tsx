@@ -306,8 +306,9 @@ function PainelUsuarios() {
     const { data: adminConfere, error: erroConfere } = await supabase.rpc('auth_confirmar_senha', { p_usuario_id: eu?.id, p_senha: senhaAdmin });
     if (erroConfere) { alert('Erro: ' + erroConfere.message); return; }
     if (adminConfere !== true) { alert('Sua senha de Admin não confere.'); return; }
-    // a senha de verdade nunca vai para a tabela de usuários: o usuário nasce com um valor provisório sem uso e a senha é definida pela função do servidor (que guarda só o resumo)
-    const { data: novo, error } = await supabase.from('auth_usuarios').insert([{ ...form, senha: 'x-' + crypto.randomUUID(), ativo: true }]).select('id').single();
+    // a senha nunca vai para a tabela de usuários (16d: a coluna deixou de existir): o usuário nasce sem senha e ela é definida pela função do servidor, que guarda só o resumo
+    const { senha: _senhaDigitada, ...dadosDoUsuario } = form;
+    const { data: novo, error } = await supabase.from('auth_usuarios').insert([{ ...dadosDoUsuario, ativo: true }]).select('id').single();
     if (error) { alert('Erro: ' + error.message); return; }
     if (!(await definirSenhaPeloAdmin(novo.id, form.senha))) alert('O usuário foi criado, mas ficou SEM senha definida. Abra "Editar" nele e defina a senha.');
     setSenhaAdmin('');
