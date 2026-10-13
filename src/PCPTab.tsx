@@ -235,7 +235,7 @@ export default function PCPTab({ currentUser }) {
 
   const liberarProducao = async (opl) => {
     const agora = new Date().toISOString();
-    const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
+    const inicioPcp = (opl.data_chegada_pcp || opl.data_liberacao_bom) ? new Date(opl.data_chegada_pcp || opl.data_liberacao_bom) : null;   // 18e: conta da chegada ao PCP; OP antiga, da BOM
     const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
     const { error: erroLib } = await supabase.from('oples').update({
       status_geral: 'Aguardando Inicio Producao',
@@ -264,7 +264,7 @@ export default function PCPTab({ currentUser }) {
   // produção é barrado de propósito e a tela do Almoxarifado já não a lista.
   const liberarEmbalagem = async (opl) => {
     const agora = new Date().toISOString();
-    const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
+    const inicioPcp = (opl.data_chegada_pcp || opl.data_liberacao_bom) ? new Date(opl.data_chegada_pcp || opl.data_liberacao_bom) : null;   // 18e: conta da chegada ao PCP; OP antiga, da BOM
     const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
     const { error: erroEmb } = await supabase.from('oples').update({
       status_geral: STATUS_EMBALAGEM,
@@ -368,6 +368,14 @@ export default function PCPTab({ currentUser }) {
   const [pinturaKiting, setPinturaKiting] = useState({ pintura: false, pintura_tipo: '' });
   const abrirKiting = async (ops, grupo = null) => {
     if (!ops.length) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
+    // Etapa 18e (13/10/2026): a BOM agora é do PCP (a Engenharia não entrega mais a OP pronta): sem ela o kiting não tem o que reservar nem o que separar
+    const semBom = ops.filter(o => o.status_bom !== 'BOM Liberado');
+    if (semBom.length) {
+      alert(ops.length === 1
+        ? 'Configure a OP antes de liberar o kiting: feche a BOM (estrutura, perguntas do carro e lista de material) no botão CONFIGURAR.'
+        : `Configure as OPs antes de liberar o kiting. Estas ainda não têm BOM:\n\n${semBom.slice(0, 10).map(o => '• ' + o.opl).join('\n')}${semBom.length > 10 ? `\n… e mais ${semBom.length - 10}` : ''}\n\nUse CONFIGURAR EM LOTE.`);
+      return;
+    }
     setFabKiting(fabricacaoVazia());
     setSugestaoFab(null);
     setFabPedidos(new Set());
@@ -507,7 +515,7 @@ export default function PCPTab({ currentUser }) {
       // 7.52: para na primeira que não grava; histórico e WhatsApp valem só para as que gravaram
       const liberadas = [];
       for (const opl of pendentes) {
-        const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
+        const inicioPcp = (opl.data_chegada_pcp || opl.data_liberacao_bom) ? new Date(opl.data_chegada_pcp || opl.data_liberacao_bom) : null;   // 18e: conta da chegada ao PCP; OP antiga, da BOM
         const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
         const { error } = await supabase.from('oples').update({
           status_geral: 'Aguardando Inicio Producao',
@@ -702,7 +710,8 @@ export default function PCPTab({ currentUser }) {
                             </Botao>
                           )}
                           {o.status_geral === 'Em Espera PCP' && (
-                            <Botao variante="primario" pequeno onClick={()=>abrirKiting([o])}>
+                            <Botao variante={o.status_bom === 'BOM Liberado' ? 'primario' : 'secundario'} pequeno
+                              title={o.status_bom === 'BOM Liberado' ? undefined : 'Configure a OP (BOM) antes de liberar o kiting'} onClick={()=>abrirKiting([o])}>
                               LIBERAR KITING
                             </Botao>
                           )}
@@ -732,7 +741,7 @@ export default function PCPTab({ currentUser }) {
                               onClick: () => setModalDesenv({ ops: [o] }) },
                             { rotulo: 'Liberação parcial p/ Serralheria', icone: mdiWrenchOutline, titulo: 'Antecipar a parte metálica/estrutural sem esperar o resto',
                               onClick: () => setModalSerralheria(o), oculto: o.status_geral !== 'Em Espera PCP' || !!o.serralheria_status },
-                            { rotulo: 'Devolver (Almoxarifado ou Engenharia)', icone: mdiArrowULeftTop, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
+                            { rotulo: o.status_geral === 'Em Espera PCP' ? 'Devolver ao Comercial' : 'Devolver ao Almoxarifado', icone: mdiArrowULeftTop, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
                           ]} />
                         </div>
                       </td>
@@ -1114,9 +1123,11 @@ export default function PCPTab({ currentUser }) {
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
       {resumoLote && <ResumoLoteOpl base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
 
-      {/* MODAL DEVOLVER — escolhe o destino: Almoxarifado (refazer kit) ou Engenharia (reanalisar) */}
+      {/* MODAL DEVOLVER — OP ainda na triagem volta ao Comercial (faltam dados); OP que já passou pelo kiting volta ao Almoxarifado (refazer o kit).
+          Desde a Etapa 18e (13/10/2026) não há mais "devolver à Engenharia": ela não recebe OP. */}
       {modalDevolver && (
         <ModalDevolverOp opl={modalDevolver} setorOrigem="PCP" currentUser={currentUser}
+          destinos={modalDevolver.status_geral === 'Em Espera PCP' ? ['comercial'] : ['almox']}
           onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); setObsDevolver(''); fetchAll(); }} />
       )}
 

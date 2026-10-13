@@ -1225,8 +1225,8 @@ Embalar e enviar assim mesmo?`)) return;
       )}
       {modalDevolver && (
         <ModalDevolverOp opl={modalDevolver} setorOrigem="Almoxarifado" currentUser={currentUser}
-          // refazer o kit só faz sentido se já houve kit; senão, só a Engenharia
-          destinos={modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox ? ['almox', 'engenharia'] : ['engenharia']}
+          // refazer o kit só faz sentido se já houve kit; senão, só o PCP (18e, 13/10/2026: a BOM agora é dele, a Engenharia não recebe mais OP)
+          destinos={modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox ? ['almox', 'pcp'] : ['pcp']}
           onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); fetchAll(); }} />
       )}
 

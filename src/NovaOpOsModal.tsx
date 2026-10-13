@@ -437,7 +437,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           cliente_nome:           form.cliente_nome.trim(),
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
-          status_geral:           'Em Espera Engenharia',
+          // Etapa 18e (13/10/2026): a OP nasce direto no PCP (decisão do usuário em 12/10/2026: a Engenharia só recebe pedidos de desenvolvimento)
+          status_geral:           'Em Espera PCP',
+          data_chegada_pcp:       new Date().toISOString(),   // ponto de partida do relógio do PCP
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    oportunidadeVinculada?.id || null,

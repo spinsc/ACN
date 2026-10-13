@@ -1079,7 +1079,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         `Deseja DESMEMBRAR agora em ${qtdNova} OPs separadas (uma por veículo/unidade)? ` +
         `Esta OP (${baseOpl}) continua sendo a 1ª unidade, com todo o histórico/status atual preservado. ` +
         `Serão criadas mais ${qtdNova - 1} OPs novas (${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}), ` +
-        `com os mesmos dados comerciais mas começando do zero (Em Espera Engenharia).\n\n` +
+        `com os mesmos dados comerciais mas começando do zero (Em Espera PCP).\n\n` +
         `OK = desmembrar agora   |   Cancelar = só salvar a quantidade nesta OP mesmo, sem desmembrar`
       );
       if (desmembrar) {
@@ -1135,7 +1135,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             valor_total:                   valoresTotal[i-1],
             valor_mao_de_obra:             valoresMO[i-1],
             valor_mao_de_obra_serralheria: valoresMOSerr[i-1],
-            status_geral: 'Em Espera Engenharia',
+            status_geral: 'Em Espera PCP',   // 18e (13/10/2026): a OP cai direto no PCP
+            data_chegada_pcp: new Date().toISOString(),
             criado_por: currentUser?.email,
             criado_por_nome: currentUser?.nome,
           });
@@ -1811,7 +1812,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // vencidas ficavam sem OP correspondente porque ninguém lembrava de criar.
   // Agora, assim que a oportunidade vira Vencido (com PV já atribuído no
   // Enviado), a OP nasce sozinha com o número A/D+PV+.+MMAA e já entra no
-  // fluxo normal ("Em Espera Engenharia"). Idempotente: não cria de novo se
+  // fluxo normal ("Em Espera PCP", desde a Etapa 18e de 13/10/2026). Idempotente: não cria de novo se
   // já existir uma OP vinculada a esta oportunidade, nem se o número gerado
   // já estiver em uso — nesses casos fica só o botão manual como fallback.
   //
@@ -1849,7 +1850,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       valor_total:           op.valor_registrado ?? null,
       cliente_nome:          op.orgao || op.titulo,
       responsavel_comercial: op.responsavel_nome || null,
-      status_geral:          'Em Espera Engenharia',
+      status_geral:          'Em Espera PCP',   // 18e (13/10/2026): a OP cai direto no PCP
+      data_chegada_pcp:      agora,
       data_entrada:          agora.slice(0, 10),
       criado_por_nome:       currentUser?.nome,
       criado_por:            currentUser?.email,
@@ -3166,22 +3168,25 @@ function ColunaRolavel({ children }: any) {
         // faria uma OP pronta, devolvida pelo Fiscal, refazer a análise de
         // engenharia. Sem registro de quem devolveu (status mexido à mão em
         // OplEdicao), vai para a Engenharia, como o botão antigo.
+        // Etapa 18e (13/10/2026): a Engenharia deixou de receber OP — quem não é o Fiscal (inclusive o que foi devolvido pela Engenharia, no histórico)
+        // volta para o PCP, que agora configura a OP.
         const destinoDaDevolucao = (o: any) => {
           const dev = devolucoesOpl[o.id];
           const fiscal = dev?.setor === 'Fiscal';
           return {
-            setor: fiscal ? 'Fiscal' : 'Engenharia',
-            para: fiscal ? 'o Fiscal' : 'a Engenharia',
-            status: fiscal ? 'Aguarda Emissao NF' : 'Em Espera Engenharia',
+            setor: fiscal ? 'Fiscal' : 'PCP',
+            para: fiscal ? 'o Fiscal' : 'o PCP',
+            status: fiscal ? 'Aguarda Emissao NF' : 'Em Espera PCP',
             registrado: !!dev,
           };
         };
         const reenviarDevolvida = async (o: any) => {
           const d = destinoDaDevolucao(o);
           const motivo = String(o.obs_devolucao || '').trim() || '—';
-          if (!await confirmar(`Reenviar a OP ${o.opl} para ${d.para}?\n\nMotivo apontado: ${motivo}\n\nConfirme só depois de corrigir o que foi apontado.${d.registrado ? '' : '\n\nNão há registro de quem devolveu esta OP; ela vai para a Engenharia.'}`)) return;
+          if (!await confirmar(`Reenviar a OP ${o.opl} para ${d.para}?\n\nMotivo apontado: ${motivo}\n\nConfirme só depois de corrigir o que foi apontado.${d.registrado ? '' : '\n\nNão há registro de quem devolveu esta OP; ela vai para o PCP.'}`)) return;
           const agora = new Date().toISOString();
           const novo: any = { status_geral: d.status };
+          if (d.setor === 'PCP') novo.data_chegada_pcp = agora;   // o relógio do PCP recomeça quando a OP volta para ele
           // Voltando ao Fiscal, o relógio dele recomeça — mesmo que o "Liberar
           // Fiscal" faz —, senão o tempo da correção do Comercial entra na conta do Fiscal.
           if (d.setor === 'Fiscal') novo.data_liberacao_comercial = agora;
@@ -3199,9 +3204,9 @@ function ColunaRolavel({ children }: any) {
           if (errLogReenvio) mostrarAviso(`A OP foi reenviada, mas o registro no histórico dela não foi gravado\n${errLogReenvio.message}`, 'atencao');   // 7.62: o erro era ignorado
           logChange({ module: 'comercial', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
             oldRow: { status_geral: o.status_geral }, newRow: novo, user: currentUser });
-          // Só a Engenharia tem evento de aviso para "OP enviada"; o "Liberar
+          // Só o PCP tem evento de aviso para "OP enviada" (op_enviada_pcp, desde a 18e; antes era o da Engenharia); o "Liberar
           // Fiscal" desta tela também não avisa, então o Fiscal segue igual.
-          if (d.setor === 'Engenharia') notificarEvento('op_enviada_engenharia', msg.oplEnviada(o.opl, 'Engenharia', currentUser?.nome));
+          if (d.setor === 'PCP') notificarEvento('op_enviada_pcp', msg.oplEnviada(o.opl, 'PCP', currentUser?.nome));
           mostrarAviso(`OP ${o.opl} reenviada para ${d.para}.`, 'ok');
           fetchOplsEmAberto();
         };

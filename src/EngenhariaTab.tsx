@@ -100,7 +100,8 @@ function InfoOplEngenharia({ o, colunas, className }) {
 }
 
 export default function EngenhariaTab({ currentUser }) {
-  const [abaEng, setAbaEng] = useState('analise');
+  // Etapa 18e (13/10/2026): a Engenharia só recebe pedidos de desenvolvimento, então a aba de abertura é a de Desenvolvimento
+  const [abaEng, setAbaEng] = useState('desenvolvimento');
   // Deep-link da busca global do topo (DashboardTab.tsx) — clicar num
   // resultado de "Desenvolvimento (Engenharia)" troca pra essa sub-aba e
   // pré-preenche a busca local com o mesmo termo digitado.
@@ -601,7 +602,9 @@ export default function EngenhariaTab({ currentUser }) {
           </Faixa>
         </div>
       )}
-      {/* OPLs em Espera ou Devolvidas */}
+      {/* OPLs em Espera ou Devolvidas — desde a 18e (13/10/2026) nenhuma OP nova cai aqui; o cartão só aparece enquanto houver OP nesses status
+          (ou se a leitura falhar, para não esconder o erro) */}
+      {(opls.length > 0 || erroLeitura) && (
       <div className="sec-card">
         <div className="sec-hdr">
           <span>OPs Aguardando Engenharia ({filtrarOpls(opls, busca).length})</span>
@@ -810,6 +813,7 @@ export default function EngenhariaTab({ currentUser }) {
           )}
         </div>
       </div>
+      )}
 
       <DemandaAvulsaPanel currentUser={currentUser} setor="Engenharia" />
 
