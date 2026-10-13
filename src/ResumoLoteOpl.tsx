@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { Botao, Selo } from './Interface';
 import { mdiClose, mdiPackageVariantClosed, mdiSendOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import { podeVerValores } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESUMO DO LOTE — pedido do usuário em 08/10/2026
@@ -27,7 +28,7 @@ export const lotePedidoIgual = (irmaos: any[]): boolean => {
   return irmaos.every(o => assinaturaDeItens(o) === a);
 };
 
-export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiberarFiscal, onAbrirUnidade, desde }: any) {
+export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiberarFiscal, onAbrirUnidade, desde, currentUser }: any) {
   const dados = useMemo(() => {
     const n = irmaos.length;
     const porStatus: Record<string, number> = {};
@@ -72,8 +73,9 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
             {linha('Cliente', rep.cliente_nome)}
             {linha('Faturamento', rep.faturamento_empresa || 'ACN')}
             {linha('Modelo(s)', modelos.join(' · '))}
-            {linha('Valor por veículo', dados.porVeiculo != null ? reais(dados.porVeiculo) : '')}
-            {linha('Valor do lote', dados.totalLote != null ? reais(dados.totalLote) : '')}
+            {/* R7 (13/10/2026): quem está com a marca "ver valores" desligada no Admin não vê o valor do lote */}
+            {podeVerValores(currentUser) && linha('Valor por veículo', dados.porVeiculo != null ? reais(dados.porVeiculo) : '')}
+            {podeVerValores(currentUser) && linha('Valor do lote', dados.totalLote != null ? reais(dados.totalLote) : '')}
             {linha('Previsão de entrega', dados.prevMin ? (dados.prevMin === dados.prevMax ? dia(dados.prevMin) : dia(dados.prevMin) + ' a ' + dia(dados.prevMax)) : '')}
             {linha('Técnico(s)', tecnicos.join(', '))}
             {desde && <div className="acn-ficha-linha"><span>Parada</span><span>a unidade mais parada: {desde}</span></div>}

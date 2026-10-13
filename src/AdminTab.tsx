@@ -278,6 +278,8 @@ function PainelUsuarios() {
         pode_enviar_avisos: u.pode_enviar_avisos || false,
         pode_aprovar_compra: u.pode_aprovar_compra || false,
         eh_dev: u.eh_dev || false,
+        ver_valores: u.ver_valores !== false,                      // R7 (13/10/2026): como o login monta (vazio vale "vê")
+        pode_deletar_anexos: u.pode_deletar_anexos === true,
         ultimo_login_anterior: null,
       }));
     } catch (e: any) { alert('Erro: ' + e.message); return; }

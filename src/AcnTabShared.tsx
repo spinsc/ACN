@@ -22,7 +22,7 @@ import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, aguardaLiberacaoComercial, f
 import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
-import { podeAlterarNumeroOplPv } from './utils/permissoes';
+import { podeAlterarNumeroOplPv, podeVerValores } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
@@ -518,7 +518,8 @@ const fmtBRL = (v: any) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString(
 const fmtDataCurta = (d: any) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
 const escHtml = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' } as any)[c]);
 
-function ResumoLoteModal({ opl, onClose }: { opl: string; onClose: () => void }) {
+// R7 (13/10/2026): `verValores` falso (marca "ver valores" desligada no Admin) tira o valor de cada unidade, o valor total e a coluna Valor, na tela e na impressão
+export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: string; onClose: () => void; verValores?: boolean }) {
   const [unidades, setUnidades] = useState<any[] | null>(null);
   const base = baseDoLote(opl);
   useEffect(() => { buscarUnidadesDoLote(opl).then(setUnidades); }, [opl]);
@@ -537,14 +538,14 @@ function ResumoLoteModal({ opl, onClose }: { opl: string; onClose: () => void })
       <td><b>${escHtml(u.opl)}</b></td><td>${escHtml(u.status_geral)}</td><td>${progressoOpl(u.status_geral).pct}%</td>
       <td>${escHtml([u.modelo, u.chassi, u.placa].filter(Boolean).join(' · ') || '—')}</td>
       <td>${escHtml(tecnico(u) || '—')}</td><td>${escHtml(u.resumo_servicos || '—')}</td>
-      <td>${fmtDataCurta(u.data_prevista_entrega)}</td><td style="text-align:right">${fmtBRL(u.valor_total)}</td></tr>`).join('');
+      <td>${fmtDataCurta(u.data_prevista_entrega)}</td>${verValores ? `<td style="text-align:right">${fmtBRL(u.valor_total)}</td>` : ''}</tr>`).join('');
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumo do lote ${escHtml(base)}</title>
       <style>body{font-family:Arial,sans-serif;font-size:11px;margin:18px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}
       th,td{border:1px solid #cbd5e1;padding:4px 6px;vertical-align:top}th{background:#0f172a;color:#fff;font-size:10px;text-align:left}</style></head><body>
       <h2>Resumo do lote — OP ${escHtml(base)}</h2>
-      <div>${escHtml(lista[0]?.cliente_nome || '')} · ${lista.length} unidade(s) · progresso médio ${pctMedio}% · valor total ${fmtBRL(total)}</div>
+      <div>${escHtml(lista[0]?.cliente_nome || '')} · ${lista.length} unidade(s) · progresso médio ${pctMedio}%${verValores ? ` · valor total ${fmtBRL(total)}` : ''}</div>
       <div style="margin-top:4px">${Object.entries(porStatus).map(([k, n]) => escHtml(k) + ': ' + n).join(' · ')}</div>
-      <table><thead><tr><th>Unidade</th><th>Status</th><th>Progresso</th><th>Veículo</th><th>Técnico</th><th>Serviços</th><th>Prazo</th><th>Valor</th></tr></thead>
+      <table><thead><tr><th>Unidade</th><th>Status</th><th>Progresso</th><th>Veículo</th><th>Técnico</th><th>Serviços</th><th>Prazo</th>${verValores ? '<th>Valor</th>' : ''}</tr></thead>
       <tbody>${linhas}</tbody></table></body></html>`);
     w.document.close();
     setTimeout(() => w.print(), 300);
@@ -558,7 +559,7 @@ function ResumoLoteModal({ opl, onClose }: { opl: string; onClose: () => void })
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>📋 Resumo do lote — OP {base}</div>
             {unidades && (
               <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-                {lista[0]?.cliente_nome || '—'} · {lista.length} unidade(s) · progresso médio {pctMedio}% · valor total <b>{fmtBRL(total)}</b>
+                {lista[0]?.cliente_nome || '—'} · {lista.length} unidade(s) · progresso médio {pctMedio}%{verValores && <> · valor total <b>{fmtBRL(total)}</b></>}
               </div>
             )}
           </div>
@@ -586,7 +587,7 @@ function ResumoLoteModal({ opl, onClose }: { opl: string; onClose: () => void })
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr style={{ background: '#0f172a', color: '#fff' }}>
-                    {['Unidade', 'Status', 'Progresso', 'Veículo', 'Técnico', 'Serviços', 'Prazo', 'Valor'].map(h => (
+                    {['Unidade', 'Status', 'Progresso', 'Veículo', 'Técnico', 'Serviços', 'Prazo', ...(verValores ? ['Valor'] : [])].map(h => (
                       <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Valor' ? 'right' : 'left', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -608,7 +609,7 @@ function ResumoLoteModal({ opl, onClose }: { opl: string; onClose: () => void })
                         <td style={{ padding: '6px 8px' }}>{tecnico(u) || <span style={{ color: '#c2410c' }}>sem responsável</span>}</td>
                         <td style={{ padding: '6px 8px', maxWidth: 260, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{u.resumo_servicos || '—'}</td>
                         <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{fmtDataCurta(u.data_prevista_entrega)}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtBRL(u.valor_total)}</td>
+                        {verValores && <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtBRL(u.valor_total)}</td>}
                       </tr>
                     );
                   })}
@@ -888,7 +889,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
   return (
     <div className="acn-opl-overlay">
-      {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} />}
+      {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
           onSalvo={(nova: any) => { setOpl(nova); setEditando(false); recarregarLogs(); }} />

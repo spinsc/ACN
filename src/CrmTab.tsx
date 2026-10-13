@@ -3694,7 +3694,7 @@ function ColunaRolavel({ children }: any) {
               if (irmaosDoLote.length === 0) return null;
               const maisParadaLote = irmaosDoLote.map((o: any) => desdeOpls[o.id]).filter(Boolean).sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime())[0];
               return (
-                <ResumoLoteOpl base={resumoLoteBase} irmaos={irmaosDoLote} desde={maisParadaLote ? textoDias(diasDesde(maisParadaLote.data)) : ''}
+                <ResumoLoteOpl currentUser={currentUser} base={resumoLoteBase} irmaos={irmaosDoLote} desde={maisParadaLote ? textoDias(diasDesde(maisParadaLote.data)) : ''}
                   onClose={() => setResumoLoteBase(null)}
                   onCompra={() => { setResumoLoteBase(null); pedirCompraDoLote(resumoLoteBase, irmaosDoLote); }}
                   onLiberarFiscal={async () => { await liberarFiscalEmLote(new Set(irmaosDoLote.map((o: any) => o.id))); setResumoLoteBase(null); }}

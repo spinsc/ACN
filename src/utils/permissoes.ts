@@ -141,6 +141,12 @@ const EQUIPE_DO_GERENTE: Record<string, string[]> = {
 };
 
 /**
+ * R7 (13/10/2026): quem tem a marca "ver valores" desligada no Admin não vê valores em reais. A marca chega à sessão pelo login (função auth_login), pelo "ver como" e pela
+ * atualização da sessão (DashboardTab); vazio vale como "vê" (o padrão da coluna). Antes a marca nem chegava ao navegador, então nenhuma tela podia obedecê-la.
+ */
+export const podeVerValores = (usuarioAtual: any): boolean => usuarioAtual?.ver_valores !== false;
+
+/**
  * `gerente` (o perfil) é gerente de quem tem o perfil `pessoa`? Usa o mesmo mapa das demandas; o próprio gerente não é gerente de si.
  * R3 (13/10/2026): é assim que o aviso de OP devolvida chega ao "gerente de quem abriu" — não existe vínculo individual no cadastro, só o perfil.
  */

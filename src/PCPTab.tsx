@@ -1121,7 +1121,7 @@ export default function PCPTab({ currentUser }) {
       <DemandaFooter setor="PCP" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
-      {resumoLote && <ResumoLoteOpl base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
+      {resumoLote && <ResumoLoteOpl currentUser={currentUser} base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
 
       {/* MODAL DEVOLVER — OP ainda na triagem volta ao Comercial (faltam dados); OP que já passou pelo kiting volta ao Almoxarifado (refazer o kit).
           Desde a Etapa 18e (13/10/2026) não há mais "devolver à Engenharia": ela não recebe OP. */}

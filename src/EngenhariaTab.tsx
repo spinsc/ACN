@@ -899,7 +899,7 @@ export default function EngenhariaTab({ currentUser }) {
       <DemandaFooter setor="Engenharia" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
-      {resumoLote && <ResumoLoteOpl base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
+      {resumoLote && <ResumoLoteOpl currentUser={currentUser} base={resumoLote.base} irmaos={opls.filter(x => baseOplDe(x.opl) === resumoLote.base)} onClose={() => setResumoLote(null)} onAbrirUnidade={(u: any) => { setResumoLote(null); setModalVer(u); }} />}
 
       {/* MODAL INICIAR ENGENHARIA */}
       {modalIniciar && (

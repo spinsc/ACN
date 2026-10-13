@@ -13,6 +13,7 @@ import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interfa
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
+import { podeVerValores } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
@@ -533,7 +534,7 @@ function FretesPanel({ currentUser }: any) {
       const { data: aprovadores } = await supabase.from('auth_usuarios')
         .select('id, nome, email').in('perfil', perfis).eq('ativo', true);
       if (!aprovadores || aprovadores.length === 0) return;
-      const valorFmt = fmt(frete.valor_frete);
+      const valorFmt = fmtReal(frete.valor_frete);
       const texto = `Aprovação de frete necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): ${frete.descricao} — ${valorFmt}`;
       for (const ap of aprovadores) {
         await supabase.from('mencoes').insert({
@@ -816,8 +817,11 @@ function FretesPanel({ currentUser }: any) {
     fetchAll();
   };
 
-  const fmt = (v: any) => v
+  // R7 (13/10/2026): `fmt` é o que aparece NA TELA e respeita a marca "ver valores" (desligada = ***); `fmtReal` é o valor de verdade, para os textos que vão para OUTRAS pessoas
+  // (a menção de aprovação de frete precisa do valor mesmo quando quem pediu a aprovação não o vê)
+  const fmtReal = (v: any) => v
     ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
+  const fmt = (v: any) => (v && !podeVerValores(currentUser)) ? '***' : fmtReal(v);
   const fmtDt = (d: string) => d ? new Date(d.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   const fmtDtHr = (d: string) => d ? new Date(d).toLocaleString('pt-BR') : '—';
 
@@ -1585,7 +1589,8 @@ function PainelRecebimento({ currentUser }: any) {
 
   const abrirReceber = (p: any) => setModalReceber(p);
 
-  const fmt = (v: any) => v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
+  // R7 (13/10/2026): na tela, o valor respeita a marca "ver valores" (desligada = ***)
+  const fmt = (v: any) => v != null ? (podeVerValores(currentUser) ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '***') : '—';
   const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(hojeISO());
 
