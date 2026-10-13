@@ -3791,3 +3791,8 @@ html body.dark .acn-agw-aviso, html body.dark .acn-agw-aviso.vazio { color: #cbd
 .acn-pdp-desc { white-space: normal; min-width: 220px; max-width: 420px; }
 .acn-pdp-bloco { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--acn-line); }
 .acn-pdp-rotulo { font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; margin-bottom: 4px; }
+
+/* R17 (13/10/2026): a linha de resposta do campo de CEP (CampoCep.tsx) — apoio em cinza, erro em vermelho, aviso em âmbar */
+.acn-cep-msg { margin-top: 3px; font-size: 11px; line-height: 1.3; color: var(--acn-muted); }
+.acn-cep-msg.erro { color: var(--acn-bad); font-weight: 600; }
+.acn-cep-msg.atencao { color: var(--acn-warn); }

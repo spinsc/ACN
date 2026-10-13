@@ -10,6 +10,8 @@ import { Faixa, Botao, Selo, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiAccountGroupOutline, mdiAccountOutline, mdiDomain, mdiEyeOutline, mdiLinkVariant, mdiMapMarkerOutline } from '@mdi/js';
 import { temPoderDeGerente, podeDeletarRegistro } from './utils/permissoes';
+import { CampoCep } from './CampoCep';
+import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
 // Etapa 12e7 (04/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, Chips, Faixa, a janela do
 // sistema, o quadro e as classes acn-tabela / acn-cli-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os
@@ -117,6 +119,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
 
   const salvar = async () => {
     if (!f.nome.trim()) { alert('Nome obrigatório!'); return; }
+    // R17 (13/10/2026): o CEP, quando informado e mexido, precisa ser válido (a conferência da embalagem); continua opcional
+    const recusaCep = await conferirCepAntesDeSalvar(f.cep, 'CEP', initial?.cep);
+    if (recusaCep) { alert(recusaCep); return; }
     setSalvando(true);
     const payload = {
       nome:          f.nome.trim().toUpperCase(),
@@ -134,7 +139,7 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
       bairro:        f.bairro   || null,
       cidade:        f.cidade   || null,
       estado:        f.estado   || null,
-      cep:           f.cep      || null,
+      cep:           cepParaGravar(f.cep),
       observacoes:   f.observacoes || null,
       atualizado_em: new Date().toISOString(),
     };
@@ -295,7 +300,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
               {ESTADOS_BR.map(u => <option key={u}>{u}</option>)}
             </select>
           </div>
-          <div>{lbl('CEP')}{inp('cep', '00000-000')}</div>
+          {/* R17 (13/10/2026): o mesmo campo de CEP de todo o sistema; o CEP digitado preenche cidade e UF (e rua e bairro, só se estiverem vazios) */}
+          <div>{lbl('CEP')}<CampoCep valor={f.cep || ''} onChange={v => set('cep', v)} desabilitado={readonly}
+            onResultado={(r) => { if (r.status === 'ok') { set('cidade', r.cidade); set('estado', r.uf); if (!f.endereco && r.logradouro) set('endereco', r.logradouro); if (!f.bairro && r.bairro) set('bairro', r.bairro); } }} /></div>
         </div>
       </div>
 

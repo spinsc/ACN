@@ -48,6 +48,7 @@ import { podeExcluirCardComercial, bloqueiosDeExclusao } from './ExclusaoDeCard'
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { camposQueFaltam, listaEmTexto } from './OpObrigatorios';
+import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -1061,6 +1062,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   const salvarOplEdit = umaVez('salvar-opl-edit', async () => {
     if (!oplEditando) return;
+    // R17 (13/10/2026): o CEP de entrega que a pessoa mexeu precisa ser válido (a conferência da embalagem); o que já estava gravado e não mudou não trava a edição
+    const recusaCep = await conferirCepAntesDeSalvar(oplFormEdit.destino_cep, 'CEP de entrega', oplEditando.destino_cep);
+    if (recusaCep) { mostrarAviso(recusaCep, 'atencao'); return; }
     setOplSalvando(true);
 
     const qtdAnterior = Number(oplEditando.quantidade) || 1;
@@ -1215,7 +1219,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       local_instalacao:      txt(oplFormEdit.local_instalacao),
       destino_cidade:        txt(oplFormEdit.destino_cidade),
       destino_uf:            txt(oplFormEdit.destino_uf),
-      destino_cep:           txt(oplFormEdit.destino_cep),
+      destino_cep:           soDigitosCep(oplFormEdit.destino_cep) === soDigitosCep(oplEditando.destino_cep) ? txt(oplFormEdit.destino_cep) : cepParaGravar(oplFormEdit.destino_cep),
       frete_responsavel:     txt(oplFormEdit.frete_responsavel),
       envio_obs:             txt(oplFormEdit.envio_obs),
       // datas e prazos

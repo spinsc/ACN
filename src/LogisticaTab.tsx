@@ -13,6 +13,8 @@ import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interfa
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
+import { CampoCep } from './CampoCep';
+import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -421,6 +423,9 @@ function FretesPanel({ currentUser }: any) {
 
   const criarFrete = async () => {
     if (!form.descricao.trim()) { alert('Descreva o frete.'); return; }
+    // R17 (13/10/2026): os CEPs, quando informados, precisam ser válidos (a conferência da embalagem); continuam opcionais neste formulário
+    const recusaCep = (await conferirCepAntesDeSalvar(form.cep_origem, 'CEP de origem')) || (await conferirCepAntesDeSalvar(form.cep_destino, 'CEP de destino'));
+    if (recusaCep) { alert(recusaCep); return; }
     setSalvandoFrete(true);
     const numOrNull = (v: any) => v === '' || v == null ? null : parseFloat(String(v).replace(',', '.'));
     const { error } = await supabase.from('pcp_fretes').insert([{
@@ -432,8 +437,8 @@ function FretesPanel({ currentUser }: any) {
       pedido_compra_id: form.pedido_compra_id || null,
       // Dados fiscais/logísticos
       cnpj_cpf_pagador:      form.cnpj_cpf_pagador.trim()      || null,
-      cep_origem:            form.cep_origem.trim()            || null,
-      cep_destino:           form.cep_destino.trim()           || null,
+      cep_origem:            cepParaGravar(form.cep_origem),
+      cep_destino:           cepParaGravar(form.cep_destino),
       cnpj_cpf_remetente:    form.cnpj_cpf_remetente.trim()    || null,
       cnpj_cpf_destinatario: form.cnpj_cpf_destinatario.trim() || null,
       valor_nota:            numOrNull(form.valor_nota),
@@ -969,13 +974,11 @@ function FretesPanel({ currentUser }: any) {
               </div>
               <div className="form-group">
                 <label className="acn-label">CEP Origem</label>
-                <input className="acn-input" value={form.cep_origem}
-                  onChange={e=>setForm({...form,cep_origem:e.target.value})} placeholder="00000-000" />
+                <CampoCep valor={form.cep_origem} onChange={v=>setForm({...form,cep_origem:v})} rotulo="CEP Origem" />
               </div>
               <div className="form-group">
                 <label className="acn-label">CEP Destino</label>
-                <input className="acn-input" value={form.cep_destino}
-                  onChange={e=>setForm({...form,cep_destino:e.target.value})} placeholder="00000-000" />
+                <CampoCep valor={form.cep_destino} onChange={v=>setForm({...form,cep_destino:v})} rotulo="CEP Destino" />
               </div>
             </div>
             <div className="form-row">

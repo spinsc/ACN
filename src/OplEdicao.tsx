@@ -18,6 +18,8 @@ import { TIPOS_SERVICO_TERCEIRO } from './NovaOpOsModal';
 import { confirmar } from './Feedback';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { carregarVeiculos, textoVeiculo } from './Veiculos';
+import { CampoCep } from './CampoCep';
+import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 
@@ -51,7 +53,7 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: 'Fluxo de entrega', tipo: 'select', opcoes: ['', ...FLUXOS.map(f => f.valor)] },
   { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de destino', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF de destino', tipo: 'select', opcoes: ['', ...UFS] },
-  { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de destino', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de destino', tipo: 'cep' },   // R17 (13/10/2026): campo de CEP com conferência
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Recebimento do veículo', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
@@ -100,8 +102,9 @@ const mostrar = (c: Campo, v: any) => {
   return String(v).length > 60 ? String(v).slice(0, 60) + '…' : String(v);
 };
 
-function Entrada({ c, valor, onChange, onVeiculo, currentUser }: { c: Campo; valor: string; onChange: (v: string) => void; onVeiculo?: (p: { veiculo_id: string; modelo?: string }) => void; currentUser?: any }) {
+function Entrada({ c, valor, onChange, onVeiculo, onCep, currentUser }: { c: Campo; valor: string; onChange: (v: string) => void; onVeiculo?: (p: { veiculo_id: string; modelo?: string }) => void; onCep?: (r: any) => void; currentUser?: any }) {
   const est = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' as const };
+  if (c.tipo === 'cep') return <CampoCep valor={valor} onChange={onChange} estilo={est} rotulo={c.rotulo} onResultado={onCep} />;
   if (c.tipo === 'veiculo') {
     return <VeiculoDaOp veiculoId={valor} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
   }
@@ -130,6 +133,12 @@ async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, m
   const nomeFicha = (id: any) => id ? (fichas.get(id) || `ficha ${String(id).slice(0, 8)}`) : '—';
   for (const op of ops) {
     const upd = mudancas(op);
+    // R17 (13/10/2026): o CEP de entrega que a pessoa mexeu precisa ser válido (a conferência da embalagem); gravado como 00000-000. O que não mudou não é conferido.
+    if ('destino_cep' in upd) {
+      const recusa = await conferirCepAntesDeSalvar(upd.destino_cep, 'CEP', op.destino_cep);
+      if (recusa) { falhas.push(`${op.opl}: ${recusa}`); continue; }
+      if (soDigitosCep(upd.destino_cep) !== soDigitosCep(op.destino_cep)) upd.destino_cep = cepParaGravar(upd.destino_cep);
+    }
     const campos = Object.keys(upd).filter(k => String(op[k] ?? '') !== String(upd[k] ?? ''));
     if (!campos.length) continue;
     const alteracao = Object.fromEntries(campos.map(k => [k, upd[k]]));
@@ -190,6 +199,7 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
                         {c.rotulo}{mudou ? ' • alterado' : ''}
                       </label>
                       <Entrada c={c} valor={form[c.campo]} onChange={v => setForm(f => ({ ...f, [c.campo]: v }))} currentUser={currentUser}
+                        onCep={(r: any) => { if (r.status === 'ok') setForm(f => ({ ...f, destino_cidade: r.cidade, destino_uf: r.uf })); }}
                         onVeiculo={p => setForm(f => ({ ...f, veiculo_id: p.veiculo_id, ...(p.modelo !== undefined ? { modelo: p.modelo } : {}) }))} />
                     </div>
                   );
@@ -341,7 +351,7 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Veículo / envio', campo: 'local_instalacao', rotulo: 'Local de instalação', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de entrega', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF', tipo: 'select', opcoes: OPC(['', ...UFS]) },
-  { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de entrega', tipo: 'texto', dica: '00000-000' },
+  { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de entrega', tipo: 'cep' },   // R17 (13/10/2026): campo de CEP com conferência (a dica virou o texto de exemplo do campo)
   // CIF/FOB não é texto livre: o Almoxarifado compara com 'FOB' na hora de
   // embalar para decidir se abre cotação de frete. Qualquer outra grafia faz
   // a OP cair no caminho do CIF calada (ver AlmoxarifadoTab.tsx).
@@ -399,10 +409,12 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
 const GRUPOS_COM = [...new Set(CAMPOS_OPL_COMERCIAL.map(c => c.grupo))];
 
 /** Campo do formulário. Controlado: quem guarda o estado é a tela do CRM. */
-function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo = null, currentUser = null }) {
+function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo = null, onCep = null, currentUser = null }) {
   const est = { width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
     fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
   const txt = valor == null ? '' : String(valor);
+
+  if (c.tipo === 'cep') return <CampoCep valor={txt} onChange={onChange} estilo={est} rotulo={c.rotulo} onResultado={onCep || undefined} />;
 
   if (c.tipo === 'veiculo') {
     return <VeiculoDaOp veiculoId={txt} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
@@ -545,6 +557,7 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
                       <EntradaCom c={c} valor={form?.[c.campo]} centrosCusto={centrosCusto} tiposProjeto={tiposProjeto}
                         currentUser={currentUser}
                         onVeiculo={(p: any) => { onCampo('veiculo_id', p.veiculo_id); if (p.modelo !== undefined) onCampo('modelo', p.modelo); }}
+                        onCep={(r: any) => { if (r.status === 'ok') { onCampo('destino_cidade', r.cidade); onCampo('destino_uf', r.uf); } }}
                         onChange={(v: any) => onCampo(c.campo, v)} />
                       {c.dica && c.tipo !== 'texto' && c.tipo !== 'textarea' && (
                         <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>{c.dica}</div>

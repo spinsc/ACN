@@ -10,6 +10,8 @@ import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalc
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
+import { CampoCep } from './CampoCep';
+import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 import Icone from './Icone';
 import { mdiFilePdfBox, mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
 
@@ -157,17 +159,7 @@ const PARENTESCOS = ['Cônjuge', 'Companheiro(a)', 'Pai', 'Mãe', 'Filho(a)', 'I
 const UFS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 const CAMPOS_EXTRAS_FUNC = ['tamanho_camiseta', 'tamanho_calca', 'tamanho_sapato', 'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento', 'endereco_bairro', 'endereco_cidade', 'endereco_uf', 'emergencia_nome', 'emergencia_parentesco', 'emergencia_telefone'];
 
-// Consulta o CEP (ViaCEP) e devolve rua, bairro, cidade e UF, ou null
-async function consultarCep(cep: string) {
-  const num = String(cep || '').replace(/\D/g, '');
-  if (num.length !== 8) return null;
-  try {
-    const r = await fetch(`https://viacep.com.br/ws/${num}/json/`);
-    const j = await r.json();
-    if (j?.erro) return null;
-    return { endereco_logradouro: j.logradouro || '', endereco_bairro: j.bairro || '', endereco_cidade: j.localidade || '', endereco_uf: j.uf || '' };
-  } catch { return null; }
-}
+// R17 (13/10/2026): a consulta de CEP própria do RH (só o ViaCEP) saiu; o cadastro usa o CampoCep de todo o sistema (ViaCEP e BrasilAPI, Cep.ts)
 
 function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
   const { campoDestaque, marcarComoLido } = useFieldHighlight('rh_funcionarios', func?.id, currentUser);
@@ -192,17 +184,6 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
     pct_tipo: Object.fromEntries(Object.entries(func.percentuais_por_tipo || {}).map(([k, v]) => [k, String(v)])) as Record<string, string>,
     ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, func[k] || ''])),
   } : vazio);
-  const [buscandoCep, setBuscandoCep] = useState(false);
-  const [avisoCep, setAvisoCep] = useState('');
-  const preencherPeloCep = async (cep: string) => {
-    if (String(cep).replace(/\D/g, '').length !== 8) { setAvisoCep(''); return; }
-    setBuscandoCep(true);
-    const achado = await consultarCep(cep);
-    setBuscandoCep(false);
-    if (!achado) { setAvisoCep('CEP não encontrado. Preencha o endereço à mão.'); return; }
-    setAvisoCep('');
-    setForm(f => ({ ...f, ...achado }));
-  };
   const [salvando, setSalvando] = useState(false);
   const set = (k, v) => setForm(f=>({...f,[k]:v}));
 
@@ -219,6 +200,9 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
 
   const salvar = async () => {
     if (!form.nome.trim()) { alert('Informe o nome!'); return; }
+    // R17 (13/10/2026): o CEP, quando informado e mexido, precisa ser válido (a conferência da embalagem); o que já estava gravado e não mudou não trava o salvamento
+    const recusaCep = await conferirCepAntesDeSalvar(form.cep, 'CEP', func?.cep);
+    if (recusaCep) { alert(recusaCep); return; }
     setSalvando(true);
     const payload = {
       nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(), cnpj: form.cnpj.trim()||null,
@@ -233,6 +217,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
       // 08/10/2026: só guarda os tipos que foram preenchidos; vazio = usa o percentual geral
       percentuais_por_tipo: (() => { const e = Object.entries(form.pct_tipo || {}).filter(([, v]) => String(v).trim() !== '' && Number.isFinite(Number(v))).map(([k, v]) => [k, Number(v)]); return form.recebe_comissao && e.length ? Object.fromEntries(e) : null; })(),
       ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, String(form[k] || '').trim() || null])),
+      cep: soDigitosCep(form.cep) === soDigitosCep(func?.cep) ? (String(form.cep || '').trim() || null) : cepParaGravar(form.cep),
     };
     if (func) {
       await supabase.from('rh_funcionarios').update(payload).eq('id', func.id);
@@ -307,14 +292,12 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
             <div className="acn-grade-cep">
               <div style={campoDestaque('cep')}>
                 {lbl('CEP')}
-                <input className="acn-input" value={form.cep} placeholder="00000-000" inputMode="numeric"
-                  onChange={e => { set('cep', e.target.value); if (e.target.value.replace(/\D/g, '').length === 8) preencherPeloCep(e.target.value); }} />
+                {/* R17 (13/10/2026): o mesmo campo de CEP de todo o sistema (Cep.ts); preenche rua, bairro, cidade e UF como antes */}
+                <CampoCep valor={form.cep} onChange={v => set('cep', v)}
+                  onResultado={(r) => { if (r.status === 'ok') setForm(f => ({ ...f, endereco_logradouro: r.logradouro || f.endereco_logradouro, endereco_bairro: r.bairro || f.endereco_bairro, endereco_cidade: r.cidade, endereco_uf: r.uf })); }} />
               </div>
               <div style={campoDestaque('endereco_logradouro')}>{lbl('Rua / Logradouro')}{inp('endereco_logradouro')}</div>
             </div>
-            {(buscandoCep || avisoCep) && (
-              <div className={'acn-ajuda' + (avisoCep ? ' atencao' : '')}>{buscandoCep ? 'Buscando o CEP...' : avisoCep}</div>
-            )}
             <div className="acn-grade-num">
               <div style={campoDestaque('endereco_numero')}>{lbl('Número')}{inp('endereco_numero')}</div>
               <div style={campoDestaque('endereco_complemento')}>{lbl('Complemento')}{inp('endereco_complemento','Apto, bloco...')}</div>

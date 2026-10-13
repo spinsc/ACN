@@ -79,3 +79,32 @@ export async function consultarCep(cep: unknown): Promise<ResultadoCep> {
   if (viaCepNaoConhece && brasilNaoConhece) return definitivo({ status: 'inexistente' });
   return { status: 'indisponivel' };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R17 (13/10/2026, resposta do usuário de 01/10/2026: "tudo que pede CEP deve se comportar assim"): a mesma regra da embalagem (Etapa 7.13) para os outros formulários que
+// pedem CEP — campo com máscara e conferência (CampoCep.tsx) e esta conferência na hora de salvar. Onde o CEP era opcional continua opcional.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** O CEP como é gravado: "00000-000" quando tem 8 dígitos; senão o texto como veio; vazio vira null. */
+export function cepParaGravar(v: unknown): string | null {
+  const t = String(v ?? '').trim();
+  if (!t) return null;
+  const d = soDigitosCep(t);
+  return d.length === 8 ? formatarCep(d) : t;
+}
+
+/**
+ * Conferência ao salvar. Devolve a frase da recusa, ou null se pode salvar.
+ * Vazio passa. Preenchido: precisa ter 8 dígitos válidos, e as duas fontes não podem dizer que ele não existe; fonte fora do ar não barra (como na embalagem).
+ * `anterior` é o CEP que já estava gravado: se a pessoa não mexeu nele, ele não barra — os CEPs antigos inválidos (os zeros de 4 fretes e de 5 OPs, medidos em 13/10/2026)
+ * não podem travar a edição de outro campo da mesma OP ou do mesmo cadastro.
+ */
+export async function conferirCepAntesDeSalvar(valor: unknown, rotulo = 'CEP', anterior?: unknown): Promise<string | null> {
+  const d = soDigitosCep(valor);
+  if (!d) return null;
+  if (anterior !== undefined && d === soDigitosCep(anterior)) return null;
+  const r = await consultarCep(d);
+  if (r.status === 'formato') return `${rotulo} inválido: use 8 números (ex.: 89010-025). CEP de zeros ou incompleto não vale.`;
+  if (r.status === 'inexistente') return `${rotulo} não existe: o ViaCEP e o BrasilAPI não o conhecem. Confira os números.`;
+  return null;
+}

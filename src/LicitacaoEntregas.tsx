@@ -18,6 +18,8 @@ import { UFS, soEnvio } from './FluxoEntrega';
 import NovaOpOsModal from './NovaOpOsModal';
 import { confirmar } from './Feedback';
 import { hojeISO } from './Interface';
+import { CampoCep } from './CampoCep';
+import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
 const n = (v) => Number(String(v ?? '').replace(',', '.')) || 0;
 const fmtQ = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -54,10 +56,13 @@ export function EnderecosEntrega({ licitacaoId }) {
 
   const salvar = async () => {
     if (!form.cidade?.trim() || !form.uf) { alert('Informe ao menos a cidade e a UF.'); return; }
+    // R17 (13/10/2026): o CEP, quando informado e mexido, precisa ser válido (a conferência da embalagem); continua opcional
+    const recusaCep = await conferirCepAntesDeSalvar(form.cep, 'CEP', editando === 'novo' ? undefined : lista.find((x: any) => x.id === editando)?.cep);
+    if (recusaCep) { alert(recusaCep); return; }
     setSalvando(true);
     const payload = {
       identificacao: form.identificacao?.trim() || null, endereco: form.endereco?.trim() || null,
-      cidade: form.cidade.trim(), uf: form.uf, cep: form.cep?.trim() || null,
+      cidade: form.cidade.trim(), uf: form.uf, cep: cepParaGravar(form.cep),
     };
     const { error } = editando === 'novo'
       ? await supabase.from('licitacao_enderecos').insert([{ ...payload, licitacao_id: licitacaoId, ordem: lista.length }])
@@ -109,7 +114,8 @@ export function EnderecosEntrega({ licitacaoId }) {
                 <option value="">—</option>{UFS.map(u => <option key={u} value={u}>{u}</option>)}
               </select></div>
             <div><label style={lbl}>CEP</label>
-              <input style={inp} value={form.cep || ''} onChange={e => setForm(f => ({ ...f, cep: e.target.value }))} placeholder="00000-000" /></div>
+              <CampoCep valor={form.cep || ''} onChange={v => setForm(f => ({ ...f, cep: v }))} estilo={inp} rotulo="CEP"
+                onResultado={(r) => { if (r.status === 'ok') setForm(f => ({ ...f, cidade: r.cidade, uf: r.uf })); }} /></div>
           </div>
           <div style={{ display:'flex', gap:6 }}>
             <button type="button" onClick={salvar} disabled={salvando} style={btn('#0369a1')}>{salvando ? 'Salvando...' : '💾 Salvar endereço'}</button>

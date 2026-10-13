@@ -21,6 +21,8 @@ import { modoDoVeiculo } from './ConfigEstrutura';
 import FotosVeiculo from './FotosVeiculo';
 import { PerguntasDaVenda, respostasDaUnidade, gravarConfiguracaoDaOp } from './PerguntasDaVenda';
 import { recusaPorPerguntasDoCarro } from './OpObrigatorios';
+import { CampoCep } from './CampoCep';
+import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -390,6 +392,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       temVeiculo: !!form.veiculo_id || (form.veiculos || []).some((u: any) => !!u?.veiculo_id),
     });
     if (recusaCarro) { setErro(recusaCarro); return; }
+    // R17 (13/10/2026): o CEP de entrega, quando informado, precisa ser válido (a mesma conferência da embalagem); continua opcional aqui
+    if (form.tipo === 'OP') {
+      const recusaCep = await conferirCepAntesDeSalvar(form.destino_cep, 'CEP de entrega');
+      if (recusaCep) { setErro(recusaCep); return; }
+    }
 
 
     setSalvando(true);
@@ -430,7 +437,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           fluxo_entrega:          fluxoEf || null,
           destino_cidade:         form.destino_cidade?.trim() || null,
           destino_uf:             form.destino_uf || null,
-          destino_cep:            form.destino_cep?.trim() || null,
+          destino_cep:            cepParaGravar(form.destino_cep),
           chassi:                 ehVendaEnvio ? null : ((veiculo?.chassi || form.chassi) || null),
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
           modelo:                 ehVendaEnvio ? null : ((veiculo?.modelo || form.modelo) || null),
@@ -867,8 +874,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 </div>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>CEP</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="00000-000"
-                    value={form.destino_cep} onChange={e => setF('destino_cep', e.target.value)} />
+                  <CampoCep valor={form.destino_cep} onChange={v => setF('destino_cep', v)} estilo={{ width:'100%' }} rotulo="CEP de entrega"
+                    onResultado={(r) => { if (r.status === 'ok') { setF('destino_cidade', r.cidade); setF('destino_uf', r.uf); } }} />
                 </div>
               </div>
 
