@@ -5512,7 +5512,7 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 
 ### Fatias da fila já feitas (cada uma com o seu registro; a mais nova por último)
 
-**Andamento (atualizado em 13/10/2026):** (1) **Etapa 18** ✅ (18a a 18e, publicada); (2) **R1 + R8 + R3** ✅ (abaixo); (3) as duas pendências pequenas de 07/10 ✅ (busca de produto da Formação de Preços e conferência das notas do CRM — abaixo); (4) R17 (CEP) ⬜; (5) Cotações (Aprovar/Rejeitar e o número em sequência) ⬜; (6) R6 ⬜; (7) R7 ⬜; (8) telas grandes da Etapa 12 ⬜; (9) Etapa 13 ⬜.
+**Andamento (atualizado em 13/10/2026):** (1) **Etapa 18** ✅ (18a a 18e, publicada); (2) **R1 + R8 + R3** ✅ (abaixo); (3) as duas pendências pequenas de 07/10 ✅ (busca de produto da Formação de Preços e conferência das notas do CRM — abaixo); (4) R17 (CEP) ⬜; (5) Cotações (Aprovar/Rejeitar e o número em sequência) ✅ (abaixo); (6) R6 ⬜; (7) R7 ⬜; (8) telas grandes da Etapa 12 ⬜; (9) Etapa 13 ⬜.
 
 #### ✅ R1 + R8 + R3 — a OP só segue ao PCP com os campos obrigatórios; perguntas do carro na abertura; contador e aviso das devolvidas ao Comercial (feita em 13/10/2026, madrugada)
 
@@ -5540,6 +5540,18 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 
 **Também registrado:** a pergunta do **modo "vendedor" da Formação de Preços** (`isVendedor`, que não liga desde 17/09/2026) segue **sem resposta do usuário** — caminho conservador: **o código fica como está**, nada mudou.
 
+#### ✅ Cotações — o "Responder" virou Aprovar/Rejeitar; o número da cotação vem em sequência do banco (feita em 13/10/2026, madrugada)
+
+**Origem:** as duas decisões do usuário de 12/10/2026 sobre as perguntas guardadas de 07/10.
+
+**Aprovar/Rejeitar.** No detalhe da cotação, a solicitação de desconto pendente (para quem pode aprovar) passa a ter **dois botões, "Aprovar" e "Rejeitar"**, como o painel de aprovações. Antes era um botão "Responder" que pedia um texto e **decidia pelo texto** (qualquer resposta com "rej" dentro virava rejeição, até "aprovado, sem rejeições"). **Aprovar** não pergunta nada (resposta fixa "Aprovado pelo gestor.", a mesma do painel) e muda a cotação para "aprovada"; **Rejeitar** pede o motivo ("Motivo da rejeição:"), grava como rejeitada e **não mexe na cotação**; motivo em branco vira "Rejeitado.". Continua uma gravação por vez (clique duplo grava uma só) e, se a cotação não puder ser marcada como aprovada, a solicitação volta a pendente. **Correção feita junto (achado):** no painel de aprovações, **cancelar a janela do motivo rejeitava do mesmo jeito** ("Rejeitado."); agora **só rejeita quem confirma**, nos dois lugares.
+
+**Número da cotação em sequência.** A janela "Nova Cotação — Catálogo de Produtos" **sorteava** o número (`COT-AAMM-` mais 4 dígitos ao acaso) e podia repetir. Agora **não manda número**: o banco **já tinha** o gatilho `gerar_numero_cotacao` (sequência `cotacao_seq`, formato `COT-AAAA-NNNN`) que numera toda cotação criada sem número — foi assim que **as 110 cotações existentes** nasceram (**conferido em 13/10: 110 de 110 com número, 110 diferentes, todas no formato do banco, nenhuma vinda do sorteio; a sequência está em 137**). **Nenhuma mudança no banco e nenhum dado alterado.**
+
+**Testado** (página de prévia, banco simulado, gravação bloqueada): **13 verificações novas, todas ok** — os botões no lugar do "Responder"; aprovar sem pergunta, com a resposta fixa e a cotação aprovada (na solicitação e na cotação certas); rejeitar com o motivo digitado sem mexer na cotação; **cancelar não rejeita**; motivo em branco; motivo com a palavra "aprovado" continua sendo rejeição; gravação recusada (na solicitação e na cotação, que devolve a solicitação a pendente e avisa); clique duplo; **o painel de aprovações** (cancelar não rejeita, rejeitar com motivo, aprovar); e a nova cotação **sem** o campo do número. **Teste de defeito plantado: 9 defeitos, um por vez** (botões trocados nos dois sentidos, cancelar que rejeita no detalhe e no painel, motivo em branco gravado vazio, resposta de aprovação alterada, rejeição que também aprova a cotação, número sorteado de volta, trava do clique duplo retirada) — **os 9 foram apontados**; o controle limpo ficou em 13 de 13. **Antes × depois (as 60 cenas do roteiro antigo de Cotações nas duas versões):** 35 iguais e 20 com diferença **só nas previstas** — o botão novo nas 8 cenas do detalhe com solicitação pendente, o número que deixou de ir na criação (3 cenas) e o carimbo de hora das outras; as cenas do painel de aprovações saem **idênticas**; as 5 cenas do roteiro antigo que clicavam em "Responder" (`c25` a `c29`) dão erro na versão nova **por desenho** e foram substituídas pelas `R02` a `R09`. `npx vite build` ok; `oxlint` sem nome indefinido novo. **Medida:** nenhum `style`, botão cru ou cor solta novo.
+
+**Suposições a confirmar:** (1) aprovar **sem** poder escrever observação (o painel já era assim; antes o detalhe deixava digitar); (2) cancelar a janela do motivo **não rejeita** (corrigi no painel também — antes rejeitava); (3) o número novo segue o padrão das outras cotações do banco, `COT-AAAA-NNNN` (ano e sequência), e **não** mais `COT-AAMM-NNNN`.
+
 ---
 
 ## Perguntas em aberto
@@ -5557,8 +5569,8 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 **Perguntas guardadas na noite de 07/10/2026** (nasceram ao revisar as telas grandes; **não foram feitas** porque o usuário dormia — fazer quando ele voltar):
 
 - **O modo "vendedor" da Formação de Preços não liga mais desde 17/09/2026 (`isVendedor`):** Comercial, CRM e Licitações viram "gerente" em `perfilComPoderes`, então ninguém vê a tela sem custo e margem. É para devolver o modo (e para quem?) ou aposentar o código? (Cotações usa `!isAdmin`, que é outra conta.)
-- **Cotações — o "Responder" do detalhe decide aprovar ou rejeitar pelo texto digitado** (qualquer resposta com "rej" dentro vira rejeição; "aprovado, sem rejeições" também). Trocar por **dois botões** ("Aprovar" e "Rejeitar"), como o painel de aprovações já faz?
-- **Cotações — o `numero_cotacao` é sorteado** (`COT-AAMM-` + 4 dígitos): em muitas cotações no mesmo mês pode repetir. Passar para sequência no banco?
+- **Cotações — o "Responder" do detalhe decide aprovar ou rejeitar pelo texto digitado** (qualquer resposta com "rej" dentro vira rejeição; "aprovado, sem rejeições" também). Trocar por **dois botões** ("Aprovar" e "Rejeitar"), como o painel de aprovações já faz? **✅ Feito em 13/10/2026 (decisão do usuário de 12/10; ver "Fatias da fila já feitas").**
+- **Cotações — o `numero_cotacao` é sorteado** (`COT-AAMM-` + 4 dígitos): em muitas cotações no mesmo mês pode repetir. Passar para sequência no banco? **✅ Feito em 13/10/2026 (decisão do usuário de 12/10): o número passa a vir do banco (ver "Fatias da fila já feitas").**
 - **Formação de Preços — a busca de produto do catálogo ignora o erro de leitura** (mostra "Nenhum produto"): aceitar a mesma faixa com "Tentar de novo"? **✅ Feito em 13/10/2026** (ver "Fatias da fila já feitas").
 - **Aviso de atualização do dia:** a regra é **uma nota por dia trabalhado, mostrada a você antes de publicar** — as notas de 07/10/2026 (Formação de Preços, Cotações, Licitações e CRM) **não foram redigidas nem publicadas**.
 - **CRM — a nota livre do card** agora grava a nova antes de apagar a anterior; se havia duas notas na mesma aba (o que o código antigo podia deixar), a tela passa a mostrar a **mais recente**. Quer que eu confira no banco se existe alguma aba com duas notas (só leitura)? **✅ Conferido em 13/10/2026: 38 notas em 38 abas, nenhuma aba com mais de uma** (ver "Fatias da fila já feitas").

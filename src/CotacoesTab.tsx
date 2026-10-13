@@ -661,11 +661,17 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
     onClose();
   });
 
-  const aprovarSolicitacao = (aprov) => umaVezDetalhe(async () => {
+  // Decisão do usuário em 12/10/2026 (pergunta guardada de 07/10): o "Responder" do detalhe virou dois botões, "Aprovar" e "Rejeitar", como no painel de aprovações. Antes a decisão
+  // saía do TEXTO digitado: qualquer resposta com "rej" dentro virava rejeição, até "aprovado, sem rejeições". Aprovar não pergunta nada (resposta fixa, como no painel); rejeitar
+  // pede o motivo e, se a pessoa cancelar a janela, NÃO rejeita (no painel, cancelar rejeitava do mesmo jeito — corrigido junto, 13/10/2026).
+  const responderSolicitacao = (aprov, status) => umaVezDetalhe(async () => {
     if (!podeAprovar) return;
-    const resposta = await pedirTexto('Resposta (aprovado/rejeitado):');
-    if (!resposta) return;
-    const status = resposta.toLowerCase().includes('rej') ? 'rejeitado' : 'aprovado';
+    let resposta = 'Aprovado pelo gestor.';
+    if (status === 'rejeitado') {
+      const motivo = await pedirTexto('Motivo da rejeição:');
+      if (motivo === null) return;
+      resposta = motivo.trim() || 'Rejeitado.';
+    }
     const { error: erroAprov } = await supabase.from('cotacoes_aprovacoes').update({
       status, aprovado_por: currentUser?.email, aprovado_em: new Date().toISOString(), resposta: resposta,
     }).eq('id', aprov.id);
@@ -847,9 +853,14 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
                   {a.motivo && <div className="acn-cot-aprov-txt">Motivo: {a.motivo}</div>}
                   {a.resposta && <div className="acn-cot-aprov-txt">Resposta: <Linkify text={a.resposta} /> (por {a.aprovado_por})</div>}
                   {podeAprovar && a.status === 'pendente' && (
-                    <Botao variante="primario" pequeno icone={mdiCheck} onClick={() => aprovarSolicitacao(a)}>
-                      Responder
-                    </Botao>
+                    <div className="acn-cot-aprov-acoes">
+                      <Botao variante="primario" pequeno icone={mdiCheck} onClick={() => responderSolicitacao(a, 'aprovado')}>
+                        Aprovar
+                      </Botao>
+                      <Botao variante="perigo" pequeno icone={mdiClose} onClick={() => responderSolicitacao(a, 'rejeitado')}>
+                        Rejeitar
+                      </Botao>
+                    </div>
                   )}
                 </div>
               ))}
@@ -931,9 +942,13 @@ function PainelAprovacoes({ currentUser, onClose }) {
     if (emAcaoRef.current) return;
     emAcaoRef.current = true;
     try {
-      const resposta = decisao === 'aprovado'
-        ? 'Aprovado pelo gestor.'
-        : await pedirTexto('Motivo da rejeição:') || 'Rejeitado.';
+      let resposta = 'Aprovado pelo gestor.';
+      if (decisao === 'rejeitado') {
+        // 13/10/2026: cancelar a janela do motivo não rejeita mais (antes rejeitava como "Rejeitado."); só rejeita quem confirma
+        const motivo = await pedirTexto('Motivo da rejeição:');
+        if (motivo === null) return;
+        resposta = motivo.trim() || 'Rejeitado.';
+      }
       const { error: erroAprov } = await supabase.from('cotacoes_aprovacoes').update({
         status: decisao, aprovado_por: currentUser?.email,
         aprovado_em: new Date().toISOString(), resposta,
@@ -1195,11 +1210,10 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
       return;
     }
 
-    const now = new Date();
-    const nn = `COT-${String(now.getFullYear()).slice(-2)}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
-
+    // Decisão do usuário em 12/10/2026 (pergunta guardada de 07/10): o número da cotação vem em sequência, do banco. Aqui ele era SORTEADO (COT-AAMM- + 4 dígitos ao acaso) e podia
+    // repetir; sem mandar o número, o gatilho gerar_numero_cotacao (cotacao_seq) dá o próximo — COT-AAAA-NNNN, igual ao de todas as outras 110 cotações (medido em 13/10/2026: 110 de
+    // 110 já eram do banco e nenhuma tinha vindo deste sorteio).
     const { error } = await supabase.from('cotacoes_precos').insert([{
-      numero_cotacao:     nn,
       nome:               `${nomeCliente.trim()} — ${selecionados.map(s=>s.produto.nome).join(', ')}`,
       tipo:               'Produto',
       empresa:            'ACN',
