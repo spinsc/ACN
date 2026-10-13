@@ -684,6 +684,9 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
   const [open, setOpen]     = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [criando, setCriando]   = useState(false);
+  // 13/10/2026 (pendência guardada de 07/10, aprovada pelo caminho conservador): leitura do catálogo que falha não pode parecer "Nenhum item encontrado" — e, com a
+  // busca falha, a opção "Criar no catálogo" some, para ninguém cadastrar em duplicata um item que só não apareceu
+  const [erroBusca, setErroBusca] = useState('');
   const ref   = useRef(null);
   const deb   = useRef(null);
 
@@ -692,10 +695,10 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 
   const buscar = (termo) => {
     clearTimeout(deb.current);
-    if (!termo.trim()) { setRes({ itens:[], produtos:[] }); setOpen(false); return; }
+    if (!termo.trim()) { setRes({ itens:[], produtos:[] }); setErroBusca(''); setOpen(false); return; }
     deb.current = setTimeout(async () => {
       setBuscando(true);
-      const [{ data: itens }, { data: produtos }] = await Promise.all([
+      const [{ data: itens, error: errItens }, { data: produtos, error: errProdutos }] = await Promise.all([
         buscarPorPalavras(supabase.from('cadastro_itens')
           .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,compra_multiplo,custo_embalagem')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(8),
@@ -703,6 +706,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
           .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(5),
       ]);
+      setErroBusca((errItens || errProdutos)?.message || '');
       setRes({ itens: itens || [], produtos: produtos || [] });
       setOpen(true);
       setBuscando(false);
@@ -780,7 +784,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
         placeholder="Descrição do item"
         value={q}
         onChange={e => { setQ(e.target.value); onFill({ produto: e.target.value }); buscar(e.target.value); }}
-        onFocus={() => { if (temResultados) setOpen(true); }}
+        onFocus={() => { if (temResultados || erroBusca) setOpen(true); }}
       />
       {buscando && (
         <div className="acn-fp-ac-espera"><Icone path={mdiTimerSand} size={14} /></div>
@@ -854,20 +858,29 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
             </>
           )}
 
+          {/* ── A busca falhou: não é "nenhum resultado" ── */}
+          {erroBusca && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={() => buscar(q)}>Tentar de novo</Botao>}>
+              Não foi possível buscar no catálogo ({erroBusca}). Isso não quer dizer que o item não exista{temResultados ? '; o que aparece é só o que a busca trouxe' : ''}.
+            </Faixa>
+          )}
+
           {/* ── Nenhum resultado ── */}
-          {!buscando && !temResultados && q.trim() && (
+          {!buscando && !erroBusca && !temResultados && q.trim() && (
             <div className="acn-fp-ac-vazio">
               Nenhum item encontrado para "{q}"
             </div>
           )}
 
-          {/* ── Criar novo ── */}
-          <div className="acn-fp-ac-criar" onClick={() => { setOpen(false); setCriando(true); }}>
-            <Icone path={mdiPlus} size={14} />
-            <span>
-              Criar "{q.trim() || 'novo item'}" no catálogo
-            </span>
-          </div>
+          {/* ── Criar novo (some enquanto a busca está com erro) ── */}
+          {!erroBusca && (
+            <div className="acn-fp-ac-criar" onClick={() => { setOpen(false); setCriando(true); }}>
+              <Icone path={mdiPlus} size={14} />
+              <span>
+                Criar "{q.trim() || 'novo item'}" no catálogo
+              </span>
+            </div>
+          )}
         </div>
       )}
 
