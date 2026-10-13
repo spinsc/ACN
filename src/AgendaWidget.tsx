@@ -41,11 +41,12 @@ const alertLevel = (minutos: number | null) => {
   return 'normal';
 };
 
-const ALERT_STYLES = {
-  urgente:  { bg:'#fef2f2', border:'#fca5a5', dot:'#dc2626', label:'🔴 EM 15 MIN' },
-  '24h':    { bg:'#fffbeb', border:'#fcd34d', dot:'#d97706', label:'🟡 EM 24H' },
-  normal:   { bg:'#f8fafc', border:'#e2e8f0', dot:'#94a3b8', label:'' },
-  expirado: { bg:'#f1f5f9', border:'#cbd5e1', dot:'#cbd5e1', label:'✓ Expirado' },
+// 12e61 (12/10/2026): só o rótulo de cada nível fica aqui; as cores (fundo, borda, faixa da lateral e cor do rótulo) passaram para o design.css, por `data-nivel` no cartão.
+const ROTULO_NIVEL = {
+  urgente:  '🔴 EM 15 MIN',
+  '24h':    '🟡 EM 24H',
+  normal:   '',
+  expirado: '✓ Expirado',
 };
 
 // Intervalo [início, fim] (ISO) para cada opção de período — semana e mês
@@ -108,46 +109,39 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
     onSalvo();
   };
 
+  // 12e61 (12/10/2026): só aparência — o formulário foi para o design.css (`acn-agw-*`) e os dois botões viraram o botão do guia. Medido antes de mexer: o sistema já repintava
+  // a letra (9 e 10 px do código saíam com 12 e 13 px) e os botões (o azul virava a cor-marca, o cinza virava o tom neutro), então o CSS dá o valor que a pessoa já via.
   return (
-    <div style={{ background:'#fff', border:'1.5px solid #3b82f6', borderRadius:8,
-      padding:12, marginBottom:10 }}>
-      <div style={{ fontSize:9, fontWeight:800, color:'#1d4ed8', marginBottom:8, textTransform:'uppercase' }}>
+    <div className="acn-agw-form">
+      <div className="acn-agw-form-tit">
         📅 Novo Compromisso
       </div>
       <input
         value={titulo} onChange={e => setTitulo(e.target.value)}
         placeholder="Título *"
-        style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
-          padding:'5px 8px', fontSize:10, marginBottom:6, boxSizing:'border-box', outline:'none' }}
+        className="acn-agw-campo"
       />
       <MencaoTextarea
         value={descricao} onChange={v => setDescricao(v)}
         placeholder="Descrição (opcional) — @Nome para mencionar alguém"
         rows={2}
-        style={{ fontSize:10, marginBottom:6 }}
       />
       <input
         type="datetime-local" value={dataHora}
         onChange={e => setDataHora(e.target.value)}
         min={agoraParaCampo()}
-        style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
-          padding:'5px 8px', fontSize:10, marginBottom:8, boxSizing:'border-box', outline:'none' }}
+        className="acn-agw-campo data"
       />
-      <div style={{ marginBottom:8 }}>
+      <div className="acn-agw-form-part">
         <ParticipantesPicker value={participantes} onChange={setParticipantes} donoEmail={currentUser?.email} />
       </div>
-      <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-        <button onClick={onCancel}
-          style={{ background:'#f1f5f9', border:'none', borderRadius:4,
-            padding:'5px 12px', fontSize:9, fontWeight:700, cursor:'pointer', color:'#475569' }}>
+      <div className="acn-agw-form-bt">
+        <Botao variante="secundario" className="acn-agw-bt-form" onClick={onCancel}>
           Cancelar
-        </button>
-        <button onClick={salvar} disabled={salvando || !titulo.trim() || !dataHora}
-          style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4,
-            padding:'5px 14px', fontSize:9, fontWeight:700, cursor:'pointer',
-            opacity: (salvando || !titulo.trim() || !dataHora) ? .5 : 1 }}>
+        </Botao>
+        <Botao variante="primario" className="acn-agw-bt-form salvar" onClick={salvar} disabled={salvando || !titulo.trim() || !dataHora}>
           {salvando ? 'Salvando...' : '✅ Salvar'}
-        </button>
+        </Botao>
       </div>
     </div>
   );
@@ -159,59 +153,47 @@ function NovoCompromissoForm({ setor, currentUser, onSalvo, onCancel }) {
 function CompromissoCard({ item, onConcluir, onExcluir, podeEditar, usuario }) {
   const minutos = minutosRestantes(item.data_hora);
   const nivel = alertLevel(minutos);
-  const style = ALERT_STYLES[nivel];
-
-  const label = nivel === 'urgente' ? style.label
-    : nivel === '24h' ? style.label
-    : nivel === 'expirado' ? style.label
-    : '';
+  const label = ROTULO_NIVEL[nivel];
 
   return (
-    <div style={{ background: style.bg, border:`1.5px solid ${style.border}`,
-      borderLeft:`4px solid ${style.dot}`, borderRadius:7, padding:'8px 10px', marginBottom:6 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:6 }}>
-        <div style={{ flex:1 }}>
-          <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:2 }}>
+    <div className="acn-agw-card" data-nivel={nivel}>
+      <div className="acn-agw-card-linha">
+        <div className="acn-agw-card-corpo">
+          <div className="acn-agw-card-topo">
             {label && (
-              <span style={{ fontSize:8, fontWeight:800, color:
-                nivel==='urgente' ? '#dc2626' : nivel==='24h' ? '#d97706' : '#9ca3af' }}>
+              <span className="acn-agw-nivel">
                 {label}
               </span>
             )}
-            <span style={{ fontSize:10, fontWeight:700, color: item.concluido ? '#94a3b8' : '#1e293b',
-              textDecoration: item.concluido ? 'line-through' : 'none' }}>
+            <span className={'acn-agw-card-titulo' + (item.concluido ? ' concluido' : '')}>
               {item.titulo}
             </span>
           </div>
           {item.descricao && (
-            <div style={{ fontSize:9, color:'#64748b', marginBottom:3 }}>{item.descricao}</div>
+            <div className="acn-agw-card-desc">{item.descricao}</div>
           )}
-          <div style={{ fontSize:9, color:'#94a3b8' }}>
+          <div className="acn-agw-card-meta">
             📅 {fmtDH(item.data_hora)}
             {item.usuario_nome && (
-              <span style={{ marginLeft:8, color:'#94a3b8' }}>👤 {item.usuario_nome}</span>
+              <span className="acn-agw-meta-item">👤 {item.usuario_nome}</span>
             )}
             {participantesDe(item).length > 0 && (
-              <span style={{ marginLeft:8, color:'#94a3b8' }}><ListaParticipantes item={item} usuario={usuario} /></span>
+              <span className="acn-agw-meta-item"><ListaParticipantes item={item} usuario={usuario} /></span>
             )}
           </div>
         </div>
         {podeEditar && (
-          <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+          <div className="acn-agw-acoes">
             {!item.concluido && (
-              <button onClick={() => onConcluir(item.id)}
-                title="Marcar como concluído"
-                style={{ background:'#dcfce7', border:'none', borderRadius:4,
-                  padding:'3px 8px', fontSize:9, cursor:'pointer', color:'#166534', fontWeight:700 }}>
+              <Botao variante="secundario" className="acn-agw-bt-ok" onClick={() => onConcluir(item.id)}
+                title="Marcar como concluído">
                 ✓
-              </button>
+              </Botao>
             )}
-            <button onClick={() => onExcluir(item.id)}
-              title="Excluir"
-              style={{ background:'#fee2e2', border:'none', borderRadius:4,
-                padding:'3px 6px', fontSize:9, cursor:'pointer', color:'#dc2626', fontWeight:700 }}>
+            <Botao variante="perigo-sec" className="acn-agw-bt-x" onClick={() => onExcluir(item.id)}
+              title="Excluir">
               ✕
-            </button>
+            </Botao>
           </div>
         )}
       </div>
@@ -314,75 +296,62 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
     // qualquer .sec-hdr que colapsa o .sec-card pai): clicar no cabeçalho
     // recolhe a agenda pra ganhar espaço na tela quando ela não é
     // necessária, sem precisar de estado/lógica própria aqui.
-    <div className="sec-card" style={{ marginBottom:12 }}>
-      {/* Header — textTransform/letterSpacing zerados pra não herdar o
+    // 12e61 (12/10/2026): só aparência — nenhum style inline: tudo no design.css (`acn-agw-*`), com os valores que o sistema já mostrava.
+    <div className="sec-card acn-agw">
+      {/* Header — textTransform/letterSpacing zerados (no CSS) pra não herdar o
           uppercase padrão de .sec-hdr (pensado pra títulos curtos, não
           pros botões/labels normais que este header também tem) */}
-      <div className="sec-hdr" style={{ padding:'10px 14px', textTransform:'none', letterSpacing:'normal' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flex:1, minWidth:0, flexWrap:'wrap', gap:8 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ fontSize:12, fontWeight:800, color:'#1e3a5f' }}>📅 Agenda</span>
+      <div className="sec-hdr acn-agw-cab">
+        <div className="acn-agw-cab-linha">
+          <div className="acn-agw-cab-esq">
+            <span className="acn-agw-tit">📅 Agenda</span>
             {alertas.length > 0 && (
-              <span style={{ background:'#dc2626', color:'#fff', borderRadius:10,
-                padding:'1px 8px', fontSize:9, fontWeight:800 }}>
+              <span className="acn-agw-cont alerta">
                 {alertas.length} alerta{alertas.length > 1 ? 's' : ''}
               </span>
             )}
             {compromissos.length > 0 && alertas.length === 0 && (
-              <span style={{ background:'#dbeafe', color:'#1d4ed8', borderRadius:10,
-                padding:'1px 8px', fontSize:9, fontWeight:700 }}>
+              <span className="acn-agw-cont info">
                 {compromissos.length} compromisso{compromissos.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
-          <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display:'flex', gap:2, background:'#f1f5f9', borderRadius:4, padding:2 }}>
+          <div className="acn-agw-cab-dir" onClick={e => e.stopPropagation()}>
+            <div className="acn-agw-grupo">
               {([
                 ['hoje','Hoje'], ['semana','Semana'], ['mes','Mês'], ['todos','Todos'],
               ] as [typeof periodo, string][]).map(([v, label]) => (
-                <button key={v} onClick={() => setPeriodo(v)}
-                  style={{ background: periodo===v ? '#1e3a5f' : 'transparent',
-                    color: periodo===v ? '#fff' : '#475569',
-                    border:'none', borderRadius:3, padding:'3px 9px', fontSize:9,
-                    fontWeight:700, cursor:'pointer' }}>
+                <Botao key={v} variante="discreto" className={'acn-agw-pilula' + (periodo===v ? ' ativa' : '')} onClick={() => setPeriodo(v)}>
                   {label}
-                </button>
+                </Botao>
               ))}
             </div>
             {!agendaPublica && isGerente && (
-              <div style={{ display:'flex', gap:2, background:'#f1f5f9', borderRadius:4, padding:2 }}>
+              <div className="acn-agw-grupo">
                 {([
                   ['meus',  '👤 Meus'],
                   ...(equipeEmails && equipeEmails.length > 0 ? [['equipe', '👔 Equipe']] : []),
                   ['todos', '👥 Todos'],
                 ] as [typeof modoView, string][]).map(([v, label]) => (
-                  <button key={v} onClick={() => setModoView(v)}
-                    style={{ background: modoView===v ? '#1e3a5f' : 'transparent',
-                      color: modoView===v ? '#fff' : '#475569',
-                      border:'none', borderRadius:3, padding:'3px 9px', fontSize:9,
-                      fontWeight:700, cursor:'pointer' }}>
+                  <Botao key={v} variante="discreto" className={'acn-agw-pilula' + (modoView===v ? ' ativa' : '')} onClick={() => setModoView(v)}>
                     {label}
-                  </button>
+                  </Botao>
                 ))}
               </div>
             )}
-            <button onClick={() => setMostrarConcluidos(v => !v)}
-              style={{ background:'#f1f5f9', border:'none', borderRadius:4,
-                padding:'3px 10px', fontSize:9, color:'#475569', cursor:'pointer', fontWeight:600 }}>
+            <Botao variante="secundario" className="acn-agw-concl" onClick={() => setMostrarConcluidos(v => !v)}>
               {mostrarConcluidos ? 'Ocultar concluídos' : 'Ver concluídos'}
-            </button>
-            <button onClick={() => setAdicionando(v => !v)}
-              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:5,
-                padding:'4px 12px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            </Botao>
+            <Botao variante="primario" className="acn-agw-novo" onClick={() => setAdicionando(v => !v)}>
               + Novo
-            </button>
+            </Botao>
           </div>
         </div>
       </div>
 
       <div className="sec-body">
         {agendaPublica && (
-          <div style={{ fontSize:9, color:'#94a3b8', marginBottom:8 }}>
+          <div className="acn-agw-publica">
             👥 Agenda pública do setor — todos veem os compromissos de todos; cada um só conclui/exclui os próprios.
           </div>
         )}
@@ -396,21 +365,21 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
           />
         )}
 
-        {/* Lista */}
         {erroLeitura && !loading && (
           <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível carregar a agenda ({erroLeitura}).</Faixa>
         )}
 
+        {/* Lista */}
         {loading ? (
-          <div style={{ fontSize:10, color:'#94a3b8', textAlign:'center', padding:'12px 0' }}>
+          <div className="acn-agw-aviso">
             Carregando agenda...
           </div>
         ) : compromissos.length === 0 ? (erroLeitura ? null : (
-          <div style={{ fontSize:10, color:'#cbd5e1', textAlign:'center', padding:'12px 0' }}>
+          <div className="acn-agw-aviso vazio">
             Nenhum compromisso agendado {periodo !== 'todos' ? 'neste período' : ''}
           </div>
         )) : (
-          // maxHeight + scroll próprio -- sem isso, no modo "Todos" (até 50
+          // maxHeight + scroll próprio (no CSS) -- sem isso, no modo "Todos" (até 50
           // compromissos de todo mundo) a lista crescia sem limite e "engolia"
           // a página: como o container pai é flex:1/overflowY:auto (ver
           // LicitacoesTab.tsx e outras telas que usam este widget), um filho
@@ -418,7 +387,7 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
           // de flex-item), então o resto da página ficava espremido/sem
           // conseguir rolar até o fim. Com isso, o próprio card da Agenda
           // rola internamente e o layout ao redor fica estável.
-          <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 2 }}>
+          <div className="acn-agw-lista">
             {compromissos.map(c => (
               <CompromissoCard key={c.id} item={c} onConcluir={concluir} onExcluir={excluir} usuario={currentUser}
                 podeEditar={ehDonoDoItem(c, currentUser) || isGerente} />

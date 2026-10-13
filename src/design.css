@@ -3695,3 +3695,83 @@ html body .acn-b.acn-login-link:hover:not(:disabled) { color: var(--acn-brand-in
 /* Etapa 16c (10/10/2026): campo "sua senha de Admin" ao definir a senha de outra pessoa (Usuários do Admin) */
 .acn-adm-senha-admin { width: 100%; }
 .acn-login-aviso { background: #fef9c3; border: 1px solid #fde047; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px; color: #854d0e; }
+
+/* ── Agenda do topo das telas (AgendaWidget, 12e61, 12/10/2026): só aparência — os valores que o sistema já mostrava (o repintor elevava a letra de 8/9/10 px do código
+   para 11/12/13 e dava aos botões e etiquetas os tons do guia), agora no CSS e não no style inline. A cor de cada nível (urgente, 24h, normal, expirado) vem do `data-nivel` do cartão. ── */
+html body .sec-card.acn-agw { margin-bottom: 12px; }
+html body .sec-hdr.acn-agw-cab { padding: 10px 14px; text-transform: none; letter-spacing: normal; }
+.acn-agw-cab-linha { display: flex; align-items: center; justify-content: space-between; flex: 1; min-width: 0; flex-wrap: wrap; gap: 8px; }
+.acn-agw-cab-esq { display: flex; align-items: center; gap: 8px; }
+.acn-agw-tit { font-size: 12px; font-weight: 800; color: #1e3a5f; }
+.acn-agw-cont { border-radius: 10px; padding: 1px 8px; font-size: 12px; font-weight: 800; line-height: 1.35; border: 0 none color-mix(in srgb, currentColor 22%, transparent); overflow: hidden; white-space: nowrap; }
+.acn-agw-cont.alerta { background: var(--acn-bad-soft); color: var(--acn-bad); }
+.acn-agw-cont.info { background: var(--acn-info-soft); color: var(--acn-info); font-weight: 700; }
+.acn-agw-cab-dir { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acn-agw-grupo { display: flex; gap: 2px; background: var(--acn-neutral-soft); border-radius: 6px; padding: 3px; }
+html body .acn-b.acn-agw-pilula { display: block; height: auto; padding: 3px 9px; border: 0; border-radius: 5px; font-size: 12px; font-weight: 500; line-height: normal; background: transparent; color: var(--acn-text); box-shadow: none; }
+html body .acn-b.acn-agw-pilula.ativa { background: var(--acn-surface); color: var(--acn-ink); font-weight: 600; box-shadow: var(--acn-shadow-1); }
+html body .acn-b.acn-agw-pilula:not(.ativa):hover:not(:disabled) { background: rgba(255, 255, 255, .6); color: var(--acn-text); }
+html body .acn-b:is(.acn-agw-pilula, .acn-agw-concl, .acn-agw-novo, .acn-agw-bt-form, .acn-agw-bt-ok, .acn-agw-bt-x) { justify-content: normal; align-items: normal; gap: normal; }
+/* a regra geral de botões (index.css) manda `nowrap`, menos nos de fundo transparente no style inline — era o caso da pílula NÃO selecionada; o `:not(#acn)` dá a força para ganhar dela */
+html body .acn-b.acn-agw-pilula:not(.ativa):not(#acn) { white-space: normal; }
+html body .acn-b.acn-agw-concl { display: block; height: auto; padding: 3px 10px; border: 1px solid var(--acn-line); border-radius: 4px; font-size: 12px; font-weight: 600; line-height: normal; background: var(--acn-surface); color: var(--acn-ink); box-shadow: none; }
+html body .acn-b.acn-agw-novo { display: block; height: auto; padding: 4px 12px; border: 0; border-color: transparent; border-radius: 5px; font-size: 12px; font-weight: 700; line-height: normal; }
+.acn-agw-publica { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+.acn-agw-aviso { font-size: 12px; color: #94a3b8; text-align: center; padding: 12px 0; }
+.acn-agw-aviso.vazio { color: #cbd5e1; }
+.acn-agw-lista { max-height: 260px; overflow-y: auto; padding-right: 2px; }
+/* o formulário do novo compromisso */
+.acn-agw-form { background: #ffffff; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.acn-agw-form-tit { font-size: 12px; font-weight: 800; color: #1d4ed8; margin-bottom: 8px; text-transform: uppercase; }
+html body .acn-agw-form .acn-agw-campo { width: 100%; border: 1px solid #d1d5db; border-radius: 5px; padding: 5px 8px; font-size: 12px; margin-bottom: 6px; box-sizing: border-box; outline: none; }
+html body .acn-agw-form .acn-agw-campo.data { margin-bottom: 8px; }
+html body .acn-agw-form .acn-mtx { font-size: 12px; margin-bottom: 6px; }
+/* no celular (tela de toque) o responsivo.css força 16 px, com !important, em toda textarea; a descrição daqui escapava disso — o style antigo (letra de 10 px) casava a regra de "nada abaixo de 12 px", mais específica, e dava 12 px (medido nas cenas de toque, 12/10/2026). Mantido como estava: para adotar o padrão de toque (16 px) basta apagar a linha abaixo */
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) { html body .acn-agw-form textarea.acn-mtx { font-size: 12px !important; } }
+.acn-agw-form-part { margin-bottom: 8px; }
+.acn-agw-form-bt { display: flex; gap: 6px; justify-content: flex-end; }
+html body .acn-b.acn-agw-bt-form { display: block; height: auto; padding: 5px 12px; border-radius: 4px; font-size: 12px; font-weight: 700; line-height: normal; box-shadow: none; }
+html body .acn-b.acn-agw-bt-form.salvar { padding: 5px 14px; border: 0; border-color: transparent; }
+html body .acn-b.acn-agw-bt-form.salvar:disabled { opacity: .5; cursor: pointer; }
+/* o cartão de cada compromisso */
+.acn-agw-card { background: #f8fafc; border: 1.5px solid #e2e8f0; border-left: 4px solid #94a3b8; border-radius: 7px; padding: 8px 10px; margin-bottom: 6px; }
+.acn-agw-card[data-nivel=urgente] { background: #fef2f2; border-color: #fca5a5; border-left-color: #dc2626; }
+.acn-agw-card[data-nivel="24h"] { background: #fffbeb; border-color: #fcd34d; border-left-color: #d97706; }
+.acn-agw-card[data-nivel=expirado] { background: #f1f5f9; border-color: #cbd5e1; border-left-color: #cbd5e1; }
+.acn-agw-card-linha { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.acn-agw-card-corpo { flex: 1; }
+.acn-agw-card-topo { display: flex; gap: 6px; align-items: center; margin-bottom: 2px; }
+.acn-agw-nivel { font-size: 11px; font-weight: 800; color: #9ca3af; }
+/* no celular (tela de toque) o responsivo.css elevava a letra de 5 a 10 px escrita no style para 12 px — o rótulo tinha 8 px no código, então saía com 12 px lá e 11 px no computador; achado pelas cenas de celular com toque (12/10/2026) */
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) { .acn-agw-nivel { font-size: 12px; } }
+.acn-agw-card[data-nivel=urgente] .acn-agw-nivel { color: #dc2626; }
+.acn-agw-card[data-nivel="24h"] .acn-agw-nivel { color: #d97706; }
+.acn-agw-card-titulo { font-size: 12px; font-weight: 700; color: #1e293b; }
+.acn-agw-card-titulo.concluido { color: #94a3b8; text-decoration: line-through; }
+.acn-agw-card-desc { font-size: 12px; color: #64748b; margin-bottom: 3px; }
+.acn-agw-card-meta { font-size: 12px; color: #94a3b8; }
+.acn-agw-meta-item { margin-left: 8px; color: #94a3b8; }
+.acn-agw-acoes { display: flex; gap: 4px; flex-shrink: 0; }
+html body .acn-b.acn-agw-bt-ok { display: block; height: auto; padding: 3px 8px; border: 1px solid #9fd0c8; border-radius: 4px; font-size: 12px; font-weight: 700; line-height: normal; background: var(--acn-brand-soft); color: var(--acn-brand-ink); box-shadow: none; }
+html body .acn-b.acn-agw-bt-ok:hover:not(:disabled) { background: var(--acn-brand-soft); border-color: #9fd0c8; }
+html body .acn-b.acn-agw-bt-x { display: block; height: auto; padding: 3px 6px; border: 1px solid #e3b5b1; border-radius: 4px; font-size: 12px; font-weight: 700; line-height: normal; background: var(--acn-surface); color: var(--acn-bad); box-shadow: none; }
+/* Agenda no tema escuro: no código antigo o escuro vinha das regras por atributo de style do DashboardTab (cor escrita no style → versão escura) e da herança de cor dos spans;
+   com classes essas regras não pegam, então os valores que a pessoa já via no escuro estão aqui (medidos antes de migrar). */
+html body.dark .acn-agw-tit, html body.dark .acn-agw-form-tit { color: #93c5fd; }
+html body.dark .acn-agw-cont.alerta { background: color(srgb 0.941176 0.415686 0.372549 / 0.24); color: color(srgb 0.973529 0.737059 0.717647); border-color: color(srgb 0.941176 0.415686 0.372549 / 0.22); }
+html body.dark .acn-agw-cont.info { background: color(srgb 0.419608 0.607843 0.901961 / 0.24); color: color(srgb 0.738824 0.823529 0.955882); border-color: color(srgb 0.419608 0.607843 0.901961 / 0.22); }
+html body.dark .acn-agw-grupo { background: #162032; color: #cbd5e1; }
+html body.dark .acn-b.acn-agw-pilula { color: #94a3b8; }
+html body.dark .acn-b.acn-agw-pilula.ativa { background: #334155; color: #f1f5f9; }
+html body.dark .acn-b.acn-agw-concl { background: #162032; border-color: #334155; color: #ced3d9; }
+html body.dark .acn-b.acn-agw-bt-ok, html body.dark .acn-b.acn-agw-bt-ok:hover:not(:disabled) { background: rgba(20, 134, 124, .22); border-color: #1f6f67; color: #e0e6ea; }
+html body.dark .acn-b.acn-agw-bt-x { background: #2d0a0a; border-color: #6b2a26; color: #f4bdbd; }
+html body.dark .acn-agw-card { background: #1e293b; color: #cbd5e1; }
+html body.dark .acn-agw-card[data-nivel=expirado] { background: #162032; }
+html body.dark .acn-agw-card[data-nivel=urgente] { background: #2d0a0a; color: #fca5a5; }
+html body.dark .acn-agw-card[data-nivel="24h"] { background: #1c1505; color: #fde68a; }
+html body.dark .acn-agw-card[data-nivel] span { color: inherit; }
+html body.dark .acn-agw-card-desc, html body.dark .acn-agw-card-meta { color: #94a3b8; }
+html body.dark .acn-agw-form { background: #1e293b; color: #cbd5e1; }
+html body.dark .acn-b.acn-agw-bt-form:not(.salvar) { background: #162032; border-color: #334155; color: #cbd5e1; }
+html body.dark .acn-agw-aviso, html body.dark .acn-agw-aviso.vazio { color: #cbd5e1; }
