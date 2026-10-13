@@ -3,16 +3,18 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
-import { normalizarBusca, combinaBusca } from './SearchUtils';
+import { normalizarBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar, mostrarAviso } from './Feedback';
+import { Botao, Faixa } from './Interface';
 
 const BROADCAST_CH = 'acn-chat-v1';
 
 // Contextos com deep-link já funcionando (window.__acnDeepLink + acn:abrir-registro)
 // que dá pra compartilhar via chat com abertura direta no processo.
+// 7.x (13/10/2026): a busca passou a usar as colunas "_norm" (sem acento) e o utilitário do projeto, que também tira os caracteres que quebram o filtro do banco.
 const REF_TIPOS = [
-  { contexto: 'licitacao', aba: 'licitacoes', tabela: 'licitacoes',        campos: 'id,numero,nome_projeto,orgao', label: (r: any) => `${r.numero || '—'} — ${r.nome_projeto || r.orgao || ''}`, icone: '🏛️' },
-  { contexto: 'crm',       aba: 'crm',        tabela: 'crm_oportunidades', campos: 'id,titulo,orgao',              label: (r: any) => r.titulo || r.orgao || '—', icone: '💼' },
+  { contexto: 'licitacao', aba: 'licitacoes', tabela: 'licitacoes',        campos: 'id,numero,nome_projeto,orgao', colunasBusca: ['nome_projeto_norm', 'orgao_norm'], label: (r: any) => `${r.numero || '—'} — ${r.nome_projeto || r.orgao || ''}`, icone: '🏛️' },
+  { contexto: 'crm',       aba: 'crm',        tabela: 'crm_oportunidades', campos: 'id,titulo,orgao',              colunasBusca: ['titulo_norm', 'orgao_norm'],       label: (r: any) => r.titulo || r.orgao || '—', icone: '💼' },
 ];
 
 function Avatar({ nome, size = 26, bg = '#e2e8f0', color = '#475569' }: any) {
@@ -73,8 +75,20 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   const [compartilharBusca, setCompartilharBusca] = useState('');
   const [compartilharResultados, setCompartilharResultados] = useState<any[]>([]);
   const [compartilharBuscando, setCompartilharBuscando] = useState(false);
+  const [compartilharErro, setCompartilharErro] = useState<string | null>(null);
+
+  // 7.x (13/10/2026) — falhas que antes passavam em silêncio: a leitura que falha não pode parecer "lista vazia" nem "conversa nova".
+  const [erroSalas, setErroSalas]         = useState<string | null>(null);
+  const [erroUsuarios, setErroUsuarios]   = useState<string | null>(null);
+  const [erroMensagens, setErroMensagens] = useState<string | null>(null);
+  const [criandoGrupo, setCriandoGrupo]   = useState(false);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
+  const erroSalasRef      = useRef<string | null>(null);   // a leitura de 5 em 5 s tenta de novo sozinha enquanto estiver com erro
+  const erroUsuariosRef   = useRef<string | null>(null);
+  const criandoGrupoRef   = useRef(false);                 // trava o clique duplo em "Criar Grupo"
+  const abrindoConversaRef = useRef(false);                // trava o clique duplo numa pessoa da lista "Nova conversa"
+  const buscaSeqRef       = useRef(0);                     // descarta a resposta de uma busca que já foi superada por outra
   const endRef       = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
   const salaAtivaRef = useRef<any>(null);
@@ -260,7 +274,9 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
         .in('sala_id', idsMinhasSalas)
         .order('criado_em', { ascending: false })
         .limit(500);
-      data = res.data || [];
+      // 7.x (13/10/2026): leitura que falha não zera o contador (antes o selo sumia e, na volta, o aviso e o som disparavam de novo por mensagens já conhecidas); -1 = "sem referência ainda".
+      if (res.error || !res.data) return -1;
+      data = res.data;
     }
     const porSala: Record<string, number> = {};
     const previews: Record<string, any> = {};
@@ -281,15 +297,19 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
   // ── Polling badge ─────────────────────────────────────────────────────────
   const verificarNovas = useCallback(async () => {
+    // 7.x (13/10/2026): se a lista de conversas ou de pessoas falhou ao carregar, tenta de novo a cada volta (antes ficava vazia até recarregar a página).
+    if (erroSalasRef.current) fetchSalas();
+    if (erroUsuariosRef.current) fetchUsuarios();
     const idsMinhasSalas = salasRef.current.map((s: any) => s.id);
     if (idsMinhasSalas.length === 0) { setNaoLidas(0); setNaoLidasPorSala({}); prevCountRef.current = 0; return; }
-    const { data } = await supabase.from('chat_mensagens')
+    const { data, error } = await supabase.from('chat_mensagens')
       .select('id,sala_id,remetente_id,remetente_nome,texto,anexo_nome,ref_desc,criado_em,apagada_em')
       .in('sala_id', idsMinhasSalas)
       .order('criado_em', { ascending: false })
       .limit(500);
+    if (error || !data) return;   // 7.x: leitura que falha mantém o contador que já estava (ver atualizarContadorEPreview)
 
-    const todas = data || [];
+    const todas = data;
     const previews: Record<string, any> = {};
     for (const m of todas) if (!previews[m.sala_id]) previews[m.sala_id] = m;
     setUltimasMsg(prev => ({ ...prev, ...previews }));
@@ -310,7 +330,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
       if (!salaAtivaRef.current || salaAtivaRef.current.id !== latest.sala_id) {
         const sala = salasRef.current.find((s: any) => s.id === latest.sala_id);
         if (sala) {
-          setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto });
+          setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto || latest.anexo_nome || latest.ref_desc || '' });   // 7.x: mensagem só com anexo ou processo também diz o que é (o aviso que chega pelo canal ao vivo já dizia)
           playAlerta();
         }
       }
@@ -383,9 +403,10 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     if (!salaAtiva || !aberto) return;
     const salaId = salaAtiva.id;
     const t = setInterval(async () => {
-      const { data } = await supabase.from('chat_mensagens')
+      const { data, error } = await supabase.from('chat_mensagens')
         .select('*').eq('sala_id', salaId).order('criado_em');
-      if (!data) return;
+      if (error || !data) return;
+      setErroMensagens(null);   // 7.x: a leitura voltou — some a faixa de "não foi possível carregar as mensagens"
       setMensagens(prev => {
         const real = prev.filter((m: any) => !m._temp);
         // Assinatura: quantas mensagens e quantas apagadas (mensagem ou anexo). Apagar não muda a contagem, então só ela não bastava (05/10/2026).
@@ -404,8 +425,11 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   // Sempre filtra pelas conversas que o usuário realmente participa — mesmo
   // Admin só vê as próprias, nunca as DMs/grupos alheios.
   const fetchSalas = async (): Promise<any[]> => {
-    const { data } = await supabase.from('chat_salas').select('*').in('tipo', ['direto', 'grupo']);
-    const minhas = (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
+    const { data, error } = await supabase.from('chat_salas').select('*').in('tipo', ['direto', 'grupo']);
+    // 7.x (13/10/2026): leitura que falha não esvazia a lista (antes a tela mostrava "nenhuma conversa" e o selo de não lidas zerava, sem aviso): mantém o que já estava e mostra a faixa com "Tentar de novo".
+    if (error || !data) { erroSalasRef.current = error?.message || 'sem resposta'; setErroSalas(erroSalasRef.current); return salasRef.current; }
+    erroSalasRef.current = null; setErroSalas(null);
+    const minhas = data.filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
 
     // DMs duplicadas (mesmo par de usuários) — fica só a mais recente.
     const seen = new Map<string, any>();
@@ -433,11 +457,14 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
       const { data, error } = await supabase
         .from('auth_usuarios').select('id,nome,email,perfil').order('nome')
         .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
+      // 7.x (13/10/2026): erro de leitura não troca a lista de pessoas por uma lista vazia/parcial (antes "Nova conversa" ficava sem ninguém e sem explicação).
+      if (error) { erroUsuariosRef.current = error.message; setErroUsuarios(error.message); return; }
+      if (!data || data.length === 0) break;
       all = [...all, ...data];
       if (data.length < PAGE) break;
       from += PAGE;
     }
+    erroUsuariosRef.current = null; setErroUsuarios(null);
     setUsuarios(all.filter(u => String(u.id || u.email) !== uid));
   };
 
@@ -451,10 +478,13 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   };
 
   const fetchMensagens = async (salaId: string) => {
-    const { data } = await supabase.from('chat_mensagens')
+    const { data, error } = await supabase.from('chat_mensagens')
       .select('*').eq('sala_id', salaId).order('criado_em');
-    setMensagens(data || []);
-    const ultima = (data || []).at(-1);
+    // 7.x (13/10/2026): leitura que falha não vira "Nenhuma mensagem ainda. Diga olá!" nem marca como lido o que a pessoa não viu: mostra a faixa com "Tentar de novo" (e a leitura de 2 em 2 s também tenta).
+    if (error || !data) { setErroMensagens(error?.message || 'sem resposta'); return; }
+    setErroMensagens(null);
+    setMensagens(data);
+    const ultima = data.at(-1);
     markRead(salaId, ultima?.criado_em);
     atualizarContadorEPreview();
   };
@@ -464,10 +494,10 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     setSalaAtiva(sala);
     salaAtivaRef.current = sala;
     setMensagens([]);
+    setErroMensagens(null);
     setView('sala');
     setToast(null);
-    markRead(sala.id);
-    atualizarContadorEPreview();
+    // 7.x (13/10/2026): quem marca a conversa como lida agora é fetchMensagens, depois de ler as mensagens de verdade (antes marcava aqui, antes de ler, e uma leitura que falhava deixava tudo "lido" sem a pessoa ter visto).
     await fetchMensagens(sala.id);
   };
 
@@ -475,24 +505,35 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     setSalaAtiva(null);
     salaAtivaRef.current = null;
     setMensagens([]);
+    setErroMensagens(null);
     setView('lista');
     setModalInfoGrupo(false);
   };
 
   const abrirDireto = async (usuario: any) => {
-    const outroId   = String(usuario.id || usuario.email);
-    const outroNome = usuario.nome || usuario.email;
-    const { data: todas } = await supabase.from('chat_salas').select('*').eq('tipo', 'direto');
-    const existente = (todas || []).find(s => {
-      const ids = (s.membros || []).map((m: any) => String(m.id));
-      return ids.includes(uid) && ids.includes(outroId);
-    });
-    if (existente) { await abrirSala(existente); return; }
-    const { data: nova } = await supabase.from('chat_salas').insert([{
-      tipo: 'direto', nome: null,
-      membros: [{ id: uid, nome: unome }, { id: outroId, nome: outroNome }],
-    }]).select().single();
-    if (nova) { fetchSalas(); await abrirSala(nova); }
+    // 7.x (13/10/2026): clique duplo na mesma pessoa criava duas conversas (a lista só mostra a mais recente, e as mensagens se dividiam).
+    if (abrindoConversaRef.current) return;
+    abrindoConversaRef.current = true;
+    try {
+      const outroId   = String(usuario.id || usuario.email);
+      const outroNome = usuario.nome || usuario.email;
+      const { data: todas, error: erroLer } = await supabase.from('chat_salas').select('*').eq('tipo', 'direto');
+      // 7.x: se a leitura falha não dá para saber se a conversa já existe — antes criava uma duplicada (e o histórico antigo sumia da lista).
+      if (erroLer || !todas) { mostrarAviso('Não foi possível abrir a conversa: ' + (erroLer?.message || 'sem resposta do servidor') + '.', 'erro'); return; }
+      const existente = todas.find(s => {
+        const ids = (s.membros || []).map((m: any) => String(m.id));
+        return ids.includes(uid) && ids.includes(outroId);
+      });
+      if (existente) { await abrirSala(existente); return; }
+      const { data: nova, error: erroNova } = await supabase.from('chat_salas').insert([{
+        tipo: 'direto', nome: null,
+        membros: [{ id: uid, nome: unome }, { id: outroId, nome: outroNome }],
+      }]).select().single();
+      if (erroNova || !nova) { mostrarAviso('Não foi possível iniciar a conversa: ' + (erroNova?.message || 'sem resposta do servidor') + '.', 'erro'); return; }
+      fetchSalas(); await abrirSala(nova);
+    } finally {
+      abrindoConversaRef.current = false;
+    }
   };
 
   const abrirViaToast = (t: any) => {
@@ -510,26 +551,32 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   };
 
   const criarGrupo = async () => {
-    if (!novoGrupoNome.trim() || novoGrupoMembros.size === 0) return;
+    // 7.x (13/10/2026): clique duplo criava dois grupos iguais; e a falha de gravação fechava a janela e apagava o nome e os participantes sem avisar.
+    if (!novoGrupoNome.trim() || novoGrupoMembros.size === 0 || criandoGrupoRef.current) return;
+    criandoGrupoRef.current = true; setCriandoGrupo(true);
     const membrosSel = usuariosVisiveis
       .filter(u => novoGrupoMembros.has(String(u.id || u.email)))
       .map(u => ({ id: String(u.id || u.email), nome: u.nome || u.email }));
-    const { data: novo } = await supabase.from('chat_salas').insert([{
+    const { data: novo, error } = await supabase.from('chat_salas').insert([{
       tipo: 'grupo', nome: novoGrupoNome.trim(),
       membros: [{ id: uid, nome: unome }, ...membrosSel],
       criado_por: uid, criado_por_nome: unome,
     }]).select().single();
+    criandoGrupoRef.current = false; setCriandoGrupo(false);
+    if (error || !novo) { mostrarAviso('Não foi possível criar o grupo: ' + (error?.message || 'sem resposta do servidor') + '. O nome e os participantes continuam na janela.', 'erro'); return; }
     setModalNovoGrupo(false);
     setNovoGrupoNome('');
     setNovoGrupoMembros(new Set());
-    if (novo) { await fetchSalas(); await abrirSala(novo); }
+    await fetchSalas(); await abrirSala(novo);
   };
 
   const atualizarMembrosGrupo = async (novosMembros: any[]) => {
     if (!salaAtiva) return;
-    const { data } = await supabase.from('chat_salas')
+    const { data, error } = await supabase.from('chat_salas')
       .update({ membros: novosMembros }).eq('id', salaAtiva.id).select().single();
-    if (data) { setSalaAtiva(data); salaAtivaRef.current = data; fetchSalas(); }
+    // 7.x (13/10/2026): antes, se a gravação falhasse a janela continuava igual, sem aviso, e a pessoa achava que tinha adicionado/removido.
+    if (error || !data) { mostrarAviso('Não foi possível atualizar os participantes: ' + (error?.message || 'sem resposta do servidor') + '.', 'erro'); return; }
+    setSalaAtiva(data); salaAtivaRef.current = data; fetchSalas();
   };
 
   const removerMembroGrupo = async (id: string) => {
@@ -545,19 +592,24 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     atualizarMembrosGrupo([...(salaAtiva.membros || []), { id, nome: u.nome || u.email }]);
   };
 
-  const sairDoGrupo = async () => {
-    if (!salaAtiva) return;
-    if (!await confirmar(`Sair do grupo "${nomeSala(salaAtiva)}"?`)) return;
-    const novos = (salaAtiva.membros || []).filter((m: any) => String(m.id) !== uid);
-    await supabase.from('chat_salas').update({ membros: novos }).eq('id', salaAtiva.id);
+  // 7.x (13/10/2026): a sala vai como argumento. A lista chamava esta função logo depois de "ativar" a sala, mas a função ainda enxergava a sala nula e saía sem fazer nada — a pessoa tinha de clicar "Sim" duas vezes, e entre os dois cliques a sala ficava "ativa" por baixo
+  // (a leitura de 2 em 2 s corria, o aviso e o som do grupo ficavam mudos e as mensagens novas entravam como lidas). "jaConfirmado": o "Sim" da lista já é a confirmação, então não pergunta de novo.
+  const sairDoGrupo = async (sala: any = salaAtiva, jaConfirmado = false) => {
+    if (!sala) return;
+    if (!jaConfirmado && !await confirmar(`Sair do grupo "${nomeSala(sala)}"?`)) return;
+    const novos = (sala.membros || []).filter((m: any) => String(m.id) !== uid);
+    const { error } = await supabase.from('chat_salas').update({ membros: novos }).eq('id', sala.id);
+    if (error) { mostrarAviso('Não foi possível sair do grupo: ' + error.message + '.', 'erro'); return; }   // antes a tela agia como se tivesse saído
     setModalInfoGrupo(false);
+    setConfirmDelete(null);
     await fetchSalas();
-    voltarLista();
+    if (salaAtivaRef.current?.id === sala.id) voltarLista();
   };
 
   // ── Enviar mensagem (texto / anexo / referência) ────────────────────────
   const inserirEEnviar = async (extra: any, textoTemp?: string) => {
-    if (!salaAtiva || enviando) return;
+    if (!salaAtiva) return null;
+    if (enviando) { mostrarAviso('Aguarde a mensagem anterior terminar de enviar e tente de novo.', 'atencao'); return null; }
     setEnviando(true);
 
     const tempId = 'temp-' + Date.now();
@@ -568,12 +620,20 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
       ...extra,
     }]);
 
-    const { data: inserido } = await supabase.from('chat_mensagens').insert([{
+    const { data: inserido, error } = await supabase.from('chat_mensagens').insert([{
       sala_id: salaAtiva.id, remetente_id: uid,
       remetente_nome: unome, texto: textoTemp || '', lida_por: [],
       ...extra,
     }]).select().single();
 
+    // 7.x (13/10/2026): se a gravação falhava, a bolha ficava para sempre como "enviando…" (a leitura de 2 em 2 s a mantém) e o texto já tinha saído da caixa, sem nenhum aviso.
+    // Agora a bolha some, quem chamou devolve o texto à caixa e a pessoa é avisada.
+    if (error || !inserido) {
+      setMensagens(prev => prev.filter(m => m.id !== tempId));
+      setEnviando(false);
+      mostrarAviso('Não foi possível enviar a mensagem: ' + (error?.message || 'sem resposta do servidor') + '.', 'erro');
+      return null;
+    }
     if (inserido) {
       setMensagens(prev => prev.map(m => m.id === tempId ? inserido : m));
       markRead(salaAtiva.id, inserido.criado_em);
@@ -595,41 +655,51 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   };
 
   const enviar = async () => {
-    if (!texto.trim()) return;
+    // 7.x (13/10/2026): com uma mensagem ainda gravando, a segunda era apagada da caixa e nunca enviada (a trava do envio devolvia sem avisar). Agora o texto fica na caixa até dar para enviar.
+    if (!texto.trim() || enviando) return;
     const txt = texto.trim();
     setTexto('');
-    await inserirEEnviar({ texto: txt }, txt);
+    const enviada = await inserirEEnviar({ texto: txt }, txt);
+    if (!enviada) setTexto(atual => atual ? txt + ' ' + atual : txt);   // falhou: o texto volta à caixa (antes se perdia)
     inputRef.current?.focus();
   };
 
   // ── Fase 4: anexo ─────────────────────────────────────────────────────────
   const enviarAnexo = async (file: File) => {
     if (!salaAtiva) return;
-    if (file.size > 15 * 1024 * 1024) { alert(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). Limite: 15 MB.`); return; }
+    // 7.x (13/10/2026): o campo de arquivo só era limpo no caminho que dava certo; depois de um erro (arquivo grande, falha no envio), escolher o MESMO arquivo de novo não fazia nada.
+    const limparCampo = () => { if (anexoInputRef.current) anexoInputRef.current.value = ''; };
+    if (file.size > 15 * 1024 * 1024) { alert(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). Limite: 15 MB.`); limparCampo(); return; }
     setEnviandoAnexo(true);
     const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `chat/${salaAtiva.id}/${Date.now()}_${nomeLimpo}`;
     const { error: errUp } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-    if (errUp) { alert('Erro ao enviar anexo: ' + errUp.message); setEnviandoAnexo(false); return; }
+    if (errUp) { alert('Erro ao enviar anexo: ' + errUp.message); setEnviandoAnexo(false); limparCampo(); return; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
     await inserirEEnviar({ anexo_url: pub?.publicUrl || null, anexo_nome: file.name, anexo_tipo: file.type || null });
     setEnviandoAnexo(false);
-    if (anexoInputRef.current) anexoInputRef.current.value = '';
+    limparCampo();
   };
 
   // ── Fase 5: compartilhar processo/demanda ───────────────────────────────
+  // 7.x (13/10/2026): a busca montava o filtro com o texto cru — uma vírgula ou parêntese ("Prefeitura de X, SC") quebrava o filtro do banco e a tela dizia "Nada encontrado"; não ignorava acento; uma resposta lenta de uma digitação anterior
+  // sobrescrevia a mais nova; e o erro de leitura também virava "Nada encontrado". Agora usa o utilitário do projeto (palavras em qualquer ordem, colunas sem acento, caracteres perigosos tirados), descarta resposta velha e mostra o erro.
   const buscarParaCompartilhar = async (texto: string) => {
     setCompartilharBusca(texto);
-    if (texto.trim().length < 2) { setCompartilharResultados([]); return; }
+    const minha = ++buscaSeqRef.current;
+    if (texto.trim().length < 2) { setCompartilharResultados([]); setCompartilharErro(null); setCompartilharBuscando(false); return; }
     setCompartilharBuscando(true);
+    setCompartilharErro(null);
     const todos: any[] = [];
+    let erro: string | null = null;
     for (const rt of REF_TIPOS) {
-      const campoTexto = rt.tabela === 'licitacoes' ? 'nome_projeto' : 'titulo';
-      const { data } = await supabase.from(rt.tabela).select(rt.campos)
-        .or(`${campoTexto}.ilike.%${texto}%,orgao.ilike.%${texto}%`).limit(6);
+      const { data, error } = await buscarPorPalavras(supabase.from(rt.tabela).select(rt.campos), rt.colunasBusca, texto).limit(6);
+      if (error) { erro = error.message; continue; }
       (data || []).forEach((r: any) => todos.push({ ...r, _tipo: rt }));
     }
+    if (minha !== buscaSeqRef.current) return;   // a pessoa já digitou outra coisa: esta resposta é velha
     setCompartilharResultados(todos);
+    setCompartilharErro(erro);
     setCompartilharBuscando(false);
   };
 
@@ -653,7 +723,9 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
   // ── Excluir DM ────────────────────────────────────────────────────────────
   const deletarSala = async (salaId: string) => {
-    await supabase.from('chat_salas').delete().eq('id', salaId);
+    const { error } = await supabase.from('chat_salas').delete().eq('id', salaId);
+    // 7.x (13/10/2026): a conversa saía da lista mesmo com a exclusão recusada e voltava na leitura seguinte, sem explicação.
+    if (error) { mostrarAviso('Não foi possível apagar a conversa: ' + error.message + '.', 'erro'); return; }
     localStorage.removeItem(lrKey(salaId));
     setSalas(prev => prev.filter(d => d.id !== salaId));
     if (salaAtivaRef.current?.id === salaId) voltarLista();
@@ -795,6 +867,14 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
               {/* Conteúdo scrollável */}
               <div style={{ flex: 1, overflowY: 'auto' }}>
+                {/* 7.x (13/10/2026): leitura que falhou aparece como erro, não como "lista vazia" */}
+                {(erroSalas || erroUsuarios) && (
+                  <div style={{ padding: '8px 12px' }}>
+                    <Faixa tom="erro" acao={<Botao pequeno onClick={() => { fetchSalas(); fetchUsuarios(); }}>Tentar de novo</Botao>}>
+                      Não foi possível carregar {erroSalas ? 'as conversas' : 'a lista de pessoas'} ({erroSalas || erroUsuarios}).
+                    </Faixa>
+                  </div>
+                )}
                 {/* Conversas + grupos, ordenados por atividade recente */}
                 {salasOrdenadas.length > 0 && (
                   <>
@@ -863,7 +943,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                               <span style={{ fontSize: 10, color: '#b91c1c', flex: 1 }}>
                                 {ehGrupo ? 'Sair deste grupo?' : 'Apagar esta conversa e todas as mensagens?'}
                               </span>
-                              <button onClick={() => { if (ehGrupo) { setSalaAtiva(s); salaAtivaRef.current = s; sairDoGrupo(); } else deletarSala(s.id); }} style={{
+                              <button onClick={() => { if (ehGrupo) sairDoGrupo(s, true); else deletarSala(s.id); }} style={{
                                 background: '#ef4444', color: 'white', border: 'none',
                                 borderRadius: 5, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
                               }}>Sim</button>
@@ -914,12 +994,12 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                 )}
 
                 {/* Estado vazio total */}
-                {salas.length === 0 && usuariosVisiveis.length === 0 && !busca && (
+                {salas.length === 0 && usuariosVisiveis.length === 0 && !busca && !erroSalas && !erroUsuarios && (
                   <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40 }}>
                     Nenhum usuário disponível
                   </div>
                 )}
-                {salas.length === 0 && usuariosParaNovaDM.length === 0 && !busca && usuariosVisiveis.length > 0 && (
+                {salas.length === 0 && usuariosParaNovaDM.length === 0 && !busca && usuariosVisiveis.length > 0 && !erroSalas && (
                   <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40 }}>
                     Todas as conversas iniciadas!
                   </div>
@@ -932,7 +1012,12 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
           {view === 'sala' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-                {mensagens.length === 0 && (
+                {mensagens.length === 0 && erroMensagens && (
+                  <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchMensagens(salaAtiva.id)}>Tentar de novo</Botao>}>
+                    Não foi possível carregar as mensagens ({erroMensagens}).
+                  </Faixa>
+                )}
+                {mensagens.length === 0 && !erroMensagens && (
                   <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 60 }}>
                     👋 Nenhuma mensagem ainda. Diga olá!
                   </div>
@@ -1135,7 +1220,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
               })}
             </div>
             <div style={{ padding: 12, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
-              <button onClick={criarGrupo} disabled={!novoGrupoNome.trim() || novoGrupoMembros.size === 0}
+              <button onClick={criarGrupo} disabled={!novoGrupoNome.trim() || novoGrupoMembros.size === 0 || criandoGrupo}
                 style={{ flex: 1, background: (!novoGrupoNome.trim() || novoGrupoMembros.size === 0) ? '#e2e8f0' : '#0f766e', color: (!novoGrupoNome.trim() || novoGrupoMembros.size === 0) ? '#94a3b8' : '#fff', border: 'none', borderRadius: 6, padding: '8px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
                 Criar Grupo
               </button>
@@ -1195,7 +1280,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
               </div>
             )}
             <div style={{ padding: 12, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
-              <button onClick={sairDoGrupo} style={{ flex: 1, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '8px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+              <button onClick={() => sairDoGrupo()} style={{ flex: 1, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '8px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
                 🚪 Sair do grupo
               </button>
               <button onClick={() => setModalInfoGrupo(false)} style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
@@ -1220,7 +1305,10 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 10px', minHeight: 100 }}>
               {compartilharBuscando && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: 16 }}>Buscando...</div>}
-              {!compartilharBuscando && compartilharBusca.trim().length >= 2 && compartilharResultados.length === 0 && (
+              {!compartilharBuscando && compartilharErro && (
+                <Faixa tom="erro">{compartilharResultados.length ? 'A busca falhou em uma das listas' : 'Não foi possível buscar'} ({compartilharErro}).</Faixa>
+              )}
+              {!compartilharBuscando && !compartilharErro && compartilharBusca.trim().length >= 2 && compartilharResultados.length === 0 && (
                 <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: 16 }}>Nada encontrado</div>
               )}
               {compartilharResultados.map((r, i) => (
