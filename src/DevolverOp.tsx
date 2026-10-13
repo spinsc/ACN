@@ -16,6 +16,7 @@ import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { notificarEvento, msg } from './whatsappHelper';
+import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import { liberarReservaDaOp } from './Estoque';
 import { Botao } from './Interface';
 
@@ -73,7 +74,9 @@ export async function devolverOp({ opl, destino, motivo, setorOrigem, currentUse
     if (destino === 'pcp') notificarEvento('op_devolvida_ao_pcp', msg.oplDevolvida(opl.opl, 'PCP', motivo, currentUser?.nome));
     else notificarEvento('pcp_devolve_engenharia', msg.oplDevolvida(opl.opl, 'Engenharia', motivo, currentUser?.nome));
   } else if (destino === 'comercial') {
-    notificarEvento('pcp_devolve_comercial', msg.oplDevolvida(opl.opl, 'Comercial', motivo, currentUser?.nome));
+    // R3 (13/10/2026): quem abriu a OP e o gerente dele, pessoa a pessoa (e não o perfil Comercial inteiro)
+    avisarDevolucaoAoComercial({ opl, evento: 'pcp_devolve_comercial', autorEmail: currentUser?.email,
+      mensagem: msg.oplVoltouAoComercial(opl.opl, motivo, currentUser?.nome || '—') });
   } else {
     notificarEvento('pcp_libera_almox', msg.oplDevolvida(opl.opl, 'Almoxarifado (refazer kit)', motivo, currentUser?.nome));
   }

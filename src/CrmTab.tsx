@@ -47,6 +47,8 @@ import { ParticipantesPicker, participantesDe, novosParticipantes, notificarPart
 import { podeExcluirCardComercial, bloqueiosDeExclusao } from './ExclusaoDeCard';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
+import { camposQueFaltam, listaEmTexto } from './OpObrigatorios';
+import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { OndeEstaCelula } from './OndeEstaAgora';
@@ -290,6 +292,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // Quem devolveu cada OP parada em "Devolvida Comercial", e quando (id da OP ->
   // linha do log). É daí que sai o destino do reenvio — ver reenviarDevolvida.
   const [devolucoesOpl, setDevolucoesOpl] = useState<Record<string, any>>({});
+  // R3 (13/10/2026): quantas OPs estão devolvidas ao Comercial — aparece na aba "OPs em aberto" mesmo com a lista fechada. null = ainda não leu (ou a leitura falhou:
+  // nunca mostra "0" no lugar de uma leitura que não deu certo).
+  const [devolvidasComercial, setDevolvidasComercial] = useState<number | null>(null);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
   const [filtStatusOpl, setFiltStatusOpl] = useState('');
@@ -1434,6 +1439,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setErroOpls('');
     const lista = data || [];
     setOplsEmAberto(lista);
+    setDevolvidasComercial(lista.filter((o: any) => o.status_geral === 'Devolvida Comercial').length);
     // Onde está / desde quando (Etapa 6.2). O histórico tem mais de 1.000 linhas e o servidor
     // corta em 1.000 por leitura, então a data do evento vem de uma função do banco; onde ela
     // não achou evento, vale o último marco da própria OP (marcado como aproximado).
@@ -1471,6 +1477,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   useEffect(() => {
     if (abaInterna === 'opls') fetchOplsEmAberto();
   }, [abaInterna]);
+
+  // R3: o contador de devolvidas precisa existir antes de abrir a aba "OPs em aberto" (e depois de uma OP automática nascer devolvida)
+  const contarDevolvidasComercial = async () => {
+    const { count, error } = await supabase.from('oples').select('id', { count: 'exact', head: true }).eq('status_geral', 'Devolvida Comercial');
+    setDevolvidasComercial(error || count == null ? null : count);
+  };
+  useEffect(() => { contarDevolvidasComercial(); }, []);
 
   const fetchAbrirTabContent = async (op: any, tab: string) => {
     setAbrirDocs([]);
@@ -1761,15 +1774,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     await avisarParticipantesDoCard(modalAbrir.id, modalAbrir, formOp, p.titulo);
     let oplCriada: string|null = null;
     let avisoOp: { tom: 'atencao'|'erro'; texto: string }|null = null;
+    let faltamOp: string[] = [];
     if (entrouEmVencidoAgora && formOp.empresa_vencedora) {
       const r = await criarOpAutomatica({ ...formOp, id: modalAbrir.id }, formOp.empresa_vencedora);
       oplCriada = r.opl;
       avisoOp = r.aviso;
+      faltamOp = r.faltam || [];
     }
     setSalvando(false);
     await load(true);
     if (oplCriada) {
-      alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+      avisarOpCriadaSozinha(oplCriada, faltamOp);
     } else if (avisoOp) {
       mostrarAviso(avisoOp.texto, avisoOp.tom);
     }
@@ -1816,14 +1831,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // já existir uma OP vinculada a esta oportunidade, nem se o número gerado
   // já estiver em uso — nesses casos fica só o botão manual como fallback.
   //
-  // Devolve { opl, aviso }. Quando não cria, `aviso` diz o porquê para quem
+  // R1 (13/10/2026, decisão do usuário de 01/10/2026): "libera para criar OP, porém só segue para o fluxo normal depois de preencher os campos obrigatórios". Se a OP
+  // nasce sem algum deles (fluxo de entrega, itens vendidos, origem, veículo quando o tipo de venda exige, quem paga o frete), ela é criada já como "Devolvida Comercial",
+  // com o motivo "faltam: ...", e o Comercial completa e reenvia pela mesma tela de reenvio das OPs devolvidas. `faltam` volta junto para quem chamou avisar na tela.
+  //
+  // Devolve { opl, aviso, faltam }. Quando não cria, `aviso` diz o porquê para quem
   // chamou mostrar na tela. Antes devolvia só null, e a colisão de número e o
   // erro de gravação passavam calados: a pessoa só descobria conferindo a lista
   // depois (achado A3 do PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026). Se já existe
   // OP vinculada, não há aviso: é o esperado, não uma falha.
   // O tom vai explícito porque o Feedback adivinha pelo texto, e "não foi
   // criada" casa com "criad" e sairia verde, como se tivesse dado certo.
-  const criarOpAutomatica = async (op: any, empresa: 'ACN'|'DETECH'): Promise<{ opl: string|null; aviso: { tom: 'atencao'|'erro'; texto: string }|null }> => {
+  const criarOpAutomatica = async (op: any, empresa: 'ACN'|'DETECH'): Promise<{ opl: string|null; aviso: { tom: 'atencao'|'erro'; texto: string }|null; faltam?: string[] }> => {
     if (!op.numero_pv) {
       return { opl: null, aviso: { tom: 'atencao', texto: 'A OP não foi criada sozinha\nEsta oportunidade não tem PV atribuído, então não deu para gerar o número. Use "Lançar OP" no menu do card.' } };
     }
@@ -1843,15 +1862,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const agora = new Date().toISOString();
     // itens vendidos: da formação de preços ligada ao card (oficial; senão a mais recente)
     const { itens: itensVendidos } = await itensDaFormacao({ crmId: op.id });
-    const { data: novaOp, error } = await supabase.from('oples').insert([{
+    const moldeOp = {
       opl:                   baseOpl,
       itens_vendidos:        itensVendidos || [],
       modelo:                op.titulo,
       valor_total:           op.valor_registrado ?? null,
       cliente_nome:          op.orgao || op.titulo,
       responsavel_comercial: op.responsavel_nome || null,
-      status_geral:          'Em Espera PCP',   // 18e (13/10/2026): a OP cai direto no PCP
-      data_chegada_pcp:      agora,
       data_entrada:          agora.slice(0, 10),
       criado_por_nome:       currentUser?.nome,
       criado_por:            currentUser?.email,
@@ -1861,6 +1878,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       destino_cidade:        op.destino_cidade || null,
       destino_uf:            op.destino_uf || null,
       destino_cep:           op.destino_cep || null,
+    };
+    // R1: o que ainda falta para a OP seguir ao PCP. A OP automática não tem veículo nem frete na hora (o card não os guarda), então o molde conta sem eles.
+    const faltam = await camposQueFaltam(moldeOp);
+    const incompleta = faltam.length > 0;
+    const motivoFaltam = `Faltam dados obrigatórios para seguir ao PCP: ${listaEmTexto(faltam)}. Complete em "Editar" e reenvie.`;
+    const { data: novaOp, error } = await supabase.from('oples').insert([{
+      ...moldeOp,
+      // 18e (13/10/2026): a OP cai direto no PCP — a menos que falte campo obrigatório (R1): aí nasce devolvida ao Comercial, que completa e reenvia
+      status_geral:          incompleta ? 'Devolvida Comercial' : 'Em Espera PCP',
+      data_chegada_pcp:      incompleta ? null : agora,
+      obs_devolucao:         incompleta ? motivoFaltam : null,
     }]).select().single();
     if (error) {
       console.error('Erro ao gerar OP automática:', error);
@@ -1869,10 +1897,32 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (novaOp) {
       await supabase.from('crm_historico').insert({
         oportunidade_id: op.id, tipo: 'conversao_op',
-        conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}${itensVendidos?.length ? ` (${itensVendidos.length} item(ns) vendido(s) da formação de preços)` : ' (sem formação de preços: informe os itens vendidos no detalhe da OP)'}`, usuario_nome: currentUser?.nome,
+        conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}${itensVendidos?.length ? ` (${itensVendidos.length} item(ns) vendido(s) da formação de preços)` : ' (sem formação de preços: informe os itens vendidos no detalhe da OP)'}${incompleta ? ` — devolvida ao Comercial: faltam ${listaEmTexto(faltam)}` : ''}`, usuario_nome: currentUser?.nome,
       });
+      if (incompleta) {
+        // o histórico da OP é o que diz, na lista de OPs em aberto, quem devolveu e quando (o campo do evento tem 200 caracteres)
+        const { error: errLogNasce } = await supabase.from('logs_movimentacao_opl').insert([{
+          opl_id: novaOp.id, numero_opl: baseOpl, setor: 'CRM',
+          evento: `OP criada sozinha ao entrar em Vencido, mas faltam dados para seguir ao PCP: ${listaEmTexto(faltam)}`.slice(0, 200),
+          status_anterior: null, status_novo: 'Devolvida Comercial',
+          usuario_nome: currentUser?.nome || 'Sistema', data_hora: agora,
+        }]);
+        if (errLogNasce) console.error('Histórico da OP automática incompleta não gravado:', errLogNasce);
+        avisarDevolucaoAoComercial({ opl: novaOp, evento: 'op_automatica_faltam_dados', autorEmail: currentUser?.email,
+          mensagem: msg.oplAutomaticaIncompleta(baseOpl, listaEmTexto(faltam), currentUser?.nome || '—') });
+      }
     }
-    return { opl: baseOpl, aviso: null };
+    return { opl: baseOpl, aviso: null, faltam };
+  };
+
+  // O que dizer a quem acabou de mover o card para Vencido: a OP foi para o PCP, ou nasceu devolvida ao Comercial por falta de campo obrigatório (R1, 13/10/2026).
+  const avisarOpCriadaSozinha = (oplCriada: string, faltam: string[]) => {
+    if (faltam.length) {
+      contarDevolvidasComercial();
+      mostrarAviso(`OP ${oplCriada} criada, mas ainda não segue ao PCP\nFaltam: ${listaEmTexto(faltam)}. Ela ficou em "OPs em aberto" como "Devolvida Comercial": complete em "Editar" e reenvie.`, 'atencao');
+    } else {
+      alert(`OP ${oplCriada} criada automaticamente e enviada para o PCP!`);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2019,10 +2069,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     }
     // OP nasce sozinha, já numerada a partir do PV (A/D+PV+.+MMAA)
     // e entra direto no fluxo normal — sem precisar de "Lançar OP" manual.
-    const { opl: oplCriada, aviso } = await criarOpAutomatica(opVenc, emp);
+    const { opl: oplCriada, aviso, faltam } = await criarOpAutomatica(opVenc, emp);
     await load();
     if (oplCriada) {
-      alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+      avisarOpCriadaSozinha(oplCriada, faltam || []);
     } else if (aviso) {
       mostrarAviso(aviso.texto, aviso.tom);
     }
@@ -2982,7 +3032,10 @@ function ColunaRolavel({ children }: any) {
               { id:'agenda',    rotulo:'Agenda', icone: mdiCalendarMonthOutline },
               { id:'recentes',  rotulo:'Últimas visualizadas', icone: mdiHistory },
               { id:'relatorio', rotulo:'Relatório', icone: mdiChartBar },
-              { id:'opls',      rotulo:'OPs em aberto', icone: mdiWrenchOutline },
+              { id:'opls',      rotulo:'OPs em aberto', icone: mdiWrenchOutline,
+                contagem: devolvidasComercial ? devolvidasComercial : null,
+                classe: devolvidasComercial ? 'acn-aba-alerta' : undefined,
+                titulo: devolvidasComercial ? `${devolvidasComercial} OP${devolvidasComercial !== 1 ? 's' : ''} devolvida${devolvidasComercial !== 1 ? 's' : ''} ao Comercial: corrija o que foi apontado e reenvie` : undefined },
               ...(podeVerFaturamentos ? [{ id:'faturamentos', rotulo:'Faturamentos', icone: mdiCashMultiple }] : []),
               { id:'contatos',  rotulo:'Contatos', icone: mdiCardAccountDetailsOutline },
             ]}
@@ -3183,6 +3236,18 @@ function ColunaRolavel({ children }: any) {
         const reenviarDevolvida = async (o: any) => {
           const d = destinoDaDevolucao(o);
           const motivo = String(o.obs_devolucao || '').trim() || '—';
+          // R1 (13/10/2026): para o PCP a OP só segue com os campos obrigatórios preenchidos. Lê a OP do banco agora (a lista não traz esses campos, e o Comercial pode ter
+          // acabado de completá-los em "Editar"). O Fiscal não passa por esta conferência: a OP dele já passou pelo PCP há tempos.
+          if (d.setor === 'PCP') {
+            const { data: fresca, error: errFresca } = await supabase.from('oples')
+              .select('fluxo_entrega,tipo_projeto,origem_venda,itens_vendidos,frete_responsavel,veiculo_id').eq('id', o.id).maybeSingle();
+            if (errFresca || !fresca) { mostrarAviso(`Não deu para conferir os dados da OP ${o.opl} antes de reenviar\n${errFresca?.message || 'OP não encontrada'}`, 'erro'); return; }
+            const faltam = await camposQueFaltam(fresca);
+            if (faltam.length) {
+              mostrarAviso(`A OP ${o.opl} ainda não pode seguir ao PCP\nFaltam: ${listaEmTexto(faltam)}. Complete em "Editar" (os itens vendidos ficam no detalhe da OP) e reenvie.`, 'atencao');
+              return;
+            }
+          }
           if (!await confirmar(`Reenviar a OP ${o.opl} para ${d.para}?\n\nMotivo apontado: ${motivo}\n\nConfirme só depois de corrigir o que foi apontado.${d.registrado ? '' : '\n\nNão há registro de quem devolveu esta OP; ela vai para o PCP.'}`)) return;
           const agora = new Date().toISOString();
           const novo: any = { status_geral: d.status };
@@ -3350,6 +3415,19 @@ function ColunaRolavel({ children }: any) {
               <Botao pequeno icone={mdiRefresh} onClick={fetchOplsEmAberto} title="Atualizar a lista" aria-label="Atualizar a lista" />
             </div>
 
+            {/* R3 (13/10/2026): o contador no topo da lista — as devolvidas ao Comercial ficam à vista, com atalho para filtrar só elas */}
+            {(() => {
+              const nDev = oplsEmAberto.filter((o: any) => o.status_geral === 'Devolvida Comercial').length;
+              if (!nDev) return null;
+              return (
+                <Faixa tom="atencao" icone={mdiUndoVariant}
+                  acao={filtStatusOpl === 'Devolvida Comercial'
+                    ? <Botao pequeno onClick={() => setFiltStatusOpl('')}>Ver todas</Botao>
+                    : <Botao pequeno onClick={() => setFiltStatusOpl('Devolvida Comercial')}>Ver só as devolvidas</Botao>}>
+                  <b>{nDev} OP{nDev !== 1 ? 's' : ''} devolvida{nDev !== 1 ? 's' : ''} ao Comercial</b> — corrija o que foi apontado e reenvie.
+                </Faixa>
+              );
+            })()}
             {erroOpls && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOplsEmAberto}>Tentar de novo</Botao>}>Não foi possível ler as OPs em aberto ({erroOpls}). Isso não quer dizer que não haja OP{oplsEmAberto.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
             {oplsLoading ? (
               <div className="acn-empty acn-crm-vazio">Carregando...</div>
@@ -3482,7 +3560,7 @@ function ColunaRolavel({ children }: any) {
                                   return (
                                     <Botao pequeno icone={mdiUndoVariant} onClick={() => reenviarDevolvida(o)}
                                       title={`Corrija o que foi apontado e reenvie para ${d.para}`}>
-                                      REENVIAR P/ {d.setor === 'Fiscal' ? 'FISCAL' : 'ENGENHARIA'}
+                                      REENVIAR P/ {d.setor === 'Fiscal' ? 'FISCAL' : 'PCP'}
                                     </Botao>
                                   );
                                 })()}

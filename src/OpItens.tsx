@@ -1,6 +1,6 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
-// OpItens — o que foi vendido, o que a Engenharia planejou e o que saiu no kit
+// OpItens — o que foi vendido, o que o PCP planejou (a BOM; era da Engenharia até a Etapa 18, de 13/10/2026) e o que saiu no kit
 //
 //   1. Vendido  (oples.itens_vendidos) — Comercial, ao gerar a OP. Obrigatório.
 //      Pode vir da formação de preços da venda ou do item do edital, ou ser
@@ -84,7 +84,7 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
     <div className="acn-quadro tom-info acn-opit-quadro">
       <div className="acn-opit-cab">
         <span className="acn-opit-tit info"><Icone path={mdiPackageVariantClosed} size={15} />Itens vendidos *{unidades > 1 ? ` — por unidade (cada uma das ${unidades} OPs)` : ''}</span>
-        <span className="acn-ajuda">Informa à Engenharia exatamente o que foi vendido.</span>
+        <span className="acn-ajuda">Informa ao PCP exatamente o que foi vendido.</span>
         <span className="acn-opit-acoes">
           {temVinculo && (
             <Botao pequeno icone={mdiArrowDown} onClick={carregar} disabled={carregando}>
@@ -495,7 +495,7 @@ export function QuadroItensOp({ opl }: { opl: any }) {
               })}
             </tbody>
           </table>
-        ) : <div className="acn-opit-vazio">BOM ainda não liberada pela Engenharia.</div>}
+        ) : <div className="acn-opit-vazio">BOM ainda não configurada pelo PCP.</div>}
         {opl?.kit_conferencia?.conferido_por && (
           <div className="acn-ajuda acn-opit-conferido">
             Conferido por {opl.kit_conferencia.conferido_por}{opl.kit_conferencia.em_lote ? ' (em lote)' : ''}

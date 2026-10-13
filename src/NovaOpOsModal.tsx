@@ -20,6 +20,7 @@ import { carregarVeiculos } from './Veiculos';
 import { modoDoVeiculo } from './ConfigEstrutura';
 import FotosVeiculo from './FotosVeiculo';
 import { PerguntasDaVenda, respostasDaUnidade, gravarConfiguracaoDaOp } from './PerguntasDaVenda';
+import { recusaPorPerguntasDoCarro } from './OpObrigatorios';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -149,7 +150,7 @@ const VAZIO = {
 
   // ── Resumo dos Serviços ───────────────────────────────────────────────────
   resumo_servicos:        '',
-  // O que foi vendido (obrigatório na OP): informa a Engenharia. No lote, por unidade.
+  // O que foi vendido (obrigatório na OP): informa o PCP (a Engenharia só recebe pedidos de desenvolvimento, desde a Etapa 18). No lote, por unidade.
   itens_vendidos:         [] as any[],
   fotos_veiculo:          [] as any[],   // como o carro chegou
   licitacao_id:           null as string | null,   // vem do prefill da Licitação (formação ligada a ela)
@@ -233,6 +234,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const [veiculosCarregados, setVeiculosCarregados] = useState<any[]>([]);
   // respostas sobre o carro, por unidade do lote — o índice 0 é o padrão
   const [respostasCarro, setRespostasCarro] = useState<any>({});
+  // R8 (13/10/2026): quantas perguntas do carro ainda estão sem resposta (quem avisa é o próprio bloco "Sobre o carro")
+  const [perguntasCarroPendentes, setPerguntasCarroPendentes] = useState(0);
   useEffect(() => { carregarVeiculos().then(setVeiculosCarregados); }, []);
   const [modelosReboque, setModelosReboque]   = useState<{id:string,nome:string}[]>([]);
   const [novoModeloReboque, setNovoModeloReboque] = useState('');
@@ -378,8 +381,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Lote misto: cada grupo tem seus próprios itens (validado em validarGrupos,
     // mais abaixo) — a lista única daqui não vale nesse caso.
     if (form.tipo === 'OP' && !loteEhMisto && itensPreenchidos(form.itens_vendidos || []).length === 0) {
-      setErro('Informe pelo menos 1 item vendido (o que a Engenharia vai receber para esta OP).'); return;
+      setErro('Informe pelo menos 1 item vendido (o que o PCP vai receber para esta OP).'); return;
     }
+    // R8 (13/10/2026, decisão do usuário de 01/10/2026): quem abre a OP é quem sabe a resposta, e o PCP deve receber tudo respondido. Só vale quando o bloco "Sobre o carro"
+    // aparece (a venda leva o Conjunto Elétrico e algum item tem pergunta) e há veículo escolhido — sem veículo as respostas nem são gravadas. Lote misto não mostra o bloco.
+    const recusaCarro = recusaPorPerguntasDoCarro({
+      tipo: form.tipo, loteMisto: loteEhMisto, pendentes: perguntasCarroPendentes,
+      temVeiculo: !!form.veiculo_id || (form.veiculos || []).some((u: any) => !!u?.veiculo_id),
+    });
+    if (recusaCarro) { setErro(recusaCarro); return; }
 
 
     setSalvando(true);
@@ -676,7 +686,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   veiculoId={form.veiculo_id}
                   unidades={Number(form.quantidade) || 1}
                   loteMisto={loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf)}
-                  respostas={respostasCarro} onChange={setRespostasCarro} />
+                  respostas={respostasCarro} onChange={setRespostasCarro} onPendentes={setPerguntasCarroPendentes} />
               )}
 
               {/* Fotos de como o carro chegou. Só faz sentido quando há carro:

@@ -709,7 +709,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const podeTrocarNumero = podeAlterarNumeroOplPv(usuario);
   // Admin/Gerente: todos os campos e valores da OP (inclusive status), uma ou o lote
   const podeEditarTudo = podeEditarOplCompleta(usuario);
-  // Itens vendidos: o Comercial ajusta até a Engenharia liberar a BOM; depois só Admin/Gerente
+  // Itens vendidos: o Comercial ajusta até o PCP fechar a BOM (era a Engenharia até a Etapa 18, de 13/10/2026); depois só Admin/Gerente
   const perfilComercial = /comercial|crm|licita/i.test(String(usuario?.perfil || ''));
   const podeEditarVendido = podeEditarTudo || (opl?.status_bom !== 'BOM Liberado'
     && (perfilComercial || (!!usuario?.nome && usuario.nome === opl?.responsavel_comercial)));

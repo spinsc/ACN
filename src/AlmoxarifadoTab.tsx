@@ -826,7 +826,7 @@ Embalar e enviar assim mesmo?`)) return;
                             </Botao>
                           )}
                           </>)}
-                          <Botao variante="perigo-sec" pequeno icone={mdiArrowULeftTop} title="Devolver para refazer o kit ou para a Engenharia reanalisar"
+                          <Botao variante="perigo-sec" pequeno icone={mdiArrowULeftTop} title="Devolver para refazer o kit ou para o PCP rever a BOM"
                             onClick={()=>setModalDevolver(o)}>
                             DEVOLVER
                           </Botao>

@@ -4,6 +4,7 @@ import { confirmar } from './Feedback';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
+import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -274,7 +275,9 @@ export default function FiscalTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('fiscal_devolve_comerc', msg.oplDevolvida(opl.opl, 'Comercial', obsDevolver.trim(), currentUser?.nome));
+    // R3 (13/10/2026): o evento 'fiscal_devolve_comerc' nunca existiu na configuração, então este aviso nunca saiu; agora existe, e vai para quem abriu a OP e o gerente dele
+    avisarDevolucaoAoComercial({ opl, evento: 'fiscal_devolve_comerc', autorEmail: currentUser?.email,
+      mensagem: msg.oplVoltouAoComercial(opl.opl, obsDevolver.trim(), currentUser?.nome || '—') });
     setModalDevolver(null); setObsDevolver('');
     fetchAll();
   };

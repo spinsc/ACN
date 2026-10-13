@@ -141,6 +141,17 @@ const EQUIPE_DO_GERENTE: Record<string, string[]> = {
 };
 
 /**
+ * `gerente` (o perfil) é gerente de quem tem o perfil `pessoa`? Usa o mesmo mapa das demandas; o próprio gerente não é gerente de si.
+ * R3 (13/10/2026): é assim que o aviso de OP devolvida chega ao "gerente de quem abriu" — não existe vínculo individual no cadastro, só o perfil.
+ */
+export function ehGerenteDoPerfil(gerente: string, pessoa: string): boolean {
+  const g = semAcento(String(gerente || ''));
+  const p = semAcento(String(pessoa || ''));
+  const equipe = EQUIPE_DO_GERENTE[g];
+  return !!equipe && p !== g && equipe.some(e => semAcento(e) === p);
+}
+
+/**
  * Até onde a vista deste usuário alcança nas demandas.
  *   { modo: 'todas' }                    → Admin
  *   { modo: 'setor', perfis: [...] }     → gerente: o setor dele

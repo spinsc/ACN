@@ -120,6 +120,13 @@ export const msg = {
   oplDevolvida: (opl: string, para: string, motivo: string, usuario: string) =>
     `*OP ${opl}* devolvida para *${para}*.\nMotivo: ${motivo || '—'}\nPor: ${usuario}`,
 
+  // R3 (13/10/2026): a mensagem de quem abriu a OP e do gerente dele quando ela volta ao Comercial
+  oplVoltouAoComercial: (opl: string, motivo: string, usuario: string) =>
+    `*OP ${opl}* voltou para o *Comercial*.\nMotivo: ${motivo || '—'}\nPor: ${usuario}\nCorrija e reenvie em CRM › OPs em aberto.`,
+
+  oplAutomaticaIncompleta: (opl: string, faltam: string, usuario: string) =>
+    `*OP ${opl}* foi criada sozinha, mas ainda não segue ao PCP.\nFaltam: ${faltam}\nCard movido por: ${usuario}\nComplete e reenvie em CRM › OPs em aberto.`,
+
   kitOk: (opl: string, usuario: string) =>
     `*Kit completo* — OP ${opl} aguardando liberação PCP.\nAlmox: ${usuario}`,
 

@@ -436,7 +436,7 @@ export async function sugerirFabricacao(ops: any[]) {
     achados.push({ setor, nome: l.nome, quantidade: num(l.quantidade) || 1,
       descricao: String(l.descricao || '').trim(), item_id: l.item_id });
   }
-  return { achados, origem: daBom ? 'BOM da Engenharia' : 'itens vendidos' };
+  return { achados, origem: daBom ? 'BOM da OP' : 'itens vendidos' };   // era "BOM da Engenharia"; desde a Etapa 18 (13/10/2026) quem fecha a BOM é o PCP
 }
 export const temFabricacao = (valor: any) => SETORES_FABRICACAO.some(s => itensPreenchidos(valor?.[s] || []).length > 0);
 

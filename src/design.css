@@ -277,6 +277,8 @@ html body .acn-tela-cab h1 { margin: 0; font-size: 20px !important; line-height:
 .acn-aba.ativa { color: var(--acn-ink); border-bottom-color: var(--acn-brand); }
 .acn-aba em, .acn-chips em { font-style: normal; font-size: 11px; font-variant-numeric: tabular-nums; background: var(--acn-neutral-soft); color: var(--acn-neutral); border-radius: 999px; padding: 1px 6px; }
 .acn-aba.ativa em { background: var(--acn-brand-soft); color: var(--acn-brand-ink); }
+/* R3 (13/10/2026): a aba que carrega um aviso (OPs devolvidas ao Comercial) pinta o número com a cor de atenção, ativa ou não */
+.acn-aba.acn-aba-alerta em, .acn-aba.acn-aba-alerta.ativa em { background: var(--acn-warn-soft); color: var(--acn-warn); font-weight: 700; }
 
 .acn-chips { display: inline-flex; padding: 3px; gap: 2px; background: var(--acn-neutral-soft); border-radius: var(--acn-r2); flex-wrap: wrap; }
 .acn-chips button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 0; border-radius: 5px; background: transparent; font: 500 12px var(--acn-font); color: var(--acn-text); cursor: pointer; white-space: nowrap; }

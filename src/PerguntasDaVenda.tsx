@@ -27,7 +27,7 @@ import Icone from './Icone';
 import { mdiCarOutline, mdiCheck } from '@mdi/js';
 
 export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteMisto = false,
-                                   respostas, onChange }) {
+                                   respostas, onChange, onPendentes }) {
   const [perguntas, setPerguntas] = useState([]);
   const [temConjunto, setTemConjunto] = useState(false);
   const [carregando, setCarregando] = useState(false);
@@ -61,12 +61,20 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
     onChange?.({ ...(respostas || {}), [un]: base });
   };
 
+  const totalUnidades = Math.max(1, Number(unidades) || 1);
+  const mostrarPorUnidade = loteMisto && totalUnidades > 1;
+
+  // R8 (13/10/2026, decisão do usuário de 01/10/2026: quem abre a OP é quem sabe a resposta, e as perguntas do carro entram nos obrigatórios): avisa o formulário quantas
+  // perguntas dos blocos que aparecem ainda estão sem resposta (o carro 01 e, no lote misto, os carros que foram abertos para responder diferente; os outros herdam o 01).
+  const pendentesAgora = (carregando || !temConjunto || !perguntas.length) ? 0
+    : perguntasPendentes(perguntas, respostasDe(0)).length
+      + (mostrarPorUnidade ? Array.from({ length: totalUnidades - 1 }, (_, k) => k + 1).filter(un => abertas[un])
+          .reduce((s, un) => s + perguntasPendentes(perguntas, respostasDe(un)).length, 0) : 0);
+  useEffect(() => { onPendentes?.(pendentesAgora); }, [pendentesAgora]);
+
   if (!ids.length || carregando) return null;
   if (!temConjunto) return null;          // sem conjunto, não há o que perguntar
   if (!perguntas.length) return null;     // nenhum item vendido tem pergunta
-
-  const totalUnidades = Math.max(1, Number(unidades) || 1);
-  const mostrarPorUnidade = loteMisto && totalUnidades > 1;
 
   // 12e54 (09/10/2026): só aparência — as respostas de cada pergunta viraram o seletor do guia (Chips) e o roxo do bloco mora no design.css (--acn-pdv-cor)
   const Bloco = ({ un, titulo }) => {
