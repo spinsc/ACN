@@ -36,6 +36,11 @@ com outras tarefas. O estado **não está na sua memória** — está no arquivo
    primeira que não estiver ✅. A ordem do plano é uma
    sugestão do usuário aceita em 29/09/2026: bug funcional primeiro, depois
    o que atrapalha entender, depois visualização, por fim polimento.
+   **PRIORIDADE (decidida pelo usuário em 12/10/2026): a Etapa 18** (a OP nasce
+   no PCP e a Engenharia só recebe pedidos de desenvolvimento — subetapas 18a a
+   18e) **é a primeira**, depois R1 + R8 + R3 (já com o destino PCP) e o resto
+   da "Fila da madrugada de 13/10/2026", no plano. Leia essas duas seções
+   inteiras antes de começar.
 
 3. **Confira o ponto de partida antes de escrever código.** O plano foi
    medido em 29/09/2026; o banco é de produção e o código anda. Os arquivos e
@@ -114,8 +119,13 @@ português, com o trailer de co-autoria); (6) **dar `git push`** — o usuário 
 (`gh run list`/`gh run watch`, sem confiar na primeira resposta da API: ela já falhou com erro 500 passageiro); **se falhar, corrigir e repetir até funcionar**, e só então (8) seguir
 para o próximo passo.
 
-**Parar:** quando o usuário mandar **"pare no próximo commit"** (ou parecido) durante o trabalho, terminar o passo em andamento — commit, push e conferência do deploy, que já estão
-testados — e **parar**, sem começar outro. Responder dizendo onde parou e o que seria o próximo passo.
+**Parar:** quando o usuário mandar **"pare"**, **"pausar"** ou **"pare no próximo commit"** (ou parecido) durante o trabalho, terminar o passo em andamento — commit, push e conferência do deploy, que já estão
+testados — e **parar**, sem começar outro. **Entregar (atualização de 12/10/2026): (1) um relatório resumido de tudo o que foi feito** (fatias, números dos testes, o que mexeu em dado real e quantas linhas, o que
+travou e o que ficou de fora) **e (2) o rascunho da nota de atualização do dia, para o usuário analisar e aprovar — a nota só é gravada em `avisos_sistema` depois do OK dele.** Dizer também onde parou e o que seria o próximo passo.
+
+**Rotina da madrugada de 13/10/2026 (autorizada pelo usuário em 12/10/2026, com o risco explicado):** vale o ciclo acima **com push de tudo a cada fatia** (inclusive regra de negócio e a migração de dado real da Etapa 18, sempre com medida nova,
+cópia de segurança e contagem); **só começa quando o usuário mandar "pode começar"**; **o teste de navegador liga o toque** (`isMobile` e `hasTouch`, senão o `responsivo.css` não é exercitado); entre uma fatia e outra,
+conferir o uso do plano (`get_usage`): janela de 5 horas acima de 90% → terminar a fatia, publicar e esperar reabrir em vez de começar outra. A fila e as regras estão no plano ("Fila da madrugada de 13/10/2026").
 
 **Ordem do que fazer:** (a) o que já está decidido e é só código: as fatias que faltam da Etapa 12 (CRM 12e40 e 12e41; depois as telas grandes e os componentes compartilhados, das
 menores para as maiores, no método de sempre: fotografia e comportamento comparados nas duas versões); (b) as respostas já dadas pelo usuário que pedem construção: R1 + R8 + R3, R6, R7 e R17;
@@ -125,8 +135,8 @@ Em cada tela grande, **antes** da migração, a etapa 7.x de achados (bugs que p
 **Dúvida de regra de negócio no meio da noite:** não parar. Escolher o caminho **mais conservador** (que não apaga, não bloqueia e não muda dado real), construir assim, e **registrar a suposição
 no plano marcada "a confirmar"**, para o usuário conferir de manhã. Dado real só o que a resposta dele já autoriza, com contagem; nunca apagar sem autorização explícita.
 
-**Nota de atualização do dia** (regra do projeto: uma por dia trabalhado, **mostrada a ele antes de publicar**): durante a noite **não publicar**; deixar o rascunho pronto em `scratchpad`
-e avisar no encerramento.
+**Nota de atualização do dia** (regra do projeto: uma por dia trabalhado, **mostrada a ele antes de publicar**): durante a noite **não publicar**; ir montando o rascunho em `scratchpad`
+(pode ser em arquivo) e entregá-lo no relatório de parada ou no encerramento, **para aprovação**.
 
 ### Encerramento — quando "tudo que tem no plano" estiver feito
 
