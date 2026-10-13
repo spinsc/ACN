@@ -12,6 +12,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio, SETORES_FABRICACAO } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
+import ModalConfigurarOp, { ModalLiberacaoParcialSerralheria } from './ConfigurarOp';
 import { confirmar } from './Feedback';
 import { MenuAcoes, Botao, Faixa, Selo, diaBR } from './Interface';
 import Icone from './Icone';
@@ -74,6 +75,10 @@ export default function PCPTab({ currentUser }) {
   const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVer, setModalVer] = useState(null);
+  // Etapa 18b (13/10/2026): o PCP passa a configurar a OP (estrutura, perguntas do carro e BOM) e a pedir a liberação parcial da Serralheria —
+  // antes eram janelas da Engenharia (decisão do usuário em 12/10/2026: a OP cai direto no PCP)
+  const [modalConfig, setModalConfig] = useState<any>(null);   // { ops, base? }
+  const [modalSerralheria, setModalSerralheria] = useState<any>(null);
   const [resumoLote, setResumoLote] = useState<any>(null);   // { base, irmaos }: cartão de resumo do lote como uma coisa só (08/10/2026)
   const [obsDevolver, setObsDevolver] = useState('');
   const [busca, setBusca] = useState('');
@@ -685,6 +690,13 @@ export default function PCPTab({ currentUser }) {
                       <td className="acn-eng-celula-acoes">
                         <div className="acn-acoes-linha quebra">
                           {o.status_geral === 'Em Espera PCP' && (
+                            <Botao variante={o.status_bom === 'BOM Liberado' ? 'secundario' : 'primario'} pequeno
+                              title="Estrutura do veículo, perguntas do carro e BOM desta OP"
+                              onClick={()=>setModalConfig({ ops: [o] })}>
+                              {o.status_bom === 'BOM Liberado' ? 'REVER BOM' : 'CONFIGURAR'}
+                            </Botao>
+                          )}
+                          {o.status_geral === 'Em Espera PCP' && (
                             <Botao variante="primario" pequeno onClick={()=>abrirKiting([o])}>
                               LIBERAR KITING
                             </Botao>
@@ -711,6 +723,8 @@ export default function PCPTab({ currentUser }) {
                           <MenuAcoes rotulo="Mais ações da OP" itens={[
                             { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
                             { rotulo: 'Nova demanda para esta OP', icone: mdiPlus, onClick: () => setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') }) },
+                            { rotulo: 'Liberação parcial p/ Serralheria', icone: mdiWrenchOutline, titulo: 'Antecipar a parte metálica/estrutural sem esperar o resto',
+                              onClick: () => setModalSerralheria(o), oculto: o.status_geral !== 'Em Espera PCP' || !!o.serralheria_status },
                             { rotulo: 'Devolver (Almoxarifado ou Engenharia)', icone: mdiArrowULeftTop, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
                           ]} />
                         </div>
@@ -759,6 +773,13 @@ export default function PCPTab({ currentUser }) {
                           <td>{fmtDt(rep.data_prevista_entrega)}</td>
                           <td className="acn-eng-celula-acoes">
                             <div className="acn-acoes-linha quebra">
+                              {qtdEspera > 0 && (
+                                <Botao variante="secundario" pequeno icone={mdiClipboardTextOutline} disabled={processandoLote}
+                                  title="Estrutura do veículo, perguntas do carro e BOM das unidades que ainda estão na triagem"
+                                  onClick={()=>setModalConfig({ ops: item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), base })}>
+                                  CONFIGURAR EM LOTE ({qtdEspera})
+                                </Botao>
+                              )}
                               {qtdEspera > 0 && (
                                 <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} onClick={()=>abrirKiting(item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), item)}>
                                   KITING EM LOTE ({qtdEspera})
@@ -1089,6 +1110,18 @@ export default function PCPTab({ currentUser }) {
       {modalDevolver && (
         <ModalDevolverOp opl={modalDevolver} setorOrigem="PCP" currentUser={currentUser}
           onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); setObsDevolver(''); fetchAll(); }} />
+      )}
+
+      {/* CONFIGURAR A OP — estrutura, perguntas do carro e BOM (Etapa 18b); salvar não muda a etapa da OP */}
+      {modalConfig && (
+        <ModalConfigurarOp ops={modalConfig.ops} base={modalConfig.base} currentUser={currentUser}
+          onClose={() => setModalConfig(null)}
+          onSalvo={(salvas, completo) => { fetchAll(); if (completo) setModalConfig(null); }} />
+      )}
+      {modalSerralheria && (
+        <ModalLiberacaoParcialSerralheria opl={modalSerralheria} currentUser={currentUser}
+          onClose={() => setModalSerralheria(null)}
+          onFeito={() => { setModalSerralheria(null); fetchAll(); }} />
       )}
     </div>
   );
