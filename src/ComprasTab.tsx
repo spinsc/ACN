@@ -21,6 +21,7 @@ import { mdiClose, mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiR
   mdiChevronUp, mdiChevronDown, mdiPlus, mdiContentSaveOutline, mdiOfficeBuildingOutline, mdiCalendarOutline, mdiBullseyeArrow,
   mdiTrashCanOutline, mdiPaperclip, mdiTrophyOutline, mdiClockOutline, mdiCheckCircleOutline, mdiCameraOutline } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
+import { listarEsperandoAprovacao, rotuloDaAlcada } from './AprovacaoCompras';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
   ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao,
@@ -772,15 +773,25 @@ const esperaTexto = (iso: any) => {
   return d === 1 ? 'há 1 dia' : `há ${d} dias`;
 };
 
-function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbrir }: any) {
+function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbrir, erroAlcadas = '' }: any) {
+  // R6: se só a leitura das alçadas pendentes falhou, o painel segue com as compras em "Aguardando Aprovação" e avisa — nunca diz "nenhuma" como se tivesse conferido tudo
+  const avisoAlcadas = erroAlcadas ? (
+    <Faixa tom="atencao">Não foi possível ler as alçadas pendentes ({erroAlcadas}). As compras que esperam só por uma alçada podem não aparecer aqui.</Faixa>
+  ) : null;
   if (!lista.length) {
-    return <div className="acn-ajuda acn-prod-ic acn-cmp-vazio-aprov"><Icone path={mdiCheck} size={13} /> Nenhuma compra esperando a sua aprovação.</div>;
+    return (
+      <>
+        <div className="acn-ajuda acn-prod-ic acn-cmp-vazio-aprov"><Icone path={mdiCheck} size={13} /> {erroAlcadas ? 'Nenhuma compra em "Aguardando Aprovação".' : 'Nenhuma compra esperando a sua aprovação.'}</div>
+        {avisoAlcadas}
+      </>
+    );
   }
   return (
     <div className="acn-quadro tom-atencao acn-cmp-aprov">
       <div className="acn-quadro-titulo">Esperando a sua aprovação ({lista.length})</div>
+      {avisoAlcadas}
       <div className="acn-ajuda">
-        Qualquer aprovador pode decidir{outros.length ? `; também recebem: ${outros.join(', ')}` : ''}. Mais antigas primeiro.
+        Qualquer aprovador pode decidir{outros.length ? `; também recebem: ${outros.join(', ')}` : ''}. Mais antigas primeiro. Cada compra mostra a alçada que falta.
       </div>
       {lista.map((p: any) => (
         <div key={p.id} className="acn-cmp-aprov-item">
@@ -793,6 +804,13 @@ function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbri
             <div className="acn-ajuda">
               Pedido por {p.criado_por_nome || '—'}{p.opl ? ` · OP ${p.opl}` : ''}
             </div>
+            {/* R6 (13/10/2026): a alçada que ainda falta (por valor ou por departamento), e a etapa da compra quando ela ainda não chegou à aprovação */}
+            {(p._alcadas || []).length > 0 && (
+              <div className="acn-ajuda atencao acn-cmp-aprov-alc">
+                Pendente: {(p._alcadas || []).map((a: any) => rotuloDaAlcada(a, canVerValor)).join(' · ')}
+                {p.status_compra !== 'Aguardando Aprovação' ? ` — compra em "${p.status_compra}"` : ''}
+              </div>
+            )}
           </div>
           <div className="acn-cmp-aprov-cot">
             <div>{p._cotacoes ? `${p._cotacoes} ${p._cotacoes === 1 ? 'cotação' : 'cotações'}` : <span className="acn-txt-erro acn-prod-ic"><Icone path={mdiAlertOutline} size={12} /> sem cotação</span>}</div>
@@ -822,6 +840,8 @@ export default function ComprasTab({ currentUser }) {
 
   // Compras que esperam aprovação (só para quem aprova): null = ainda não carregou ou não é aprovador
   const [esperando, setEsperando] = useState<any[] | null>(null);
+  // R6: a leitura das alçadas pendentes (complemento do painel) falhou — o painel segue com as compras em "Aguardando Aprovação" e avisa
+  const [erroAlcadasEsperando, setErroAlcadasEsperando] = useState('');
   // Linhas com alteração não vista por este usuário ganham borda amarela —
   // mesmo padrão usado nas outras telas (ver AuditSystem.tsx).
   const { naoLidoSet: pedidosNaoLidos } = useUnreadMap('pcp_pedidos_compra', pedidos.map((p: any) => p.id), currentUser);
@@ -1078,22 +1098,26 @@ export default function ComprasTab({ currentUser }) {
   // tudo o que espera, qualquer que seja o filtro escolhido. Três leituras pequenas, e só para quem aprova.
   const carregarEsperando = async () => {
     if (!podeAprovarCompra(currentUser)) { setEsperando(null); return; }
-    const { data: peds, error } = await supabase.from('pcp_pedidos_compra').select('*')
-      .eq('status_compra', 'Aguardando Aprovação').order('data_criacao', { ascending: true });
-    if (error) { console.warn('Compras esperando aprovação: falha ao ler —', error.message); return; }
-    const ids = (peds || []).map((p: any) => p.id);
+    // R6 (13/10/2026): além das compras em "Aguardando Aprovação", entram as que têm alçada pendente (por valor ou por departamento) em outra etapa — mesma conta do contador do menu
+    const { pedidos: peds, alcadas, erro: erroEsperando, erroAlcadas } = await listarEsperandoAprovacao();
+    if (erroEsperando) { console.warn('Compras esperando aprovação: falha ao ler —', erroEsperando); return; }
+    setErroAlcadasEsperando(erroAlcadas || '');
+    const ids = (peds || []).filter((p: any) => p.status_compra === 'Aguardando Aprovação').map((p: any) => p.id);
+    const idsTodos = (peds || []).map((p: any) => p.id);
     const desde: Record<string, string> = {}, nCot: Record<string, number> = {};
-    if (ids.length) {
+    if (idsTodos.length) {
       const [{ data: hist }, { data: cots }] = await Promise.all([
-        supabase.from('pcp_pedidos_compra_historico').select('pedido_id,criado_em').in('pedido_id', ids).eq('status_para', 'Aguardando Aprovação'),
-        supabase.from('pcp_cotacoes_fornecedores').select('pedido_id').in('pedido_id', ids),
+        ids.length ? supabase.from('pcp_pedidos_compra_historico').select('pedido_id,criado_em').in('pedido_id', ids).eq('status_para', 'Aguardando Aprovação') : Promise.resolve({ data: [] }),
+        supabase.from('pcp_cotacoes_fornecedores').select('pedido_id').in('pedido_id', idsTodos),
       ]);
       // "aguardando há": a ÚLTIMA vez que entrou na etapa (um pedido devolvido e reenviado conta de novo)
       (hist || []).forEach((h: any) => { if (!desde[h.pedido_id] || h.criado_em > desde[h.pedido_id]) desde[h.pedido_id] = h.criado_em; });
       (cots || []).forEach((c: any) => { nCot[c.pedido_id] = (nCot[c.pedido_id] || 0) + 1; });
     }
+    // a compra que só espera por uma alçada (não está na etapa "Aguardando Aprovação") conta o tempo da alçada pendente mais antiga
+    const desdeDaAlcada = (id: string) => (alcadas[id] || []).map((a: any) => a.solicitado_em || a.criado_em).filter(Boolean).sort()[0];
     setEsperando((peds || [])
-      .map((p: any) => ({ ...p, _desde: desde[p.id] || p.ultima_movimentacao_em || p.data_criacao, _cotacoes: nCot[p.id] || 0 }))
+      .map((p: any) => ({ ...p, _desde: desde[p.id] || desdeDaAlcada(p.id) || p.ultima_movimentacao_em || p.data_criacao, _cotacoes: nCot[p.id] || 0, _alcadas: alcadas[p.id] || [] }))
       .sort((a: any, b: any) => String(a._desde).localeCompare(String(b._desde))));
   };
 
@@ -2093,7 +2117,7 @@ export default function ComprasTab({ currentUser }) {
       {esperando !== null && podeAprovarCompra(currentUser) && (
         <PainelEsperandoMinhaAprovacao lista={esperando} canVerValor={canVerValor} fmt={fmt}
           outros={aprovadoresCompra.filter((a: any) => String(a.id) !== String(currentUser?.id)).map((a: any) => a.nome)}
-          onAbrir={abrirModalCotacoes} />
+          erroAlcadas={erroAlcadasEsperando} onAbrir={abrirModalCotacoes} />
       )}
 
       {/* KPIs — resumo no topo, antes da lista */}

@@ -33,7 +33,8 @@ import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
 import AvisosOpPanel, { contarAvisosOp } from './AvisosOpPanel';
-import { AlertasComprasPanel, JanelaParadasObrigatoria, carregarAlertasCompras, alertasDoUsuario, dispararMencoesEntrega } from './ComprasFluxo';
+import { AlertasComprasPanel, JanelaParadasObrigatoria, carregarAlertasCompras, alertasDoUsuario, dispararMencoesEntrega, podeAprovarCompra } from './ComprasFluxo';
+import { contarEsperandoAprovacao } from './AprovacaoCompras';
 import Icone from './Icone';
 import {
   mdiViewDashboardOutline, mdiCalendarMonthOutline, mdiHandshakeOutline, mdiGavel, mdiFileDocumentOutline,
@@ -733,6 +734,21 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       .subscribe();
     return () => { clearInterval(iv); supabase.removeChannel(ch); };
   }, []);
+  // R6 (13/10/2026): quantas compras esperam a decisão de quem aprova (a etapa "Aguardando Aprovação" e as alçadas por valor ou por departamento) — contador "Compras (N)" no menu,
+  // só para quem tem a marca de aprovar compra. A marca chega DEPOIS da tela abrir (a sessão é atualizada do banco), por isso o efeito depende dela. Falha na leitura não zera o contador.
+  const [comprasEsperando, setComprasEsperando] = useState(0);
+  const aprovaCompra = podeAprovarCompra(currentUser);
+  useEffect(() => {
+    if (!aprovaCompra) { setComprasEsperando(0); return; }
+    const atualizar = () => contarEsperandoAprovacao().then(n => { if (n != null) setComprasEsperando(n); }).catch(() => {});
+    atualizar();
+    const iv = setInterval(atualizar, 60000);
+    const ch = supabase.channel('menu-compras-aprovacao')
+      .on('postgres_changes', { event:'*', schema:'public', table:'pcp_pedidos_compra' }, atualizar)
+      .on('postgres_changes', { event:'*', schema:'public', table:'pcp_aprovacoes' }, atualizar)
+      .subscribe();
+    return () => { clearInterval(iv); supabase.removeChannel(ch); };
+  }, [aprovaCompra]);
   const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);
   const [mencoesCount, setMencoesCount]         = useState(0);
@@ -1277,7 +1293,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   // Etapa 14a: com o menu escondido, os avisos dos itens (análises técnicas de Engenharia/Produção e as mensagens de WhatsApp do CRM) vêm somados no botão do menu
   const totalAvisosMenu = SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => isVisible(i.id)).reduce((soma, i) => {
     const setor = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[i.id];
-    return soma + (setor ? (analisesPorSetor[setor] || 0) : 0) + (i.id === 'crm' ? waNotifCount : 0);
+    return soma + (setor ? (analisesPorSetor[setor] || 0) : 0) + (i.id === 'crm' ? waNotifCount : 0) + (i.id === 'compras' ? comprasEsperando : 0);
   }, 0);
 
   return (
@@ -1329,6 +1345,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                           <span className="sidebar-contador" title={`${n} análise(s) técnica(s) aguardando este setor`}>{n}</span>
                         ) : null;
                       })()}
+                      {item.id === 'compras' && comprasEsperando > 0 && (
+                        <span className="sidebar-contador" title={`${comprasEsperando} compra${comprasEsperando === 1 ? '' : 's'} esperando a sua aprovação`}>{comprasEsperando}</span>
+                      )}
                       {item.id === 'crm' && waNotifCount > 0 && (
                         <span className="acn-wa-sidebar-dot">
                           {waNotifCount > 9 ? '9+' : waNotifCount}
