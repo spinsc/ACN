@@ -17,26 +17,13 @@ const REF_TIPOS = [
   { contexto: 'crm',       aba: 'crm',        tabela: 'crm_oportunidades', campos: 'id,titulo,orgao',              colunasBusca: ['titulo_norm', 'orgao_norm'],       label: (r: any) => r.titulo || r.orgao || '—', icone: '💼' },
 ];
 
-function Avatar({ nome, size = 26, bg = '#e2e8f0', color = '#475569' }: any) {
-  return (
-    <span style={{
-      width: size, height: size, borderRadius: '50%', background: bg,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color, fontWeight: 700, fontSize: size * 0.38, flexShrink: 0,
-    }}>
-      {(nome || '?')[0].toUpperCase()}
-    </span>
-  );
+// 12e62 (13/10/2026): o tamanho e o tom saem por atributo (data-t, data-tom) e o desenho fica no design.css — antes eram estilos soltos aqui dentro.
+function Avatar({ nome, size = 26, tom }: any) {
+  return <span className="acn-chat-av" data-t={size} data-tom={tom}>{(nome || '?')[0].toUpperCase()}</span>;
 }
 
 function GroupIcon({ size = 26 }: any) {
-  return (
-    <span style={{
-      width: size, height: size, borderRadius: '50%', background: '#ede9fe',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#6d28d9', fontSize: size * 0.5, flexShrink: 0,
-    }}>👥</span>
-  );
+  return <span className="acn-chat-gi" data-t={size}>👥</span>;
 }
 
 export default function ChatWidget({ currentUser, onNavigate }: any) {
@@ -57,7 +44,6 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [mutado, setMutado]       = useState(() => localStorage.getItem('acn_chat_muted') === '1');
   const [busca, setBusca]         = useState('');
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   // Fase 2 — grupos
   const [modalNovoGrupo, setModalNovoGrupo] = useState(false);
@@ -751,125 +737,95 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
      RENDER
   ══════════════════════════════════════════════════════════════════════════ */
   return (
-    <div className="acn-chat-raiz" style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 9500, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+    <div className="acn-chat-raiz">
 
-      <style>{`
-        @keyframes chatPop   { from{opacity:0;transform:translateY(10px) scale(.95)} to{opacity:1;transform:translateY(0) scale(1)} }
-        @keyframes chatPulse { 0%,100%{box-shadow:0 4px 18px rgba(239,68,68,.55),0 0 0 0 rgba(239,68,68,.45)} 60%{box-shadow:0 4px 18px rgba(239,68,68,.55),0 0 0 10px rgba(239,68,68,0)} }
-        @keyframes badgePop  { 0%{transform:scale(0)} 60%{transform:scale(1.25)} 100%{transform:scale(1)} }
-        .chat-row-hover:hover { background: #f0fdfa !important; }
-        .dm-del-btn { opacity: 0; transition: opacity .15s; }
-        .dm-item-row:hover .dm-del-btn { opacity: 1; }
-      `}</style>
-
-      {/* ── Toast ── */}
+      {/* ── Aviso de mensagem nova ── */}
       {toast && (
-        <div onClick={() => abrirViaToast(toast)} style={{
-          background: '#1e293b', color: 'white', borderRadius: 10,
-          padding: '10px 14px', cursor: 'pointer', width: 290,
-          boxShadow: '0 6px 28px rgba(0,0,0,.5)',
-          display: 'flex', flexDirection: 'column', gap: 4,
-          animation: 'chatPop .18s ease',
-          border: '1px solid rgba(239,68,68,.6)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 9, color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
+        <div className="acn-chat-aviso" onClick={() => abrirViaToast(toast)}>
+          <div className="acn-chat-aviso-topo">
+            <span className="acn-chat-aviso-sala">
               🔔 {nomeSala(toast.sala)}
             </span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button onClick={e => { e.stopPropagation(); toggleMudo(); }}
-                title={mutado ? 'Ativar som' : 'Silenciar'}
-                style={{ background: 'none', border: 'none', color: mutado ? '#475569' : '#fbbf24', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>
+            <div className="acn-chat-aviso-acoes">
+              <Botao variante="discreto" pequeno className="acn-chat-b acn-chat-mini acn-chat-aviso-sino" data-mudo={mutado ? '1' : undefined}
+                onClick={e => { e.stopPropagation(); toggleMudo(); }}
+                title={mutado ? 'Ativar som' : 'Silenciar'}>
                 {mutado ? '🔕' : '🔔'}
-              </button>
-              <button onClick={e => { e.stopPropagation(); setToast(null); }}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+              </Botao>
+              <Botao variante="discreto" pequeno className="acn-chat-b acn-chat-mini acn-chat-aviso-x"
+                onClick={e => { e.stopPropagation(); setToast(null); }}>✕</Botao>
             </div>
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#f1f5f9' }}>{toast.remetente_nome}</div>
-          <div style={{ fontSize: 10, color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div className="acn-chat-aviso-nome">{toast.remetente_nome}</div>
+          <div className="acn-chat-aviso-texto">
             {toast.texto}
           </div>
-          <div style={{ fontSize: 8, color: '#64748b', marginTop: 1 }}>Clique para abrir a conversa</div>
+          <div className="acn-chat-aviso-dica">Clique para abrir a conversa</div>
         </div>
       )}
 
       {/* ── Painel principal ── */}
       {aberto && (
-        <div className="acn-chat-painel" style={{
-          width: 380, height: 580, background: '#ffffff', borderRadius: 14,
-          boxShadow: '0 16px 56px rgba(0,0,0,.22)', display: 'flex',
-          flexDirection: 'column', border: '1px solid #e2e8f0', overflow: 'hidden',
-          animation: 'chatPop .18s ease',
-        }}>
+        <div className="acn-chat-painel">
 
           {/* Header */}
-          <div style={{ background: '#0f766e', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div className="acn-chat-cab">
             {view === 'sala' ? (
               <>
-                <button onClick={voltarLista}
-                  style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1, marginRight: 2 }}>←</button>
-                {salaAtiva?.tipo === 'grupo' ? <GroupIcon size={24} /> : <Avatar nome={nomeDireto(salaAtiva)} size={24} bg='#dbeafe' color='#1d4ed8' />}
-                <div onClick={() => salaAtiva?.tipo === 'grupo' && setModalInfoGrupo(true)}
-                  style={{ flex: 1, minWidth: 0, cursor: salaAtiva?.tipo === 'grupo' ? 'pointer' : 'default' }}>
-                  <div style={{ color: 'white', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Botao variante="discreto" className="acn-chat-b acn-chat-cab-bt acn-chat-cab-voltar" onClick={voltarLista}>←</Botao>
+                {salaAtiva?.tipo === 'grupo' ? <GroupIcon size={24} /> : <Avatar nome={nomeDireto(salaAtiva)} size={24} tom="azul" />}
+                <div className="acn-chat-cab-info" data-grupo={salaAtiva?.tipo === 'grupo' ? '1' : undefined}
+                  onClick={() => salaAtiva?.tipo === 'grupo' && setModalInfoGrupo(true)}>
+                  <div className="acn-chat-cab-nome">
                     {nomeSala(salaAtiva)}
                   </div>
                   {salaAtiva?.tipo === 'grupo' && (
-                    <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 9 }}>{(salaAtiva.membros || []).length} participantes · toque para ver</div>
+                    <div className="acn-chat-cab-sub">{(salaAtiva.membros || []).length} participantes · toque para ver</div>
                   )}
                 </div>
               </>
             ) : (
               <>
-                <span style={{ color: 'white', fontWeight: 700, fontSize: 14, flex: 1 }}>💬 Chat ACN</span>
-                <button onClick={() => setModalNovoGrupo(true)} title="Novo grupo"
-                  style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: 'white', cursor: 'pointer', fontSize: 12, padding: '5px 9px', borderRadius: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="acn-chat-cab-titulo">💬 Chat ACN</span>
+                <Botao variante="secundario" className="acn-chat-cab-novo" onClick={() => setModalNovoGrupo(true)} title="Novo grupo">
                   👥+
-                </button>
+                </Botao>
               </>
             )}
-            <button onClick={toggleMudo} title={mutado ? 'Ativar som' : 'Silenciar'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: '0 4px', lineHeight: 1,
-                color: mutado ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.75)' }}>
+            <Botao variante="discreto" className="acn-chat-b acn-chat-cab-bt acn-chat-cab-sino" data-mudo={mutado ? '1' : undefined}
+              onClick={toggleMudo} title={mutado ? 'Ativar som' : 'Silenciar'}>
               {mutado ? '🔕' : '🔔'}
-            </button>
-            <button onClick={() => setAberto(false)}
-              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.65)', cursor: 'pointer', fontSize: 17, padding: 0, lineHeight: 1 }}>✕</button>
+            </Botao>
+            <Botao variante="discreto" className="acn-chat-b acn-chat-cab-bt acn-chat-cab-x" onClick={() => setAberto(false)}>✕</Botao>
           </div>
 
           {/* ── LISTA ── */}
           {view === 'lista' && (
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+            <div className="acn-chat-lista">
 
               {/* Campo de busca */}
-              <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0, background: '#fafafa' }}>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#94a3b8', pointerEvents: 'none' }}>🔍</span>
+              <div className="acn-chat-busca">
+                <div className="acn-chat-busca-in">
+                  <span className="acn-chat-busca-lupa">🔍</span>
                   <input
+                    className="acn-chat-busca-campo"
                     value={busca}
                     onChange={e => setBusca(e.target.value)}
                     placeholder="Buscar conversa ou usuário..."
-                    style={{
-                      width: '100%', padding: '6px 10px 6px 28px', fontSize: 11,
-                      border: '1px solid #e2e8f0', borderRadius: 8, outline: 'none',
-                      background: 'white', color: '#1e293b', boxSizing: 'border-box',
-                    }}
                   />
                   {busca && (
-                    <button onClick={() => setBusca('')}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, padding: 0, lineHeight: 1 }}>
+                    <Botao variante="discreto" pequeno className="acn-chat-b acn-chat-busca-limpa" onClick={() => setBusca('')}>
                       ✕
-                    </button>
+                    </Botao>
                   )}
                 </div>
               </div>
 
               {/* Conteúdo scrollável */}
-              <div style={{ flex: 1, overflowY: 'auto' }}>
+              <div className="acn-chat-rolagem">
                 {/* 7.x (13/10/2026): leitura que falhou aparece como erro, não como "lista vazia" */}
                 {(erroSalas || erroUsuarios) && (
-                  <div style={{ padding: '8px 12px' }}>
+                  <div className="acn-chat-erro">
                     <Faixa tom="erro" acao={<Botao pequeno onClick={() => { fetchSalas(); fetchUsuarios(); }}>Tentar de novo</Botao>}>
                       Não foi possível carregar {erroSalas ? 'as conversas' : 'a lista de pessoas'} ({erroSalas || erroUsuarios}).
                     </Faixa>
@@ -878,79 +834,59 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                 {/* Conversas + grupos, ordenados por atividade recente */}
                 {salasOrdenadas.length > 0 && (
                   <>
-                    <div style={{ padding: '8px 14px 4px', fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .7, background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                    <div className="acn-chat-secao">
                       Conversas
                     </div>
                     {salasOrdenadas.map(s => {
                       const unread    = naoLidasPorSala[s.id] || 0;
-                      const isHovered = hoveredRow === s.id;
                       const ultima    = ultimasMsg[s.id];
                       const ehGrupo   = s.tipo === 'grupo';
+                      const nova      = unread > 0 ? '1' : undefined;
                       return (
-                        <div key={s.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                        <div key={s.id} className="acn-chat-sala">
                           <div
-                            className="dm-item-row"
-                            style={{
-                              padding: '8px 12px', cursor: 'pointer', display: 'flex',
-                              alignItems: 'center', gap: 9,
-                              background: confirmDelete === s.id ? '#fff7ed' : unread > 0 ? '#eff6ff' : 'transparent',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa'; setHoveredRow(s.id); }}
-                            onMouseLeave={e => { e.currentTarget.style.background = confirmDelete === s.id ? '#fff7ed' : unread > 0 ? '#eff6ff' : 'transparent'; setHoveredRow(null); }}
+                            className="acn-chat-linha dm-item-row"
+                            data-estado={confirmDelete === s.id ? 'confirma' : unread > 0 ? 'nova' : undefined}
                           >
-                            <div onClick={() => abrirSala(s)} style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 }}>
-                              {ehGrupo ? <GroupIcon size={32} /> : <Avatar nome={nomeDireto(s)} size={32} bg='#dbeafe' color='#1d4ed8' />}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-                                  <span style={{ fontSize: 12, fontWeight: unread > 0 ? 700 : 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div className="acn-chat-linha-abrir" onClick={() => abrirSala(s)}>
+                              {ehGrupo ? <GroupIcon size={32} /> : <Avatar nome={nomeDireto(s)} size={32} tom="azul" />}
+                              <div className="acn-chat-linha-corpo">
+                                <div className="acn-chat-linha-topo">
+                                  <span className="acn-chat-linha-nome" data-nova={nova}>
                                     {nomeSala(s)}
                                   </span>
                                   {ultima && (
-                                    <span style={{ fontSize: 9, color: unread > 0 ? '#3b82f6' : '#b0bac5', fontWeight: unread > 0 ? 700 : 400, flexShrink: 0 }}>
+                                    <span className="acn-chat-linha-hora" data-nova={nova}>
                                       {fmtHoraLista(ultima.criado_em)}
                                     </span>
                                   )}
                                 </div>
-                                <div style={{ fontSize: 10, color: unread > 0 ? '#1e293b' : '#94a3b8', fontWeight: unread > 0 ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div className="acn-chat-linha-previa" data-nova={nova}>
                                   {ultima ? previewMsg(ultima) : (ehGrupo ? 'Grupo criado' : 'Nenhuma mensagem ainda')}
                                 </div>
                               </div>
                               {unread > 0 && (
-                                <span style={{
-                                  background: '#3b82f6', color: 'white', borderRadius: 10,
-                                  padding: '2px 8px', fontSize: 9, fontWeight: 700, flexShrink: 0,
-                                  animation: 'badgePop .3s ease',
-                                }}>{unread}</span>
+                                <span className="acn-chat-linha-n">{unread}</span>
                               )}
                             </div>
-                            <button
-                              className="dm-del-btn"
+                            <Botao variante="discreto" pequeno
+                              className="acn-chat-b dm-del-btn acn-chat-lixeira"
+                              data-confirma={confirmDelete === s.id ? '1' : undefined}
                               onClick={e => { e.stopPropagation(); setConfirmDelete(confirmDelete === s.id ? null : s.id); }}
-                              title={ehGrupo ? 'Sair do grupo' : 'Apagar conversa'}
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: confirmDelete === s.id ? '#ef4444' : '#94a3b8',
-                                fontSize: 13, padding: '2px 5px', borderRadius: 5, flexShrink: 0,
-                                opacity: (isHovered || confirmDelete === s.id) ? 1 : 0,
-                                transition: 'color .15s',
-                              }}>
+                              title={ehGrupo ? 'Sair do grupo' : 'Apagar conversa'}>
                               🗑️
-                            </button>
+                            </Botao>
                           </div>
 
                           {confirmDelete === s.id && (
-                            <div style={{ padding: '6px 14px 8px', background: '#fef2f2', display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 10, color: '#b91c1c', flex: 1 }}>
+                            <div className="acn-chat-confirma">
+                              <span className="acn-chat-confirma-txt">
                                 {ehGrupo ? 'Sair deste grupo?' : 'Apagar esta conversa e todas as mensagens?'}
                               </span>
-                              <button onClick={() => { if (ehGrupo) sairDoGrupo(s, true); else deletarSala(s.id); }} style={{
-                                background: '#ef4444', color: 'white', border: 'none',
-                                borderRadius: 5, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                              }}>Sim</button>
-                              <button onClick={() => setConfirmDelete(null)} style={{
-                                background: '#e2e8f0', color: '#475569', border: 'none',
-                                borderRadius: 5, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                              }}>Não</button>
+                              <Botao variante="perigo" pequeno className="acn-chat-confirma-bt"
+                                onClick={() => { if (ehGrupo) sairDoGrupo(s, true); else deletarSala(s.id); }}>Sim</Botao>
+                              <Botao variante="secundario" pequeno className="acn-chat-confirma-bt nao"
+                                onClick={() => setConfirmDelete(null)}>Não</Botao>
                             </div>
                           )}
                         </div>
@@ -962,30 +898,20 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                 {/* Nova conversa — usuários sem DM */}
                 {(usuariosParaNovaDM.length > 0 || (busca && salasOrdenadas.length === 0)) && (
                   <>
-                    <div style={{
-                      padding: '8px 14px 4px', fontSize: 9, fontWeight: 700, color: '#94a3b8',
-                      textTransform: 'uppercase', letterSpacing: .7, background: '#f8fafc',
-                      borderTop: salasOrdenadas.length > 0 ? '2px solid #e8ecf0' : 'none',
-                      borderBottom: '1px solid #f1f5f9',
-                    }}>
+                    <div className="acn-chat-secao" data-sep={salasOrdenadas.length > 0 ? '1' : undefined}>
                       ✉ Nova conversa
                     </div>
                     {usuariosParaNovaDM.length === 0 && busca ? (
-                      <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: '20px 0' }}>
+                      <div className="acn-chat-vazio curto">
                         Nenhum usuário encontrado
                       </div>
                     ) : (
                       usuariosParaNovaDM.map(u => (
-                        <div key={u.id || u.email} onClick={() => abrirDireto(u)}
-                          className="chat-row-hover"
-                          style={{
-                            padding: '7px 14px', cursor: 'pointer', display: 'flex',
-                            alignItems: 'center', gap: 9, borderBottom: '1px solid #f8fafc',
-                          }}>
+                        <div key={u.id || u.email} onClick={() => abrirDireto(u)} className="acn-chat-pessoa">
                           <Avatar nome={u.nome} size={30} />
                           <div>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: '#1e293b' }}>{u.nome}</div>
-                            <div style={{ fontSize: 9, color: '#94a3b8' }}>{u.perfil}</div>
+                            <div className="acn-chat-pessoa-nome">{u.nome}</div>
+                            <div className="acn-chat-pessoa-perfil">{u.perfil}</div>
                           </div>
                         </div>
                       ))
@@ -995,12 +921,12 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
                 {/* Estado vazio total */}
                 {salas.length === 0 && usuariosVisiveis.length === 0 && !busca && !erroSalas && !erroUsuarios && (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40 }}>
+                  <div className="acn-chat-vazio">
                     Nenhum usuário disponível
                   </div>
                 )}
                 {salas.length === 0 && usuariosParaNovaDM.length === 0 && !busca && usuariosVisiveis.length > 0 && !erroSalas && (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40 }}>
+                  <div className="acn-chat-vazio">
                     Todas as conversas iniciadas!
                   </div>
                 )}
@@ -1010,75 +936,68 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
           {/* ── SALA DE MENSAGENS ── */}
           {view === 'sala' && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+            <div className="acn-chat-sala-corpo">
+              <div className="acn-chat-msgs">
                 {mensagens.length === 0 && erroMensagens && (
                   <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchMensagens(salaAtiva.id)}>Tentar de novo</Botao>}>
                     Não foi possível carregar as mensagens ({erroMensagens}).
                   </Faixa>
                 )}
                 {mensagens.length === 0 && !erroMensagens && (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 60 }}>
+                  <div className="acn-chat-vazio sala">
                     👋 Nenhuma mensagem ainda. Diga olá!
                   </div>
                 )}
                 {agrupar().map(grupo => (
                   <div key={grupo.data}>
-                    <div style={{ textAlign: 'center', margin: '12px 0 10px', fontSize: 10, color: '#b0bac5', fontWeight: 600, letterSpacing: .5, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ flex: 1, height: 1, background: '#e8ecf0' }} />
+                    <div className="acn-chat-dia">
+                      <span className="acn-chat-dia-linha" />
                       {grupo.data}
-                      <span style={{ flex: 1, height: 1, background: '#e8ecf0' }} />
+                      <span className="acn-chat-dia-linha" />
                     </div>
                     {grupo.msgs.map((m, i) => {
                       const proprio   = String(m.remetente_id) === uid;
                       const mesmaPess = i > 0 && grupo.msgs[i - 1].remetente_id === m.remetente_id;
+                      const meu       = proprio ? '1' : undefined;
                       return (
-                        <div key={m.id} style={{
-                          display: 'flex', flexDirection: proprio ? 'row-reverse' : 'row',
-                          gap: 7, marginBottom: mesmaPess ? 3 : 10, alignItems: 'flex-end',
-                        }}>
+                        <div key={m.id} className="acn-chat-m" data-proprio={meu} data-seguida={mesmaPess ? '1' : undefined}>
                           {!proprio && (mesmaPess
-                            ? <span style={{ width: 28, flexShrink: 0 }} />
+                            ? <span className="acn-chat-m-vazio" />
                             : <Avatar nome={m.remetente_nome} size={28} />
                           )}
-                          <div style={{ maxWidth: '78%' }}>
+                          <div className="acn-chat-m-col">
                             {!proprio && !mesmaPess && (
-                              <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3, marginLeft: 3, fontWeight: 700, letterSpacing: .3 }}>
+                              <div className="acn-chat-m-nome">
                                 {m.remetente_nome}
                               </div>
                             )}
 
                             {/* Mensagem apagada pelo autor (para todos) */}
                             {m.apagada_em && (
-                              <div style={{ fontStyle: 'italic', fontSize: 11, color: '#94a3b8', padding: '8px 12px', border: '1px dashed #cbd5e1', borderRadius: 14, background: '#f8fafc' }}>
+                              <div className="acn-chat-apagada">
                                 🚫 {proprio ? 'Você apagou esta mensagem' : 'Esta mensagem foi apagada'}
                               </div>
                             )}
 
                             {/* Referência a processo/demanda — cartão clicável */}
                             {!m.apagada_em && m.ref_contexto_id && (
-                              <div onClick={() => abrirReferencia(m)} style={{
-                                background: proprio ? '#0d5c56' : '#fff', border: `1px solid ${proprio ? 'rgba(255,255,255,.25)' : '#e2e8f0'}`,
-                                borderRadius: '12px 12px 4px 12px', padding: '9px 11px', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2,
-                                boxShadow: '0 1px 2px rgba(0,0,0,.06)',
-                              }}>
-                                <span style={{ fontSize: 18 }}>{REF_TIPOS.find(r => r.contexto === m.ref_contexto)?.icone || '🔗'}</span>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .4, color: proprio ? '#99f6e4' : '#64748b' }}>
+                              <div className="acn-chat-ref" data-proprio={meu} onClick={() => abrirReferencia(m)}>
+                                <span className="acn-chat-ref-icone">{REF_TIPOS.find(r => r.contexto === m.ref_contexto)?.icone || '🔗'}</span>
+                                <div className="acn-chat-ref-corpo">
+                                  <div className="acn-chat-ref-tipo">
                                     {m.ref_contexto === 'licitacao' ? 'Licitação' : 'CRM'}
                                   </div>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: proprio ? '#fff' : '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <div className="acn-chat-ref-desc">
                                     {m.ref_desc}
                                   </div>
                                 </div>
-                                <span style={{ fontSize: 10, color: proprio ? '#99f6e4' : '#0f766e', fontWeight: 700 }}>Abrir →</span>
+                                <span className="acn-chat-ref-abrir">Abrir →</span>
                               </div>
                             )}
 
                             {/* Anexo apagado (só o anexo; o texto continua) */}
                             {!m.apagada_em && m.anexo_url && m.anexo_apagado_em && (
-                              <div style={{ fontStyle: 'italic', fontSize: 11, color: '#94a3b8', padding: '6px 10px', border: '1px dashed #cbd5e1', borderRadius: 10, background: '#f8fafc', marginBottom: 2 }}>
+                              <div className="acn-chat-apagada anexo">
                                 🚫 Anexo apagado
                               </div>
                             )}
@@ -1086,17 +1005,13 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                             {/* Anexo */}
                             {!m.apagada_em && m.anexo_url && !m.anexo_apagado_em && (
                               ehImagem(m.anexo_tipo) ? (
-                                <a href={m.anexo_url} target="_blank" rel="noreferrer" style={{ display: 'block', marginBottom: 2 }}>
-                                  <img src={m.anexo_url} alt={m.anexo_nome} style={{ maxWidth: 200, maxHeight: 200, borderRadius: 10, display: 'block', objectFit: 'cover' }} />
+                                <a className="acn-chat-img" href={m.anexo_url} target="_blank" rel="noreferrer">
+                                  <img src={m.anexo_url} alt={m.anexo_nome} />
                                 </a>
                               ) : (
-                                <a href={m.anexo_url} target="_blank" rel="noreferrer" style={{
-                                  display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none',
-                                  background: proprio ? '#0d5c56' : '#fff', border: `1px solid ${proprio ? 'rgba(255,255,255,.25)' : '#e2e8f0'}`,
-                                  borderRadius: '12px 12px 4px 12px', padding: '9px 11px', marginBottom: 2,
-                                }}>
-                                  <span style={{ fontSize: 16 }}>📄</span>
-                                  <span style={{ fontSize: 11, fontWeight: 600, color: proprio ? '#fff' : '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <a className="acn-chat-arq" data-proprio={meu} href={m.anexo_url} target="_blank" rel="noreferrer">
+                                  <span className="acn-chat-arq-icone">📄</span>
+                                  <span className="acn-chat-arq-nome">
                                     {m.anexo_nome}
                                   </span>
                                 </a>
@@ -1105,32 +1020,24 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
                             {/* Texto (se houver) */}
                             {!m.apagada_em && m.texto && (
-                              <div style={{
-                                background: proprio ? '#0f766e' : '#f1f5f9',
-                                color: proprio ? 'white' : '#1e293b',
-                                padding: '8px 12px',
-                                borderRadius: proprio ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                                fontSize: 12, lineHeight: 1.55, wordBreak: 'break-word',
-                                opacity: m._temp ? 0.55 : 1, transition: 'opacity .2s',
-                                boxShadow: '0 1px 2px rgba(0,0,0,.06)',
-                              }}>
+                              <div className="acn-chat-balao" data-proprio={meu} data-temp={m._temp ? '1' : undefined}>
                                 <Linkify text={m.texto} />
                               </div>
                             )}
-                            <div style={{ fontSize: 9, color: '#b0bac5', marginTop: 3, textAlign: proprio ? 'right' : 'left', padding: '0 3px' }}>
+                            <div className="acn-chat-hora" data-proprio={meu}>
                               {m._temp ? '⏳ enviando…' : fmtHora(m.criado_em)}
                               {podeApagar(m) && (
                                 <>
                                   {' · '}
                                   <span role="button" tabIndex={0} aria-label="Apagar mensagem" title="Apagar para todos (até 2 dias depois de enviada)"
-                                    onClick={() => apagarMensagem(m)} onKeyDown={e => { if (e.key === 'Enter') apagarMensagem(m); }}
-                                    style={{ cursor: 'pointer', color: '#94a3b8', textDecoration: 'underline' }}>Apagar</span>
+                                    className="acn-chat-apagar"
+                                    onClick={() => apagarMensagem(m)} onKeyDown={e => { if (e.key === 'Enter') apagarMensagem(m); }}>Apagar</span>
                                   {m.anexo_url && !m.anexo_apagado_em && m.texto && (
                                     <>
                                       {' · '}
                                       <span role="button" tabIndex={0} aria-label="Apagar só o anexo" title="Apagar só o anexo para todos"
-                                        onClick={() => apagarMensagem(m, true)} onKeyDown={e => { if (e.key === 'Enter') apagarMensagem(m, true); }}
-                                        style={{ cursor: 'pointer', color: '#94a3b8', textDecoration: 'underline' }}>Apagar só o anexo</span>
+                                        className="acn-chat-apagar"
+                                        onClick={() => apagarMensagem(m, true)} onKeyDown={e => { if (e.key === 'Enter') apagarMensagem(m, true); }}>Apagar só o anexo</span>
                                     </>
                                   )}
                                 </>
@@ -1146,45 +1053,27 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
               </div>
 
               {/* Input */}
-              <div style={{ padding: '10px 12px', borderTop: '1px solid #e8ecf0', display: 'flex', gap: 6, flexShrink: 0, background: '#fafafa', alignItems: 'center' }}>
-                <input ref={anexoInputRef} type="file" style={{ display: 'none' }}
+              <div className="acn-chat-entrada">
+                <input ref={anexoInputRef} type="file" className="acn-chat-arquivo"
                   onChange={e => { const f = e.target.files?.[0]; if (f) enviarAnexo(f); }} />
-                <button onClick={() => anexoInputRef.current?.click()} disabled={enviandoAnexo} title="Anexar arquivo"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, padding: 4, color: '#64748b', flexShrink: 0, opacity: enviandoAnexo ? .5 : 1 }}>
+                <Botao variante="discreto" className="acn-chat-b acn-chat-ic" onClick={() => anexoInputRef.current?.click()} disabled={enviandoAnexo} title="Anexar arquivo">
                   📎
-                </button>
-                <button onClick={() => setModalCompartilhar(true)} title="Compartilhar processo/licitação"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 4, color: '#64748b', flexShrink: 0 }}>
+                </Botao>
+                <Botao variante="discreto" className="acn-chat-b acn-chat-ic compart" onClick={() => setModalCompartilhar(true)} title="Compartilhar processo/licitação">
                   🔗
-                </button>
+                </Botao>
                 <input ref={inputRef}
-                  style={{
-                    flex: 1, padding: '9px 14px', fontSize: 12,
-                    border: '1.5px solid #d1d5db', borderRadius: 22,
-                    outline: 'none', color: '#1e293b', background: 'white',
-                    colorScheme: 'light', transition: 'border-color .15s',
-                  }}
-                  onFocus={e => (e.target.style.borderColor = '#0f766e')}
-                  onBlur={e  => (e.target.style.borderColor = '#d1d5db')}
+                  className="acn-chat-msg-in"
                   placeholder={enviandoAnexo ? 'Enviando anexo…' : 'Mensagem… (Enter para enviar)'}
                   value={texto}
                   disabled={enviandoAnexo}
                   onChange={e => setTexto(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } }}
                 />
-                <button onClick={enviar} disabled={!texto.trim() || enviando} style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: texto.trim() ? '#0f766e' : '#e2e8f0',
-                  color: texto.trim() ? 'white' : '#94a3b8',
-                  border: 'none', cursor: texto.trim() ? 'pointer' : 'default',
-                  fontSize: 15, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background .15s, transform .1s',
-                  boxShadow: texto.trim() ? '0 2px 8px rgba(15,118,110,.35)' : 'none',
-                }}
-                onMouseEnter={e => { if (texto.trim()) e.currentTarget.style.transform = 'scale(1.08)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
+                <Botao variante={texto.trim() ? 'primario' : 'secundario'} className="acn-chat-enviar" data-pronto={texto.trim() ? '1' : undefined}
+                  onClick={enviar} disabled={!texto.trim() || enviando}>
                   ➤
-                </button>
+                </Botao>
               </div>
             </div>
           )}
@@ -1193,41 +1082,39 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
       {/* ── MODAL: Novo Grupo ── */}
       {modalNovoGrupo && (
-        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9700 }}
+        <div className="modal-overlay acn-chat-ov"
           onClick={e => { if (e.target === e.currentTarget) setModalNovoGrupo(false); }}>
-          <div style={{ background: '#fff', borderRadius: 12, width: 320, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, fontSize: 13, color: '#1e293b' }}>👥 Novo Grupo</div>
-            <div style={{ padding: '12px 16px' }}>
-              <label style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', display: 'block', marginBottom: 3 }}>Nome do grupo</label>
-              <input value={novoGrupoNome} onChange={e => setNovoGrupoNome(e.target.value)} placeholder="Ex: Equipe Produção"
-                style={{ width: '100%', padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }} autoFocus />
+          <div className="acn-chat-caixa">
+            <div className="acn-chat-caixa-tit">👥 Novo Grupo</div>
+            <div className="acn-chat-caixa-campo">
+              <label className="acn-chat-rotulo">Nome do grupo</label>
+              <input className="acn-chat-in" value={novoGrupoNome} onChange={e => setNovoGrupoNome(e.target.value)} placeholder="Ex: Equipe Produção" autoFocus />
             </div>
-            <div style={{ padding: '0 16px 6px', fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>
+            <div className="acn-chat-subtit">
               Participantes ({novoGrupoMembros.size} selecionado{novoGrupoMembros.size !== 1 ? 's' : ''})
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px', minHeight: 120 }}>
+            <div className="acn-chat-membros">
               {usuariosVisiveis.map(u => {
                 const id = String(u.id || u.email);
                 const sel = novoGrupoMembros.has(id);
                 return (
-                  <div key={id} onClick={() => toggleNovoGrupoMembro(id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: sel ? '#f0fdfa' : 'transparent' }}>
-                    <input type="checkbox" checked={sel} onChange={() => {}} style={{ pointerEvents: 'none' }} />
+                  <div key={id} onClick={() => toggleNovoGrupoMembro(id)} className="acn-chat-membro" data-sel={sel ? '1' : undefined}>
+                    <input type="checkbox" checked={sel} onChange={() => {}} className="acn-chat-membro-cx" />
                     <Avatar nome={u.nome} size={26} />
-                    <span style={{ fontSize: 11, color: '#1e293b', fontWeight: sel ? 700 : 500 }}>{u.nome}</span>
+                    <span className="acn-chat-membro-nome" data-sel={sel ? '1' : undefined}>{u.nome}</span>
                   </div>
                 );
               })}
             </div>
-            <div style={{ padding: 12, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
-              <button onClick={criarGrupo} disabled={!novoGrupoNome.trim() || novoGrupoMembros.size === 0 || criandoGrupo}
-                style={{ flex: 1, background: (!novoGrupoNome.trim() || novoGrupoMembros.size === 0) ? '#e2e8f0' : '#0f766e', color: (!novoGrupoNome.trim() || novoGrupoMembros.size === 0) ? '#94a3b8' : '#fff', border: 'none', borderRadius: 6, padding: '8px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+            <div className="acn-chat-caixa-rodape">
+              <Botao variante={(!novoGrupoNome.trim() || novoGrupoMembros.size === 0) ? 'secundario' : 'primario'} className="acn-chat-caixa-bt acn-chat-criar" data-vazio={(!novoGrupoNome.trim() || novoGrupoMembros.size === 0) ? '1' : undefined}
+                onClick={criarGrupo} disabled={!novoGrupoNome.trim() || novoGrupoMembros.size === 0 || criandoGrupo}>
                 Criar Grupo
-              </button>
-              <button onClick={() => { setModalNovoGrupo(false); setNovoGrupoNome(''); setNovoGrupoMembros(new Set()); }}
-                style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+              </Botao>
+              <Botao variante="secundario" className="acn-chat-caixa-bt acn-chat-cancelar"
+                onClick={() => { setModalNovoGrupo(false); setNovoGrupoNome(''); setNovoGrupoMembros(new Set()); }}>
                 Cancelar
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
@@ -1235,57 +1122,55 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
       {/* ── MODAL: Info do Grupo ── */}
       {modalInfoGrupo && salaAtiva?.tipo === 'grupo' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9700 }}
+        <div className="acn-chat-ov"
           onClick={e => { if (e.target === e.currentTarget) setModalInfoGrupo(false); }}>
-          <div style={{ background: '#fff', borderRadius: 12, width: 320, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="acn-chat-caixa">
+            <div className="acn-chat-info-cab">
               <GroupIcon size={36} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{nomeSala(salaAtiva)}</div>
-                <div style={{ fontSize: 9, color: '#94a3b8' }}>Criado por {salaAtiva.criado_por_nome || '—'}</div>
+              <div className="acn-chat-info-quem">
+                <div className="acn-chat-info-nome">{nomeSala(salaAtiva)}</div>
+                <div className="acn-chat-info-por">Criado por {salaAtiva.criado_por_nome || '—'}</div>
               </div>
             </div>
-            <div style={{ padding: '10px 16px 4px', fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>
+            <div className="acn-chat-subtit info">
               {(salaAtiva.membros || []).length} participantes
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 10px' }}>
+            <div className="acn-chat-info-lista">
               {(salaAtiva.membros || []).map((m: any) => (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 6px' }}>
+                <div key={m.id} className="acn-chat-info-membro">
                   <Avatar nome={m.nome} size={28} />
-                  <span style={{ fontSize: 11, color: '#1e293b', flex: 1 }}>
-                    {m.nome}{String(m.id) === String(salaAtiva.criado_por) && <span style={{ color: '#0f766e', fontWeight: 700 }}> · admin</span>}
+                  <span className="acn-chat-info-membro-nome">
+                    {m.nome}{String(m.id) === String(salaAtiva.criado_por) && <span className="acn-chat-info-admin"> · admin</span>}
                   </span>
                   {souAdmin(salaAtiva) && String(m.id) !== uid && (
-                    <button onClick={() => removerMembroGrupo(m.id)} title="Remover do grupo"
-                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12 }}>🗑️</button>
+                    <Botao variante="discreto" pequeno className="acn-chat-b acn-chat-info-remover" onClick={() => removerMembroGrupo(m.id)} title="Remover do grupo">🗑️</Botao>
                   )}
                 </div>
               ))}
             </div>
             {souAdmin(salaAtiva) && (
-              <div style={{ padding: '8px 16px', borderTop: '1px solid #f1f5f9' }}>
-                <input value={addMembroBusca} onChange={e => setAddMembroBusca(e.target.value)} placeholder="+ Adicionar participante..."
-                  style={{ width: '100%', padding: '6px 9px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 11, boxSizing: 'border-box', marginBottom: 4 }} />
+              <div className="acn-chat-info-add">
+                <input className="acn-chat-in menor" value={addMembroBusca} onChange={e => setAddMembroBusca(e.target.value)} placeholder="+ Adicionar participante..." />
                 {addMembroBusca.trim().length > 0 && usuariosVisiveis
                   .filter(u => !(salaAtiva.membros || []).some((m: any) => String(m.id) === String(u.id || u.email)))
                   .filter(u => combinaBusca(u.nome, addMembroBusca))
                   .slice(0, 5)
                   .map(u => (
                     <div key={u.id || u.email} onClick={() => { adicionarMembroGrupo(u); setAddMembroBusca(''); }}
-                      className="chat-row-hover" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 6, cursor: 'pointer' }}>
+                      className="acn-chat-info-opcao">
                       <Avatar nome={u.nome} size={22} />
-                      <span style={{ fontSize: 11, color: '#1e293b' }}>{u.nome}</span>
+                      <span className="acn-chat-info-opcao-nome">{u.nome}</span>
                     </div>
                   ))}
               </div>
             )}
-            <div style={{ padding: 12, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
-              <button onClick={() => sairDoGrupo()} style={{ flex: 1, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '8px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+            <div className="acn-chat-caixa-rodape">
+              <Botao variante="perigo-sec" className="acn-chat-caixa-bt acn-chat-sair" onClick={() => sairDoGrupo()}>
                 🚪 Sair do grupo
-              </button>
-              <button onClick={() => setModalInfoGrupo(false)} style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+              </Botao>
+              <Botao variante="secundario" className="acn-chat-caixa-bt acn-chat-cancelar" onClick={() => setModalInfoGrupo(false)}>
                 Fechar
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
@@ -1293,73 +1178,53 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
       {/* ── MODAL: Compartilhar processo ── */}
       {modalCompartilhar && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9700 }}
+        <div className="acn-chat-ov"
           onClick={e => { if (e.target === e.currentTarget) { setModalCompartilhar(false); setCompartilharBusca(''); setCompartilharResultados([]); } }}>
-          <div style={{ background: '#fff', borderRadius: 12, width: 320, maxHeight: '70vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, fontSize: 13, color: '#1e293b' }}>🔗 Compartilhar Processo</div>
-            <div style={{ padding: '10px 16px' }}>
-              <input value={compartilharBusca} onChange={e => buscarParaCompartilhar(e.target.value)}
-                placeholder="Buscar licitação ou oportunidade CRM..." autoFocus
-                style={{ width: '100%', padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }} />
-              <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>Busca em Licitações e Comercial/CRM</div>
+          <div className="acn-chat-caixa compart">
+            <div className="acn-chat-caixa-tit">🔗 Compartilhar Processo</div>
+            <div className="acn-chat-caixa-campo">
+              <input className="acn-chat-in" value={compartilharBusca} onChange={e => buscarParaCompartilhar(e.target.value)}
+                placeholder="Buscar licitação ou oportunidade CRM..." autoFocus />
+              <div className="acn-chat-dica">Busca em Licitações e Comercial/CRM</div>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 10px', minHeight: 100 }}>
-              {compartilharBuscando && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: 16 }}>Buscando...</div>}
+            <div className="acn-chat-res">
+              {compartilharBuscando && <div className="acn-chat-vazio res">Buscando...</div>}
               {!compartilharBuscando && compartilharErro && (
                 <Faixa tom="erro">{compartilharResultados.length ? 'A busca falhou em uma das listas' : 'Não foi possível buscar'} ({compartilharErro}).</Faixa>
               )}
               {!compartilharBuscando && !compartilharErro && compartilharBusca.trim().length >= 2 && compartilharResultados.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: 16 }}>Nada encontrado</div>
+                <div className="acn-chat-vazio res">Nada encontrado</div>
               )}
               {compartilharResultados.map((r, i) => (
-                <div key={i} onClick={() => compartilharRegistro(r)} className="chat-row-hover"
-                  style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 8px', borderRadius: 6, cursor: 'pointer' }}>
-                  <span style={{ fontSize: 18 }}>{r._tipo.icone}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{r._tipo.contexto === 'licitacao' ? 'Licitação' : 'CRM'}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r._tipo.label(r)}</div>
+                <div key={i} onClick={() => compartilharRegistro(r)} className="acn-chat-res-item">
+                  <span className="acn-chat-res-icone">{r._tipo.icone}</span>
+                  <div className="acn-chat-res-corpo">
+                    <div className="acn-chat-res-tipo">{r._tipo.contexto === 'licitacao' ? 'Licitação' : 'CRM'}</div>
+                    <div className="acn-chat-res-nome">{r._tipo.label(r)}</div>
                   </div>
                 </div>
               ))}
             </div>
-            <div style={{ padding: 12, borderTop: '1px solid #e2e8f0' }}>
-              <button onClick={() => { setModalCompartilhar(false); setCompartilharBusca(''); setCompartilharResultados([]); }}
-                style={{ width: '100%', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 6, padding: '8px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+            <div className="acn-chat-caixa-rodape">
+              <Botao variante="secundario" className="acn-chat-caixa-bt acn-chat-cancelar largo"
+                onClick={() => { setModalCompartilhar(false); setCompartilharBusca(''); setCompartilharResultados([]); }}>
                 Cancelar
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
       )}
 
       {/* ── Botão flutuante ── */}
-      <button onClick={() => setAberto(a => !a)} style={{
-        width: 52, height: 52, borderRadius: '50%',
-        background: aberto ? '#0c5d58' : '#0f766e',
-        border: 'none', cursor: 'pointer', color: 'white', fontSize: 22,
-        position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background .15s, transform .1s',
-        animation: temNaoLidas && !aberto ? 'chatPulse 1.8s ease-in-out infinite' : 'none',
-        boxShadow: temNaoLidas && !aberto
-          ? '0 4px 18px rgba(239,68,68,.55)'
-          : '0 4px 18px rgba(15,118,110,.45)',
-      }}
-      onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.08)')}
-      onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
+      <Botao variante="primario" className="acn-chat-fab" data-aberto={aberto ? '1' : undefined} data-novas={temNaoLidas && !aberto ? '1' : undefined}
+        onClick={() => setAberto(a => !a)}>
         {aberto ? '✕' : '💬'}
         {naoLidas > 0 && (
-          <span style={{
-            position: 'absolute', top: -3, right: -3,
-            background: '#ef4444', color: 'white', borderRadius: '50%',
-            width: 20, height: 20, fontSize: 9, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '2px solid white', lineHeight: 1,
-            animation: 'badgePop .3s ease',
-          }}>
+          <span className="acn-chat-fab-n">
             {naoLidas > 99 ? '99+' : naoLidas}
           </span>
         )}
-      </button>
+      </Botao>
     </div>
   );
 }
