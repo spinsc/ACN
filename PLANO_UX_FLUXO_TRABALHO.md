@@ -5413,6 +5413,14 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 
 **Riscos e cuidados:** muda a rotina de **dois setores no mesmo dia** — por isso a 18e é a última e só depois do resto publicado; o deploy sobe antes do turno da manhã, e a migração das OPs roda **só depois** de o deploy da 18e terminar com sucesso (para o PCP já ter as ferramentas quando as OPs chegarem). Tudo o que mexe em dado real é antecedido de **medida nova** e de **cópia de segurança**.
 
+#### ✅ 18a — Banco e base (feita em 13/10/2026, madrugada; só banco, nenhum arquivo do sistema mudou)
+
+**Migração `etapa18a_pedidos_de_desenvolvimento_item_por_item`** (só acrescenta; nada que existia mudou — conferido: **4 pedidos de desenvolvimento antes e depois**, 0 `ZZTESTE`, 0 itens):
+- **`engenharia_desenvolvimento`** ganhou 4 colunas: `opl_ids` (a lista das OPs a que o pedido se aplica — **um pedido vale para um lote desmembrado inteiro**; `opl_id` segue como a OP de referência, como já era), `veiculo_id`, `veiculo_nome` e `solicitado_por_setor` (quem pediu: "PCP"); índice próprio para achar o pedido pela OP.
+- **Tabela nova `engenharia_desenvolvimento_itens`:** uma linha por item a desenvolver — **tipo** (suporte, peça, chicote ou outro, com restrição no banco), **descrição**, **item vendido de origem** (id e nome), **situação** (pendente, em andamento, entregue ou cancelado), quem entregou e quando, observações e quem criou. Apagar o pedido leva as linhas junto (a tela de Desenvolvimento já pede confirmação para excluir). Proteção de linha ligada com a regra permissiva do projeto (o banco exige uma).
+- **Testado no banco de produção, dentro de uma transação que termina com erro (desfaz tudo):** pedido com duas linhas; tipo inválido, situação inválida e pedido inexistente **recusados**; a busca pela OP dentro de `opl_ids` acha o pedido; apagar o pedido leva as duas linhas (0 sobras); **conferido de fora, com a chave pública do navegador:** a tabela nova e as colunas novas respondem (HTTP 200).
+- **Decisão de desenho registrada:** o pedido **fica no mesmo cadastro de hoje** (`engenharia_desenvolvimento`, com as 8 etapas e a sub-aba Desenvolvimento), e os **itens** são a lista de verdade do que falta; o pedido só vira "concluído" quando todos os itens estiverem entregues ou cancelados (18d). Os 4 pedidos que existem hoje (projetos livres, sem OP) **não mudam**.
+
 ---
 
 ## Fila da madrugada de 13/10/2026 (decidida pelo usuário em 12/10/2026)
