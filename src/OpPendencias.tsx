@@ -36,8 +36,16 @@ const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toL
  *  itens cancelados ficavam pedindo "recebimento pelo Almoxarifado" de algo
  *  que nunca seria fabricado, e a OP nunca mais fechava. */
 const foiCancelada = (v) => /cancelad|descartad/.test(norm(v.status));
+
+/** Pedido de desenvolvimento feito pelo PCP à Engenharia (Etapa 18c, 13/10/2026). Segura a OP como as demais pendências — decisão do usuário
+ *  em 12/10/2026: a OP segue, o kit sai "com pendência" e a Produção só conclui quando a Engenharia entregar —, mas não tem material
+ *  para o Almoxarifado receber: a etapa "almox recebeu" não se aplica e já vem cumprida. O desenvolvimento que a Engenharia abre por conta
+ *  própria (outra origem) continua sendo só apoio, como sempre foi. */
+export const ehDesenvolvimentoDoPcp = (v) => v?.tipo === 'engenharia_desenvolvimento' && v?.origem === 'pcp';
+
 const seguraAOp = (v) => {
   if (foiCancelada(v)) return false;
+  if (v.tipo === 'engenharia_desenvolvimento') return v.origem === 'pcp';
   if (v.grupo === 'compra') return true;
   if (v.grupo !== 'demanda') return false;
   return SETORES_QUE_SEGURAM.some(s => norm(v.setor) === norm(s));
@@ -48,7 +56,7 @@ export function etapasDaPendencia(v, op) {
   const reg = (op?.pendencias_kit || {})[v.id] || {};
   return {
     setor:    !v.aberto,                 // status da própria demanda
-    recebido: !!reg.recebido,
+    recebido: ehDesenvolvimentoDoPcp(v) || !!reg.recebido,
     liberado: !!reg.liberado,
     quemRecebeu:  reg.recebido || null,
     quemLiberou:  reg.liberado || null,
@@ -69,11 +77,12 @@ export function pendenciasDaOp(vinculos, op) {
 export function progressoPendencias(vinculos, op) {
   const todas = (vinculos || []).filter(seguraAOp);
   if (!todas.length) return { total: 0, feitas: 0, pct: 100, pendentes: [] };
+  // o pedido de desenvolvimento do PCP tem 2 etapas (a Engenharia entrega, o PCP libera): o recebimento do Almoxarifado não conta
   const feitas = todas.reduce((s, v) => {
     const e = etapasDaPendencia(v, op);
-    return s + Number(e.setor) + Number(e.recebido) + Number(e.liberado);
+    return s + Number(e.setor) + (ehDesenvolvimentoDoPcp(v) ? 0 : Number(e.recebido)) + Number(e.liberado);
   }, 0);
-  const total = todas.length * 3;
+  const total = todas.reduce((s, v) => s + (ehDesenvolvimentoDoPcp(v) ? 2 : 3), 0);
   return { total, feitas, pct: Math.round((feitas / total) * 100), pendentes: pendenciasDaOp(todas, op) };
 }
 
@@ -166,7 +175,7 @@ export function ChecklistPendencias({ op, vinculos, modo = 'ver', currentUser, o
               <span className="acn-pnd-setor">{v.setor || '—'}</span> · {v.titulo}
             </span>
             <Passo ok={e.setor}    texto="setor concluiu" />
-            <Passo ok={e.recebido} texto="almox recebeu"  quem={e.quemRecebeu} />
+            {!ehDesenvolvimentoDoPcp(v) && <Passo ok={e.recebido} texto="almox recebeu"  quem={e.quemRecebeu} />}
             <Passo ok={e.liberado} texto="PCP liberou"    quem={e.quemLiberou} />
             {modo === 'almox' && e.setor && !e.recebido && (
               <Botao pequeno variante="primario" icone={salvando === v.id ? undefined : mdiCheck} onClick={() => agir(v, 'recebido')} disabled={salvando === v.id}>
@@ -229,13 +238,15 @@ export async function indicePendencias() {
     if (!mapa.get(k).some(x => x.id === item.id)) mapa.get(k).push(item);
   };
 
-  const [setoriais, avulsas, compras] = await Promise.all([
+  const [setoriais, avulsas, compras, desenvolvimentos] = await Promise.all([
     supabase.from('demandas_setoriais').select('id,opl_id,setor_destino,descricao,status')
       .not('opl_id', 'is', null).in('setor_destino', SETORES_QUE_SEGURAM),
     supabase.from('demandas_avulsas').select('id,setor,titulo,status,vinculo_id,vinculos')
       .in('setor', SETORES_QUE_SEGURAM),
     supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,descricao_material,status_compra')
       .not('vinculo_id', 'is', null),
+    // 18c: só os pedidos do PCP seguram a OP (o desenvolvimento aberto pela própria Engenharia segue sendo apoio)
+    supabase.from('engenharia_desenvolvimento').select('id,opl_id,opl_ids,titulo,concluida,origem').eq('origem', 'pcp'),
   ]);
 
   (setoriais.data || []).forEach(d => add(d.opl_id, {
@@ -248,6 +259,16 @@ export async function indicePendencias() {
       aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status };
     add(d.vinculo_id, item);
     (Array.isArray(d.vinculos) ? d.vinculos : []).forEach(v => { if (v?.tipo === 'op' || !v?.tipo) add(v?.id, item); });
+  });
+
+  (desenvolvimentos.data || []).forEach(d => {
+    // um pedido vale para a OP ou para as unidades de um lote (opl_ids); `semRecebimento`: não há material para o Almoxarifado receber
+    const ids = (Array.isArray(d.opl_ids) && d.opl_ids.length ? d.opl_ids : [d.opl_id]).filter(Boolean);
+    ids.forEach(opId => add(opId, {
+      id: d.id, setor: 'Engenharia', titulo: d.titulo || 'Desenvolvimento',
+      aberto: !d.concluida, statusBruto: d.concluida ? 'Concluído' : 'Em desenvolvimento',
+      tipo: 'engenharia_desenvolvimento', origem: 'pcp', semRecebimento: true,
+    }));
   });
 
   (compras.data || []).forEach(c => {
@@ -265,11 +286,18 @@ export async function indicePendencias() {
   return mapa;
 }
 
+/** O registro das etapas 2 e 3 de uma pendência do índice. Para o pedido de desenvolvimento do PCP (`semRecebimento`) o "recebido" já vem cumprido. */
+const registroDaPendencia = (p, op) => {
+  const reg = { ...((op?.pendencias_kit || {})[p.id] || {}) };
+  if (p.semRecebimento && !reg.recebido) reg.recebido = { por: 'não se aplica', em: null };
+  return reg;
+};
+
 /** O Almoxarifado só fecha "Kit 100%" quando tem tudo em mãos: nenhuma demanda
  *  dos três setores pode estar em aberto nem esperando o recebimento. */
 export function travaKit100(pendenciasDaOp, op) {
   const faltando = (pendenciasDaOp || []).filter(p => {
-    const reg = (op?.pendencias_kit || {})[p.id] || {};
+    const reg = registroDaPendencia(p, op);
     return p.aberto || !reg.recebido;
   });
   return faltando;
@@ -281,7 +309,7 @@ export function travaKit100(pendenciasDaOp, op) {
  *  agora. Usado no painel de OPs que já saíram do kiting (ver AlmoxarifadoTab). */
 export function travaRecebimento(pendenciasDaOp, op) {
   return (pendenciasDaOp || []).filter(p => {
-    const reg = (op?.pendencias_kit || {})[p.id] || {};
+    const reg = registroDaPendencia(p, op);
     return !p.aberto && !reg.recebido;
   });
 }
@@ -291,7 +319,7 @@ export function travaRecebimento(pendenciasDaOp, op) {
  *  OPs pedem ação dele e quantas só aguardam outro setor (Etapa 9 do plano de UX, 30/09/2026). */
 export function liberaveisPeloPcp(pendenciasDaOp, op) {
   return (pendenciasDaOp || []).filter(p => {
-    const reg = (op?.pendencias_kit || {})[p.id] || {};
+    const reg = registroDaPendencia(p, op);
     return !p.aberto && !!reg.recebido && !reg.liberado;
   });
 }
@@ -299,7 +327,7 @@ export function liberaveisPeloPcp(pendenciasDaOp, op) {
 /** A Produção só conclui com as três etapas cumpridas em todas as pendências. */
 export function travaConclusaoProducao(pendenciasDaOp, op) {
   return (pendenciasDaOp || []).filter(p => {
-    const reg = (op?.pendencias_kit || {})[p.id] || {};
+    const reg = registroDaPendencia(p, op);
     return p.aberto || !reg.recebido || !reg.liberado;
   });
 }

@@ -52,7 +52,7 @@ export async function previsaoDeFalta(linhas) {
  * `opsParaResponder`: as OPs que o botão "Responder agora" atende de uma vez. Na liberação individual é só a própria
  * OP; na liberação em LOTE são todas as marcadas (a tela de resposta em lote existe justamente para elas).
  */
-export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaResponder, onRespondido }) {
+export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaResponder, onRespondido, onSolicitarDesenvolvimento }) {
   const [estado, setEstado] = useState({ carregando: true });
   const [responder, setResponder] = useState(false);
   const [tick, setTick] = useState(0);   // sobe quando as respostas mudam, para o painel recalcular o material
@@ -138,11 +138,26 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
           <div className="acn-aep-sub">
             {e.semEstrutura.map(v => `• ${v.nome}`).join('  ')}
           </div>
-          <div className="acn-aep-nota">
-            O material deles não entra sozinho. Cadastre a composição em
-            <b> Administração → Estruturas</b>, escolhendo o item e este veículo — a partir daí
-            toda OP igual sai pronta.
-          </div>
+          {/* 18c (13/10/2026): no PCP, quem cadastra a composição é a Engenharia, a pedido — o botão abre o pedido já com estes itens */}
+          {onSolicitarDesenvolvimento ? (
+            <>
+              <div className="acn-aep-nota">
+                O material deles não entra sozinho. Peça o desenvolvimento à Engenharia: ela cadastra a composição de cada item neste veículo e,
+                a partir daí, toda OP igual sai pronta.
+              </div>
+              <div className="acn-aep-acoes">
+                <Botao pequeno variante="primario" onClick={() => onSolicitarDesenvolvimento(e.semEstrutura)}>
+                  Solicitar desenvolvimento
+                </Botao>
+              </div>
+            </>
+          ) : (
+            <div className="acn-aep-nota">
+              O material deles não entra sozinho. Cadastre a composição em
+              <b> Administração → Estruturas</b>, escolhendo o item e este veículo — a partir daí
+              toda OP igual sai pronta.
+            </div>
+          )}
         </Caixa>
       )}
 

@@ -36,13 +36,15 @@ const opcoesDeItem = (itens) => itens.map(i => ({
   valor: i.id, rotulo: `${i.codigo ? i.codigo + ' — ' : ''}${i.nome}`, busca: [i.codigo, i.nome],
 }));
 
-export default function ConfigEstruturaTela({ currentUser }) {
-  const [itemId, setItemId] = useState('');
-  const [veiculoId, setVeiculoId] = useState('');
+export default function ConfigEstruturaTela({ currentUser, itemInicial = '', veiculoInicial = '' }) {
+  // 18d (13/10/2026): o atalho "Cadastrar estrutura" do pedido de desenvolvimento abre a tela já no item e no veículo daquela linha
+  const [itemId, setItemId] = useState(itemInicial || '');
+  const [veiculoId, setVeiculoId] = useState(veiculoInicial || '');
   const [perguntas, setPerguntas] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const itens = useItens();
-  const pode = ehAdminOuGerente(currentUser) || String(currentUser?.perfil || '').trim() === 'PCP';
+  // 18d (13/10/2026): quem desenvolve o item cadastra a estrutura dele no veículo (decisão do usuário em 12/10/2026) — a Engenharia entra junto do PCP
+  const pode = ehAdminOuGerente(currentUser) || ['PCP', 'Engenharia'].includes(String(currentUser?.perfil || '').trim());
   const item = itens.find(i => i.id === itemId);
 
   const recPerguntas = async () => setPerguntas(itemId ? await perguntasDoItem(itemId) : []);

@@ -13,11 +13,12 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio, SETORES_FABRICACAO } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import ModalConfigurarOp, { ModalLiberacaoParcialSerralheria } from './ConfigurarOp';
+import ModalSolicitarDesenvolvimento from './SolicitarDesenvolvimento';
 import { confirmar } from './Feedback';
 import { MenuAcoes, Botao, Faixa, Selo, diaBR } from './Interface';
 import Icone from './Icone';
 import {
-  mdiClipboardTextOutline, mdiCancel, mdiPackageVariantClosed, mdiWrenchOutline, mdiToolboxOutline, mdiTrayArrowUp, mdiEyeOutline, mdiPlus, mdiArrowULeftTop, mdiLinkVariant, mdiFactory, mdiChevronUp, mdiChevronDown, mdiCheckCircleOutline, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline,
+  mdiClipboardTextOutline, mdiCogOutline, mdiCancel, mdiPackageVariantClosed, mdiWrenchOutline, mdiToolboxOutline, mdiTrayArrowUp, mdiEyeOutline, mdiPlus, mdiArrowULeftTop, mdiLinkVariant, mdiFactory, mdiChevronUp, mdiChevronDown, mdiCheckCircleOutline, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline,
 } from '@mdi/js';
 import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
 
@@ -79,6 +80,7 @@ export default function PCPTab({ currentUser }) {
   // antes eram janelas da Engenharia (decisão do usuário em 12/10/2026: a OP cai direto no PCP)
   const [modalConfig, setModalConfig] = useState<any>(null);   // { ops, base? }
   const [modalSerralheria, setModalSerralheria] = useState<any>(null);
+  const [modalDesenv, setModalDesenv] = useState<any>(null);   // pedido de desenvolvimento à Engenharia (Etapa 18c)
   const [resumoLote, setResumoLote] = useState<any>(null);   // { base, irmaos }: cartão de resumo do lote como uma coisa só (08/10/2026)
   const [obsDevolver, setObsDevolver] = useState('');
   const [busca, setBusca] = useState('');
@@ -682,6 +684,9 @@ export default function PCPTab({ currentUser }) {
                         {o.status_bom === 'BOM Liberado'
                           ? <Selo familia="ok" ponto={false}>BOM OK</Selo>
                           : <Selo familia="atencao" ponto={false}>Aguard. BOM</Selo>}
+                        {pendenciasDe(o).some(p => p.tipo === 'engenharia_desenvolvimento' && p.aberto) && (
+                          <div><Selo familia="info" ponto={false} title="Pedido de desenvolvimento aberto na Engenharia: a OP segue, o kit sai com pendência">Desenv. pedido</Selo></div>
+                        )}
                       </td>
                       <td><SeloKit o={o} /></td>
                       <td className="acn-texto-medio"><span className={o.obs_almox ? 'acn-txt-erro' : undefined}>{o.obs_almox || '—'}</span></td>
@@ -723,6 +728,8 @@ export default function PCPTab({ currentUser }) {
                           <MenuAcoes rotulo="Mais ações da OP" itens={[
                             { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
                             { rotulo: 'Nova demanda para esta OP', icone: mdiPlus, onClick: () => setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') }) },
+                            { rotulo: 'Solicitar desenvolvimento à Engenharia', icone: mdiCogOutline, titulo: 'Item que nunca foi adaptado e precisa de projeto: pede à Engenharia, com esta OP anexada',
+                              onClick: () => setModalDesenv({ ops: [o] }) },
                             { rotulo: 'Liberação parcial p/ Serralheria', icone: mdiWrenchOutline, titulo: 'Antecipar a parte metálica/estrutural sem esperar o resto',
                               onClick: () => setModalSerralheria(o), oculto: o.status_geral !== 'Em Espera PCP' || !!o.serralheria_status },
                             { rotulo: 'Devolver (Almoxarifado ou Engenharia)', icone: mdiArrowULeftTop, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
@@ -1028,7 +1035,8 @@ export default function PCPTab({ currentUser }) {
           <div className="sec-body">
             <div className="acn-ajuda acn-alm-espaco">
               Cada pendência fecha em três etapas: o setor conclui, o Almoxarifado confirma o recebimento
-              e o PCP libera para a produção. A produção não conclui a OP enquanto faltar alguma.
+              e o PCP libera para a produção. O pedido de desenvolvimento fecha em duas: a Engenharia entrega e o PCP libera.
+              A produção não conclui a OP enquanto faltar alguma.
             </div>
             {/* as OPs em que o PCP pode liberar algo agora vêm primeiro */}
             {[...oplsPendencia].sort((a, b) => Number(pcpLibera(b)) - Number(pcpLibera(a))).map(o => (
@@ -1116,7 +1124,12 @@ export default function PCPTab({ currentUser }) {
       {modalConfig && (
         <ModalConfigurarOp ops={modalConfig.ops} base={modalConfig.base} currentUser={currentUser}
           onClose={() => setModalConfig(null)}
+          onPedido={() => fetchAll()}
           onSalvo={(salvas, completo) => { fetchAll(); if (completo) setModalConfig(null); }} />
+      )}
+      {modalDesenv && (
+        <ModalSolicitarDesenvolvimento ops={modalDesenv.ops} base={modalDesenv.base} currentUser={currentUser}
+          onClose={() => setModalDesenv(null)} onEnviado={() => { setModalDesenv(null); fetchAll(); }} />
       )}
       {modalSerralheria && (
         <ModalLiberacaoParcialSerralheria opl={modalSerralheria} currentUser={currentUser}

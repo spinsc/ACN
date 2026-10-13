@@ -11,6 +11,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
 import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
+import ConfigEstruturaTela from './ConfigEstruturaTela';
 import HorasTarefasTab from './HorasTarefasTab';
 import { horasUteis } from './utils/horasUteis';
 import { BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
@@ -25,7 +26,7 @@ import { indicePendencias } from './OpPendencias';
 import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
 import Icone from './Icone';
 import {
-  mdiRulerSquareCompass, mdiCogOutline, mdiTimerOutline, mdiTrayArrowUp, mdiWrenchOutline, mdiCheckCircleOutline, mdiClockAlertOutline,
+  mdiRulerSquareCompass, mdiCogOutline, mdiPuzzleOutline, mdiTimerOutline, mdiTrayArrowUp, mdiWrenchOutline, mdiCheckCircleOutline, mdiClockAlertOutline,
   mdiPauseCircleOutline, mdiEyeOutline, mdiNoteTextOutline, mdiPowerPlugOutline, mdiArrowULeftTop, mdiLinkVariant, mdiPlayOutline, mdiClipboardTextOutline,
   mdiChevronUp, mdiChevronDown, mdiCarOutline, mdiAlertOutline, mdiTagOutline,
 } from '@mdi/js';
@@ -200,7 +201,20 @@ export default function EngenhariaTab({ currentUser }) {
   const [novaObsAcomp, setNovaObsAcomp] = useState('');
   const [busca, setBusca] = useState('');
 
-  useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(true); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
+  // Etapa 18d (13/10/2026): a Engenharia passa a receber SOLICITAÇÕES DE DESENVOLVIMENTO do PCP. O contador na aba mostra quantas ainda estão abertas, e
+  // "Cadastrar estrutura" (nas linhas do pedido) abre a aba Estruturas já no item e no veículo daquela linha.
+  const [pedidosAbertos, setPedidosAbertos] = useState<number | null>(null);
+  const lerPedidosAbertos = async () => {
+    const { count, error } = await supabase.from('engenharia_desenvolvimento').select('id', { count: 'exact', head: true }).eq('origem', 'pcp').eq('concluida', false);
+    if (!error && count != null) setPedidosAbertos(count);   // se a leitura falha, o contador some em vez de mostrar zero
+  };
+  const [estruturaInicial, setEstruturaInicial] = useState<any>(null);
+  useEffect(() => {
+    const handler = (e: any) => { setEstruturaInicial(e.detail || null); setAbaEng('estruturas'); };
+    window.addEventListener('engenharia:abrir-estruturas', handler);
+    return () => window.removeEventListener('engenharia:abrir-estruturas', handler);
+  }, []);
+  useEffect(() => { fetchAll(); fetchOsAcomp(); lerPedidosAbertos(); const t = setInterval(()=>{ fetchAll(true); fetchOsAcomp(); lerPedidosAbertos(); }, 30000); return () => clearInterval(t); }, []);
 
   // Etapa 7.51 (06/10/2026): leitura que falha não pode parecer "nenhuma OP aguardando Engenharia" (e a atualização de 30 s que
   // falha não pode esvaziar a lista que já estava na tela).
@@ -542,7 +556,7 @@ export default function EngenhariaTab({ currentUser }) {
     'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao',
     'Provisionada': 'ok', 'Verificação e Orçamento': 'marca', 'Em Manutenção': 'erro', 'Manutenção Concluída': 'ok',
   };
-  const trocarAba = (id) => { if (id === 'horas') setHorasAbaInicial(undefined); setAbaEng(id); };
+  const trocarAba = (id) => { if (id === 'horas') setHorasAbaInicial(undefined); if (id === 'estruturas') setEstruturaInicial(null); setAbaEng(id); };
 
   return (
     <div>
@@ -551,13 +565,18 @@ export default function EngenhariaTab({ currentUser }) {
       {/* SELETOR DE SUB-ABAS */}
       <Abas className="acn-eng-abas" ativa={abaEng} onChange={trocarAba} itens={[
         { id: 'analise', rotulo: 'Análise', icone: mdiRulerSquareCompass },
-        { id: 'desenvolvimento', rotulo: 'Desenvolvimento', icone: mdiCogOutline },
+        { id: 'desenvolvimento', rotulo: 'Desenvolvimento', icone: mdiCogOutline, contagem: pedidosAbertos > 0 ? pedidosAbertos : undefined },
+        { id: 'estruturas', rotulo: 'Estruturas', icone: mdiPuzzleOutline },
         { id: 'horas', rotulo: 'Horas/Tarefas', icone: mdiTimerOutline },
       ]} />
 
       {abaEng === 'desenvolvimento' ? (
         <div className="acn-eng-sub">
           <DesenvolvimentoPecasTab currentUser={currentUser} buscaInicial={buscaDeepLink} />
+        </div>
+      ) : abaEng === 'estruturas' ? (
+        <div className="acn-eng-sub">
+          <ConfigEstruturaTela currentUser={currentUser} itemInicial={estruturaInicial?.item_id} veiculoInicial={estruturaInicial?.veiculo_id} />
         </div>
       ) : abaEng === 'horas' ? (
         <div className="acn-eng-sub">

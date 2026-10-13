@@ -13,13 +13,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
+import ModalSolicitarDesenvolvimento from './SolicitarDesenvolvimento';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { Faixa, Botao } from './Interface';
 import { logChange } from './AuditSystem';
 import { notificarEvento } from './whatsappHelper';
 import Icone from './Icone';
-import { mdiTrayArrowUp, mdiTagOutline, mdiWrenchOutline } from '@mdi/js';
+import { mdiTrayArrowUp, mdiTagOutline, mdiWrenchOutline, mdiCogOutline } from '@mdi/js';
 
 const chaveLinha = (l: any) => l?.item_id || `txt:${l?.nome}`;
 const temConteudo = (l: any) => l?.item_id || String(l?.nome || '').trim();
@@ -57,14 +58,16 @@ const isEnvioDireto = (o: any) => o.item_envio === true || TIPOS_ENVIO_DIRETO.so
 /**
  * `ops`: as OPs que a janela atende — uma só, ou as unidades de um lote desmembrado ainda em "Em Espera PCP".
  * `onSalvo(salvas, completo)`: quem chama atualiza a lista; fecha a janela só quando `completo` (todas gravaram).
+ * `onPedido`: o PCP enviou um pedido de desenvolvimento por aqui (Etapa 18c); quem chama atualiza a lista, e esta janela continua aberta.
  */
-export default function ModalConfigurarOp({ ops, base = null, currentUser, onClose, onSalvo }: any) {
+export default function ModalConfigurarOp({ ops, base = null, currentUser, onClose, onSalvo, onPedido }: any) {
   const lote = ops.length > 1;
   const [marcadas, setMarcadas] = useState<any>(() => Object.fromEntries(ops.map((o: any) => [o.id, true])));
   const [linhas, setLinhas] = useState<any[]>([]);
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [versaoRespostas, setVersaoRespostas] = useState(0);   // sobe quando as respostas mudam: refaz o aviso de respostas diferentes
+  const [solicitar, setSolicitar] = useState<any>(null);          // { itens }: a janela do pedido de desenvolvimento, por cima desta
   const emAcao = useRef(false);                                // clique duplo em "Salvar" gravava duas vezes (cuidado da 7.51/7.52)
 
   const selecionadas = ops.filter((o: any) => marcadas[o.id]);
@@ -180,6 +183,7 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
             <PainelConferenciaEstrutura opl={ref} currentUser={currentUser}
               opsParaResponder={lote ? selecionadas : undefined}
               onRespondido={lote ? () => setVersaoRespostas(v => v + 1) : undefined}
+              onSolicitarDesenvolvimento={(itens: any[]) => setSolicitar({ itens })}
               onUsar={(novas: any[], idsConj: string[] = []) => setLinhas(atuais => somarLinhas(atuais, novas, idsConj))} />
           )}
           {!lote && (
@@ -198,9 +202,17 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
           <Botao variante="primario" disabled={salvando} onClick={salvar}>
             {salvando ? 'Salvando...' : lote ? `SALVAR CONFIGURAÇÃO DE ${selecionadas.length} OPs` : 'SALVAR CONFIGURAÇÃO'}
           </Botao>
+          <Botao icone={mdiCogOutline} disabled={salvando} onClick={() => setSolicitar({ itens: [] })}
+            title="Algo que nunca foi adaptado e precisa de projeto: pede à Engenharia, com esta OP anexada">
+            Solicitar desenvolvimento
+          </Botao>
           <Botao disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
+      {solicitar && (
+        <ModalSolicitarDesenvolvimento ops={selecionadas.length ? selecionadas : ops} base={base} itensSugeridos={solicitar.itens} currentUser={currentUser}
+          onClose={() => setSolicitar(null)} onEnviado={() => { setSolicitar(null); onPedido?.(); }} />
+      )}
     </div>
   );
 }

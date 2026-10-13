@@ -10,6 +10,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import Linkify from './Linkify';
 import { confirmar } from './Feedback';
+import PedidoDoPcp from './PedidoDesenvolvimentoPcp';
 
 export const ETAPAS_DEV = [
   'Concepção', 'Criação', 'Desenvolvimento', 'Prototipagem',
@@ -231,6 +232,30 @@ function PainelEtapa({ demanda, etapa, idx, onAtualizado, currentUser }: any) {
 
 // ─── Card de uma demanda ──────────────────────────────────────────────────────
 function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
+  // 18d (13/10/2026): o pedido que o PCP faz à Engenharia tem os itens como lista de verdade (PedidoDesenvolvimentoPcp.tsx, que fecha o pedido quando
+  // todos estão entregues ou cancelados); as 8 etapas não aparecem para ele — dois andamentos para a mesma coisa só confundiriam
+  if (demanda.origem === 'pcp') {
+    return (
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>OP {demanda.numero_opl} — {demanda.titulo}</span>
+          <span>{demanda.concluida ? '✅ Concluída' : 'Aguardando a Engenharia'}</span>
+        </div>
+        <div className="sec-body">
+          {demanda.cliente_nome && <div className="acn-ajuda"><strong>Cliente:</strong> {demanda.cliente_nome}</div>}
+          <PedidoDoPcp demanda={demanda} onAtualizado={onAtualizado} currentUser={currentUser} />
+          <div className="acn-pdp-bloco">
+            <div className="acn-pdp-rotulo">Anexos</div>
+            <AnexosDev demanda={demanda} onAtualizado={onAtualizado} />
+          </div>
+          <div className="acn-pdp-bloco">
+            <div className="acn-pdp-rotulo">Área Livre</div>
+            <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} />
+          </div>
+        </div>
+      </div>
+    );
+  }
   const etapas = demanda.etapas || [];
   const concluidas = etapas.filter((e: any) => e.status === 'concluida').length;
   const pct = etapas.length ? Math.round((concluidas / etapas.length) * 100) : 0;
@@ -395,7 +420,8 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
 
   const filtradas = demandas.filter(d => {
     const etapas = d.etapas || [];
-    const finalizada = etapas.length > 0 && etapas.every((e: any) => e.status === 'concluida');
+    // o pedido do PCP fecha pelos itens (campo `concluida`), não pelas 8 etapas
+    const finalizada = d.origem === 'pcp' ? !!d.concluida : etapas.length > 0 && etapas.every((e: any) => e.status === 'concluida');
     if (filtro === 'andamento' && finalizada) return false;
     if (filtro === 'concluidas' && !finalizada) return false;
     if (busca.trim()) {

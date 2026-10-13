@@ -41,6 +41,8 @@ export type ItemVinculo = {
   porTexto?: boolean;
   /** true = ainda não terminou (pendente/em andamento) */
   aberto?: boolean;
+  /** de onde o pedido nasceu (hoje só o desenvolvimento usa: 'pcp' = pedido do PCP à Engenharia, que segura a OP — Etapa 18c) */
+  origem?: string | null;
 };
 
 const txt = (v: any) => (v == null ? '' : String(v).trim());
@@ -141,7 +143,8 @@ export async function vinculosDaOp(op: any): Promise<ItemVinculo[]> {
     num ? tentar(supabase.from('pcp_pedidos_compra').select('*').is('vinculo_id', null).eq('opl', num)) : Promise.resolve([]),
     tentar(supabase.from('pcp_fretes').select('*').eq('vinculo_id', id)),
     tentar(supabase.from('cq_auditorias').select('*').eq('opl_id', id)),
-    tentar(supabase.from('engenharia_desenvolvimento').select('*').eq('opl_id', id)),
+    // 18c (13/10/2026): o pedido do PCP vale para as várias OPs de um lote, então também se acha pela lista `opl_ids`
+    tentar(supabase.from('engenharia_desenvolvimento').select('*').or(`opl_id.eq.${id},opl_ids.cs.{${id}}`)),
     tentar(supabase.from('engenharia_horas_tarefas').select('*').eq('opl_id', id)),
     num ? tentar(supabase.from('ajustes_trabalhos').select('*').eq('opl', num)) : Promise.resolve([]),
     tentar(supabase.from('opl_anexos').select('*').eq('opl_id', id)),
@@ -210,7 +213,7 @@ export async function vinculosDaOp(op: any): Promise<ItemVinculo[]> {
     grupo: 'engenharia', tipo: 'engenharia_desenvolvimento', id: d.id, numero: d.numero_opl,
     titulo: txt(d.titulo) || 'Desenvolvimento', descricao: d.descricao,
     status: d.concluida ? 'Concluído' : 'Em desenvolvimento', setor: 'Engenharia',
-    responsavel: d.criado_por_nome, data: d.criado_em, aberto: !d.concluida,
+    responsavel: d.criado_por_nome, data: d.criado_em, aberto: !d.concluida, origem: d.origem || null,
   }));
 
   const tarefa = (t: any, porTexto = false) => push({
