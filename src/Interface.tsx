@@ -63,6 +63,26 @@ export function Chips({ itens, ativo, onChange, rotulo, className, desativado }:
   );
 }
 
+// ── Seletor em pílulas que aceita VÁRIAS escolhas ───────────────────────────────
+// 14/10/2026: os departamentos do RH (uma pessoa pode estar em mais de um, ex.: PCP e PROGRAMAÇÃO). Mesmo desenho do `Chips`; cada pílula liga e desliga sozinha.
+export function ChipsMultiplos({ itens, ativos, onChange, rotulo, className, desativado }: { itens: ItemAba[]; ativos: string[]; onChange: (ids: string[]) => void; rotulo?: string; className?: string; desativado?: boolean }) {
+  const alterna = (id: string) => onChange(ativos.includes(id) ? ativos.filter(x => x !== id) : [...ativos, id]);
+  return (
+    <div className={'acn-chips' + (className ? ' ' + className : '')} role="group" aria-label={rotulo}>
+      {itens.map(it => {
+        const ligado = ativos.includes(it.id);
+        return (
+          <button key={it.id} type="button" aria-pressed={ligado} title={it.titulo} disabled={desativado}
+            className={ligado ? 'on' : ''} onClick={() => alterna(it.id)}>
+            {it.icone && <Icone path={it.icone} size={15} />}
+            {it.rotulo}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Botão com a hierarquia do guia ────────────────────────────────────────────
 type Variante = 'primario' | 'secundario' | 'discreto' | 'perigo' | 'perigo-sec';
 export function Botao({ variante = 'secundario', pequeno, icone, children, className, type = 'button', ...resto }:

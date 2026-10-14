@@ -28,6 +28,11 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > `/garantia`. A rotina automática da noite (trabalhar, commitar, push e deploy, próximo passo; "pare no
 > próximo commit" interrompe) está descrita no `/ux-fluxo`.
 
+> Demandas avulsas de 14/10/2026, a fazer **antes de seguir os planos acima**:
+> [PLANO_RH_DEPARTAMENTOS_ENVIOS.md](PLANO_RH_DEPARTAMENTOS_ENVIOS.md) — departamentos fixos e vários por
+> pessoa no RH, responsáveis por setor em todas as telas, quadro de colaboradores completo (planilha) com sexo
+> e relatório de uniformes, e envios parciais em "Venda para envio". Retomado pelo comando `/rh-envios`.
+
 ---
 
 ## Como falar

@@ -4033,3 +4033,13 @@ html body.dark .acn-chat-raiz .acn-b.acn-chat-info-remover { color: #fca5a5; }
 @media (hover: none) and (pointer: coarse) and (max-width: 639.98px) {
   .acn-chat-ref-tipo, .acn-chat-aviso-dica, .acn-chat-res-tipo { font-size: 12px; }
 }
+
+/* ── Departamentos do RH (14/10/2026, PLANO_RH_DEPARTAMENTOS_ENVIOS.md, fatia 1): a janela de criar e excluir departamentos ── */
+.acn-dpr-box { width: min(640px, 96vw); }
+.acn-dpr-ajuda { font-size: 12px; color: var(--acn-muted); margin-bottom: 10px; line-height: 1.45; }
+.acn-dpr-lista { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; margin: 8px 0; }
+.acn-dpr-linha { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-dpr-nome { font-weight: 600; color: var(--acn-ink); flex: 0 0 auto; }
+.acn-dpr-pessoas { flex: 1; min-width: 0; font-size: 12px; color: var(--acn-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acn-dpr-novo { display: flex; gap: 8px; margin-top: 12px; }
+.acn-dpr-novo .acn-input { flex: 1; min-width: 0; }

@@ -8,7 +8,10 @@ import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './ComissaoDocumento';
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
-import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
+import { hojeISO, diaISO, Botao, Selo, Chips, ChipsMultiplos, Faixa } from './Interface';
+import { lerDepartamentos, anexarDepartamentos, departamentosTexto, salvarVinculosDaPessoa } from './RhDepartamentos';
+import { ModalDepartamentos } from './DepartamentosRH';
+import { resetColaboradoresCache } from './ColaboradorSelect';
 import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
@@ -129,7 +132,7 @@ function imprimirAutorizacao(aut: any, func: any) {
   <div class="sub">Formulário de controle de ponto — ${new Date(aut.data+'T00:00:00').toLocaleDateString('pt-BR', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
   <table>
     <tr><td class="label">${labelColaborador}</td><td>${func?.nome || '—'}</td></tr>
-    <tr><td class="label">Cargo / Depto.</td><td>${[func?.cargo, func?.departamento].filter(Boolean).join(' — ') || '—'}</td></tr>
+    <tr><td class="label">Cargo / Depto.</td><td>${[func?.cargo, departamentosTexto(func)].filter(Boolean).join(' — ') || '—'}</td></tr>
     <tr><td class="label">Tipo</td><td><strong>${tipoLabel}</strong></td></tr>
     <tr><td class="label">Data</td><td>${new Date(aut.data+'T00:00:00').toLocaleDateString('pt-BR')}</td></tr>
     <tr><td class="label">${isSaida ? 'Horário de Saída' : 'Horário de Entrada'}</td><td>${aut.hora_saida || '—'}</td></tr>
@@ -157,15 +160,15 @@ const TAMANHOS_CALCA = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '5
 const TAMANHOS_SAPATO = Array.from({ length: 14 }, (_, i) => String(33 + i));   // 33 a 46
 const PARENTESCOS = ['Cônjuge', 'Companheiro(a)', 'Pai', 'Mãe', 'Filho(a)', 'Irmão(ã)', 'Avô/Avó', 'Tio(a)', 'Amigo(a)', 'Outro'];
 const UFS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
-const CAMPOS_EXTRAS_FUNC = ['tamanho_camiseta', 'tamanho_calca', 'tamanho_sapato', 'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento', 'endereco_bairro', 'endereco_cidade', 'endereco_uf', 'emergencia_nome', 'emergencia_parentesco', 'emergencia_telefone'];
+const CAMPOS_EXTRAS_FUNC = ['empresa_prestador', 'tamanho_camiseta', 'tamanho_calca', 'tamanho_sapato', 'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento', 'endereco_bairro', 'endereco_cidade', 'endereco_uf', 'emergencia_nome', 'emergencia_parentesco', 'emergencia_telefone'];
 
 // R17 (13/10/2026): a consulta de CEP própria do RH (só o ViaCEP) saiu; o cadastro usa o CampoCep de todo o sistema (ViaCEP e BrasilAPI, Cep.ts)
 
-function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
+function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos = [], erroDepartamentos = '' }) {
   const { campoDestaque, marcarComoLido } = useFieldHighlight('rh_funcionarios', func?.id, currentUser);
   const fecharModal = () => { marcarComoLido(); onClose(); };
   const vazio = {
-    nome:'', email:'', cpf:'', cnpj:'', cargo:'', departamento:'', data_admissao:'',
+    nome:'', email:'', cpf:'', cnpj:'', cargo:'', dep_ids: [] as string[], data_admissao:'',
     tipo_colaborador:'Funcionário',
     salario:'', valor_servicos:'',
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento', pct_tipo: {} as Record<string, string>,
@@ -173,7 +176,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
   };
   const [form, setForm] = useState(func ? {
     nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
-    cargo: func.cargo||'', departamento: func.departamento||'',
+    cargo: func.cargo||'', dep_ids: (func.departamento_ids || []) as string[],
     data_admissao: func.data_admissao||'',
     tipo_colaborador: func.tipo_colaborador||'Funcionário',
     salario: func.salario!=null ? String(func.salario) : '',
@@ -206,7 +209,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
     setSalvando(true);
     const payload = {
       nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(), cnpj: form.cnpj.trim()||null,
-      cargo: form.cargo.trim(), departamento: form.departamento.trim(),
+      cargo: form.cargo.trim(),   // 14/10/2026: o texto antigo "departamento" não é mais gravado (fica no banco como histórico); os departamentos vão para rh_funcionario_departamentos
       data_admissao: form.data_admissao || null,
       tipo_colaborador: form.tipo_colaborador,
       salario: form.salario ? Number(form.salario) : null,
@@ -219,16 +222,27 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
       ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, String(form[k] || '').trim() || null])),
       cep: soDigitosCep(form.cep) === soDigitosCep(func?.cep) ? (String(form.cep || '').trim() || null) : cepParaGravar(form.cep),
     };
+    let funcId = func?.id;
     if (func) {
-      await supabase.from('rh_funcionarios').update(payload).eq('id', func.id);
+      const { error } = await supabase.from('rh_funcionarios').update(payload).eq('id', func.id);
+      // 14/10/2026: gravação recusada não fecha a ficha como se tivesse salvo
+      if (error) { setSalvando(false); alert('Não foi possível salvar o colaborador: ' + error.message); return; }
       logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: func.id, changeType: 'UPDATE',
         oldRow: func, newRow: { ...func, ...payload }, user: currentUser });
     } else {
-      const { data: novo } = await supabase.from('rh_funcionarios')
+      const { data: novo, error } = await supabase.from('rh_funcionarios')
         .insert([{ ...payload, status_presenca:'Ativo', ativo:true }]).select('id').single();
-      if (novo?.id) logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: novo.id, changeType: 'CREATE',
+      if (error || !novo?.id) { setSalvando(false); alert('Não foi possível cadastrar o colaborador: ' + (error?.message || 'sem resposta')); return; }
+      funcId = novo.id;
+      logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: novo.id, changeType: 'CREATE',
         newRow: payload, user: currentUser });
     }
+    // os departamentos (uma pessoa pode estar em mais de um); só mexe neles quando a lista chegou (leitura que falhou não apaga vínculo)
+    if (!erroDepartamentos && departamentos.length) {
+      const erroDep = await salvarVinculosDaPessoa(funcId, form.dep_ids);
+      if (erroDep) { alert('O colaborador foi salvo, mas os departamentos não: ' + erroDep + '.\n\nAbra o cadastro dele de novo e marque os departamentos.'); }
+    }
+    resetColaboradoresCache();
     setSalvando(false); onSaved(); fecharModal();
   };
 
@@ -254,9 +268,19 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Dados do Colaborador</div>
             {[['nome','Nome completo *'],['email','E-mail'],
-              ['cargo','Cargo / Função'],['departamento','Departamento / Empresa']].map(([k,l])=>(
+              ['cargo','Cargo / Função']].map(([k,l])=>(
               <div key={k} style={campoDestaque(k)}>{lbl(l)}{inp(k)}</div>
             ))}
+            <div>
+              {lbl('Departamentos (marque um ou mais)')}
+              {erroDepartamentos
+                ? <Faixa tom="erro">Não foi possível carregar os departamentos ({erroDepartamentos}). Os que a pessoa já tem não serão mexidos.</Faixa>
+                : <ChipsMultiplos rotulo="Departamentos" ativos={form.dep_ids} onChange={ids => set('dep_ids', ids)}
+                    itens={departamentos.map((d: any) => ({ id: d.id, rotulo: d.nome }))} />}
+            </div>
+            {!isFuncionario && (
+              <div style={campoDestaque('empresa_prestador')}>{lbl('Empresa do prestador')}{inp('empresa_prestador', 'Razão social ou nome da empresa')}</div>
+            )}
             <div className={isFuncionario ? undefined : 'acn-grade-2'}>
               <div style={campoDestaque('cpf')}>{lbl('CPF')}{inp('cpf','000.000.000-00')}</div>
               {!isFuncionario && (
@@ -682,7 +706,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, onDesligar, c
                     </Selo>
                   </td>
                   <td>
-                    {[f.cargo, f.departamento].filter(Boolean).join(' · ') || '—'}
+                    {[f.cargo, departamentosTexto(f)].filter(Boolean).join(' · ') || '—'}
                   </td>
                   <td>
                     <select className="acn-sel-status" data-acn-familia={FAMILIA_PRESENCA[f.status_presenca] || 'neutro'}
@@ -808,7 +832,7 @@ function PainelDesligados({ desligados, onCorrigir, onReativar }) {
                 <tr key={f.id}>
                   <td className="acn-forte">{f.nome}</td>
                   <td>{f.tipo_colaborador || 'Funcionário'}</td>
-                  <td>{[f.cargo, f.departamento].filter(Boolean).join(' · ') || '—'}</td>
+                  <td>{[f.cargo, departamentosTexto(f)].filter(Boolean).join(' · ') || '—'}</td>
                   <td className="acn-num">{diaBR(f.data_desligamento)}</td>
                   <td>{f.motivo_desligamento || '—'}</td>
                   <td>
@@ -1694,7 +1718,7 @@ function RelatorioTecnicos({ funcionarios }) {
                 <div className="acn-forte">{tec.nome}</div>
                 {tec.func && (
                   <div className="acn-tec-sub">
-                    {tec.func.cargo||'—'} · {tec.func.departamento||'—'}
+                    {tec.func.cargo||'—'} · {departamentosTexto(tec.func) || '—'}
                     <Selo familia={tec.func.tipo_colaborador==='Terceiro' ? 'atencao' : 'info'} ponto={false}>{tec.func.tipo_colaborador||'Funcionário'}</Selo>
                   </div>
                 )}
@@ -2175,6 +2199,9 @@ export default function RHTab({ currentUser }) {
   const [lancamentos, setLancamentos]     = useState<any[]>([]);
   const [autorizacoes, setAutorizacoes]   = useState<any[]>([]);
   const [loading, setLoading]             = useState(true);
+  const [departamentos, setDepartamentos] = useState<any[]>([]);
+  const [erroDeptos, setErroDeptos]       = useState('');
+  const [modalDeptos, setModalDeptos]     = useState(false);
 
   const [modalFunc, setModalFunc]         = useState<'new'|any|null>(null);
   const [modalLanc, setModalLanc]         = useState(false);
@@ -2185,15 +2212,18 @@ export default function RHTab({ currentUser }) {
 
   const fetch = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
-    const [fRes, lRes, aRes, dRes] = await Promise.all([
+    const [fRes, lRes, aRes, dRes, depRes] = await Promise.all([
       supabase.from('rh_funcionarios').select('*').eq('ativo', true).order('nome'),
       supabase.from('rh_lancamentos').select('*').order('data', { ascending: false }),
       supabase.from('rh_autorizacoes').select('*').order('data', { ascending: false }),
       supabase.from('rh_funcionarios').select('*').eq('status_presenca', 'Desligado')
         .order('data_desligamento', { ascending: false, nullsFirst: false }).order('nome'),
+      lerDepartamentos(),
     ]);
-    setFuncionarios(fRes.data || []);
-    setDesligados(dRes.data || []);
+    // 14/10/2026: cada pessoa recebe os departamentos dela; se a leitura dos departamentos falhar, a lista de pessoas continua e a ficha avisa
+    setDepartamentos(depRes.departamentos); setErroDeptos(depRes.erro || '');
+    setFuncionarios(anexarDepartamentos(fRes.data || [], depRes.departamentos, depRes.vinculos));
+    setDesligados(anexarDepartamentos(dRes.data || [], depRes.departamentos, depRes.vinculos));
     setLancamentos(lRes.data || []);
     setAutorizacoes(aRes.data || []);
     if (!silent) setLoading(false);
@@ -2237,6 +2267,7 @@ export default function RHTab({ currentUser }) {
           {isAdmin && (
             <>
               <Botao variante="primario" icone={mdiPlus} onClick={()=>setModalFunc('new')}>Colaborador</Botao>
+              <Botao icone={mdiAccountGroupOutline} onClick={()=>setModalDeptos(true)}>Departamentos</Botao>
               <Botao icone={mdiClipboardTextOutline} onClick={()=>setModalLanc(true)}>Lançar Horas</Botao>
               {podeAutorizar && (
                 <Botao icone={mdiPrinterOutline} onClick={()=>setModalAut(true)}>Autorização</Botao>
@@ -2288,7 +2319,13 @@ export default function RHTab({ currentUser }) {
           onClose={()=>setModalFunc(null)}
           onSaved={fetch}
           currentUser={currentUser}
+          departamentos={departamentos}
+          erroDepartamentos={erroDeptos}
         />
+      )}
+      {modalDeptos && (
+        <ModalDepartamentos departamentos={departamentos} funcionarios={comDesligados} currentUser={currentUser}
+          onClose={()=>setModalDeptos(false)} onMudou={()=>fetch(true)} />
       )}
       {modalLanc && (
         <ModalLancamento
