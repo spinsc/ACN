@@ -6,7 +6,8 @@ import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
 import { combinaBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
+import { Botao, Faixa } from './Interface';
 import { perfilComPoderes } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,11 +57,14 @@ const VAZIO_CONTATO: any = {
   whatsapp: '', email: '', telefone: '', linkedin: '', observacoes: '',
   operador_nome: '', foco_id: '',
 };
-const VAZIO_INTERACAO: any = {
+// 7.x (13/10/2026): o campo "Data e Hora" (datetime-local) é a hora de quem está olhando. Antes o padrão era a hora de Londres (3 h à frente de Brasília) calculada UMA vez, quando a página abriu, e o que a pessoa digitava ia ao banco sem fuso — o banco lia como Londres e a hora aparecia 3 h atrás no histórico.
+const agoraLocalInput = () => { const d = new Date(); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+const localParaIso = (v: string) => { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString(); };
+const interacaoVazia = (): any => ({
   tipo: 'whatsapp', descricao: '', resultado: 'positivo',
-  data_interacao: new Date().toISOString().slice(0, 16),
+  data_interacao: agoraLocalInput(),
   oportunidade_id: null, audio_url: null, transcricao: '',
-};
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -90,26 +94,32 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const [modalContato, setModalContato]     = useState<any | null>(null); // null=fechado, {}=novo, obj=editar
   const [modalInteracao, setModalInteracao] = useState<any | null>(null); // {contato}
   const [formC, setFormC]   = useState({ ...VAZIO_CONTATO });
-  const [formI, setFormI]   = useState({ ...VAZIO_INTERACAO });
+  const [formI, setFormI]   = useState<any>(interacaoVazia);
   const [salvando, setSalvando] = useState(false);
   const [transcrevendo, setTranscrevendo] = useState(false);
+  const [enviandoAudio, setEnviandoAudio] = useState(false);
+  // 7.x (13/10/2026): leitura que falha não pode parecer "lista vazia" — guarda o motivo de cada uma e mostra a faixa com "Tentar de novo"
+  const [falhas, setFalhas] = useState<Record<string, string>>({});
+  const jaCarregouRef = useRef(false);   // só a primeira carga troca a tela por "Carregando…"; as seguintes (depois de salvar, excluir…) atualizam por baixo, sem piscar
+  const salvandoRef = useRef(false);     // trava o clique duplo em "Salvar"
   const audioRef = useRef<HTMLInputElement>(null);
 
   // ─── carga ───
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!jaCarregouRef.current) setLoading(true);
     const [r1, r2, r3, r4, r5] = await Promise.all([
       supabase.from('crm_contatos').select('*').order('nome'),
       supabase.from('crm_interacoes').select('*').order('data_interacao', { ascending: false }),
-      supabase.from('crm_oportunidades').select('id, titulo, funil').order('titulo'),
+      supabase.from('crm_oportunidades').select('id, titulo, funil, cliente_id').order('titulo'),   // 7.x: sem o cliente_id o quadro "Oportunidades" do contato nunca aparecia
       supabase.from('clientes').select('id, nome').order('nome'),
       supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }),
     ]);
-    setContatos(r1.data || []);
-    setInteracoes(r2.data || []);
-    setOps(r3.data || []);
-    setClientes(r4.data || []);
-    setWaMsgs(r5.data || []);
+    // 7.x: a leitura que falha mantém o que já estava na tela (antes virava lista vazia, sem aviso)
+    const novas: Record<string, string> = {};
+    const aplica = (r: any, chave: string, set: (v: any[]) => void) => { if (r.error || !r.data) { novas[chave] = r.error?.message || 'sem resposta'; return; } set(r.data); };
+    aplica(r1, 'contatos', setContatos); aplica(r2, 'interacoes', setInteracoes); aplica(r3, 'oportunidades', setOps); aplica(r4, 'clientes', setClientes); aplica(r5, 'mensagens', setWaMsgs);
+    setFalhas(novas);
+    jaCarregouRef.current = true;
     setLoading(false);
   }, []);
 
@@ -128,10 +138,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   }, []);
 
   // Emite total de msgs não lidas para o DashboardTab (badge no sidebar)
+  // 7.x (13/10/2026): o selo contava toda mensagem não lida do sistema — inclusive a de contato de outro operador (que a pessoa nem vê) e a sem contato (que nenhuma tela mostra e por isso nunca zerava)
   useEffect(() => {
-    const naoLidas = waMsgs.filter(m => !m.lida).length;
+    if (falhas.contatos && contatos.length === 0) return;   // os contatos não chegaram: não zera o selo por isso
+    const visiveis = new Set(contatos.filter(c => veTodos || c.operador_nome === currentUser?.nome).map(c => c.id));
+    const naoLidas = waMsgs.filter(m => !m.lida && m.contato_id && visiveis.has(m.contato_id)).length;
     window.dispatchEvent(new CustomEvent('crm:wa-unread-count', { detail: { count: naoLidas } }));
-  }, [waMsgs]);
+  }, [waMsgs, contatos, falhas]);
 
   // atualiza contato selecionado quando dados recarregam
   useEffect(() => {
@@ -165,8 +178,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const limpar = (v: any) => (v === '' || v === undefined) ? null : v;
 
   const salvarContato = async () => {
-    if (!formC.nome?.trim()) return;
-    setSalvando(true);
+    if (salvandoRef.current) return;
+    if (!formC.nome?.trim()) { mostrarAviso('Informe o nome do contato.', 'atencao'); return; }   // 7.x: antes o botão não fazia nada e não dizia por quê
+    salvandoRef.current = true; setSalvando(true);
     const p = {
       nome:          formC.nome.trim(),
       cargo:         limpar(formC.cargo),
@@ -180,15 +194,21 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
       foco_id:       limpar(formC.foco_id),
       operador_nome: formC.operador_nome || currentUser?.nome,
     };
-    if (modalContato?.id) {
-      // editar NÃO troca o responsável nem reativa: antes o payload mandava operador_id = quem editava e
-      // ativo:true, e um contato desativado voltava a aparecer e mudava de dono (achado em 29/09/2026)
-      await supabase.from('crm_contatos').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalContato.id);
-    } else {
-      const { data } = await supabase.from('crm_contatos').insert({ ...p, operador_id: currentUser?.id || null, ativo: true }).select().single();
-      if (data) setContatoSel(data);
-    }
-    setSalvando(false);
+    let erro: any = null;
+    try {
+      if (modalContato?.id) {
+        // editar NÃO troca o responsável nem reativa: antes o payload mandava operador_id = quem editava e
+        // ativo:true, e um contato desativado voltava a aparecer e mudava de dono (achado em 29/09/2026)
+        const r = await supabase.from('crm_contatos').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalContato.id);
+        erro = r.error;
+      } else {
+        const r = await supabase.from('crm_contatos').insert({ ...p, operador_id: currentUser?.id || null, ativo: true }).select().single();
+        erro = r.error;
+        if (!erro && r.data) setContatoSel(r.data);
+      }
+    } finally { salvandoRef.current = false; setSalvando(false); }
+    // 7.x (13/10/2026): gravação recusada não fecha a janela como se tivesse salvo (antes o erro era ignorado e o contato "sumia" na leitura seguinte)
+    if (erro) { mostrarAviso('Não foi possível salvar o contato: ' + erro.message + '.', 'erro'); return; }
     setModalContato(null);
     await load();
   };
@@ -197,8 +217,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // EXCLUIR CONTATO
   // ─────────────────────────────────────────────────────────────────────────
   const excluirContato = async (c: any) => {
-    if (!await confirmar(`Excluir "${c.nome}"?`)) return;
-    await supabase.from('crm_contatos').delete().eq('id', c.id);
+    // 7.x (13/10/2026): excluir o contato apaga TAMBÉM o histórico de interações dele (o banco apaga em cascata) e as mensagens de WhatsApp dele ficam sem contato, e a pergunta não dizia isso
+    const nInt = interacoes.filter(i => i.contato_id === c.id).length;
+    const nWa = waMsgs.filter(m => m.contato_id === c.id).length;
+    const junto = [nInt ? `O histórico de ${nInt} interaç${nInt !== 1 ? 'ões' : 'ão'} dele também será apagado.` : '', nWa ? `${nWa !== 1 ? 'As ' + nWa + ' mensagens' : 'A mensagem'} de WhatsApp dele deixa${nWa !== 1 ? 'm' : ''} de aparecer.` : ''].filter(Boolean).join(' ');
+    if (!await confirmar(`Excluir "${c.nome}"?` + (junto ? '\n\n' + junto : ''))) return;
+    const { error } = await supabase.from('crm_contatos').delete().eq('id', c.id);
+    if (error) { mostrarAviso('Não foi possível excluir o contato: ' + error.message + '.', 'erro'); return; }   // 7.x: antes o erro era ignorado e o contato só "voltava" na leitura seguinte
     if (contatoSel?.id === c.id) setContatoSel(null);
     await load();
   };
@@ -207,17 +232,23 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // SALVAR INTERAÇÃO
   // ─────────────────────────────────────────────────────────────────────────
   const salvarInteracao = async () => {
-    if (!modalInteracao || !formI.descricao?.trim()) return;
-    setSalvando(true);
-    await supabase.from('crm_interacoes').insert({
-      ...formI,
-      contato_id:    modalInteracao.contato.id,
-      operador_nome: currentUser?.nome,
-      data_interacao: formI.data_interacao || new Date().toISOString(),
-    });
-    setSalvando(false);
+    if (salvandoRef.current || !modalInteracao) return;
+    if (!formI.descricao?.trim()) { mostrarAviso('Escreva o resumo da interação.', 'atencao'); return; }   // 7.x: antes o botão não fazia nada e não dizia por quê
+    salvandoRef.current = true; setSalvando(true);
+    let erro: any = null;
+    try {
+      const r = await supabase.from('crm_interacoes').insert({
+        ...formI,
+        contato_id:    modalInteracao.contato.id,
+        operador_nome: currentUser?.nome,
+        data_interacao: localParaIso(formI.data_interacao),
+      });
+      erro = r.error;
+    } finally { salvandoRef.current = false; setSalvando(false); }
+    // 7.x (13/10/2026): gravação recusada não fecha a janela nem apaga o que foi escrito (antes o erro era ignorado e a interação se perdia)
+    if (erro) { mostrarAviso('Não foi possível salvar a interação: ' + erro.message + '.', 'erro'); return; }
     setModalInteracao(null);
-    setFormI({ ...VAZIO_INTERACAO });
+    setFormI(interacaoVazia());
     if (audioRef.current) audioRef.current.value = '';
     await load();
   };
@@ -226,11 +257,17 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // UPLOAD ÁUDIO + TRANSCRIÇÃO
   // ─────────────────────────────────────────────────────────────────────────
   const uploadAudio = async (file: File) => {
-    const path = `interacoes/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const { data, error } = await supabase.storage.from('crm-audios').upload(path, file, { upsert: true });
-    if (error || !data) { alert('Erro ao enviar áudio: ' + error?.message); return; }
-    const { data: pub } = supabase.storage.from('crm-audios').getPublicUrl(path);
-    setFormI(f => ({ ...f, audio_url: pub?.publicUrl || null }));
+    setEnviandoAudio(true);   // 7.x: o botão "Salvar" espera o envio terminar
+    try {
+      const path = `interacoes/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { data, error } = await supabase.storage.from('crm-audios').upload(path, file, { upsert: true });
+      if (error || !data) { alert('Erro ao enviar áudio: ' + (error?.message || 'sem resposta')); return; }
+      const { data: pub } = supabase.storage.from('crm-audios').getPublicUrl(path);
+      setFormI(f => ({ ...f, audio_url: pub?.publicUrl || null }));
+    } finally {
+      setEnviandoAudio(false);
+      if (audioRef.current) audioRef.current.value = '';   // 7.x: depois de um erro, escolher o MESMO arquivo de novo não fazia nada (o campo ficava preenchido)
+    }
   };
 
   const transcreverAudio = async () => {
@@ -252,7 +289,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // MARCAR MSG COMO LIDA
   // ─────────────────────────────────────────────────────────────────────────
   const marcarLida = async (msgId: string) => {
-    await supabase.from('crm_whatsapp_msgs').update({ lida: true }).eq('id', msgId);
+    const { error } = await supabase.from('crm_whatsapp_msgs').update({ lida: true }).eq('id', msgId);
+    // 7.x (13/10/2026): gravação recusada não marca como lida na tela (antes o erro era ignorado: a mensagem parecia lida e o selo do menu caía, e na leitura seguinte tudo voltava)
+    if (error) { mostrarAviso('Não foi possível marcar a mensagem como lida: ' + error.message + '.', 'erro'); return; }
     setWaMsgs(prev => prev.map(m => m.id === msgId ? { ...m, lida: true } : m));
   };
 
@@ -304,7 +343,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               )}
               {nInter > 0 && (
                 <span style={{ fontSize:8, background:'#e0f2fe', color:'#0369a1', padding:'1px 6px', borderRadius:10, fontWeight:600 }}>
-                  {nInter} interação{nInter !== 1 ? 'ões' : ''}
+                  {nInter} {nInter !== 1 ? 'interações' : 'interação'}
                 </span>
               )}
               {nWA > 0 && (
@@ -368,7 +407,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               </a>
             )}
             <button className="acn-btn" style={{ background:'#0891b2' }}
-              onClick={() => { setModalInteracao({ contato: c }); setFormI({ ...VAZIO_INTERACAO }); }}>
+              onClick={() => { setModalInteracao({ contato: c }); setFormI(interacaoVazia()); }}>
               + Registrar contato
             </button>
             <button className="acn-btn" style={{ background:'#475569' }}
@@ -467,13 +506,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
           {abaDetalhe === 'historico' && (
             <div>
               <button className="acn-btn" style={{ background:'#0891b2', marginBottom:10 }}
-                onClick={() => { setModalInteracao({ contato: c }); setFormI({ ...VAZIO_INTERACAO }); }}>
+                onClick={() => { setModalInteracao({ contato: c }); setFormI(interacaoVazia()); }}>
                 + Nova interação
               </button>
 
               {interacoesC.length === 0 ? (
                 <div style={{ textAlign:'center', color:'#94a3b8', fontSize:10, padding:16 }}>
-                  Nenhuma interação registrada ainda.
+                  {falhas.interacoes ? 'Não foi possível carregar o histórico.' : 'Nenhuma interação registrada ainda.'}
                 </div>
               ) : interacoesC.map(i => (
                 <div key={i.id} style={{ marginBottom:10, paddingBottom:10, borderBottom:'1px dashed #f1f5f9' }}>
@@ -526,11 +565,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               )}
               {c.whatsapp && waMsgsC.length === 0 && (
                 <div style={{ textAlign:'center', padding:16 }}>
-                  <div style={{ fontSize:10, color:'#94a3b8', marginBottom:8 }}>Nenhuma mensagem sincronizada.</div>
+                  <div style={{ fontSize:10, color:'#94a3b8', marginBottom:8 }}>{falhas.mensagens ? 'Não foi possível carregar as mensagens.' : 'Nenhuma mensagem sincronizada.'}</div>
+                  {!falhas.mensagens && (
                   <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:6, padding:'8px 10px', textAlign:'left' }}>
                     💡 Para sincronizar automaticamente, configure o webhook da <strong>Evolution API</strong> para gravar mensagens nesta tabela.<br /><br />
                     Endpoint: <code style={{ fontSize:8 }}>POST /functions/v1/whatsapp-webhook</code>
                   </div>
+                  )}
                   <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer"
                     style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#16a34a', color:'white',
                       borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, textDecoration:'none', marginTop:10 }}>
@@ -559,7 +600,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                             e.stopPropagation();
                             setModalInteracao({ contato: c });
                             setFormI({
-                              ...VAZIO_INTERACAO,
+                              ...interacaoVazia(),
                               tipo: 'whatsapp',
                               descricao: m.conteudo || m.transcricao || '',
                               transcricao: m.transcricao || '',
@@ -623,6 +664,14 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
         )}
       </div>
 
+      {Object.keys(falhas).length > 0 && (
+        <div style={{ marginBottom:10 }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
+            Não foi possível carregar {Object.keys(falhas).map(k => ({ contatos: 'os contatos', interacoes: 'as interações', oportunidades: 'as oportunidades', clientes: 'os clientes', mensagens: 'as mensagens do WhatsApp' }[k])).join(', ')} ({[...new Set(Object.values(falhas))].join('; ')}).
+          </Faixa>
+        </div>
+      )}
+
       {showWaConexoes && <WhatsAppConexoesWidget onClose={() => setShowWaConexoes(false)} />}
 
       {/* ── Layout: lista + painel ── */}
@@ -633,7 +682,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
             <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
               <div style={{ fontSize:14, marginBottom:6 }}>📇</div>
               <div style={{ fontSize:11 }}>
-                {busca ? 'Nenhum contato encontrado.' : 'Nenhum contato cadastrado ainda.'}
+                {busca ? 'Nenhum contato encontrado.' : falhas.contatos ? 'Não foi possível carregar os contatos.' : 'Nenhum contato cadastrado ainda.'}
               </div>
             </div>
           ) : contatosFiltrados.map(c => renderCard(c))}
@@ -856,8 +905,8 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
                 <label style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#7c3aed', color:'white',
                   borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                  📎 Anexar áudio
-                  <input ref={audioRef} type="file" accept="audio/*"
+                  {enviandoAudio ? '⏳ Enviando áudio…' : '📎 Anexar áudio'}
+                  <input ref={audioRef} type="file" accept="audio/*" disabled={enviandoAudio}
                     onChange={e => { if (e.target.files?.[0]) uploadAudio(e.target.files[0]); }}
                     style={{ display:'none' }} />
                 </label>
@@ -884,7 +933,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }}
                 onClick={() => setModalInteracao(null)}>Cancelar</button>
               <button className="acn-btn" style={{ background:'#0891b2', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
-                onClick={salvarInteracao} disabled={salvando}>
+                onClick={salvarInteracao} disabled={salvando || enviandoAudio}>
                 {salvando ? 'Salvando...' : 'Salvar Interação'}
               </button>
             </div>
