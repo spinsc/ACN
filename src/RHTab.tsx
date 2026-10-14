@@ -160,7 +160,11 @@ const TAMANHOS_CALCA = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '5
 const TAMANHOS_SAPATO = Array.from({ length: 14 }, (_, i) => String(33 + i));   // 33 a 46
 const PARENTESCOS = ['Cônjuge', 'Companheiro(a)', 'Pai', 'Mãe', 'Filho(a)', 'Irmão(ã)', 'Avô/Avó', 'Tio(a)', 'Amigo(a)', 'Outro'];
 const UFS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
-const CAMPOS_EXTRAS_FUNC = ['empresa_prestador', 'tamanho_camiseta', 'tamanho_calca', 'tamanho_sapato', 'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento', 'endereco_bairro', 'endereco_cidade', 'endereco_uf', 'emergencia_nome', 'emergencia_parentesco', 'emergencia_telefone'];
+// 14/10/2026 (PLANO_RH_DEPARTAMENTOS_ENVIOS.md, fatia 3): o que a planilha "Quadro de Colaboradores" traz e a ficha não tinha — sexo (o relatório de uniformes separa MASCULINO e FEMININO),
+// empresa (DETECH / ACN), nome completo (o "nome" continua sendo o do sistema: as OPs e os campos de responsável guardam esse texto, então ele não é renomeado), atividades, e os valores abaixo.
+const CAMPOS_VALOR_FUNC = ['adicional_cargo_confianca', 'insalubridade_percentual', 'insalubridade_valor', 'ajuda_custo', 'alimentacao'];
+const EMPRESAS_RH = ['DETECH', 'ACN', 'DETECH e ACN'];
+const CAMPOS_EXTRAS_FUNC = ['sexo', 'empresa', 'nome_completo', 'atividades_exercidas', 'atividades_paralelas', 'empresa_prestador', 'tamanho_camiseta', 'tamanho_calca', 'tamanho_sapato', 'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento', 'endereco_bairro', 'endereco_cidade', 'endereco_uf', 'emergencia_nome', 'emergencia_parentesco', 'emergencia_telefone'];
 
 // R17 (13/10/2026): a consulta de CEP própria do RH (só o ViaCEP) saiu; o cadastro usa o CampoCep de todo o sistema (ViaCEP e BrasilAPI, Cep.ts)
 
@@ -170,9 +174,10 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
   const vazio = {
     nome:'', email:'', cpf:'', cnpj:'', cargo:'', dep_ids: [] as string[], data_admissao:'',
     tipo_colaborador:'Funcionário',
-    salario:'', valor_servicos:'',
+    salario:'', valor_servicos:'', cargo_confianca: false,
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento', pct_tipo: {} as Record<string, string>,
     ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, ''])),
+    ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, ''])),
   };
   const [form, setForm] = useState(func ? {
     nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
@@ -181,6 +186,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     tipo_colaborador: func.tipo_colaborador||'Funcionário',
     salario: func.salario!=null ? String(func.salario) : '',
     valor_servicos: func.valor_servicos!=null ? String(func.valor_servicos) : '',
+    cargo_confianca: !!func.cargo_confianca,
+    ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, func[k] != null ? String(func[k]) : ''])),
     recebe_comissao: func.recebe_comissao||false,
     percentual_comissao: func.percentual_comissao!=null ? String(func.percentual_comissao) : '',
     incide_em: func.incide_em||'Faturamento',
@@ -214,6 +221,9 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
       tipo_colaborador: form.tipo_colaborador,
       salario: form.salario ? Number(form.salario) : null,
       valor_servicos: form.valor_servicos ? Number(form.valor_servicos) : null,
+      cargo_confianca: !!form.cargo_confianca,
+      ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, String(form[k]).trim() !== '' && Number.isFinite(Number(form[k])) ? Number(form[k]) : null])),
+      adicional_cargo_confianca: form.cargo_confianca && String(form.adicional_cargo_confianca).trim() !== '' && Number.isFinite(Number(form.adicional_cargo_confianca)) ? Number(form.adicional_cargo_confianca) : null,   // sem cargo de confiança não há adicional
       recebe_comissao: form.recebe_comissao,
       percentual_comissao: form.recebe_comissao && form.percentual_comissao ? Number(form.percentual_comissao) : null,
       incide_em: form.recebe_comissao ? form.incide_em : null,
@@ -247,6 +257,10 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
   };
 
   const isFuncionario = form.tipo_colaborador === 'Funcionário';
+  // total da planilha = salário base + adicional de cargo de confiança + insalubridade em R$ (a ajuda de custo e a alimentação não entram); só aparece com o salário base preenchido
+  const numOuZero = (v: any) => (String(v).trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : 0);
+  const totalMensal = String(form.salario).trim() === '' || !Number.isFinite(Number(form.salario)) ? null
+    : Math.round((numOuZero(form.salario) + (form.cargo_confianca ? numOuZero(form.adicional_cargo_confianca) : 0) + numOuZero(form.insalubridade_valor)) * 100) / 100;
 
   return (
     <div className="modal-overlay" onClick={e=>{ if(e.target===e.currentTarget) fecharModal(); }}>
@@ -267,10 +281,25 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
           {/* DADOS PESSOAIS */}
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Dados do Colaborador</div>
-            {[['nome','Nome completo *'],['email','E-mail'],
+            {/* 14/10/2026: "Nome completo" passou a ser o campo novo (como consta no contrato); este é o nome com que a pessoa aparece nas OPs e nas listas — não se renomeia quem já tem OP */}
+            {[['nome','Nome no sistema *'],['nome_completo','Nome completo (como consta no contrato)'],['email','E-mail'],
               ['cargo','Cargo / Função']].map(([k,l])=>(
               <div key={k} style={campoDestaque(k)}>{lbl(l)}{inp(k)}</div>
             ))}
+            <div style={campoDestaque('sexo')}>
+              {lbl('Sexo')}
+              {/* separa MASCULINO e FEMININO no relatório de uniformes; vazio = não informado */}
+              <Chips ativo={form.sexo || 'nao'} onChange={v => set('sexo', v === 'nao' ? '' : v)}
+                itens={[{ id: 'nao', rotulo: 'Não informado' }, { id: 'Masculino', rotulo: 'Masculino' }, { id: 'Feminino', rotulo: 'Feminino' }]} />
+            </div>
+            <div style={campoDestaque('empresa')}>
+              {lbl('Empresa (DETECH / ACN)')}
+              <select className="acn-input" value={form.empresa} onChange={e=>set('empresa', e.target.value)} aria-label="Empresa">
+                <option value="">—</option>
+                {EMPRESAS_RH.map(o => <option key={o} value={o}>{o}</option>)}
+                {form.empresa && !EMPRESAS_RH.includes(form.empresa) && <option value={form.empresa}>{form.empresa}</option>}
+              </select>
+            </div>
             <div>
               {lbl('Departamentos (marque um ou mais)')}
               {erroDepartamentos
@@ -360,7 +389,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
             <div className="acn-quadro-titulo">Remuneração</div>
             {isFuncionario ? (
               <div style={campoDestaque('salario')}>
-                {lbl('Salário (R$)')}
+                {/* 14/10/2026: o salário é o BASE; o adicional e a insalubridade têm campo próprio e o total é calculado (antes, em 6 cadastros, o total estava digitado aqui) */}
+                {lbl('Salário base (R$)')}
                 <input type="number" min="0" step="0.01" className="acn-input" value={form.salario} onChange={e=>set('salario',e.target.value)}
                   placeholder="Ex: 3500.00" />
               </div>
@@ -371,6 +401,52 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
                   placeholder="Ex: 5000.00" />
                 <div className="acn-ajuda">Valor do contrato ou por serviço prestado</div>
               </div>
+            )}
+            <div style={campoDestaque('cargo_confianca')}>
+              {lbl('Cargo de confiança?')}
+              <Chips ativo={form.cargo_confianca ? 'sim' : 'nao'} onChange={v => set('cargo_confianca', v === 'sim')}
+                itens={[{ id: 'nao', rotulo: 'Não' }, { id: 'sim', rotulo: 'Sim' }]} />
+            </div>
+            {form.cargo_confianca && (
+              <div style={campoDestaque('adicional_cargo_confianca')}>
+                {lbl('Adicional de cargo de confiança (R$)')}
+                <input type="number" min="0" step="0.01" className="acn-input" value={form.adicional_cargo_confianca} onChange={e=>set('adicional_cargo_confianca',e.target.value)}
+                  placeholder="Ex: 1045.97" />
+                <div className="acn-ajuda">O "Adicional 40%" da planilha do quadro de colaboradores.</div>
+              </div>
+            )}
+            {isFuncionario && (
+              <>
+                <div className="acn-grade-2">
+                  <div style={campoDestaque('insalubridade_percentual')}>
+                    {lbl('Insalubridade (% do salário mínimo)')}
+                    <input type="number" min="0" max="100" step="0.1" className="acn-input" value={form.insalubridade_percentual} onChange={e=>set('insalubridade_percentual',e.target.value)}
+                      placeholder="Ex: 40" />
+                  </div>
+                  <div style={campoDestaque('insalubridade_valor')}>
+                    {lbl('Insalubridade (R$)')}
+                    <input type="number" min="0" step="0.01" className="acn-input" value={form.insalubridade_valor} onChange={e=>set('insalubridade_valor',e.target.value)}
+                      placeholder="Ex: 648.40" />
+                  </div>
+                </div>
+                <div className="acn-grade-2">
+                  <div style={campoDestaque('ajuda_custo')}>
+                    {lbl('Ajuda de custo (R$)')}
+                    <input type="number" min="0" step="0.01" className="acn-input" value={form.ajuda_custo} onChange={e=>set('ajuda_custo',e.target.value)}
+                      placeholder="Ex: 359.00" />
+                  </div>
+                  <div style={campoDestaque('alimentacao')}>
+                    {lbl('Alimentação (R$)')}
+                    <input type="number" min="0" step="0.01" className="acn-input" value={form.alimentacao} onChange={e=>set('alimentacao',e.target.value)}
+                      placeholder="Ex: 436.00" />
+                  </div>
+                </div>
+                {totalMensal != null && (
+                  <div className="acn-ajuda" data-teste="total-calculado">
+                    Total (calculado): <strong>{totalMensal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong> = salário base + adicional de cargo de confiança + insalubridade (a ajuda de custo e a alimentação ficam de fora, como na planilha).
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -414,6 +490,19 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
                 </Faixa>
               </>
             )}
+          </div>
+
+          {/* ATIVIDADES (o quadro de colaboradores traz as atividades exercidas e as paralelas de cada pessoa) */}
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">Atividades</div>
+            <div style={campoDestaque('atividades_exercidas')}>
+              {lbl('Atividades exercidas')}
+              <textarea className="acn-input" rows={5} value={form.atividades_exercidas} onChange={e=>set('atividades_exercidas', e.target.value)} placeholder="O que a pessoa faz na empresa" />
+            </div>
+            <div style={campoDestaque('atividades_paralelas')}>
+              {lbl('Atividades paralelas')}
+              <textarea className="acn-input" rows={2} value={form.atividades_paralelas} onChange={e=>set('atividades_paralelas', e.target.value)} placeholder="Outros trabalhos fora da empresa (se houver)" />
+            </div>
           </div>
 
         </div>
