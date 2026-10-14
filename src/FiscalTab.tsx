@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
+import { lerRemessasAtivasDe } from './Remessas';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -30,6 +31,11 @@ export default function FiscalTab({ currentUser }) {
   const [nfs, setNfs] = useState({});
   // Nota de serviço (NFS-e) ao lado da NF-e de material — só os faturamentos que saem com as duas preenchem (05/10/2026)
   const [nfsServico, setNfsServico] = useState({});
+  // Remessas (fatia 5, entrega 2 — 14/10/2026): OP que saiu em partes pode ter UMA NF-e para todas as remessas ou UMA POR REMESSA. `remessasPorOp` = as remessas ativas de cada OP da tela;
+  // `oplsNfPorRemessa` = as OPs em que o Fiscal ligou "uma NF para cada remessa"; `nfsRemessa` = o número digitado em cada remessa. A comissão e o "faturado" seguem contando só com a OP inteira faturada.
+  const [remessasPorOp, setRemessasPorOp] = useState<Map<string, any[]>>(() => new Map());
+  const [oplsNfPorRemessa, setOplsNfPorRemessa] = useState<Set<string>>(() => new Set());
+  const [nfsRemessa, setNfsRemessa] = useState<Record<string, string>>({});
   const [modalVer, setModalVer] = useState(null);
   // Quem trabalhou em cada OP (30/09/2026): a comissão dos técnicos sai do apontamento quando o Fiscal
   // fatura, e depois de faturar ele trava. Por isso o aviso e a correção aparecem AQUI, antes do clique.
@@ -73,6 +79,9 @@ export default function FiscalTab({ currentUser }) {
     (lotesRes.data || []).forEach(u => { if (/\/\d+$/.test(u.opl || '')) { const b = baseOplDe(u.opl); (porBase[b] = porBase[b] || []).push(u); } });
     setUnidadesDoLote(porBase);
     setOpls(oplsRes.data || []);
+    // remessas ativas das OPs da tela (leitura que falha deixa as que já estavam; a lista de OPs não depende disto)
+    const rem = await lerRemessasAtivasDe((oplsRes.data || []).map(o => o.id));
+    if (!rem.erro) setRemessasPorOp(rem.porOp);
     setOrdensOS(osRes.data || []);
     situacaoDaEquipe((oplsRes.data || []).filter(o => o.status_geral === 'Aguarda Emissao NF').map(o => o.id))
       .then(setSituacaoEquipe);
@@ -90,6 +99,17 @@ export default function FiscalTab({ currentUser }) {
   // Este é o miolo, usado pelas duas portas de entrada: a barra de OPs avulsas
   // marcadas (faturarSelecionados) e o bloco do lote (faturarLote). Quem chama
   // pergunta, valida e limpa a tela; aqui só se grava.
+  // NF-e compartilhada: o mesmo número em todas as remessas ativas das OPs faturadas. A OP já foi faturada quando isto roda: se falhar, só avisa (a nota da OP não se perde).
+  const gravarNfNasRemessas = async (oplIds, nf) => {
+    if (!nf || !oplIds.length) return;
+    const { porOp, erro } = await lerRemessasAtivasDe(oplIds);
+    if (erro) { mostrarAviso(`A NF-e foi gravada na OP, mas não consegui ler as remessas para gravar a nota nelas: ${erro}`, 'atencao'); return; }
+    const ids = [...porOp.values()].flat().map(r => r.id);
+    if (!ids.length) return;
+    const { error } = await supabase.from('op_remessas').update({ nf_numero: nf }).in('id', ids);
+    if (error) mostrarAviso(`A NF-e foi gravada na OP, mas não nas remessas dela: ${error.message}`, 'atencao');
+  };
+
   const executarFaturamento = async ({ itens, nf, nfServ, notaNoHistorico = '' }) => {
     const agora = new Date().toISOString();
     const obsCombinado = itens.length > 1
@@ -131,6 +151,7 @@ export default function FiscalTab({ currentUser }) {
       }]);
     }
     if (faturadas.length > 0) {
+      await gravarNfNasRemessas(faturadas.map(o => o.id), nf);   // OP com remessas: o mesmo número em cada remessa
       notificarEvento('fiscal_nf_emitida',
         msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     }
@@ -195,10 +216,16 @@ export default function FiscalTab({ currentUser }) {
   };
 
   const faturar = async (opl) => {
-    const nf = (nfs[opl.id] || '').trim();
+    // OP que saiu em remessas (2 ou mais): uma NF-e para todas (o campo de sempre) ou, se o Fiscal ligou, uma NF-e por remessa; a OP guarda os números distintos juntos ("111 / 222")
+    const rems = remessasPorOp.get(opl.id) || [];
+    const porRemessa = rems.length >= 2 && oplsNfPorRemessa.has(opl.id);
+    const numerosRemessa = porRemessa ? rems.map(r => (nfsRemessa[r.id] || '').trim()) : [];
+    if (porRemessa && numerosRemessa.some(n => !n)) { alert('Informe a NF-e de cada remessa — ou desligue "uma NF-e para cada remessa" para usar uma nota só.'); return; }
+    const nf = porRemessa ? [...new Set(numerosRemessa)].join(' / ') : (nfs[opl.id] || '').trim();
     const nfServ = (nfsServico[opl.id] || '').trim();
     if (!nf && !nfServ) { alert(AVISO_SEM_NOTA); return; }
-    if (!await confirmar(`Confirmar o faturamento da OP ${opl.opl} com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?`)) return;
+    const detalheRemessas = porRemessa ? ' (' + rems.map((r, i) => `remessa ${r.numero}: ${numerosRemessa[i]}`).join('; ') + ')' : '';
+    if (!await confirmar(`Confirmar o faturamento da OP ${opl.opl} com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}${detalheRemessas}?`)) return;
     setFaturandoId(opl.id);
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
@@ -223,11 +250,27 @@ export default function FiscalTab({ currentUser }) {
       oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
-      evento: `Faturado: ${descricaoNotas(nf, nfServ)}. Disponivel para entrega.`,
+      evento: `Faturado: ${descricaoNotas(nf, nfServ)}${detalheRemessas}. Disponivel para entrega.`,
       status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    // remessas: cada uma recebe o seu número (uma NF-e por remessa) ou o mesmo número (NF-e compartilhada); a OP já está faturada, então uma falha aqui só avisa
+    if (rems.length) {
+      const erros = [];
+      if (porRemessa) {
+        for (let i = 0; i < rems.length; i++) {
+          const { error } = await supabase.from('op_remessas').update({ nf_numero: numerosRemessa[i] }).eq('id', rems[i].id);
+          if (error) erros.push(`remessa ${rems[i].numero}: ${error.message}`);
+        }
+      } else if (nf) {
+        const { error } = await supabase.from('op_remessas').update({ nf_numero: nf }).in('id', rems.map(r => r.id));
+        if (error) erros.push(error.message);
+      }
+      if (erros.length) mostrarAviso(`A OP foi faturada, mas a NF-e não ficou gravada nas remessas (${erros.join('; ')}).`, 'atencao');
+    }
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
+    setOplsNfPorRemessa(prev => { const n = new Set(prev); n.delete(opl.id); return n; });
+    setNfsRemessa(prev => { const n = {...prev}; rems.forEach(r => delete n[r.id]); return n; });
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
     setNfsServico(prev => { const n={...prev}; delete n[opl.id]; return n; });
     setFaturandoId(null);
@@ -502,8 +545,9 @@ export default function FiscalTab({ currentUser }) {
               </tr></thead>
               <tbody>
                 {basesDeLote.map(renderLote)}
-                {unicasAguardando.map(o => (
-                  <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : ehLote(o) ? 'acn-linha-marca' : undefined}>
+                {unicasAguardando.map(o => { const rems = remessasPorOp.get(o.id) || []; const porRem = rems.length >= 2 && oplsNfPorRemessa.has(o.id); return (
+                  <React.Fragment key={o.id}>
+                  <tr className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : ehLote(o) ? 'acn-linha-marca' : undefined}>
                     <td>
                       <input type="checkbox" checked={selecionados.has(o.id)} onChange={()=>toggleSelecionado(o.id)} />
                     </td>
@@ -536,7 +580,8 @@ export default function FiscalTab({ currentUser }) {
                     <td>
                       <input className="acn-input" style={{width:118}}
                         placeholder="NF-e (material)"
-                        value={nfs[o.id] || ''}
+                        value={porRem ? 'uma por remessa ↓' : (nfs[o.id] || '')}
+                        disabled={porRem}
                         onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturar(o)}
                       />
@@ -562,7 +607,35 @@ export default function FiscalTab({ currentUser }) {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  {/* Remessas (fatia 5, entrega 2): a OP saiu em partes — uma NF-e para todas (o campo acima) ou uma por remessa */}
+                  {rems.length >= 2 && (
+                    <tr className="acn-linha-remessas" data-teste="linha-remessas">
+                      <td></td>
+                      <td colSpan={10}>
+                        <div className="acn-fis-remessas">
+                          <span className="acn-forte">Esta OP saiu em {rems.length} remessas</span>
+                          <label className="acn-fis-remessas-opcao">
+                            <input type="checkbox" checked={porRem}
+                              onChange={e => setOplsNfPorRemessa(prev => { const n = new Set(prev); e.target.checked ? n.add(o.id) : n.delete(o.id); return n; })} />
+                            {' '}Uma NF-e para cada remessa
+                          </label>
+                          {porRem ? rems.map(r => (
+                            <label key={r.id} className="acn-fis-remessa-nf">
+                              <span>Remessa {r.numero} ({r.unidades} un.)</span>
+                              <input className="acn-input" style={{width:118}} placeholder="NF-e da remessa" aria-label={`NF-e da remessa ${r.numero}`}
+                                value={nfsRemessa[r.id] || ''}
+                                onChange={e => setNfsRemessa(prev => ({...prev,[r.id]:e.target.value}))}
+                                onKeyDown={e => e.key === 'Enter' && faturar(o)} />
+                            </label>
+                          )) : (
+                            <span className="acn-ajuda">Todas as remessas saem na NF-e informada acima.</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                ); })}
               </tbody>
             </table>
           )}
@@ -593,6 +666,10 @@ export default function FiscalTab({ currentUser }) {
                       {o.numero_nf_servico && (
                         <div style={{marginTop:3}}><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
                       )}
+                      {/* OP que saiu em remessas com NF-e diferentes: qual nota levou cada remessa */}
+                      {(() => { const rs = remessasPorOp.get(o.id) || [];
+                        return rs.length >= 2 && new Set(rs.map(r => r.nf_numero).filter(Boolean)).size > 1
+                          ? <div className="acn-nota-mono" data-teste="nf-por-remessa">{rs.map(r => `Remessa ${r.numero}: NF-e ${r.nf_numero || '—'}`).join('\n')}</div> : null; })()}
                       {o.observacoes_faturamento && (
                         <div className="acn-nota-mono"><b>NF em lote:</b>{'\n'}{o.observacoes_faturamento}</div>
                       )}
