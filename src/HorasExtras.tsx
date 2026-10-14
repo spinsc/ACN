@@ -44,7 +44,7 @@ export function mesmaPessoa(nomeTarefa: any, nomesUsuario: string[]) {
 }
 export async function nomesDoUsuario(u: any) {
   const nomes = [u?.nome];
-  const { data } = await supabase.from('rh_funcionarios').select('nome, email, usuario_id');
+  const { data } = await supabase.from('rh_funcionarios_basico').select('nome, email, usuario_id');
   (data || []).forEach((f: any) => {
     if ((u?.id && f.usuario_id === u.id) || (u?.email && f.email && normNome(f.email) === normNome(u.email))) nomes.push(f.nome);
   });
@@ -52,7 +52,7 @@ export async function nomesDoUsuario(u: any) {
 }
 // Nome com que a pessoa aparece como responsável nas tarefas (cadastro do RH) ou o do login
 async function nomeNasTarefas(u: any) {
-  const { data } = await supabase.from('rh_funcionarios').select('nome, email, usuario_id, ativo');
+  const { data } = await supabase.from('rh_funcionarios_basico' /* 17b: visão sem CPF e salário */).select('nome, email, usuario_id, ativo');
   const rh = (data || []).filter((f: any) => f.ativo !== false);
   const f = rh.find((f: any) => (u?.id && f.usuario_id === u.id) || (u?.email && f.email && normNome(f.email) === normNome(u.email)))
     || rh.find((f: any) => mesmaPessoa(f.nome, [normNome(u?.nome)]));
@@ -67,7 +67,7 @@ async function usuariosAtivos() {
 export async function localizarPessoa(pessoaNome: string) {
   const [usuarios, { data: rh }] = await Promise.all([
     usuariosAtivos(),
-    supabase.from('rh_funcionarios').select('nome, email, usuario_id'),
+    supabase.from('rh_funcionarios_basico').select('nome, email, usuario_id'),
   ]);
   const alvo = normNome(pessoaNome);
   const f = (rh || []).find((r: any) => normNome(r.nome) === alvo);

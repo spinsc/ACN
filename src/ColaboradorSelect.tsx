@@ -25,8 +25,9 @@ export function resetColaboradoresCache() {
 
 function lerBase(): Promise<any[]> {
   // Busca apenas colunas que sempre existem; tipo_colaborador é opcional
+  // 14/10/2026 (Etapa 17b): lê a visão rh_funcionarios_basico (só nome, cargo, departamento, situação e comissão) em vez da tabela inteira, que traz CPF e salário e vai fechar para quem não é do RH
   return supabase
-    .from('rh_funcionarios')
+    .from('rh_funcionarios_basico')
     .select('id,nome,cargo,tipo_colaborador')
     .eq('ativo', true)
     .order('nome')
@@ -34,7 +35,7 @@ function lerBase(): Promise<any[]> {
       if (error) {
         // Se falhar com tipo_colaborador (coluna pode não existir ainda), tenta select mínimo
         return supabase
-          .from('rh_funcionarios')
+          .from('rh_funcionarios_basico')
           .select('id,nome,cargo')
           .eq('ativo', true)
           .order('nome')

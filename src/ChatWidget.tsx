@@ -458,7 +458,8 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   // por NOME com auth_usuarios porque rh_funcionarios.usuario_id não vem
   // preenchido nos cadastros existentes (e-mails também divergem às vezes).
   const fetchAusentes = async () => {
-    const { data } = await supabase.from('rh_funcionarios')
+    // 14/10/2026 (Etapa 17b): lê a visão rh_funcionarios_basico (só nome, cargo, departamento, situação e comissão) em vez da tabela inteira, que traz CPF e salário e vai fechar para quem não é do RH
+    const { data } = await supabase.from('rh_funcionarios_basico')
       .select('nome,status_presenca').in('status_presenca', ['Afastado', 'Férias']);
     setAusentesNomes(new Set((data || []).map((f: any) => (f.nome || '').trim().toUpperCase())));
   };

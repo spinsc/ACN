@@ -114,7 +114,8 @@ export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }
     setOp(o); setLinhas(l);
     const ids = [...new Set(l.map(x => x.tecnico_id).filter(Boolean))];
     if (!ids.length) { setCadastroRh({}); return; }
-    const { data } = await supabase.from('rh_funcionarios').select('id,percentual_comissao').in('id', ids);
+    // 14/10/2026 (Etapa 17b): lê a visão rh_funcionarios_basico (só nome, cargo, departamento, situação e comissão) em vez da tabela inteira, que traz CPF e salário e vai fechar para quem não é do RH
+    const { data } = await supabase.from('rh_funcionarios_basico').select('id,percentual_comissao').in('id', ids);
     setCadastroRh(Object.fromEntries((data || []).map(f => [f.id, f])));
   };
   useEffect(() => { carregar(); }, [oplProp?.id]);

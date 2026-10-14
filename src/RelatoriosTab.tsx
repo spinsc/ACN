@@ -1126,7 +1126,7 @@ function RelComissoes() {
       const [anoM, mesM] = mes.split('-').map(Number);
       const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
       const [resFuncs, resOps, divisores, dep] = await Promise.all([
-        supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,ativo,percentual_comissao,percentuais_por_tipo,incide_em,recebe_comissao').eq('recebe_comissao', true),
+        supabase.from('rh_funcionarios_basico').select('id,nome,cargo,departamento,ativo,percentual_comissao,percentuais_por_tipo,incide_em,recebe_comissao').eq('recebe_comissao', true),
         // Documento detalhado (05/10/2026): o número da NF e as datas de conclusão e de entrega vão junto, para o PDF mostrar as datas de cada comissão
         supabase.from('oples').select('id,opl,crm_oportunidade_id,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
@@ -1388,7 +1388,7 @@ function RelComissoesProducao({ mes, labelMes, periodo }) {
       if (!/^\d{4}-\d{2}$/.test(mes)) { setRes(null); return; }   // campo de mês apagado: nada a consultar
       setLoading(true);
       try {
-        const { data: funcs, error } = await supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,incide_em,recebe_comissao');
+        const { data: funcs, error } = await supabase.from('rh_funcionarios_basico').select('id,nome,cargo,departamento,percentual_comissao,incide_em,recebe_comissao');
         if (error) throw error;
         const dep = await lerDepartamentos();   // 14/10/2026: o técnico é agrupado pelo departamento da lista do RH; se a leitura falhar, vale o texto antigo do cadastro
         const funcsComDep = dep.erro ? (funcs || []) : anexarDepartamentos(funcs || [], dep.departamentos, dep.vinculos);
