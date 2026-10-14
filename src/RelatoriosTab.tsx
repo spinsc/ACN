@@ -14,6 +14,7 @@ import { montarModeloVendedores, montarModeloTecnicos, emitirDocumento, dataBR }
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos, percentualDoVendedor, regraDoVendedor } from './ComissaoCalculo';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import { lerDepartamentos, anexarDepartamentos, departamentosTexto, departamentoPrincipal } from './RhDepartamentos';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -1124,17 +1125,19 @@ function RelComissoes() {
       // qualquer situação — o mesmo critério da Comissão de Técnicos. (3) O erro do banco passa a ser avisado em vez de virar um relatório vazio.
       const [anoM, mesM] = mes.split('-').map(Number);
       const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
-      const [resFuncs, resOps, divisores] = await Promise.all([
-        supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,percentuais_por_tipo,incide_em,recebe_comissao').eq('recebe_comissao', true),
+      const [resFuncs, resOps, divisores, dep] = await Promise.all([
+        supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,ativo,percentual_comissao,percentuais_por_tipo,incide_em,recebe_comissao').eq('recebe_comissao', true),
         // Documento detalhado (05/10/2026): o número da NF e as datas de conclusão e de entrega vão junto, para o PDF mostrar as datas de cada comissão
         supabase.from('oples').select('id,opl,crm_oportunidade_id,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
           .lt('data_emissao_nf', `${proximoMes}-01T00:00:00-03:00`),
         lerDivisorPorBaseDeLote(),
+        lerDepartamentos(),
       ]);
       const falha = resFuncs.error || resOps.error;
       if (falha) setErro(falha.message);
-      setFuncionarios(resFuncs.data || []);
+      // 14/10/2026: os departamentos vêm da lista do RH (se a leitura falhar, vale o texto antigo, que continua no cadastro) — "é do Comercial?" decide quem aparece sem ter vendido
+      setFuncionarios(resFuncs.data ? (dep.erro ? resFuncs.data : anexarDepartamentos(resFuncs.data, dep.departamentos, dep.vinculos)) : []);
       setOps(resOps.data || []);
       // 08/10/2026: tipo de negócio (Revenda/Venda/Pós-vendas) de cada OP = o do card do CRM a que ela está ligada; decide qual percentual do vendedor vale
       const idsCrm = [...new Set((resOps.data || []).map((x: any) => x.crm_oportunidade_id).filter(Boolean))];
@@ -1183,7 +1186,8 @@ function RelComissoes() {
   const opsSemComissao = ops.filter(o => !funcionarios.some(f => nomeNorm(f.nome) === nomeNorm(o.responsavel_comercial)));
   const vendedoresSemPercentual = comissoes.filter(c => c.opsVendedor.length > 0 && c.opsVendedor.some((o: any) => !(o._pct > 0)));
   // Quem tem "Recebe comissão" mas não vendeu nada no mês e NÃO é do Comercial/Licitações é técnico (Produção, Serralheria, Adaptação): a comissão dele está na visão Produção, e o bloco vazio aqui só confundia.
-  const ehDoComercial = (f) => /COMERCIAL|LICITA/i.test(String(f.departamento || ''));
+  // (14/10/2026: quem já foi desligado só aparece se vendeu no mês — o bloco vazio de um desligado ficaria na tela para sempre)
+  const ehDoComercial = (f) => f.ativo !== false && /COMERCIAL|LICITA/i.test(departamentosTexto(f, ' '));
   const comissoesVisiveis = comissoes.filter(c => c.opsVendedor.length > 0 || ehDoComercial(c));
   const foraDaVisao = comissoes.filter(c => !comissoesVisiveis.includes(c));
 
@@ -1386,9 +1390,11 @@ function RelComissoesProducao({ mes, labelMes, periodo }) {
       try {
         const { data: funcs, error } = await supabase.from('rh_funcionarios').select('id,nome,cargo,departamento,percentual_comissao,incide_em,recebe_comissao');
         if (error) throw error;
+        const dep = await lerDepartamentos();   // 14/10/2026: o técnico é agrupado pelo departamento da lista do RH; se a leitura falhar, vale o texto antigo do cadastro
+        const funcsComDep = dep.erro ? (funcs || []) : anexarDepartamentos(funcs || [], dep.departamentos, dep.vinculos);
         const [a, m] = mes.split('-').map(Number);
         const r = await calcularComissaoTecnicos({
-          funcionarios: funcs || [], inicio: `${mes}-01`, fim: diaISO(new Date(a, m, 0)),
+          funcionarios: funcsComDep, inicio: `${mes}-01`, fim: diaISO(new Date(a, m, 0)),
           modoFatura: situacao, filtroOrigem: origem, fechamento: { mes: m, ano: a },
         });
         if (!vivo) return;
@@ -1406,8 +1412,9 @@ function RelComissoesProducao({ mes, labelMes, periodo }) {
   const aprovados: Record<string, any> = {};
   (res?.fechamentos || []).filter((f: any) => f.status === 'aprovado').forEach((f: any) => { aprovados[f.tecnico_id] = f; });
 
-  const depto = (t) => String(t.func?.departamento || '').trim().toUpperCase() || 'SEM DEPARTAMENTO';
   const ORDEM = ['PRODUÇÃO', 'SERRALHERIA'];
+  // 14/10/2026: antes lia o texto livre do cadastro, que trazia nome de empresa de prestador ("LIFE WORK BRASIL CONSULT", "DETECH COMERCIO…") e grafias (RADIO) como se fossem departamentos
+  const depto = (t) => String(departamentoPrincipal(t.func, ORDEM)).trim().toUpperCase() || 'SEM DEPARTAMENTO';
   const deptos = [...new Set(dados.map(depto))].sort((a: any, b: any) => {
     const ia = ORDEM.indexOf(a), ib = ORDEM.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a).localeCompare(String(b), 'pt-BR');

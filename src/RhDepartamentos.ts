@@ -37,6 +37,18 @@ export function anexarDepartamentos<T extends { id: string }>(funcs: T[], depart
 export const departamentosTexto = (f: any, separador = ' · '): string =>
   (Array.isArray(f?.departamentos) && f.departamentos.length ? f.departamentos.join(separador) : (f?.departamento || '')) as string;
 
+/**
+ * O departamento onde a pessoa é agrupada num relatório que precisa de UM só (comissão por departamento): o primeiro, na ordem da lista de departamentos — ou, se for de vários,
+ * o primeiro que estiver em `preferidos` (os departamentos de que o relatório trata). Enquanto a pessoa não tem nenhum, o texto antigo.
+ * Antes (até 14/10/2026) esses relatórios liam só o texto livre, que misturava nome de empresa de prestador ("LIFE WORK BRASIL CONSULT") e grafias (RADIO) com os departamentos.
+ */
+export const departamentoPrincipal = (f: any, preferidos: string[] = []): string => {
+  const lista: string[] = Array.isArray(f?.departamentos) ? f.departamentos : [];
+  if (!lista.length) return f?.departamento || '';
+  const quer = preferidos.map(chaveDepto);
+  return lista.find(n => quer.includes(chaveDepto(n))) || lista[0];
+};
+
 /** Grava os departamentos de uma pessoa: tira os que saíram e acrescenta os novos (sem apagar tudo e refazer). Devolve o motivo do erro, ou null. */
 export async function salvarVinculosDaPessoa(funcionarioId: string, departamentoIds: string[]): Promise<string | null> {
   const { data: atuais, error: erroLer } = await supabase.from('rh_funcionario_departamentos').select('departamento_id').eq('funcionario_id', funcionarioId);

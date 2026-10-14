@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { departamentoPrincipal } from './RhDepartamentos';
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTO DETALHADO DE COMISSÕES (pedido do usuário em 05/10/2026)
 //
@@ -136,7 +137,8 @@ const ORDEM_DEPTO = ['PRODUÇÃO', 'SERRALHERIA'];
  */
 export function montarModeloTecnicos({ periodo, situacao, origem, tecnicos, grupos = [], semTecnico = [], aprovados = {}, emitidoPor, agora = new Date() }: any) {
   const comissaoDoItem = (i: any, t: any) => (i.papel === 'apoio' ? i.base * 0.001 : i.base * (Number(t.percentual) || 0) / 100);
-  const depto = (t: any) => String(t.func?.departamento || '').trim().toUpperCase() || 'SEM DEPARTAMENTO';
+  // 14/10/2026: o departamento vem da lista do RH (departamentoPrincipal), não mais do texto livre, que misturava nome de empresa de prestador e grafias (RADIO)
+  const depto = (t: any) => String(departamentoPrincipal(t.func, ORDEM_DEPTO)).trim().toUpperCase() || 'SEM DEPARTAMENTO';
   const HEAD = ['Tipo', 'Função', 'Nº', 'Cliente', 'NF', 'Produção concluída', 'NF emitida em', 'Entregue em', 'Valor total', 'Mão de obra', 'Base', 'Comissão'];
 
   const linhaDe = (i: any, t: any) => {
