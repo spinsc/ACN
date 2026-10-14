@@ -1,5 +1,7 @@
 # Plano — Estoque, reserva e automação da lista de material
 
+> **✅ PLANO CONCLUÍDO — 28/09/2026 (a última etapa, a 9, foi entregue nesse dia).** Todas as etapas (1 a 9, com a 5.1 e as 7.x) estão ✅; sobram só as três perguntas de observação listadas no fim ("Perguntas em aberto"), que não são trabalho pendente. Movido para a pasta `PLANOS CONCLUIDOS` em 14/10/2026, depois de conferir etapa por etapa. Fica aqui para consulta.
+
 > **Documento vivo.** Cada etapa concluída é marcada aqui, com data e o que foi
 > feito de verdade. Quem pegar o trabalho em outra máquina lê este arquivo e
 > sabe exatamente onde parou e qual é a próxima etapa.

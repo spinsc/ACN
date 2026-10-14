@@ -1,6 +1,8 @@
 # Demandas avulsas de 14/10/2026 — RH (departamentos e quadro de colaboradores) e envios parciais
 
-Pedidas pelo usuário em 14/10/2026, **antes de seguir** os planos já em curso ([PLANO_UX_FLUXO_TRABALHO.md](PLANO_UX_FLUXO_TRABALHO.md), [PLANO_ESTOQUE_AUTOMATICO.md](PLANO_ESTOQUE_AUTOMATICO.md)).
+> **✅ PLANO CONCLUÍDO — 14/10/2026.** As fatias 1 a 5 (e a 2b) estão ✅ e publicadas; sobram só as decisões suas sobre as "pontas soltas" e as suposições "a confirmar" registradas no fim, que não são trabalho pendente do plano. Movido para a pasta `PLANOS CONCLUIDOS` em 14/10/2026, depois de conferir etapa por etapa. Fica aqui para consulta.
+
+Pedidas pelo usuário em 14/10/2026, **antes de seguir** os planos já em curso ([PLANO_UX_FLUXO_TRABALHO.md](../PLANO_UX_FLUXO_TRABALHO.md), [PLANO_ESTOQUE_AUTOMATICO.md](PLANO_ESTOQUE_AUTOMATICO.md)).
 Este arquivo é a fonte da verdade desse trabalho: **leia inteiro antes de mexer**, atualize no mesmo commit do código e marque o que foi feito.
 Quem retoma: o comando `/rh-envios` (ou, sem ele, "continue o PLANO_RH_DEPARTAMENTOS_ENVIOS.md").
 

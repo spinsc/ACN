@@ -8,31 +8,22 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > conta ou máquina. A arquitetura detalhada está em [CONTEXTO_PROJETO.md](CONTEXTO_PROJETO.md);
 > o que está em andamento, em [ESTADO_ATUAL_PROJETO.md](ESTADO_ATUAL_PROJETO.md).
 >
-> Projeto longo em curso: [PLANO_ESTOQUE_AUTOMATICO.md](PLANO_ESTOQUE_AUTOMATICO.md)
-> — estoque, reserva e automação da lista de material, em etapas. Retomado pelo
-> comando `/estoque-auto`, de qualquer máquina.
+> **Planos (`PLANO_*.md`).** Os **não concluídos ficam na raiz do projeto**; os **concluídos ficam na pasta `PLANOS CONCLUIDOS`** (conferidos um a um em 14/10/2026). Hoje:
 >
-> Outro projeto longo: [PLANO_UX_FLUXO_TRABALHO.md](PLANO_UX_FLUXO_TRABALHO.md)
-> — visualização do fluxo do PV à entrega e polimento de UX, em etapas. Retomado
-> pelo comando `/ux-fluxo`, de qualquer máquina. A Etapa 15 (centros de custo mais
-> completos — ficha, painel, controle de uso, lançamento e relatórios; pesquisa em
-> [PLANO_CENTRO_CUSTO.md](PLANO_CENTRO_CUSTO.md)) foi a prioridade e está **concluída
-> (05/10/2026)**; a tela do Financeiro e as janelas do centro de custo já foram migradas
-> para o design system (12e9 e 12e10) e, em 06/10/2026, a aba Tarefas (12e11) e as telas
-> médias e grandes — Almoxarifado, Engenharia, PCP (12e12 a 12e14), os setores (12e15), a Produção inteira (12e16 a 12e18), o Compras (12e19 a 12e21), a Formação de Preços (12e22 a 12e27), as Cotações (12e28 a 12e30) e as Licitações (12e31 a 12e34) —, cada
-> fatia com uma etapa 7.x de achados antes. O `/ux-fluxo` segue pelas telas grandes, pelos componentes compartilhados
-> e pelas respostas que pedem desenho com o usuário (R1+R8+R3, R6, R7, R17); R4 e R9 estão
-> parciais (ver o quadro de "Respostas a aplicar").
-> **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:**
-> [PLANO_GARANTIA.md](PLANO_GARANTIA.md) — atendimento em garantia (G1 a G6), retomado pelo comando
-> `/garantia`. A rotina automática da noite (trabalhar, commitar, push e deploy, próximo passo; "pare no
-> próximo commit" interrompe) está descrita no `/ux-fluxo`.
-
-> Demandas avulsas de 14/10/2026 — **concluídas em 14/10/2026 (fatias 1 a 5, publicadas)**; os planos acima podem ser retomados:
-> [PLANO_RH_DEPARTAMENTOS_ENVIOS.md](PLANO_RH_DEPARTAMENTOS_ENVIOS.md) — departamentos fixos e vários por
-> pessoa no RH, responsáveis por setor em todas as telas, quadro de colaboradores completo (planilha) com sexo
-> e relatório de uniformes, e envios parciais em "Venda para envio" (remessas e NF por remessa). Sobraram só as
-> suposições a confirmar e as pontas soltas que o plano lista. Comando `/rh-envios` se for preciso mexer de novo.
+> - **Em andamento — [PLANO_UX_FLUXO_TRABALHO.md](PLANO_UX_FLUXO_TRABALHO.md):** visualização do fluxo do PV à entrega e polimento de UX, em etapas. Retomado
+>   pelo comando `/ux-fluxo`, de qualquer máquina. A Etapa 15 (centros de custo mais completos) foi a prioridade e está **concluída (05/10/2026)**; a tela do Financeiro e as janelas do centro de custo
+>   já foram migradas para o design system (12e9 e 12e10) e, em 06/10/2026, a aba Tarefas (12e11) e as telas médias e grandes — Almoxarifado, Engenharia, PCP (12e12 a 12e14), os setores (12e15),
+>   a Produção inteira (12e16 a 12e18), o Compras (12e19 a 12e21), a Formação de Preços (12e22 a 12e27), as Cotações (12e28 a 12e30) e as Licitações (12e31 a 12e34) —, cada
+>   fatia com uma etapa 7.x de achados antes. O `/ux-fluxo` segue pelas telas grandes, pelos componentes compartilhados e pelas respostas que pedem desenho com o usuário
+>   (R1+R8+R3, R6, R7, R17); R4 e R9 estão parciais (ver o quadro de "Respostas a aplicar"). **A Etapa 17 (fechar o banco por perfil — segurança) é a próxima, decidida em 14/10/2026.**
+>   A rotina automática da noite (trabalhar, commitar, push e deploy, próximo passo; "pare no próximo commit" interrompe) está descrita no `/ux-fluxo`.
+>   **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:** a Garantia, logo abaixo.
+> - **Ainda não começou — [PLANO_GARANTIA.md](PLANO_GARANTIA.md):** atendimento em garantia (G1 a G6), retomado pelo comando `/garantia`; depende de decisões do usuário com os setores.
+> - **Concluídos — pasta [PLANOS CONCLUIDOS](PLANOS%20CONCLUIDOS/):**
+>   [PLANO_ESTOQUE_AUTOMATICO.md](PLANOS%20CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md) (estoque, reserva e automação da lista de material; 9 etapas; `/estoque-auto` só para consulta),
+>   [PLANO_CENTRO_CUSTO.md](PLANOS%20CONCLUIDOS/PLANO_CENTRO_CUSTO.md) (anexo da Etapa 15 do plano de UX) e
+>   [PLANO_RH_DEPARTAMENTOS_ENVIOS.md](PLANOS%20CONCLUIDOS/PLANO_RH_DEPARTAMENTOS_ENVIOS.md) (as demandas avulsas de 14/10/2026: departamentos, responsáveis por setor, quadro de colaboradores,
+>   uniformes por sexo e envios parciais; concluído em 14/10/2026; `/rh-envios` só para consulta ou ajuste).
 
 ---
 

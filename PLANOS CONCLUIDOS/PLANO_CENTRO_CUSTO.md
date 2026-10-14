@@ -1,5 +1,7 @@
 # Anexo — Centros de custo mais completos: pesquisa e proposta
 
+> **✅ PLANO CONCLUÍDO — 05/10/2026.** Este arquivo é só o anexo (pesquisa e proposta) da Etapa 15 do `PLANO_UX_FLUXO_TRABALHO.md`, concluída em 05/10/2026 (15a a 15e). Movido para a pasta `PLANOS CONCLUIDOS` em 14/10/2026, depois de conferir etapa por etapa. Fica aqui para consulta.
+
 > **ESTE ARQUIVO É O ANEXO (pesquisa e proposta de 05/10/2026). O ACOMPANHAMENTO DAS ETAPAS
 > VIVE NA ETAPA 15 DO `PLANO_UX_FLUXO_TRABALHO.md`** (subetapas 15a a 15e, com o estado, as respostas do usuário
 > às 6 perguntas e o que cada uma entrega). Em 05/10/2026 o usuário decidiu tratar os centros de custo como

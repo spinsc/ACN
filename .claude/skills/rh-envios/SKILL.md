@@ -1,15 +1,17 @@
 ---
 name: rh-envios
-description: Continuar as demandas avulsas de 14/10/2026 (PLANO_RH_DEPARTAMENTOS_ENVIOS.md) — departamentos fixos e vários por pessoa no RH, responsáveis por setor em todas as telas, quadro de colaboradores completo (planilha) com sexo e relatório de uniformes, e envios parciais em "Venda para envio".
+description: Consultar ou ajustar as demandas avulsas de 14/10/2026, já CONCLUÍDAS (PLANOS CONCLUIDOS/PLANO_RH_DEPARTAMENTOS_ENVIOS.md) — departamentos fixos e vários por pessoa no RH, responsáveis por setor em todas as telas, quadro de colaboradores completo (planilha) com sexo e relatório de uniformes, e envios parciais em "Venda para envio".
 ---
 
 # RH (departamentos e quadro de colaboradores) e envios parciais — iniciar e continuar
 
-O estado **não está na sua memória** — está em `PLANO_RH_DEPARTAMENTOS_ENVIOS.md`, na raiz do projeto. Ele é a fonte da verdade (igual aos outros planos).
+> **Plano concluído em 14/10/2026** (fatias 1 a 5 publicadas). Esta skill serve só para **consulta ou ajuste**; o que sobra são decisões do usuário sobre as "pontas soltas" do plano.
+
+O estado **não está na sua memória** — está em `PLANOS CONCLUIDOS/PLANO_RH_DEPARTAMENTOS_ENVIOS.md`. Ele é a fonte da verdade (igual aos outros planos).
 
 ## Como conduzir
 
-1. **Leia `PLANO_RH_DEPARTAMENTOS_ENVIOS.md` inteiro**: o pedido do usuário, as respostas dele, o que foi medido no banco e na planilha, as fatias (1 a 5) e as suposições em aberto.
+1. **Leia `PLANOS CONCLUIDOS/PLANO_RH_DEPARTAMENTOS_ENVIOS.md` inteiro**: o pedido do usuário, as respostas dele, o que foi medido no banco e na planilha, as fatias (1 a 5) e as suposições em aberto.
 2. **Uma fatia por vez**, na ordem do plano. Cada uma funciona sozinha e vai para produção sozinha. Não adiante a seguinte.
 3. **Dado real** (a migração dos 46 cadastros do RH, a importação da planilha, o sexo): só o que o plano autoriza, com **medida nova, cópia de segurança (tabela de cópia ou JSON em `scratchpad`) e contagem**, e **mostrando ao usuário a tabela de conferência antes de gravar** quando o plano diz isso (departamentos dos sem departamento, sexo por primeiro nome, quadro "tela → departamento"). **Nunca renomear pessoa** (o nome do RH é texto de responsável em OPs, tarefas e demandas). **Nunca apagar** cadastro.
 4. **Telas e janelas novas nascem no visual novo** (`Interface.tsx`, `Feedback.tsx`; sem `style` inline de cor, sem `<button>` cru). Antes de criar, procure o que já existe (`ColaboradorSelect.tsx`, `utils/permissoes.ts` — `ehAdminOuGerente`, `perfilComPoderes`).

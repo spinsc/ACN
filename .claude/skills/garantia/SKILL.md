@@ -6,7 +6,7 @@ description: Construir o módulo de atendimento em garantia da ACN (G1 a G6 do P
 # Atendimento em garantia — iniciar e continuar
 
 O estado **não está na sua memória** — está em `PLANO_GARANTIA.md`, na raiz do projeto (desenho aprovado e as etapas G1 a G6). Ele é a fonte da verdade, igual aos planos
-`PLANO_ESTOQUE_AUTOMATICO.md` e `PLANO_UX_FLUXO_TRABALHO.md`.
+`PLANOS CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md` e `PLANO_UX_FLUXO_TRABALHO.md`.
 
 ## Como conduzir
 

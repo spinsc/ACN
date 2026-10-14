@@ -6,12 +6,14 @@ description: Trabalhar na implementação do estoque automático da ACN — rese
 # Continuar a implementação do estoque automático
 
 Este projeto é longo e o usuário trabalha nele em várias máquinas, intercalando
-com outras tarefas. O estado **não está na sua memória** — está no arquivo
-`PLANO_ESTOQUE_AUTOMATICO.md`, na raiz do projeto. Ele é a fonte da verdade.
+com outras tarefas. > **Plano concluído** (conferido em 14/10/2026: todas as etapas ✅). Esta skill serve só para **consulta ou ajuste**.
+
+O estado **não está na sua memória** — está no arquivo
+`PLANOS CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md`, na pasta dos planos concluídos. Ele é a fonte da verdade.
 
 ## Como conduzir
 
-1. **Leia `PLANO_ESTOQUE_AUTOMATICO.md` inteiro** antes de qualquer coisa. Ele
+1. **Leia `PLANOS CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md` inteiro** antes de qualquer coisa. Ele
    diz onde queremos chegar, o que já existe, o que cada etapa faz e quais estão
    concluídas.
 
