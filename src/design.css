@@ -680,6 +680,8 @@ html body .acn-input.acn-input-filtro { width: 170px; }
 html body .acn-main table.acn-tabela tr.acn-linha-total > td { background: var(--acn-neutral-soft) !important; font-weight: 700; color: var(--acn-ink); }
 /* resumo por tamanho de uniforme */
 .acn-pecas { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+/* 14/10/2026 (fatia 4 do RH): o resumo de uniformes por sexo — um título pequeno em cima de cada grupo de peças */
+.acn-uni-grupo-titulo { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-muted); }
 .acn-peca { padding: 6px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); font-size: 13px; }
 .acn-peca strong { color: var(--acn-brand-ink); }
 .acn-peca span { margin-left: 6px; }

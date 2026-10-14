@@ -1412,31 +1412,42 @@ function contarTamanhos(funcs: any[], campo: string, ordem: string[]) {
     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a[0].localeCompare(b[0]);
   });
 }
+// 14/10/2026 (PLANO_RH_DEPARTAMENTOS_ENVIOS.md, fatia 4): o resumo por tamanho sai separado por sexo — MASCULINO e FEMININO (pedido do usuário: "MASCULINO 5 G, 5 GG… FEMININO 2 P, 2 M…"),
+// porque a compra da grade é por sexo. Quem ainda não tem o sexo informado fica num grupo à parte, com aviso; o resumo de antes (todos juntos) continua no fim, como "Total geral".
+const GRUPOS_SEXO: [string, string][] = [['Masculino', 'MASCULINO'], ['Feminino', 'FEMININO'], ['', 'SEXO NÃO INFORMADO']];
+const totaisDeUniformes = (pessoas: any[]) => [
+  ['Camiseta', contarTamanhos(pessoas, 'tamanho_camiseta', TAMANHOS_CAMISETA)],
+  ['Calça', contarTamanhos(pessoas, 'tamanho_calca', TAMANHOS_CALCA)],
+  ['Sapato', contarTamanhos(pessoas, 'tamanho_sapato', TAMANHOS_SAPATO)],
+] as [string, [string, number][]][];
 function RelatorioUniformes({ funcionarios }) {
   const [collapsed, setCollapsed] = useState(true);
   const [tipo, setTipo] = useState('todos');
   const lista = funcionarios.filter(f => tipo === 'todos' || (f.tipo_colaborador || 'Funcionário') === tipo);
   const semTamanho = lista.filter(f => !f.tamanho_camiseta && !f.tamanho_calca && !f.tamanho_sapato).length;
-  const totais = [
-    ['Camiseta', contarTamanhos(lista, 'tamanho_camiseta', TAMANHOS_CAMISETA)],
-    ['Calça', contarTamanhos(lista, 'tamanho_calca', TAMANHOS_CALCA)],
-    ['Sapato', contarTamanhos(lista, 'tamanho_sapato', TAMANHOS_SAPATO)],
-  ] as [string, [string, number][]][];
+  const totais = totaisDeUniformes(lista);
+  const grupos = GRUPOS_SEXO.map(([chave, rotulo]) => ({ chave, rotulo, pessoas: lista.filter(f => (f.sexo || '') === chave) })).filter(g => g.pessoas.length > 0)
+    .map(g => ({ ...g, totais: totaisDeUniformes(g.pessoas) }));
+  const semSexo = lista.filter(f => !f.sexo).length;
 
   const imprimir = () => {
-    const rows = lista.map(f =>
-      `<tr><td>${escHtml(f.nome)}</td><td>${escHtml(f.cargo || '')}</td><td class="c">${escHtml(f.tamanho_camiseta || '—')}</td>` +
-      `<td class="c">${escHtml(f.tamanho_calca || '—')}</td><td class="c">${escHtml(f.tamanho_sapato || '—')}</td><td class="ass"></td></tr>`).join('');
-    const resumo = totais.map(([peca, t]) =>
+    const linhaHtml = (f: any) => `<tr><td>${escHtml(f.nome)}</td><td>${escHtml(f.cargo || '')}</td><td class="c">${escHtml(f.tamanho_camiseta || '—')}</td>` +
+      `<td class="c">${escHtml(f.tamanho_calca || '—')}</td><td class="c">${escHtml(f.tamanho_sapato || '—')}</td><td class="ass"></td></tr>`;
+    const rows = grupos.map(g => `<tr class="grp"><td colspan="6">${g.rotulo} (${g.pessoas.length})</td></tr>` + g.pessoas.map(linhaHtml).join('')).join('');
+    const blocos = (tt: [string, [string, number][]][]) => tt.map(([peca, t]) =>
       `<div class="bloco"><strong>${peca}</strong> ${t.length ? t.map(([tam, n]) => `${escHtml(tam)}: <b>${n}</b>`).join(' · ') : '—'}</div>`).join('');
+    const resumo = grupos.map(g => `<div class="gr"><div class="gt">${g.rotulo} — ${g.pessoas.length} pessoa(s)</div>${blocos(g.totais)}</div>`).join('') +
+      (grupos.length > 1 ? `<div class="gr"><div class="gt">TOTAL GERAL — ${lista.length} pessoa(s)</div>${blocos(totais)}</div>` : '');
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio de Uniformes</title>` +
       `<style>body{font-family:Arial,sans-serif;font-size:11px;margin:25px;}h2{text-align:center;font-size:14px;margin-bottom:2px}` +
       `.sub{text-align:center;font-size:10px;color:#555;margin-bottom:14px;}.bloco{margin:3px 0;font-size:11px}.resumo{border:1px solid #cbd5e1;padding:8px 10px;margin-bottom:14px}` +
+      `.gr{margin-bottom:8px}.gt{font-weight:bold;font-size:10px;letter-spacing:.4px;color:#334155;margin-bottom:2px}` +
       `table{width:100%;border-collapse:collapse;}th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}` +
       `td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;}.c{text-align:center}th.c{text-align:center}.ass{width:160px}` +
+      `tr.grp td{background:#e2e8f0;font-weight:bold;font-size:10px;letter-spacing:.4px}` +
       `@media print{body{margin:12mm;}}</style></head><body>` +
       `<h2>ACN SINAL VERDE — TAMANHOS DE UNIFORME</h2>` +
-      `<div class="sub">${lista.length} colaborador(es)${tipo !== 'todos' ? ' · ' + escHtml(tipo) : ''} · Emitido em ${new Date().toLocaleString('pt-BR')}</div>` +
+      `<div class="sub">${lista.length} colaborador(es)${tipo !== 'todos' ? ' · ' + escHtml(tipo) : ''}${semSexo > 0 ? ' · ' + semSexo + ' sem sexo informado' : ''} · Emitido em ${new Date().toLocaleString('pt-BR')}</div>` +
       `<div class="resumo">${resumo}</div>` +
       `<table><thead><tr><th>Nome</th><th>Cargo</th><th class="c">Camiseta</th><th class="c">Calça</th><th class="c">Sapato</th><th>Assinatura (recebido)</th></tr></thead>` +
       `<tbody>${rows}</tbody></table>` +
@@ -1462,27 +1473,53 @@ function RelatorioUniformes({ funcionarios }) {
       </div>
       {!collapsed && (
         <div className="sec-body">
-          {/* resumo no topo: quantos de cada tamanho */}
-          <div className="acn-pecas">
-            {totais.map(([peca, t]) => (
-              <div key={peca} className="acn-peca">
-                <strong>{peca}</strong>{' '}
-                {t.length ? t.map(([tam, n]) => <span key={tam}>{tam}: <b>{n}</b></span>) : <span className="acn-fraco">—</span>}
+          {/* resumo no topo: quantos de cada tamanho, separado por sexo (e o total geral no fim) */}
+          {grupos.map(g => (
+            <div key={g.chave || 'sem-sexo'} className="acn-uni-grupo">
+              <div className="acn-uni-grupo-titulo">{g.rotulo} · {g.pessoas.length} {g.pessoas.length === 1 ? 'pessoa' : 'pessoas'}</div>
+              <div className="acn-pecas">
+                {g.totais.map(([peca, t]) => (
+                  <div key={peca} className="acn-peca">
+                    <strong>{peca}</strong>{' '}
+                    {t.length ? t.map(([tam, n]) => <span key={tam}>{tam}: <b>{n}</b></span>) : <span className="acn-fraco">—</span>}
+                  </div>
+                ))}
               </div>
-            ))}
-            {semTamanho > 0 && (
-              <span className="acn-ajuda atencao">{semTamanho} sem tamanho cadastrado</span>
-            )}
-          </div>
+            </div>
+          ))}
+          {grupos.length > 1 && (
+            <div className="acn-uni-grupo">
+              <div className="acn-uni-grupo-titulo">TOTAL GERAL · {lista.length} {lista.length === 1 ? 'pessoa' : 'pessoas'}</div>
+              <div className="acn-pecas">
+                {totais.map(([peca, t]) => (
+                  <div key={peca} className="acn-peca">
+                    <strong>{peca}</strong>{' '}
+                    {t.length ? t.map(([tam, n]) => <span key={tam}>{tam}: <b>{n}</b></span>) : <span className="acn-fraco">—</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {(semTamanho > 0 || semSexo > 0) && (
+            <div className="acn-pecas">
+              {semTamanho > 0 && <span className="acn-ajuda atencao">{semTamanho} sem tamanho cadastrado</span>}
+              {semSexo > 0 && <span className="acn-ajuda atencao">{semSexo} sem sexo informado (preencha na ficha do colaborador)</span>}
+            </div>
+          )}
           <div className="acn-rolagem">
             <table className="acn-tabela">
               <thead><tr><th>Nome</th><th>Cargo</th><th>Camiseta</th><th>Calça</th><th>Sapato</th></tr></thead>
               <tbody>
-                {lista.map(f => (
-                  <tr key={f.id}>
-                    <td className="acn-forte">{f.nome}</td><td>{f.cargo || '—'}</td>
-                    <td>{f.tamanho_camiseta || '—'}</td><td>{f.tamanho_calca || '—'}</td><td>{f.tamanho_sapato || '—'}</td>
-                  </tr>
+                {grupos.map(g => (
+                  <React.Fragment key={g.chave || 'sem-sexo'}>
+                    <tr className="acn-linha-total"><td colSpan={5}>{g.rotulo} ({g.pessoas.length})</td></tr>
+                    {g.pessoas.map(f => (
+                      <tr key={f.id}>
+                        <td className="acn-forte">{f.nome}</td><td>{f.cargo || '—'}</td>
+                        <td>{f.tamanho_camiseta || '—'}</td><td>{f.tamanho_calca || '—'}</td><td>{f.tamanho_sapato || '—'}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
