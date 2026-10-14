@@ -14,7 +14,8 @@ import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
-import { confirmar, mostrarAviso } from './Feedback';
+import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
+import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesAbertosDaOp, descricaoDaRemessa } from './Remessas';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
 import { diaBR, Faixa, Botao, Chips, Selo } from './Interface';
@@ -60,6 +61,11 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [aplicandoSeriaisLote, setAplicandoSeriaisLote] = useState(false);
   // Venda para Envio: kiting 100% do lote com os seriais de todos os produtos
   const [modalKitEnvioLote, setModalKitEnvioLote] = useState(null); // { base, ops }
+  // Remessas (envio parcial de Venda para Envio — fatia 5 do PLANO_RH_DEPARTAMENTOS_ENVIOS.md, 14/10/2026): as remessas ativas de cada OP da fila (a linha mostra "enviadas 2 de 5")
+  // e, com a janela de embalagem aberta, as da OP dela (todas, inclusive canceladas: o número da próxima depende delas)
+  const [remessasPorOp, setRemessasPorOp] = useState<Map<string, any[]>>(new Map());
+  const [remessasDaOp, setRemessasDaOp] = useState<any[]>([]);
+  const [erroRemessas, setErroRemessas] = useState('');
   // Conferência do kit contra a BOM da Engenharia (quando a OP tem BOM)
   const [conferencia, setConferencia] = useState<any[]>([]);
   // em lote não há conferência linha a linha: registra a BOM como separada inteira
@@ -138,6 +144,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
     if (erroOpls) { setErroLeitura(erroOpls.message); if (!silent) setLoading(false); return; }
     setErroLeitura('');
     setOpls(data || []);
+    // remessas ativas das Vendas para Envio da fila; leitura que falha deixa a que já estava na tela (a lista de OPs não depende disto)
+    const rem = await lerRemessasAtivasDe((data || []).filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
+    if (!rem.erro) setRemessasPorOp(rem.porOp);
 
     // O painel de recebimento lista TODA OP com material esperando conferência,
     // inclusive as que ainda estão na fila de kiting aqui em cima.
@@ -213,6 +222,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const ehVendaEnvioOp = (o) => o?.tipo_projeto === TIPO_VENDA_ENVIO;
   // "Venda para Envio" vale como envio mesmo sem o campo Fluxo de Entrega preenchido
   const ehEnvio = (o) => soEnvio(fluxoEfetivo(o?.tipo_projeto, o?.fluxo_entrega));
+  // a OP já teve remessa? então o botão é o da próxima (fatia 5, 14/10/2026)
+  const rotuloEmbalar = (o) => (remessasPorOp.get(String(o?.id)) || []).length ? 'EMBALAR PRÓXIMA REMESSA' : 'EMBALAR E ENVIAR';
   const linhasSeriaisIniciais = (o) => {
     if (Array.isArray(o?.seriais_itens) && o.seriais_itens.length) return o.seriais_itens.map(x => ({ produto: x.produto || '', serial: x.serial || '' }));
     return Array.from({ length: Math.max(1, Number(o?.quantidade) || 1) }, () => ({ produto: '', serial: '' }));
@@ -274,8 +285,15 @@ export default function AlmoxarifadoTab({ currentUser }) {
     setConferencia(linhas);
     setSaldosKit({});
     if (linhas.length) saldosDoKit({ opl, linhas }).then(setSaldosKit);
+    // fatia 5 (14/10/2026): Venda para Envio pode sair em remessas. Lê as da OP; com remessas anteriores, a janela começa pelo SALDO (os seriais já enviados não voltam para a tela)
+    let remessas: any[] = []; let erroRem = '';
+    if (ehVendaEnvioOp(opl)) { const r = await lerRemessas(opl.id); remessas = r.remessas; erroRem = r.erro || ''; }
+    setRemessasDaOp(remessas); setErroRemessas(erroRem);
+    const saldo = ehVendaEnvioOp(opl) ? Math.max(1, saldoDeUnidades(opl, remessas)) : 0;
+    const jaTemRemessa = remessas.some(r => !r.cancelada);
     setEmbForm({
-      itens: linhasSeriaisIniciais(opl),
+      itens: ehVendaEnvioOp(opl) && jaTemRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais(opl),
+      unidades: ehVendaEnvioOp(opl) ? String(saldo) : '',   // o padrão é mandar tudo o que falta: quem envia de uma vez só não muda nada
       seriais: opl.seriais_equipamentos || '',
       peso_total: '', volumes: '1',
       altura: '', largura: '', comprimento: '',
@@ -298,11 +316,20 @@ export default function AlmoxarifadoTab({ currentUser }) {
     const itensSeriais = vendaEnvio
       ? (f.itens || []).map(x => ({ produto: String(x.produto || '').trim(), serial: String(x.serial || '').trim() })).filter(x => x.serial)
       : [];
+    // fatia 5 (14/10/2026): remessa. `unidadesRemessa` = quantas unidades saem agora (o padrão da janela é o saldo inteiro: envio de uma vez só = o caminho de sempre, sem registro de remessa).
+    // Parcial = menos que o saldo: grava a remessa, abre o frete dela e a OP continua na fila. Última remessa (já há remessa anterior): grava a remessa e a OP segue como sempre seguiu.
+    if (vendaEnvio && erroRemessas) { mostrarAviso(`Não consegui ler as remessas desta OP (${erroRemessas}). Sem isso não dá para saber o que já foi enviado — feche a janela e tente de novo.`, 'atencao'); return; }
+    const saldoOp = vendaEnvio ? Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp)) : 0;
+    const unidadesRemessa = vendaEnvio ? Math.floor(Number(f.unidades)) : 0;
+    if (vendaEnvio && !(unidadesRemessa >= 1 && unidadesRemessa <= saldoOp)) { alert(`Informe quantas unidades vão nesta remessa: de 1 a ${saldoOp}.`); return; }
+    const remessasAtivas = remessasDaOp.filter(r => !r.cancelada);
+    const parcial = vendaEnvio && unidadesRemessa < saldoOp;
+    const comRemessa = vendaEnvio && (parcial || remessasAtivas.length > 0);
     if (vendaEnvio) {
-      const qtdVendida = Math.max(1, Number(modalEmbalagem.quantidade) || 1);
+      const qtdVendida = unidadesRemessa;
       if (itensSeriais.some(x => !x.produto)) { alert('Informe o produto de cada serial.'); return; }
       if (itensSeriais.length < qtdVendida) {
-        alert(`Informe o serial ACN de cada produto: são ${qtdVendida} unidade(s) vendida(s) e há ${itensSeriais.length} serial(is).`);
+        alert(`Informe o serial ACN de cada produto: ${comRemessa ? `são ${qtdVendida} unidade(s) nesta remessa` : `são ${qtdVendida} unidade(s) vendida(s)`} e há ${itensSeriais.length} serial(is).`);
         return;
       }
     } else if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
@@ -358,35 +385,98 @@ Embalar e enviar assim mesmo?`)) return;
     // Almoxarifado pode estar corrigindo o que o Comercial respondeu.
     const freteComCliente = f.frete_responsavel === 'FOB';
 
-    // 1) a OP sai do caminho da produção — pra cotação de frete (CIF) ou já
-    //    pra liberação comercial (FOB, sem cotação)
+    // fatia 5 (14/10/2026): na ÚLTIMA remessa, a OP só vai direto para o Comercial (FOB) se nenhum frete de remessa anterior ainda estiver aberto — lido ANTES de gravar qualquer coisa,
+    // para uma leitura que falha não deixar a OP no meio do caminho
+    let fretesAbertosAntes = 0;
+    if (comRemessa && !parcial) {
+      const ab = await contarFretesAbertosDaOp(opl.id);
+      if (ab.erro) { setSalvandoEmb(false); mostrarAviso(`Não consegui conferir os fretes das remessas anteriores (${ab.erro}). Tente de novo.`, 'atencao'); return; }
+      fretesAbertosAntes = ab.abertos;
+    }
+    // para onde a OP vai depois desta embalagem: pra cotação de frete (CIF) ou já pra liberação comercial (FOB, sem cotação); a remessa parcial NÃO muda a etapa da OP
+    const statusDepois = comRemessa && !parcial
+      ? statusDepoisDaUltimaRemessa({ freteComCliente, fretesAbertos: fretesAbertosAntes, statusLiberacao: statusDeLiberacaoComercial(opl) })
+      : (freteComCliente ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete');
+
+    // 1) a OP sai do caminho da produção
     const difEmb = divergencias(conferencia).length ? 'Diferença com a BOM — ' + resumoDivergencias(conferencia) : '';
     // OP de envio direto não passa pelo kiting: a conferência dela acontece
     // aqui, então é aqui que o material dá baixa. Quem já foi conferido no
     // kiting chega com `conferencia` vazia e não movimenta nada de novo.
+    // (Com remessas, a conferência e a baixa são do kit INTEIRO e acontecem uma vez só, na primeira remessa: depois dela `kit_conferencia` já está gravado.)
     const baixaEmb = conferencia.length
       ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser })
       : null;
-    const gravouOp = await setAlmox(opl, 'Kit OK', freteComCliente ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete',
-      [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · '), {
+    const obsEmb = [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · ');
+    // seriais da OP: com remessa, o que já estava + os das remessas ativas + os desta, sem repetir serial (gravar de novo não duplica linha)
+    const seriaisDaOp = comRemessa ? mesclarSeriais(mesclarSeriais(opl.seriais_itens, remessasAtivas.flatMap(r => r.itens || [])), itensSeriais) : itensSeriais;
+    const extraOp = {
       ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
-      seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
-      ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
+      seriais_equipamentos: vendaEnvio ? seriaisDaOp.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
+      ...(vendaEnvio ? { seriais_itens: seriaisDaOp } : {}),
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
       destino_cep: formatarCep(f.destino_cep),
       // a resposta dada (ou corrigida) aqui fica na OP: da próxima vez que
       // alguém abrir esta OP, o selo mostra quem paga o frete
       frete_responsavel: f.frete_responsavel,
-    });
-    // 7.50: sem a OP atualizada não abre frete, não avisa ninguém e a janela fica aberta para tentar de novo
-    if (!gravouOp) { setSalvandoEmb(false); return; }
+    };
+
+    // 1a) a remessa é gravada ANTES de a OP andar: é ela que diz quantas unidades já saíram. Se esta gravação falhar, nada mais é mexido
+    // (o estoque já baixado não duplica ao repetir: a baixa trabalha por diferença). O número é único por OP: janela desatualizada não grava a mesma remessa duas vezes.
+    const numeroRemessa = proximoNumeroDeRemessa(remessasDaOp);
+    let remessaId: string | null = null;
+    if (comRemessa) {
+      const { data: remNova, error: erroRem } = await supabase.from('op_remessas').insert([{
+        opl_id: opl.id, numero: numeroRemessa, unidades: unidadesRemessa, itens: itensSeriais,
+        peso_total: num(f.peso_total), volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
+        medida_altura: num(f.altura), medida_largura: num(f.largura), medida_comprimento: num(f.comprimento),
+        destino_cep: formatarCep(f.destino_cep), destino_cidade: f.destino_cidade.trim(), destino_uf: f.destino_uf,
+        frete_responsavel: f.frete_responsavel, observacoes: f.observacoes || null,
+        criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+      }]).select('id');
+      if (erroRem || !remNova?.[0]?.id) {
+        setSalvandoEmb(false);
+        alert(erroRem?.code === '23505'
+          ? `A remessa ${numeroRemessa} desta OP já foi gravada (outra pessoa embalou ao mesmo tempo, ou esta janela ficou aberta). Feche a janela e abra "EMBALAR" de novo.`
+          : 'Não foi possível gravar a remessa: ' + (erroRem?.message || 'sem resposta') + '\n\nNada foi enviado; tente de novo.');
+        return;
+      }
+      remessaId = remNova[0].id;
+    }
+
+    // 1b) a OP: parcial não muda de etapa (continua na fila do Almoxarifado com o saldo; só recebe seriais, a conferência do kit, o destino e o recado); as demais andam como sempre andaram
+    if (parcial) {
+      const { error: erroOp } = await supabase.from('oples').update({ obs_almox: obsEmb, responsavel_almox: currentUser?.nome, ...extraOp }).eq('id', opl.id);
+      if (erroOp) {
+        setSalvandoEmb(false); fetchAll();
+        alert(`A remessa ${numeroRemessa} foi gravada, mas a OP ${opl.opl} não foi atualizada: ${erroOp.message}\n\nAbra "EMBALAR" de novo e use "Cancelar remessa ${numeroRemessa}" para refazer.`);
+        return;
+      }
+      logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+        oldRow: { seriais_itens: opl.seriais_itens, obs_almox: opl.obs_almox }, newRow: { seriais_itens: seriaisDaOp, obs_almox: obsEmb }, user: currentUser });
+      const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
+        evento: `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} un.) — a OP continua no Almoxarifado`,
+        status_anterior: opl.status_geral, status_novo: opl.status_geral,
+        usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+      }]);
+      if (erroLog) mostrarAviso(`A remessa foi registrada, mas o histórico de movimentação da OP ${opl.opl} não foi gravado: ${erroLog.message}`, 'atencao');
+    } else {
+      const gravouOp = await setAlmox(opl, 'Kit OK', statusDepois, obsEmb, extraOp);
+      // 7.50: sem a OP atualizada não abre frete, não avisa ninguém e a janela fica aberta para tentar de novo
+      if (!gravouOp) {
+        setSalvandoEmb(false);
+        if (remessaId) { fetchAll(); alert(`A remessa ${numeroRemessa} foi gravada, mas a OP ${opl.opl} não andou. Abra "EMBALAR" de novo e use "Cancelar remessa ${numeroRemessa}" para refazer.`); }
+        return;
+      }
+    }
 
     // 2) nasce a solicitação de frete (status default 'Cotação') pra Logística
-    //    — só quando é a empresa quem paga (CIF)
-    const { error } = freteComCliente ? { error: null } : await supabase.from('pcp_fretes').insert([{
+    //    — só quando é a empresa quem paga (CIF); com remessa, um pedido de frete por remessa
+    const { data: freteCriado, error } = freteComCliente ? { data: null, error: null } : await supabase.from('pcp_fretes').insert([{
       direcao: 'outbound',
-      descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim(),
+      descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim() + (comRemessa ? ` — ${descricaoDaRemessa(opl, numeroRemessa, unidadesRemessa)}` : ''),
       destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
       cep_destino: formatarCep(f.destino_cep),
       data_prevista: opl.data_prevista_entrega || null,
@@ -401,16 +491,26 @@ Embalar e enviar assim mesmo?`)) return;
       // avisar a OP quando o frete é entregue. Bug achado em 29/09/2026 na
       // varredura de UX: com 'opl' aqui, a entrega do frete não acontecia
       // pra ninguém — nem o recado no acompanhamento, nem o avanço de status.
-      vinculo_tipo: 'op_os', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}`,
+      vinculo_tipo: 'op_os', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}` + (comRemessa ? ` · remessa ${numeroRemessa}` : ''),
       observacoes: f.observacoes || null,
       criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
-    }]);
+    }]).select('id');
+    if (remessaId && freteCriado?.[0]?.id) {
+      const { error: erroLig } = await supabase.from('op_remessas').update({ frete_id: freteCriado[0].id }).eq('id', remessaId);
+      if (erroLig) mostrarAviso(`O frete da remessa ${numeroRemessa} foi aberto, mas não consegui ligá-lo à remessa (${erroLig.message}); o cancelamento da remessa não conseguirá cancelar o frete sozinho.`, 'atencao');
+    }
     // 3) quem vendeu precisa poder responder ao cliente sem perguntar a
     //    ninguém: "embalado, foi para cotação de frete" é exatamente o
     //    recado que falta hoje. Registra no acompanhamento e notifica.
-    const recado = freteComCliente
-      ? `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${[f.destino_cidade, f.destino_uf].filter(Boolean).join('/')}. Frete por conta do cliente (FOB) — liberado direto para o Comercial.`
-      : `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${[f.destino_cidade, f.destino_uf].filter(Boolean).join('/')}. Solicitação de frete aberta para a Logística cotar.`;
+    const destinoTxt = [f.destino_cidade, f.destino_uf].filter(Boolean).join('/');
+    const irDireto = freteComCliente && statusDepois !== 'Aguardando Cotacao Frete';
+    const recado = comRemessa
+      ? `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidade(s)): ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. `
+        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no Almoxarifado. ` : 'Foi a última remessa: a OP segue. ')
+        + (freteComCliente ? 'Frete por conta do cliente (FOB).' : 'Solicitação de frete aberta para a Logística cotar.')
+      : freteComCliente
+      ? `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Frete por conta do cliente (FOB) — liberado direto para o Comercial.`
+      : `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Solicitação de frete aberta para a Logística cotar.`;
     await supabase.from('op_acompanhamentos').insert({
       referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`,
       setor: 'Almoxarifado', texto: recado,
@@ -418,17 +518,63 @@ Embalar e enviar assim mesmo?`)) return;
       criado_em: new Date().toISOString(),
     });
     await notificarEnvolvidosOp({
-      ref: opl.opl, texto: recado, assunto: 'Embalagem e frete',
+      ref: opl.opl, texto: recado, assunto: parcial ? 'Remessa parcial e frete' : 'Embalagem e frete',
       autorId: currentUser?.id ? String(currentUser.id) : null,
       autorNome: currentUser?.nome || null,
     });
 
     setSalvandoEmb(false);
-    if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
-    else if (freteComCliente) { alert(`Embalagem registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`); }
+    if (parcial) {
+      alert(`Remessa ${numeroRemessa} registrada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidades). `
+        + (error ? `Houve erro ao abrir a solicitação de frete: ${error.message}. ` : freteComCliente ? 'Frete por conta do cliente (FOB). ' : 'Solicitação de frete aberta para a Logística cotar. ')
+        + `A OP ${opl.opl} continua no Almoxarifado com ${saldoOp - unidadesRemessa} unidade(s) por enviar.`);
+    }
+    else if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
+    else if (irDireto) { alert(`Embalagem registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`); }
+    else if (freteComCliente) { alert(`Última remessa registrada. Frete por conta do cliente, mas ainda há frete de remessa anterior em aberto — a OP ${opl.opl} espera a entrega dele para seguir para o Comercial.`); }
     else { alert(`Embalagem registrada. Solicitação de frete aberta para a Logística cotar (OP ${opl.opl}).`); }
     setModalEmbalagem(null);
     fetchAll();
+  };
+
+  // Cancelar uma remessa (fatia 5, 14/10/2026): marca como cancelada (nada é apagado), cancela o frete dela se ainda não foi entregue e devolve as unidades — e os seriais — ao saldo da OP.
+  // Só existe aqui, na janela de embalagem, ou seja, enquanto a OP ainda está na fila do Almoxarifado.
+  const cancelarRemessa = async (r) => {
+    const opl = modalEmbalagem; if (!opl) return;
+    const motivo = await pedirTexto(`Motivo do cancelamento da remessa ${r.numero} (${r.unidades} unidade(s)):`);
+    if (motivo === null) return;
+    if (!String(motivo).trim()) { mostrarAviso('Escreva o motivo do cancelamento.', 'atencao'); return; }
+    if (r.frete_id) {
+      const { data: fr, error: erroFr } = await supabase.from('pcp_fretes').select('id,status,observacoes').eq('id', r.frete_id).maybeSingle();
+      if (erroFr) { alert('Não consegui conferir o frete desta remessa: ' + erroFr.message); return; }
+      if (fr?.status === 'Entregue') { alert(`O frete da remessa ${r.numero} já foi entregue — não dá para cancelar a remessa.`); return; }
+      if (fr && fr.status !== 'Cancelado') {
+        const { error: erroCf } = await supabase.from('pcp_fretes').update({ status: 'Cancelado', observacoes: [fr.observacoes, `Cancelado: remessa ${r.numero} cancelada no Almoxarifado — ${String(motivo).trim()}`].filter(Boolean).join(' · ') }).eq('id', fr.id);
+        if (erroCf) { alert('Não consegui cancelar o frete desta remessa: ' + erroCf.message + '\n\nNada foi cancelado.'); return; }
+      }
+    }
+    const { error: erroRm } = await supabase.from('op_remessas').update({ cancelada: true, cancelada_em: new Date().toISOString(), cancelada_por_nome: currentUser?.nome || null, motivo_cancelamento: String(motivo).trim() }).eq('id', r.id);
+    if (erroRm) { alert('Não foi possível cancelar a remessa: ' + erroRm.message); return; }
+    // os seriais da remessa voltam ao saldo (a OP deixa de listá-los como enviados)
+    const sobraram = tirarSeriais(opl.seriais_itens, r.itens);
+    const { error: erroOp } = await supabase.from('oples').update({ seriais_itens: sobraram, seriais_equipamentos: sobraram.map(x => `${x.produto}: ${x.serial}`).join('\n') }).eq('id', opl.id);
+    if (erroOp) mostrarAviso(`A remessa foi cancelada, mas não consegui tirar os seriais dela da OP: ${erroOp.message}`, 'atencao');
+    logChange({ module: 'almoxarifado', entityType: 'op_remessas', entityId: r.id, changeType: 'UPDATE', oldRow: { cancelada: false }, newRow: { cancelada: true, motivo_cancelamento: String(motivo).trim() }, user: currentUser });
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado', evento: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo) — ${String(motivo).trim()}`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral, usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+    }]);
+    await supabase.from('op_acompanhamentos').insert({
+      referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`, setor: 'Almoxarifado',
+      texto: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo): ${String(motivo).trim()}.`,
+      usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
+    });
+    // a janela passa a mostrar o saldo novo
+    const novas = await lerRemessas(opl.id); setRemessasDaOp(novas.remessas); setErroRemessas(novas.erro || '');
+    const saldo = Math.max(1, saldoDeUnidades(opl, novas.remessas));
+    setModalEmbalagem(o => o && ({ ...o, seriais_itens: sobraram }));
+    setEmbForm(fm => ({ ...fm, unidades: String(saldo), itens: novas.remessas.some(x => !x.cancelada) ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais({ ...opl, seriais_itens: sobraram }) }));
+    fetchAll(true);
   };
 
   const abrirModalSeriais = async (opl, pendenciaSanada=false) => {
@@ -760,6 +906,11 @@ Embalar e enviar assim mesmo?`)) return;
                             <Icone path={mdiPackageVariantClosed} size={13} /> {ehEnvio(o) ? 'EMBALAR — NÃO PASSA POR PRODUÇÃO' : 'EMBALAR — PRODUÇÃO CONCLUÍDA'}
                           </Selo></div>
                         )}
+                        {(remessasPorOp.get(String(o.id)) || []).length > 0 && (
+                          <div className="acn-alm-embalar"><Selo familia="atencao" ponto={false} title="Envio parcial: cada remessa tem o seu frete; a OP só segue quando tudo tiver saído">
+                            <Icone path={mdiTruckOutline} size={13} /> ENVIO PARCIAL — {resumoDeRemessas(o, remessasPorOp.get(String(o.id)))}
+                          </Selo></div>
+                        )}
                       </td>
                       <td className="acn-alm-veic">
                         <VeiculoOuEnvio o={o} />
@@ -788,7 +939,7 @@ Embalar e enviar assim mesmo?`)) return;
                             <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
                               title="Produção concluída: pesar, medir e abrir a cotação de frete"
                               onClick={()=>abrirModalEmbalagem(o)}>
-                              EMBALAR E ENVIAR
+                              {rotuloEmbalar(o)}
                             </Botao>
                           ) : (<>
                           {o.status_almox !== 'Kit OK' && (
@@ -796,7 +947,7 @@ Embalar e enviar assim mesmo?`)) return;
                               <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
                                 title="Esta OP não passa por produção: separar, embalar e enviar"
                                 onClick={()=>abrirModalEmbalagem(o)}>
-                                EMBALAR E ENVIAR
+                                {rotuloEmbalar(o)}
                               </Botao>
                             ) : (
                               (() => {
@@ -1051,11 +1202,44 @@ Embalar e enviar assim mesmo?`)) return;
                 </div>
               </div>
 
+              {/* Remessa (fatia 5, 14/10/2026): Venda para Envio com mais de uma unidade pode sair em partes. O padrão é o saldo inteiro: enviar tudo de uma vez não muda nada. */}
+              {ehVendaEnvioOp(modalEmbalagem) && (unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) && (() => {
+                const saldo = Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp));
+                const n = Math.floor(Number(embForm.unidades));
+                const parcial = n >= 1 && n < saldo;
+                const ativas = remessasDaOp.filter(r => !r.cancelada);
+                return (
+                  <div className={'acn-quadro' + (parcial ? ' tom-atencao' : '')} data-teste="quadro-remessa">
+                    <div className="acn-quadro-titulo"><Icone path={mdiTruckOutline} size={14} /> Remessa {proximoNumeroDeRemessa(remessasDaOp)}</div>
+                    {erroRemessas && <Faixa tom="erro">Não consegui ler as remessas desta OP ({erroRemessas}). Sem isso não dá para saber o que já foi enviado: feche a janela e tente de novo.</Faixa>}
+                    <div className="acn-ajuda">
+                      {ativas.length ? resumoDeRemessas(modalEmbalagem, remessasDaOp) + '.' : `Esta OP tem ${unidadesDaOp(modalEmbalagem)} unidades.`}
+                    </div>
+                    {ativas.map(r => (
+                      <div key={r.id} className="acn-alm-remessa-linha" data-teste="remessa-anterior">
+                        <span><strong>Remessa {r.numero}</strong> — {r.unidades} un. · {diaBR(r.criado_em)} · {r.frete_responsavel === 'FOB' ? 'frete do cliente (FOB)' : r.frete_id ? 'frete aberto' : 'sem frete ligado'}</span>
+                        <Botao variante="perigo-sec" pequeno icone={mdiClose} title={`Cancelar a remessa ${r.numero}: as ${r.unidades} unidade(s) voltam ao saldo`} onClick={() => cancelarRemessa(r)}>Cancelar remessa {r.numero}</Botao>
+                      </div>
+                    ))}
+                    <div className="form-group">
+                      <label className="acn-label" htmlFor="alm-unidades">Quantas unidades vão nesta remessa? *</label>
+                      <input id="alm-unidades" className="acn-input" type="number" min={1} max={saldo} value={embForm.unidades || ''} disabled={!!erroRemessas}
+                        onChange={e => setEmbForm(f => ({ ...f, unidades: e.target.value }))} />
+                      <div className="acn-ajuda">
+                        {parcial
+                          ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no Almoxarifado para a próxima remessa.`
+                          : `Saldo: ${saldo} unidade(s). Enviando todas, a OP segue para o próximo passo.`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {ehVendaEnvioOp(modalEmbalagem) ? (
                 <div className="acn-alm-bloco">
                   <div className="acn-label">
                     Seriais ACN por produto * <span className="acn-ajuda">
-                      — pelo menos {Math.max(1, Number(modalEmbalagem.quantidade) || 1)} (uma por unidade vendida). Dá para colar do Excel: produto ⇥ serial.
+                      — pelo menos {Math.max(1, Math.floor(Number(embForm.unidades)) || 1)} (uma por unidade {(unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) ? 'desta remessa' : 'vendida'}). Dá para colar do Excel: produto ⇥ serial.
                     </span>
                   </div>
                   <div className="acn-alm-seriais">
@@ -1077,7 +1261,7 @@ Embalar e enviar assim mesmo?`)) return;
                     </Botao>
                     {(() => {
                       const n = (embForm.itens || []).filter(x => String(x.serial || '').trim()).length;
-                      const q = Math.max(1, Number(modalEmbalagem.quantidade) || 1);
+                      const q = Math.max(1, Math.floor(Number(embForm.unidades)) || 1);
                       return <span className={n >= q ? 'acn-txt-ok' : 'acn-txt-atencao'}>{n} de {q} serial(is)</span>;
                     })()}
                   </div>
@@ -1170,9 +1354,15 @@ Embalar e enviar assim mesmo?`)) return;
               <Botao variante="primario" icone={mdiPackageVariantClosed} disabled={salvandoEmb} onClick={confirmarEmbalagem}>
                 {/* o botão dizia sempre "solicitar frete", inclusive em OP FOB,
                     onde nenhum frete é solicitado (24/09/2026) */}
-                {salvandoEmb ? 'Salvando...'
-                  : embForm.frete_responsavel === 'FOB' ? 'Finalizar e liberar para o Comercial'
-                  : 'Finalizar e solicitar frete'}
+                {(() => {
+                  // remessa parcial (fatia 5): a OP não anda; só nasce a remessa (e o frete dela, se CIF)
+                  const n = Math.floor(Number(embForm.unidades));
+                  const parcialBtn = ehVendaEnvioOp(modalEmbalagem) && n >= 1 && n < Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp));
+                  return salvandoEmb ? 'Salvando...'
+                    : parcialBtn ? (embForm.frete_responsavel === 'FOB' ? 'Registrar remessa (frete do cliente)' : 'Registrar remessa e solicitar frete')
+                    : embForm.frete_responsavel === 'FOB' ? 'Finalizar e liberar para o Comercial'
+                    : 'Finalizar e solicitar frete';
+                })()}
               </Botao>
             </div>
           </div>

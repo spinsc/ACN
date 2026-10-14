@@ -13,6 +13,7 @@ import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interfa
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
+import { opTemRemessas, contarFretesAbertosDaOp, oFreteLiberaAOp } from './Remessas';
 import { podeVerValores } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
@@ -757,7 +758,19 @@ function FretesPanel({ currentUser }: any) {
           usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
           criado_em: new Date().toISOString(),
         });
-        if (opl?.status_geral === 'Aguardando Cotacao Frete') {
+        // fatia 5 (14/10/2026, remessas): OP com envio parcial tem um frete por remessa. O frete entregue só leva a OP adiante quando NENHUM outro frete dela estiver aberto;
+        // antes o primeiro entregue já bastava. OP sem remessa: igual a sempre. Se a conferência falhar, segue como antes (melhor adiantar que deixar a OP presa sem ninguém para destravar).
+        const temRem = opl?.status_geral === 'Aguardando Cotacao Frete' ? await opTemRemessas(opl.id) : false;
+        const outros = temRem ? await contarFretesAbertosDaOp(opl.id, frete.id) : { abertos: 0, erro: null };
+        const aindaHaFrete = temRem && !outros.erro && !oFreteLiberaAOp({ temRemessas: temRem, outrosFretesAbertos: outros.abertos });
+        if (aindaHaFrete) {
+          await supabase.from('op_acompanhamentos').insert({
+            referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc, setor: 'Logística',
+            texto: `Este frete foi entregue, mas ainda há ${outros.abertos} frete(s) de outras remessas em aberto: a OP segue para a liberação comercial quando todos forem entregues.`,
+            usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
+          });
+        }
+        if (opl?.status_geral === 'Aguardando Cotacao Frete' && !aindaHaFrete) {
           const statusNovo = statusDeLiberacaoComercial(opl);
           await supabase.from('oples').update({ status_geral: statusNovo }).eq('id', opl.id);
           logChange({ module: 'logistica', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',

@@ -1310,6 +1310,8 @@ html body .modal-box.acn-modal-cadastro.acn-alm-lote-jan { width: min(980px, 95v
 .acn-alm-emb .acn-modal-corpo > *, .acn-alm-kiting .acn-modal-corpo > *, .acn-alm-lote-jan .acn-modal-corpo > *, .acn-alm-jan .acn-modal-corpo > * { flex-shrink: 0; }
 html body .acn-input.acn-alm-mono { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; font-size: 12px; resize: vertical; }
 .acn-alm-bloco { display: grid; gap: 6px; }
+/* 14/10/2026 (fatia 5, remessas): uma linha por remessa já registrada, com o botão de cancelar ao lado */
+.acn-alm-remessa-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 0; font-size: 12px; }
 .acn-alm-seriais { max-height: 220px; overflow-y: auto; padding: 6px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: grid; gap: 4px; }
 .acn-alm-serial-linha { display: grid; grid-template-columns: 24px 1.4fr 1fr auto; gap: 5px; align-items: center; }
 .acn-alm-secao { padding-bottom: 3px; border-bottom: 2px solid var(--acn-brand); color: var(--acn-brand-ink); }
