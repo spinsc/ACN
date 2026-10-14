@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ParticipantesPicker, ModalEditarParticipantes, ListaParticipantes, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
@@ -173,7 +174,7 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
 
         <label className="acn-label">Responsável</label>
         <div style={{ marginBottom: 8 }}>
-          <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
+          <ColaboradorSelect departamentos={DEPTOS.engenharia} value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
         </div>
 
         <label className="acn-label">Vincular a uma OP/OS (opcional)</label>

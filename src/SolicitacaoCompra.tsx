@@ -24,6 +24,7 @@ import { AvisoSaldoCentro, useCentroObrigatorio, lerCentroObrigatorio, MSG_CENTR
 import { VinculoPicker } from './VinculoPicker';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { Botao, Faixa } from './Interface';
 
 export const solicitacaoCompraVazia = (inicial: any = {}) => ({
@@ -101,7 +102,7 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
       </div>
       <div className="form-group">
         <label className="acn-label">Comprador responsável (opcional)</label>
-        <ColaboradorSelect value={valor.comprador} onChange={v => set('comprador', v)} incluirUsuariosDaAba="compras"
+        <ColaboradorSelect departamentos={DEPTOS.compras} value={valor.comprador} onChange={v => set('comprador', v)} incluirUsuariosDaAba="compras"
           placeholder="Deixe em branco para o Compras definir" />
       </div>
       <div className="form-group">

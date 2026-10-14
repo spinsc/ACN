@@ -9,6 +9,7 @@ import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
 import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo, terminaEmEnvio } from './FluxoEntrega';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { dividirValorEmUnidades } from './AcnTabShared';
 import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA, type GrupoLote } from './LoteMisto';
@@ -1217,7 +1218,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Responsável *</div>
-            <ColaboradorSelect
+            <ColaboradorSelect departamentos={DEPTOS.comercial}
               value={form.responsavel}
               onChange={v => setF('responsavel', v)}
               placeholder="Selecione o responsável..."

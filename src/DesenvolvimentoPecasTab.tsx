@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import Linkify from './Linkify';
 import { confirmar } from './Feedback';
 import PedidoDoPcp from './PedidoDesenvolvimentoPcp';
@@ -181,7 +182,7 @@ function PainelEtapa({ demanda, etapa, idx, onAtualizado, currentUser }: any) {
           <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 160 }}>
               <label className="acn-label">Responsável *</label>
-              <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
+              <ColaboradorSelect departamentos={DEPTOS.engenharia} value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
             </div>
             <div style={{ width: 150 }}>
               <label className="acn-label">Data Prevista</label>

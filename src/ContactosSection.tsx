@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
 import { combinaBusca } from './SearchUtils';
@@ -782,7 +783,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               {isGerente && (
                 <div style={{ gridColumn:'1/-1' }}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Operador Responsável</div>
-                  <ColaboradorSelect
+                  <ColaboradorSelect departamentos={DEPTOS.comercial}
                     value={formC.operador_nome||''}
                     onChange={v => setFormC(f => ({...f, operador_nome:v}))}
                     placeholder="Selecione o operador"

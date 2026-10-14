@@ -21,6 +21,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
@@ -399,7 +400,7 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
           <div className="acn-kb-grade">
             <div className="form-group">
               <label className="acn-label">Responsável</label>
-              <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="financeiro" />
+              <ColaboradorSelect departamentos={DEPTOS.financeiro} value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="financeiro" />
             </div>
             <div className="form-group">
               <label className="acn-label" htmlFor="kb-venc">Vencimento</label>

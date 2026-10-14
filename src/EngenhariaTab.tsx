@@ -4,6 +4,7 @@ import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, SETORES_FABRICACAO } from './DemandaItens';
 import { PinturaCampos } from './PinturaSerralheria';
@@ -920,7 +921,7 @@ export default function EngenhariaTab({ currentUser }) {
               </div>
               <div className="form-group">
                 <label className="acn-label">Responsável pela Execução *</label>
-                <ColaboradorSelect
+                <ColaboradorSelect departamentos={DEPTOS.engenharia}
                   value={responsavelEng} onChange={setResponsavelEng}
                   incluirUsuariosDaAba="engenharia"
                   placeholder="Selecione o responsável"

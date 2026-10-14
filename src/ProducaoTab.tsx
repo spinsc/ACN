@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { EquipeDaOpModal, inserirResponsaveisSemRepetir } from './EquipeDaOp';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, VeiculoOuEnvio, VeiculoCompacto } from './AcnTabShared';
@@ -1185,7 +1186,7 @@ function PainelSacVeicular({ currentUser }) {
               {iniciarManuModo === 'individual' && (
                 <div className="form-group">
                   <label className="acn-label">Técnico Responsável *</label>
-                  <ColaboradorSelect
+                  <ColaboradorSelect departamentos={DEPTOS.producao}
                     value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
                     placeholder="Selecione o técnico responsável"
                     className="acn-input"
@@ -1197,14 +1198,14 @@ function PainelSacVeicular({ currentUser }) {
                 <>
                   <div className="form-group">
                     <label className="acn-label">Head Line (Técnico 1) *</label>
-                    <ColaboradorSelect
+                    <ColaboradorSelect departamentos={DEPTOS.producao}
                       value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
                       placeholder="Selecione o head line"
                       className="acn-input" />
                   </div>
                   <div className="form-group">
                     <label className="acn-label">Auxiliar (Técnico 2) *</label>
-                    <ColaboradorSelect
+                    <ColaboradorSelect departamentos={DEPTOS.producao}
                       value={iniciarManuTecnico2} onChange={(nome)=>{ setIniciarManuTecnico2(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnico2Id(colab?.id||null); }}
                       placeholder="Selecione o auxiliar"
                       className="acn-input" />
@@ -1275,7 +1276,7 @@ function PainelSacVeicular({ currentUser }) {
                 </div>
               )}
               <div className="acn-prod-add">
-                <ColaboradorSelect value={novoRespNomeOS}
+                <ColaboradorSelect departamentos={DEPTOS.producao} value={novoRespNomeOS}
                   onChange={nome=>{ setNovoRespNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoRespIdOS(c?.id||null); }}
                   placeholder="Adicionar responsável..." className="acn-input" />
                 <Botao pequeno variante="primario" icone={mdiPlus} onClick={()=>adicionarMembroEquipeOS('responsavel')}>Add</Botao>
@@ -1295,7 +1296,7 @@ function PainelSacVeicular({ currentUser }) {
                 </div>
               )}
               <div className="acn-prod-add">
-                <ColaboradorSelect value={novoApoioNomeOS}
+                <ColaboradorSelect departamentos={DEPTOS.producao} value={novoApoioNomeOS}
                   onChange={nome=>{ setNovoApoioNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoApoioIdOS(c?.id||null); }}
                   placeholder="Adicionar apoio..." className="acn-input" />
                 <Botao pequeno variante="primario" icone={mdiPlus} onClick={()=>adicionarMembroEquipeOS('apoio')}>Add</Botao>
@@ -1909,7 +1910,7 @@ function EquipesSection({ currentUser }) {
 
               <div className="form-group">
                 <label className="acn-label">Head Line (Técnico Responsável) *</label>
-                <ColaboradorSelect
+                <ColaboradorSelect departamentos={DEPTOS.producao}
                   value={form.head_line_nome}
                   onChange={nome => { const c = colabs.find(x => x.nome === nome); setForm(f => ({ ...f, head_line_nome: nome, head_line_id: c?.id || '' })); }}
                   placeholder="Selecione o técnico líder"
@@ -1919,7 +1920,7 @@ function EquipesSection({ currentUser }) {
               <div className="form-group">
                 <label className="acn-label">Membros da Equipe</label>
                 <div className="acn-prod-add">
-                  <ColaboradorSelect
+                  <ColaboradorSelect departamentos={DEPTOS.producao}
                     value={membroAdd}
                     onChange={v => setMembroAdd(v)}
                     placeholder="Adicionar técnico..."
@@ -2928,7 +2929,7 @@ export default function ProducaoTab({ currentUser }) {
               {modoExecucao === 'individual' && (
                 <div className="form-group">
                   <label className="acn-label">Técnico Responsável</label>
-                  <ColaboradorSelect value={respNome}
+                  <ColaboradorSelect departamentos={DEPTOS.producao} value={respNome}
                     onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
                     placeholder="Selecione o técnico"
                     className="acn-input" autoFocus />
@@ -2940,14 +2941,14 @@ export default function ProducaoTab({ currentUser }) {
                 <>
                   <div className="form-group">
                     <label className="acn-label">Técnico 1</label>
-                    <ColaboradorSelect value={respNome}
+                    <ColaboradorSelect departamentos={DEPTOS.producao} value={respNome}
                       onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
                       placeholder="Selecione o 1º técnico"
                       className="acn-input" />
                   </div>
                   <div className="form-group">
                     <label className="acn-label">Técnico 2</label>
-                    <ColaboradorSelect value={respNome2}
+                    <ColaboradorSelect departamentos={DEPTOS.producao} value={respNome2}
                       onChange={nome=>{ setRespNome2(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId2(c?.id||null); }}
                       placeholder="Selecione o 2º técnico"
                       className="acn-input" />
@@ -3008,7 +3009,7 @@ export default function ProducaoTab({ currentUser }) {
               {editModo === 'individual' && (
                 <div className="form-group">
                   <label className="acn-label">Técnico Responsável</label>
-                  <ColaboradorSelect value={editResp1Nome}
+                  <ColaboradorSelect departamentos={DEPTOS.producao} value={editResp1Nome}
                     onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
                     placeholder="Selecione o técnico"
                     className="acn-input" />
@@ -3018,14 +3019,14 @@ export default function ProducaoTab({ currentUser }) {
                 <>
                   <div className="form-group">
                     <label className="acn-label">Técnico 1</label>
-                    <ColaboradorSelect value={editResp1Nome}
+                    <ColaboradorSelect departamentos={DEPTOS.producao} value={editResp1Nome}
                       onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
                       placeholder="Selecione o 1º técnico"
                       className="acn-input" />
                   </div>
                   <div className="form-group">
                     <label className="acn-label">Técnico 2</label>
-                    <ColaboradorSelect value={editResp2Nome}
+                    <ColaboradorSelect departamentos={DEPTOS.producao} value={editResp2Nome}
                       onChange={nome=>{ setEditResp2Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp2Id(c?.id||null); }}
                       placeholder="Selecione o 2º técnico"
                       className="acn-input" />

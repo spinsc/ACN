@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { departamentosDoSetor } from './RhDepartamentos';
 import Linkify from './Linkify';
 import { centrosParaApontar, motivoBloqueio, labelHierarquico } from './CentroCustoShared';
 import { notificarEvento } from './whatsappHelper';
@@ -1021,7 +1022,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
               </div>
               <div className="form-group">
                 <label className="acn-label">Responsável pela Execução *</label>
-                <ColaboradorSelect
+                <ColaboradorSelect departamentos={departamentosDoSetor(setor)}
                   value={responsavelIniciar} onChange={setResponsavelIniciar}
                   placeholder="Selecione o responsável"
                   className="acn-input"

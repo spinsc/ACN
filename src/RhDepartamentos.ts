@@ -73,3 +73,26 @@ export async function excluirDepartamento(id: string): Promise<string | null> {
   const { error } = await supabase.from('rh_departamentos').delete().eq('id', id);
   return error ? error.message : null;
 }
+
+// ── Responsáveis por setor (fatia 2, 14/10/2026) ──────────────────────────────────────────────────────────────────────────────────────────────────────
+// Nos campos de responsável de cada tela, o ColaboradorSelect mostra só as pessoas dos departamentos da tela (+ Admin e gerentes + o valor já gravado).
+// A tabela "tela → departamento" foi confirmada pelo usuário em 14/10/2026; SAC, Horas Extras e os campos configuráveis do cadastro de OP ficam sem filtro.
+export const DEPTOS = {
+  engenharia: ['ENGENHARIA'],
+  producao: ['PRODUÇÃO'],
+  serralheria: ['SERRALHERIA'],
+  chicotes: ['CHICOTES'],
+  compras: ['COMPRAS'],
+  financeiro: ['FINANCEIRO/RH', 'ADMINISTRATIVO'],
+  comercial: ['COMERCIAL', 'LICITAÇÕES'],   // o CRM, os contatos e a Nova OP atendem vendas diretas e licitações
+};
+
+/** Departamentos de um setor de demanda (Engenharia, Serralheria, Telecom…). Telecom e Laboratório não têm departamento próprio: usam RÁDIO. Setor desconhecido = sem filtro. */
+export function departamentosDoSetor(setor: string | null | undefined): string[] | undefined {
+  const k = chaveDepto(setor);
+  if (!k) return undefined;
+  if (k === 'telecom' || k === 'laboratorio') return ['RÁDIO'];
+  if (k === 'chicote') return DEPTOS.chicotes;
+  if (k === 'licitacao' || k === 'licitacoes') return ['LICITAÇÕES'];
+  return [String(setor).trim().toLocaleUpperCase('pt-BR')];   // mesmo nome do departamento (ENGENHARIA, COMPRAS, ALMOXARIFADO, PCP…); se não existir, o seletor não filtra
+}

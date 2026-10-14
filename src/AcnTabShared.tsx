@@ -11,6 +11,7 @@ import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 // pacote principal, só baixando quando alguém abre o dossiê).
 const ModalDossieOp = lazy(() => import('./OpDossie').then(m => ({ default: m.ModalDossieOp })));
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { departamentosDoSetor } from './RhDepartamentos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
@@ -1609,7 +1610,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
           <div className="modal-box" style={{ maxWidth: 400 }}>
             <div className="modal-title">Iniciar — {modalIniciar.descricao?.replace('[AJUSTE] ', '')}</div>
             <label className="acn-label">Responsável *</label>
-            <ColaboradorSelect
+            <ColaboradorSelect departamentos={departamentosDoSetor(setor)}
               value={responsavel} onChange={setResponsavel}
               placeholder="Selecione o responsável"
               className="acn-input" style={{ width: '100%', marginBottom: 12 }}

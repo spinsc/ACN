@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -484,7 +485,7 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
 
             <div style={{ marginBottom:10 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Vendedor *</div>
-              <ColaboradorSelect
+              <ColaboradorSelect departamentos={DEPTOS.comercial}
                 value={novaVend}
                 onChange={v => {
                   setNovaVend(v);

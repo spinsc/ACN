@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
 import Linkify from './Linkify';
@@ -3805,7 +3806,7 @@ function ColunaRolavel({ children }: any) {
 
               <div>
                 <label className="acn-label">Responsável / Operador</label>
-                <ColaboradorSelect
+                <ColaboradorSelect departamentos={DEPTOS.comercial}
                   value={formOp.responsavel_nome||''}
                   onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))}
                   placeholder="Selecione o operador"
@@ -4413,7 +4414,7 @@ function ColunaRolavel({ children }: any) {
 
               <div>
                 <label className="acn-label">Operador Responsável (Vendedor)</label>
-                <ColaboradorSelect
+                <ColaboradorSelect departamentos={DEPTOS.comercial}
                   value={formVenda.operador_nome||''}
                   onChange={v => setFormVenda(f => ({...f, operador_nome:v}))}
                   placeholder="Selecione o operador"
@@ -4625,7 +4626,7 @@ function ColunaRolavel({ children }: any) {
 
                 <div className="acn-crm-ab-campo" style={campoDestaque('responsavel_nome')}>
                   <div className="acn-label">Responsável</div>
-                  <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o operador" />
+                  <ColaboradorSelect departamentos={DEPTOS.comercial} value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o operador" />
                 </div>
 
                 <div className="acn-crm-ab-contato">

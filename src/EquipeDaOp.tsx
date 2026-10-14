@@ -28,17 +28,18 @@ import { supabase } from './supabaseClient';
 import { Botao, Faixa, Selo } from './Interface';
 import { confirmar } from './Feedback';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
+import { DEPTOS } from './RhDepartamentos';
 import { podeEditarEquipeDaOp } from './utils/permissoes';
 
 export const PAPEIS_EQUIPE = [
   { papel: 'responsavel', titulo: 'Adaptação — responsáveis', rotulo: 'Responsável', setorLog: 'Producao',
-    placeholder: 'Adicionar responsável...',
+    placeholder: 'Adicionar responsável...', departamentos: DEPTOS.producao,
     ajuda: 'Recebem a comissão pelo percentual e pela base cadastrados no RH.' },
   { papel: 'apoio', titulo: 'Adaptação — apoios', rotulo: 'Apoio', setorLog: 'Producao',
-    placeholder: 'Adicionar apoio...',
+    placeholder: 'Adicionar apoio...', departamentos: DEPTOS.producao,
     ajuda: 'Recebem 0,1% fixo da mão de obra de adaptação da OP, além do que os responsáveis recebem.' },
   { papel: 'serralheria', titulo: 'Serralheria — quem trabalhou', rotulo: 'Serralheria', setorLog: 'Serralheria',
-    placeholder: 'Adicionar quem trabalhou na serralheria...',
+    placeholder: 'Adicionar quem trabalhou na serralheria...', departamentos: DEPTOS.serralheria,
     ajuda: 'Recebem o percentual cadastrado no RH em cima da mão de obra de serralheria da OP.' },
 ];
 
@@ -252,7 +253,7 @@ export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }
                   })}
               {pode && (
                 <div className="acn-equipe-add">
-                  <ColaboradorSelect value={novo[p.papel]} placeholder={p.placeholder} className="acn-input acn-eqp-sel"
+                  <ColaboradorSelect value={novo[p.papel]} placeholder={p.placeholder} departamentos={p.departamentos} className="acn-input acn-eqp-sel"
                     onChange={nome => setNovo(n => ({ ...n, [p.papel]: nome }))} />
                   <Botao pequeno variante="secundario" icone={mdiPlus} disabled={ocupado || !novo[p.papel]}
                     onClick={() => adicionar(p)}>Adicionar</Botao>
