@@ -6,9 +6,11 @@
 // porque ele travava em navegadores antigos (iOS 10 / Safari 10). Aqui é só guardar três campos e renovar com uma chamada simples.
 const CHAVE_ARMAZENAMENTO = 'acn_sessao_banco';
 const URL_BASE = 'https://qgemelnuqdilnggxmrdw.supabase.co';
-// Etapa 17b (12/10/2026): interruptor da trava "sem crachá, sem entrar". DESLIGADO enquanto as tabelas ainda aceitam a chave pública; vira `true` na MESMA publicação
-// da primeira tabela fechada (todo mundo precisa ter entrado de novo antes, e quem estiver com o usuário guardado e sem crachá vê a tela de entrada).
-export const EXIGIR_CRACHA = false;
+// Etapa 17b (12/10/2026): interruptor da trava "sem crachá, sem entrar". Quem estiver com o usuário guardado e sem crachá vê a tela de entrada ("Por segurança, entre de novo.").
+// LIGADO em 14/10/2026, por decisão do usuário, ANTES de fechar qualquer tabela: em 14/10 só 4 das 27 pessoas ativas tinham crachá (as outras usavam o login guardado de antes da 17a),
+// e a única forma de todas o terem é reentrar uma vez. Ligar não fecha nada — as tabelas ainda aceitam a chave pública; o fechamento só vem quando os 27 tiverem crachá e os backups
+// estiverem conferidos. Para voltar atrás (por exemplo, se a função `entrar` ficar fora do ar e ninguém conseguir entrar): trocar para `false` e publicar.
+export const EXIGIR_CRACHA = true;
 
 const MARGEM_SEGUNDOS = 60;   // renova um minuto antes de vencer
 
