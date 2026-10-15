@@ -251,8 +251,13 @@ export async function respostasDasOps(oplIds: string[]) {
 
 /** Como a OPL quer o veículo naquele tipo de venda. */
 export async function modoDoVeiculo(fluxo: string) {
-  if (!fluxo) return 'opcional';
-  const { data } = await supabase.from('fluxo_config')
+  return (await modoDoVeiculoOuErro(fluxo)).modo;
+}
+
+/** Como modoDoVeiculo, mas diz quando a leitura falhou (14/10/2026, 7.x do NovaOpOsModal): sem isso a regra "veículo obrigatório" voltava "opcional" em silêncio. */
+export async function modoDoVeiculoOuErro(fluxo: string): Promise<{ modo: string; erro: string | null }> {
+  if (!fluxo) return { modo: 'opcional', erro: null };
+  const { data, error } = await supabase.from('fluxo_config')
     .select('veiculo_modo').eq('fluxo', fluxo).maybeSingle();
-  return data?.veiculo_modo || 'opcional';
+  return { modo: data?.veiculo_modo || 'opcional', erro: error ? error.message : null };
 }

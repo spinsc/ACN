@@ -172,7 +172,10 @@ export function respostasDaUnidade(respostas, un) {
  * Engenharia ainda confere a BOM — travar a venda por causa do cálculo seria
  * pior que a OP nascer sem ele.
  */
-export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }) {
+// 7.x do NovaOpOsModal (14/10/2026): devolve null quando deu certo (ou quando não havia o que gravar) e um texto com o que NÃO foi gravado quando uma gravação foi recusada — antes
+// os erros das duas gravações eram ignorados e a OP nascia sem as respostas do carro e sem a lista de material, sem ninguém saber. A OP continua valendo: nunca derruba a venda.
+export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): Promise<string | null> {
+  const falhas: string[] = [];
   try {
     const vendidos = opl?.itens_vendidos || [];
     const ids = vendidos.map(v => v.item_id).filter(Boolean);
@@ -193,18 +196,19 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }) {
         respondido_por: currentUser?.nome || currentUser?.email || '—',
       }));
     if (registros.length) {
-      await supabase.from('op_configuracao_respostas')
+      const { error: errRespostas } = await supabase.from('op_configuracao_respostas')
         .upsert(registros, { onConflict: 'opl_id,pergunta_id' });
+      if (errRespostas) falhas.push(`as respostas sobre o carro não foram gravadas (${errRespostas.message})`);
     }
 
     const materiais = await materiaisDoVeiculo(opl.veiculo_id, semConjunto);
-    if (!materiais.length) return;
+    if (!materiais.length) return falhas.length ? falhas.join('; ') : null;
     const qtdPorItem = {};
     vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = Number(v.quantidade) || 1; });
     const linhas = montarMaterial(materiais, todas, qtdPorItem);
     // nada calculado: a lista continua nascendo vazia e a Engenharia sugere na
     // hora de liberar, exatamente como sempre foi
-    if (!linhas.length) return;
+    if (!linhas.length) return falhas.length ? falhas.join('; ') : null;
 
     // A LISTA COMPLETA (corrigido em 28/09/2026)
     //
@@ -232,9 +236,12 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }) {
       if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
       else mapa.set(chave, { ...l });
     });
-    await supabase.from('oples').update({ bom_itens: [...mapa.values()] }).eq('id', opl.id);
-  } catch (e) {
+    const { error: errBom } = await supabase.from('oples').update({ bom_itens: [...mapa.values()] }).eq('id', opl.id);
+    if (errBom) falhas.push(`a lista de material não foi gravada (${errBom.message})`);
+  } catch (e: any) {
     // a OP já existe; o cálculo é conveniência, não pode derrubar a venda
     console.warn('Configuração do veículo não pôde ser aplicada na criação:', e);
+    falhas.push(`a configuração do carro não pôde ser aplicada (${e?.message || e})`);
   }
+  return falhas.length ? falhas.join('; ') : null;
 }

@@ -16,9 +16,10 @@ import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA,
 import { ItensVendidosEditor } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
 import { hojeISO } from './Interface';
+import { mostrarAviso } from './Feedback';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
-import { modoDoVeiculo } from './ConfigEstrutura';
+import { modoDoVeiculoOuErro } from './ConfigEstrutura';
 import FotosVeiculo from './FotosVeiculo';
 import { PerguntasDaVenda, respostasDaUnidade, gravarConfiguracaoDaOp } from './PerguntasDaVenda';
 import { recusaPorPerguntasDoCarro } from './OpObrigatorios';
@@ -29,10 +30,14 @@ import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
   const [arquivos, setArquivos] = useState<{nome:string;url:string}[]>([]);
   const [uploading, setUploading] = useState(false);
+  // 7.x (14/10/2026): arquivo que não subiu (ou que subiu e não foi registrado na OP) aparecia como se nada tivesse acontecido, ou pior, como "✅" na lista
+  const [falhas, setFalhas] = useState<string[]>([]);
   const ref = useRef<HTMLInputElement>(null);
 
   const upload = async (files: FileList) => {
     setUploading(true);
+    setFalhas([]);
+    const novasFalhas: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const safe = oplNumero.replace(/[^a-zA-Z0-9-]/g, '_');
@@ -40,16 +45,17 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
       const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
       const ct = contentTypeUpload(f);
       const { data: up, error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: ct });
-      if (!error && up) {
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        await supabase.from('opl_anexos').insert({
-          opl_id: oplId, opl_numero: oplNumero, setor: 'Comercial',
-          tipo: f.type.startsWith('image/') ? 'foto' : 'documento',
-          nome: f.name, url: pub?.publicUrl || '', criado_por: currentUser?.nome,
-        });
-        setArquivos(prev => [...prev, { nome: f.name, url: pub?.publicUrl || '' }]);
-      }
+      if (error || !up) { novasFalhas.push(`${f.name}: não foi enviado (${error?.message || 'sem resposta'}).`); continue; }
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      const { error: errReg } = await supabase.from('opl_anexos').insert({
+        opl_id: oplId, opl_numero: oplNumero, setor: 'Comercial',
+        tipo: f.type.startsWith('image/') ? 'foto' : 'documento',
+        nome: f.name, url: pub?.publicUrl || '', criado_por: currentUser?.nome,
+      });
+      if (errReg) { novasFalhas.push(`${f.name}: foi enviado, mas não ficou registrado na OP (${errReg.message}) — os outros setores não vão ver.`); continue; }
+      setArquivos(prev => [...prev, { nome: f.name, url: pub?.publicUrl || '' }]);
     }
+    setFalhas(novasFalhas);
     if (ref.current) ref.current.value = '';
     setUploading(false);
   };
@@ -65,6 +71,11 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
           onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
           style={{ display:'none' }} />
       </label>
+      {falhas.length > 0 && (
+        <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5, padding:'6px 10px', fontSize:10, color:'#dc2626', marginBottom:8 }}>
+          {falhas.map((m, i) => <div key={i}>⚠️ {m}</div>)}
+        </div>
+      )}
       {arquivos.length > 0 && (
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
           {arquivos.map((a,i) => (
@@ -179,6 +190,21 @@ interface Props {
   crmCard?:          any; // card CRM para pré-preenchimento e vínculo
 }
 
+// 7.x (14/10/2026): o valor digitado era lido tirando TODOS os pontos e trocando a vírgula por ponto — "1500.50" virava 150.050 (cem vezes mais) e texto ("abc", "R$ 45000", "12x") virava vazio, sem avisar.
+// Agora: com vírgula, o ponto é separador de milhar ("45.000,50"); sem vírgula, ponto seguido de 3 dígitos é milhar ("45.000") e ponto seguido de 1 ou 2 dígitos é decimal ("1500.50"); "R$" é ignorado;
+// o que não for número (ou for negativo) é recusado com a mensagem. Retorna { vazio } quando o campo está em branco.
+export function lerValorDigitado(texto: any): { vazio?: true; valor?: number; invalido?: true } {
+  const t = String(texto ?? '').replace(/R\$/gi, '').replace(/\s+/g, '');
+  if (!t) return { vazio: true };
+  let n: string;
+  if (t.includes(',')) { if (!/^\d{1,3}(\.\d{3})*,\d+$|^\d+,\d+$/.test(t)) return { invalido: true }; n = t.replace(/\./g, '').replace(',', '.'); }
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) n = t.replace(/\./g, '');
+  else if (/^\d+(\.\d{1,2})?$/.test(t)) n = t;
+  else return { invalido: true };
+  const v = parseFloat(n);
+  return Number.isFinite(v) ? { valor: v } : { invalido: true };
+}
+
 // Número da OS no padrão do SAC ("OS-0038/2026"). Mesma regra de SacTab.tsx (gerarNumeroOS): primeiro a função atômica do banco; se ela falhar, maior número do ano + 1.
 async function gerarNumeroOS(): Promise<string> {
   const { data: rpcData, error: rpcErr } = await supabase.rpc('proximo_numero_os');
@@ -205,7 +231,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // 'oculto' = só o modelo em texto livre; nos outros, só o select de veículo —
   // os dois juntos são a mesma informação pedida duas vezes.
   const [modoVeiculo, setModoVeiculo] = useState('opcional');
-  useEffect(() => { modoDoVeiculo(fluxoEf).then(setModoVeiculo); }, [fluxoEf]);
+  // 7.x (14/10/2026): se a leitura da regra do veículo falhasse, ela voltava "opcional" em silêncio e a OP saía sem o veículo que a Administração exige; agora a falha aparece e barra o salvar até dar certo
+  const [modoErro, setModoErro] = useState<string | null>(null);
+  const [modoPronto, setModoPronto] = useState(false);
+  const [tentativaModo, setTentativaModo] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    setModoPronto(false);
+    modoDoVeiculoOuErro(fluxoEf).then(({ modo, erro }) => { if (!vivo) return; setModoVeiculo(modo); setModoErro(erro); setModoPronto(true); });
+    return () => { vivo = false; };
+  }, [fluxoEf, tentativaModo]);
   const mostraVeiculo = modoVeiculo !== 'oculto';
   const veiculoObrigatorio = modoVeiculo === 'obrigatorio';
   // Quem paga o frete importa em TODA OP que sai daqui embalada, não só na
@@ -216,12 +251,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const precisaFrete = terminaEmEnvio(fluxoEf);
 
   const [salvando, setSalvando] = useState(false);
+  const salvandoRef = useRef(false);   // 7.x (14/10/2026): trava o clique duplo em "Criar" — a conferência do CEP e a do número demoram, e o botão só desabilita depois delas
   const [erro, setErro]       = useState('');
   // Pedido de venda: com PV, a OP se liga à oportunidade do CRM com aquele número
   // (e libera carregar os itens da formação oficial); sem PV, o número da OP é digitado.
   const [semPv, setSemPv]         = useState(false);
   const [pvAchados, setPvAchados] = useState<any[] | null>(null);   // null = ainda não buscou
   const [pvCard, setPvCard]       = useState<any>(null);
+  // 7.x (14/10/2026): leitura do CRM que falha parecia "PV não encontrado" e a OP saía sem vínculo; agora o erro aparece, com "Tentar de novo", e barra o salvar
+  const [pvErro, setPvErro]       = useState<string | null>(null);
+  const [tentativaPv, setTentativaPv] = useState(0);
   // Lote misto: adaptações e itens diferentes entre os veículos do mesmo lote
   const [loteMisto, setLoteMisto] = useState(false);
   const [grupos, setGrupos]       = useState<GrupoLote[]>(grupoInicial(1));
@@ -241,12 +280,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const [perguntasCarroPendentes, setPerguntasCarroPendentes] = useState(0);
   useEffect(() => { carregarVeiculos().then(setVeiculosCarregados); }, []);
   const [modelosReboque, setModelosReboque]   = useState<{id:string,nome:string}[]>([]);
+  const [modelosErro, setModelosErro]         = useState<string | null>(null);   // 7.x: leitura que falha deixava a lista vazia sem avisar
   const [novoModeloReboque, setNovoModeloReboque] = useState('');
   const [mostrandoNovoModelo, setMostrandoNovoModelo] = useState(false);
 
   const fetchModelosReboque = async () => {
-    const { data } = await supabase.from('oples_reboque_modelos').select('id,nome').eq('ativo', true).order('nome');
-    setModelosReboque(data || []);
+    const { data, error } = await supabase.from('oples_reboque_modelos').select('id,nome').eq('ativo', true).order('nome');
+    setModelosErro(error ? error.message : null);
+    if (!error) setModelosReboque(data || []);   // com erro, mantém o que já estava
   };
 
   const salvarNovoModeloReboque = async () => {
@@ -312,24 +353,26 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     } else {
       setForm({ ...VAZIO, data_entrada: hojeISO(), ...(pre || {}) });
     }
-    setSemPv(false); setPvAchados(null); setPvCard(null);
+    setSemPv(false); setPvAchados(null); setPvCard(null); setPvErro(null);
     setErro('');
   }, [isOpen, crmCard?.id]);
 
   useEffect(() => {
     const pv = String(form.pedido_venda || '');
-    if (!isOpen || semPv || crmCard || pv.length !== 4) { setPvAchados(null); setPvCard(null); return; }
+    if (!isOpen || semPv || crmCard || pv.length !== 4) { setPvAchados(null); setPvCard(null); setPvErro(null); return; }
     let vivo = true;
+    setPvErro(null); setPvAchados(null);
     supabase.from('crm_oportunidades').select('id,titulo,numero_pv,responsavel_nome,orgao,cliente_id,funil')
       .eq('numero_pv', pv).limit(5)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!vivo) return;
+        if (error) { setPvErro(error.message); setPvAchados(null); setPvCard(null); return; }
         const lista = data || [];
         setPvAchados(lista);
         setPvCard(lista.length === 1 ? lista[0] : null);
       });
     return () => { vivo = false; };
-  }, [form.pedido_venda, semPv, isOpen, crmCard?.id]);
+  }, [form.pedido_venda, semPv, isOpen, crmCard?.id, tentativaPv]);
   const oportunidadeVinculada = crmCard || pvCard;
 
   const setF = (k: string, v: any) => setForm(f => {
@@ -355,7 +398,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     return next;
   });
 
+  // 7.x (14/10/2026): o clique duplo em "Criar" gravava duas vezes quando a conferência do CEP demorava (o banco barra o número repetido, mas a pessoa via um erro de "chave duplicada" com a OP já criada)
   const salvar = async () => {
+    if (salvandoRef.current) return;
+    salvandoRef.current = true;
+    try { await executarSalvar(); } finally { salvandoRef.current = false; }
+  };
+
+  const executarSalvar = async () => {
     setErro('');
     if (!form.cliente_nome.trim()) { setErro('Informe o cliente.'); return; }
     if (form.tipo === 'OP' && !form.opl.trim()) {
@@ -370,15 +420,34 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
     // Veículo obrigatório é por tipo de venda, configurado na Administração:
     // adaptação precisa saber qual carro; envio de material nem sempre.
-    if (form.tipo === 'OP' && veiculoObrigatorio) {
+    if (form.tipo === 'OP' && modoErro) { setErro(`Não foi possível conferir se este tipo de venda exige o veículo (${modoErro}). Toque em "Tentar de novo" antes de criar a OP.`); return; }
+    if (form.tipo === 'OP' && !modoPronto) { setErro('Aguarde um instante: conferindo se este tipo de venda exige o veículo.'); return; }
+    // 7.x (14/10/2026): a lista de unidades (form.veiculos) só existe quando a quantidade passa de 1 — com UM veículo ela vinha vazia, "faltaEmAlguma" dava falso e o veículo obrigatório nunca barrava (desde 28/09/2026, 7 OPs de Adaptação na matriz saíram sem veículo).
+    // Agora a conferência olha uma unidade por veículo do lote, e só o cabeçalho quando não há lote. Venda para Envio não tem veículo neste formulário e não é conferida.
+    if (form.tipo === 'OP' && veiculoObrigatorio && !ehVendaEnvio) {
       const faltaNoCabecalho = !form.veiculo_id;
-      const unidades = (form.veiculos || []).slice(0, Math.max(1, parseInt(String(form.quantidade)) || 1));
+      const qtdVeic = Math.max(1, parseInt(String(form.quantidade)) || 1);
+      const unidades: any[] = qtdVeic > 1 && !soEnvio(fluxoEf) ? Array.from({ length: qtdVeic }, (_, i) => (form.veiculos || [])[i]) : [undefined];
       const faltaEmAlguma = unidades.some(u => !(u?.veiculo_id || form.veiculo_id));
       if (faltaNoCabecalho && faltaEmAlguma) {
         setErro('Este tipo de venda exige o veículo. Escolha o veículo do catálogo (ou cadastre no "+ Novo").');
         return;
       }
       if (faltaEmAlguma) { setErro('Há unidade do lote sem veículo. Escolha o veículo de cada carro.'); return; }
+    }
+    // 7.x (14/10/2026): quantidade e valores precisam ser números de verdade (antes "0", vazio e "2,5" viravam 1 sem aviso e valor ilegível virava vazio)
+    if (form.tipo === 'OP') {
+      if (!/^\d+$/.test(String(form.quantidade).trim()) || parseInt(String(form.quantidade)) < 1) { setErro('Informe a quantidade: um número inteiro, de 1 em diante.'); return; }
+      const camposValor: [string, any][] = [['Valor Total', form.valor_total]];
+      if (!ehVendaEnvio) camposValor.push(['Valor M.O.', form.valor_mao_de_obra], ['Valor M.O. Serralheria', form.valor_mao_de_obra_serralheria]);
+      for (const [rotulo, texto] of camposValor) {
+        if (lerValorDigitado(texto).invalido) { setErro(`${rotulo} inválido: "${String(texto).trim()}". Use só números, por exemplo 45000 ou 45.000,50.`); return; }
+      }
+      // PV digitado: a conferência no CRM precisa ter terminado e dado certo (antes, leitura com erro ou ainda em andamento criava a OP sem vínculo, em silêncio)
+      if (!semPv && !crmCard && String(form.pedido_venda || '').length === 4) {
+        if (pvErro) { setErro(`Não foi possível conferir o pedido de venda no CRM (${pvErro}). Toque em "Tentar de novo" antes de criar a OP.`); return; }
+        if (pvAchados === null) { setErro('Aguarde um instante: conferindo o pedido de venda no CRM.'); return; }
+      }
     }
     if (precisaFrete && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
     // Lote misto: cada grupo tem seus próprios itens (validado em validarGrupos,
@@ -420,14 +489,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         // Número repetido: confere todos os números que serão criados (no lote, cada /NN),
         // antes de gravar — senão o lote parava no meio ao bater num número já existente
         const numeros = desmembrar ? Array.from({ length: qty }, (_, i) => `${baseOpl}/${String(i + 1).padStart(2, '0')}`) : [baseOpl];
-        const { data: existentes } = await supabase.from('oples').select('opl').in('opl', numeros);
+        const { data: existentes, error: errExistentes } = await supabase.from('oples').select('opl').in('opl', numeros);
+        // 7.x: leitura que falha pulava a conferência do número repetido em silêncio — num lote, a gravação parava no meio ao bater num número existente
+        if (errExistentes) { setErro(`Não foi possível conferir se o número da OP já existe (${errExistentes.message}). Tente de novo.`); setSalvando(false); return; }
         if (existentes?.length) {
           setErro(`Já existe OP com este número: ${existentes.map((e: any) => e.opl).join(', ')}. Use um número diferente.`);
           setSalvando(false);
           return;
         }
 
-        const parseMoedaOuNull = (v: any) => v ? parseFloat(String(v).replace(/\./g,'').replace(',','.')) : null;
+        const parseMoedaOuNull = (v: any) => { const r = lerValorDigitado(v); return r.valor !== undefined ? r.valor : null; };
 
         const makePayload = (oplNum: string, veiculo?: {chassi:string, placa:string, modelo?:string, veiculo_id?:string}, valores?: {total: number|null, mo: number|null, moSerr: number|null}) => ({
           opl:                    oplNum,
@@ -478,6 +549,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         });
 
         let firstData: any;
+        const criadas: string[] = [];   // 7.x: o lote é gravado uma OP por vez; se uma falha no meio, a pessoa precisa saber quais já existem
+        const avisosConfig: string[] = [];
         if (desmembrar) {
           // Criar uma OP por veículo com sufixo /01, /02... — valor dividido
           // igualmente entre as unidades (resto de arredondamento na última).
@@ -498,25 +571,36 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             const { data, error } = await supabase.from('oples')
               .insert([payload])
               .select().single();
-            if (error) throw error;
+            if (error) {
+              if (criadas.length) {
+                throw new Error(`A OP ${baseOpl}/${suf} não foi criada (${error.message}). Já foram criadas: ${criadas.join(', ')}. Não crie o lote de novo. Para criar as que faltam, marque "OP sem pedido de venda" e digite o número completo de cada uma (por exemplo ${baseOpl}/${suf}), com quantidade 1.`);
+              }
+              throw error;
+            }
+            criadas.push(`${baseOpl}/${suf}`);
             // a OP só existe agora, então é aqui que as respostas e o material
             // são gravados — no formulário ainda não havia id
-            await gravarConfiguracaoDaOp({
+            const falhaConfig = await gravarConfiguracaoDaOp({
               opl: data, respostas: respostasDaUnidade(respostasCarro, i),
               currentUser,
             });
+            if (falhaConfig) avisosConfig.push(`${data.opl}: ${falhaConfig}`);
             if (i === 0) firstData = data;
           }
           onSaved?.(firstData, 'op');
           alert(`${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`);
+          // 7.x: as respostas sobre o carro e a lista de material são gravadas depois da OP; se falharem, a OP existe e a pessoa precisa saber
+          if (avisosConfig.length) mostrarAviso(`As OPs foram criadas, mas nem tudo foi gravado:\n${avisosConfig.join('\n')}\nAbra a OP e confira as respostas sobre o carro e a lista de material.`, 'atencao');
           onClose();
           return;
         } else {
           const { data, error } = await supabase.from('oples').insert([makePayload(baseOpl)]).select().single();
           if (error) throw error;
-          await gravarConfiguracaoDaOp({
+          const falhaConfig = await gravarConfiguracaoDaOp({
             opl: data, respostas: respostasDaUnidade(respostasCarro, 0), currentUser,
           });
+          // 7.x: a OP já existe; se as respostas sobre o carro ou a lista de material não foram gravadas, o aviso fica na tela (aviso solto, porque quem chamou pode fechar este modal em seguida)
+          if (falhaConfig) mostrarAviso(`A OP ${data.opl} foi criada, mas nem tudo foi gravado: ${falhaConfig}\nAbra a OP e confira as respostas sobre o carro e a lista de material.`, 'atencao');
           onSaved?.(data, 'op');
           setSavedOp(data);
           return; // vai para o passo 2 (documentos) em vez de fechar
@@ -728,6 +812,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   {!semPv && crmCard && (
                     <div style={{ fontSize:10, color:'#15803d', marginTop:3 }}>🔗 Vinculada ao card do CRM: {crmCard.titulo}</div>
                   )}
+                  {!semPv && !crmCard && pvErro && (
+                    <div style={{ fontSize:10, color:'#dc2626', marginTop:3 }}>
+                      ⚠️ Não foi possível conferir o PV {form.pedido_venda} no CRM ({pvErro}).{' '}
+                      <button type="button" onClick={() => setTentativaPv(n => n + 1)}
+                        style={{ background:'none', border:'none', color:'#2563eb', cursor:'pointer', fontSize:10, textDecoration:'underline', padding:0 }}>Tentar de novo</button>
+                    </div>
+                  )}
                   {!semPv && !crmCard && pvAchados && (
                     pvAchados.length === 0 ? (
                       <div style={{ fontSize:10, color:'#b45309', marginTop:3 }}>PV {form.pedido_venda} não encontrado no CRM — a OP será criada sem vínculo.</div>
@@ -826,6 +917,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
                 </div>
               </div>
+              )}
+
+              {modoErro && (
+                <div style={{ marginBottom:10, fontSize:10, color:'#dc2626', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5, padding:'6px 10px' }}>
+                  ⚠️ Não foi possível conferir se este tipo de venda exige o veículo ({modoErro}).{' '}
+                  <button type="button" onClick={() => setTentativaModo(n => n + 1)}
+                    style={{ background:'none', border:'none', color:'#2563eb', cursor:'pointer', fontSize:10, textDecoration:'underline', padding:0 }}>Tentar de novo</button>
+                </div>
               )}
 
               {/* Quem paga o frete: se for o cliente (FOB), a Logística não
@@ -1028,12 +1127,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                           style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #d1d5db', borderRadius:4, padding:'0 10px', fontSize:11, cursor:'pointer' }}>✕</button>
                       </div>
                     ) : (
+                      <>
                       <select className="acn-input" style={{ width:'100%' }} value={form.modelo}
                         onChange={e => { if (e.target.value === '___NOVO___') setMostrandoNovoModelo(true); else setF('modelo', e.target.value); }}>
                         <option value="">— Selecione o modelo —</option>
                         {modelosReboque.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
                         <option value="___NOVO___">➕ Novo modelo...</option>
                       </select>
+                      {modelosErro && <div style={{ fontSize:9, color:'#dc2626', marginTop:3 }}>⚠️ Não foi possível carregar os modelos de reboque ({modelosErro}).</div>}
+                      </>
                     )
                   ) : (
                     /* Um OU outro, nunca os dois: são a mesma informação, e dois
