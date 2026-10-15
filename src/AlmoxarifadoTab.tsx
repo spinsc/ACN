@@ -334,6 +334,13 @@ export default function AlmoxarifadoTab({ currentUser }) {
       }
     } else if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
     if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
+    // Medidas obrigatórias (pedido do usuário em 15/10/2026): o frete nasce desta janela e a transportadora cota pelas medidas;
+    // uma embalagem foi gravada só com o peso e o frete seguiu para cotação sem as três medidas.
+    // (conta local: o `num` desta função só é declarado mais abaixo e usá-lo aqui daria erro de execução)
+    const medidaValida = (v: any) => Number(String(v ?? '').replace(',', '.')) > 0;
+    if (!(medidaValida(f.altura) && medidaValida(f.largura) && medidaValida(f.comprimento))) {
+      mostrarAviso('Informe as três medidas da embalagem (altura, largura e comprimento, em cm): é com elas que a Logística cota o frete.', 'atencao'); return;
+    }
     const erroConf = validarConferencia(conferencia);
     // texto montado na hora, sempre uma pendência de preenchimento: tom explícito (29/09/2026)
     if (erroConf) { mostrarAviso(erroConf, 'atencao'); return; }
@@ -1296,17 +1303,17 @@ Embalar e enviar assim mesmo?`)) return;
                     onChange={e=>setEmbForm(f=>({...f, volumes:e.target.value}))} />
                 </div>
                 <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-alt">Altura (cm)</label>
+                  <label className="acn-label" htmlFor="alm-alt">Altura (cm) *</label>
                   <input id="alm-alt" className="acn-input" value={embForm.altura||''}
                     onChange={e=>setEmbForm(f=>({...f, altura:e.target.value}))} />
                 </div>
                 <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-larg">Largura (cm)</label>
+                  <label className="acn-label" htmlFor="alm-larg">Largura (cm) *</label>
                   <input id="alm-larg" className="acn-input" value={embForm.largura||''}
                     onChange={e=>setEmbForm(f=>({...f, largura:e.target.value}))} />
                 </div>
                 <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-comp">Comprimento (cm)</label>
+                  <label className="acn-label" htmlFor="alm-comp">Comprimento (cm) *</label>
                   <input id="alm-comp" className="acn-input" value={embForm.comprimento||''}
                     onChange={e=>setEmbForm(f=>({...f, comprimento:e.target.value}))} />
                 </div>

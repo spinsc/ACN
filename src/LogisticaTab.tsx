@@ -7,14 +7,14 @@ import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
-import { confirmar, pedirTexto } from './Feedback';
+import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { creditarCompraRecebida, fmtQtd, avisosDaReposicao } from './Estoque';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
-import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
+import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline, mdiPencilOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { opTemRemessas, contarFretesAbertosDaOp, oFreteLiberaAOp } from './Remessas';
-import { podeVerValores } from './utils/permissoes';
+import { podeVerValores, ehAdminOuGerente } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
@@ -331,7 +331,11 @@ function FretesPanel({ currentUser }: any) {
 
   const [modalFrete, setModalFrete] = useState<any>(null);
   const marcarComoLidoFrete = useMarkAsRead('pcp_fretes', modalFrete?.id, currentUser);
-  const fecharModalFrete = () => { marcarComoLidoFrete(); setModalFrete(null); };
+  const fecharModalFrete = () => { marcarComoLidoFrete(); setModalFrete(null); setEditEmb(null); };
+  // Edição da embalagem do frete (pedido do usuário em 15/10/2026): o Almoxarifado grava volumes, peso e medidas ao embalar,
+  // e quando uma medida ficava em branco não havia onde corrigir depois. null = não está editando.
+  const [editEmb, setEditEmb] = useState<any>(null);
+  const [salvandoEmb, setSalvandoEmb] = useState(false);
   const [cotacoes, setCotacoes] = useState<any[]>([]);
   const [loadingCotacoes, setLoadingCotacoes] = useState(false);
   const [novaCotacao, setNovaCotacao] = useState({ ...VAZIO_COTACAO_FRETE });
@@ -461,7 +465,53 @@ function FretesPanel({ currentUser }: any) {
     setForm({ ...VAZIO_FRETE }); setShowForm(false); fetchAll();
   };
 
+  // Quem corrige a embalagem: Admin e Gerente (decidido com o usuário em 15/10/2026), até o frete ser entregue.
+  // Cancelado também trava: não há mais o que cotar nem transportar.
+  const podeEditarEmbalagem = (f: any) =>
+    ehAdminOuGerente(currentUser) && !!f && f.status !== 'Entregue' && f.status !== 'Cancelado';
+
+  const abrirEdicaoEmbalagem = () => {
+    const txt = (v: any) => (v == null ? '' : String(v).replace('.', ','));
+    setEditEmb({
+      volumes: txt(modalFrete.quantidade_volumes), peso: txt(modalFrete.peso_total),
+      altura: txt(modalFrete.medida_altura), largura: txt(modalFrete.medida_largura), comprimento: txt(modalFrete.medida_comprimento),
+    });
+  };
+
+  const salvarEmbalagem = async () => {
+    if (!modalFrete || !editEmb) return;
+    const n = (v: any) => { const x = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(x) ? x : 0; };
+    const volumes = parseInt(String(editEmb.volumes), 10);
+    // as três medidas e o peso são obrigatórios, como na embalagem do Almoxarifado: é por elas que a transportadora cota
+    if (!(volumes >= 1)) { mostrarAviso('Informe a quantidade de volumes (pelo menos 1).', 'atencao'); return; }
+    if (!(n(editEmb.peso) > 0)) { mostrarAviso('Informe o peso total (kg).', 'atencao'); return; }
+    if (!(n(editEmb.altura) > 0 && n(editEmb.largura) > 0 && n(editEmb.comprimento) > 0)) {
+      mostrarAviso('Informe as três medidas da embalagem (altura, largura e comprimento, em cm).', 'atencao'); return;
+    }
+    setSalvandoEmb(true);
+    const novo = {
+      quantidade_volumes: volumes, peso_total: n(editEmb.peso),
+      medida_altura: n(editEmb.altura), medida_largura: n(editEmb.largura), medida_comprimento: n(editEmb.comprimento),
+    };
+    const { error } = await supabase.from('pcp_fretes').update(novo).eq('id', modalFrete.id);
+    if (error) { setSalvandoEmb(false); mostrarAviso('Não foi possível salvar a embalagem: ' + error.message, 'erro'); return; }
+    // a remessa parcial guarda uma cópia desses números (op_remessas): mantém as duas iguais
+    const { error: erroRem } = await supabase.from('op_remessas').update({
+      volumes: novo.quantidade_volumes, peso_total: novo.peso_total,
+      medida_altura: novo.medida_altura, medida_largura: novo.medida_largura, medida_comprimento: novo.medida_comprimento,
+    }).eq('frete_id', modalFrete.id);
+    logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
+      oldRow: modalFrete, newRow: { ...modalFrete, ...novo }, user: currentUser });
+    setSalvandoEmb(false);
+    setModalFrete((m: any) => ({ ...m, ...novo }));
+    setEditEmb(null);
+    fetchAll();
+    if (erroRem) mostrarAviso('A embalagem do frete foi salva, mas a cópia na remessa da OP não: ' + erroRem.message, 'atencao');
+    else mostrarAviso('Embalagem do frete atualizada.', 'ok');
+  };
+
   const abrirModalFrete = async (f: any) => {
+    setEditEmb(null);
     setModalFrete(f);
     setNovaCotacao({ ...VAZIO_COTACAO_FRETE });
     setNovoAnexoCotacao(null);
@@ -1027,17 +1077,17 @@ function FretesPanel({ currentUser }: any) {
                   onChange={e=>setForm({...form,peso_total:e.target.value})} placeholder="Ex: 12,5" />
               </div>
               <div className="form-group">
-                <label className="acn-label">Altura (m)</label>
+                <label className="acn-label">Altura (cm)</label>
                 <input className="acn-input" value={form.medida_altura}
                   onChange={e=>setForm({...form,medida_altura:e.target.value})} />
               </div>
               <div className="form-group">
-                <label className="acn-label">Largura (m)</label>
+                <label className="acn-label">Largura (cm)</label>
                 <input className="acn-input" value={form.medida_largura}
                   onChange={e=>setForm({...form,medida_largura:e.target.value})} />
               </div>
               <div className="form-group">
-                <label className="acn-label">Comprimento (m)</label>
+                <label className="acn-label">Comprimento (cm)</label>
                 <input className="acn-input" value={form.medida_comprimento}
                   onChange={e=>setForm({...form,medida_comprimento:e.target.value})} />
               </div>
@@ -1148,9 +1198,62 @@ function FretesPanel({ currentUser }: any) {
                 {modalFrete.valor_nota && <div><strong>Valor NF:</strong> {fmt(modalFrete.valor_nota)}</div>}
                 {modalFrete.quantidade_volumes && <div><strong>Volumes:</strong> {modalFrete.quantidade_volumes}</div>}
                 {modalFrete.peso_total && <div><strong>Peso:</strong> {modalFrete.peso_total} kg</div>}
-                {(modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento) && (
-                  <div><strong>Medidas (AxLxC):</strong> {modalFrete.medida_altura||'—'} x {modalFrete.medida_largura||'—'} x {modalFrete.medida_comprimento||'—'} m</div>
+                {/* em cm: é a unidade que a embalagem do Almoxarifado grava (os fretes reais têm de 10 a 100); aqui estava escrito "m" */}
+                {(modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento) ? (
+                  <div><strong>Medidas (AxLxC):</strong> {modalFrete.medida_altura||'—'} x {modalFrete.medida_largura||'—'} x {modalFrete.medida_comprimento||'—'} cm</div>
+                ) : (
+                  <div><strong>Medidas (AxLxC):</strong> <span className="acn-fraco">não informadas</span></div>
                 )}
+              </div>
+            )}
+
+            {podeEditarEmbalagem(modalFrete) && !editEmb && (
+              <div className="acn-acoes-linha">
+                <Botao pequeno icone={mdiPencilOutline} onClick={abrirEdicaoEmbalagem}>Editar embalagem</Botao>
+              </div>
+            )}
+
+            {editEmb && (
+              <div className="acn-quadro">
+                <div className="acn-label">Embalagem do frete — volumes, peso e medidas (todos obrigatórios)</div>
+                {cotacoes.length > 0 && (
+                  <Faixa tom="atencao" icone={mdiAlertOutline}>
+                    Já há {cotacoes.length} cotação(ões) neste frete: as transportadoras cotaram com as medidas antigas. Avise-as ou refaça a cotação.
+                  </Faixa>
+                )}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="acn-label" htmlFor="emb-vol">Volumes *</label>
+                    <input id="emb-vol" type="number" min={1} className="acn-input" value={editEmb.volumes}
+                      onChange={e=>setEditEmb({...editEmb, volumes:e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label className="acn-label" htmlFor="emb-peso">Peso total (kg) *</label>
+                    <input id="emb-peso" className="acn-input" value={editEmb.peso} placeholder="Ex: 12,5"
+                      onChange={e=>setEditEmb({...editEmb, peso:e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label className="acn-label" htmlFor="emb-alt">Altura (cm) *</label>
+                    <input id="emb-alt" className="acn-input" value={editEmb.altura}
+                      onChange={e=>setEditEmb({...editEmb, altura:e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label className="acn-label" htmlFor="emb-larg">Largura (cm) *</label>
+                    <input id="emb-larg" className="acn-input" value={editEmb.largura}
+                      onChange={e=>setEditEmb({...editEmb, largura:e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label className="acn-label" htmlFor="emb-comp">Comprimento (cm) *</label>
+                    <input id="emb-comp" className="acn-input" value={editEmb.comprimento}
+                      onChange={e=>setEditEmb({...editEmb, comprimento:e.target.value})} />
+                  </div>
+                </div>
+                <div className="acn-acoes-linha">
+                  <Botao pequeno variante="primario" icone={mdiContentSaveOutline} onClick={salvarEmbalagem} disabled={salvandoEmb}>
+                    {salvandoEmb ? 'Salvando...' : 'Salvar embalagem'}
+                  </Botao>
+                  <Botao pequeno onClick={()=>setEditEmb(null)} disabled={salvandoEmb}>Cancelar</Botao>
+                </div>
               </div>
             )}
 
