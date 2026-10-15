@@ -114,6 +114,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Auditoria e destaque de campo | `AuditSystem.tsx` |
 | Permissões | `utils/permissoes.ts` |
 | Estoque: saldo, reserva, reposição, baixa do kit | `Estoque.tsx` — `movimentarEstoque` (único caminho para mexer no saldo), `avisosDaReposicao`; toda função que lê devolve o erro, e leitura recusada nunca vale como "vazio" |
+| Estrutura de instalação: cobertura das regras do veículo, uso das respostas, o que apagar leva junto | `CoberturaDaEstrutura.ts` — `coberturaDoVeiculo` (usa o mesmo `avaliarRegras` da OP), `lerUsoDasRespostas`, `oQueApagarPerguntaLeva`; as peças da tela estão em `ConfigEstruturaPecas.tsx` |
 
 ---
 
