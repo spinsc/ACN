@@ -54,17 +54,17 @@ function progressoOpl(status: string) {
 
 export function OplProgressBar({ status }: { status: string }) {
   const { pct, label, retrabalho } = progressoOpl(status);
-  const cor = retrabalho ? '#f59e0b' : pct >= 100 ? '#16a34a' : '#2563eb';
+  const tom = retrabalho ? 'retrab' : pct >= 100 ? 'ok' : 'and';
   return (
-    <div style={{ margin: '10px 0 0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
+    <div className="acn-ats-prog">
+      <div className="acn-ats-prog-lin">
+        <span className="acn-ats-prog-rot">
           {retrabalho && '⚠️ '}Progresso — {label}
         </span>
-        <span style={{ fontSize: 9, fontWeight: 800, color: cor }}>{pct}%</span>
+        <span className={'acn-ats-prog-pct ' + tom}>{pct}%</span>
       </div>
-      <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: cor, transition: 'width .4s' }} />
+      <div className="acn-ats-prog-trilho">
+        <div className={'acn-ats-prog-barra ' + tom} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -76,7 +76,6 @@ function AnexosOPSection({ oplId }: { oplId: string }) {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
   const TIPO_ICONE: Record<string, string> = { proposta:'📋', orcamento:'💰', documento:'📄', foto:'🖼️', checklist_entrega:'✅' };
-  const TIPO_COR:   Record<string, string> = { proposta:'#0891b2', orcamento:'#059669', documento:'#2563eb', foto:'#7c3aed', checklist_entrega:'#16a34a' };
 
   useEffect(() => {
     if (!oplId) return;
@@ -90,23 +89,22 @@ function AnexosOPSection({ oplId }: { oplId: string }) {
     return () => { vivo = false; };
   }, [oplId]);
 
-  if (loading) return <div style={{ fontSize:10, color:'#94a3b8', padding:'6px 0' }}>Carregando documentos...</div>;
+  if (loading) return <div className="acn-ats-anx-msg">Carregando documentos...</div>;
   if (erro) return <div className="acn-opl-aviso erro">Não foi possível ler os documentos anexados ({erro}). Isso não quer dizer que não existam.</div>;
-  if (anexos.length === 0) return <div style={{ fontSize:10, color:'#94a3b8', padding:'6px 0' }}>Nenhum documento anexado.</div>;
+  if (anexos.length === 0) return <div className="acn-ats-anx-msg">Nenhum documento anexado.</div>;
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+    <div className="acn-ats-anx">
       {anexos.map(a => (
-        <div key={a.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-          background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6 }}>
-          <span style={{ fontSize:15 }}>{TIPO_ICONE[a.tipo] || '📄'}</span>
-          <div style={{ flex:1, minWidth:0 }}>
-            <a href={a.url} target="_blank" rel="noreferrer"
-              style={{ fontSize:11, color: TIPO_COR[a.tipo] || '#2563eb', fontWeight:600, textDecoration:'none', wordBreak:'break-all' }}>
+        <div key={a.id} className="acn-ats-anx-item">
+          <span className="acn-ats-anx-ic">{TIPO_ICONE[a.tipo] || '📄'}</span>
+          <div className="acn-ats-anx-meio">
+            {/* a cor do link vem do tipo do documento; tipo desconhecido usa a do "documento" */}
+            <a href={a.url} target="_blank" rel="noreferrer" className="acn-ats-anx-lnk" data-tipo={TIPO_ICONE[a.tipo] ? a.tipo : 'documento'}>
               {a.nome}
             </a>
-            <div style={{ fontSize:9, color:'#9ca3af', marginTop:1 }}>
-              {a.setor && <span style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:8, padding:'0 5px', marginRight:4 }}>{a.setor}</span>}
+            <div className="acn-ats-anx-meta">
+              {a.setor && <span className="acn-ats-anx-setor">{a.setor}</span>}
               {a.criado_por && <span>{a.criado_por}</span>}
             </div>
           </div>
@@ -139,49 +137,40 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
 
   const abrir = () => { setOpen(true); buscar(); };
 
-  const corStatus = (s: string) => s === 'Em Andamento' ? '#3b82f6' : '#f59e0b';
-
   return (
     <>
-      <button
-        onClick={abrir}
-        title="Ver pendências desta OP"
-        style={{
-          fontSize: 10, padding: '2px 7px', border: '1px solid #e2e8f0',
-          borderRadius: 3, cursor: 'pointer', background: '#f1f5f9',
-          color: '#475569', fontWeight: 700, whiteSpace: 'nowrap',
-        }}>
+      <Botao className="acn-ats-b acn-ats-pend-bt" onClick={abrir} title="Ver pendências desta OP">
         📋 Pendências
-      </button>
+      </Botao>
 
       {open && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: 980, width: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
+          <div className="modal-box acn-ats-pend-box">
             <div className="modal-title">Pendências — OP {opl}</div>
             {loading ? (
-              <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Carregando...</div>
+              <div className="acn-ats-pend-msg">Carregando...</div>
             ) : erro ? (
               <div>
                 <div className="acn-opl-aviso erro">Não foi possível ler as pendências desta OP ({erro}). Isso não quer dizer que não existam.</div>
-                <div style={{ textAlign: 'center', marginTop: 10 }}><Botao pequeno onClick={buscar}>Tentar de novo</Botao></div>
+                <div className="acn-ats-pend-novo"><Botao pequeno onClick={buscar}>Tentar de novo</Botao></div>
               </div>
             ) : pendencias.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#22c55e', padding: 20, fontWeight: 700 }}>
+              <div className="acn-ats-pend-ok">
                 ✓ Nenhuma pendência aberta para esta OP.
               </div>
             ) : (
               <>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+                <div className="acn-ats-pend-sub">
                   {pendencias.length} pendência(s) em aberto em {[...new Set(pendencias.map(p => p.setor_destino))].join(', ')}
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <table className="acn-ats-pend-tab">
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Setor</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Descrição</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Status</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Responsável</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Abertura</th>
+                    <tr className="acn-ats-pend-cab">
+                      <th className="acn-ats-pend-th">Setor</th>
+                      <th className="acn-ats-pend-th">Descrição</th>
+                      <th className="acn-ats-pend-th">Status</th>
+                      <th className="acn-ats-pend-th">Responsável</th>
+                      <th className="acn-ats-pend-th">Abertura</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -189,17 +178,17 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
                       const isAjuste = p.descricao?.startsWith('[AJUSTE]');
                       const desc = isAjuste ? p.descricao.replace('[AJUSTE] ', '') : (p.descricao || '—');
                       return (
-                        <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9', background: isAjuste ? '#fffbeb' : undefined }}>
-                          <td style={{ padding: '5px 8px', fontWeight: 700, color: '#1e293b' }}>{p.setor_destino || '—'}</td>
-                          <td style={{ padding: '5px 8px', maxWidth: 200, wordBreak:'break-word' }} title={desc}>
-                            {isAjuste && <span style={{ background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 3px', borderRadius: 2, marginRight: 3 }}>AJUSTE</span>}
+                        <tr key={p.id} className={'acn-ats-pend-tr' + (isAjuste ? ' ajuste' : '')}>
+                          <td className="acn-ats-pend-td set">{p.setor_destino || '—'}</td>
+                          <td className="acn-ats-pend-td desc" title={desc}>
+                            {isAjuste && <span className="acn-ats-selo-ajuste">AJUSTE</span>}
                             {desc}
                           </td>
-                          <td style={{ padding: '5px 8px' }}>
-                            <span style={{ background: corStatus(p.status), color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3 }}>{p.status}</span>
+                          <td className="acn-ats-pend-td">
+                            <span className="acn-ats-pend-st" data-status={p.status === 'Em Andamento' ? 'and' : 'pend'}>{p.status}</span>
                           </td>
-                          <td style={{ padding: '5px 8px', color: '#64748b' }}>{p.responsavel_nome || '—'}</td>
-                          <td style={{ padding: '5px 8px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                          <td className="acn-ats-pend-td resp">{p.responsavel_nome || '—'}</td>
+                          <td className="acn-ats-pend-td data">
                             {p.data_abertura ? new Date(p.data_abertura).toLocaleDateString('pt-BR') : '—'}
                           </td>
                         </tr>
@@ -209,8 +198,8 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
                 </table>
               </>
             )}
-            <div style={{ textAlign: 'right', marginTop: 14 }}>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setOpen(false)}>Fechar</button>
+            <div className="acn-ats-pend-rod">
+              <Botao className="acn-ats-b acn-ats-mbt" onClick={() => setOpen(false)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -294,7 +283,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
   const temFiltro = fOperador || fDataInicio || fDataFim;
 
   return (
-    <div style={{ marginTop: 10 }}>
+    <div className="acn-ats-mv">
       <div className="opl-mov-hdr" onClick={() => setOpen(o => !o)}>
         <span>📋 Histórico de Movimentações OP</span>
         <span>{open ? '▲' : '▼'}</span>
@@ -303,91 +292,85 @@ export function OplMovimentadas({ setor }: { setor: string }) {
       {open && (
         <div className="opl-mov-body">
           {/* ── FILTROS ── */}
-          <div style={{ display:'flex', gap:6, alignItems:'flex-end', flexWrap:'wrap', padding:'10px 12px', background:'#f8fafc', borderBottom:'1px solid #fde68a' }}>
+          <div className="acn-ats-mv-fil">
             <div>
-              <div style={{ fontSize:8, fontWeight:700, color:'#92400e', textTransform:'uppercase', marginBottom:2 }}>Operador</div>
+              <div className="acn-ats-mv-rot">Operador</div>
               <select
                 value={fOperador} onChange={e => setFOperador(e.target.value)}
-                style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151', minWidth:140 }}>
+                className="acn-ats-mv-campo sel">
                 <option value="">Todos</option>
                 {operadores.map(op => <option key={op} value={op}>{op}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:8, fontWeight:700, color:'#92400e', textTransform:'uppercase', marginBottom:2 }}>Data início</div>
+              <div className="acn-ats-mv-rot">Data início</div>
               <input type="date" value={fDataInicio} onChange={e => setFDataInicio(e.target.value)}
-                style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151' }} />
+                className="acn-ats-mv-campo" />
             </div>
             <div>
-              <div style={{ fontSize:8, fontWeight:700, color:'#92400e', textTransform:'uppercase', marginBottom:2 }}>Data fim</div>
+              <div className="acn-ats-mv-rot">Data fim</div>
               <input type="date" value={fDataFim} onChange={e => setFDataFim(e.target.value)}
-                style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151' }} />
+                className="acn-ats-mv-campo" />
             </div>
-            <button onClick={() => fetchData()}
-              style={{ fontSize:10, fontWeight:700, padding:'4px 12px', background:'#92400e', color:'white', border:'none', borderRadius:4, cursor:'pointer' }}>
+            <Botao className="acn-ats-b acn-ats-mv-buscar" onClick={() => fetchData()}>
               🔍 Buscar
-            </button>
+            </Botao>
             {temFiltro && (
-              <button onClick={() => { limparFiltros(); fetchData({ operador: '', ini: '', fim: '' }); }}
-                style={{ fontSize:10, padding:'4px 8px', background:'#f1f5f9', color:'#64748b', border:'1px solid #d1d5db', borderRadius:4, cursor:'pointer' }}>
+              <Botao className="acn-ats-b acn-ats-mv-limpar" onClick={() => { limparFiltros(); fetchData({ operador: '', ini: '', fim: '' }); }}>
                 ✕ Limpar
-              </button>
+              </Botao>
             )}
-            <span style={{ marginLeft:'auto', fontSize:9, color:'#92400e', fontStyle:'italic' }}>
+            <span className="acn-ats-mv-cont">
               {loading ? 'Carregando...' : erroLogs ? '—' : `${logs.length} registro(s)`}
             </span>
           </div>
           {erroOperadores && <div className="acn-opl-aviso erro">Não foi possível ler a lista de operadores ({erroOperadores}); o filtro por operador pode estar incompleto.</div>}
 
           {/* ── ABAS ── */}
-          <div style={{ display:'flex', borderBottom:'1px solid #fde68a' }}>
+          <div className="acn-ats-mv-abas">
             {(['logs','processo'] as const).map(a => (
-              <button key={a} onClick={() => setAba(a)}
-                style={{ flex:1, padding:'6px', fontSize:10, fontWeight:700, cursor:'pointer', border:'none',
-                  background: aba===a ? '#92400e' : '#fffbeb',
-                  color: aba===a ? 'white' : '#92400e',
-                  borderBottom: aba===a ? '2px solid #92400e' : '2px solid transparent' }}>
+              <Botao key={a} className={'acn-ats-b acn-ats-mv-aba' + (aba===a ? ' ativa' : '')} onClick={() => setAba(a)}>
                 {a === 'logs' ? '📝 Logs de Movimentação' : '⚙️ Em Processo'}
-              </button>
+              </Botao>
             ))}
           </div>
 
           {/* ── ABA LOGS ── */}
           {aba === 'logs' && (
-            <div style={{ overflowX:'auto' }}>
+            <div className="acn-ats-mv-rol">
               {loading ? (
-                <div style={{ textAlign:'center', padding:20, color:'#94a3b8', fontSize:11 }}>Carregando...</div>
+                <div className="acn-ats-mv-msg">Carregando...</div>
               ) : erroLogs ? (
                 <div className="acn-opl-aviso erro">Não foi possível ler os registros de movimentação ({erroLogs}). Isso não quer dizer que não existam.</div>
               ) : logs.length === 0 ? (
-                <div style={{ textAlign:'center', padding:20, color:'#94a3b8', fontSize:11 }}>Nenhum registro encontrado.</div>
+                <div className="acn-ats-mv-msg">Nenhum registro encontrado.</div>
               ) : (
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
-                  <thead><tr style={{ background:'#1e293b' }}>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Data/Hora</th>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OP</th>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Setor</th>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Evento</th>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Operador</th>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Status anterior → novo</th>
+                <table className="acn-ats-mv-tab">
+                  <thead><tr className="acn-ats-mv-cab">
+                    <th className="acn-ats-mv-th">Data/Hora</th>
+                    <th className="acn-ats-mv-th">OP</th>
+                    <th className="acn-ats-mv-th">Setor</th>
+                    <th className="acn-ats-mv-th">Evento</th>
+                    <th className="acn-ats-mv-th">Operador</th>
+                    <th className="acn-ats-mv-th">Status anterior → novo</th>
                   </tr></thead>
                   <tbody>
                     {logs.map((l, i) => (
-                      <tr key={l.id || i} style={{ borderBottom:'1px solid #f1f5f9', background: i%2===0 ? 'white' : '#fafafa' }}>
-                        <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>{fmtDt(l.data_hora)}</td>
-                        <td style={{ padding:'5px 8px' }}><strong style={{ color:'#2563eb' }}>{l.numero_opl || '—'}</strong></td>
-                        <td style={{ padding:'5px 8px', color:'#475569' }}>{l.setor || '—'}</td>
-                        <td style={{ padding:'5px 8px', maxWidth:260, wordBreak:'break-word' }} title={l.evento}>
+                      <tr key={l.id || i} className="acn-ats-mv-tr">
+                        <td className="acn-ats-mv-td data">{fmtDt(l.data_hora)}</td>
+                        <td className="acn-ats-mv-td"><strong className="acn-ats-mv-opnum">{l.numero_opl || '—'}</strong></td>
+                        <td className="acn-ats-mv-td setor">{l.setor || '—'}</td>
+                        <td className="acn-ats-mv-td evento" title={l.evento}>
                           {l.evento || '—'}
                         </td>
-                        <td style={{ padding:'5px 8px' }}>
+                        <td className="acn-ats-mv-td">
                           {l.usuario_nome
-                            ? <span style={{ background:'#eff6ff', color:'#1d4ed8', padding:'1px 6px', borderRadius:10, fontSize:9, fontWeight:700 }}>{l.usuario_nome}</span>
-                            : <span style={{ color:'#94a3b8', fontSize:9 }}>—</span>}
+                            ? <span className="acn-ats-mv-chip">{l.usuario_nome}</span>
+                            : <span className="acn-ats-mv-traco">—</span>}
                         </td>
-                        <td style={{ padding:'5px 8px', fontSize:9, color:'#64748b' }}>
+                        <td className="acn-ats-mv-td status">
                           {l.status_anterior && l.status_novo
-                            ? <>{l.status_anterior} <span style={{ color:'#0f766e', fontWeight:700 }}>→</span> {l.status_novo}</>
+                            ? <>{l.status_anterior} <span className="acn-ats-mv-seta">→</span> {l.status_novo}</>
                             : '—'}
                         </td>
                       </tr>
@@ -395,46 +378,46 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                   </tbody>
                 </table>
               )}
-              {!loading && !erroLogs && logs.length >= 200 && <div className="acn-ajuda" style={{ padding:'6px 10px' }}>Mostrando os 200 registros mais recentes; use os filtros para ver os mais antigos.</div>}
+              {!loading && !erroLogs && logs.length >= 200 && <div className="acn-ajuda acn-ats-mv-nota">Mostrando os 200 registros mais recentes; use os filtros para ver os mais antigos.</div>}
             </div>
           )}
 
           {/* ── ABA EM PROCESSO ── */}
           {aba === 'processo' && (
-            <div style={{ overflowX:'auto' }}>
+            <div className="acn-ats-mv-rol">
               {erroOpls && <div className="acn-opl-aviso erro">Não foi possível ler as OPs em processo ({erroOpls}). Isso não quer dizer que não existam.</div>}
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
-                <thead><tr style={{ background:'#1e293b' }}>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OP</th>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Cliente</th>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Tipo</th>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Status</th>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Último Registro</th>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Pendências</th>
+              <table className="acn-ats-mv-tab">
+                <thead><tr className="acn-ats-mv-cab">
+                  <th className="acn-ats-mv-th">OP</th>
+                  <th className="acn-ats-mv-th">Cliente</th>
+                  <th className="acn-ats-mv-th">Tipo</th>
+                  <th className="acn-ats-mv-th">Status</th>
+                  <th className="acn-ats-mv-th">Último Registro</th>
+                  <th className="acn-ats-mv-th">Pendências</th>
                 </tr></thead>
                 <tbody>
                   {opls.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign:'center', padding:16, color:'#94a3b8', fontSize:11 }}>{erroOpls ? '—' : 'Nenhuma OP em processo.'}</td></tr>
+                    <tr><td colSpan={6} className="acn-ats-mv-vazio">{erroOpls ? '—' : 'Nenhuma OP em processo.'}</td></tr>
                   ) : opls.map((o, i) => {
                     const ultimoLog = logs.find(l => l.opl_id === o.id);
                     return (
-                      <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9', background: i%2===0 ? 'white' : '#fafafa' }}>
-                        <td style={{ padding:'5px 8px' }}><strong style={{ color:'#2563eb' }}>{o.opl}</strong></td>
-                        <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome || '—'}</td>
-                        <td style={{ padding:'5px 8px', color:'#64748b' }}>{o.tipo_projeto || '—'}</td>
-                        <td style={{ padding:'5px 8px' }}>
-                          <span style={{ background:'#3b82f6', color:'white', fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:10 }}>{o.status_geral}</span>
+                      <tr key={o.id} className="acn-ats-mv-tr">
+                        <td className="acn-ats-mv-td"><strong className="acn-ats-mv-opnum">{o.opl}</strong></td>
+                        <td className="acn-ats-mv-td cli">{o.cliente_nome || '—'}</td>
+                        <td className="acn-ats-mv-td tipo">{o.tipo_projeto || '—'}</td>
+                        <td className="acn-ats-mv-td">
+                          <span className="acn-ats-mv-st">{o.status_geral}</span>
                         </td>
-                        <td style={{ padding:'5px 8px', fontSize:9, color:'#64748b', maxWidth:200, wordBreak:'break-word' }}>
+                        <td className="acn-ats-mv-td ult">
                           {ultimoLog ? `${ultimoLog.evento} — ${fmtDt(ultimoLog.data_hora)}` : '—'}
                         </td>
-                        <td style={{ padding:'5px 8px' }}><BotaoPendencias opl={o.opl} opl_id={o.id} /></td>
+                        <td className="acn-ats-mv-td"><BotaoPendencias opl={o.opl} opl_id={o.id} /></td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-              {!erroOpls && opls.length >= 50 && <div className="acn-ajuda" style={{ padding:'6px 10px' }}>Mostrando as 50 OPs em processo mais recentes.</div>}
+              {!erroOpls && opls.length >= 50 && <div className="acn-ajuda acn-ats-mv-nota">Mostrando as 50 OPs em processo mais recentes.</div>}
             </div>
           )}
         </div>
@@ -442,18 +425,6 @@ export function OplMovimentadas({ setor }: { setor: string }) {
     </div>
   );
 }
-
-
-// ─── Modal de Detalhes da OPL ────────────────────────────────────────────────
-// Sec fica em escopo de MODULO: declarado dentro do componente, cada render
-// criava uma funcao nova e o React remontava a arvore em vez de atualizar.
-// Nao tem dependencia nenhuma do componente, entao subir e a correcao certa.
-const Sec = ({ title }: { title: string }) => (
-  <div style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase',
-    letterSpacing: '.6px', margin: '14px 0 8px', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>
-    {title}
-  </div>
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VEÍCULO OU ENVIO — a célula "Veículo" das listas de OP.
@@ -470,9 +441,7 @@ const Sec = ({ title }: { title: string }) => (
 export function SeloFrete({ o, compacto = false }: { o: any; compacto?: boolean }) {
   if (!terminaEmEnvio(o?.fluxo_entrega) && o?.tipo_projeto !== TIPO_VENDA_ENVIO) return null;
   const v = o?.frete_responsavel;
-  const cor = v === 'FOB' ? { fundo:'#fef3c7', texto:'#92400e' }
-            : v === 'CIF' ? { fundo:'#dbeafe', texto:'#1d4ed8' }
-            :               { fundo:'#fee2e2', texto:'#b91c1c' };
+  const tom = v === 'FOB' ? 'fob' : v === 'CIF' ? 'cif' : 'nada';
   const rotulo = v === 'FOB' ? 'FOB — cliente paga o frete'
                : v === 'CIF' ? 'CIF — a empresa paga o frete'
                :               'Frete não informado';
@@ -480,8 +449,7 @@ export function SeloFrete({ o, compacto = false }: { o: any; compacto?: boolean 
                : v === 'CIF' ? 'depois de embalada, abre pedido de frete para a Logística cotar'
                :               'sem resposta, a OP é tratada como CIF e vai para cotação';
   return (
-    <span title={efeito} style={{ display:'inline-flex', alignItems:'center', gap:5, background:cor.fundo, color:cor.texto,
-      fontSize: compacto ? 9 : 10, fontWeight:800, padding:'2px 8px', borderRadius:10, whiteSpace:'nowrap' }}>
+    <span title={efeito} className={'acn-ats-frete ' + tom}>
       🚚 {rotulo}
     </span>
   );
@@ -489,18 +457,18 @@ export function SeloFrete({ o, compacto = false }: { o: any; compacto?: boolean 
 
 export function VeiculoOuEnvio({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
   const vazio = (v: any) => !v || !String(v).trim();
-  const alerta = (t: string) => <span style={{ color:'#dc2626', fontWeight:700 }}>⚠️ {t}</span>;
+  const alerta = (t: string) => <span className="acn-ats-alerta">⚠️ {t}</span>;
   if (o?.tipo_projeto === TIPO_VENDA_ENVIO) {
-    return <div style={{ color:'#0f766e', fontWeight:700 }}>📦 Venda para envio · {o.quantidade || 1} un.</div>;
+    return <div className="acn-ats-envio">📦 Venda para envio · {o.quantidade || 1} un.</div>;
   }
   if (soEnvio(o?.fluxo_entrega)) {
-    return <div style={{ color:'#94a3b8' }}>— sem veículo (envio)</div>;
+    return <div className="acn-ats-apoio">— sem veículo (envio)</div>;
   }
   return (
     <>
       <div>{vazio(o?.modelo) ? alerta('sem modelo') : o.modelo}</div>
-      <div style={{ color:'#94a3b8' }}>{vazio(o?.chassi) ? alerta('sem chassi') : `🔧 ${o.chassi}`}</div>
-      {!semPlaca && <div style={{ color:'#94a3b8' }}>{vazio(o?.placa) ? alerta('sem placa') : `🚘 ${o.placa}`}</div>}
+      <div className="acn-ats-apoio">{vazio(o?.chassi) ? alerta('sem chassi') : `🔧 ${o.chassi}`}</div>
+      {!semPlaca && <div className="acn-ats-apoio">{vazio(o?.placa) ? alerta('sem placa') : `🚘 ${o.placa}`}</div>}
     </>
   );
 }
@@ -519,9 +487,9 @@ export function VeiculoCompacto({ o, semPlaca = false, children }: { o: any; sem
   const dados = [!vazio(o?.chassi) && o.chassi, !semPlaca && !vazio(o?.placa) && o.placa].filter(Boolean);
   return (
     <div className="acn-duas">
-      <span className="acn-forte" style={{ whiteSpace: 'normal' }}>
+      <span className="acn-forte">
         {vazio(o?.modelo) ? '' : o.modelo}
-        {falta.length > 0 && <span className="acn-aviso-mini" style={vazio(o?.modelo) ? { marginLeft: 0 } : undefined}>⚠ {falta.join(' · ')}</span>}
+        {falta.length > 0 && <span className={'acn-aviso-mini' + (vazio(o?.modelo) ? ' acn-ats-sem-margem' : '')}>⚠ {falta.join(' · ')}</span>}
       </span>
       {dados.length > 0 && <small className="acn-mono">{dados.join(' · ')}</small>}
       {children}
@@ -590,48 +558,46 @@ export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: stri
   };
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 2100 }}>
-      <div className="modal-box" style={{ maxWidth: 1000, width: '96vw', maxHeight: '92vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>📋 Resumo do lote — OP {base}</div>
+    <div className="modal-overlay acn-ats-rl-ov">
+      <div className="modal-box acn-ats-rl-box">
+        <div className="acn-ats-rl-cab">
+          <div className="acn-ats-rl-tit">
+            <div className="acn-ats-rl-nome">📋 Resumo do lote — OP {base}</div>
             {unidades && !erroLote && (
-              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+              <div className="acn-ats-rl-sub">
                 {lista[0]?.cliente_nome || '—'} · {lista.length} unidade(s) · progresso médio {pctMedio}%{verValores && <> · valor total <b>{fmtBRL(total)}</b></>}
               </div>
             )}
           </div>
-          <button onClick={imprimir} disabled={!lista.length}
-            style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+          <Botao className="acn-ats-b acn-ats-rl-imp" onClick={imprimir} disabled={!lista.length}>
             🖨️ Imprimir
-          </button>
-          <button onClick={onClose} title="Fechar resumo"
-            style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 12px', fontSize: 11, cursor: 'pointer' }}>
+          </Botao>
+          <Botao className="acn-ats-b acn-ats-rl-fechar" onClick={onClose} title="Fechar resumo">
             Fechar
-          </button>
+          </Botao>
         </div>
         {!unidades ? (
-          <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>Carregando...</div>
+          <div className="acn-ats-rl-msg">Carregando...</div>
         ) : erroLote ? (
           <div>
             <div className="acn-opl-aviso erro">Não foi possível ler as unidades do lote ({erroLote}). Isso não quer dizer que não existam.</div>
-            <div style={{ textAlign: 'center', marginTop: 10 }}><Botao pequeno onClick={() => setTentativaLote(n => n + 1)}>Tentar de novo</Botao></div>
+            <div className="acn-ats-pend-novo"><Botao pequeno onClick={() => setTentativaLote(n => n + 1)}>Tentar de novo</Botao></div>
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div className="acn-ats-rl-stats">
               {Object.entries(porStatus).map(([k, n]) => (
-                <span key={k} style={{ fontSize: 10, fontWeight: 700, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 12, padding: '2px 10px', color: '#334155' }}>
+                <span key={k} className="acn-ats-rl-stat">
                   {k}: {n}
                 </span>
               ))}
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <div className="acn-ats-rl-rol">
+              <table className="acn-ats-rl-tab">
                 <thead>
-                  <tr style={{ background: '#0f172a', color: '#fff' }}>
+                  <tr className="acn-ats-rl-cab-tr">
                     {['Unidade', 'Status', 'Progresso', 'Veículo', 'Técnico', 'Serviços', 'Prazo', ...(verValores ? ['Valor'] : [])].map(h => (
-                      <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Valor' ? 'right' : 'left', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} className={'acn-ats-rl-th' + (h === 'Valor' ? ' dir' : '')}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -639,20 +605,20 @@ export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: stri
                   {lista.map(u => {
                     const pr = progressoOpl(u.status_geral);
                     return (
-                      <tr key={u.id} style={{ borderBottom: '1px solid #e2e8f0', background: u.opl === opl ? '#eff6ff' : undefined }}>
-                        <td style={{ padding: '6px 8px', fontWeight: 800, whiteSpace: 'nowrap' }}>{u.opl}</td>
-                        <td style={{ padding: '6px 8px' }}>{u.status_geral || '—'}</td>
-                        <td style={{ padding: '6px 8px', minWidth: 90 }}>
-                          <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                            <div style={{ width: pr.pct + '%', height: '100%', background: pr.retrabalho ? '#f59e0b' : pr.pct >= 100 ? '#16a34a' : '#2563eb' }} />
+                      <tr key={u.id} className={'acn-ats-rl-tr' + (u.opl === opl ? ' atual' : '')}>
+                        <td className="acn-ats-rl-td uni">{u.opl}</td>
+                        <td className="acn-ats-rl-td">{u.status_geral || '—'}</td>
+                        <td className="acn-ats-rl-td prog">
+                          <div className="acn-ats-rl-trilho">
+                            <div className={'acn-ats-rl-barra ' + (pr.retrabalho ? 'retrab' : pr.pct >= 100 ? 'ok' : 'and')} style={{ width: pr.pct + '%' }} />
                           </div>
-                          <div style={{ fontSize: 9, color: '#64748b' }}>{pr.pct}%</div>
+                          <div className="acn-ats-rl-pct">{pr.pct}%</div>
                         </td>
-                        <td style={{ padding: '6px 8px' }}>{[u.modelo, u.chassi, u.placa].filter(Boolean).join(' · ') || '—'}</td>
-                        <td style={{ padding: '6px 8px' }}>{tecnico(u) || <span style={{ color: '#c2410c' }}>sem responsável</span>}</td>
-                        <td style={{ padding: '6px 8px', maxWidth: 260, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{u.resumo_servicos || '—'}</td>
-                        <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{fmtDataCurta(u.data_prevista_entrega)}</td>
-                        {verValores && <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtBRL(u.valor_total)}</td>}
+                        <td className="acn-ats-rl-td">{[u.modelo, u.chassi, u.placa].filter(Boolean).join(' · ') || '—'}</td>
+                        <td className="acn-ats-rl-td">{tecnico(u) || <span className="acn-ats-rl-sem">sem responsável</span>}</td>
+                        <td className="acn-ats-rl-td serv">{u.resumo_servicos || '—'}</td>
+                        <td className="acn-ats-rl-td prazo">{fmtDataCurta(u.data_prevista_entrega)}</td>
+                        {verValores && <td className="acn-ats-rl-td val">{fmtBRL(u.valor_total)}</td>}
                       </tr>
                     );
                   })}
@@ -666,6 +632,7 @@ export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: stri
   );
 }
 
+// ─── Modal de Detalhes da OPL ────────────────────────────────────────────────
 export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: any; onClose: () => void; currentUser?: any }) {
   const [opl, setOpl]       = useState<any>(oplProp);
   const [logs, setLogs]     = useState<any[]>([]);
@@ -1357,15 +1324,8 @@ export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: an
     <>
       <span
         onClick={handleClick}
-        style={{
-          color: color || '#2563eb', fontWeight: discreto ? 400 : 700,
-          cursor: 'pointer',
-          textDecoration: 'underline dotted',
-          textUnderlineOffset: 2,
-          opacity: loading ? 0.6 : 1,
-          // número curto não quebra ("OPL A" / "997.2607"); número com nome junto pode quebrar
-          whiteSpace: String(numero || '').length <= 22 ? 'nowrap' : undefined,
-        }}
+        className={'acn-ats-link' + (discreto ? ' discreto' : '') + (loading ? ' carregando' : '') + (String(numero || '').length <= 22 ? ' curto' : '')}
+        style={color ? { color } : undefined}
         title="Abrir detalhes da OP"
       >
         {loading ? '...' : numero}
@@ -1387,16 +1347,16 @@ export function filtrarOpls(opls: any[], busca: string): any[] {
 // ─── Input de busca padrão ────────────────────────────────────────────────────
 export function BuscaOplInput({ busca, setBusca }: { busca: string; setBusca: (v: string) => void }) {
   return (
-    <div style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
-      <span style={{ fontSize: 12, color: '#94a3b8' }}>🔍</span>
+    <div className="acn-ats-busca">
+      <span className="acn-ats-busca-ic">🔍</span>
       <input
         value={busca}
         onChange={e => setBusca(e.target.value)}
         placeholder="Buscar por OP, chassi, cliente ou projeto..."
-        style={{ flex: 1, border: 'none', outline: 'none', fontSize: 11, background: 'transparent', color: '#1e293b' }}
+        className="acn-ats-busca-campo"
       />
       {busca && (
-        <button onClick={() => setBusca('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+        <Botao className="acn-ats-b acn-ats-busca-x" onClick={() => setBusca('')}>✕</Botao>
       )}
     </div>
   );
@@ -1615,17 +1575,17 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   if (demandas.length === 0 && !erroDemandas) return null;
 
   return (
-    <div className="sec-card" style={{ marginTop: 10 }}>
-      <div className="sec-hdr" style={{ background: cor || '#1e293b', color: 'white' }}>
+    <div className="sec-card acn-ats-dm">
+      <div className="sec-hdr" style={{ background: cor || '#1e293b' }}>   {/* a cor do setor é dado da tela e fica no style: o sistema pinta o cabeçalho (branco com um ponto da cor) olhando esse fundo */}
         <span>Demandas / Ajustes para {setor} ({demandas.length})</span>
         {fora && (
-          <span style={{ fontSize: 9, background: 'rgba(0,0,0,.3)', padding: '2px 7px', borderRadius: 3 }}>
+          <span className="acn-ats-dm-fora">
             ⏸ Fora do horário comercial — timers pausados
           </span>
         )}
       </div>
       {erroDemandas && <div className="acn-opl-aviso erro">Não foi possível atualizar as demandas de {setor} ({erroDemandas}).{demandas.length > 0 ? ' Está aparecendo a última lista lida.' : ''}</div>}
-      <div className="sec-body" style={{ overflowX: 'auto' }}>
+      <div className="sec-body acn-ats-dm-rol">
         <table>
           <thead><tr>
             <th>Data</th><th>OP</th><th>Descricao</th><th>Status</th>
@@ -1640,55 +1600,58 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
               const seg = emAndamento && d.data_inicio
                 ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, (d.pausado || fora) ? (d.data_pausa || new Date().toISOString()) : null)
                 : 0;
+              // Dos botões "de destaque" da linha (ver, acompanhar, iniciar, pausar/retomar, concluir) só o ÚLTIMO fica no tom principal (verde-água); os outros ficam no tom neutro — era o que o
+              // ajuste de cores do sistema fazia ao ler as cores soltas de cada botão. O OBS é sempre neutro.
+              const destaques = ['ver', d.numero_opl && 'acomp', d.status === 'Pendente' && 'iniciar', emAndamento && !fora && (!d.pausado ? 'pausar' : 'retomar'), emAndamento && !fora && !d.pausado && 'concluir'].filter(Boolean);
+              const principal = destaques[destaques.length - 1];
+              const cls = (k: string) => 'acn-ats-b acn-ats-dm-bt' + (k === principal ? ' pri' : '');
               return (
-                <tr key={d.id} style={{ background: isAjuste ? '#fffbeb' : undefined }}>
+                <tr key={d.id} className={isAjuste ? 'acn-ats-dm-tr ajuste' : 'acn-ats-dm-tr'}>
                   <td>{d.data_abertura ? new Date(d.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
                   <td>{d.numero_opl || '—'}</td>
-                  <td style={{ maxWidth: 180, wordBreak:'break-word' }} title={desc}>
-                    {isAjuste && <span style={{ background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 2, marginRight: 4 }}>AJUSTE</span>}
+                  <td className="acn-ats-dm-desc" title={desc}>
+                    {isAjuste && <span className="acn-ats-selo-ajuste dm">AJUSTE</span>}
                     {desc}
                   </td>
-                  <td><span className="acn-badge" style={{ background: emAndamento ? (pausado ? '#f59e0b' : '#3b82f6') : '#f59e0b' }}>
+                  <td><span className={'acn-badge acn-ats-dm-st ' + (emAndamento ? (pausado ? 'paus' : 'and') : 'pend')}>
                     {emAndamento && pausado ? 'PAUSADO' : d.status}
                   </span></td>
                   <td>{d.responsavel_nome || '—'}</td>
                   <td>
                     {emAndamento && d.data_inicio ? (
-                      <span style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color: pausado ? '#f59e0b' : '#2563eb', fontWeight: 700 }}>
+                      <span className={'acn-ats-dm-tempo' + (pausado ? ' paus' : '')}>
                         {pausado ? '⏸ ' : ''}{fmtHMS(seg)}
                       </span>
                     ) : '—'}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      <button className="acn-btn" style={{ background: '#0891b2', fontSize: 10 }}
-                        onClick={() => setModalVer(d)}>👁 VER</button>
+                    <div className="acn-ats-dm-acoes">
+                      <Botao className={cls('ver')} onClick={() => setModalVer(d)}>👁 VER</Botao>
                       {/* Botão de acompanhamento — sempre visível se a demanda tem OP vinculada */}
                       {d.numero_opl && (
-                        <button className="acn-btn" style={{ background: '#6366f1', fontSize: 9 }}
-                          onClick={() => setModalAcomp(d)}>💬 ACOMP.</button>
+                        <Botao className={cls('acomp')} onClick={() => setModalAcomp(d)}>💬 ACOMP.</Botao>
                       )}
                       {/* OBS — visível para qualquer status (Pendente ou Em Andamento) */}
-                      <button className="acn-btn" style={{ background: '#475569', fontSize: 10 }}
-                        onClick={() => { setModalObs(d); setObsTexto(''); }}>OBS</button>
+                      <Botao className="acn-ats-b acn-ats-dm-bt"
+                        onClick={() => { setModalObs(d); setObsTexto(''); }}>OBS</Botao>
                       {d.status === 'Pendente' && (
-                        <button className="acn-btn" style={{ background: cor || '#1e293b' }}
-                          onClick={() => { setModalIniciar(d); setResponsavel(currentUser?.nome || ''); }}>INICIAR</button>
+                        <Botao className={cls('iniciar')}
+                          onClick={() => { setModalIniciar(d); setResponsavel(currentUser?.nome || ''); }}>INICIAR</Botao>
                       )}
                       {emAndamento && !fora && (
                         <>
                           {!d.pausado ? (
-                            <button className="acn-btn" style={{ background: '#f59e0b', fontSize: 9 }} onClick={() => pausar(d)}>⏸ PAUSAR</button>
+                            <Botao className={cls('pausar')} onClick={() => pausar(d)}>⏸ PAUSAR</Botao>
                           ) : (
-                            <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={() => retomar(d)}>▶ RETOMAR</button>
+                            <Botao className={cls('retomar')} onClick={() => retomar(d)}>▶ RETOMAR</Botao>
                           )}
                           {!d.pausado && (
-                            <button className="acn-btn" style={{ background: '#22c55e' }} onClick={() => concluir(d)}>CONCLUIR</button>
+                            <Botao className={cls('concluir')} onClick={() => concluir(d)}>CONCLUIR</Botao>
                           )}
                         </>
                       )}
                       {emAndamento && fora && (
-                        <span style={{ fontSize: 9, color: '#f59e0b', fontStyle: 'italic' }}>Aguard. horário</span>
+                        <span className="acn-ats-dm-aguard">Aguard. horário</span>
                       )}
                     </div>
                   </td>
@@ -1701,17 +1664,17 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
 
       {modalIniciar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: 400 }}>
+          <div className="modal-box acn-ats-dm-m1">
             <div className="modal-title">Iniciar — {modalIniciar.descricao?.replace('[AJUSTE] ', '')}</div>
             <label className="acn-label">Responsável *</label>
             <ColaboradorSelect departamentos={departamentosDoSetor(setor)}
               value={responsavel} onChange={setResponsavel}
               placeholder="Selecione o responsável"
-              className="acn-input" style={{ width: '100%', marginBottom: 12 }}
+              className="acn-input acn-ats-dm-resp"
               autoFocus onKeyDown={e => e.key === 'Enter' && iniciar()} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="acn-btn" style={{ background: cor || '#1e293b', flex: 1 }} onClick={iniciar}>INICIAR</button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setModalIniciar(null)}>Cancelar</button>
+            <div className="acn-ats-dm-mrod">
+              <Botao className="acn-ats-b acn-ats-mbt pri grande" onClick={iniciar}>INICIAR</Botao>
+              <Botao className="acn-ats-b acn-ats-mbt" onClick={() => setModalIniciar(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -1719,17 +1682,17 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
 
       {modalObs && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: 480 }}>
+          <div className="modal-box acn-ats-dm-m2">
             <div className="modal-title">Observação — {modalObs.descricao?.replace('[AJUSTE] ', '')}</div>
-            <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 6 }}>
+            <div className="acn-ats-dm-dica">
               Use @Nome para mencionar um colega
             </div>
             <MencaoTextarea
               value={obsTexto} onChange={setObsTexto} rows={3}
               placeholder="Adicione uma observação... @Nome para mencionar" />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button className="acn-btn" style={{ background: cor || '#1e293b', flex: 1 }} onClick={salvarObs}>SALVAR</button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setModalObs(null)}>Fechar</button>
+            <div className="acn-ats-dm-mrod obs">
+              <Botao className="acn-ats-b acn-ats-mbt pri grande" onClick={salvarObs}>SALVAR</Botao>
+              <Botao className="acn-ats-b acn-ats-mbt" onClick={() => setModalObs(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -1761,14 +1724,14 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
           : 0;
         return (
           <div className="modal-overlay">
-            <div className="modal-box" style={{ maxWidth: 520, maxHeight: '88vh', overflowY: 'auto' }}>
+            <div className="modal-box acn-ats-dm-m3">
               <div className="modal-title">
                 👁 Detalhes da Demanda
-                {isAjuste && <span style={{ marginLeft: 8, fontSize: 10, background: '#f59e0b', color: '#fff', padding: '2px 7px', borderRadius: 10 }}>AJUSTE</span>}
+                {isAjuste && <span className="acn-ats-dm-tit-ajuste">AJUSTE</span>}
               </div>
 
               {/* Info principal */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 14 }}>
+              <div className="acn-ats-dm-grade">
                 {[
                   ['Descrição', desc],
                   ['Status', d.status + (emAndamento && pausado ? ' (Pausado)' : '')],
@@ -1782,33 +1745,33 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                   ['Aberto por', d.aberto_por || '—'],
                 ].map(([label, value]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .4 }}>{label}</div>
-                    <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600, marginTop: 1 }}>{value}</div>
+                    <div className="acn-ats-dm-rot">{label}</div>
+                    <div className="acn-ats-dm-val">{value}</div>
                   </div>
                 ))}
               </div>
 
               {/* Observações */}
               {d.observacoes_execucao && (
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>Observações</div>
-                  <div style={{ fontSize: 11, color: '#334155', whiteSpace: 'pre-wrap' }}><Linkify text={d.observacoes_execucao} /></div>
+                <div className="acn-ats-dm-obs">
+                  <div className="acn-ats-dm-obs-rot">Observações</div>
+                  <div className="acn-ats-dm-obs-txt"><Linkify text={d.observacoes_execucao} /></div>
                 </div>
               )}
 
               {/* Logs / histórico */}
               {logs.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>Histórico de Ações</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div className="acn-ats-dm-hist-rot">Histórico de Ações</div>
+                  <div className="acn-ats-dm-hist">
                     {logs.map((l: any, i: number) => (
-                      <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 10px', background: '#f8fafc', borderRadius: 5, border: '1px solid #e2e8f0' }}>
-                        <div style={{ flexShrink: 0, fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap', minWidth: 100 }}>
+                      <div key={i} className="acn-ats-dm-hist-it">
+                        <div className="acn-ats-dm-hist-hora">
                           {l.hora ? new Date(l.hora).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—'}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <span style={{ fontSize: 10, color: '#1e293b' }}>{l.texto}</span>
-                          {l.usuario && <span style={{ fontSize: 9, color: '#6366f1', marginLeft: 6 }}>— {l.usuario}</span>}
+                        <div className="acn-ats-dm-hist-corpo">
+                          <span className="acn-ats-dm-hist-txt">{l.texto}</span>
+                          {l.usuario && <span className="acn-ats-dm-hist-usu">— {l.usuario}</span>}
                         </div>
                       </div>
                     ))}
@@ -1816,8 +1779,8 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                 </div>
               )}
 
-              <div style={{ marginTop: 14 }}>
-                <button className="acn-btn" style={{ background: '#94a3b8', width: '100%' }} onClick={() => setModalVer(null)}>Fechar</button>
+              <div className="acn-ats-dm-ver-rod">
+                <Botao className="acn-ats-b acn-ats-mbt larga" onClick={() => setModalVer(null)}>Fechar</Botao>
               </div>
             </div>
           </div>
