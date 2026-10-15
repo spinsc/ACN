@@ -331,6 +331,159 @@ export async function copiarRegras(origemId: string, destinoId: string, currentU
   return { copiadas, erro: null };
 }
 
+// ── Copiar estrutura e perguntas de um item para outro (15/10/2026) ──────────
+//
+// Pedido do usuário: o catálogo tem 17 variantes de slimled (cor, lente, G2…) e as perguntas e o material de uma servem para as outras; recadastrar tudo
+// em cada uma não é viável. A cópia leva, à escolha: as PERGUNTAS (com respostas, perguntas-filhas, condição de itens e resposta automática), o MATERIAL POR
+// VEÍCULO do item e as REGRAS de chicote/suporte dos veículos que usam essas perguntas ou o item. Sempre SOMA ao que o destino já tem — nunca apaga nem
+// substitui — e, se algo falhar no meio, desfaz só o que esta cópia criou.
+//
+// As regras copiadas precisam apontar para as perguntas e respostas NOVAS do destino: uma regra "quantos na frente = 4" aponta para a pergunta do slimled
+// de origem, e sem esse ajuste a regra não valeria para o destino ("chicote a definir").
+
+export type OpcoesDaCopia = { perguntas: boolean; materiais: boolean; regras: boolean; veiculoId: string | null };   // veiculoId nulo = todos os veículos
+
+async function lerOrigemDaCopia(origemId: string, veiculoId: string | null) {
+  const ler = (r: any) => { if (r.error) throw new Error(r.error.message); return r.data || []; };
+  const perguntas = ler(await supabase.from('item_perguntas').select('*').eq('item_id', origemId).order('ordem').order('id'));
+  const perguntaIds = perguntas.map((p: any) => p.id);
+  const opcoes = perguntaIds.length
+    ? ler(await supabase.from('item_pergunta_opcoes').select('*').in('pergunta_id', perguntaIds).order('ordem').order('id')) : [];
+  let qm = supabase.from('veiculo_item_materiais').select('*').eq('item_id', origemId).order('ordem').order('id');
+  if (veiculoId) qm = qm.eq('veiculo_id', veiculoId);
+  const materiais = ler(await qm);
+
+  // regras que citam as perguntas, as respostas ou o próprio item de origem
+  const regraIds = new Set<string>();
+  const achar = async (coluna: string, valores: string[]) => {
+    for (let i = 0; i < valores.length; i += 100) {
+      ler(await supabase.from('veiculo_regra_condicoes').select('regra_id').in(coluna, valores.slice(i, i + 100))).forEach((c: any) => regraIds.add(c.regra_id));
+    }
+  };
+  await achar('pergunta_id', perguntaIds);
+  await achar('opcao_id', opcoes.map((o: any) => o.id));
+  await achar('item_id', [origemId]);
+  let regras: any[] = [];
+  if (regraIds.size) {
+    let qr = supabase.from('veiculo_regras').select('*').in('id', [...regraIds]).order('ordem').order('id');
+    if (veiculoId) qr = qr.eq('veiculo_id', veiculoId);
+    regras = ler(await qr);
+    if (regras.length) {
+      const ids = regras.map((r: any) => r.id);
+      const conds = ler(await supabase.from('veiculo_regra_condicoes').select('*').in('regra_id', ids));
+      const mats = ler(await supabase.from('veiculo_regra_materiais').select('*').in('regra_id', ids).order('ordem'));
+      regras = regras.map((r: any) => ({ ...r, condicoes: conds.filter((c: any) => c.regra_id === r.id), materiais: mats.filter((m: any) => m.regra_id === r.id) }));
+    }
+  }
+  return { perguntas, opcoes, materiais, regras };
+}
+
+/** Quanto há para copiar de um item (para a tela mostrar antes de o usuário confirmar). Lança erro se a leitura falhar. */
+export async function resumoDaCopia(origemId: string, veiculoId: string | null) {
+  const o = await lerOrigemDaCopia(origemId, veiculoId);
+  return { perguntas: o.perguntas.length, respostas: o.opcoes.length, materiais: o.materiais.length, regras: o.regras.length };
+}
+
+export async function copiarEstruturaDeItem({ origemId, destinoId, opcoes, currentUser }: { origemId: string; destinoId: string; opcoes: OpcoesDaCopia; currentUser: any }) {
+  if (!origemId || !destinoId || origemId === destinoId) return { erro: 'Escolha um item de origem diferente deste.' };
+  const por = currentUser?.nome || '—';
+  const criadas = { perguntas: [] as string[], materiais: [] as string[], regras: [] as string[] };
+  // desfaz SÓ o que esta cópia criou, na ordem que o banco permite (regras apontam para perguntas/respostas, que não podem sumir antes delas)
+  const desfazer = async () => {
+    if (criadas.regras.length) await supabase.from('veiculo_regras').delete().in('id', criadas.regras);
+    if (criadas.materiais.length) await supabase.from('veiculo_item_materiais').delete().in('id', criadas.materiais);
+    if (criadas.perguntas.length) await supabase.from('item_perguntas').delete().in('id', criadas.perguntas);
+  };
+  const falha = (e: any) => { throw new Error(e?.message || String(e)); };
+  // combinações de itens que citam o item de origem passam a citar o destino ("parachoque + este slimled")
+  const trocaItem = (lista: any) => (lista && lista.length ? lista.map((id: string) => String(id) === String(origemId) ? destinoId : id) : null);
+
+  try {
+    const o = await lerOrigemDaCopia(origemId, opcoes.veiculoId);
+    const mapaPergunta = new Map<string, string>();
+    const mapaOpcao = new Map<string, string>();
+    const r = { perguntas: 0, respostas: 0, materiais: 0, regras: 0, materiaisSemResposta: 0, regrasPuladas: 0 };
+
+    if (opcoes.perguntas && o.perguntas.length) {
+      const { count, error: ec } = await supabase.from('item_perguntas').select('id', { count: 'exact', head: true }).eq('item_id', destinoId);
+      if (ec) falha(ec);
+      const base = count || 0;
+      // pergunta-filha só nasce depois da resposta-pai que leva a ela
+      let pendentes = [...o.perguntas];
+      for (let progresso = true; pendentes.length && progresso;) {
+        progresso = false;
+        for (const p of [...pendentes]) {
+          if (p.opcao_pai_id && !mapaOpcao.has(p.opcao_pai_id)) continue;
+          const { data: nova, error } = await supabase.from('item_perguntas').insert([{
+            item_id: destinoId, opcao_pai_id: p.opcao_pai_id ? mapaOpcao.get(p.opcao_pai_id) : null, texto: p.texto, ordem: base + p.ordem,
+            tipo: p.tipo || 'opcoes', quando_itens: trocaItem(p.quando_itens), criado_por_nome: por,
+          }]).select('id').single();
+          if (error || !nova?.id) falha(error || 'sem resposta do banco');
+          criadas.perguntas.push(nova.id); mapaPergunta.set(p.id, nova.id); r.perguntas++;
+          for (const op of o.opcoes.filter((x: any) => x.pergunta_id === p.id)) {
+            const { data: nop, error: eo } = await supabase.from('item_pergunta_opcoes').insert([{
+              pergunta_id: nova.id, rotulo: op.rotulo, ordem: op.ordem, auto_quando_itens: trocaItem(op.auto_quando_itens),
+            }]).select('id').single();
+            if (eo || !nop?.id) falha(eo || 'sem resposta do banco');
+            mapaOpcao.set(op.id, nop.id); r.respostas++;
+          }
+          pendentes = pendentes.filter(x => x.id !== p.id);
+          progresso = true;
+        }
+      }
+    }
+
+    if (opcoes.materiais && o.materiais.length) {
+      // material por resposta só vai se a resposta também foi copiada; senão apontaria para a pergunta do item de origem
+      const linhas = o.materiais.filter((m: any) => !m.opcao_id || mapaOpcao.has(m.opcao_id));
+      r.materiaisSemResposta = o.materiais.length - linhas.length;
+      for (let i = 0; i < linhas.length; i += 500) {
+        const { data, error } = await supabase.from('veiculo_item_materiais').insert(linhas.slice(i, i + 500).map((m: any) => ({
+          veiculo_id: m.veiculo_id, item_id: destinoId, opcao_id: m.opcao_id ? mapaOpcao.get(m.opcao_id) : null,
+          material_item_id: m.material_item_id, quantidade: m.quantidade, acao: m.acao, observacoes: m.observacoes, ordem: m.ordem, criado_por_nome: por,
+        }))).select('id');
+        if (error) falha(error);
+        (data || []).forEach((d: any) => criadas.materiais.push(d.id));
+        r.materiais += (data || []).length;
+      }
+    }
+
+    if (opcoes.regras && o.regras.length) {
+      const perguntasOrigem = new Set(o.perguntas.map((p: any) => p.id));
+      const opcoesOrigem = new Set(o.opcoes.map((x: any) => x.id));
+      for (const reg of o.regras) {
+        // condição que cita pergunta/resposta de origem só se traduz se essa pergunta foi copiada; senão a regra é pulada (e contada)
+        const conds: any[] = [];
+        let ok = true;
+        for (const c of reg.condicoes) {
+          if (c.tipo === 'quantidade' && perguntasOrigem.has(c.pergunta_id)) { if (mapaPergunta.has(c.pergunta_id)) conds.push({ ...c, pergunta_id: mapaPergunta.get(c.pergunta_id) }); else ok = false; }
+          else if (c.tipo === 'resposta' && opcoesOrigem.has(c.opcao_id)) { if (mapaOpcao.has(c.opcao_id)) conds.push({ ...c, opcao_id: mapaOpcao.get(c.opcao_id) }); else ok = false; }
+          else if (c.tipo === 'item' && String(c.item_id) === String(origemId)) conds.push({ ...c, item_id: destinoId });
+          else conds.push(c);
+        }
+        if (!ok) { r.regrasPuladas++; continue; }
+        const { data: nova, error } = await supabase.from('veiculo_regras')
+          .insert([{ veiculo_id: reg.veiculo_id, nome: reg.nome, ordem: reg.ordem, criado_por_nome: por }]).select('id').single();
+        if (error || !nova?.id) falha(error || 'sem resposta do banco');
+        criadas.regras.push(nova.id);
+        const ec = await supabase.from('veiculo_regra_condicoes').insert(conds.map(c => ({
+          regra_id: nova.id, tipo: c.tipo, opcao_id: c.opcao_id, item_id: c.item_id, pergunta_id: c.pergunta_id, valor_numerico: c.valor_numerico,
+        })));
+        if (ec.error) falha(ec.error);
+        const em = await supabase.from('veiculo_regra_materiais').insert(reg.materiais.map((m: any) => ({
+          regra_id: nova.id, material_item_id: m.material_item_id, quantidade: m.quantidade, acao: m.acao, ordem: m.ordem,
+        })));
+        if (em.error) falha(em.error);
+        r.regras++;
+      }
+    }
+    return { ...r, erro: null };
+  } catch (e: any) {
+    await desfazer();
+    return { erro: e?.message || String(e), desfeito: true };
+  }
+}
+
 // ── Catálogo inteiro para os seletores ───────────────────────────────────────
 
 /**

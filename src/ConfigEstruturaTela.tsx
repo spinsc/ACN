@@ -20,7 +20,7 @@ import { SelectBusca, Botao, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiAlertOutline, mdiClose, mdiPlus } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade } from './ConfigEstrutura';
+import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade, copiarEstruturaDeItem, resumoDaCopia } from './ConfigEstrutura';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 function useItens() {
@@ -106,6 +106,12 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
                       aoMudar={recMateriais} />
                   )}
                 </div>
+
+                {/* 15/10/2026: leva perguntas, material por veículo e regras de um item para este (ex.: de uma variante de slimled para outra) */}
+                {pode && (
+                  <CopiarEstruturaDeItem itemId={itemId} itens={itens} veiculoId={veiculoId} currentUser={currentUser}
+                    aoCopiar={() => { recPerguntas(); recMateriais(); recPerguntasOp(); }} />
+                )}
               </>
             )}
           </>
@@ -115,6 +121,76 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
     {/* etapa 3 (15/10/2026): chicote e suporte por regra "se… então…", sempre de um veículo */}
     <RegrasDoVeiculo currentUser={currentUser} pode={pode} itens={itens} />
     </>
+  );
+}
+
+/**
+ * COPIAR ESTRUTURA E PERGUNTAS DE OUTRO ITEM (15/10/2026, pedido do usuário)
+ *
+ * O catálogo tem muitas variantes do mesmo produto (17 de slimled); o que uma tem de pergunta, material e regra serve para as outras. A cópia sempre SOMA ao que
+ * este item já tem. O "escopo de veículos" vale para o material e as regras: todos os veículos, ou só o que está escolhido na tela.
+ */
+function CopiarEstruturaDeItem({ itemId, itens, veiculoId, currentUser, aoCopiar }) {
+  const [origem, setOrigem] = useState('');
+  const [escopo, setEscopo] = useState('todos');      // 'todos' | 'veiculo'
+  const [marcas, setMarcas] = useState({ perguntas: true, materiais: true, regras: true });
+  const [resumo, setResumo] = useState(null);
+  const [falha, setFalha] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const veiculoDoEscopo = escopo === 'veiculo' && veiculoId ? veiculoId : null;
+
+  useEffect(() => {
+    setResumo(null); setFalha('');
+    if (!origem || origem === itemId) return;
+    let vivo = true;
+    resumoDaCopia(origem, veiculoDoEscopo).then(r => { if (vivo) setResumo(r); }).catch(e => { if (vivo) setFalha(e?.message || 'falha ao ler o item de origem'); });
+    return () => { vivo = false; };
+  }, [origem, escopo, veiculoId, itemId]);
+
+  const nome = (id) => { const i = itens.find(x => x.id === id); return i ? `${i.codigo ? i.codigo + ' — ' : ''}${i.nome}` : '(item)'; };
+
+  const copiar = async () => {
+    if (ocupado || !resumo) return;
+    if (!marcas.perguntas && !marcas.materiais && !marcas.regras) { alert('Marque o que copiar.'); return; }
+    if (escopo === 'veiculo' && !veiculoId) { alert('Escolha o veículo acima, ou copie para todos os veículos.'); return; }
+    const partes = [
+      marcas.perguntas ? `${resumo.perguntas} pergunta(s) com ${resumo.respostas} resposta(s)` : '',
+      marcas.materiais ? `${resumo.materiais} linha(s) de material por veículo` : '',
+      marcas.regras ? `${resumo.regras} regra(s) de chicote/suporte` : '',
+    ].filter(Boolean).join(', ');
+    if (!await confirmar(`Copiar para "${nome(itemId)}" o que há em "${nome(origem)}": ${partes}?\n\nA cópia se soma ao que este item já tem; nada é apagado nem substituído. `
+        + `Se copiar duas vezes, fica duplicado.`)) return;
+    setOcupado(true);
+    const r = await copiarEstruturaDeItem({ origemId: origem, destinoId: itemId, opcoes: { ...marcas, veiculoId: veiculoDoEscopo }, currentUser });
+    setOcupado(false);
+    if (r.erro) { alert('A cópia falhou e o que ela tinha criado foi desfeito: ' + r.erro); return; }
+    const avisos = [
+      r.materiaisSemResposta ? `${r.materiaisSemResposta} linha(s) de material que dependem de uma resposta não foram copiadas (copie também as perguntas)` : '',
+      r.regrasPuladas ? `${r.regrasPuladas} regra(s) que usam perguntas do item de origem não foram copiadas (copie também as perguntas)` : '',
+    ].filter(Boolean);
+    alert(`Copiado: ${r.perguntas} pergunta(s) com ${r.respostas} resposta(s), ${r.materiais} linha(s) de material e ${r.regras} regra(s).` + (avisos.length ? '\n\nAtenção: ' + avisos.join('; ') + '.' : ''));
+    aoCopiar?.();
+  };
+
+  return (
+    <div className="acn-cet-copiar">
+      <label className="acn-label">COPIAR PERGUNTAS, MATERIAL E REGRAS DE OUTRO ITEM PARA ESTE</label>
+      <SelectBusca opcoes={opcoesDeItem(itens.filter(i => i.id !== itemId))} valor={origem} onChange={setOrigem} placeholder="Item de origem (nome ou código)" />
+      {falha && <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> {falha}</div>}
+      {origem && resumo && (
+        <div className="acn-cet-copiar-opcoes">
+          <label><input type="checkbox" checked={marcas.perguntas} onChange={e => setMarcas(m => ({ ...m, perguntas: e.target.checked }))} /> Perguntas e respostas ({resumo.perguntas} pergunta(s), {resumo.respostas} resposta(s))</label>
+          <label><input type="checkbox" checked={marcas.materiais} onChange={e => setMarcas(m => ({ ...m, materiais: e.target.checked }))} /> Material por veículo ({resumo.materiais} linha(s))</label>
+          <label><input type="checkbox" checked={marcas.regras} onChange={e => setMarcas(m => ({ ...m, regras: e.target.checked }))} /> Regras de chicote/suporte que usam essas perguntas ou o item ({resumo.regras})</label>
+          <select className="acn-input" value={escopo} aria-label="Veículos do material e das regras" onChange={e => setEscopo(e.target.value)}>
+            <option value="todos">Material e regras de todos os veículos</option>
+            <option value="veiculo" disabled={!veiculoId}>{veiculoId ? 'Só do veículo escolhido acima' : 'Só do veículo escolhido acima (escolha um veículo antes)'}</option>
+          </select>
+          <div><Botao pequeno variante="primario" disabled={ocupado} onClick={copiar}>{ocupado ? 'Copiando…' : 'Copiar para este item'}</Botao></div>
+        </div>
+      )}
+      {origem && !resumo && !falha && <div className="acn-ajuda">Lendo o item de origem…</div>}
+    </div>
   );
 }
 

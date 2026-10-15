@@ -3477,6 +3477,8 @@ html body .acn-b.acn-cet-x { color: var(--acn-bad); }
 @media (max-width: 760px) { .acn-cet-grade-regra { grid-template-columns: 1fr 1fr; } }
 .acn-cet-regra-salvar { margin-top: 10px; }
 .acn-cet-copiar { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--acn-line); }
+.acn-cet-copiar-opcoes { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; font-size: 12px; color: var(--acn-ink); }
+.acn-cet-copiar-opcoes label { display: flex; align-items: center; gap: 6px; }
 .acn-pdv-cab svg, .acn-pdv-resp-item svg, .acn-cet-perg-txt svg, .acn-cet-opcao-txt svg, .acn-cet-alerta svg, .acn-cet-aviso-tit svg, .acn-rpl-aviso svg, .acn-cet-form svg { display: inline-block !important; vertical-align: -2px; }
 
 /* Veículos (12e55, 09/10/2026): painel da Tabela FIPE, fotos do carro na abertura da OP e o cadastro/edição/seleção de veículo. Só aparência.
