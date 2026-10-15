@@ -20,7 +20,7 @@ import { SelectBusca, Botao, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiAlertOutline, mdiClose, mdiPlus } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo } from './ConfigEstrutura';
+import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade } from './ConfigEstrutura';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 function useItens() {
@@ -64,6 +64,7 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   // 12e54 (09/10/2026): só aparência — o roxo-azulado dos títulos virou o tom do guia, os botões miúdos viraram os botões do guia (pequenos) e o recuo das
   // perguntas filhas passou para [data-nivel] no design.css (antes era uma conta de margem escrita no JSX); o que cada botão grava não mudou
   return (
+    <>
     <div className="sec-card acn-cet">
       <div className="sec-hdr">
         <span className="acn-cet-tit"><Icone path={mdiPuzzleOutline} size={16} />Estrutura de instalação</span>
@@ -104,6 +105,226 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
                       perguntas={perguntas} itens={itens} pode={pode} currentUser={currentUser}
                       aoMudar={recMateriais} />
                   )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+    {/* etapa 3 (15/10/2026): chicote e suporte por regra "se… então…", sempre de um veículo */}
+    <RegrasDoVeiculo currentUser={currentUser} pode={pode} itens={itens} />
+    </>
+  );
+}
+
+/**
+ * REGRAS "SE… ENTÃO…" DE UM VEÍCULO (etapa 3, 15/10/2026)
+ *
+ * Define qual chicote e qual suporte entram, a partir das respostas da OP (caracterizada, bateria), de itens vendidos juntos (sirene S100W…) e de
+ * quantidades (slimled: 2 na frente). Sempre por veículo, como decidido com o usuário. Para editar uma regra, apague e crie de novo: assim nenhuma
+ * regra muda de sentido por acidente.
+ */
+function RegrasDoVeiculo({ currentUser, pode, itens }) {
+  const [veiculo, setVeiculo] = useState({ id: '', nome: '' });
+  const [regras, setRegras] = useState([]);
+  const [perguntas, setPerguntas] = useState([]);
+  const [falha, setFalha] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [nome, setNome] = useState('');
+  const [condicoes, setCondicoes] = useState([]);
+  const [saidas, setSaidas] = useState([]);
+  const [cond, setCond] = useState({ tipo: 'resposta', opcao_id: '', item_id: '', pergunta_id: '', valor: '' });
+  const [mat, setMat] = useState({ material_item_id: '', quantidade: '1', acao: 'adicionar' });
+
+  const recarregar = async () => {
+    if (!veiculo.id) { setRegras([]); return; }
+    try { setRegras(await regrasDoVeiculo(veiculo.id)); setFalha(''); }
+    catch (e) { setFalha(e?.message || 'falha ao ler as regras'); }
+  };
+  useEffect(() => { recarregar(); }, [veiculo.id]);
+  useEffect(() => { todasAsPerguntas().then(setPerguntas).catch(e => setFalha(e?.message || 'falha ao ler as perguntas')); }, []);
+
+  const dona = (p) => (p.item_id ? (p.cadastro_itens?.nome || 'item') : 'da OP');
+  const opcoesDeResposta = perguntas.filter(p => !ehQuantidade(p)).flatMap(p => (p.opcoes || []).map(o => ({ id: o.id, rotulo: `${p.texto} → ${o.rotulo} (${dona(p)})` })));
+  const perguntasQtd = perguntas.filter(p => ehQuantidade(p));
+  const rotuloItem = (id) => { const i = itens.find(x => x.id === id); return i ? `${i.codigo ? i.codigo + ' — ' : ''}${i.nome}` : '(item)'; };
+  const textoCondicao = (c) => {
+    if (c.tipo === 'item') return `vendeu ${rotuloItem(c.item_id)}`;
+    if (c.tipo === 'quantidade') return `${perguntas.find(p => p.id === c.pergunta_id)?.texto || '(pergunta)'} = ${Number(c.valor_numerico ?? c.valor)}`;
+    return opcoesDeResposta.find(o => o.id === c.opcao_id)?.rotulo || '(resposta)';
+  };
+
+  const adicionarCondicao = () => {
+    let nova = null;
+    if (cond.tipo === 'resposta' && cond.opcao_id) nova = { tipo: 'resposta', opcao_id: cond.opcao_id };
+    if (cond.tipo === 'item' && cond.item_id) nova = { tipo: 'item', item_id: cond.item_id };
+    if (cond.tipo === 'quantidade' && cond.pergunta_id && /^\d+$/.test(String(cond.valor).trim())) nova = { tipo: 'quantidade', pergunta_id: cond.pergunta_id, valor_numerico: Number(cond.valor) };
+    if (!nova) { alert('Preencha a condição: escolha a resposta, o item ou a pergunta com o número inteiro.'); return; }
+    if (condicoes.some(c => JSON.stringify(c) === JSON.stringify(nova))) { alert('Esta condição já está na regra.'); return; }
+    setCondicoes(l => [...l, nova]);
+    setCond(c => ({ ...c, opcao_id: '', item_id: '', pergunta_id: '', valor: '' }));
+  };
+  const adicionarSaida = () => {
+    const q = Number(String(mat.quantidade).replace(',', '.'));
+    if (!mat.material_item_id || !(q > 0)) { alert('Escolha o material e uma quantidade maior que zero.'); return; }
+    setSaidas(l => [...l, { material_item_id: mat.material_item_id, quantidade: q, acao: mat.acao }]);
+    setMat({ material_item_id: '', quantidade: '1', acao: 'adicionar' });
+  };
+
+  const salvar = async () => {
+    if (ocupado) return;
+    if (!veiculo.id) { alert('Escolha o veículo.'); return; }
+    if (!condicoes.length) { alert('A regra precisa de pelo menos uma condição, senão valeria para toda OP deste veículo.'); return; }
+    if (!saidas.length) { alert('A regra precisa de pelo menos um material (o chicote ou o suporte que ela escolhe).'); return; }
+    const assinatura = (cs) => JSON.stringify(cs.map(c => `${c.tipo}:${c.opcao_id || c.item_id || c.pergunta_id}:${c.valor_numerico ?? ''}`).sort());
+    if (regras.some(r => assinatura(r.condicoes) === assinatura(condicoes))
+        && !await confirmar('Este veículo já tem uma regra com exatamente estas condições. Criar outra assim mesmo? O material das duas soma.')) return;
+    setOcupado(true);
+    try {
+      const { data: nova, error } = await supabase.from('veiculo_regras')
+        .insert([{ veiculo_id: veiculo.id, nome: nome.trim() || null, ordem: regras.length, criado_por_nome: currentUser?.nome || '—' }]).select('id').single();
+      if (error || !nova?.id) { alert('Não foi possível criar a regra: ' + (error?.message || 'sem resposta do banco')); return; }
+      const ec = await supabase.from('veiculo_regra_condicoes').insert(condicoes.map(c => ({ regra_id: nova.id, ...c })));
+      const em = ec.error ? null : await supabase.from('veiculo_regra_materiais').insert(saidas.map((s, i) => ({ regra_id: nova.id, ...s, ordem: i })));
+      const falhou = ec.error || em?.error;
+      if (falhou) {
+        // regra sem condição ou sem material é pior que nenhuma: desfaz só o que ESTA ação acabou de criar
+        await supabase.from('veiculo_regras').delete().eq('id', nova.id);
+        alert('Não foi possível gravar a regra: ' + falhou.message + '\n\nNada foi criado; tente de novo.');
+        return;
+      }
+      setNome(''); setCondicoes([]); setSaidas([]);
+      await recarregar();
+    } finally { setOcupado(false); }
+  };
+
+  const apagar = async (r) => {
+    if (!await confirmar(`Apagar a regra "${r.nome || 'sem nome'}" deste veículo?\n\nAs OPs já criadas não mudam; as próximas deixam de receber o material dela.`)) return;
+    const { error } = await supabase.from('veiculo_regras').delete().eq('id', r.id);
+    if (error) { alert('Não foi possível apagar a regra: ' + error.message); return; }
+    recarregar();
+  };
+
+  const copiarDe = async (origemId, origem) => {
+    if (!origemId || !veiculo.id) return;
+    if (origemId === veiculo.id) { alert('Escolha um veículo diferente.'); return; }
+    let qtd = 0;
+    try { qtd = (await regrasDoVeiculo(origemId)).length; } catch (e) { alert('Não foi possível ler as regras de origem: ' + (e?.message || e)); return; }
+    if (!qtd) { alert('Esse veículo não tem regras para copiar.'); return; }
+    if (!await confirmar(`Copiar ${qtd} regra(s) de "${origem?.nome || 'outro veículo'}" para "${veiculo.nome || 'este veículo'}"?`
+        + (regras.length ? `\n\nEste veículo já tem ${regras.length} regra(s): as copiadas se somam a elas, e regras iguais ficam duplicadas.` : ''))) return;
+    setOcupado(true);
+    const r = await copiarRegras(origemId, veiculo.id, currentUser);
+    setOcupado(false);
+    if (r.erro) alert(`Foram copiadas ${r.copiadas} de ${qtd} regra(s). Parou em: ${r.erro}`);
+    recarregar();
+  };
+
+  return (
+    <div className="sec-card acn-cet">
+      <div className="sec-hdr">
+        <span className="acn-cet-tit"><Icone path={mdiPuzzleOutline} size={16} />Regras de chicote e suporte por veículo</span>
+      </div>
+      <div className="sec-body">
+        <div className="acn-ajuda acn-cet-intro">
+          Uma regra diz: <b>se</b> todas as condições valerem (resposta da OP, item vendido junto, quantidade informada) <b>então</b> entra este material.
+          Cada veículo tem as suas. Várias regras podem valer na mesma OP e o material delas soma; a quantidade é <b>por carro</b>.
+          Se uma resposta não for usada por nenhuma regra do veículo, a OP mostra "chicote/suporte a definir".
+        </div>
+        {falha && <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> {falha}</div>}
+
+        <label className="acn-label">VEÍCULO</label>
+        <SelectVeiculo valor={veiculo.id} onChange={(id, v) => setVeiculo({ id: id || '', nome: v ? (v.nome_exibicao || [v.marca, v.modelo].filter(Boolean).join(' ')) : '' })} currentUser={currentUser} />
+
+        {veiculo.id && (
+          <>
+            <div className="acn-cet-sec espaco">REGRAS DESTE VEÍCULO ({regras.length})</div>
+            {!regras.length && !falha && <div className="acn-ajuda">Nenhuma regra ainda: nenhum chicote ou suporte é escolhido por resposta neste veículo.</div>}
+            {regras.map(r => (
+              <div key={r.id} className="acn-cet-regra">
+                <div className="acn-cet-regra-cab">
+                  <b className="acn-cet-regra-nome">{r.nome || 'Regra sem nome'}</b>
+                  {pode && <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a regra ${r.nome || 'sem nome'}`} onClick={() => apagar(r)} />}
+                </div>
+                <div className="acn-cet-regra-se"><b>SE</b> {r.condicoes.map(textoCondicao).join(' E ')}</div>
+                {r.materiais.map(m => (
+                  <div key={m.id} className="acn-cet-linha">
+                    <span className={'acn-cet-acao' + (m.acao === 'remover' ? ' remover' : '')}>{m.acao === 'remover' ? '− tira' : '+ usa'} {m.quantidade}</span>
+                    <span className="acn-cet-mat-nome">{m.material?.codigo ? <b>{m.material.codigo} — </b> : null}{m.material?.nome || '(item)'}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            {pode && (
+              <>
+                <div className="acn-cet-form">
+                  <label className="acn-label"><Icone path={mdiPlus} size={13} /> NOVA REGRA NESTE VEÍCULO</label>
+                  <input className="acn-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome (opcional). Ex.: Chicote principal — caracterizado, bateria frontal" />
+
+                  <div className="acn-cet-sec espaco">SE (todas as condições)</div>
+                  {condicoes.map((c, i) => (
+                    <div key={i} className="acn-cet-linha">
+                      <span className="acn-cet-mat-nome">{textoCondicao(c)}</span>
+                      <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label="Tirar esta condição" onClick={() => setCondicoes(l => l.filter((_, j) => j !== i))} />
+                    </div>
+                  ))}
+                  <div className="acn-cet-grade-regra">
+                    <select className="acn-input" value={cond.tipo} aria-label="Tipo de condição" onChange={e => setCond({ tipo: e.target.value, opcao_id: '', item_id: '', pergunta_id: '', valor: '' })}>
+                      <option value="resposta">a resposta foi…</option>
+                      <option value="item">o item foi vendido…</option>
+                      <option value="quantidade">a quantidade é…</option>
+                    </select>
+                    {cond.tipo === 'resposta' && (
+                      <select className="acn-input" value={cond.opcao_id} aria-label="Resposta" onChange={e => setCond(c => ({ ...c, opcao_id: e.target.value }))}>
+                        <option value="">— escolha a resposta —</option>
+                        {opcoesDeResposta.map(o => <option key={o.id} value={o.id}>{o.rotulo}</option>)}
+                      </select>
+                    )}
+                    {cond.tipo === 'item' && (
+                      <SelectBusca opcoes={opcoesDeItem(itens)} valor={cond.item_id} onChange={v => setCond(c => ({ ...c, item_id: v }))} placeholder="Item vendido" />
+                    )}
+                    {cond.tipo === 'quantidade' && (
+                      <select className="acn-input" value={cond.pergunta_id} aria-label="Pergunta de quantidade" onChange={e => setCond(c => ({ ...c, pergunta_id: e.target.value }))}>
+                        <option value="">— escolha a pergunta —</option>
+                        {perguntasQtd.map(p => <option key={p.id} value={p.id}>{p.texto} ({dona(p)})</option>)}
+                      </select>
+                    )}
+                    {cond.tipo === 'quantidade'
+                      ? <input className="acn-input" inputMode="numeric" value={cond.valor} aria-label="Quantidade" placeholder="Nº" onChange={e => setCond(c => ({ ...c, valor: e.target.value.replace(/\D/g, '').slice(0, 4) }))} />
+                      : <span />}
+                    <Botao pequeno variante="secundario" onClick={adicionarCondicao}>Adicionar condição</Botao>
+                  </div>
+
+                  <div className="acn-cet-sec espaco">ENTÃO (material)</div>
+                  {saidas.map((s, i) => (
+                    <div key={i} className="acn-cet-linha">
+                      <span className={'acn-cet-acao' + (s.acao === 'remover' ? ' remover' : '')}>{s.acao === 'remover' ? '− tira' : '+ usa'} {s.quantidade}</span>
+                      <span className="acn-cet-mat-nome">{rotuloItem(s.material_item_id)}</span>
+                      <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label="Tirar este material" onClick={() => setSaidas(l => l.filter((_, j) => j !== i))} />
+                    </div>
+                  ))}
+                  <div className="acn-cet-grade">
+                    <SelectBusca opcoes={opcoesDeItem(itens)} valor={mat.material_item_id} onChange={v => setMat(m => ({ ...m, material_item_id: v }))} placeholder="Material (chicote, suporte…)" />
+                    <input className="acn-input" inputMode="decimal" value={mat.quantidade} aria-label="Quantidade do material" onChange={e => setMat(m => ({ ...m, quantidade: e.target.value }))} placeholder="Qtd" />
+                    <select className="acn-input" value={mat.acao} aria-label="Ação" onChange={e => setMat(m => ({ ...m, acao: e.target.value }))}>
+                      <option value="adicionar">usa</option>
+                      <option value="remover">tira da lista</option>
+                    </select>
+                    <span />
+                    <Botao pequeno variante="secundario" onClick={adicionarSaida}>Adicionar material</Botao>
+                  </div>
+
+                  <div className="acn-cet-regra-salvar">
+                    <Botao variante="primario" disabled={ocupado} onClick={salvar}>{ocupado ? 'Gravando…' : 'Salvar regra'}</Botao>
+                  </div>
+                </div>
+
+                <div className="acn-cet-copiar">
+                  <label className="acn-label">COPIAR AS REGRAS DE OUTRO VEÍCULO PARA ESTE</label>
+                  <SelectVeiculo valor="" onChange={(id, v) => { if (id) copiarDe(id, { nome: v ? (v.nome_exibicao || [v.marca, v.modelo].filter(Boolean).join(' ')) : '' }); }}
+                    currentUser={currentUser} compacto placeholder="Veículo de origem" />
                 </div>
               </>
             )}
@@ -164,7 +385,14 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
   };
   const apagar = async (tabela, id, oque) => {
     if (!await confirmar(`Apagar ${oque}?`)) return;
-    await supabase.from(tabela).delete().eq('id', id);
+    // etapa 3 (15/10/2026): se uma regra de chicote/suporte usa esta pergunta/resposta, o banco recusa de propósito (apagar mudaria o que a regra faz) — e a tela explica em vez de fingir que apagou
+    const { error } = await supabase.from(tabela).delete().eq('id', id);
+    if (error) {
+      alert(error.code === '23503'
+        ? 'Não dá para apagar: esta pergunta ou resposta é usada por uma regra de chicote/suporte de algum veículo. Apague a regra antes.'
+        : 'Não foi possível apagar: ' + error.message);
+      return;
+    }
     aoMudar();
   };
   const definirRegra = async (opcao) => {

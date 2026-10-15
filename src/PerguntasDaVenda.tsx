@@ -20,6 +20,7 @@ import {
   itensConjunto, vendaTemConjunto,
   materiaisDoVeiculo, montarMaterial,
   ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
+  regrasDoVeiculo, avaliarRegras, podarRespostas,
 } from './ConfigEstrutura';
 import { supabase } from './supabaseClient';
 import { sugerirBom } from './OpItens';
@@ -234,10 +235,19 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     }
 
     const materiais = await materiaisDoVeiculo(opl.veiculo_id, semConjunto);
-    if (!materiais.length) return falhas.length ? falhas.join('; ') : null;
+    // Regras "se… então…" do veículo (etapa 3, 15/10/2026): chicote e suporte pelas respostas, itens vendidos juntos e quantidades. Somam ao material por item.
+    // Respostas podadas: a de uma pergunta-filha cuja resposta-pai foi trocada não pode escolher chicote.
+    // Se a leitura das regras falhar, o material por item continua sendo calculado e a falha é dita — sem o chicote, a OP não pode parecer completa.
+    let doRegras: any = { linhas: [] };
+    try {
+      doRegras = avaliarRegras(await regrasDoVeiculo(opl.veiculo_id), { respostas: podarRespostas(perguntas, todas), vendidosIds: ids, perguntas });
+    } catch (e: any) {
+      falhas.push(`as regras de chicote e suporte do veículo não puderam ser lidas (${e?.message || e}); a lista de material saiu sem elas`);
+    }
+    if (!materiais.length && !doRegras.linhas.length) return falhas.length ? falhas.join('; ') : null;
     const qtdPorItem = {};
     vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = Number(v.quantidade) || 1; });
-    const linhas = montarMaterial(materiais, todas, qtdPorItem);
+    const linhas = montarMaterial([...materiais, ...doRegras.linhas], todas, qtdPorItem);
     // nada calculado: a lista continua nascendo vazia e a Engenharia sugere na
     // hora de liberar, exatamente como sempre foi
     if (!linhas.length) return falhas.length ? falhas.join('; ') : null;

@@ -221,6 +221,116 @@ export function montarMaterial(materiais: any[], respostas: Record<string, strin
   return [...soma.values()];
 }
 
+// ── Regras "se… então…" por veículo (etapa 3, 15/10/2026) ───────────────────
+//
+// Pedido do usuário: o chicote principal (e o suporte) depende de respostas da OP (caracterizada, bateria), de itens vendidos juntos (sirene S100W, arrow8…)
+// e de quantidades (slimled: 2 na frente → chicote de 2 luzes), e isso muda de carro para carro — por isso a regra é SEMPRE de um veículo.
+// Uma regra vale quando TODAS as condições se cumprem; várias regras podem valer ao mesmo tempo e o material delas soma. Quantidade é POR OP (por carro),
+// diferente do material por item, que multiplica pela quantidade vendida: o chicote Der. Fr. p/ 2 luzes é um por carro, não um por slimled.
+
+/** Regras de um veículo, com condições e materiais dentro. Lança erro se a leitura falhar: lista vazia por falha deixaria a OP sem chicote em silêncio. */
+export async function regrasDoVeiculo(veiculoId: string) {
+  if (!veiculoId) return [];
+  const { data: regras, error } = await supabase.from('veiculo_regras')
+    .select('*').eq('veiculo_id', veiculoId).order('ordem').order('criado_em').order('id');
+  if (error) throw new Error(error.message);
+  if (!regras?.length) return [];
+  const ids = regras.map((r: any) => r.id);
+  const [rc, rm] = await Promise.all([
+    supabase.from('veiculo_regra_condicoes').select('*').in('regra_id', ids),
+    supabase.from('veiculo_regra_materiais')
+      .select('*, material:cadastro_itens!material_item_id(id,codigo,nome,unidade,controla_estoque)').in('regra_id', ids).order('ordem'),
+  ]);
+  if (rc.error) throw new Error(rc.error.message);
+  if (rm.error) throw new Error(rm.error.message);
+  return regras.map((r: any) => ({
+    ...r,
+    condicoes: (rc.data || []).filter((c: any) => c.regra_id === r.id),
+    materiais: (rm.data || []).filter((m: any) => m.regra_id === r.id),
+  }));
+}
+
+/**
+ * Quais regras valem para esta OP, o material que elas dão e o que ficou sem regra.
+ *
+ * `perguntas`: as que a venda comporta (já filtradas pela condição de itens juntos); `respostas`: pergunta_id → valor (as já podadas).
+ *
+ * `semRegra` é o "chicote a definir": pergunta da OP ou de quantidade que foi respondida e que NENHUMA regra aplicada deste veículo usa. Quantidade 0
+ * não entra ("0 na frente" não pede chicote). Resposta de pergunta de item por opção não entra: essas seguem pelo material do item no veículo.
+ */
+export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas }: { respostas: Record<string, string>; vendidosIds: string[]; perguntas: any[] }) {
+  const escolhidas = new Set(Object.values(respostas || {}).filter(Boolean));
+  const vendidos = new Set((vendidosIds || []).filter(Boolean).map(String));
+  const vale = (c: any) => c.tipo === 'resposta' ? escolhidas.has(c.opcao_id)
+    : c.tipo === 'item' ? vendidos.has(String(c.item_id))
+    : valorDeQuantidade(respostas?.[c.pergunta_id]) === Number(c.valor_numerico);
+  // regra sem condição nenhuma não vale (valeria para toda OP): não deveria existir, e a tela não deixa criar
+  const aplicadas = (regras || []).filter(r => (r.condicoes || []).length > 0 && r.condicoes.every(vale));
+
+  const linhas = aplicadas.flatMap(r => (r.materiais || []).map((m: any) => ({ ...m, regra_id: r.id, opcao_id: null, item_id: null })));
+  const itensCobertos = new Set<string>();
+  const perguntasCobertas = new Set<string>();
+  const perguntaDaOpcao = new Map<string, string>();
+  (perguntas || []).forEach(p => (p.opcoes || []).forEach((o: any) => perguntaDaOpcao.set(o.id, p.id)));
+  aplicadas.forEach(r => r.condicoes.forEach((c: any) => {
+    if (c.tipo === 'item') itensCobertos.add(String(c.item_id));
+    if (c.tipo === 'quantidade') perguntasCobertas.add(c.pergunta_id);
+    if (c.tipo === 'resposta' && perguntaDaOpcao.has(c.opcao_id)) perguntasCobertas.add(perguntaDaOpcao.get(c.opcao_id)!);
+  }));
+
+  const semRegra: { pergunta_id: string; texto: string; resposta: string }[] = [];
+  for (const p of perguntas || []) {
+    const v = respostas?.[p.id];
+    if (!v || !(ehPerguntaDaOp(p) || ehQuantidade(p)) || perguntasCobertas.has(p.id)) continue;
+    const n = valorDeQuantidade(v);
+    if (n === 0) continue;
+    const resposta = n !== null ? String(n) : ((p.opcoes || []).find((o: any) => o.id === v)?.rotulo || '—');
+    semRegra.push({ pergunta_id: p.id, texto: p.texto, resposta });
+  }
+  return { aplicadas, linhas, itensCobertos, semRegra };
+}
+
+/** Todas as perguntas (da OP e de itens), com as respostas dentro — para montar as condições das regras. */
+export async function todasAsPerguntas() {
+  const { data: perguntas, error } = await supabase.from('item_perguntas')
+    .select('*, cadastro_itens(id,nome,codigo)').order('ordem').order('id');
+  if (error) throw new Error(error.message);
+  if (!perguntas?.length) return [];
+  const { data: opcoes, error: eo } = await supabase.from('item_pergunta_opcoes')
+    .select('*').in('pergunta_id', perguntas.map((p: any) => p.id)).order('ordem').order('id');
+  if (eo) throw new Error(eo.message);
+  return perguntas.map((p: any) => ({ ...p, opcoes: (opcoes || []).filter((o: any) => o.pergunta_id === p.id) }));
+}
+
+/**
+ * Copia as regras de um veículo para outro (o histórico tem 91 modelos: recomeçar do zero em cada um não é viável). Soma às que o destino já tem; quem
+ * chama avisa. Se uma cópia falha no meio, a regra recém-criada é desfeita (só ela — nada que já existia é apagado) e a função devolve o que conseguiu.
+ */
+export async function copiarRegras(origemId: string, destinoId: string, currentUser: any) {
+  if (!origemId || !destinoId || origemId === destinoId) return { copiadas: 0, erro: 'Escolha dois veículos diferentes.' };
+  let regras: any[];
+  try { regras = await regrasDoVeiculo(origemId); } catch (e: any) { return { copiadas: 0, erro: e?.message || 'falha ao ler as regras' }; }
+  let copiadas = 0;
+  for (const r of regras) {
+    const { data: nova, error } = await supabase.from('veiculo_regras')
+      .insert([{ veiculo_id: destinoId, nome: r.nome, ordem: r.ordem, criado_por_nome: currentUser?.nome || '—' }]).select('id').single();
+    if (error || !nova?.id) return { copiadas, erro: error?.message || 'sem resposta do banco' };
+    const ec = await supabase.from('veiculo_regra_condicoes').insert(r.condicoes.map((c: any) => ({
+      regra_id: nova.id, tipo: c.tipo, opcao_id: c.opcao_id, item_id: c.item_id, pergunta_id: c.pergunta_id, valor_numerico: c.valor_numerico,
+    })));
+    const em = ec.error ? null : await supabase.from('veiculo_regra_materiais').insert(r.materiais.map((m: any) => ({
+      regra_id: nova.id, material_item_id: m.material_item_id, quantidade: m.quantidade, acao: m.acao, ordem: m.ordem,
+    })));
+    const falha = ec.error || em?.error;
+    if (falha) {
+      await supabase.from('veiculo_regras').delete().eq('id', nova.id);
+      return { copiadas, erro: falha.message };
+    }
+    copiadas++;
+  }
+  return { copiadas, erro: null };
+}
+
 // ── Catálogo inteiro para os seletores ───────────────────────────────────────
 
 /**

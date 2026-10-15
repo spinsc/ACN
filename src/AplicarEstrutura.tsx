@@ -20,6 +20,7 @@ import {
   perguntasDaVenda, perguntasPendentes, respostasAutomaticas,
   materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
   itensConjunto, vendaTemConjunto, podarRespostas, valorSalvo,
+  regrasDoVeiculo, avaliarRegras,
 } from './ConfigEstrutura';
 import { RespostasEmLote } from './RespostasEmLote';
 import { Botao } from './Interface';
@@ -76,11 +77,12 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
         : { data: [] };
       const genericos = new Set((cats || []).filter(c => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map(c => String(c.id)));
       const idsParaEstrutura = idsVendidos.filter(id => !conj.some(c => c.id === id) && !genericos.has(String(id)));
-      const [perguntas, materiais, semEstrutura] = await Promise.all([
+      const [perguntas, materiais, semEstrutura, regras] = await Promise.all([
         // 15/10/2026: inclui as perguntas da OP (caracterizada, bateria…); `idsVendidos` aplica a condição "só quando estes itens foram vendidos juntos"
         perguntasDaVenda(idsParaEstrutura, idsVendidos),
         materiaisDoVeiculo(opl.veiculo_id, idsParaEstrutura),
         itensSemEstrutura(opl.veiculo_id, idsParaEstrutura),
+        regrasDoVeiculo(opl.veiculo_id),   // etapa 3: chicote e suporte por regra "se… então…" deste veículo
       ]);
       const auto = respostasAutomaticas(perguntas, idsVendidos);
 
@@ -96,12 +98,16 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
       const qtdPorItem = {};
       vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = num(v.quantidade) || 1; });
 
-      const linhas = montarMaterial(materiais, respostas, qtdPorItem);
+      const doRegras = avaliarRegras(regras, { respostas, vendidosIds: idsVendidos, perguntas });
+      const linhas = montarMaterial([...materiais, ...doRegras.linhas], respostas, qtdPorItem);
       const falta = await previsaoDeFalta(linhas);
       const pendentes = perguntasPendentes(perguntas, respostas);
-      const nomesSem = vendidos.filter(v => semEstrutura.includes(String(v.item_id)));
+      // item vendido que uma regra do veículo usa como condição (ex.: a sirene) já está "adaptado" neste carro: não cobrar de novo
+      const nomesSem = vendidos.filter(v => semEstrutura.includes(String(v.item_id)) && !doRegras.itensCobertos.has(String(v.item_id)));
+      // só diz "sem regra" depois que as perguntas foram respondidas: pergunta pendente já tem o seu aviso
+      const semRegra = doRegras.semRegra;
 
-      setEstado({ carregando: false, temConjunto: true, conj, linhas, falta, pendentes,
+      setEstado({ carregando: false, temConjunto: true, conj, linhas, falta, pendentes, semRegra,
         semEstrutura: nomesSem, respondidas: Object.keys(respostas).length, totalPerguntas: perguntas.length });
     })().catch((err) => {
       // 15/10/2026: a leitura das perguntas da OP lança erro de propósito; sem este desvio o painel ficaria em "Conferindo…" para sempre
@@ -164,6 +170,34 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
               O material deles não entra sozinho. Cadastre a composição em
               <b> Administração → Estruturas</b>, escolhendo o item e este veículo — a partir daí
               toda OP igual sai pronta.
+            </div>
+          )}
+        </Caixa>
+      )}
+
+      {/* etapa 3 (15/10/2026): "chicote a definir" — resposta dada que nenhuma regra deste veículo usa. O pedido de desenvolvimento é do PCP, como nos itens nunca adaptados. */}
+      {e.semRegra?.length > 0 && (
+        <Caixa tom="atencao">
+          <b><Icone path={mdiAlertOutline} size={14} /> Chicote/suporte a definir: {e.semRegra.length} resposta(s) sem regra neste veículo.</b>
+          <div className="acn-aep-sub">
+            {e.semRegra.map(s => <div key={s.pergunta_id}>• {s.texto} → <b>{s.resposta}</b></div>)}
+          </div>
+          {onSolicitarDesenvolvimento ? (
+            <>
+              <div className="acn-aep-nota">
+                Nenhuma regra deste veículo usa essas respostas, então o chicote e o suporte delas não entram sozinhos. Peça o desenvolvimento à Engenharia:
+                ela cadastra a regra e, a partir daí, toda OP igual sai pronta.
+              </div>
+              <div className="acn-aep-acoes">
+                <Botao pequeno variante="primario"
+                  onClick={() => onSolicitarDesenvolvimento(e.semRegra.map(s => ({ nome: `chicote/suporte para "${s.texto}" = ${s.resposta}`, item_id: null })))}>
+                  Solicitar desenvolvimento
+                </Botao>
+              </div>
+            </>
+          ) : (
+            <div className="acn-aep-nota">
+              Nenhuma regra deste veículo usa essas respostas. Cadastre a regra em <b>Administração → Estruturas</b> (regras do veículo) — a partir daí toda OP igual sai pronta.
             </div>
           )}
         </Caixa>
