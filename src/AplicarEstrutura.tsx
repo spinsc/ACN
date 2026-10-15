@@ -17,7 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import {
-  perguntasDeVariosItens, perguntasPendentes, respostasAutomaticas,
+  perguntasDaVenda, perguntasPendentes, respostasAutomaticas,
   materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
   itensConjunto, vendaTemConjunto, podarRespostas,
 } from './ConfigEstrutura';
@@ -77,7 +77,7 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
       const genericos = new Set((cats || []).filter(c => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map(c => String(c.id)));
       const idsParaEstrutura = idsVendidos.filter(id => !conj.some(c => c.id === id) && !genericos.has(String(id)));
       const [perguntas, materiais, semEstrutura] = await Promise.all([
-        perguntasDeVariosItens(idsParaEstrutura),
+        perguntasDaVenda(idsParaEstrutura),   // 15/10/2026: inclui as perguntas da OP (caracterizada, bateria…)
         materiaisDoVeiculo(opl.veiculo_id, idsParaEstrutura),
         itensSemEstrutura(opl.veiculo_id, idsParaEstrutura),
       ]);
@@ -102,7 +102,10 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
 
       setEstado({ carregando: false, temConjunto: true, conj, linhas, falta, pendentes,
         semEstrutura: nomesSem, respondidas: Object.keys(respostas).length, totalPerguntas: perguntas.length });
-    })();
+    })().catch((err) => {
+      // 15/10/2026: a leitura das perguntas da OP lança erro de propósito; sem este desvio o painel ficaria em "Conferindo…" para sempre
+      setEstado({ carregando: false, falhou: err?.message || 'Não foi possível ler as perguntas.' });
+    });
   }, [opl?.id, tick]);
 
   // 12e53 (09/10/2026): só aparência — as caixas coloridas passaram a ter um "tom" (info, neutro, atenção, erro, ok) que o design.css pinta com os
@@ -110,6 +113,10 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
   const e = estado;
   if (e.carregando) {
     return <Caixa tom="info">Conferindo a configuração do veículo…</Caixa>;
+  }
+
+  if (e.falhou) {
+    return <Caixa tom="erro"><b>Não foi possível conferir a configuração do veículo.</b> {e.falhou} Abra a OP de novo; se persistir, avise o suporte.</Caixa>;
   }
 
   // Sem conjunto elétrico na venda: a estrutura não se aplica, e isso é normal.

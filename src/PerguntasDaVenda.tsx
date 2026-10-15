@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import {
-  perguntasDeVariosItens, perguntasPendentes, respostasAutomaticas,
+  perguntasDaVenda, donaDaPergunta, perguntasPendentes, respostasAutomaticas,
   itensConjunto, vendaTemConjunto,
   materiaisDoVeiculo, montarMaterial,
 } from './ConfigEstrutura';
@@ -32,6 +32,7 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
   const [temConjunto, setTemConjunto] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [abertas, setAbertas] = useState({});   // unidades destacadas do padrão
+  const [falhaLeitura, setFalhaLeitura] = useState('');
 
   const ids = (itensVendidos || []).map(v => v.item_id).filter(Boolean);
   const chave = ids.join(',');
@@ -46,7 +47,10 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
       if (!tem) { setPerguntas([]); setCarregando(false); return; }
       // o próprio conjunto não tem perguntas: ele é o recipiente
       const semConjunto = ids.filter(id => !conj.some(c => c.id === id));
-      setPerguntas(await perguntasDeVariosItens(semConjunto));
+      // as da OP (caracterizada, bateria…) vêm junto com as dos itens vendidos (15/10/2026)
+      // falha de leitura NÃO pode parecer "sem perguntas": o vendedor criaria a OP sem responder e ninguém saberia
+      try { setPerguntas(await perguntasDaVenda(semConjunto)); setFalhaLeitura(''); }
+      catch (e) { console.warn('Perguntas da venda: falha ao ler', e); setPerguntas([]); setFalhaLeitura(e?.message || 'falha ao ler'); }
       setCarregando(false);
     })();
   }, [chave]);
@@ -74,6 +78,15 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
 
   if (!ids.length || carregando) return null;
   if (!temConjunto) return null;          // sem conjunto, não há o que perguntar
+  if (falhaLeitura) {
+    return (
+      <div className="acn-pdv">
+        <div className="acn-pdv-aviso">
+          Não foi possível ler as perguntas sobre o carro ({falhaLeitura}). Feche e abra a criação da OP de novo antes de salvar; se salvar assim, a Engenharia responde na conferência da BOM.
+        </div>
+      </div>
+    );
+  }
   if (!perguntas.length) return null;     // nenhum item vendido tem pergunta
 
   // 12e54 (09/10/2026): só aparência — as respostas de cada pergunta viraram o seletor do guia (Chips) e o roxo do bloco mora no design.css (--acn-pdv-cor)
@@ -89,7 +102,7 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
             <div className="acn-pdv-texto">
               {p.texto}
               <span className="acn-pdv-item">
-                ({p.cadastro_itens?.nome})
+                ({donaDaPergunta(p)})
               </span>
             </div>
             {(p.opcoes || []).length > 0 && (
@@ -185,7 +198,7 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     if (!vendaTemConjunto(vendidos, conj.map(c => c.id))) return;   // o interruptor
 
     const semConjunto = ids.filter(id => !conj.some(c => c.id === id));
-    const perguntas = await perguntasDeVariosItens(semConjunto);
+    const perguntas = await perguntasDaVenda(semConjunto);
     const todas = { ...respostasAutomaticas(perguntas, ids), ...(respostas || {}) };
 
     const registros = perguntas

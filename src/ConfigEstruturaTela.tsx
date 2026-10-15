@@ -20,7 +20,7 @@ import { SelectBusca, Botao, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiAlertOutline, mdiClose, mdiPlus } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { perguntasDoItem, materiaisDoVeiculo, itensAtivosDoCatalogo } from './ConfigEstrutura';
+import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo } from './ConfigEstrutura';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 function useItens() {
@@ -42,6 +42,8 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   const [veiculoId, setVeiculoId] = useState(veiculoInicial || '');
   const [perguntas, setPerguntas] = useState([]);
   const [materiais, setMateriais] = useState([]);
+  const [perguntasOp, setPerguntasOp] = useState([]);
+  const [falhaOp, setFalhaOp] = useState('');
   const itens = useItens();
   // 18d (13/10/2026): quem desenvolve o item cadastra a estrutura dele no veículo (decisão do usuário em 12/10/2026) — a Engenharia entra junto do PCP
   const pode = ehAdminOuGerente(currentUser) || ['PCP', 'Engenharia'].includes(String(currentUser?.perfil || '').trim());
@@ -50,6 +52,12 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   const recPerguntas = async () => setPerguntas(itemId ? await perguntasDoItem(itemId) : []);
   const recMateriais = async () =>
     setMateriais(veiculoId && itemId ? await materiaisDoVeiculo(veiculoId, [itemId]) : []);
+  // 15/10/2026: perguntas da OP (sem item). Se a leitura falhar, a tela diz — lista vazia pareceria "nenhuma cadastrada" e convidaria a recadastrar em dobro
+  const recPerguntasOp = async () => {
+    try { setPerguntasOp(await perguntasDaOp()); setFalhaOp(''); }
+    catch (e) { setFalhaOp(e?.message || 'falha ao ler'); }
+  };
+  useEffect(() => { recPerguntasOp(); }, []);
   useEffect(() => { recPerguntas(); recMateriais(); }, [itemId]);
   useEffect(() => { recMateriais(); }, [veiculoId]);
 
@@ -66,6 +74,14 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
           consome fica no carro. Assim "tem hack de teto?" é cadastrada uma vez só, e cada veículo
           diz qual suporte usa.
         </div>
+
+        {/* perguntas que não são de nenhum item: valem para a OP inteira (15/10/2026) */}
+        {falhaOp
+          ? <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> Não foi possível ler as perguntas da OP ({falhaOp}). Recarregue a tela antes de cadastrar.</div>
+          : <PerguntasDoItem itemId={null} perguntas={perguntasOp} itens={itens}
+              pode={pode} currentUser={currentUser} aoMudar={recPerguntasOp}
+              titulo="PERGUNTAS DA OP"
+              ajuda="Valem para a OP inteira, qualquer que seja o item vendido (ex.: caracterizada ou descaracterizada, bateria frontal ou traseira). O vendedor responde na abertura da OP; só aparecem quando a venda leva o Conjunto Elétrico." />}
 
         <label className="acn-label">ITEM VENDIDO</label>
         <SelectBusca opcoes={opcoesDeItem(itens)} valor={itemId} onChange={setItemId}
@@ -115,7 +131,9 @@ function MarcaConjunto({ item }) {
   );
 }
 
-function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar }) {
+// `itemId` nulo = perguntas da OP (sem item). `titulo` e `ajuda` só mudam o texto.
+function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar, titulo = '', ajuda = '' }) {
+  const daOp = !itemId;
   const nivelDe = (p, visto = 0) => {
     if (!p.opcao_pai_id || visto > 8) return 0;
     const pai = perguntas.find(x => (x.opcoes || []).some(o => o.id === p.opcao_pai_id));
@@ -126,10 +144,11 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar 
   const addPergunta = async (opcaoPaiId = null) => {
     const texto = await pedirTexto(opcaoPaiId
       ? 'Pergunta que só aparece depois desta resposta:'
-      : 'Qual pergunta o vendedor deve responder sobre o carro?\n\nEx.: "Tem hack de teto?"', '');
+      : daOp ? 'Qual pergunta o vendedor deve responder sobre a OP?\n\nEx.: "O veículo é caracterizado?"'
+        : 'Qual pergunta o vendedor deve responder sobre o carro?\n\nEx.: "Tem hack de teto?"', '');
     if (!texto?.trim()) return;
     const { error } = await supabase.from('item_perguntas').insert([{
-      item_id: itemId, opcao_pai_id: opcaoPaiId, texto: texto.trim(), ordem: perguntas.length,
+      item_id: itemId || null, opcao_pai_id: opcaoPaiId, texto: texto.trim(), ordem: perguntas.length,
       criado_por_nome: currentUser?.nome || '—',
     }]);
     if (error) { alert('Não foi possível criar: ' + error.message); return; }
@@ -169,11 +188,12 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar 
   return (
     <div className="acn-cet-perguntas">
       <div className="acn-cet-sec">
-        PERGUNTAS DESTE ITEM ({perguntas.length}) — valem em qualquer carro
+        {titulo ? `${titulo} (${perguntas.length})` : `PERGUNTAS DESTE ITEM (${perguntas.length}) — valem em qualquer carro`}
       </div>
+      {ajuda && <div className="acn-ajuda">{ajuda}</div>}
       {!perguntas.length && (
         <div className="acn-ajuda">
-          Nenhuma. Se a instalação deste item não varia conforme o carro, não precisa de pergunta.
+          {daOp ? 'Nenhuma ainda.' : 'Nenhuma. Se a instalação deste item não varia conforme o carro, não precisa de pergunta.'}
         </div>
       )}
       {perguntas.map(p => (

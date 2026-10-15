@@ -62,6 +62,39 @@ export async function perguntasDeVariosItens(itemIds: string[]) {
 }
 
 /**
+ * PERGUNTAS DA OP (15/10/2026, pedido do usuário): "Caracterizada ou Descaracterizada?" e "Bateria frontal ou traseira?" não são de nenhum item
+ * — mudam o chicote e o suporte independente do que foi vendido. São as mesmas perguntas do banco, só que SEM item (`item_id` nulo): assim a resposta,
+ * a pergunta-filha e a tela de resposta em lote seguem iguais. Só valem, como as demais, quando a venda leva o Conjunto Elétrico.
+ */
+export const ehPerguntaDaOp = (p: any) => !p?.item_id;
+
+/** Rótulo curto de quem é dona da pergunta, para as telas. */
+export const donaDaPergunta = (p: any) => (ehPerguntaDaOp(p) ? 'da OP' : (p?.cadastro_itens?.nome || ''));
+
+/** As perguntas da OP, com as respostas possíveis dentro. Lança erro se a leitura falhar: lista vazia por falha esconderia a pergunta do vendedor. */
+export async function perguntasDaOp() {
+  const { data: perguntas, error } = await supabase.from('item_perguntas')
+    .select('*').is('item_id', null).order('ordem').order('id');
+  if (error) throw new Error(error.message);
+  if (!perguntas?.length) return [];
+  const { data: opcoes, error: eo } = await supabase.from('item_pergunta_opcoes')
+    .select('*').in('pergunta_id', perguntas.map((p: any) => p.id)).order('ordem').order('id');
+  if (eo) throw new Error(eo.message);
+  const porPergunta = new Map<string, any[]>();
+  (opcoes || []).forEach((o: any) => {
+    if (!porPergunta.has(o.pergunta_id)) porPergunta.set(o.pergunta_id, []);
+    porPergunta.get(o.pergunta_id)!.push(o);
+  });
+  return perguntas.map((p: any) => ({ ...p, opcoes: porPergunta.get(p.id) || [] }));
+}
+
+/** Tudo o que a venda pode perguntar: as da OP primeiro, depois as dos itens vendidos. */
+export async function perguntasDaVenda(itemIds: string[]) {
+  const [daOp, dosItens] = await Promise.all([perguntasDaOp(), perguntasDeVariosItens(itemIds)]);
+  return [...daOp, ...dosItens];
+}
+
+/**
  * Quais perguntas cabe fazer agora.
  *
  * Só entra a pergunta cujo "pai" já foi respondido com a resposta que leva a

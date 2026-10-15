@@ -31,12 +31,13 @@ import { Botao, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiCarOutline, mdiAlertOutline } from '@mdi/js';
 import {
-  perguntasDeVariosItens, respostasAutomaticas, itensConjunto, vendaTemConjunto,
+  perguntasDaVenda, donaDaPergunta, ehPerguntaDaOp, respostasAutomaticas, itensConjunto, vendaTemConjunto,
   podarRespostas, respostasDasOps,
 } from './ConfigEstrutura';
 
 const idsVendidos = (o) => (o?.itens_vendidos || []).map(v => v.item_id).filter(Boolean).map(String);
-const perguntasDaOp = (perguntas, o) => { const ids = new Set(idsVendidos(o)); return perguntas.filter(p => ids.has(String(p.item_id))); };
+// 15/10/2026: a pergunta da OP (sem item) vale para todas as OPs; as demais, só para as que venderam o item dono
+const perguntasDaOp = (perguntas, o) => { const ids = new Set(idsVendidos(o)); return perguntas.filter(p => ehPerguntaDaOp(p) || ids.has(String(p.item_id))); };
 const restringir = (ps, mapa) => { const ok = new Set(ps.map(p => p.id)); const r = {}; Object.entries(mapa || {}).forEach(([k, v]) => { if (ok.has(k)) r[k] = v; }); return r; };
 const rotuloDe = (perguntas, opcaoId) => { for (const p of perguntas) { const o = (p.opcoes || []).find(x => x.id === opcaoId); if (o) return o.rotulo; } return '—'; };
 
@@ -63,7 +64,7 @@ function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
           <div key={p.id} className={'acn-rpl-pergunta' + (p.opcao_pai_id ? ' filha' : '')}>
             <div className="acn-rpl-texto">
               {p.texto}
-              <span className="acn-rpl-item">({p.cadastro_itens?.nome})</span>
+              <span className="acn-rpl-item">({donaDaPergunta(p)})</span>
               {ehAuto && <span className="acn-rpl-auto">o sistema já sabia</span>}
             </div>
             {(p.opcoes || []).length > 0 && (
@@ -106,7 +107,7 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
         const ok = comVeiculo.filter(o => vendaTemConjunto(o.itens_vendidos || [], idsConj));
         const idsItens = [...new Set(ok.flatMap(idsVendidos))].filter(id => !idsConj.includes(id));
         const [ps, gravadas] = await Promise.all([
-          perguntasDeVariosItens(idsItens),
+          perguntasDaVenda(idsItens),
           respostasDasOps(ok.map(o => o.id)),
         ]);
         if (!vivo) return;
@@ -252,7 +253,7 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
 
               {total > 0 && !perguntas.length && (
                 <div className="acn-rpl-info neutro">
-                  Nenhum item vendido destas OPs tem pergunta cadastrada. Cadastre em Administração → Estruturas (Passo 3 do manual).
+                  Nenhuma pergunta da OP nem de item vendido destas OPs está cadastrada. Cadastre em Administração → Estruturas (Passo 3 do manual).
                 </div>
               )}
 
