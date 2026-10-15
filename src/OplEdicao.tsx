@@ -54,6 +54,12 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de destino', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF de destino', tipo: 'select', opcoes: ['', ...UFS] },
   { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de destino', tipo: 'cep' },   // R17 (13/10/2026): campo de CEP com conferência
+  { grupo: 'Veículo / envio', campo: 'destino_logradouro', rotulo: 'Rua de destino', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_numero', rotulo: 'Número do destino', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_bairro', rotulo: 'Bairro do destino', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_complemento', rotulo: 'Complemento do destino', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_destinatario', rotulo: 'Quem recebe', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'texto' },
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Recebimento do veículo', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
@@ -352,6 +358,13 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de entrega', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF', tipo: 'select', opcoes: OPC(['', ...UFS]) },
   { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de entrega', tipo: 'cep' },   // R17 (13/10/2026): campo de CEP com conferência (a dica virou o texto de exemplo do campo)
+  // Endereço completo (15/10/2026): obrigatório em Venda para Envio com frete CIF (EnderecoEntrega.ts); é o que a Logística vê na cotação do frete
+  { grupo: 'Veículo / envio', campo: 'destino_logradouro', rotulo: 'Rua de entrega', tipo: 'texto', soFrete: true },
+  { grupo: 'Veículo / envio', campo: 'destino_numero', rotulo: 'Número', tipo: 'texto', soFrete: true },
+  { grupo: 'Veículo / envio', campo: 'destino_bairro', rotulo: 'Bairro', tipo: 'texto', soFrete: true },
+  { grupo: 'Veículo / envio', campo: 'destino_complemento', rotulo: 'Complemento', tipo: 'texto', soFrete: true, dica: 'se não houver: sem complemento' },
+  { grupo: 'Veículo / envio', campo: 'destino_destinatario', rotulo: 'Quem recebe', tipo: 'texto', soFrete: true },
+  { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'texto', soFrete: true },
   // CIF/FOB não é texto livre: o Almoxarifado compara com 'FOB' na hora de
   // embalar para decidir se abre cotação de frete. Qualquer outra grafia faz
   // a OP cair no caminho do CIF calada (ver AlmoxarifadoTab.tsx).

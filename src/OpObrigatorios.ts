@@ -12,6 +12,7 @@
 import { fluxoEfetivo, terminaEmEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import { modoDoVeiculo } from './ConfigEstrutura';
 import { itensPreenchidos } from './DemandaItens';
+import { exigeEnderecoCompleto, enderecoQueFalta } from './EnderecoEntrega';
 
 /**
  * O que falta na OP para ela poder seguir ao PCP, nas palavras de quem preenche. Lista vazia = completa.
@@ -30,6 +31,11 @@ export async function camposQueFaltam(o: any): Promise<string[]> {
   }
   // quem paga o frete importa em toda OP que sai daqui embalada
   if (fluxo && terminaEmEnvio(fluxo) && !o?.frete_responsavel) faltam.push('quem paga o frete (CIF ou FOB)');
+  // Pedido do usuário em 15/10/2026: Venda para Envio com frete por conta da empresa — o endereço completo é do vendedor (EnderecoEntrega.ts).
+  // A OP criada sozinha nunca o traz do card, então volta ao Comercial para completar, como com os outros campos.
+  if (exigeEnderecoCompleto(o?.tipo_projeto, o?.fluxo_entrega, o?.frete_responsavel) && enderecoQueFalta(o).length) {
+    faltam.push('endereço de entrega completo (rua, número, bairro, complemento, quem recebe e telefone, além de CEP, cidade e UF)');
+  }
   return faltam;
 }
 

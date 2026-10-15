@@ -73,6 +73,12 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
           )
         )}
 
+        {/* frete por conta do cliente (FOB): pedido do usuário em 15/10/2026, para ficar claro em toda tela que a OP não passa por cotação */}
+        {op.frete_responsavel === 'FOB' && (
+          <Selo familia="atencao" ponto={false} title="O cliente paga o frete (FOB): esta OP não vai para cotação; depois de embalada segue para a liberação comercial e o faturamento.">
+            <Icone path={mdiTruckOutline} size={13} /> Frete por conta do cliente (FOB)
+          </Selo>
+        )}
         {frete && <span className="acn-oea-chip"><Icone path={mdiTruckOutline} size={13} /> Frete: {frete.status || 'em andamento'}</span>}
         {nf && <span className="acn-oea-chip"><Icone path={mdiReceiptTextOutline} size={13} /> NF {nf}</span>}
         {op.numero_nf_servico && <span className="acn-oea-chip"><Icone path={mdiReceiptTextOutline} size={13} /> NFS-e {op.numero_nf_servico}</span>}

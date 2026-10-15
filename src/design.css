@@ -4523,6 +4523,8 @@ html body .acn-ats-dm.sec-card table tr.acn-ats-dm-tr.ajuste { background-color:
 .acn-ats-dm-val { margin-top: 1px; color: #1e293b; font-weight: 600; }
 .acn-ats-dm-ver-rod { margin-top: 14px; }
 .acn-ats-envio { color: #0f766e; font-weight: 700; }
+/* selo "frete do cliente (FOB)" embaixo da célula Veículo/Envio das listas de OP (15/10/2026) */
+.acn-ats-fob { margin-top: 3px; }
 .acn-ats-frete { padding: 2px 8px; border-radius: 10px; display: flex; color: #b9302a; background-color: #fbe9e7; font-size: 12px; font-weight: 800; line-height: 1.45; white-space: nowrap; align-items: center; gap: 5px; }
 .acn-ats-frete.fob { color: #9a5708; background-color: #fcf1df; }
 .acn-ats-frete.cif { color: #245fb8; background-color: #e7effa; }

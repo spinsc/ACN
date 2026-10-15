@@ -23,7 +23,8 @@ import { carregarVeiculos } from './Veiculos';
 import { modoDoVeiculoOuErro } from './ConfigEstrutura';
 import FotosVeiculo from './FotosVeiculo';
 import { PerguntasDaVenda, respostasDaUnidade, gravarConfiguracaoDaOp } from './PerguntasDaVenda';
-import { recusaPorPerguntasDoCarro } from './OpObrigatorios';
+import { recusaPorPerguntasDoCarro, listaEmTexto } from './OpObrigatorios';
+import { exigeEnderecoCompleto, enderecoQueFalta } from './EnderecoEntrega';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
@@ -139,6 +140,13 @@ const VAZIO = {
   destino_cidade:         '',
   destino_uf:             '',
   destino_cep:            '',
+  // endereço completo: obrigatório em Venda para Envio com frete CIF (EnderecoEntrega.ts)
+  destino_logradouro:     '',
+  destino_numero:         '',
+  destino_bairro:         '',
+  destino_complemento:    '',
+  destino_destinatario:   '',
+  destino_telefone:       '',
   chassi:                 '',
   placa:                  '',   // sempre ativo
   modelo:                 '',
@@ -435,6 +443,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       }
     }
     if (precisaFrete && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
+    // Pedido do usuário em 15/10/2026: Venda para Envio com frete por conta da empresa — o vendedor é o responsável por informar o endereço completo certo,
+    // e é ele que a Logística vê na cotação do frete.
+    if (form.tipo === 'OP' && exigeEnderecoCompleto(form.tipo_projeto, fluxoEf, form.frete_responsavel)) {
+      const faltaEnd = enderecoQueFalta(form);
+      if (faltaEnd.length) { setErro(`Frete por conta da empresa: informe o endereço de entrega, é com ele que a Logística cota o frete. Falta: ${listaEmTexto(faltaEnd)}.`); return; }
+    }
     // Lote misto: cada grupo tem seus próprios itens (validado em validarGrupos,
     // mais abaixo) — a lista única daqui não vale nesse caso.
     if (form.tipo === 'OP' && !loteEhMisto && itensPreenchidos(form.itens_vendidos || []).length === 0) {
@@ -495,6 +509,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           destino_cidade:         form.destino_cidade?.trim() || null,
           destino_uf:             form.destino_uf || null,
           destino_cep:            cepParaGravar(form.destino_cep),
+          destino_logradouro:     form.destino_logradouro?.trim() || null,
+          destino_numero:         form.destino_numero?.trim() || null,
+          destino_bairro:         form.destino_bairro?.trim() || null,
+          destino_complemento:    form.destino_complemento?.trim() || null,
+          destino_destinatario:   form.destino_destinatario?.trim() || null,
+          destino_telefone:       form.destino_telefone?.trim() || null,
           chassi:                 ehVendaEnvio ? null : ((veiculo?.chassi || form.chassi) || null),
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
           modelo:                 ehVendaEnvio ? null : ((veiculo?.modelo || form.modelo) || null),
@@ -924,7 +944,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               <div className="acn-nop-gr g211">
                 <div>
                   <div className="acn-nop-rot">Cidade de Entrega</div>
-                  <input className="acn-input acn-nop-w" placeholder="Opcional — pode preencher depois"
+                  <input className="acn-input acn-nop-w" placeholder={exigeEnderecoCompleto(form.tipo_projeto, fluxoEf, form.frete_responsavel) ? 'Obrigatório (frete por conta da empresa)' : 'Opcional — pode preencher depois'}
                     value={form.destino_cidade} onChange={e => setF('destino_cidade', e.target.value)} />
                 </div>
                 <div>
@@ -941,6 +961,42 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     onResultado={(r) => { if (r.status === 'ok') { setF('destino_cidade', r.cidade); setF('destino_uf', r.uf); } }} />
                 </div>
               </div>
+
+              {/* Endereço completo (pedido do usuário em 15/10/2026): Venda para Envio com frete por conta da empresa. É de responsabilidade de quem gera a OP
+                  e é o que a Logística vê na cotação. Cidade, UF e CEP acima passam a ser obrigatórios junto. */}
+              {form.tipo === 'OP' && exigeEnderecoCompleto(form.tipo_projeto, fluxoEf, form.frete_responsavel) && (
+                <div className="acn-nop-frete-box">
+                  <div className="acn-nop-rot">📍 Endereço de entrega * <span style={{ fontWeight: 400 }}>— a Logística cota o frete com estes dados; confira com o cliente</span></div>
+                  <div className="acn-nop-gr g211">
+                    <div>
+                      <div className="acn-nop-rot">Rua *</div>
+                      <input className="acn-input acn-nop-w" value={form.destino_logradouro} onChange={e => setF('destino_logradouro', e.target.value)} />
+                    </div>
+                    <div>
+                      <div className="acn-nop-rot">Número *</div>
+                      <input className="acn-input acn-nop-w" value={form.destino_numero} onChange={e => setF('destino_numero', e.target.value)} />
+                    </div>
+                    <div>
+                      <div className="acn-nop-rot">Bairro *</div>
+                      <input className="acn-input acn-nop-w" value={form.destino_bairro} onChange={e => setF('destino_bairro', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="acn-nop-gr g3">
+                    <div>
+                      <div className="acn-nop-rot">Complemento *</div>
+                      <input className="acn-input acn-nop-w" placeholder="Se não houver: sem complemento" value={form.destino_complemento} onChange={e => setF('destino_complemento', e.target.value)} />
+                    </div>
+                    <div>
+                      <div className="acn-nop-rot">Quem recebe *</div>
+                      <input className="acn-input acn-nop-w" value={form.destino_destinatario} onChange={e => setF('destino_destinatario', e.target.value)} />
+                    </div>
+                    <div>
+                      <div className="acn-nop-rot">Telefone de quem recebe *</div>
+                      <input className="acn-input acn-nop-w" inputMode="tel" placeholder="(00) 00000-0000" value={form.destino_telefone} onChange={e => setF('destino_telefone', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Envio direto: quantidade é só um número na mesma OP — sem lote
                   e sem dados por veículo. Avisa, para não parecer que sumiu. */}
