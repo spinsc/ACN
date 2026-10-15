@@ -16,6 +16,7 @@ import React, { useState, useEffect } from 'react';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { carregarDossie, buscarOps } from './OpVinculos';
 import { QuadroItensOp } from './OpItens';
+import { RespostasDaOp } from './RespostasDaOp';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
 import { diaBR } from './Interface';
@@ -208,7 +209,13 @@ export function DossieOp({ op, dossieCarregado = null }) {
         {/* ── Vendido × BOM × Separado ── */}
         <Secao titulo="O que foi vendido, o que a BOM pediu e o que saiu do estoque" cor="#0f766e"
           vazio="Esta OP não tem itens vendidos nem BOM estruturada (OPs anteriores a set/2026).">
-          {(o.itens_vendidos?.length || o.bom_itens?.length) ? <QuadroItensOp opl={o} /> : null}
+          {(o.itens_vendidos?.length || o.bom_itens?.length) ? (
+            <>
+              <QuadroItensOp opl={o} />
+              {/* etapa 4 (15/10/2026): as respostas sobre o carro e a troca delas enquanto a OP ainda não saiu do PCP */}
+              <RespostasDaOp op={o} />
+            </>
+          ) : null}
         </Secao>
 
         {/* ── Grupos de vínculos ── */}

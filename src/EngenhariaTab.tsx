@@ -22,6 +22,7 @@ import { OrigemVendaBadge } from './OrigemVenda';
 import { fluxoLabel } from './FluxoEntrega';
 import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
+import { aplicarDiferencaNaBom, avisoDoQueNaoFoiTirado } from './CalculoDaEstrutura';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { indicePendencias } from './OpPendencias';
 import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
@@ -987,6 +988,13 @@ export default function EngenhariaTab({ currentUser }) {
                   calculado, avisa o que vai faltar e — o mais importante — cobra
                   o cadastro dos itens que nunca foram adaptados neste carro. */}
               <PainelConferenciaEstrutura opl={modalBom} currentUser={currentUser}
+                onAjustarBom={(dif, nomeConj) => {
+                  // etapa 4 (15/10/2026): uma resposta mudou; entra na BOM desta janela só a diferença (o que foi ajustado à mão fica)
+                  const r = aplicarDiferencaNaBom(bomLinhas, dif, nomeConj);
+                  setBomLinhas(r.bom);
+                  const aviso = avisoDoQueNaoFoiTirado(r.naoAchou);
+                  if (aviso) alert(aviso);
+                }}
                 onUsar={(linhas, idsConj = []) => setBomLinhas(atuais => {
                   const mapa = new Map();
                   [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
@@ -1110,6 +1118,12 @@ export default function EngenhariaTab({ currentUser }) {
                     <div className="acn-ajuda">Estrutura calculada com base na OP <b>{ref.opl}</b>.</div>
                     <PainelConferenciaEstrutura opl={ref} currentUser={currentUser} opsParaResponder={marcadas}
                       onRespondido={() => setVersaoRespostas(v => v + 1)}
+                      onAjustarBom={(dif, nomeConj) => {
+                        const r = aplicarDiferencaNaBom(bomLote, dif, nomeConj);
+                        setBomLote(r.bom);
+                        const aviso = avisoDoQueNaoFoiTirado(r.naoAchou);
+                        if (aviso) alert(aviso);
+                      }}
                       onUsar={(linhas, idsConj = []) => setBomLote(atuais => {
                         const mapa = new Map();
                         [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
