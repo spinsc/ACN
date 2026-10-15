@@ -12,15 +12,28 @@
 //
 // Reescrita em 28/09/2026: a primeira versão misturava as duas, obrigando a
 // redigitar a mesma pergunta em cada carro.
+//
+// REDESENHO de 16/10/2026 (pedido do usuário; análise com olhar de backend, frontend e UX/UI; só tela — nenhuma tabela, coluna ou função do banco mudou):
+//   • o VEÍCULO é escolhido uma vez, no alto (antes eram dois seletores iguais em dois quadros) e vale para o material do item, as regras, a cobertura e o simulador;
+//   • as PERGUNTAS vêm recolhidas, com o uso de cada resposta (quantas regras e quantas linhas de material dependem dela) — resposta que nada usa aparece em âmbar;
+//   • "condição" e "regra" (dois sentidos diferentes, e um terceiro "Regras do veículo") viraram "aparece só com…" e "automática se…", e escolhem ITENS POR BUSCA
+//     (antes era uma caixa de texto com códigos separados por vírgula);
+//   • a REGRA é lida em uma frase (SE … E … ENTÃO usa …) e pode ser editada ou duplicada. Editar grava a regra nova PRIMEIRO e só então apaga a antiga: se a
+//     gravação falhar, a antiga continua valendo (mantém a decisão de 15/10/2026 de que nenhuma regra muda de sentido por acidente);
+//   • COBERTURA: toda combinação de respostas tem regra? Usa o mesmo cálculo da OP, então "a definir" aqui é "a definir" lá (CoberturaDaEstrutura.ts);
+//   • SIMULADOR: monta uma OP de mentira e mostra o material que a conta oficial devolveria (só leitura);
+//   • apagar pergunta ou resposta diz ANTES o que leva junto (o banco apaga o material por resposta e as respostas já dadas nas OPs; se uma regra a usa, ele recusa).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
-import { SelectBusca, Botao, Selo } from './Interface';
+import { SelectBusca, Botao, Selo, Faixa } from './Interface';
 import Icone from './Icone';
-import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiAlertOutline, mdiClose, mdiPlus } from '@mdi/js';
+import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiChevronDown, mdiAlertOutline, mdiClose, mdiPlus, mdiPencilOutline, mdiContentCopy, mdiTrashCanOutline } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade, copiarEstruturaDeItem, resumoDaCopia } from './ConfigEstrutura';
+import { coberturaDoVeiculo, perguntasSemRegra, lerUsoDasRespostas, usosDaResposta, oQueApagarRespostaLeva, oQueApagarPerguntaLeva, fraseDoQueLeva } from './CoberturaDaEstrutura';
+import { EditorDeItens, FraseDaRegra, CoberturaDasRegras, SimuladorDaEstrutura, rotuloDoItem } from './ConfigEstruturaPecas';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 function useItens() {
@@ -35,31 +48,88 @@ function useItens() {
 const opcoesDeItem = (itens) => itens.map(i => ({
   valor: i.id, rotulo: `${i.codigo ? i.codigo + ' — ' : ''}${i.nome}`, busca: [i.codigo, i.nome],
 }));
+const nomeDoVeiculo = (v) => (v ? (v.nome_exibicao || [v.marca, v.modelo].filter(Boolean).join(' ')) : '');
 
 export default function ConfigEstruturaTela({ currentUser, itemInicial = '', veiculoInicial = '' }) {
   // 18d (13/10/2026): o atalho "Cadastrar estrutura" do pedido de desenvolvimento abre a tela já no item e no veículo daquela linha
   const [itemId, setItemId] = useState(itemInicial || '');
-  const [veiculoId, setVeiculoId] = useState(veiculoInicial || '');
+  // 16/10/2026: um veículo só para a tela inteira (antes: um seletor em cada quadro)
+  const [veiculo, setVeiculo] = useState({ id: veiculoInicial || '', nome: '' });
+  const veiculoId = veiculo.id;
   const [perguntas, setPerguntas] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [perguntasOp, setPerguntasOp] = useState([]);
   const [falhaOp, setFalhaOp] = useState('');
+  const [perguntasTodas, setPerguntasTodas] = useState([]);   // as da OP e as de todos os itens, para montar as condições das regras
+  const [falhaPerguntas, setFalhaPerguntas] = useState('');
+  const [regras, setRegras] = useState([]);
+  const [falhaRegras, setFalhaRegras] = useState('');
+  const [uso, setUso] = useState(null);                       // quantas regras e linhas de material usam cada resposta
+  const [falhaUso, setFalhaUso] = useState('');
+  const [combinacaoSim, setCombinacaoSim] = useState(null);   // { respostas, sinal }: "Simular" na tabela da cobertura
+  const [pedidoDeRegra, setPedidoDeRegra] = useState(null);   // { condicoes, sinal }: "Criar regra" na tabela da cobertura
   const itens = useItens();
+  const loteRegras = useRef(0);
+  const loteMateriais = useRef(0);
   // 18d (13/10/2026): quem desenvolve o item cadastra a estrutura dele no veículo (decisão do usuário em 12/10/2026) — a Engenharia entra junto do PCP
   const pode = ehAdminOuGerente(currentUser) || ['PCP', 'Engenharia'].includes(String(currentUser?.perfil || '').trim());
   const item = itens.find(i => i.id === itemId);
 
   const recPerguntas = async () => setPerguntas(itemId ? await perguntasDoItem(itemId) : []);
-  const recMateriais = async () =>
-    setMateriais(veiculoId && itemId ? await materiaisDoVeiculo(veiculoId, [itemId]) : []);
+  // a resposta de uma leitura antiga não pode sobrescrever a da mais nova (trocar de veículo depressa)
+  const recMateriais = async () => {
+    const meu = ++loteMateriais.current;
+    const lista = veiculoId && itemId ? await materiaisDoVeiculo(veiculoId, [itemId]) : [];
+    if (meu === loteMateriais.current) setMateriais(lista);
+  };
   // 15/10/2026: perguntas da OP (sem item). Se a leitura falhar, a tela diz — lista vazia pareceria "nenhuma cadastrada" e convidaria a recadastrar em dobro
   const recPerguntasOp = async () => {
     try { setPerguntasOp(await perguntasDaOp()); setFalhaOp(''); }
     catch (e) { setFalhaOp(e?.message || 'falha ao ler'); }
   };
-  useEffect(() => { recPerguntasOp(); }, []);
+  const recPerguntasTodas = async () => {
+    try { setPerguntasTodas(await todasAsPerguntas()); setFalhaPerguntas(''); }
+    catch (e) { setFalhaPerguntas(e?.message || 'falha ao ler as perguntas'); }
+  };
+  const recRegras = async () => {
+    const meu = ++loteRegras.current;
+    if (!veiculoId) { setRegras([]); setFalhaRegras(''); return; }
+    try { const lista = await regrasDoVeiculo(veiculoId); if (meu === loteRegras.current) { setRegras(lista); setFalhaRegras(''); } }
+    catch (e) { if (meu === loteRegras.current) setFalhaRegras(e?.message || 'falha ao ler as regras'); }
+  };
+  // contador de uso: se a leitura falhar, os contadores somem (não mostram "sem uso" de algo que é usado)
+  const recUso = async () => {
+    try { setUso(await lerUsoDasRespostas()); setFalhaUso(''); }
+    catch (e) { setUso(null); setFalhaUso(e?.message || 'falha ao ler o uso das respostas'); }
+  };
+  useEffect(() => { recPerguntasOp(); recPerguntasTodas(); recUso(); }, []);
+  // aberta pelo atalho da Engenharia (veículo já escolhido): o seletor só sabe o id, então o nome vem de uma leitura — é ele que aparece em "Regras de …" e na cópia de regras
+  useEffect(() => {
+    if (!veiculoInicial) return;
+    supabase.from('veiculos').select('*').eq('id', veiculoInicial).maybeSingle()
+      .then(({ data }) => { if (data) setVeiculo(v => (v.id === veiculoInicial && !v.nome ? { id: v.id, nome: nomeDoVeiculo(data) } : v)); });
+  }, []);
   useEffect(() => { recPerguntas(); recMateriais(); }, [itemId]);
-  useEffect(() => { recMateriais(); }, [veiculoId]);
+  useEffect(() => { recMateriais(); recRegras(); }, [veiculoId]);
+
+  // depois de mexer em pergunta ou resposta: tudo o que depende delas se atualiza (as regras montam as condições a partir delas)
+  const aposMudarPerguntas = () => { recPerguntas(); recPerguntasOp(); recPerguntasTodas(); recUso(); };
+  const aposMudarMaterial = () => { recMateriais(); recUso(); };
+  const aposMudarRegras = () => { recRegras(); recUso(); };
+
+  const cobertura = useMemo(() => (veiculoId ? coberturaDoVeiculo(regras, perguntasTodas) : { eixos: [], linhas: [], total: 0, truncado: false, condicionais: [] }), [veiculoId, regras, perguntasTodas]);
+  const semRegra = useMemo(() => (veiculoId ? perguntasSemRegra(regras, perguntasTodas) : []), [veiculoId, regras, perguntasTodas]);
+  const falhaCobertura = falhaRegras || falhaPerguntas;
+
+  // 64 combinações já enchem a tela: "Criar regra" leva as respostas daquela linha para o formulário
+  const criarRegraDaCombinacao = (respostas, eixos) => setPedidoDeRegra({
+    sinal: Date.now(),
+    condicoes: eixos.filter(p => respostas[p.id]).map(p => ({ tipo: 'resposta', opcao_id: respostas[p.id] })),
+  });
+  const simularCombinacao = (respostas) => {
+    setCombinacaoSim({ respostas, sinal: Date.now() });
+    setTimeout(() => document.getElementById('acn-cet-simulador')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  };
 
   // 12e54 (09/10/2026): só aparência — o roxo-azulado dos títulos virou o tom do guia, os botões miúdos viraram os botões do guia (pequenos) e o recuo das
   // perguntas filhas passou para [data-nivel] no design.css (antes era uma conta de margem escrita no JSX); o que cada botão grava não mudou
@@ -73,14 +143,18 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
         <div className="acn-ajuda acn-cet-intro">
           A <b>pergunta</b> fica no item e vale em qualquer carro. O <b>material</b> que cada resposta
           consome fica no carro. Assim "tem hack de teto?" é cadastrada uma vez só, e cada veículo
-          diz qual suporte usa.
+          diz qual suporte usa. Escolha o veículo aqui em cima: vale para o material do item, para as regras, para a cobertura e para o simulador.
         </div>
+
+        <label className="acn-label">VEÍCULO</label>
+        <SelectVeiculo valor={veiculoId} onChange={(id, v) => setVeiculo({ id: id || '', nome: nomeDoVeiculo(v) })} currentUser={currentUser} />
+        {falhaUso && <Faixa tom="atencao">Não foi possível ler onde cada resposta é usada ({falhaUso}). Os contadores de uso ficam escondidos e apagar uma resposta não consegue avisar o que leva junto.</Faixa>}
 
         {/* perguntas que não são de nenhum item: valem para a OP inteira (15/10/2026) */}
         {falhaOp
           ? <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> Não foi possível ler as perguntas da OP ({falhaOp}). Recarregue a tela antes de cadastrar.</div>
           : <PerguntasDoItem itemId={null} perguntas={perguntasOp} itens={itens}
-              pode={pode} currentUser={currentUser} aoMudar={recPerguntasOp}
+              pode={pode} currentUser={currentUser} aoMudar={aposMudarPerguntas} uso={uso}
               titulo="PERGUNTAS DA OP"
               ajuda="Valem para a OP inteira, qualquer que seja o item vendido (ex.: caracterizada ou descaracterizada, bateria frontal ou traseira). O vendedor responde na abertura da OP; só aparecem quando a venda leva o Conjunto Elétrico." />}
 
@@ -95,22 +169,21 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
             {String(item.codigo) !== '1687' && (
               <>
                 <PerguntasDoItem itemId={itemId} perguntas={perguntas} itens={itens}
-                  pode={pode} currentUser={currentUser} aoMudar={recPerguntas} />
+                  pode={pode} currentUser={currentUser} aoMudar={aposMudarPerguntas} uso={uso} />
 
                 <div className="acn-cet-material">
-                  <label className="acn-label">MATERIAL DESTE ITEM EM QUAL CARRO</label>
-                  <SelectVeiculo valor={veiculoId} onChange={setVeiculoId} currentUser={currentUser} />
-                  {veiculoId && (
-                    <MaterialNoVeiculo veiculoId={veiculoId} itemId={itemId} materiais={materiais}
-                      perguntas={perguntas} itens={itens} pode={pode} currentUser={currentUser}
-                      aoMudar={recMateriais} />
-                  )}
+                  <label className="acn-label">MATERIAL DESTE ITEM NO VEÍCULO ESCOLHIDO</label>
+                  {veiculoId
+                    ? <MaterialNoVeiculo veiculoId={veiculoId} itemId={itemId} materiais={materiais}
+                        perguntas={perguntas} itens={itens} pode={pode} currentUser={currentUser}
+                        aoMudar={aposMudarMaterial} />
+                    : <div className="acn-ajuda">Escolha o veículo no alto da tela para ver e cadastrar o material deste item.</div>}
                 </div>
 
                 {/* 15/10/2026: leva perguntas, material por veículo e regras de um item para este (ex.: de uma variante de slimled para outra) */}
                 {pode && (
                   <CopiarEstruturaDeItem itemId={itemId} itens={itens} veiculoId={veiculoId} currentUser={currentUser}
-                    aoCopiar={() => { recPerguntas(); recMateriais(); recPerguntasOp(); }} />
+                    aoCopiar={() => { aposMudarPerguntas(); recMateriais(); recRegras(); }} />
                 )}
               </>
             )}
@@ -119,7 +192,29 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
       </div>
     </div>
     {/* etapa 3 (15/10/2026): chicote e suporte por regra "se… então…", sempre de um veículo */}
-    <RegrasDoVeiculo currentUser={currentUser} pode={pode} itens={itens} />
+    <RegrasDoVeiculo veiculo={veiculo} regras={regras} falha={falhaCobertura} perguntas={perguntasTodas} itens={itens}
+      pode={pode} currentUser={currentUser} aoMudar={aposMudarRegras} pedidoDeRegra={pedidoDeRegra} />
+
+    <div className="sec-card acn-cet">
+      <div className="sec-hdr">
+        <span className="acn-cet-tit"><Icone path={mdiPuzzleOutline} size={16} />Cobertura e simulador do veículo</span>
+      </div>
+      <div className="sec-body">
+        {!veiculoId && <div className="acn-ajuda">Escolha o veículo no alto da tela.</div>}
+        {veiculoId && (
+          <>
+            <div className="acn-cet-sec">COBERTURA: TODA COMBINAÇÃO DE RESPOSTAS TEM REGRA?</div>
+            <div className="acn-ajuda">Usa a mesma conta da OP: "a definir" aqui é o que a OP mostraria como "chicote/suporte a definir".</div>
+            {falhaCobertura
+              ? <Faixa tom="erro">Não foi possível ler as regras ou as perguntas ({falhaCobertura}): sem elas a cobertura não é confiável.</Faixa>
+              : <CoberturaDasRegras cobertura={cobertura} semRegra={semRegra} totalDeRegras={regras.length} pode={pode}
+                  aoSimular={simularCombinacao} aoCriarRegra={criarRegraDaCombinacao} />}
+            <div className="acn-cet-sec espaco" id="acn-cet-simulador">SIMULADOR: O QUE UMA OP RECEBE</div>
+            <SimuladorDaEstrutura veiculo={veiculo} itens={itens} combinacao={combinacaoSim?.respostas} sinal={combinacaoSim?.sinal} />
+          </>
+        )}
+      </div>
+    </div>
     </>
   );
 }
@@ -198,68 +293,88 @@ function CopiarEstruturaDeItem({ itemId, itens, veiculoId, currentUser, aoCopiar
  * REGRAS "SE… ENTÃO…" DE UM VEÍCULO (etapa 3, 15/10/2026)
  *
  * Define qual chicote e qual suporte entram, a partir das respostas da OP (caracterizada, bateria), de itens vendidos juntos (sirene S100W…) e de
- * quantidades (slimled: 2 na frente). Sempre por veículo, como decidido com o usuário. Para editar uma regra, apague e crie de novo: assim nenhuma
- * regra muda de sentido por acidente.
+ * quantidades (slimled: 2 na frente). Sempre por veículo, como decidido com o usuário.
+ *
+ * Editar uma regra (16/10/2026): a regra NOVA é gravada primeiro e só depois a antiga é apagada, para nenhuma regra mudar de sentido por acidente — se a gravação
+ * falhar, a antiga segue valendo. Se a nova gravar e a antiga não apagar, a tela diz (as duas valendo somam o material).
  */
-function RegrasDoVeiculo({ currentUser, pode, itens }) {
-  const [veiculo, setVeiculo] = useState({ id: '', nome: '' });
-  const [regras, setRegras] = useState([]);
-  const [perguntas, setPerguntas] = useState([]);
-  const [falha, setFalha] = useState('');
-  const [ocupado, setOcupado] = useState(false);
+function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, currentUser, aoMudar, pedidoDeRegra }) {
   const [nome, setNome] = useState('');
   const [condicoes, setCondicoes] = useState([]);
   const [saidas, setSaidas] = useState([]);
   const [cond, setCond] = useState({ tipo: 'resposta', opcao_id: '', item_id: '', pergunta_id: '', valor: '' });
   const [mat, setMat] = useState({ material_item_id: '', quantidade: '1', acao: 'adicionar' });
+  const [erroForm, setErroForm] = useState('');
+  const [editando, setEditando] = useState(null);   // { id, ordem, nome } da regra que está sendo refeita
+  const [ocupado, setOcupado] = useState(false);
+  const refForm = useRef(null);
+  const irParaForm = () => setTimeout(() => refForm.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 
-  const recarregar = async () => {
-    if (!veiculo.id) { setRegras([]); return; }
-    try { setRegras(await regrasDoVeiculo(veiculo.id)); setFalha(''); }
-    catch (e) { setFalha(e?.message || 'falha ao ler as regras'); }
-  };
-  useEffect(() => { recarregar(); }, [veiculo.id]);
-  useEffect(() => { todasAsPerguntas().then(setPerguntas).catch(e => setFalha(e?.message || 'falha ao ler as perguntas')); }, []);
+  useEffect(() => { setEditando(null); setErroForm(''); }, [veiculo.id]);
+  // "Criar regra" da cobertura: as respostas daquela combinação já entram como condições
+  useEffect(() => {
+    if (!pedidoDeRegra) return;
+    setEditando(null); setNome(''); setSaidas([]); setErroForm('');
+    setCondicoes(pedidoDeRegra.condicoes || []);
+    irParaForm();
+  }, [pedidoDeRegra?.sinal]);
 
   const dona = (p) => (p.item_id ? (p.cadastro_itens?.nome || 'item') : 'da OP');
   const opcoesDeResposta = perguntas.filter(p => !ehQuantidade(p)).flatMap(p => (p.opcoes || []).map(o => ({ id: o.id, rotulo: `${p.texto} → ${o.rotulo} (${dona(p)})` })));
   const perguntasQtd = perguntas.filter(p => ehQuantidade(p));
-  const rotuloItem = (id) => { const i = itens.find(x => x.id === id); return i ? `${i.codigo ? i.codigo + ' — ' : ''}${i.nome}` : '(item)'; };
+  const rotuloItem = (id) => rotuloDoItem(itens, id);
   const textoCondicao = (c) => {
     if (c.tipo === 'item') return `vendeu ${rotuloItem(c.item_id)}`;
     if (c.tipo === 'quantidade') return `${perguntas.find(p => p.id === c.pergunta_id)?.texto || '(pergunta)'} = ${Number(c.valor_numerico ?? c.valor)}`;
     return opcoesDeResposta.find(o => o.id === c.opcao_id)?.rotulo || '(resposta)';
   };
+  const rotuloMaterialSalvo = (m) => (m.material ? `${m.material.codigo ? m.material.codigo + ' — ' : ''}${m.material.nome}` : rotuloItem(m.material_item_id));
 
   const adicionarCondicao = () => {
     let nova = null;
     if (cond.tipo === 'resposta' && cond.opcao_id) nova = { tipo: 'resposta', opcao_id: cond.opcao_id };
     if (cond.tipo === 'item' && cond.item_id) nova = { tipo: 'item', item_id: cond.item_id };
     if (cond.tipo === 'quantidade' && cond.pergunta_id && /^\d+$/.test(String(cond.valor).trim())) nova = { tipo: 'quantidade', pergunta_id: cond.pergunta_id, valor_numerico: Number(cond.valor) };
-    if (!nova) { alert('Preencha a condição: escolha a resposta, o item ou a pergunta com o número inteiro.'); return; }
-    if (condicoes.some(c => JSON.stringify(c) === JSON.stringify(nova))) { alert('Esta condição já está na regra.'); return; }
+    if (!nova) { setErroForm('Preencha a condição: escolha a resposta, o item ou a pergunta com o número inteiro.'); return; }
+    if (condicoes.some(c => JSON.stringify(c) === JSON.stringify(nova))) { setErroForm('Esta condição já está na regra.'); return; }
+    setErroForm('');
     setCondicoes(l => [...l, nova]);
     setCond(c => ({ ...c, opcao_id: '', item_id: '', pergunta_id: '', valor: '' }));
   };
   const adicionarSaida = () => {
     const q = Number(String(mat.quantidade).replace(',', '.'));
-    if (!mat.material_item_id || !(q > 0)) { alert('Escolha o material e uma quantidade maior que zero.'); return; }
+    if (!mat.material_item_id || !(q > 0)) { setErroForm('Escolha o material e uma quantidade maior que zero.'); return; }
+    setErroForm('');
     setSaidas(l => [...l, { material_item_id: mat.material_item_id, quantidade: q, acao: mat.acao }]);
     setMat({ material_item_id: '', quantidade: '1', acao: 'adicionar' });
+  };
+  const limpar = () => { setNome(''); setCondicoes([]); setSaidas([]); setEditando(null); setErroForm(''); };
+
+  // o formulário recebe uma regra existente (editar) ou uma cópia (duplicar)
+  const carregarNoForm = (r, comoEdicao) => {
+    setNome(comoEdicao ? (r.nome || '') : (r.nome ? `${r.nome} (cópia)` : ''));
+    setCondicoes((r.condicoes || []).map(c => (c.tipo === 'item' ? { tipo: 'item', item_id: c.item_id }
+      : c.tipo === 'quantidade' ? { tipo: 'quantidade', pergunta_id: c.pergunta_id, valor_numerico: Number(c.valor_numerico) }
+      : { tipo: 'resposta', opcao_id: c.opcao_id })));
+    setSaidas((r.materiais || []).map(m => ({ material_item_id: m.material_item_id, quantidade: Number(m.quantidade), acao: m.acao })));
+    setEditando(comoEdicao ? { id: r.id, ordem: r.ordem, nome: r.nome || '' } : null);
+    setErroForm('');
+    irParaForm();
   };
 
   const salvar = async () => {
     if (ocupado) return;
-    if (!veiculo.id) { alert('Escolha o veículo.'); return; }
-    if (!condicoes.length) { alert('A regra precisa de pelo menos uma condição, senão valeria para toda OP deste veículo.'); return; }
-    if (!saidas.length) { alert('A regra precisa de pelo menos um material (o chicote ou o suporte que ela escolhe).'); return; }
+    setErroForm('');
+    if (!veiculo.id) { setErroForm('Escolha o veículo.'); return; }
+    if (!condicoes.length) { setErroForm('A regra precisa de pelo menos uma condição, senão valeria para toda OP deste veículo.'); return; }
+    if (!saidas.length) { setErroForm('A regra precisa de pelo menos um material (o chicote ou o suporte que ela escolhe).'); return; }
     const assinatura = (cs) => JSON.stringify(cs.map(c => `${c.tipo}:${c.opcao_id || c.item_id || c.pergunta_id}:${c.valor_numerico ?? ''}`).sort());
-    if (regras.some(r => assinatura(r.condicoes) === assinatura(condicoes))
+    if (regras.some(r => r.id !== editando?.id && assinatura(r.condicoes) === assinatura(condicoes))
         && !await confirmar('Este veículo já tem uma regra com exatamente estas condições. Criar outra assim mesmo? O material das duas soma.')) return;
     setOcupado(true);
     try {
       const { data: nova, error } = await supabase.from('veiculo_regras')
-        .insert([{ veiculo_id: veiculo.id, nome: nome.trim() || null, ordem: regras.length, criado_por_nome: currentUser?.nome || '—' }]).select('id').single();
+        .insert([{ veiculo_id: veiculo.id, nome: nome.trim() || null, ordem: editando ? editando.ordem : regras.length, criado_por_nome: currentUser?.nome || '—' }]).select('id').single();
       if (error || !nova?.id) { alert('Não foi possível criar a regra: ' + (error?.message || 'sem resposta do banco')); return; }
       const ec = await supabase.from('veiculo_regra_condicoes').insert(condicoes.map(c => ({ regra_id: nova.id, ...c })));
       const em = ec.error ? null : await supabase.from('veiculo_regra_materiais').insert(saidas.map((s, i) => ({ regra_id: nova.id, ...s, ordem: i })));
@@ -267,11 +382,16 @@ function RegrasDoVeiculo({ currentUser, pode, itens }) {
       if (falhou) {
         // regra sem condição ou sem material é pior que nenhuma: desfaz só o que ESTA ação acabou de criar
         await supabase.from('veiculo_regras').delete().eq('id', nova.id);
-        alert('Não foi possível gravar a regra: ' + falhou.message + '\n\nNada foi criado; tente de novo.');
+        alert('Não foi possível gravar a regra: ' + falhou.message + '\n\nNada foi criado' + (editando ? '; a regra antiga continua valendo' : '') + '; tente de novo.');
         return;
       }
-      setNome(''); setCondicoes([]); setSaidas([]);
-      await recarregar();
+      // editar: só agora, com a nova já gravada, a antiga sai
+      if (editando) {
+        const { error: erroAntiga } = await supabase.from('veiculo_regras').delete().eq('id', editando.id);
+        if (erroAntiga) alert('A regra nova foi gravada, mas a antiga NÃO foi apagada (' + erroAntiga.message + '). Apague a antiga na lista: com as duas valendo, o material soma em dobro.');
+      }
+      limpar();
+      await aoMudar();
     } finally { setOcupado(false); }
   };
 
@@ -279,7 +399,8 @@ function RegrasDoVeiculo({ currentUser, pode, itens }) {
     if (!await confirmar(`Apagar a regra "${r.nome || 'sem nome'}" deste veículo?\n\nAs OPs já criadas não mudam; as próximas deixam de receber o material dela.`)) return;
     const { error } = await supabase.from('veiculo_regras').delete().eq('id', r.id);
     if (error) { alert('Não foi possível apagar a regra: ' + error.message); return; }
-    recarregar();
+    if (editando?.id === r.id) limpar();
+    aoMudar();
   };
 
   const copiarDe = async (origemId, origem) => {
@@ -294,7 +415,7 @@ function RegrasDoVeiculo({ currentUser, pode, itens }) {
     const r = await copiarRegras(origemId, veiculo.id, currentUser);
     setOcupado(false);
     if (r.erro) alert(`Foram copiadas ${r.copiadas} de ${qtd} regra(s). Parou em: ${r.erro}`);
-    recarregar();
+    aoMudar();
   };
 
   return (
@@ -308,35 +429,36 @@ function RegrasDoVeiculo({ currentUser, pode, itens }) {
           Cada veículo tem as suas. Várias regras podem valer na mesma OP e o material delas soma; a quantidade é <b>por carro</b>.
           Se uma resposta não for usada por nenhuma regra do veículo, a OP mostra "chicote/suporte a definir".
         </div>
-        {falha && <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> {falha}</div>}
+        {falha && <Faixa tom="erro">{falha}</Faixa>}
 
-        <label className="acn-label">VEÍCULO</label>
-        <SelectVeiculo valor={veiculo.id} onChange={(id, v) => setVeiculo({ id: id || '', nome: v ? (v.nome_exibicao || [v.marca, v.modelo].filter(Boolean).join(' ')) : '' })} currentUser={currentUser} />
+        {!veiculo.id && <div className="acn-ajuda">Escolha o veículo no alto da tela para ver e cadastrar as regras dele.</div>}
 
         {veiculo.id && (
           <>
-            <div className="acn-cet-sec espaco">REGRAS DESTE VEÍCULO ({regras.length})</div>
+            <div className="acn-cet-sec espaco">REGRAS DE {(veiculo.nome || 'ESTE VEÍCULO').toUpperCase()} ({regras.length})</div>
             {!regras.length && !falha && <div className="acn-ajuda">Nenhuma regra ainda: nenhum chicote ou suporte é escolhido por resposta neste veículo.</div>}
             {regras.map(r => (
-              <div key={r.id} className="acn-cet-regra">
+              <div key={r.id} className={'acn-cet-regra' + (editando?.id === r.id ? ' editando' : '')}>
                 <div className="acn-cet-regra-cab">
                   <b className="acn-cet-regra-nome">{r.nome || 'Regra sem nome'}</b>
-                  {pode && <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a regra ${r.nome || 'sem nome'}`} onClick={() => apagar(r)} />}
+                  {editando?.id === r.id && <Selo familia="atencao" ponto={false}>em edição</Selo>}
+                  {pode && (
+                    <>
+                      <Botao variante="discreto" pequeno icone={mdiPencilOutline} aria-label={`Editar a regra ${r.nome || 'sem nome'}`} title="Editar: carrega a regra no formulário abaixo" onClick={() => carregarNoForm(r, true)} />
+                      <Botao variante="discreto" pequeno icone={mdiContentCopy} aria-label={`Duplicar a regra ${r.nome || 'sem nome'}`} title="Duplicar: começa uma regra nova a partir desta" onClick={() => carregarNoForm(r, false)} />
+                      <Botao variante="discreto" pequeno icone={mdiTrashCanOutline} className="acn-cet-x" aria-label={`Apagar a regra ${r.nome || 'sem nome'}`} onClick={() => apagar(r)} />
+                    </>
+                  )}
                 </div>
-                <div className="acn-cet-regra-se"><b>SE</b> {r.condicoes.map(textoCondicao).join(' E ')}</div>
-                {r.materiais.map(m => (
-                  <div key={m.id} className="acn-cet-linha">
-                    <span className={'acn-cet-acao' + (m.acao === 'remover' ? ' remover' : '')}>{m.acao === 'remover' ? '− tira' : '+ usa'} {m.quantidade}</span>
-                    <span className="acn-cet-mat-nome">{m.material?.codigo ? <b>{m.material.codigo} — </b> : null}{m.material?.nome || '(item)'}</span>
-                  </div>
-                ))}
+                <FraseDaRegra condicoes={r.condicoes} saidas={r.materiais} textoCondicao={textoCondicao} rotuloMaterial={rotuloMaterialSalvo} />
               </div>
             ))}
 
             {pode && (
               <>
-                <div className="acn-cet-form">
-                  <label className="acn-label"><Icone path={mdiPlus} size={13} /> NOVA REGRA NESTE VEÍCULO</label>
+                <div className="acn-cet-form" ref={refForm}>
+                  <label className="acn-label"><Icone path={mdiPlus} size={13} /> {editando ? `EDITANDO A REGRA "${(editando.nome || 'SEM NOME').toUpperCase()}"` : 'NOVA REGRA NESTE VEÍCULO'}</label>
+                  {editando && <div className="acn-ajuda">Ao salvar, a regra nova é gravada primeiro e só então a antiga sai. Se algo falhar, a antiga continua valendo.</div>}
                   <input className="acn-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome (opcional). Ex.: Chicote principal — caracterizado, bateria frontal" />
 
                   <div className="acn-cet-sec espaco">SE (todas as condições)</div>
@@ -392,14 +514,22 @@ function RegrasDoVeiculo({ currentUser, pode, itens }) {
                     <Botao pequeno variante="secundario" onClick={adicionarSaida}>Adicionar material</Botao>
                   </div>
 
+                  {(condicoes.length > 0 || saidas.length > 0) && (
+                    <div className="acn-cet-previa">
+                      <div className="acn-cet-sec espaco">COMO A REGRA VAI FICAR</div>
+                      <FraseDaRegra condicoes={condicoes} saidas={saidas} textoCondicao={textoCondicao} rotuloMaterial={(s) => rotuloItem(s.material_item_id)} />
+                    </div>
+                  )}
+                  {erroForm && <Faixa tom="erro">{erroForm}</Faixa>}
                   <div className="acn-cet-regra-salvar">
-                    <Botao variante="primario" disabled={ocupado} onClick={salvar}>{ocupado ? 'Gravando…' : 'Salvar regra'}</Botao>
+                    <Botao variante="primario" disabled={ocupado} onClick={salvar}>{ocupado ? 'Gravando…' : (editando ? 'Salvar alterações' : 'Salvar regra')}</Botao>
+                    {(editando || condicoes.length > 0 || saidas.length > 0 || nome) && <Botao variante="discreto" disabled={ocupado} onClick={limpar}>{editando ? 'Cancelar edição' : 'Limpar'}</Botao>}
                   </div>
                 </div>
 
                 <div className="acn-cet-copiar">
                   <label className="acn-label">COPIAR AS REGRAS DE OUTRO VEÍCULO PARA ESTE</label>
-                  <SelectVeiculo valor="" onChange={(id, v) => { if (id) copiarDe(id, { nome: v ? (v.nome_exibicao || [v.marca, v.modelo].filter(Boolean).join(' ')) : '' }); }}
+                  <SelectVeiculo valor="" onChange={(id, v) => { if (id) copiarDe(id, { nome: nomeDoVeiculo(v) }); }}
                     currentUser={currentUser} compacto placeholder="Veículo de origem" />
                 </div>
               </>
@@ -429,14 +559,26 @@ function MarcaConjunto({ item }) {
 }
 
 // `itemId` nulo = perguntas da OP (sem item). `titulo` e `ajuda` só mudam o texto.
-function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar, titulo = '', ajuda = '' }) {
+// 16/10/2026: as perguntas vêm recolhidas (a resposta de cada uma aparece como etiqueta com o uso dela); abrir mostra as respostas e os botões. `uso` é o contador de
+// quantas regras e linhas de material usam cada resposta (nulo se a leitura falhou: sem contador em vez de um "sem uso" falso).
+function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar, uso, titulo = '', ajuda = '' }) {
   const daOp = !itemId;
+  const [abertas, setAbertas] = useState(() => new Set());
+  const [editor, setEditor] = useState(null);   // { tipo: 'cond' | 'auto', id }
+  useEffect(() => { setAbertas(new Set()); setEditor(null); }, [itemId]);
+  const alternar = (id) => setAbertas(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const nivelDe = (p, visto = 0) => {
     if (!p.opcao_pai_id || visto > 8) return 0;
     const pai = perguntas.find(x => (x.opcoes || []).some(o => o.id === p.opcao_pai_id));
     return pai ? nivelDe(pai, visto + 1) + 1 : 0;
   };
   const temFilha = (opcaoId) => perguntas.some(p => p.opcao_pai_id === opcaoId);
+  // perguntas que só aparecem depois de uma resposta (e as filhas delas): apagar a resposta leva todas junto (o banco encadeia)
+  const filhasDaOpcao = (opcaoId, visto = 0) => {
+    if (visto > 8) return [];
+    const diretas = perguntas.filter(p => p.opcao_pai_id === opcaoId);
+    return diretas.flatMap(p => [p, ...(p.opcoes || []).flatMap(o => filhasDaOpcao(o.id, visto + 1))]);
+  };
 
   // `tipo` 'quantidade' (etapa 2, 15/10/2026): quem responde digita um número em vez de escolher uma resposta cadastrada
   const addPergunta = async (opcaoPaiId = null, tipo = 'opcoes') => {
@@ -456,12 +598,25 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
   const addOpcao = async (perguntaId, qtd) => {
     const rot = await pedirTexto('Resposta possível:\n\nEx.: "Tem, hack alto"', '');
     if (!rot?.trim()) return;
-    await supabase.from('item_pergunta_opcoes').insert([{ pergunta_id: perguntaId, rotulo: rot.trim(), ordem: qtd }]);
+    const { error } = await supabase.from('item_pergunta_opcoes').insert([{ pergunta_id: perguntaId, rotulo: rot.trim(), ordem: qtd }]);
+    if (error) { alert('Não foi possível criar a resposta: ' + error.message); return; }
+    setAbertas(s => new Set(s).add(perguntaId));
     aoMudar();
   };
-  const apagar = async (tabela, id, oque) => {
-    if (!await confirmar(`Apagar ${oque}?`)) return;
-    // etapa 3 (15/10/2026): se uma regra de chicote/suporte usa esta pergunta/resposta, o banco recusa de propósito (apagar mudaria o que a regra faz) — e a tela explica em vez de fingir que apagou
+
+  // Apagar diz antes o que leva junto (16/10/2026). Etapa 3 (15/10/2026): se uma regra de chicote/suporte usa esta pergunta/resposta, o banco recusa de propósito
+  // (apagar mudaria o que a regra faz) — e a tela explica em vez de fingir que apagou.
+  const apagarComAviso = async (tabela, id, oque, lerLeva, filhas) => {
+    let leva;
+    try { leva = await lerLeva(); }
+    catch (e) { alert(`Não foi possível conferir onde ${oque} é usada (${e?.message || e}). Nada foi apagado.`); return; }
+    if (leva.regras > 0) {
+      alert(`Não dá para apagar ${oque}: ela é usada por ${leva.regras} condição(ões) de regra de chicote/suporte de algum veículo. Apague ou ajuste a regra antes.`);
+      return;
+    }
+    const frase = fraseDoQueLeva(leva);
+    const partes = [frase, filhas.length ? `${filhas.length} pergunta(s) que só aparecem depois dela` : ''].filter(Boolean).join(', ');
+    if (!await confirmar(`Apagar ${oque}?` + (partes ? `\n\nIsto também apaga: ${partes}.` : ''))) return;
     const { error } = await supabase.from(tabela).delete().eq('id', id);
     if (error) {
       alert(error.code === '23503'
@@ -471,48 +626,26 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
     }
     aoMudar();
   };
-  const definirRegra = async (opcao) => {
-    const txt = await pedirTexto(
-      'Esta resposta vale sozinha quando QUAIS itens estiverem na venda?\n\n'
-      + 'Códigos separados por vírgula. Vazio apaga a regra.\n'
-      + 'Caso real: parachoque de impulsão + slimled — os slimled prendem direto no parachoque,\n'
-      + 'então o suporte deles sai da lista e ninguém precisa ser perguntado.', '');
-    if (txt === null) return;
-    const codigos = String(txt).split(',').map(s => s.trim()).filter(Boolean);
-    let ids = [];
-    if (codigos.length) {
-      const { data } = await supabase.from('cadastro_itens').select('id,codigo').in('codigo', codigos);
-      ids = (data || []).map(d => d.id);
-      const faltando = codigos.filter(c => !(data || []).some(d => String(d.codigo) === c));
-      if (faltando.length) { alert('Código não encontrado: ' + faltando.join(', ')); return; }
-    }
-    await supabase.from('item_pergunta_opcoes')
-      .update({ auto_quando_itens: ids.length ? ids : null }).eq('id', opcao.id);
-    aoMudar();
-  };
+  const apagarPergunta = (p) => apagarComAviso('item_perguntas', p.id, `a pergunta "${p.texto}"`, () => oQueApagarPerguntaLeva(p),
+    (p.opcoes || []).flatMap(o => filhasDaOpcao(o.id)));
+  const apagarOpcao = (o) => apagarComAviso('item_pergunta_opcoes', o.id, `a resposta "${o.rotulo}"`, () => oQueApagarRespostaLeva(o.id), filhasDaOpcao(o.id));
 
-  // Condição (etapa 2, 15/10/2026): a pergunta só aparece quando TODOS os itens listados estão na venda — "somente quando 1 ou mais itens são vendidos juntos"
-  const definirCondicao = async (p) => {
-    const atuais = (p.quando_itens || []).map(id => itens.find(i => i.id === id)?.codigo).filter(Boolean).join(', ');
-    const txt = await pedirTexto(
-      'Esta pergunta só aparece quando QUAIS itens estiverem juntos na venda?\n\n'
-      + 'Códigos separados por vírgula; precisam estar TODOS na venda. Vazio apaga a condição.\n'
-      + 'Ex.: pergunta de quantidade do slimled que só vale quando o parachoque de impulsão também foi vendido.', atuais);
-    if (txt === null) return;
-    const codigos = String(txt).split(',').map(s => s.trim()).filter(Boolean);
-    let ids = [];
-    if (codigos.length) {
-      const { data, error: er } = await supabase.from('cadastro_itens').select('id,codigo').in('codigo', codigos);
-      if (er) { alert('Não foi possível conferir os códigos: ' + er.message); return; }
-      const faltando = codigos.filter(c => !(data || []).some(d => String(d.codigo) === c));
-      if (faltando.length) { alert('Código não encontrado: ' + faltando.join(', ')); return; }
-      ids = (data || []).map(d => d.id);
-    }
+  // "automática se…": a resposta se marca sozinha quando TODOS os itens escolhidos estão na venda. Caso real: parachoque de impulsão + slimled — os slimled
+  // prendem direto no parachoque, então o suporte deles sai da lista e ninguém precisa ser perguntado. Sem itens = sem regra automática.
+  const salvarAutomatica = async (opcao, ids) => {
+    const { error } = await supabase.from('item_pergunta_opcoes').update({ auto_quando_itens: ids.length ? ids : null }).eq('id', opcao.id);
+    if (error) return 'Não foi possível gravar: ' + error.message;
+    setEditor(null); aoMudar(); return '';
+  };
+  // "aparece só com…" (etapa 2, 15/10/2026): a pergunta só aparece quando TODOS os itens escolhidos estão na venda — "somente quando 1 ou mais itens são vendidos juntos"
+  const salvarCondicao = async (p, ids) => {
     const { error } = await supabase.from('item_perguntas').update({ quando_itens: ids.length ? ids : null }).eq('id', p.id);
-    if (error) { alert('Não foi possível gravar a condição: ' + error.message); return; }
-    aoMudar();
+    if (error) return 'Não foi possível gravar a condição: ' + error.message;
+    setEditor(null); aoMudar(); return '';
   };
   const codigosDaCondicao = (p) => (p.quando_itens || []).map(id => itens.find(i => i.id === id)?.codigo || '?').join(', ');
+  const textoUso = (n) => (n ? `${n} uso${n === 1 ? '' : 's'}` : 'sem uso');
+  const textoRegras = (n) => (n ? `${n} regra${n === 1 ? '' : 's'}` : 'sem regra');
 
   return (
     <div className="acn-cet-perguntas">
@@ -525,54 +658,103 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
           {daOp ? 'Nenhuma ainda.' : 'Nenhuma. Se a instalação deste item não varia conforme o carro, não precisa de pergunta.'}
         </div>
       )}
-      {perguntas.map(p => (
-        <div key={p.id} className={'acn-cet-perg' + (p.opcao_pai_id ? ' filha' : '')} data-nivel={nivelDe(p)}>
-          <div className="acn-cet-perg-cab">
-            <span className="acn-cet-perg-txt">
-              <Icone path={mdiHelpCircleOutline} size={14} /> {p.texto}
-              {p.tipo === 'quantidade' && <Selo familia="info" ponto={false}>resposta numérica</Selo>}
-              {(p.quando_itens || []).length > 0 && <Selo familia="atencao" ponto={false}>só com: {codigosDaCondicao(p)}</Selo>}
-            </span>
-            {pode && (
-              <>
-                <Botao pequeno variante="secundario" className="acn-cet-mini" onClick={() => definirCondicao(p)}>condição</Botao>
-                {p.tipo !== 'quantidade' && (
-                  <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
-                    onClick={() => addOpcao(p.id, (p.opcoes || []).length)}>resposta</Botao>
-                )}
-                <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a pergunta "${p.texto}"`}
-                  onClick={() => apagar('item_perguntas', p.id, `a pergunta "${p.texto}"`)} />
-              </>
-            )}
-          </div>
-          {p.tipo !== 'quantidade' && !(p.opcoes || []).length && (
-            <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> sem respostas — não faz nada ainda</div>
-          )}
-          {(p.opcoes || []).map(o => (
-            <div key={o.id} className="acn-cet-opcao">
-              <span className="acn-cet-opcao-txt">
-                <Icone path={mdiChevronRight} size={13} /> {o.rotulo}
-                {(o.auto_quando_itens || []).length > 0 && (
-                  <Selo familia="atencao" ponto={false}>
-                    automática ({o.auto_quando_itens.length})
-                  </Selo>
-                )}
+      {perguntas.length > 3 && (
+        <div className="acn-cet-todas">
+          <Botao pequeno variante="discreto" className="acn-cet-mini" onClick={() => setAbertas(new Set(perguntas.map(p => p.id)))}>abrir todas</Botao>
+          <Botao pequeno variante="discreto" className="acn-cet-mini" onClick={() => setAbertas(new Set())}>recolher todas</Botao>
+        </div>
+      )}
+      {perguntas.map(p => {
+        const aberta = abertas.has(p.id);
+        const opcoes = p.opcoes || [];
+        return (
+          <div key={p.id} className={'acn-cet-perg' + (p.opcao_pai_id ? ' filha' : '')} data-nivel={nivelDe(p)}>
+            <div className="acn-cet-perg-cab">
+              <Botao variante="discreto" pequeno icone={aberta ? mdiChevronDown : mdiChevronRight} className="acn-cet-alterna" aria-expanded={aberta}
+                aria-label={`${aberta ? 'Recolher' : 'Abrir'} a pergunta "${p.texto}"`} onClick={() => alternar(p.id)} />
+              <span className="acn-cet-perg-txt" onClick={() => alternar(p.id)}>
+                <Icone path={mdiHelpCircleOutline} size={14} /> {p.texto}
+                {p.tipo === 'quantidade' && <Selo familia="info" ponto={false}>resposta numérica</Selo>}
+                {(p.quando_itens || []).length > 0 && <Selo familia="atencao" ponto={false} title="A pergunta só é feita quando todos estes itens estão na venda">só com: {codigosDaCondicao(p)}</Selo>}
+                {p.tipo !== 'quantidade' && !opcoes.length && <Selo familia="atencao" ponto={false}>sem respostas — não faz nada ainda</Selo>}
               </span>
               {pode && (
                 <>
-                  <Botao pequeno variante="secundario" className="acn-cet-mini" onClick={() => definirRegra(o)}>regra</Botao>
-                  {!temFilha(o.id) && (
+                  <Botao pequeno variante="secundario" className="acn-cet-mini" title="A pergunta só é feita quando estes itens estiverem na venda"
+                    onClick={() => setEditor(e => (e?.tipo === 'cond' && e.id === p.id ? null : { tipo: 'cond', id: p.id }))}>aparece só com…</Botao>
+                  {p.tipo !== 'quantidade' && (
                     <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
-                      onClick={() => addPergunta(o.id)}>pergunta</Botao>
+                      onClick={() => addOpcao(p.id, opcoes.length)}>resposta</Botao>
                   )}
-                  <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a resposta "${o.rotulo}"`}
-                    onClick={() => apagar('item_pergunta_opcoes', o.id, `a resposta "${o.rotulo}"`)} />
+                  <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a pergunta "${p.texto}"`}
+                    onClick={() => apagarPergunta(p)} />
                 </>
               )}
             </div>
-          ))}
-        </div>
-      ))}
+
+            {editor?.tipo === 'cond' && editor.id === p.id && (
+              <EditorDeItens titulo="Aparece só quando estes itens forem vendidos juntos" idsIniciais={p.quando_itens} itens={itens}
+                ajuda="Precisam estar todos na venda. Ex.: pergunta de quantidade do slimled que só vale quando o parachoque de impulsão também foi vendido."
+                aoSalvar={(ids) => salvarCondicao(p, ids)} aoCancelar={() => setEditor(null)} />
+            )}
+
+            {/* recolhida: as respostas viram etiquetas com o uso de cada uma (âmbar = nenhuma regra nem material usa) */}
+            {!aberta && opcoes.length > 0 && (
+              <div className="acn-cet-resumo">
+                {opcoes.map(o => (
+                  <Selo key={o.id} familia={!uso ? 'neutro' : usosDaResposta(uso, o.id) ? 'info' : 'atencao'} ponto={false}
+                    title={uso ? 'Quantas regras de veículo e linhas de material por resposta dependem desta resposta' : undefined}>
+                    {o.rotulo}{uso ? ` · ${textoUso(usosDaResposta(uso, o.id))}` : ''}
+                  </Selo>
+                ))}
+              </div>
+            )}
+            {!aberta && p.tipo === 'quantidade' && uso && (
+              <div className="acn-cet-resumo">
+                <Selo familia={uso.regrasPorPergunta.get(String(p.id)) ? 'info' : 'atencao'} ponto={false}>
+                  {textoRegras(uso.regrasPorPergunta.get(String(p.id)) || 0)}
+                </Selo>
+              </div>
+            )}
+
+            {aberta && p.tipo !== 'quantidade' && !opcoes.length && (
+              <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> sem respostas — não faz nada ainda</div>
+            )}
+            {aberta && opcoes.map(o => (
+              <React.Fragment key={o.id}>
+                <div className="acn-cet-opcao">
+                  <span className="acn-cet-opcao-txt">
+                    <Icone path={mdiChevronRight} size={13} /> {o.rotulo}
+                    {(o.auto_quando_itens || []).length > 0 && (
+                      <Selo familia="atencao" ponto={false} title="A resposta se marca sozinha quando todos os itens escolhidos estão na venda">
+                        automática com {o.auto_quando_itens.length} item(ns)
+                      </Selo>
+                    )}
+                    {uso && <Selo familia={usosDaResposta(uso, o.id) ? 'info' : 'atencao'} ponto={false}>{textoUso(usosDaResposta(uso, o.id))}</Selo>}
+                  </span>
+                  {pode && (
+                    <>
+                      <Botao pequeno variante="secundario" className="acn-cet-mini" title="A resposta se marca sozinha quando estes itens estiverem na venda"
+                        onClick={() => setEditor(e => (e?.tipo === 'auto' && e.id === o.id ? null : { tipo: 'auto', id: o.id }))}>automática se…</Botao>
+                      {!temFilha(o.id) && (
+                        <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
+                          onClick={() => addPergunta(o.id)}>pergunta</Botao>
+                      )}
+                      <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a resposta "${o.rotulo}"`}
+                        onClick={() => apagarOpcao(o)} />
+                    </>
+                  )}
+                </div>
+                {editor?.tipo === 'auto' && editor.id === o.id && (
+                  <EditorDeItens titulo={`"${o.rotulo}" é marcada sozinha quando estes itens estiverem na venda`} idsIniciais={o.auto_quando_itens} itens={itens}
+                    ajuda="Caso real: parachoque de impulsão + slimled — os slimled prendem direto no parachoque, então o suporte deles sai da lista e ninguém precisa ser perguntado."
+                    aoSalvar={(ids) => salvarAutomatica(o, ids)} aoCancelar={() => setEditor(null)} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      })}
       {pode && (
         <>
           <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini acn-cet-nova" onClick={() => addPergunta(null)}>
@@ -606,7 +788,8 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
   };
   const apagar = async (id) => {
     if (!await confirmar('Apagar esta linha de material?')) return;
-    await supabase.from('veiculo_item_materiais').delete().eq('id', id);
+    const { error } = await supabase.from('veiculo_item_materiais').delete().eq('id', id);
+    if (error) { alert('Não foi possível apagar: ' + error.message); return; }
     aoMudar();
   };
   const rotuloDaOpcao = (opcaoId) => {

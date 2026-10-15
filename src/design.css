@@ -3480,6 +3480,50 @@ html body .acn-b.acn-cet-x { color: var(--acn-bad); }
 .acn-cet-copiar-opcoes { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; font-size: 12px; color: var(--acn-ink); }
 .acn-cet-copiar-opcoes label { display: flex; align-items: center; gap: 6px; }
 .acn-pdv-cab svg, .acn-pdv-resp-item svg, .acn-cet-perg-txt svg, .acn-cet-opcao-txt svg, .acn-cet-alerta svg, .acn-cet-aviso-tit svg, .acn-rpl-aviso svg, .acn-cet-form svg { display: inline-block !important; vertical-align: -2px; }
+/* Redesenho da Estrutura de instalação (16/10/2026, pedido do usuário): perguntas recolhidas com o uso de cada resposta, itens escolhidos por busca, regra lida em uma frase,
+   cobertura das combinações e simulador. Só os tons e as medidas do guia (--acn-*); o tema escuro vem das próprias variáveis. */
+.acn-cet-itens { display: flex; flex-direction: column; gap: 6px; }
+.acn-cet-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.acn-cet-chip { display: inline-flex; align-items: center; gap: 1px; }
+.acn-cet-editor { margin: 6px 0 8px 14px; padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+.acn-cet-editor-tit { font-size: 12px; font-weight: 800; color: var(--acn-ink); }
+.acn-cet-editor-acoes { display: flex; gap: 6px; }
+.acn-cet-frase { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px; }
+.acn-cet-pal { font-size: 11px; font-weight: 800; color: var(--acn-info); }
+.acn-cet-resumo { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 0 26px; }
+.acn-cet-todas { display: flex; gap: 6px; margin-bottom: 4px; }
+.acn-cet-perg-txt { cursor: pointer; }
+html body .acn-b.acn-cet-alterna { height: auto; min-height: 0; padding: 0 2px; }
+.acn-cet-regra.editando { border-color: var(--acn-warn); }
+.acn-cet-previa { margin-top: 6px; }
+.acn-cet-form > .acn-input { width: 100%; box-sizing: border-box; }
+.acn-cet-cob { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.acn-cet-cob-resumo { margin: 2px 0; }
+.acn-cet-cob-linha { display: grid; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid var(--acn-line); border-radius: 6px; font-size: 12px; color: var(--acn-ink); }
+.acn-cet-cob-linha.cab { border: 0; padding-bottom: 0; font-size: 11px; font-weight: 800; color: var(--acn-info); }
+.acn-cet-cob-linha[data-estado="definir"] { background: var(--acn-warn-soft); }
+.acn-cet-cob-acoes { display: inline-flex; gap: 4px; justify-content: flex-end; }
+.acn-cet-cob-linha[data-colunas="1"] { grid-template-columns: repeat(1, minmax(0, 1fr)) minmax(0, 1.3fr) 200px; }
+.acn-cet-cob-linha[data-colunas="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.3fr) 200px; }
+.acn-cet-cob-linha[data-colunas="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr) 200px; }
+.acn-cet-cob-linha[data-colunas="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.3fr) 200px; }
+.acn-cet-cob-linha[data-colunas="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 1.3fr) 200px; }
+.acn-cet-cob-linha[data-colunas="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)) minmax(0, 1.3fr) 200px; }
+@media (max-width: 760px) { .acn-cet-cob-linha[data-colunas] { grid-template-columns: 1fr; } .acn-cet-cob-linha.cab { display: none; } }
+.acn-cet-sim { display: flex; flex-direction: column; gap: 4px; }
+.acn-cet-sim-linha { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; font-size: 12px; }
+@media (max-width: 760px) { .acn-cet-sim-linha { grid-template-columns: 1fr; } }
+.acn-cet-sim-perg { color: var(--acn-ink); }
+/* celular (16/10/2026): os botões da pergunta e da resposta descem para a linha de baixo em vez de espremer o texto; os campos do formulário da regra ficam um por linha;
+   etiqueta comprida (item com nome grande) quebra em vez de vazar do cartão */
+@media (max-width: 760px) {
+  .acn-cet-perg-cab, .acn-cet-opcao { flex-wrap: wrap; }
+  .acn-cet-perg-txt, .acn-cet-opcao-txt { min-width: 0; flex: 1 1 12rem; }
+  .acn-cet-grade-regra, .acn-cet-grade { grid-template-columns: minmax(0, 1fr); }
+  .acn-cet-grade-regra > span:empty, .acn-cet-grade > span:empty { display: none; }
+  .acn-cet-form .acn-input { min-width: 0; max-width: 100%; }
+}
+html body .acn-cet-frase .acn-selo, html body .acn-cet-chip .acn-selo { white-space: normal; text-align: left; }
 
 /* Veículos (12e55, 09/10/2026): painel da Tabela FIPE, fotos do carro na abertura da OP e o cadastro/edição/seleção de veículo. Só aparência.
    O tom do painel da FIPE (catálogo velho = vermelho, em dia = verde) vem de [data-fip]; o botão de tirar foto fica redondo sobre a miniatura. */
