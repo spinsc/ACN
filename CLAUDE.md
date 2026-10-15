@@ -106,6 +106,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Requisição de compra | `ComprasFluxo.tsx` — `criarRequisicaoCompra`, `origemDaRequisicao` |
 | Pintura da serralheria | `PinturaSerralheria.tsx` |
 | Busca sem acento | `SearchUtils.ts` |
+| Ler tabela grande (o banco corta em 1.000 linhas por consulta) | `LerPaginado.ts` — `lerPaginado` (lê em blocos de 1.000; ponha `.order('id')` como desempate) |
 | Data de hoje / dia de uma data | `Interface.tsx` — `hojeISO`, `diaISO` (nunca `toISOString`, que devolve o dia de Londres) |
 | Botões, abas, selos, menus | `Interface.tsx` |
 | Confirmar / pedir texto | `Feedback.tsx` — `confirmar`, `pedirTexto` |

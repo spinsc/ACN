@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
+import { lerPaginado } from './LerPaginado';
 import Icone from './Icone';
 import { Botao, Selo, Faixa, diaBR, diaISO } from './Interface';
 import { idsComDescendentes, orcamentoDoCentro, foraDaVigencia, ordenarArvore } from './CentroCustoShared';
@@ -41,16 +42,8 @@ const primeiraLinha = (t: any) => String(t || '').split('\n').map(s => s.trim())
 
 // ─── LEITURA ──────────────────────────────────────────────────────────────────
 // O servidor devolve no máximo 1000 linhas por consulta: lê em páginas para a conta não ficar pela metade sem avisar.
-export async function lerPaginado(montar: () => any) {
-  const saida: any[] = [];
-  for (let de = 0; ; de += 1000) {
-    const { data, error } = await montar().range(de, de + 999);
-    if (error) throw error;
-    saida.push(...(data || []));
-    if (!data || data.length < 1000) break;
-  }
-  return saida;
-}
+// 14/10/2026: a função foi para o arquivo próprio LerPaginado.ts (os Contatos do CRM também a usam); daqui só reexporta, para o CentroCustoRelatorios e quem mais importava deste arquivo.
+export { lerPaginado };
 
 /** Compras, pagamentos e despesas — o que alimenta a conta. Lança erro se alguma leitura falhar (quem chama avisa). */
 export async function carregarMovimentosCentros() {

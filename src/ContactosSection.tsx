@@ -10,6 +10,7 @@ import RichTextInput, { htmlSeguro } from './RichTextInput';
 import { confirmar, mostrarAviso } from './Feedback';
 import { Botao, Faixa } from './Interface';
 import { perfilComPoderes } from './utils/permissoes';
+import { lerPaginado } from './LerPaginado';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -31,6 +32,9 @@ const waLink = (n: string) => `https://wa.me/${n.replace(/\D/g, '')}`;
 const initials = (nome: string) =>
   nome.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 
+// 12e63 (14/10/2026): o tom do avatar (um de seis) sai da letra inicial e vai ao CSS pelo atributo data-tom; antes era uma lista de cores aqui dentro
+const tomDoAvatar = (ini: string) => ini.charCodeAt(0) % 6;
+
 const TIPO_ICON: Record<string, string> = {
   ligacao:  '📞',
   whatsapp: '💬',
@@ -38,19 +42,6 @@ const TIPO_ICON: Record<string, string> = {
   reuniao:  '🤝',
   visita:   '🏢',
   outro:    '📝',
-};
-const TIPO_COR: Record<string, string> = {
-  ligacao:  '#2563eb',
-  whatsapp: '#16a34a',
-  email:    '#7c3aed',
-  reuniao:  '#0891b2',
-  visita:   '#ea580c',
-  outro:    '#64748b',
-};
-const RESULTADO_COR: Record<string, string> = {
-  positivo: '#16a34a',
-  neutro:   '#64748b',
-  negativo: '#dc2626',
 };
 
 const VAZIO_CONTATO: any = {
@@ -66,6 +57,16 @@ const interacaoVazia = (): any => ({
   data_interacao: agoraLocalInput(),
   oportunidade_id: null, audio_url: null, transcricao: '',
 });
+
+// 12e63 (14/10/2026, decidido com o usuário): o banco entrega no máximo 1.000 linhas por consulta e as cinco leituras desta tela não tinham limite próprio —
+// passando de 1.000 mensagens, interações ou contatos a tela mostraria só as primeiras 1.000, sem avisar. Agora lê em blocos de 1.000 até acabar (o desempate por "id"
+// mantém a ordem estável entre um bloco e outro) e devolve no mesmo formato { data, error } do resto da tela; se qualquer bloco falhar, a leitura inteira conta como falha
+// (melhor a faixa "Não foi possível carregar" do que uma lista pela metade que parece completa).
+const lerTudo = async (montar: () => any) => {
+  try { return { data: await lerPaginado(montar), error: null }; }
+  catch (e: any) { return { data: null, error: { message: e?.message || String(e) } }; }
+};
+const lerMensagens = () => lerPaginado(() => supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }).order('id'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -109,11 +110,11 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const load = useCallback(async () => {
     if (!jaCarregouRef.current) setLoading(true);
     const [r1, r2, r3, r4, r5] = await Promise.all([
-      supabase.from('crm_contatos').select('*').order('nome'),
-      supabase.from('crm_interacoes').select('*').order('data_interacao', { ascending: false }),
-      supabase.from('crm_oportunidades').select('id, titulo, funil, cliente_id').order('titulo'),   // 7.x: sem o cliente_id o quadro "Oportunidades" do contato nunca aparecia
-      supabase.from('clientes').select('id, nome').order('nome'),
-      supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }),
+      lerTudo(() => supabase.from('crm_contatos').select('*').order('nome').order('id')),
+      lerTudo(() => supabase.from('crm_interacoes').select('*').order('data_interacao', { ascending: false }).order('id')),
+      lerTudo(() => supabase.from('crm_oportunidades').select('id, titulo, funil, cliente_id').order('titulo').order('id')),   // 7.x: sem o cliente_id o quadro "Oportunidades" do contato nunca aparecia
+      lerTudo(() => supabase.from('clientes').select('id, nome').order('nome').order('id')),
+      lerTudo(() => supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }).order('id')),
     ]);
     // 7.x: a leitura que falha mantém o que já estava na tela (antes virava lista vazia, sem aviso)
     const novas: Record<string, string> = {};
@@ -131,8 +132,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     const channel = supabase
       .channel('wa-msgs-live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_whatsapp_msgs' }, () => {
-        supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false })
-          .then(({ data }) => { if (data) setWaMsgs(data); });
+        lerMensagens().then(data => { if (data) setWaMsgs(data); }).catch(() => {});   // 12e63: também em blocos de 1.000; leitura que falha mantém o que já está na tela, como antes
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -304,58 +304,47 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     const nInter = interacoes.filter(i => i.contato_id === c.id).length;
     const nWA    = waMsgs.filter(m => m.contato_id === c.id && !m.lida).length;
     const ini    = initials(c.nome);
-    const BG_COLORS = ['#7c3aed','#0891b2','#0f766e','#b45309','#be185d','#1d4ed8'];
-    const bg = BG_COLORS[ini.charCodeAt(0) % BG_COLORS.length];
 
     return (
       <div key={c.id} onClick={() => { setContatoSel(isSel ? null : c); setAbaDetalhe('info'); }}
-        style={{
-          background: isSel ? '#f0f9ff' : 'white',
-          borderRadius:8, padding:'10px 12px',
-          border: `1.5px solid ${isSel ? '#0891b2' : '#e2e8f0'}`,
-          cursor:'pointer', marginBottom:6,
-          transition:'all .15s',
-        }}>
-        <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+        className={'acn-ctt-card' + (isSel ? ' sel' : '')}>
+        <div className="acn-ctt-card-lin">
           {/* Avatar */}
-          <div style={{ width:36, height:36, borderRadius:'50%', background:bg,
-            display:'flex', alignItems:'center', justifyContent:'center',
-            color:'white', fontSize:12, fontWeight:700, flexShrink:0 }}>
+          <div className="acn-ctt-av" data-tom={tomDoAvatar(ini)}>
             {ini}
           </div>
           {/* Info */}
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', marginBottom:1 }}>{c.nome}</div>
+          <div className="acn-ctt-card-info">
+            <div className="acn-ctt-card-nome">{c.nome}</div>
             {(c.cargo || c.empresa) && (
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>
+              <div className="acn-ctt-card-cargo">
                 {[c.cargo, c.empresa].filter(Boolean).join(' · ')}
               </div>
             )}
-            <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:3 }}>
+            <div className="acn-ctt-pils">
               {c.whatsapp && (
-                <span style={{ fontSize:8, background:'#dcfce7', color:'#166534', padding:'1px 6px', borderRadius:10, fontWeight:600 }}>
+                <span className="acn-ctt-pil acn-ctt-pil-wa">
                   💬 {fmtTel(c.whatsapp)}
                 </span>
               )}
               {c.email && (
-                <span style={{ fontSize:8, background:'#f3e8ff', color:'#6b21a8', padding:'1px 6px', borderRadius:10, fontWeight:600 }}>
+                <span className="acn-ctt-pil acn-ctt-pil-email">
                   📧
                 </span>
               )}
               {nInter > 0 && (
-                <span style={{ fontSize:8, background:'#e0f2fe', color:'#0369a1', padding:'1px 6px', borderRadius:10, fontWeight:600 }}>
+                <span className="acn-ctt-pil acn-ctt-pil-int">
                   {nInter} {nInter !== 1 ? 'interações' : 'interação'}
                 </span>
               )}
               {nWA > 0 && (
-                <span className="acn-wa-unread-badge"
-                  style={{ fontSize:8, background:'#16a34a', color:'#fff', padding:'2px 7px', borderRadius:10, fontWeight:800, display:'inline-flex', alignItems:'center', gap:3 }}>
+                <span className="acn-wa-unread-badge acn-ctt-pil acn-ctt-pil-nl">
                   💬 {nWA} não lida{nWA !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
             {veTodos && c.operador_nome && (
-              <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>👤 {c.operador_nome}</div>
+              <div className="acn-ctt-card-op">👤 {c.operador_nome}</div>
             )}
           </div>
         </div>
@@ -370,59 +359,50 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     if (!contatoSel) return null;
     const c = contatoSel;
     const ini = initials(c.nome);
-    const BG_COLORS = ['#7c3aed','#0891b2','#0f766e','#b45309','#be185d','#1d4ed8'];
-    const bg = BG_COLORS[ini.charCodeAt(0) % BG_COLORS.length];
     const interacoesC = interacoesContato(c.id);
     const waMsgsC = waMsgsContato(c.id);
     const opsC = opsContato(c);
 
     return (
-      <div style={{ width:340, flexShrink:0, background:'white', borderRadius:8,
-        border:'1px solid #e2e8f0', display:'flex', flexDirection:'column',
-        maxHeight:'calc(100vh - 180px)', overflow:'hidden' }}>
+      <div className="acn-ctt-det">
         {/* Header do painel */}
-        <div style={{ padding:'12px 14px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc', flexShrink:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:44, height:44, borderRadius:'50%', background:bg,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              color:'white', fontSize:16, fontWeight:700, flexShrink:0 }}>
+        <div className="acn-ctt-det-cab">
+          <div className="acn-ctt-det-id">
+            <div className="acn-ctt-av acn-ctt-av-g" data-tom={tomDoAvatar(ini)}>
               {ini}
             </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#1e293b' }}>{c.nome}</div>
+            <div className="acn-ctt-det-quem">
+              <div className="acn-ctt-det-nome">{c.nome}</div>
               {(c.cargo || c.empresa) && (
-                <div style={{ fontSize:10, color:'#64748b' }}>{[c.cargo, c.empresa].filter(Boolean).join(' — ')}</div>
+                <div className="acn-ctt-det-cargo">{[c.cargo, c.empresa].filter(Boolean).join(' — ')}</div>
               )}
             </div>
-            <button onClick={() => setContatoSel(null)}
-              style={{ background:'none', border:'none', cursor:'pointer', fontSize:16, color:'#94a3b8', padding:2 }}>✕</button>
+            <Botao variante="discreto" className="acn-ctt-b acn-ctt-fechar" onClick={() => setContatoSel(null)}>✕</Botao>
           </div>
 
           {/* Ações rápidas */}
-          <div style={{ display:'flex', gap:4, marginTop:10, flexWrap:'wrap' }}>
+          <div className="acn-ctt-acoes">
             {c.whatsapp && (
-              <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer"
-                style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#16a34a', color:'white',
-                  border:'none', borderRadius:4, padding:'3px 8px', fontSize:9, fontWeight:700, textDecoration:'none' }}>
+              <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer" className="acn-ctt-lnk-wa">
                 💬 WhatsApp
               </a>
             )}
-            <button className="acn-btn" style={{ background:'#0891b2' }}
+            <Botao variante="primario" pequeno
               onClick={() => { setModalInteracao({ contato: c }); setFormI(interacaoVazia()); }}>
               + Registrar contato
-            </button>
-            <button className="acn-btn" style={{ background:'#475569' }}
+            </Botao>
+            <Botao variante="secundario" pequeno
               onClick={() => { setFormC({ ...VAZIO_CONTATO, ...c }); setModalContato(c); }}>
               ✏️ Editar
-            </button>
+            </Botao>
             {(veTodos || c.operador_nome === currentUser?.nome) && (
-              <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirContato(c)}>✕</button>
+              <Botao variante="perigo" pequeno onClick={() => excluirContato(c)}>✕</Botao>
             )}
           </div>
         </div>
 
         {/* Abas internas */}
-        <div style={{ display:'flex', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
+        <div className="acn-ctt-abas">
           {([
             ['info',     'ℹ️ Info'],
             ['historico', `📋 Histórico (${interacoesC.length})`],
@@ -437,10 +417,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
             const temNaoLidas = aba === 'whatsapp' && naoLidasWa > 0;
             return (
               <div key={aba} onClick={() => setAbaDetalhe(aba)}
-                style={{ padding:'5px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
-                  color: temNaoLidas ? '#16a34a' : abaDetalhe===aba ? '#0891b2' : '#64748b',
-                  borderBottom: abaDetalhe===aba ? `2px solid ${temNaoLidas ? '#16a34a' : '#0891b2'}` : '2px solid transparent',
-                }}>
+                className={'acn-ctt-aba' + (abaDetalhe===aba ? ' ativa' : '') + (temNaoLidas ? ' nova' : '')}>
                 <span className={temNaoLidas ? 'acn-wa-tab-ativa' : ''}>{label}</span>
               </div>
             );
@@ -448,7 +425,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
         </div>
 
         {/* Conteúdo aba */}
-        <div style={{ flex:1, overflowY:'auto', padding:'10px 14px' }}>
+        <div className="acn-ctt-aba-corpo">
 
           {/* ── Info ── */}
           {abaDetalhe === 'info' && (
@@ -459,45 +436,45 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                 { label:'Telefone', val: c.telefone,  icon:'📞' },
                 { label:'LinkedIn', val: c.linkedin,  icon:'🔗', link: c.linkedin },
               ].filter(r => r.val).map(({ label, val, icon, link }) => (
-                <div key={label} style={{ display:'flex', gap:6, marginBottom:6, alignItems:'flex-start' }}>
-                  <span style={{ fontSize:12, flexShrink:0 }}>{icon}</span>
+                <div key={label} className="acn-ctt-info-lin">
+                  <span className="acn-ctt-info-ic">{icon}</span>
                   <div>
-                    <div style={{ fontSize:8, color:'#94a3b8', fontWeight:700, textTransform:'uppercase' }}>{label}</div>
+                    <div className="acn-ctt-info-rot">{label}</div>
                     {link ? (
-                      <a href={link} target="_blank" rel="noreferrer" style={{ fontSize:10, color:'#2563eb' }}>{val}</a>
+                      <a href={link} target="_blank" rel="noreferrer" className="acn-ctt-info-lnk">{val}</a>
                     ) : (
-                      <div style={{ fontSize:10, color:'#1e293b' }}>{val}</div>
+                      <div className="acn-ctt-info-val">{val}</div>
                     )}
                   </div>
                 </div>
               ))}
 
               {c.foco_id && (
-                <div style={{ fontSize:8, color:'#94a3b8', padding:'4px 8px', background:'#f8fafc', borderRadius:4, marginTop:4 }}>
+                <div className="acn-ctt-foco">
                   🔗 Foco ID: <code>{c.foco_id}</code>
                 </div>
               )}
 
               {c.observacoes && (
-                <div style={{ marginTop:10, padding:'7px 10px', background:'#fffbeb', border:'1px solid #fed7aa', borderRadius:6, fontSize:10, color:'#92400e', wordBreak:'break-word', whiteSpace:'pre-wrap' }}
+                <div className="acn-ctt-obs"
                   dangerouslySetInnerHTML={{ __html: htmlSeguro(c.observacoes) }} />
               )}
 
               {/* Oportunidades ligadas */}
               {opsC.length > 0 && (
-                <div style={{ marginTop:12 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', textTransform:'uppercase', marginBottom:6 }}>Oportunidades</div>
+                <div className="acn-ctt-ops">
+                  <div className="acn-ctt-ops-tit">Oportunidades</div>
                   {opsC.map(op => (
-                    <div key={op.id} style={{ padding:'5px 8px', background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, marginBottom:4 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#0369a1' }}>{op.titulo}</div>
-                      <div style={{ fontSize:8, color:'#64748b' }}>{op.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda Direta'}</div>
+                    <div key={op.id} className="acn-ctt-op">
+                      <div className="acn-ctt-op-tit">{op.titulo}</div>
+                      <div className="acn-ctt-op-funil">{op.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda Direta'}</div>
                     </div>
                   ))}
                 </div>
               )}
 
               {/* Quem cadastrou */}
-              <div style={{ marginTop:12, fontSize:8, color:'#94a3b8', paddingTop:8, borderTop:'1px dashed #e2e8f0' }}>
+              <div className="acn-ctt-quem-cadastrou">
                 Cadastrado por {c.operador_nome || '—'}
               </div>
             </div>
@@ -506,51 +483,49 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
           {/* ── Histórico de interações ── */}
           {abaDetalhe === 'historico' && (
             <div>
-              <button className="acn-btn" style={{ background:'#0891b2', marginBottom:10 }}
+              <Botao variante="primario" pequeno className="acn-ctt-nova-int"
                 onClick={() => { setModalInteracao({ contato: c }); setFormI(interacaoVazia()); }}>
                 + Nova interação
-              </button>
+              </Botao>
 
               {interacoesC.length === 0 ? (
-                <div style={{ textAlign:'center', color:'#94a3b8', fontSize:10, padding:16 }}>
+                <div className="acn-ctt-sem">
                   {falhas.interacoes ? 'Não foi possível carregar o histórico.' : 'Nenhuma interação registrada ainda.'}
                 </div>
               ) : interacoesC.map(i => (
-                <div key={i.id} style={{ marginBottom:10, paddingBottom:10, borderBottom:'1px dashed #f1f5f9' }}>
-                  <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:3 }}>
-                    <span style={{ fontSize:13 }}>{TIPO_ICON[i.tipo] || '📝'}</span>
-                    <div style={{ flex:1 }}>
-                      <span style={{ fontSize:9, fontWeight:700, color: TIPO_COR[i.tipo] || '#64748b', textTransform:'uppercase' }}>
+                <div key={i.id} className="acn-ctt-int">
+                  <div className="acn-ctt-int-cab">
+                    <span className="acn-ctt-int-ic">{TIPO_ICON[i.tipo] || '📝'}</span>
+                    <div className="acn-ctt-int-meio">
+                      <span className="acn-ctt-int-tipo" data-tipo={i.tipo}>
                         {i.tipo}
                       </span>
                       {i.resultado && (
-                        <span style={{ fontSize:8, marginLeft:6, padding:'1px 5px', borderRadius:10, fontWeight:700,
-                          background: i.resultado === 'positivo' ? '#dcfce7' : i.resultado === 'negativo' ? '#fee2e2' : '#f1f5f9',
-                          color: RESULTADO_COR[i.resultado] || '#64748b' }}>
+                        <span className="acn-ctt-int-res" data-res={i.resultado}>
                           {i.resultado}
                         </span>
                       )}
                     </div>
-                    <span style={{ fontSize:8, color:'#94a3b8' }}>{fmtDT(i.data_interacao)}</span>
+                    <span className="acn-ctt-int-data">{fmtDT(i.data_interacao)}</span>
                   </div>
                   {i.descricao && (
-                    <div style={{ fontSize:10, color:'#374151', lineHeight:1.4, paddingLeft:19 }}><Linkify text={i.descricao} /></div>
+                    <div className="acn-ctt-int-desc"><Linkify text={i.descricao} /></div>
                   )}
                   {i.transcricao && (
-                    <div style={{ marginTop:4, paddingLeft:19 }}>
-                      <div style={{ fontSize:8, fontWeight:700, color:'#7c3aed', marginBottom:2 }}>🎙️ Transcrição</div>
-                      <div style={{ fontSize:9, color:'#4c1d95', background:'#f5f3ff', borderRadius:4, padding:'4px 8px', lineHeight:1.4 }}>
+                    <div className="acn-ctt-int-trans">
+                      <div className="acn-ctt-int-trans-tit">🎙️ Transcrição</div>
+                      <div className="acn-ctt-int-trans-tx">
                         {i.transcricao}
                       </div>
                     </div>
                   )}
                   {i.audio_url && !i.transcricao && (
-                    <div style={{ paddingLeft:19, marginTop:4 }}>
+                    <div className="acn-ctt-int-aud">
                       <a href={i.audio_url} target="_blank" rel="noreferrer"
-                        style={{ fontSize:9, color:'#2563eb' }}>🎵 Ouvir áudio</a>
+                        className="acn-ctt-int-aud-lnk">🎵 Ouvir áudio</a>
                     </div>
                   )}
-                  <div style={{ fontSize:8, color:'#94a3b8', paddingLeft:19, marginTop:2 }}>{i.operador_nome}</div>
+                  <div className="acn-ctt-int-op">{i.operador_nome}</div>
                 </div>
               ))}
             </div>
@@ -560,43 +535,35 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
           {abaDetalhe === 'whatsapp' && (
             <div>
               {!c.whatsapp && (
-                <div style={{ textAlign:'center', color:'#94a3b8', fontSize:10, padding:16 }}>
+                <div className="acn-ctt-sem">
                   Nenhum número WhatsApp cadastrado para este contato.
                 </div>
               )}
               {c.whatsapp && waMsgsC.length === 0 && (
-                <div style={{ textAlign:'center', padding:16 }}>
-                  <div style={{ fontSize:10, color:'#94a3b8', marginBottom:8 }}>{falhas.mensagens ? 'Não foi possível carregar as mensagens.' : 'Nenhuma mensagem sincronizada.'}</div>
+                <div className="acn-ctt-wa-vazio">
+                  <div className="acn-ctt-wa-vazio-tx">{falhas.mensagens ? 'Não foi possível carregar as mensagens.' : 'Nenhuma mensagem sincronizada.'}</div>
                   {!falhas.mensagens && (
-                  <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:6, padding:'8px 10px', textAlign:'left' }}>
+                  <div className="acn-ctt-wa-dica">
                     💡 Para sincronizar automaticamente, configure o webhook da <strong>Evolution API</strong> para gravar mensagens nesta tabela.<br /><br />
-                    Endpoint: <code style={{ fontSize:8 }}>POST /functions/v1/whatsapp-webhook</code>
+                    Endpoint: <code className="acn-ctt-wa-cod">POST /functions/v1/whatsapp-webhook</code>
                   </div>
                   )}
-                  <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer"
-                    style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#16a34a', color:'white',
-                      borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, textDecoration:'none', marginTop:10 }}>
+                  <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer" className="acn-ctt-lnk-wa acn-ctt-lnk-wa-g">
                     💬 Abrir no WhatsApp
                   </a>
                 </div>
               )}
               {waMsgsC.length > 0 && (
-                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <div className="acn-ctt-msgs">
                   {waMsgsC.map(m => (
                     <div key={m.id} onClick={() => !m.lida && marcarLida(m.id)}
-                      style={{
-                        padding:'7px 10px', borderRadius:8, maxWidth:'88%', cursor: m.lida ? 'default' : 'pointer',
-                        alignSelf: m.direcao === 'saida' ? 'flex-end' : 'flex-start',
-                        background: m.direcao === 'saida' ? '#dcfce7' : m.lida ? '#f8fafc' : '#fff',
-                        border: `1px solid ${m.lida ? '#e2e8f0' : '#bae6fd'}`,
-                        fontWeight: m.lida ? 400 : 600,
-                      }}>
-                      <div style={{ fontSize:10, color:'#1e293b', lineHeight:1.4 }}>{m.conteudo || m.transcricao || '🎵 Áudio'}</div>
+                      className={'acn-ctt-msg' + (m.direcao === 'saida' ? ' saida' : '') + (m.lida ? ' lida' : '')}>
+                      <div className="acn-ctt-msg-tx">{m.conteudo || m.transcricao || '🎵 Áudio'}</div>
                       {m.transcricao && m.tipo_msg === 'audio' && (
-                        <div style={{ fontSize:8, color:'#7c3aed', marginTop:2 }}>🎙️ Transcrito</div>
+                        <div className="acn-ctt-msg-trans">🎙️ Transcrito</div>
                       )}
-                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:4 }}>
-                        <button
+                      <div className="acn-ctt-msg-rod">
+                        <Botao className="acn-ctt-b acn-ctt-salvar-crm"
                           onClick={e => {
                             e.stopPropagation();
                             setModalInteracao({ contato: c });
@@ -608,13 +575,11 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                               oportunidade_id: null,
                             });
                           }}
-                          title="Salvar esta mensagem como interação em qualquer card CRM"
-                          style={{ fontSize:8, color:'#2563eb', background:'none', border:'1px solid #bfdbfe', borderRadius:4,
-                            padding:'1px 6px', cursor:'pointer', fontWeight:600, lineHeight:'14px' }}>
+                          title="Salvar esta mensagem como interação em qualquer card CRM">
                           📌 Salvar no CRM
-                        </button>
-                        <div style={{ fontSize:8, color:'#94a3b8', textAlign:'right' }}>
-                          {fmtDT(m.data_msg)} {!m.lida && <span style={{ color:'#0369a1' }}>● novo</span>}
+                        </Botao>
+                        <div className="acn-ctt-msg-data">
+                          {fmtDT(m.data_msg)} {!m.lida && <span className="acn-ctt-msg-novo">● novo</span>}
                         </div>
                       </div>
                     </div>
@@ -631,42 +596,41 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER PRINCIPAL
   // ─────────────────────────────────────────────────────────────────────────
-  if (loading) return <div style={{ padding:20, color:'#64748b', fontSize:11 }}>Carregando contatos...</div>;
+  if (loading) return <div className="acn-ctt-carregando">Carregando contatos...</div>;
 
   return (
-    <div style={{ padding:'8px 0' }}>
+    <div className="acn-ctt-raiz">
       {/* ── Toolbar ── */}
-      <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:10, flexWrap:'wrap' }}>
-        <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'3px 10px' }}
+      <div className="acn-ctt-barra">
+        <Botao variante="secundario" pequeno
           onClick={() => { setFormC({ ...VAZIO_CONTATO, operador_nome: currentUser?.nome }); setModalContato({}); }}>
           + Novo Contato
-        </button>
+        </Botao>
         <input
           placeholder="🔍 Nome, empresa, WhatsApp..."
           value={busca} onChange={e => setBusca(e.target.value)}
-          style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9, width:200 }}
+          className="acn-ctt-busca"
         />
         {veTodos && operadoresUnicos.length > 1 && (
           <select value={filtroOp} onChange={e => setFiltroOp(e.target.value)}
-            style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
+            className="acn-ctt-filtro">
             <option value="">Todos os operadores</option>
             {operadoresUnicos.map(op => <option key={op} value={op}>{op}</option>)}
           </select>
         )}
-        <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
+        <span className="acn-ctt-contador">
           {contatosFiltrados.length} contato{contatosFiltrados.length !== 1 ? 's' : ''}
         </span>
         {isGerente && (
-          <button className="acn-btn"
-            style={{ background:'#16a34a', fontSize:9, padding:'3px 10px', marginLeft:4 }}
+          <Botao variante="primario" pequeno className="acn-ctt-b-wa"
             onClick={() => setShowWaConexoes(true)}>
             ⚙️ WhatsApp
-          </button>
+          </Botao>
         )}
       </div>
 
       {Object.keys(falhas).length > 0 && (
-        <div style={{ marginBottom:10 }}>
+        <div className="acn-ctt-faixa">
           <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
             Não foi possível carregar {Object.keys(falhas).map(k => ({ contatos: 'os contatos', interacoes: 'as interações', oportunidades: 'as oportunidades', clientes: 'os clientes', mensagens: 'as mensagens do WhatsApp' }[k])).join(', ')} ({[...new Set(Object.values(falhas))].join('; ')}).
           </Faixa>
@@ -676,13 +640,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
       {showWaConexoes && <WhatsAppConexoesWidget onClose={() => setShowWaConexoes(false)} />}
 
       {/* ── Layout: lista + painel ── */}
-      <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+      <div className="acn-ctt-corpo">
         {/* Lista */}
-        <div style={{ flex:1, minWidth:0 }}>
+        <div className="acn-ctt-lista">
           {contatosFiltrados.length === 0 ? (
-            <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
-              <div style={{ fontSize:14, marginBottom:6 }}>📇</div>
-              <div style={{ fontSize:11 }}>
+            <div className="acn-ctt-vazio">
+              <div className="acn-ctt-vazio-ic">📇</div>
+              <div>
                 {busca ? 'Nenhum contato encontrado.' : falhas.contatos ? 'Não foi possível carregar os contatos.' : 'Nenhum contato cadastrado ainda.'}
               </div>
             </div>
@@ -695,49 +659,47 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
       {/* ══════ MODAL CRIAR/EDITAR CONTATO ══════ */}
       {modalContato !== null && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000,
-          display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="acn-ctt-ov"
           onClick={e => { if (e.target===e.currentTarget) setModalContato(null); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(540px,96vw)',
-            maxHeight:'90vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+          <div className="acn-ctt-modal acn-ctt-modal-c">
 
-            <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#1e293b' }}>
+            <div className="acn-ctt-modal-tit">
               {modalContato?.id ? '✏️ Editar Contato' : '+ Novo Contato'}
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 12px' }}>
+            <div className="acn-ctt-grade">
               {/* Nome */}
-              <div style={{ gridColumn:'1/-1' }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Nome *</div>
+              <div className="acn-ctt-larga">
+                <div className="acn-ctt-rot">Nome *</div>
                 <input value={formC.nome||''} placeholder="Nome completo"
                   onChange={e => setFormC(f => ({...f, nome:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* Cargo */}
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cargo</div>
+                <div className="acn-ctt-rot">Cargo</div>
                 <input value={formC.cargo||''} placeholder="Ex: Diretor de Compras"
                   onChange={e => setFormC(f => ({...f, cargo:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* Empresa */}
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Empresa / Órgão</div>
+                <div className="acn-ctt-rot">Empresa / Órgão</div>
                 <input value={formC.empresa||''} placeholder="Ex: Prefeitura de SP"
                   onChange={e => setFormC(f => ({...f, empresa:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* Cliente vinculado */}
-              <div style={{ gridColumn:'1/-1' }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Vincular a Cliente Cadastrado (opcional)</div>
+              <div className="acn-ctt-larga">
+                <div className="acn-ctt-rot">Vincular a Cliente Cadastrado (opcional)</div>
                 <select value={formC.cliente_id||''} onChange={e => setFormC(f => ({...f, cliente_id: e.target.value||null}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                  className="acn-ctt-campo">
                   <option value="">— Sem vínculo —</option>
                   {clientes.map(cl => <option key={cl.id} value={cl.id}>{cl.nome}</option>)}
                 </select>
@@ -745,44 +707,44 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
               {/* WhatsApp */}
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>WhatsApp (55DDD+número)</div>
+                <div className="acn-ctt-rot">WhatsApp (55DDD+número)</div>
                 <input value={formC.whatsapp||''} placeholder="5511987654321"
                   onChange={e => setFormC(f => ({...f, whatsapp:e.target.value.replace(/\D/g,'')}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* E-mail */}
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>E-mail</div>
+                <div className="acn-ctt-rot">E-mail</div>
                 <input type="email" value={formC.email||''} placeholder="contato@empresa.com"
                   onChange={e => setFormC(f => ({...f, email:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* Telefone */}
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Telefone fixo</div>
+                <div className="acn-ctt-rot">Telefone fixo</div>
                 <input value={formC.telefone||''} placeholder="(11) 3000-0000"
                   onChange={e => setFormC(f => ({...f, telefone:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* LinkedIn */}
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>LinkedIn</div>
+                <div className="acn-ctt-rot">LinkedIn</div>
                 <input value={formC.linkedin||''} placeholder="https://linkedin.com/in/..."
                   onChange={e => setFormC(f => ({...f, linkedin:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
 
               {/* Operador */}
               {isGerente && (
-                <div style={{ gridColumn:'1/-1' }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Operador Responsável</div>
+                <div className="acn-ctt-larga">
+                  <div className="acn-ctt-rot">Operador Responsável</div>
                   <ColaboradorSelect departamentos={DEPTOS.comercial}
                     value={formC.operador_nome||''}
                     onChange={v => setFormC(f => ({...f, operador_nome:v}))}
@@ -792,33 +754,33 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               )}
 
               {/* Observações */}
-              <div style={{ gridColumn:'1/-1' }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
+              <div className="acn-ctt-larga">
+                <div className="acn-ctt-rot">Observações</div>
                 <RichTextInput value={formC.observacoes||''} placeholder="Notas importantes sobre este contato... (selecione um trecho pra formatar)"
                   onChange={html => setFormC(f => ({...f, observacoes:html}))}
-                  style={{ width:'100%' }} minHeight={60}
+                  minHeight={60}
                 />
               </div>
 
               {/* Foco ID */}
-              <div style={{ gridColumn:'1/-1' }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                  Foco ID <span style={{ color:'#94a3b8', fontWeight:400 }}>(integração futura)</span>
+              <div className="acn-ctt-larga">
+                <div className="acn-ctt-rot">
+                  Foco ID <span className="acn-ctt-rot-dica">(integração futura)</span>
                 </div>
                 <input value={formC.foco_id||''} placeholder="ID do contato no Sistema Foco"
                   onChange={e => setFormC(f => ({...f, foco_id:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  className="acn-ctt-campo"
                 />
               </div>
             </div>
 
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:14 }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }}
-                onClick={() => setModalContato(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#0891b2', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
+            <div className="acn-ctt-rodape acn-ctt-rodape-c">
+              <Botao variante="secundario" pequeno className="acn-ctt-b-rod"
+                onClick={() => setModalContato(null)}>Cancelar</Botao>
+              <Botao variante="primario" pequeno className="acn-ctt-b-rod"
                 onClick={salvarContato} disabled={salvando}>
                 {salvando ? 'Salvando...' : 'Salvar Contato'}
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
@@ -826,117 +788,106 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
       {/* ══════ MODAL REGISTRAR INTERAÇÃO ══════ */}
       {modalInteracao && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000,
-          display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="acn-ctt-ov"
           onClick={e => { if (e.target===e.currentTarget) setModalInteracao(null); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(500px,96vw)',
-            maxHeight:'90vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+          <div className="acn-ctt-modal acn-ctt-modal-i">
 
-            <div style={{ fontWeight:700, fontSize:12, marginBottom:4, color:'#1e293b' }}>
+            <div className="acn-ctt-modal-tit acn-ctt-modal-tit-i">
               📋 Registrar Interação
             </div>
-            <div style={{ fontSize:9, color:'#64748b', marginBottom:12, background:'#f8fafc',
-              borderRadius:4, padding:'4px 8px' }}>
+            <div className="acn-ctt-modal-sub">
               Contato: <strong>{modalInteracao.contato?.nome}</strong>
             </div>
 
             {/* Tipo */}
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Tipo de Interação</div>
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+            <div className="acn-ctt-grupo">
+              <div className="acn-ctt-rot acn-ctt-rot-g">Tipo de Interação</div>
+              <div className="acn-ctt-pilulas">
                 {['ligacao','whatsapp','email','reuniao','visita','outro'].map(t => (
-                  <button key={t} onClick={() => setFormI(f => ({...f, tipo:t}))}
-                    style={{ fontSize:9, padding:'3px 10px', borderRadius:14, fontWeight:700, cursor:'pointer', border:'none',
-                      background: formI.tipo===t ? TIPO_COR[t] : '#f1f5f9',
-                      color: formI.tipo===t ? 'white' : '#64748b',
-                    }}>
+                  <Botao key={t} className={'acn-ctt-b acn-ctt-pilula' + (formI.tipo===t ? ' ativa' : '')} data-tipo={t}
+                    onClick={() => setFormI(f => ({...f, tipo:t}))}>
                     {TIPO_ICON[t]} {t.charAt(0).toUpperCase()+t.slice(1)}
-                  </button>
+                  </Botao>
                 ))}
               </div>
             </div>
 
             {/* Resultado */}
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Resultado</div>
-              <div style={{ display:'flex', gap:5 }}>
+            <div className="acn-ctt-grupo">
+              <div className="acn-ctt-rot acn-ctt-rot-g">Resultado</div>
+              <div className="acn-ctt-pilulas">
                 {[['positivo','✅'],['neutro','➖'],['negativo','❌']].map(([r, icon]) => (
-                  <button key={r} onClick={() => setFormI(f => ({...f, resultado:r}))}
-                    style={{ fontSize:9, padding:'3px 10px', borderRadius:14, fontWeight:700, cursor:'pointer', border:'none',
-                      background: formI.resultado===r ? RESULTADO_COR[r] : '#f1f5f9',
-                      color: formI.resultado===r ? 'white' : '#64748b',
-                    }}>
+                  <Botao key={r} className={'acn-ctt-b acn-ctt-pilula' + (formI.resultado===r ? ' ativa' : '')} data-res={r}
+                    onClick={() => setFormI(f => ({...f, resultado:r}))}>
                     {icon} {r.charAt(0).toUpperCase()+r.slice(1)}
-                  </button>
+                  </Botao>
                 ))}
               </div>
             </div>
 
             {/* Data */}
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Data e Hora</div>
+            <div className="acn-ctt-grupo">
+              <div className="acn-ctt-rot">Data e Hora</div>
               <input type="datetime-local" value={formI.data_interacao}
                 onChange={e => setFormI(f => ({...f, data_interacao:e.target.value}))}
-                style={{ padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, width:'100%', boxSizing:'border-box' }}
+                className="acn-ctt-campo"
               />
             </div>
 
             {/* Descrição */}
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Resumo da interação *</div>
+            <div className="acn-ctt-grupo">
+              <div className="acn-ctt-rot">Resumo da interação *</div>
               <textarea value={formI.descricao} onChange={e => setFormI(f => ({...f, descricao:e.target.value}))}
                 placeholder="O que foi conversado? Qual o próximo passo?"
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, height:80, resize:'vertical', boxSizing:'border-box' }}
+                className="acn-ctt-campo acn-ctt-campo-ta"
               />
             </div>
 
             {/* Vincular oportunidade */}
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Vincular a Oportunidade (opcional)</div>
+            <div className="acn-ctt-grupo">
+              <div className="acn-ctt-rot">Vincular a Oportunidade (opcional)</div>
               <select value={formI.oportunidade_id||''} onChange={e => setFormI(f => ({...f, oportunidade_id:e.target.value||null}))}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                className="acn-ctt-campo">
                 <option value="">— Sem vínculo —</option>
                 {oportunidades.map(op => <option key={op.id} value={op.id}>{op.funil==='licitacao'?'':''} {op.titulo}</option>)}
               </select>
             </div>
 
             {/* Upload áudio */}
-            <div style={{ marginBottom:12, padding:'10px 12px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:6 }}>🎙️ Áudio da conversa (opcional)</div>
-              <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-                <label style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#7c3aed', color:'white',
-                  borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            <div className="acn-ctt-audio">
+              <div className="acn-ctt-rot acn-ctt-rot-a">🎙️ Áudio da conversa (opcional)</div>
+              <div className="acn-ctt-audio-lin">
+                <label className={'acn-ctt-anexar' + (formI.audio_url && !transcrevendo ? ' ja-enviou' : '')}>
                   {enviandoAudio ? '⏳ Enviando áudio…' : '📎 Anexar áudio'}
                   <input ref={audioRef} type="file" accept="audio/*" disabled={enviandoAudio}
                     onChange={e => { if (e.target.files?.[0]) uploadAudio(e.target.files[0]); }}
-                    style={{ display:'none' }} />
+                    className="acn-ctt-arquivo" />
                 </label>
                 {formI.audio_url && (
                   <>
-                    <span style={{ fontSize:9, color:'#16a34a', fontWeight:700 }}>✓ Áudio enviado</span>
-                    <button className="acn-btn"
-                      style={{ background: transcrevendo ? '#94a3b8' : '#7c3aed', opacity: transcrevendo?.7:1 }}
+                    <span className="acn-ctt-audio-ok">✓ Áudio enviado</span>
+                    <Botao variante={transcrevendo ? 'secundario' : 'primario'} pequeno
                       onClick={transcreverAudio} disabled={transcrevendo}>
                       {transcrevendo ? '⏳ Transcrevendo...' : '🎙️ Transcrever (IA)'}
-                    </button>
+                    </Botao>
                   </>
                 )}
               </div>
               {formI.transcricao && (
-                <div style={{ marginTop:8, padding:'6px 8px', background:'#f5f3ff', border:'1px solid #ddd6fe', borderRadius:5 }}>
-                  <div style={{ fontSize:8, fontWeight:700, color:'#7c3aed', marginBottom:2 }}>Transcrição</div>
-                  <div style={{ fontSize:10, color:'#4c1d95', lineHeight:1.4 }}>{formI.transcricao}</div>
+                <div className="acn-ctt-trans">
+                  <div className="acn-ctt-trans-tit">Transcrição</div>
+                  <div className="acn-ctt-trans-tx">{formI.transcricao}</div>
                 </div>
               )}
             </div>
 
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }}
-                onClick={() => setModalInteracao(null)}>Cancelar</button>
-              <button className="acn-btn" style={{ background:'#0891b2', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
+            <div className="acn-ctt-rodape">
+              <Botao variante="secundario" pequeno className="acn-ctt-b-rod"
+                onClick={() => setModalInteracao(null)}>Cancelar</Botao>
+              <Botao variante="primario" pequeno className="acn-ctt-b-rod"
                 onClick={salvarInteracao} disabled={salvando || enviandoAudio}>
                 {salvando ? 'Salvando...' : 'Salvar Interação'}
-              </button>
+              </Botao>
             </div>
           </div>
         </div>

@@ -4051,3 +4051,217 @@ html body.dark .acn-chat-raiz .acn-b.acn-chat-info-remover { color: #fca5a5; }
 .acn-dpr-pessoas { flex: 1; min-width: 0; font-size: 12px; color: var(--acn-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acn-dpr-novo { display: flex; gap: 8px; margin-top: 12px; }
 .acn-dpr-novo .acn-input { flex: 1; min-width: 0; }
+
+/* ══ Contatos do CRM (ContactosSection, 12e63 — 14/10/2026) ═══════════════════════════════════════════════════════
+   Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar:
+   o tamanho mínimo de letra, os tons e as cores que os ajustes de tela aplicavam por cima). Os botões com fundo usam o Botao do guia;
+   os que são só um símbolo, as pílulas e o "Salvar no CRM" partem de uma base pelada (acn-ctt-b), como no chat. */
+html body .acn-b.acn-ctt-b { display: block; align-items: normal; justify-content: normal; gap: normal; height: auto; width: auto; margin: 0; padding: 0; border: 0 none; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; font-weight: 400; line-height: normal; letter-spacing: normal; text-align: center; white-space: normal; cursor: pointer; transition: all 0s; }
+
+/* ── Barra de cima, lista e cartão ── */
+.acn-ctt-raiz { padding: 8px 0; }
+.acn-ctt-carregando { padding: 20px; color: #64748b; font-size: 13px; }
+.acn-ctt-barra { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.acn-ctt-busca { width: 200px; padding: 3px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; }
+.acn-ctt-filtro { padding: 3px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; }
+.acn-ctt-contador { margin-left: auto; color: #94a3b8; font-size: 12px; line-height: 1.45; }
+html body .acn-b.acn-ctt-b-wa { margin-left: 4px; }
+.acn-ctt-faixa { margin-bottom: 10px; }
+.acn-ctt-corpo { display: flex; align-items: flex-start; gap: 10px; }
+.acn-ctt-lista { flex: 1; min-width: 0; }
+.acn-ctt-vazio { padding: 40px; color: #94a3b8; text-align: center; }
+.acn-ctt-vazio-ic { margin-bottom: 6px; font-size: 14px; line-height: 1.45; }
+.acn-ctt-card { padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; margin-bottom: 6px; background-color: #ffffff; cursor: pointer; transition: all .15s; }
+.acn-ctt-card.sel { background-color: #f0f9ff; border-color: #0891b2; }
+.acn-ctt-card-lin { display: flex; align-items: flex-start; gap: 10px; }
+.acn-ctt-card-info { flex: 1; min-width: 0; }
+.acn-ctt-card-nome { margin-bottom: 1px; color: #1e293b; font-weight: 700; }
+.acn-ctt-card-cargo { margin-bottom: 2px; color: #64748b; font-size: 12px; line-height: 1.45; }
+.acn-ctt-card-op { margin-top: 2px; color: #94a3b8; font-size: 11px; line-height: 1.45; }
+
+/* ── Avatar: o tom (um de seis) vem da letra inicial ── */
+.acn-ctt-av { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #ffffff; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-ctt-av.acn-ctt-av-g { width: 44px; height: 44px; font-size: 16px; line-height: 1.45; }
+.acn-ctt-av[data-tom="0"] { background-color: #7c3aed; }
+.acn-ctt-av[data-tom="1"] { background-color: #0891b2; }
+.acn-ctt-av[data-tom="2"] { background-color: #0f766e; }
+.acn-ctt-av[data-tom="3"] { background-color: #b45309; }
+.acn-ctt-av[data-tom="4"] { background-color: #be185d; }
+.acn-ctt-av[data-tom="5"] { background-color: #1d4ed8; }
+
+/* ── Selos do cartão ── */
+.acn-ctt-pils { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+.acn-ctt-pil { padding: 1px 6px; border-radius: 10px; overflow: hidden; font-size: 11px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; vertical-align: middle; }
+.acn-ctt-pil-wa { color: #1b7f43; background-color: #e6f4ea; }
+.acn-ctt-pil-email { color: #0a544e; background-color: #e3f2ef; }
+.acn-ctt-pil-int { color: #245fb8; background-color: #e7effa; }
+.acn-ctt-pil.acn-ctt-pil-nl { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; overflow: visible; white-space: normal; text-overflow: clip; max-width: none; vertical-align: baseline; font-weight: 800; line-height: 1.45; color: #1b7f43; background-color: #e6f4ea; }
+
+/* ── Painel da ficha ── */
+.acn-ctt-det { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; max-height: calc(100vh - 180px); overflow: hidden; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; }
+.acn-ctt-det-cab { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; background-color: #f8fafc; flex-shrink: 0; }
+.acn-ctt-det-id { display: flex; align-items: center; gap: 10px; }
+.acn-ctt-det-quem { flex: 1; }
+.acn-ctt-det-nome { color: #1e293b; font-weight: 700; }
+.acn-ctt-det-cargo { color: #64748b; font-size: 12px; line-height: 1.45; }
+html body .acn-b.acn-ctt-b.acn-ctt-fechar { padding: 2px; color: #94a3b8; font-size: 16px; }
+html body .acn-b.acn-ctt-b.acn-ctt-fechar:hover:not(:disabled) { color: #94a3b8; }
+.acn-ctt-acoes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.acn-ctt-lnk-wa { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; color: #ffffff; background-color: #16a34a; font-size: 12px; font-weight: 700; line-height: 1.45; text-decoration: none; }
+.acn-ctt-lnk-wa.acn-ctt-lnk-wa-g { gap: 6px; margin-top: 10px; padding: 6px 14px; border-radius: 6px; }
+.acn-ctt-abas { display: flex; flex-shrink: 0; border-bottom: 1px solid #e2e8f0; }
+.acn-ctt-aba { padding: 5px 10px; border-bottom: 2px solid transparent; color: #64748b; font-size: 12px; font-weight: 700; line-height: 1.45; cursor: pointer; }
+.acn-ctt-aba.ativa { color: #0891b2; border-bottom-color: #0891b2; }
+.acn-ctt-aba.nova { color: #16a34a; }
+.acn-ctt-aba.ativa.nova { border-bottom-color: #16a34a; }
+.acn-ctt-aba-corpo { flex: 1; overflow-y: auto; padding: 10px 14px; }
+
+/* ── Aba Info ── */
+.acn-ctt-info-lin { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
+.acn-ctt-info-ic { flex-shrink: 0; font-size: 12px; line-height: 1.45; }
+.acn-ctt-info-rot { color: #94a3b8; font-size: 11px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
+.acn-ctt-info-val { color: #1e293b; font-size: 12px; line-height: 1.45; }
+.acn-ctt-info-lnk { color: #2563eb; font-size: 12px; line-height: 1.45; }
+.acn-ctt-foco { margin-top: 4px; padding: 4px 8px; border-radius: 4px; color: #94a3b8; background-color: #f8fafc; font-size: 11px; line-height: 1.45; }
+.acn-ctt-obs { margin-top: 10px; padding: 7px 10px; border: 1px solid #fed7aa; border-radius: 6px; color: #92400e; background-color: #fffbeb; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.acn-ctt-ops { margin-top: 12px; }
+.acn-ctt-ops-tit { margin-bottom: 6px; color: #475569; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
+.acn-ctt-op { margin-bottom: 4px; padding: 5px 8px; border: 1px solid #bae6fd; border-radius: 5px; background-color: #f0f9ff; }
+.acn-ctt-op-tit { color: #0369a1; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-ctt-op-funil { color: #64748b; font-size: 11px; line-height: 1.45; }
+.acn-ctt-quem-cadastrou { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #e2e8f0; color: #94a3b8; font-size: 11px; line-height: 1.45; }
+
+/* ── Aba Histórico ── */
+html body .acn-b.acn-ctt-nova-int { margin-bottom: 10px; }
+.acn-ctt-sem { padding: 16px; color: #94a3b8; font-size: 12px; line-height: 1.45; text-align: center; }
+.acn-ctt-int { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #f1f5f9; }
+.acn-ctt-int-cab { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.acn-ctt-int-ic { font-size: 13px; }
+.acn-ctt-int-meio { flex: 1; }
+.acn-ctt-int-tipo { font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; color: #64748b; }
+.acn-ctt-int-tipo[data-tipo="ligacao"] { color: #2563eb; }
+.acn-ctt-int-tipo[data-tipo="whatsapp"] { color: #16a34a; }
+.acn-ctt-int-tipo[data-tipo="email"] { color: #7c3aed; }
+.acn-ctt-int-tipo[data-tipo="reuniao"] { color: #0891b2; }
+.acn-ctt-int-tipo[data-tipo="visita"] { color: #17212b; }
+.acn-ctt-int-res { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 10px; overflow: hidden; font-size: 11px; font-weight: 700; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; vertical-align: middle; color: #245fb8; background-color: #e7effa; }
+.acn-ctt-int-res[data-res="positivo"] { color: #1b7f43; background-color: #e6f4ea; }
+.acn-ctt-int-res[data-res="negativo"] { color: #b9302a; background-color: #fbe9e7; }
+.acn-ctt-int-data { color: #94a3b8; font-size: 11px; line-height: 1.45; }
+.acn-ctt-int-desc { padding-left: 19px; color: #374151; font-size: 12px; line-height: 1.4; }
+.acn-ctt-int-trans { margin-top: 4px; padding-left: 19px; }
+.acn-ctt-int-trans-tit { margin-bottom: 2px; color: #7c3aed; font-size: 11px; font-weight: 700; line-height: 1.45; }
+.acn-ctt-int-trans-tx { padding: 4px 8px; border-radius: 4px; color: #4c1d95; background-color: #f5f3ff; font-size: 12px; line-height: 1.4; }
+.acn-ctt-int-aud { margin-top: 4px; padding-left: 19px; }
+.acn-ctt-int-aud-lnk { color: #2563eb; font-size: 12px; line-height: 1.45; }
+.acn-ctt-int-op { margin-top: 2px; padding-left: 19px; color: #94a3b8; font-size: 11px; line-height: 1.45; }
+
+/* ── Aba WhatsApp ── */
+.acn-ctt-wa-vazio { padding: 16px; text-align: center; }
+.acn-ctt-wa-vazio-tx { margin-bottom: 8px; color: #94a3b8; font-size: 12px; line-height: 1.45; }
+.acn-ctt-wa-dica { padding: 8px 10px; border-radius: 6px; color: #64748b; background-color: #f8fafc; font-size: 12px; line-height: 1.45; text-align: left; }
+.acn-ctt-wa-cod { font-size: 11px; line-height: 1.35; }
+.acn-ctt-msgs { display: flex; flex-direction: column; gap: 6px; }
+.acn-ctt-msg { align-self: flex-start; max-width: 88%; padding: 7px 10px; border: 1px solid #bae6fd; border-radius: 8px; background-color: #ffffff; font-weight: 600; cursor: pointer; }
+.acn-ctt-msg.saida { align-self: flex-end; background-color: #dcfce7; }
+.acn-ctt-msg.lida { border-color: #e2e8f0; background-color: #f8fafc; font-weight: 400; cursor: default; }
+.acn-ctt-msg.saida.lida { background-color: #dcfce7; }
+.acn-ctt-msg-tx { color: #1e293b; font-size: 12px; line-height: 1.4; }
+.acn-ctt-msg-trans { margin-top: 2px; color: #7c3aed; font-size: 11px; line-height: 1.45; }
+.acn-ctt-msg-rod { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+html body .acn-b.acn-ctt-b.acn-ctt-salvar-crm { padding: 1px 6px; border: 1px solid #dee4ea; border-radius: 4px; background-color: #ffffff; color: #17212b; font-size: 11px; font-weight: 600; line-height: 14px; transition: background-color .12s, border-color .12s, color .12s; }
+html body .acn-b.acn-ctt-b.acn-ctt-salvar-crm:hover:not(:disabled) { border-color: #c5cfd8; background-color: #f8fafb; }
+.acn-ctt-msg-data { color: #94a3b8; font-size: 11px; line-height: 1.45; text-align: right; }
+.acn-ctt-msg-novo { color: #0369a1; }
+
+/* ── Janelas (contato e interação) ── */
+.acn-ctt-ov { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background-color: rgba(0, 0, 0, .5); }
+.acn-ctt-modal { max-height: 90vh; overflow: auto; padding: 16px 18px; border-radius: 8px; background-color: #ffffff; box-shadow: 0 8px 32px #0004; }
+.acn-ctt-modal-c { width: min(540px, 96vw); }
+.acn-ctt-modal-i { width: min(500px, 96vw); }
+.acn-ctt-modal-tit { margin-bottom: 12px; color: #1e293b; font-weight: 700; }
+.acn-ctt-modal-tit.acn-ctt-modal-tit-i { margin-bottom: 4px; font-size: 12px; line-height: 1.45; }
+.acn-ctt-modal-sub { margin-bottom: 12px; padding: 4px 8px; border-radius: 4px; color: #64748b; background-color: #f8fafc; font-size: 12px; line-height: 1.45; }
+.acn-ctt-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.acn-ctt-larga { grid-column: 1 / -1; }
+.acn-ctt-grupo { margin-bottom: 8px; }
+.acn-ctt-rot { margin-bottom: 3px; color: #475569; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-ctt-rot.acn-ctt-rot-g { margin-bottom: 4px; }
+.acn-ctt-rot.acn-ctt-rot-a { margin-bottom: 6px; }
+.acn-ctt-rot-dica { color: #94a3b8; font-weight: 400; }
+.acn-ctt-campo { width: 100%; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; }
+.acn-ctt-campo.acn-ctt-campo-ta { height: 80px; padding: 6px 8px; resize: vertical; }
+.acn-ctt-rodape { display: flex; gap: 6px; justify-content: flex-end; }
+.acn-ctt-rodape.acn-ctt-rodape-c { margin-top: 14px; }
+@media (min-width: 769px) { html body .acn-b.acn-ctt-b-rod { padding: 0 12px; } }
+
+/* ── Tipo e resultado da interação (pílulas) ── */
+.acn-ctt-pilulas { display: flex; flex-wrap: wrap; gap: 5px; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula { padding: 3px 10px; border: 1px solid #dee4ea; border-radius: 14px; background-color: #ffffff; color: #17212b; font-size: 12px; font-weight: 700; transition: background-color .12s, border-color .12s, color .12s; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa { border: 0 none; background-color: #0e7068; color: #ffffff; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-tipo="outro"], html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-res="neutro"] { border: 1px solid #64748b; background-color: #64748b; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula:not(.ativa):hover:not(:disabled) { border-color: #c5cfd8; background-color: #f8fafb; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa:hover:not(:disabled) { background-color: #0a5c55; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-res="negativo"]:hover:not(:disabled) { background-color: #9c2621; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-tipo="outro"]:hover:not(:disabled), html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-res="neutro"]:hover:not(:disabled) { background-color: #475569; }
+html body .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-res="negativo"] { background-color: #b9302a; }
+
+/* ── Áudio da conversa ── */
+.acn-ctt-audio { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background-color: #f8fafc; }
+.acn-ctt-audio-lin { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.acn-ctt-anexar { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 4px; color: #ffffff; background-color: #0e7068; font-size: 12px; font-weight: 700; line-height: 1.45; cursor: pointer; transition: background-color .12s, border-color .12s, color .12s; }
+.acn-ctt-anexar.ja-enviou { padding: 3px 10px; border: 1px solid #dee4ea; color: #17212b; background-color: #ffffff; }
+.acn-ctt-arquivo { display: none; }
+.acn-ctt-audio-ok { color: #16a34a; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-ctt-trans { margin-top: 8px; padding: 6px 8px; border: 1px solid #ddd6fe; border-radius: 5px; background-color: #f5f3ff; }
+.acn-ctt-trans-tit { margin-bottom: 2px; color: #7c3aed; font-size: 11px; font-weight: 700; line-height: 1.45; }
+.acn-ctt-trans-tx { color: #4c1d95; font-size: 12px; line-height: 1.4; }
+
+/* ── Tema escuro dos Contatos: os ajustes de tela olham a cor escrita no próprio elemento, e deixam de pegar quando a cor vai para uma classe;
+   por isso os valores que a pessoa já via no escuro (medidos antes de migrar) ficam escritos aqui ── */
+html body.dark .acn-ctt-card { background-color: #1e293b; border-color: #334155; }
+html body.dark .acn-ctt-card.sel { background-color: #162032; border-color: #0891b2; }
+html body.dark .acn-ctt-card-nome, html body.dark .acn-ctt-card-cargo, html body.dark .acn-ctt-card-op { color: #94a3b8; }
+html body.dark .acn-ctt-pil-wa, html body.dark .acn-ctt-pil.acn-ctt-pil-nl, html body.dark .acn-ctt-int-res[data-res="positivo"] { color: #a9debc; background-color: rgba(63, 181, 106, .24); }
+html body.dark .acn-ctt-pil-email { color: #c5ede8; background-color: rgba(127, 216, 204, .24); }
+html body.dark .acn-ctt-pil-int, html body.dark .acn-ctt-int-res, html body.dark .acn-ctt-int-res[data-res="neutro"] { color: #bcd2f4; background-color: rgba(107, 155, 230, .24); }
+html body.dark .acn-ctt-int-res[data-res="negativo"] { color: #f8bcb7; background-color: rgba(240, 106, 95, .24); }
+html body.dark .acn-ctt-det { background-color: #1e293b; border-color: #334155; }
+html body.dark .acn-ctt-det-cab { background-color: #1e293b; }
+html body.dark .acn-ctt-det-nome, html body.dark .acn-ctt-det-cargo { color: #94a3b8; }
+html body.dark .acn-ctt-aba { color: #94a3b8; }
+html body.dark .acn-ctt-aba.ativa { color: #2dd4bf; }
+html body.dark .acn-ctt-aba.nova, html body.dark .acn-ctt-aba.ativa.nova { color: #86efac; }
+html body.dark .acn-ctt-info-lnk, html body.dark .acn-ctt-int-aud-lnk, html body.dark .acn-ctt-msg-novo, html body.dark .acn-ctt-op-tit { color: #93c5fd; }
+html body.dark .acn-ctt-info-val, html body.dark .acn-ctt-int-desc, html body.dark .acn-ctt-op-funil, html body.dark .acn-ctt-ops-tit { color: #94a3b8; }
+html body.dark .acn-ctt-foco, html body.dark .acn-ctt-wa-dica, html body.dark .acn-ctt-modal-sub { background-color: #1e293b; }
+html body.dark .acn-ctt-foco, html body.dark .acn-ctt-modal-sub, html body.dark .acn-ctt-wa-dica { color: #cbd5e1; }
+html body.dark .acn-ctt-obs { color: #fde68a; background-color: #1c1505; }
+html body.dark .acn-ctt-op { background-color: #162032; }
+html body.dark .acn-ctt-int-tipo[data-tipo="ligacao"] { color: #93c5fd; }
+html body.dark .acn-ctt-int-tipo[data-tipo="whatsapp"] { color: #86efac; }
+html body.dark .acn-ctt-int-tipo[data-tipo="email"] { color: #c4b5fd; }
+html body.dark .acn-ctt-int-tipo[data-tipo="reuniao"] { color: #2dd4bf; }
+html body.dark .acn-ctt-int-tipo { color: #94a3b8; }
+html body.dark .acn-ctt-int-trans-tit, html body.dark .acn-ctt-msg-trans, html body.dark .acn-ctt-trans-tit, html body.dark .acn-ctt-trans-tx { color: #c4b5fd; }
+html body.dark .acn-ctt-int-trans-tx, html body.dark .acn-ctt-trans { color: #c4b5fd; background-color: #2d1b5c; }
+html body.dark .acn-ctt-msg { background-color: #1e293b; }
+html body.dark .acn-ctt-msg.saida { border-color: #334155; }
+html body.dark .acn-ctt-msg-tx, html body.dark .acn-ctt-msg-data { color: #94a3b8; }
+html body.dark .acn-b.acn-ctt-b.acn-ctt-salvar-crm { color: #93c5fd; background-color: #1e293b; border-color: #334155; }
+html body.dark .acn-ctt-modal { background-color: #1e293b; }
+html body.dark .acn-ctt-modal-tit, html body.dark .acn-ctt-rot { color: #94a3b8; }
+html body.dark .acn-ctt-audio { background-color: #1e293b; border-color: #334155; }
+html body.dark .acn-ctt-audio-ok { color: #86efac; }
+html body.dark .acn-ctt-anexar.ja-enviou { color: #e2e8f0; background-color: #1e293b; border-color: #334155; }
+html body.dark .acn-b.acn-ctt-b.acn-ctt-pilula { background-color: #162032; border-color: #334155; color: #cbd5e1; }
+html body.dark .acn-b.acn-ctt-b.acn-ctt-pilula.ativa { border-color: transparent; background-color: #0e7068; color: #ffffff; }
+html body.dark .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-res="negativo"] { background-color: #b9302a; }
+html body.dark .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-tipo="outro"], html body.dark .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-res="neutro"] { border-color: #475569; background-color: #475569; }
+
+/* ── Celular (até 768 px): o ajuste de tela subia a letra miúda para 12 px olhando o estilo solto de cada elemento; com a cor e o tamanho em classes, a regra vem para cá ── */
+@media (max-width: 768px) {
+  .acn-ctt-card-op, .acn-ctt-foco, .acn-ctt-info-rot, .acn-ctt-int-data, .acn-ctt-int-op, .acn-ctt-int-trans-tit, .acn-ctt-trans-tit, .acn-ctt-msg-data, .acn-ctt-msg-trans, .acn-ctt-op-funil, .acn-ctt-quem-cadastrou, .acn-ctt-pil.acn-ctt-pil-nl { font-size: 12px; line-height: 1.45; }
+  .acn-ctt-pil, .acn-ctt-int-res, .acn-ctt-wa-cod { font-size: 12px; line-height: 1.35; }
+  html body .acn-b.acn-ctt-b.acn-ctt-salvar-crm { font-size: 12px; }
+}
