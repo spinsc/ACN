@@ -69,7 +69,10 @@ export default function AjustesProjetoTab({ currentUser }) {
     // 08/10/2026: quem foi marcado como ENVOLVIDO numa demanda (de qualquer setor) a vê aqui, mesmo sem ter aberto — como os membros de um card do Trello
     if (!filtroUsuario && currentUser?.email) {
       const { data: env, error: erroEnv } = await supabase.from('demandas_avulsas')
-        .select('id,titulo,setor,status,prioridade,prazo,criado_em,criado_por,criado_por_nome,responsavel_nome,vinculo_descricao,membros,grupo_id').contains('membros', [{ email: currentUser.email }])
+        .select('id,titulo,setor,status,prioridade,prazo,criado_em,criado_por,criado_por_nome,responsavel_nome,vinculo_descricao,membros,grupo_id')
+        // 15/10/2026: "membros" é jsonb, e .contains() com array de objetos vira literal de array do PostgREST — o banco recusava ("invalid input syntax for type json") e a faixa
+        // vermelha aparecia para todo mundo, sem nunca trazer as demandas de quem foi marcado como envolvido. O texto JSON é o que ele entende (mesmo cuidado de OpVinculos.ts).
+        .filter('membros', 'cs', JSON.stringify([{ email: currentUser.email }]))
         .order('criado_em', { ascending: false }).limit(300);
       if (erroEnv) { setErroMinhas('Não foi possível ler as demandas em que você é envolvido (' + erroEnv.message + ').'); }
       const ja = new Set(lista.map((x: any) => x.id));
