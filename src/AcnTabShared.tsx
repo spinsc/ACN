@@ -4,7 +4,7 @@ import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
 import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline } from '@mdi/js';
 import Icone from './Icone';
-import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
 // O dossiê importa OplProgressBar deste arquivo; para não fechar um ciclo de
 // imports, a volta é por import dinâmico (que de quebra deixa o jsPDF fora do
@@ -31,6 +31,7 @@ import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
 import { FotosVeiculoVer } from './FotosVeiculo';
 import { itensPreenchidos } from './DemandaItens';
 import { EquipeDaOpResumo } from './EquipeDaOp';
+import { lerValorDigitado } from './LerValor';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -73,16 +74,24 @@ export function OplProgressBar({ status }: { status: string }) {
 function AnexosOPSection({ oplId }: { oplId: string }) {
   const [anexos, setAnexos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
   const TIPO_ICONE: Record<string, string> = { proposta:'📋', orcamento:'💰', documento:'📄', foto:'🖼️', checklist_entrega:'✅' };
   const TIPO_COR:   Record<string, string> = { proposta:'#0891b2', orcamento:'#059669', documento:'#2563eb', foto:'#7c3aed', checklist_entrega:'#16a34a' };
 
   useEffect(() => {
     if (!oplId) return;
+    let vivo = true;
     supabase.from('opl_anexos').select('*').eq('opl_id', oplId).order('criado_em', { ascending: false })
-      .then(({ data }) => { setAnexos(data || []); setLoading(false); });
+      .then(({ data, error }) => {
+        if (!vivo) return;
+        // 7.x (15/10/2026): leitura que falha não pode parecer "nenhum documento anexado"
+        setErro(error ? error.message : ''); if (!error) setAnexos(data || []); setLoading(false);
+      });
+    return () => { vivo = false; };
   }, [oplId]);
 
   if (loading) return <div style={{ fontSize:10, color:'#94a3b8', padding:'6px 0' }}>Carregando documentos...</div>;
+  if (erro) return <div className="acn-opl-aviso erro">Não foi possível ler os documentos anexados ({erro}). Isso não quer dizer que não existam.</div>;
   if (anexos.length === 0) return <div style={{ fontSize:10, color:'#94a3b8', padding:'6px 0' }}>Nenhum documento anexado.</div>;
 
   return (
@@ -113,16 +122,18 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
   const [open, setOpen] = useState(false);
   const [pendencias, setPendencias] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
 
   const buscar = async () => {
-    setLoading(true);
-    const { data } = await supabase
+    setLoading(true); setErro('');
+    const { data, error } = await supabase
       .from('demandas_setoriais')
       .select('*')
       .eq('numero_opl', opl)
       .in('status', ['Pendente', 'Em Andamento'])
       .order('data_abertura', { ascending: false });
-    setPendencias(data || []);
+    // 7.x (15/10/2026): leitura que falhava mostrava "✓ Nenhuma pendência aberta" — um aval falso; agora a falha aparece
+    if (error) { setErro(error.message); setPendencias([]); } else setPendencias(data || []);
     setLoading(false);
   };
 
@@ -149,6 +160,11 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
             <div className="modal-title">Pendências — OP {opl}</div>
             {loading ? (
               <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Carregando...</div>
+            ) : erro ? (
+              <div>
+                <div className="acn-opl-aviso erro">Não foi possível ler as pendências desta OP ({erro}). Isso não quer dizer que não existam.</div>
+                <div style={{ textAlign: 'center', marginTop: 10 }}><Botao pequeno onClick={buscar}>Tentar de novo</Botao></div>
+              </div>
             ) : pendencias.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#22c55e', padding: 20, fontWeight: 700 }}>
                 ✓ Nenhuma pendência aberta para esta OP.
@@ -210,6 +226,10 @@ export function OplMovimentadas({ setor }: { setor: string }) {
   const [opls, setOpls]     = useState<any[]>([]);
   const [operadores, setOperadores] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  // 7.x (15/10/2026): cada leitura que falha aparece, em vez de virar "Nenhum registro encontrado" / lista vazia
+  const [erroLogs, setErroLogs] = useState('');
+  const [erroOpls, setErroOpls] = useState('');
+  const [erroOperadores, setErroOperadores] = useState('');
 
   // Filtros
   const [fOperador, setFOperador]       = useState('');
@@ -220,7 +240,8 @@ export function OplMovimentadas({ setor }: { setor: string }) {
     if (open) fetchData();
   }, [open]);
 
-  const fetchData = async () => {
+  // Os filtros entram por parâmetro: o "Limpar" zerava os campos e chamava esta função logo em seguida, mas ela ainda enxergava os valores da tela de antes e lia com os filtros antigos (7.x, 15/10/2026)
+  const fetchData = async (f = { operador: fOperador, ini: fDataInicio, fim: fDataFim }) => {
     setLoading(true);
     try {
       // Logs com filtros
@@ -230,9 +251,9 @@ export function OplMovimentadas({ setor }: { setor: string }) {
         .order('data_hora', { ascending: false })
         .limit(200);
 
-      if (fOperador)    q = q.ilike('usuario_nome', `%${fOperador}%`);
-      if (fDataInicio)  q = q.gte('data_hora', fDataInicio + 'T00:00:00');
-      if (fDataFim)     q = q.lte('data_hora', fDataFim + 'T23:59:59');
+      if (f.operador)  q = q.ilike('usuario_nome', `%${f.operador}%`);
+      if (f.ini)       q = q.gte('data_hora', f.ini + 'T00:00:00');
+      if (f.fim)       q = q.lte('data_hora', f.fim + 'T23:59:59');
 
       const [logsRes, oplsRes, opersRes] = await Promise.all([
         q,
@@ -247,11 +268,16 @@ export function OplMovimentadas({ setor }: { setor: string }) {
           .limit(500),
       ]);
 
-      setLogs(logsRes.data || []);
-      setOpls(oplsRes.data || []);
-
-      const uniq = [...new Set((opersRes.data || []).map((r: any) => r.usuario_nome).filter(Boolean))].sort() as string[];
-      setOperadores(uniq);
+      setErroLogs(logsRes.error ? logsRes.error.message : ''); if (!logsRes.error) setLogs(logsRes.data || []); else setLogs([]);
+      setErroOpls(oplsRes.error ? oplsRes.error.message : ''); if (!oplsRes.error) setOpls(oplsRes.data || []); else setOpls([]);
+      setErroOperadores(opersRes.error ? opersRes.error.message : '');
+      if (!opersRes.error) {
+        const uniq = [...new Set((opersRes.data || []).map((r: any) => r.usuario_nome).filter(Boolean))].sort() as string[];
+        setOperadores(uniq);
+      }
+    } catch (e: any) {
+      // falha de rede: as três leituras contam como recusadas
+      const m = e?.message || String(e); setErroLogs(m); setErroOpls(m); setErroOperadores(m);
     } finally {
       setLoading(false);
     }
@@ -297,20 +323,21 @@ export function OplMovimentadas({ setor }: { setor: string }) {
               <input type="date" value={fDataFim} onChange={e => setFDataFim(e.target.value)}
                 style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151' }} />
             </div>
-            <button onClick={fetchData}
+            <button onClick={() => fetchData()}
               style={{ fontSize:10, fontWeight:700, padding:'4px 12px', background:'#92400e', color:'white', border:'none', borderRadius:4, cursor:'pointer' }}>
               🔍 Buscar
             </button>
             {temFiltro && (
-              <button onClick={() => { limparFiltros(); setTimeout(fetchData, 50); }}
+              <button onClick={() => { limparFiltros(); fetchData({ operador: '', ini: '', fim: '' }); }}
                 style={{ fontSize:10, padding:'4px 8px', background:'#f1f5f9', color:'#64748b', border:'1px solid #d1d5db', borderRadius:4, cursor:'pointer' }}>
                 ✕ Limpar
               </button>
             )}
             <span style={{ marginLeft:'auto', fontSize:9, color:'#92400e', fontStyle:'italic' }}>
-              {loading ? 'Carregando...' : `${logs.length} registro(s)`}
+              {loading ? 'Carregando...' : erroLogs ? '—' : `${logs.length} registro(s)`}
             </span>
           </div>
+          {erroOperadores && <div className="acn-opl-aviso erro">Não foi possível ler a lista de operadores ({erroOperadores}); o filtro por operador pode estar incompleto.</div>}
 
           {/* ── ABAS ── */}
           <div style={{ display:'flex', borderBottom:'1px solid #fde68a' }}>
@@ -330,6 +357,8 @@ export function OplMovimentadas({ setor }: { setor: string }) {
             <div style={{ overflowX:'auto' }}>
               {loading ? (
                 <div style={{ textAlign:'center', padding:20, color:'#94a3b8', fontSize:11 }}>Carregando...</div>
+              ) : erroLogs ? (
+                <div className="acn-opl-aviso erro">Não foi possível ler os registros de movimentação ({erroLogs}). Isso não quer dizer que não existam.</div>
               ) : logs.length === 0 ? (
                 <div style={{ textAlign:'center', padding:20, color:'#94a3b8', fontSize:11 }}>Nenhum registro encontrado.</div>
               ) : (
@@ -366,12 +395,14 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                   </tbody>
                 </table>
               )}
+              {!loading && !erroLogs && logs.length >= 200 && <div className="acn-ajuda" style={{ padding:'6px 10px' }}>Mostrando os 200 registros mais recentes; use os filtros para ver os mais antigos.</div>}
             </div>
           )}
 
           {/* ── ABA EM PROCESSO ── */}
           {aba === 'processo' && (
             <div style={{ overflowX:'auto' }}>
+              {erroOpls && <div className="acn-opl-aviso erro">Não foi possível ler as OPs em processo ({erroOpls}). Isso não quer dizer que não existam.</div>}
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                 <thead><tr style={{ background:'#1e293b' }}>
                   <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OP</th>
@@ -383,7 +414,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                 </tr></thead>
                 <tbody>
                   {opls.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign:'center', padding:16, color:'#94a3b8', fontSize:11 }}>Nenhuma OP em processo.</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign:'center', padding:16, color:'#94a3b8', fontSize:11 }}>{erroOpls ? '—' : 'Nenhuma OP em processo.'}</td></tr>
                   ) : opls.map((o, i) => {
                     const ultimoLog = logs.find(l => l.opl_id === o.id);
                     return (
@@ -403,6 +434,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                   })}
                 </tbody>
               </table>
+              {!erroOpls && opls.length >= 50 && <div className="acn-ajuda" style={{ padding:'6px 10px' }}>Mostrando as 50 OPs em processo mais recentes.</div>}
             </div>
           )}
         </div>
@@ -504,16 +536,19 @@ export function VeiculoCompacto({ o, semPlaca = false, children }: { o: any; sem
 const baseDoLote = (opl: string) => String(opl || '').trim().replace(/\/\d+$/, '');
 const escLike = (v: string) => v.replace(/[\\%_]/g, m => '\\' + m);
 
-async function buscarUnidadesDoLote(opl: string) {
+// 7.x (15/10/2026): devolve também o erro da leitura — antes uma falha virava lista vazia e a tela dizia "0 unidade(s)" ou escondia o resumo do lote sem avisar
+async function lerUnidadesDoLote(opl: string): Promise<{ lista: any[]; erro: string }> {
   const base = baseDoLote(opl);
-  if (!base) return [];
-  const { data } = await supabase.from('oples')
+  if (!base) return { lista: [], erro: '' };
+  const { data, error } = await supabase.from('oples')
     .select('id,opl,status_geral,chassi,placa,modelo,responsavel_producao,equipe_nome,modo_execucao,resumo_servicos,data_prevista_entrega,valor_total,cliente_nome,origem_venda')
     .like('opl', escLike(base) + '/%');
-  return (data || [])
+  if (error) return { lista: [], erro: error.message };
+  return { erro: '', lista: (data || [])
     .filter((o: any) => /^\/\d+$/.test(String(o.opl).slice(base.length)))
-    .sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true }));
+    .sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })) };
 }
+async function buscarUnidadesDoLote(opl: string) { return (await lerUnidadesDoLote(opl)).lista; }
 
 const fmtBRL = (v: any) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 const fmtDataCurta = (d: any) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
@@ -522,8 +557,10 @@ const escHtml = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp
 // R7 (13/10/2026): `verValores` falso (marca "ver valores" desligada no Admin) tira o valor de cada unidade, o valor total e a coluna Valor, na tela e na impressão
 export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: string; onClose: () => void; verValores?: boolean }) {
   const [unidades, setUnidades] = useState<any[] | null>(null);
+  const [erroLote, setErroLote] = useState('');
+  const [tentativaLote, setTentativaLote] = useState(0);
   const base = baseDoLote(opl);
-  useEffect(() => { buscarUnidadesDoLote(opl).then(setUnidades); }, [opl]);
+  useEffect(() => { setUnidades(null); setErroLote(''); lerUnidadesDoLote(opl).then(r => { setErroLote(r.erro); setUnidades(r.lista); }); }, [opl, tentativaLote]);
 
   const lista = unidades || [];
   const porStatus: Record<string, number> = {};
@@ -558,7 +595,7 @@ export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: stri
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>📋 Resumo do lote — OP {base}</div>
-            {unidades && (
+            {unidades && !erroLote && (
               <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
                 {lista[0]?.cliente_nome || '—'} · {lista.length} unidade(s) · progresso médio {pctMedio}%{verValores && <> · valor total <b>{fmtBRL(total)}</b></>}
               </div>
@@ -575,6 +612,11 @@ export function ResumoLoteModal({ opl, onClose, verValores = true }: { opl: stri
         </div>
         {!unidades ? (
           <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>Carregando...</div>
+        ) : erroLote ? (
+          <div>
+            <div className="acn-opl-aviso erro">Não foi possível ler as unidades do lote ({erroLote}). Isso não quer dizer que não existam.</div>
+            <div style={{ textAlign: 'center', marginTop: 10 }}><Botao pequeno onClick={() => setTentativaLote(n => n + 1)}>Tentar de novo</Botao></div>
+          </div>
         ) : (
           <>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -631,6 +673,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
   const [erroCompras, setErroCompras] = useState('');
+  // 7.x (15/10/2026): releitura da OP e do histórico que falham aparecem; antes a tela ficava com a linha velha da lista ou com "Nenhum registro de movimentação"
+  const [erroOpl, setErroOpl] = useState('');
+  const [erroLogs, setErroLogs] = useState('');
+  const liberandoRef = useRef(false);
   // Seriais dos itens instalados, registrados pelo CQ na auditoria aprovada mais recente (pedido do usuário em 07/10/2026) — migração cq_seriais_dos_itens_instalados
   const [seriaisCq, setSeriaisCq] = useState<any>(null);
   const [erroSeriaisCq, setErroSeriaisCq] = useState('');
@@ -652,7 +698,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
    */
   const recarregarOpl = async () => {
     if (!oplProp?.id) return;
-    const { data } = await supabase.from('oples').select('*').eq('id', oplProp.id).maybeSingle();
+    const { data, error } = await supabase.from('oples').select('*').eq('id', oplProp.id).maybeSingle();
+    setErroOpl(error ? error.message : '');
     if (data) setOpl(data);
   };
   useEffect(() => { setOpl(oplProp); recarregarOpl(); }, [oplProp?.id]);
@@ -716,17 +763,22 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const podeEditarVendido = podeEditarTudo || (opl?.status_bom !== 'BOM Liberado'
     && (perfilComercial || (!!usuario?.nome && usuario.nome === opl?.responsavel_comercial)));
   const [editandoVendido, setEditandoVendido] = useState<any[] | null>(null);
+  // 7.x (15/10/2026): a alteração já foi gravada; se o registro dela no histórico falhar, a pessoa precisa saber (antes ficava sem rastro e sem aviso)
+  const registrarNoHistorico = async (registro: any) => {
+    const { error } = await supabase.from('logs_movimentacao_opl').insert([registro]);
+    if (error) alert('A alteração foi salva, mas não ficou registrada no histórico da OP: ' + error.message);
+  };
   const salvarVendido = async () => {
     const itens = itensPreenchidos(editandoVendido || []);
     if (!itens.length) { alert('A OP precisa de pelo menos 1 item vendido.'); return; }
     const { error } = await supabase.from('oples').update({ itens_vendidos: itens }).eq('id', opl.id);
     if (error) { alert('Não foi possível salvar: ' + error.message); return; }
-    await supabase.from('logs_movimentacao_opl').insert([{
+    await registrarNoHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: usuario?.perfil || 'Comercial',
       evento: `Itens vendidos alterados: ${itens.map((v: any) => `${v.quantidade}× ${v.nome}`).join('; ')}`,
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: new Date().toISOString(),
-    }]);
+    });
     setEditandoVendido(null);
     await recarregarOpl();      // mostra o que ficou gravado, não o que eu achei que gravei
     recarregarLogs();
@@ -735,11 +787,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
-    .order('data_hora', { ascending: false }).limit(50).then(({ data }) => setLogs(data || []));
+    .order('data_hora', { ascending: false }).limit(50).then(({ data, error }) => { setErroLogs(error ? error.message : ''); if (!error) setLogs(data || []); setLoading(false); });
   const abrirEdicaoLote = async () => {
-    const ids = (await buscarUnidadesDoLote(opl.opl)).map((u: any) => u.id);
+    const lote = await lerUnidadesDoLote(opl.opl);
+    if (lote.erro) { alert('Não foi possível ler as unidades do lote: ' + lote.erro); return; }
+    const ids = lote.lista.map((u: any) => u.id);
     if (!ids.length) return;
-    const { data } = await supabase.from('oples').select('*').in('id', ids);
+    const { data, error: erroLote } = await supabase.from('oples').select('*').in('id', ids);
+    if (erroLote) { alert('Não foi possível ler as unidades do lote: ' + erroLote.message); return; }
     setEditandoLote([...(data || [])].sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })));
   };
 
@@ -758,13 +813,13 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     if (error) { alert('Erro ao salvar a origem: ' + error.message); return; }
     const antes = origemInfo(opl.origem_venda)?.label || 'não informada';
     const depois = origemInfo(nova)?.label || nova;
-    await supabase.from('logs_movimentacao_opl').insert([{
+    await registrarNoHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: usuario?.perfil || 'Comercial',
       evento: `Origem da venda: ${antes} → ${depois}.`,
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: usuario?.nome || usuario?.email || '—', usuario_email: usuario?.email || null,
       data_hora: new Date().toISOString(),
-    }]);
+    });
     await recarregarOpl();
     recarregarLogs();
   };
@@ -776,12 +831,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   useEffect(() => {
     if (!opl?.id) return;
     setLoading(true);
-    supabase.from('logs_movimentacao_opl')
-      .select('*')
-      .eq('opl_id', opl.id)
-      .order('data_hora', { ascending: false })
-      .limit(50)
-      .then(({ data }) => { setLogs(data || []); setLoading(false); });
+    recarregarLogs();
   }, [opl?.id, opl?.opl]);
 
   // ── Liberar OP para o Fiscal emitir NF ──────────────────────────────────
@@ -789,6 +839,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // (antes de liberar para o PCP), não mais aqui — o Comercial só confirma
   // a liberação e dispara o email automático ao Fiscal com os dados da OP/OS.
   const confirmarLiberarParaFiscal = async () => {
+    // 7.x (15/10/2026): dois cliques seguidos gravavam duas vezes (duas linhas no histórico e dois e-mails) — o botão só desabilitava depois de redesenhar
+    if (liberandoRef.current) return;
+    liberandoRef.current = true;
+    try { await liberarParaFiscal(); } finally { liberandoRef.current = false; }
+  };
+  const liberarParaFiscal = async () => {
     setLiberando(true);
     const agora = new Date().toISOString();
     const { error } = await supabase.from('oples').update({
@@ -796,12 +852,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       data_liberacao_comercial: agora,
     }).eq('id', opl.id);
     if (error) { alert('Erro ao liberar: ' + error.message); setLiberando(false); return; }
-    await supabase.from('logs_movimentacao_opl').insert([{
+    await registrarNoHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial',
       evento: 'OP liberada para emissão de NF pelo Fiscal.',
       status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
       usuario_nome: currentUser?.nome || null, data_hora: agora,
-    }]);
+    });
     logChange({ module: 'comercial', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguarda Emissao NF' }, user: currentUser });
     // Atualiza status local sem fechar o modal
@@ -835,11 +891,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       });
       if (fnError || data?.error) {
         console.warn('Falha ao enviar email ao Fiscal:', fnError || data?.error);
+        avisarEmailDoFiscal(fnError?.message || data?.error);
       }
     } catch (e) {
       console.warn('Falha ao enviar email ao Fiscal:', e);
+      avisarEmailDoFiscal((e as any)?.message || e);
     }
   };
+  // 7.x (15/10/2026): o e-mail não bloqueia a liberação, mas a falha dele não pode passar em branco (só ia para o console do navegador e o Fiscal nunca era avisado)
+  const avisarEmailDoFiscal = (motivo: any) => alert(`A OP foi liberada, mas o e-mail automático ao Fiscal não foi enviado (${String(motivo || 'sem detalhe')}). Avise o Fiscal por outro meio.`);
 
   // Só colunas do tipo date (entrada, recebimento do veículo, previsão, prazos, aceite): o dia vem do texto (R16, 05/10/2026).
   // Antes era `new Date(d)`, que mostrava o dia anterior em 95 de 95 datas conferidas com o banco.
@@ -938,6 +998,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <div className="acn-opl-corpo">
         {/* ── Situação: onde está agora, o andamento e o que pede ação (rola junto com o resto; o cabeçalho é que fica fixo) ── */}
         <div className="acn-opl-situacao">
+          {erroOpl && <div className="acn-opl-aviso erro">Não foi possível atualizar os dados desta OP ({erroOpl}). Estão aparecendo os da lista, que podem estar desatualizados.</div>}
           <OndeEstaAgoraAuto op={opl} onAbrirDossie={() => setVerDossie(true)} />
           {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
 
@@ -1104,6 +1165,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               <div className="acn-opl-card-corpo">
                 {loading ? (
                   <div className="acn-ajuda acn-centro">Carregando...</div>
+                ) : erroLogs ? (
+                  <div className="acn-opl-aviso erro">Não foi possível ler o histórico de movimentações ({erroLogs}). Isso não quer dizer que não exista.</div>
                 ) : logs.length === 0 ? (
                   <div className="acn-ajuda acn-centro">Nenhum registro de movimentação.</div>
                 ) : (
@@ -1282,9 +1345,12 @@ export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: an
     // string-only: busca o objeto no banco
     if (!numero) return;
     setLoading(true);
-    const { data } = await supabase.from('oples').select('*').eq('opl', numero).maybeSingle();
+    const { data, error } = await supabase.from('oples').select('*').eq('opl', numero).maybeSingle();
     setLoading(false);
-    if (data) { setFetched(data); setOpen(true); }
+    // 7.x (15/10/2026): clicar no número e não abrir nada, sem dizer por quê, deixava a pessoa sem saber se era erro ou se a OP não existia
+    if (error) { alert(`Não foi possível abrir a OP ${numero}: ${error.message}`); return; }
+    if (!data) { alert(`A OP ${numero} não foi encontrada.`); return; }
+    setFetched(data); setOpen(true);
   };
 
   return (
@@ -1380,6 +1446,9 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   const [responsavel, setResponsavel] = useState('');
   const [obsTexto, setObsTexto] = useState('');
   const [tick, setTick] = useState(0);
+  // 7.x (15/10/2026): leitura da lista que falha aparece (antes a lista sumia ou ficava velha, sem aviso) e as gravações passam a conferir o erro
+  const [erroDemandas, setErroDemandas] = useState('');
+  const gravandoRef = useRef(false);
 
   useEffect(() => {
     fetchDemandas();
@@ -1408,53 +1477,72 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   }, []);
 
   const fetchDemandas = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('demandas_setoriais')
       .select('*')
       .eq('setor_destino', setor)
       .in('status', ['Pendente', 'Em Andamento'])
       .order('data_abertura', { ascending: false });
-    setDemandas(data || []);
+    // leitura que falha mantém a última lista lida e mostra a faixa; antes virava lista vazia e o quadro inteiro sumia
+    if (error) { setErroDemandas(error.message); return; }
+    setErroDemandas(''); setDemandas(data || []);
   };
 
-  const iniciar = async () => {
+  // Uma gravação por vez, e conferida: o clique duplo gravava o histórico em dobro, e a gravação recusada passava como feita.
+  const exclusivo = async (fn: () => Promise<void>) => {
+    if (gravandoRef.current) return;
+    gravandoRef.current = true;
+    try { await fn(); } finally { gravandoRef.current = false; }
+  };
+  const gravarDemanda = async (id: any, campos: any): Promise<boolean> => {
+    const { error } = await supabase.from('demandas_setoriais').update(campos).eq('id', id);
+    if (error) { alert('Não foi possível gravar: ' + error.message); return false; }
+    return true;
+  };
+  // A linha de verdade, lida na hora de gravar: a da lista pode ter até 30 s e outra pessoa pode ter mexido nesse meio-tempo — gravar o histórico em cima da cópia velha apagava o que ela escreveu.
+  // Se a releitura falhar, segue com a linha da lista (como era antes).
+  const linhaAtual = async (d: any) => {
+    const { data, error } = await supabase.from('demandas_setoriais').select('*').eq('id', d.id).maybeSingle();
+    return !error && data ? data : d;
+  };
+  const mudouDeSituacao = (acao: string) => { alert(`Esta demanda já mudou de situação (outra pessoa mexeu nela). Não deu para ${acao}; a lista foi atualizada.`); fetchDemandas(); };
+
+  const iniciar = () => exclusivo(async () => {
     if (!responsavel.trim()) { alert('Informe o responsavel!'); return; }
-    const d = modalIniciar;
+    const d = await linhaAtual(modalIniciar);
+    if (d.status !== 'Pendente') { setModalIniciar(null); setResponsavel(''); mudouDeSituacao('iniciar'); return; }
     const agora = new Date().toISOString();
-    const logs = d.logs_demanda || [];
-    logs.push({ texto: `Iniciado. Responsavel: ${responsavel}`, usuario: currentUser?.nome, hora: agora });
-    await supabase.from('demandas_setoriais').update({
+    const logs = [...(d.logs_demanda || []), { texto: `Iniciado. Responsavel: ${responsavel}`, usuario: currentUser?.nome, hora: agora }];
+    if (!await gravarDemanda(d.id, {
       status: 'Em Andamento', data_inicio: agora,
       responsavel_nome: responsavel, logs_demanda: logs,
       pausado: false, segundos_pausados: 0,
-    }).eq('id', d.id);
+    })) return;     // a janela fica aberta para tentar de novo
     setModalIniciar(null); setResponsavel('');
     fetchDemandas();
-  };
+  });
 
-  const pausar = async (d: any) => {
+  const pausar = (d0: any) => exclusivo(async () => {
+    const d = await linhaAtual(d0);
+    if (d.status !== 'Em Andamento' || d.pausado) { mudouDeSituacao('pausar'); return; }
     const agora = new Date().toISOString();
-    const logs = d.logs_demanda || [];
-    logs.push({ texto: 'Atividade PAUSADA manualmente.', usuario: currentUser?.nome, hora: agora });
-    await supabase.from('demandas_setoriais').update({
-      pausado: true, data_pausa: agora, logs_demanda: logs,
-    }).eq('id', d.id);
+    const logs = [...(d.logs_demanda || []), { texto: 'Atividade PAUSADA manualmente.', usuario: currentUser?.nome, hora: agora }];
+    if (!await gravarDemanda(d.id, { pausado: true, data_pausa: agora, logs_demanda: logs })) return;
     fetchDemandas();
-  };
+  });
 
-  const retomar = async (d: any) => {
+  const retomar = (d0: any) => exclusivo(async () => {
+    const d = await linhaAtual(d0);
+    if (d.status !== 'Em Andamento' || !d.pausado) { mudouDeSituacao('retomar'); return; }
     const agora = new Date().toISOString();
     const tempoPausadoAgora = d.data_pausa
       ? Math.floor((new Date(agora).getTime() - new Date(d.data_pausa).getTime()) / 1000)
       : 0;
     const totalPausado = (d.segundos_pausados || 0) + tempoPausadoAgora;
-    const logs = d.logs_demanda || [];
-    logs.push({ texto: `Atividade RETOMADA. Pausa: ${fmtHMS(tempoPausadoAgora)}`, usuario: currentUser?.nome, hora: agora });
-    await supabase.from('demandas_setoriais').update({
-      pausado: false, data_pausa: null, segundos_pausados: totalPausado, logs_demanda: logs,
-    }).eq('id', d.id);
+    const logs = [...(d.logs_demanda || []), { texto: `Atividade RETOMADA. Pausa: ${fmtHMS(tempoPausadoAgora)}`, usuario: currentUser?.nome, hora: agora }];
+    if (!await gravarDemanda(d.id, { pausado: false, data_pausa: null, segundos_pausados: totalPausado, logs_demanda: logs })) return;
     fetchDemandas();
-  };
+  });
 
   const concluir = async (d: any) => {
     // Demanda que aponta para um item do cadastro vira saldo na prateleira, e
@@ -1469,39 +1557,44 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
         `Esta quantidade entra no estoque quando o Almoxarifado conferir.`,
         String(d.quantidade ?? ''));
       if (resposta === null) return;
-      produzida = Number(String(resposta).replace(',', '.'));
-      if (!Number.isFinite(produzida) || produzida <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
+      // mesma leitura do valor digitado da Nova OP: "1.000" é mil (antes virava 1), "12,5" é doze e meio, texto é recusado
+      const lido = lerValorDigitado(resposta);
+      if (!(lido.valor > 0)) { alert('Informe uma quantidade maior que zero.'); return; }     // em branco e ilegível voltam sem valor
+      produzida = lido.valor;
     } else if (!await confirmar(`Concluir a demanda${d?.numero_opl ? ` da OP ${d.numero_opl}` : ''}? Ela sai da lista de pendentes.`)) {
       return;
     }
-    const agora = new Date().toISOString();
-    const seg = d.data_inicio ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, null) : 0;
-    const tempo = seg / 3600;
-    const logs = d.logs_demanda || [];
-    logs.push({
-      texto: `Concluido. Tempo util: ${fmtHMS(seg)}`
-        + (produzida != null ? ` Produzido: ${produzida} ${d.unidade || 'un'} (pedido: ${d.quantidade || 0}).` : ''),
-      usuario: currentUser?.nome, hora: agora,
+    await exclusivo(async () => {
+      const f = await linhaAtual(d);
+      if (f.status !== 'Em Andamento') { mudouDeSituacao('concluir'); return; }
+      const agora = new Date().toISOString();
+      const seg = f.data_inicio ? bhElapsed(f.data_inicio, f.segundos_pausados || 0, null) : 0;
+      const tempo = seg / 3600;
+      const logs = [...(f.logs_demanda || []), {
+        texto: `Concluido. Tempo util: ${fmtHMS(seg)}`
+          + (produzida != null ? ` Produzido: ${produzida} ${d.unidade || 'un'} (pedido: ${d.quantidade || 0}).` : ''),
+        usuario: currentUser?.nome, hora: agora,
+      }];
+      const campos: any = {
+        status: 'Concluido', data_conclusao: agora,
+        tempo_execucao_horas: tempo, logs_demanda: logs,
+      };
+      if (produzida != null) campos.quantidade_produzida = produzida;
+      // o aviso de "concluída com N" só sai se a gravação deu certo (antes saía mesmo com a gravação recusada)
+      if (!await gravarDemanda(f.id, campos)) return;
+      if (produzida != null) {
+        alert(`Demanda concluída com ${produzida} ${d.unidade || 'un'}. ` +
+          `O estoque sobe quando o Almoxarifado conferir o recebimento.`);
+      }
+      fetchDemandas();
     });
-    const campos: any = {
-      status: 'Concluido', data_conclusao: agora,
-      tempo_execucao_horas: tempo, logs_demanda: logs,
-    };
-    if (produzida != null) campos.quantidade_produzida = produzida;
-    await supabase.from('demandas_setoriais').update(campos).eq('id', d.id);
-    if (produzida != null) {
-      alert(`Demanda concluída com ${produzida} ${d.unidade || 'un'}. ` +
-        `O estoque sobe quando o Almoxarifado conferir o recebimento.`);
-    }
-    fetchDemandas();
   };
 
-  const salvarObs = async () => {
+  const salvarObs = () => exclusivo(async () => {
     if (!obsTexto.trim()) return;
-    const d = modalObs;
-    const logs = d.logs_demanda || [];
-    logs.push({ texto: obsTexto, usuario: currentUser?.nome, hora: new Date().toISOString() });
-    await supabase.from('demandas_setoriais').update({ observacoes_execucao: obsTexto, logs_demanda: logs }).eq('id', d.id);
+    const d = await linhaAtual(modalObs);
+    const logs = [...(d.logs_demanda || []), { texto: obsTexto, usuario: currentUser?.nome, hora: new Date().toISOString() }];
+    if (!await gravarDemanda(d.id, { observacoes_execucao: obsTexto, logs_demanda: logs })) return;     // a janela e o texto ficam para tentar de novo
     // Salva @menções da observação
     await salvarMencoes({
       texto:             obsTexto,
@@ -1515,11 +1608,11 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
     });
     setObsTexto(''); setModalObs(null);
     fetchDemandas();
-  };
+  });
 
   const fora = !dentroHorarioComercial();
 
-  if (demandas.length === 0) return null;
+  if (demandas.length === 0 && !erroDemandas) return null;
 
   return (
     <div className="sec-card" style={{ marginTop: 10 }}>
@@ -1531,6 +1624,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
           </span>
         )}
       </div>
+      {erroDemandas && <div className="acn-opl-aviso erro">Não foi possível atualizar as demandas de {setor} ({erroDemandas}).{demandas.length > 0 ? ' Está aparecendo a última lista lida.' : ''}</div>}
       <div className="sec-body" style={{ overflowX: 'auto' }}>
         <table>
           <thead><tr>

@@ -107,6 +107,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Pintura da serralheria | `PinturaSerralheria.tsx` |
 | Busca sem acento | `SearchUtils.ts` |
 | Ler tabela grande (o banco corta em 1.000 linhas por consulta) | `LerPaginado.ts` — `lerPaginado` (lê em blocos de 1.000; ponha `.order('id')` como desempate) |
+| Número digitado em campo (valor em reais, quantidade) | `LerValor.ts` — `lerValorDigitado` ("1.000" é mil, "12,5" é doze e meio; devolve `vazio`, `invalido` ou `valor`) |
 | Data de hoje / dia de uma data | `Interface.tsx` — `hojeISO`, `diaISO` (nunca `toISOString`, que devolve o dia de Londres) |
 | Botões, abas, selos, menus | `Interface.tsx` |
 | Confirmar / pedir texto | `Feedback.tsx` — `confirmar`, `pedirTexto` |

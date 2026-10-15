@@ -16,6 +16,7 @@ import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA,
 import { ItensVendidosEditor } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
 import { hojeISO, Botao } from './Interface';
+import { lerValorDigitado } from './LerValor';
 import { mostrarAviso } from './Feedback';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
@@ -186,20 +187,8 @@ interface Props {
   crmCard?:          any; // card CRM para pré-preenchimento e vínculo
 }
 
-// 7.x (14/10/2026): o valor digitado era lido tirando TODOS os pontos e trocando a vírgula por ponto — "1500.50" virava 150.050 (cem vezes mais) e texto ("abc", "R$ 45000", "12x") virava vazio, sem avisar.
-// Agora: com vírgula, o ponto é separador de milhar ("45.000,50"); sem vírgula, ponto seguido de 3 dígitos é milhar ("45.000") e ponto seguido de 1 ou 2 dígitos é decimal ("1500.50"); "R$" é ignorado;
-// o que não for número (ou for negativo) é recusado com a mensagem. Retorna { vazio } quando o campo está em branco.
-export function lerValorDigitado(texto: any): { vazio?: true; valor?: number; invalido?: true } {
-  const t = String(texto ?? '').replace(/R\$/gi, '').replace(/\s+/g, '');
-  if (!t) return { vazio: true };
-  let n: string;
-  if (t.includes(',')) { if (!/^\d{1,3}(\.\d{3})*,\d+$|^\d+,\d+$/.test(t)) return { invalido: true }; n = t.replace(/\./g, '').replace(',', '.'); }
-  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) n = t.replace(/\./g, '');
-  else if (/^\d+(\.\d{1,2})?$/.test(t)) n = t;
-  else return { invalido: true };
-  const v = parseFloat(n);
-  return Number.isFinite(v) ? { valor: v } : { invalido: true };
-}
+// A leitura do valor digitado (7.x, 14/10/2026) mora em LerValor.ts desde 15/10/2026, para a tela de demandas usar a mesma regra; continua exportada daqui.
+export { lerValorDigitado };
 
 // Número da OS no padrão do SAC ("OS-0038/2026"). Mesma regra de SacTab.tsx (gerarNumeroOS): primeiro a função atômica do banco; se ela falhar, maior número do ano + 1.
 async function gerarNumeroOS(): Promise<string> {
