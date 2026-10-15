@@ -31,14 +31,24 @@ import { Botao, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiCarOutline, mdiAlertOutline } from '@mdi/js';
 import {
-  perguntasDeVariosItens, respostasAutomaticas, itensConjunto, vendaTemConjunto,
+  perguntasDaVenda, donaDaPergunta, ehPerguntaDaOp, respostasAutomaticas, itensConjunto, vendaTemConjunto,
   podarRespostas, respostasDasOps,
+  perguntaCabeNaVenda, ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
 } from './ConfigEstrutura';
+import {
+  lerBaseDaEstrutura, calcularDaEstrutura, diferencaDeMaterial, textoDaDiferenca, aplicarDiferencaNaBom,
+  avisoDoQueNaoFoiTirado, situacaoParaTrocarResposta,
+} from './CalculoDaEstrutura';
 
 const idsVendidos = (o) => (o?.itens_vendidos || []).map(v => v.item_id).filter(Boolean).map(String);
-const perguntasDaOp = (perguntas, o) => { const ids = new Set(idsVendidos(o)); return perguntas.filter(p => ids.has(String(p.item_id))); };
+// 15/10/2026: a pergunta da OP (sem item) vale para todas as OPs; as demais, só para as que venderam o item dono
+// Etapa 2 (15/10/2026): e só as que a condição "só quando estes itens foram vendidos juntos" deixa valer para a venda desta OP
+const perguntasDaOp = (perguntas, o) => {
+  const ids = new Set(idsVendidos(o));
+  return perguntas.filter(p => (ehPerguntaDaOp(p) || ids.has(String(p.item_id))) && perguntaCabeNaVenda(p, ids));
+};
 const restringir = (ps, mapa) => { const ok = new Set(ps.map(p => p.id)); const r = {}; Object.entries(mapa || {}).forEach(([k, v]) => { if (ok.has(k)) r[k] = v; }); return r; };
-const rotuloDe = (perguntas, opcaoId) => { for (const p of perguntas) { const o = (p.opcoes || []).find(x => x.id === opcaoId); if (o) return o.rotulo; } return '—'; };
+const rotuloDe = (perguntas, opcaoId) => { const q = valorDeQuantidade(opcaoId); if (q !== null) return String(q); for (const p of perguntas) { const o = (p.opcoes || []).find(x => x.id === opcaoId); if (o) return o.rotulo; } return '—'; };
 
 /** Uma linha de OPs para o cabeçalho: "1673.2609/01 … 1673.2609/39 (39 OPs)". */
 const resumoOps = (ops) => {
@@ -63,15 +73,23 @@ function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
           <div key={p.id} className={'acn-rpl-pergunta' + (p.opcao_pai_id ? ' filha' : '')}>
             <div className="acn-rpl-texto">
               {p.texto}
-              <span className="acn-rpl-item">({p.cadastro_itens?.nome})</span>
+              <span className="acn-rpl-item">({donaDaPergunta(p)})</span>
               {ehAuto && <span className="acn-rpl-auto">o sistema já sabia</span>}
             </div>
-            {(p.opcoes || []).length > 0 && (
+            {ehQuantidade(p) && (
+              <input className="acn-input acn-rpl-qtd" type="text" inputMode="numeric" aria-label={p.texto} placeholder="quantidade"
+                value={valorDeQuantidade(atual) ?? ''}
+                onChange={(e) => {
+                  const d = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  onEscolher(p, d === '' ? null : { id: respostaDeQuantidade(Number(d)) });
+                }} />
+            )}
+            {!ehQuantidade(p) && (p.opcoes || []).length > 0 && (
               <Chips ativo={atual || ''} desativado={ehAuto} rotulo={p.texto}
                 onChange={(id) => onEscolher(p, (p.opcoes || []).find(x => x.id === id))}
                 itens={(p.opcoes || []).map(o => ({ id: o.id, rotulo: o.rotulo }))} />
             )}
-            {!(p.opcoes || []).length && <span className="acn-rpl-sem">pergunta sem respostas cadastradas</span>}
+            {!ehQuantidade(p) && !(p.opcoes || []).length && <span className="acn-rpl-sem">pergunta sem respostas cadastradas</span>}
             {nota && <div className="acn-rpl-nota">{nota}</div>}
           </div>
         );
@@ -80,13 +98,18 @@ function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
   );
 }
 
-export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
+/**
+ * `aplicarNaBom` (etapa 4, 15/10/2026): quando a tela é aberta com a OP já com BOM montada fora de um editor de BOM (a OP aberta, no dossiê), a troca de resposta mostra
+ * "sai este, entra aquele" e, com a confirmação, ajusta a BOM gravada. Dentro de um editor de BOM (PCP/Engenharia) fica desligado: ali o painel de conferência mostra a
+ * diferença e aplica na lista da própria janela — gravar a BOM por aqui seria desfeito quando a janela salvasse a lista que ela tem na tela.
+ */
+export function RespostasEmLote({ ops, currentUser, onClose, onSalvo, aplicarNaBom = false }) {
   const [carregando, setCarregando] = useState(true);
   const [falha, setFalha] = useState('');
   const [perguntas, setPerguntas] = useState([]);
   const [salvas, setSalvas] = useState({});          // opl_id → { pergunta_id → { opcao_id, automatica } }
   const [aplicaveis, setAplicaveis] = useState([]);
-  const [ignoradas, setIgnoradas] = useState({ semVeiculo: 0, semConjunto: 0 });
+  const [ignoradas, setIgnoradas] = useState({ semVeiculo: 0, semConjunto: 0, bloqueadas: [] });
   const [padrao, setPadrao] = useState({});          // pergunta_id → opcao_id, vale para todas
   const [excecoes, setExcecoes] = useState({});      // opl_id → { pergunta_id → opcao_id }
   const [abertas, setAbertas] = useState({});        // opl_id → mostrando as perguntas do carro
@@ -103,15 +126,19 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
         const conj = await itensConjunto();
         const idsConj = conj.map(c => c.id);
         const comVeiculo = (ops || []).filter(o => o.veiculo_id);
-        const ok = comVeiculo.filter(o => vendaTemConjunto(o.itens_vendidos || [], idsConj));
+        const comConjunto = comVeiculo.filter(o => vendaTemConjunto(o.itens_vendidos || [], idsConj));
+        // etapa 4 (15/10/2026): OP que já saiu do PCP ou tem material reservado não troca resposta por aqui (o Almoxarifado já trabalha com a lista dela)
+        const situacao = await situacaoParaTrocarResposta(comConjunto);
+        const ok = comConjunto.filter(o => situacao.get(String(o.id))?.pode);
+        const bloqueadas = comConjunto.filter(o => !situacao.get(String(o.id))?.pode).map(o => ({ opl: o.opl, motivo: situacao.get(String(o.id))?.motivo }));
         const idsItens = [...new Set(ok.flatMap(idsVendidos))].filter(id => !idsConj.includes(id));
         const [ps, gravadas] = await Promise.all([
-          perguntasDeVariosItens(idsItens),
+          perguntasDaVenda(idsItens),
           respostasDasOps(ok.map(o => o.id)),
         ]);
         if (!vivo) return;
         setAplicaveis(ok); setPerguntas(ps); setSalvas(gravadas);
-        setIgnoradas({ semVeiculo: (ops || []).length - comVeiculo.length, semConjunto: comVeiculo.length - ok.length });
+        setIgnoradas({ semVeiculo: (ops || []).length - comVeiculo.length, semConjunto: comVeiculo.length - comConjunto.length, bloqueadas });
         // já vem preenchido o que TODAS as OPs que têm a pergunta já respondem igual (e não foi o sistema que respondeu)
         const pre = {};
         for (const p of ps) {
@@ -139,8 +166,10 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
     return comum;
   })();
 
-  const escolherPadrao = (p, o) => setPadrao(r => ({ ...r, [p.id]: o.id }));
-  const escolherExcecao = (op, p, o) => setExcecoes(r => ({ ...r, [op.id]: { ...(r[op.id] || {}), [p.id]: o.id } }));
+  // `o` nulo = o campo de quantidade foi esvaziado: a escolha sai do padrão/da exceção
+  const semChave = (mapa, id) => { const c = { ...mapa }; delete c[id]; return c; };
+  const escolherPadrao = (p, o) => setPadrao(r => o ? ({ ...r, [p.id]: o.id }) : semChave(r, p.id));
+  const escolherExcecao = (op, p, o) => setExcecoes(r => ({ ...r, [op.id]: o ? { ...(r[op.id] || {}), [p.id]: o.id } : semChave(r[op.id] || {}, p.id) }));
   const voltarAoPadrao = (op) => { setExcecoes(r => { const c = { ...r }; delete c[op.id]; return c; }); setAbertas(a => ({ ...a, [op.id]: false })); };
 
   // quantas OPs já respondem a pergunta e como — só informação, para não trocar às cegas
@@ -157,6 +186,7 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
   /** Monta o que seria gravado, sem gravar. */
   const montarPlano = () => {
     const linhas = [], apagar = [], historico = [];
+    const finaisPorOp = {}, jaSalvasPorOp = {};   // para calcular a diferença na BOM (etapa 4)
     const agora = new Date().toISOString();
     const por = currentUser?.nome || currentUser?.email || '—';
     let trocadas = 0; const opsComTroca = new Set(); const opsComBom = new Set();
@@ -170,7 +200,7 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
       for (const p of ps) {
         const nova = finais[p.id]; const antes = salvas[o.id]?.[p.id];
         if (!nova || (antes && antes.opcao_id === nova)) continue;
-        linhas.push({ opl_id: o.id, item_id: p.item_id, pergunta_id: p.id, opcao_id: nova,
+        linhas.push({ opl_id: o.id, item_id: p.item_id, pergunta_id: p.id, ...camposDaResposta(nova),
           automatica: !(p.id in explicitas), respondido_por: por, respondido_em: agora });
         desta.push(`${p.texto} → ${rotuloDe(perguntas, nova)}`);
         if (antes) { trocadas++; opsComTroca.add(o.id); }
@@ -179,20 +209,44 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
       if (podadas.length) { apagar.push({ opl_id: o.id, perguntas: podadas }); desta.push(`${podadas.length} resposta(s) que dependiam de uma resposta trocada foram removidas`); }
       if (desta.length) {
         historico.push({ o, texto: desta.join('; ') });
+        finaisPorOp[o.id] = finais; jaSalvasPorOp[o.id] = jaSalvas;
         if ((o.bom_itens || []).length) opsComBom.add(o.id);
       }
     }
-    return { linhas, apagar, historico, trocadas, opsComTroca, opsComBom };
+    return { linhas, apagar, historico, trocadas, opsComTroca, opsComBom, finaisPorOp, jaSalvasPorOp };
   };
 
   const salvar = async () => {
     setErro('');
     const plano = montarPlano();
     if (!plano.linhas.length && !plano.apagar.length) { setErro('Nada mudou: escolha uma resposta antes de salvar.'); return; }
+    // etapa 4: com a BOM já montada, calcula o material antes e depois da troca e mostra a diferença; a leitura que falhar para tudo (não grava às cegas)
+    const difs: any[] = [];
+    if (aplicarNaBom) {
+      try {
+        for (const { o } of plano.historico) {
+          if (!(o.bom_itens || []).length) continue;
+          const base = await lerBaseDaEstrutura(o);
+          if (!base.aplicavel) continue;
+          const dif = diferencaDeMaterial(
+            calcularDaEstrutura(base, plano.jaSalvasPorOp[o.id]).linhas,
+            calcularDaEstrutura(base, plano.finaisPorOp[o.id]).linhas);
+          if (dif.length) difs.push({ o, dif, conjNome: base.conj?.[0]?.nome });
+        }
+      } catch (e) { setErro('Não foi possível calcular a diferença na BOM: ' + (e?.message || e) + '. Nada foi gravado.'); return; }
+    }
     let aviso = `Gravar as respostas em ${plano.historico.length} OP(s)?`;
     if (plano.trocadas) aviso += `\n\n${plano.trocadas} resposta(s) que ${plano.opsComTroca.size} OP(s) já tinham vão ser TROCADAS.`;
-    if (plano.opsComBom.size) aviso += `\n\n${plano.opsComBom.size} destas OPs já têm a BOM montada: a BOM delas não muda sozinha. A resposta vale para a próxima conferência.`;
+    if (difs.length) {
+      aviso += `\n\nA BOM mudaria assim:\n` + difs.slice(0, 6).map(d => `• ${d.o.opl}: ${textoDaDiferenca(d.dif)}`).join('\n') + (difs.length > 6 ? `\n… e mais ${difs.length - 6} OP(s)` : '');
+    } else if (plano.opsComBom.size && !aplicarNaBom) {
+      aviso += `\n\n${plano.opsComBom.size} destas OPs já têm a BOM montada: a BOM delas não muda sozinha. A resposta vale para a próxima conferência.`;
+    } else if (plano.opsComBom.size) {
+      aviso += `\n\nO material calculado não muda: a BOM continua como está.`;
+    }
     if (!await confirmar(aviso)) return;
+    // a BOM só muda com uma segunda confirmação: dá para gravar as respostas e deixar a lista como está
+    const aplicarBom = difs.length > 0 && await confirmar(`Atualizar também a BOM de ${difs.length} OP(s) agora?\n\nTira da lista só o que saiu (até o que ela tem) e põe o que entrou; o que foi ajustado à mão não muda. Se cancelar aqui, só as respostas são gravadas e a BOM continua como está.`);
     setSalvando(true);
     try {
       for (let i = 0; i < plano.linhas.length; i += 500) {
@@ -213,6 +267,27 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
         usuario_nome: currentUser?.nome || null, usuario_email: currentUser?.email || null, data_hora: agora,
       })));
       if (eh) console.warn('Histórico das respostas não gravado:', eh.message);
+      // etapa 4: ajusta a BOM gravada; relê a lista na hora (pode ter sido mexida depois que a tela abriu) e cada falha é dita
+      const falhasBom: string[] = [];
+      if (aplicarBom) {
+        for (const { o, dif, conjNome } of difs) {
+          const { data: atual, error: er } = await supabase.from('oples').select('bom_itens').eq('id', o.id).maybeSingle();
+          if (er || !atual) { falhasBom.push(`${o.opl}: não foi possível ler a BOM (${er?.message || 'sem resposta'})`); continue; }
+          const r = aplicarDiferencaNaBom(atual.bom_itens || [], dif, conjNome);
+          const { error: eu } = await supabase.from('oples').update({ bom_itens: r.bom }).eq('id', o.id);
+          if (eu) { falhasBom.push(`${o.opl}: a BOM não foi gravada (${eu.message})`); continue; }
+          const { error: el } = await supabase.from('logs_movimentacao_opl').insert([{
+            opl_id: o.id, numero_opl: o.opl, setor: currentUser?.perfil || 'Engenharia',
+            evento: `BOM ajustada pela troca de respostas: ${textoDaDiferenca(dif)}`.slice(0, 900),
+            status_anterior: o.status_geral, status_novo: o.status_geral,
+            usuario_nome: currentUser?.nome || null, usuario_email: currentUser?.email || null, data_hora: agora,
+          }]);
+          if (el) console.warn('Histórico do ajuste da BOM não gravado:', el.message);
+          const nao = avisoDoQueNaoFoiTirado(r.naoAchou);
+          if (nao) falhasBom.push(`${o.opl}: ${nao}`);
+        }
+      }
+      if (falhasBom.length) alert('As respostas foram gravadas, mas a BOM pede atenção:\n' + falhasBom.join('\n'));
       onSalvo?.();
       onClose?.();
     } catch (e) {
@@ -241,18 +316,24 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
 
           {!carregando && !falha && (
             <>
-              {(ignoradas.semVeiculo > 0 || ignoradas.semConjunto > 0) && (
+              {(ignoradas.semVeiculo > 0 || ignoradas.semConjunto > 0 || ignoradas.bloqueadas.length > 0) && (
                 <div className="acn-rpl-aviso">
                   {ignoradas.semVeiculo > 0 && <div>{ignoradas.semVeiculo} OP(s) ficam de fora: sem veículo do catálogo.</div>}
+                  {ignoradas.bloqueadas.length > 0 && (
+                    <div>
+                      {ignoradas.bloqueadas.length} OP(s) ficam de fora e não trocam resposta por aqui: {ignoradas.bloqueadas.slice(0, 4).map(b => `${b.opl} (${b.motivo})`).join(', ')}
+                      {ignoradas.bloqueadas.length > 4 ? ` … e mais ${ignoradas.bloqueadas.length - 4}` : ''}. Para trocar, devolva a OP ao PCP ("PCP — rever a BOM"): ela volta sem BOM e solta a reserva.
+                    </div>
+                  )}
                   {ignoradas.semConjunto > 0 && <div>{ignoradas.semConjunto} OP(s) ficam de fora: a venda não leva o Conjunto Elétrico (sem ele não há material a montar).</div>}
                 </div>
               )}
 
-              {!total && <div className="acn-rpl-info neutro">Nenhuma das OPs tem veículo do catálogo e Conjunto Elétrico na venda.</div>}
+              {!total && <div className="acn-rpl-info neutro">Nenhuma das OPs pode trocar resposta agora: precisa ter veículo do catálogo, Conjunto Elétrico na venda e ainda não ter saído do PCP.</div>}
 
               {total > 0 && !perguntas.length && (
                 <div className="acn-rpl-info neutro">
-                  Nenhum item vendido destas OPs tem pergunta cadastrada. Cadastre em Administração → Estruturas (Passo 3 do manual).
+                  Nenhuma pergunta da OP nem de item vendido destas OPs está cadastrada. Cadastre em Administração → Estruturas (Passo 3 do manual).
                 </div>
               )}
 
@@ -262,7 +343,9 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
                     <div className="acn-rpl-padrao-tit">
                       PARA TODAS AS {total} OPs
                     </div>
-                    <ListaDePerguntas perguntas={perguntas} efetivas={efetivaPadrao} auto={autoComum}
+                    {/* só as perguntas que alguma destas OPs comporta: a condição "itens vendidos juntos" tira as demais (etapa 2) */}
+                    <ListaDePerguntas perguntas={perguntas.filter(p => aplicaveis.some(o => perguntasDaOp(perguntas, o).some(x => x.id === p.id)))}
+                      efetivas={efetivaPadrao} auto={autoComum}
                       onEscolher={escolherPadrao} resumo={resumoSalvo} />
                   </div>
 

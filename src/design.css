@@ -3387,6 +3387,8 @@ body.dark .acn-pdv { --acn-pdv-cor: #c4b5fd; }
 .acn-pdv-bloco { margin-bottom: 8px; }
 .acn-pdv-tit { margin-bottom: 4px; font-size: 11px; font-weight: 800; color: var(--acn-pdv-cor); }
 .acn-pdv-pergunta { margin-bottom: 6px; }
+/* campo de pergunta de quantidade (etapa 2, 15/10/2026): curto, é só um número inteiro */
+.acn-pdv-qtd, .acn-rpl-qtd { width: 110px; max-width: 100%; margin-top: 4px; }
 .acn-pdv-texto { margin-bottom: 3px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
 .acn-pdv-item { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--acn-muted); }
 .acn-pdv-resp { font-size: 12px; color: var(--acn-text); }
@@ -3466,6 +3468,17 @@ html body .acn-b.acn-cet-x { color: var(--acn-bad); }
 .acn-cet-form { margin-top: 10px; padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 6px; }
 .acn-cet-grade { display: grid; grid-template-columns: minmax(0, 2fr) 70px 110px minmax(0, 1.6fr) auto; gap: 6px; align-items: center; }
 @media (max-width: 760px) { .acn-cet-grade { grid-template-columns: 1fr 1fr; } }
+/* Regras de chicote e suporte por veículo (etapa 3, 15/10/2026): só aparência */
+.acn-cet-regra { margin: 8px 0; padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-cet-regra-cab { display: flex; align-items: center; gap: 6px; }
+.acn-cet-regra-nome { flex: 1; font-size: 13px; color: var(--acn-ink); }
+.acn-cet-regra-se { margin: 2px 0 4px; font-size: 12px; color: var(--acn-info); }
+.acn-cet-grade-regra { display: grid; grid-template-columns: 170px minmax(0, 1fr) 80px auto; gap: 6px; align-items: center; margin-top: 4px; }
+@media (max-width: 760px) { .acn-cet-grade-regra { grid-template-columns: 1fr 1fr; } }
+.acn-cet-regra-salvar { margin-top: 10px; }
+.acn-cet-copiar { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--acn-line); }
+.acn-cet-copiar-opcoes { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; font-size: 12px; color: var(--acn-ink); }
+.acn-cet-copiar-opcoes label { display: flex; align-items: center; gap: 6px; }
 .acn-pdv-cab svg, .acn-pdv-resp-item svg, .acn-cet-perg-txt svg, .acn-cet-opcao-txt svg, .acn-cet-alerta svg, .acn-cet-aviso-tit svg, .acn-rpl-aviso svg, .acn-cet-form svg { display: inline-block !important; vertical-align: -2px; }
 
 /* Veículos (12e55, 09/10/2026): painel da Tabela FIPE, fotos do carro na abertura da OP e o cadastro/edição/seleção de veículo. Só aparência.

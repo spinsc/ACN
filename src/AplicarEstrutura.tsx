@@ -14,13 +14,12 @@
 // O INTERRUPTOR: nada é montado se o Conjunto Elétrico não estiver na venda.
 // Cliente que traz suporte e chicote de terceiros não leva conjunto.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { perguntasPendentes } from './ConfigEstrutura';
 import {
-  perguntasDeVariosItens, perguntasPendentes, respostasAutomaticas,
-  materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
-  itensConjunto, vendaTemConjunto, podarRespostas,
-} from './ConfigEstrutura';
+  lerBaseDaEstrutura, respostasSalvasDaOp, calcularDaEstrutura, diferencaDeMaterial, textoDaDiferenca,
+} from './CalculoDaEstrutura';
 import { RespostasEmLote } from './RespostasEmLote';
 import { Botao } from './Interface';
 import Icone from './Icone';
@@ -52,57 +51,40 @@ export async function previsaoDeFalta(linhas) {
  * `opsParaResponder`: as OPs que o botão "Responder agora" atende de uma vez. Na liberação individual é só a própria
  * OP; na liberação em LOTE são todas as marcadas (a tela de resposta em lote existe justamente para elas).
  */
-export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaResponder, onRespondido, onSolicitarDesenvolvimento }) {
+export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaResponder, onRespondido, onSolicitarDesenvolvimento, onAjustarBom }) {
   const [estado, setEstado] = useState({ carregando: true });
+  // etapa 4 (15/10/2026): o material da primeira conta desta janela — o que a BOM em edição representa. `onAjustarBom(diferenca, nomeDoConjunto)` aplica na BOM
+  // da janela só o que mudou depois que uma resposta foi trocada (quem abre o painel dentro de um editor de BOM passa esse retorno).
+  const linhasBase = useRef(null);
   const [responder, setResponder] = useState(false);
   const [tick, setTick] = useState(0);   // sobe quando as respostas mudam, para o painel recalcular o material
 
   useEffect(() => {
     (async () => {
-      const vendidos = opl?.itens_vendidos || [];
-      const idsVendidos = vendidos.map(v => v.item_id).filter(Boolean);
-      const conj = await itensConjunto();
-      const temConjunto = vendaTemConjunto(vendidos, conj.map(c => c.id));
-
-      if (!opl?.veiculo_id || !temConjunto) {
-        setEstado({ carregando: false, temConjunto, semVeiculo: !opl?.veiculo_id, conj });
+      // o cálculo (perguntas, material por item, regras do veículo) mora em CalculoDaEstrutura.ts, para o painel, a tela de respostas e a OP aberta calcularem igual (etapa 4, 15/10/2026)
+      const base = await lerBaseDaEstrutura(opl);
+      if (!base.aplicavel) {
+        setEstado({ carregando: false, temConjunto: base.temConjunto, semVeiculo: base.semVeiculo, conj: base.conj });
         return;
       }
-      // o próprio conjunto não tem estrutura: ele é o recipiente. Serviço e item genérico (categoria GENERICO: película,
-      // instalação do kit, garantia estendida, plotagem…) também nunca consomem material de instalação: sem esta exceção
-      // eles apareceriam para sempre como "nunca adaptados neste carro" (visto nas OPs do lote 1673.2609, 29/09/2026)
-      const { data: cats } = idsVendidos.length
-        ? await supabase.from('cadastro_itens').select('id,categoria').in('id', idsVendidos)
-        : { data: [] };
-      const genericos = new Set((cats || []).filter(c => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map(c => String(c.id)));
-      const idsParaEstrutura = idsVendidos.filter(id => !conj.some(c => c.id === id) && !genericos.has(String(id)));
-      const [perguntas, materiais, semEstrutura] = await Promise.all([
-        perguntasDeVariosItens(idsParaEstrutura),
-        materiaisDoVeiculo(opl.veiculo_id, idsParaEstrutura),
-        itensSemEstrutura(opl.veiculo_id, idsParaEstrutura),
-      ]);
-      const auto = respostasAutomaticas(perguntas, idsVendidos);
-
-      // respostas que o vendedor já deu na abertura da OPL
-      const { data: salvas } = await supabase.from('op_configuracao_respostas')
-        .select('pergunta_id,opcao_id,automatica').eq('opl_id', opl.id);
-      // podadas: resposta a pergunta "filha" cuja resposta-pai foi trocada não vale, senão o material dela entraria
-      const respostas = { ...auto };
-      (salvas || []).forEach(r => { respostas[r.pergunta_id] = r.opcao_id; });
-      const respostasValidas = podarRespostas(perguntas, respostas);
-      Object.keys(respostas).forEach(k => { if (!respostasValidas[k]) delete respostas[k]; });
-
-      const qtdPorItem = {};
-      vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = num(v.quantidade) || 1; });
-
-      const linhas = montarMaterial(materiais, respostas, qtdPorItem);
+      const { respostas, doRegras, linhas } = calcularDaEstrutura(base, await respostasSalvasDaOp(opl.id));
       const falta = await previsaoDeFalta(linhas);
-      const pendentes = perguntasPendentes(perguntas, respostas);
-      const nomesSem = vendidos.filter(v => semEstrutura.includes(String(v.item_id)));
+      const pendentes = perguntasPendentes(base.perguntas, respostas);
+      // item vendido que uma regra do veículo usa como condição (ex.: a sirene) já está "adaptado" neste carro: não cobrar de novo
+      const nomesSem = base.vendidos.filter(v => base.semEstrutura.includes(String(v.item_id)) && !doRegras.itensCobertos.has(String(v.item_id)));
+      // só diz "sem regra" depois que as perguntas foram respondidas: pergunta pendente já tem o seu aviso
+      const semRegra = doRegras.semRegra;
 
-      setEstado({ carregando: false, temConjunto: true, conj, linhas, falta, pendentes,
-        semEstrutura: nomesSem, respondidas: Object.keys(respostas).length, totalPerguntas: perguntas.length });
-    })();
+      // etapa 4: o que a BOM desta janela representa é o material da PRIMEIRA conta; se uma resposta mudar depois, a diferença aparece e só entra na BOM com confirmação
+      if (!linhasBase.current) linhasBase.current = linhas;
+      const mudou = diferencaDeMaterial(linhasBase.current, linhas);
+
+      setEstado({ carregando: false, temConjunto: true, conj: base.conj, linhas, falta, pendentes, semRegra, mudou,
+        semEstrutura: nomesSem, respondidas: Object.keys(respostas).length, totalPerguntas: base.perguntas.length });
+    })().catch((err) => {
+      // 15/10/2026: a leitura das perguntas da OP lança erro de propósito; sem este desvio o painel ficaria em "Conferindo…" para sempre
+      setEstado({ carregando: false, falhou: err?.message || 'Não foi possível ler as perguntas.' });
+    });
   }, [opl?.id, tick]);
 
   // 12e53 (09/10/2026): só aparência — as caixas coloridas passaram a ter um "tom" (info, neutro, atenção, erro, ok) que o design.css pinta com os
@@ -110,6 +92,10 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
   const e = estado;
   if (e.carregando) {
     return <Caixa tom="info">Conferindo a configuração do veículo…</Caixa>;
+  }
+
+  if (e.falhou) {
+    return <Caixa tom="erro"><b>Não foi possível conferir a configuração do veículo.</b> {e.falhou} Abra a OP de novo; se persistir, avise o suporte.</Caixa>;
   }
 
   // Sem conjunto elétrico na venda: a estrutura não se aplica, e isso é normal.
@@ -132,6 +118,35 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
 
   return (
     <div className="acn-aep">
+      {/* etapa 4: uma resposta foi trocada e o material mudou — "sai este, entra aquele". Só entra na BOM com o clique de quem está configurando. */}
+      {e.mudou?.length > 0 && (
+        <Caixa tom="atencao">
+          <b><Icone path={mdiAlertOutline} size={14} /> As respostas mudaram: o material calculado não é mais o que a BOM desta janela tem.</b>
+          <div className="acn-aep-sub">
+            {e.mudou.map(d => (
+              <div key={d.item_id || d.nome} className="acn-aep-linha">
+                • {d.delta < 0 ? 'sai' : 'entra'} {fmt(Math.abs(d.delta))} {d.unidade || 'UN'} — {d.codigo ? d.codigo + ' ' : ''}{d.nome}
+              </div>
+            ))}
+          </div>
+          {onAjustarBom ? (
+            <>
+              <div className="acn-aep-nota">
+                Aplicar tira da BOM só o que saiu (até o que ela tem) e põe o que entrou. O resto da lista, inclusive o que foi ajustado à mão, não muda.
+              </div>
+              <div className="acn-aep-acoes">
+                <Botao pequeno variante="primario" onClick={() => {
+                  onAjustarBom(e.mudou, e.conj?.[0]?.nome);
+                  linhasBase.current = e.linhas;
+                  setTick(t => t + 1);
+                }}>Aplicar na BOM</Botao>
+              </div>
+            </>
+          ) : (
+            <div className="acn-aep-nota">{textoDaDiferenca(e.mudou)}. Ajuste a BOM à mão.</div>
+          )}
+        </Caixa>
+      )}
       {e.semEstrutura?.length > 0 && (
         <Caixa tom="erro">
           <b><Icone path={mdiAlertOutline} size={14} /> {e.semEstrutura.length} item(ns) nunca foram adaptados neste carro.</b>
@@ -156,6 +171,34 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
               O material deles não entra sozinho. Cadastre a composição em
               <b> Administração → Estruturas</b>, escolhendo o item e este veículo — a partir daí
               toda OP igual sai pronta.
+            </div>
+          )}
+        </Caixa>
+      )}
+
+      {/* etapa 3 (15/10/2026): "chicote a definir" — resposta dada que nenhuma regra deste veículo usa. O pedido de desenvolvimento é do PCP, como nos itens nunca adaptados. */}
+      {e.semRegra?.length > 0 && (
+        <Caixa tom="atencao">
+          <b><Icone path={mdiAlertOutline} size={14} /> Chicote/suporte a definir: {e.semRegra.length} resposta(s) sem regra neste veículo.</b>
+          <div className="acn-aep-sub">
+            {e.semRegra.map(s => <div key={s.pergunta_id}>• {s.texto} → <b>{s.resposta}</b></div>)}
+          </div>
+          {onSolicitarDesenvolvimento ? (
+            <>
+              <div className="acn-aep-nota">
+                Nenhuma regra deste veículo usa essas respostas, então o chicote e o suporte delas não entram sozinhos. Peça o desenvolvimento à Engenharia:
+                ela cadastra a regra e, a partir daí, toda OP igual sai pronta.
+              </div>
+              <div className="acn-aep-acoes">
+                <Botao pequeno variante="primario"
+                  onClick={() => onSolicitarDesenvolvimento(e.semRegra.map(s => ({ nome: `chicote/suporte para "${s.texto}" = ${s.resposta}`, item_id: null })))}>
+                  Solicitar desenvolvimento
+                </Botao>
+              </div>
+            </>
+          ) : (
+            <div className="acn-aep-nota">
+              Nenhuma regra deste veículo usa essas respostas. Cadastre a regra em <b>Administração → Estruturas</b> (regras do veículo) — a partir daí toda OP igual sai pronta.
             </div>
           )}
         </Caixa>

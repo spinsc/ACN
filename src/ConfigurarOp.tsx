@@ -15,6 +15,7 @@ import { supabase } from './supabaseClient';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
 import ModalSolicitarDesenvolvimento from './SolicitarDesenvolvimento';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
+import { aplicarDiferencaNaBom, avisoDoQueNaoFoiTirado } from './CalculoDaEstrutura';
 import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { Faixa, Botao } from './Interface';
 import { logChange } from './AuditSystem';
@@ -184,7 +185,14 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
               opsParaResponder={lote ? selecionadas : undefined}
               onRespondido={lote ? () => setVersaoRespostas(v => v + 1) : undefined}
               onSolicitarDesenvolvimento={(itens: any[]) => setSolicitar({ itens })}
-              onUsar={(novas: any[], idsConj: string[] = []) => setLinhas(atuais => somarLinhas(atuais, novas, idsConj))} />
+              onUsar={(novas: any[], idsConj: string[] = []) => setLinhas(atuais => somarLinhas(atuais, novas, idsConj))}
+              onAjustarBom={(dif: any[], nomeConj?: string) => {
+                // etapa 4 (15/10/2026): uma resposta mudou; entra na BOM desta janela só a diferença (o que foi ajustado à mão fica)
+                const r = aplicarDiferencaNaBom(linhas, dif, nomeConj);
+                setLinhas(r.bom);
+                const aviso = avisoDoQueNaoFoiTirado(r.naoAchou);
+                if (aviso) alert(aviso);
+              }} />
           )}
           {!lote && (
             <CopiarBomDeOutraOp oplAtual={ops[0]} onCopiar={(novas: any[], modo: string) => setLinhas(atuais => modo === 'substituir' ? novas : somarLinhas(atuais, novas))} />

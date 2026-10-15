@@ -16,9 +16,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import {
-  perguntasDeVariosItens, perguntasPendentes, respostasAutomaticas,
+  perguntasDaVenda, donaDaPergunta, perguntasPendentes, respostasAutomaticas,
   itensConjunto, vendaTemConjunto,
   materiaisDoVeiculo, montarMaterial,
+  ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
+  regrasDoVeiculo, avaliarRegras, podarRespostas,
 } from './ConfigEstrutura';
 import { supabase } from './supabaseClient';
 import { sugerirBom } from './OpItens';
@@ -32,6 +34,7 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
   const [temConjunto, setTemConjunto] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [abertas, setAbertas] = useState({});   // unidades destacadas do padrão
+  const [falhaLeitura, setFalhaLeitura] = useState('');
 
   const ids = (itensVendidos || []).map(v => v.item_id).filter(Boolean);
   const chave = ids.join(',');
@@ -46,7 +49,11 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
       if (!tem) { setPerguntas([]); setCarregando(false); return; }
       // o próprio conjunto não tem perguntas: ele é o recipiente
       const semConjunto = ids.filter(id => !conj.some(c => c.id === id));
-      setPerguntas(await perguntasDeVariosItens(semConjunto));
+      // as da OP (caracterizada, bateria…) vêm junto com as dos itens vendidos (15/10/2026)
+      // falha de leitura NÃO pode parecer "sem perguntas": o vendedor criaria a OP sem responder e ninguém saberia
+      // `ids` (a venda inteira) filtra as perguntas com a condição "só quando estes itens foram vendidos juntos" (etapa 2, 15/10/2026)
+      try { setPerguntas(await perguntasDaVenda(semConjunto, ids)); setFalhaLeitura(''); }
+      catch (e) { console.warn('Perguntas da venda: falha ao ler', e); setPerguntas([]); setFalhaLeitura(e?.message || 'falha ao ler'); }
       setCarregando(false);
     })();
   }, [chave]);
@@ -58,6 +65,11 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
   const responder = (un, perguntaId, opcaoId) => {
     const base = { ...(respostas?.[un] || (un > 0 ? respostas?.[0] : {}) || {}) };
     base[perguntaId] = opcaoId;
+    onChange?.({ ...(respostas || {}), [un]: base });
+  };
+  const limpar = (un, perguntaId) => {
+    const base = { ...(respostas?.[un] || (un > 0 ? respostas?.[0] : {}) || {}) };
+    delete base[perguntaId];
     onChange?.({ ...(respostas || {}), [un]: base });
   };
 
@@ -74,25 +86,45 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
 
   if (!ids.length || carregando) return null;
   if (!temConjunto) return null;          // sem conjunto, não há o que perguntar
+  if (falhaLeitura) {
+    return (
+      <div className="acn-pdv">
+        <div className="acn-pdv-aviso">
+          Não foi possível ler as perguntas sobre o carro ({falhaLeitura}). Feche e abra a criação da OP de novo antes de salvar; se salvar assim, a Engenharia responde na conferência da BOM.
+        </div>
+      </div>
+    );
+  }
   if (!perguntas.length) return null;     // nenhum item vendido tem pergunta
 
   // 12e54 (09/10/2026): só aparência — as respostas de cada pergunta viraram o seletor do guia (Chips) e o roxo do bloco mora no design.css (--acn-pdv-cor)
   const Bloco = ({ un, titulo }) => {
     const r = respostasDe(un);
     const pendentes = perguntasPendentes(perguntas, r);
-    const respondidas = perguntas.filter(p => r[p.id]);
+    // pergunta de quantidade fica sempre no campo, mesmo respondida: se saísse para a lista de "respondidas" a cada número digitado, o campo sumiria no meio da digitação
+    const quantidades = perguntas.filter(p => ehQuantidade(p) && r[p.id] && !pendentes.includes(p));
+    const campos = perguntas.filter(p => pendentes.includes(p) || quantidades.includes(p));
+    const respondidas = perguntas.filter(p => r[p.id] && !ehQuantidade(p));
     return (
       <div className="acn-pdv-bloco">
         {titulo && <div className="acn-pdv-tit">{titulo}</div>}
-        {pendentes.map(p => (
+        {campos.map(p => (
           <div key={p.id} className="acn-pdv-pergunta">
             <div className="acn-pdv-texto">
               {p.texto}
               <span className="acn-pdv-item">
-                ({p.cadastro_itens?.nome})
+                ({donaDaPergunta(p)})
               </span>
             </div>
-            {(p.opcoes || []).length > 0 && (
+            {ehQuantidade(p) && (
+              <input className="acn-input acn-pdv-qtd" type="text" inputMode="numeric" aria-label={p.texto} placeholder="quantidade"
+                value={valorDeQuantidade(r[p.id]) ?? ''}
+                onChange={(e) => {
+                  const d = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  if (d === '') limpar(un, p.id); else responder(un, p.id, respostaDeQuantidade(Number(d)));
+                }} />
+            )}
+            {!ehQuantidade(p) && (p.opcoes || []).length > 0 && (
               <Chips ativo={r[p.id] || ''} onChange={(id) => responder(un, p.id, id)} rotulo={p.texto}
                 itens={(p.opcoes || []).map(o => ({ id: o.id, rotulo: o.rotulo }))} />
             )}
@@ -135,12 +167,13 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
         </div>
       )}
 
-      <Bloco un={0} titulo={mostrarPorUnidade ? 'CARRO 01' : null} />
+      {/* chamado como função (não como <Bloco/>) de propósito: o Bloco é declarado aqui dentro e remontaria a cada tecla, tirando o foco do campo de quantidade */}
+      {Bloco({ un: 0, titulo: mostrarPorUnidade ? 'CARRO 01' : null })}
 
       {mostrarPorUnidade && Array.from({ length: totalUnidades - 1 }, (_, k) => k + 1).map(un => (
         <div key={un} className="acn-pdv-unidade">
           {abertas[un] ? (
-            <Bloco un={un} titulo={`CARRO ${String(un + 1).padStart(2, '0')}`} />
+            Bloco({ un, titulo: `CARRO ${String(un + 1).padStart(2, '0')}` })
           ) : (
             <div className="acn-pdv-igual">
               Carro {String(un + 1).padStart(2, '0')}: <b>igual ao 01</b>
@@ -185,13 +218,13 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     if (!vendaTemConjunto(vendidos, conj.map(c => c.id))) return;   // o interruptor
 
     const semConjunto = ids.filter(id => !conj.some(c => c.id === id));
-    const perguntas = await perguntasDeVariosItens(semConjunto);
+    const perguntas = await perguntasDaVenda(semConjunto, ids);   // já sem as que a condição de itens vendidos juntos descarta
     const todas = { ...respostasAutomaticas(perguntas, ids), ...(respostas || {}) };
 
     const registros = perguntas
       .filter(p => todas[p.id])
       .map(p => ({
-        opl_id: opl.id, item_id: p.item_id, pergunta_id: p.id, opcao_id: todas[p.id],
+        opl_id: opl.id, item_id: p.item_id, pergunta_id: p.id, ...camposDaResposta(todas[p.id]),
         automatica: !(respostas || {})[p.id],
         respondido_por: currentUser?.nome || currentUser?.email || '—',
       }));
@@ -202,10 +235,19 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     }
 
     const materiais = await materiaisDoVeiculo(opl.veiculo_id, semConjunto);
-    if (!materiais.length) return falhas.length ? falhas.join('; ') : null;
+    // Regras "se… então…" do veículo (etapa 3, 15/10/2026): chicote e suporte pelas respostas, itens vendidos juntos e quantidades. Somam ao material por item.
+    // Respostas podadas: a de uma pergunta-filha cuja resposta-pai foi trocada não pode escolher chicote.
+    // Se a leitura das regras falhar, o material por item continua sendo calculado e a falha é dita — sem o chicote, a OP não pode parecer completa.
+    let doRegras: any = { linhas: [] };
+    try {
+      doRegras = avaliarRegras(await regrasDoVeiculo(opl.veiculo_id), { respostas: podarRespostas(perguntas, todas), vendidosIds: ids, perguntas });
+    } catch (e: any) {
+      falhas.push(`as regras de chicote e suporte do veículo não puderam ser lidas (${e?.message || e}); a lista de material saiu sem elas`);
+    }
+    if (!materiais.length && !doRegras.linhas.length) return falhas.length ? falhas.join('; ') : null;
     const qtdPorItem = {};
     vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = Number(v.quantidade) || 1; });
-    const linhas = montarMaterial(materiais, todas, qtdPorItem);
+    const linhas = montarMaterial([...materiais, ...doRegras.linhas], todas, qtdPorItem);
     // nada calculado: a lista continua nascendo vazia e a Engenharia sugere na
     // hora de liberar, exatamente como sempre foi
     if (!linhas.length) return falhas.length ? falhas.join('; ') : null;
