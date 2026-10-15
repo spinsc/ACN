@@ -113,6 +113,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Confirmar / pedir texto | `Feedback.tsx` — `confirmar`, `pedirTexto` |
 | Auditoria e destaque de campo | `AuditSystem.tsx` |
 | Permissões | `utils/permissoes.ts` |
+| Estoque: saldo, reserva, reposição, baixa do kit | `Estoque.tsx` — `movimentarEstoque` (único caminho para mexer no saldo), `avisosDaReposicao`; toda função que lê devolve o erro, e leitura recusada nunca vale como "vazio" |
 
 ---
 

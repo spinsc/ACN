@@ -8,7 +8,7 @@ import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
-import { creditarCompraRecebida, fmtQtd } from './Estoque';
+import { creditarCompraRecebida, fmtQtd, avisosDaReposicao } from './Estoque';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
@@ -1493,7 +1493,9 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
         const aindaFalta = credito.requisicao?.criada
           ? `\n\nO saldo continua no mínimo, então uma nova reposição de ${fmtQtd(credito.requisicao.quantidade)} foi pedida ao Compras (${credito.requisicao.numero_pedido}).`
           : '';
-        alert(novo + aindaFalta);
+        // 7.x do Estoque (15/10/2026): a reposição automática que não pôde ser aberta também é dita (antes só se dizia a que nasceu)
+        const semReposicao = avisosDaReposicao(credito).map(a => `\n\n⚠️ ${a}`).join('');
+        alert(novo + aindaFalta + semReposicao);
       }
     }
 
@@ -1880,7 +1882,7 @@ export default function LogisticaTab({ currentUser }) {
               alert('Recebimento registrado, mas NADA entrou no estoque: ' + (credito.motivo || 'não foi possível identificar o item.') + ' Faça a entrada pela tela do Estoque.');
             } else if (credito?.ok) {
               await supabase.from('pcp_pedidos_compra').update({ quantidade_recebida: qtd }).eq('id', pedidoInteiro.id);
-              alert(`Estoque atualizado: entraram ${fmtQtd(qtd)}, saldo agora ${fmtQtd(credito.saldo_depois)}.`);
+              alert(`Estoque atualizado: entraram ${fmtQtd(qtd)}, saldo agora ${fmtQtd(credito.saldo_depois)}.` + avisosDaReposicao(credito).map(a => `\n\n⚠️ ${a}`).join(''));
             }
           }
         }

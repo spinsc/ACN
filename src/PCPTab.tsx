@@ -20,7 +20,7 @@ import Icone from './Icone';
 import {
   mdiClipboardTextOutline, mdiCogOutline, mdiCancel, mdiPackageVariantClosed, mdiWrenchOutline, mdiToolboxOutline, mdiTrayArrowUp, mdiEyeOutline, mdiPlus, mdiArrowULeftTop, mdiLinkVariant, mdiFactory, mdiChevronUp, mdiChevronDown, mdiCheckCircleOutline, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline,
 } from '@mdi/js';
-import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
+import { reservarParaOp, textoPedidosDaReserva, textoFalhasDosPedidos } from './Estoque';
 
 
 // setores que recebem demanda avulsa (cada um tem o seu painel)
@@ -347,6 +347,8 @@ export default function PCPTab({ currentUser }) {
     const res = await reservarParaOp({ oplId: opl.id, currentUser });
     if (res?.erro) alert('A OP foi liberada, mas a reserva de estoque falhou: ' + res.erro);
     else if (res?.pedidos?.length) alert(textoPedidosDaReserva(res.pedidos));
+    // 7.x do Estoque (15/10/2026): o pedido do que faltava que não pôde ser aberto era omitido, e a OP seguia achando que estava tudo pedido
+    if (res?.falhasPedidos?.length) alert(textoFalhasDosPedidos(res.falhasPedidos));
     notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
     return true;
@@ -460,7 +462,7 @@ export default function PCPTab({ currentUser }) {
     const agora = new Date().toISOString();
     let liberouAlguma = false;
     try {
-      const falhasReserva: string[] = [], pedidosDoLote: string[] = [];
+      const falhasReserva: string[] = [], pedidosDoLote: string[] = [], falhasPedidosLote: string[] = [];
       // 7.52: para na primeira que não grava; reserva, histórico e WhatsApp valem só para as que gravaram
       const liberadas = [];
       for (const opl of pendentes) {
@@ -476,6 +478,7 @@ export default function PCPTab({ currentUser }) {
         const res = await reservarParaOp({ oplId: opl.id, currentUser });
         if (res?.erro) falhasReserva.push(`${opl.opl}: ${res.erro}`);
         (res?.pedidos || []).forEach(p => pedidosDoLote.push(`${opl.opl} — ${p.nome}: ${p.quantidade}`));
+        (res?.falhasPedidos || []).forEach(f => falhasPedidosLote.push(`${opl.opl} — ${f}`));   // 7.x do Estoque: pedido que não abriu
       }
       // num lote de 90 carros isso pode ser muita linha: resume em vez de
       // despejar um alerta por OP
@@ -488,6 +491,7 @@ export default function PCPTab({ currentUser }) {
       if (falhasReserva.length) {
         alert(`As OPs foram liberadas, mas a reserva de estoque falhou em:\n${falhasReserva.join('\n')}`);
       }
+      if (falhasPedidosLote.length) alert(textoFalhasDosPedidos(falhasPedidosLote.slice(0, 15)) + (falhasPedidosLote.length > 15 ? `\n… e mais ${falhasPedidosLote.length - 15}.` : ''));
       if (liberadas.length) {
         await supabase.from('logs_movimentacao_opl').insert(liberadas.map(opl => ({
           opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
