@@ -15,7 +15,7 @@ import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA, type GrupoLote } from './LoteMisto';
 import { ItensVendidosEditor } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
-import { hojeISO } from './Interface';
+import { hojeISO, Botao } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
@@ -62,28 +62,24 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
 
   return (
     <div>
-      <label style={{ display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
-        background: uploading ? '#94a3b8' : '#2563eb', color:'#fff', borderRadius:6,
-        padding:'7px 16px', fontSize:11, fontWeight:700, marginBottom:10 }}>
+      <label className={'acn-nop-up' + (uploading ? ' enviando' : '')}>
         {uploading ? 'Enviando...' : '📎 Selecionar Arquivos'}
         <input ref={ref} type="file" multiple disabled={uploading}
           accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.txt`}
           onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
-          style={{ display:'none' }} />
+          className="acn-nop-oculto" />
       </label>
       {falhas.length > 0 && (
-        <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5, padding:'6px 10px', fontSize:10, color:'#dc2626', marginBottom:8 }}>
+        <div className="acn-nop-falhas">
           {falhas.map((m, i) => <div key={i}>⚠️ {m}</div>)}
         </div>
       )}
       {arquivos.length > 0 && (
-        <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+        <div className="acn-nop-arqs">
           {arquivos.map((a,i) => (
-            <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px',
-              background:'#f0fdf4', border:'1px solid #86efac', borderRadius:5, fontSize:10 }}>
+            <div key={i} className="acn-nop-arq">
               <span>✅</span>
-              <a href={a.url} target="_blank" rel="noreferrer"
-                style={{ color:'#16a34a', fontWeight:600, textDecoration:'none' }}>{a.nome}</a>
+              <a href={a.url} target="_blank" rel="noreferrer" className="acn-nop-arq-lnk">{a.nome}</a>
             </div>
           ))}
         </div>
@@ -651,30 +647,28 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // ── Passo 2: documentos após OP criada ──────────────────────────────────────
   if (savedOp) {
     return (
-      <div style={{ position:'fixed', inset:0, background:'#0009', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-        <div style={{ background:'#fff', borderRadius:10, width:'min(520px,96vw)', boxShadow:'0 20px 60px #0003', overflow:'hidden' }}>
-          <div style={{ padding:'12px 18px', background:'#0f172a', color:'#fff', display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ fontSize:20 }}>📎</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:9, opacity:.7, fontWeight:700, letterSpacing:.5 }}>OP CRIADA COM SUCESSO</div>
-              <div style={{ fontSize:14, fontWeight:700 }}>Anexar Documentos — {savedOp.opl}</div>
+      <div className="acn-nop-ov">
+        <div className="acn-nop-modal acn-nop-modal-2">
+          <div className="acn-nop-cab acn-nop-cab-2">
+            <div className="acn-nop-cab-ic">📎</div>
+            <div className="acn-nop-cab-meio">
+              <div className="acn-nop-cab-sup acn-nop-cab-sup-2">OP CRIADA COM SUCESSO</div>
+              <div className="acn-nop-cab-tit">Anexar Documentos — {savedOp.opl}</div>
             </div>
           </div>
-          <div style={{ padding:'20px 18px' }}>
-            <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:7, padding:'10px 14px', marginBottom:16, fontSize:11, color:'#15803d' }}>
+          <div className="acn-nop-p2-corpo">
+            <div className="acn-nop-ok">
               ✅ OP <strong>{savedOp.opl}</strong> criada! Agora você pode anexar documentos (proposta, orçamento, fotos) que acompanharão esta OP em todos os setores.
             </div>
             <UploadAnexosInline oplId={savedOp.id} oplNumero={savedOp.opl} currentUser={currentUser} />
           </div>
-          <div style={{ padding:'10px 18px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
-            <button onClick={onClose}
-              style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:6, padding:'7px 16px', fontSize:11, cursor:'pointer' }}>
+          <div className="acn-nop-rodape">
+            <Botao variante="secundario" className="acn-nop-b-rod" onClick={onClose}>
               Pular
-            </button>
-            <button onClick={onClose}
-              style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:6, padding:'7px 20px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+            </Botao>
+            <Botao variante="primario" className="acn-nop-b-rod acn-nop-b-rod-p" onClick={onClose}>
               ✅ Concluir
-            </button>
+            </Botao>
           </div>
         </div>
       </div>
@@ -684,53 +678,45 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const isOP = form.tipo === 'OP';
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0009', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(640px,96vw)', maxHeight:'90vh',
-        display:'flex', flexDirection:'column', boxShadow:'0 20px 60px #0003' }}>
+    <div className="acn-nop-ov">
+      <div className="acn-nop-modal acn-nop-modal-1">
 
         {/* Header */}
-        <div style={{ padding:'14px 18px', background:'#0f172a', color:'#fff', borderRadius:'10px 10px 0 0',
-          display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ fontSize:20 }}>{isOP ? '🔧' : '📋'}</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:11, opacity:.7, fontWeight:700, letterSpacing:.5 }}>
+        <div className="acn-nop-cab">
+          <div className="acn-nop-cab-ic">{isOP ? '🔧' : '📋'}</div>
+          <div className="acn-nop-cab-meio">
+            <div className="acn-nop-cab-sup">
               {crmCard ? `VINCULADO: ${crmCard.titulo}` : 'GERAÇÃO CENTRALIZADA'}
             </div>
-            <div style={{ fontSize:14, fontWeight:700 }}>Nova {isOP ? 'Ordem de Produção (OP)' : 'Ordem de Serviço (OS)'}</div>
+            <div className="acn-nop-cab-tit">Nova {isOP ? 'Ordem de Produção (OP)' : 'Ordem de Serviço (OS)'}</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>✕</button>
+          <Botao className="acn-nop-b acn-nop-fechar" onClick={onClose}>✕</Botao>
         </div>
 
         {/* Body */}
-        <div style={{ flex:1, overflowY:'auto', padding:'14px 18px' }}>
+        <div className="acn-nop-corpo">
 
           {/* Tipo + Empresa */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+          <div className="acn-nop-gr g2 m12">
             <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Tipo de Documento *</div>
-              <div style={{ display:'flex', gap:8 }}>
+              <div className="acn-nop-rot r4">Tipo de Documento *</div>
+              <div className="acn-nop-togs">
                 {(['OP','OS'] as const).map(t => (
-                  <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11,
-                    background: form.tipo===t ? '#0f172a' : '#f1f5f9', color: form.tipo===t ? '#fff' : '#475569',
-                    padding:'5px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, border:'1.5px solid',
-                    borderColor: form.tipo===t ? '#0f172a' : '#e2e8f0', transition:'all .15s' }}>
+                  <label key={t} className={'acn-nop-tog' + (form.tipo===t ? ' sel' : '')}>
                     <input type="radio" name="tipo" value={t} checked={form.tipo===t}
-                      onChange={() => setF('tipo', t)} style={{ display:'none' }} />
+                      onChange={() => setF('tipo', t)} className="acn-nop-oculto" />
                     {t === 'OP' ? '🔧' : '📋'} {t}
                   </label>
                 ))}
               </div>
             </div>
             <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Empresa *</div>
-              <div style={{ display:'flex', gap:8 }}>
+              <div className="acn-nop-rot r4">Empresa *</div>
+              <div className="acn-nop-togs">
                 {(['ACN','Detech'] as const).map(e => (
-                  <label key={e} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11,
-                    background: form.empresa===e ? '#0369a1' : '#f1f5f9', color: form.empresa===e ? '#fff' : '#475569',
-                    padding:'5px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, border:'1.5px solid',
-                    borderColor: form.empresa===e ? '#0369a1' : '#e2e8f0', transition:'all .15s' }}>
+                  <label key={e} className={'acn-nop-tog' + (form.empresa===e ? ' sel' : '')}>
                     <input type="radio" name="empresa" value={e} checked={form.empresa===e}
-                      onChange={() => setF('empresa', e)} style={{ display:'none' }} />
+                      onChange={() => setF('empresa', e)} className="acn-nop-oculto" />
                     {e}
                   </label>
                 ))}
@@ -739,8 +725,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           </div>
 
           {/* Cliente */}
-          <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cliente *</div>
+          <div className="acn-nop-bl">
+            <div className="acn-nop-rot">Cliente *</div>
             <ClienteAutocomplete
               value={form.cliente_nome}
               onChange={v => setF('cliente_nome', v)}
@@ -758,9 +744,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   depois do veículo obrigaria a voltar e refazer. No lote misto a
                   lista de cada grupo continua sendo editada lá embaixo. */}
               {!loteEhMisto && (
-                <div style={{ marginBottom: 12, background:'#f8fafc', border:'1px solid #e2e8f0',
-                  borderRadius:7, padding:'8px 10px' }}>
-                  <div style={{ fontSize:9, fontWeight:800, color:'#334155', marginBottom:5 }}>
+                <div className="acn-nop-itens">
+                  <div className="acn-nop-rot-box">
                     1 · O QUE FOI VENDIDO
                   </div>
                   <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
@@ -789,45 +774,44 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               )}
 
               {/* Número OP: Pedido de Venda → PPPP.YYMMM */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="acn-nop-gr g2">
                 <div>
                   {semPv ? (
                     <>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número da OP * (sem pedido de venda)</div>
-                      <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 0000.2609 ou A1530.2608" aria-label="Número da OP"
+                      <div className="acn-nop-rot">Número da OP * (sem pedido de venda)</div>
+                      <input className="acn-input acn-nop-w" placeholder="Ex: 0000.2609 ou A1530.2608" aria-label="Número da OP"
                         value={form.opl} onChange={e => setForm(f => ({ ...f, opl: e.target.value.trimStart() }))} />
                     </>
                   ) : (
                     <>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>N° Pedido de Venda * (4 dígitos)</div>
-                      <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 1212" maxLength={4} aria-label="Pedido de venda"
+                      <div className="acn-nop-rot">N° Pedido de Venda * (4 dígitos)</div>
+                      <input className="acn-input acn-nop-w" placeholder="Ex: 1212" maxLength={4} aria-label="Pedido de venda"
                         value={form.pedido_venda} onChange={e => setF('pedido_venda', e.target.value.replace(/\D/g,''))} />
                     </>
                   )}
-                  <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, color:'#475569', marginTop:4, cursor:'pointer' }}>
+                  <label className="acn-nop-chk">
                     <input type="checkbox" checked={semPv} disabled={!!crmCard?.numero_pv}
                       onChange={e => { const v = e.target.checked; setSemPv(v); setForm(f => ({ ...f, pedido_venda: '', opl: '' })); }} />
                     OP sem pedido de venda
                   </label>
                   {!semPv && crmCard && (
-                    <div style={{ fontSize:10, color:'#15803d', marginTop:3 }}>🔗 Vinculada ao card do CRM: {crmCard.titulo}</div>
+                    <div className="acn-nop-pv-nota ok">🔗 Vinculada ao card do CRM: {crmCard.titulo}</div>
                   )}
                   {!semPv && !crmCard && pvErro && (
-                    <div style={{ fontSize:10, color:'#dc2626', marginTop:3 }}>
+                    <div className="acn-nop-pv-nota erro">
                       ⚠️ Não foi possível conferir o PV {form.pedido_venda} no CRM ({pvErro}).{' '}
-                      <button type="button" onClick={() => setTentativaPv(n => n + 1)}
-                        style={{ background:'none', border:'none', color:'#2563eb', cursor:'pointer', fontSize:10, textDecoration:'underline', padding:0 }}>Tentar de novo</button>
+                      <Botao className="acn-nop-b acn-nop-lnk" onClick={() => setTentativaPv(n => n + 1)}>Tentar de novo</Botao>
                     </div>
                   )}
                   {!semPv && !crmCard && pvAchados && (
                     pvAchados.length === 0 ? (
-                      <div style={{ fontSize:10, color:'#b45309', marginTop:3 }}>PV {form.pedido_venda} não encontrado no CRM — a OP será criada sem vínculo.</div>
+                      <div className="acn-nop-pv-nota aviso">PV {form.pedido_venda} não encontrado no CRM — a OP será criada sem vínculo.</div>
                     ) : pvAchados.length === 1 ? (
-                      <div style={{ fontSize:10, color:'#15803d', marginTop:3 }}>🔗 Vinculada ao PV {pvCard?.numero_pv}: {pvCard?.titulo}</div>
+                      <div className="acn-nop-pv-nota ok">🔗 Vinculada ao PV {pvCard?.numero_pv}: {pvCard?.titulo}</div>
                     ) : (
-                      <div style={{ marginTop:3 }}>
-                        <div style={{ fontSize:10, color:'#b45309' }}>Mais de uma oportunidade com o PV {form.pedido_venda}. Escolha:</div>
-                        <select className="acn-input" style={{ width:'100%', fontSize:10 }} aria-label="Oportunidade do PV"
+                      <div className="acn-nop-pv-varias">
+                        <div className="acn-nop-pv-nota aviso sem-margem">Mais de uma oportunidade com o PV {form.pedido_venda}. Escolha:</div>
+                        <select className="acn-input acn-nop-w acn-nop-sel-p" aria-label="Oportunidade do PV"
                           value={pvCard?.id || ''} onChange={e => setPvCard(pvAchados.find(x => x.id === e.target.value) || null)}>
                           <option value="">— nenhuma (sem vínculo) —</option>
                           {pvAchados.map(x => <option key={x.id} value={x.id}>{x.titulo}</option>)}
@@ -837,20 +821,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   )}
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número OP gerado</div>
-                  <div style={{ background: form.opl ? '#f0fdf4' : '#f8fafc',
-                    border:`1px solid ${form.opl ? '#86efac' : '#e2e8f0'}`,
-                    borderRadius:5, padding:'6px 10px', fontSize:11, fontWeight:800,
-                    color: form.opl ? '#166534' : '#9ca3af', letterSpacing:1, minHeight:30,
-                    display:'flex', alignItems:'center' }}>
+                  <div className="acn-nop-rot">Número OP gerado</div>
+                  <div className={'acn-nop-opl' + (form.opl ? ' ok' : '')}>
                     {form.opl || 'A0000.AAMM'}
                     {form.opl && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
-                      <span style={{ fontSize:9, marginLeft:6, color:'#7c3aed', fontWeight:700 }}>
+                      <span className="acn-nop-opl-lote">
                         → /01…/{String(form.quantidade).padStart(2,'0')}
                       </span>
                     )}
                     {form.opl && Number(form.quantidade) > 1 && soEnvio(fluxoEf) && (
-                      <span style={{ fontSize:9, marginLeft:6, color:'#0f766e', fontWeight:700 }}>
+                      <span className="acn-nop-opl-un">
                         · 1 OP com {form.quantidade} un.
                       </span>
                     )}
@@ -858,25 +838,23 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 </div>
               </div>
               {/* Origem da venda — aparece no Kanban da Adaptação e no Painel TV */}
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>
-                  Origem da venda *{crmCard && <span style={{ fontWeight:400, color:'#64748b' }}> · definida pelo funil do CRM</span>}
+              <div className="acn-nop-bl">
+                <div className="acn-nop-rot r4">
+                  Origem da venda *{crmCard && <span className="acn-nop-rot-sub"> · definida pelo funil do CRM</span>}
                 </div>
-                <div style={{ display:'flex', gap:8 }}>
+                <div className="acn-nop-togs">
                   {ORIGENS.map(o => (
-                    <button key={o.valor} type="button" onClick={() => setF('origem_venda', o.valor)}
-                      style={{ fontSize:11, fontWeight:800, padding:'5px 14px', borderRadius:6, cursor:'pointer',
-                        border:`1.5px solid ${o.cor}`, background: form.origem_venda === o.valor ? o.fundo : '#fff',
-                        color: o.cor, boxShadow: form.origem_venda === o.valor ? `inset 0 0 0 1px ${o.cor}` : 'none' }}>
+                    <Botao key={o.valor} className={'acn-nop-b acn-nop-origem' + (form.origem_venda === o.valor ? ' sel' : '')} data-origem={o.valor}
+                      onClick={() => setF('origem_venda', o.valor)}>
                       {o.emoji} {o.label}
-                    </button>
+                    </Botao>
                   ))}
                 </div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="acn-nop-gr g21">
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo de Projeto *</div>
-                  <select className="acn-input" style={{ width:'100%' }} value={form.tipo_projeto}
+                  <div className="acn-nop-rot">Tipo de Projeto *</div>
+                  <select className="acn-input acn-nop-w" value={form.tipo_projeto}
                     onChange={e => setF('tipo_projeto', e.target.value)}>
                     {TIPOS_PROJETO.map(t => (
                       <option key={t.label} value={t.label}>{t.emoji} {t.label}</option>
@@ -889,10 +867,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
+                  <div className="acn-nop-rot">
                     {soEnvio(fluxoEf) ? 'Quantidade' : 'Qtd. Veículos'}
                   </div>
-                  <input className="acn-input" style={{ width:'100%' }} type="number" min={1}
+                  <input className="acn-input acn-nop-w" type="number" min={1}
                     value={form.quantidade} onChange={e => setF('quantidade', e.target.value)} />
                 </div>
               </div>
@@ -900,18 +878,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               {/* Fluxo de entrega — é o que impede que item de puro envio caia na
                   fila da Adaptação. Sem isso preenchido a OP não é criada. */}
               {ehVendaEnvio ? (
-                <div style={{ marginBottom:8, fontSize:9, color:'#0369a1' }}>
+                <div className="acn-nop-fluxo-env">
                   🚦 Fluxo de entrega: <strong>Envio de material</strong> (automático em Venda para Envio)
                 </div>
               ) : (
-              <div style={{ marginBottom:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'8px 10px' }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:3 }}>🚦 Fluxo de Entrega *</div>
-                <select className="acn-input" style={{ width:'100%' }} value={form.fluxo_entrega}
+              <div className="acn-nop-fluxo">
+                <div className="acn-nop-fluxo-tit">🚦 Fluxo de Entrega *</div>
+                <select className="acn-input acn-nop-w" value={form.fluxo_entrega}
                   onChange={e => setF('fluxo_entrega', e.target.value)}>
                   <option value="">— Selecione como esta venda será entregue —</option>
                   {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
                 </select>
-                <div style={{ fontSize:9, color:'#0369a1', marginTop:3 }}>
+                <div className="acn-nop-fluxo-aj">
                   {form.fluxo_entrega
                     ? FLUXOS.find(f => f.valor === form.fluxo_entrega)?.ajuda
                     : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
@@ -920,10 +898,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               )}
 
               {modoErro && (
-                <div style={{ marginBottom:10, fontSize:10, color:'#dc2626', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5, padding:'6px 10px' }}>
+                <div className="acn-nop-aviso-erro">
                   ⚠️ Não foi possível conferir se este tipo de venda exige o veículo ({modoErro}).{' '}
-                  <button type="button" onClick={() => setTentativaModo(n => n + 1)}
-                    style={{ background:'none', border:'none', color:'#2563eb', cursor:'pointer', fontSize:10, textDecoration:'underline', padding:0 }}>Tentar de novo</button>
+                  <Botao className="acn-nop-b acn-nop-lnk" onClick={() => setTentativaModo(n => n + 1)}>Tentar de novo</Botao>
                 </div>
               )}
 
@@ -932,23 +909,20 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   embalar (regra pedida pelo usuário em 24/09/2026). Aparece em
                   qualquer fluxo que termine com a mercadoria saindo daqui. */}
               {precisaFrete && (
-                <div style={{ marginBottom:10, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 10px' }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>🚚 Frete *</div>
-                  <div style={{ display:'flex', gap:8 }}>
+                <div className="acn-nop-frete-box">
+                  <div className="acn-nop-rot">🚚 Frete *</div>
+                  <div className="acn-nop-togs">
                     {[
                       { v:'CIF', label:'CIF — a empresa paga o frete' },
                       { v:'FOB', label:'FOB — o cliente paga o frete' },
                     ].map(opt => (
-                      <button key={opt.v} type="button" onClick={() => setF('frete_responsavel', opt.v)}
-                        style={{ flex:1, padding:'8px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer',
-                          border: form.frete_responsavel === opt.v ? '2px solid #2563eb' : '1px solid #d1d5db',
-                          background: form.frete_responsavel === opt.v ? '#dbeafe' : '#fff',
-                          color: form.frete_responsavel === opt.v ? '#1d4ed8' : '#374151' }}>
+                      <Botao key={opt.v} className={'acn-nop-b acn-nop-frete' + (form.frete_responsavel === opt.v ? ' sel' : '')}
+                        onClick={() => setF('frete_responsavel', opt.v)}>
                         {opt.label}
-                      </button>
+                      </Botao>
                     ))}
                   </div>
-                  <div style={{ fontSize:9, color: form.frete_responsavel === 'FOB' ? '#b45309' : '#64748b', marginTop:4 }}>
+                  <div className={'acn-nop-frete-aj' + (form.frete_responsavel === 'FOB' ? ' fob' : '')}>
                     {form.frete_responsavel === 'FOB'
                       ? 'Cliente paga o frete: esta OP não vai para cotação da Logística — segue direto para liberação comercial depois de embalada.'
                       : 'Depois de embalada, a OP abre pedido de frete para a Logística cotar.'}
@@ -958,22 +932,22 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
               {/* Destino — pode ficar em branco agora e ser completado depois na
                   própria OPL; é o dado que o aproveitamento de frete vai usar. */}
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="acn-nop-gr g211">
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cidade de Entrega</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Opcional — pode preencher depois"
+                  <div className="acn-nop-rot">Cidade de Entrega</div>
+                  <input className="acn-input acn-nop-w" placeholder="Opcional — pode preencher depois"
                     value={form.destino_cidade} onChange={e => setF('destino_cidade', e.target.value)} />
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>UF</div>
-                  <select className="acn-input" style={{ width:'100%' }} value={form.destino_uf}
+                  <div className="acn-nop-rot">UF</div>
+                  <select className="acn-input acn-nop-w" value={form.destino_uf}
                     onChange={e => setF('destino_uf', e.target.value)}>
                     <option value="">—</option>
                     {UFS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>CEP</div>
+                  <div className="acn-nop-rot">CEP</div>
                   <CampoCep valor={form.destino_cep} onChange={v => setF('destino_cep', v)} estilo={{ width:'100%' }} rotulo="CEP de entrega"
                     onResultado={(r) => { if (r.status === 'ok') { setF('destino_cidade', r.cidade); setF('destino_uf', r.uf); } }} />
                 </div>
@@ -982,8 +956,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               {/* Envio direto: quantidade é só um número na mesma OP — sem lote
                   e sem dados por veículo. Avisa, para não parecer que sumiu. */}
               {Number(form.quantidade) > 1 && soEnvio(fluxoEf) && (
-                <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:7,
-                  padding:'8px 10px', marginBottom:10, fontSize:10, color:'#0f766e' }}>
+                <div className="acn-nop-env-nota">
                   📦 <strong>Envio:</strong> será criada <strong>1 OP com quantidade {form.quantidade}</strong>, sem lote —
                   como não passa pela produção, não há veículo para acompanhar um a um.
                 </div>
@@ -991,14 +964,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
               {/* Veículos individuais quando qty > 1 e a OP vai gerar lote */}
               {Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
-                <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:7,
-                  padding:10, marginBottom:10 }}>
-                  <div style={{ fontSize:9, fontWeight:800, color:'#7c3aed', marginBottom:8, textTransform:'uppercase' }}>
+                <div className="acn-nop-lote">
+                  <div className="acn-nop-lote-tit">
                     🚗 Dados por Veículo (desmembramento)
                   </div>
                   {/* Lote misto: grupos de veículos com serviços diferentes */}
-                  <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:10, fontWeight:700, color:'#6b21a8', marginBottom:8, cursor:'pointer' }}>
-                    <input type="checkbox" checked={loteMisto} style={{ accentColor:'#7c3aed' }}
+                  <label className="acn-nop-lote-chk">
+                    <input type="checkbox" checked={loteMisto}
                       onChange={e => {
                         setLoteMisto(e.target.checked);
                         if (e.target.checked) setGrupos(grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || '', form.itens_vendidos || []));
@@ -1009,27 +981,23 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       é a primeira decisão do lote e estava escondida num
                       checkbox de uma linha. A caixa acima continua e manda no
                       estado — os botões só a tornam visível. */}
-                  <div style={{ display:'flex', gap:6, margin:'6px 0 4px' }}>
+                  <div className="acn-nop-lote-bts">
                     {[{ misto:false, rotulo:'Lote igual', ajuda:'Todos os carros iguais — informe só a quantidade' },
                       { misto:true,  rotulo:'Lote customizável', ajuda:'Carro a carro: veículo e itens podem variar' }].map(op => (
-                      <button key={op.rotulo} type="button" title={op.ajuda}
+                      <Botao key={op.rotulo} title={op.ajuda} className={'acn-nop-b acn-nop-lote-bt' + (loteMisto === op.misto ? ' sel' : '')}
                         onClick={() => {
                           setLoteMisto(op.misto);
                           if (op.misto) setGrupos(grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || '', form.itens_vendidos || []));
-                        }}
-                        style={{ flex:1, padding:'6px 0', fontSize:10, fontWeight:700, borderRadius:5, cursor:'pointer',
-                          border:`1px solid ${loteMisto === op.misto ? '#7c3aed' : '#cbd5e1'}`,
-                          background: loteMisto === op.misto ? '#ede9fe' : '#fff',
-                          color: loteMisto === op.misto ? '#6b21a8' : '#64748b' }}>
+                        }}>
                         {op.rotulo}
-                      </button>
+                      </Botao>
                     ))}
                   </div>
                   {loteMisto && (
-                    <div style={{ marginBottom:10 }}>
+                    <div className="acn-nop-lote-grupos">
                       <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos}
                         crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null} />
-                      <div style={{ fontSize:9, color:'#6b21a8', marginTop:4 }}>
+                      <div className="acn-nop-lote-nota">
                         Um grupo com 1 veículo é o carro personalizado sozinho — crie um grupo por unidade pra deixar o lote todo diferente.
                       </div>
                     </div>
@@ -1040,11 +1008,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       as outras encolherem: sem o piso ela sumia, sem o minmax(0,…)
                       nas outras o nome do veículo empurrava a Placa para fora. */}
                   {(form.veiculos || []).map((v, i) => (
-                    <div key={i} style={{ display:'grid', gap:6, marginBottom:6, alignItems:'center',
-                      gridTemplateColumns:'auto minmax(132px, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' }}>
-                      <span style={{ fontSize:10, fontWeight:800, color:'#7c3aed', width: loteMisto ? 44 : 28 }}>
+                    <div key={i} className="acn-nop-un">
+                      <span className={'acn-nop-un-n' + (loteMisto ? ' misto' : '')}>
                         {String(i+1).padStart(2,'0')}
-                        {loteMisto && (() => { const u = unidadesDosGrupos(grupos)[i]; return u ? <span style={{ marginLeft:3, fontSize:8, background:'#ede9fe', borderRadius:3, padding:'0 3px' }}>{LETRA(u.grupo)}</span> : null; })()}
+                        {loteMisto && (() => { const u = unidadesDosGrupos(grupos)[i]; return u ? <span className="acn-nop-un-g">{LETRA(u.grupo)}</span> : null; })()}
                       </span>
                       {/* Veículo POR UNIDADE — sem isto, um lote com carros
                           diferentes gravaria o mesmo veículo em todas as OPs
@@ -1096,45 +1063,43 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   não se aplicam. O que foi vendido já está no PV — anexe-o no passo 2
                   (documentos); não se recadastra item aqui. */}
               {ehVendaEnvio ? (<>
-                <div style={{ marginBottom:10 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor Total (R$)</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 45000"
+                <div className="acn-nop-bl">
+                  <div className="acn-nop-rot">Valor Total (R$)</div>
+                  <input className="acn-input acn-nop-w" placeholder="Ex: 45000"
                     value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
                 </div>
               </>) : (<>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="acn-nop-gr g3">
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Placa</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: ABC-1234"
+                  <div className="acn-nop-rot">Placa</div>
+                  <input className="acn-input acn-nop-w" placeholder="Ex: ABC-1234"
                     value={form.placa} onChange={e => setF('placa', e.target.value.toUpperCase())} />
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Chassi</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Opcional"
+                  <div className="acn-nop-rot">Chassi</div>
+                  <input className="acn-input acn-nop-w" placeholder="Opcional"
                     value={form.chassi} onChange={e => setF('chassi', e.target.value)} />
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Modelo</div>
+                  <div className="acn-nop-rot">Modelo</div>
                   {form.tipo_projeto === 'Reboque' ? (
                     mostrandoNovoModelo ? (
-                      <div style={{ display:'flex', gap:4 }}>
-                        <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do novo modelo"
+                      <div className="acn-nop-mod">
+                        <input className="acn-input acn-nop-w" placeholder="Nome do novo modelo"
                           value={novoModeloReboque} onChange={e => setNovoModeloReboque(e.target.value)} autoFocus
                           onKeyDown={e => e.key === 'Enter' && salvarNovoModeloReboque()} />
-                        <button type="button" onClick={salvarNovoModeloReboque}
-                          style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'0 10px', fontSize:11, fontWeight:700, cursor:'pointer' }}>✓</button>
-                        <button type="button" onClick={() => { setMostrandoNovoModelo(false); setNovoModeloReboque(''); }}
-                          style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #d1d5db', borderRadius:4, padding:'0 10px', fontSize:11, cursor:'pointer' }}>✕</button>
+                        <Botao variante="primario" className="acn-nop-b acn-nop-mod-ok" onClick={salvarNovoModeloReboque}>✓</Botao>
+                        <Botao variante="secundario" className="acn-nop-b acn-nop-mod-x" onClick={() => { setMostrandoNovoModelo(false); setNovoModeloReboque(''); }}>✕</Botao>
                       </div>
                     ) : (
                       <>
-                      <select className="acn-input" style={{ width:'100%' }} value={form.modelo}
+                      <select className="acn-input acn-nop-w" value={form.modelo}
                         onChange={e => { if (e.target.value === '___NOVO___') setMostrandoNovoModelo(true); else setF('modelo', e.target.value); }}>
                         <option value="">— Selecione o modelo —</option>
                         {modelosReboque.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
                         <option value="___NOVO___">➕ Novo modelo...</option>
                       </select>
-                      {modelosErro && <div style={{ fontSize:9, color:'#dc2626', marginTop:3 }}>⚠️ Não foi possível carregar os modelos de reboque ({modelosErro}).</div>}
+                      {modelosErro && <div className="acn-nop-modelos-erro">⚠️ Não foi possível carregar os modelos de reboque ({modelosErro}).</div>}
                       </>
                     )
                   ) : (
@@ -1158,79 +1123,73 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                           if (v) setF('modelo', v.nome_exibicao);
                         }} />
                     ) : (
-                      <input className="acn-input" style={{ width:'100%' }}
+                      <input className="acn-input acn-nop-w"
                         placeholder="Modelo (opcional)"
                         value={form.modelo} onChange={e => setF('modelo', e.target.value)} />
                     )
                   )}
                 </div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="acn-nop-gr g2">
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor Total (R$)</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 45000"
+                  <div className="acn-nop-rot">Valor Total (R$)</div>
+                  <input className="acn-input acn-nop-w" placeholder="Ex: 45000"
                     value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor M.O. (R$)</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 12000"
+                  <div className="acn-nop-rot">Valor M.O. (R$)</div>
+                  <input className="acn-input acn-nop-w" placeholder="Ex: 12000"
                     value={form.valor_mao_de_obra} onChange={e => setF('valor_mao_de_obra', e.target.value)} />
                 </div>
               </div>
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor M.O. Serralheria (R$)</div>
-                <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 5000"
+              <div className="acn-nop-bl">
+                <div className="acn-nop-rot">Valor M.O. Serralheria (R$)</div>
+                <input className="acn-input acn-nop-w" placeholder="Ex: 5000"
                   value={form.valor_mao_de_obra_serralheria} onChange={e => setF('valor_mao_de_obra_serralheria', e.target.value)} />
               </div>
 
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Data de Recebimento do Veículo</div>
-                <input type="date" className="acn-input" style={{ width:'100%' }}
+              <div className="acn-nop-bl">
+                <div className="acn-nop-rot">Data de Recebimento do Veículo</div>
+                <input type="date" className="acn-input acn-nop-w"
                   value={form.data_chegada_veiculo} onChange={e => setF('data_chegada_veiculo', e.target.value)} />
               </div>
 
               {/* ── Serviço de Terceiro ──────────────────────────────────────── */}
-              <div style={{ marginBottom:12, border: form.servico_terceiro ? '2px solid #f59e0b' : '1.5px solid #e2e8f0',
-                borderRadius:8, padding:'10px 12px', background: form.servico_terceiro ? '#fffbeb' : '#f8fafc',
-                transition:'all .2s' }}>
-                <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
+              <div className={'acn-nop-st' + (form.servico_terceiro ? ' ativo' : '')}>
+                <label className="acn-nop-st-lbl">
                   <input type="checkbox" checked={form.servico_terceiro}
                     onChange={e => setF('servico_terceiro', e.target.checked)}
-                    style={{ width:16, height:16, cursor:'pointer', accentColor:'#f59e0b' }} />
-                  <span style={{ fontSize:11, fontWeight:700, color: form.servico_terceiro ? '#b45309' : '#475569' }}>
+                    className="acn-nop-st-chk" />
+                  <span className={'acn-nop-st-tit' + (form.servico_terceiro ? ' ativo' : '')}>
                     ⚠️ Necessita Serviço de Terceiro
                   </span>
                   {form.servico_terceiro && (
-                    <span style={{ marginLeft:4, background:'#f59e0b', color:'#fff', fontSize:8,
-                      fontWeight:800, padding:'2px 7px', borderRadius:10, letterSpacing:.4 }}>ATENÇÃO</span>
+                    <span className="acn-nop-st-chip">ATENÇÃO</span>
                   )}
                 </label>
 
                 {form.servico_terceiro && (
-                  <div style={{ marginTop:10 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:6 }}>
-                      Tipos de Serviço de Terceiro * <span style={{ fontWeight:400, color:'#b45309' }}>(marque todos que se aplicam)</span>
+                  <div className="acn-nop-st-corpo">
+                    <div className="acn-nop-st-rot">
+                      Tipos de Serviço de Terceiro * <span className="acn-nop-st-sub">(marque todos que se aplicam)</span>
                     </div>
-                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                    <div className="acn-nop-st-tipos">
                       {TIPOS_SERVICO_TERCEIRO.map(t => {
                         const sel = form.tipos_servico_terceiro.includes(t);
                         return (
-                          <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10,
-                            background: sel ? '#f59e0b' : '#fff', color: sel ? '#fff' : '#475569',
-                            padding:'4px 10px', borderRadius:6, cursor:'pointer', fontWeight:700,
-                            border: `1.5px solid ${sel ? '#f59e0b' : '#d1d5db'}` }}>
+                          <label key={t} className={'acn-nop-st-tipo' + (sel ? ' sel' : '')}>
                             <input type="checkbox" checked={sel}
                               onChange={() => setF('tipos_servico_terceiro',
                                 sel ? form.tipos_servico_terceiro.filter(x => x !== t)
                                     : [...form.tipos_servico_terceiro, t])}
-                              style={{ accentColor:'#f59e0b', cursor:'pointer' }} />
+                              className="acn-nop-st-ck" />
                             {t}
                           </label>
                         );
                       })}
                     </div>
                     {form.tipos_servico_terceiro.includes('Outro') && (
-                      <input className="acn-input" style={{ width:'100%' }}
+                      <input className="acn-input acn-nop-w"
                         placeholder="Descreva o(s) serviço(s) de terceiro..."
                         value={form.obs_servico_terceiro}
                         onChange={e => setF('obs_servico_terceiro', e.target.value)} />
@@ -1248,14 +1207,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
           {/* Resumo dos Serviços — OP (no lote misto, cada unidade usa o do seu grupo) */}
           {isOP && loteEhMisto && (
-            <div style={{ marginBottom:10, fontSize:10, color:'#6b21a8', background:'#faf5ff', border:'1px dashed #c4b5fd', borderRadius:6, padding:'6px 10px' }}>
+            <div className="acn-nop-lm-aviso">
               🧩 Lote misto: o resumo dos serviços e os itens vendidos de cada unidade vêm do seu grupo (acima, em Dados por Veículo).
             </div>
           )}
           {isOP && !loteEhMisto && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Resumo dos Serviços a serem executados</div>
-              <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', overflow: 'hidden', minHeight: 60 }}
+            <div className="acn-nop-bl">
+              <div className="acn-nop-rot">Resumo dos Serviços a serem executados</div>
+              <textarea className="acn-input acn-nop-w acn-nop-ta acn-nop-ta-auto" rows={3}
                 placeholder="Descreva os serviços que serão executados nesta OP..."
                 value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)}
                 onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
@@ -1265,29 +1224,29 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           {/* Campos OS */}
           {!isOP && (
             <>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="acn-nop-gr g2">
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo de Serviço *</div>
-                  <select className="acn-input" style={{ width:'100%' }} value={form.tipo_servico}
+                  <div className="acn-nop-rot">Tipo de Serviço *</div>
+                  <select className="acn-input acn-nop-w" value={form.tipo_servico}
                     onChange={e => setF('tipo_servico', e.target.value)}>
                     {TIPOS_OS.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Equipamento</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: Rádio Motorola APX"
+                  <div className="acn-nop-rot">Equipamento</div>
+                  <input className="acn-input acn-nop-w" placeholder="Ex: Rádio Motorola APX"
                     value={form.equipamento} onChange={e => setF('equipamento', e.target.value)} />
                 </div>
               </div>
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Descrição do problema / serviço *</div>
-                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical' }}
+              <div className="acn-nop-bl">
+                <div className="acn-nop-rot">Descrição do problema / serviço *</div>
+                <textarea className="acn-input acn-nop-w acn-nop-ta" rows={3}
                   placeholder="Descreva o que precisa ser feito..."
                   value={form.descricao_problema} onChange={e => setF('descricao_problema', e.target.value)} />
               </div>
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Resumo dos Serviços a serem executados</div>
-                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', overflow:'hidden', minHeight:60 }}
+              <div className="acn-nop-bl">
+                <div className="acn-nop-rot">Resumo dos Serviços a serem executados</div>
+                <textarea className="acn-input acn-nop-w acn-nop-ta acn-nop-ta-auto" rows={3}
                   placeholder="Descreva os serviços que serão executados nesta OS..."
                   value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)}
                   onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
@@ -1296,30 +1255,30 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           )}
 
           {/* Campos comuns */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+          <div className="acn-nop-gr g2">
             <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Data de Entrada *</div>
-              <input type="date" className="acn-input" style={{ width:'100%' }}
+              <div className="acn-nop-rot">Data de Entrada *</div>
+              <input type="date" className="acn-input acn-nop-w"
                 value={form.data_entrada} onChange={e => setF('data_entrada', e.target.value)} />
             </div>
             <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Prazo de Entrega *</div>
-              <input type="date" className="acn-input" style={{ width:'100%' }}
+              <div className="acn-nop-rot">Prazo de Entrega *</div>
+              <input type="date" className="acn-input acn-nop-w"
                 value={form.prazo_entrega} onChange={e => setF('prazo_entrega', e.target.value)} />
             </div>
           </div>
 
           {form.tipo === 'OP' && (
-            <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Prazo de Garantia</div>
-              <input className="acn-input" style={{ width:'100%' }} maxLength={300}
+            <div className="acn-nop-bl">
+              <div className="acn-nop-rot">Prazo de Garantia</div>
+              <input className="acn-input acn-nop-w" maxLength={300}
                 placeholder="Ex: 12 meses a partir da entrega · 90 dias mão de obra, 1 ano equipamento"
                 value={form.prazo_garantia} onChange={e => setF('prazo_garantia', e.target.value)} />
             </div>
           )}
 
-          <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Responsável *</div>
+          <div className="acn-nop-bl">
+            <div className="acn-nop-rot">Responsável *</div>
             <ColaboradorSelect departamentos={DEPTOS.comercial}
               value={form.responsavel}
               onChange={v => setF('responsavel', v)}
@@ -1327,42 +1286,35 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             />
           </div>
 
-          <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
-            <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical' }}
+          <div className="acn-nop-bl">
+            <div className="acn-nop-rot">Observações</div>
+            <textarea className="acn-input acn-nop-w acn-nop-ta" rows={2}
               placeholder="Observações adicionais..."
               value={form.observacoes} onChange={e => setF('observacoes', e.target.value)} />
           </div>
 
           {/* Vínculo CRM */}
           {crmCard && (
-            <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6,
-              padding:'8px 10px', fontSize:10, color:'#15803d' }}>
+            <div className="acn-nop-vinc">
               🔗 Esta {isOP ? 'OP' : 'OS'} será vinculada ao card CRM: <strong>{crmCard.titulo}</strong>
             </div>
           )}
 
           {erro && (
-            <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5,
-              padding:'8px 10px', fontSize:10, color:'#dc2626', marginTop:8 }}>
+            <div className="acn-nop-erro">
               ⚠️ {erro}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'10px 18px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose}
-            style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1',
-              borderRadius:6, padding:'7px 16px', fontSize:11, cursor:'pointer' }}>
+        <div className="acn-nop-rodape">
+          <Botao variante="secundario" className="acn-nop-b-rod" onClick={onClose}>
             Cancelar
-          </button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ background: isOP ? '#0f766e' : '#7c3aed', color:'#fff', border:'none',
-              borderRadius:6, padding:'7px 20px', fontSize:11, fontWeight:700, cursor:'pointer',
-              opacity: salvando ? .6 : 1 }}>
+          </Botao>
+          <Botao variante="primario" className="acn-nop-b-rod acn-nop-b-rod-p" onClick={salvar} disabled={salvando}>
             {salvando ? 'Salvando...' : `✅ Criar ${isOP ? 'OP' : 'OS'}`}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>

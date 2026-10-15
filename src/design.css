@@ -4265,3 +4265,189 @@ html body.dark .acn-b.acn-ctt-b.acn-ctt-pilula.ativa[data-tipo="outro"], html bo
   .acn-ctt-pil, .acn-ctt-int-res, .acn-ctt-wa-cod { font-size: 12px; line-height: 1.35; }
   html body .acn-b.acn-ctt-b.acn-ctt-salvar-crm { font-size: 12px; }
 }
+
+/* ══ Criação de OP/OS (NovaOpOsModal, 12e64 — 14/10/2026) ═══════════════════════════════════════════════════════
+   Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar: o tamanho mínimo
+   de letra, os tons e as cores que os ajustes de tela aplicavam por cima). Os botões com fundo usam o Botao do guia; os de escolha (origem, frete, lote),
+   o ✕, o "✓/✕" do modelo e o "Tentar de novo" partem de uma base "pelada" (acn-nop-b), como no chat e nos Contatos. */
+html body .acn-b.acn-nop-b { display: block; align-items: normal; justify-content: normal; gap: normal; height: auto; width: auto; margin: 0; padding: 0; border: 0 none; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; font-weight: 400; line-height: normal; letter-spacing: normal; text-align: center; white-space: normal; cursor: pointer; transition: all 0s; }
+
+/* ── Janela, cabeçalho e rodapé ── */
+.acn-nop-ov { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background-color: #0009; }
+.acn-nop-modal { background-color: #ffffff; border-radius: 10px; box-shadow: 0 20px 60px #0003; }
+.acn-nop-modal-1 { width: min(640px, 96vw); max-height: 90vh; display: flex; flex-direction: column; }
+.acn-nop-modal-2 { width: min(520px, 96vw); overflow: hidden; }
+.acn-nop-cab { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-radius: 10px 10px 0 0; color: #ffffff; background-color: #0f172a; }
+.acn-nop-cab.acn-nop-cab-2 { padding: 12px 18px; border-radius: 0; }
+.acn-nop-cab-ic { font-size: 20px; line-height: 1.45; }
+.acn-nop-cab-meio { flex: 1; }
+.acn-nop-cab-sup { font-weight: 700; letter-spacing: .5px; opacity: .7; }
+.acn-nop-cab-sup.acn-nop-cab-sup-2 { font-size: 12px; line-height: 1.45; }
+.acn-nop-cab-tit { font-size: 14px; font-weight: 700; line-height: 1.45; }
+html body .acn-b.acn-nop-b.acn-nop-fechar { padding: 1px 6px; color: #ffffff; font-size: 20px; }
+.acn-nop-corpo { flex: 1; overflow-y: auto; padding: 14px 18px; }
+.acn-nop-rodape { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 18px; border-top: 1px solid #e2e8f0; }
+.acn-nop-p2-corpo { padding: 20px 18px; }
+.acn-nop-ok { margin-bottom: 16px; padding: 10px 14px; border: 1px solid #86efac; border-radius: 7px; color: #15803d; background-color: #f0fdf4; }
+
+/* ── Grades, blocos e rótulos ── */
+.acn-nop-gr { display: grid; gap: 10px; margin-bottom: 10px; }
+.acn-nop-gr.m12 { margin-bottom: 12px; }
+.acn-nop-gr.g2 { grid-template-columns: 1fr 1fr; }
+.acn-nop-gr.g21 { grid-template-columns: 2fr 1fr; }
+.acn-nop-gr.g211 { grid-template-columns: 2fr 1fr 1fr; }
+.acn-nop-gr.g3 { grid-template-columns: 1fr 1fr 1fr; }
+.acn-nop-bl { margin-bottom: 10px; }
+.acn-nop-rot { margin-bottom: 3px; color: #475569; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-nop-rot.r4 { margin-bottom: 4px; }
+.acn-nop-rot-box { margin-bottom: 5px; color: #334155; font-size: 12px; font-weight: 800; line-height: 1.45; }
+.acn-nop-rot-sub { color: #64748b; font-weight: 400; }
+.acn-nop-w { width: 100%; }
+.acn-nop-sel-p.acn-nop-w { font-size: 12px; }
+.acn-nop-ta { resize: vertical; }
+.acn-nop-ta.acn-nop-ta-auto { overflow: hidden; min-height: 60px; }
+.acn-nop-oculto { display: none; }
+.acn-nop-togs { display: flex; gap: 8px; }
+.acn-nop-tog { display: flex; align-items: center; gap: 5px; padding: 5px 14px; border: 1px solid #dee4ea; border-radius: 6px; color: #17212b; background-color: #ffffff; font-weight: 700; cursor: pointer; transition: all .15s; }
+.acn-nop-tog.sel { color: #ffffff; background-color: #0e7068; border-color: transparent; }
+.acn-nop-itens { margin-bottom: 12px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 7px; background-color: #f8fafc; }
+
+/* ── Pedido de venda e número da OP ── */
+.acn-nop-chk { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: #475569; font-size: 12px; line-height: 1.45; cursor: pointer; }
+.acn-nop-pv-nota { margin-top: 3px; color: #dc2626; font-size: 12px; line-height: 1.45; }
+.acn-nop-pv-nota.aviso { color: #b45309; }
+.acn-nop-pv-nota.ok { color: #15803d; }
+.acn-nop-pv-nota.sem-margem { margin-top: 0; }
+.acn-nop-pv-varias { margin-top: 3px; }
+html body .acn-b.acn-nop-b.acn-nop-lnk { display: inline-block; color: #0a544e; font-size: 12px; text-decoration: underline; }
+.acn-nop-opl { display: flex; align-items: center; min-height: 30px; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 5px; color: #9ca3af; background-color: #f8fafc; font-weight: 800; letter-spacing: 1px; }
+.acn-nop-opl.ok { color: #166534; background-color: #f0fdf4; border-color: #86efac; }
+.acn-nop-opl-lote { margin-left: 6px; color: #7c3aed; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-nop-opl-un { margin-left: 6px; color: #0f766e; font-size: 12px; font-weight: 700; line-height: 1.45; }
+
+/* ── Origem da venda, fluxo de entrega e frete ── */
+html body .acn-b.acn-nop-b.acn-nop-origem { padding: 5px 14px; border: 1px solid #dee4ea; border-radius: 6px; background-color: #ffffff; font-weight: 800; transition: background-color .12s, border-color .12s, color .12s; }
+html body .acn-b.acn-nop-b.acn-nop-origem.sel[data-origem="venda_direta"] { color: #0a544e; background-color: #e3f2ef; border-color: #9fd0c8; box-shadow: inset 0 0 0 1px #1e3a8a; }
+html body .acn-b.acn-nop-b.acn-nop-origem.sel[data-origem="licitacao"] { color: #ffffff; background-color: #0e7068; border-color: transparent; box-shadow: inset 0 0 0 1px #7c2d12; }
+.acn-nop-fluxo { margin-bottom: 10px; padding: 8px 10px; border: 1px solid #bae6fd; border-radius: 6px; background-color: #f0f9ff; }
+.acn-nop-fluxo-tit { margin-bottom: 3px; color: #0369a1; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-nop-fluxo-aj { margin-top: 3px; color: #0369a1; font-size: 12px; line-height: 1.45; }
+.acn-nop-fluxo-env { margin-bottom: 8px; color: #0369a1; font-size: 12px; line-height: 1.45; }
+.acn-nop-aviso-erro { margin-bottom: 10px; padding: 6px 10px; border: 1px solid #fca5a5; border-radius: 5px; color: #dc2626; background-color: #fef2f2; font-size: 12px; line-height: 1.45; }
+.acn-nop-frete-box { margin-bottom: 10px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background-color: #f8fafc; }
+html body .acn-b.acn-nop-b.acn-nop-frete { flex: 1; padding: 8px 10px; border: 1px solid #dee4ea; border-radius: 6px; background-color: #ffffff; font-weight: 700; transition: background-color .12s, border-color .12s, color .12s; }
+html body .acn-b.acn-nop-b.acn-nop-frete.sel { color: #0a544e; background-color: #e3f2ef; border: 2px solid #9fd0c8; }
+.acn-nop-frete-aj { margin-top: 4px; color: #64748b; font-size: 12px; line-height: 1.45; }
+.acn-nop-frete-aj.fob { color: #b45309; }
+.acn-nop-env-nota { margin-bottom: 10px; padding: 8px 10px; border: 1px solid #99f6e4; border-radius: 7px; color: #0f766e; background-color: #f0fdfa; font-size: 12px; line-height: 1.45; }
+
+/* ── Dados por veículo (lote) ── */
+.acn-nop-lote { margin-bottom: 10px; padding: 10px; border: 1px solid #c4b5fd; border-radius: 7px; background-color: #f5f3ff; }
+.acn-nop-lote-tit { margin-bottom: 8px; color: #7c3aed; font-size: 12px; font-weight: 800; line-height: 1.45; text-transform: uppercase; }
+.acn-nop-lote-chk { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #0a544e; font-size: 12px; font-weight: 700; line-height: 1.45; cursor: pointer; }
+.acn-nop-lote-chk input { accent-color: #7c3aed; }
+.acn-nop-lote-bts { display: flex; gap: 6px; margin: 6px 0 4px; }
+html body .acn-b.acn-nop-b.acn-nop-lote-bt { flex: 1; padding: 6px 0; border: 1px solid #dee4ea; border-radius: 5px; background-color: #ffffff; font-size: 12px; font-weight: 700; transition: background-color .12s, border-color .12s, color .12s; }
+html body .acn-b.acn-nop-b.acn-nop-lote-bt.sel { color: #0a544e; background-color: #e3f2ef; border-color: #9fd0c8; }
+.acn-nop-lote-grupos { margin-bottom: 10px; }
+.acn-nop-lote-nota { margin-top: 4px; color: #6b21a8; font-size: 12px; line-height: 1.45; }
+.acn-nop-un { display: grid; grid-template-columns: auto minmax(132px, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; margin-bottom: 6px; }
+.acn-nop-un-n { width: 28px; color: #7c3aed; font-size: 12px; font-weight: 800; line-height: 1.45; }
+.acn-nop-un-n.misto { width: 44px; }
+.acn-nop-un-g { display: inline-block; max-width: 100%; margin-left: 3px; padding: 0 3px; overflow: hidden; border-color: rgba(36, 95, 184, .22); border-radius: 3px; color: #245fb8; background-color: #e7effa; font-size: 11px; font-weight: 800; line-height: 1.35; letter-spacing: .18px; white-space: nowrap; text-overflow: ellipsis; vertical-align: middle; }
+.acn-nop-lm-aviso { margin-bottom: 10px; padding: 6px 10px; border: 1px dashed #c4b5fd; border-radius: 6px; color: #6b21a8; background-color: #faf5ff; font-size: 12px; line-height: 1.45; }
+
+/* ── Modelo de reboque ── */
+.acn-nop-mod { display: flex; gap: 4px; }
+html body .acn-b.acn-nop-b.acn-nop-mod-ok { padding: 0 10px; border-radius: 4px; background-color: #0e7068; font-weight: 700; transition: background-color .12s, border-color .12s, color .12s; }
+html body .acn-b.acn-nop-b.acn-nop-mod-x { padding: 0 10px; border: 1px solid #dee4ea; border-radius: 4px; background-color: #ffffff; transition: background-color .12s, border-color .12s, color .12s; }
+.acn-nop-modelos-erro { margin-top: 3px; color: #dc2626; font-size: 12px; line-height: 1.45; }
+
+/* ── Serviço de terceiro ── */
+.acn-nop-st { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc; transition: all .2s; }
+.acn-nop-st.ativo { background-color: #fffbeb; border: 2px solid #f59e0b; }
+.acn-nop-st-lbl { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.acn-nop-st-chk { width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b; }
+.acn-nop-st-tit { color: #475569; font-weight: 700; }
+.acn-nop-st-tit.ativo { color: #b45309; }
+.acn-nop-st-chip { margin-left: 4px; padding: 2px 7px; border-radius: 10px; overflow: hidden; color: #9a5708; background-color: #fcf1df; font-size: 11px; font-weight: 800; line-height: 1.35; letter-spacing: .4px; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; vertical-align: middle; }
+.acn-nop-st-corpo { margin-top: 10px; }
+.acn-nop-st-rot { margin-bottom: 6px; color: #92400e; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.acn-nop-st-sub { color: #b45309; font-weight: 400; }
+.acn-nop-st-tipos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.acn-nop-st-tipo { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid #dee4ea; border-radius: 6px; color: #17212b; background-color: #ffffff; font-size: 12px; font-weight: 700; line-height: 1.45; cursor: pointer; transition: background-color .12s, border-color .12s, color .12s; }
+.acn-nop-st-tipo.sel { color: #0a544e; background-color: #e3f2ef; border-color: #9fd0c8; }
+.acn-nop-st-ck { accent-color: #f59e0b; cursor: pointer; }
+
+/* ── Vínculo, erro e passo 2 (anexos) ── */
+.acn-nop-vinc { padding: 8px 10px; border: 1px solid #86efac; border-radius: 6px; color: #15803d; background-color: #f0fdf4; font-size: 12px; line-height: 1.45; }
+.acn-nop-erro { margin-top: 8px; padding: 8px 10px; border: 1px solid #fca5a5; border-radius: 5px; color: #dc2626; background-color: #fef2f2; font-size: 12px; line-height: 1.45; }
+.acn-nop-up { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; padding: 7px 16px; border-radius: 6px; color: #ffffff; background-color: #0e7068; font-weight: 700; cursor: pointer; transition: background-color .12s, border-color .12s, color .12s; }
+/* enquanto envia, o botão fica no desenho secundário (antes o ajuste de cores do sistema trocava o cinza-azulado solto por este) */
+.acn-nop-up.enviando { border: 1px solid #dee4ea; color: #17212b; background-color: #ffffff; }
+.acn-nop-falhas { margin-bottom: 8px; padding: 6px 10px; border: 1px solid #fca5a5; border-radius: 5px; color: #dc2626; background-color: #fef2f2; font-size: 12px; line-height: 1.45; }
+.acn-nop-arqs { display: flex; flex-direction: column; gap: 4px; }
+.acn-nop-arq { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #86efac; border-radius: 5px; background-color: #f0fdf4; font-size: 12px; line-height: 1.45; }
+.acn-nop-arq-lnk { color: #16a34a; font-weight: 600; text-decoration: none; }
+html body .acn-b.acn-nop-b-rod { padding: 0 16px; }
+html body .acn-b.acn-nop-b-rod.acn-nop-b-rod-p { padding: 0 20px; }
+/* 12e64 — escuro do modal de criação de OP/OS: valores medidos na versão anterior (o ajuste automático de cores já repintava o estilo solto) */
+html body.dark .acn-nop-arq { color: #86efac; background-color: #0d2818; }
+html body.dark .acn-nop-aviso-erro { color: #fca5a5; background-color: #2d0a0a; }
+html body.dark .acn-b.acn-nop-b.acn-nop-frete { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-b.acn-nop-b.acn-nop-frete.sel { background-color: #1e3a5f; border-top-color: #1f6f67; border-right-color: #1f6f67; border-bottom-color: #1f6f67; border-left-color: #1f6f67; color: #93c5fd; }
+html body.dark .acn-b.acn-nop-b.acn-nop-lnk { color: #93c5fd; }
+html body.dark .acn-b.acn-nop-b.acn-nop-lote-bt.sel { color: #c4b5fd; background-color: rgba(20, 134, 124, 0.22); border-top-color: #1f6f67; border-right-color: #1f6f67; border-bottom-color: #1f6f67; border-left-color: #1f6f67; }
+html body.dark .acn-b.acn-nop-b.acn-nop-lote-bt { background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; color: #cbd5e1; }
+html body.dark .acn-b.acn-nop-b.acn-nop-origem[data-origem=licitacao] { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-b.acn-nop-b.acn-nop-origem[data-origem=venda_direta] { background-color: rgba(20, 134, 124, 0.22); border-top-color: #1f6f67; border-right-color: #1f6f67; border-bottom-color: #1f6f67; border-left-color: #1f6f67; color: #93c5fd; }
+html body.dark .acn-nop-chk { color: #94a3b8; }
+html body.dark .acn-nop-env-nota { background-color: #162032; }
+html body.dark .acn-nop-erro { color: #fca5a5; background-color: #2d0a0a; }
+html body.dark .acn-nop-falhas { color: #fca5a5; background-color: #2d0a0a; }
+html body.dark .acn-nop-fluxo { background-color: #162032; }
+html body.dark .acn-nop-fluxo-aj { color: #93c5fd; }
+html body.dark .acn-nop-fluxo-env { color: #93c5fd; }
+html body.dark .acn-nop-fluxo-tit { color: #93c5fd; }
+html body.dark .acn-nop-frete-aj { color: #fdba74; }
+html body.dark .acn-nop-frete-box { background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-nop-itens { background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-nop-lm-aviso { color: #c4b5fd; }
+html body.dark .acn-nop-lote { color: #c4b5fd; background-color: #2d1b5c; }
+html body.dark .acn-nop-modal.acn-nop-modal-1 { background-color: #1e293b; }
+html body.dark .acn-nop-modal.acn-nop-modal-2 { background-color: #1e293b; }
+html body.dark .acn-nop-modelos-erro { color: #fca5a5; }
+html body.dark .acn-nop-ok { color: #86efac; background-color: #0d2818; }
+html body.dark .acn-nop-opl { color: #86efac; background-color: #0d2818; }
+html body.dark .acn-nop-opl-lote { color: #c4b5fd; }
+html body.dark .acn-nop-opl-un { color: #2dd4bf; }
+html body.dark .acn-nop-pv-nota.aviso { color: #fdba74; }
+html body.dark .acn-nop-pv-nota.erro { color: #fca5a5; }
+html body.dark .acn-nop-pv-nota { color: #86efac; }
+html body.dark .acn-nop-rot { color: #94a3b8; }
+html body.dark .acn-nop-rot-box { color: #94a3b8; }
+html body.dark .acn-nop-st { background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-nop-st.ativo { border-color: #f59e0b; background-color: #1c1505; color: #fde68a; }
+html body.dark .acn-nop-st-chip { color: rgb(241, 213, 166); background-color: rgba(224, 161, 58, 0.24); }
+html body.dark .acn-nop-st-rot { color: #fdba74; }
+html body.dark .acn-nop-st-tipo.sel { color: #7fd8cc; background-color: rgba(20, 134, 124, 0.22); border-top-color: #1f6f67; border-right-color: #1f6f67; border-bottom-color: #1f6f67; border-left-color: #1f6f67; }
+html body.dark .acn-nop-st-tipo { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-nop-st-tit { color: #94a3b8; }
+html body.dark .acn-nop-st-tit.ativo { color: #fdba74; }
+html body.dark .acn-nop-tog { color: #cbd5e1; background-color: #162032; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-nop-un-g { color: rgb(188, 210, 244); background-color: rgba(107, 155, 230, 0.24); }
+html body.dark .acn-nop-vinc { color: #86efac; background-color: #0d2818; }
+html body.dark .acn-nop-tog.sel { border-color: transparent; color: #ffffff; background-color: #0e7068; }
+html body.dark .acn-nop-env-nota { color: #cbd5e1; }
+html body.dark .acn-nop-lote-tit, html body.dark .acn-nop-lote-chk, html body.dark .acn-nop-lote-nota, html body.dark .acn-nop-un-n { color: #c4b5fd; }
+html body.dark .acn-nop-rot-sub { color: #94a3b8; }
+html body.dark .acn-nop-st-sub { color: #fdba74; }
+html body.dark .acn-nop-arq-lnk { color: #86efac; }
+html body.dark .acn-nop-up.enviando { border-color: #334155; color: #e2e8f0; }
+/* 12e64 — celular: só o que o responsivo.css não dá sozinho (as janelas inteiras e as grades de 3 colunas vêm das listas dele). Mesma condição de toque do responsivo.css. */
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  /* os dois chips pequenos (tipo do serviço de terceiro e letra do grupo) tinham fonte solta de 8 a 10 px, que o responsivo.css sobe para 12 px no toque */
+  .acn-nop-st-chip, .acn-nop-un-g { font-size: 12px; line-height: 1.35; }
+}
+/* as duas escolhas de frete (CIF/FOB) tinham "flex: 1" solto e por isso escapavam da regra global que não deixa botão quebrar o texto (index.css); sem isso o rótulo longo passa da borda do quadro no celular. O :not(#acn) vence essa regra, como nos botões do login */
+html body .acn-b.acn-nop-b.acn-nop-frete:not(#acn) { white-space: normal; }
