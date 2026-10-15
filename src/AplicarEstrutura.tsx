@@ -19,7 +19,7 @@ import { supabase } from './supabaseClient';
 import {
   perguntasDaVenda, perguntasPendentes, respostasAutomaticas,
   materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
-  itensConjunto, vendaTemConjunto, podarRespostas,
+  itensConjunto, vendaTemConjunto, podarRespostas, valorSalvo,
 } from './ConfigEstrutura';
 import { RespostasEmLote } from './RespostasEmLote';
 import { Botao } from './Interface';
@@ -77,7 +77,8 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
       const genericos = new Set((cats || []).filter(c => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map(c => String(c.id)));
       const idsParaEstrutura = idsVendidos.filter(id => !conj.some(c => c.id === id) && !genericos.has(String(id)));
       const [perguntas, materiais, semEstrutura] = await Promise.all([
-        perguntasDaVenda(idsParaEstrutura),   // 15/10/2026: inclui as perguntas da OP (caracterizada, bateria…)
+        // 15/10/2026: inclui as perguntas da OP (caracterizada, bateria…); `idsVendidos` aplica a condição "só quando estes itens foram vendidos juntos"
+        perguntasDaVenda(idsParaEstrutura, idsVendidos),
         materiaisDoVeiculo(opl.veiculo_id, idsParaEstrutura),
         itensSemEstrutura(opl.veiculo_id, idsParaEstrutura),
       ]);
@@ -85,10 +86,10 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
 
       // respostas que o vendedor já deu na abertura da OPL
       const { data: salvas } = await supabase.from('op_configuracao_respostas')
-        .select('pergunta_id,opcao_id,automatica').eq('opl_id', opl.id);
+        .select('pergunta_id,opcao_id,valor_numerico,automatica').eq('opl_id', opl.id);
       // podadas: resposta a pergunta "filha" cuja resposta-pai foi trocada não vale, senão o material dela entraria
       const respostas = { ...auto };
-      (salvas || []).forEach(r => { respostas[r.pergunta_id] = r.opcao_id; });
+      (salvas || []).forEach(r => { respostas[r.pergunta_id] = valorSalvo(r); });
       const respostasValidas = podarRespostas(perguntas, respostas);
       Object.keys(respostas).forEach(k => { if (!respostasValidas[k]) delete respostas[k]; });
 

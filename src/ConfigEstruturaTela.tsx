@@ -141,15 +141,17 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
   };
   const temFilha = (opcaoId) => perguntas.some(p => p.opcao_pai_id === opcaoId);
 
-  const addPergunta = async (opcaoPaiId = null) => {
+  // `tipo` 'quantidade' (etapa 2, 15/10/2026): quem responde digita um número em vez de escolher uma resposta cadastrada
+  const addPergunta = async (opcaoPaiId = null, tipo = 'opcoes') => {
     const texto = await pedirTexto(opcaoPaiId
       ? 'Pergunta que só aparece depois desta resposta:'
+      : tipo === 'quantidade' ? 'Qual quantidade o vendedor deve informar?\n\nEx.: "Quantos na frente?"'
       : daOp ? 'Qual pergunta o vendedor deve responder sobre a OP?\n\nEx.: "O veículo é caracterizado?"'
         : 'Qual pergunta o vendedor deve responder sobre o carro?\n\nEx.: "Tem hack de teto?"', '');
     if (!texto?.trim()) return;
     const { error } = await supabase.from('item_perguntas').insert([{
       item_id: itemId || null, opcao_pai_id: opcaoPaiId, texto: texto.trim(), ordem: perguntas.length,
-      criado_por_nome: currentUser?.nome || '—',
+      tipo, criado_por_nome: currentUser?.nome || '—',
     }]);
     if (error) { alert('Não foi possível criar: ' + error.message); return; }
     aoMudar();
@@ -185,6 +187,29 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
     aoMudar();
   };
 
+  // Condição (etapa 2, 15/10/2026): a pergunta só aparece quando TODOS os itens listados estão na venda — "somente quando 1 ou mais itens são vendidos juntos"
+  const definirCondicao = async (p) => {
+    const atuais = (p.quando_itens || []).map(id => itens.find(i => i.id === id)?.codigo).filter(Boolean).join(', ');
+    const txt = await pedirTexto(
+      'Esta pergunta só aparece quando QUAIS itens estiverem juntos na venda?\n\n'
+      + 'Códigos separados por vírgula; precisam estar TODOS na venda. Vazio apaga a condição.\n'
+      + 'Ex.: pergunta de quantidade do slimled que só vale quando o parachoque de impulsão também foi vendido.', atuais);
+    if (txt === null) return;
+    const codigos = String(txt).split(',').map(s => s.trim()).filter(Boolean);
+    let ids = [];
+    if (codigos.length) {
+      const { data, error: er } = await supabase.from('cadastro_itens').select('id,codigo').in('codigo', codigos);
+      if (er) { alert('Não foi possível conferir os códigos: ' + er.message); return; }
+      const faltando = codigos.filter(c => !(data || []).some(d => String(d.codigo) === c));
+      if (faltando.length) { alert('Código não encontrado: ' + faltando.join(', ')); return; }
+      ids = (data || []).map(d => d.id);
+    }
+    const { error } = await supabase.from('item_perguntas').update({ quando_itens: ids.length ? ids : null }).eq('id', p.id);
+    if (error) { alert('Não foi possível gravar a condição: ' + error.message); return; }
+    aoMudar();
+  };
+  const codigosDaCondicao = (p) => (p.quando_itens || []).map(id => itens.find(i => i.id === id)?.codigo || '?').join(', ');
+
   return (
     <div className="acn-cet-perguntas">
       <div className="acn-cet-sec">
@@ -199,17 +224,24 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
       {perguntas.map(p => (
         <div key={p.id} className={'acn-cet-perg' + (p.opcao_pai_id ? ' filha' : '')} data-nivel={nivelDe(p)}>
           <div className="acn-cet-perg-cab">
-            <span className="acn-cet-perg-txt"><Icone path={mdiHelpCircleOutline} size={14} /> {p.texto}</span>
+            <span className="acn-cet-perg-txt">
+              <Icone path={mdiHelpCircleOutline} size={14} /> {p.texto}
+              {p.tipo === 'quantidade' && <Selo familia="info" ponto={false}>resposta numérica</Selo>}
+              {(p.quando_itens || []).length > 0 && <Selo familia="atencao" ponto={false}>só com: {codigosDaCondicao(p)}</Selo>}
+            </span>
             {pode && (
               <>
-                <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
-                  onClick={() => addOpcao(p.id, (p.opcoes || []).length)}>resposta</Botao>
+                <Botao pequeno variante="secundario" className="acn-cet-mini" onClick={() => definirCondicao(p)}>condição</Botao>
+                {p.tipo !== 'quantidade' && (
+                  <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini"
+                    onClick={() => addOpcao(p.id, (p.opcoes || []).length)}>resposta</Botao>
+                )}
                 <Botao variante="discreto" pequeno icone={mdiClose} className="acn-cet-x" aria-label={`Apagar a pergunta "${p.texto}"`}
                   onClick={() => apagar('item_perguntas', p.id, `a pergunta "${p.texto}"`)} />
               </>
             )}
           </div>
-          {!(p.opcoes || []).length && (
+          {p.tipo !== 'quantidade' && !(p.opcoes || []).length && (
             <div className="acn-cet-alerta"><Icone path={mdiAlertOutline} size={13} /> sem respostas — não faz nada ainda</div>
           )}
           {(p.opcoes || []).map(o => (
@@ -238,9 +270,14 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
         </div>
       ))}
       {pode && (
-        <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini acn-cet-nova" onClick={() => addPergunta(null)}>
-          pergunta
-        </Botao>
+        <>
+          <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini acn-cet-nova" onClick={() => addPergunta(null)}>
+            pergunta
+          </Botao>
+          <Botao pequeno variante="secundario" icone={mdiPlus} className="acn-cet-mini acn-cet-nova" onClick={() => addPergunta(null, 'quantidade')}>
+            pergunta de quantidade
+          </Botao>
+        </>
       )}
     </div>
   );

@@ -88,11 +88,45 @@ export async function perguntasDaOp() {
   return perguntas.map((p: any) => ({ ...p, opcoes: porPergunta.get(p.id) || [] }));
 }
 
-/** Tudo o que a venda pode perguntar: as da OP primeiro, depois as dos itens vendidos. */
-export async function perguntasDaVenda(itemIds: string[]) {
+/**
+ * Tudo o que a venda pode perguntar: as da OP primeiro, depois as dos itens vendidos.
+ *
+ * `vendidosIds` (todos os itens da venda): quando informado, tira as perguntas cuja condição "só quando estes itens forem vendidos juntos"
+ * (`quando_itens`) não se cumpre. Sem ele nada é filtrado — é o caso da tela em lote, que junta várias OPs e filtra OP por OP.
+ */
+export async function perguntasDaVenda(itemIds: string[], vendidosIds: string[] | null = null) {
   const [daOp, dosItens] = await Promise.all([perguntasDaOp(), perguntasDeVariosItens(itemIds)]);
-  return [...daOp, ...dosItens];
+  const todas = [...daOp, ...dosItens];
+  if (!vendidosIds) return todas;
+  const vendidos = new Set(vendidosIds.filter(Boolean).map(String));
+  return todas.filter(p => perguntaCabeNaVenda(p, vendidos));
 }
+
+// ── Pergunta de quantidade e condição de itens (etapa 2, 15/10/2026) ─────────
+
+/** A pergunta só vale quando TODOS os itens de `quando_itens` estão na venda (vazio = sempre). */
+export function perguntaCabeNaVenda(p: any, vendidos: Set<string>) {
+  const cond = (p?.quando_itens || []).map(String).filter(Boolean);
+  return cond.every((id: string) => vendidos.has(id));
+}
+
+/**
+ * Pergunta de QUANTIDADE ("quantos slimled na frente?"): quem responde digita um número. Para caber nos mesmos mapas das respostas por opção
+ * (pergunta_id → texto), a resposta numérica viaja como "q:4". No banco vai para `valor_numerico`, com `opcao_id` nulo.
+ */
+export const ehQuantidade = (p: any) => p?.tipo === 'quantidade';
+export const respostaDeQuantidade = (n: number) => `q:${n}`;
+export const valorDeQuantidade = (v: any): number | null =>
+  (typeof v === 'string' && v.startsWith('q:') && v.length > 2 && Number.isFinite(Number(v.slice(2)))) ? Number(v.slice(2)) : null;
+
+/** Do mapa de respostas para as colunas do banco. */
+export const camposDaResposta = (v: string) => {
+  const n = valorDeQuantidade(v);
+  return n === null ? { opcao_id: v, valor_numerico: null } : { opcao_id: null, valor_numerico: n };
+};
+/** Da linha do banco para o valor do mapa de respostas. */
+export const valorSalvo = (r: any): string =>
+  r?.opcao_id || (r?.valor_numerico !== null && r?.valor_numerico !== undefined ? respostaDeQuantidade(Number(r.valor_numerico)) : '');
 
 /**
  * Quais perguntas cabe fazer agora.
@@ -275,9 +309,10 @@ export async function respostasDasOps(oplIds: string[]) {
   ids.forEach(id => { mapa[id] = {}; });
   for (let i = 0; i < ids.length; i += 100) {
     const { data, error } = await supabase.from('op_configuracao_respostas')
-      .select('opl_id,pergunta_id,opcao_id,automatica').in('opl_id', ids.slice(i, i + 100));
+      .select('opl_id,pergunta_id,opcao_id,valor_numerico,automatica').in('opl_id', ids.slice(i, i + 100));
     if (error) throw new Error(error.message);
-    (data || []).forEach((r: any) => { (mapa[r.opl_id] ||= {})[r.pergunta_id] = { opcao_id: r.opcao_id, automatica: !!r.automatica }; });
+    // `opcao_id` devolve o valor já unificado ("q:4" nas perguntas de quantidade): quem lê trata como texto opaco
+    (data || []).forEach((r: any) => { (mapa[r.opl_id] ||= {})[r.pergunta_id] = { opcao_id: valorSalvo(r), automatica: !!r.automatica }; });
   }
   return mapa;
 }

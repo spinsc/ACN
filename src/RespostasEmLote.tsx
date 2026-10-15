@@ -33,13 +33,18 @@ import { mdiCarOutline, mdiAlertOutline } from '@mdi/js';
 import {
   perguntasDaVenda, donaDaPergunta, ehPerguntaDaOp, respostasAutomaticas, itensConjunto, vendaTemConjunto,
   podarRespostas, respostasDasOps,
+  perguntaCabeNaVenda, ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
 } from './ConfigEstrutura';
 
 const idsVendidos = (o) => (o?.itens_vendidos || []).map(v => v.item_id).filter(Boolean).map(String);
 // 15/10/2026: a pergunta da OP (sem item) vale para todas as OPs; as demais, só para as que venderam o item dono
-const perguntasDaOp = (perguntas, o) => { const ids = new Set(idsVendidos(o)); return perguntas.filter(p => ehPerguntaDaOp(p) || ids.has(String(p.item_id))); };
+// Etapa 2 (15/10/2026): e só as que a condição "só quando estes itens foram vendidos juntos" deixa valer para a venda desta OP
+const perguntasDaOp = (perguntas, o) => {
+  const ids = new Set(idsVendidos(o));
+  return perguntas.filter(p => (ehPerguntaDaOp(p) || ids.has(String(p.item_id))) && perguntaCabeNaVenda(p, ids));
+};
 const restringir = (ps, mapa) => { const ok = new Set(ps.map(p => p.id)); const r = {}; Object.entries(mapa || {}).forEach(([k, v]) => { if (ok.has(k)) r[k] = v; }); return r; };
-const rotuloDe = (perguntas, opcaoId) => { for (const p of perguntas) { const o = (p.opcoes || []).find(x => x.id === opcaoId); if (o) return o.rotulo; } return '—'; };
+const rotuloDe = (perguntas, opcaoId) => { const q = valorDeQuantidade(opcaoId); if (q !== null) return String(q); for (const p of perguntas) { const o = (p.opcoes || []).find(x => x.id === opcaoId); if (o) return o.rotulo; } return '—'; };
 
 /** Uma linha de OPs para o cabeçalho: "1673.2609/01 … 1673.2609/39 (39 OPs)". */
 const resumoOps = (ops) => {
@@ -67,12 +72,20 @@ function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
               <span className="acn-rpl-item">({donaDaPergunta(p)})</span>
               {ehAuto && <span className="acn-rpl-auto">o sistema já sabia</span>}
             </div>
-            {(p.opcoes || []).length > 0 && (
+            {ehQuantidade(p) && (
+              <input className="acn-input acn-rpl-qtd" type="text" inputMode="numeric" aria-label={p.texto} placeholder="quantidade"
+                value={valorDeQuantidade(atual) ?? ''}
+                onChange={(e) => {
+                  const d = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  onEscolher(p, d === '' ? null : { id: respostaDeQuantidade(Number(d)) });
+                }} />
+            )}
+            {!ehQuantidade(p) && (p.opcoes || []).length > 0 && (
               <Chips ativo={atual || ''} desativado={ehAuto} rotulo={p.texto}
                 onChange={(id) => onEscolher(p, (p.opcoes || []).find(x => x.id === id))}
                 itens={(p.opcoes || []).map(o => ({ id: o.id, rotulo: o.rotulo }))} />
             )}
-            {!(p.opcoes || []).length && <span className="acn-rpl-sem">pergunta sem respostas cadastradas</span>}
+            {!ehQuantidade(p) && !(p.opcoes || []).length && <span className="acn-rpl-sem">pergunta sem respostas cadastradas</span>}
             {nota && <div className="acn-rpl-nota">{nota}</div>}
           </div>
         );
@@ -140,8 +153,10 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
     return comum;
   })();
 
-  const escolherPadrao = (p, o) => setPadrao(r => ({ ...r, [p.id]: o.id }));
-  const escolherExcecao = (op, p, o) => setExcecoes(r => ({ ...r, [op.id]: { ...(r[op.id] || {}), [p.id]: o.id } }));
+  // `o` nulo = o campo de quantidade foi esvaziado: a escolha sai do padrão/da exceção
+  const semChave = (mapa, id) => { const c = { ...mapa }; delete c[id]; return c; };
+  const escolherPadrao = (p, o) => setPadrao(r => o ? ({ ...r, [p.id]: o.id }) : semChave(r, p.id));
+  const escolherExcecao = (op, p, o) => setExcecoes(r => ({ ...r, [op.id]: o ? { ...(r[op.id] || {}), [p.id]: o.id } : semChave(r[op.id] || {}, p.id) }));
   const voltarAoPadrao = (op) => { setExcecoes(r => { const c = { ...r }; delete c[op.id]; return c; }); setAbertas(a => ({ ...a, [op.id]: false })); };
 
   // quantas OPs já respondem a pergunta e como — só informação, para não trocar às cegas
@@ -171,7 +186,7 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
       for (const p of ps) {
         const nova = finais[p.id]; const antes = salvas[o.id]?.[p.id];
         if (!nova || (antes && antes.opcao_id === nova)) continue;
-        linhas.push({ opl_id: o.id, item_id: p.item_id, pergunta_id: p.id, opcao_id: nova,
+        linhas.push({ opl_id: o.id, item_id: p.item_id, pergunta_id: p.id, ...camposDaResposta(nova),
           automatica: !(p.id in explicitas), respondido_por: por, respondido_em: agora });
         desta.push(`${p.texto} → ${rotuloDe(perguntas, nova)}`);
         if (antes) { trocadas++; opsComTroca.add(o.id); }
@@ -263,7 +278,9 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo }) {
                     <div className="acn-rpl-padrao-tit">
                       PARA TODAS AS {total} OPs
                     </div>
-                    <ListaDePerguntas perguntas={perguntas} efetivas={efetivaPadrao} auto={autoComum}
+                    {/* só as perguntas que alguma destas OPs comporta: a condição "itens vendidos juntos" tira as demais (etapa 2) */}
+                    <ListaDePerguntas perguntas={perguntas.filter(p => aplicaveis.some(o => perguntasDaOp(perguntas, o).some(x => x.id === p.id)))}
+                      efetivas={efetivaPadrao} auto={autoComum}
                       onEscolher={escolherPadrao} resumo={resumoSalvo} />
                   </div>
 
