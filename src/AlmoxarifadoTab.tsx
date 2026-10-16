@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
+import { LinkLote } from './OpLote';
 import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERECO } from './EnderecoEntrega';
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
@@ -1045,7 +1046,7 @@ Embalar e enviar assim mesmo?`)) return;
                         <tr className="acn-linha-marca">
                           <td>{fmtDt(rep.data_entrada)}</td>
                           <td>
-                            <strong className="acn-alm-lote"><Icone path={mdiLinkVariant} size={14} /> {base}</strong>
+                            <LinkLote base={base} currentUser={currentUser} />
                             <div className="acn-alm-lote-selo">
                               <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades

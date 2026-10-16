@@ -18,6 +18,7 @@ import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { diaBR } from './Interface';
 import { podeVerValores } from './utils/permissoes';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
+import { LinkOpl } from './AcnTabShared';
 
 const fmtD  = (d) => diaBR(d);
 const fmtDH = (d) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -195,7 +196,8 @@ const Secao = ({ titulo, cor = '#1e293b', children }) => (
 const th = { textAlign: 'left', padding: '3px 6px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' };
 const td = { padding: '4px 6px', fontSize: 11, borderTop: '1px solid #f1f5f9', verticalAlign: 'top' };
 
-export function DossieLote({ base, onVoltar = null }) {
+/** `semTitulo`: quando embutido na janela do lote (OpLote.tsx), que já tem o título; cada unidade da tabela abre o detalhe da sua OP. */
+export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState('');
   const [progresso, setProgresso] = useState({ feitas: 0, total: 0 });
@@ -230,10 +232,10 @@ export function DossieLote({ base, onVoltar = null }) {
   const r = resumirLote(dados);
   const o = r.primeira;
   return (
-    <div id="dossie-lote" style={{ fontSize: 12 }}>
+    <div id="dossie-lote" style={{ fontSize: 12, gridColumn: '1 / -1', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 800 }}>📦 Lote {r.base}</div>
+          {!semTitulo && <div style={{ fontSize: 17, fontWeight: 800 }}>📦 Lote {r.base}</div>}
           <div style={{ fontSize: 11, color: '#64748b' }}>{o.cliente_nome || '—'} · {r.n} unidade(s)</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -295,7 +297,7 @@ export function DossieLote({ base, onVoltar = null }) {
             <thead><tr><th style={th}>Unid.</th><th style={th}>Modelo</th><th style={th}>Chassi</th><th style={th}>Placa</th><th style={th}>Situação</th><th style={th}>Onde está</th><th style={th}>Há</th><th style={th}>Pend.</th></tr></thead>
             <tbody>{r.unidades.map(u => (
               <tr key={u.id}>
-                <td style={td}><strong>/{u.sufixo}</strong></td><td style={td}>{u.modelo || '—'}</td><td style={td}>{u.chassi || '—'}</td><td style={td}>{u.placa || '—'}</td>
+                <td style={td}><LinkOpl opl={u.opl} currentUser={usuario} /></td><td style={td}>{u.modelo || '—'}</td><td style={td}>{u.chassi || '—'}</td><td style={td}>{u.placa || '—'}</td>
                 <td style={td}>{u.situacao}</td><td style={td}>{u.onde}</td><td style={td}>{u.desde}</td>
                 <td style={{ ...td, color: u.pendencias ? '#b45309' : undefined, fontWeight: u.pendencias ? 700 : 400 }}>{u.pendencias || '—'}</td>
               </tr>

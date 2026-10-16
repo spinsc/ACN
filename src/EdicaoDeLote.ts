@@ -108,9 +108,12 @@ export async function aplicarNoLote({ op, mudados, usuario, ehGerente, origem }:
 }
 
 /** Frase para a pessoa: o que aconteceu nas outras unidades. */
-export function textoDoResultadoLote(r: ResultadoLote, totalOutras: number): string {
-  if (r.erroLeitura) return `A OP aberta foi salva, mas não consegui ler as outras unidades do lote (${r.erroLeitura}). Nada mudou nelas.`;
-  const partes = [`Lote: ${r.atualizadas.length} de ${totalOutras} outras unidades alteradas`];
+export function textoDoResultadoLote(r: ResultadoLote, totalOutras: number, todas = false): string {
+  if (r.erroLeitura) return todas
+    ? `Não consegui ler as unidades do lote (${r.erroLeitura}). Nada foi alterado.`
+    : `A OP aberta foi salva, mas não consegui ler as outras unidades do lote (${r.erroLeitura}). Nada mudou nelas.`;
+  // `todas`: a mudança veio da janela do lote (nenhuma unidade é "a aberta")
+  const partes = [`Lote: ${r.atualizadas.length} de ${totalOutras} ${todas ? '' : 'outras '}unidades alteradas`];
   if (r.iguais) partes.push(`${r.iguais} já estavam assim`);
   if (r.puladas.length) partes.push(`${r.puladas.length} não mexidas (${[...new Set(r.puladas.map(p => p.motivo))].join('; ')})`);
   if (r.falhas.length) partes.push(`FALHOU em ${r.falhas.length}: ${r.falhas.slice(0, 3).join(' | ')}`);

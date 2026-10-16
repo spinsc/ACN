@@ -18,6 +18,7 @@ import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
 import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial, CAMPOS_OPL_COMERCIAL } from './OplEdicao';
 import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote } from './EdicaoDeLote';
+import { LinkLote } from './OpLote';
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -3661,7 +3662,7 @@ function ColunaRolavel({ children }: any) {
                                   })} />
                               </td>
                               <td className="acn-lic-nowrap">
-                                <span className="acn-crm-opl-lote-base"><Icone path={mdiLinkVariant} size={13} />{base}</span>
+                                <LinkLote base={base} currentUser={currentUser} className="acn-crm-opl-lote-base" tag="span" tamanho={13} />
                                 <div>
                                   <Selo familia="marca" ponto={false}>LOTE — {irmaos.length} unidades</Selo>
                                 </div>

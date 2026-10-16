@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
+import { LinkLote } from './OpLote';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
 import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp } from './OpPendencias';
 import { PinturaCampos } from './PinturaSerralheria';
@@ -768,7 +769,7 @@ export default function PCPTab({ currentUser }) {
                         <tr className="acn-linha-marca">
                           <td>{fmtDt(rep.data_entrada)}</td>
                           <td>
-                            <strong className="acn-alm-lote"><Icone path={mdiLinkVariant} size={14} /> {base}</strong>
+                            <LinkLote base={base} currentUser={currentUser} />
                             <div className="acn-eng-selo-linha">
                               <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades

@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
+import { LinkLote } from './OpLote';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
@@ -764,7 +765,7 @@ export default function EngenhariaTab({ currentUser }) {
                         <tr className="acn-eng-linha acn-linha-marca">
                           <td>{fmtDia(rep.data_entrada)}</td>
                           <td>
-                            <strong className="acn-alm-lote"><Icone path={mdiLinkVariant} size={14} /> {base}</strong>
+                            <LinkLote base={base} currentUser={currentUser} />
                             <div className="acn-eng-selo-linha acn-selos">
                               <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades

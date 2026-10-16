@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -10,6 +10,7 @@ import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'rea
 // imports, a volta é por import dinâmico (que de quebra deixa o jsPDF fora do
 // pacote principal, só baixando quando alguém abre o dossiê).
 const ModalDossieOp = lazy(() => import('./OpDossie').then(m => ({ default: m.ModalDossieOp })));
+const ModalLote = lazy(() => import('./OpLote').then(m => ({ default: m.ModalLote })));
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -797,6 +798,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // Lote: só mostra o "Resumo do lote" se houver unidades /NN desta base
   const [qtdLote, setQtdLote] = useState(0);
   const [verResumoLote, setVerResumoLote] = useState(false);
+  const [abrirLote, setAbrirLote] = useState(false);   // a janela do lote inteiro (OpLote.tsx), aberta do detalhe de uma unidade
   useEffect(() => {
     if (!opl?.opl) { setQtdLote(0); return; }
     buscarUnidadesDoLote(opl.opl).then(u => setQtdLote(u.length));
@@ -946,6 +948,11 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
   return (
     <div className="acn-opl-overlay">
+      {abrirLote && (
+        <Suspense fallback={null}>
+          <ModalLote base={baseDoLote(opl.opl)} currentUser={usuario} onClose={() => setAbrirLote(false)} />
+        </Suspense>
+      )}
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
@@ -984,6 +991,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <MenuAcoes rotulo="Mais ações da OP" itens={[
               { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
               { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },
+              { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
               { rotulo: `Resumo do lote (${qtdLote})`, icone: mdiFormatListNumbered, onClick: () => setVerResumoLote(true), oculto: qtdLote <= 1 },
               { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
             ]} />
