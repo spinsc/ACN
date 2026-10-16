@@ -115,6 +115,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Permissões | `utils/permissoes.ts` |
 | Estoque: saldo, reserva, reposição, baixa do kit | `Estoque.tsx` — `movimentarEstoque` (único caminho para mexer no saldo), `avisosDaReposicao`; toda função que lê devolve o erro, e leitura recusada nunca vale como "vazio" |
 | Estrutura de instalação: cobertura das regras do veículo, uso das respostas, o que apagar leva junto | `CoberturaDaEstrutura.ts` — `coberturaDoVeiculo` (usa o mesmo `avaliarRegras` da OP), `lerUsoDasRespostas`, `oQueApagarPerguntaLeva`; as peças da tela estão em `ConfigEstruturaPecas.tsx` |
+| Estrutura de instalação: gravar ou copiar regra e copiar a estrutura de um item (tudo ou nada), histórico, onde um item é usado | funções do banco `estrutura_gravar_regra`, `estrutura_copiar_regras`, `estrutura_copiar_item` e `estrutura_onde_item_e_usado`, chamadas por `ConfigEstrutura.ts` (`copiarRegras`, `copiarEstruturaDeItem`, `ondeOItemEUsado`); histórico com `registrarNaEstrutura` (módulo `estrutura` do `audit_log`) |
 
 ---
 

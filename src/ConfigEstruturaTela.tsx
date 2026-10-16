@@ -23,6 +23,15 @@
 //   • COBERTURA: toda combinação de respostas tem regra? Usa o mesmo cálculo da OP, então "a definir" aqui é "a definir" lá (CoberturaDaEstrutura.ts);
 //   • SIMULADOR: monta uma OP de mentira e mostra o material que a conta oficial devolveria (só leitura);
 //   • apagar pergunta ou resposta diz ANTES o que leva junto (o banco apaga o material por resposta e as respostas já dadas nas OPs; se uma regra a usa, ele recusa).
+//
+// FASE 2 de 16/10/2026 (banco; pedido do usuário: "segue"): criar, editar e copiar regra, e copiar a estrutura de um item, passam a ser UMA chamada a uma função do banco
+// (`estrutura_gravar_regra`, `estrutura_copiar_regras`, `estrutura_copiar_item`): tudo ou nada, sem o desfazer feito pelo navegador; as listas de itens de "aparece só com…" e
+// "automática se…" só aceitam item que existe no cadastro (gatilho do banco); cada mudança grava uma linha de histórico (`registrarNaEstrutura`, módulo "estrutura"); e, ao
+// escolher o item vendido, a tela diz onde ele já é usado (`estrutura_onde_item_e_usado`).
+//
+// FASE 3 de 16/10/2026, versão que NÃO mexe em dado nem na conta da OP: "material por resposta" (`veiculo_item_materiais`) e "regras do veículo" não são a mesma coisa — o material por item
+// MULTIPLICA pela quantidade vendida do item (vendeu 2, entra o dobro) e a regra é POR CARRO (`montarMaterial` × `avaliarRegras`); trocar um pelo outro mudaria a lista de material das OPs
+// futuras. Por isso os dois ficam, e a tela passou a (a) dizer a diferença de quantidade nos dois lugares e (b) mostrar, ao lado das regras, o material por item do veículo, com atalho para abrir o item.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
@@ -31,7 +40,7 @@ import { SelectBusca, Botao, Selo, Faixa } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiChevronDown, mdiAlertOutline, mdiClose, mdiPlus, mdiPencilOutline, mdiContentCopy, mdiTrashCanOutline } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade, copiarEstruturaDeItem, resumoDaCopia } from './ConfigEstrutura';
+import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade, copiarEstruturaDeItem, resumoDaCopia, registrarNaEstrutura, ondeOItemEUsado, fraseDeOndeOItemEUsado, resumoDoMaterialPorItem } from './ConfigEstrutura';
 import { coberturaDoVeiculo, perguntasSemRegra, lerUsoDasRespostas, usosDaResposta, oQueApagarRespostaLeva, oQueApagarPerguntaLeva, fraseDoQueLeva } from './CoberturaDaEstrutura';
 import { EditorDeItens, FraseDaRegra, CoberturaDasRegras, SimuladorDaEstrutura, rotuloDoItem } from './ConfigEstruturaPecas';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -71,6 +80,10 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   const itens = useItens();
   const loteRegras = useRef(0);
   const loteMateriais = useRef(0);
+  const [usoDoItem, setUsoDoItem] = useState(null);           // { frase } ou { falha }: onde o item escolhido já é usado na estrutura (Fase 2, 16/10/2026)
+  const loteUsoItem = useRef(0);
+  const [matPorItem, setMatPorItem] = useState(null);         // { lista } ou { falha }: o material por item do veículo escolhido (Fase 3, 16/10/2026)
+  const loteMatPorItem = useRef(0);
   // 18d (13/10/2026): quem desenvolve o item cadastra a estrutura dele no veículo (decisão do usuário em 12/10/2026) — a Engenharia entra junto do PCP
   const pode = ehAdminOuGerente(currentUser) || ['PCP', 'Engenharia'].includes(String(currentUser?.perfil || '').trim());
   const item = itens.find(i => i.id === itemId);
@@ -102,6 +115,22 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
     try { setUso(await lerUsoDasRespostas()); setFalhaUso(''); }
     catch (e) { setUso(null); setFalhaUso(e?.message || 'falha ao ler o uso das respostas'); }
   };
+  // leitura recusada nunca vale como "não é usado em lugar nenhum": a tela diz que não conseguiu conferir
+  const recUsoDoItem = async () => {
+    const meu = ++loteUsoItem.current;
+    if (!itemId) { setUsoDoItem(null); return; }
+    try { const u = await ondeOItemEUsado(itemId); if (meu === loteUsoItem.current) setUsoDoItem({ frase: fraseDeOndeOItemEUsado(u) }); }
+    catch (e) { if (meu === loteUsoItem.current) setUsoDoItem({ falha: e?.message || 'falha ao ler' }); }
+  };
+  // leitura recusada nunca vale como "nenhum item tem material": a tela diz que não conseguiu ler
+  const recMatPorItem = async () => {
+    const meu = ++loteMatPorItem.current;
+    if (!veiculoId) { setMatPorItem(null); return; }
+    try { const l = await resumoDoMaterialPorItem(veiculoId); if (meu === loteMatPorItem.current) setMatPorItem({ lista: l }); }
+    catch (e) { if (meu === loteMatPorItem.current) setMatPorItem({ falha: e?.message || 'falha ao ler' }); }
+  };
+  // do resumo do veículo para o item: escolhe o item e leva a tela até o quadro dele
+  const abrirItem = (id) => { setItemId(id); setTimeout(() => document.getElementById('acn-cet-item')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); };
   useEffect(() => { recPerguntasOp(); recPerguntasTodas(); recUso(); }, []);
   // aberta pelo atalho da Engenharia (veículo já escolhido): o seletor só sabe o id, então o nome vem de uma leitura — é ele que aparece em "Regras de …" e na cópia de regras
   useEffect(() => {
@@ -109,13 +138,13 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
     supabase.from('veiculos').select('*').eq('id', veiculoInicial).maybeSingle()
       .then(({ data }) => { if (data) setVeiculo(v => (v.id === veiculoInicial && !v.nome ? { id: v.id, nome: nomeDoVeiculo(data) } : v)); });
   }, []);
-  useEffect(() => { recPerguntas(); recMateriais(); }, [itemId]);
-  useEffect(() => { recMateriais(); recRegras(); }, [veiculoId]);
+  useEffect(() => { recPerguntas(); recMateriais(); recUsoDoItem(); }, [itemId]);
+  useEffect(() => { recMateriais(); recRegras(); recMatPorItem(); }, [veiculoId]);
 
   // depois de mexer em pergunta ou resposta: tudo o que depende delas se atualiza (as regras montam as condições a partir delas)
-  const aposMudarPerguntas = () => { recPerguntas(); recPerguntasOp(); recPerguntasTodas(); recUso(); };
-  const aposMudarMaterial = () => { recMateriais(); recUso(); };
-  const aposMudarRegras = () => { recRegras(); recUso(); };
+  const aposMudarPerguntas = () => { recPerguntas(); recPerguntasOp(); recPerguntasTodas(); recUso(); recUsoDoItem(); };
+  const aposMudarMaterial = () => { recMateriais(); recUso(); recUsoDoItem(); recMatPorItem(); };
+  const aposMudarRegras = () => { recRegras(); recUso(); recUsoDoItem(); };
 
   const cobertura = useMemo(() => (veiculoId ? coberturaDoVeiculo(regras, perguntasTodas) : { eixos: [], linhas: [], total: 0, truncado: false, condicionais: [] }), [veiculoId, regras, perguntasTodas]);
   const semRegra = useMemo(() => (veiculoId ? perguntasSemRegra(regras, perguntasTodas) : []), [veiculoId, regras, perguntasTodas]);
@@ -158,9 +187,12 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
               titulo="PERGUNTAS DA OP"
               ajuda="Valem para a OP inteira, qualquer que seja o item vendido (ex.: caracterizada ou descaracterizada, bateria frontal ou traseira). O vendedor responde na abertura da OP; só aparecem quando a venda leva o Conjunto Elétrico." />}
 
-        <label className="acn-label">ITEM VENDIDO</label>
+        <label className="acn-label" id="acn-cet-item">ITEM VENDIDO</label>
         <SelectBusca opcoes={opcoesDeItem(itens)} valor={itemId} onChange={setItemId}
           placeholder="Procure o item (nome ou código)" />
+        {itemId && usoDoItem && (usoDoItem.falha
+          ? <Faixa tom="atencao">Não foi possível conferir onde este item é usado ({usoDoItem.falha}).</Faixa>
+          : <div className="acn-ajuda">{usoDoItem.frase ? `Este item aparece em: ${usoDoItem.frase}.` : 'Este item ainda não aparece em nenhuma pergunta, regra ou material da estrutura.'}</div>)}
 
         {item && (
           <>
@@ -183,7 +215,7 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
                 {/* 15/10/2026: leva perguntas, material por veículo e regras de um item para este (ex.: de uma variante de slimled para outra) */}
                 {pode && (
                   <CopiarEstruturaDeItem itemId={itemId} itens={itens} veiculoId={veiculoId} currentUser={currentUser}
-                    aoCopiar={() => { aposMudarPerguntas(); recMateriais(); recRegras(); }} />
+                    aoCopiar={() => { aposMudarPerguntas(); recMateriais(); recRegras(); recMatPorItem(); }} />
                 )}
               </>
             )}
@@ -193,7 +225,7 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
     </div>
     {/* etapa 3 (15/10/2026): chicote e suporte por regra "se… então…", sempre de um veículo */}
     <RegrasDoVeiculo veiculo={veiculo} regras={regras} falha={falhaCobertura} perguntas={perguntasTodas} itens={itens}
-      pode={pode} currentUser={currentUser} aoMudar={aposMudarRegras} pedidoDeRegra={pedidoDeRegra} />
+      pode={pode} currentUser={currentUser} aoMudar={aposMudarRegras} pedidoDeRegra={pedidoDeRegra} matPorItem={matPorItem} aoAbrirItem={abrirItem} />
 
     <div className="sec-card acn-cet">
       <div className="sec-hdr">
@@ -258,7 +290,12 @@ function CopiarEstruturaDeItem({ itemId, itens, veiculoId, currentUser, aoCopiar
     setOcupado(true);
     const r = await copiarEstruturaDeItem({ origemId: origem, destinoId: itemId, opcoes: { ...marcas, veiculoId: veiculoDoEscopo }, currentUser });
     setOcupado(false);
-    if (r.erro) { alert('A cópia falhou e o que ela tinha criado foi desfeito: ' + r.erro); return; }
+    if (r.erro) { alert('A cópia falhou e nada foi copiado (a cópia é tudo ou nada): ' + r.erro); return; }
+    registrarNaEstrutura(currentUser, {
+      entidade: 'cadastro_itens', id: itemId, acao: 'CREATE',
+      descricao: `Copiou para "${nome(itemId)}" o que havia em "${nome(origem)}": ${r.perguntas} pergunta(s) com ${r.respostas} resposta(s), ${r.materiais} linha(s) de material e ${r.regras} regra(s)`,
+      detalhes: { origem, destino: itemId, veiculo: veiculoDoEscopo, perguntas: r.perguntas, respostas: r.respostas, materiais: r.materiais, regras: r.regras, materiaisSemResposta: r.materiaisSemResposta, regrasPuladas: r.regrasPuladas },
+    });
     const avisos = [
       r.materiaisSemResposta ? `${r.materiaisSemResposta} linha(s) de material que dependem de uma resposta não foram copiadas (copie também as perguntas)` : '',
       r.regrasPuladas ? `${r.regrasPuladas} regra(s) que usam perguntas do item de origem não foram copiadas (copie também as perguntas)` : '',
@@ -295,10 +332,11 @@ function CopiarEstruturaDeItem({ itemId, itens, veiculoId, currentUser, aoCopiar
  * Define qual chicote e qual suporte entram, a partir das respostas da OP (caracterizada, bateria), de itens vendidos juntos (sirene S100W…) e de
  * quantidades (slimled: 2 na frente). Sempre por veículo, como decidido com o usuário.
  *
- * Editar uma regra (16/10/2026): a regra NOVA é gravada primeiro e só depois a antiga é apagada, para nenhuma regra mudar de sentido por acidente — se a gravação
- * falhar, a antiga segue valendo. Se a nova gravar e a antiga não apagar, a tela diz (as duas valendo somam o material).
+ * Editar uma regra (16/10/2026): a regra NOVA é gravada e a antiga apagada na MESMA transação do banco (`estrutura_gravar_regra`, Fase 2): ou troca inteira, ou nada
+ * muda e a antiga segue valendo. (Na Fase 1 eram passos soltos feitos pelo navegador, e uma queda entre a nova e o apagar da antiga deixava as duas valendo, com o material
+ * somando em dobro.)
  */
-function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, currentUser, aoMudar, pedidoDeRegra }) {
+function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, currentUser, aoMudar, pedidoDeRegra, matPorItem, aoAbrirItem }) {
   const [nome, setNome] = useState('');
   const [condicoes, setCondicoes] = useState([]);
   const [saidas, setSaidas] = useState([]);
@@ -329,6 +367,8 @@ function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, curre
     return opcoesDeResposta.find(o => o.id === c.opcao_id)?.rotulo || '(resposta)';
   };
   const rotuloMaterialSalvo = (m) => (m.material ? `${m.material.codigo ? m.material.codigo + ' — ' : ''}${m.material.nome}` : rotuloItem(m.material_item_id));
+  // a regra em uma frase de texto, para o histórico (a tela mostra a mesma frase com etiquetas, em FraseDaRegra)
+  const fraseDaRegraTexto = (conds, mats) => `SE ${(conds || []).map(textoCondicao).join(' E ')} ENTÃO ${(mats || []).map(m => `${m.acao === 'remover' ? 'tira' : 'usa'} ${Number(m.quantidade)} × ${rotuloMaterialSalvo(m)}`).join(' + ')}`;
 
   const adicionarCondicao = () => {
     let nova = null;
@@ -373,22 +413,31 @@ function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, curre
         && !await confirmar('Este veículo já tem uma regra com exatamente estas condições. Criar outra assim mesmo? O material das duas soma.')) return;
     setOcupado(true);
     try {
-      const { data: nova, error } = await supabase.from('veiculo_regras')
-        .insert([{ veiculo_id: veiculo.id, nome: nome.trim() || null, ordem: editando ? editando.ordem : regras.length, criado_por_nome: currentUser?.nome || '—' }]).select('id').single();
-      if (error || !nova?.id) { alert('Não foi possível criar a regra: ' + (error?.message || 'sem resposta do banco')); return; }
-      const ec = await supabase.from('veiculo_regra_condicoes').insert(condicoes.map(c => ({ regra_id: nova.id, ...c })));
-      const em = ec.error ? null : await supabase.from('veiculo_regra_materiais').insert(saidas.map((s, i) => ({ regra_id: nova.id, ...s, ordem: i })));
-      const falhou = ec.error || em?.error;
-      if (falhou) {
-        // regra sem condição ou sem material é pior que nenhuma: desfaz só o que ESTA ação acabou de criar
-        await supabase.from('veiculo_regras').delete().eq('id', nova.id);
-        alert('Não foi possível gravar a regra: ' + falhou.message + '\n\nNada foi criado' + (editando ? '; a regra antiga continua valendo' : '') + '; tente de novo.');
+      // Fase 2 (16/10/2026): regra + condições + materiais (e, ao editar, o apagar da antiga) numa transação só, no banco — regra sem condição ou sem material é pior que
+      // nenhuma (vale para toda OP do veículo), e as duas regras valendo somam o material em dobro; com a função, nenhum dos dois sobra por queda de internet
+      const antiga = editando ? regras.find(r => r.id === editando.id) : null;
+      const { data: novaId, error } = await supabase.rpc('estrutura_gravar_regra', {
+        p_veiculo_id: veiculo.id, p_nome: nome.trim() || null, p_ordem: editando ? editando.ordem : regras.length,
+        p_condicoes: condicoes, p_materiais: saidas, p_criado_por_nome: currentUser?.nome || '—', p_substitui_id: editando?.id || null,
+      });
+      if (error || !novaId) {
+        alert('Não foi possível gravar a regra: ' + (error?.message || 'sem resposta do banco') + '\n\nNada foi gravado' + (editando ? '; a regra antiga continua valendo' : '') + '. Tente de novo.');
         return;
       }
-      // editar: só agora, com a nova já gravada, a antiga sai
+      const frase = fraseDaRegraTexto(condicoes, saidas);
+      const deVeiculo = veiculo.nome || 'veículo';
+      const registroDaNova = registrarNaEstrutura(currentUser, {
+        entidade: 'veiculo_regras', id: novaId, acao: 'CREATE',
+        descricao: `${editando ? 'Editou' : 'Criou'} a regra "${nome.trim() || 'sem nome'}" de ${deVeiculo}: ${frase}`,
+        detalhes: { veiculo_id: veiculo.id, substitui: editando?.id || null },
+      });
       if (editando) {
-        const { error: erroAntiga } = await supabase.from('veiculo_regras').delete().eq('id', editando.id);
-        if (erroAntiga) alert('A regra nova foi gravada, mas a antiga NÃO foi apagada (' + erroAntiga.message + '). Apague a antiga na lista: com as duas valendo, o material soma em dobro.');
+        // um depois do outro (sem travar a tela): o histórico sai na ordem em que as coisas aconteceram — duas gravações soltas podiam chegar trocadas
+        registroDaNova.then(() => registrarNaEstrutura(currentUser, {
+          entidade: 'veiculo_regras', id: editando.id, acao: 'DELETE',
+          descricao: `Regra "${editando.nome || 'sem nome'}" de ${deVeiculo} trocada pela versão editada: ${antiga ? fraseDaRegraTexto(antiga.condicoes, antiga.materiais) : '(não foi possível ler a regra antiga)'}`,
+          detalhes: { veiculo_id: veiculo.id, substituida_por: novaId },
+        }));
       }
       limpar();
       await aoMudar();
@@ -399,6 +448,11 @@ function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, curre
     if (!await confirmar(`Apagar a regra "${r.nome || 'sem nome'}" deste veículo?\n\nAs OPs já criadas não mudam; as próximas deixam de receber o material dela.`)) return;
     const { error } = await supabase.from('veiculo_regras').delete().eq('id', r.id);
     if (error) { alert('Não foi possível apagar a regra: ' + error.message); return; }
+    registrarNaEstrutura(currentUser, {
+      entidade: 'veiculo_regras', id: r.id, acao: 'DELETE',
+      descricao: `Apagou a regra "${r.nome || 'sem nome'}" de ${veiculo.nome || 'veículo'}: ${fraseDaRegraTexto(r.condicoes, r.materiais)}`,
+      detalhes: { veiculo_id: veiculo.id },
+    });
     if (editando?.id === r.id) limpar();
     aoMudar();
   };
@@ -414,7 +468,14 @@ function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, curre
     setOcupado(true);
     const r = await copiarRegras(origemId, veiculo.id, currentUser);
     setOcupado(false);
-    if (r.erro) alert(`Foram copiadas ${r.copiadas} de ${qtd} regra(s). Parou em: ${r.erro}`);
+    if (r.erro) alert(`Não foi possível copiar as regras: ${r.erro}\n\nNada foi copiado (a cópia é tudo ou nada); tente de novo.`);
+    else {
+      registrarNaEstrutura(currentUser, {
+        entidade: 'veiculo_regras', id: veiculo.id, acao: 'CREATE',
+        descricao: `Copiou ${r.copiadas} regra(s) de "${origem?.nome || 'outro veículo'}" para "${veiculo.nome || 'este veículo'}"`,
+        detalhes: { origem: origemId, destino: veiculo.id, copiadas: r.copiadas },
+      });
+    }
     aoMudar();
   };
 
@@ -454,11 +515,25 @@ function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, curre
               </div>
             ))}
 
+            <div className="acn-cet-sec espaco">MATERIAL POR ITEM NESTE VEÍCULO{matPorItem?.lista?.length ? ` (${matPorItem.lista.reduce((n, m) => n + m.fixas + m.porResposta, 0)} linha(s) em ${matPorItem.lista.length} item(ns))` : ''}</div>
+            <div className="acn-ajuda">
+              Este material é cadastrado dentro de cada item (no quadro de cima) e <b>multiplica pela quantidade vendida</b> do item; as regras acima valem <b>por carro</b>.
+              Os dois somam na lista de material da OP.
+            </div>
+            {matPorItem?.falha && <Faixa tom="atencao">Não foi possível ler o material por item deste veículo ({matPorItem.falha}).</Faixa>}
+            {matPorItem?.lista && !matPorItem.lista.length && <div className="acn-ajuda">Nenhum item tem material cadastrado neste veículo.</div>}
+            {(matPorItem?.lista || []).slice().sort((a, b) => rotuloItem(a.item_id).localeCompare(rotuloItem(b.item_id))).map(m => (
+              <div key={m.item_id} className="acn-cet-linha">
+                <span className="acn-cet-mat-nome"><b>{rotuloItem(m.item_id)}</b> · {m.fixas} sempre, {m.porResposta} conforme a resposta</span>
+                <Botao variante="discreto" pequeno onClick={() => aoAbrirItem(m.item_id)}>Abrir o item</Botao>
+              </div>
+            ))}
+
             {pode && (
               <>
                 <div className="acn-cet-form" ref={refForm}>
                   <label className="acn-label"><Icone path={mdiPlus} size={13} /> {editando ? `EDITANDO A REGRA "${(editando.nome || 'SEM NOME').toUpperCase()}"` : 'NOVA REGRA NESTE VEÍCULO'}</label>
-                  {editando && <div className="acn-ajuda">Ao salvar, a regra nova é gravada primeiro e só então a antiga sai. Se algo falhar, a antiga continua valendo.</div>}
+                  {editando && <div className="acn-ajuda">Ao salvar, a regra nova entra e a antiga sai de uma vez só. Se algo falhar, nada muda e a antiga continua valendo.</div>}
                   <input className="acn-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome (opcional). Ex.: Chicote principal — caracterizado, bateria frontal" />
 
                   <div className="acn-cet-sec espaco">SE (todas as condições)</div>
@@ -588,18 +663,32 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
       : daOp ? 'Qual pergunta o vendedor deve responder sobre a OP?\n\nEx.: "O veículo é caracterizado?"'
         : 'Qual pergunta o vendedor deve responder sobre o carro?\n\nEx.: "Tem hack de teto?"', '');
     if (!texto?.trim()) return;
-    const { error } = await supabase.from('item_perguntas').insert([{
+    const { data: nova, error } = await supabase.from('item_perguntas').insert([{
       item_id: itemId || null, opcao_pai_id: opcaoPaiId, texto: texto.trim(), ordem: perguntas.length,
       tipo, criado_por_nome: currentUser?.nome || '—',
-    }]);
+    }]).select('id').single();
     if (error) { alert('Não foi possível criar: ' + error.message); return; }
+    if (nova?.id) {
+      registrarNaEstrutura(currentUser, {
+        entidade: 'item_perguntas', id: nova.id, acao: 'CREATE',
+        descricao: `Criou a pergunta ${tipo === 'quantidade' ? 'de quantidade ' : ''}"${texto.trim()}" (${daOp ? 'da OP' : rotuloDoItem(itens, itemId)}${opcaoPaiId ? ', só depois de uma resposta' : ''})`,
+        detalhes: { item_id: itemId || null, opcao_pai_id: opcaoPaiId, tipo },
+      });
+    }
     aoMudar();
   };
   const addOpcao = async (perguntaId, qtd) => {
     const rot = await pedirTexto('Resposta possível:\n\nEx.: "Tem, hack alto"', '');
     if (!rot?.trim()) return;
-    const { error } = await supabase.from('item_pergunta_opcoes').insert([{ pergunta_id: perguntaId, rotulo: rot.trim(), ordem: qtd }]);
+    const { data: nova, error } = await supabase.from('item_pergunta_opcoes').insert([{ pergunta_id: perguntaId, rotulo: rot.trim(), ordem: qtd }]).select('id').single();
     if (error) { alert('Não foi possível criar a resposta: ' + error.message); return; }
+    if (nova?.id) {
+      registrarNaEstrutura(currentUser, {
+        entidade: 'item_pergunta_opcoes', id: nova.id, acao: 'CREATE',
+        descricao: `Criou a resposta "${rot.trim()}" da pergunta "${perguntas.find(p => p.id === perguntaId)?.texto || ''}"`,
+        detalhes: { pergunta_id: perguntaId },
+      });
+    }
     setAbertas(s => new Set(s).add(perguntaId));
     aoMudar();
   };
@@ -624,6 +713,11 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
         : 'Não foi possível apagar: ' + error.message);
       return;
     }
+    registrarNaEstrutura(currentUser, {
+      entidade: tabela, id, acao: 'DELETE',
+      descricao: `Apagou ${oque}${partes ? ' (junto: ' + partes + ')' : ''}`,
+      detalhes: { levou: partes || null },
+    });
     aoMudar();
   };
   const apagarPergunta = (p) => apagarComAviso('item_perguntas', p.id, `a pergunta "${p.texto}"`, () => oQueApagarPerguntaLeva(p),
@@ -635,14 +729,24 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
   const salvarAutomatica = async (opcao, ids) => {
     const { error } = await supabase.from('item_pergunta_opcoes').update({ auto_quando_itens: ids.length ? ids : null }).eq('id', opcao.id);
     if (error) return 'Não foi possível gravar: ' + error.message;
+    registrarNaEstrutura(currentUser, {
+      entidade: 'item_pergunta_opcoes', id: opcao.id, acao: 'UPDATE', descricao: `Mudou "automática se…" da resposta "${opcao.rotulo}"`,
+      antes: { auto_quando_itens: listaDeItens(opcao.auto_quando_itens) }, depois: { auto_quando_itens: listaDeItens(ids) },
+    });
     setEditor(null); aoMudar(); return '';
   };
   // "aparece só com…" (etapa 2, 15/10/2026): a pergunta só aparece quando TODOS os itens escolhidos estão na venda — "somente quando 1 ou mais itens são vendidos juntos"
   const salvarCondicao = async (p, ids) => {
     const { error } = await supabase.from('item_perguntas').update({ quando_itens: ids.length ? ids : null }).eq('id', p.id);
     if (error) return 'Não foi possível gravar a condição: ' + error.message;
+    registrarNaEstrutura(currentUser, {
+      entidade: 'item_perguntas', id: p.id, acao: 'UPDATE', descricao: `Mudou "aparece só com…" da pergunta "${p.texto}"`,
+      antes: { quando_itens: listaDeItens(p.quando_itens) }, depois: { quando_itens: listaDeItens(ids) },
+    });
     setEditor(null); aoMudar(); return '';
   };
+  // o histórico guarda os itens por nome (o código sozinho não diz nada a quem lê depois)
+  const listaDeItens = (ids) => ((ids || []).length ? ids.map(id => rotuloDoItem(itens, id)).join(' + ') : '(nenhum)');
   const codigosDaCondicao = (p) => (p.quando_itens || []).map(id => itens.find(i => i.id === id)?.codigo || '?').join(', ');
   const textoUso = (n) => (n ? `${n} uso${n === 1 ? '' : 's'}` : 'sem uso');
   const textoRegras = (n) => (n ? `${n} regra${n === 1 ? '' : 's'}` : 'sem regra');
@@ -774,22 +878,38 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
 
   const add = async () => {
     if (!novo.material_item_id) { alert('Escolha o material.'); return; }
-    const { error } = await supabase.from('veiculo_item_materiais').insert([{
+    const quantidade = Number(String(novo.quantidade).replace(',', '.')) || 1;
+    const { data: nova, error } = await supabase.from('veiculo_item_materiais').insert([{
       veiculo_id: veiculoId, item_id: itemId,
       opcao_id: novo.opcao_id || null,
       material_item_id: novo.material_item_id,
-      quantidade: Number(String(novo.quantidade).replace(',', '.')) || 1,
+      quantidade,
       acao: novo.acao, ordem: materiais.length,
       criado_por_nome: currentUser?.nome || '—',
-    }]);
+    }]).select('id').single();
     if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
+    if (nova?.id) {
+      registrarNaEstrutura(currentUser, {
+        entidade: 'veiculo_item_materiais', id: nova.id, acao: 'CREATE',
+        descricao: `Material por veículo: ${novo.acao === 'remover' ? 'tira' : 'usa'} ${quantidade} × ${rotuloDoItem(itens, novo.material_item_id)} no item ${rotuloDoItem(itens, itemId)}${novo.opcao_id ? ' (' + rotuloDaOpcao(novo.opcao_id) + ')' : ''}`,
+        detalhes: { veiculo_id: veiculoId, item_id: itemId, opcao_id: novo.opcao_id || null },
+      });
+    }
     setNovo({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
     aoMudar();
   };
   const apagar = async (id) => {
     if (!await confirmar('Apagar esta linha de material?')) return;
+    const linha = materiais.find(x => x.id === id);
     const { error } = await supabase.from('veiculo_item_materiais').delete().eq('id', id);
     if (error) { alert('Não foi possível apagar: ' + error.message); return; }
+    registrarNaEstrutura(currentUser, {
+      entidade: 'veiculo_item_materiais', id, acao: 'DELETE',
+      descricao: linha
+        ? `Apagou o material por veículo: ${linha.acao === 'remover' ? 'tira' : 'usa'} ${Number(linha.quantidade)} × ${rotuloDoItem(itens, linha.material_item_id)} no item ${rotuloDoItem(itens, itemId)}${linha.opcao_id ? ' (' + rotuloDaOpcao(linha.opcao_id) + ')' : ''}`
+        : 'Apagou uma linha de material por veículo',
+      detalhes: { veiculo_id: veiculoId, item_id: itemId },
+    });
     aoMudar();
   };
   const rotuloDaOpcao = (opcaoId) => {
@@ -862,7 +982,7 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
             <Botao pequeno variante="primario" onClick={add}>Adicionar</Botao>
           </div>
           <div className="acn-ajuda">
-            "tira da lista" é para a regra que <b>desfaz</b>. Quantidade 0 tira o item inteiro.
+            "tira da lista" é para a linha que <b>desfaz</b> o que outra pôs. A quantidade é <b>por unidade vendida</b> deste item: vendeu 2, entra o dobro (nas regras de chicote e suporte, mais abaixo, a quantidade é por carro).
           </div>
         </div>
       )}

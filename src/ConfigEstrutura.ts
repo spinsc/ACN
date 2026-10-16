@@ -24,6 +24,8 @@
 // AplicarEstrutura.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { logChange } from './AuditSystem';
+import { lerPaginado } from './LerPaginado';
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
@@ -187,6 +189,23 @@ export async function itensSemEstrutura(veiculoId: string, itemIds: string[]) {
 }
 
 /**
+ * Resumo do material POR ITEM de um veículo: para cada item, quantas linhas valem sempre e quantas dependem de uma resposta. Só para a tela da Estrutura mostrar,
+ * ao lado das regras, tudo o que decide material naquele carro (Fase 3, 16/10/2026). Lança erro se a leitura falhar: lista vazia por falha pareceria "nenhum item tem material".
+ * Paginada: o banco corta em 1.000 linhas por consulta.
+ */
+export async function resumoDoMaterialPorItem(veiculoId: string) {
+  if (!veiculoId) return [];
+  const linhas = await lerPaginado(() => supabase.from('veiculo_item_materiais').select('item_id,opcao_id').eq('veiculo_id', veiculoId).order('id'));
+  const porItem = new Map<string, { item_id: string; fixas: number; porResposta: number }>();
+  for (const l of linhas) {
+    const atual = porItem.get(String(l.item_id)) || { item_id: String(l.item_id), fixas: 0, porResposta: 0 };
+    if (l.opcao_id) atual.porResposta++; else atual.fixas++;
+    porItem.set(String(l.item_id), atual);
+  }
+  return [...porItem.values()];
+}
+
+/**
  * Monta a lista de material a partir das respostas.
  *
  * Ordem importa: ADICIONA tudo antes de REMOVER qualquer coisa. Se as remoções
@@ -304,31 +323,16 @@ export async function todasAsPerguntas() {
 
 /**
  * Copia as regras de um veículo para outro (o histórico tem 91 modelos: recomeçar do zero em cada um não é viável). Soma às que o destino já tem; quem
- * chama avisa. Se uma cópia falha no meio, a regra recém-criada é desfeita (só ela — nada que já existia é apagado) e a função devolve o que conseguiu.
+ * chama avisa. Desde 16/10/2026 (Fase 2 da Estrutura) é UMA chamada à função `estrutura_copiar_regras` do banco: tudo ou nada. Antes eram 3 gravações por regra
+ * feitas pelo navegador, com desfazer manual, e uma queda no meio deixava o destino com parte das regras ("Foram copiadas 3 de 7").
  */
 export async function copiarRegras(origemId: string, destinoId: string, currentUser: any) {
   if (!origemId || !destinoId || origemId === destinoId) return { copiadas: 0, erro: 'Escolha dois veículos diferentes.' };
-  let regras: any[];
-  try { regras = await regrasDoVeiculo(origemId); } catch (e: any) { return { copiadas: 0, erro: e?.message || 'falha ao ler as regras' }; }
-  let copiadas = 0;
-  for (const r of regras) {
-    const { data: nova, error } = await supabase.from('veiculo_regras')
-      .insert([{ veiculo_id: destinoId, nome: r.nome, ordem: r.ordem, criado_por_nome: currentUser?.nome || '—' }]).select('id').single();
-    if (error || !nova?.id) return { copiadas, erro: error?.message || 'sem resposta do banco' };
-    const ec = await supabase.from('veiculo_regra_condicoes').insert(r.condicoes.map((c: any) => ({
-      regra_id: nova.id, tipo: c.tipo, opcao_id: c.opcao_id, item_id: c.item_id, pergunta_id: c.pergunta_id, valor_numerico: c.valor_numerico,
-    })));
-    const em = ec.error ? null : await supabase.from('veiculo_regra_materiais').insert(r.materiais.map((m: any) => ({
-      regra_id: nova.id, material_item_id: m.material_item_id, quantidade: m.quantidade, acao: m.acao, ordem: m.ordem,
-    })));
-    const falha = ec.error || em?.error;
-    if (falha) {
-      await supabase.from('veiculo_regras').delete().eq('id', nova.id);
-      return { copiadas, erro: falha.message };
-    }
-    copiadas++;
-  }
-  return { copiadas, erro: null };
+  const { data, error } = await supabase.rpc('estrutura_copiar_regras', {
+    p_origem: origemId, p_destino: destinoId, p_criado_por_nome: currentUser?.nome || '—',
+  });
+  if (error) return { copiadas: 0, erro: error.message };
+  return { copiadas: Number(data) || 0, erro: null };
 }
 
 // ── Copiar estrutura e perguntas de um item para outro (15/10/2026) ──────────
@@ -336,7 +340,8 @@ export async function copiarRegras(origemId: string, destinoId: string, currentU
 // Pedido do usuário: o catálogo tem 17 variantes de slimled (cor, lente, G2…) e as perguntas e o material de uma servem para as outras; recadastrar tudo
 // em cada uma não é viável. A cópia leva, à escolha: as PERGUNTAS (com respostas, perguntas-filhas, condição de itens e resposta automática), o MATERIAL POR
 // VEÍCULO do item e as REGRAS de chicote/suporte dos veículos que usam essas perguntas ou o item. Sempre SOMA ao que o destino já tem — nunca apaga nem
-// substitui — e, se algo falhar no meio, desfaz só o que esta cópia criou.
+// substitui. Desde 16/10/2026 (Fase 2) é UMA chamada à função `estrutura_copiar_item` do banco, tudo ou nada: se algo falhar no meio, nada fica copiado (antes o
+// navegador criava pergunta por pergunta e tentava desfazer sozinho, e uma queda de internet podia deixar a cópia pela metade).
 //
 // As regras copiadas precisam apontar para as perguntas e respostas NOVAS do destino: uma regra "quantos na frente = 4" aponta para a pergunta do slimled
 // de origem, e sem esse ajuste a regra não valeria para o destino ("chicote a definir").
@@ -386,102 +391,61 @@ export async function resumoDaCopia(origemId: string, veiculoId: string | null) 
 
 export async function copiarEstruturaDeItem({ origemId, destinoId, opcoes, currentUser }: { origemId: string; destinoId: string; opcoes: OpcoesDaCopia; currentUser: any }) {
   if (!origemId || !destinoId || origemId === destinoId) return { erro: 'Escolha um item de origem diferente deste.' };
-  const por = currentUser?.nome || '—';
-  const criadas = { perguntas: [] as string[], materiais: [] as string[], regras: [] as string[] };
-  // desfaz SÓ o que esta cópia criou, na ordem que o banco permite (regras apontam para perguntas/respostas, que não podem sumir antes delas)
-  const desfazer = async () => {
-    if (criadas.regras.length) await supabase.from('veiculo_regras').delete().in('id', criadas.regras);
-    if (criadas.materiais.length) await supabase.from('veiculo_item_materiais').delete().in('id', criadas.materiais);
-    if (criadas.perguntas.length) await supabase.from('item_perguntas').delete().in('id', criadas.perguntas);
+  const { data, error } = await supabase.rpc('estrutura_copiar_item', {
+    p_origem: origemId, p_destino: destinoId,
+    p_perguntas: !!opcoes.perguntas, p_materiais: !!opcoes.materiais, p_regras: !!opcoes.regras,
+    p_veiculo: opcoes.veiculoId || null, p_criado_por_nome: currentUser?.nome || '—',
+  });
+  if (error || !data) return { erro: error?.message || 'sem resposta do banco', desfeito: true };
+  return {
+    perguntas: Number(data.perguntas) || 0, respostas: Number(data.respostas) || 0, materiais: Number(data.materiais) || 0, regras: Number(data.regras) || 0,
+    materiaisSemResposta: Number(data.materiais_sem_resposta) || 0, regrasPuladas: Number(data.regras_puladas) || 0, erro: null,
   };
-  const falha = (e: any) => { throw new Error(e?.message || String(e)); };
-  // combinações de itens que citam o item de origem passam a citar o destino ("parachoque + este slimled")
-  const trocaItem = (lista: any) => (lista && lista.length ? lista.map((id: string) => String(id) === String(origemId) ? destinoId : id) : null);
+}
 
+// ── Histórico da estrutura (16/10/2026, Fase 2) ──────────────────────────────
+//
+// Antes, ninguém sabia quem mudou uma regra, uma pergunta ou o material de um carro — e uma OP que saiu com o chicote errado não tinha de onde tirar o motivo.
+// Cada mudança da tela grava uma linha em `audit_log` (módulo "estrutura"), como o resto do projeto faz com `logChange`; a frase vai em `metadata.descricao`.
+// O histórico NUNCA atrapalha a ação: a gravação do banco já foi feita, e falha ao registrar é ignorada (só aparece no console).
+export async function registrarNaEstrutura(currentUser: any, { entidade, id, acao, descricao, antes, depois, formatadores, detalhes }: {
+  entidade: string; id: string; acao: 'CREATE' | 'UPDATE' | 'DELETE'; descricao: string; antes?: any; depois?: any; formatadores?: any; detalhes?: any;
+}) {
   try {
-    const o = await lerOrigemDaCopia(origemId, opcoes.veiculoId);
-    const mapaPergunta = new Map<string, string>();
-    const mapaOpcao = new Map<string, string>();
-    const r = { perguntas: 0, respostas: 0, materiais: 0, regras: 0, materiaisSemResposta: 0, regrasPuladas: 0 };
+    await logChange({
+      module: 'estrutura', entityType: entidade, entityId: id, changeType: acao, oldRow: antes, newRow: depois,
+      user: currentUser, formatters: formatadores, metadata: { descricao, ...(detalhes || {}) },
+    });
+  } catch (e: any) { console.error('Histórico da estrutura: não foi possível registrar —', e?.message || e); }
+}
 
-    if (opcoes.perguntas && o.perguntas.length) {
-      const { count, error: ec } = await supabase.from('item_perguntas').select('id', { count: 'exact', head: true }).eq('item_id', destinoId);
-      if (ec) falha(ec);
-      const base = count || 0;
-      // pergunta-filha só nasce depois da resposta-pai que leva a ela
-      let pendentes = [...o.perguntas];
-      for (let progresso = true; pendentes.length && progresso;) {
-        progresso = false;
-        for (const p of [...pendentes]) {
-          if (p.opcao_pai_id && !mapaOpcao.has(p.opcao_pai_id)) continue;
-          const { data: nova, error } = await supabase.from('item_perguntas').insert([{
-            item_id: destinoId, opcao_pai_id: p.opcao_pai_id ? mapaOpcao.get(p.opcao_pai_id) : null, texto: p.texto, ordem: base + p.ordem,
-            tipo: p.tipo || 'opcoes', quando_itens: trocaItem(p.quando_itens), criado_por_nome: por,
-          }]).select('id').single();
-          if (error || !nova?.id) falha(error || 'sem resposta do banco');
-          criadas.perguntas.push(nova.id); mapaPergunta.set(p.id, nova.id); r.perguntas++;
-          for (const op of o.opcoes.filter((x: any) => x.pergunta_id === p.id)) {
-            const { data: nop, error: eo } = await supabase.from('item_pergunta_opcoes').insert([{
-              pergunta_id: nova.id, rotulo: op.rotulo, ordem: op.ordem, auto_quando_itens: trocaItem(op.auto_quando_itens),
-            }]).select('id').single();
-            if (eo || !nop?.id) falha(eo || 'sem resposta do banco');
-            mapaOpcao.set(op.id, nop.id); r.respostas++;
-          }
-          pendentes = pendentes.filter(x => x.id !== p.id);
-          progresso = true;
-        }
-      }
-    }
+/** Onde um item é usado na estrutura (perguntas, listas de "aparece só com…" e "automática se…", regras, material por carro, chicote). Só leitura; lança erro se falhar. */
+export async function ondeOItemEUsado(itemId: string) {
+  // GET: a função só lê (STABLE) — assim ela passa como leitura mesmo onde as gravações estão bloqueadas
+  const { data, error } = await supabase.rpc('estrutura_onde_item_e_usado', { p_item_id: itemId }, { get: true });
+  if (error) throw new Error(error.message);
+  const n = (k: string) => Number(data?.[k]) || 0;
+  return {
+    perguntasDoItem: n('perguntas_do_item'), apareceSoCom: n('aparece_so_com'), respostasAutomaticas: n('respostas_automaticas'),
+    regrasQueExigem: n('regras_que_exigem_o_item'), regrasComoMaterial: n('regras_que_usam_como_material'),
+    materialPorCarroDoItem: n('material_por_carro_do_item'), materialPorCarroComoMaterial: n('material_por_carro_como_material'), chicote: n('chicote_materiais'),
+  };
+}
 
-    if (opcoes.materiais && o.materiais.length) {
-      // material por resposta só vai se a resposta também foi copiada; senão apontaria para a pergunta do item de origem
-      const linhas = o.materiais.filter((m: any) => !m.opcao_id || mapaOpcao.has(m.opcao_id));
-      r.materiaisSemResposta = o.materiais.length - linhas.length;
-      for (let i = 0; i < linhas.length; i += 500) {
-        const { data, error } = await supabase.from('veiculo_item_materiais').insert(linhas.slice(i, i + 500).map((m: any) => ({
-          veiculo_id: m.veiculo_id, item_id: destinoId, opcao_id: m.opcao_id ? mapaOpcao.get(m.opcao_id) : null,
-          material_item_id: m.material_item_id, quantidade: m.quantidade, acao: m.acao, observacoes: m.observacoes, ordem: m.ordem, criado_por_nome: por,
-        }))).select('id');
-        if (error) falha(error);
-        (data || []).forEach((d: any) => criadas.materiais.push(d.id));
-        r.materiais += (data || []).length;
-      }
-    }
-
-    if (opcoes.regras && o.regras.length) {
-      const perguntasOrigem = new Set(o.perguntas.map((p: any) => p.id));
-      const opcoesOrigem = new Set(o.opcoes.map((x: any) => x.id));
-      for (const reg of o.regras) {
-        // condição que cita pergunta/resposta de origem só se traduz se essa pergunta foi copiada; senão a regra é pulada (e contada)
-        const conds: any[] = [];
-        let ok = true;
-        for (const c of reg.condicoes) {
-          if (c.tipo === 'quantidade' && perguntasOrigem.has(c.pergunta_id)) { if (mapaPergunta.has(c.pergunta_id)) conds.push({ ...c, pergunta_id: mapaPergunta.get(c.pergunta_id) }); else ok = false; }
-          else if (c.tipo === 'resposta' && opcoesOrigem.has(c.opcao_id)) { if (mapaOpcao.has(c.opcao_id)) conds.push({ ...c, opcao_id: mapaOpcao.get(c.opcao_id) }); else ok = false; }
-          else if (c.tipo === 'item' && String(c.item_id) === String(origemId)) conds.push({ ...c, item_id: destinoId });
-          else conds.push(c);
-        }
-        if (!ok) { r.regrasPuladas++; continue; }
-        const { data: nova, error } = await supabase.from('veiculo_regras')
-          .insert([{ veiculo_id: reg.veiculo_id, nome: reg.nome, ordem: reg.ordem, criado_por_nome: por }]).select('id').single();
-        if (error || !nova?.id) falha(error || 'sem resposta do banco');
-        criadas.regras.push(nova.id);
-        const ec = await supabase.from('veiculo_regra_condicoes').insert(conds.map(c => ({
-          regra_id: nova.id, tipo: c.tipo, opcao_id: c.opcao_id, item_id: c.item_id, pergunta_id: c.pergunta_id, valor_numerico: c.valor_numerico,
-        })));
-        if (ec.error) falha(ec.error);
-        const em = await supabase.from('veiculo_regra_materiais').insert(reg.materiais.map((m: any) => ({
-          regra_id: nova.id, material_item_id: m.material_item_id, quantidade: m.quantidade, acao: m.acao, ordem: m.ordem,
-        })));
-        if (em.error) falha(em.error);
-        r.regras++;
-      }
-    }
-    return { ...r, erro: null };
-  } catch (e: any) {
-    await desfazer();
-    return { erro: e?.message || String(e), desfeito: true };
-  }
+/** Frase curta do que a lista de "onde é usado" mostra ("2 regras, 1 pergunta…"); vazio se o item não aparece na estrutura. */
+export function fraseDeOndeOItemEUsado(u: any) {
+  if (!u) return '';
+  const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+  return [
+    u.perguntasDoItem ? plural(u.perguntasDoItem, 'pergunta cadastrada nele', 'perguntas cadastradas nele') : '',
+    u.apareceSoCom ? plural(u.apareceSoCom, 'pergunta que só aparece com ele', 'perguntas que só aparecem com ele') : '',
+    u.respostasAutomaticas ? plural(u.respostasAutomaticas, 'resposta automática', 'respostas automáticas') : '',
+    u.regrasQueExigem ? plural(u.regrasQueExigem, 'regra que exige a venda dele', 'regras que exigem a venda dele') : '',
+    u.regrasComoMaterial ? plural(u.regrasComoMaterial, 'regra que o usa como material', 'regras que o usam como material') : '',
+    u.materialPorCarroDoItem ? plural(u.materialPorCarroDoItem, 'linha de material por carro dele', 'linhas de material por carro dele') : '',
+    u.materialPorCarroComoMaterial ? plural(u.materialPorCarroComoMaterial, 'linha de material por carro que o usa', 'linhas de material por carro que o usam') : '',
+    u.chicote ? plural(u.chicote, 'ligação de chicote', 'ligações de chicote') : '',
+  ].filter(Boolean).join(', ');
 }
 
 // ── Catálogo inteiro para os seletores ───────────────────────────────────────
