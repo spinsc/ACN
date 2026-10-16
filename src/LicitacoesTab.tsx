@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio, registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ModalSolicitarAnalise, AnaliseStatusPanel } from './AnaliseWidget';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup } from './MarkupTermometro';
@@ -310,7 +311,7 @@ async function uploadAnexo(file: File, licitacaoId: string, tipo: string): Promi
   const path = `licitacoes/${licitacaoId}/${tipo}/${Date.now()}_${safeName}`;
   const contentType = contentTypeUpload(file);
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
-  if (error || !data) { console.error('Upload erro:', error?.message); return null; }
+  if (error || !data) { console.error('Upload erro:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
@@ -649,7 +650,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
     const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
     const path = `licitacoes/${licitacaoId}/area-livre/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-    if (error) { alert('Erro ao inserir imagem: ' + error.message); return; }
+    if (error) { alert('Não foi possível inserir a imagem: ' + explicarErroDeEnvio(error, file)); return; }
     const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
     const url = urlData?.publicUrl;
     if (!url) return;
@@ -834,7 +835,7 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
         for (const file of uploadFiles) {
           const url = await uploadAnexo(file, licitacaoId, categoria);
           // 7.61: o envio que falhava devolvia vazio e o documento era registrado SEM arquivo, só com o nome
-          if (!url) { falhas.push(file.name + ' (o envio do arquivo falhou)'); continue; }
+          if (!url) { falhas.push(file.name + ' (' + motivoDoUltimoEnvio() + ')'); continue; }
           const { data: novoDoc, error: erroDoc } = await supabase.from('licitacao_documentos').insert([{
             licitacao_id: licitacaoId, categoria, nome: file.name, url,
             conteudo: uploadDesc.trim() || null,
@@ -1309,7 +1310,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         primeiroAnexoUrl = await uploadAnexo(novoAnexoFiles[0], licit.id, 'andamento');
         primeiroAnexoNome = novoAnexoFiles[0].name;
         // 7.61: o envio que falhava devolvia vazio e o andamento era gravado com o nome do arquivo e SEM o arquivo
-        if (!primeiroAnexoUrl) { alert('O envio do arquivo "' + primeiroAnexoNome + '" falhou. O andamento NÃO foi gravado — tente de novo.'); return; }
+        if (!primeiroAnexoUrl) { alert('O envio do arquivo "' + primeiroAnexoNome + '" falhou: ' + motivoDoUltimoEnvio() + '\n\nO andamento NÃO foi gravado — corrija e tente de novo.'); return; }
       }
       const { data: novoAndamento, error } = await supabase.from('licitacao_documentos').insert([{
         licitacao_id: licit.id, categoria: 'andamento',
@@ -1327,7 +1328,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       const falhasExtras: string[] = [];
       for (let i = 1; i < novoAnexoFiles.length; i++) {
         const url = await uploadAnexo(novoAnexoFiles[i], licit.id, 'andamento');
-        if (!url) { falhasExtras.push(novoAnexoFiles[i].name + ' (o envio do arquivo falhou)'); continue; }
+        if (!url) { falhasExtras.push(novoAnexoFiles[i].name + ' (' + motivoDoUltimoEnvio() + ')'); continue; }
         const { error: erroExtra } = await supabase.from('licitacao_documentos').insert([{
           licitacao_id: licit.id, categoria: 'andamento',
           nome: 'Andamento', conteudo: null,
@@ -1418,7 +1419,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         for (const file of uploadFiles) {
           const url = await uploadAnexo(file, licit.id, tabDir);
           // 7.61: o envio que falhava devolvia vazio e o documento era registrado SEM arquivo; o erro de gravação também era ignorado
-          if (!url) { falhas.push(file.name + ' (o envio do arquivo falhou)'); continue; }
+          if (!url) { falhas.push(file.name + ' (' + motivoDoUltimoEnvio() + ')'); continue; }
           const { data: novoDoc, error: erroDoc } = await supabase.from('licitacao_documentos').insert([{
             licitacao_id: licit.id, categoria: tabDir,
             nome: file.name, url,

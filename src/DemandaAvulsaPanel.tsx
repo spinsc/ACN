@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
-import { EXT_PLANILHAS } from './FormatosArquivo';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
@@ -31,11 +32,13 @@ const ehComprador = (u: any, d: any) =>
 const camposDoSetor = (setor: string) => CAMPOS_POR_SETOR[String(setor || '').trim()] || {};
 // chave da aba do setor ("Laboratório" → "laboratorio"), para listar também os usuários com acesso a ela
 const abaDoSetor = (setor: string) => normalizarBusca(String(setor || '').trim()) || undefined;
-import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+import { VinculoPicker, abrirVinculo, TIPO_LABEL, TIPOS_PADRAO } from './VinculoPicker';
+import { FormacaoDaDemanda } from './FormacaoDaDemanda';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
+import { Faixa, hojeISO } from './Interface';
 import {
   ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView, CATEGORIA_DO_SETOR,
   itemVazio, itensPreenchidos, vinculosDaDemanda, camposDosVinculos,
@@ -107,12 +110,18 @@ const alertClass = (prazo: string, status: string): 'vencida' | 'urgente' | null
   return null;
 };
 
-async function uploadAnexo(file: File, demandaId: string): Promise<string | null> {
-  const path = `demandas-avulsas/${demandaId}/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return null;
+// Pedido do usuário em 16/10/2026: a demanda avulsa da Engenharia aceita QUALQUER arquivo (desenho, compactado, modelo 3D...), não só foto e documento.
+// Dois motivos faziam o arquivo não entrar: o seletor só mostrava alguns tipos e o envio falhava SEM AVISO — o armazenamento recusa nome com acento ou símbolo
+// ("Especificação (v2).pdf") e aqui só se trocava o espaço. Agora o nome guardado no armazenamento é limpo (o original continua na lista) e cada falha volta com o motivo.
+const LIMITE_ANEXO_MB = 50;   // é o limite do próprio armazenamento (bucket acn-media)
+async function uploadAnexo(file: File, demandaId: string): Promise<{ url: string | null; erro?: string }> {
+  if (file.size > LIMITE_ANEXO_MB * 1024 * 1024) return { url: null, erro: explicarErroDeEnvio({ statusCode: 413 }, file) };
+  const path = `demandas-avulsas/${demandaId}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
+  // sem tipo informado pelo navegador (.dwg, .step, .rar...), sobe como arquivo genérico
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+  if (error || !data) return { url: null, erro: explicarErroDeEnvio(error, file) };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl || null;
+  return pub?.publicUrl ? { url: pub.publicUrl } : { url: null, erro: 'não foi possível obter o endereço do arquivo' };
 }
 
 // Status geral calculado pelas etapas
@@ -141,8 +150,8 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
     ? { tipo: etapa.vinculo_tipo, id: etapa.vinculo_id, descricao: etapa.vinculo_descricao }
     : null;
   const salvarVinculoEtapa = async (v: VinculoValue | null) => {
-    await onUpdate(idx, { vinculo_tipo: v?.tipo || null, vinculo_id: v?.id || null, vinculo_descricao: v?.descricao || null });
-    setEditandoVinculo(false);
+    const gravou = await onUpdate(idx, { vinculo_tipo: v?.tipo || null, vinculo_id: v?.id || null, vinculo_descricao: v?.descricao || null });
+    if (gravou) setEditandoVinculo(false);   // 7.x (16/10/2026): gravação recusada não fecha a edição
   };
   const al = etapaVencida(etapa);
   const diasV = diasParaVencer(etapa.prazo);
@@ -166,9 +175,9 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
       usuario: currentUser?.nome || '',
       data: agora,
     };
-    const reprogramacoes = [...(etapa.reprogramacoes || []), entrada];
-    await onUpdate(idx, { prazo: dateToISO(reprogData), reprogramacoes });
-    setReprogData(''); setReprogMotivo(''); setMostrarReprog(false);
+    // 7.x (16/10/2026): a lista de reprogramações vem da etapa lida AGORA (duas pessoas reprogramando apagavam o registro uma da outra) e, se o banco recusar, o formulário continua preenchido
+    const gravou = await onUpdate(idx, (e: any) => ({ prazo: dateToISO(reprogData), reprogramacoes: [...(e.reprogramacoes || []), entrada] }));
+    if (gravou) { setReprogData(''); setReprogMotivo(''); setMostrarReprog(false); }
     setSalvando(false);
   };
   const concluir = async () => {
@@ -180,8 +189,10 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const addObs = async () => {
     if (!obsExec.trim()) return;
     setSalvando(true);
-    const obs_lista = [...(etapa.obs_execucao || []), { texto: obsExec, usuario: currentUser?.nome, data: new Date().toISOString() }];
-    await onUpdate(idx, { obs_execucao: obs_lista });
+    // 7.x (16/10/2026): a observação entra na lista lida AGORA e, se o banco recusar, o texto fica na caixa e ninguém é avisado (@menção) de uma observação que não foi gravada
+    const nova = { texto: obsExec, usuario: currentUser?.nome, data: new Date().toISOString() };
+    const gravou = await onUpdate(idx, (e: any) => ({ obs_execucao: [...(e.obs_execucao || []), nova] }));
+    if (!gravou) { setSalvando(false); return; }
     await salvarMencoes({
       texto:               obsExec,
       mencionanteId:       String(currentUser?.id || currentUser?.email || ''),
@@ -385,11 +396,15 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const camposSetor = camposDoSetor(initial.setor);
   const [centrosDet, setCentrosDet] = useState<any[]>([]);
   useEffect(() => { if (camposSetor.centroCusto) fetchCentrosCusto().then(setCentrosDet); }, [camposSetor.centroCusto]);
+  // 7.x (16/10/2026): toda gravação da demanda confere a resposta do banco; se recusou, avisa o motivo e quem chamou NÃO segue como se tivesse dado certo
+  const gravarDemanda = async (campos: any, oQue: string): Promise<boolean> => {
+    const { error } = await supabase.from('demandas_avulsas').update(campos).eq('id', d.id);
+    if (error) { alert(`Não foi possível ${oQue}: ${error.message}`); return false; }
+    return true;
+  };
   const gravarCentroCusto = async (id: string | null) => {
     const c = centrosDet.find((x: any) => x.id === id);
-    await supabase.from('demandas_avulsas').update({
-      centro_custo_id: id, centro_custo: c ? `${c.codigo} — ${c.nome}` : null, atualizado_em: new Date().toISOString(),
-    }).eq('id', d.id);
+    if (!await gravarDemanda({ centro_custo_id: id, centro_custo: c ? `${c.codigo} — ${c.nome}` : null, atualizado_em: new Date().toISOString() }, 'gravar o centro de custo')) return;
     await reload();
     onRefresh();
   };
@@ -400,13 +415,16 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   const temEtapas = (d.etapas || []).length > 0;
 
+  // 7.x (16/10/2026): leitura recusada não pode parecer "nenhum arquivo" nem deixar a tela velha como se estivesse em dia: a faixa vermelha avisa e o que já estava na tela fica
+  const [erroLeitura, setErroLeitura] = useState('');
   const reload = useCallback(async () => {
-    const [{ data: dem }, { data: anx }] = await Promise.all([
+    const [{ data: dem, error: e1 }, { data: anx, error: e2 }] = await Promise.all([
       supabase.from('demandas_avulsas').select('*').eq('id', d.id).single(),
       supabase.from('demanda_avulsa_anexos').select('*').eq('demanda_id', d.id).order('criado_em', { ascending: false }),
     ]);
+    setErroLeitura(e1 || e2 ? ((e1 || e2) as any).message : '');
     if (dem) setD(dem);
-    setAnexos(anx || []);
+    if (!e2) setAnexos(anx || []);
   }, [d.id]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -451,11 +469,12 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     }]).select('id,numero_pedido').single();
     if (error) { setSalvando(false); alert('Não foi possível gerar o pedido: ' + error.message); return; }
     const info = [...(d.informacoes || []), { texto: `Pedido de compra ${novo.numero_pedido} gerado — cotações e valor seguem em Compras.`, usuario: currentUser?.nome || '', data: agora }];
-    await supabase.from('demandas_avulsas').update({
+    const ligou = await gravarDemanda({
       pedido_compra_id: novo.id, informacoes: info, atualizado_em: agora,
       ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora } : {}),
-    }).eq('id', d.id);
+    }, `ligar a demanda ao pedido ${novo.numero_pedido} (o pedido foi criado em Compras, mas a demanda NÃO ficou ligada a ele; não gere outro pedido)`);
     setSalvando(false);
+    if (!ligou) return;
     await reload(); onRefresh();
   };
 
@@ -509,13 +528,16 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   // ── Salvar edição básica ─────────────────────────────────────────────────
   const salvarEdicao = async () => {
+    // 7.x (16/10/2026): título vazio era gravado (a demanda ficava sem nome na lista) e a gravação recusada fechava a edição como se tivesse salvo (e ainda avisava as @menções)
+    if (!String(editForm.titulo || '').trim()) { alert('Informe o título!'); return; }
     setSalvando(true);
-    await supabase.from('demandas_avulsas').update({
+    const salvou = await gravarDemanda({
       ...editForm,
       ...camposDosVinculos(vinculos),
       itens: itensPreenchidos(itensEdit),
       atualizado_em: new Date().toISOString(),
-    }).eq('id', d.id);
+    }, 'salvar as alterações');
+    if (!salvou) { setSalvando(false); return; }
     for (const [campo, texto] of [['descricao', editForm.descricao], ['observacoes', editForm.observacoes]]) {
       if (texto?.trim()) {
         await salvarMencoes({
@@ -541,12 +563,13 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     if (!designarForm.responsavel_nome.trim()) { alert('Informe o responsável!'); return; }
     if (!designarForm.prazo) { alert('Informe o prazo!'); return; }
     setSalvando(true);
-    await supabase.from('demandas_avulsas').update({
+    const designou = await gravarDemanda({
       responsavel_nome: designarForm.responsavel_nome,
       responsavel_email: designarForm.responsavel_email,
       prazo: dateToISO(designarForm.prazo),
       atualizado_em: new Date().toISOString(),
-    }).eq('id', d.id);
+    }, 'designar o responsável');
+    if (!designou) { setSalvando(false); return; }
     setMostrarDesignar(false);
     await reload();
     setSalvando(false);
@@ -568,11 +591,12 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       texto: `Prazo reprogramado de ${fmtDate(d.prazo)} → ${fmtDate(reprogramarForm.nova_data)}${reprogramarForm.motivo ? ` — Motivo: ${reprogramarForm.motivo}` : ''}`,
     };
     const infoAtual = [...(d.informacoes || []), entrada];
-    await supabase.from('demandas_avulsas').update({
+    const reprogramou = await gravarDemanda({
       prazo: dateToISO(reprogramarForm.nova_data),
       informacoes: infoAtual,
       atualizado_em: agora,
-    }).eq('id', d.id);
+    }, 'reprogramar o prazo');
+    if (!reprogramou) { setSalvando(false); return; }
     setReprogramarForm({ nova_data: '', motivo: '' });
     setMostrarReprogramar(false);
     await reload();
@@ -584,7 +608,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const iniciar = async () => {
     if (!await confirmar('Marcar início da execução agora?')) return;
     const agora = new Date().toISOString();
-    await supabase.from('demandas_avulsas').update({ status: 'Em Andamento', data_inicio: agora, atualizado_em: agora }).eq('id', d.id);
+    if (!await gravarDemanda({ status: 'Em Andamento', data_inicio: agora, atualizado_em: agora }, 'marcar o início da execução')) return;
     await reload(); onRefresh();
   };
   const concluir = async () => {
@@ -592,7 +616,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     if (!await confirmar(`Concluir a demanda "${d.titulo}"? Ela sai da lista de ativas.${
       vaiPintar ? '\n\nComo esta peça tem pintura, o pedido do serviço será aberto para o Compras.' : ''}`)) return;
     const agora = new Date().toISOString();
-    await supabase.from('demandas_avulsas').update({ status: 'Concluída', data_fim: agora, atualizado_em: agora }).eq('id', d.id);
+    // 7.x (16/10/2026): conclusão recusada não abre o pedido de pintura (a peça ainda não estava concluída) nem diz "demanda concluída"
+    if (!await gravarDemanda({ status: 'Concluída', data_fim: agora, atualizado_em: agora }, 'concluir a demanda')) return;
     if (vaiPintar) {
       const r = await abrirPedidoPintura(d, currentUser);
       if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
@@ -601,24 +626,30 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   };
 
   // ── Atualizar etapa individual ───────────────────────────────────────────
-  const updateEtapa = async (idx: number, patch: any) => {
-    const etapas = [...(d.etapas || [])];
-    etapas[idx] = { ...etapas[idx], ...patch };
+  // 7.x (16/10/2026): a demanda é lida de novo ANTES de gravar (duas pessoas agindo em etapas diferentes apagavam o trabalho uma da outra: cada uma regravava a lista inteira a partir do
+  // que tinha na tela) e a gravação recusada avisa e devolve false — nada depois dela (pedido de pintura, limpar o formulário) acontece. `patch` pode ser uma função da etapa já lida.
+  const updateEtapa = async (idx: number, patch: any): Promise<boolean> => {
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('etapas,status,data_inicio').eq('id', d.id).maybeSingle();
+    if (erroLer || !fresca) { alert('Não foi possível ler a demanda antes de gravar a etapa: ' + (erroLer?.message || 'demanda não encontrada') + '. Nada foi alterado.'); return false; }
+    const etapas = [...(fresca.etapas || [])];
+    if (!etapas[idx]) { alert('Não foi possível gravar: esta etapa não existe mais. Atualize a tela e confira.'); return false; }
+    etapas[idx] = { ...etapas[idx], ...(typeof patch === 'function' ? patch(etapas[idx]) : patch) };
     // Recalcula status geral
     const novoStatus = calcStatusEtapas(etapas);
     const agora = new Date().toISOString();
     const upd: any = { etapas, atualizado_em: agora };
-    if (novoStatus !== d.status) {
+    if (novoStatus !== fresca.status) {
       upd.status = novoStatus;
-      if (novoStatus === 'Em Andamento' && !d.data_inicio) upd.data_inicio = agora;
+      if (novoStatus === 'Em Andamento' && !fresca.data_inicio) upd.data_inicio = agora;
       if (novoStatus === 'Concluída') upd.data_fim = agora;
     }
-    await supabase.from('demandas_avulsas').update(upd).eq('id', d.id);
+    if (!await gravarDemanda(upd, 'gravar a etapa')) return false;
     if (upd.status === 'Concluída' && ehSerralheria(d.setor) && d.pintura && !d.pintura_pedido_id) {
       const r = await abrirPedidoPintura(d, currentUser);
       if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
     }
     await reload(); onRefresh();
+    return true;
   };
 
   // ── Nova informação ──────────────────────────────────────────────────────
@@ -626,7 +657,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     if (!novaInfo.trim()) return;
     setSalvando(true);
     const lista = [...(d.informacoes || []), { texto: novaInfo, usuario: currentUser?.nome, data: new Date().toISOString() }];
-    await supabase.from('demandas_avulsas').update({ informacoes: lista, atualizado_em: new Date().toISOString() }).eq('id', d.id);
+    // 7.x (16/10/2026): informação recusada fica na caixa e as @menções NÃO saem (avisavam alguém de uma informação que não foi gravada)
+    if (!await gravarDemanda({ informacoes: lista, atualizado_em: new Date().toISOString() }, 'registrar a informação')) { setSalvando(false); return; }
     await salvarMencoes({
       texto:             novaInfo,
       mencionanteId:     String(currentUser?.id || currentUser?.email || ''),
@@ -645,25 +677,29 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   // ── Upload de arquivo ────────────────────────────────────────────────────
   const uploadFiles = async (files: FileList) => {
     setSalvando(true);
-    for (let i = 0; i < files.length; i++) {
-      const url = await uploadAnexo(files[i], d.id);
-      if (url) {
-        const isImg = files[i].type.startsWith('image/');
-        await supabase.from('demanda_avulsa_anexos').insert([{
-          demanda_id: d.id, nome: files[i].name, url,
-          tipo: isImg ? 'foto' : 'documento',
-          criado_por: currentUser?.nome,
-        }]);
-      }
+    const falhas: string[] = [];
+    // a lista de arquivos some quando o campo é limpo: copia antes
+    const lista = Array.from(files);
+    for (const f of lista) {
+      const r = await uploadAnexo(f, d.id);
+      if (!r.url) { falhas.push(f.name + ' (' + r.erro + ')'); continue; }
+      const { error: erroIns } = await supabase.from('demanda_avulsa_anexos').insert([{
+        demanda_id: d.id, nome: f.name, url: r.url,
+        tipo: f.type.startsWith('image/') ? 'foto' : 'documento',
+        criado_por: currentUser?.nome,
+      }]);
+      if (erroIns) falhas.push(f.name + ' (enviado, mas não registrado na demanda: ' + erroIns.message + ')');
     }
     if (fileRef.current) fileRef.current.value = '';
     await reload();
     setSalvando(false);
+    if (falhas.length) alert('Não foi possível anexar estes arquivos:\n\n' + falhas.join('\n'));   // "não foi possível" deixa o aviso vermelho, que só fecha quando a pessoa fecha (Feedback.tsx)
   };
 
   const excluirAnexo = async (id: string) => {
     if (!await confirmar('Remover este arquivo?')) return;
-    await supabase.from('demanda_avulsa_anexos').delete().eq('id', id);
+    const { error } = await supabase.from('demanda_avulsa_anexos').delete().eq('id', id);
+    if (error) { alert('Não foi possível remover o arquivo: ' + error.message); return; }   // 7.x (16/10/2026): antes seguia como se tivesse removido
     await reload();
   };
 
@@ -774,6 +810,9 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
 
           {/* ── Demanda composta e envolvidos (08/10/2026) ── */}
+          {erroLeitura && (
+            <Faixa tom="erro">Não foi possível atualizar esta demanda ({erroLeitura}). O que aparece pode estar desatualizado: feche e abra de novo.</Faixa>
+          )}
           <GrupoDaDemanda demanda={d} />
           <MembrosDaDemanda demanda={d} currentUser={currentUser} podeEditar={!ENCERRADA(d.status) && podeMexerNaDemanda}
             onSaved={() => { reload(); onRefresh(); }} />
@@ -850,8 +889,14 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* ── Vínculos (várias OPs, lote, outros processos) ── */}
-          {!editando && <VinculosView vinculos={vinculos} />}
+          {/* ── Formação de preço da demanda: vincula e tira direto no detalhe, sem o Editar (pedido do usuário em 16/10/2026) ── */}
+          {!editando && (
+            <FormacaoDaDemanda demanda={d} currentUser={currentUser} podeMexer={d.status !== 'Cancelada'}
+              onMudou={async () => { await reload(); onRefresh(); }} />
+          )}
+
+          {/* ── Vínculos (várias OPs, lote, outros processos) — a formação de preço tem o bloco próprio, logo acima ── */}
+          {!editando && <VinculosView vinculos={vinculos.filter(v => v.tipo !== 'formacao')} />}
 
           {/* ── Pintura pedida (Serralheria): quem abriu definiu, aqui é leitura ── */}
           {!editando && camposSetor.pintura && d.pintura && (
@@ -917,7 +962,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>NOVA DATA *</label>
                   <input type="date" value={reprogramarForm.nova_data} onChange={e=>setReprogramarForm(f=>({...f,nova_data:e.target.value}))}
-                    min={new Date().toISOString().substring(0,10)}
+                    min={hojeISO()}
                     style={{ width:'100%', padding:'5px 8px', border:'1px solid #fdba74', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                 </div>
                 <div>
@@ -972,7 +1017,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                   categoriaPreferida={CATEGORIA_DO_SETOR[d.setor] || ''} />
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULOS (OPCIONAL)</label>
-                  <VinculosEditor vinculos={vinculos} onChange={setVinculos} />
+                  <VinculosEditor vinculos={vinculos} onChange={setVinculos} tipos={TIPOS_PADRAO} />
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>
@@ -1042,7 +1087,6 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               <label style={{ fontSize:10, color:'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
                 📎 Anexar arquivo
                 <input type="file" multiple ref={fileRef}
-                  accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp`}
                   onChange={e => { if (e.target.files?.length) uploadFiles(e.target.files); }}
                   style={{ display:'none' }} />
               </label>
@@ -1216,7 +1260,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       const r: any = await enviarSolicitacaoCompra({ valor: sc, currentUser, origemSetor: origem || 'Demanda geral' });
       setSalvando(false);
       if (r.erro) { alert('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
-      if (r.errosAnexos?.length) alert('A requisição foi criada, mas alguns anexos não foram enviados: ' + r.errosAnexos.join('; '));
+      if (r.errosAnexos?.length) alert('A requisição foi criada, mas houve falha ao enviar alguns anexos:\n\n' + r.errosAnexos.join('\n'));
       alert(`Requisição ${r.numero_pedido} aberta no quadro do Compras.`);
       onSaved(); onClose();
       return;
@@ -1284,16 +1328,17 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     if (anexos.length) {
       const falhas: string[] = [];
       for (const f of anexos) {
-        const url = await uploadAnexo(f, nova.id);   // sobe uma vez; cada parte aponta para o mesmo arquivo
-        if (!url) { falhas.push(f.name); continue; }
+        const r = await uploadAnexo(f, nova.id);   // sobe uma vez; cada parte aponta para o mesmo arquivo
+        if (!r.url) { falhas.push(f.name + ' (' + r.erro + ')'); continue; }
         for (const c of criadas) {
-          await supabase.from('demanda_avulsa_anexos').insert([{
-            demanda_id: c.id, nome: f.name, url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
+          const { error: erroIns } = await supabase.from('demanda_avulsa_anexos').insert([{
+            demanda_id: c.id, nome: f.name, url: r.url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
             descricao: (descAnexos[chaveArquivo(f)] || '').trim() || null,
           }]);
+          if (erroIns) falhas.push(f.name + ' (não registrado em uma das partes: ' + erroIns.message + ')');
         }
       }
-      if (falhas.length) alert('A demanda foi criada, mas estes anexos não foram enviados: ' + falhas.join(', '));
+      if (falhas.length) alert('A demanda foi criada, mas houve falha ao enviar estes anexos:\n\n' + falhas.join('\n'));
     }
     if (form.descricao?.trim() && nova?.id) {
       await salvarMencoes({
@@ -1629,6 +1674,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
   const [vinculoParaNova, setVinculoParaNova] = useState<VinculoValue | null>(null);
   const [selected, setSelected] = useState<any | null>(null);
   const [grupos, setGrupos] = useState<Record<string, { total: number; concluidas: number }>>({});   // demanda composta: quantas partes já concluíram
+  const [erroLista, setErroLista] = useState('');   // 7.x (16/10/2026): leitura recusada não pode parecer "nenhuma demanda"
 
   // Abre "Nova Demanda" já com um vínculo pronto quando disparado de fora.
   useEffect(() => {
@@ -1641,9 +1687,12 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
 
   const fetch = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
-    const { data } = await supabase.from('demandas_avulsas')
+    const { data, error: erroLer } = await supabase.from('demandas_avulsas')
       .select('*').eq('setor', setor)
       .order('criado_em', { ascending: false });
+    // 7.x (16/10/2026): com a leitura recusada a lista que já estava na tela fica (antes virava "Nenhuma demanda ativa") e a faixa vermelha avisa
+    if (erroLer) { setErroLista(erroLer.message); if (!silent) setLoading(false); return; }
+    setErroLista('');
     setDemandas(data || []);
     const gids = [...new Set((data || []).map((x: any) => x.grupo_id).filter(Boolean))];
     if (gids.length) {
@@ -1770,13 +1819,16 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
       </div>
 
       <div className="sec-body" style={{ padding:'10px 12px' }}>
+        {erroLista && (
+          <Faixa tom="erro">Não foi possível ler as demandas ({erroLista}). A lista abaixo pode estar incompleta ou desatualizada.</Faixa>
+        )}
         {loading ? (
           <div className="acn-empty">Carregando...</div>
-        ) : lista.length === 0 ? (
+        ) : lista.length === 0 ? (erroLista ? null : (   // com a leitura recusada a faixa vermelha já explica; "nenhuma demanda" seria mentira
           <div className="acn-empty">
             {filtroStatus === 'ativas' ? 'Nenhuma demanda ativa. Clique em "+ Nova Demanda" para criar.' : 'Nenhuma demanda encontrada.'}
           </div>
-        ) : (
+        )) : (
           lista.map(d => (
             <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} grupo={d.grupo_id ? grupos[d.grupo_id] : undefined} />
           ))

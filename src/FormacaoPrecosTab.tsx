@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
          somarResultados, estruturaFormacao, custoComImpostos, precoUnitario } from './FormacaoCalculo';
@@ -1122,7 +1123,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 }
 
 // ─── ABA PREÇOS FORMADOS (Vendedores + Todos) ─────────────────────────────────
-function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
+function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId = null, onAbriu = null }: any) {
   const [cotacoes, setCotacoes]         = useState([]);
   const [carregando, setCarregando]     = useState(true);
   const [cotacaoAberta, setAberta]      = useState(null);
@@ -1158,6 +1159,15 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     if (error) alert('Não foi possível ler as propostas desta formação: ' + error.message + '\n\nA lista de propostas abaixo pode estar incompleta.');   // 7.59
     setPropostas(data || []);
   };
+
+  // Vínculo de demanda avulsa (16/10/2026): com a lista carregada, abre a formação pedida; se ela não existe mais, diz em vez de ficar na lista sem explicar.
+  useEffect(() => {
+    if (!abrirId || carregando) return;
+    onAbriu?.();
+    if (erroLeitura) return;   // a faixa de erro da própria tela já explica
+    const m = cotacoes.find((c: any) => String(c.id) === String(abrirId));
+    if (m) abrirCotacao(m); else alert('Não encontrei esta formação de preços: ela pode ter sido excluída.');
+  }, [abrirId, carregando]);
 
   const salvarProposta = async () => {
     if (!cotacaoAberta || salvando || salvandoPropostaRef.current) return;   // 7.59: clique duplo gravava a proposta duas vezes (o estado `salvando` só muda no desenho seguinte; o ref vale na hora)
@@ -1732,6 +1742,22 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   // Novos estados
   const [abaAtiva, setAbaAtiva]             = useState('formacao');
+  // Vínculo de uma demanda avulsa com uma formação de preço (16/10/2026): abrir o vínculo leva direto à formação, na aba "Preços Formados". Mesmo padrão dos outros
+  // atalhos (global + evento), porque esta tela pode montar depois do clique. Dentro de Licitações/CRM (embutido) a formação é do processo e não responde ao atalho.
+  const [abrirId, setAbrirId] = useState<string | null>(null);
+  useEffect(() => {
+    if (embutido) return;
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'formacao') return;
+      (window as any).__acnDeepLink = null;
+      setAbaAtiva('precos_formados');
+      setAbrirId(String(pend.contextoId));
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, [embutido]);
   const [oplVinculada, setOplVinculada]     = useState(null);
   const [descontoMaximoPct, setDescontoMax] = useState(0);
   const [finalizando, setFinalizando]       = useState(false);
@@ -2866,7 +2892,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         .from('acn-media')
         .upload(path, pdfBlob, { upsert: true, contentType: 'application/pdf' });
 
-      if (upErr || !upData) throw new Error('Erro no upload: ' + (upErr?.message || 'desconhecido'));
+      if (upErr || !upData) throw new Error('não foi possível enviar o PDF: ' + explicarErroDeEnvio(upErr));
 
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
 
@@ -3104,7 +3130,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
       {/* ── ABA PREÇOS FORMADOS ── */}
       {!embutido && abaAtiva === 'precos_formados' && (
-        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} />
+        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} abrirId={abrirId} onAbriu={() => setAbrirId(null)} />
       )}
 
       {/* ── ABA FORMAÇÃO DE PREÇOS ── */}

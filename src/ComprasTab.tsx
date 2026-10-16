@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas, resolverMencoesDeTodos } from './MencaoTextarea';
@@ -185,7 +186,7 @@ async function uploadCotacaoArquivo(file: File): Promise<{ url: string; nome: st
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `pcp-cotacoes/${Date.now()}_${nomeLimpo}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', nome: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  if (error || !data) return { url: '', nome: '', error: explicarErroDeEnvio(error, file) };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
   return { url: pub.publicUrl, nome: file.name };
@@ -398,7 +399,7 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
     const path = `pcp-cotacoes/${cotacao.id}/area-livre/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-    if (error) { alert('Erro ao inserir imagem: ' + error.message); return; }
+    if (error) { alert('Não foi possível inserir a imagem: ' + explicarErroDeEnvio(error, file)); return; }
     const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
     const url = urlData?.publicUrl;
     if (!url) return;

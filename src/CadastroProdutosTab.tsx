@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
@@ -464,7 +465,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
       const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
       setFotos(prev => [...prev, urlData.publicUrl]);
     } else {
-      alert('Erro ao enviar foto: ' + error.message);
+      alert('Não foi possível enviar a foto: ' + explicarErroDeEnvio(error, file));
     }
     setUploadingFoto(false);
   };
@@ -480,7 +481,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
       const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
       setCatalogoUrl(urlData.publicUrl);
     } else {
-      alert('Erro ao enviar catálogo: ' + error.message);
+      alert('Não foi possível enviar o catálogo: ' + explicarErroDeEnvio(error, file));
     }
     setUploadingCatalogo(false);
   };

@@ -18,6 +18,7 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 >   (R1+R8+R3, R6, R7, R17); R4 e R9 estão parciais (ver o quadro de "Respostas a aplicar"). **A Etapa 17 (fechar o banco por perfil — segurança) é a próxima, decidida em 14/10/2026.**
 >   A rotina automática da noite (trabalhar, commitar, push e deploy, próximo passo; "pare no próximo commit" interrompe) está descrita no `/ux-fluxo`.
 >   **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:** a Garantia, logo abaixo.
+>   **Modo de trabalho (decidido em 16/10/2026): de dia, os outros planos (Garantia, Etapa 17 etc.); de madrugada, o `/ux-fluxo`.** Tudo que nasce de dia já nasce no padrão novo (`Interface.tsx`, `Feedback.tsx`, classes, `Botao`; sem `style` solto). **Se o trabalho do dia vai mexer numa tela que o `/ux-fluxo` ainda não migrou, fazer antes a fatia dela** (7.x e migração) e só então a mudança; **nos quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`), perguntar ao usuário** se vale construir só a peça nova no padrão, sem migrar a tela inteira. Detalhe no quadro de decisões do plano de UX.
 > - **Ainda não começou — [PLANO_GARANTIA.md](PLANO_GARANTIA.md):** atendimento em garantia (G1 a G6), retomado pelo comando `/garantia`; depende de decisões do usuário com os setores.
 > - **Concluídos — pasta [PLANOS CONCLUIDOS](PLANOS%20CONCLUIDOS/):**
 >   [PLANO_ESTOQUE_AUTOMATICO.md](PLANOS%20CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md) (estoque, reserva e automação da lista de material; 9 etapas; `/estoque-auto` só para consulta),
@@ -111,10 +112,12 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Data de hoje / dia de uma data | `Interface.tsx` — `hojeISO`, `diaISO` (nunca `toISOString`, que devolve o dia de Londres) |
 | Botões, abas, selos, menus | `Interface.tsx` |
 | Confirmar / pedir texto | `Feedback.tsx` — `confirmar`, `pedirTexto` |
+| Enviar arquivo ao armazenamento: nome seguro e motivo da falha | `FormatosArquivo.ts` — `nomeSeguroDeArquivo` (o armazenamento recusa acento e símbolo na chave; o nome original vai à parte, para a lista); `ErroDeArquivo.ts` — `explicarErroDeEnvio` (frase em português para a pessoa: nome com caractere especial, arquivo grande, sem conexão, sem permissão), e `registrarFalhaDeEnvio`/`motivoDoUltimoEnvio` para ajudantes que devolvem só "nada" quando falham. Todo envio novo usa os dois, e a mensagem de falha deve conter "falha" ou "não foi possível": é isso que a deixa vermelha e parada na tela (`Feedback.tsx`; os outros tons somem sozinhos em 4 a 9 s) |
 | Auditoria e destaque de campo | `AuditSystem.tsx` |
 | Permissões | `utils/permissoes.ts` |
 | Estoque: saldo, reserva, reposição, baixa do kit | `Estoque.tsx` — `movimentarEstoque` (único caminho para mexer no saldo), `avisosDaReposicao`; toda função que lê devolve o erro, e leitura recusada nunca vale como "vazio" |
 | Estrutura de instalação: cobertura das regras do veículo, uso das respostas, o que apagar leva junto | `CoberturaDaEstrutura.ts` — `coberturaDoVeiculo` (usa o mesmo `avaliarRegras` da OP), `lerUsoDasRespostas`, `oQueApagarPerguntaLeva`; as peças da tela estão em `ConfigEstruturaPecas.tsx` |
+| Estrutura de instalação: gravar ou copiar regra e copiar a estrutura de um item (tudo ou nada), histórico, onde um item é usado | funções do banco `estrutura_gravar_regra`, `estrutura_copiar_regras`, `estrutura_copiar_item` e `estrutura_onde_item_e_usado`, chamadas por `ConfigEstrutura.ts` (`copiarRegras`, `copiarEstruturaDeItem`, `ondeOItemEUsado`); histórico com `registrarNaEstrutura` (módulo `estrutura` do `audit_log`) |
 
 ---
 

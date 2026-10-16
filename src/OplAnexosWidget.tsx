@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { Botao } from './Interface';
@@ -44,7 +45,7 @@ async function uploadOplAnexo(file: File, oplNumero: string): Promise<string | n
   // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
   const contentType = contentTypeUpload(file);
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
-  if (error || !data) { console.error('Upload erro Supabase:', error?.message); return null; }
+  if (error || !data) { console.error('Upload erro Supabase:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
@@ -71,24 +72,26 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
 
   const upload = async (files: FileList) => {
     setUploading(true);
+    const falhas: string[] = [];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const url = await uploadOplAnexo(f, opl.opl);
-      if (url) {
-        const isImg = f.type.startsWith('image/');
-        await supabase.from('opl_anexos').insert([{
-          opl_id:     opl.id,
-          opl_numero: opl.opl,
-          setor,
-          tipo:       tipoFixo || (isImg ? 'foto' : 'documento'),
-          nome:       f.name,
-          url,
-          criado_por: currentUser?.nome,
-        }]);
-      }
+      if (!url) { falhas.push(f.name + ' (' + motivoDoUltimoEnvio() + ')'); continue; }
+      const isImg = f.type.startsWith('image/');
+      const { error: erroReg } = await supabase.from('opl_anexos').insert([{
+        opl_id:     opl.id,
+        opl_numero: opl.opl,
+        setor,
+        tipo:       tipoFixo || (isImg ? 'foto' : 'documento'),
+        nome:       f.name,
+        url,
+        criado_por: currentUser?.nome,
+      }]);
+      if (erroReg) falhas.push(f.name + ' (o arquivo subiu, mas não foi registrado na OP: ' + erroReg.message + ')');
     }
     if (fileRef.current) fileRef.current.value = '';
     setUploading(false);
+    if (falhas.length) alert('Estes arquivos NÃO foram anexados:\n\n' + falhas.join('\n'));
     reload();
   };
 
@@ -236,24 +239,26 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
 
   const uploadDireto = async (files: FileList) => {
     setUploading(true);
+    const falhas: string[] = [];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const url = await uploadOplAnexo(f, opl.opl);
-      if (url) {
-        const isImg = f.type.startsWith('image/');
-        await supabase.from('opl_anexos').insert([{
-          opl_id:     opl.id,
-          opl_numero: opl.opl,
-          setor,
-          tipo:       tipoFixo || (isImg ? 'foto' : 'documento'),
-          nome:       f.name,
-          url,
-          criado_por: currentUser?.nome,
-        }]);
-      }
+      if (!url) { falhas.push(f.name + ' (' + motivoDoUltimoEnvio() + ')'); continue; }
+      const isImg = f.type.startsWith('image/');
+      const { error: erroReg } = await supabase.from('opl_anexos').insert([{
+        opl_id:     opl.id,
+        opl_numero: opl.opl,
+        setor,
+        tipo:       tipoFixo || (isImg ? 'foto' : 'documento'),
+        nome:       f.name,
+        url,
+        criado_por: currentUser?.nome,
+      }]);
+      if (erroReg) falhas.push(f.name + ' (o arquivo subiu, mas não foi registrado na OP: ' + erroReg.message + ')');
     }
     if (fileRef.current) fileRef.current.value = '';
     setUploading(false);
+    if (falhas.length) alert('Estes arquivos NÃO foram anexados:\n\n' + falhas.join('\n'));
     loadCount();
   };
 

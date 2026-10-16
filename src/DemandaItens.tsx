@@ -17,7 +17,7 @@ import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
-import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+import { VinculoPicker, abrirVinculo, TIPO_LABEL, TIPOS_DEMANDA_AVULSA } from './VinculoPicker';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -327,7 +327,7 @@ export function camposDosVinculos(vinculos: VinculoValue[]) {
   };
 }
 
-export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[]; onChange: (v: VinculoValue[]) => void }) {
+export function VinculosEditor({ vinculos, onChange, tipos = TIPOS_DEMANDA_AVULSA }: { vinculos: VinculoValue[]; onChange: (v: VinculoValue[]) => void; tipos?: string[] }) {
   const [lote, setLote] = useState<{ base: string; ops: any[] } | null>(null);
   const jaTem = (v: VinculoValue) => vinculos.some(x => x.tipo === v.tipo && String(x.id) === String(v.id));
 
@@ -368,7 +368,7 @@ export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[
           + Lote inteiro {lote.base} (mais {lote.ops.length} OP{lote.ops.length > 1 ? 's' : ''})
         </Botao>
       )}
-      <VinculoPicker value={null} onSelect={v => { if (!jaTem(v)) onChange([...vinculos, v]); }} onClear={() => {}} />
+      <VinculoPicker value={null} tipos={tipos} onSelect={v => { if (!jaTem(v)) onChange([...vinculos, v]); }} onClear={() => {}} />
     </div>
   );
 }

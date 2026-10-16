@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
@@ -2763,7 +2764,7 @@ async function uploadContratoArquivo(file: File): Promise<{ url: string; nome: s
     .replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `contratos-padrao/${Date.now()}_${nomeLimpo}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', nome: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  if (error || !data) return { url: '', nome: '', error: explicarErroDeEnvio(error, file) };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
   return { url: pub.publicUrl, nome: file.name };

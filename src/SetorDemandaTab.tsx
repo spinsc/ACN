@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
@@ -412,7 +413,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     const safeName = file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_').slice(0, 100);
     const path = `demandas-cotacoes/${demandaId}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type });
-    if (error) alert(`Não subiu "${file.name}": ${error.message}`);   // 7.53: o envio falhava em silêncio e o anexo não aparecia
+    if (error) alert(`Não subiu "${file.name}": ${explicarErroDeEnvio(error, file)}`);   // 7.53: o envio falhava em silêncio e o anexo não aparecia
     else {
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       setAnexosCotacao(prev => [...prev, { nome: file.name, url: pub?.publicUrl || '' }]);

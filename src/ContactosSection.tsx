@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
@@ -262,7 +263,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     try {
       const path = `interacoes/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { data, error } = await supabase.storage.from('crm-audios').upload(path, file, { upsert: true });
-      if (error || !data) { alert('Erro ao enviar áudio: ' + (error?.message || 'sem resposta')); return; }
+      if (error || !data) { alert('Não foi possível enviar o áudio: ' + explicarErroDeEnvio(error, file)); return; }
       const { data: pub } = supabase.storage.from('crm-audios').getPublicUrl(path);
       setFormI(f => ({ ...f, audio_url: pub?.publicUrl || null }));
     } finally {

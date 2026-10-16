@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
 import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo, terminaEmEnvio } from './FluxoEntrega';
@@ -47,7 +48,7 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
       const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
       const ct = contentTypeUpload(f);
       const { data: up, error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: ct });
-      if (error || !up) { novasFalhas.push(`${f.name}: não foi enviado (${error?.message || 'sem resposta'}).`); continue; }
+      if (error || !up) { novasFalhas.push(`${f.name}: não foi enviado — ${explicarErroDeEnvio(error, f)}`); continue; }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       const { error: errReg } = await supabase.from('opl_anexos').insert({
         opl_id: oplId, opl_numero: oplNumero, setor: 'Comercial',

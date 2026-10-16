@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -1570,7 +1571,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         const ct = contentTypeUpload(abrirUploadFile);
         const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
         if (upErr) {
-          alert(`Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);
+          alert(`Falha ao enviar "${abrirUploadFile.name}": ${explicarErroDeEnvio(upErr, abrirUploadFile)}`);
           return;
         }
         const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
@@ -1670,7 +1671,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!modalAbrir) return;
     const ext = file.name.split('.').pop();
     const path = `crm-docs/${modalAbrir.id}/nota/${Date.now()}.${ext}`;
-    await supabase.storage.from('acn-media').upload(path, file);
+    const { error: erroImg } = await supabase.storage.from('acn-media').upload(path, file);
+    // 16/10/2026: a falha era ignorada e a nota recebia uma imagem quebrada, sem aviso
+    if (erroImg) { alert('Não foi possível inserir a imagem: ' + explicarErroDeEnvio(erroImg, file)); return; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
     abrirNotaRef.current?.focus();
     document.execCommand('insertHTML', false,
