@@ -56,6 +56,20 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
   return { formacao: f, itens };
 }
 
+/**
+ * Itens cuja quantidade PARECE ser o total do lote (pedido do usuário em 16/10/2026).
+ * Na Nova OP o item vale POR CARRO: o sistema copia a mesma lista em cada OP do lote. Numa venda de 20 carros, quem digitou 80 Slimleds, 20 Conjuntos e 20
+ * Instalações (o total) deixou cada carro com 80, 20 e 20 — foi o que aconteceu no lote A1704. A quantidade que "parece o total" é a que é múltiplo exato
+ * do número de carros (e pelo menos esse número): 80 e 20 num lote de 20. É só um palpite para avisar; quem tem certeza de que é por carro segue.
+ */
+export function itensQueParecemTotalDoLote(itens: any[], unidades: number) {
+  if (!(unidades > 1)) return [];
+  return itensPreenchidos(itens || [])
+    .map((i: any) => ({ nome: String(i.nome || '').trim(), quantidade: num(i.quantidade) }))
+    .filter(i => i.quantidade >= unidades && i.quantidade % unidades === 0)
+    .map(i => ({ ...i, porCarro: i.quantidade / unidades }));
+}
+
 /** Editor dos itens vendidos, com "carregar da formação" e "dividir por unidade" */
 export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unidades = 1 }: {
   itens: any[]; onChange: (v: any[]) => void; crmId?: string | null; licitacaoId?: string | null; unidades?: number;
@@ -63,6 +77,16 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
   const [carregando, setCarregando] = useState(false);
   const [aviso, setAviso] = useState('');
   const temVinculo = !!(crmId || licitacaoId);
+  const suspeitos = itensQueParecemTotalDoLote(itens, unidades);
+  // corrige só os suspeitos (o "÷ Dividir" divide todos); o que não parece total fica como está
+  const corrigirSuspeitos = () => {
+    const nomes = new Set(suspeitos.map(s => s.nome));
+    onChange(itens.map(i => {
+      const q = num(i.quantidade);
+      return nomes.has(String(i.nome || '').trim()) && q && q % unidades === 0 ? { ...i, quantidade: q / unidades } : i;
+    }));
+    setAviso(`Corrigido: ${suspeitos.map(s => `${s.nome} ${s.quantidade} → ${s.porCarro}`).join('; ')} por carro.`);
+  };
   const carregar = async () => {
     setCarregando(true); setAviso('');
     const { formacao, itens: vindos } = await itensDaFormacao({ crmId, licitacaoId });
@@ -97,6 +121,13 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
         </span>
       </div>
       {aviso && <div className="acn-opit-aviso">{aviso}</div>}
+      {suspeitos.length > 0 && (
+        <div className="acn-opit-aviso" role="alert" data-aviso="total-do-lote">
+          ⚠️ <strong>Isto parece o total do lote.</strong> Aqui o item vale <strong>por carro</strong> (cada uma das {unidades} OPs recebe a quantidade digitada):{' '}
+          {suspeitos.map(s => `${s.nome || 'item sem nome'}: ${s.quantidade} (por carro seria ${s.porCarro})`).join(' · ')}.{' '}
+          <Botao pequeno onClick={corrigirSuspeitos}>Corrigir para por carro</Botao>
+        </div>
+      )}
       <ItensDemandaEditor itens={itens.length ? itens : [itemVazio()]} onChange={onChange} titulo="" />
     </div>
   );

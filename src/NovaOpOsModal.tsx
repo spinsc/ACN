@@ -13,11 +13,11 @@ import { DEPTOS } from './RhDepartamentos';
 import { dividirValorEmUnidades } from './AcnTabShared';
 import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA, type GrupoLote } from './LoteMisto';
-import { ItensVendidosEditor } from './OpItens';
+import { ItensVendidosEditor, itensQueParecemTotalDoLote } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
 import { hojeISO, Botao } from './Interface';
 import { lerValorDigitado } from './LerValor';
-import { mostrarAviso } from './Feedback';
+import { mostrarAviso, confirmar } from './Feedback';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
 import { modoDoVeiculoOuErro } from './ConfigEstrutura';
@@ -453,6 +453,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // mais abaixo) — a lista única daqui não vale nesse caso.
     if (form.tipo === 'OP' && !loteEhMisto && itensPreenchidos(form.itens_vendidos || []).length === 0) {
       setErro('Informe pelo menos 1 item vendido (o que o PCP vai receber para esta OP).'); return;
+    }
+    // Pedido do usuário em 16/10/2026: item que parece o TOTAL do lote (80 num lote de 20 carros) avisa e pede confirmação, porque aqui o item vale por carro
+    // e o sistema copia a quantidade digitada em cada OP do lote (aconteceu no lote A1704: 80, 20 e 20 em cada carro). Lote misto tem a lista de cada grupo; não entra.
+    if (form.tipo === 'OP' && !loteEhMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf)) {
+      const suspeitos = itensQueParecemTotalDoLote(form.itens_vendidos || [], Number(form.quantidade));
+      if (suspeitos.length) {
+        const ok = await confirmar(
+          `Estes itens parecem ser o TOTAL do lote de ${form.quantidade} carros, mas aqui o item vale POR CARRO (cada uma das ${form.quantidade} OPs receberia a quantidade digitada):\n\n` +
+          suspeitos.map(s => `• ${s.nome || 'item sem nome'}: ${s.quantidade} por carro (se for o total, seria ${s.porCarro} por carro)`).join('\n') +
+          `\n\nCriar a OP assim mesmo?`);
+        if (!ok) return;
+      }
     }
     // R8 (13/10/2026, decisão do usuário de 01/10/2026): quem abre a OP é quem sabe a resposta, e o PCP deve receber tudo respondido. Só vale quando o bloco "Sobre o carro"
     // aparece (a venda leva o Conjunto Elétrico e algum item tem pergunta) e há veículo escolhido — sem veículo as respostas nem são gravadas. Lote misto não mostra o bloco.

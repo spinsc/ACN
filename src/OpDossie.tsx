@@ -21,6 +21,7 @@ import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
 import { diaBR } from './Interface';
 import { OndeEstaAgora } from './OndeEstaAgora';
+import { DossieLote, baseDoLote } from './OpDossieLote';
 
 // Entrada, prazo e data do pedido são colunas do tipo date, e a data dos vínculos mistura date e data com hora: `diaBR` lê do texto a data pura e converte a que tem hora (R16, 05/10/2026; antes `new Date(d)`: 0 de 32 batiam com o banco).
 const fmtD   = (d) => diaBR(d);
@@ -107,6 +108,8 @@ export function DossieOp({ op, dossieCarregado = null }) {
   const [d, setD] = useState(dossieCarregado);
   const [carregando, setCarregando] = useState(!dossieCarregado);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  // dossiê do lote inteiro (pedido do usuário em 16/10/2026): troca esta tela pela do lote, com o botão de voltar
+  const [verLote, setVerLote] = useState(false);
 
   useEffect(() => {
     if (dossieCarregado) { setD(dossieCarregado); return; }
@@ -121,6 +124,7 @@ export function DossieOp({ op, dossieCarregado = null }) {
   if (!d) return <div style={{ padding: 20, fontSize: 12, color: '#64748b' }}>OP não encontrada.</div>;
 
   const { op: o, origem, vinculos, logs, acompanhamentos, irmas, pendencias, tempos, marcos } = d;
+  if (verLote) return <DossieLote base={baseDoLote(o.opl)} onVoltar={() => setVerLote(false)} />;
   const porGrupo = (g) => vinculos.filter(v => v.grupo === g);
   const totalHoras = tempos.reduce((s, t) => s + t.horas, 0);
 
@@ -134,11 +138,21 @@ export function DossieOp({ op, dossieCarregado = null }) {
             {o.cliente_nome || '—'}{o.modelo ? ` · ${o.modelo}` : ''}{o.placa ? ` · ${o.placa}` : ''}
           </div>
         </div>
-        <button onClick={() => gerarPdfDossie(d, setGerandoPdf)} disabled={gerandoPdf}
-          style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 5,
-            padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: gerandoPdf ? .6 : 1 }}>
-          {gerandoPdf ? 'Gerando...' : '📄 Baixar PDF'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {irmas.length > 0 && (
+            <button onClick={() => setVerLote(true)}
+              title="O lote inteiro numa página só, com PDF para imprimir"
+              style={{ background: '#fff', color: '#0f766e', border: '1px solid #0f766e', borderRadius: 5,
+                padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              📦 Dossiê do lote ({irmas.length + 1} unidades)
+            </button>
+          )}
+          <button onClick={() => gerarPdfDossie(d, setGerandoPdf)} disabled={gerandoPdf}
+            style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 5,
+              padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: gerandoPdf ? .6 : 1 }}>
+            {gerandoPdf ? 'Gerando...' : '📄 Baixar PDF'}
+          </button>
+        </div>
       </div>
 
       <OndeEstaAgora op={o} vinculos={vinculos} logs={logs} />
@@ -402,11 +416,18 @@ export function RelDossieOp() {
   const [buscando, setBuscando] = useState(false);
   const [dossie, setDossie] = useState(null);
   const [montando, setMontando] = useState(false);
+  // lote inteiro (pedido do usuário em 16/10/2026): quando o número digitado casa com várias unidades de um mesmo lote, a busca oferece o dossiê dele
+  const [lote, setLote] = useState(null);
+  const lotesAchados = (() => {
+    const porBase = new Map();
+    (opcoes || []).forEach(op => { if (/\/\d+$/.test(String(op.opl || '').trim())) porBase.set(baseDoLote(op.opl), (porBase.get(baseDoLote(op.opl)) || 0) + 1); });
+    return [...porBase.entries()].filter(([, n]) => n > 1);
+  })();
 
   const buscar = async (e) => {
     e?.preventDefault?.();
     if (!termo.trim()) return;
-    setBuscando(true); setDossie(null);
+    setBuscando(true); setDossie(null); setLote(null);
     const ops = await buscarOps(termo);
     setOpcoes(ops);
     setBuscando(false);
@@ -434,8 +455,16 @@ export function RelDossieOp() {
       {opcoes && opcoes.length === 0 && (
         <div style={{ fontSize: 12, color: '#b45309' }}>Nenhuma OP encontrada para "{termo}".</div>
       )}
-      {opcoes && opcoes.length > 1 && !dossie && (
+      {lote && <DossieLote base={lote} onVoltar={() => setLote(null)} />}
+      {opcoes && opcoes.length > 1 && !dossie && !lote && (
         <div style={{ marginBottom: 12 }}>
+          {lotesAchados.map(([base, n]) => (
+            <button key={base} onClick={() => setLote(base)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 6, padding: '8px 12px', border: '2px solid #0f766e', borderRadius: 5,
+                background: '#f0fdfa', color: '#0f766e', cursor: 'pointer', fontSize: 12, fontWeight: 800 }}>
+              📦 Dossiê do lote inteiro: {base} ({n} unidades)
+            </button>
+          ))}
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5 }}>{opcoes.length} OPs encontradas — escolha uma:</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {opcoes.map(op => (
