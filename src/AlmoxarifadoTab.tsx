@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
+import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERECO } from './EnderecoEntrega';
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -300,6 +301,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
       destino_cidade: opl.destino_cidade || '',
       destino_uf: opl.destino_uf || '',
       destino_cep: formatarCep(opl.destino_cep),
+      // endereço completo que o vendedor informou ao gerar a OP (15/10/2026); o Almoxarifado confere e, se preciso, ajusta — e o ajuste fica no histórico
+      destino_logradouro: opl.destino_logradouro || '', destino_numero: opl.destino_numero || '', destino_bairro: opl.destino_bairro || '',
+      destino_complemento: opl.destino_complemento || '', destino_destinatario: opl.destino_destinatario || '', destino_telefone: opl.destino_telefone || '',
       // CIF/FOB decide se esta OP abre cotação de frete ou vai direto para o
       // Comercial. Quando a OP chega aqui sem resposta, é aqui que ela é dada
       // — antes seguia calada como CIF (regra do usuário em 24/09/2026).
@@ -371,6 +375,14 @@ export default function AlmoxarifadoTab({ currentUser }) {
       alert('Informe quem paga o frete desta OP: CIF (a empresa) ou FOB (o cliente).\n\nÉ isso que decide se a Logística vai cotar o frete ou se a OP segue direto para a liberação comercial.');
       return;
     }
+    // Pedido do usuário em 15/10/2026: Venda para Envio com frete por conta da empresa exige o endereço completo — é o que a Logística vê na cotação.
+    // Quem deveria ter informado é o vendedor (ao gerar a OP); a OP antiga, sem ele, é completada aqui.
+    if (exigeEnderecoCompleto(modalEmbalagem.tipo_projeto, modalEmbalagem.fluxo_entrega, f.frete_responsavel)) {
+      const faltaEnd = enderecoQueFalta(f);
+      if (faltaEnd.length) {
+        mostrarAviso(`Frete por conta da empresa: a Logística cota o frete pelo endereço de entrega. Falta: ${faltaEnd.join(', ')}.`, 'atencao'); return;
+      }
+    }
     // Fluxo de envio: aqui a mercadoria sai da empresa. Se ainda há peça de
     // fabricação ou compra em aberto, o risco é enviar incompleto — então
     // avisa e pede confirmação (bloquear de vez pararia envio parcial, que é
@@ -424,6 +436,8 @@ Embalar e enviar assim mesmo?`)) return;
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
       destino_cep: formatarCep(f.destino_cep),
+      destino_logradouro: f.destino_logradouro?.trim() || null, destino_numero: f.destino_numero?.trim() || null, destino_bairro: f.destino_bairro?.trim() || null,
+      destino_complemento: f.destino_complemento?.trim() || null, destino_destinatario: f.destino_destinatario?.trim() || null, destino_telefone: f.destino_telefone?.trim() || null,
       // a resposta dada (ou corrigida) aqui fica na OP: da próxima vez que
       // alguém abrir esta OP, o selo mostra quem paga o frete
       frete_responsavel: f.frete_responsavel,
@@ -486,6 +500,10 @@ Embalar e enviar assim mesmo?`)) return;
       descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim() + (comRemessa ? ` — ${descricaoDaRemessa(opl, numeroRemessa, unidadesRemessa)}` : ''),
       destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
       cep_destino: formatarCep(f.destino_cep),
+      // endereço completo, tirado da OP no momento da embalagem: é o que a Logística lê na cotação
+      destino_endereco: enderecoEmLinha(f) || null,
+      destino_destinatario: f.destino_destinatario?.trim() || null,
+      destino_telefone: f.destino_telefone?.trim() || null,
       data_prevista: opl.data_prevista_entrega || null,
       quantidade_volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
       peso_total:         num(f.peso_total),
@@ -506,6 +524,24 @@ Embalar e enviar assim mesmo?`)) return;
       const { error: erroLig } = await supabase.from('op_remessas').update({ frete_id: freteCriado[0].id }).eq('id', remessaId);
       if (erroLig) mostrarAviso(`O frete da remessa ${numeroRemessa} foi aberto, mas não consegui ligá-lo à remessa (${erroLig.message}); o cancelamento da remessa não conseguirá cancelar o frete sozinho.`, 'atencao');
     }
+    // o ajuste do endereço de entrega pelo Almoxarifado fica no histórico da OP (quem informou foi o vendedor; aqui só se confere e corrige)
+    {
+      const CHAVES = ['destino_cep', 'destino_cidade', 'destino_uf', ...CAMPOS_ENDERECO.map(c => c.campo)];
+      const norm = (k: string, v: any) => (k === 'destino_cep' ? String(v ?? '').replace(/\D/g, '') : String(v ?? '').trim());
+      const mudou = CHAVES.filter(k => norm(k, opl[k]) !== norm(k, f[k]));
+      if (mudou.length) {
+        const rot = (k: string) => k === 'destino_cep' ? 'CEP' : k === 'destino_cidade' ? 'cidade' : k === 'destino_uf' ? 'UF' : (CAMPOS_ENDERECO.find(c => c.campo === k)?.rotulo.split(' (')[0] || k);
+        const texto = mudou.map(k => `${rot(k)}: ${String(opl[k] ?? '').trim() || '—'} → ${String(f[k] ?? '').trim() || '—'}`).join('; ');
+        const { error: erroEnd } = await supabase.from('logs_movimentacao_opl').insert([{
+          opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
+          evento: `Endereço de entrega conferido/ajustado na embalagem por ${currentUser?.nome || '—'} — ${texto}`,
+          status_anterior: opl.status_geral, status_novo: opl.status_geral,
+          usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+        }]);
+        if (erroEnd) mostrarAviso(`A embalagem foi gravada, mas o histórico do ajuste de endereço da OP ${opl.opl} não: ${erroEnd.message}`, 'atencao');
+      }
+    }
+
     // 3) quem vendeu precisa poder responder ao cliente sem perguntar a
     //    ninguém: "embalado, foi para cotação de frete" é exatamente o
     //    recado que falta hoje. Registra no acompanhamento e notifica.
@@ -1347,6 +1383,33 @@ Embalar e enviar assim mesmo?`)) return;
                   </div>
                 )}
               </div>
+
+              {/* Endereço completo (15/10/2026): vem preenchido pelo vendedor; com frete CIF a Logística cota por ele. Obrigatório em Venda para Envio. */}
+              {embForm.frete_responsavel === 'CIF' && (() => {
+                const obrig = exigeEnderecoCompleto(modalEmbalagem?.tipo_projeto, modalEmbalagem?.fluxo_entrega, 'CIF');
+                const campo = (id: string, chave: string, rotulo: string, extra: any = {}) => (
+                  <div className="form-group">
+                    <label className="acn-label" htmlFor={id}>{rotulo}{obrig ? ' *' : ''}</label>
+                    <input id={id} className="acn-input" value={embForm[chave] || ''} {...extra}
+                      onChange={e => setEmbForm(f => ({ ...f, [chave]: e.target.value }))} />
+                  </div>
+                );
+                return (
+                  <>
+                    <div className="acn-quadro-titulo acn-alm-secao">Endereço de entrega (a Logística cota o frete com ele)</div>
+                    <div className="form-row">
+                      {campo('alm-rua', 'destino_logradouro', 'Rua')}
+                      {campo('alm-num', 'destino_numero', 'Número')}
+                      {campo('alm-bairro', 'destino_bairro', 'Bairro')}
+                    </div>
+                    <div className="form-row">
+                      {campo('alm-compl', 'destino_complemento', 'Complemento', { placeholder: 'Se não houver: sem complemento' })}
+                      {campo('alm-dest', 'destino_destinatario', 'Quem recebe')}
+                      {campo('alm-tel', 'destino_telefone', 'Telefone de quem recebe', { inputMode: 'tel', placeholder: '(00) 00000-0000' })}
+                    </div>
+                  </>
+                );
+              })()}
 
               <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
               <div className="form-group">

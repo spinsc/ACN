@@ -335,6 +335,7 @@ function FretesPanel({ currentUser }: any) {
   // Edição da embalagem do frete (pedido do usuário em 15/10/2026): o Almoxarifado grava volumes, peso e medidas ao embalar,
   // e quando uma medida ficava em branco não havia onde corrigir depois. null = não está editando.
   const [editEmb, setEditEmb] = useState<any>(null);
+  const [opDoFrete, setOpDoFrete] = useState<any>(null);   // a OP ligada ao frete aberto (para avisar se ela é FOB)
   const [salvandoEmb, setSalvandoEmb] = useState(false);
   const [cotacoes, setCotacoes] = useState<any[]>([]);
   const [loadingCotacoes, setLoadingCotacoes] = useState(false);
@@ -512,6 +513,10 @@ function FretesPanel({ currentUser }: any) {
 
   const abrirModalFrete = async (f: any) => {
     setEditEmb(null);
+    setOpDoFrete(null);
+    if (f.vinculo_tipo === 'op_os' && f.vinculo_id) {
+      supabase.from('oples').select('id,opl,frete_responsavel').eq('id', f.vinculo_id).maybeSingle().then(({ data }: any) => setOpDoFrete(data || null));
+    }
     setModalFrete(f);
     setNovaCotacao({ ...VAZIO_COTACAO_FRETE });
     setNovoAnexoCotacao(null);
@@ -1187,12 +1192,26 @@ function FretesPanel({ currentUser }: any) {
               </Faixa>
             )}
 
+            {/* OP FOB (o cliente paga o frete) não passa pela cotação: se um frete foi ligado a ela por outro caminho, a Logística precisa saber antes de cotar (15/10/2026) */}
+            {opDoFrete?.frete_responsavel === 'FOB' && (
+              <Faixa tom="atencao" icone={mdiAlertOutline}>
+                A OP {opDoFrete.opl} está marcada como <strong>FOB — frete por conta do cliente</strong>. Em geral ela não passa por cotação: confirme com o Comercial antes de cotar.
+              </Faixa>
+            )}
+
             {(modalFrete.cnpj_cpf_pagador || modalFrete.cep_origem || modalFrete.cep_destino || modalFrete.cnpj_cpf_remetente ||
               modalFrete.cnpj_cpf_destinatario || modalFrete.valor_nota || modalFrete.quantidade_volumes || modalFrete.peso_total ||
-              modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento) && (
+              modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento || modalFrete.destino_endereco) && (
               <div className="acn-quadro acn-dados-grade">
                 {modalFrete.cnpj_cpf_pagador && <div><strong>Pagador:</strong> {modalFrete.cnpj_cpf_pagador}</div>}
                 {(modalFrete.cep_origem || modalFrete.cep_destino) && <div><strong>CEP:</strong> {modalFrete.cep_origem||'—'} → {modalFrete.cep_destino||'—'}</div>}
+                {/* endereço completo que o vendedor informou ao gerar a OP, copiado na embalagem (15/10/2026) */}
+                {modalFrete.destino_endereco
+                  ? <div><strong>Endereço de entrega:</strong> {modalFrete.destino_endereco}{modalFrete.destino && ` — ${modalFrete.destino}`}</div>
+                  : modalFrete.vinculo_tipo === 'op_os' && <div><strong>Endereço de entrega:</strong> <span className="acn-fraco">completo não informado (só CEP, cidade e UF) — peça ao vendedor</span></div>}
+                {(modalFrete.destino_destinatario || modalFrete.destino_telefone) && (
+                  <div><strong>Quem recebe:</strong> {[modalFrete.destino_destinatario, modalFrete.destino_telefone].filter(Boolean).join(' · ')}</div>
+                )}
                 {modalFrete.cnpj_cpf_remetente && <div><strong>Remetente:</strong> {modalFrete.cnpj_cpf_remetente}</div>}
                 {modalFrete.cnpj_cpf_destinatario && <div><strong>Destinatário:</strong> {modalFrete.cnpj_cpf_destinatario}</div>}
                 {modalFrete.valor_nota && <div><strong>Valor NF:</strong> {fmt(modalFrete.valor_nota)}</div>}

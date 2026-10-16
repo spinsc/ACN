@@ -427,6 +427,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // quando (id do card -> OPs). Chega depois do selo simples, porque o "desde quando" vem de
   // uma função do banco (Etapa 6.3 do PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026).
   const [oplsInfoPorCard, setOplsInfoPorCard] = useState<Record<string, any[]>>({});
+  const [cardsFob, setCardsFob] = useState<Record<string, boolean>>({});
 
   // ── modal ABRIR (split-screen CRM) ──
   const [modalAbrir, setModalAbrir]         = useState<any|null>(null);
@@ -525,7 +526,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!errPc) setPedidosCompra(pcData || []);
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
     const { data: oplsDosCards, error: errOplsCards } = await supabase
-      .from('oples').select('id,opl,status_geral,crm_oportunidade_id,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
+      .from('oples').select('id,opl,status_geral,crm_oportunidade_id,frete_responsavel,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
     if (errOplsCards) { carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
     const porCard: Record<string, string[]> = {};
     (oplsDosCards || []).forEach((o: any) => {
@@ -533,6 +534,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       (porCard[k] = porCard[k] || []).push(o.opl);
     });
     setOplsPorCard(porCard);
+    // card cuja OP tem frete por conta do cliente (FOB): o selo aparece junto do número da OP (pedido do usuário em 15/10/2026)
+    const fobPorCard: Record<string, boolean> = {};
+    (oplsDosCards || []).forEach((o: any) => { if (o.frete_responsavel === 'FOB') fobPorCard[String(o.crm_oportunidade_id)] = true; });
+    setCardsFob(fobPorCard);
     // "Onde está" de cada OP dos cards: fora do caminho principal (não atrasa a tela; o selo
     // simples aparece antes e ganha o setor e os dias quando a função do banco responde).
     // Encerradas não precisam de "desde quando".
@@ -1221,6 +1226,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       destino_cidade:        txt(oplFormEdit.destino_cidade),
       destino_uf:            txt(oplFormEdit.destino_uf),
       destino_cep:           soDigitosCep(oplFormEdit.destino_cep) === soDigitosCep(oplEditando.destino_cep) ? txt(oplFormEdit.destino_cep) : cepParaGravar(oplFormEdit.destino_cep),
+      destino_logradouro:    txt(oplFormEdit.destino_logradouro),
+      destino_numero:        txt(oplFormEdit.destino_numero),
+      destino_bairro:        txt(oplFormEdit.destino_bairro),
+      destino_complemento:   txt(oplFormEdit.destino_complemento),
+      destino_destinatario:  txt(oplFormEdit.destino_destinatario),
+      destino_telefone:      txt(oplFormEdit.destino_telefone),
       frete_responsavel:     txt(oplFormEdit.frete_responsavel),
       envio_obs:             txt(oplFormEdit.envio_obs),
       // datas e prazos
@@ -1436,7 +1447,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data, error: errLista } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,veiculo_id,fat_antecipado_em,fat_antecipado_por,fat_antecipado_motivo,data_emissao_nf,' + COLUNAS_MARCOS_OP)
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,frete_responsavel,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,veiculo_id,fat_antecipado_em,fat_antecipado_por,fat_antecipado_motivo,data_emissao_nf,' + COLUNAS_MARCOS_OP)
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     // 7.62: a leitura que falhava virava "Nenhuma OP em aberto" — e sumia com a lista que já estava na tela
@@ -2497,6 +2508,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 {resumoOps.texto}
               </Selo>
             )}
+            {cardsFob[String(op.id)] && (
+              <Selo familia="atencao" ponto={false} title="Frete por conta do cliente (FOB): a OP não vai para cotação de frete; depois de embalada segue para a liberação comercial e o faturamento.">
+                🚚 FOB
+              </Selo>
+            )}
           </div>
         )}
 
@@ -3245,7 +3261,7 @@ function ColunaRolavel({ children }: any) {
           // acabado de completá-los em "Editar"). O Fiscal não passa por esta conferência: a OP dele já passou pelo PCP há tempos.
           if (d.setor === 'PCP') {
             const { data: fresca, error: errFresca } = await supabase.from('oples')
-              .select('fluxo_entrega,tipo_projeto,origem_venda,itens_vendidos,frete_responsavel,veiculo_id').eq('id', o.id).maybeSingle();
+              .select('fluxo_entrega,tipo_projeto,origem_venda,itens_vendidos,frete_responsavel,veiculo_id,destino_cep,destino_cidade,destino_uf,destino_logradouro,destino_numero,destino_bairro,destino_complemento,destino_destinatario,destino_telefone').eq('id', o.id).maybeSingle();
             if (errFresca || !fresca) { mostrarAviso(`Não deu para conferir os dados da OP ${o.opl} antes de reenviar\n${errFresca?.message || 'OP não encontrada'}`, 'erro'); return; }
             const faltam = await camposQueFaltam(fresca);
             if (faltam.length) {

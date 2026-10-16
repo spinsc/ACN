@@ -455,7 +455,24 @@ export function SeloFrete({ o, compacto = false }: { o: any; compacto?: boolean 
   );
 }
 
-export function VeiculoOuEnvio({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
+/** Alerta de frete por conta do cliente (FOB), para todo mundo que olha a OP saber de relance (pedido do usuário em 15/10/2026): a OP não passa por cotação de
+ *  frete e, depois de embalada, segue para a liberação comercial e o faturamento. Só aparece em FOB; em CIF a informação está no detalhe da OP (SeloFrete). */
+export function SeloFreteCliente({ o }: { o: any }) {
+  if (o?.frete_responsavel !== 'FOB') return null;
+  return (
+    <div className="acn-ats-fob">
+      <Selo familia="atencao" ponto={false} title="O cliente paga o frete (FOB): esta OP não vai para cotação de frete; depois de embalada segue direto para a liberação comercial e o faturamento.">
+        🚚 FRETE DO CLIENTE (FOB)
+      </Selo>
+    </div>
+  );
+}
+
+export function VeiculoOuEnvio(props: { o: any; semPlaca?: boolean }) {
+  return (<><VeiculoOuEnvioBase {...props} /><SeloFreteCliente o={props.o} /></>);
+}
+
+function VeiculoOuEnvioBase({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
   const vazio = (v: any) => !v || !String(v).trim();
   const alerta = (t: string) => <span className="acn-ats-alerta">⚠️ {t}</span>;
   if (o?.tipo_projeto === TIPO_VENDA_ENVIO) {
