@@ -27,7 +27,7 @@ import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { lerValorDigitado } from './LerValor';
 import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
-import { SelectBusca, MenuAcoes } from './Interface';
+import { SelectBusca, MenuAcoes, Botao } from './Interface';
 import { itensAtivosDoCatalogo } from './ConfigEstrutura';
 import { centroDisponivel } from './CentroCustoShared';
 import { mdiPencilOutline, mdiCloseCircleOutline } from '@mdi/js';
@@ -1214,10 +1214,11 @@ export async function carregarItensControlados() {
 export function situacaoEstoque(item: any) {
   const saldo = num(item?.estoque_atual);
   const minimo = item?.estoque_minimo == null ? null : num(item.estoque_minimo);
-  if (saldo < 0) return { chave: 'negativo', texto: 'saldo negativo', cor: '#b91c1c', fundo: '#fee2e2' };
-  if (saldo === 0) return { chave: 'zerado', texto: 'sem saldo', cor: '#b91c1c', fundo: '#fee2e2' };
-  if (minimo != null && saldo <= minimo) return { chave: 'abaixo', texto: 'abaixo do mínimo', cor: '#b45309', fundo: '#fef3c7' };
-  return { chave: 'ok', texto: 'ok', cor: '#15803d', fundo: '#dcfce7' };
+  // 12e66 (16/10/2026): a cor do selo saiu daqui — quem pinta é a classe com o nome da situação (`acn-est-selo` e `acn-est-pe-sit` + `chave`), no `design.css`
+  if (saldo < 0) return { chave: 'negativo', texto: 'saldo negativo' };
+  if (saldo === 0) return { chave: 'zerado', texto: 'sem saldo' };
+  if (minimo != null && saldo <= minimo) return { chave: 'abaixo', texto: 'abaixo do mínimo' };
+  return { chave: 'ok', texto: 'ok' };
 }
 
 /** Selo de saldo, para as telas que mostram item controlado. */
@@ -1226,8 +1227,7 @@ export function SeloEstoque({ item, compacto = false }: any) {
   const s = situacaoEstoque(item);
   return (
     <span title={`Saldo ${fmtQtd(item.estoque_atual)}${item.estoque_minimo != null ? ` · mínimo ${fmtQtd(item.estoque_minimo)}` : ''}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.fundo, color: s.cor,
-        fontSize: compacto ? 8.5 : 9.5, fontWeight: 800, padding: '1px 7px', borderRadius: 9, whiteSpace: 'nowrap' }}>
+      className={'acn-est-selo ' + s.chave + (compacto ? ' compacto' : '')}>
       📦 {fmtQtd(item.estoque_atual)} {item.unidade || 'UN'}
     </span>
   );
@@ -1240,58 +1240,53 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
   const pode = podeGerirEstoque(currentUser);
   const ligado = !!form.controla_estoque;
   const dois = !!form.tem_inacabado;
-  const inp = { width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
-    fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
-  const lbl = { fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 };
 
   return (
-    <div style={{ marginBottom: 10, background: ligado ? '#f0fdf4' : '#f8fafc',
-      border: `1px solid ${ligado ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 6, padding: '9px 11px' }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: pode ? 'pointer' : 'not-allowed',
-        fontSize: 11, fontWeight: 700, color: ligado ? '#15803d' : '#334155', opacity: pode ? 1 : .6 }}>
+    <div className={'acn-est-ce-box' + (ligado ? ' ligado' : '')}>
+      <label className={'acn-est-ce-chk' + (ligado ? ' ligado' : '') + (pode ? '' : ' bloq')}>
         <input type="checkbox" checked={ligado} disabled={!pode}
-          onChange={e => set('controla_estoque', e.target.checked)} style={{ cursor: pode ? 'pointer' : 'not-allowed' }} />
+          onChange={e => set('controla_estoque', e.target.checked)} className={'acn-est-ce-cb' + (pode ? '' : ' bloq')} />
         📦 Controlar o estoque deste item
       </label>
-      <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+      <div className="acn-est-ce-ajuda">
         {ligado
           ? 'Ligado: este item dá baixa quando sai, confere o mínimo, pede compra sozinho quando falta e trava a liberação se não houver saldo.'
           : 'Desligado: o item circula normalmente, sem baixa, sem mínimo e sem travar nada. Ligue só depois de contar o que existe na prateleira.'}
       </div>
       {!pode && (
-        <div style={{ fontSize: 9, color: '#b45309', marginTop: 3 }}>
+        <div className="acn-est-ce-so-gerencia">
           Só o Almoxarifado e a gerência ligam ou desligam o controle.
         </div>
       )}
 
       {ligado && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 9 }}>
+        <div className="acn-est-ce-grade">
           <div>
-            <div style={lbl}>Saldo atual</div>
-            <div style={{ ...inp, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+            <div className="acn-est-ce-lbl">Saldo atual</div>
+            <div className="acn-est-ce-inp fixo">
               {fmtQtd(form.estoque_atual)} {form.unidade || 'UN'}
             </div>
-            <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>
+            <div className="acn-est-ce-nota">
               muda só por contagem, baixa ou entrada — não se digita aqui
             </div>
           </div>
           <div>
-            <div style={lbl}>Estoque mínimo</div>
-            <input type="number" min={0} step="any" style={inp} value={form.estoque_minimo ?? ''}
+            <div className="acn-est-ce-lbl">Estoque mínimo</div>
+            <input type="number" min={0} step="any" className="acn-est-ce-inp" value={form.estoque_minimo ?? ''}
               disabled={!pode} onChange={e => set('estoque_minimo', e.target.value)} placeholder="ex.: 10" />
-            <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>quando chegar aqui, pede compra</div>
+            <div className="acn-est-ce-nota">quando chegar aqui, pede compra</div>
           </div>
           <div>
-            <div style={lbl}>Estoque ideal</div>
-            <input type="number" min={0} step="any" style={inp} value={form.estoque_ideal ?? ''}
+            <div className="acn-est-ce-lbl">Estoque ideal</div>
+            <input type="number" min={0} step="any" className="acn-est-ce-inp" value={form.estoque_ideal ?? ''}
               disabled={!pode} onChange={e => set('estoque_ideal', e.target.value)} placeholder="ex.: 50" />
-            <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>até onde repor na compra</div>
+            <div className="acn-est-ce-nota">até onde repor na compra</div>
           </div>
         </div>
       )}
       {ligado && form.estoque_minimo != null && form.estoque_ideal != null
         && num(form.estoque_ideal) > 0 && num(form.estoque_ideal) <= num(form.estoque_minimo) && (
-        <div style={{ fontSize: 9, color: '#b91c1c', marginTop: 6, fontWeight: 700 }}>
+        <div className="acn-est-ce-aviso-ideal">
           ⚠️ O ideal precisa ser maior que o mínimo, senão a compra automática pede zero.
         </div>
       )}
@@ -1299,14 +1294,13 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
       {/* DOIS ESTADOS — o caso do suporte (28/09/2026).
           A peça é a mesma; o que muda é se ela já passou pelo acabamento. */}
       {ligado && (
-        <div style={{ marginTop: 10, borderTop: '1px solid #d1fae5', paddingTop: 9 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: pode ? 'pointer' : 'not-allowed',
-            fontSize: 11, fontWeight: 700, color: dois ? '#9a3412' : '#334155', opacity: pode ? 1 : .6 }}>
+        <div className="acn-est-ce-dois">
+          <label className={'acn-est-ce-chk' + (dois ? ' dois' : '') + (pode ? '' : ' bloq')}>
             <input type="checkbox" checked={dois} disabled={!pode}
               onChange={e => set('tem_inacabado', e.target.checked)} />
             🔧 Esta peça é guardada em dois estados (pronta e sem acabamento)
           </label>
-          <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+          <div className="acn-est-ce-ajuda">
             {dois
               ? 'A produção usa só a pronta. A bruta espera na prateleira porque o acabamento só compensa em quantidade.'
               : 'É o caso do suporte: cortado e dobrado de um lado, já pintado do outro. Ligue só se a fábrica guardar os dois.'}
@@ -1314,42 +1308,41 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
 
           {dois && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 9 }}>
+              <div className="acn-est-ce-grade">
                 <div>
-                  <div style={lbl}>Saldo sem acabamento</div>
-                  <div style={{ ...inp, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                  <div className="acn-est-ce-lbl">Saldo sem acabamento</div>
+                  <div className="acn-est-ce-inp fixo">
                     {fmtQtd(form.estoque_inacabado)} {form.unidade || 'UN'}
                   </div>
-                  <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>muda quando o serviço volta</div>
+                  <div className="acn-est-ce-nota">muda quando o serviço volta</div>
                 </div>
                 <div>
-                  <div style={lbl}>Mínimo sem acabamento</div>
-                  <input type="number" min={0} step="any" style={inp} value={form.inacabado_minimo ?? ''}
+                  <div className="acn-est-ce-lbl">Mínimo sem acabamento</div>
+                  <input type="number" min={0} step="any" className="acn-est-ce-inp" value={form.inacabado_minimo ?? ''}
                     disabled={!pode} onChange={e => set('inacabado_minimo', e.target.value)} placeholder="ex.: 20" />
-                  <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>aqui pede corte e dobra</div>
+                  <div className="acn-est-ce-nota">aqui pede corte e dobra</div>
                 </div>
                 <div>
-                  <div style={lbl}>Ideal sem acabamento</div>
-                  <input type="number" min={0} step="any" style={inp} value={form.inacabado_ideal ?? ''}
+                  <div className="acn-est-ce-lbl">Ideal sem acabamento</div>
+                  <input type="number" min={0} step="any" className="acn-est-ce-inp" value={form.inacabado_ideal ?? ''}
                     disabled={!pode} onChange={e => set('inacabado_ideal', e.target.value)} placeholder="ex.: 100" />
-                  <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>até onde repor de peça bruta</div>
+                  <div className="acn-est-ce-nota">até onde repor de peça bruta</div>
                 </div>
               </div>
 
-              <div style={{ marginTop: 9 }}>
-                <div style={lbl}>O que falta para ficar pronta — o comprador lê isto para cotar</div>
-                <input style={inp} value={form.servico_acabamento || ''} disabled={!pode}
+              <div className="acn-est-ce-linha9">
+                <div className="acn-est-ce-lbl">O que falta para ficar pronta — o comprador lê isto para cotar</div>
+                <input className="acn-est-ce-inp" value={form.servico_acabamento || ''} disabled={!pode}
                   onChange={e => set('servico_acabamento', e.target.value)}
                   placeholder="ex.: pintura eletrostática preta" />
               </div>
-              <div style={{ marginTop: 7 }}>
-                <div style={lbl}>Como a peça bruta nasce</div>
-                <input style={inp} value={form.servico_bruto || ''} disabled={!pode}
+              <div className="acn-est-ce-linha7">
+                <div className="acn-est-ce-lbl">Como a peça bruta nasce</div>
+                <input className="acn-est-ce-inp" value={form.servico_bruto || ''} disabled={!pode}
                   onChange={e => set('servico_bruto', e.target.value)}
                   placeholder="ex.: corte a laser e dobra, chapa 3mm" />
               </div>
-              <div style={{ fontSize: 9, color: '#9a3412', marginTop: 7, background: '#fff7ed',
-                border: '1px solid #fed7aa', borderRadius: 4, padding: '6px 8px' }}>
+              <div className="acn-est-ce-fluxo">
                 Pronta no mínimo → pede o acabamento da peça bruta que houver.
                 Se não houver bruta suficiente, sai junto o pedido de corte e dobra do que falta.
                 Bruta no mínimo → pede corte e dobra. As duas vão para o Compras.
@@ -1424,49 +1417,47 @@ export function CamposEstruturaChicote({ item, currentUser }: any) {
   };
 
   if (!item?.id) return (
-    <div style={{ fontSize: 9.5, color: '#94a3b8', fontStyle: 'italic', marginBottom: 10 }}>
+    <div className="acn-est-ch-nota-i">
       Salve o item primeiro para cadastrar a estrutura de material.
     </div>
   );
 
   return (
-    <div style={{ marginBottom: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '9px 11px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>🧵 Estrutura deste chicote</div>
-      <div style={{ fontSize: 9, color: '#78350f', marginTop: 3, marginBottom: 8 }}>
+    <div className="acn-est-ch-caixa">
+      <div className="acn-est-ch-titulo">🧵 Estrutura deste chicote</div>
+      <div className="acn-est-ch-ajuda">
         Quanto de cada material 1 unidade deste chicote consome ao ser fabricada — fio por cor, conexão,
         terminal. Ao dar entrada no estoque desta fabricação, o sistema desconta isto sozinho, na quantidade
         que o setor de fato produziu. Sem nada aqui, a entrada credita só o chicote, como sempre foi.
       </div>
 
       {erroLeitura && !carregando && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>
+        <div className="acn-est-erro">
           Não foi possível ler a estrutura deste chicote ({erroLeitura}).{materiais.length ? ' A lista abaixo pode estar desatualizada.' : ' Não dá para saber o que já está cadastrado.'}{' '}
-          <button onClick={carregar} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+          <Botao className="acn-est-b acn-est-erro-bt" onClick={carregar}>Tentar de novo</Botao>
         </div>
       )}
       {carregando ? (
-        <div style={{ fontSize: 10, color: '#94a3b8' }}>Carregando...</div>
+        <div className="acn-est-ch-dim">Carregando...</div>
       ) : materiais.length === 0 ? (
-        !erroLeitura && <div style={{ fontSize: 9.5, color: '#94a3b8', fontStyle: 'italic', marginBottom: 8 }}>Nenhum material cadastrado ainda.</div>
+        !erroLeitura && <div className="acn-est-ch-vazio">Nenhum material cadastrado ainda.</div>
       ) : (
-        <div style={{ marginBottom: 8 }}>
+        <div className="acn-est-ch-lista">
           {materiais.map(m => (
-            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: '1px solid #fef3c7' }}>
-              <span style={{ flex: 1, fontSize: 10.5, color: '#1e293b' }}>
+            <div className="acn-est-ch-linha" key={m.id}>
+              <span className="acn-est-ch-nome">
                 {m.material?.codigo ? m.material.codigo + ' · ' : ''}{m.material?.nome}
                 {!m.material?.controla_estoque && (
-                  <span style={{ color: '#b45309', fontSize: 8.5, marginLeft: 5 }}>(sem controle de estoque ligado)</span>
+                  <span className="acn-est-ch-un">(sem controle de estoque ligado)</span>
                 )}
               </span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>
+              <span className="acn-est-ch-qtd">
                 {fmtQtd(m.quantidade)} {m.material?.unidade || 'UN'} / chicote
               </span>
               {pode && (
-                <button onClick={() => remover(m)} title="Remover"
-                  style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #fca5a5', borderRadius: 4,
-                    background: '#fff', color: '#dc2626', cursor: 'pointer' }}>
+                <Botao className="acn-est-b acn-est-ch-remover" onClick={() => remover(m)} title="Remover">
                   ✕
-                </button>
+                </Botao>
               )}
             </div>
           ))}
@@ -1474,22 +1465,19 @@ export function CamposEstruturaChicote({ item, currentUser }: any) {
       )}
 
       {pode && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: 2, minWidth: 180 }}>
-            <div style={{ fontSize: 8.5, color: '#78350f', marginBottom: 2 }}>Material</div>
+        <div className="acn-est-ch-form">
+          <div className="acn-est-ch-campo">
+            <div className="acn-est-ch-rotulo">Material</div>
             <SelectBusca valor={materialId} onChange={setMaterialId} opcoes={opcoes}
               placeholder="— escolha o material —" vazio="— nenhum material —" />
           </div>
-          <div style={{ width: 110 }}>
-            <div style={{ fontSize: 8.5, color: '#78350f', marginBottom: 2 }}>Qtd / chicote</div>
-            <input type="number" min={0} step="any" value={qtdNova} onChange={e => setQtdNova(e.target.value)}
-              style={{ width: '100%', padding: '6px 8px', border: '1px solid #fbbf24', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+          <div className="acn-est-ch-campo-qtd">
+            <div className="acn-est-ch-rotulo">Qtd / chicote</div>
+            <input className="acn-est-ch-entrada" type="number" min={0} step="any" value={qtdNova} onChange={e => setQtdNova(e.target.value)} />
           </div>
-          <button onClick={adicionar} disabled={salvando}
-            style={{ fontSize: 10, fontWeight: 700, padding: '6px 14px', border: 'none', borderRadius: 4,
-              background: '#b45309', color: '#fff', cursor: 'pointer' }}>
+          <Botao className="acn-est-b acn-est-ch-adicionar" onClick={adicionar} disabled={salvando}>
             {salvando ? '...' : '+ Adicionar'}
-          </button>
+          </Botao>
         </div>
       )}
     </div>
@@ -1641,74 +1629,68 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
     onClose();
   };
 
-  const inp = { width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
-    fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
-
   return (
-    <div className="modal-overlay" style={{ zIndex: 2100 }}>
-      <div className="modal-box" style={{ maxWidth: 620, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="modal-overlay acn-est-sobre">
+      <div className="modal-box acn-est-mr-caixa">
         <div className="modal-title">📤 Registrar retirada de material</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+        <div className="acn-est-dica">
           Só aparecem itens sob controle de estoque. O que não está sob controle sai como sempre, sem registro.
         </div>
 
         <label className="acn-label">Quem retirou *</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={quemRetirou} autoFocus
+        <input className="acn-input acn-est-mr-campo" value={quemRetirou} autoFocus
           onChange={e => setQuemRetirou(e.target.value)} placeholder="Nome de quem levou o material" />
 
         <label className="acn-label">Para onde foi</label>
-        <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
+        <div className="acn-est-mr-chips">
           {[{ v: 'nenhum', r: 'Uso geral' }, { v: 'op', r: 'Uma OP' }, { v: 'centro', r: 'Centro de custo' }].map(o => (
-            <button key={o.v} type="button" onClick={() => setDestino(o.v as any)}
-              style={{ fontSize: 10, fontWeight: 700, padding: '4px 11px', borderRadius: 4, cursor: 'pointer',
-                border: '1px solid ' + (destino === o.v ? '#0f766e' : '#cbd5e1'),
-                background: destino === o.v ? '#ccfbf1' : '#fff',
-                color: destino === o.v ? '#115e59' : '#64748b' }}>
+            <Botao key={o.v} type="button" onClick={() => setDestino(o.v as any)}
+              className={'acn-est-b ' + ('acn-est-mr-chip' + (destino === o.v ? ' on' : ''))}>
               {o.r}
-            </button>
+            </Botao>
           ))}
         </div>
         {destino === 'op' && (
-          <div style={{ marginBottom: 10 }}>
+          <div className="acn-est-mr-bloco">
             <SelectBusca valor={oplId} onChange={setOplId} placeholder="— procure a OP —" vazio="— nenhuma OP —"
               opcoes={opls.map(o => ({ valor: o.id, rotulo: `OP ${o.opl}`,
                 detalhe: o.cliente_nome || '', busca: [o.opl, o.cliente_nome] }))} />
           </div>
         )}
         {destino === 'centro' && (
-          <div style={{ marginBottom: 10 }}>
+          <div className="acn-est-mr-bloco">
             <SelectBusca valor={centroId} onChange={setCentroId} placeholder="— procure o centro de custo —" vazio="— nenhum —"
               opcoes={centros.map(c => ({ valor: c.id, rotulo: `${c.codigo ? c.codigo + ' · ' : ''}${c.nome}`,
                 busca: [c.codigo, c.nome] }))} />
           </div>
         )}
         {destino !== 'nenhum' && erroDestino && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 10 }}>
+          <div className="acn-est-mr-erro">
             {erroDestino}{' '}
-            <button type="button" onClick={() => carregarDestino(destino)} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+            <Botao className="acn-est-b acn-est-erro-bt" type="button" onClick={() => carregarDestino(destino)}>Tentar de novo</Botao>
           </div>
         )}
         {destino === 'nenhum' && (
-          <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 10 }}>
+          <div className="acn-est-mr-sem-destino">
             Sem destino o material sai do saldo mas não entra no custo de nenhuma OP nem de nenhum setor.
           </div>
         )}
 
         {erroItens && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>
+          <div className="acn-est-erro">
             Não foi possível ler os itens sob controle ({erroItens}). {disponiveis.length ? 'A lista de itens e os saldos podem estar desatualizados.' : 'Sem a lista não dá para escolher o item.'}{' '}
-            <button type="button" onClick={carregarItens} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+            <Botao className="acn-est-b acn-est-erro-bt" type="button" onClick={carregarItens}>Tentar de novo</Botao>
           </div>
         )}
 
-        <div style={{ overflowY: 'auto', flex: 1 }}>
+        <div className="acn-est-mr-rolagem">
           {linhas.map((l, i) => {
             const saldo = l.item ? num(l.item.estoque_atual) : null;
             const pedido = num(l.quantidade);
             const passaDoSaldo = l.item && pedido > saldo;
             return (
-              <div key={l.chave} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 6 }}>
-                <div style={{ flex: 3 }}>
+              <div className="acn-est-mr-linha" key={l.chave}>
+                <div className="acn-est-mr-item">
                   {/* select com busca: hoje são poucos itens sob controle, mas o
                       cadastro tem 4.436 e a lista vai crescer — rolar não serve,
                       tem que dar para digitar (pedido de 24/09/2026) */}
@@ -1723,58 +1705,56 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
                       busca: [d.codigo, d.nome],
                     }))} />
                   {passaDoSaldo && (
-                    <div style={{ fontSize: 9, color: '#b45309', marginTop: 2 }}>
+                    <div className="acn-est-mr-aviso-saldo">
                       Pedido maior que o saldo ({fmtQtd(saldo)}): o saldo vai ficar negativo.
                     </div>
                   )}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <input type="number" min={0} step="any" style={inp} value={l.quantidade}
+                <div className="acn-est-cresce">
+                  <input type="number" min={0} step="any" className="acn-est-mr-inp" value={l.quantidade}
                     onChange={e => set(i, { quantidade: e.target.value })} placeholder="Qtd" />
                 </div>
-                <button onClick={async () => { if (!await confirmarRemocao('esta linha da retirada')) return; setLinhas(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [linhaRetiradaVazia()]); }}
-                  title="Remover linha"
-                  style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', fontSize: 11 }}>✕</button>
+                <Botao className="acn-est-b acn-est-mr-remover" onClick={async () => { if (!await confirmarRemocao('esta linha da retirada')) return; setLinhas(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [linhaRetiradaVazia()]); }}
+                  title="Remover linha">✕</Botao>
               </div>
             );
           })}
-          <button onClick={() => setLinhas(ls => [...ls, linhaRetiradaVazia()])}
-            style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', border: '1px dashed #cbd5e1', borderRadius: 4, background: '#fff', color: '#475569', cursor: 'pointer' }}>
+          <Botao className="acn-est-b acn-est-mr-mais" onClick={() => setLinhas(ls => [...ls, linhaRetiradaVazia()])}>
             ＋ Mais um item
-          </button>
+          </Botao>
         </div>
 
-        <label className="acn-label" style={{ marginTop: 10 }}>Observação</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={observacoes}
+        <label className="acn-label acn-est-mr-obs">Observação</label>
+        <input className="acn-input acn-est-mr-campo" value={observacoes}
           onChange={e => setObservacoes(e.target.value)} placeholder="Ex.: para a manutenção da prensa" />
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="acn-btn" style={{ background: '#0f766e', flex: 1, opacity: salvando ? .6 : 1 }}
+        <div className="acn-est-botoes">
+          <Botao className={'acn-est-b ' + ('acn-est-bt teal cresce' + (salvando ? ' ocupado' : ''))}
             disabled={salvando} onClick={revisar}>
             {salvando ? 'Registrando...' : `Conferir e registrar (${preenchidas.length} item${preenchidas.length === 1 ? '' : 's'})`}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao className="acn-est-b acn-est-bt cinza" disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
 
       {/* Conferência antes da baixa. Fica por cima do formulário, que continua
           intacto atrás: dizer "não" é só fechar isto e voltar a ajustar. */}
       {conferindo && (
-        <div className="modal-overlay" style={{ zIndex: 2200 }}>
-          <div className="modal-box" style={{ maxWidth: 980, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-overlay acn-est-mr-sobre2">
+          <div className="modal-box acn-est-mr-caixa-conf">
             <div className="modal-title">Confirmar a baixa no estoque</div>
-            <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 10 }}>
-              Retirado por <b style={{ color: '#0f172a' }}>{quemRetirou.trim()}</b>
-              {vinculoDaRetirada() ? <> · para <b style={{ color: '#0f172a' }}>{vinculoDaRetirada()?.descricao}</b></> : <> · uso geral</>}
+            <div className="acn-est-mr-resumo">
+              Retirado por <b className="acn-est-mr-forte">{quemRetirou.trim()}</b>
+              {vinculoDaRetirada() ? <> · para <b className="acn-est-mr-forte">{vinculoDaRetirada()?.descricao}</b></> : <> · uso geral</>}
               {observacoes.trim() ? <> · {observacoes.trim()}</> : null}
             </div>
 
-            <div style={{ overflowY: 'auto', flex: 1 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <div className="acn-est-mr-rolagem">
+              <table className="acn-est-mr-tab">
                 <thead>
-                  <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+                  <tr className="acn-est-tr-cab">
                     {['Item', 'Sai', 'Saldo hoje', 'Fica com'].map(h => (
-                      <th key={h} style={{ padding: '4px 7px', fontSize: 9, fontWeight: 700, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
+                      <th key={h}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -1785,16 +1765,15 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
                     const fica = saldo - sai;
                     const minimo = l.item.estoque_minimo == null ? null : num(l.item.estoque_minimo);
                     return (
-                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '4px 7px' }}>
+                      <tr className="acn-est-tr" key={i}>
+                        <td>
                           {l.item.codigo ? <b>{l.item.codigo}</b> : null} {l.item.nome}
                         </td>
-                        <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                        <td className="acn-est-td-forte">
                           −{fmtQtd(sai)} {l.item.unidade || 'UN'}
                         </td>
-                        <td style={{ padding: '4px 7px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtQtd(saldo)}</td>
-                        <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap',
-                          color: fica < 0 ? '#b91c1c' : (minimo != null && fica <= minimo) ? '#b45309' : '#15803d' }}>
+                        <td className="acn-est-mr-td-saldo">{fmtQtd(saldo)}</td>
+                        <td className={'acn-est-mr-fica ' + (fica < 0 ? 'neg' : (minimo != null && fica <= minimo) ? 'min' : 'ok')}>
                           {fmtQtd(fica)}
                           {fica < 0 ? ' · negativo' : (minimo != null && fica <= minimo) ? ' · no mínimo' : ''}
                         </td>
@@ -1805,31 +1784,29 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
               </table>
 
               {preenchidas.some(l => num(l.item.estoque_atual) - num(l.quantidade) < 0) && (
-                <div style={{ fontSize: 10, color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca',
-                  borderRadius: 6, padding: '7px 10px', marginTop: 8 }}>
+                <div className="acn-est-mr-aviso-neg">
                   Algum saldo vai ficar negativo. Isso é permitido — só quer dizer que a prateleira
                   tinha mais do que o sistema achava. Vale fazer uma contagem depois.
                 </div>
               )}
               {preenchidas.some(l => { const m = l.item.estoque_minimo; return m != null && num(l.item.estoque_atual) - num(l.quantidade) <= num(m); }) && (
-                <div style={{ fontSize: 10, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a',
-                  borderRadius: 6, padding: '7px 10px', marginTop: 8 }}>
+                <div className="acn-est-mr-aviso-min">
                   Item chegando no mínimo: a reposição vai ser pedida ao Compras sozinha ao confirmar.
                 </div>
               )}
             </div>
 
-            <div style={{ fontSize: 10, color: '#64748b', margin: '10px 0' }}>
+            <div className="acn-est-mr-nota">
               Baixa não tem desfazer: o saldo muda e fica registrado no extrato. Se algo estiver errado,
               volte e ajuste a lista.
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="acn-btn" style={{ background: '#0f766e', flex: 1, opacity: salvando ? .6 : 1 }}
+            <div className="acn-est-botoes">
+              <Botao className={'acn-est-b ' + ('acn-est-bt teal cresce' + (salvando ? ' ocupado' : ''))}
                 disabled={salvando} onClick={gravar}>
                 {salvando ? 'Registrando...' : 'Confirmar baixa'}
-              </button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando}
-                onClick={() => setConferindo(false)}>Voltar e ajustar</button>
+              </Botao>
+              <Botao className="acn-est-b acn-est-bt cinza" disabled={salvando}
+                onClick={() => setConferindo(false)}>Voltar e ajustar</Botao>
             </div>
           </div>
         </div>
@@ -1913,70 +1890,67 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr" style={{ background: '#eff6ff', borderBottom: '2px solid #2563eb' }}>
-        <span style={{ color: '#1d4ed8' }}>🔧 Fabricação pronta para conferir ({fila.length || (erroFila ? '?' : 0)})</span>
+      <div className="sec-hdr acn-est-pf-cab">
+        <span className="acn-est-pf-tit">🔧 Fabricação pronta para conferir ({fila.length || (erroFila ? '?' : 0)})</span>
       </div>
       <div className="sec-body">
         {erroFila && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>
+          <div className="acn-est-erro">
             Não foi possível ler a fila de fabricação ({erroFila}). {fila.length ? 'A lista abaixo pode estar desatualizada.' : 'Pode haver peça pronta esperando entrada.'}{' '}
-            <button type="button" onClick={recarregar} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+            <Botao className="acn-est-b acn-est-erro-bt" type="button" onClick={recarregar}>Tentar de novo</Botao>
           </div>
         )}
-        <div style={{ fontSize: 10, color: '#1e40af', marginBottom: 8 }}>
+        <div className="acn-est-pf-ajuda">
           O setor terminou e informou quanto produziu. Confira na prateleira e confirme —
           é a confirmação que faz o saldo subir, não a conclusão do setor.
         </div>
         {fila.map(d => (
-          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '1px solid #f1f5f9' }}>
-            <span style={{ flex: 1, fontSize: 11 }}>
+          <div className="acn-est-pf-linha" key={d.id}>
+            <span className="acn-est-pf-desc">
               {String(d.descricao || '').split('\n')[0]}
-              <span style={{ color: '#64748b', fontSize: 9, marginLeft: 6 }}>
+              <span className="acn-est-pf-det">
                 {d.setor_destino}{d.numero_demanda ? ` · ${d.numero_demanda}` : ''}
                 {d.numero_opl ? ` · OP ${d.numero_opl}` : ''}
               </span>
             </span>
-            <span style={{ fontSize: 10, color: '#334155', whiteSpace: 'nowrap' }}>
+            <span className="acn-est-pf-prod">
               produziu <b>{fmtQtd(d.quantidade_produzida ?? d.quantidade)}</b> {d.unidade || 'un'}
               {d.quantidade_produzida != null && num(d.quantidade_produzida) !== num(d.quantidade) && (
-                <span style={{ color: '#94a3b8' }}> · pedido {fmtQtd(d.quantidade)}</span>
+                <span className="acn-est-pf-traco"> · pedido {fmtQtd(d.quantidade)}</span>
               )}
             </span>
-            <button onClick={() => abrir(d)}
-              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#2563eb', color: '#fff', cursor: 'pointer' }}>
+            <Botao className="acn-est-b acn-est-pf-entrada" onClick={() => abrir(d)}>
               Conferir e dar entrada
-            </button>
+            </Botao>
           </div>
         ))}
       </div>
 
       {conferindo && (
         <div className="modal-overlay" onClick={() => !salvando && setConferindo(null)}>
-          <div className="modal-box" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-box acn-est-pf-caixa" onClick={e => e.stopPropagation()}>
             <div className="modal-title">🔧 Dar entrada no estoque</div>
-            <div style={{ fontSize: 11, color: '#334155', margin: '8px 0' }}>
+            <div className="acn-est-pf-texto">
               {String(conferindo.descricao || '').split('\n')[0]}
             </div>
-            <label style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 2 }}>
+            <label className="acn-est-pf-rotulo">
               QUANTO CHEGOU DE VERDADE
             </label>
-            <input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} autoFocus
-              style={{ width: '100%', padding: '6px 8px', border: '1px solid #93c5fd', borderRadius: 4, fontSize: 12, boxSizing: 'border-box' }} />
-            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 4 }}>
+            <input className="acn-est-pf-campo" inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} autoFocus />
+            <div className="acn-est-pf-dica">
               O setor informou {fmtQtd(conferindo.quantidade_produzida ?? conferindo.quantidade)} {conferindo.unidade || 'un'}.
               Se chegou menos, corrija aqui — vale o que está na prateleira.
             </div>
 
             {erroEstrutura && (
-              <div style={{ fontSize: 9.5, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, padding: '6px 8px', marginTop: 8 }}>
+              <div className="acn-est-pf-erro">
                 ⚠️ Não foi possível ler a estrutura do chicote ({erroEstrutura}). A entrada só é feita com a estrutura lida, para não creditar o chicote sem descontar o material — feche e abra de novo.
               </div>
             )}
             {consumoPrevisto.length > 0 && (
-              <div style={{ fontSize: 9.5, color: '#78350f', background: '#fffbeb', border: '1px solid #fde68a',
-                borderRadius: 4, padding: '6px 8px', marginTop: 8 }}>
+              <div className="acn-est-pf-aviso">
                 🧵 Esta entrada também vai descontar da estrutura do chicote:
-                <ul style={{ margin: '3px 0 0', paddingLeft: 16 }}>
+                <ul className="acn-est-pf-lista">
                   {consumoPrevisto.map((m: any) => (
                     <li key={m.id}>{fmtQtd(m.aConsumir)} {m.material?.unidade || 'UN'} de {m.material?.nome}</li>
                   ))}
@@ -1984,15 +1958,13 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button onClick={confirmar_} disabled={salvando}
-                style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+            <div className="acn-est-pf-botoes">
+              <Botao className="acn-est-b acn-est-pf-confirma" onClick={confirmar_} disabled={salvando}>
                 {salvando ? '...' : '✓ Dar entrada'}
-              </button>
-              <button onClick={() => setConferindo(null)} disabled={salvando}
-                style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', fontSize: 11, cursor: 'pointer' }}>
+              </Botao>
+              <Botao className="acn-est-b acn-est-pf-volta" onClick={() => setConferindo(null)} disabled={salvando}>
                 Cancelar
-              </button>
+              </Botao>
             </div>
           </div>
         </div>
@@ -2053,36 +2025,36 @@ function ModalCategoriasEstoque({ categorias, itens, currentUser, onClose, onMud
   };
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 2100 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 460 }} role="dialog" aria-label="Categorias do estoque">
+    <div className="modal-overlay acn-est-sobre" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-est-mc-caixa" role="dialog" aria-label="Categorias do estoque">
         <div className="modal-title">🗂️ Categorias do estoque</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+        <div className="acn-est-dica">
           Só para organizar a lista de itens sob controle (não é a categoria fiscal do cadastro de itens). A categoria de cada item é escolhida na própria lista.
         </div>
         {categorias.length === 0 && <div className="acn-empty">Nenhuma categoria ainda. Crie a primeira abaixo.</div>}
         {categorias.map((c: any, idx: number) => (
-          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
+          <div className="acn-est-mc-linha" key={c.id}>
             {editando?.id === c.id ? (<>
-              <input className="acn-input" style={{ flex: 1 }} autoFocus value={editando.nome} onChange={e => setEditando({ id: c.id, nome: e.target.value })}
+              <input className="acn-input acn-est-cresce" autoFocus value={editando.nome} onChange={e => setEditando({ id: c.id, nome: e.target.value })}
                 onKeyDown={e => { if (e.key === 'Enter') renomear(); }} />
-              <button className="acn-btn" style={{ background: '#16a34a' }} disabled={ocupado} onClick={renomear}>Salvar</button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setEditando(null)}>Cancelar</button>
+              <Botao className="acn-est-b acn-est-bt verde" disabled={ocupado} onClick={renomear}>Salvar</Botao>
+              <Botao className="acn-est-b acn-est-bt cinza" onClick={() => setEditando(null)}>Cancelar</Botao>
             </>) : (<>
-              <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.nome} <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 10 }}>· {itens.filter((i: any) => i.categoria_estoque_id === c.id).length} itens</span></span>
-              <button title="Subir" aria-label={'Subir ' + c.nome} disabled={ocupado || idx === 0} onClick={() => mover(idx, -1)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>▲</button>
-              <button title="Descer" aria-label={'Descer ' + c.nome} disabled={ocupado || idx === categorias.length - 1} onClick={() => mover(idx, 1)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>▼</button>
-              <button title="Renomear" aria-label={'Renomear ' + c.nome} onClick={() => setEditando({ id: c.id, nome: c.nome })} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>✎</button>
-              <button title="Apagar" aria-label={'Apagar ' + c.nome} disabled={ocupado} onClick={() => apagar(c)} style={{ border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', borderRadius: 4, cursor: 'pointer' }}>✕</button>
+              <span className="acn-est-mc-nome">{c.nome} <span className="acn-est-mc-qtd">· {itens.filter((i: any) => i.categoria_estoque_id === c.id).length} itens</span></span>
+              <Botao className="acn-est-b acn-est-mc-icone" title="Subir" aria-label={'Subir ' + c.nome} disabled={ocupado || idx === 0} onClick={() => mover(idx, -1)}>▲</Botao>
+              <Botao className="acn-est-b acn-est-mc-icone" title="Descer" aria-label={'Descer ' + c.nome} disabled={ocupado || idx === categorias.length - 1} onClick={() => mover(idx, 1)}>▼</Botao>
+              <Botao className="acn-est-b acn-est-mc-icone" title="Renomear" aria-label={'Renomear ' + c.nome} onClick={() => setEditando({ id: c.id, nome: c.nome })}>✎</Botao>
+              <Botao className="acn-est-b acn-est-mc-apagar" title="Apagar" aria-label={'Apagar ' + c.nome} disabled={ocupado} onClick={() => apagar(c)}>✕</Botao>
             </>)}
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-          <input className="acn-input" style={{ flex: 1 }} placeholder="Nova categoria (ex.: Parafusos)" value={novo} onChange={e => setNovo(e.target.value)}
+        <div className="acn-est-mc-nova">
+          <input className="acn-input acn-est-cresce" placeholder="Nova categoria (ex.: Parafusos)" value={novo} onChange={e => setNovo(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') criar(); }} />
-          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={ocupado || !novo.trim()} onClick={criar}>Criar</button>
+          <Botao className="acn-est-b acn-est-bt verde" disabled={ocupado || !novo.trim()} onClick={criar}>Criar</Botao>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Fechar</button>
+        <div className="acn-est-mc-fecha">
+          <Botao className="acn-est-b acn-est-bt cinza" onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -2263,96 +2235,90 @@ export function PainelEstoque({ currentUser }: any) {
   const abaixo = itens.filter(i => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(i).chave));
 
   return (
-    <div className="sec-card" style={{ marginTop: 12 }}>
-      <div className="sec-hdr" style={{ background: '#f0fdf4', borderBottom: '2px solid #16a34a' }}>
-        <span style={{ color: '#15803d' }}>📦 Estoque sob controle ({itens.length})</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="sec-card acn-est-pe-cartao">
+      <div className="sec-hdr acn-est-pe-cab">
+        <span className="acn-est-pe-tit">📦 Estoque sob controle ({itens.length})</span>
+        <div className="acn-est-pe-acoes">
           {abaixo.length > 0 && (
-            <span style={{ fontSize: 9, fontWeight: 800, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10 }}>
+            <span className="acn-est-pe-selo-baixo">
               {abaixo.length} precisando de reposição
             </span>
           )}
           {pode && itens.length > 0 && (
-            <button onClick={e => { e.stopPropagation(); rodarVarredura(); }} disabled={varrendo}
+            <Botao onClick={e => { e.stopPropagation(); rodarVarredura(); }} disabled={varrendo}
               title="Conferir todos os itens controlados e abrir o que estiver faltando"
-              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#b45309', color: '#fff', cursor: varrendo ? 'wait' : 'pointer' }}>
+              className={'acn-est-b ' + ('acn-est-pe-varre' + (varrendo ? ' espera' : ''))}>
               {varrendo ? 'Conferindo…' : '🔎 Conferir mínimos'}
-            </button>
+            </Botao>
           )}
           {pode && (
-            <button onClick={e => { e.stopPropagation(); setGerindoCats(true); }}
-              title="Criar, renomear, ordenar e apagar as categorias do estoque"
-              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: '1px solid #16a34a', borderRadius: 4, background: '#fff', color: '#15803d', cursor: 'pointer' }}>
+            <Botao className="acn-est-b acn-est-pe-categorias" onClick={e => { e.stopPropagation(); setGerindoCats(true); }}
+              title="Criar, renomear, ordenar e apagar as categorias do estoque">
               🗂️ Categorias
-            </button>
+            </Botao>
           )}
           {pode && itens.length > 0 && (
-            <button onClick={e => { e.stopPropagation(); setRetirando(true); }}
-              title="Registrar o que alguém veio buscar no balcão"
-              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#0f766e', color: '#fff', cursor: 'pointer' }}>
+            <Botao className="acn-est-b acn-est-pe-retirada" onClick={e => { e.stopPropagation(); setRetirando(true); }}
+              title="Registrar o que alguém veio buscar no balcão">
               📤 Registrar retirada
-            </button>
+            </Botao>
           )}
         </div>
       </div>
       <div className="sec-body">
-        <div style={{ fontSize: 10, color: '#166534', marginBottom: 8 }}>
+        <div className="acn-est-pe-intro">
           Só os itens desta lista têm controle. Os demais circulam normalmente, sem baixa e sem travar nada —
           é assim que dá para contar a prateleira aos poucos, começando pelos itens mais usados.
         </div>
 
         {pode && (
-          <div style={{ marginBottom: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+          <div className="acn-est-pe-novo">
+            <div className="acn-est-pe-novo-tit">
               ＋ Colocar mais um item sob controle
             </div>
-            <input value={procurarNovo} onChange={e => setProcurarNovo(e.target.value)}
-              placeholder="Procure pelo nome ou código do item (3 letras ou mais)"
-              style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+            <input className="acn-est-pe-busca" value={procurarNovo} onChange={e => setProcurarNovo(e.target.value)}
+              placeholder="Procure pelo nome ou código do item (3 letras ou mais)" />
             {achados.map(a => (
-              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: '1px solid #f1f5f9' }}>
-                <span style={{ fontSize: 10.5, flex: 1 }}>
+              <div className="acn-est-pe-achado" key={a.id}>
+                <span className="acn-est-pe-achado-nome">
                   {a.codigo ? <b>{a.codigo}</b> : null} {a.nome}
                 </span>
-                <button onClick={() => ligarControle(a)}
-                  style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: 'none', borderRadius: 4, background: '#16a34a', color: '#fff', cursor: 'pointer' }}>
+                <Botao className="acn-est-b acn-est-pe-controlar" onClick={() => ligarControle(a)}>
                   Controlar
-                </button>
+                </Botao>
               </div>
             ))}
-            {erroBusca && <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 4 }}>Não foi possível procurar ({erroBusca}).</div>}
-            {buscou && !achados.length && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>Nenhum item encontrado entre os que ainda não estão sob controle.</div>}
+            {erroBusca && <div className="acn-est-pe-busca-erro">Não foi possível procurar ({erroBusca}).</div>}
+            {buscou && !achados.length && <div className="acn-est-pe-busca-vazia">Nenhum item encontrado entre os que ainda não estão sob controle.</div>}
           </div>
         )}
 
         {(erroLeitura.itens || erroLeitura.reservas || erroLeitura.extrato) && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>
+          <div className="acn-est-erro">
             Não foi possível ler {[erroLeitura.itens && `a lista de itens (${erroLeitura.itens})`, erroLeitura.reservas && `as reservas (${erroLeitura.reservas})`, erroLeitura.extrato && `o extrato (${erroLeitura.extrato})`].filter(Boolean).join(', ')}.
             {erroLeitura.reservas ? ' As colunas Reservado e Disponível podem estar erradas.' : ''}{erroLeitura.itens && itens.length ? ' A tabela mostra a última lista lida.' : ''}{' '}
-            <button type="button" onClick={recarregar} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+            <Botao className="acn-est-b acn-est-erro-bt" type="button" onClick={recarregar}>Tentar de novo</Botao>
           </div>
         )}
         {erroCategorias && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>
+          <div className="acn-est-erro">
             Não foi possível ler as categorias do estoque ({erroCategorias}). A lista abaixo aparece sem separação por categoria.{' '}
-            <button onClick={recarregar} style={{ border: '1px solid #b91c1c', background: '#fff', color: '#b91c1c', borderRadius: 4, fontSize: 9, cursor: 'pointer' }}>Tentar de novo</button>
+            <Botao className="acn-est-b acn-est-erro-bt" onClick={recarregar}>Tentar de novo</Botao>
           </div>
         )}
         {categorias.length > 0 && itens.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Categoria</span>
-            <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} aria-label="Filtrar por categoria"
-              style={{ padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11 }}>
+          <div className="acn-est-pe-filtro">
+            <span className="acn-est-pe-filtro-rot">Categoria</span>
+            <select className="acn-est-pe-filtro-sel" value={filtroCat} onChange={e => setFiltroCat(e.target.value)} aria-label="Filtrar por categoria">
               <option value="">Todas ({filtradaPorBusca.length})</option>
               {categorias.map(c => <option key={c.id} value={c.id}>{c.nome} ({filtradaPorBusca.filter(i => i.categoria_estoque_id === c.id).length})</option>)}
               {filtradaPorBusca.some(i => !i.categoria_estoque_id) && <option value="sem">Sem categoria ({filtradaPorBusca.filter(i => !i.categoria_estoque_id).length})</option>}
             </select>
-            {filtroCat && <button onClick={() => setFiltroCat('')} style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11 }}>✕ limpar</button>}
+            {filtroCat && <Botao className="acn-est-b acn-est-pe-limpar" onClick={() => setFiltroCat('')}>✕ limpar</Botao>}
           </div>
         )}
         {itens.length > 6 && (
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar a lista..."
-            style={{ width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11, marginBottom: 8, boxSizing: 'border-box' }} />
+          <input className="acn-est-pe-filtra" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar a lista..." />
         )}
 
         {carregando ? (
@@ -2364,25 +2330,25 @@ export function PainelEstoque({ currentUser }: any) {
             </div>
           )
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
+          <table className="acn-est-pe-tab">
             <thead>
-              <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+              <tr className="acn-est-tr-cab">
                 {['Código', 'Item', ...(pode && categorias.length ? ['Categoria'] : []), 'Saldo', 'Reservado', 'Disponível', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
-                  <th key={h} style={{ padding: '4px 7px', fontSize: 9, fontWeight: 700, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {grupos.length === 0 && (
-                <tr><td colSpan={10} style={{ padding: 10, textAlign: 'center', color: '#94a3b8' }}>Nenhum item nesta categoria{busca.trim() ? ' com esse filtro' : ''}.</td></tr>
+                <tr><td className="acn-est-pe-vazio-td" colSpan={10}>Nenhum item nesta categoria{busca.trim() ? ' com esse filtro' : ''}.</td></tr>
               )}
               {grupos.map(g => (<React.Fragment key={g.id || 'todos'}>
               {g.nome && (
                 <tr>
-                  <td colSpan={10} style={{ padding: '7px 7px 3px', fontSize: 10, fontWeight: 800, color: '#15803d', background: '#f0fdf4', borderTop: '2px solid #bbf7d0' }}>
-                    {g.nome} <span style={{ fontWeight: 600, color: '#64748b' }}>· {g.itens.length} {g.itens.length === 1 ? 'item' : 'itens'}
+                  <td className="acn-est-pe-grupo" colSpan={10}>
+                    {g.nome} <span className="acn-est-pe-grupo-n">· {g.itens.length} {g.itens.length === 1 ? 'item' : 'itens'}
                       {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length > 0
-                        && <b style={{ color: '#b45309' }}> · {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length} precisando de reposição</b>}
+                        && <b className="acn-est-pe-grupo-rep"> · {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length} precisando de reposição</b>}
                     </span>
                   </td>
                 </tr>
@@ -2390,14 +2356,14 @@ export function PainelEstoque({ currentUser }: any) {
               {g.itens.map(i => {
                 const s = situacaoEstoque(i);
                 return (
-                  <tr key={i.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>{i.codigo || '—'}</td>
-                    <td style={{ padding: '4px 7px' }}>
+                  <tr className="acn-est-tr" key={i.id}>
+                    <td className="acn-est-pe-cod">{i.codigo || '—'}</td>
+                    <td>
                       {i.nome}
                       {/* peça guardada em dois estados: a bruta espera o
                           acabamento e não serve para a produção ainda */}
                       {i.tem_inacabado && (
-                        <div style={{ fontSize: 8.5, color: '#9a3412', marginTop: 1 }}>
+                        <div className="acn-est-pe-inacab">
                           🔧 {fmtQtd(i.estoque_inacabado)} sem acabamento
                           {i.inacabado_minimo != null && ` (mín. ${fmtQtd(i.inacabado_minimo)})`}
                           {num(i.inacabado_minimo) > 0 && num(i.estoque_inacabado) <= num(i.inacabado_minimo)
@@ -2406,38 +2372,35 @@ export function PainelEstoque({ currentUser }: any) {
                       )}
                     </td>
                     {pode && categorias.length > 0 && (
-                      <td style={{ padding: '4px 7px' }}>
-                        <select value={i.categoria_estoque_id || ''} onChange={e => trocarCategoria(i, e.target.value)} aria-label={'Categoria de ' + i.nome}
-                          style={{ padding: '2px 4px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 10, maxWidth: 150 }}>
+                      <td>
+                        <select className="acn-est-pe-cat-sel" value={i.categoria_estoque_id || ''} onChange={e => trocarCategoria(i, e.target.value)} aria-label={'Categoria de ' + i.nome}>
                           <option value="">— sem categoria —</option>
                           {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </td>
                     )}
-                    <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
+                    <td className="acn-est-td-forte">{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
                     {/* saldo é o que está na prateleira; disponível é o que ainda
                         não tem dono. A diferença é o que outra OP já levou no papel. */}
-                    <td style={{ padding: '4px 7px', color: num(reservas.get(i.id)) > 0 ? '#b45309' : '#cbd5e1', whiteSpace: 'nowrap' }}>
+                    <td className={'acn-est-pe-reserv' + (num(reservas.get(i.id)) > 0 ? ' tem' : '')}>
                       {num(reservas.get(i.id)) > 0 ? fmtQtd(reservas.get(i.id)) : '—'}
                     </td>
-                    <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap',
-                      color: num(i.estoque_atual) - num(reservas.get(i.id)) < 0 ? '#dc2626' : '#0f766e' }}>
+                    <td className={'acn-est-pe-disp' + (num(i.estoque_atual) - num(reservas.get(i.id)) < 0 ? ' neg' : '')}>
                       {fmtQtd(num(i.estoque_atual) - num(reservas.get(i.id)))}
                     </td>
-                    <td style={{ padding: '4px 7px', color: '#64748b' }}>{i.estoque_minimo == null ? '—' : fmtQtd(i.estoque_minimo)}</td>
-                    <td style={{ padding: '4px 7px', color: '#64748b' }}>{i.estoque_ideal == null ? '—' : fmtQtd(i.estoque_ideal)}</td>
-                    <td style={{ padding: '4px 7px' }}>
-                      <span style={{ background: s.fundo, color: s.cor, fontSize: 8.5, fontWeight: 800, padding: '1px 7px', borderRadius: 9, whiteSpace: 'nowrap' }}>
+                    <td className="acn-est-pe-td-dim">{i.estoque_minimo == null ? '—' : fmtQtd(i.estoque_minimo)}</td>
+                    <td className="acn-est-pe-td-dim">{i.estoque_ideal == null ? '—' : fmtQtd(i.estoque_ideal)}</td>
+                    <td>
+                      <span className={'acn-est-pe-sit ' + s.chave}>
                         {s.texto}
                       </span>
                     </td>
-                    <td style={{ padding: '4px 7px', textAlign: 'right' }}>
+                    <td className="acn-est-pe-td-dir">
                       {pode && (
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
-                          <button onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}
-                            style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #cbd5e1', borderRadius: 4, background: '#fff', color: '#334155', cursor: 'pointer' }}>
+                        <div className="acn-est-pe-acoes-linha">
+                          <Botao className="acn-est-b acn-est-pe-contar" onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}>
                             Contar
-                          </button>
+                          </Botao>
                           <MenuAcoes itens={[
                             { rotulo: 'Definir mínimo e ideal', icone: mdiPencilOutline, onClick: () => abrirLimites(i) },
                             { rotulo: 'Tirar do controle de estoque', icone: mdiCloseCircleOutline, perigo: true,
@@ -2456,30 +2419,29 @@ export function PainelEstoque({ currentUser }: any) {
 
         {/* extrato recente: é o que dá confiança de que o saldo não muda sozinho */}
         {movimentos.length > 0 && (
-          <div style={{ marginTop: 10, borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
-            <button onClick={() => setVerExtrato(v => !v)}
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 9.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+          <div className="acn-est-pe-extrato">
+            <Botao className="acn-est-b acn-est-pe-extrato-bt" onClick={() => setVerExtrato(v => !v)}>
               {verExtrato ? '▾' : '▸'} Últimos movimentos ({movimentos.length})
-            </button>
+            </Botao>
             {verExtrato && (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, marginTop: 6 }}>
+              <table className="acn-est-pe-extrato-tab">
                 <tbody>
                   {movimentos.map(m => {
                     const sinal = m.tipo === 'saida' ? '−' : m.tipo === 'entrada' ? '+' : '=';
-                    const cor = m.tipo === 'saida' ? '#b91c1c' : m.tipo === 'entrada' ? '#15803d' : '#475569';
+                    const tom = m.tipo === 'saida' ? 'saida' : m.tipo === 'entrada' ? 'entrada' : 'outro';
                     return (
-                      <tr key={m.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '3px 6px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                      <tr className="acn-est-tr" key={m.id}>
+                        <td className="acn-est-pe-mov-data">
                           {new Date(m.criado_em).toLocaleDateString('pt-BR')}
                         </td>
-                        <td style={{ padding: '3px 6px' }}>{m.item_nome}</td>
-                        <td style={{ padding: '3px 6px', fontWeight: 800, color: cor, whiteSpace: 'nowrap' }}>
+                        <td>{m.item_nome}</td>
+                        <td className={'acn-est-pe-mov-q ' + tom}>
                           {sinal}{fmtQtd(m.quantidade)}
                         </td>
-                        <td style={{ padding: '3px 6px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                        <td className="acn-est-pe-mov-saldo">
                           saldo {fmtQtd(m.saldo_depois)}
                         </td>
-                        <td style={{ padding: '3px 6px', color: '#64748b' }}>
+                        <td className="acn-est-pe-mov-motivo">
                           {/* o destino da retirada entra no extrato: é ele que
                               diz para qual OP ou setor o material foi */}
                           {m.motivo === MOTIVO.RETIRADA && m.retirado_por_nome
@@ -2508,71 +2470,71 @@ export function PainelEstoque({ currentUser }: any) {
       )}
 
       {definindo && (
-        <div className="modal-overlay" style={{ zIndex: 2100 }}>
-          <div className="modal-box" style={{ maxWidth: 420 }}>
+        <div className="modal-overlay acn-est-sobre">
+          <div className="modal-box acn-est-pe-modal">
             <div className="modal-title">🎯 Mínimo e ideal — {definindo.nome}</div>
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+            <div className="acn-est-dica">
               O mínimo é onde a compra dispara. O ideal é até onde repor: o pedido é a diferença entre
               o saldo e o ideal, para não pedir de novo na semana seguinte.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="acn-est-pe-limites-grade">
               <div>
                 <label className="acn-label">Estoque mínimo</label>
-                <input type="number" min={0} step="any" autoFocus className="acn-input" style={{ width: '100%' }}
+                <input type="number" min={0} step="any" autoFocus className="acn-input acn-est-pe-largo"
                   value={formLimites.minimo} onChange={e => setFormLimites(f => ({ ...f, minimo: e.target.value }))}
                   placeholder="ex.: 10" />
               </div>
               <div>
                 <label className="acn-label">Estoque ideal</label>
-                <input type="number" min={0} step="any" className="acn-input" style={{ width: '100%' }}
+                <input type="number" min={0} step="any" className="acn-input acn-est-pe-largo"
                   value={formLimites.ideal} onChange={e => setFormLimites(f => ({ ...f, ideal: e.target.value }))}
                   placeholder="ex.: 50" />
               </div>
             </div>
-            <div style={{ fontSize: 10, color: '#64748b', margin: '8px 0 10px' }}>
+            <div className="acn-est-pe-saldo-hoje">
               Saldo de hoje: <b>{fmtQtd(definindo.estoque_atual)} {definindo.unidade || 'UN'}</b>.
               {formLimites.minimo !== '' && formLimites.ideal !== '' && num(formLimites.ideal) > num(formLimites.minimo) && (
                 <> Batendo o mínimo, o pedido sairia com {fmtQtd(Math.max(num(formLimites.ideal) - num(formLimites.minimo), 0))} ou mais.</>
               )}
               {formLimites.minimo === '' && <> Sem mínimo, este item não pede compra sozinho.</>}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="acn-btn" style={{ background: '#16a34a', flex: 1 }} onClick={gravarLimites}>Salvar</button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setDefinindo(null)}>Cancelar</button>
+            <div className="acn-est-botoes">
+              <Botao className="acn-est-b acn-est-bt verde cresce" onClick={gravarLimites}>Salvar</Botao>
+              <Botao className="acn-est-b acn-est-bt cinza" onClick={() => setDefinindo(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
       )}
 
       {contando && (
-        <div className="modal-overlay" style={{ zIndex: 2100 }}>
-          <div className="modal-box" style={{ maxWidth: 420 }}>
+        <div className="modal-overlay acn-est-sobre">
+          <div className="modal-box acn-est-pe-modal">
             <div className="modal-title">📦 Contagem — {contando.nome}</div>
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+            <div className="acn-est-dica">
               O saldo passa a ser exatamente o que você contar. A diferença fica registrada no extrato,
               com o saldo de antes e o de depois — nada é apagado.
             </div>
             <label className="acn-label">Quantidade contada na prateleira *</label>
-            <input type="number" min={0} step="any" autoFocus className="acn-input" style={{ width: '100%', marginBottom: 8 }}
+            <input type="number" min={0} step="any" autoFocus className="acn-input acn-est-pe-obs-campo"
               value={valorContagem} onChange={e => setValorContagem(e.target.value)} />
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+            <div className="acn-est-pe-contagem-nota">
               Sistema diz {fmtQtd(contando.estoque_atual)} {contando.unidade || 'UN'}
               {valorContagem !== '' && Number(valorContagem) !== Number(contando.estoque_atual || 0) && (
-                <b style={{ color: '#b45309' }}>
+                <b className="acn-est-pe-diferenca">
                   {' '}· diferença de {fmtQtd(Number(valorContagem) - Number(contando.estoque_atual || 0))}
                 </b>
               )}
             </div>
             <label className="acn-label">Observação</label>
-            <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={obsContagem}
+            <input className="acn-input acn-est-pe-obs" value={obsContagem}
               onChange={e => setObsContagem(e.target.value)} placeholder="Ex.: sobrou caixa fechada no fundo" />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="acn-btn" style={{ background: '#16a34a', flex: 1, opacity: salvando ? .6 : 1 }}
+            <div className="acn-est-botoes">
+              <Botao className={'acn-est-b ' + ('acn-est-bt verde cresce' + (salvando ? ' ocupado' : ''))}
                 disabled={salvando} onClick={gravarContagem}>
                 {salvando ? 'Gravando...' : 'Gravar contagem'}
-              </button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando}
-                onClick={() => setContando(null)}>Cancelar</button>
+              </Botao>
+              <Botao className="acn-est-b acn-est-bt cinza" disabled={salvando}
+                onClick={() => setContando(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
