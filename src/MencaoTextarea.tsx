@@ -227,9 +227,10 @@ interface Props {
   rows?: number;
   placeholder?: string;
   style?: React.CSSProperties;
+  className?: string;   // 12e67 (16/10/2026): a demanda avulsa troca o estilo solto de cada caixa por classe; sem isso a classe de quem chama não chegava ao campo
 }
 
-export default function MencaoTextarea({ value, onChange, rows = 3, placeholder, style }: Props) {
+export default function MencaoTextarea({ value, onChange, rows = 3, placeholder, style, className }: Props) {
   const users = useUsers();  // lista de usuários (cache singleton)
 
   const [sugestoes, setSugestoes] = useState<any[]>([]);
@@ -318,7 +319,7 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
         onKeyUp={handleKeyUp}
         rows={rows}
         placeholder={placeholder ?? 'Digite... use @Nome para mencionar alguém'}
-        className="acn-input acn-mtx"
+        className={'acn-input acn-mtx' + (className ? ' ' + className : '')}
         style={style}
       />
 
