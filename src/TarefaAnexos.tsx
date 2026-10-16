@@ -18,6 +18,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { ehGestorEngenharia } from './HorasExtras';
@@ -50,7 +51,7 @@ async function subirArquivo(file: File, tarefaId: string): Promise<string | null
   // Office e planilha sobem como octet-stream — ver FormatosArquivo.ts
   const { data, error } = await supabase.storage.from('acn-media')
     .upload(caminho, file, { upsert: true, contentType: contentTypeUpload(file) });
-  if (error || !data) { console.error('Upload do anexo falhou:', error?.message); return null; }
+  if (error || !data) { console.error('Upload do anexo falhou:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(caminho);
   return pub?.publicUrl || null;
 }
@@ -95,7 +96,7 @@ export function ModalAnexosTarefa({ tarefa, currentUser, onClose, onMudou }: any
     const falhas: string[] = [];
     for (const f of arquivos) {
       const url = await subirArquivo(f, tarefa.id);
-      if (!url) { falhas.push(f.name); setSubindo(n => n - 1); continue; }
+      if (!url) { falhas.push(`${f.name}: ${motivoDoUltimoEnvio()}`); setSubindo(n => n - 1); continue; }
       const { error } = await supabase.from('engenharia_tarefas_anexos').insert([{
         tarefa_id: tarefa.id,
         nome: f.name,
@@ -105,7 +106,7 @@ export function ModalAnexosTarefa({ tarefa, currentUser, onClose, onMudou }: any
         criado_por: currentUser?.email || null,
         criado_por_nome: currentUser?.nome || null,
       }]);
-      if (error) falhas.push(f.name);
+      if (error) falhas.push(`${f.name}: o arquivo subiu, mas não foi registrado na tarefa (${error.message})`);
       setSubindo(n => n - 1);
     }
     if (refArquivo.current) refArquivo.current.value = '';

@@ -22,15 +22,21 @@ const TIPOS = [
   { id: 'pv',     label: 'PV' },
   { id: 'compra', label: 'Compra' },
   { id: 'ofi',    label: 'OFI' },
+  { id: 'formacao', label: 'Formação de preço' },
 ];
 
-export const TIPO_LABEL: Record<string, string> = { op: 'OP', os: 'OS', pv: 'PV', compra: 'Compra', ofi: 'OFI' };
+// Pedido do usuário em 16/10/2026: a demanda avulsa também se vincula a uma formação de preço. Só a janela de vínculos da demanda avulsa mostra esse tipo
+// (TIPOS_DEMANDA_AVULSA); reposição do Almoxarifado, OFI e Compras seguem com os cinco de sempre. O tipo é texto livre no banco (vinculo_tipo / vinculos), nada mudou lá.
+export const TIPOS_PADRAO = ['op', 'os', 'pv', 'compra', 'ofi'];
+export const TIPOS_DEMANDA_AVULSA = [...TIPOS_PADRAO, 'formacao'];
+
+export const TIPO_LABEL: Record<string, string> = { op: 'OP', os: 'OS', pv: 'PV', compra: 'Compra', ofi: 'OFI', formacao: 'Formação de preço' };
 
 // contexto do deep-link (acn:abrir-registro) e aba de destino por tipo —
 // reaproveita os listeners que já existem em ProducaoTab/SacTab/CrmTab/
 // ComprasTab, nenhum listener novo fora do que o plano previu.
-const TIPO_CONTEXTO: Record<string, string> = { op: 'op', os: 'sac', pv: 'crm', compra: 'compra', ofi: 'ofi' };
-const TIPO_ABA: Record<string, string | null> = { op: 'producao', os: 'sac', pv: 'crm', compra: 'compras', ofi: null };
+const TIPO_CONTEXTO: Record<string, string> = { op: 'op', os: 'sac', pv: 'crm', compra: 'compra', ofi: 'ofi', formacao: 'formacao' };
+const TIPO_ABA: Record<string, string | null> = { op: 'producao', os: 'sac', pv: 'crm', compra: 'compras', ofi: null, formacao: 'formacao_precos' };
 const SETOR_DESTINO_ABA: Record<string, string> = { Chicotes: 'chicotes', Serralheria: 'serralheria', Laboratorio: 'laboratorio' };
 
 // Dispara o deep-link já estabelecido no app pra abrir o registro vinculado —
@@ -42,10 +48,26 @@ const SETOR_DESTINO_ABA: Record<string, string> = { Chicotes: 'chicotes', Serral
 // passar onNavigate por 3-4 níveis de componente até cada um deles.
 // 'ofi' precisa de uma consulta rápida pra saber o setor_destino (a aba não
 // é fixa como as demais) antes de decidir pra onde trocar.
+// Formação de preços mostra custo e margem. O menu só ESCONDE a aba de quem não a tem, mas não impede de abri-la por um vínculo: por isso o vínculo
+// só abre a formação para quem já tem a aba (mesma regra do menu em DashboardTab: Admin, ou sem lista de abas, ou com "formacao_precos" na lista). Decidido em 16/10/2026 — a confirmar.
+function podeAbrirFormacao(): boolean {
+  try {
+    const u = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!u) return false;
+    if (u.perfil === 'Admin') return true;
+    const abas = u.abas_permitidas;
+    return !Array.isArray(abas) || abas.length === 0 || abas.includes('formacao_precos');
+  } catch { return false; }
+}
+
 export async function abrirVinculo(v: VinculoValue | null | undefined) {
   if (!v?.id || !v?.tipo) return;
   const contexto = TIPO_CONTEXTO[v.tipo];
   if (!contexto) return;
+  if (v.tipo === 'formacao' && !podeAbrirFormacao()) {
+    alert('Você não tem acesso à tela de Formação de preços. Peça a quem tem acesso para abrir esta formação: ' + (v.descricao || ''));
+    return;
+  }
 
   let aba: string | null = TIPO_ABA[v.tipo];
   if (v.tipo === 'ofi') {
@@ -91,14 +113,25 @@ async function buscarPorTipo(tipo: string, q: string): Promise<{ id: string; des
         .order('criado_em', { ascending: false }).limit(8);
       return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero_ofi || '—'} — ${r.descricao || ''}`.replace(/ — $/, '') }));
     }
+    if (tipo === 'formacao') {
+      // o texto digitado vira parte do filtro do banco: vírgula, parênteses e curingas quebram o filtro (e a lista dizia "nada encontrado"), então saem
+      const limpo = q.replace(/[,()*%\\]/g, ' ').trim();
+      if (limpo.length < 2) return [];
+      const lk = `%${limpo}%`;
+      const { data } = await supabase.from('cotacoes_precos').select('id,nome,numero_cotacao,versao')
+        .or(`nome.ilike.${lk},numero_cotacao.ilike.${lk},empresa.ilike.${lk},orgao_cliente.ilike.${lk}`)
+        .order('criado_em', { ascending: false }).limit(8);
+      return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero_cotacao || 'sem nº'} — ${r.nome || 'sem nome'}${Number(r.versao) > 1 ? ' · v' + r.versao : ''}` }));
+    }
   } catch (_) { /* tabela pode não existir em algum ambiente antigo — falha silenciosa */ }
   return [];
 }
 
-export function VinculoPicker({ value, onSelect, onClear }: {
+export function VinculoPicker({ value, onSelect, onClear, tipos = TIPOS_PADRAO }: {
   value: VinculoValue | null;
   onSelect: (v: VinculoValue) => void;
   onClear: () => void;
+  tipos?: string[];   // quais tipos oferecer; sem dizer, os cinco de sempre
 }) {
   // começa sem tipo escolhido: o vínculo é opcional, a pessoa escolhe se precisar
   const [tipo, setTipo]           = useState('');
@@ -153,7 +186,7 @@ export function VinculoPicker({ value, onSelect, onClear }: {
   return (
     <div ref={wrapRef} className="acn-vcp">
       <Chips ativo={tipo} onChange={trocarTipo} rotulo="Tipo de vínculo" className="acn-vcp-tipos"
-        itens={TIPOS.map(t => ({ id: t.id, rotulo: t.label }))} />
+        itens={TIPOS.filter(t => tipos.includes(t.id)).map(t => ({ id: t.id, rotulo: t.label }))} />
       {tipo ? (
         <input
           className="acn-input acn-vcp-busca"

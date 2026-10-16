@@ -6,6 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { nomeSeguroDeArquivo } from './FormatosArquivo';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmar } from './Feedback';
 import { Botao } from './Interface';
 import Icone from './Icone';
@@ -30,17 +32,17 @@ export function ProdutoArquivos({ produtoId, currentUser, somenteLeitura = false
     setEnviando(true);
     const falhas: string[] = [];
     for (const f of Array.from(files)) {
-      const path = `produtos/${produtoId}/projeto/${Date.now()}_${f.name.replace(/\s/g, '_')}`;
+      const path = `produtos/${produtoId}/projeto/${Date.now()}_${nomeSeguroDeArquivo(f.name)}`;
       const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: false });
-      if (error) { falhas.push(f.name); continue; }
+      if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       const { error: e2 } = await supabase.from('cadastro_produtos_anexos').insert([{
         produto_id: produtoId, nome: f.name, url: pub.publicUrl, criado_por: currentUser?.nome || null,
       }]);
-      if (e2) falhas.push(f.name);
+      if (e2) falhas.push(`${f.name}: o arquivo subiu, mas não foi registrado no produto (${e2.message})`);
     }
     setEnviando(false);
-    if (falhas.length) alert('Não foi possível enviar: ' + falhas.join(', '));
+    if (falhas.length) alert('Não foi possível enviar:\n\n' + falhas.join('\n'));
     carregar();
   };
   const remover = async (a: any) => {

@@ -19,6 +19,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { logChange } from './AuditSystem';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -255,7 +256,7 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
     for (const f of arquivos) {
       const caminho = `financeiro-tarefas/${tarefaId}/${nomeSeguro(f.name)}`;
       const { error } = await supabase.storage.from('acn-media').upload(caminho, f, { upsert: false });
-      if (error) { alert(`Não subiu "${f.name}": ${error.message}`); continue; }
+      if (error) { alert(`Não subiu "${f.name}": ${explicarErroDeEnvio(error, f)}`); continue; }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(caminho);
       // 7.48: se a linha não grava, o arquivo subiu mas não aparece na lista — a pessoa precisa saber
       const { error: erroLinha } = await supabase.from('financeiro_tarefa_anexos').insert([{

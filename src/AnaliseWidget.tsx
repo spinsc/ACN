@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { ehAdminOuGerente, podeEditarParecerDaAnalise } from './utils/permissoes';
 import { pedirTexto, confirmar } from './Feedback';
 import { diaBR, Botao, Selo } from './Interface';
@@ -705,24 +706,26 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
   const uploadAnexo = async (solicitacaoId: string, files: FileList | File[]) => {
     setUploadando(solicitacaoId);
     const lista = Array.from(files);
+    const falhas: string[] = [];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
     for (const file of lista) {
       const path = `analise/${solicitacaoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-      const { data: up } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
-      if (up) {
-        const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-        await supabase.from('analise_anexos').insert({
-          solicitacao_id: solicitacaoId,
-          nome: file.name,
-          url: pub?.publicUrl || '',
-          criado_por: currentUser?.nome || 'Sistema',
-          setor,
-        });
-      }
+      const { data: up, error: erroUp } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
+      if (!up) { falhas.push(`${file.name}: ${explicarErroDeEnvio(erroUp, file)}`); continue; }
+      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      const { error: erroReg } = await supabase.from('analise_anexos').insert({
+        solicitacao_id: solicitacaoId,
+        nome: file.name,
+        url: pub?.publicUrl || '',
+        criado_por: currentUser?.nome || 'Sistema',
+        setor,
+      });
+      if (erroReg) falhas.push(`${file.name}: o arquivo subiu, mas não foi registrado na análise (${erroReg.message})`);
     }
     // reload anexos após enviar todos
     const { data: anx } = await supabase.from('analise_anexos').select('*').eq('solicitacao_id', solicitacaoId);
     setAnexos(prev => ({ ...prev, [solicitacaoId]: anx || [] }));
     setUploadando(null);
+    if (falhas.length) alert('Não foi possível anexar estes arquivos:\n\n' + falhas.join('\n'));
   };
 
   // Lista na ordem escolhida (só Telecom; nos outros setores segue a ordem de sempre)

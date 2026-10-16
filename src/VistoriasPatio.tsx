@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
@@ -232,7 +233,7 @@ export default function VistoriasPatio({ currentUser }) {
       if (!error) {
         const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
         urls.push(pub?.publicUrl || path);
-      } else falhas.push(`${f.name} (${error.message})`);
+      } else falhas.push(`${f.name} (${explicarErroDeEnvio(error, f)})`);
     }
     if (falhas.length) throw new Error((falhas.length === 1 ? 'a foto ' : 'as fotos ') + falhas.join(', '));
     return urls;
@@ -247,7 +248,7 @@ export default function VistoriasPatio({ currentUser }) {
       if (error) throw error;
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       return pub?.publicUrl;
-    } catch(e) { console.warn(e); throw new Error('a assinatura (' + (e?.message || 'falha no envio') + ')'); }
+    } catch(e) { console.warn(e); throw new Error('a assinatura (' + explicarErroDeEnvio(e) + ')'); }
   };
 
   const salvar = async () => {

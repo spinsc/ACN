@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { Botao, Chips } from './Interface';
@@ -82,7 +83,7 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
         .upload(path, f, { upsert: true, contentType: ct });
       if (error || !up) {
         console.error('Upload erro:', error?.message);
-        falhas.push(`${f.name} — ${error?.message || 'erro desconhecido'}`);
+        falhas.push(`${f.name} — ${explicarErroDeEnvio(error, f)}`);
         continue;
       }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);

@@ -16,6 +16,7 @@
 import React, { useState, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { Botao } from './Interface';
 import Icone from './Icone';
 import { mdiCameraOutline, mdiClose } from '@mdi/js';
@@ -64,7 +65,7 @@ export default function FotosVeiculo({ valor = [], onChange, currentUser, pasta 
       if (!String(f.type || '').startsWith('image/')) { setErro(`"${f.name}" não é uma imagem.`); continue; }
       const caminho = `${pasta}/${nomeSeguro(f.name)}`;
       const { error } = await supabase.storage.from(BUCKET).upload(caminho, f, { upsert: false });
-      if (error) { setErro(`Não subiu "${f.name}": ${error.message}`); continue; }
+      if (error) { setErro(`Não subiu "${f.name}": ${explicarErroDeEnvio(error, f)}`); continue; }
       const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(caminho);
       novas.push({
         url: pub.publicUrl, nome: f.name, tamanho: f.size,

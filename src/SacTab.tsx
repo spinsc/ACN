@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
-import { EXT_PLANILHAS } from './FormatosArquivo';
+import { EXT_PLANILHAS, nomeSeguroDeArquivo } from './FormatosArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
@@ -115,9 +116,10 @@ function SignCanvas({ onSave }) {
 }
 
 async function uploadFoto(file: File, pasta: string): Promise<string | null> {
-  const path = `sac/${pasta}/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
+  // 16/10/2026: só se trocava o espaço; nome com acento ou símbolo era recusado pelo armazenamento e a OS não abria sem dizer por quê
+  const path = `sac/${pasta}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return null;
+  if (error || !data) { registrarFalhaDeEnvio(error, file); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
@@ -126,7 +128,7 @@ async function uploadAssinatura(dataUrl: string, pasta: string): Promise<string 
   const blob = await (await fetch(dataUrl)).blob();
   const path = `sac/${pasta}/assinatura_${Date.now()}.png`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert: true });
-  if (error || !data) return null;
+  if (error || !data) { registrarFalhaDeEnvio(error); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
@@ -424,13 +426,13 @@ export default function SacTab({ currentUser }) {
     // deixa o formulário e os arquivos escolhidos como estão, para tentar de novo ou tirar o arquivo da lista. (Suposição minha, registrada no plano.)
     for (const f of fotosEntradaFiles) {
       const url = await uploadFoto(f, `os_${numero.replace('/','_')}/entrada`);
-      if (!url) { alert(`Não consegui enviar a foto "${f.name}". A OS NÃO foi aberta: tente de novo ou tire a foto da lista.`); setSalvando(false); return; }
+      if (!url) { alert(`Falha ao enviar a foto "${f.name}": ${motivoDoUltimoEnvio()}\n\nA OS NÃO foi aberta: corrija e tente de novo, ou tire a foto da lista.`); setSalvando(false); return; }
       urlsFotos.push(url);
     }
     const urlsArquivos: any[] = [];
     for (const f of arquivosEntradaFiles) {
       const result = await uploadArquivo(f, `os_${numero.replace('/','_')}/arquivos`);
-      if (!result) { alert(`Não consegui enviar o documento "${f.name}". A OS NÃO foi aberta: tente de novo ou tire o documento da lista.`); setSalvando(false); return; }
+      if (!result) { alert(`Falha ao enviar o documento "${f.name}": ${motivoDoUltimoEnvio()}\n\nA OS NÃO foi aberta: corrija e tente de novo, ou tire o documento da lista.`); setSalvando(false); return; }
       urlsArquivos.push({ ...result, enviado_em: new Date().toISOString(), enviado_por: currentUser?.nome||'' });
     }
 
@@ -612,7 +614,7 @@ export default function SacTab({ currentUser }) {
     const url = await uploadAssinatura(aprovForm.sig, `os_${modalAprov.numero_os.replace('/','_')}`);
     // Etapa 7.27: a assinatura que não subia era trocada por vazio ("assinatura_aprovacao_url: ''") e a aprovação seguia sem ela, mesmo a assinatura sendo obrigatória; a gravação recusada também seguia como se
     // tivesse dado certo (e criava a demanda do Laboratório e mandava o WhatsApp de uma aprovação que não foi gravada). Agora avisa e para; o que foi digitado e a assinatura desenhada continuam na janela.
-    if (!url) { alert('Não consegui enviar a assinatura. A aprovação NÃO foi registrada: tente de novo.'); return; }
+    if (!url) { alert('Falha ao enviar a assinatura: ' + motivoDoUltimoEnvio() + '\n\nA aprovação NÃO foi registrada: tente de novo.'); return; }
     const agora = new Date().toISOString();
 
     const { error } = await supabase.from('sac_ordens_servico').update({
@@ -674,12 +676,12 @@ export default function SacTab({ currentUser }) {
     const url = await uploadAssinatura(saidaForm.sig, `os_${modalSaida.numero_os.replace('/','_')}_saida`);
     // Etapa 7.27: assinatura ou foto de saída que não subia era descartada em silêncio (a OS ficava "Entregue" sem a prova da retirada) e a gravação recusada seguia como se tivesse dado certo, com o
     // WhatsApp de "OS entregue". Agora avisa e para; o formulário, a assinatura desenhada e as fotos escolhidas continuam como estão para tentar de novo.
-    if (!url) { alert('Não consegui enviar a assinatura. A entrega NÃO foi registrada: tente de novo.'); return; }
+    if (!url) { alert('Falha ao enviar a assinatura: ' + motivoDoUltimoEnvio() + '\n\nA entrega NÃO foi registrada: tente de novo.'); return; }
     const agora = new Date().toISOString();
     const urlsFotos: string[] = [];
     for (const f of fotosSaidaFiles) {
       const u = await uploadFoto(f, `os_${modalSaida.numero_os.replace('/','_')}/saida`);
-      if (!u) { alert(`Não consegui enviar a foto "${f.name}". A entrega NÃO foi registrada: tente de novo ou tire a foto da lista.`); return; }
+      if (!u) { alert(`Falha ao enviar a foto "${f.name}": ${motivoDoUltimoEnvio()}\n\nA entrega NÃO foi registrada: corrija e tente de novo, ou tire a foto da lista.`); return; }
       urlsFotos.push(u);
     }
     const { error } = await supabase.from('sac_ordens_servico').update({
@@ -881,9 +883,9 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
 
   // Upload genérico de arquivo
   const uploadArquivo = async (file: File, pasta: string): Promise<{nome:string;url:string;tipo:string}|null> => {
-    const path = `sac/${pasta}/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
+    const path = `sac/${pasta}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
     const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert:true, contentType:'application/octet-stream' });
-    if (error||!data) return null;
+    if (error||!data) { registrarFalhaDeEnvio(error, file); return null; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
     return { nome: file.name, url: pub?.publicUrl||'', tipo: file.type };
   };
@@ -897,7 +899,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
     const novos: any[] = [];
     for (const f of files) {
       const result = await uploadArquivo(f, `os_${os.numero_os.replace('/','_')}/arquivos`);
-      if (!result) { alert(`Não consegui enviar o arquivo "${f.name}". Nenhum arquivo foi anexado: tente de novo ou tire o arquivo da lista.`); setAnexosSendoUpload(false); return false; }
+      if (!result) { alert(`Falha ao enviar o arquivo "${f.name}": ${motivoDoUltimoEnvio()}\n\nNenhum arquivo foi anexado: corrija e tente de novo, ou tire o arquivo da lista.`); setAnexosSendoUpload(false); return false; }
       novos.push(result);
     }
     const { error } = await supabase.from('sac_ordens_servico').update({

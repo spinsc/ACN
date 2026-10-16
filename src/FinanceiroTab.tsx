@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA } from './ComprasFluxo';
 import { labelHierarquico, ModalLancarMedicao,
@@ -270,7 +271,7 @@ async function uploadNfFornecedor(file: File): Promise<{ url: string; error?: st
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `pcp-nf-fornecedor/${Date.now()}_${nomeLimpo}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  if (error || !data) return { url: '', error: explicarErroDeEnvio(error, file) };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return { url: pub?.publicUrl || '' };
 }

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import Linkify from './Linkify';
 import { normalizarBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -661,7 +662,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `chat/${salaAtiva.id}/${Date.now()}_${nomeLimpo}`;
     const { error: errUp } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-    if (errUp) { alert('Erro ao enviar anexo: ' + errUp.message); setEnviandoAnexo(false); limparCampo(); return; }
+    if (errUp) { alert('Não foi possível enviar o anexo: ' + explicarErroDeEnvio(errUp, file)); setEnviandoAnexo(false); limparCampo(); return; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
     await inserirEEnviar({ anexo_url: pub?.publicUrl || null, anexo_nome: file.name, anexo_tipo: file.type || null });
     setEnviandoAnexo(false);

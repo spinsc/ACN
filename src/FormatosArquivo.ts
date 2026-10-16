@@ -26,3 +26,13 @@ const RE_OFFICE = /\.(docx?|docm|dotx?|odt|pptx?|pptm|odp|xlsx|xlsm|xlsb|xls|xlt
 export function contentTypeUpload(file: File): string {
   return RE_OFFICE.test(file.name) ? 'application/octet-stream' : file.type;
 }
+
+// Nome que o armazenamento aceita (o nome original continua guardado à parte, para aparecer na lista). Pedido do usuário em 16/10/2026: o armazenamento recusa
+// chave com acento ou símbolo ("Especificação (v2).pdf"), e as telas que só trocavam o espaço por "_" perdiam o arquivo em silêncio.
+export function nomeSeguroDeArquivo(nome: string): string {
+  const ponto = nome.lastIndexOf('.');
+  const ext = ponto > 0 ? nome.slice(ponto).toLowerCase().replace(/[^a-z0-9.]/g, '') : '';
+  const base = ponto > 0 ? nome.slice(0, ponto) : nome;
+  const limpo = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80);
+  return (limpo || 'arquivo') + ext;
+}

@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
-import { EXT_PLANILHAS } from './FormatosArquivo';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
@@ -107,12 +108,18 @@ const alertClass = (prazo: string, status: string): 'vencida' | 'urgente' | null
   return null;
 };
 
-async function uploadAnexo(file: File, demandaId: string): Promise<string | null> {
-  const path = `demandas-avulsas/${demandaId}/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return null;
+// Pedido do usuário em 16/10/2026: a demanda avulsa da Engenharia aceita QUALQUER arquivo (desenho, compactado, modelo 3D...), não só foto e documento.
+// Dois motivos faziam o arquivo não entrar: o seletor só mostrava alguns tipos e o envio falhava SEM AVISO — o armazenamento recusa nome com acento ou símbolo
+// ("Especificação (v2).pdf") e aqui só se trocava o espaço. Agora o nome guardado no armazenamento é limpo (o original continua na lista) e cada falha volta com o motivo.
+const LIMITE_ANEXO_MB = 50;   // é o limite do próprio armazenamento (bucket acn-media)
+async function uploadAnexo(file: File, demandaId: string): Promise<{ url: string | null; erro?: string }> {
+  if (file.size > LIMITE_ANEXO_MB * 1024 * 1024) return { url: null, erro: explicarErroDeEnvio({ statusCode: 413 }, file) };
+  const path = `demandas-avulsas/${demandaId}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
+  // sem tipo informado pelo navegador (.dwg, .step, .rar...), sobe como arquivo genérico
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+  if (error || !data) return { url: null, erro: explicarErroDeEnvio(error, file) };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl || null;
+  return pub?.publicUrl ? { url: pub.publicUrl } : { url: null, erro: 'não foi possível obter o endereço do arquivo' };
 }
 
 // Status geral calculado pelas etapas
@@ -645,20 +652,23 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   // ── Upload de arquivo ────────────────────────────────────────────────────
   const uploadFiles = async (files: FileList) => {
     setSalvando(true);
-    for (let i = 0; i < files.length; i++) {
-      const url = await uploadAnexo(files[i], d.id);
-      if (url) {
-        const isImg = files[i].type.startsWith('image/');
-        await supabase.from('demanda_avulsa_anexos').insert([{
-          demanda_id: d.id, nome: files[i].name, url,
-          tipo: isImg ? 'foto' : 'documento',
-          criado_por: currentUser?.nome,
-        }]);
-      }
+    const falhas: string[] = [];
+    // a lista de arquivos some quando o campo é limpo: copia antes
+    const lista = Array.from(files);
+    for (const f of lista) {
+      const r = await uploadAnexo(f, d.id);
+      if (!r.url) { falhas.push(f.name + ' (' + r.erro + ')'); continue; }
+      const { error: erroIns } = await supabase.from('demanda_avulsa_anexos').insert([{
+        demanda_id: d.id, nome: f.name, url: r.url,
+        tipo: f.type.startsWith('image/') ? 'foto' : 'documento',
+        criado_por: currentUser?.nome,
+      }]);
+      if (erroIns) falhas.push(f.name + ' (enviado, mas não registrado na demanda: ' + erroIns.message + ')');
     }
     if (fileRef.current) fileRef.current.value = '';
     await reload();
     setSalvando(false);
+    if (falhas.length) alert('Não foi possível anexar estes arquivos:\n\n' + falhas.join('\n'));   // "não foi possível" deixa o aviso vermelho, que só fecha quando a pessoa fecha (Feedback.tsx)
   };
 
   const excluirAnexo = async (id: string) => {
@@ -1042,7 +1052,6 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               <label style={{ fontSize:10, color:'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
                 📎 Anexar arquivo
                 <input type="file" multiple ref={fileRef}
-                  accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp`}
                   onChange={e => { if (e.target.files?.length) uploadFiles(e.target.files); }}
                   style={{ display:'none' }} />
               </label>
@@ -1216,7 +1225,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       const r: any = await enviarSolicitacaoCompra({ valor: sc, currentUser, origemSetor: origem || 'Demanda geral' });
       setSalvando(false);
       if (r.erro) { alert('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
-      if (r.errosAnexos?.length) alert('A requisição foi criada, mas alguns anexos não foram enviados: ' + r.errosAnexos.join('; '));
+      if (r.errosAnexos?.length) alert('A requisição foi criada, mas houve falha ao enviar alguns anexos:\n\n' + r.errosAnexos.join('\n'));
       alert(`Requisição ${r.numero_pedido} aberta no quadro do Compras.`);
       onSaved(); onClose();
       return;
@@ -1284,16 +1293,17 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     if (anexos.length) {
       const falhas: string[] = [];
       for (const f of anexos) {
-        const url = await uploadAnexo(f, nova.id);   // sobe uma vez; cada parte aponta para o mesmo arquivo
-        if (!url) { falhas.push(f.name); continue; }
+        const r = await uploadAnexo(f, nova.id);   // sobe uma vez; cada parte aponta para o mesmo arquivo
+        if (!r.url) { falhas.push(f.name + ' (' + r.erro + ')'); continue; }
         for (const c of criadas) {
-          await supabase.from('demanda_avulsa_anexos').insert([{
-            demanda_id: c.id, nome: f.name, url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
+          const { error: erroIns } = await supabase.from('demanda_avulsa_anexos').insert([{
+            demanda_id: c.id, nome: f.name, url: r.url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
             descricao: (descAnexos[chaveArquivo(f)] || '').trim() || null,
           }]);
+          if (erroIns) falhas.push(f.name + ' (não registrado em uma das partes: ' + erroIns.message + ')');
         }
       }
-      if (falhas.length) alert('A demanda foi criada, mas estes anexos não foram enviados: ' + falhas.join(', '));
+      if (falhas.length) alert('A demanda foi criada, mas houve falha ao enviar estes anexos:\n\n' + falhas.join('\n'));
     }
     if (form.descricao?.trim() && nova?.id) {
       await salvarMencoes({

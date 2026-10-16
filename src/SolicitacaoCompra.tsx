@@ -168,7 +168,7 @@ export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra',
     const r: any = await enviarSolicitacaoCompra({ valor, currentUser, origemSetor, oportunidadeId, opl, contexto });
     setSalvando(false);
     if (r.erro) { setErro('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
-    if (r.errosAnexos?.length) alert('A requisição foi criada, mas alguns anexos não foram enviados: ' + r.errosAnexos.join('; '));
+    if (r.errosAnexos?.length) alert('A requisição foi criada, mas houve falha ao enviar alguns anexos:\n\n' + r.errosAnexos.join('\n'));
     await onCriada?.(r, valor);
     onClose?.();
   };

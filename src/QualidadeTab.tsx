@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoCompacto } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -165,7 +166,7 @@ export default function QualidadeTab({ currentUser }) {
       sigUrl = pub?.publicUrl;
     } catch(e) {
       console.warn('Signature upload failed', e);
-      alert('Erro ao enviar a assinatura: ' + (e?.message || e) + '\nA aprovação não foi registrada: tente de novo.');
+      alert('Erro ao enviar a assinatura: ' + explicarErroDeEnvio(e) + '\nA aprovação não foi registrada: tente de novo.');
       setUploading(false); return;
     }
 

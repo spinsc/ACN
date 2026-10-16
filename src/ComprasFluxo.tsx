@@ -24,6 +24,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { horasUteis } from './utils/horasUteis';
 import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import { Botao, Selo, Faixa } from './Interface';
@@ -466,7 +467,7 @@ export async function enviarAnexosCompra(pedidoId: string, arquivos: File[], use
     const nomeLimpo = f.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `compras-anexos/${pedidoId}/${Date.now()}_${nomeLimpo}`;
     const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: f.type || undefined });
-    if (error) { erros.push(`${f.name}: ${error.message}`); continue; }
+    if (error) { erros.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
     const { error: erroReg } = await supabase.from('pcp_pedidos_compra_anexos').insert([{
       pedido_id: pedidoId, nome: f.name, url: pub?.publicUrl || path, tipo: f.type || null, tamanho: f.size,

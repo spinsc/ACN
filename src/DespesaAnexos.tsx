@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmar, mostrarAviso } from './Feedback';
 import { Botao } from './Interface';
 import Icone from './Icone';
@@ -21,7 +22,7 @@ export async function enviarAnexosDespesa(despesaIds: string[], arquivos: File[]
     const nomeLimpo = f.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `centro-custo-despesas/${despesaIds[0]}/${Date.now()}_${nomeLimpo}`;
     const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: f.type || undefined });
-    if (error) { erros.push(`${f.name}: ${error.message}`); continue; }
+    if (error) { erros.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
     const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
     const { error: erroLinha } = await supabase.from('centro_custo_despesas_anexos').insert(despesaIds.map(id => ({
       despesa_id: id, nome: f.name, url: pub?.publicUrl || path, tipo: f.type || null, tamanho: f.size,

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
 import React, { useState, useEffect, useRef } from 'react';
@@ -198,7 +199,7 @@ async function uploadArquivoFrete(file: File, pasta: string): Promise<{ url: str
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `${pasta}/${Date.now()}_${nomeLimpo}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', nome: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  if (error || !data) return { url: '', nome: '', error: explicarErroDeEnvio(error, file) };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
   return { url: pub.publicUrl, nome: file.name };
@@ -1952,15 +1953,16 @@ export default function LogisticaTab({ currentUser }) {
 
     // Upload fotos
     const fotosUrls = [];
+    const falhasFotos: string[] = [];   // 16/10/2026: a foto que não subia era descartada em silêncio e o registro era salvo sem ela
     for (const f of fotos) {
       const ext = f.name.split('.').pop();
       const path = `logistica/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
       const { error } = await supabase.storage.from('acn-media').upload(path, f, { contentType: f.type, upsert: true });
-      if (!error) {
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        fotosUrls.push(pub?.publicUrl || path);
-      }
+      if (error) { falhasFotos.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      fotosUrls.push(pub?.publicUrl || path);
     }
+    if (falhasFotos.length && !await confirmar('Estas fotos NÃO foram enviadas:\n\n' + falhasFotos.join('\n') + '\n\nSalvar o registro mesmo assim, sem elas?')) { setUploading(false); return; }
 
     const payload = {
       ...form,

@@ -172,7 +172,7 @@ export function ModalLancarDespesa({ centro, currentUser, onClose, onSalvo }: an
     const resumo = ehParcelado ? 'Contrato parcelado criado! Lance as medições (pagamentos) depois, na lista de despesas do centro.'
       : ratear ? `Despesa lançada e dividida entre ${linhas.length} centros.` : 'Despesa lançada!';
     mostrarAviso(resumo + (recorrente ? ' Ela passa a repetir todo mês (veja "Despesas recorrentes").' : ''), 'ok');
-    if (errosAnexo.length) mostrarAviso('A despesa foi lançada, mas o anexo não subiu: ' + errosAnexo.join(' · '), 'atencao');
+    if (errosAnexo.length) mostrarAviso('A despesa foi lançada, mas o anexo não subiu: ' + errosAnexo.join(' · '), 'erro');   // 16/10/2026: agora traz o motivo; 'atencao' sumia em 7 s e a pessoa não conseguia ler
     onSalvo?.();
     onClose();
   };

@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import Linkify from './Linkify';
@@ -61,19 +62,21 @@ function AnexosDev({ demanda, onAtualizado }: any) {
   const upload = async (files: FileList) => {
     setUploading(true);
     const novos = [...anexos];
+    const falhas: string[] = [];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const safeName = f.name.replace(/[^a-zA-Z0-9_\-.]/g, '_').slice(0, 100);
       const path = `desenvolvimento/${demanda.id}/${Date.now()}_${safeName}`;
       const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: f.type });
-      if (!error) {
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        novos.push({ nome: f.name, url: pub?.publicUrl || '' });
-      }
+      if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      novos.push({ nome: f.name, url: pub?.publicUrl || '' });
     }
-    await supabase.from('engenharia_desenvolvimento').update({ anexos: novos, atualizado_em: new Date().toISOString() }).eq('id', demanda.id);
+    const { error: erroGrava } = await supabase.from('engenharia_desenvolvimento').update({ anexos: novos, atualizado_em: new Date().toISOString() }).eq('id', demanda.id);
+    if (erroGrava) falhas.push('os arquivos subiram, mas não foram gravados na demanda (' + erroGrava.message + ')');
     if (ref.current) ref.current.value = '';
     setUploading(false);
+    if (falhas.length) alert('Não foi possível anexar estes arquivos:\n\n' + falhas.join('\n'));
     onAtualizado();
   };
 
