@@ -32,7 +32,8 @@ const ehComprador = (u: any, d: any) =>
 const camposDoSetor = (setor: string) => CAMPOS_POR_SETOR[String(setor || '').trim()] || {};
 // chave da aba do setor ("Laboratório" → "laboratorio"), para listar também os usuários com acesso a ela
 const abaDoSetor = (setor: string) => normalizarBusca(String(setor || '').trim()) || undefined;
-import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+import { VinculoPicker, abrirVinculo, TIPO_LABEL, TIPOS_PADRAO } from './VinculoPicker';
+import { FormacaoDaDemanda } from './FormacaoDaDemanda';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -860,8 +861,14 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* ── Vínculos (várias OPs, lote, outros processos) ── */}
-          {!editando && <VinculosView vinculos={vinculos} />}
+          {/* ── Formação de preço da demanda: vincula e tira direto no detalhe, sem o Editar (pedido do usuário em 16/10/2026) ── */}
+          {!editando && (
+            <FormacaoDaDemanda demanda={d} currentUser={currentUser} podeMexer={d.status !== 'Cancelada'}
+              onMudou={async () => { await reload(); onRefresh(); }} />
+          )}
+
+          {/* ── Vínculos (várias OPs, lote, outros processos) — a formação de preço tem o bloco próprio, logo acima ── */}
+          {!editando && <VinculosView vinculos={vinculos.filter(v => v.tipo !== 'formacao')} />}
 
           {/* ── Pintura pedida (Serralheria): quem abriu definiu, aqui é leitura ── */}
           {!editando && camposSetor.pintura && d.pintura && (
@@ -982,7 +989,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                   categoriaPreferida={CATEGORIA_DO_SETOR[d.setor] || ''} />
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULOS (OPCIONAL)</label>
-                  <VinculosEditor vinculos={vinculos} onChange={setVinculos} />
+                  <VinculosEditor vinculos={vinculos} onChange={setVinculos} tipos={TIPOS_PADRAO} />
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>

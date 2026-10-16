@@ -134,7 +134,8 @@ export function VinculoPicker({ value, onSelect, onClear, tipos = TIPOS_PADRAO }
   tipos?: string[];   // quais tipos oferecer; sem dizer, os cinco de sempre
 }) {
   // começa sem tipo escolhido: o vínculo é opcional, a pessoa escolhe se precisar
-  const [tipo, setTipo]           = useState('');
+  // com um tipo só (o bloco "Formação de preço" da demanda), ele já vem escolhido e a fileira de tipos some
+  const [tipo, setTipo]           = useState(tipos.length === 1 ? tipos[0] : '');
   const [q, setQ]                 = useState('');
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [aberto, setAberto]       = useState(false);
@@ -185,8 +186,10 @@ export function VinculoPicker({ value, onSelect, onClear, tipos = TIPOS_PADRAO }
 
   return (
     <div ref={wrapRef} className="acn-vcp">
-      <Chips ativo={tipo} onChange={trocarTipo} rotulo="Tipo de vínculo" className="acn-vcp-tipos"
-        itens={TIPOS.filter(t => tipos.includes(t.id)).map(t => ({ id: t.id, rotulo: t.label }))} />
+      {tipos.length > 1 && (
+        <Chips ativo={tipo} onChange={trocarTipo} rotulo="Tipo de vínculo" className="acn-vcp-tipos"
+          itens={TIPOS.filter(t => tipos.includes(t.id)).map(t => ({ id: t.id, rotulo: t.label }))} />
+      )}
       {tipo ? (
         <input
           className="acn-input acn-vcp-busca"

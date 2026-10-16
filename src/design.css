@@ -2845,6 +2845,11 @@ html body .acn-input.acn-dmi-valedit { width: 96px; }
 .acn-dmi-chip.link { padding: 3px 9px; cursor: pointer; }
 .acn-dmi-chip-desc { text-decoration: underline; }
 html body .acn-b.acn-dmi-chip-x { padding: 0 2px; min-height: 0; }
+/* Formação de preço da demanda avulsa (FormacaoDaDemanda.tsx, 16/10/2026): o quadro é o .acn-quadro de sempre; aqui só a linha do título e a linha da busca */
+.acn-fdd-cab, .acn-fdd-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-fdd-cab { justify-content: space-between; }
+.acn-fdd-linha { align-items: flex-start; }
+.acn-fdd-linha .acn-vcp { flex: 1; min-width: 220px; }
 .acn-dmi-lote { margin-bottom: 6px; }
 .acn-quadro.acn-dmi-fab { margin: 0 0 10px; gap: 6px; padding: 8px 10px; }
 .acn-dmi-fab-bt { justify-self: start; font-weight: 800; }

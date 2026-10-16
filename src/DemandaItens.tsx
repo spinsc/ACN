@@ -327,7 +327,7 @@ export function camposDosVinculos(vinculos: VinculoValue[]) {
   };
 }
 
-export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[]; onChange: (v: VinculoValue[]) => void }) {
+export function VinculosEditor({ vinculos, onChange, tipos = TIPOS_DEMANDA_AVULSA }: { vinculos: VinculoValue[]; onChange: (v: VinculoValue[]) => void; tipos?: string[] }) {
   const [lote, setLote] = useState<{ base: string; ops: any[] } | null>(null);
   const jaTem = (v: VinculoValue) => vinculos.some(x => x.tipo === v.tipo && String(x.id) === String(v.id));
 
@@ -368,7 +368,7 @@ export function VinculosEditor({ vinculos, onChange }: { vinculos: VinculoValue[
           + Lote inteiro {lote.base} (mais {lote.ops.length} OP{lote.ops.length > 1 ? 's' : ''})
         </Botao>
       )}
-      <VinculoPicker value={null} tipos={TIPOS_DEMANDA_AVULSA} onSelect={v => { if (!jaTem(v)) onChange([...vinculos, v]); }} onClear={() => {}} />
+      <VinculoPicker value={null} tipos={tipos} onSelect={v => { if (!jaTem(v)) onChange([...vinculos, v]); }} onClear={() => {}} />
     </div>
   );
 }
