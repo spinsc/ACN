@@ -19,6 +19,8 @@ import { confirmar } from './Feedback';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { carregarVeiculos, textoVeiculo } from './Veiculos';
 import { CampoCep } from './CampoCep';
+import { SeletorEscopo, useTamanhoDoLote } from './EscopoDaEdicao';
+import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote } from './EdicaoDeLote';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
@@ -173,12 +175,28 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
   const alterados = CAMPOS_OPL.filter(c => String(paraBanco(c, form[c.campo]) ?? '') !== String(opl[c.campo] ?? '').slice(0, c.tipo === 'data' ? 10 : undefined));
+  // "Esta alteração vale para: o lote inteiro" (16/10/2026) — a regra mora em EdicaoDeLote.ts
+  const tamanhoDoLote = useTamanhoDoLote(opl?.opl);
+  const [escopo, setEscopo] = useState<'unidade' | 'lote'>('unidade');
   const salvar = async () => {
     if (!alterados.length) { alert('Nenhum campo foi alterado.'); return; }
     if (!motivo.trim()) { alert('Informe o motivo da alteração.'); return; }
+    const mudadosOp = Object.fromEntries(alterados.map(c => [c.campo, paraBanco(c, form[c.campo])]));
+    const noLote = escopo === 'lote' && tamanhoDoLote > 1;
+    const camposLote = noLote ? camposDoLote(mudadosOp) : [];
+    if (noLote && camposLote.length) {
+      const rotulo = (k: string) => CAMPOS_OPL.find(x => x.campo === k)?.rotulo || k;
+      if (!await confirmar(`Aplicar também nas outras ${tamanhoDoLote - 1} unidades do lote?\n\n${camposLote.map(k => `• ${rotulo(k)}`).join('\n')}\n\nChassi, placa, veículo, status e NF não mudam nas outras, e unidade já faturada ou cancelada não é mexida.`)) return;
+    }
     setSalvando(true);
-    const falhas = await aplicar([opl], () => Object.fromEntries(alterados.map(c => [c.campo, paraBanco(c, form[c.campo])])),
-      motivo.trim(), currentUser, 'Edição completa');
+    const falhas = await aplicar([opl], () => mudadosOp, motivo.trim(), currentUser, 'Edição completa');
+    if (!falhas.length && noLote) {
+      if (!camposLote.length) alert('Salvo só nesta unidade: os campos alterados (chassi, placa, veículo, status ou NF) são de cada carro e não vão para o lote.');
+      else {
+        const r = await aplicarNoLote({ op: opl, mudados: mudadosOp, usuario: currentUser, ehGerente: true, origem: `Edição completa (vale para o lote inteiro). Motivo: ${motivo.trim()}` });
+        alert(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length)));
+      }
+    }
     setSalvando(false);
     if (falhas.length) { alert('Não foi possível salvar:\n' + falhas.join('\n')); return; }
     const { data } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
@@ -192,6 +210,7 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
           Edição completa (Admin/Gerente). O status muda a fase da OP sem passar pelos botões do fluxo: use com cuidado.
           Cada campo alterado fica no histórico da OP com o valor anterior.
         </div>
+        <SeletorEscopo opl={opl?.opl} tamanho={tamanhoDoLote} valor={escopo} onChange={setEscopo} texto="Valores em R$ são por carro e ficam iguais em todas." />
         <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
           {GRUPOS.map(g => (
             <div key={g} style={{ marginBottom: 10 }}>
@@ -506,6 +525,8 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
 
 export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCusto = [], tiposProjeto = [],
                                     salvando = false, onSalvar, onCancelar, onAlterarNumero = null }) {
+  // OP de lote: "esta alteração vale para só esta unidade ou o lote inteiro" (16/10/2026); a gravação mora em CrmTab.salvarOplEdit + EdicaoDeLote.ts
+  const tamanhoDoLote = useTamanhoDoLote(opl?.opl);
   const envio = soEnvio(form?.fluxo_entrega ?? opl?.fluxo_entrega);
   // quem não vê valores não vê o grupo inteiro — mesmo tratamento da tela de
   // detalhe da OP, para o valor de venda não vazar por uma tela nova
@@ -549,6 +570,9 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
           A fase da OP não se muda por aqui: ela anda pelos botões do fluxo de cada setor.
           {!podeVerValores && ' Os valores estão ocultos para o seu acesso.'}
         </div>
+
+        <SeletorEscopo opl={opl?.opl} tamanho={tamanhoDoLote} valor={form?.__escopo === 'lote' ? 'lote' : 'unidade'} onChange={v => onCampo('__escopo', v)}
+          texto="Valores em R$ são por carro e ficam iguais em todas." />
 
         <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
           {GRUPOS_COM.map(g => {
