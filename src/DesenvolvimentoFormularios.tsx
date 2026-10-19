@@ -6,14 +6,16 @@
 // meta de custo e prazo, matriz de escolha entre conceitos e o conceito escolhido. As regras (o que falta para valer como feito, limites, pontuação) estão em
 // DesenvolvimentoModelo.ts; aqui ficam só os campos. O que se digita fica no rascunho da tela até "Salvar" — a gravação é a de sempre (DesenvolvimentoPorta.gravarDemanda).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Icone from './Icone';
-import { Botao, Selo } from './Interface';
+import { Botao, Selo, Faixa, hojeISO } from './Interface';
+import { ColaboradorSelect } from './ColaboradorSelect';
 import { lerValorDigitado } from './LerValor';
 import {
   PRIORIDADES, CRITERIOS_SUGERIDOS, NOTA_MAXIMA, ranking, faltaNoEntregavel, dadosDoEntregavel, entregaveisDaEtapa, solicitanteDaDemanda,
+  letraDaRevisao, revisaoVigente, custoEstimado, nivelDoRisco, AREAS_REVISAO, CONCLUSOES_REVISAO,
 } from './DesenvolvimentoModelo';
-import { mdiPlus, mdiClose, mdiContentSaveOutline } from '@mdi/js';
+import { mdiPlus, mdiClose, mdiContentSaveOutline, mdiPaperclip } from '@mdi/js';
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -203,9 +205,206 @@ function EditorEscolhido({ demanda, inicial, onSalvar, onCancelar, ocupado }: an
   );
 }
 
+// ── D3: desenhos com revisão (só se acrescenta) ─────────────────────────────────────────────────────────────────
+function EditorDesenhos({ inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const revisoes = inicial?.revisoes || [];
+  const [descricao, setDescricao] = useState('');
+  const [arquivos, setArquivos] = useState<File[]>([]);
+  const [enviando, setEnviando] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const proxima = letraDaRevisao(revisoes.length);
+  const registrar = async () => {
+    if (enviando) return;
+    if (!descricao.trim()) { alert('Escreva o que mudou nesta revisão.'); return; }
+    if (!arquivos.length) { alert('Anexe ao menos um arquivo do desenho desta revisão.'); return; }
+    setEnviando(true);
+    try {
+      const { enviados, falhas } = await enviar(arquivos);
+      // revisão com arquivo faltando seria uma revisão incompleta guardada para sempre: só registra se TODOS subiram
+      if (falhas.length) { alert('Não foi possível anexar estes arquivos, e a revisão não foi registrada:\n\n' + falhas.join('\n')); return; }
+      await onSalvar({ revisoes: [...revisoes, { id: novoId(), descricao, anexos: enviados.map((a: any) => ({ nome: a.nome, url: a.url })) }] });
+    } finally { setEnviando(false); }
+  };
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">As revisões só se acrescentam: o que já foi registrado não se reescreve. Mudou o desenho, registre a próxima revisão.</div>
+      {[...revisoes].reverse().map((r: any) => <LinhaDeRevisao key={r.id} r={r} />)}
+      <div className="acn-dev-porta-tit">Nova revisão (Rev {proxima})</div>
+      <textarea className="acn-input" rows={2} aria-label="O que mudou nesta revisão" placeholder={revisoes.length ? 'O que mudou em relação à revisão anterior' : 'Primeira versão do desenho'} value={descricao} onChange={e => setDescricao(e.target.value)} />
+      <div className="acn-dev-acoes">
+        <input ref={ref} type="file" multiple hidden onChange={e => { setArquivos(Array.from(e.target.files || [])); }} />
+        <Botao pequeno icone={mdiPaperclip} onClick={() => ref.current?.click()}>{arquivos.length ? `${arquivos.length} arquivo(s) escolhido(s)` : 'Escolher arquivos do desenho'}</Botao>
+        {arquivos.length > 0 && <span className="acn-ajuda">{arquivos.map(a => a.name).join(', ')}</span>}
+      </div>
+      <div className="acn-dev-acoes">
+        <Botao variante="primario" pequeno icone={mdiContentSaveOutline} disabled={ocupado || enviando} onClick={registrar}>{enviando ? 'Enviando…' : `Registrar Rev ${proxima}`}</Botao>
+        <Botao pequeno onClick={onCancelar}>Fechar</Botao>
+      </div>
+    </div>
+  );
+}
+function LinhaDeRevisao({ r }: any) {
+  return (
+    <div className="acn-dev-revisao" data-revisao={r.rev}>
+      <Selo familia="marca" ponto={false}>Rev {r.rev}</Selo>
+      <div className="acn-dev-revisao-corpo">
+        <div>{r.descricao}</div>
+        <div className="acn-ajuda">{r.por} em {r.em ? new Date(r.em).toLocaleString('pt-BR') : '—'}</div>
+        <div className="acn-dev-anexos-lista">
+          {(r.anexos || []).map((a: any, i: number) => a.url
+            ? <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a>
+            : <span key={i} className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── D3: lista de materiais preliminar e custo estimado ──────────────────────────────────────────────────────
+const comoTexto = (n: any) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
+function EditorBom({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [linhas, setLinhas] = useState<any[]>((inicial?.linhas || []).map((l: any) => ({ id: l.id, item: l.item, unidade: l.unidade || '', quantidade: comoTexto(l.quantidade), custo_unit: comoTexto(l.custo_unit) })));
+  const [just, setJust] = useState(inicial?.justificativa || '');
+  const meta = Number(dadosDoEntregavel(demanda, 'meta_custo')?.custo_alvo) || 0;
+  const lido = (v: string) => { const r = lerValorDigitado(v); return r.valor ?? null; };
+  const total = custoEstimado({ linhas: linhas.map(l => ({ quantidade: lido(l.quantidade), custo_unit: lido(l.custo_unit) })) });
+  const acima = meta > 0 && total > meta;
+  const mudar = (n: number, campo: string, v: string) => setLinhas(l => l.map((x, i) => (i === n ? { ...x, [campo]: v } : x)));
+  const salvar = () => {
+    const convertidas: any[] = [];
+    for (const [n, l] of linhas.entries()) {
+      if (!l.item.trim()) continue;
+      const q = lerValorDigitado(l.quantidade), c = lerValorDigitado(l.custo_unit);
+      if (q.invalido || c.invalido) { alert(`Na linha ${n + 1} ("${l.item}") a quantidade ou o custo não parecem números. Escreva, por exemplo, 2,5 ou 1.250,00.`); return; }
+      convertidas.push({ id: l.id, item: l.item, unidade: l.unidade, quantidade: q.valor ?? null, custo_unit: c.valor ?? null });
+    }
+    onSalvar({ linhas: convertidas, justificativa: just });
+  };
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Custo de UMA unidade do produto: o que leva de material e o custo de cada um.</div>
+      {linhas.map((l, n) => (
+        <div key={l.id} className="acn-dev-form-linha acn-dev-bom-linha">
+          <input className="acn-input" aria-label={`Material ${n + 1}`} placeholder="Material ou componente" value={l.item} onChange={e => mudar(n, 'item', e.target.value)} />
+          <input className="acn-input acn-dev-bom-num" aria-label={`Quantidade do material ${n + 1}`} inputMode="decimal" placeholder="Qtd" value={l.quantidade} onChange={e => mudar(n, 'quantidade', e.target.value)} />
+          <input className="acn-input acn-dev-bom-un" aria-label={`Unidade do material ${n + 1}`} placeholder="un" value={l.unidade} onChange={e => mudar(n, 'unidade', e.target.value)} />
+          <input className="acn-input acn-dev-bom-num" aria-label={`Custo unitário do material ${n + 1}`} inputMode="decimal" placeholder="R$ un." value={l.custo_unit} onChange={e => mudar(n, 'custo_unit', e.target.value)} />
+          <span className="acn-ajuda acn-dev-bom-sub">{brl((lido(l.quantidade) || 0) * (lido(l.custo_unit) || 0))}</span>
+          <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar material ${n + 1}`} title="Tirar" onClick={() => setLinhas(ls => ls.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setLinhas(ls => [...ls, { id: novoId(), item: '', unidade: '', quantidade: '', custo_unit: '' }])}>Adicionar material</Botao></div>
+      <div className="acn-dev-bom-total">Custo estimado: <strong>{brl(total)}</strong> por unidade</div>
+      {meta > 0 && total > 0 && (
+        <Faixa tom={acima ? 'atencao' : 'ok'}>
+          Meta de custo: {brl(meta)}. O estimado está {Math.abs(Math.round(((total - meta) / meta) * 1000) / 10).toLocaleString('pt-BR')}% {acima ? 'ACIMA' : 'abaixo'} da meta ({brl(Math.abs(total - meta))}).
+        </Faixa>
+      )}
+      {acima && (
+        <div><label className="acn-label">Por que o custo ficou acima da meta *</label>
+          <textarea className="acn-input" rows={2} aria-label="Justificativa do custo acima da meta" value={just} onChange={e => setJust(e.target.value)} /></div>
+      )}
+      {!meta && <div className="acn-ajuda">Esta demanda não tem meta de custo na Concepção; o estimado não é comparado com nada.</div>}
+      <Rodape ocupado={ocupado} onSalvar={salvar} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+// ── D3: riscos ──────────────────────────────────────────────────────────────────────────────────────────────────
+const FAMILIA_RISCO: Record<string, string> = { alto: 'erro', medio: 'atencao', baixo: 'ok' };
+const ROTULO_RISCO: Record<string, string> = { alto: 'Risco alto', medio: 'Risco médio', baixo: 'Risco baixo' };
+function EditorRiscos({ inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [itens, setItens] = useState<any[]>((inicial?.itens || []).map((i: any) => ({ ...i })));
+  const [nenhum, setNenhum] = useState(!!inicial?.nenhum);
+  const mudar = (n: number, campo: string, v: any) => setItens(l => l.map((x, i) => (i === n ? { ...x, [campo]: v } : x)));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Gravidade (o estrago se acontecer) × probabilidade (a chance de acontecer), de 1 a 5. Risco médio ou alto precisa de uma ação.</div>
+      {itens.map((r, n) => {
+        const { pontos, nivel } = nivelDoRisco(r.gravidade, r.probabilidade);
+        return (
+          <div key={r.id} className="acn-dev-conceito" data-risco={r.id}>
+            <div className="acn-dev-form-linha">
+              <input className="acn-input" aria-label={`Risco ${n + 1}`} placeholder="O que pode dar errado" value={r.descricao} onChange={e => mudar(n, 'descricao', e.target.value)} />
+              <Selo familia={FAMILIA_RISCO[nivel]} ponto={false}>{ROTULO_RISCO[nivel]} ({pontos})</Selo>
+              <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar risco ${n + 1}`} title="Tirar" onClick={() => setItens(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+            </div>
+            <div className="acn-dev-notas">
+              <label className="acn-dev-nota-campo"><span className="acn-ajuda">Gravidade</span>
+                <select className="acn-input" aria-label={`Gravidade do risco ${n + 1}`} value={r.gravidade} onChange={e => mudar(n, 'gravidade', Number(e.target.value))}>{[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+              <label className="acn-dev-nota-campo"><span className="acn-ajuda">Probabilidade</span>
+                <select className="acn-input" aria-label={`Probabilidade do risco ${n + 1}`} value={r.probabilidade} onChange={e => mudar(n, 'probabilidade', Number(e.target.value))}>{[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+            </div>
+            <input className="acn-input" aria-label={`Ação para o risco ${n + 1}`} placeholder={nivel === 'baixo' ? 'Ação (opcional)' : 'O que fazer a respeito *'} value={r.acao || ''} onChange={e => mudar(n, 'acao', e.target.value)} />
+            <input className="acn-input" aria-label={`Responsável pelo risco ${n + 1}`} placeholder="Responsável (opcional)" value={r.responsavel || ''} onChange={e => mudar(n, 'responsavel', e.target.value)} />
+          </div>
+        );
+      })}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setItens(l => [...l, { id: novoId(), descricao: '', gravidade: 3, probabilidade: 3, acao: '', responsavel: '' }])}>Adicionar risco</Botao></div>
+      <label className="acn-dev-form-nenhum"><input type="checkbox" checked={nenhum} onChange={e => setNenhum(e.target.checked)} /> Não vi risco relevante neste projeto</label>
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ itens, nenhum })} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+// ── D3: revisão de projeto ──────────────────────────────────────────────────────────────────────────────────────
+function EditorRevisao({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [data, setData] = useState(inicial?.data || hojeISO());
+  const [participantes, setParticipantes] = useState<any[]>((inicial?.participantes || []).map((p: any) => ({ ...p })));
+  const [pontos, setPontos] = useState<any[]>((inicial?.pontos || []).map((p: any) => ({ ...p })));
+  const [conclusao, setConclusao] = useState(inicial?.conclusao || '');
+  const [ata, setAta] = useState(inicial?.ata || '');
+  const vigente = revisaoVigente(demanda);
+  const obrigatorias = demanda.tipo_desenvolvimento === 'produto_novo' ? ['Produção', 'Compras', 'Qualidade'] : [];
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">
+        {vigente ? <>Esta revisão vale para o desenho na <strong>Rev {vigente.rev}</strong>. Se o desenho mudar depois, será preciso repetir.</> : 'Registre antes uma revisão do desenho.'}
+        {obrigatorias.length > 0 && <> Para produto novo precisa ter alguém de {obrigatorias.join(', ')}.</>}
+      </div>
+      <div className="acn-dev-campos">
+        <div className="acn-dev-campo-data"><label className="acn-label">Data da revisão *</label>
+          <input type="date" className="acn-input" aria-label="Data da revisão" value={data} onChange={e => setData(e.target.value)} /></div>
+        <div className="acn-dev-campo-data"><label className="acn-label">Conclusão *</label>
+          <select className="acn-input" aria-label="Conclusão da revisão" value={conclusao} onChange={e => setConclusao(e.target.value)}>
+            <option value="">Escolha…</option>
+            {Object.entries(CONCLUSOES_REVISAO).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select></div>
+      </div>
+      <div className="acn-dev-porta-tit">Participantes</div>
+      {participantes.map((p, n) => (
+        <div key={p.id} className="acn-dev-form-linha">
+          <div className="acn-dev-campo-resp"><ColaboradorSelect value={p.nome} onChange={v => setParticipantes(l => l.map((x, i) => (i === n ? { ...x, nome: v } : x)))} placeholder="Quem participou" /></div>
+          <select className="acn-input acn-dev-form-prio" aria-label={`Área do participante ${n + 1}`} value={p.area} onChange={e => setParticipantes(l => l.map((x, i) => (i === n ? { ...x, area: e.target.value } : x)))}>
+            {AREAS_REVISAO.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar participante ${n + 1}`} title="Tirar" onClick={() => setParticipantes(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setParticipantes(l => [...l, { id: novoId(), nome: '', area: obrigatorias.find(a => !l.some(x => x.area === a)) || 'Engenharia' }])}>Adicionar participante</Botao></div>
+      <div className="acn-dev-porta-tit">Pontos levantados (o que precisa ajustar)</div>
+      {pontos.map((p, n) => (
+        <div key={p.id} className="acn-dev-form-linha">
+          <input className="acn-input" aria-label={`Ponto ${n + 1}`} placeholder="Ex: trocar o parafuso por um de aço inox" value={p.texto} onChange={e => setPontos(l => l.map((x, i) => (i === n ? { ...x, texto: e.target.value } : x)))} />
+          <label className="acn-dev-form-nenhum"><input type="checkbox" aria-label={`Ponto ${n + 1} resolvido`} checked={!!p.resolvido} onChange={e => setPontos(l => l.map((x, i) => (i === n ? { ...x, resolvido: e.target.checked } : x)))} /> Resolvido</label>
+          <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar ponto ${n + 1}`} title="Tirar" onClick={() => setPontos(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setPontos(l => [...l, { id: novoId(), texto: '', resolvido: false }])}>Adicionar ponto</Botao></div>
+      <div><label className="acn-label">Ata (resumo do que foi decidido)</label>
+        <textarea className="acn-input" rows={3} aria-label="Ata da revisão" value={ata} onChange={e => setAta(e.target.value)} /></div>
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ data, participantes, pontos, conclusao, ata })} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
 /** O formulário do entregável (abre ao clicar em Preencher/Editar). */
-export function FormularioDoEntregavel({ id, demanda, dados, onSalvar, onCancelar, ocupado }: any) {
-  const comum = { onSalvar, onCancelar, ocupado, inicial: dados, demanda };
+export function FormularioDoEntregavel({ id, demanda, dados, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const comum = { onSalvar, onCancelar, ocupado, inicial: dados, demanda, enviar };
+  if (id === 'desenhos') return <EditorDesenhos {...comum} />;
+  if (id === 'bom_prelim') return <EditorBom {...comum} />;
+  if (id === 'riscos') return <EditorRiscos {...comum} />;
+  if (id === 'revisao_projeto') return <EditorRevisao {...comum} />;
   if (id === 'briefing') return <EditorBriefing {...comum} />;
   if (id === 'requisitos' || id === 'normas' || id === 'similares') return <EditorLista id={id} {...comum} />;
   if (id === 'meta_custo') return <EditorMeta {...comum} />;
@@ -256,18 +455,61 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
       </div>
     );
   }
+  if (id === 'desenhos' && (x.revisoes || []).length) return (
+    <div className="acn-dev-resumo">
+      {[...x.revisoes].reverse().map((r: any) => <LinhaDeRevisao key={r.id} r={r} />)}
+    </div>
+  );
+  if (id === 'bom_prelim' && (x.linhas || []).length) {
+    const total = custoEstimado(x);
+    const meta = Number(dadosDoEntregavel(demanda, 'meta_custo')?.custo_alvo) || 0;
+    const pct = meta ? Math.round(((total - meta) / meta) * 1000) / 10 : null;
+    return (
+      <div className="acn-dev-resumo">
+        <ul className="acn-dev-resumo-lista">
+          {x.linhas.map((l: any) => <li key={l.id}>{l.item} — {l.quantidade ?? '?'} {l.unidade} × {l.custo_unit === null ? '?' : brl(l.custo_unit)}</li>)}
+        </ul>
+        <div>Custo estimado: <strong>{brl(total)}</strong> por unidade
+          {pct !== null && <> <Selo familia={pct > 0 ? 'atencao' : 'ok'} ponto={false}>{pct > 0 ? `${pct.toLocaleString('pt-BR')}% acima da meta` : `${Math.abs(pct).toLocaleString('pt-BR')}% abaixo da meta`} ({brl(meta)})</Selo></>}
+        </div>
+        {x.justificativa && <div className="acn-ajuda">Justificativa: {x.justificativa}</div>}
+      </div>
+    );
+  }
+  if (id === 'riscos' && ((x.itens || []).length || x.nenhum)) return (
+    <ul className="acn-dev-resumo acn-dev-resumo-lista">
+      {(x.itens || []).map((r: any) => {
+        const { pontos, nivel } = nivelDoRisco(r.gravidade, r.probabilidade);
+        return <li key={r.id}><Selo familia={FAMILIA_RISCO[nivel]} ponto={false}>{ROTULO_RISCO[nivel]} ({pontos})</Selo> {r.descricao}{r.acao && <span className="acn-ajuda"> — ação: {r.acao}{r.responsavel ? ` (${r.responsavel})` : ''}</span>}</li>;
+      })}
+      {x.nenhum && !(x.itens || []).length && <li className="acn-ajuda">Nenhum risco relevante identificado.</li>}
+    </ul>
+  );
+  if (id === 'revisao_projeto' && (x.data || x.conclusao)) {
+    const vigente = revisaoVigente(demanda)?.rev;
+    const velha = vigente && x.revisao_analisada && vigente !== x.revisao_analisada;
+    return (
+      <div className="acn-dev-resumo">
+        <div>Revisão de {dataBR(x.data)}: <strong>{CONCLUSOES_REVISAO[x.conclusao] || 'sem conclusão'}</strong>{x.revisao_analisada && <> · desenho na Rev {x.revisao_analisada}</>}</div>
+        {(x.participantes || []).length > 0 && <div className="acn-ajuda">Participantes: {x.participantes.map((p: any) => `${p.nome} (${p.area})`).join(', ')}</div>}
+        {(x.pontos || []).length > 0 && <ul className="acn-dev-resumo-lista">{x.pontos.map((p: any) => <li key={p.id}>{p.texto} <Selo familia={p.resolvido ? 'ok' : 'atencao'} ponto={false}>{p.resolvido ? 'Resolvido' : 'Em aberto'}</Selo></li>)}</ul>}
+        {x.ata && <div className="acn-ajuda">{x.ata}</div>}
+        {velha && <div className="acn-ajuda atencao">O desenho mudou depois desta revisão (agora está na Rev {vigente}): repita a revisão de projeto.</div>}
+      </div>
+    );
+  }
   return null;
 }
 
 /** Resumo do que a Concepção e a Criação definiram, para consulta nas etapas seguintes. */
 export function ResumoDoProjeto({ demanda }: any) {
-  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido'];
-  const rotulos: Record<string, string> = { briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido' };
+  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto'];
+  const rotulos: Record<string, string> = { briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
   const com = ids.filter(id => dadosDoEntregavel(demanda, id) && faltaNoEntregavel(id, dadosDoEntregavel(demanda, id), demanda).length === 0);
   if (!com.length) return null;
   return (
     <details className="acn-dev-historico acn-dev-resumo-projeto">
-      <summary>Resumo do projeto (o que a Concepção e a Criação definiram)</summary>
+      <summary>Resumo do projeto (o que as etapas já definiram)</summary>
       {com.map(id => (
         <div key={id} className="acn-dev-resumo-bloco">
           <div className="acn-pdp-rotulo">{rotulos[id]}</div>

@@ -47,6 +47,20 @@ export async function gravarDemanda(id: string, operacao: (linha: any, agora: st
   return r;
 }
 
+/** Envia os arquivos de um entregável ao armazenamento (pasta da etapa, nome seguro). Devolve o que subiu e a frase de cada falha. */
+export async function enviarArquivos(demandaId: string, etapaNome: string, entId: string, files: FileList | File[], currentUser: any) {
+  const enviados: any[] = []; const falhas: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const path = `desenvolvimento/${demandaId}/${nomeSeguroDeArquivo(etapaNome)}/${entId}/${Date.now()}_${i}_${nomeSeguroDeArquivo(f.name)}`;
+    const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: contentTypeUpload(f) });
+    if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
+    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+    enviados.push({ nome: f.name, url: pub?.publicUrl || '', por: currentUser?.nome || '', em: new Date().toISOString() });
+  }
+  return { enviados, falhas };
+}
+
 /** Uma gravação por vez em cada painel (clique duplo não grava duas vezes). */
 function useExecutar(demandaId: string, onAtualizado: () => void) {
   const [ocupado, setOcupado] = useState(false);
@@ -110,15 +124,7 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
     if (enviando) return;
     setEnviando(true);
     try {
-      const enviados: any[] = []; const falhas: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const path = `desenvolvimento/${demanda.id}/${nomeSeguroDeArquivo(etapa.nome)}/${ent.id}/${Date.now()}_${i}_${nomeSeguroDeArquivo(f.name)}`;
-        const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: contentTypeUpload(f) });
-        if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        enviados.push({ nome: f.name, url: pub?.publicUrl || '', por: currentUser?.nome || '', em: new Date().toISOString() });
-      }
+      const { enviados, falhas } = await enviarArquivos(demanda.id, etapa.nome, ent.id, files, currentUser);
       if (enviados.length) {
         const r = await executar((d, agora) => atualizarEntregavel(d, idx, ent.id, currentUser, agora, e => { e.anexos = [...(e.anexos || []), ...enviados]; }));
         if (!r) falhas.push('os arquivos subiram, mas não foram gravados no entregável');
@@ -156,7 +162,8 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
         <div className="acn-ajuda atencao">Falta preencher: {faltas.join('; ')}.</div>
       )}
       {comFormulario && editandoForm && (
-        <FormularioDoEntregavel id={ent.id} demanda={demanda} dados={estado.dados} ocupado={ocupado} onSalvar={salvarFormulario} onCancelar={() => setEditandoForm(false)} />
+        <FormularioDoEntregavel id={ent.id} demanda={demanda} dados={estado.dados} ocupado={ocupado} onSalvar={salvarFormulario} onCancelar={() => setEditandoForm(false)}
+          enviar={(files: FileList) => enviarArquivos(demanda.id, etapa.nome, ent.id, files, currentUser)} />
       )}
       {(estado.anexos || []).length > 0 && (
         <div className="acn-dev-anexos-lista">

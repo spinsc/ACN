@@ -5115,3 +5115,12 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-dev-resumo-lista { margin: 0; padding-left: 18px; }
 .acn-dev-resumo-lista li { margin-bottom: 2px; }
 .acn-dev-resumo-bloco { margin-top: 8px; }
+
+/* ══ Engenharia > Desenvolvimento (D3, 19/10/2026) — desenhos com revisão, lista de materiais, riscos e revisão de projeto ══ */
+.acn-dev-revisao { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); font-size: 13px; }
+.acn-dev-revisao-corpo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.acn-dev-bom-linha .acn-input:first-child { min-width: 180px; }
+.acn-dev-bom-num { width: 96px; }
+.acn-dev-bom-un { width: 64px; }
+.acn-dev-bom-sub { min-width: 84px; text-align: right; }
+.acn-dev-bom-total { font-size: 14px; }

@@ -212,7 +212,8 @@ export const marcarFeito = (d: any, idx: number, id: string, feito: boolean, u: 
 
 // ── entregáveis com formulário próprio (D2, 19/10/2026): Concepção e Criação ────────────────────────────────────
 // O conteúdo fica em `etapa.entregaveis[id].dados`. Marcar como feito exige o formulário completo; editar um formulário já "feito" que deixe de estar completo desmarca o "feito".
-export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido'];
+// D3 (19/10/2026) acrescenta os da etapa de Desenvolvimento: desenhos com revisão, lista de materiais preliminar, riscos e revisão de projeto.
+export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto'];
 export const temFormulario = (id: string) => ENTREGAVEIS_COM_FORMULARIO.includes(id);
 export const PRIORIDADES: Record<string, string> = { obrigatorio: 'Obrigatório', desejavel: 'Desejável' };
 // critérios de partida da matriz (nome, peso de 1 a 5); a Engenharia troca, tira e acrescenta
@@ -234,6 +235,39 @@ export function dadosDoEntregavel(d: any, id: string) {
   for (const e of d?.etapas || []) if (e.entregaveis?.[id]?.dados) return e.entregaveis[id].dados;
   return null;
 }
+
+// ── D3: desenhos, lista de materiais preliminar, riscos e revisão de projeto ───────────────────────────────────────
+/** Rev A, B … Z, AA …: a letra da revisão é sempre pela ordem (a tela não escolhe). */
+export function letraDaRevisao(n: number) {
+  let s = ''; let k = n + 1;
+  while (k > 0) { const r = (k - 1) % 26; s = String.fromCharCode(65 + r) + s; k = Math.floor((k - 1) / 26); }
+  return s;
+}
+export function revisaoVigente(d: any) {
+  const rs = dadosDoEntregavel(d, 'desenhos')?.revisoes || [];
+  return rs.length ? rs[rs.length - 1] : null;
+}
+const arred2 = (n: number) => Math.round(n * 100) / 100;
+/** Custo estimado de UMA unidade do produto: soma de quantidade × custo unitário de cada linha da lista de materiais. */
+export function custoEstimado(dados: any) {
+  return arred2((dados?.linhas || []).reduce((s: number, l: any) => s + arred2((Number(l.quantidade) || 0) * (Number(l.custo_unit) || 0)), 0));
+}
+/** Compara o estimado com a meta de custo da Concepção: { meta, estimado, diferenca, percentual } (nulo se ainda não há meta). */
+export function custoContraMeta(d: any) {
+  const meta = Number(dadosDoEntregavel(d, 'meta_custo')?.custo_alvo) || 0;
+  const bom = dadosDoEntregavel(d, 'bom_prelim');
+  if (!meta || !bom?.linhas?.length) return null;
+  const estimado = custoEstimado(bom);
+  return { meta, estimado, diferenca: arred2(estimado - meta), percentual: Math.round(((estimado - meta) / meta) * 1000) / 10 };
+}
+/** Gravidade × probabilidade (1 a 5 cada): 15 ou mais é alto, de 8 a 14 é médio, abaixo disso é baixo. */
+export function nivelDoRisco(gravidade: number, probabilidade: number) {
+  const pontos = (Number(gravidade) || 0) * (Number(probabilidade) || 0);
+  return { pontos, nivel: pontos >= 15 ? 'alto' : pontos >= 8 ? 'medio' : 'baixo' };
+}
+export const AREAS_REVISAO = ['Engenharia', 'Produção', 'Compras', 'Qualidade', 'Comercial', 'Outra'];
+export const CONCLUSOES_REVISAO: Record<string, string> = { aprovado: 'Aprovado', aprovado_com_ajustes: 'Aprovado com ajustes', reprovado: 'Reprovado' };
+const areasObrigatorias = (tipo: string) => (tipo === 'produto_novo' ? ['Produção', 'Compras', 'Qualidade'] : []);
 
 /** O que ainda falta preencher para o formulário valer como feito (lista vazia = completo). */
 export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
@@ -260,6 +294,31 @@ export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
       if (!x.conceito_id || !lista.some((c: any) => c.id === x.conceito_id)) falta.push('o conceito escolhido');
     } else if (!String(x.nome || '').trim()) falta.push('o nome do conceito escolhido');
     if (!String(x.justificativa || '').trim()) falta.push('por que esse caminho');
+  } else if (id === 'desenhos') {
+    const rs = x.revisoes || [];
+    if (!rs.length) falta.push('ao menos uma revisão do desenho');
+    else if (rs.some((r: any) => !String(r.descricao || '').trim() || !(r.anexos || []).length)) falta.push('descrição e arquivo em todas as revisões');
+  } else if (id === 'bom_prelim') {
+    const ls = x.linhas || [];
+    if (!ls.length) falta.push('ao menos um material');
+    else if (ls.some((l: any) => !(Number(l.quantidade) > 0) || l.custo_unit === null || l.custo_unit === undefined)) falta.push('quantidade e custo unitário de todos os materiais');
+    const meta = Number(dadosDoEntregavel(d, 'meta_custo')?.custo_alvo) || 0;
+    if (ls.length && meta && custoEstimado(x) > meta && !String(x.justificativa || '').trim()) falta.push('a justificativa do custo estimado acima da meta');
+  } else if (id === 'riscos') {
+    const rs = x.itens || [];
+    if (!rs.length && !x.nenhum) falta.push('os riscos, ou marcar que não viu risco relevante');
+    if (rs.some((r: any) => nivelDoRisco(r.gravidade, r.probabilidade).pontos >= 8 && !String(r.acao || '').trim())) falta.push('a ação para cada risco médio ou alto');
+  } else if (id === 'revisao_projeto') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''))) falta.push('a data da revisão');
+    const ps = x.participantes || [];
+    if (!ps.length) falta.push('os participantes');
+    const sem = areasObrigatorias(d?.tipo_desenvolvimento).filter(a => !ps.some((p: any) => p.area === a));
+    if (ps.length && sem.length) falta.push(`participante de ${sem.join(', ')}`);
+    if (!CONCLUSOES_REVISAO[x.conclusao]) falta.push('a conclusão da revisão');
+    else if (x.conclusao === 'reprovado') falta.push('a revisão foi reprovada: ajuste o projeto (nova revisão do desenho) e registre a revisão de novo');
+    else if (x.conclusao === 'aprovado_com_ajustes' && (x.pontos || []).some((p: any) => !p.resolvido)) falta.push('resolver os pontos de ajuste em aberto');
+    const vigente = revisaoVigente(d)?.rev;
+    if (vigente && x.revisao_analisada && x.revisao_analisada !== vigente) falta.push(`repetir a revisão: o desenho mudou (a revisão analisada foi a ${x.revisao_analisada}, a vigente é a ${vigente})`);
   }
   return falta;
 }
@@ -285,6 +344,21 @@ export function limparDados(id: string, dados: any) {
     return { criterios, conceitos };
   }
   if (id === 'conceito_escolhido') return { conceito_id: txt(x.conceito_id, 20) || null, nome: txt(x.nome, LIMITES.nome), justificativa: txt(x.justificativa, 2000) };
+  if (id === 'desenhos') return { revisoes: lista(x.revisoes, 60).map((r: any) => ({
+    id: txt(r.id, 20), rev: txt(r.rev, 4), descricao: txt(r.descricao, LIMITES.texto), por: txt(r.por, LIMITES.nome), em: txt(r.em, 40),
+    anexos: lista(r.anexos, 20).map((a: any) => ({ nome: txt(a.nome, 200), url: txt(a.url, 1000) })).filter((a: any) => a.nome),
+  })) };
+  if (id === 'bom_prelim') {
+    const num = (v: any) => { const n = Number(v); return v !== null && v !== undefined && v !== '' && Number.isFinite(n) && n >= 0 ? arred2(n) : null; };
+    return { linhas: lista(x.linhas, 120).map((l: any) => ({ id: txt(l.id, 20), item: txt(l.item, 120), quantidade: num(l.quantidade), unidade: txt(l.unidade, 12), custo_unit: num(l.custo_unit) })).filter((l: any) => l.item), justificativa: txt(x.justificativa, LIMITES.texto) };
+  }
+  if (id === 'riscos') return { nenhum: !!x.nenhum, itens: lista(x.itens, LIMITES.itens).map((r: any) => ({ id: txt(r.id, 20), descricao: txt(r.descricao, LIMITES.texto), gravidade: dentro(r.gravidade, 1, 5) ?? 3, probabilidade: dentro(r.probabilidade, 1, 5) ?? 3, acao: txt(r.acao, LIMITES.texto), responsavel: txt(r.responsavel, LIMITES.nome) })).filter((r: any) => r.descricao) };
+  if (id === 'revisao_projeto') return {
+    data: /^\d{4}-\d{2}-\d{2}$/.test(String(x.data || '')) ? x.data : '',
+    participantes: lista(x.participantes, 30).map((p: any) => ({ id: txt(p.id, 20), nome: txt(p.nome, LIMITES.nome), area: AREAS_REVISAO.includes(p.area) ? p.area : 'Outra' })).filter((p: any) => p.nome),
+    pontos: lista(x.pontos, LIMITES.itens).map((p: any) => ({ id: txt(p.id, 20), texto: txt(p.texto, LIMITES.texto), resolvido: !!p.resolvido })).filter((p: any) => p.texto),
+    conclusao: CONCLUSOES_REVISAO[x.conclusao] ? x.conclusao : '', ata: txt(x.ata, 3000), revisao_analisada: txt(x.revisao_analisada, 4) || null,
+  };
   return {};
 }
 
@@ -292,6 +366,18 @@ export function salvarDados(d: any, idx: number, id: string, dados: any, u: any,
   if (!temFormulario(id)) return { erro: 'Este entregável não tem formulário.' };
   const limpo = limparDados(id, dados);
   return atualizarEntregavel(d, idx, id, u, agora, (e, etapa) => {
+    if (id === 'desenhos') {
+      // revisões só se acrescentam (como no PLM: o que já foi liberado como Rev A não se reescreve; mudou, é Rev B)
+      const antes = e.dados?.revisoes || [];
+      const novos = limpo.revisoes;
+      if (novos.length < antes.length || antes.some((a: any, i: number) => a.descricao !== novos[i].descricao || JSON.stringify(a.anexos) !== JSON.stringify(novos[i].anexos))) return 'As revisões anteriores não podem ser alteradas: registre uma nova revisão.';
+      if (novos.slice(antes.length).some((r: any) => !r.descricao || !r.anexos.length)) return 'A nova revisão precisa de uma descrição do que mudou e de ao menos um arquivo.';
+      novos.forEach((r: any, i: number) => { r.rev = letraDaRevisao(i); if (i < antes.length) { r.id = antes[i].id; r.por = antes[i].por; r.em = antes[i].em; } else { r.por = u?.nome || ''; r.em = agora; } });
+      // o desenho mudou: a revisão de projeto que olhou a versão anterior deixa de valer
+      const rev = etapa.entregaveis?.revisao_projeto;
+      if (novos.length > antes.length && rev?.feito && rev.dados?.revisao_analisada && rev.dados.revisao_analisada !== novos[novos.length - 1].rev) { rev.feito = false; rev.feito_por = null; rev.feito_em = null; }
+    }
+    if (id === 'revisao_projeto') limpo.revisao_analisada = revisaoVigente(d)?.rev || null;   // a revisão de projeto vale para a revisão do desenho vigente NESTE momento
     e.dados = limpo;
     if (id === 'conceitos') {
       // trocar os conceitos pode apagar o que já tinha sido escolhido: a escolha volta a ficar em aberto, em vez de apontar para um conceito que não existe mais

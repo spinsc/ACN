@@ -22,7 +22,7 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > - **Ainda não começou — [PLANO_GARANTIA.md](PLANO_GARANTIA.md):** atendimento em garantia (G1 a G6), retomado pelo comando `/garantia`; depende de decisões do usuário com os setores.
 > - **Planejado em 19/10/2026 — [PLANO_DESENVOLVIMENTO_ENGENHARIA.md](PLANO_DESENVOLVIMENTO_ENGENHARIA.md):** a aba Engenharia > Desenvolvimento deixa de ter 8 etapas iguais:
 >   cada etapa ganha entregáveis próprios, porta de decisão (solicitante + gerente), tipo de desenvolvimento, revisões do desenho, protótipos, testes e ligação com catálogo/Garantia. Fatias D0 a D6;
->   **D0 (migração da aba, 12e68), D1 (tipo, entregáveis e portas) e D2 (formulários da Concepção e da Criação) estão feitas (19/10/2026)**; a próxima é a D3 (Desenvolvimento: revisões do desenho, lista de materiais preliminar e custo × meta, riscos, revisão de projeto).
+>   **D0 (migração da aba, 12e68), D1 (tipo, entregáveis e portas), D2 (formulários da Concepção e da Criação) e D3 (desenhos com revisão, lista de materiais e custo × meta, riscos, revisão de projeto) estão feitas (19/10/2026)**; a próxima é a D4 (Prototipagem e Validação: protótipos, plano de testes ligado aos requisitos, parecer da Qualidade).
 > - **Concluídos — pasta [PLANOS CONCLUIDOS](PLANOS%20CONCLUIDOS/):**
 >   [PLANO_ESTOQUE_AUTOMATICO.md](PLANOS%20CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md) (estoque, reserva e automação da lista de material; 9 etapas; `/estoque-auto` só para consulta),
 >   [PLANO_CENTRO_CUSTO.md](PLANOS%20CONCLUIDOS/PLANO_CENTRO_CUSTO.md) (anexo da Etapa 15 do plano de UX) e
