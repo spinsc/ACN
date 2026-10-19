@@ -94,7 +94,7 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 | **D1** | Base: tipo de desenvolvimento, entregáveis por etapa (lista própria de cada etapa, anexo por entregável), porta com aprovação solicitante + gerente, registro no histórico | ✅ 19/10/2026 (regras em `DesenvolvimentoModelo.ts`, tela em `DesenvolvimentoPorta.tsx`; 68 regras + 58 verificações no navegador; ver "Como ficou a D1") |
 | **D2** | Concepção e Criação: requisitos com prioridade, meta de custo, normas, matriz de escolha de conceitos | ✅ 19/10/2026 (ver "Como ficou a D2"; 94 regras + 76 verificações no navegador) |
 | **D3** | Desenvolvimento: revisões do desenho (Rev A, B…), lista de materiais preliminar, custo estimado × meta, lista de riscos, revisão de projeto | ✅ 19/10/2026 (ver "Como ficou a D3"; 125 regras + 99 verificações no navegador) |
-| **D4** | Prototipagem e Validação: registro de protótipos, problemas com ação, plano de testes ligado aos requisitos, parecer da Qualidade, "volta ao Desenvolvimento" | não feita |
+| **D4** | Prototipagem e Validação: registro de protótipos, problemas com ação, plano de testes ligado aos requisitos, parecer da Qualidade, "volta ao Desenvolvimento" | ✅ 19/10/2026 (ver "Como ficou a D4"; 155 regras + 124 verificações no navegador) |
 | **D5** | Produção, Acabamento e Entrega: liberação com item no catálogo e estrutura de instalação, primeira unidade, custo real, pedido de mudança, pacote técnico, aceite, ligação com a Garantia | não feita |
 | **D6** | Painel: atrasadas, esperando aprovação, etapa parada há dias, custo estimado × meta; filtros novos | não feita |
 
@@ -138,6 +138,19 @@ Sem mudança no banco (os dados ficam em `entregaveis[id].dados`). Regras em `De
 - **Para a D4:** os protótipos vão referenciar a Rev do desenho; os riscos da D3 alimentam o plano de testes.
 
 **Uso real já em andamento (conferido só por leitura, 19/10/2026):** a Engenharia já usa a D1/D2 em produção — uma demanda nova ("produto novo") e uma antiga que passou ao modelo novo. Entregável marcado como "feito" antes da D3 sem formulário **continua feito** (a regra de "só feito com formulário completo" vale daqui para a frente, ao marcar ou editar); o dado dessas demandas não foi tocado.
+
+### Como ficou a D4 (19/10/2026)
+
+Sem mudança no banco. Regras em `DesenvolvimentoModelo.ts` (`requisitosSemTeste`, `riscosSemTeste`, `normasSemResposta`); campos em `DesenvolvimentoFormularios.tsx`; o parecer da Qualidade está em `DesenvolvimentoPorta.tsx` e em `decidirPorta`.
+
+- **Protótipos:** cada um é **P1, P2… pela ordem** (o número muda se um for tirado, o `id` não), com a **revisão do desenho construída** (já vem a vigente; se o desenho já mudou, o protótipo mostra "foi feito na Rev A; o desenho hoje está na Rev B"), o que se fez, material, **horas (obrigatórias)**, custo e fotos. Valem como feito com descrição, revisão (que exista nos desenhos) e horas.
+- **Problemas e ações:** problema, protótipo de origem, ação, **revisão do desenho que o corrigiu** e "resolvido". Só vale como feito com **todos resolvidos e com ação**; dá para marcar "nenhum problema apareceu".
+- **Plano de testes (modelo em V):** cada teste liga a um **requisito da Concepção** e, se quiser, a um **risco médio/alto da etapa anterior**, com critério para passar, resultado (ainda não testado, aprovado, reprovado) e evidência. **Todo requisito obrigatório precisa de ao menos um teste** (a tela lista o que ainda não tem; o teste novo já vem ligado ao primeiro requisito sem teste); só vale como feito com **todos os testes aprovados**, com critério e evidência. Risco médio/alto sem teste é **aviso**, não trava.
+- **Instalação em veículo:** veículo, data, resultado e fotos; só vale **aprovada**.
+- **Conferência das normas:** percorre **as normas listadas na Concepção** (atende / não atende / não se aplica, com observação). **"Não atende" trava** até o projeto ser ajustado; se a Concepção não listou normas, não há o que conferir.
+- **Parecer da Qualidade:** quem aprova pela Qualidade (a pessoa indicada ao iniciar a Validação, ou o Admin cobrindo esse papel) **precisa escrever o parecer**; o texto fica na decisão e no histórico. Solicitante e gerente continuam só confirmando.
+- **Resumo do projeto** inclui protótipos, problemas, plano de testes, instalação e conferência de normas.
+- **Para a D5:** o item do catálogo e a estrutura de instalação nascem do que ficou aprovado aqui; a primeira unidade da Produção é conferida contra a Rev vigente do desenho.
 
 Regras de cada fatia: `npx vite build` antes de commitar; teste no navegador com gravações bloqueadas (padrão `scratchpad/fstest/`);
 nenhum dado real alterado; relatar números reais; push só com a pergunta clicável de autorização.

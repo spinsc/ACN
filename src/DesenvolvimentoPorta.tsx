@@ -210,8 +210,13 @@ function PortaDaEtapa({ demanda, etapa, idx, executar, ocupado, currentUser }: a
   const pedir = () => executar((d, agora) => pedirPorta(d, idx, currentUser, agora));
   const retirar = () => executar((d, agora) => retirarPedido(d, idx, currentUser, agora));
   const aprovar = async () => {
-    if (!await confirmar(`Aprovar a etapa "${etapa.nome}" como ${meus.map(m => ROTULO_PAPEL[m]).join(' e ')}?`)) return;
-    const r = await executar((d, agora) => decidirPorta(d, idx, currentUser, { decisao: 'aprovou' }, agora));
+    // D4: quem aprova pela Qualidade escreve o parecer (fica na decisão e no histórico); os outros papéis só confirmam
+    let parecer: string | null = null;
+    if (meus.includes('qualidade')) {
+      parecer = await pedirTexto(`Parecer da Qualidade sobre a etapa "${etapa.nome}" (obrigatório para aprovar):`);
+      if (!parecer || !String(parecer).trim()) return;
+    } else if (!await confirmar(`Aprovar a etapa "${etapa.nome}" como ${meus.map(m => ROTULO_PAPEL[m]).join(' e ')}?`)) return;
+    const r = await executar((d, agora) => decidirPorta(d, idx, currentUser, { decisao: 'aprovou', texto: parecer }, agora));
     if (r?.concluiu) alert(`Etapa ${etapa.nome} concluída: todas as aprovações foram dadas.`);
   };
   const ressalva = async () => {

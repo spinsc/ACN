@@ -213,7 +213,9 @@ export const marcarFeito = (d: any, idx: number, id: string, feito: boolean, u: 
 // ── entregáveis com formulário próprio (D2, 19/10/2026): Concepção e Criação ────────────────────────────────────
 // O conteúdo fica em `etapa.entregaveis[id].dados`. Marcar como feito exige o formulário completo; editar um formulário já "feito" que deixe de estar completo desmarca o "feito".
 // D3 (19/10/2026) acrescenta os da etapa de Desenvolvimento: desenhos com revisão, lista de materiais preliminar, riscos e revisão de projeto.
-export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto'];
+export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto',
+  // D4 (19/10/2026): Prototipagem e Validação
+  'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas'];
 export const temFormulario = (id: string) => ENTREGAVEIS_COM_FORMULARIO.includes(id);
 export const PRIORIDADES: Record<string, string> = { obrigatorio: 'Obrigatório', desejavel: 'Desejável' };
 // critérios de partida da matriz (nome, peso de 1 a 5); a Engenharia troca, tira e acrescenta
@@ -269,6 +271,27 @@ export const AREAS_REVISAO = ['Engenharia', 'Produção', 'Compras', 'Qualidade'
 export const CONCLUSOES_REVISAO: Record<string, string> = { aprovado: 'Aprovado', aprovado_com_ajustes: 'Aprovado com ajustes', reprovado: 'Reprovado' };
 const areasObrigatorias = (tipo: string) => (tipo === 'produto_novo' ? ['Produção', 'Compras', 'Qualidade'] : []);
 
+// ── D4: protótipos, problemas, plano de testes, instalação em veículo e conferência das normas ───────────────────
+export const RESULTADOS_TESTE: Record<string, string> = { pendente: 'Ainda não testado', aprovado: 'Aprovado', reprovado: 'Reprovado' };
+export const SITUACOES_NORMA: Record<string, string> = { atende: 'Atende', nao_atende: 'Não atende', nao_se_aplica: 'Não se aplica' };
+const requisitosDoProjeto = (d: any) => dadosDoEntregavel(d, 'requisitos')?.itens || [];
+const normasDoProjeto = (d: any) => dadosDoEntregavel(d, 'normas')?.itens || [];
+/** Requisitos OBRIGATÓRIOS que nenhum teste do plano cobre (a ligação requisito → teste do modelo em V). */
+export function requisitosSemTeste(d: any, dados: any) {
+  const testes = dados?.testes || [];
+  return requisitosDoProjeto(d).filter((r: any) => r.prioridade === 'obrigatorio' && !testes.some((t: any) => t.requisito_id === r.id));
+}
+/** Riscos médios e altos da etapa de Desenvolvimento que nenhum teste menciona (aviso, não trava). */
+export function riscosSemTeste(d: any, dados: any) {
+  const testes = dados?.testes || [];
+  return (dadosDoEntregavel(d, 'riscos')?.itens || []).filter((r: any) => nivelDoRisco(r.gravidade, r.probabilidade).pontos >= 8 && !testes.some((t: any) => t.risco_id === r.id));
+}
+/** As normas da Concepção que a conferência ainda não respondeu. */
+export function normasSemResposta(d: any, dados: any) {
+  const itens = dados?.itens || [];
+  return normasDoProjeto(d).filter((n: any) => !itens.some((i: any) => i.norma_id === n.id && SITUACOES_NORMA[i.situacao]));
+}
+
 /** O que ainda falta preencher para o formulário valer como feito (lista vazia = completo). */
 export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
   const x = dados || {};
@@ -319,6 +342,37 @@ export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
     else if (x.conclusao === 'aprovado_com_ajustes' && (x.pontos || []).some((p: any) => !p.resolvido)) falta.push('resolver os pontos de ajuste em aberto');
     const vigente = revisaoVigente(d)?.rev;
     if (vigente && x.revisao_analisada && x.revisao_analisada !== vigente) falta.push(`repetir a revisão: o desenho mudou (a revisão analisada foi a ${x.revisao_analisada}, a vigente é a ${vigente})`);
+  } else if (id === 'prototipos') {
+    const ps = x.itens || [];
+    const revisoes = (dadosDoEntregavel(d, 'desenhos')?.revisoes || []).map((r: any) => r.rev);
+    if (!ps.length) falta.push('ao menos um protótipo');
+    else {
+      if (ps.some((p: any) => !String(p.descricao || '').trim())) falta.push('o que foi feito em cada protótipo');
+      if (ps.some((p: any) => !p.rev_desenho || (revisoes.length && !revisoes.includes(p.rev_desenho)))) falta.push('a revisão do desenho usada em cada protótipo');
+      if (ps.some((p: any) => p.horas === null || p.horas === undefined)) falta.push('as horas gastas em cada protótipo');
+    }
+  } else if (id === 'problemas') {
+    const ps = x.itens || [];
+    if (!ps.length && !x.nenhum) falta.push('os problemas, ou marcar que nenhum apareceu');
+    if (ps.some((p: any) => !String(p.acao || '').trim())) falta.push('a ação de cada problema');
+    if (ps.some((p: any) => !p.resolvido)) falta.push('resolver os problemas em aberto');
+  } else if (id === 'plano_testes') {
+    const ts = x.testes || [];
+    if (!ts.length) falta.push('ao menos um teste');
+    const semTeste = requisitosSemTeste(d, x);
+    if (semTeste.length) falta.push(`teste para o requisito: ${semTeste.map((r: any) => r.texto).join('; ')}`);
+    if (ts.some((t: any) => !String(t.criterio || '').trim())) falta.push('o critério para passar em cada teste');
+    const naoOk = ts.filter((t: any) => t.resultado !== 'aprovado');
+    if (naoOk.length) falta.push(`${naoOk.length} teste(s) sem resultado aprovado`);
+    if (ts.some((t: any) => t.resultado === 'aprovado' && !String(t.evidencia || '').trim())) falta.push('a evidência de cada teste aprovado');
+  } else if (id === 'teste_instalacao') {
+    if (!String(x.veiculo || '').trim()) falta.push('o veículo do teste');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''))) falta.push('a data do teste');
+    if (x.resultado !== 'aprovado') falta.push('resultado aprovado (reprovado ou pendente não vale)');
+  } else if (id === 'conferencia_normas') {
+    const sem = normasSemResposta(d, x);
+    if (sem.length) falta.push(`a situação de cada norma (faltam ${sem.length})`);
+    if ((x.itens || []).some((i: any) => i.situacao === 'nao_atende' && normasDoProjeto(d).some((n: any) => n.id === i.norma_id))) falta.push('o produto não atende a uma norma: ajuste o projeto e confira de novo');
   }
   return falta;
 }
@@ -359,6 +413,22 @@ export function limparDados(id: string, dados: any) {
     pontos: lista(x.pontos, LIMITES.itens).map((p: any) => ({ id: txt(p.id, 20), texto: txt(p.texto, LIMITES.texto), resolvido: !!p.resolvido })).filter((p: any) => p.texto),
     conclusao: CONCLUSOES_REVISAO[x.conclusao] ? x.conclusao : '', ata: txt(x.ata, 3000), revisao_analisada: txt(x.revisao_analisada, 4) || null,
   };
+  const fotos = (v: any) => lista(v, 20).map((a: any) => ({ nome: txt(a.nome, 200), url: txt(a.url, 1000) })).filter((a: any) => a.nome);
+  const diaOuVazio = (v: any) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : '');
+  const numero = (v: any) => { const n = Number(v); return v !== null && v !== undefined && v !== '' && Number.isFinite(n) && n >= 0 ? arred2(n) : null; };
+  if (id === 'prototipos') return { itens: lista(x.itens, 30).map((p: any, i: number) => ({
+    id: txt(p.id, 20), numero: `P${i + 1}`, rev_desenho: txt(p.rev_desenho, 4), descricao: txt(p.descricao, LIMITES.texto), material: txt(p.material, LIMITES.texto),
+    horas: numero(p.horas), custo: numero(p.custo), data: diaOuVazio(p.data), fotos: fotos(p.fotos),
+  })).filter((p: any) => p.descricao || p.material || p.fotos.length) };
+  if (id === 'problemas') return { nenhum: !!x.nenhum, itens: lista(x.itens, LIMITES.itens).map((p: any) => ({
+    id: txt(p.id, 20), descricao: txt(p.descricao, LIMITES.texto), prototipo_id: txt(p.prototipo_id, 20) || null, acao: txt(p.acao, LIMITES.texto), rev_corrigida: txt(p.rev_corrigida, 4), resolvido: !!p.resolvido,
+  })).filter((p: any) => p.descricao) };
+  if (id === 'plano_testes') return { testes: lista(x.testes, 80).map((t: any) => ({
+    id: txt(t.id, 20), requisito_id: txt(t.requisito_id, 20) || null, risco_id: txt(t.risco_id, 20) || null, descricao: txt(t.descricao, LIMITES.texto), criterio: txt(t.criterio, LIMITES.texto),
+    resultado: RESULTADOS_TESTE[t.resultado] ? t.resultado : 'pendente', evidencia: txt(t.evidencia, LIMITES.texto), data: diaOuVazio(t.data),
+  })).filter((t: any) => t.descricao) };
+  if (id === 'teste_instalacao') return { veiculo: txt(x.veiculo, LIMITES.nome), data: diaOuVazio(x.data), resultado: RESULTADOS_TESTE[x.resultado] ? x.resultado : 'pendente', observacoes: txt(x.observacoes, 2000), fotos: fotos(x.fotos) };
+  if (id === 'conferencia_normas') return { itens: lista(x.itens, LIMITES.itens).map((i: any) => ({ norma_id: txt(i.norma_id, 20), texto: txt(i.texto, LIMITES.texto), situacao: SITUACOES_NORMA[i.situacao] ? i.situacao : '', obs: txt(i.obs, LIMITES.texto) })).filter((i: any) => i.norma_id) };
   return {};
 }
 
@@ -426,6 +496,8 @@ export function decidirPorta(d: any, idx: number, u: any, { decisao, texto }: an
   const meus = papeisQueOUsuarioCobre(d, etapa, u).filter(papel => estado.faltam.includes(papel));
   if (!meus.length) return { erro: estado.faltam.length ? 'Você não pode decidir esta porta (ou já decidiu).' : 'Esta porta já está aprovada.' };
   const txt = String(texto || '').trim();
+  // D4 (19/10/2026): na Validação a Qualidade não só "aprova": ela escreve o parecer (o texto fica na decisão e no histórico)
+  if (decisao === 'aprovou' && meus.includes('qualidade') && !txt) return { erro: 'A Qualidade precisa escrever o parecer ao aprovar a Validação.' };
 
   if (decisao === 'devolveu') {
     const porta = etapa.porta;

@@ -14,6 +14,7 @@ import { lerValorDigitado } from './LerValor';
 import {
   PRIORIDADES, CRITERIOS_SUGERIDOS, NOTA_MAXIMA, ranking, faltaNoEntregavel, dadosDoEntregavel, entregaveisDaEtapa, solicitanteDaDemanda,
   letraDaRevisao, revisaoVigente, custoEstimado, nivelDoRisco, AREAS_REVISAO, CONCLUSOES_REVISAO,
+  RESULTADOS_TESTE, SITUACOES_NORMA, requisitosSemTeste, riscosSemTeste, normasSemResposta,
 } from './DesenvolvimentoModelo';
 import { mdiPlus, mdiClose, mdiContentSaveOutline, mdiPaperclip } from '@mdi/js';
 
@@ -398,9 +399,219 @@ function EditorRevisao({ demanda, inicial, onSalvar, onCancelar, ocupado }: any)
   );
 }
 
+// ── D4: Prototipagem e Validação ────────────────────────────────────────────────────────────────────────────────
+/** Fotos de um registro: escolhe, envia ao armazenamento e guarda nome e endereço. Arquivo que não sobe é dito e não entra. */
+function CampoDeFotos({ fotos, onChange, enviar, rotulo }: any) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [enviando, setEnviando] = useState(false);
+  const anexar = async (files: FileList) => {
+    if (enviando) return;
+    setEnviando(true);
+    try {
+      const { enviados, falhas } = await enviar(files);
+      if (falhas.length) alert('Não foi possível anexar estes arquivos:\n\n' + falhas.join('\n'));
+      if (enviados.length) onChange([...(fotos || []), ...enviados.map((a: any) => ({ nome: a.nome, url: a.url }))]);
+    } finally { setEnviando(false); if (ref.current) ref.current.value = ''; }
+  };
+  return (
+    <div className="acn-dev-anexos">
+      {(fotos || []).length > 0 && (
+        <div className="acn-dev-anexos-lista">
+          {fotos.map((a: any, i: number) => (
+            <span key={i} className="acn-dev-anexo-grupo">
+              {a.url ? <a href={a.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a> : <span className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>}
+              <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar ${a.nome}`} title="Tirar" onClick={() => onChange(fotos.filter((_: any, k: number) => k !== i))}><Icone path={mdiClose} size={13} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input ref={ref} type="file" multiple hidden onChange={e => { if (e.target.files?.length) anexar(e.target.files); }} />
+      <div><Botao pequeno icone={mdiPaperclip} disabled={enviando} onClick={() => ref.current?.click()}>{enviando ? 'Enviando…' : rotulo || 'Anexar fotos'}</Botao></div>
+    </div>
+  );
+}
+const opcoesRevisao = (demanda: any) => (dadosDoEntregavel(demanda, 'desenhos')?.revisoes || []).map((r: any) => r.rev);
+const num = (v: string) => { const r = lerValorDigitado(v); return r.invalido ? 'invalido' : (r.valor ?? null); };
+
+function EditorPrototipos({ demanda, inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const revs = opcoesRevisao(demanda);
+  const vigente = revisaoVigente(demanda)?.rev || '';
+  const [itens, setItens] = useState<any[]>((inicial?.itens || []).map((p: any) => ({ ...p, horas: comoTexto(p.horas), custo: comoTexto(p.custo), fotos: [...(p.fotos || [])] })));
+  const mudar = (n: number, campo: string, v: any) => setItens(l => l.map((x, i) => (i === n ? { ...x, [campo]: v } : x)));
+  const salvar = () => {
+    const prontos: any[] = [];
+    for (const [n, p] of itens.entries()) {
+      const h = num(p.horas), c = num(p.custo);
+      if (h === 'invalido' || c === 'invalido') { alert(`No protótipo ${n + 1}, as horas ou o custo não parecem números. Escreva, por exemplo, 3,5.`); return; }
+      prontos.push({ ...p, horas: h, custo: c });
+    }
+    onSalvar({ itens: prontos });
+  };
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Cada protótipo registra qual revisão do desenho foi construída, o que se fez, o material, as horas e as fotos.</div>
+      {itens.map((p, n) => (
+        <div key={p.id} className="acn-dev-conceito" data-prototipo={p.id}>
+          <div className="acn-dev-form-linha">
+            <Selo familia="marca" ponto={false}>P{n + 1}</Selo>
+            <select className="acn-input acn-dev-form-prio" aria-label={`Revisão do desenho do protótipo ${n + 1}`} value={p.rev_desenho} onChange={e => mudar(n, 'rev_desenho', e.target.value)}>
+              <option value="">Revisão do desenho…</option>
+              {revs.map((r: string) => <option key={r} value={r}>Rev {r}</option>)}
+            </select>
+            <input type="date" className="acn-input acn-dev-form-prio" aria-label={`Data do protótipo ${n + 1}`} value={p.data || ''} onChange={e => mudar(n, 'data', e.target.value)} />
+            <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar protótipo ${n + 1}`} title="Tirar" onClick={() => setItens(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+          </div>
+          {p.rev_desenho && vigente && p.rev_desenho !== vigente && <div className="acn-ajuda atencao">Este protótipo foi feito na Rev {p.rev_desenho}; o desenho hoje está na Rev {vigente}.</div>}
+          <textarea className="acn-input" rows={2} aria-label={`O que foi feito no protótipo ${n + 1}`} placeholder="O que foi feito e como saiu" value={p.descricao} onChange={e => mudar(n, 'descricao', e.target.value)} />
+          <div className="acn-dev-form-linha">
+            <input className="acn-input" aria-label={`Material do protótipo ${n + 1}`} placeholder="Material usado" value={p.material || ''} onChange={e => mudar(n, 'material', e.target.value)} />
+            <input className="acn-input acn-dev-bom-num" aria-label={`Horas do protótipo ${n + 1}`} inputMode="decimal" placeholder="Horas *" value={p.horas} onChange={e => mudar(n, 'horas', e.target.value)} />
+            <input className="acn-input acn-dev-bom-num" aria-label={`Custo do protótipo ${n + 1}`} inputMode="decimal" placeholder="Custo R$" value={p.custo} onChange={e => mudar(n, 'custo', e.target.value)} />
+          </div>
+          <CampoDeFotos fotos={p.fotos} onChange={(f: any[]) => mudar(n, 'fotos', f)} enviar={enviar} />
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setItens(l => [...l, { id: novoId(), rev_desenho: vigente, descricao: '', material: '', horas: '', custo: '', data: hojeISO(), fotos: [] }])}>Adicionar protótipo</Botao></div>
+      <Rodape ocupado={ocupado} onSalvar={salvar} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorProblemas({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const revs = opcoesRevisao(demanda);
+  const prototipos = dadosDoEntregavel(demanda, 'prototipos')?.itens || [];
+  const [itens, setItens] = useState<any[]>((inicial?.itens || []).map((p: any) => ({ ...p })));
+  const [nenhum, setNenhum] = useState(!!inicial?.nenhum);
+  const mudar = (n: number, campo: string, v: any) => setItens(l => l.map((x, i) => (i === n ? { ...x, [campo]: v } : x)));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">O que deu errado no protótipo, o que foi feito a respeito e em qual revisão do desenho ficou corrigido. Só vale como feito com todos resolvidos.</div>
+      {itens.map((p, n) => (
+        <div key={p.id} className="acn-dev-conceito" data-problema={p.id}>
+          <div className="acn-dev-form-linha">
+            <input className="acn-input" aria-label={`Problema ${n + 1}`} placeholder="O que deu errado" value={p.descricao} onChange={e => mudar(n, 'descricao', e.target.value)} />
+            <select className="acn-input acn-dev-form-prio" aria-label={`Protótipo do problema ${n + 1}`} value={p.prototipo_id || ''} onChange={e => mudar(n, 'prototipo_id', e.target.value)}>
+              <option value="">Protótipo…</option>
+              {prototipos.map((pt: any) => <option key={pt.id} value={pt.id}>{pt.numero}</option>)}
+            </select>
+            <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar problema ${n + 1}`} title="Tirar" onClick={() => setItens(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+          </div>
+          <input className="acn-input" aria-label={`Ação do problema ${n + 1}`} placeholder="O que foi feito a respeito *" value={p.acao || ''} onChange={e => mudar(n, 'acao', e.target.value)} />
+          <div className="acn-dev-form-linha">
+            <select className="acn-input acn-dev-form-prio" aria-label={`Revisão que corrigiu o problema ${n + 1}`} value={p.rev_corrigida || ''} onChange={e => mudar(n, 'rev_corrigida', e.target.value)}>
+              <option value="">Corrigido na revisão…</option>
+              {revs.map((r: string) => <option key={r} value={r}>Rev {r}</option>)}
+            </select>
+            <label className="acn-dev-form-nenhum"><input type="checkbox" aria-label={`Problema ${n + 1} resolvido`} checked={!!p.resolvido} onChange={e => mudar(n, 'resolvido', e.target.checked)} /> Resolvido</label>
+          </div>
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setItens(l => [...l, { id: novoId(), descricao: '', prototipo_id: prototipos[prototipos.length - 1]?.id || '', acao: '', rev_corrigida: '', resolvido: false }])}>Adicionar problema</Botao></div>
+      <label className="acn-dev-form-nenhum"><input type="checkbox" checked={nenhum} onChange={e => setNenhum(e.target.checked)} /> Nenhum problema apareceu nos protótipos</label>
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ itens, nenhum })} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorTestes({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const requisitos = dadosDoEntregavel(demanda, 'requisitos')?.itens || [];
+  const riscos = (dadosDoEntregavel(demanda, 'riscos')?.itens || []).filter((r: any) => nivelDoRisco(r.gravidade, r.probabilidade).pontos >= 8);
+  const [testes, setTestes] = useState<any[]>((inicial?.testes || []).map((t: any) => ({ ...t })));
+  const mudar = (n: number, campo: string, v: any) => setTestes(l => l.map((x, i) => (i === n ? { ...x, [campo]: v } : x)));
+  const semTeste = requisitosSemTeste(demanda, { testes });
+  const riscosSem = riscosSemTeste(demanda, { testes });
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Para cada requisito obrigatório da Concepção, ao menos um teste: o que testar, o critério para passar, o resultado e a evidência.</div>
+      {semTeste.length > 0 && <Faixa tom="atencao">Requisitos obrigatórios ainda sem teste: {semTeste.map((r: any) => r.texto).join('; ')}.</Faixa>}
+      {riscosSem.length > 0 && <div className="acn-ajuda atencao">Riscos médios ou altos que nenhum teste menciona: {riscosSem.map((r: any) => r.descricao).join('; ')}.</div>}
+      {testes.map((t, n) => (
+        <div key={t.id} className="acn-dev-conceito" data-teste={t.id}>
+          <div className="acn-dev-form-linha">
+            <input className="acn-input" aria-label={`Teste ${n + 1}`} placeholder="O que será testado" value={t.descricao} onChange={e => mudar(n, 'descricao', e.target.value)} />
+            <select className="acn-input acn-dev-form-prio" aria-label={`Resultado do teste ${n + 1}`} value={t.resultado} onChange={e => mudar(n, 'resultado', e.target.value)}>
+              {Object.entries(RESULTADOS_TESTE).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+            </select>
+            <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar teste ${n + 1}`} title="Tirar" onClick={() => setTestes(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+          </div>
+          <div className="acn-dev-form-linha">
+            <select className="acn-input" aria-label={`Requisito do teste ${n + 1}`} value={t.requisito_id || ''} onChange={e => mudar(n, 'requisito_id', e.target.value)}>
+              <option value="">Sem requisito ligado</option>
+              {requisitos.map((r: any) => <option key={r.id} value={r.id}>{PRIORIDADES[r.prioridade]}: {r.texto}</option>)}
+            </select>
+            {riscos.length > 0 && (
+              <select className="acn-input" aria-label={`Risco do teste ${n + 1}`} value={t.risco_id || ''} onChange={e => mudar(n, 'risco_id', e.target.value)}>
+                <option value="">Sem risco ligado</option>
+                {riscos.map((r: any) => <option key={r.id} value={r.id}>Risco: {r.descricao}</option>)}
+              </select>
+            )}
+          </div>
+          <input className="acn-input" aria-label={`Critério do teste ${n + 1}`} placeholder="Critério para passar *" value={t.criterio || ''} onChange={e => mudar(n, 'criterio', e.target.value)} />
+          <textarea className="acn-input" rows={2} aria-label={`Evidência do teste ${n + 1}`} placeholder="Evidência (o que foi medido ou visto; foto e vídeo vão nos anexos do entregável)" value={t.evidencia || ''} onChange={e => mudar(n, 'evidencia', e.target.value)} />
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => setTestes(l => [...l, { id: novoId(), requisito_id: semTeste[0]?.id || '', risco_id: '', descricao: '', criterio: '', resultado: 'pendente', evidencia: '', data: hojeISO() }])}>Adicionar teste</Botao></div>
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ testes })} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorInstalacao({ inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const [x, setX] = useState({ veiculo: inicial?.veiculo || '', data: inicial?.data || hojeISO(), resultado: inicial?.resultado || 'pendente', observacoes: inicial?.observacoes || '', fotos: [...(inicial?.fotos || [])] });
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-dev-campos">
+        <div className="acn-dev-campo-resp"><label className="acn-label">Veículo do teste *</label>
+          <input className="acn-input" aria-label="Veículo do teste" placeholder="Ex: Hilux 2024, placa …" value={x.veiculo} onChange={e => setX({ ...x, veiculo: e.target.value })} /></div>
+        <div className="acn-dev-campo-data"><label className="acn-label">Data *</label>
+          <input type="date" className="acn-input" aria-label="Data do teste de instalação" value={x.data} onChange={e => setX({ ...x, data: e.target.value })} /></div>
+        <div className="acn-dev-campo-data"><label className="acn-label">Resultado *</label>
+          <select className="acn-input" aria-label="Resultado da instalação" value={x.resultado} onChange={e => setX({ ...x, resultado: e.target.value })}>
+            {Object.entries(RESULTADOS_TESTE).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select></div>
+      </div>
+      <textarea className="acn-input" rows={3} aria-label="Observações da instalação" placeholder="Como foi a instalação, dificuldades, ajustes" value={x.observacoes} onChange={e => setX({ ...x, observacoes: e.target.value })} />
+      <CampoDeFotos fotos={x.fotos} onChange={(f: any[]) => setX({ ...x, fotos: f })} enviar={enviar} />
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar(x)} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorNormas({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const normas = dadosDoEntregavel(demanda, 'normas')?.itens || [];
+  const [linhas, setLinhas] = useState<any[]>(normas.map((n: any) => { const a = (inicial?.itens || []).find((i: any) => i.norma_id === n.id); return { norma_id: n.id, texto: n.texto, situacao: a?.situacao || '', obs: a?.obs || '' }; }));
+  const mudar = (n: number, campo: string, v: string) => setLinhas(l => l.map((x, i) => (i === n ? { ...x, [campo]: v } : x)));
+  return (
+    <div className="acn-dev-form">
+      {normas.length === 0
+        ? <div className="acn-ajuda">A Concepção não listou normas aplicáveis; não há o que conferir. Pode marcar como feito.</div>
+        : <div className="acn-ajuda">Cada norma listada na Concepção, conferida contra o produto. “Não atende” trava até o projeto ser ajustado.</div>}
+      {linhas.map((l, n) => (
+        <div key={l.norma_id} className="acn-dev-conceito" data-norma={l.norma_id}>
+          <div className="acn-dev-form-linha">
+            <strong className="acn-dev-norma-texto">{l.texto}</strong>
+            <select className="acn-input acn-dev-form-prio" aria-label={`Situação da norma ${n + 1}`} value={l.situacao} onChange={e => mudar(n, 'situacao', e.target.value)}>
+              <option value="">Situação…</option>
+              {Object.entries(SITUACOES_NORMA).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+            </select>
+          </div>
+          <input className="acn-input" aria-label={`Observação da norma ${n + 1}`} placeholder="Como foi conferido (opcional)" value={l.obs} onChange={e => mudar(n, 'obs', e.target.value)} />
+        </div>
+      ))}
+      {normas.length > 0 && <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ itens: linhas })} onCancelar={onCancelar} />}
+      {normas.length === 0 && <div className="acn-dev-acoes"><Botao pequeno onClick={onCancelar}>Fechar</Botao></div>}
+    </div>
+  );
+}
+
 /** O formulário do entregável (abre ao clicar em Preencher/Editar). */
 export function FormularioDoEntregavel({ id, demanda, dados, onSalvar, onCancelar, ocupado, enviar }: any) {
   const comum = { onSalvar, onCancelar, ocupado, inicial: dados, demanda, enviar };
+  if (id === 'prototipos') return <EditorPrototipos {...comum} />;
+  if (id === 'problemas') return <EditorProblemas {...comum} />;
+  if (id === 'plano_testes') return <EditorTestes {...comum} />;
+  if (id === 'teste_instalacao') return <EditorInstalacao {...comum} />;
+  if (id === 'conferencia_normas') return <EditorNormas {...comum} />;
   if (id === 'desenhos') return <EditorDesenhos {...comum} />;
   if (id === 'bom_prelim') return <EditorBom {...comum} />;
   if (id === 'riscos') return <EditorRiscos {...comum} />;
@@ -498,13 +709,65 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
       </div>
     );
   }
+  if (id === 'prototipos' && (x.itens || []).length) {
+    const vigente = revisaoVigente(demanda)?.rev;
+    return (
+      <ul className="acn-dev-resumo acn-dev-resumo-lista">
+        {x.itens.map((p: any) => (
+          <li key={p.id}>
+            <strong>{p.numero}</strong> na Rev {p.rev_desenho || '?'} — {p.descricao}
+            <span className="acn-ajuda"> ({[p.material, p.horas !== null && p.horas !== undefined ? `${p.horas} h` : '', p.custo ? brl(p.custo) : ''].filter(Boolean).join(' · ')})</span>
+            {vigente && p.rev_desenho && p.rev_desenho !== vigente && <> <Selo familia="atencao" ponto={false}>desenho já está na Rev {vigente}</Selo></>}
+            {(p.fotos || []).length > 0 && <> {p.fotos.map((f: any, i: number) => f.url ? <a key={i} href={f.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</a> : null)}</>}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (id === 'problemas' && ((x.itens || []).length || x.nenhum)) return (
+    <ul className="acn-dev-resumo acn-dev-resumo-lista">
+      {(x.itens || []).map((p: any) => <li key={p.id}>{p.descricao} — {p.acao || 'sem ação'} {p.rev_corrigida && <span className="acn-ajuda">(corrigido na Rev {p.rev_corrigida})</span>} <Selo familia={p.resolvido ? 'ok' : 'atencao'} ponto={false}>{p.resolvido ? 'Resolvido' : 'Em aberto'}</Selo></li>)}
+      {x.nenhum && !(x.itens || []).length && <li className="acn-ajuda">Nenhum problema apareceu nos protótipos.</li>}
+    </ul>
+  );
+  if (id === 'plano_testes' && (x.testes || []).length) {
+    const requisitos = dadosDoEntregavel(demanda, 'requisitos')?.itens || [];
+    const semTeste = requisitosSemTeste(demanda, x), riscosSem = riscosSemTeste(demanda, x);
+    return (
+      <div className="acn-dev-resumo">
+        <ul className="acn-dev-resumo-lista">
+          {x.testes.map((t: any) => (
+            <li key={t.id}>
+              <Selo familia={t.resultado === 'aprovado' ? 'ok' : t.resultado === 'reprovado' ? 'erro' : 'neutro'} ponto={false}>{RESULTADOS_TESTE[t.resultado]}</Selo> {t.descricao}
+              <span className="acn-ajuda"> — critério: {t.criterio || '—'}{t.requisito_id && requisitos.find((r: any) => r.id === t.requisito_id) ? ` · requisito: ${requisitos.find((r: any) => r.id === t.requisito_id).texto}` : ''}</span>
+              {t.evidencia && <div className="acn-ajuda">Evidência: {t.evidencia}</div>}
+            </li>
+          ))}
+        </ul>
+        {semTeste.length > 0 && <div className="acn-ajuda atencao">Requisitos obrigatórios sem teste: {semTeste.map((r: any) => r.texto).join('; ')}.</div>}
+        {riscosSem.length > 0 && <div className="acn-ajuda atencao">Riscos médios ou altos sem teste: {riscosSem.map((r: any) => r.descricao).join('; ')}.</div>}
+      </div>
+    );
+  }
+  if (id === 'teste_instalacao' && (x.veiculo || x.resultado)) return (
+    <div className="acn-dev-resumo">
+      <div>Veículo: <strong>{x.veiculo || '—'}</strong> · {dataBR(x.data)} · <Selo familia={x.resultado === 'aprovado' ? 'ok' : x.resultado === 'reprovado' ? 'erro' : 'neutro'} ponto={false}>{RESULTADOS_TESTE[x.resultado]}</Selo></div>
+      {x.observacoes && <div className="acn-ajuda">{x.observacoes}</div>}
+      {(x.fotos || []).length > 0 && <div className="acn-dev-anexos-lista">{x.fotos.map((f: any, i: number) => f.url ? <a key={i} href={f.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</a> : null)}</div>}
+    </div>
+  );
+  if (id === 'conferencia_normas' && (x.itens || []).length) return (
+    <ul className="acn-dev-resumo acn-dev-resumo-lista">
+      {x.itens.map((i: any) => <li key={i.norma_id}>{i.texto} <Selo familia={i.situacao === 'atende' ? 'ok' : i.situacao === 'nao_atende' ? 'erro' : 'neutro'} ponto={false}>{SITUACOES_NORMA[i.situacao] || 'Sem resposta'}</Selo>{i.obs && <span className="acn-ajuda"> — {i.obs}</span>}</li>)}
+    </ul>
+  );
   return null;
 }
 
 /** Resumo do que a Concepção e a Criação definiram, para consulta nas etapas seguintes. */
 export function ResumoDoProjeto({ demanda }: any) {
-  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto'];
-  const rotulos: Record<string, string> = { briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
+  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto', 'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas'];
+  const rotulos: Record<string, string> = { prototipos: 'Protótipos', problemas: 'Problemas e ações', plano_testes: 'Plano de testes', teste_instalacao: 'Instalação em veículo', conferencia_normas: 'Conferência das normas', briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
   const com = ids.filter(id => dadosDoEntregavel(demanda, id) && faltaNoEntregavel(id, dadosDoEntregavel(demanda, id), demanda).length === 0);
   if (!com.length) return null;
   return (
