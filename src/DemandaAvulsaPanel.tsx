@@ -39,6 +39,9 @@ import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
 import { Faixa, hojeISO, Botao } from './Interface';
+// pausa e horas úteis (16/10/2026): a conta fica em HorarioDemanda.ts, o relógio e as perguntas da tela em PausaDaDemanda.tsx
+import { abrirTrecho, fecharTrecho, situacaoDoRelogio, fmtTempo, dentroDoExpediente } from './HorarioDemanda';
+import { useAgora, confirmarAbertura, entradaDoRelogio, FaixaDoRelogio, tempoEmTexto, tempoDasEtapas } from './PausaDaDemanda';
 import {
   ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView, CATEGORIA_DO_SETOR,
   itemVazio, itensPreenchidos, vinculosDaDemanda, camposDosVinculos,
@@ -87,11 +90,6 @@ const isoToDate = (v: string) => {
   const d = new Date(v);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
-const fmtH = (h: number) => {
-  if (h < 1) return `${Math.round(h * 60)}min`;
-  if (h < 24) return `${h.toFixed(1)}h`;
-  return `${Math.floor(h / 24)}d ${Math.round(h % 24)}h`;
-};
 const diasParaVencer = (prazo: string): number | null => {
   if (!prazo) return null;
   return Math.ceil((new Date(prazo).getTime() - Date.now()) / 86400000);
@@ -134,7 +132,7 @@ function etapaVencida(e: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE ETAPA (dentro do ModalDetalhe)
 // ─────────────────────────────────────────────────────────────────────────────
-function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
+function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId, agora }) {
   const [obsExec, setObsExec] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [mostrarReprog, setMostrarReprog] = useState(false);
@@ -152,10 +150,29 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const diasV = diasParaVencer(etapa.prazo);
   const modCor = al ? 'al-' + al : 'st-' + chaveStatus(etapa.status);   // atraso manda; sem atraso vale a cor do status
 
+  const nomeDeQuemMexe = currentUser?.nome || '';
   const iniciar = async () => {
-    if (!await confirmar(`Iniciar Etapa ${idx + 1}?`)) return;
+    const ag = new Date();
+    if (!await confirmarAbertura(`Iniciar Etapa ${idx + 1}?`, `iniciar a etapa ${idx + 1}`, ag)) return;
     setSalvando(true);
-    await onUpdate(idx, { status: 'Em Andamento', data_inicio: new Date().toISOString() });
+    // pausa e horas úteis (16/10/2026): iniciar abre o primeiro trecho de trabalho da etapa; fora do expediente conta como hora extra e fica no histórico
+    await onUpdate(idx, { status: 'Em Andamento', data_inicio: ag.toISOString(), trechos: abrirTrecho({ trechos: [] }, ag, nomeDeQuemMexe) },
+      dentroDoExpediente(ag) ? undefined : { informacao: entradaDoRelogio('inicio', nomeDeQuemMexe, ag, `a etapa ${idx + 1}`) });
+    setSalvando(false);
+  };
+  // pausar e retomar a etapa: a etapa é lida de novo antes de gravar (updateEtapa) e a conta de trechos é a mesma da demanda simples
+  const pausar = async () => {
+    const ag = new Date();
+    setSalvando(true);
+    await onUpdate(idx, (e: any) => ({ trechos: fecharTrecho(e, ag) }), { informacao: entradaDoRelogio('pausa', nomeDeQuemMexe, ag, `a etapa ${idx + 1}`) });
+    setSalvando(false);
+  };
+  const retomar = async () => {
+    const ag = new Date();
+    if (!await confirmarAbertura(`Retomar a Etapa ${idx + 1} agora?`, `retomar a etapa ${idx + 1}`, ag)) return;
+    setSalvando(true);
+    await onUpdate(idx, (e: any) => (situacaoDoRelogio(e, ag) === 'rodando' ? {} : { trechos: abrirTrecho(e, ag, nomeDeQuemMexe), data_inicio: e.data_inicio || ag.toISOString() }),
+      { informacao: entradaDoRelogio('retomada', nomeDeQuemMexe, ag, `a etapa ${idx + 1}`) });
     setSalvando(false);
   };
   const reprogramar = async () => {
@@ -178,7 +195,8 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const concluir = async () => {
     if (!await confirmar(`Concluir Etapa ${idx + 1}?`)) return;
     setSalvando(true);
-    await onUpdate(idx, { status: 'Concluída', data_fim: new Date().toISOString() });
+    const ag = new Date();
+    await onUpdate(idx, (e: any) => ({ status: 'Concluída', data_fim: ag.toISOString(), trechos: fecharTrecho(e, ag) }));
     setSalvando(false);
   };
   const addObs = async () => {
@@ -202,9 +220,9 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
     setSalvando(false);
   };
 
-  const inicio = etapa.data_inicio ? new Date(etapa.data_inicio) : null;
-  const fim = etapa.data_fim ? new Date(etapa.data_fim) : null;
-  const tempoH = inicio ? ((fim || new Date()).getTime() - inicio.getTime()) / 3600000 : null;
+  // pausa e horas úteis (16/10/2026): o tempo da etapa é a soma dos trechos de trabalho em horas úteis; a hora extra vai à parte
+  const sitRelogio = situacaoDoRelogio(etapa, agora);
+  const tempo = tempoEmTexto(etapa, agora);
 
   return (
     <div className={'acn-dav-et ' + modCor}>
@@ -217,6 +235,9 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
           <span className={'acn-dav-st st-' + chaveStatus(etapa.status)}>
             {etapa.status}
           </span>
+          {(sitRelogio === 'pausada' || sitRelogio === 'pausada-auto') && (
+            <span className="acn-dav-st st-pausada" title={sitRelogio === 'pausada-auto' ? 'Pausou sozinha ao fim do expediente: retome para voltar a contar' : 'O tempo não está contando'}>⏸ Pausada</span>
+          )}
           {al && (
             <span className={'acn-dav-al-txt al-' + al}>
               {al === 'vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d`}
@@ -234,6 +255,9 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
               ✓ Concluir
             </Botao>
           )}
+          {etapa.status === 'Em Andamento' && (sitRelogio === 'rodando'
+            ? <Botao className="acn-dav-b acn-dav-et-pausar" onClick={pausar} disabled={salvando}>⏸ Pausar</Botao>
+            : <Botao className="acn-dav-b acn-dav-et-pausar" onClick={retomar} disabled={salvando}>▶ Retomar</Botao>)}
           {etapa.status !== 'Concluída' && (
             <Botao onClick={() => setMostrarReprog(v => !v)} disabled={salvando}
               className={'acn-dav-b ' + ('acn-dav-et-bt-reprog' + (mostrarReprog ? ' aberto' : ''))}>
@@ -278,10 +302,11 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
           </div>
           <div>
             <div className="acn-dav-et-13">
-              {etapa.data_fim ? 'Tempo Total' : etapa.data_inicio ? 'Em andamento' : 'KPI'}
+              {etapa.data_fim ? 'Tempo trabalhado' : etapa.data_inicio ? 'Trabalhado até agora' : 'KPI'}
             </div>
             <div className="acn-dav-et-15">
-              {tempoH !== null ? fmtH(tempoH) : '—'}
+              {etapa.data_inicio ? tempo.uteis : '—'}
+              {tempo.extras && <span className="acn-dav-et-extra" title="Hora extra: tempo trabalhado fora do expediente (segunda a sexta, 8:00 às 17:48)"> + {tempo.extras} extra</span>}
             </div>
           </div>
         </div>
@@ -364,6 +389,7 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [d, setD] = useState(initial);
+  const agora = useAgora();   // o relógio da tela: a pausa das 17:48 aparece sem ninguém recarregar
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [novaInfo, setNovaInfo] = useState('');
@@ -452,7 +478,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const info = [...(d.informacoes || []), { texto: `Pedido de compra ${novo.numero_pedido} gerado — cotações e valor seguem em Compras.`, usuario: currentUser?.nome || '', data: agora }];
     const ligou = await gravarDemanda({
       pedido_compra_id: novo.id, informacoes: info, atualizado_em: agora,
-      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora } : {}),
+      // pausa e horas úteis (16/10/2026): gerar o pedido marca o início, mas só abre o relógio dentro do expediente (a hora extra não nasce sem a pessoa decidir)
+      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora, trechos: dentroDoExpediente(new Date(agora)) ? abrirTrecho({ trechos: [] }, new Date(agora), currentUser?.nome || '') : [] } : {}),
     }, `ligar a demanda ao pedido ${novo.numero_pedido} (o pedido foi criado em Compras, mas a demanda NÃO ficou ligada a ele; não gere outro pedido)`);
     setSalvando(false);
     if (!ligou) return;
@@ -476,7 +503,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       texto: `Reaberta (${d.status} → ${reabrirForm.status}) — Motivo: ${reabrirForm.motivo.trim()}` }];
     const { error } = await supabase.from('demandas_avulsas').update({
       status: reabrirForm.status, data_fim: null,
-      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null } : {}),
+      // pausa e horas úteis (16/10/2026): reaberta como Pendente zera o tempo (como já zerava o início); reaberta em andamento guarda o que foi trabalhado e fica PAUSADA até alguém retomar
+      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null, trechos: null } : { trechos: fecharTrecho(d, new Date(d.data_fim || d.cancelada_em || agora)) }),
       cancelada_em: null, cancelada_por: null, motivo_cancelamento: null,
       informacoes: info, atualizado_em: agora,
     }).eq('id', d.id);
@@ -497,6 +525,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const { error } = await supabase.from('demandas_avulsas').update({
       status: 'Cancelada', cancelada_em: agora, cancelada_por: currentUser?.nome || currentUser?.email || null,
       motivo_cancelamento: motivoCancelar.trim(), informacoes: infoAtual, atualizado_em: agora,
+      ...(d.data_inicio && !temEtapas ? { trechos: fecharTrecho(d, new Date(agora)) } : {}),   // pausa e horas úteis (16/10/2026): cancelar para o relógio
     }).eq('id', d.id);
     setSalvando(false);
     if (error) { alert('Não foi possível cancelar: ' + error.message); return; }
@@ -587,9 +616,35 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   // ── Ações da demanda simples ─────────────────────────────────────────────
   const iniciar = async () => {
-    if (!await confirmar('Marcar início da execução agora?')) return;
-    const agora = new Date().toISOString();
-    if (!await gravarDemanda({ status: 'Em Andamento', data_inicio: agora, atualizado_em: agora }, 'marcar o início da execução')) return;
+    const ag = new Date();
+    if (!await confirmarAbertura('Marcar início da execução agora?', 'iniciar a execução', ag)) return;
+    const agora = ag.toISOString();
+    // pausa e horas úteis (16/10/2026): iniciar abre o primeiro trecho; fora do expediente conta como hora extra e fica no histórico
+    if (!await gravarDemanda({
+      status: 'Em Andamento', data_inicio: agora, atualizado_em: agora, trechos: abrirTrecho({ trechos: [] }, ag, currentUser?.nome || ''),
+      ...(dentroDoExpediente(ag) ? {} : { informacoes: [...(d.informacoes || []), entradaDoRelogio('inicio', currentUser?.nome || '', ag)] }),
+    }, 'marcar o início da execução')) return;
+    await reload(); onRefresh();
+  };
+  // Pausar e retomar a demanda simples (16/10/2026): lê a demanda AGORA antes de gravar (duas pessoas não apagam o registro uma da outra) e só grava se o estado ainda for o que a tela mostrava
+  const mudarRelogio = async (tipo: 'pausa' | 'retomada') => {
+    const ag = new Date();
+    const verbo = tipo === 'pausa' ? 'pausar' : 'retomar';
+    if (tipo === 'retomada' && !await confirmarAbertura('Retomar a execução agora?', 'retomar a execução', ag)) return;
+    setSalvando(true);
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('trechos,data_inicio,data_fim,status,informacoes').eq('id', d.id).maybeSingle();
+    if (erroLer || !fresca) { setSalvando(false); alert(`Não foi possível ${verbo} a execução: ${erroLer?.message || 'a demanda não foi encontrada'}. Nada foi alterado.`); return; }
+    if (fresca.status !== 'Em Andamento') { setSalvando(false); alert(`Não foi possível ${verbo} a execução: a demanda não está mais em andamento. Atualize a tela.`); await reload(); return; }
+    const rodando = situacaoDoRelogio(fresca, ag) === 'rodando';
+    if ((tipo === 'pausa') === rodando) {
+      const gravou = await gravarDemanda({
+        trechos: tipo === 'pausa' ? fecharTrecho(fresca, ag) : abrirTrecho(fresca, ag, currentUser?.nome || ''),
+        ...(tipo === 'retomada' && !fresca.data_inicio ? { data_inicio: ag.toISOString() } : {}),
+        informacoes: [...(fresca.informacoes || []), entradaDoRelogio(tipo, currentUser?.nome || '', ag)], atualizado_em: ag.toISOString(),
+      }, `${verbo} a execução`);
+      if (!gravou) { setSalvando(false); return; }
+    }   // se outra pessoa já tinha pausado (ou retomado), a tela só se atualiza
+    setSalvando(false);
     await reload(); onRefresh();
   };
   const concluir = async () => {
@@ -598,7 +653,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       vaiPintar ? '\n\nComo esta peça tem pintura, o pedido do serviço será aberto para o Compras.' : ''}`)) return;
     const agora = new Date().toISOString();
     // 7.x (16/10/2026): conclusão recusada não abre o pedido de pintura (a peça ainda não estava concluída) nem diz "demanda concluída"
-    if (!await gravarDemanda({ status: 'Concluída', data_fim: agora, atualizado_em: agora }, 'concluir a demanda')) return;
+    // pausa e horas úteis (16/10/2026): concluir fecha o trecho aberto (se estava pausada, o tempo já estava fechado)
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('trechos,data_inicio,data_fim').eq('id', d.id).maybeSingle();
+    if (erroLer || !fresca) { alert(`Não foi possível ler a demanda antes de concluir: ${erroLer?.message || 'demanda não encontrada'}. Nada foi alterado.`); return; }
+    if (!await gravarDemanda({ status: 'Concluída', data_fim: agora, atualizado_em: agora, ...(fresca.data_inicio ? { trechos: fecharTrecho(fresca, new Date(agora)) } : {}) }, 'concluir a demanda')) return;
     if (vaiPintar) {
       const r = await abrirPedidoPintura(d, currentUser);
       if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
@@ -609,8 +667,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   // ── Atualizar etapa individual ───────────────────────────────────────────
   // 7.x (16/10/2026): a demanda é lida de novo ANTES de gravar (duas pessoas agindo em etapas diferentes apagavam o trabalho uma da outra: cada uma regravava a lista inteira a partir do
   // que tinha na tela) e a gravação recusada avisa e devolve false — nada depois dela (pedido de pintura, limpar o formulário) acontece. `patch` pode ser uma função da etapa já lida.
-  const updateEtapa = async (idx: number, patch: any): Promise<boolean> => {
-    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('etapas,status,data_inicio').eq('id', d.id).maybeSingle();
+  const updateEtapa = async (idx: number, patch: any, opcoes?: { informacao?: any }): Promise<boolean> => {
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('etapas,status,data_inicio,informacoes').eq('id', d.id).maybeSingle();
     if (erroLer || !fresca) { alert('Não foi possível ler a demanda antes de gravar a etapa: ' + (erroLer?.message || 'demanda não encontrada') + '. Nada foi alterado.'); return false; }
     const etapas = [...(fresca.etapas || [])];
     if (!etapas[idx]) { alert('Não foi possível gravar: esta etapa não existe mais. Atualize a tela e confira.'); return false; }
@@ -619,6 +677,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const novoStatus = calcStatusEtapas(etapas);
     const agora = new Date().toISOString();
     const upd: any = { etapas, atualizado_em: agora };
+    // pausa e horas úteis (16/10/2026): pausar, retomar e iniciar fora do expediente ficam no histórico geral da demanda, com quem fez e quando
+    if (opcoes?.informacao) upd.informacoes = [...(fresca.informacoes || []), opcoes.informacao];
     if (novoStatus !== fresca.status) {
       upd.status = novoStatus;
       if (novoStatus === 'Em Andamento' && !fresca.data_inicio) upd.data_inicio = agora;
@@ -692,10 +752,15 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const etapasConcluidas = etapas.filter(e => e.status === 'Concluída').length;
   const pct = etapas.length > 0 ? Math.round((etapasConcluidas / etapas.length) * 100) : 0;
 
+  // pausa e horas úteis (16/10/2026): em que pé está o relógio da demanda simples e quanto já se trabalhou (a composta soma o tempo das etapas)
+  const sitRelogio = !temEtapas && d.status === 'Em Andamento' ? situacaoDoRelogio(d, agora) : 'parada';   // demanda cancelada ou concluída não tem relógio
+  const tempoDemanda = temEtapas ? tempoDasEtapas(etapas, agora) : tempoEmTexto(d, agora);
+
   // Quantas ações a barra mostra (decidido na migração visual, 16/10/2026): com duas ou mais ela é um seletor em pílulas — o visual que o repintor já dava a esses botões soltos —
   // e as ações "do momento" (iniciar, concluir, designar, reprogramar, gerar pedido) ganham a pílula branca; com uma só, o botão fica sozinho, sem o trilho.
   const acoesDaBarra = [
     !temEtapas && (d.status === 'Pendente' || d.status === 'Em Andamento'),
+    !temEtapas && d.status === 'Em Andamento',   // Pausar ou Retomar
     !temEtapas && d.status !== 'Cancelada',
     !ENCERRADA(d.status),
     d.status !== 'Cancelada',
@@ -712,7 +777,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
         {/* Header */}
         <div className={'acn-dav-det-cab st-' + chaveStatus(d.status)}>
           <div className="acn-dav-g-2">
-            <div className="acn-dav-det-3">{d.status.toUpperCase()} · {d.prioridade}</div>
+            <div className="acn-dav-det-3">{d.status.toUpperCase()}{sitRelogio === 'pausada' || sitRelogio === 'pausada-auto' ? ' (PAUSADA)' : ''} · {d.prioridade}</div>
             <div className="acn-dav-det-4">{d.titulo}</div>
             {temEtapas ? (
               <div className="acn-dav-det-5">
@@ -751,6 +816,9 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               ✓ Concluir
             </Botao>
           )}
+          {!temEtapas && d.status === 'Em Andamento' && (sitRelogio === 'rodando'
+            ? <Botao className="acn-dav-b acn-dav-bt-pausar" onClick={() => mudarRelogio('pausa')} disabled={salvando}>⏸ Pausar</Botao>
+            : <Botao className="acn-dav-b acn-dav-bt-retomar ativa" onClick={() => mudarRelogio('retomada')} disabled={salvando}>▶ Retomar</Botao>)}
           {!temEtapas && d.status !== 'Cancelada' && (
             <Botao onClick={() => setMostrarDesignar(v => !v)}
               className={'acn-dav-b acn-dav-bt-designar' + (mostrarDesignar ? ' aberto' : ' ativa')}>
@@ -802,6 +870,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {erroLeitura && (
             <Faixa tom="erro">Não foi possível atualizar esta demanda ({erroLeitura}). O que aparece pode estar desatualizado: feche e abra de novo.</Faixa>
           )}
+          {!temEtapas && d.status === 'Em Andamento' && <FaixaDoRelogio item={d} agora={agora} />}
           <GrupoDaDemanda demanda={d} />
           <MembrosDaDemanda demanda={d} currentUser={currentUser} podeEditar={!ENCERRADA(d.status) && podeMexerNaDemanda}
             onSaved={() => { reload(); onRefresh(); }} />
@@ -1012,9 +1081,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               <InfoBlock label="Início Execução" value={fmtDT(d.data_inicio)} />
               <InfoBlock label="Conclusão" value={fmtDT(d.data_fim)} />
               {d.data_inicio && (
-                <InfoBlock label={d.data_fim ? 'Tempo Total' : 'Tempo em Andamento'}
-                  value={fmtH(((d.data_fim ? new Date(d.data_fim) : new Date()).getTime() - new Date(d.data_inicio).getTime()) / 3600000)}
-                  tom="info" />
+                <InfoBlock label={d.data_fim ? 'Tempo trabalhado (horas úteis)' : 'Trabalhado até agora (horas úteis)'} value={tempoDemanda.uteis} tom="info" />
+              )}
+              {d.data_inicio && tempoDemanda.extras && (
+                <InfoBlock label="Hora extra" value={tempoDemanda.extras} tom="info" />
               )}
               <InfoBlock label="Criado por" value={`${d.criado_por_nome} · ${fmtDT(d.criado_em)}`} />
               {d.descricao && <div className="acn-dav-det-49"><InfoBlock label="Descrição" value={<Linkify text={d.descricao} />} /></div>}
@@ -1026,11 +1096,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {temEtapas && !editando && (
             <div>
               <div className="acn-dav-det-50">
-                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas)</span>
+                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas){tempoDemanda.totalMs > 0 ? ` · ${tempoDemanda.uteis} trabalhadas${tempoDemanda.extras ? ` + ${tempoDemanda.extras} de hora extra` : ''}` : ''}</span>
                 <span className={'acn-dav-pct' + (pct === 100 ? ' ok' : '')}>{pct}%</span>
               </div>
               {etapas.map((e, i) => (
-                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} demandaId={d.id} />
+                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} demandaId={d.id} agora={agora} />
               ))}
             </div>
           )}
@@ -1517,7 +1587,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DA LISTA
 // ─────────────────────────────────────────────────────────────────────────────
-function DemandaCard({ d, onClick, grupo }: any) {
+function DemandaCard({ d, onClick, grupo, agora }: any) {
   const alerta = alertClass(d.prazo, d.status);
   const diasV = diasParaVencer(d.prazo);
   const modCor = alerta ? 'al-' + alerta : 'st-' + chaveStatus(d.status);   // atraso manda (borda e fundo); sem atraso vale a cor do status
@@ -1582,8 +1652,8 @@ function DemandaCard({ d, onClick, grupo }: any) {
             <div className="acn-dav-card-12">
               {d.responsavel_nome && <span className="acn-dav-card-13">👤 {d.responsavel_nome}</span>}
               {d.prazo && <span className={'acn-dav-card-prazo' + (alerta ? ' al-' + alerta : '')}>⏰ {fmtDate(d.prazo)}</span>}
-              {d.data_inicio && !d.data_fim && (
-                <span className="acn-dav-card-14">▶ {fmtH((Date.now() - new Date(d.data_inicio).getTime()) / 3600000)}</span>
+              {d.data_inicio && !d.data_fim && d.status === 'Em Andamento' && (
+                <span className="acn-dav-card-14" title="Tempo trabalhado em horas úteis">{situacaoDoRelogio(d, agora) === 'rodando' ? '▶' : '⏸'} {fmtTempo(tempoEmTexto(d, agora).totalMs)}</span>
               )}
             </div>
           )}
@@ -1610,6 +1680,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
   abrirComVinculo?: VinculoValue | null;
   onAbrirComVinculoConsumido?: () => void;
 }) {
+  const agoraDaLista = useAgora(60000);   // pausa e horas úteis (16/10/2026): o cartão troca ▶ por ⏸ às 17:48 sem recarregar
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('ativas');
@@ -1768,7 +1839,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
           </div>
         )) : (
           lista.map(d => (
-            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} grupo={d.grupo_id ? grupos[d.grupo_id] : undefined} />
+            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} grupo={d.grupo_id ? grupos[d.grupo_id] : undefined} agora={agoraDaLista} />
           ))
         )}
       </div>

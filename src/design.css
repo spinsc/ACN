@@ -5519,3 +5519,15 @@ html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(2
   /* grades de 3+ colunas viram 2 no toque (responsivo.css); a classe da grade das etapas entra aqui pelo nome */
   html body .acn-main .acn-dav-et-12 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ══ Pausa e horas úteis da demanda avulsa (16/10/2026) — peças novas, já no padrão do guia ═══════════════════════════════════════════════════════════════
+   Pausar/Retomar da barra de ações (entram no seletor em pílulas), Pausar/Retomar do cabeçalho da etapa (mesmo desenho do Concluir da etapa), o selo "Pausada" e a
+   hora extra ao lado do tempo da etapa. As cores do escuro e o celular seguem as peças vizinhas. */
+html body .acn-b.acn-dav-b.acn-dav-bt-pausar:not(#acn), html body .acn-b.acn-dav-b.acn-dav-bt-retomar:not(#acn) { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
+html body .acn-b.acn-dav-b.acn-dav-et-pausar:not(#acn) { padding: 3px 10px; border: 1px solid #dee4ea; border-radius: 4px; background-color: #ffffff; color: #17212b; font-size: 12px; font-weight: 700; white-space: nowrap; }
+html body.dark .acn-b.acn-dav-b.acn-dav-et-pausar:not(#acn) { color: #e2e8f0; background-color: #1e293b; border-color: #334155; }
+html body .acn-main .acn-dav-st.st-pausada { color: #56636f; background-color: #eef1f4; }
+html body.dark .acn-main .acn-dav-st.st-pausada { color: rgb(203, 213, 225); background-color: rgba(148, 163, 184, 0.24); }
+html body .acn-main .acn-dav-et-extra { font-size: 12px; font-weight: 600; color: #9a5708; }
+html body.dark .acn-main .acn-dav-et-extra { color: rgb(241, 213, 167); }
+html body .acn-main .acn-dav-relogio { font-weight: 600; }
