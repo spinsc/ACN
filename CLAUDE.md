@@ -22,7 +22,7 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > - **Ainda não começou — [PLANO_GARANTIA.md](PLANO_GARANTIA.md):** atendimento em garantia (G1 a G6), retomado pelo comando `/garantia`; depende de decisões do usuário com os setores.
 > - **Planejado em 19/10/2026 — [PLANO_DESENVOLVIMENTO_ENGENHARIA.md](PLANO_DESENVOLVIMENTO_ENGENHARIA.md):** a aba Engenharia > Desenvolvimento deixa de ter 8 etapas iguais:
 >   cada etapa ganha entregáveis próprios, porta de decisão (solicitante + gerente), tipo de desenvolvimento, revisões do desenho, protótipos, testes e ligação com catálogo/Garantia. Fatias D0 a D6;
->   a D0 é a migração da aba para o design system (o `/ux-fluxo` ainda não a fez). Nenhuma fatia começou.
+>   **D0 (migração da aba, 12e68) e D1 (tipo, entregáveis e portas) estão feitas (19/10/2026)**; a próxima é a D2 (Concepção e Criação: requisitos, meta de custo, normas, matriz de conceitos).
 > - **Concluídos — pasta [PLANOS CONCLUIDOS](PLANOS%20CONCLUIDOS/):**
 >   [PLANO_ESTOQUE_AUTOMATICO.md](PLANOS%20CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md) (estoque, reserva e automação da lista de material; 9 etapas; `/estoque-auto` só para consulta),
 >   [PLANO_CENTRO_CUSTO.md](PLANOS%20CONCLUIDOS/PLANO_CENTRO_CUSTO.md) (anexo da Etapa 15 do plano de UX) e

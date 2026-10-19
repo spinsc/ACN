@@ -91,12 +91,30 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 | Etapa | O que faz | Estado |
 |---|---|---|
 | **D0** | Fatia do `/ux-fluxo` da aba: achados 7.x e migração para `Interface.tsx`/`Feedback.tsx`/classes/`Botao`, sem mudar o comportamento | ✅ 19/10/2026 (12e68 no plano de UX; 29 verificações no navegador, nenhuma gravação) |
-| **D1** | Base: tipo de desenvolvimento, entregáveis por etapa (lista própria de cada etapa, anexo por entregável), porta com aprovação solicitante + gerente, registro no histórico | não feita |
+| **D1** | Base: tipo de desenvolvimento, entregáveis por etapa (lista própria de cada etapa, anexo por entregável), porta com aprovação solicitante + gerente, registro no histórico | ✅ 19/10/2026 (regras em `DesenvolvimentoModelo.ts`, tela em `DesenvolvimentoPorta.tsx`; 68 regras + 58 verificações no navegador; ver "Como ficou a D1") |
 | **D2** | Concepção e Criação: requisitos com prioridade, meta de custo, normas, matriz de escolha de conceitos | não feita |
 | **D3** | Desenvolvimento: revisões do desenho (Rev A, B…), lista de materiais preliminar, custo estimado × meta, lista de riscos, revisão de projeto | não feita |
 | **D4** | Prototipagem e Validação: registro de protótipos, problemas com ação, plano de testes ligado aos requisitos, parecer da Qualidade, "volta ao Desenvolvimento" | não feita |
 | **D5** | Produção, Acabamento e Entrega: liberação com item no catálogo e estrutura de instalação, primeira unidade, custo real, pedido de mudança, pacote técnico, aceite, ligação com a Garantia | não feita |
 | **D6** | Painel: atrasadas, esperando aprovação, etapa parada há dias, custo estimado × meta; filtros novos | não feita |
+
+### Como ficou a D1 (19/10/2026)
+
+**Respostas do usuário na hora de construir:** o gerente é **Admin ou qualquer perfil "Gerente …"** (a regra que o sistema já tinha); o **solicitante** é quem criou a demanda, com campo para indicar outro na janela de nova demanda (na automática, quem iniciou a análise); a **Qualidade** é a pessoa que a Engenharia indica **ao iniciar a Validação** (só em "produto novo" e "adaptação").
+
+**Banco (migração `desenvolvimento_tipo_portas_e_historico`):** colunas novas em `engenharia_desenvolvimento`: `tipo_desenvolvimento`, `solicitante_nome`, `solicitante_email`, `situacao` (ativa/pausada/cancelada) e `historico` (jsonb). As 4 demandas que existem **não mudaram** (continuam sem tipo = modelo antigo, medido depois: 4 linhas, 4 sem tipo, última atualização de 13/10).
+
+**Como funciona:**
+- **Tipo:** demanda nova escolhe o tipo na criação; a automática nasce "a definir" (a tela pede o tipo antes de iniciar a Concepção); a antiga ganha "Usar o novo modelo" (as etapas concluídas continuam concluídas). Trocar o tipo é livre até a Concepção ser aprovada; depois, só gerente.
+- **Entregáveis:** cada etapa mostra a lista do tipo (obrigatório/opcional) com caixa de "feito" (guarda quem e quando), anexo por entregável (pasta da etapa, nome seguro) e nota. Fecham enquanto a porta espera decisão.
+- **Porta:** "Pedir decisão da porta" só libera com os obrigatórios feitos. Aprovam o **solicitante** e o **gerente** (e a **Qualidade** na Validação). Cada pessoa **aprova**, **aprova com ressalva** (texto obrigatório; a ressalva fica em aberto na demanda até alguém marcar como resolvida) ou **devolve para ajustes** (texto obrigatório; a rodada fica guardada). Quando todos aprovam, a etapa conclui sozinha e a próxima abre pendente. **Admin** pode aprovar por qualquer papel; fica registrado "no lugar de".
+- **Gerente:** menu "Ações do gerente" — voltar para a etapa anterior (as aprovações viram histórico e precisam ser dadas de novo), alterar o tipo, pausar, retomar, cancelar (nada é apagado) e reabrir. A demanda cancelada ganha o filtro **Canceladas**.
+- **Histórico da demanda** (recolhido, no fim do cartão): tipo, início de etapa, pedido de porta, aprovações, ressalvas, devoluções, pausas. Fica no próprio registro (`historico`), **não** no `audit_log`: assim a leitura é uma lista só e cada decisão grava no mesmo UPDATE das etapas.
+- **Gravação:** toda ação lê a demanda de novo, aplica a regra sobre o que está no banco e grava num **único UPDATE conferindo `atualizado_em`**; se outra pessoa mexeu no meio, não grava e avisa.
+
+**Achado do teste:** a caixa de "feito" lia o valor depois da leitura do banco, quando a caixa controlada já tinha voltado ao valor antigo (marcava e não gravava); corrigido lendo o valor na hora do clique.
+
+**Fica para as próximas fatias:** os formulários próprios de cada entregável (requisitos com prioridade, matriz de conceitos, revisões do desenho, protótipos, plano de testes — D2 a D5) e o painel (D6). Hoje cada entregável é "feito + anexos + nota".
 
 Regras de cada fatia: `npx vite build` antes de commitar; teste no navegador com gravações bloqueadas (padrão `scratchpad/fstest/`);
 nenhum dado real alterado; relatar números reais; push só com a pergunta clicável de autorização.

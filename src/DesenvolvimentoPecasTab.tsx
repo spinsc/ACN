@@ -23,6 +23,8 @@ import Icone from './Icone';
 import { confirmar } from './Feedback';
 import { Botao, Chips, Faixa, Selo, Tag } from './Interface';
 import PedidoDoPcp from './PedidoDesenvolvimentoPcp';
+import { modeloGuiado, TIPOS_DEV, rotuloDoTipoDev, mesmoNome, ehGerenteDev } from './DesenvolvimentoModelo';
+import { PainelGuiado, FaixaDeTipo, RessalvasAbertas, HistoricoDaDemanda, MenuDaDemanda } from './DesenvolvimentoPorta';
 import { mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh } from '@mdi/js';
 
 export const ETAPAS_DEV = [
@@ -52,6 +54,11 @@ export async function criarDemandaDesenvolvimento({ opl, descricao, currentUser 
     origem: 'automatico',
     criado_por: currentUser?.email,
     criado_por_nome: currentUser?.nome,
+    // D1 (19/10/2026): a análise não sabe o tipo; a demanda nasce "a definir" e a Engenharia escolhe o tipo antes de iniciar a Concepção. Solicitante = quem iniciou a análise.
+    tipo_desenvolvimento: 'a_definir',
+    solicitante_nome: currentUser?.nome || null,
+    solicitante_email: currentUser?.email || null,
+    historico: [{ em: new Date().toISOString(), por: currentUser?.nome || '', tipo: 'criada', etapa: null, texto: 'Criada ao iniciar a análise da OP' }],
   }]);
 }
 
@@ -66,6 +73,8 @@ const estaFinalizada = (d: any) => {
   const etapas = d.etapas || [];
   return d.origem === 'pcp' ? !!d.concluida : etapas.length > 0 && etapas.every((e: any) => e.status === 'concluida');
 };
+// D1: a demanda cancelada sai de "Em andamento" e de "Concluídas" e ganha o próprio filtro; a pausada continua em andamento (com o selo)
+const estaCancelada = (d: any) => d.situacao === 'cancelada';
 
 // Relê UMA coluna da demanda logo antes de gravar. As etapas e os anexos moram dentro do registro; gravar a partir da cópia que está na tela
 // apagaria o que outra pessoa acabou de lançar na mesma demanda.
@@ -322,11 +331,28 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
       </div>
     );
   }
+  return <DemandaComEtapas demanda={demanda} onAtualizado={onAtualizado} currentUser={currentUser} />;
+}
+
+// o motivo da última pausa/cancelamento, para a faixa da demanda
+function ultimoMotivo(demanda: any, tipo: string) {
+  const e = [...(demanda.historico || [])].reverse().find((x: any) => x.tipo === tipo);
+  return e?.texto ? `Motivo: ${e.texto}.` : '';
+}
+
+// (separado do cartão para os ganchos do React ficarem sempre na mesma ordem: o pedido do PCP sai antes, em DemandaDevCard)
+function DemandaComEtapas({ demanda, onAtualizado, currentUser }: any) {
   const etapas = demanda.etapas || [];
   const concluidas = etapas.filter((e: any) => e.status === 'concluida').length;
   const pct = etapas.length ? Math.round((concluidas / etapas.length) * 100) : 0;
   const idxAtiva = etapas.findIndex((e: any) => e.status !== 'concluida');
   const finalizada = idxAtiva === -1;
+  const guiada = modeloGuiado(demanda);
+  const aDefinir = demanda.tipo_desenvolvimento === 'a_definir';
+  const situacao = demanda.situacao || 'ativa';
+  const [editandoTipo, setEditandoTipo] = useState(false);
+  // trocar o tipo: livre até a Concepção ser aprovada; depois, só Admin ou gerente (a regra também está no modelo)
+  const podeTrocarTipo = guiada && situacao !== 'cancelada' && (!etapas[0]?.porta?.concluida_em || ehGerenteDev(currentUser));
 
   return (
     <div className="sec-card">
@@ -334,8 +360,14 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
         <span className="acn-dev-titulo">
           {demanda.numero_opl ? <>OP {demanda.numero_opl} — </> : ''}{demanda.titulo}
           {demanda.origem === 'automatico' && <Tag title="Criada sozinha quando a Engenharia marcou “Precisa de Desenvolvimento”">Automática</Tag>}
+          {guiada && <Tag title="Tipo de desenvolvimento: decide o que é obrigatório em cada etapa">{rotuloDoTipoDev(demanda.tipo_desenvolvimento)}</Tag>}
         </span>
-        {finalizada ? <Selo familia="ok">Concluída</Selo> : <Selo familia="info" ponto={false}>{concluidas}/{etapas.length} etapas</Selo>}
+        <span className="acn-dev-selos">
+          {situacao === 'pausada' && <Selo familia="atencao">Pausada</Selo>}
+          {situacao === 'cancelada' && <Selo familia="erro">Cancelada</Selo>}
+          {finalizada ? <Selo familia="ok">Concluída</Selo> : <Selo familia="info" ponto={false}>{concluidas}/{etapas.length} etapas</Selo>}
+          <MenuDaDemanda demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} guiada={guiada} onAlterarTipo={() => setEditandoTipo(true)} />
+        </span>
       </div>
       <div className="sec-body">
         {(demanda.cliente_nome || demanda.descricao) && (
@@ -356,17 +388,32 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
         {/* Passos das etapas */}
         <ol className="acn-dev-passos" aria-label="Etapas do desenvolvimento">
           {etapas.map((e: any, i: number) => (
-            <li key={e.nome} title={`${e.nome} — ${STATUS_ETAPA[e.status] || e.status}`}
-              className={'acn-dev-passo ' + classeEtapa(e.status) + (i === idxAtiva ? ' ativa' : '')}
+            <li key={e.nome} title={`${e.nome} — ${e.porta?.pedida_em ? 'aguardando decisão da porta' : (STATUS_ETAPA[e.status] || e.status)}`}
+              className={'acn-dev-passo ' + classeEtapa(e.status) + (i === idxAtiva ? ' ativa' : '') + (e.porta?.pedida_em ? ' porta' : '')}
               aria-current={i === idxAtiva ? 'step' : undefined}>
               {i + 1}. {e.nome}
             </li>
           ))}
         </ol>
 
-        {!finalizada && (
+        {situacao === 'pausada' && <Faixa tom="atencao">Demanda pausada: nada avança até um gerente retomar. {ultimoMotivo(demanda, 'pausou')}</Faixa>}
+        {situacao === 'cancelada' && <Faixa tom="erro">Demanda cancelada. {ultimoMotivo(demanda, 'cancelou')} Nada foi apagado; um gerente pode reabrir.</Faixa>}
+
+        {(aDefinir || editandoTipo) && situacao !== 'cancelada' && (
+          <FaixaDeTipo demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} onFechar={editandoTipo ? () => setEditandoTipo(false) : null} />
+        )}
+        {!guiada && !aDefinir && !finalizada && situacao === 'ativa' && (
+          <FaixaDeTipo antiga demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} />
+        )}
+        {podeTrocarTipo && !editandoTipo && <div><Botao variante="discreto" pequeno onClick={() => setEditandoTipo(true)}>Alterar o tipo</Botao></div>}
+
+        {guiada && <RessalvasAbertas demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} />}
+
+        {!finalizada && !aDefinir && (
           // key: ao concluir uma etapa o painel da próxima é outro — sem isso ele herdava o responsável, a data e a observação digitada da anterior
-          <PainelEtapa key={etapas[idxAtiva].nome} demanda={demanda} etapa={etapas[idxAtiva]} idx={idxAtiva} onAtualizado={onAtualizado} currentUser={currentUser} />
+          guiada
+            ? <PainelGuiado key={etapas[idxAtiva].nome} demanda={demanda} etapa={etapas[idxAtiva]} idx={idxAtiva} onAtualizado={onAtualizado} currentUser={currentUser} />
+            : <PainelEtapa key={etapas[idxAtiva].nome} demanda={demanda} etapa={etapas[idxAtiva]} idx={idxAtiva} onAtualizado={onAtualizado} currentUser={currentUser} />
         )}
 
         <div className="acn-pdp-bloco">
@@ -378,6 +425,8 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
           <div className="acn-pdp-rotulo">Área Livre</div>
           <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} />
         </div>
+
+        <HistoricoDaDemanda demanda={demanda} />
       </div>
     </div>
   );
@@ -391,6 +440,8 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
   const [opResultados, setOpResultados] = useState<any[]>([]);
   const [opSelecionada, setOpSelecionada] = useState<any>(null);
   const [erroBusca, setErroBusca] = useState('');
+  const [tipo, setTipo] = useState('');
+  const [solicitante, setSolicitante] = useState(currentUser?.nome || '');   // quem pediu (aprova as portas); por padrão, quem está criando
   const [salvando, setSalvando] = useState(false);
   const trava = useRef(false);
   const ultimaBusca = useRef(0);   // a resposta de uma busca antiga não pode sobrescrever a da letra seguinte
@@ -409,6 +460,8 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
   const criar = async () => {
     if (trava.current) return;
     if (!titulo.trim()) { alert('Informe o título/peça em desenvolvimento.'); return; }
+    if (!tipo) { alert('Escolha o tipo de desenvolvimento: ele decide o que é obrigatório em cada etapa.'); return; }
+    if (!solicitante.trim()) { alert('Informe o solicitante (quem pediu e aprova as portas).'); return; }
     // digitou um número de OP mas não escolheu na lista: antes a demanda nascia sem vínculo e ninguém percebia
     if (opBusca.trim() && !opSelecionada) {
       if (!await confirmar(`Você digitou "${opBusca.trim()}" mas não escolheu nenhuma OP da lista.\n\nCriar a demanda sem vínculo com OP?`)) return;
@@ -425,6 +478,10 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
       origem: 'manual',
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
+      tipo_desenvolvimento: tipo,
+      solicitante_nome: solicitante.trim(),
+      solicitante_email: mesmoNome(solicitante, currentUser?.nome) ? (currentUser?.email || null) : null,   // o e-mail só se sabe quando o solicitante é quem está criando
+      historico: [{ em: new Date().toISOString(), por: currentUser?.nome || '', tipo: 'criada', etapa: null, texto: `Tipo: ${rotuloDoTipoDev(tipo)}` }],
     }]);
     trava.current = false;
     setSalvando(false);
@@ -463,6 +520,21 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
           </div>
 
           <div className="form-group">
+            <label className="acn-label">Tipo de desenvolvimento *</label>
+            <select className="acn-input" value={tipo} onChange={e => setTipo(e.target.value)} aria-label="Tipo de desenvolvimento">
+              <option value="">Escolha o tipo…</option>
+              {TIPOS_DEV.map(t => <option key={t.id} value={t.id}>{t.rotulo}</option>)}
+            </select>
+            <div className="acn-ajuda">{TIPOS_DEV.find(t => t.id === tipo)?.ajuda || 'Decide o que é obrigatório em cada etapa.'}</div>
+          </div>
+
+          <div className="form-group">
+            <label className="acn-label">Solicitante *</label>
+            <ColaboradorSelect value={solicitante} onChange={setSolicitante} placeholder="Quem pediu este desenvolvimento" />
+            <div className="acn-ajuda">Quem pediu aprova as portas das etapas, junto com o gerente.</div>
+          </div>
+
+          <div className="form-group">
             <label className="acn-label">Descrição</label>
             <textarea className="acn-input" rows={3} placeholder="Detalhes do que precisa ser desenvolvido..." value={descricao} onChange={e => setDescricao(e.target.value)} />
           </div>
@@ -480,7 +552,7 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
 export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: { currentUser: any; buscaInicial?: string }) {
   const [demandas, setDemandas] = useState<any[] | null>(null);   // null = ainda não leu; depois da primeira leitura a lista fica na tela enquanto recarrega
   const [erroLista, setErroLista] = useState('');
-  const [filtro, setFiltro] = useState<'todas' | 'andamento' | 'concluidas'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'andamento' | 'concluidas' | 'canceladas'>('todas');
   const [busca, setBusca] = useState(buscaInicial || '');
   const [modalNova, setModalNova] = useState(false);
 
@@ -506,11 +578,13 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
   const lista = demandas || [];
   const casaBusca = (d: any) => combinaBusca([d.titulo, d.descricao, d.numero_opl, d.cliente_nome, d.veiculo_nome], busca);
   const baseBusca = lista.filter(casaBusca);
-  const nAndamento = baseBusca.filter(d => !estaFinalizada(d)).length;
-  const nConcluidas = baseBusca.length - nAndamento;
+  const nAndamento = baseBusca.filter(d => !estaCancelada(d) && !estaFinalizada(d)).length;
+  const nConcluidas = baseBusca.filter(d => !estaCancelada(d) && estaFinalizada(d)).length;
+  const nCanceladas = baseBusca.filter(estaCancelada).length;
   const filtradas = baseBusca.filter(d => {
-    if (filtro === 'andamento') return !estaFinalizada(d);
-    if (filtro === 'concluidas') return estaFinalizada(d);
+    if (filtro === 'andamento') return !estaCancelada(d) && !estaFinalizada(d);
+    if (filtro === 'concluidas') return !estaCancelada(d) && estaFinalizada(d);
+    if (filtro === 'canceladas') return estaCancelada(d);
     return true;
   });
 
@@ -527,6 +601,7 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
               { id: 'todas', rotulo: 'Todas', contagem: demandas ? baseBusca.length : null },
               { id: 'andamento', rotulo: 'Em andamento', contagem: demandas ? nAndamento : null },
               { id: 'concluidas', rotulo: 'Concluídas', contagem: demandas ? nConcluidas : null },
+              { id: 'canceladas', rotulo: 'Canceladas', contagem: demandas ? nCanceladas : null },
             ]} />
           <label className="acn-dev-busca">
             <Icone path={mdiMagnify} size={16} />

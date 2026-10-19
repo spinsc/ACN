@@ -5068,3 +5068,33 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-dev-op-item { display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-bottom: 1px solid var(--acn-line-soft); background: var(--acn-surface); color: var(--acn-text); font: 13px var(--acn-font); cursor: pointer; }
 .acn-dev-op-item:last-child { border-bottom: 0; }
 .acn-dev-op-item:hover { background: var(--acn-neutral-soft); }
+
+/* ══ Engenharia > Desenvolvimento (D1, 19/10/2026) — entregáveis, portas, tipo e histórico ═════════════ */
+.acn-dev-selos { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-dev-tipo { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin-bottom: 8px; border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-brand-soft); }
+.acn-dev-tipo-tit { font-weight: 600; font-size: 13px; }
+.acn-dev-tipo-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.acn-dev-tipo-linha .acn-input { flex: 1; min-width: 220px; }
+.acn-dev-previa ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.acn-dev-entregaveis { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.acn-dev-ent { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.acn-dev-ent.feito { border-color: var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-dev-ent-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.acn-dev-ent-marca { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.acn-dev-ent-marca input { width: 16px; height: 16px; }
+.acn-dev-nota { font-size: 13px; white-space: pre-wrap; padding: 4px 8px; border-left: 3px solid var(--acn-line); color: var(--acn-text); }
+.acn-dev-nota-edicao { display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-nota-edicao textarea { width: 100%; resize: vertical; }
+.acn-dev-anexo-grupo { display: inline-flex; align-items: center; gap: 2px; }
+.acn-dev-anexo-x { display: inline-flex; border: 0; background: transparent; color: var(--acn-muted); cursor: pointer; padding: 2px; border-radius: var(--acn-r1); }
+.acn-dev-anexo-x:hover { color: var(--acn-bad); background: var(--acn-bad-soft); }
+.acn-dev-porta { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-dev-porta-tit { font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; }
+.acn-dev-aprov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.acn-dev-ressalvas { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.acn-dev-ressalvas ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-ressalvas li { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; padding: 6px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-warn-soft); }
+.acn-dev-historico { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--acn-line); font-size: 13px; }
+.acn-dev-historico summary { cursor: pointer; font-weight: 600; color: var(--acn-muted); }
+.acn-dev-historico ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-passo.porta { border-style: dashed; }
