@@ -1571,7 +1571,7 @@ body.dark .acn-main table.acn-tabela tr.acn-cmp-linha > td { background: color-m
 .acn-cmp-card-valor { margin-right: 6px; }
 .acn-cmp-mover { width: 100%; margin-top: 6px; }
 html body .acn-cmp-recebidos-btn { margin-top: 4px; width: 100%; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(900px, 96vw); max-width: 900px; max-height: 90vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(1080px, 96vw); max-width: 1080px; max-height: 90vh; }
 .acn-cmp-recebidos-cab { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .acn-cmp-recebidos-cab .modal-title { flex: 1; }
 .acn-cmp-recebidos-busca { flex: 1 1 260px; width: auto; }
@@ -1580,14 +1580,14 @@ html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(900px, 96
 .acn-cmp-acoes { min-width: 240px; }
 
 /* ── Compras · 12e20 (07/10/2026): as janelas da tela (centro, departamento, prazos, observação, mesa de cotações, senha, vínculo, resumo) ── */
-html body .modal-box.acn-modal-cadastro.acn-cmp-j380 { width: min(380px, 95vw); max-width: 380px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j420 { width: min(420px, 95vw); max-width: 420px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j460 { width: min(460px, 95vw); max-width: 460px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j480 { width: min(480px, 95vw); max-width: 480px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j500 { width: min(500px, 95vw); max-width: 500px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j560 { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j640 { width: min(640px, 95vw); max-width: 640px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(680px, 95vw); max-width: 680px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j380 { width: min(520px, 95vw); max-width: 520px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j420 { width: min(540px, 95vw); max-width: 540px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j460 { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j480 { width: min(600px, 95vw); max-width: 600px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j500 { width: min(660px, 95vw); max-width: 660px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j560 { width: min(780px, 95vw); max-width: 780px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j640 { width: min(1080px, 95vw); max-width: 1080px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(880px, 95vw); max-width: 880px; max-height: 92vh; }
 .acn-cmp-j380 .form-group, .acn-cmp-j420 .form-group, .acn-cmp-j460 .form-group, .acn-cmp-j480 .form-group, .acn-cmp-j500 .form-group, .acn-cmp-j640 .form-group { margin-bottom: 0; }
 .acn-cmp-j380 .acn-modal-corpo > *, .acn-cmp-j420 .acn-modal-corpo > *, .acn-cmp-j460 .acn-modal-corpo > *, .acn-cmp-j480 .acn-modal-corpo > *, .acn-cmp-j500 .acn-modal-corpo > *,
 .acn-cmp-j560 .acn-modal-corpo > *, .acn-cmp-j640 .acn-modal-corpo > *, .acn-cmp-j680 .acn-modal-corpo > * { flex-shrink: 0; }
@@ -1605,7 +1605,7 @@ html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(680px, 95vw); 
 .acn-cmp-mesa-dica { flex: 1; }
 .acn-cmp-mesa-descartar { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--acn-warn) 45%, transparent); }
 .acn-cmp-mesa-hist { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
-.acn-cmp-mesa-lista { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.acn-cmp-mesa-lista { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
 .acn-cmp-mesa-vazia { padding: 14px; }
 .acn-cmp-cot { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--acn-surface); border: 1.5px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-cmp-cot.venc { border: 2px solid var(--acn-ok); background: var(--acn-ok-soft); }
@@ -5115,3 +5115,13 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-dev-resumo-lista { margin: 0; padding-left: 18px; }
 .acn-dev-resumo-lista li { margin-bottom: 2px; }
 .acn-dev-resumo-bloco { margin-top: 8px; }
+
+/* 19/10/2026: pedido do usuário — modais do Compras maiores e mais claros. A mesa de cotações usa a largura toda:
+   as cotações lançadas ficam lado a lado em duas colunas e o item marcado numa cotação ocupa a linha inteira. */
+.acn-cmp-mesa-lista { grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); display: grid; gap: 10px; }
+.acn-cmp-cot { font-size: 14px; padding: 12px 14px; gap: 8px; }
+.acn-cmp-comp label.acn-cmp-comp-sdesc { flex: 3; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.acn-cmp-comp-servico { padding: 4px 0; border-bottom: 1px dashed var(--acn-line); }
+.acn-cmp-j640 .acn-modal-corpo, .acn-cmp-j680 .acn-modal-corpo { font-size: 14px; }
+.acn-cmp-j640 .acn-quadro { padding: 12px 14px; }
+.acn-cmp-j640 .acn-quadro-titulo { font-size: 14px; margin-bottom: 8px; }
