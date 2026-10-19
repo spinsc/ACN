@@ -49,6 +49,14 @@ const ehDemandaDeVariosItens = (p: any) => itensNumerados(p).length > 1;
 const vencedorasDoPedido = (p: any) => Array.isArray(p?.vencedoras) ? p.vencedoras : [];
 const ehVencedora = (p: any, cotacaoId: string) => p?.vencedora_id === cotacaoId || vencedorasDoPedido(p).some((v: any) => v.cotacao_id === cotacaoId);
 
+// Fatia de uma cotação que vence só parte dos itens: frete, serviços, taxas e desconto entram na mesma proporção dos itens.
+function valorDaFatia(valor: any, itensCot: any[], indices: number[]) {
+  const sub = (arr: any[]) => arr.reduce((s: number, i: any) => s + (Number(i.valor_unitario) || 0) * (Number(i.quantidade) || 0), 0);
+  const total = sub(itensCot);
+  if (!total || indices.length === itensCot.length) return Number(valor);
+  return Number((Number(valor) * sub(itensCot.filter((i: any) => indices.includes(i.indice))) / total).toFixed(2));
+}
+
 function novoFormCotacao(p: any) {
   const base: any = { ...VAZIO_COTACAO, quantidade: String(p?.quantidade || 1) };
   if (!ehDemandaDeVariosItens(p)) return base;
@@ -953,6 +961,8 @@ export default function ComprasTab({ currentUser }) {
   const [salvandoEdicaoCotacao, setSalvandoEdicaoCotacao] = useState(false);
   // Aprovar cotação com senha (substitui o antigo fluxo de rádio + justificativa + confirmar)
   const [modalConfirmarSenha, setModalConfirmarSenha] = useState<any>(null); // cotação sendo aprovada
+  // 19/10/2026: quem aprova escolhe, entre os itens da cotação, quais ela vence (o resto pode vencer em outra cotação, mais barata)
+  const [itensEscolhidos, setItensEscolhidos] = useState<number[]>([]);
   const [senhaConfirmacao, setSenhaConfirmacao] = useState('');
   const [verificandoSenha, setVerificandoSenha] = useState(false);
   const [erroSenha, setErroSenha]               = useState('');
@@ -1496,9 +1506,9 @@ export default function ComprasTab({ currentUser }) {
     }
     const comoVencedora = vencedoras.find((v: any) => v.cotacao_id === c.id);
     if (comoVencedora && editCotacaoForm.itens_cot) {
-      const novosIndices = editCotacaoForm.itens_cot.filter((i: any) => i.marcado).map((i: any) => i.indice).sort().join(',');
-      if (novosIndices !== [...comoVencedora.itens].sort().join(',')) {
-        alert('Esta cotação já foi escolhida para estes itens. Desfaça a escolha dela antes de mudar quais itens ela cobre (os preços podem ser corrigidos).'); return;
+      const marcados = editCotacaoForm.itens_cot.filter((i: any) => i.marcado).map((i: any) => i.indice);
+      if (comoVencedora.itens.some((ix: number) => !marcados.includes(ix))) {
+        alert('Esta cotação já foi escolhida para estes itens. Desfaça a escolha dela antes de desmarcar um deles (os preços podem ser corrigidos).'); return;
       }
     }
     setSalvandoEdicaoCotacao(true);
@@ -1509,9 +1519,9 @@ export default function ComprasTab({ currentUser }) {
     logChange({ module: 'compras', entityType: 'pcp_cotacoes_fornecedores', entityId: c.id, changeType: 'UPDATE',
       oldRow: { fornecedor_nome: c.fornecedor_nome, valor_unitario: c.valor_unitario, valor: c.valor },
       newRow: payload, user: currentUser });
-    if (comoVencedora && novoValorTotal != null && novoValorTotal !== c.valor) {
+    if (comoVencedora && novoValorTotal != null) {
       // várias vencedoras: o valor da compra é a soma delas, então a lista e o total são refeitos juntos
-      const novaLista = vencedoras.map((v: any) => v.cotacao_id === c.id ? { ...v, valor: novoValorTotal } : v);
+      const novaLista = vencedoras.map((v: any) => v.cotacao_id === c.id ? { ...v, valor: valorDaFatia(novoValorTotal, payload.itens || [], v.itens) } : v);
       const upd: any = { vencedoras: novaLista };
       if (vencedoraId) upd.valor_compra = Number(novaLista.reduce((s: number, v: any) => s + (Number(v.valor) || 0), 0).toFixed(2));
       const { error: erroLista } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', modalCotacoes.id);
@@ -1851,6 +1861,11 @@ export default function ComprasTab({ currentUser }) {
       alert('Você não tem autorização para aprovar compra.\n\nQuem aprova: ' + nomesAprovadores());
       return;
     }
+    if (Array.isArray(cotacao.itens) && cotacao.itens.length && ehDemandaDeVariosItens(modalCotacoes)) {
+      const dela = vencedoras.find((v: any) => v.cotacao_id === cotacao.id);
+      const deOutras = new Set(vencedoras.filter((v: any) => v.cotacao_id !== cotacao.id).flatMap((v: any) => v.itens));
+      setItensEscolhidos(dela ? dela.itens : cotacao.itens.map((i: any) => i.indice).filter((ix: number) => !deOutras.has(ix)));
+    }
     setModalConfirmarSenha(cotacao);
     setSenhaConfirmacao('');
     setErroSenha('');
@@ -1890,11 +1905,14 @@ export default function ComprasTab({ currentUser }) {
     let faltamItens = false;
     if (porItens) {
       const atuais = vencedorasDoPedido(pedidoVenc);
-      const indices = cotacao.itens.map((i: any) => i.indice);
+      const indices = cotacao.itens.map((i: any) => i.indice).filter((ix: number) => itensEscolhidos.includes(ix));
+      if (!indices.length) { setVerificandoSenha(false); setErroSenha('Marque pelo menos um item que esta cotação vence.'); return; }
+      // cotação que vence só parte dos itens: o valor é a fatia dela, e frete, serviços, taxas e desconto vão na mesma proporção
+      const valorDaParte = valorDaFatia(cotacao.valor, cotacao.itens, indices);
       const conflito = atuais.find((v: any) => v.cotacao_id !== cotacao.id && v.itens.some((ix: number) => indices.includes(ix)));
       if (conflito) { setVerificandoSenha(false); setErroSenha(`Alguns destes itens já foram escolhidos na cotação de ${conflito.fornecedor}. Desfaça aquela escolha primeiro.`); return; }
       listaVencedoras = [...atuais.filter((v: any) => v.cotacao_id !== cotacao.id),
-        { cotacao_id: cotacao.id, fornecedor: cotacao.fornecedor_nome, valor: cotacao.valor, itens: indices }];
+        { cotacao_id: cotacao.id, fornecedor: cotacao.fornecedor_nome, valor: valorDaParte, itens: indices }];
       const cobertos = new Set(listaVencedoras.flatMap((v: any) => v.itens));
       faltamItens = itensNumerados(modalCotacoes).some((i: any) => !cobertos.has(i.indice));
       if (faltamItens) {
@@ -2726,9 +2744,18 @@ export default function ComprasTab({ currentUser }) {
                   <div className="acn-quadro-titulo">Itens da demanda — quem fornece cada um</div>
                   {itensNumerados(modalCotacoes).map((i: any) => {
                     const venc = vencedoras.find((v: any) => v.itens.includes(i.indice));
+                    // comparativo: o preço unitário de cada cotação que cobre o item; o menor aparece em destaque
+                    const precos = cotacoes.map((c: any) => ({ c, it: Array.isArray(c.itens) ? c.itens.find((x: any) => x.indice === i.indice) : null }))
+                      .filter((x: any) => x.it && Number(x.it.valor_unitario) > 0);
+                    const menor = precos.length ? Math.min(...precos.map((x: any) => Number(x.it.valor_unitario))) : null;
                     return (
                       <div key={i.indice} className="acn-ajuda">
                         {venc ? <span className="acn-txt-ok">✓</span> : '○'} {i.nome} ({i.quantidade ?? 1}) — {venc ? <strong className="acn-forte">{venc.fornecedor}</strong> : 'sem vencedora ainda'}
+                        {precos.map((x: any) => (
+                          <div key={x.c.id} className={Number(x.it.valor_unitario) === menor && precos.length > 1 ? 'acn-txt-ok' : 'acn-fraco'}>
+                            {x.c.fornecedor_nome}: {moedaBr(x.it.valor_unitario)}{Number(x.it.valor_unitario) === menor && precos.length > 1 ? ' (menor preço)' : ''}
+                          </div>
+                        ))}
                       </div>
                     );
                   })}
@@ -2860,6 +2887,23 @@ export default function ComprasTab({ currentUser }) {
                 Confirme sua senha para aprovar <strong>{modalConfirmarSenha.fornecedor_nome}</strong> como
                 cotação vencedora ({fmt(modalConfirmarSenha.valor)}).
               </div>
+              {Array.isArray(modalConfirmarSenha.itens) && modalConfirmarSenha.itens.length > 0 && ehDemandaDeVariosItens(modalCotacoes) && (
+                <div className="form-group">
+                  <label className="acn-label">Itens que esta cotação vence</label>
+                  {modalConfirmarSenha.itens.map((i: any) => {
+                    const outra = vencedoras.find((v: any) => v.cotacao_id !== modalConfirmarSenha.id && v.itens.includes(i.indice));
+                    return (
+                      <div key={i.indice} className="acn-ajuda">
+                        <label>
+                          <input type="checkbox" checked={itensEscolhidos.includes(i.indice)} disabled={!!outra || !!vencedoraId}
+                            onChange={e=>setItensEscolhidos(prev => e.target.checked ? [...prev, i.indice] : prev.filter(x => x !== i.indice))} />
+                          {' '}{i.nome} — {moedaBr(i.valor_unitario)} × {i.quantidade}{outra ? ` (já é de ${outra.fornecedor})` : ''}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="form-group">
                 <label className="acn-label">Sua senha</label>
                 <input type="password" className="acn-input"
