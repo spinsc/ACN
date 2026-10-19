@@ -5314,6 +5314,7 @@ html body .acn-main .acn-dav-det-prog-fill { transition: width .4s; }
 html body .acn-main .acn-dav-card-prog-fill { transition: width .3s; }
 /* o cartão ganhava sombra maior com o mouse em cima (escrita em linha por código); agora é :hover */
 html body .acn-main .acn-dav-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.133); }
+html body .acn-main .acn-dav-prazo.al-vencida { color: #dc2626; }
 html body.dark .acn-main .acn-dav-al-txt.al-vencida { color: #fca5a5; }
 html body.dark .acn-main .acn-dav-al-txt { color: #fdba74; font-size: 12px; font-weight: 700; line-height: 1.45; }
 html body.dark .acn-b.acn-dav-b.acn-dav-bt-reabrir.solo:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
@@ -5465,6 +5466,8 @@ html body.dark .acn-main .acn-dav-st.st-concluida { color: rgb(203, 213, 225); }
 html body.dark .acn-main .acn-dav-et-cab .acn-dav-st.st-concluida { color: rgb(169, 222, 188); }
 /* o selo do status do pedido de compra (acn-badge) tem a cor da família "info" no escuro; a classe do claro deixava o texto branco */
 html body.dark .acn-main .acn-badge.acn-dav-det-27 { color: rgb(188, 210, 244) !important; }
+/* o prazo vencido do formulário de reprogramar fica vermelho (no escuro, o vermelho claro dos avisos) */
+html body.dark .acn-main .acn-dav-prazo.al-vencida { color: rgb(252, 165, 165); }
 @media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
   html body .acn-main .acn-dav-al-txt.al-vencida { color: #dc2626; }
   html body .acn-main .acn-dav-al-txt { color: #d97706; font-size: 12px; font-weight: 700; line-height: 1.45; }
