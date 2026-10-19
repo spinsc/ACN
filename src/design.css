@@ -5112,12 +5112,18 @@ html body .acn-main .acn-dav-card-prazo.al-urgente { color: #d97706; }
 html body .acn-main .acn-dav-card-prog-fill { background-color: #2563eb; }
 html body .acn-main .acn-dav-card-prog-fill.ok { background-color: #16a34a; }
 html body .acn-main .acn-dav-cc-txt { display: block; color: #1e293b; }
+html body .acn-main .acn-dav-cc-txt.vazio { color: #94a3b8; }
 html body .acn-main .acn-dav-det-1 { display: flex; position: fixed; top: 0px; left: 0px; right: 0px; bottom: 0px; z-index: 1000; background-color: rgba(0, 0, 0, 0.533); align-items: flex-start; justify-content: flex-end; }
 html body .acn-main .acn-dav-det-12 { padding: 6px 16px; color: #475569; background-color: #f1f5f9; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: #cbd5e1; flex-shrink: 0; }
 html body .acn-main .acn-dav-det-13 { padding: 14px; overflow: auto; display: flex; flex-direction: column; flex-grow: 1; flex-basis: 0%; gap: 12px; }
 html body .acn-main .acn-dav-det-14 { padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; background-color: #f8fafc; align-items: center; gap: 8px; }
 html body .acn-main .acn-dav-det-15 { display: block; color: #475569; font-weight: 700; }
+html body .acn-main .acn-dav-det-16 { display: block; color: #94a3b8; font-size: 12px; line-height: 1.45; }
+html body .acn-main .acn-dav-det-17 { padding: 12px; border: 1px solid #93c5fd; border-radius: 6px; background-color: #eff6ff; }
+html body .acn-main .acn-dav-det-18 { display: flex; margin-bottom: 8px; gap: 8px; }
+html body .acn-main .acn-dav-det-19:not(#acn) { padding: 5px 8px; border-radius: 4px; display: block; border-top-color: #93c5fd; border-right-color: #93c5fd; border-bottom-color: #93c5fd; border-left-color: #93c5fd; font-size: 13px; }
 html body .acn-main .acn-dav-det-2 { display: flex; background-color: #ffffff; box-shadow: rgba(0, 0, 0, 0.2) -4px 0px 24px 0px; flex-direction: column; }
+html body .acn-main .acn-dav-det-20:not(#acn) { padding: 5px 8px; border: 1px solid #93c5fd; border-radius: 4px; display: block; font-size: 13px; flex-grow: 1; flex-basis: 0%; min-width: 180px; }
 html body .acn-main .acn-dav-det-21 { display: flex; gap: 8px; }
 html body .acn-main .acn-dav-det-24 { padding: 6px 10px; border: 1px solid #86efac; border-radius: 6px; display: flex; background-color: #f0fdf4; cursor: pointer; align-items: center; gap: 8px; }
 html body .acn-main .acn-dav-det-25 { display: block; color: #15803d; font-weight: 700; }
@@ -5308,19 +5314,25 @@ html body .acn-main .acn-dav-det-prog-fill { transition: width .4s; }
 html body .acn-main .acn-dav-card-prog-fill { transition: width .3s; }
 /* o cartão ganhava sombra maior com o mouse em cima (escrita em linha por código); agora é :hover */
 html body .acn-main .acn-dav-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.133); }
-html body.dark .acn-main .acn-dav-al-txt { color: inherit; font-size: 12px; font-weight: 700; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-al-txt.al-vencida { color: #fca5a5; }
+html body.dark .acn-main .acn-dav-al-txt { color: #fdba74; font-size: 12px; font-weight: 700; line-height: 1.45; }
+html body.dark .acn-b.acn-dav-b.acn-dav-bt-reabrir.solo:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-chip.sel:not(#acn) { color: #ffffff; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
 html body.dark .acn-b.acn-dav-b.acn-dav-chip:not(#acn) { color: #cbd5e1; background-color: #162032; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-det-22:not(#acn) { }
 html body.dark .acn-b.acn-dav-b.acn-dav-det-23:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-det-62:not(#acn) { color: #fca5a5; }
+html body.dark .acn-b.acn-dav-b.acn-dav-et-10:not(#acn) { color: #94a3b8; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-et-2:not(#acn) { color: #e2e8f0; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-et-21:not(#acn) { color: #94a3b8; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-et-3:not(#acn) { color: #e2e8f0; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-b.acn-dav-b.acn-dav-et-3.reprog-aberto:not(#acn) { color: #ffffff; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
 html body.dark .acn-b.acn-dav-b.acn-dav-et-31:not(#acn) { }
+html body.dark .acn-b.acn-dav-b.acn-dav-et-bt-reprog.aberto:not(#acn) { color: #e2e8f0; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-nova-14:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-nova-20:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-nova-4:not(#acn) { color: #94a3b8; }
+html body.dark .acn-b.acn-dav-b.acn-dav-pn-7:not(#acn) { color: #fca5a5; background-color: #2d0a0a; border-top-color: #6b2a26; border-right-color: #6b2a26; border-bottom-color: #6b2a26; border-left-color: #6b2a26; }
 html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed.prio-media:not(#acn) { color: #fcecdb; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
 html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
@@ -5343,10 +5355,28 @@ html body.dark .acn-main .acn-dav-card-7 { color: inherit; background-color: rgb
 html body.dark .acn-main .acn-dav-card-8 { color: inherit; background-color: rgba(107, 155, 230, 0.24); border-top-color: rgba(107, 155, 230, 0.22); border-right-color: rgba(107, 155, 230, 0.22); border-bottom-color: rgba(107, 155, 230, 0.22); border-left-color: rgba(107, 155, 230, 0.22); font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
 html body.dark .acn-main .acn-dav-card-9 { color: #94a3b8; font-size: 12px; font-weight: 700; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-card-prazo { color: inherit; font-size: 12px; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-cc-txt { color: #94a3b8; }
+html body.dark .acn-main .acn-dav-det-12 { color: inherit; background-color: #162032; }
+html body.dark .acn-main .acn-dav-det-14 { background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+html body.dark .acn-main .acn-dav-det-15 { color: #94a3b8; font-weight: 700; }
+html body.dark .acn-main .acn-dav-det-16 { color: #94a3b8; font-size: 12px; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-det-17 { color: #93c5fd; background-color: #1e3a5f; }
 html body.dark .acn-main .acn-dav-det-2 { background-color: #1e293b; }
+html body.dark .acn-main .acn-dav-det-24 { color: #86efac; background-color: #0d2818; cursor: pointer; }
+html body.dark .acn-main .acn-dav-det-25 { color: inherit; font-weight: 700; }
+html body.dark .acn-main .acn-dav-det-26 { color: #c4b5fd; font-weight: 700; }
+html body.dark .acn-main .acn-dav-det-27 { color: rgb(188, 210, 244); background-color: rgba(107, 155, 230, 0.24); font-size: 11px; font-weight: 600; line-height: 1.2; letter-spacing: normal; white-space: nowrap; }
+html body.dark .acn-main .acn-dav-det-28 { color: inherit; font-size: 12px; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-det-29 { color: #fca5a5; background-color: #2d0a0a; }
 html body.dark .acn-main .acn-dav-det-3 { font-size: 12px; font-weight: 600; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-det-30 { color: inherit; font-size: 12px; font-weight: 700; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-31 { color: #94a3b8; font-size: 12px; font-weight: 700; line-height: 1.45; cursor: default; }
+html body.dark .acn-main .acn-dav-det-34 { color: #c4b5fd; background-color: #2d1b5c; }
+html body.dark .acn-main .acn-dav-det-35 { color: #94a3b8; font-size: 12px; font-weight: 700; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-det-39 { color: #fdba74; background-color: #1c1505; }
 html body.dark .acn-main .acn-dav-det-4 { font-size: 14px; font-weight: 700; line-height: 1.3; }
+html body.dark .acn-main .acn-dav-det-40 { color: inherit; font-size: 12px; font-weight: 700; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-det-41 { color: #94a3b8; font-size: 12px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-44 { background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-main .acn-dav-det-45 { color: #94a3b8; font-size: 12px; font-weight: 700; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-5 { font-size: 12px; line-height: 1.45; }
@@ -5361,6 +5391,8 @@ html body.dark .acn-main .acn-dav-det-6 { font-size: 12px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-60 { font-size: 14px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-61 { color: #93c5fd; font-weight: 600; word-break: break-all; cursor: pointer; }
 html body.dark .acn-main .acn-dav-det-8 { color: #94a3b8; background-color: #334155; }
+html body.dark .acn-main .acn-dav-det-9 { background-color: #1e293b; }
+html body.dark .acn-main .acn-dav-det-alerta { color: #fca5a5; background-color: #2d0a0a; font-weight: 700; }
 html body.dark .acn-main .acn-dav-det-cab { color: #ffffff; }
 html body.dark .acn-main .acn-dav-et-13 { color: #94a3b8; font-size: 11px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
 html body.dark .acn-main .acn-dav-et-14 { font-weight: 600; }
@@ -5372,6 +5404,8 @@ html body.dark .acn-main .acn-dav-et-22 { color: inherit; background-color: #1e2
 html body.dark .acn-main .acn-dav-et-25 { color: #94a3b8; font-size: 11px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-et-26 { color: #fdba74; font-size: 12px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-et-28 { color: #94a3b8; font-size: 12px; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-et-4 { color: #fdba74; background-color: #1c1505; }
+html body.dark .acn-main .acn-dav-et-5 { color: inherit; font-size: 11px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
 html body.dark .acn-main .acn-dav-et-num.st-concluida { color: rgb(169, 222, 188); background-color: rgba(63, 181, 106, 0.24); }
 html body.dark .acn-main .acn-dav-et-num.al-vencida { color: rgb(248, 188, 183); background-color: rgba(240, 106, 95, 0.24); }
 html body.dark .acn-main .acn-dav-et-num { color: rgb(241, 213, 166); background-color: rgba(224, 161, 58, 0.24); font-size: 12px; font-weight: 800; line-height: 1.35; white-space: nowrap; }
@@ -5388,6 +5422,7 @@ html body.dark .acn-main .acn-dav-inf-val { color: #94a3b8; }
 html body.dark .acn-main .acn-dav-inf-val.prio-alta { color: #fca5a5; font-weight: 700; }
 html body.dark .acn-main .acn-dav-inf-val.prio-media { color: #fdba74; font-weight: 700; }
 html body.dark .acn-main .acn-dav-inf-val.info { color: #93c5fd; font-weight: 700; }
+html body.dark .acn-main .acn-dav-inf-val.al-vencida { color: #fca5a5; font-weight: 700; }
 html body.dark .acn-main .acn-dav-nova-11 { color: #94a3b8; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; cursor: default; }
 html body.dark .acn-main .acn-dav-nova-12 { color: #94a3b8; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; cursor: default; }
 html body.dark .acn-main .acn-dav-nova-15 { color: inherit; font-size: 22px; font-weight: 800; line-height: 1.45; text-align: center; }
@@ -5404,14 +5439,16 @@ html body.dark .acn-main .acn-dav-pn-2 { color: rgb(241, 213, 166); background-c
 html body.dark .acn-main .acn-dav-pn-5 { color: #94a3b8; background-color: #334155; }
 html body.dark .acn-main .acn-dav-pn-6:not(#acn) { background-color: #1e293b !important; }
 html body.dark .acn-main .acn-dav-pn-8 { color: #94a3b8; font-size: 12px; line-height: 22px; }
+html body.dark .acn-main .acn-dav-prazo { color: inherit; font-weight: 700; }
 html body.dark .acn-main .acn-dav-prio-selo { color: inherit; background-color: rgba(224, 161, 58, 0.24); border-top-color: rgba(224, 161, 58, 0.22); border-right-color: rgba(224, 161, 58, 0.22); border-bottom-color: rgba(224, 161, 58, 0.22); border-left-color: rgba(224, 161, 58, 0.22); font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
 html body.dark .acn-main .acn-dav-prio-selo.prio-alta { background-color: rgba(240, 106, 95, 0.24); border-top-color: rgba(240, 106, 95, 0.22); border-right-color: rgba(240, 106, 95, 0.22); border-bottom-color: rgba(240, 106, 95, 0.22); border-left-color: rgba(240, 106, 95, 0.22); }
 html body.dark .acn-main .acn-dav-prio-selo.prio-baixa { background-color: rgba(63, 181, 106, 0.24); border-top-color: rgba(63, 181, 106, 0.22); border-right-color: rgba(63, 181, 106, 0.22); border-bottom-color: rgba(63, 181, 106, 0.22); border-left-color: rgba(63, 181, 106, 0.22); }
 html body.dark .acn-main .acn-dav-qtd { color: #86efac; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
-html body.dark .acn-main .acn-dav-st { color: inherit; background-color: rgba(63, 181, 106, 0.24); font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
-html body.dark .acn-main .acn-dav-st.st-concluida { color: rgb(169, 222, 188); }
+html body.dark .acn-main .acn-dav-st { color: inherit; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
+html body.dark .acn-main .acn-dav-st.st-concluida { color: rgb(169, 222, 188); background-color: rgba(63, 181, 106, 0.24); }
 html body.dark .acn-main .acn-dav-st.st-pendente { background-color: rgba(224, 161, 58, 0.24); }
 html body.dark .acn-main .acn-dav-st.st-andamento { background-color: rgba(107, 155, 230, 0.24); }
+html body.dark .acn-main .acn-dav-st.st-cancelada { background-color: rgba(148, 163, 184, 0.24); }
 /* o texto de apoio (g-8) tem cor própria no detalhe e segue a cor do cartão (vencido/urgente) dentro da lista */
 html body.dark .acn-main .acn-dav-g-8 { color: #94a3b8; }
 html body.dark .acn-main .acn-dav-card .acn-dav-g-8 { color: inherit; }
@@ -5423,6 +5460,11 @@ html body.dark .acn-main .acn-dav-al-txt.al-vencida { color: rgb(252, 165, 165);
 html body.dark .acn-main .acn-dav-al-txt.al-urgente { color: rgb(253, 186, 116); }
 /* na lista (cartão) o "vence em N dias" é um amarelo mais claro que o da etapa */
 html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(253, 230, 138); }
+/* o selo "Concluída" do detalhe e do cartão tem a cor comum dos selos; dentro do cabeçalho da etapa tem a cor da família */
+html body.dark .acn-main .acn-dav-st.st-concluida { color: rgb(203, 213, 225); }
+html body.dark .acn-main .acn-dav-et-cab .acn-dav-st.st-concluida { color: rgb(169, 222, 188); }
+/* o selo do status do pedido de compra (acn-badge) tem a cor da família "info" no escuro; a classe do claro deixava o texto branco */
+html body.dark .acn-main .acn-badge.acn-dav-det-27 { color: rgb(188, 210, 244) !important; }
 @media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
   html body .acn-main .acn-dav-al-txt.al-vencida { color: #dc2626; }
   html body .acn-main .acn-dav-al-txt { color: #d97706; font-size: 12px; font-weight: 700; line-height: 1.45; }
@@ -5446,11 +5488,27 @@ html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(2
   html body .acn-main .acn-dav-card-prazo.al-vencida { color: #dc2626; }
   html body .acn-main .acn-dav-card-prazo.al-urgente { color: #d97706; }
   html body .acn-main .acn-dav-card-prazo { color: #6b7280; font-size: 12px; line-height: 1.45; }
+  html body .acn-main .acn-dav-cc-txt.vazio { color: #94a3b8; }
+  html body .acn-main .acn-dav-cc-txt { color: #1e293b; }
   html body .acn-main .acn-dav-det-1 { align-items: stretch; justify-content: stretch; }
+  html body .acn-main .acn-dav-det-12 { color: #475569; }
+  html body .acn-main .acn-dav-det-15 { color: #475569; font-weight: 700; }
+  html body .acn-main .acn-dav-det-16 { color: #94a3b8; font-size: 12px; line-height: 1.45; }
+  html body .acn-main .acn-dav-det-19:not(#acn) { font-size: 13px !important; }
   html body .acn-main .acn-dav-det-2 { overflow: auto; max-width: 100%; max-height: 100%; min-width: 0px; }
+  html body .acn-main .acn-dav-det-24 { cursor: pointer; }
+  html body .acn-main .acn-dav-det-25 { color: #15803d; font-weight: 700; }
+  html body .acn-main .acn-dav-det-26 { color: #7c3aed; font-weight: 700; }
+  html body .acn-main .acn-dav-det-27 { color: #245fb8; font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: normal; white-space: nowrap; }
+  html body .acn-main .acn-dav-det-28 { margin-left: auto; color: #16a34a; font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-3 { font-size: 12px; font-weight: 600; line-height: 1.45; }
+  html body .acn-main .acn-dav-det-30 { color: #b91c1c; font-size: 12px; font-weight: 700; line-height: 1.45; }
   html body .acn-main .acn-dav-det-31 { color: #6b7280; font-size: 12px; font-weight: 700; line-height: 1.45; cursor: default; }
+  html body .acn-main .acn-dav-det-35 { color: #5b21b6; font-size: 12px; font-weight: 700; line-height: 1.45; }
+  html body .acn-main .acn-dav-det-37.acn-input:not(#acn) { font-size: 13px !important; }
   html body .acn-main .acn-dav-det-4 { font-size: 14px; font-weight: 700; line-height: 1.3; }
+  html body .acn-main .acn-dav-det-40 { color: #c2410c; font-size: 12px; font-weight: 700; line-height: 1.45; }
+  html body .acn-main .acn-dav-det-41 { color: #64748b; font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-45 { color: #374151; font-size: 12px; font-weight: 700; line-height: 1.45; }
   html body .acn-main .acn-dav-det-5 { font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-50 { color: #374151; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
@@ -5462,6 +5520,7 @@ html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(2
   html body .acn-main .acn-dav-det-6 { font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-60 { font-size: 14px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-61 { color: #2563eb; font-weight: 600; word-break: break-all; cursor: pointer; }
+  html body .acn-main .acn-dav-det-alerta { color: #dc2626; font-weight: 700; }
   html body .acn-main .acn-dav-det-cab { color: #ffffff; }
   html body .acn-main .acn-dav-et-13 { color: #9ca3af; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
   html body .acn-main .acn-dav-et-14 { font-weight: 600; }
@@ -5474,6 +5533,7 @@ html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(2
   html body .acn-main .acn-dav-et-26 { color: #9a3412; font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-et-28 { color: #1f2937; font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-et-30:not(#acn) { font-size: 12px !important; line-height: 1.5; }
+  html body .acn-main .acn-dav-et-5 { color: #9a3412; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
   html body .acn-main .acn-dav-et-num.st-concluida { color: #1b7f43; }
   html body .acn-main .acn-dav-et-num.al-vencida { color: #b9302a; }
   html body .acn-main .acn-dav-et-num { color: #9a5708; font-size: 12px; font-weight: 800; line-height: 1.35; white-space: nowrap; }
@@ -5490,6 +5550,7 @@ html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(2
   html body .acn-main .acn-dav-inf-val.prio-alta { color: #dc2626; font-weight: 700; }
   html body .acn-main .acn-dav-inf-val.prio-media { color: #d97706; font-weight: 700; }
   html body .acn-main .acn-dav-inf-val.info { color: #2563eb; font-weight: 700; }
+  html body .acn-main .acn-dav-inf-val.al-vencida { color: #dc2626; font-weight: 700; }
   html body .acn-main .acn-dav-nova-1 { align-items: stretch; justify-content: stretch; }
   html body .acn-main .acn-dav-nova-11 { color: #6b7280; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; cursor: default; }
   html body .acn-main .acn-dav-nova-12 { color: #166534; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; cursor: default; }
@@ -5506,12 +5567,15 @@ html body.dark .acn-main .acn-dav-card .acn-dav-al-txt.al-urgente { color: rgb(2
   html body .acn-main .acn-dav-pn-2 { color: #9a5708; font-weight: 700; line-height: 1.35; white-space: nowrap; }
   html body .acn-main .acn-dav-pn-6:not(#acn) { font-size: 12px !important; }
   html body .acn-main .acn-dav-pn-8 { margin-left: auto; color: #9ca3af; font-size: 12px; line-height: 22px; }
+  html body .acn-main .acn-dav-prazo { color: #1e293b; font-weight: 700; }
   html body .acn-main .acn-dav-prio-selo.prio-alta { color: #b9302a; }
   html body .acn-main .acn-dav-prio-selo.prio-baixa { color: #1b7f43; }
   html body .acn-main .acn-dav-prio-selo { color: #9a5708; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
   html body .acn-main .acn-dav-st.st-pendente { color: #9a5708; }
   html body .acn-main .acn-dav-st.st-andamento { color: #245fb8; }
-  html body .acn-main .acn-dav-st { color: #1b7f43; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
+  html body .acn-main .acn-dav-st.st-concluida { color: #1b7f43; }
+  html body .acn-main .acn-dav-st.st-cancelada { color: #56636f; }
+  html body .acn-main .acn-dav-st { font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
 }
 @media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
   /* a janela de detalhe e a de nova demanda ocupam a largura toda no toque (o estilo solto antigo tinha a largura mínima trocada pelo responsivo.css; a classe não recebe isso sozinha) */
