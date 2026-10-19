@@ -5116,6 +5116,24 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 
 **O que ficou de fora:** `VeiculosNfcTab`, `CadastroProdutosTab`, `DemandaAvulsaPanel`, o Admin e as pequenas. Os maiores que sobram: Admin 524, `DemandaAvulsaPanel` 242, `CadastroProdutosTab` 197, `VeiculosNfcTab` 195, `CadastroItensTab` 92, `HorasTarefasTab` 87. **Próximo passo (modo madrugada):** a 7.x e a migração visual da próxima tela grande (`DemandaAvulsaPanel`).
 
+#### ✅ 7.x e migração do Desenvolvimento de peças (`DesenvolvimentoPecasTab.tsx`) — D0 do `PLANO_DESENVOLVIMENTO_ENGENHARIA.md` (12e68)
+
+**Feito em:** 19/10/2026, a pedido do usuário ("pode começar pela D0"), antes de qualquer função nova da aba (regra de dia/noite: tela não migrada tocada de dia → a fatia dela vem antes). **Nenhuma regra de negócio mudou**: as 8 etapas, o pedido do PCP e o que a tela grava com o banco funcionando seguem iguais.
+
+**Achados e correção (`DesenvolvimentoPecasTab.tsx`; uma linha no `EngenhariaTab.tsx`; nenhum no banco):**
+- **Gravação sem conferir a resposta do banco** em "Iniciar etapa", "Salvar observação", "Concluir etapa", "Salvar área livre" e na lista de anexos. Agora cada uma avisa a falha; **a observação digitada e a área livre ficam na caixa** quando a gravação falha.
+- **Duas pessoas na mesma demanda apagavam o trabalho uma da outra** (cada gravação regravava as 8 etapas, ou a lista de anexos, a partir da cópia da tela). Agora a demanda é lida de novo antes de gravar; se outra pessoa já iniciou ou concluiu a etapa, a tela avisa e **não grava por cima**.
+- **Leitura recusada virava "Nenhuma demanda cadastrada ainda"** e cada gravação trocava a lista por "Carregando…" (os cartões abertos perdiam o que estava digitado). Agora uma faixa vermelha explica, a lista que já estava na tela fica e a leitura é em blocos de 1.000.
+- **Anexo com acento ou símbolo no nome** (ex.: "Especificação (v2).pdf") era recusado pelo armazenamento; agora usa `nomeSeguroDeArquivo` e `contentTypeUpload`, e só regrava a lista se algum arquivo subiu.
+- **O painel da etapa seguinte herdava o responsável, a data prevista e a observação digitada da etapa anterior** (mesmo componente, sem `key`). Agora cada etapa abre limpa (o responsável vem do usuário logado, como na primeira).
+- **Nova demanda:** digitar o número da OP sem escolher na lista criava a demanda **sem vínculo, sem avisar** → agora pergunta; a busca de OP ignorava erro e deixava a resposta antiga sobrescrever a nova; clicar fora da janela perdia o que estava digitado; clique duplo em "Criar" podia criar duas.
+- **Busca da lista** não ignorava acento; passou a usar `combinaBusca` (e também procura no veículo). Os filtros mostram a contagem.
+- **`EngenhariaTab`:** a falha ao criar a demanda de desenvolvimento ao iniciar a análise era ignorada (a análise seguia e o pedido nunca aparecia). Agora avisa e manda criar em Desenvolvimento > Nova demanda.
+
+**Visual:** 51 `style` soltos viraram classes `.acn-dev-*` (`design.css`); botões, chips, selos e faixa do guia (`Botao`, `Chips`, `Selo`, `Tag`, `Faixa`); janela no padrão `acn-modal-cadastro`. Escuro e celular conferidos (390 px, toque ligado: nada estoura a largura).
+
+**Testado** (app inteiro no navegador, **toda gravação bloqueada**, banco simulado só nas leituras): **29 verificações em 5 cenas, 29 ok** — leitura normal (4 demandas, 8 passos cada, busca sem acento, nenhum `style` solto); leitura recusada; observação e conclusão com falha e com aceite (o corpo gravado traz as 8 etapas, só a ativa muda); etapa já concluída por outra pessoa (não grava); anexo com acento + nova demanda (pergunta da OP, 8 etapas, falha avisa e a janela continua aberta). **Nenhum dado real foi alterado.**
+
 #### ✅ 7.x da demanda avulsa (`DemandaAvulsaPanel.tsx`) — achados corrigidos antes da 12e67
 
 **Feito em:** 16/10/2026 (pedido do usuário: pausar a demanda avulsa e contar as horas em horas úteis; ele escolheu **migrar a tela inteira antes**, com a 7.x primeiro, como nas outras telas grandes). **Nenhuma regra de negócio mudou**: o que a tela já gravava com o banco funcionando segue igual; mudou o que acontece quando o banco recusa, a leitura que falha e dois detalhes pequenos.

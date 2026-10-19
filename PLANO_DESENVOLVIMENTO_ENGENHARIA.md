@@ -90,7 +90,7 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 
 | Etapa | O que faz | Estado |
 |---|---|---|
-| **D0** | Fatia do `/ux-fluxo` da aba: achados 7.x e migração para `Interface.tsx`/`Feedback.tsx`/classes/`Botao`, sem mudar o comportamento | não feita |
+| **D0** | Fatia do `/ux-fluxo` da aba: achados 7.x e migração para `Interface.tsx`/`Feedback.tsx`/classes/`Botao`, sem mudar o comportamento | ✅ 19/10/2026 (12e68 no plano de UX; 29 verificações no navegador, nenhuma gravação) |
 | **D1** | Base: tipo de desenvolvimento, entregáveis por etapa (lista própria de cada etapa, anexo por entregável), porta com aprovação solicitante + gerente, registro no histórico | não feita |
 | **D2** | Concepção e Criação: requisitos com prioridade, meta de custo, normas, matriz de escolha de conceitos | não feita |
 | **D3** | Desenvolvimento: revisões do desenho (Rev A, B…), lista de materiais preliminar, custo estimado × meta, lista de riscos, revisão de projeto | não feita |

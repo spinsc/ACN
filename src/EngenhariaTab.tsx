@@ -295,7 +295,9 @@ export default function EngenhariaTab({ currentUser }) {
     }]);
     if (erroLogIni) alert(`A análise foi iniciada, mas o histórico de movimentação não foi gravado: ${erroLogIni.message}`);
     if (precisaDesenvolvimento) {
-      await criarDemandaDesenvolvimento({ opl, descricao: descDesenvolvimento.trim(), currentUser });
+      // 19/10/2026 (D0 do plano de Desenvolvimento): a falha ao criar a demanda era ignorada — a análise seguia e o pedido de desenvolvimento nunca aparecia
+      const { error: erroDev } = await criarDemandaDesenvolvimento({ opl, descricao: descDesenvolvimento.trim(), currentUser });
+      if (erroDev) alert(`A análise foi iniciada, mas não foi possível criar a demanda de desenvolvimento: ${erroDev.message}\n\nCrie a demanda em Desenvolvimento > Nova demanda.`);
     }
     setModalIniciar(null); setResponsavelEng(''); setPrecisaDesenvolvimento(false); setDescDesenvolvimento('');
     fetchAll();
