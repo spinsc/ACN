@@ -20,6 +20,9 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 >   **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:** a Garantia, logo abaixo.
 >   **Modo de trabalho (decidido em 16/10/2026): de dia, os outros planos (Garantia, Etapa 17 etc.); de madrugada, o `/ux-fluxo`.** Tudo que nasce de dia já nasce no padrão novo (`Interface.tsx`, `Feedback.tsx`, classes, `Botao`; sem `style` solto). **Se o trabalho do dia vai mexer numa tela que o `/ux-fluxo` ainda não migrou, fazer antes a fatia dela** (7.x e migração) e só então a mudança; **nos quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`), perguntar ao usuário** se vale construir só a peça nova no padrão, sem migrar a tela inteira. Detalhe no quadro de decisões do plano de UX.
 > - **Ainda não começou — [PLANO_GARANTIA.md](PLANO_GARANTIA.md):** atendimento em garantia (G1 a G6), retomado pelo comando `/garantia`; depende de decisões do usuário com os setores.
+> - **Planejado em 19/10/2026 — [PLANO_DESENVOLVIMENTO_ENGENHARIA.md](PLANO_DESENVOLVIMENTO_ENGENHARIA.md):** a aba Engenharia > Desenvolvimento deixa de ter 8 etapas iguais:
+>   cada etapa ganha entregáveis próprios, porta de decisão (solicitante + gerente), tipo de desenvolvimento, revisões do desenho, protótipos, testes e ligação com catálogo/Garantia. Fatias D0 a D6;
+>   a D0 é a migração da aba para o design system (o `/ux-fluxo` ainda não a fez). Nenhuma fatia começou.
 > - **Concluídos — pasta [PLANOS CONCLUIDOS](PLANOS%20CONCLUIDOS/):**
 >   [PLANO_ESTOQUE_AUTOMATICO.md](PLANOS%20CONCLUIDOS/PLANO_ESTOQUE_AUTOMATICO.md) (estoque, reserva e automação da lista de material; 9 etapas; `/estoque-auto` só para consulta),
 >   [PLANO_CENTRO_CUSTO.md](PLANOS%20CONCLUIDOS/PLANO_CENTRO_CUSTO.md) (anexo da Etapa 15 do plano de UX) e
