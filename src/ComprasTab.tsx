@@ -39,10 +39,38 @@ const valorBrTexto = (n: any) => n == null || n === '' ? '' : String(Number(n).t
 
 // Composição do preço de um orçamento: itens (unitário × quantidade) + frete +
 // serviços adicionais + outras taxas − desconto. O total é sempre calculado.
+// Pedido do usuário em 19/10/2026: numa demanda com vários itens, cada cotação marca os itens que cobre,
+// com quantidade e preço por item (`itens_cot` no formulário, `itens` na tabela). Sem `itens_cot`, é a
+// cotação de sempre (um preço unitário × quantidade).
+const qtdDoCampo = (v: any) => Number(String(v ?? '').replace(',', '.')) || 0;
+const itensNumerados = (p: any) => Array.isArray(p?.itens)
+  ? p.itens.map((i: any, indice: number) => ({ ...i, indice })).filter((i: any) => String(i?.nome || '').trim()) : [];
+const ehDemandaDeVariosItens = (p: any) => itensNumerados(p).length > 1;
+const vencedorasDoPedido = (p: any) => Array.isArray(p?.vencedoras) ? p.vencedoras : [];
+const ehVencedora = (p: any, cotacaoId: string) => p?.vencedora_id === cotacaoId || vencedorasDoPedido(p).some((v: any) => v.cotacao_id === cotacaoId);
+
+function novoFormCotacao(p: any) {
+  const base: any = { ...VAZIO_COTACAO, quantidade: String(p?.quantidade || 1) };
+  if (!ehDemandaDeVariosItens(p)) return base;
+  base.itens_cot = itensNumerados(p).map((i: any) => ({ indice: i.indice, nome: i.nome, marcado: false, quantidade: String(i.quantidade ?? 1), valor_unitario: '' }));
+  return base;
+}
+
+function cotacaoValida(f: any) {
+  if (!f.fornecedor_nome?.trim()) return false;
+  if (f.itens_cot) {
+    const marcados = f.itens_cot.filter((i: any) => i.marcado);
+    return marcados.length > 0 && marcados.every((i: any) => parseValorBr(i.valor_unitario) && qtdDoCampo(i.quantidade) > 0);
+  }
+  return !!parseValorBr(f.valor_unitario) && qtdDoCampo(f.quantidade) > 0;
+}
+
 function totalComposicao(f: any) {
   const unit = parseValorBr(f.valor_unitario) || 0;
   const qtd = Number(String(f.quantidade ?? '').replace(',', '.')) || 0;
-  const itens = unit * qtd;
+  const itens = f.itens_cot
+    ? f.itens_cot.filter((i: any) => i.marcado).reduce((s: number, i: any) => s + (parseValorBr(i.valor_unitario) || 0) * qtdDoCampo(i.quantidade), 0)
+    : unit * qtd;
   const frete = f.frete_tipo === 'pago' ? (parseValorBr(f.frete_valor) || 0) : 0;
   const servicos = (f.servicos || []).reduce((s: number, x: any) => s + (parseValorBr(x.valor) || 0), 0);
   const taxas = parseValorBr(f.outras_taxas) || 0;
@@ -51,10 +79,18 @@ function totalComposicao(f: any) {
 }
 
 // Linha da cotação para o formulário (nova ou corrigir)
-function formDaCotacao(c: any, qtdPedido: any) {
+function formDaCotacao(c: any, qtdPedido: any, pedido?: any) {
   const qtd = c.quantidade ?? qtdPedido ?? 1;
   const unit = c.valor_unitario ?? (c.valor != null && Number(qtd) ? Number(c.valor) / Number(qtd) : null);
+  // cotação lançada por itens: reabre com os mesmos itens marcados; a de antes (itens nulo) segue no formato antigo
+  const itens_cot = Array.isArray(c.itens) && ehDemandaDeVariosItens(pedido)
+    ? itensNumerados(pedido).map((i: any) => {
+        const nela = c.itens.find((x: any) => x.indice === i.indice);
+        return { indice: i.indice, nome: i.nome, marcado: !!nela, quantidade: String(nela?.quantidade ?? i.quantidade ?? 1), valor_unitario: valorBrTexto(nela?.valor_unitario) };
+      })
+    : undefined;
   return {
+    itens_cot,
     fornecedor_nome: c.fornecedor_nome || '', valor_unitario: valorBrTexto(unit), quantidade: String(qtd),
     condicao_pagamento: c.condicao_pagamento || '', prazo_entrega: c.prazo_entrega || '',
     frete_tipo: c.frete_tipo || 'gratis', frete_valor: valorBrTexto(c.frete_valor),
@@ -67,8 +103,11 @@ function payloadDaCotacao(f: any) {
   const t = totalComposicao(f);
   return {
     fornecedor_nome: f.fornecedor_nome.trim(),
-    valor_unitario: parseValorBr(f.valor_unitario),
-    quantidade: Number(String(f.quantidade).replace(',', '.')) || null,
+    valor_unitario: f.itens_cot ? null : parseValorBr(f.valor_unitario),
+    quantidade: f.itens_cot ? null : Number(String(f.quantidade).replace(',', '.')) || null,
+    itens: f.itens_cot
+      ? f.itens_cot.filter((i: any) => i.marcado).map((i: any) => ({ indice: i.indice, nome: i.nome, quantidade: qtdDoCampo(i.quantidade), valor_unitario: parseValorBr(i.valor_unitario) }))
+      : null,
     valor: Number(t.total.toFixed(2)),
     condicao_pagamento: String(f.condicao_pagamento || '').trim() || null,
     prazo_entrega: String(f.prazo_entrega || '').trim() || null,
@@ -94,6 +133,7 @@ function ComposicaoCotacao({ form, setForm }: any) {
           <label className="acn-label">Fornecedor *</label>
           <input className="acn-input" value={form.fornecedor_nome} onChange={e=>set('fornecedor_nome', e.target.value)} />
         </div>
+        {!form.itens_cot && (<>
         <div>
           <label className="acn-label">Valor unitário (R$) *</label>
           <input className="acn-input" value={form.valor_unitario} placeholder="Ex: 15,00" inputMode="decimal"
@@ -104,7 +144,34 @@ function ComposicaoCotacao({ form, setForm }: any) {
           <input className="acn-input" value={form.quantidade} inputMode="decimal"
             onChange={e=>set('quantidade', e.target.value)} />
         </div>
+        </>)}
       </div>
+      {form.itens_cot && (() => {
+        const mudarItem = (indice: number, campo: string, valor: any) =>
+          set('itens_cot', form.itens_cot.map((i: any) => i.indice === indice ? { ...i, [campo]: valor } : i));
+        const todosMarcados = form.itens_cot.every((i: any) => i.marcado);
+        return (
+          <div>
+            <label className="acn-label">Itens que esta cotação cobre *</label>
+            {form.itens_cot.map((i: any) => (
+              <div key={i.indice} className="acn-cmp-comp-servico">
+                <label className="acn-cmp-comp-sdesc">
+                  <input type="checkbox" checked={i.marcado} onChange={e=>mudarItem(i.indice, 'marcado', e.target.checked)} /> {i.nome}
+                </label>
+                {i.marcado && (<>
+                  <input className="acn-input acn-cmp-comp-sval" value={i.quantidade} inputMode="decimal" placeholder="Qtd"
+                    onChange={e=>mudarItem(i.indice, 'quantidade', e.target.value)} aria-label={`Quantidade de ${i.nome}`} />
+                  <input className="acn-input acn-cmp-comp-sval" value={i.valor_unitario} inputMode="decimal" placeholder="Valor un."
+                    onChange={e=>mudarItem(i.indice, 'valor_unitario', e.target.value)} aria-label={`Valor unitário de ${i.nome}`} />
+                </>)}
+              </div>
+            ))}
+            <Botao pequeno onClick={()=>set('itens_cot', form.itens_cot.map((i: any) => ({ ...i, marcado: !todosMarcados })))}>
+              {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
+            </Botao>
+          </div>
+        );
+      })()}
       <div className="acn-cmp-comp-g2">
         <div>
           <label className="acn-label">Frete</label>
@@ -155,7 +222,7 @@ function ComposicaoCotacao({ form, setForm }: any) {
         </div>
       </div>
       <div className="acn-cmp-comp-resumo">
-        <div className="acn-cmp-comp-linha"><span>Itens ({form.quantidade || 0} × {moedaBr(parseValorBr(form.valor_unitario))})</span><span className="acn-num">{moedaBr(t.itens)}</span></div>
+        <div className="acn-cmp-comp-linha"><span>Itens ({form.itens_cot ? `${form.itens_cot.filter((i: any) => i.marcado).length} marcado(s)` : `${form.quantidade || 0} × ${moedaBr(parseValorBr(form.valor_unitario))}`})</span><span className="acn-num">{moedaBr(t.itens)}</span></div>
         <div className="acn-cmp-comp-linha acn-fraco"><span>Frete {form.frete_tipo === 'pago' ? '' : '(grátis)'}</span><span className="acn-num">{moedaBr(t.frete)}</span></div>
         {t.servicos > 0 && <div className="acn-cmp-comp-linha acn-fraco"><span>Serviços adicionais</span><span className="acn-num">{moedaBr(t.servicos)}</span></div>}
         {t.taxas > 0 && <div className="acn-cmp-comp-linha acn-fraco"><span>Outras taxas</span><span className="acn-num">{moedaBr(t.taxas)}</span></div>}
@@ -171,7 +238,8 @@ function ComposicaoCotacao({ form, setForm }: any) {
 // Texto curto da composição (lista de cotações e resumo)
 function textoComposicao(c: any) {
   const partes: string[] = [];
-  if (c.valor_unitario != null && c.quantidade != null) partes.push(`${c.quantidade} × ${moedaBr(c.valor_unitario)}`);
+  if (Array.isArray(c.itens) && c.itens.length) partes.push(`${c.itens.length} ${c.itens.length === 1 ? 'item' : 'itens'}: ${c.itens.map((i: any) => i.nome).join(', ')}`);
+  else if (c.valor_unitario != null && c.quantidade != null) partes.push(`${c.quantidade} × ${moedaBr(c.valor_unitario)}`);
   else if (c.valor_unitario != null) partes.push(`${moedaBr(c.valor_unitario)}/un.`);
   if (c.frete_tipo === 'pago') partes.push(`frete ${moedaBr(c.frete_valor)}`);
   else if (c.frete_tipo === 'gratis') partes.push('frete grátis');
@@ -716,8 +784,8 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
           {cotacoes === null ? <div className="acn-fraco">Carregando...</div> : cotacoes.length === 0 ? (
             <div className="acn-fraco">Nenhuma cotação lançada.</div>
           ) : cotacoes.map((c: any) => (
-            <div key={c.id} className={'acn-cmp-res-cot' + (c.id === p.vencedora_id ? ' venc' : '')}>
-              <span className={'acn-cmp-cresce' + (c.id === p.vencedora_id ? ' acn-forte' : '')}>{c.id === p.vencedora_id ? <Icone path={mdiTrophyOutline} size={13} /> : null}{c.id === p.vencedora_id ? ' ' : ''}{c.fornecedor_nome}</span>
+            <div key={c.id} className={'acn-cmp-res-cot' + (ehVencedora(p, c.id) ? ' venc' : '')}>
+              <span className={'acn-cmp-cresce' + (ehVencedora(p, c.id) ? ' acn-forte' : '')}>{ehVencedora(p, c.id) ? <Icone path={mdiTrophyOutline} size={13} /> : null}{ehVencedora(p, c.id) ? ' ' : ''}{c.fornecedor_nome}</span>
               {canVerValor && <span className="acn-ajuda">{textoComposicao(c)}</span>}
               {canVerValor && <span>{moeda(c.valor)}</span>}
               {c.prazo_entrega && <span className="acn-ajuda">prazo {c.prazo_entrega}</span>}
@@ -878,6 +946,7 @@ export default function ComprasTab({ currentUser }) {
   const [novoAnexoCotacao, setNovoAnexoCotacao] = useState<File|null>(null);
   const [enviandoCotacao, setEnviandoCotacao]   = useState(false);
   const [vencedoraId, setVencedoraId]           = useState<string|null>(null);
+  const [vencedoras, setVencedoras]             = useState<any[]>([]);   // 19/10/2026: demanda de vários itens, uma vencedora por grupo de itens
   // Corrigir uma cotação já lançada (Admin) — id da cotação em edição + form
   const [editandoCotacaoId, setEditandoCotacaoId] = useState<string|null>(null);
   const [editCotacaoForm, setEditCotacaoForm]     = useState<any>({});
@@ -1253,9 +1322,10 @@ export default function ComprasTab({ currentUser }) {
   // é agora o único caminho de Em Andamento → Comprado.
   const abrirModalCotacoes = async (p: any) => {
     setModalCotacoes(p);
-    setNovaCotacao({ ...VAZIO_COTACAO, quantidade: String(p.quantidade || 1) });
+    setNovaCotacao(novoFormCotacao(p));
     setNovoAnexoCotacao(null);
     setVencedoraId(p.vencedora_id || null);
+    setVencedoras(vencedorasDoPedido(p));
     setLoadingCotacoes(true);
     setErroMesa('');
     setCotacoes([]); setAprovacoesPedido([]);   // 7.57: não mostrar as cotações/aprovações do pedido anterior se a leitura deste falhar
@@ -1279,8 +1349,10 @@ export default function ComprasTab({ currentUser }) {
   const adicionarCotacao = umaVez('cotacao', async () => {
     if (!modalCotacoes) return;
     if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de lançar cotação.'); return; }   // 7.57: a contagem de cotações decide a aprovação do departamento
-    if (!novaCotacao.fornecedor_nome.trim() || !parseValorBr(novaCotacao.valor_unitario) || !(Number(String(novaCotacao.quantidade).replace(',', '.')) > 0)) {
-      alert('Informe o fornecedor, o valor unitário e a quantidade.'); return;
+    if (!cotacaoValida(novaCotacao)) {
+      alert(novaCotacao.itens_cot
+        ? 'Informe o fornecedor, marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
+        : 'Informe o fornecedor, o valor unitário e a quantidade.'); return;
     }
     if (novoAnexoCotacao && novoAnexoCotacao.size > 10 * 1024 * 1024) {
       alert(`Anexo muito grande (${(novoAnexoCotacao.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
@@ -1311,7 +1383,7 @@ export default function ComprasTab({ currentUser }) {
       if (resDep.erro) alert('A cotação foi salva, mas a aprovação do departamento NÃO foi criada: ' + resDep.erro + '\n\nAvise quem aprova ou peça para refazer a cotação.');
       else if (resDep.avisoFalhou) alert('A cotação foi salva e a aprovação do departamento foi criada, mas o aviso aos aprovadores não saiu. Avise-os diretamente.');
     }
-    setNovaCotacao({ ...VAZIO_COTACAO, quantidade: String(modalCotacoes.quantidade || 1) });
+    setNovaCotacao(novoFormCotacao(modalCotacoes));
     setNovoAnexoCotacao(null);
     abrirModalCotacoes(modalCotacoes);
   });
@@ -1376,6 +1448,10 @@ export default function ComprasTab({ currentUser }) {
     // A vencedora, uma vez que a compra já foi Aprovada/Comprada, não pode
     // simplesmente sumir — se o valor dela estava errado, o caminho é
     // corrigir (✏️ Editar), não excluir (perderia o registro/rastreio).
+    if (vencedoras.some((v: any) => v.cotacao_id === id)) {
+      mostrarAviso('Esta cotação já foi escolhida para alguns itens. Desfaça a escolha dela antes de remover.', 'atencao');
+      return;
+    }
     if (id === vencedoraId && ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra)) {
       // o texto diz "aprovada/comprada" e o palpite saía verde, mas é uma recusa (29/09/2026)
       mostrarAviso('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "Editar" para corrigir o valor em vez de excluir.', 'atencao');
@@ -1388,9 +1464,24 @@ export default function ComprasTab({ currentUser }) {
     abrirModalCotacoes(modalCotacoes);
   })();
 
+  // Desfaz a escolha parcial de uma cotação (19/10/2026). Depois que todos os itens têm vencedora a compra já foi para a
+  // alçada; aí o caminho é voltar a demanda para "Em Andamento", não desfazer uma cotação só.
+  const desfazerEscolha = (c: any) => umaVez('desfazer-escolha-' + c.id, async () => {
+    if (vencedoraId) { mostrarAviso('Todos os itens já têm vencedora e a compra foi enviada para aprovação. Para trocar, volte a demanda para "Em Andamento".', 'atencao'); return; }
+    if (!await confirmar(`Desfazer a escolha da cotação de ${c.fornecedor_nome}? Os itens dela voltam a ficar sem vencedora.`)) return;
+    const nova = vencedoras.filter((v: any) => v.cotacao_id !== c.id);
+    const { error } = await supabase.from('pcp_pedidos_compra').update({ vencedoras: nova.length ? nova : null }).eq('id', modalCotacoes.id);
+    if (error) { alert('Não foi possível desfazer a escolha: ' + error.message); return; }
+    await registrarHistorico(modalCotacoes.id, { tipo: 'escolha_cotacao', motivo: `Escolha da cotação de ${c.fornecedor_nome} desfeita.` }, currentUser);
+    const atualizado = { ...modalCotacoes, vencedoras: nova.length ? nova : null };
+    setModalCotacoes(atualizado);
+    abrirModalCotacoes(atualizado);
+    load();
+  })();
+
   const iniciarEdicaoCotacao = (c: any) => {
     setEditandoCotacaoId(c.id);
-    setEditCotacaoForm(formDaCotacao(c, modalCotacoes?.quantidade));
+    setEditCotacaoForm(formDaCotacao(c, modalCotacoes?.quantidade, modalCotacoes));
   };
 
   // Corrige uma cotação já lançada (Admin). Se for a vencedora do pedido,
@@ -1398,8 +1489,17 @@ export default function ComprasTab({ currentUser }) {
   // campo que Centro de Custo/Financeiro de fato leem, então é aqui que o
   // erro "entrou errado no centro de custo" se corrige de verdade.
   const salvarEdicaoCotacao = (c: any) => umaVez('editar-cotacao-' + c.id, async () => {
-    if (!editCotacaoForm.fornecedor_nome?.trim() || !parseValorBr(editCotacaoForm.valor_unitario) || !(Number(String(editCotacaoForm.quantidade).replace(',', '.')) > 0)) {
-      alert('Informe o fornecedor, o valor unitário e a quantidade.'); return;
+    if (!cotacaoValida(editCotacaoForm)) {
+      alert(editCotacaoForm.itens_cot
+        ? 'Informe o fornecedor, marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
+        : 'Informe o fornecedor, o valor unitário e a quantidade.'); return;
+    }
+    const comoVencedora = vencedoras.find((v: any) => v.cotacao_id === c.id);
+    if (comoVencedora && editCotacaoForm.itens_cot) {
+      const novosIndices = editCotacaoForm.itens_cot.filter((i: any) => i.marcado).map((i: any) => i.indice).sort().join(',');
+      if (novosIndices !== [...comoVencedora.itens].sort().join(',')) {
+        alert('Esta cotação já foi escolhida para estes itens. Desfaça a escolha dela antes de mudar quais itens ela cobre (os preços podem ser corrigidos).'); return;
+      }
     }
     setSalvandoEdicaoCotacao(true);
     const payload: any = { ...payloadDaCotacao(editCotacaoForm), atualizado_em: new Date().toISOString(), atualizado_por_nome: currentUser?.nome || null };
@@ -1409,7 +1509,15 @@ export default function ComprasTab({ currentUser }) {
     logChange({ module: 'compras', entityType: 'pcp_cotacoes_fornecedores', entityId: c.id, changeType: 'UPDATE',
       oldRow: { fornecedor_nome: c.fornecedor_nome, valor_unitario: c.valor_unitario, valor: c.valor },
       newRow: payload, user: currentUser });
-    if (c.id === vencedoraId && novoValorTotal != null && novoValorTotal !== c.valor) {
+    if (comoVencedora && novoValorTotal != null && novoValorTotal !== c.valor) {
+      // várias vencedoras: o valor da compra é a soma delas, então a lista e o total são refeitos juntos
+      const novaLista = vencedoras.map((v: any) => v.cotacao_id === c.id ? { ...v, valor: novoValorTotal } : v);
+      const upd: any = { vencedoras: novaLista };
+      if (vencedoraId) upd.valor_compra = Number(novaLista.reduce((s: number, v: any) => s + (Number(v.valor) || 0), 0).toFixed(2));
+      const { error: erroLista } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', modalCotacoes.id);
+      if (erroLista) alert('A cotação foi corrigida, mas o VALOR DO PEDIDO (que o Financeiro lê) não foi atualizado: ' + erroLista.message + '\n\nCorrija de novo para tentar outra vez.');
+      else setVencedoras(novaLista);
+    } else if (c.id === vencedoraId && novoValorTotal != null && novoValorTotal !== c.valor) {
       const { error: erroValor } = await supabase.from('pcp_pedidos_compra').update({ valor_compra: novoValorTotal }).eq('id', modalCotacoes.id);
       // 7.57: a cotação era corrigida e o valor do pedido (o que o Financeiro e o centro de custo leem) seguia o antigo, sem aviso
       if (erroValor) alert('A cotação foi corrigida, mas o VALOR DO PEDIDO (que o Financeiro lê) não foi atualizado: ' + erroValor.message + '\n\nCorrija de novo para tentar outra vez.');
@@ -1706,7 +1814,7 @@ export default function ComprasTab({ currentUser }) {
       return;
     }
     const { error: erroVoltar } = await supabase.from('pcp_pedidos_compra').update({
-      status_compra: 'Em Andamento', vencedora_id: null, justificativa_vencedora: null,
+      status_compra: 'Em Andamento', vencedora_id: null, vencedoras: null, justificativa_vencedora: null,
       reprocessos: (Number(modalCotacoes.reprocessos) || 0) + 1,
     }).eq('id', modalCotacoes.id);
     if (erroVoltar) {
@@ -1771,18 +1879,47 @@ export default function ComprasTab({ currentUser }) {
     const { data: jaPendentes, error: erroJa } = await supabase.from('pcp_aprovacoes').select('id,tipo')
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
     const { data: pedidoVenc, error: erroVenc } = await supabase.from('pcp_pedidos_compra')
-      .select('vencedora_id').eq('id', modalCotacoes.id).maybeSingle();
+      .select('vencedora_id,vencedoras').eq('id', modalCotacoes.id).maybeSingle();
     // 7.57: falha de leitura aqui criava uma segunda linha de aprovação pendente para o mesmo nível
     if (erroJa || erroVenc) { setVerificandoSenha(false); setErroSenha('Não foi possível conferir as aprovações do pedido: ' + (erroJa || erroVenc).message); return; }
     const alcadaJaPendente = (jaPendentes || []).some((a: any) => a.tipo !== 'departamento');
-    const mesmaVencedora = pedidoVenc?.vencedora_id === cotacao.id;
+    // 19/10/2026: demanda de vários itens — cada cotação aprovada fica com os itens que cobre; só quando todos os itens
+    // têm vencedora a compra segue para a alçada, com o valor da SOMA das vencedoras e os fornecedores juntos.
+    const porItens = Array.isArray(cotacao.itens) && cotacao.itens.length > 0 && ehDemandaDeVariosItens(modalCotacoes);
+    let listaVencedoras: any[] | null = null;
+    let faltamItens = false;
+    if (porItens) {
+      const atuais = vencedorasDoPedido(pedidoVenc);
+      const indices = cotacao.itens.map((i: any) => i.indice);
+      const conflito = atuais.find((v: any) => v.cotacao_id !== cotacao.id && v.itens.some((ix: number) => indices.includes(ix)));
+      if (conflito) { setVerificandoSenha(false); setErroSenha(`Alguns destes itens já foram escolhidos na cotação de ${conflito.fornecedor}. Desfaça aquela escolha primeiro.`); return; }
+      listaVencedoras = [...atuais.filter((v: any) => v.cotacao_id !== cotacao.id),
+        { cotacao_id: cotacao.id, fornecedor: cotacao.fornecedor_nome, valor: cotacao.valor, itens: indices }];
+      const cobertos = new Set(listaVencedoras.flatMap((v: any) => v.itens));
+      faltamItens = itensNumerados(modalCotacoes).some((i: any) => !cobertos.has(i.indice));
+      if (faltamItens) {
+        const { error: erroLista } = await supabase.from('pcp_pedidos_compra').update({ vencedoras: listaVencedoras }).eq('id', modalCotacoes.id);
+        setVerificandoSenha(false);
+        if (erroLista) { setErroSenha('Erro: ' + erroLista.message); return; }
+        await registrarHistorico(modalCotacoes.id, { tipo: 'escolha_cotacao', motivo: `Cotação de ${cotacao.fornecedor_nome} escolhida para ${indices.length} item(ns). Faltam itens sem vencedora.` }, currentUser);
+        setModalConfirmarSenha(null);
+        const atualizado = { ...modalCotacoes, vencedoras: listaVencedoras };
+        setModalCotacoes(atualizado);
+        abrirModalCotacoes(atualizado);
+        load();
+        return;
+      }
+    }
+    const mesmaVencedora = pedidoVenc?.vencedora_id === cotacao.id
+      || (porItens && !!pedidoVenc?.vencedora_id && vencedorasDoPedido(pedidoVenc).some((v: any) => v.cotacao_id === cotacao.id));
     const resDisparo: any = alcadaJaPendente && mesmaVencedora
       ? { error: null }
       : await dispararOuConfirmar(modalCotacoes.id, {
           vencedora_id: cotacao.id,
           justificativa_vencedora: textoJustificativa,
-          fornecedor: cotacao.fornecedor_nome,
-          valor_compra: cotacao.valor,
+          fornecedor: listaVencedoras ? listaVencedoras.map((v: any) => v.fornecedor).join(' + ') : cotacao.fornecedor_nome,
+          valor_compra: listaVencedoras ? Number(listaVencedoras.reduce((s: number, v: any) => s + (Number(v.valor) || 0), 0).toFixed(2)) : cotacao.valor,
+          ...(listaVencedoras ? { vencedoras: listaVencedoras } : {}),
           // sem data_prevista_recebimento: ela é do Compras, na efetivação
         });
     const error = resDisparo.error;
@@ -2584,6 +2721,20 @@ export default function ComprasTab({ currentUser }) {
                 );
               })()}
 
+              {ehDemandaDeVariosItens(modalCotacoes) && (
+                <div className="acn-quadro">
+                  <div className="acn-quadro-titulo">Itens da demanda — quem fornece cada um</div>
+                  {itensNumerados(modalCotacoes).map((i: any) => {
+                    const venc = vencedoras.find((v: any) => v.itens.includes(i.indice));
+                    return (
+                      <div key={i.indice} className="acn-ajuda">
+                        {venc ? <span className="acn-txt-ok">✓</span> : '○'} {i.nome} ({i.quantidade ?? 1}) — {venc ? <strong className="acn-forte">{venc.fornecedor}</strong> : 'sem vencedora ainda'}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {loadingCotacoes ? (
                 <div className="acn-empty">Carregando...</div>
               ) : (
@@ -2595,7 +2746,7 @@ export default function ComprasTab({ currentUser }) {
                     const compraDecidida = ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra);
                     const emEdicao = editandoCotacaoId === c.id;
                     return (
-                    <div key={c.id} className={'acn-cmp-cot' + (vencedoraId===c.id ? ' venc' : '')}>
+                    <div key={c.id} className={'acn-cmp-cot' + (vencedoraId===c.id || vencedoras.some((v:any)=>v.cotacao_id===c.id) ? ' venc' : '')}>
                       {emEdicao ? (
                         <div className="acn-cmp-cot-edicao">
                           <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} />
@@ -2612,7 +2763,7 @@ export default function ComprasTab({ currentUser }) {
                         <div className="acn-cmp-cot-info">
                           <div className="acn-forte">
                             {c.fornecedor_nome}
-                            {vencedoraId===c.id && <span className="acn-txt-ok acn-cmp-venc">✓ VENCEDORA</span>}
+                            {(vencedoraId===c.id || vencedoras.some((v:any)=>v.cotacao_id===c.id)) && <span className="acn-txt-ok acn-cmp-venc">✓ VENCEDORA{Array.isArray(c.itens) && c.itens.length ? ' DOS ITENS' : ''}</span>}
                           </div>
                           <div className="acn-ajuda">
                             {textoComposicao(c) ? `${textoComposicao(c)} · ` : ''}
@@ -2631,17 +2782,22 @@ export default function ComprasTab({ currentUser }) {
                       </div>
                       <CotacaoAreaLivre cotacao={c}
                         onSaved={(html:string)=>setCotacoes(prev=>prev.map(x=>x.id===c.id?{...x,area_livre:html}:x))} />
-                      {!compraDecidida && !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
+                      {!compraDecidida && !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento')
+                        && !vencedoras.some((v:any)=>v.cotacao_id===c.id) && (
                         <Botao variante="primario" icone={mdiCheck} className="acn-cmp-largo"
                           onClick={()=>aprovarCotacaoComoVencedora(c)}>
-                          Aprovar esta cotação como vencedora
+                          {Array.isArray(c.itens) && c.itens.length ? 'Aprovar esta cotação para os itens dela' : 'Aprovar esta cotação como vencedora'}
                         </Botao>
+                      )}
+                      {/* escolha parcial (faltam itens): dá para desfazer enquanto a compra não foi enviada à alçada */}
+                      {!compraDecidida && !vencedoraId && vencedoras.some((v:any)=>v.cotacao_id===c.id) && (
+                        <Botao className="acn-cmp-largo" onClick={()=>desfazerEscolha(c)}>Desfazer a escolha desta cotação</Botao>
                       )}
                       {/* Aprovação de alçada JÁ pendente (30/09/2026): o painel de cima manda "aprovar clicando em
                           ✅ Aprovar na cotação vencedora", mas o botão acima some quando há pendência — e não havia
                           outro. A compra ficava parada sem ninguém conseguir aprovar. Agora quem aprova vê o botão
                           na cotação que já é a vencedora (só nela: a escolha da vencedora já foi feita). */}
-                      {!compraDecidida && vencedoraId === c.id && podeAprovarCompra(currentUser)
+                      {!compraDecidida && ehVencedora({ vencedora_id: vencedoraId, vencedoras }, c.id) && !!vencedoraId && podeAprovarCompra(currentUser)
                         && aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
                         <Botao variante="primario" icone={mdiCheck} className="acn-cmp-largo"
                           onClick={()=>aprovarCotacaoComoVencedora(c)}>
