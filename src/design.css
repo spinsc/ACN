@@ -5098,3 +5098,20 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-dev-historico summary { cursor: pointer; font-weight: 600; color: var(--acn-muted); }
 .acn-dev-historico ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .acn-dev-passo.porta { border-style: dashed; }
+
+/* ══ Engenharia > Desenvolvimento (D2, 19/10/2026) — formulários da Concepção e da Criação ════════════ */
+.acn-dev-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--acn-neutral-soft); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); }
+.acn-dev-form textarea { width: 100%; resize: vertical; }
+.acn-dev-form-linha { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acn-dev-form-linha > .acn-input:first-child { flex: 1; min-width: 200px; }
+.acn-dev-form-prio { width: 130px; }
+.acn-dev-form-link { width: 200px; }
+.acn-dev-form-nenhum { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.acn-dev-conceito { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); }
+.acn-dev-notas { display: flex; flex-wrap: wrap; gap: 8px; }
+.acn-dev-nota-campo { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.acn-dev-nota-campo .acn-input { width: 100%; }
+.acn-dev-resumo { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.acn-dev-resumo-lista { margin: 0; padding-left: 18px; }
+.acn-dev-resumo-lista li { margin-bottom: 2px; }
+.acn-dev-resumo-bloco { margin-top: 8px; }

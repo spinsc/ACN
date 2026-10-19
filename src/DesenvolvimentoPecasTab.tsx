@@ -24,6 +24,7 @@ import { confirmar } from './Feedback';
 import { Botao, Chips, Faixa, Selo, Tag } from './Interface';
 import PedidoDoPcp from './PedidoDesenvolvimentoPcp';
 import { modeloGuiado, TIPOS_DEV, rotuloDoTipoDev, mesmoNome, ehGerenteDev } from './DesenvolvimentoModelo';
+import { ResumoDoProjeto } from './DesenvolvimentoFormularios';
 import { PainelGuiado, FaixaDeTipo, RessalvasAbertas, HistoricoDaDemanda, MenuDaDemanda } from './DesenvolvimentoPorta';
 import { mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh } from '@mdi/js';
 
@@ -408,6 +409,7 @@ function DemandaComEtapas({ demanda, onAtualizado, currentUser }: any) {
         {podeTrocarTipo && !editandoTipo && <div><Botao variante="discreto" pequeno onClick={() => setEditandoTipo(true)}>Alterar o tipo</Botao></div>}
 
         {guiada && <RessalvasAbertas demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} />}
+        {guiada && <ResumoDoProjeto demanda={demanda} />}
 
         {!finalizada && !aDefinir && (
           // key: ao concluir uma etapa o painel da próxima é outro — sem isso ele herdava o responsável, a data e a observação digitada da anterior

@@ -201,7 +201,111 @@ export function atualizarEntregavel(d: any, idx: number, id: string, u: any, ago
   return { patch: { etapas } };
 }
 export const marcarFeito = (d: any, idx: number, id: string, feito: boolean, u: any, agora: string) =>
-  atualizarEntregavel(d, idx, id, u, agora, e => { e.feito = !!feito; e.feito_por = feito ? (u?.nome || '') : null; e.feito_em = feito ? agora : null; });
+  atualizarEntregavel(d, idx, id, u, agora, e => {
+    // D2: o entregável que tem formulário só vale como feito com o formulário preenchido
+    if (feito && temFormulario(id)) {
+      const falta = faltaNoEntregavel(id, e.dados, d);
+      if (falta.length) return `Falta preencher: ${falta.join('; ')}.`;
+    }
+    e.feito = !!feito; e.feito_por = feito ? (u?.nome || '') : null; e.feito_em = feito ? agora : null;
+  });
+
+// ── entregáveis com formulário próprio (D2, 19/10/2026): Concepção e Criação ────────────────────────────────────
+// O conteúdo fica em `etapa.entregaveis[id].dados`. Marcar como feito exige o formulário completo; editar um formulário já "feito" que deixe de estar completo desmarca o "feito".
+export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido'];
+export const temFormulario = (id: string) => ENTREGAVEIS_COM_FORMULARIO.includes(id);
+export const PRIORIDADES: Record<string, string> = { obrigatorio: 'Obrigatório', desejavel: 'Desejável' };
+// critérios de partida da matriz (nome, peso de 1 a 5); a Engenharia troca, tira e acrescenta
+export const CRITERIOS_SUGERIDOS: [string, number][] = [['Custo', 5], ['Desempenho', 5], ['Segurança e normas', 5], ['Facilidade de fabricar', 4], ['Prazo de fabricação', 3]];
+export const NOTA_MAXIMA = 5;
+const LIMITES = { itens: 60, conceitos: 8, criterios: 12, texto: 600, nome: 100 };
+
+/** Pontos de cada conceito (soma de peso × nota) e o máximo possível, do maior para o menor. */
+export function ranking(dados: any) {
+  const criterios = dados?.criterios || [];
+  const maximo = criterios.reduce((s: number, c: any) => s + c.peso * NOTA_MAXIMA, 0);
+  return (dados?.conceitos || [])
+    .map((c: any) => ({ id: c.id, nome: c.nome, pontos: criterios.reduce((s: number, k: any) => s + k.peso * (Number(c.notas?.[k.id]) || 0), 0), maximo }))
+    .sort((a: any, b: any) => b.pontos - a.pontos);
+}
+
+const conceitosSeAplicam = (tipo: string) => entregaveisDaEtapa('Criação', tipo).some(e => e.id === 'conceitos');
+export function dadosDoEntregavel(d: any, id: string) {
+  for (const e of d?.etapas || []) if (e.entregaveis?.[id]?.dados) return e.entregaveis[id].dados;
+  return null;
+}
+
+/** O que ainda falta preencher para o formulário valer como feito (lista vazia = completo). */
+export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
+  const x = dados || {};
+  const falta: string[] = [];
+  if (id === 'briefing') { if (!String(x.problema || '').trim()) falta.push('o problema a resolver'); }
+  else if (id === 'requisitos') {
+    const itens = x.itens || [];
+    if (!itens.length) falta.push('ao menos um requisito');
+    else if (!itens.some((i: any) => i.prioridade === 'obrigatorio')) falta.push('ao menos um requisito obrigatório');
+  } else if (id === 'normas' || id === 'similares') {
+    if (!(x.itens || []).length && !x.nenhum) falta.push(id === 'normas' ? 'as normas, ou marcar que nenhuma se aplica' : 'os similares, ou marcar que não achou nenhum');
+  } else if (id === 'meta_custo') {
+    if (!(Number(x.custo_alvo) > 0)) falta.push('o custo alvo');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.prazo || ''))) falta.push('o prazo');
+  } else if (id === 'conceitos') {
+    const conceitos = x.conceitos || [], criterios = x.criterios || [];
+    if (conceitos.length < 2) falta.push('ao menos 2 conceitos');
+    if (!criterios.length) falta.push('ao menos 1 critério');
+    if (conceitos.length && criterios.length && conceitos.some((c: any) => criterios.some((k: any) => c.notas?.[k.id] === undefined || c.notas?.[k.id] === null))) falta.push('a nota de cada conceito em cada critério');
+  } else if (id === 'conceito_escolhido') {
+    if (conceitosSeAplicam(d?.tipo_desenvolvimento)) {
+      const lista = dadosDoEntregavel(d, 'conceitos')?.conceitos || [];
+      if (!x.conceito_id || !lista.some((c: any) => c.id === x.conceito_id)) falta.push('o conceito escolhido');
+    } else if (!String(x.nome || '').trim()) falta.push('o nome do conceito escolhido');
+    if (!String(x.justificativa || '').trim()) falta.push('por que esse caminho');
+  }
+  return falta;
+}
+
+const txt = (v: any, max: number) => String(v ?? '').trim().slice(0, max);
+const dentro = (n: any, min: number, max: number) => { const v = Math.round(Number(n)); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null; };
+
+/** Limpa o que veio da tela: corta texto, limita quantidades, descarta linha vazia e nota fora de 0 a 5. */
+export function limparDados(id: string, dados: any) {
+  const x = dados || {};
+  const lista = (v: any, max: number) => (Array.isArray(v) ? v : []).slice(0, max);
+  if (id === 'briefing') return { problema: txt(x.problema, 2000), aplicacao: txt(x.aplicacao, LIMITES.texto), pedido_por: txt(x.pedido_por, LIMITES.nome) };
+  if (id === 'requisitos') return { itens: lista(x.itens, LIMITES.itens).map((i: any) => ({ id: txt(i.id, 20), texto: txt(i.texto, LIMITES.texto), prioridade: i.prioridade === 'desejavel' ? 'desejavel' : 'obrigatorio' })).filter((i: any) => i.texto) };
+  if (id === 'normas' || id === 'similares') return { nenhum: !!x.nenhum, itens: lista(x.itens, LIMITES.itens).map((i: any) => ({ id: txt(i.id, 20), texto: txt(i.texto, LIMITES.texto), ...(id === 'similares' ? { link: txt(i.link, 300) } : {}) })).filter((i: any) => i.texto) };
+  if (id === 'meta_custo') { const c = Number(x.custo_alvo); return { custo_alvo: Number.isFinite(c) && c > 0 ? Math.round(c * 100) / 100 : null, prazo: /^\d{4}-\d{2}-\d{2}$/.test(String(x.prazo || '')) ? x.prazo : '', quantidade: dentro(x.quantidade, 1, 1000000) }; }
+  if (id === 'conceitos') {
+    const criterios = lista(x.criterios, LIMITES.criterios).map((k: any) => ({ id: txt(k.id, 20), nome: txt(k.nome, LIMITES.nome), peso: dentro(k.peso, 1, 5) ?? 3 })).filter((k: any) => k.nome);
+    const conceitos = lista(x.conceitos, LIMITES.conceitos).map((c: any) => {
+      const notas: Record<string, number> = {};
+      criterios.forEach((k: any) => { const n = c.notas?.[k.id]; if (n !== undefined && n !== null && n !== '') { const v = dentro(n, 0, NOTA_MAXIMA); if (v !== null) notas[k.id] = v; } });
+      return { id: txt(c.id, 20), nome: txt(c.nome, LIMITES.nome), descricao: txt(c.descricao, LIMITES.texto), notas };
+    }).filter((c: any) => c.nome);
+    return { criterios, conceitos };
+  }
+  if (id === 'conceito_escolhido') return { conceito_id: txt(x.conceito_id, 20) || null, nome: txt(x.nome, LIMITES.nome), justificativa: txt(x.justificativa, 2000) };
+  return {};
+}
+
+export function salvarDados(d: any, idx: number, id: string, dados: any, u: any, agora: string) {
+  if (!temFormulario(id)) return { erro: 'Este entregável não tem formulário.' };
+  const limpo = limparDados(id, dados);
+  return atualizarEntregavel(d, idx, id, u, agora, (e, etapa) => {
+    e.dados = limpo;
+    if (id === 'conceitos') {
+      // trocar os conceitos pode apagar o que já tinha sido escolhido: a escolha volta a ficar em aberto, em vez de apontar para um conceito que não existe mais
+      const esc = etapa.entregaveis?.conceito_escolhido;
+      if (esc?.dados?.conceito_id && !limpo.conceitos.some((c: any) => c.id === esc.dados.conceito_id)) {
+        esc.dados = { ...esc.dados, conceito_id: null };
+        if (esc.feito) { esc.feito = false; esc.feito_por = null; esc.feito_em = null; }
+      }
+    }
+    // formulário "feito" que deixou de estar completo volta a não-feito
+    const copiaD = { ...d, etapas: d.etapas.map((et: any, i: number) => (i === idx ? { ...et, entregaveis: { ...(et.entregaveis || {}), [id]: { ...e } } } : et)) };
+    if (e.feito && faltaNoEntregavel(id, limpo, copiaD).length) { e.feito = false; e.feito_por = null; e.feito_em = null; }
+  });
+}
 
 export function pedirPorta(d: any, idx: number, u: any, agora: string) {
   const p = preparar(d, idx); if (p.erro) return p;

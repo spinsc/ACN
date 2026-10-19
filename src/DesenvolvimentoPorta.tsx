@@ -19,7 +19,9 @@ import {
   TIPOS_DEV, rotuloDoTipoDev, ROTULO_PAPEL, entregaveisDaEtapa, entregaveisQueFaltam, estadoDaPorta, papeisQueOUsuarioCobre, solicitanteDaDemanda,
   ehGerenteDev, definirTipo, iniciarEtapa, observarEtapa, atualizarEntregavel, marcarFeito, pedirPorta, retirarPedido, decidirPorta, resolverRessalva,
   voltarEtapa, pausarDemanda, retomarDemanda, cancelarDemanda, reabrirDemanda, papeisExigidos, frasePorEvento,
+  temFormulario, faltaNoEntregavel, salvarDados,
 } from './DesenvolvimentoModelo';
+import { FormularioDoEntregavel, ResumoDoEntregavel } from './DesenvolvimentoFormularios';
 import {
   mdiPaperclip, mdiPlay, mdiNoteEditOutline, mdiCheck, mdiClose, mdiSendOutline, mdiUndoVariant, mdiPauseCircleOutline, mdiPlayCircleOutline,
   mdiCancel, mdiBackupRestore, mdiSwapHorizontal, mdiCheckCircleOutline,
@@ -95,6 +97,14 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
   const [editandoNota, setEditandoNota] = useState(false);
   const [nota, setNota] = useState(estado.nota || '');
   const [enviando, setEnviando] = useState(false);
+  const [editandoForm, setEditandoForm] = useState(false);
+  // D2: entregável com formulário (Concepção e Criação) só vale como feito com o formulário completo
+  const comFormulario = temFormulario(ent.id);
+  const faltas = comFormulario ? faltaNoEntregavel(ent.id, estado.dados, demanda) : [];
+  const salvarFormulario = async (dados: any) => {
+    const r = await executar((d, agora) => salvarDados(d, idx, ent.id, dados, currentUser, agora));
+    if (r) setEditandoForm(false);
+  };
 
   const anexar = async (files: FileList) => {
     if (enviando) return;
@@ -131,7 +141,8 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
     <li className={'acn-dev-ent' + (estado.feito ? ' feito' : '')} data-entregavel={ent.id}>
       <div className="acn-dev-ent-topo">
         <label className="acn-dev-ent-marca">
-          <input type="checkbox" checked={!!estado.feito} disabled={travado || ocupado}
+          <input type="checkbox" checked={!!estado.feito} disabled={travado || ocupado || (!estado.feito && faltas.length > 0)}
+            title={!estado.feito && faltas.length ? `Falta preencher: ${faltas.join('; ')}` : undefined}
             // o valor é lido AGORA: a operação roda depois da leitura do banco, quando a caixa controlada já voltou ao valor antigo
             onChange={e => { const marcado = e.target.checked; executar((d, agora) => marcarFeito(d, idx, ent.id, marcado, currentUser, agora)); }} />
           <strong>{ent.nome}</strong>
@@ -140,6 +151,13 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
       </div>
       <div className="acn-ajuda">{ent.ajuda}</div>
       {estado.feito && <div className="acn-ajuda">Feito por {estado.feito_por} em {fmtDtHr(estado.feito_em)}</div>}
+      {comFormulario && !editandoForm && <ResumoDoEntregavel id={ent.id} dados={estado.dados} demanda={demanda} />}
+      {comFormulario && !editandoForm && !estado.feito && faltas.length > 0 && !travado && (
+        <div className="acn-ajuda atencao">Falta preencher: {faltas.join('; ')}.</div>
+      )}
+      {comFormulario && editandoForm && (
+        <FormularioDoEntregavel id={ent.id} demanda={demanda} dados={estado.dados} ocupado={ocupado} onSalvar={salvarFormulario} onCancelar={() => setEditandoForm(false)} />
+      )}
       {(estado.anexos || []).length > 0 && (
         <div className="acn-dev-anexos-lista">
           {estado.anexos.map((a: any, i: number) => (
@@ -161,8 +179,9 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
           </div>
         </div>
       )}
-      {!travado && !editandoNota && (
+      {!travado && !editandoNota && !editandoForm && (
         <div className="acn-dev-acoes">
+          {comFormulario && <Botao pequeno variante={estado.dados && !faltas.length ? 'secundario' : 'primario'} icone={mdiNoteEditOutline} onClick={() => setEditandoForm(true)}>{estado.dados ? 'Editar formulário' : 'Preencher formulário'}</Botao>}
           <input ref={ref} type="file" multiple hidden onChange={e => { if (e.target.files?.length) anexar(e.target.files); }} />
           <Botao pequeno icone={mdiPaperclip} disabled={enviando || ocupado} onClick={() => ref.current?.click()}>{enviando ? 'Enviando…' : 'Anexar arquivo'}</Botao>
           <Botao pequeno variante="discreto" icone={mdiNoteEditOutline} onClick={() => setEditandoNota(true)}>{estado.nota ? 'Editar nota' : 'Nota'}</Botao>

@@ -92,7 +92,7 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 |---|---|---|
 | **D0** | Fatia do `/ux-fluxo` da aba: achados 7.x e migração para `Interface.tsx`/`Feedback.tsx`/classes/`Botao`, sem mudar o comportamento | ✅ 19/10/2026 (12e68 no plano de UX; 29 verificações no navegador, nenhuma gravação) |
 | **D1** | Base: tipo de desenvolvimento, entregáveis por etapa (lista própria de cada etapa, anexo por entregável), porta com aprovação solicitante + gerente, registro no histórico | ✅ 19/10/2026 (regras em `DesenvolvimentoModelo.ts`, tela em `DesenvolvimentoPorta.tsx`; 68 regras + 58 verificações no navegador; ver "Como ficou a D1") |
-| **D2** | Concepção e Criação: requisitos com prioridade, meta de custo, normas, matriz de escolha de conceitos | não feita |
+| **D2** | Concepção e Criação: requisitos com prioridade, meta de custo, normas, matriz de escolha de conceitos | ✅ 19/10/2026 (ver "Como ficou a D2"; 94 regras + 76 verificações no navegador) |
 | **D3** | Desenvolvimento: revisões do desenho (Rev A, B…), lista de materiais preliminar, custo estimado × meta, lista de riscos, revisão de projeto | não feita |
 | **D4** | Prototipagem e Validação: registro de protótipos, problemas com ação, plano de testes ligado aos requisitos, parecer da Qualidade, "volta ao Desenvolvimento" | não feita |
 | **D5** | Produção, Acabamento e Entrega: liberação com item no catálogo e estrutura de instalação, primeira unidade, custo real, pedido de mudança, pacote técnico, aceite, ligação com a Garantia | não feita |
@@ -115,6 +115,16 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 **Achado do teste:** a caixa de "feito" lia o valor depois da leitura do banco, quando a caixa controlada já tinha voltado ao valor antigo (marcava e não gravava); corrigido lendo o valor na hora do clique.
 
 **Fica para as próximas fatias:** os formulários próprios de cada entregável (requisitos com prioridade, matriz de conceitos, revisões do desenho, protótipos, plano de testes — D2 a D5) e o painel (D6). Hoje cada entregável é "feito + anexos + nota".
+
+### Como ficou a D2 (19/10/2026)
+
+Sem mudança no banco: o conteúdo dos formulários fica em `etapa.entregaveis[id].dados` (jsonb que já existia). Regras em `DesenvolvimentoModelo.ts` (`faltaNoEntregavel`, `limparDados`, `salvarDados`, `ranking`); campos em `DesenvolvimentoFormularios.tsx`.
+
+- **Concepção:** *Briefing* (problema a resolver obrigatório, aplicação, quem pediu); *Requisitos* (linhas com prioridade Obrigatório/Desejável; precisa de ao menos um obrigatório); *Normas* e *Similares* (linhas, ou "nenhuma norma se aplica"/"não achei similar"; similar aceita link); *Meta de custo e prazo* (custo alvo por unidade lido com `lerValorDigitado`, prazo e quantidade prevista opcional).
+- **Criação:** *Matriz de conceitos* — critérios com peso de 1 a 5 (botão "Usar critérios sugeridos": custo, desempenho, segurança e normas, facilidade de fabricar, prazo de fabricação), de 2 a 8 conceitos, nota de 0 a 5 de cada conceito em cada critério, **pontuação ao vivo** (peso × nota) com o maior destacado; *Conceito escolhido* — escolhe entre os conceitos da matriz (com a pontuação), e **escolher um que não é o de maior nota exige explicar** (a justificativa é sempre obrigatória). Em adaptação (sem matriz) o conceito é um nome livre mais o porquê. O *croqui* continua anexo.
+- **Regra:** o entregável com formulário **só pode ser marcado "feito" com o formulário completo** (a caixa fica travada e diz o que falta); editar um formulário já "feito" que deixe de estar completo **desmarca o "feito"**; trocar a matriz de modo que o conceito escolhido deixe de existir **reabre a escolha** em vez de apontar para o vazio. Tudo fecha com a porta, como antes.
+- **Resumo do projeto:** o cartão ganhou um quadro recolhido com o que a Concepção e a Criação definiram (briefing, meta, requisitos, normas, conceito escolhido), para consulta nas etapas seguintes.
+- **Para a D3:** a meta de custo (`custo_alvo`) é o que a lista de materiais preliminar será comparada; as normas listadas são as que a conferência de normas da Validação (D4) vai percorrer.
 
 Regras de cada fatia: `npx vite build` antes de commitar; teste no navegador com gravações bloqueadas (padrão `scratchpad/fstest/`);
 nenhum dado real alterado; relatar números reais; push só com a pergunta clicável de autorização.
