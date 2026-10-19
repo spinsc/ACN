@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -10,6 +10,7 @@ import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'rea
 // imports, a volta é por import dinâmico (que de quebra deixa o jsPDF fora do
 // pacote principal, só baixando quando alguém abre o dossiê).
 const ModalDossieOp = lazy(() => import('./OpDossie').then(m => ({ default: m.ModalDossieOp })));
+const ModalLote = lazy(() => import('./OpLote').then(m => ({ default: m.ModalLote })));
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -27,6 +28,8 @@ import { podeAlterarNumeroOplPv, podeVerValores } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
+import { SeletorEscopo } from './EscopoDaEdicao';
+import { aplicarNoLote, lerOutrasUnidadesDoLote, textoDoResultadoLote } from './EdicaoDeLote';
 import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
 import { FotosVeiculoVer } from './FotosVeiculo';
 import { itensPreenchidos } from './DemandaItens';
@@ -752,9 +755,13 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     const { error } = await supabase.from('logs_movimentacao_opl').insert([registro]);
     if (error) alert('A alteração foi salva, mas não ficou registrada no histórico da OP: ' + error.message);
   };
+  // "Esta alteração vale para" (16/10/2026): só esta unidade (padrão) ou o lote inteiro — os itens vendidos valem por carro e costumam ser iguais em todos
+  const [escopoVendido, setEscopoVendido] = useState<'unidade' | 'lote'>('unidade');
   const salvarVendido = async () => {
     const itens = itensPreenchidos(editandoVendido || []);
     if (!itens.length) { alert('A OP precisa de pelo menos 1 item vendido.'); return; }
+    const noLote = escopoVendido === 'lote' && qtdLote > 1;
+    if (noLote && !await confirmar(`Aplicar estes itens vendidos nas ${qtdLote} unidades do lote?\n\n${itens.map((v: any) => `• ${v.quantidade}× ${v.nome}`).join('\n')}\n\nCada unidade fica com esta lista (por carro). Unidade já faturada ou cancelada não é mexida.`)) return;
     const { error } = await supabase.from('oples').update({ itens_vendidos: itens }).eq('id', opl.id);
     if (error) { alert('Não foi possível salvar: ' + error.message); return; }
     await registrarNoHistorico({
@@ -763,6 +770,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: new Date().toISOString(),
     });
+    if (noLote) {
+      const r = await aplicarNoLote({ op: opl, mudados: { itens_vendidos: itens }, usuario, ehGerente: podeEditarTudo, origem: 'Itens vendidos alterados (vale para o lote inteiro)' });
+      const outras = r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length);
+      alert(textoDoResultadoLote(r, outras));
+    }
+    setEscopoVendido('unidade');
     setEditandoVendido(null);
     await recarregarOpl();      // mostra o que ficou gravado, não o que eu achei que gravei
     recarregarLogs();
@@ -785,6 +798,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // Lote: só mostra o "Resumo do lote" se houver unidades /NN desta base
   const [qtdLote, setQtdLote] = useState(0);
   const [verResumoLote, setVerResumoLote] = useState(false);
+  const [abrirLote, setAbrirLote] = useState(false);   // a janela do lote inteiro (OpLote.tsx), aberta do detalhe de uma unidade
   useEffect(() => {
     if (!opl?.opl) { setQtdLote(0); return; }
     buscarUnidadesDoLote(opl.opl).then(u => setQtdLote(u.length));
@@ -934,6 +948,11 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
   return (
     <div className="acn-opl-overlay">
+      {abrirLote && (
+        <Suspense fallback={null}>
+          <ModalLote base={baseDoLote(opl.opl)} currentUser={usuario} onClose={() => setAbrirLote(false)} />
+        </Suspense>
+      )}
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
@@ -972,6 +991,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <MenuAcoes rotulo="Mais ações da OP" itens={[
               { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
               { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },
+              { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
               { rotulo: `Resumo do lote (${qtdLote})`, icone: mdiFormatListNumbered, onClick: () => setVerResumoLote(true), oculto: qtdLote <= 1 },
               { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
             ]} />
@@ -1021,10 +1041,11 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               <div className="acn-opl-card-corpo">
                 {editandoVendido ? (
                   <div>
-                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} />
+                    <SeletorEscopo opl={opl.opl} tamanho={qtdLote} valor={escopoVendido} onChange={setEscopoVendido} />
+                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} unidades={qtdLote > 1 ? qtdLote : 1} />
                     <div className="acn-opl-botoes">
-                      <Botao variante="primario" onClick={salvarVendido}>Salvar itens vendidos</Botao>
-                      <Botao onClick={() => setEditandoVendido(null)}>Cancelar</Botao>
+                      <Botao variante="primario" onClick={salvarVendido}>{escopoVendido === 'lote' && qtdLote > 1 ? `Salvar nas ${qtdLote} unidades` : 'Salvar itens vendidos'}</Botao>
+                      <Botao onClick={() => { setEscopoVendido('unidade'); setEditandoVendido(null); }}>Cancelar</Botao>
                     </div>
                   </div>
                 ) : (

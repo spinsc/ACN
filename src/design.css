@@ -1572,7 +1572,7 @@ body.dark .acn-main table.acn-tabela tr.acn-cmp-linha > td { background: color-m
 .acn-cmp-card-valor { margin-right: 6px; }
 .acn-cmp-mover { width: 100%; margin-top: 6px; }
 html body .acn-cmp-recebidos-btn { margin-top: 4px; width: 100%; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(900px, 96vw); max-width: 900px; max-height: 90vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(1080px, 96vw); max-width: 1080px; max-height: 90vh; }
 .acn-cmp-recebidos-cab { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .acn-cmp-recebidos-cab .modal-title { flex: 1; }
 .acn-cmp-recebidos-busca { flex: 1 1 260px; width: auto; }
@@ -1581,14 +1581,14 @@ html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(900px, 96
 .acn-cmp-acoes { min-width: 240px; }
 
 /* ── Compras · 12e20 (07/10/2026): as janelas da tela (centro, departamento, prazos, observação, mesa de cotações, senha, vínculo, resumo) ── */
-html body .modal-box.acn-modal-cadastro.acn-cmp-j380 { width: min(380px, 95vw); max-width: 380px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j420 { width: min(420px, 95vw); max-width: 420px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j460 { width: min(460px, 95vw); max-width: 460px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j480 { width: min(480px, 95vw); max-width: 480px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j500 { width: min(500px, 95vw); max-width: 500px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j560 { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j640 { width: min(640px, 95vw); max-width: 640px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(680px, 95vw); max-width: 680px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j380 { width: min(520px, 95vw); max-width: 520px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j420 { width: min(540px, 95vw); max-width: 540px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j460 { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j480 { width: min(600px, 95vw); max-width: 600px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j500 { width: min(660px, 95vw); max-width: 660px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j560 { width: min(780px, 95vw); max-width: 780px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j640 { width: min(1080px, 95vw); max-width: 1080px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(880px, 95vw); max-width: 880px; max-height: 92vh; }
 .acn-cmp-j380 .form-group, .acn-cmp-j420 .form-group, .acn-cmp-j460 .form-group, .acn-cmp-j480 .form-group, .acn-cmp-j500 .form-group, .acn-cmp-j640 .form-group { margin-bottom: 0; }
 .acn-cmp-j380 .acn-modal-corpo > *, .acn-cmp-j420 .acn-modal-corpo > *, .acn-cmp-j460 .acn-modal-corpo > *, .acn-cmp-j480 .acn-modal-corpo > *, .acn-cmp-j500 .acn-modal-corpo > *,
 .acn-cmp-j560 .acn-modal-corpo > *, .acn-cmp-j640 .acn-modal-corpo > *, .acn-cmp-j680 .acn-modal-corpo > * { flex-shrink: 0; }
@@ -1606,7 +1606,7 @@ html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(680px, 95vw); 
 .acn-cmp-mesa-dica { flex: 1; }
 .acn-cmp-mesa-descartar { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--acn-warn) 45%, transparent); }
 .acn-cmp-mesa-hist { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
-.acn-cmp-mesa-lista { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.acn-cmp-mesa-lista { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
 .acn-cmp-mesa-vazia { padding: 14px; }
 .acn-cmp-cot { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--acn-surface); border: 1.5px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-cmp-cot.venc { border: 2px solid var(--acn-ok); background: var(--acn-ok-soft); }
@@ -2741,6 +2741,9 @@ body.dark .acn-crm-ab-min-txt { color: #e2e8f0; }
 .acn-opit-acoes { display: flex; gap: 6px; margin-left: auto; }
 .acn-opit-fim { margin-left: auto; }
 .acn-opit-aviso { font-size: 12px; color: var(--acn-info); }
+/* alerta "isto parece o total do lote" (16/10/2026): é um aviso, não uma informação — âmbar, como os outros avisos de atenção */
+.acn-opit-aviso[data-aviso="total-do-lote"] { margin: 6px 0; padding: 6px 9px; border: 1px solid #fde68a; border-radius: 6px; color: #92400e; background-color: #fffbeb; line-height: 1.5; }
+html body.dark .acn-opit-aviso[data-aviso="total-do-lote"] { border-color: #854d0e; color: #fcd34d; background-color: #422006; }
 .acn-opit-copiar-abrir { margin-bottom: 8px; border-style: dashed; }
 .acn-opit-origem { display: grid; gap: 7px; margin-top: 2px; }
 .acn-opit-ajuste { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer; color: var(--acn-warn); background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 35%, transparent); border-radius: var(--acn-r1); }
@@ -5598,3 +5601,96 @@ html body.dark .acn-main .acn-dav-st.st-pausada { color: rgb(203, 213, 225); bac
 html body .acn-main .acn-dav-et-extra { font-size: 12px; font-weight: 600; color: #9a5708; }
 html body.dark .acn-main .acn-dav-et-extra { color: rgb(241, 213, 167); }
 html body .acn-main .acn-dav-relogio { font-weight: 600; }
+
+/* ══ Engenharia > Desenvolvimento (D0, 19/10/2026) — classes no lugar do estilo solto ═════════════════ */
+.acn-dev-titulo { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-dev-info { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--acn-text); margin-bottom: 10px; }
+.acn-dev-andamento { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.acn-dev-trilho { flex: 1; height: 8px; background: var(--acn-line); border-radius: 4px; overflow: hidden; }
+.acn-dev-trilho > i { display: block; height: 100%; background: var(--acn-info); transition: width .4s; }
+.acn-dev-trilho > i.ok { background: var(--acn-ok); }
+.acn-dev-passos { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.acn-dev-passo { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; background: var(--acn-neutral-soft); color: var(--acn-neutral); border: 2px solid transparent; }
+.acn-dev-passo.ok { background: var(--acn-ok-soft); color: var(--acn-ok); }
+.acn-dev-passo.andamento { background: var(--acn-info-soft); color: var(--acn-info); }
+.acn-dev-passo.ativa { border-color: var(--acn-ink); }
+.acn-dev-painel { background: var(--acn-neutral-soft); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 12px; margin-top: 8px; }
+.acn-dev-painel-tit { font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--acn-neutral); }
+.acn-dev-painel-tit.andamento { color: var(--acn-info); }
+.acn-dev-painel-corpo { display: flex; flex-direction: column; gap: 8px; }
+.acn-dev-campos { display: flex; gap: 8px; flex-wrap: wrap; }
+.acn-dev-campo-resp { flex: 1; min-width: 180px; }
+.acn-dev-campo-data { width: 160px; }
+.acn-dev-obs-lista { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); padding: 8px; max-height: 160px; overflow-y: auto; }
+.acn-dev-obs { font-size: 13px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-dev-obs:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.acn-dev-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-dev-anexos { display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-anexos-lista { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-dev-anexo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: var(--acn-r1); background: var(--acn-ok-soft); color: var(--acn-ok); text-decoration: none; }
+.acn-dev-anexo.sem-link { background: var(--acn-neutral-soft); color: var(--acn-neutral); }
+.acn-dev-livre { display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-livre textarea, .acn-dev-painel textarea { width: 100%; resize: vertical; }
+.acn-dev-busca { display: inline-flex; align-items: center; gap: 6px; color: var(--acn-muted); margin-left: auto; }
+.acn-dev-busca .acn-input { min-width: 240px; }
+.acn-dev-op-lista { border: 1px solid var(--acn-line); border-radius: var(--acn-r1); margin-top: 4px; max-height: 160px; overflow-y: auto; }
+.acn-dev-op-item { display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-bottom: 1px solid var(--acn-line-soft); background: var(--acn-surface); color: var(--acn-text); font: 13px var(--acn-font); cursor: pointer; }
+.acn-dev-op-item:last-child { border-bottom: 0; }
+.acn-dev-op-item:hover { background: var(--acn-neutral-soft); }
+
+/* ══ Engenharia > Desenvolvimento (D1, 19/10/2026) — entregáveis, portas, tipo e histórico ═════════════ */
+.acn-dev-selos { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-dev-tipo { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin-bottom: 8px; border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-brand-soft); }
+.acn-dev-tipo-tit { font-weight: 600; font-size: 13px; }
+.acn-dev-tipo-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.acn-dev-tipo-linha .acn-input { flex: 1; min-width: 220px; }
+.acn-dev-previa ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.acn-dev-entregaveis { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.acn-dev-ent { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.acn-dev-ent.feito { border-color: var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-dev-ent-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.acn-dev-ent-marca { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.acn-dev-ent-marca input { width: 16px; height: 16px; }
+.acn-dev-nota { font-size: 13px; white-space: pre-wrap; padding: 4px 8px; border-left: 3px solid var(--acn-line); color: var(--acn-text); }
+.acn-dev-nota-edicao { display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-nota-edicao textarea { width: 100%; resize: vertical; }
+.acn-dev-anexo-grupo { display: inline-flex; align-items: center; gap: 2px; }
+.acn-dev-anexo-x { display: inline-flex; border: 0; background: transparent; color: var(--acn-muted); cursor: pointer; padding: 2px; border-radius: var(--acn-r1); }
+.acn-dev-anexo-x:hover { color: var(--acn-bad); background: var(--acn-bad-soft); }
+.acn-dev-porta { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-dev-porta-tit { font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; }
+.acn-dev-aprov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.acn-dev-ressalvas { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.acn-dev-ressalvas ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-ressalvas li { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; padding: 6px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-warn-soft); }
+.acn-dev-historico { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--acn-line); font-size: 13px; }
+.acn-dev-historico summary { cursor: pointer; font-weight: 600; color: var(--acn-muted); }
+.acn-dev-historico ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-passo.porta { border-style: dashed; }
+
+/* ══ Engenharia > Desenvolvimento (D2, 19/10/2026) — formulários da Concepção e da Criação ════════════ */
+.acn-dev-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--acn-neutral-soft); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); }
+.acn-dev-form textarea { width: 100%; resize: vertical; }
+.acn-dev-form-linha { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acn-dev-form-linha > .acn-input:first-child { flex: 1; min-width: 200px; }
+.acn-dev-form-prio { width: 130px; }
+.acn-dev-form-link { width: 200px; }
+.acn-dev-form-nenhum { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.acn-dev-conceito { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); }
+.acn-dev-notas { display: flex; flex-wrap: wrap; gap: 8px; }
+.acn-dev-nota-campo { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.acn-dev-nota-campo .acn-input { width: 100%; }
+.acn-dev-resumo { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.acn-dev-resumo-lista { margin: 0; padding-left: 18px; }
+.acn-dev-resumo-lista li { margin-bottom: 2px; }
+.acn-dev-resumo-bloco { margin-top: 8px; }
+
+/* 19/10/2026: pedido do usuário — modais do Compras maiores e mais claros. A mesa de cotações usa a largura toda:
+   as cotações lançadas ficam lado a lado em duas colunas e o item marcado numa cotação ocupa a linha inteira. */
+.acn-cmp-mesa-lista { grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); display: grid; gap: 10px; }
+.acn-cmp-cot { font-size: 14px; padding: 12px 14px; gap: 8px; }
+.acn-cmp-comp label.acn-cmp-comp-sdesc { flex: 3; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.acn-cmp-comp-servico { padding: 4px 0; border-bottom: 1px dashed var(--acn-line); }
+.acn-cmp-j640 .acn-modal-corpo, .acn-cmp-j680 .acn-modal-corpo { font-size: 14px; }
+.acn-cmp-j640 .acn-quadro { padding: 12px 14px; }
+.acn-cmp-j640 .acn-quadro-titulo { font-size: 14px; margin-bottom: 8px; }

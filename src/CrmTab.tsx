@@ -16,7 +16,9 @@ import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
-import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial } from './OplEdicao';
+import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial, CAMPOS_OPL_COMERCIAL } from './OplEdicao';
+import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote } from './EdicaoDeLote';
+import { LinkLote } from './OpLote';
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -1296,6 +1298,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const mudados: Record<string, any> = Object.fromEntries(
       Object.entries(oplPayload).filter(([k, v]) => norm(k, v) !== norm(k, oplEditando[k])));
     if (!Object.keys(mudados).length) { setOplSalvando(false); setOplEditando(null); return; }
+    // "Esta alteração vale para: o lote inteiro" (16/10/2026): confirma ANTES de gravar qualquer coisa, para cancelar não deixar a OP aberta alterada e as outras não
+    const noLote = oplFormEdit.__escopo === 'lote';
+    const camposLote = noLote ? camposDoLote(mudados) : [];
+    if (noLote && camposLote.length) {
+      const outras = await lerOutrasUnidadesDoLote(oplEditando);
+      const rotulo = (k: string) => CAMPOS_OPL_COMERCIAL.find(c => c.campo === k)?.rotulo?.replace(/^[^\wÀ-ú]+/, '') || k;
+      const ok = !outras.erro && await confirmar(
+        `Aplicar também nas outras ${outras.lista.length} unidades do lote?\n\n${camposLote.map(k => `• ${rotulo(k)}`).join('\n')}\n\n` +
+        `Só estes campos vão para as outras unidades; chassi, placa, veículo, status e NF não mudam, e unidade já faturada ou cancelada não é mexida.`);
+      if (outras.erro) mostrarAviso(`Não consegui ler as outras unidades do lote (${outras.erro}). Nada foi salvo.`, 'erro');
+      if (!ok) { setOplSalvando(false); return; }
+    }
     const { error } = await supabase.from('oples').update({
       ...mudados, data_atualizacao: new Date().toISOString(),
     }).eq('id', oplEditando.id);
@@ -1303,6 +1317,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     logChange({ module: 'comercial', entityType: 'oples', entityId: oplEditando.id, changeType: 'UPDATE',
       oldRow: Object.fromEntries(Object.keys(mudados).map(k => [k, oplEditando[k]])), newRow: mudados, user: currentUser });
+    if (noLote) {
+      if (!camposLote.length) {
+        mostrarAviso('Salvo só nesta unidade: os campos alterados (chassi, placa, veículo, status ou NF) são de cada carro e não vão para o lote.', 'atencao');
+      } else {
+        const r = await aplicarNoLote({ op: oplEditando, mudados, usuario: currentUser, ehGerente: podeEditarOplCompleta(currentUser), origem: 'Edição do Comercial (vale para o lote inteiro)' });
+        const totalOutras = r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length);
+        mostrarAviso(textoDoResultadoLote(r, totalOutras), r.erroLeitura || r.falhas.length ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
+      }
+    }
     setOplEditando(null);
     fetchOplsEmAberto();
   });
@@ -3639,7 +3662,7 @@ function ColunaRolavel({ children }: any) {
                                   })} />
                               </td>
                               <td className="acn-lic-nowrap">
-                                <span className="acn-crm-opl-lote-base"><Icone path={mdiLinkVariant} size={13} />{base}</span>
+                                <LinkLote base={base} currentUser={currentUser} className="acn-crm-opl-lote-base" tag="span" tamanho={13} />
                                 <div>
                                   <Selo familia="marca" ponto={false}>LOTE — {irmaos.length} unidades</Selo>
                                 </div>

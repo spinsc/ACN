@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
+import { LinkLote } from './OpLote';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
@@ -294,7 +295,9 @@ export default function EngenhariaTab({ currentUser }) {
     }]);
     if (erroLogIni) alert(`A análise foi iniciada, mas o histórico de movimentação não foi gravado: ${erroLogIni.message}`);
     if (precisaDesenvolvimento) {
-      await criarDemandaDesenvolvimento({ opl, descricao: descDesenvolvimento.trim(), currentUser });
+      // 19/10/2026 (D0 do plano de Desenvolvimento): a falha ao criar a demanda era ignorada — a análise seguia e o pedido de desenvolvimento nunca aparecia
+      const { error: erroDev } = await criarDemandaDesenvolvimento({ opl, descricao: descDesenvolvimento.trim(), currentUser });
+      if (erroDev) alert(`A análise foi iniciada, mas não foi possível criar a demanda de desenvolvimento: ${erroDev.message}\n\nCrie a demanda em Desenvolvimento > Nova demanda.`);
     }
     setModalIniciar(null); setResponsavelEng(''); setPrecisaDesenvolvimento(false); setDescDesenvolvimento('');
     fetchAll();
@@ -764,7 +767,7 @@ export default function EngenhariaTab({ currentUser }) {
                         <tr className="acn-eng-linha acn-linha-marca">
                           <td>{fmtDia(rep.data_entrada)}</td>
                           <td>
-                            <strong className="acn-alm-lote"><Icone path={mdiLinkVariant} size={14} /> {base}</strong>
+                            <LinkLote base={base} currentUser={currentUser} />
                             <div className="acn-eng-selo-linha acn-selos">
                               <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades
