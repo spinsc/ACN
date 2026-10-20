@@ -38,7 +38,10 @@ import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
-import { Faixa, hojeISO } from './Interface';
+import { Faixa, hojeISO, Botao } from './Interface';
+// pausa e horas úteis (16/10/2026): a conta fica em HorarioDemanda.ts, o relógio e as perguntas da tela em PausaDaDemanda.tsx
+import { abrirTrecho, fecharTrecho, situacaoDoRelogio, fmtTempo, dentroDoExpediente } from './HorarioDemanda';
+import { useAgora, confirmarAbertura, entradaDoRelogio, FaixaDoRelogio, tempoEmTexto, tempoDasEtapas } from './PausaDaDemanda';
 import {
   ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView, CATEGORIA_DO_SETOR,
   itemVazio, itensPreenchidos, vinculosDaDemanda, camposDosVinculos,
@@ -60,15 +63,10 @@ const ENCERRADA = (st: string) => st === 'Concluída' || st === 'Cancelada';
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
-const STATUS_COR: Record<string, string> = {
-  'Pendente':    '#d97706',
-  'Em Andamento':'#2563eb',
-  'Concluída':   '#16a34a',
-  'Cancelada':   '#6b7280',
-};
-const PRIO_COR: Record<string, string> = {
-  'Alta':'#dc2626', 'Média':'#d97706', 'Baixa':'#16a34a',
-};
+// 12e67 (16/10/2026): a cor de cada status, prioridade e atraso saiu do código (era um mapa de cores soltas lido por dezenas de estilos): o estado virou modificador de classe
+// (st-pendente…, prio-alta…, al-vencida/al-urgente) e o CSS (design.css, bloco acn-dav-*) dá a cor.
+const chaveStatus = (st: string) => (({ 'Pendente': 'pendente', 'Em Andamento': 'andamento', 'Concluída': 'concluida', 'Cancelada': 'cancelada' }) as any)[st] || 'outro';
+const chavePrio = (p: string) => (({ 'Alta': 'alta', 'Média': 'media', 'Baixa': 'baixa' }) as any)[p] || 'outro';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -91,11 +89,6 @@ const isoToDate = (v: string) => {
   if (!v) return '';
   const d = new Date(v);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-};
-const fmtH = (h: number) => {
-  if (h < 1) return `${Math.round(h * 60)}min`;
-  if (h < 24) return `${h.toFixed(1)}h`;
-  return `${Math.floor(h / 24)}d ${Math.round(h % 24)}h`;
 };
 const diasParaVencer = (prazo: string): number | null => {
   if (!prazo) return null;
@@ -139,7 +132,7 @@ function etapaVencida(e: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE ETAPA (dentro do ModalDetalhe)
 // ─────────────────────────────────────────────────────────────────────────────
-function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
+function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId, agora }) {
   const [obsExec, setObsExec] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [mostrarReprog, setMostrarReprog] = useState(false);
@@ -155,12 +148,31 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   };
   const al = etapaVencida(etapa);
   const diasV = diasParaVencer(etapa.prazo);
-  const corBorda = al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : STATUS_COR[etapa.status] || '#e2e8f0';
+  const modCor = al ? 'al-' + al : 'st-' + chaveStatus(etapa.status);   // atraso manda; sem atraso vale a cor do status
 
+  const nomeDeQuemMexe = currentUser?.nome || '';
   const iniciar = async () => {
-    if (!await confirmar(`Iniciar Etapa ${idx + 1}?`)) return;
+    const ag = new Date();
+    if (!await confirmarAbertura(`Iniciar Etapa ${idx + 1}?`, `iniciar a etapa ${idx + 1}`, ag)) return;
     setSalvando(true);
-    await onUpdate(idx, { status: 'Em Andamento', data_inicio: new Date().toISOString() });
+    // pausa e horas úteis (16/10/2026): iniciar abre o primeiro trecho de trabalho da etapa; fora do expediente conta como hora extra e fica no histórico
+    await onUpdate(idx, { status: 'Em Andamento', data_inicio: ag.toISOString(), trechos: abrirTrecho({ trechos: [] }, ag, nomeDeQuemMexe) },
+      dentroDoExpediente(ag) ? undefined : { informacao: entradaDoRelogio('inicio', nomeDeQuemMexe, ag, `a etapa ${idx + 1}`) });
+    setSalvando(false);
+  };
+  // pausar e retomar a etapa: a etapa é lida de novo antes de gravar (updateEtapa) e a conta de trechos é a mesma da demanda simples
+  const pausar = async () => {
+    const ag = new Date();
+    setSalvando(true);
+    await onUpdate(idx, (e: any) => ({ trechos: fecharTrecho(e, ag) }), { informacao: entradaDoRelogio('pausa', nomeDeQuemMexe, ag, `a etapa ${idx + 1}`) });
+    setSalvando(false);
+  };
+  const retomar = async () => {
+    const ag = new Date();
+    if (!await confirmarAbertura(`Retomar a Etapa ${idx + 1} agora?`, `retomar a etapa ${idx + 1}`, ag)) return;
+    setSalvando(true);
+    await onUpdate(idx, (e: any) => (situacaoDoRelogio(e, ag) === 'rodando' ? {} : { trechos: abrirTrecho(e, ag, nomeDeQuemMexe), data_inicio: e.data_inicio || ag.toISOString() }),
+      { informacao: entradaDoRelogio('retomada', nomeDeQuemMexe, ag, `a etapa ${idx + 1}`) });
     setSalvando(false);
   };
   const reprogramar = async () => {
@@ -183,7 +195,8 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const concluir = async () => {
     if (!await confirmar(`Concluir Etapa ${idx + 1}?`)) return;
     setSalvando(true);
-    await onUpdate(idx, { status: 'Concluída', data_fim: new Date().toISOString() });
+    const ag = new Date();
+    await onUpdate(idx, (e: any) => ({ status: 'Concluída', data_fim: ag.toISOString(), trechos: fecharTrecho(e, ag) }));
     setSalvando(false);
   };
   const addObs = async () => {
@@ -207,92 +220,93 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
     setSalvando(false);
   };
 
-  const inicio = etapa.data_inicio ? new Date(etapa.data_inicio) : null;
-  const fim = etapa.data_fim ? new Date(etapa.data_fim) : null;
-  const tempoH = inicio ? ((fim || new Date()).getTime() - inicio.getTime()) / 3600000 : null;
+  // pausa e horas úteis (16/10/2026): o tempo da etapa é a soma dos trechos de trabalho em horas úteis; a hora extra vai à parte
+  const sitRelogio = situacaoDoRelogio(etapa, agora);
+  const tempo = tempoEmTexto(etapa, agora);
 
   return (
-    <div style={{ border:`1.5px solid ${corBorda}`, borderRadius:8, marginBottom:10, overflow:'hidden' }}>
+    <div className={'acn-dav-et ' + modCor}>
       {/* Header da etapa */}
-      <div style={{ background: corBorda + '15', borderBottom:`1px solid ${corBorda}30`, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:6 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ background: corBorda, color:'#fff', borderRadius:12, padding:'1px 8px', fontSize:9, fontWeight:800 }}>
+      <div className={'acn-dav-et-cab ' + modCor}>
+        <div className="acn-dav-g-1">
+          <span className={'acn-dav-et-num ' + modCor}>
             ETAPA {idx + 1}/{total}
           </span>
-          <span style={{ background: STATUS_COR[etapa.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>
+          <span className={'acn-dav-st st-' + chaveStatus(etapa.status)}>
             {etapa.status}
           </span>
+          {(sitRelogio === 'pausada' || sitRelogio === 'pausada-auto') && (
+            <span className="acn-dav-st st-pausada" title={sitRelogio === 'pausada-auto' ? 'Pausou sozinha ao fim do expediente: retome para voltar a contar' : 'O tempo não está contando'}>⏸ Pausada</span>
+          )}
           {al && (
-            <span style={{ fontSize:9, fontWeight:700, color: al === 'vencida' ? '#dc2626' : '#d97706' }}>
+            <span className={'acn-dav-al-txt al-' + al}>
               {al === 'vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d`}
             </span>
           )}
         </div>
-        <div style={{ display:'flex', gap:5 }}>
+        <div className="acn-dav-et-1">
           {etapa.status === 'Pendente' && (
-            <button onClick={iniciar} disabled={salvando}
-              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            <Botao className={'acn-dav-b acn-dav-et-2' + (mostrarReprog ? ' reprog-aberto' : '')} onClick={iniciar} disabled={salvando}>
               ▶ Iniciar
-            </button>
+            </Botao>
           )}
           {etapa.status === 'Em Andamento' && (
-            <button onClick={concluir} disabled={salvando}
-              style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            <Botao className={'acn-dav-b acn-dav-et-3' + (mostrarReprog ? ' reprog-aberto' : '')} onClick={concluir} disabled={salvando}>
               ✓ Concluir
-            </button>
+            </Botao>
           )}
+          {etapa.status === 'Em Andamento' && (sitRelogio === 'rodando'
+            ? <Botao className="acn-dav-b acn-dav-et-pausar" onClick={pausar} disabled={salvando}>⏸ Pausar</Botao>
+            : <Botao className="acn-dav-b acn-dav-et-pausar" onClick={retomar} disabled={salvando}>▶ Retomar</Botao>)}
           {etapa.status !== 'Concluída' && (
-            <button onClick={() => setMostrarReprog(v => !v)} disabled={salvando}
-              style={{ background: mostrarReprog ? '#6b7280' : '#f97316', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            <Botao onClick={() => setMostrarReprog(v => !v)} disabled={salvando}
+              className={'acn-dav-b ' + ('acn-dav-et-bt-reprog' + (mostrarReprog ? ' aberto' : ''))}>
               📅 Reprogramar
-            </button>
+            </Botao>
           )}
         </div>
       </div>
 
       {/* Reprogramar prazo da etapa */}
       {mostrarReprog && (
-        <div style={{ padding:'8px 12px', background:'#fff7ed', borderBottom:'1px solid #fed7aa', display:'flex', gap:6, alignItems:'flex-end', flexWrap:'wrap' }}>
+        <div className="acn-dav-et-4">
           <div>
-            <div style={{ fontSize:8, color:'#9a3412', fontWeight:700, textTransform:'uppercase' }}>Novo Prazo *</div>
-            <input type="date" value={reprogData} onChange={e=>setReprogData(e.target.value)}
-              style={{ padding:'4px 6px', border:'1px solid #fed7aa', borderRadius:4, fontSize:10 }} />
+            <div className="acn-dav-et-5">Novo Prazo *</div>
+            <input className="acn-dav-et-6" type="date" value={reprogData} onChange={e=>setReprogData(e.target.value)} />
           </div>
-          <div style={{ flex:1, minWidth:160 }}>
-            <div style={{ fontSize:8, color:'#9a3412', fontWeight:700, textTransform:'uppercase' }}>Motivo da Reprogramação *</div>
-            <input value={reprogMotivo} onChange={e=>setReprogMotivo(e.target.value)} placeholder="Por que o prazo mudou?"
-              style={{ width:'100%', padding:'4px 6px', border:'1px solid #fed7aa', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+          <div className="acn-dav-et-7">
+            <div className="acn-dav-et-5">Motivo da Reprogramação *</div>
+            <input className="acn-dav-et-8" value={reprogMotivo} onChange={e=>setReprogMotivo(e.target.value)} placeholder="Por que o prazo mudou?" />
           </div>
-          <button onClick={reprogramar} disabled={salvando}
-            style={{ background:'#f97316', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+          <Botao className="acn-dav-b acn-dav-et-9" onClick={reprogramar} disabled={salvando}>
             Confirmar
-          </button>
-          <button onClick={() => setMostrarReprog(false)}
-            style={{ background:'#e5e7eb', color:'#374151', border:'none', borderRadius:4, padding:'5px 12px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+          </Botao>
+          <Botao className="acn-dav-b acn-dav-et-10" onClick={() => setMostrarReprog(false)}>
             Cancelar
-          </button>
+          </Botao>
         </div>
       )}
 
       {/* Body da etapa */}
-      <div style={{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:6 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+      <div className="acn-dav-et-11">
+        <div className="acn-dav-et-12">
           <div>
-            <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>Responsável</div>
-            <div style={{ fontSize:11, fontWeight:600 }}>{etapa.responsavel_nome || '—'}</div>
+            <div className="acn-dav-et-13">Responsável</div>
+            <div className="acn-dav-et-14">{etapa.responsavel_nome || '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>Prazo</div>
-            <div style={{ fontSize:11, fontWeight: al ? 700 : 400, color: al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : '#1f2937' }}>
+            <div className="acn-dav-et-13">Prazo</div>
+            <div className={'acn-dav-et-prazo' + (al ? ' al-' + al : '')}>
               {fmtDate(etapa.prazo)}
             </div>
           </div>
           <div>
-            <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>
-              {etapa.data_fim ? 'Tempo Total' : etapa.data_inicio ? 'Em andamento' : 'KPI'}
+            <div className="acn-dav-et-13">
+              {etapa.data_fim ? 'Tempo trabalhado' : etapa.data_inicio ? 'Trabalhado até agora' : 'KPI'}
             </div>
-            <div style={{ fontSize:11, color:'#2563eb', fontWeight:700 }}>
-              {tempoH !== null ? fmtH(tempoH) : '—'}
+            <div className="acn-dav-et-15">
+              {etapa.data_inicio ? tempo.uteis : '—'}
+              {tempo.extras && <span className="acn-dav-et-extra" title="Hora extra: tempo trabalhado fora do expediente (segunda a sexta, 8:00 às 17:48)"> + {tempo.extras} extra</span>}
             </div>
           </div>
         </div>
@@ -301,41 +315,35 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
         {editandoVinculo ? (
           <div>
             <VinculoPicker value={etapaVinculo} onSelect={salvarVinculoEtapa} onClear={() => salvarVinculoEtapa(null)} />
-            <button onClick={() => setEditandoVinculo(false)}
-              style={{ marginTop:4, background:'none', border:'none', color:'#94a3b8', fontSize:9, cursor:'pointer' }}>
+            <Botao className="acn-dav-b acn-dav-et-16" onClick={() => setEditandoVinculo(false)}>
               cancelar
-            </button>
+            </Botao>
           </div>
         ) : etapaVinculo ? (
-          <div onClick={() => abrirVinculo(etapaVinculo)}
-            style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 8px', border:'1px solid #93c5fd',
-              background:'#eff6ff', borderRadius:4, fontSize:10, cursor:'pointer' }}>
-            <span style={{ fontWeight:700, color:'#1d4ed8', flexShrink:0 }}>🔗 {TIPO_LABEL[etapaVinculo.tipo] || etapaVinculo.tipo}</span>
-            <span style={{ color:'#1e293b', flex:1, textDecoration:'underline' }}>{etapaVinculo.descricao}</span>
-            <button onClick={e => { e.stopPropagation(); setEditandoVinculo(true); }}
-              style={{ background:'none', border:'none', color:'#93c5fd', cursor:'pointer', fontSize:9, flexShrink:0 }}>editar</button>
+          <div className="acn-dav-et-17" onClick={() => abrirVinculo(etapaVinculo)}>
+            <span className="acn-dav-et-18">🔗 {TIPO_LABEL[etapaVinculo.tipo] || etapaVinculo.tipo}</span>
+            <span className="acn-dav-et-19">{etapaVinculo.descricao}</span>
+            <Botao className="acn-dav-b acn-dav-et-20" onClick={e => { e.stopPropagation(); setEditandoVinculo(true); }}>editar</Botao>
           </div>
         ) : (
-          <button onClick={() => setEditandoVinculo(true)}
-            style={{ alignSelf:'flex-start', background:'none', border:'1px dashed #cbd5e1', color:'#6b7280',
-              borderRadius:4, padding:'3px 8px', fontSize:9, cursor:'pointer' }}>
+          <Botao className="acn-dav-b acn-dav-et-21" onClick={() => setEditandoVinculo(true)}>
             🔗 Vincular a um processo (opcional)
-          </button>
+          </Botao>
         )}
 
         {etapa.obs_criacao && (
-          <div style={{ fontSize:10, color:'#6b7280', background:'#f8fafc', borderRadius:4, padding:'4px 8px' }}>
+          <div className="acn-dav-et-22">
             {etapa.obs_criacao}
           </div>
         )}
 
         {/* Histórico de reprogramações da etapa */}
         {(etapa.reprogramacoes || []).length > 0 && (
-          <div style={{ borderLeft:'2px solid #f97316', paddingLeft:8 }}>
+          <div className="acn-dav-et-23">
             {[...(etapa.reprogramacoes || [])].reverse().map((r: any, i: number) => (
-              <div key={i} style={{ marginBottom:4 }}>
-                <span style={{ fontSize:8, color:'#9ca3af' }}>{r.usuario} · {fmtDT(r.data)}</span>
-                <div style={{ fontSize:10, color:'#9a3412' }}>
+              <div className="acn-dav-et-24" key={i}>
+                <span className="acn-dav-et-25">{r.usuario} · {fmtDT(r.data)}</span>
+                <div className="acn-dav-et-26">
                   📅 {fmtDate(r.prazo_anterior)} → {fmtDate(r.novo_prazo)} — {r.motivo}
                 </div>
               </div>
@@ -345,11 +353,11 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
 
         {/* Histórico de obs de execução */}
         {(etapa.obs_execucao || []).length > 0 && (
-          <div style={{ borderLeft:'2px solid #2563eb', paddingLeft:8 }}>
+          <div className="acn-dav-et-27">
             {[...(etapa.obs_execucao || [])].reverse().map((o: any, i: number) => (
-              <div key={i} style={{ marginBottom:4 }}>
-                <span style={{ fontSize:8, color:'#9ca3af' }}>{o.usuario} · {fmtDT(o.data)}</span>
-                <div style={{ fontSize:10, color:'#1f2937' }}>{o.texto}</div>
+              <div className="acn-dav-et-24" key={i}>
+                <span className="acn-dav-et-25">{o.usuario} · {fmtDT(o.data)}</span>
+                <div className="acn-dav-et-28">{o.texto}</div>
               </div>
             ))}
           </div>
@@ -357,20 +365,18 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
 
         {/* Adicionar obs de execução */}
         {etapa.status !== 'Concluída' && (
-          <div style={{ display:'flex', gap:6, alignItems:'flex-end' }}>
-            <div style={{ flex:1 }}>
-              <MencaoTextarea
+          <div className="acn-dav-et-29">
+            <div className="acn-dav-g-2">
+              <MencaoTextarea className="acn-dav-et-30"
                 value={obsExec}
                 onChange={setObsExec}
                 rows={2}
                 placeholder="Observação durante execução... use @Nome para mencionar"
-                style={{ fontSize:10 }}
               />
             </div>
-            <button onClick={addObs} disabled={salvando || !obsExec.trim()}
-              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'6px 12px', fontSize:9, fontWeight:700, cursor:'pointer', flexShrink:0, marginBottom:1 }}>
+            <Botao className="acn-dav-b acn-dav-et-31" onClick={addObs} disabled={salvando || !obsExec.trim()}>
               +
-            </button>
+            </Botao>
           </div>
         )}
       </div>
@@ -383,6 +389,7 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [d, setD] = useState(initial);
+  const agora = useAgora();   // o relógio da tela: a pausa das 17:48 aparece sem ninguém recarregar
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [novaInfo, setNovaInfo] = useState('');
@@ -471,7 +478,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const info = [...(d.informacoes || []), { texto: `Pedido de compra ${novo.numero_pedido} gerado — cotações e valor seguem em Compras.`, usuario: currentUser?.nome || '', data: agora }];
     const ligou = await gravarDemanda({
       pedido_compra_id: novo.id, informacoes: info, atualizado_em: agora,
-      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora } : {}),
+      // pausa e horas úteis (16/10/2026): gerar o pedido marca o início, mas só abre o relógio dentro do expediente (a hora extra não nasce sem a pessoa decidir)
+      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora, trechos: dentroDoExpediente(new Date(agora)) ? abrirTrecho({ trechos: [] }, new Date(agora), currentUser?.nome || '') : [] } : {}),
     }, `ligar a demanda ao pedido ${novo.numero_pedido} (o pedido foi criado em Compras, mas a demanda NÃO ficou ligada a ele; não gere outro pedido)`);
     setSalvando(false);
     if (!ligou) return;
@@ -495,7 +503,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       texto: `Reaberta (${d.status} → ${reabrirForm.status}) — Motivo: ${reabrirForm.motivo.trim()}` }];
     const { error } = await supabase.from('demandas_avulsas').update({
       status: reabrirForm.status, data_fim: null,
-      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null } : {}),
+      // pausa e horas úteis (16/10/2026): reaberta como Pendente zera o tempo (como já zerava o início); reaberta em andamento guarda o que foi trabalhado e fica PAUSADA até alguém retomar
+      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null, trechos: null } : { trechos: fecharTrecho(d, new Date(d.data_fim || d.cancelada_em || agora)) }),
       cancelada_em: null, cancelada_por: null, motivo_cancelamento: null,
       informacoes: info, atualizado_em: agora,
     }).eq('id', d.id);
@@ -516,6 +525,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const { error } = await supabase.from('demandas_avulsas').update({
       status: 'Cancelada', cancelada_em: agora, cancelada_por: currentUser?.nome || currentUser?.email || null,
       motivo_cancelamento: motivoCancelar.trim(), informacoes: infoAtual, atualizado_em: agora,
+      ...(d.data_inicio && !temEtapas ? { trechos: fecharTrecho(d, new Date(agora)) } : {}),   // pausa e horas úteis (16/10/2026): cancelar para o relógio
     }).eq('id', d.id);
     setSalvando(false);
     if (error) { alert('Não foi possível cancelar: ' + error.message); return; }
@@ -606,9 +616,35 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   // ── Ações da demanda simples ─────────────────────────────────────────────
   const iniciar = async () => {
-    if (!await confirmar('Marcar início da execução agora?')) return;
-    const agora = new Date().toISOString();
-    if (!await gravarDemanda({ status: 'Em Andamento', data_inicio: agora, atualizado_em: agora }, 'marcar o início da execução')) return;
+    const ag = new Date();
+    if (!await confirmarAbertura('Marcar início da execução agora?', 'iniciar a execução', ag)) return;
+    const agora = ag.toISOString();
+    // pausa e horas úteis (16/10/2026): iniciar abre o primeiro trecho; fora do expediente conta como hora extra e fica no histórico
+    if (!await gravarDemanda({
+      status: 'Em Andamento', data_inicio: agora, atualizado_em: agora, trechos: abrirTrecho({ trechos: [] }, ag, currentUser?.nome || ''),
+      ...(dentroDoExpediente(ag) ? {} : { informacoes: [...(d.informacoes || []), entradaDoRelogio('inicio', currentUser?.nome || '', ag)] }),
+    }, 'marcar o início da execução')) return;
+    await reload(); onRefresh();
+  };
+  // Pausar e retomar a demanda simples (16/10/2026): lê a demanda AGORA antes de gravar (duas pessoas não apagam o registro uma da outra) e só grava se o estado ainda for o que a tela mostrava
+  const mudarRelogio = async (tipo: 'pausa' | 'retomada') => {
+    const ag = new Date();
+    const verbo = tipo === 'pausa' ? 'pausar' : 'retomar';
+    if (tipo === 'retomada' && !await confirmarAbertura('Retomar a execução agora?', 'retomar a execução', ag)) return;
+    setSalvando(true);
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('trechos,data_inicio,data_fim,status,informacoes').eq('id', d.id).maybeSingle();
+    if (erroLer || !fresca) { setSalvando(false); alert(`Não foi possível ${verbo} a execução: ${erroLer?.message || 'a demanda não foi encontrada'}. Nada foi alterado.`); return; }
+    if (fresca.status !== 'Em Andamento') { setSalvando(false); alert(`Não foi possível ${verbo} a execução: a demanda não está mais em andamento. Atualize a tela.`); await reload(); return; }
+    const rodando = situacaoDoRelogio(fresca, ag) === 'rodando';
+    if ((tipo === 'pausa') === rodando) {
+      const gravou = await gravarDemanda({
+        trechos: tipo === 'pausa' ? fecharTrecho(fresca, ag) : abrirTrecho(fresca, ag, currentUser?.nome || ''),
+        ...(tipo === 'retomada' && !fresca.data_inicio ? { data_inicio: ag.toISOString() } : {}),
+        informacoes: [...(fresca.informacoes || []), entradaDoRelogio(tipo, currentUser?.nome || '', ag)], atualizado_em: ag.toISOString(),
+      }, `${verbo} a execução`);
+      if (!gravou) { setSalvando(false); return; }
+    }   // se outra pessoa já tinha pausado (ou retomado), a tela só se atualiza
+    setSalvando(false);
     await reload(); onRefresh();
   };
   const concluir = async () => {
@@ -617,7 +653,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       vaiPintar ? '\n\nComo esta peça tem pintura, o pedido do serviço será aberto para o Compras.' : ''}`)) return;
     const agora = new Date().toISOString();
     // 7.x (16/10/2026): conclusão recusada não abre o pedido de pintura (a peça ainda não estava concluída) nem diz "demanda concluída"
-    if (!await gravarDemanda({ status: 'Concluída', data_fim: agora, atualizado_em: agora }, 'concluir a demanda')) return;
+    // pausa e horas úteis (16/10/2026): concluir fecha o trecho aberto (se estava pausada, o tempo já estava fechado)
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('trechos,data_inicio,data_fim').eq('id', d.id).maybeSingle();
+    if (erroLer || !fresca) { alert(`Não foi possível ler a demanda antes de concluir: ${erroLer?.message || 'demanda não encontrada'}. Nada foi alterado.`); return; }
+    if (!await gravarDemanda({ status: 'Concluída', data_fim: agora, atualizado_em: agora, ...(fresca.data_inicio ? { trechos: fecharTrecho(fresca, new Date(agora)) } : {}) }, 'concluir a demanda')) return;
     if (vaiPintar) {
       const r = await abrirPedidoPintura(d, currentUser);
       if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
@@ -628,8 +667,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   // ── Atualizar etapa individual ───────────────────────────────────────────
   // 7.x (16/10/2026): a demanda é lida de novo ANTES de gravar (duas pessoas agindo em etapas diferentes apagavam o trabalho uma da outra: cada uma regravava a lista inteira a partir do
   // que tinha na tela) e a gravação recusada avisa e devolve false — nada depois dela (pedido de pintura, limpar o formulário) acontece. `patch` pode ser uma função da etapa já lida.
-  const updateEtapa = async (idx: number, patch: any): Promise<boolean> => {
-    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('etapas,status,data_inicio').eq('id', d.id).maybeSingle();
+  const updateEtapa = async (idx: number, patch: any, opcoes?: { informacao?: any }): Promise<boolean> => {
+    const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('etapas,status,data_inicio,informacoes').eq('id', d.id).maybeSingle();
     if (erroLer || !fresca) { alert('Não foi possível ler a demanda antes de gravar a etapa: ' + (erroLer?.message || 'demanda não encontrada') + '. Nada foi alterado.'); return false; }
     const etapas = [...(fresca.etapas || [])];
     if (!etapas[idx]) { alert('Não foi possível gravar: esta etapa não existe mais. Atualize a tela e confira.'); return false; }
@@ -638,6 +677,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const novoStatus = calcStatusEtapas(etapas);
     const agora = new Date().toISOString();
     const upd: any = { etapas, atualizado_em: agora };
+    // pausa e horas úteis (16/10/2026): pausar, retomar e iniciar fora do expediente ficam no histórico geral da demanda, com quem fez e quando
+    if (opcoes?.informacao) upd.informacoes = [...(fresca.informacoes || []), opcoes.informacao];
     if (novoStatus !== fresca.status) {
       upd.status = novoStatus;
       if (novoStatus === 'Em Andamento' && !fresca.data_inicio) upd.data_inicio = agora;
@@ -705,186 +746,195 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   const alerta = alertClass(d.prazo, d.status);
   const diasV = diasParaVencer(d.prazo);
-  const corStatus = STATUS_COR[d.status] || '#6b7280';
 
   // Progresso de etapas
   const etapas: any[] = d.etapas || [];
   const etapasConcluidas = etapas.filter(e => e.status === 'Concluída').length;
   const pct = etapas.length > 0 ? Math.round((etapasConcluidas / etapas.length) * 100) : 0;
 
+  // pausa e horas úteis (16/10/2026): em que pé está o relógio da demanda simples e quanto já se trabalhou (a composta soma o tempo das etapas)
+  const sitRelogio = !temEtapas && d.status === 'Em Andamento' ? situacaoDoRelogio(d, agora) : 'parada';   // demanda cancelada ou concluída não tem relógio
+  const tempoDemanda = temEtapas ? tempoDasEtapas(etapas, agora) : tempoEmTexto(d, agora);
+
+  // Quantas ações a barra mostra (decidido na migração visual, 16/10/2026): com duas ou mais ela é um seletor em pílulas — o visual que o repintor já dava a esses botões soltos —
+  // e as ações "do momento" (iniciar, concluir, designar, reprogramar, gerar pedido) ganham a pílula branca; com uma só, o botão fica sozinho, sem o trilho.
+  const acoesDaBarra = [
+    !temEtapas && (d.status === 'Pendente' || d.status === 'Em Andamento'),
+    !temEtapas && d.status === 'Em Andamento',   // Pausar ou Retomar
+    !temEtapas && d.status !== 'Cancelada',
+    !ENCERRADA(d.status),
+    d.status !== 'Cancelada',
+    camposSetor.valorItens && !d.pedido_compra_id && ehComprador(currentUser, d) && !ENCERRADA(d.status),
+    ehAdmin && ENCERRADA(d.status),
+    podeCancelar(d, currentUser),
+  ].filter(Boolean).length;
+
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'flex-start', justifyContent:'flex-end' }}
+    <div className="acn-dav-det-1"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:'min(620px,96vw)', height:'100vh', background:'#fff', display:'flex', flexDirection:'column', boxShadow:'-4px 0 24px #0003' }}>
+      <div className="acn-dav-det-2">
 
         {/* Header */}
-        <div style={{ background: corStatus, color:'#fff', padding:'12px 16px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexShrink:0 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:9, opacity:.8, fontWeight:600 }}>{d.status.toUpperCase()} · {d.prioridade}</div>
-            <div style={{ fontSize:14, fontWeight:700, lineHeight:1.3 }}>{d.titulo}</div>
+        <div className={'acn-dav-det-cab st-' + chaveStatus(d.status)}>
+          <div className="acn-dav-g-2">
+            <div className="acn-dav-det-3">{d.status.toUpperCase()}{sitRelogio === 'pausada' || sitRelogio === 'pausada-auto' ? ' (PAUSADA)' : ''} · {d.prioridade}</div>
+            <div className="acn-dav-det-4">{d.titulo}</div>
             {temEtapas ? (
-              <div style={{ fontSize:10, opacity:.9, marginTop:2 }}>
+              <div className="acn-dav-det-5">
                 {etapasConcluidas}/{etapas.length} etapas concluídas
               </div>
             ) : (
-              d.responsavel_nome && <div style={{ fontSize:10, opacity:.85 }}>👤 {d.responsavel_nome}</div>
+              d.responsavel_nome && <div className="acn-dav-det-6">👤 {d.responsavel_nome}</div>
             )}
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', flexShrink:0 }}>✕</button>
+          <Botao className="acn-dav-b acn-dav-det-7" onClick={onClose}>✕</Botao>
         </div>
 
         {/* Barra de progresso (etapas múltiplas) */}
         {temEtapas && (
-          <div style={{ height:5, background:'#e2e8f0', flexShrink:0 }}>
-            <div style={{ height:'100%', width:`${pct}%`, background:'#16a34a', transition:'width .4s' }} />
+          <div className="acn-dav-det-8">
+            <div className="acn-dav-det-prog-fill" style={{ width: `${pct}%` }} />
           </div>
         )}
 
         {/* Alertas de prazo */}
         {alerta && (
-          <div style={{ padding:'6px 16px', background: alerta === 'vencida' ? '#fef2f2' : '#fffbeb',
-            borderBottom:`1px solid ${alerta === 'vencida' ? '#fca5a5' : '#fcd34d'}`,
-            color: alerta === 'vencida' ? '#dc2626' : '#d97706', fontWeight:700, fontSize:11, flexShrink:0 }}>
+          <div className={'acn-dav-det-alerta al-' + alerta}>
             {alerta === 'vencida' ? '🔴 TAREFA VENCIDA' : `🟡 Vence em ${diasV} dia${diasV === 1 ? '' : 's'}`} — {fmtDate(d.prazo)}
           </div>
         )}
 
         {/* Barra de ações */}
-        <div style={{ padding:'8px 16px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6, flexWrap:'wrap', flexShrink:0 }}>
+        <div className={'acn-dav-det-9' + (acoesDaBarra >= 2 ? ' acn-pilulas' : '')}>
           {!temEtapas && d.status === 'Pendente' && (
-            <button onClick={iniciar} style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao className="acn-dav-b acn-dav-det-10 ativa" onClick={iniciar}>
               ▶ Iniciar Execução
-            </button>
+            </Botao>
           )}
           {!temEtapas && d.status === 'Em Andamento' && (
-            <button onClick={concluir} style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao className="acn-dav-b acn-dav-det-11 ativa" onClick={concluir}>
               ✓ Concluir
-            </button>
+            </Botao>
           )}
+          {!temEtapas && d.status === 'Em Andamento' && (sitRelogio === 'rodando'
+            ? <Botao className="acn-dav-b acn-dav-bt-pausar" onClick={() => mudarRelogio('pausa')} disabled={salvando}>⏸ Pausar</Botao>
+            : <Botao className="acn-dav-b acn-dav-bt-retomar ativa" onClick={() => mudarRelogio('retomada')} disabled={salvando}>▶ Retomar</Botao>)}
           {!temEtapas && d.status !== 'Cancelada' && (
-            <button onClick={() => setMostrarDesignar(v => !v)}
-              style={{ background: mostrarDesignar ? '#6b7280' : '#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao onClick={() => setMostrarDesignar(v => !v)}
+              className={'acn-dav-b acn-dav-bt-designar' + (mostrarDesignar ? '' : ' ativa')}>
               👤 {d.responsavel_nome ? 'Reatribuir' : 'Designar'}
-            </button>
+            </Botao>
           )}
           {!ENCERRADA(d.status) && (
-            <button onClick={() => { setMostrarReprogramar(v => !v); setMostrarDesignar(false); setEditando(false); }}
-              style={{ background: mostrarReprogramar ? '#6b7280' : '#f97316', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao onClick={() => { setMostrarReprogramar(v => !v); setMostrarDesignar(false); setEditando(false); }}
+              className={'acn-dav-b acn-dav-bt-reprogramar' + (mostrarReprogramar ? '' : ' ativa')}>
               📅 Reprogramar
-            </button>
+            </Botao>
           )}
           {d.status !== 'Cancelada' && (
-            <button onClick={() => { setEditando(v => !v); setMostrarDesignar(false); setMostrarReprogramar(false); }}
-              style={{ background: editando ? '#6b7280' : '#475569', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao onClick={() => { setEditando(v => !v); setMostrarDesignar(false); setMostrarReprogramar(false); }}
+              className={'acn-dav-b acn-dav-bt-editar' + (acoesDaBarra === 1 ? ' solo' : '')}>
               ✏️ Editar
-            </button>
+            </Botao>
           )}
           {camposSetor.valorItens && !d.pedido_compra_id && ehComprador(currentUser, d) && !ENCERRADA(d.status) && (
-            <button onClick={gerarPedidoCompra} disabled={salvando}
-              title="Leva esta demanda para o fluxo de compra: Mesa de Cotações (com desconto), aprovação, OC e valor gasto"
-              style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao className="acn-dav-b acn-dav-det-11 ativa" onClick={gerarPedidoCompra} disabled={salvando}
+              title="Leva esta demanda para o fluxo de compra: Mesa de Cotações (com desconto), aprovação, OC e valor gasto">
               🛒 Gerar pedido de compra
-            </button>
+            </Botao>
           )}
           {ehAdmin && ENCERRADA(d.status) && (
-            <button onClick={() => setMostrarReabrir(v => !v)}
+            <Botao onClick={() => setMostrarReabrir(v => !v)}
               title="Admin: volta a demanda concluída ou cancelada por engano"
-              style={{ background: mostrarReabrir ? '#6b7280' : '#fff', color: mostrarReabrir ? '#fff' : '#1d4ed8', border:'1px solid #93c5fd', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              className={'acn-dav-b acn-dav-bt-reabrir' + (acoesDaBarra === 1 ? ' solo' : '')}>
               ↺ Reabrir
-            </button>
+            </Botao>
           )}
           {podeCancelar(d, currentUser) && (
-            <button onClick={() => { setMostrarCancelar(v => !v); setEditando(false); setMostrarDesignar(false); setMostrarReprogramar(false); }}
-              style={{ marginLeft:'auto', background: mostrarCancelar ? '#6b7280' : '#fff', color: mostrarCancelar ? '#fff' : '#b91c1c', border:'1px solid #fca5a5', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+            <Botao onClick={() => { setMostrarCancelar(v => !v); setEditando(false); setMostrarDesignar(false); setMostrarReprogramar(false); }}
+              className={'acn-dav-b ' + ('acn-dav-bt-cancelar' + (mostrarCancelar ? ' aberto' : ''))}>
               ✖ Cancelar demanda
-            </button>
+            </Botao>
           )}
         </div>
 
         {d.status === 'Cancelada' && (
-          <div style={{ padding:'6px 16px', background:'#f1f5f9', borderBottom:'1px solid #cbd5e1', color:'#475569', fontSize:11, flexShrink:0 }}>
+          <div className="acn-dav-det-12">
             <strong>Cancelada</strong> por {d.cancelada_por || '—'} em {fmtDT(d.cancelada_em)}{d.motivo_cancelamento ? ` — ${d.motivo_cancelamento}` : ''}
           </div>
         )}
 
-        <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="acn-dav-det-13">
 
           {/* ── Demanda composta e envolvidos (08/10/2026) ── */}
           {erroLeitura && (
             <Faixa tom="erro">Não foi possível atualizar esta demanda ({erroLeitura}). O que aparece pode estar desatualizado: feche e abra de novo.</Faixa>
           )}
+          {!temEtapas && d.status === 'Em Andamento' && <FaixaDoRelogio item={d} agora={agora} />}
           <GrupoDaDemanda demanda={d} />
           <MembrosDaDemanda demanda={d} currentUser={currentUser} podeEditar={!ENCERRADA(d.status) && podeMexerNaDemanda}
             onSaved={() => { reload(); onRefresh(); }} />
 
           {/* ── Centro de custo (setor Compras) ── */}
           {camposSetor.centroCusto && (
-            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'6px 10px',
-              border:'1px solid #e2e8f0', background:'#f8fafc', borderRadius:6, fontSize:11 }}>
-              <span style={{ fontWeight:700, color:'#475569' }}>🏷️ Centro de custo</span>
+            <div className="acn-dav-det-14">
+              <span className="acn-dav-det-15">🏷️ Centro de custo</span>
               {editando || (!d.centro_custo && ehComprador(currentUser, d) && !ENCERRADA(d.status))
                 ? <CentroCustoSelect value={d.centro_custo_id} onChange={gravarCentroCusto} style={{ flex:1, minWidth:180, fontSize:11 }} />
-                : <span style={{ color: d.centro_custo ? '#1e293b' : '#94a3b8' }}>{d.centro_custo || 'não informado'}</span>}
+                : <span className={'acn-dav-cc-txt' + (d.centro_custo ? '' : ' vazio')}>{d.centro_custo || 'não informado'}</span>}
               {!d.centro_custo && !editando && !ehComprador(currentUser, d) && (
-                <span style={{ fontSize:9, color:'#94a3b8' }}>o comprador pode completar</span>
+                <span className="acn-dav-det-16">o comprador pode completar</span>
               )}
             </div>
           )}
 
           {/* ── Reabrir (Admin) ── */}
           {mostrarReabrir && (
-            <div style={{ background:'#eff6ff', border:'1px solid #93c5fd', borderRadius:6, padding:12 }}>
-              <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>↺ REABRIR DEMANDA ({d.status})</div>
-              <div style={{ display:'flex', gap:8, marginBottom:8, flexWrap:'wrap' }}>
-                <select value={reabrirForm.status} onChange={e => setReabrirForm(f => ({ ...f, status: e.target.value }))} aria-label="Voltar para"
-                  style={{ padding:'5px 8px', border:'1px solid #93c5fd', borderRadius:4, fontSize:11 }}>
+            <div className="acn-dav-det-17">
+              <div className="acn-dav-g-3">↺ REABRIR DEMANDA ({d.status})</div>
+              <div className="acn-dav-det-18">
+                <select className="acn-dav-det-19" value={reabrirForm.status} onChange={e => setReabrirForm(f => ({ ...f, status: e.target.value }))} aria-label="Voltar para">
                   <option value="Pendente">Voltar para Pendente</option>
                   <option value="Em Andamento">Voltar para Em Andamento</option>
                 </select>
-                <input value={reabrirForm.motivo} onChange={e => setReabrirForm(f => ({ ...f, motivo: e.target.value }))} aria-label="Motivo da reabertura"
-                  placeholder="Motivo (ex.: concluída sem querer)" style={{ flex:1, minWidth:180, padding:'5px 8px', border:'1px solid #93c5fd', borderRadius:4, fontSize:11 }} />
+                <input className="acn-dav-det-20" value={reabrirForm.motivo} onChange={e => setReabrirForm(f => ({ ...f, motivo: e.target.value }))} aria-label="Motivo da reabertura"
+                  placeholder="Motivo (ex.: concluída sem querer)" />
               </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={reabrirDemanda} disabled={salvando}
-                  style={{ background:'#1d4ed8', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+              <div className="acn-dav-det-21">
+                <Botao className="acn-dav-b acn-dav-det-22" onClick={reabrirDemanda} disabled={salvando}>
                   {salvando ? '...' : 'Confirmar reabertura'}
-                </button>
-                <button onClick={() => setMostrarReabrir(false)}
-                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>Voltar</button>
+                </Botao>
+                <Botao className="acn-dav-b acn-dav-det-23" onClick={() => setMostrarReabrir(false)}>Voltar</Botao>
               </div>
             </div>
           )}
 
           {/* ── Pedido de compra gerado desta demanda ── */}
           {pedidoCompra && (
-            <div onClick={() => abrirVinculo({ tipo: 'compra', id: pedidoCompra.id, descricao: pedidoCompra.numero_pedido })} role="link" tabIndex={0}
-              style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'6px 10px', border:'1px solid #86efac', background:'#f0fdf4', borderRadius:6, fontSize:11, cursor:'pointer' }}>
-              <strong style={{ color:'#15803d' }}>🛒 {pedidoCompra.numero_pedido}</strong>
-              {pedidoCompra.numero_oc && <span style={{ color:'#7c3aed', fontWeight:700 }}>{pedidoCompra.numero_oc}</span>}
-              <span className="acn-badge" style={{ background:'#475569' }}>{pedidoCompra.status_compra}</span>
+            <div className="acn-dav-det-24" onClick={() => abrirVinculo({ tipo: 'compra', id: pedidoCompra.id, descricao: pedidoCompra.numero_pedido })} role="link" tabIndex={0}>
+              <strong className="acn-dav-det-25">🛒 {pedidoCompra.numero_pedido}</strong>
+              {pedidoCompra.numero_oc && <span className="acn-dav-det-26">{pedidoCompra.numero_oc}</span>}
+              <span className="acn-badge acn-dav-det-27">{pedidoCompra.status_compra}</span>
               {pedidoCompra.fornecedor && <span>{pedidoCompra.fornecedor}</span>}
               {pedidoCompra.valor_compra != null && <strong>{Number(pedidoCompra.valor_compra).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</strong>}
-              <span style={{ marginLeft:'auto', color:'#16a34a', fontSize:9 }}>abrir em Compras →</span>
+              <span className="acn-dav-det-28">abrir em Compras →</span>
             </div>
           )}
 
           {/* ── Cancelar demanda ── */}
           {mostrarCancelar && (
-            <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:12 }}>
-              <div style={{ fontWeight:700, fontSize:10, color:'#b91c1c', marginBottom:8 }}>✖ CANCELAR DEMANDA</div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>MOTIVO *</label>
-              <input value={motivoCancelar} onChange={e=>setMotivoCancelar(e.target.value)} autoFocus aria-label="Motivo do cancelamento"
-                placeholder="Ex.: não é mais necessária, aberta em duplicidade..."
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #fca5a5', borderRadius:4, fontSize:11, boxSizing:'border-box', marginBottom:8 }} />
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={cancelarDemanda} disabled={salvando}
-                  style={{ background:'#b91c1c', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+            <div className="acn-dav-det-29">
+              <div className="acn-dav-det-30">✖ CANCELAR DEMANDA</div>
+              <label className="acn-dav-det-31">MOTIVO *</label>
+              <input className="acn-dav-det-32" value={motivoCancelar} onChange={e=>setMotivoCancelar(e.target.value)} autoFocus aria-label="Motivo do cancelamento"
+                placeholder="Ex.: não é mais necessária, aberta em duplicidade..." />
+              <div className="acn-dav-det-21">
+                <Botao className="acn-dav-b acn-dav-det-33" onClick={cancelarDemanda} disabled={salvando}>
                   {salvando ? '...' : 'Confirmar cancelamento'}
-                </button>
-                <button onClick={() => setMostrarCancelar(false)}
-                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
+                </Botao>
+                <Botao className="acn-dav-b acn-dav-det-23" onClick={() => setMostrarCancelar(false)}>
                   Voltar
-                </button>
+                </Botao>
               </div>
             </div>
           )}
@@ -916,122 +966,108 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
           {/* ── Designar responsável (demanda simples) ── */}
           {mostrarDesignar && !temEtapas && (
-            <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:12 }}>
-              <div style={{ fontWeight:700, fontSize:10, color:'#5b21b6', marginBottom:8 }}>👤 DESIGNAR RESPONSÁVEL</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+            <div className="acn-dav-det-34">
+              <div className="acn-dav-det-35">👤 DESIGNAR RESPONSÁVEL</div>
+              <div className="acn-dav-det-36">
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>NOME *</label>
-                  <ColaboradorSelect value={designarForm.responsavel_nome}
+                  <label className="acn-dav-det-31">NOME *</label>
+                  <ColaboradorSelect className="acn-dav-det-37" value={designarForm.responsavel_nome}
                     onChange={v=>setDesignarForm(f=>({...f,responsavel_nome:v}))}
                     incluirUsuariosDaAba={abaDoSetor(initial.setor)}
                     departamentos={departamentosDoSetor(initial.setor)}
-                    placeholder="Selecione" style={{ width:'100%', padding:'5px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                    placeholder="Selecione" />
                 </div>
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>E-MAIL</label>
-                  <input type="email" value={designarForm.responsavel_email} onChange={e=>setDesignarForm(f=>({...f,responsavel_email:e.target.value}))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  <label className="acn-dav-det-31">E-MAIL</label>
+                  <input className="acn-dav-det-37" type="email" value={designarForm.responsavel_email} onChange={e=>setDesignarForm(f=>({...f,responsavel_email:e.target.value}))} />
                 </div>
               </div>
-              <div style={{ marginBottom:8 }}>
-                <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>PRAZO *</label>
-                <input type="date" value={designarForm.prazo} onChange={e=>setDesignarForm(f=>({...f,prazo:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+              <div className="acn-dav-g-4">
+                <label className="acn-dav-det-31">PRAZO *</label>
+                <input className="acn-dav-det-37" type="date" value={designarForm.prazo} onChange={e=>setDesignarForm(f=>({...f,prazo:e.target.value}))} />
               </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={salvarDesignar} disabled={salvando}
-                  style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+              <div className="acn-dav-det-21">
+                <Botao className="acn-dav-b acn-dav-det-38" onClick={salvarDesignar} disabled={salvando}>
                   {salvando ? '...' : '✓ Salvar'}
-                </button>
-                <button onClick={() => setMostrarDesignar(false)}
-                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
+                </Botao>
+                <Botao className="acn-dav-b acn-dav-det-23" onClick={() => setMostrarDesignar(false)}>
                   Cancelar
-                </button>
+                </Botao>
               </div>
             </div>
           )}
 
           {/* ── Reprogramar prazo ── */}
           {mostrarReprogramar && (
-            <div style={{ background:'#fff7ed', border:'1px solid #fdba74', borderRadius:6, padding:12 }}>
-              <div style={{ fontWeight:700, fontSize:10, color:'#c2410c', marginBottom:8 }}>📅 REPROGRAMAR PRAZO</div>
-              <div style={{ fontSize:10, color:'#64748b', marginBottom:8 }}>
-                Prazo atual: <strong style={{ color: alerta==='vencida'?'#dc2626':'#1e293b' }}>{fmtDate(d.prazo)}</strong>
+            <div className="acn-dav-det-39">
+              <div className="acn-dav-det-40">📅 REPROGRAMAR PRAZO</div>
+              <div className="acn-dav-det-41">
+                Prazo atual: <strong className={'acn-dav-prazo' + (alerta === 'vencida' ? ' al-vencida' : '')}>{fmtDate(d.prazo)}</strong>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+              <div className="acn-dav-det-36">
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>NOVA DATA *</label>
-                  <input type="date" value={reprogramarForm.nova_data} onChange={e=>setReprogramarForm(f=>({...f,nova_data:e.target.value}))}
-                    min={hojeISO()}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #fdba74', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  <label className="acn-dav-det-31">NOVA DATA *</label>
+                  <input className="acn-dav-det-42" type="date" value={reprogramarForm.nova_data} onChange={e=>setReprogramarForm(f=>({...f,nova_data:e.target.value}))}
+                    min={hojeISO()} />
                 </div>
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>MOTIVO</label>
-                  <input value={reprogramarForm.motivo} onChange={e=>setReprogramarForm(f=>({...f,motivo:e.target.value}))}
-                    placeholder="Ex: cliente solicitou, aguardando peça..."
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #fdba74', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  <label className="acn-dav-det-31">MOTIVO</label>
+                  <input className="acn-dav-det-42" value={reprogramarForm.motivo} onChange={e=>setReprogramarForm(f=>({...f,motivo:e.target.value}))}
+                    placeholder="Ex: cliente solicitou, aguardando peça..." />
                 </div>
               </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={salvarReprogramar} disabled={salvando}
-                  style={{ background:'#f97316', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+              <div className="acn-dav-det-21">
+                <Botao className="acn-dav-b acn-dav-det-43" onClick={salvarReprogramar} disabled={salvando}>
                   {salvando ? '...' : '✓ Confirmar'}
-                </button>
-                <button onClick={() => setMostrarReprogramar(false)}
-                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
+                </Botao>
+                <Botao className="acn-dav-b acn-dav-det-23" onClick={() => setMostrarReprogramar(false)}>
                   Cancelar
-                </button>
+                </Botao>
               </div>
             </div>
           )}
 
           {/* ── Editar dados básicos ── */}
           {editando && (
-            <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
-              <div style={{ fontWeight:700, fontSize:10, color:'#374151', marginBottom:8 }}>✏️ EDITAR</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            <div className="acn-dav-det-44">
+              <div className="acn-dav-det-45">✏️ EDITAR</div>
+              <div className="acn-dav-g-5">
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>TÍTULO</label>
-                  <input value={editForm.titulo} onChange={e=>setEditForm(f=>({...f,titulo:e.target.value}))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  <label className="acn-dav-det-31">TÍTULO</label>
+                  <input className="acn-dav-det-46" value={editForm.titulo} onChange={e=>setEditForm(f=>({...f,titulo:e.target.value}))} />
                 </div>
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>DESCRIÇÃO</label>
-                  <MencaoTextarea value={editForm.descricao} onChange={v=>setEditForm(f=>({...f,descricao:v}))} rows={2} style={{fontSize:11}} />
+                  <label className="acn-dav-det-31">DESCRIÇÃO</label>
+                  <MencaoTextarea className="acn-dav-g-6" value={editForm.descricao} onChange={v=>setEditForm(f=>({...f,descricao:v}))} rows={2} />
                 </div>
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>PRIORIDADE</label>
-                  <div style={{ display:'flex', gap:6 }}>
+                  <label className="acn-dav-det-31">PRIORIDADE</label>
+                  <div className="acn-dav-g-7">
                     {['Alta','Média','Baixa'].map(p => (
-                      <button key={p} onClick={() => setEditForm(f=>({...f,prioridade:p}))}
-                        style={{ flex:1, padding:'4px', border:`1.5px solid ${editForm.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
-                          background: editForm.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
-                          color: editForm.prioridade===p ? PRIO_COR[p] : '#374151',
-                          borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                      <Botao key={p} onClick={() => setEditForm(f=>({...f,prioridade:p}))}
+                        className={'acn-dav-b ' + ('acn-dav-prio-ed prio-' + chavePrio(p) + (editForm.prioridade === p ? ' sel' : ''))}>
                         {p}
-                      </button>
+                      </Botao>
                     ))}
                   </div>
                 </div>
                 <ItensDemandaEditor itens={itensEdit} onChange={setItensEdit} comValor={!!camposSetor.valorItens}
                   categoriaPreferida={CATEGORIA_DO_SETOR[d.setor] || ''} />
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULOS (OPCIONAL)</label>
+                  <label className="acn-dav-det-31">VÍNCULOS (OPCIONAL)</label>
                   <VinculosEditor vinculos={vinculos} onChange={setVinculos} tipos={TIPOS_PADRAO} />
                 </div>
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>
-                  <MencaoTextarea value={editForm.observacoes} onChange={v=>setEditForm(f=>({...f,observacoes:v}))} rows={3} style={{fontSize:11}} />
+                  <label className="acn-dav-det-31">OBSERVAÇÕES</label>
+                  <MencaoTextarea className="acn-dav-g-6" value={editForm.observacoes} onChange={v=>setEditForm(f=>({...f,observacoes:v}))} rows={3} />
                 </div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={salvarEdicao} disabled={salvando}
-                    style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                <div className="acn-dav-det-21">
+                  <Botao className="acn-dav-b acn-dav-det-47" onClick={salvarEdicao} disabled={salvando}>
                     {salvando ? '...' : '✓ Salvar'}
-                  </button>
-                  <button onClick={() => setEditando(false)}
-                    style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
+                  </Botao>
+                  <Botao className="acn-dav-b acn-dav-det-23" onClick={() => setEditando(false)}>
                     Cancelar
-                  </button>
+                  </Botao>
                 </div>
               </div>
             </div>
@@ -1039,56 +1075,53 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
           {/* ── Info principal (demanda simples) ── */}
           {!editando && !temEtapas && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            <div className="acn-dav-det-48">
               <InfoBlock label="Prazo" value={fmtDate(d.prazo)} alert={alerta} />
-              <InfoBlock label="Prioridade" value={d.prioridade} color={PRIO_COR[d.prioridade]} />
+              <InfoBlock label="Prioridade" value={d.prioridade} tom={'prio-' + chavePrio(d.prioridade)} />
               <InfoBlock label="Início Execução" value={fmtDT(d.data_inicio)} />
               <InfoBlock label="Conclusão" value={fmtDT(d.data_fim)} />
               {d.data_inicio && (
-                <InfoBlock label={d.data_fim ? 'Tempo Total' : 'Tempo em Andamento'}
-                  value={fmtH(((d.data_fim ? new Date(d.data_fim) : new Date()).getTime() - new Date(d.data_inicio).getTime()) / 3600000)}
-                  color="#2563eb" />
+                <InfoBlock label={d.data_fim ? 'Tempo trabalhado (horas úteis)' : 'Trabalhado até agora (horas úteis)'} value={tempoDemanda.uteis} tom="info" />
+              )}
+              {d.data_inicio && tempoDemanda.extras && (
+                <InfoBlock label="Hora extra" value={tempoDemanda.extras} tom="info" />
               )}
               <InfoBlock label="Criado por" value={`${d.criado_por_nome} · ${fmtDT(d.criado_em)}`} />
-              {d.descricao && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Descrição" value={<Linkify text={d.descricao} />} /></div>}
-              {d.observacoes && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Observações" value={<Linkify text={d.observacoes} />} /></div>}
+              {d.descricao && <div className="acn-dav-det-49"><InfoBlock label="Descrição" value={<Linkify text={d.descricao} />} /></div>}
+              {d.observacoes && <div className="acn-dav-det-49"><InfoBlock label="Observações" value={<Linkify text={d.observacoes} />} /></div>}
             </div>
           )}
 
           {/* ── ETAPAS MÚLTIPLAS ── */}
           {temEtapas && !editando && (
             <div>
-              <div style={{ fontWeight:700, fontSize:10, color:'#374151', textTransform:'uppercase', marginBottom:10,
-                display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas)</span>
-                <span style={{ fontSize:11, fontWeight:700, color: pct === 100 ? '#16a34a' : '#2563eb' }}>{pct}%</span>
+              <div className="acn-dav-det-50">
+                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas){tempoDemanda.totalMs > 0 ? ` · ${tempoDemanda.uteis} trabalhadas${tempoDemanda.extras ? ` + ${tempoDemanda.extras} de hora extra` : ''}` : ''}</span>
+                <span className={'acn-dav-pct' + (pct === 100 ? ' ok' : '')}>{pct}%</span>
               </div>
               {etapas.map((e, i) => (
-                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} demandaId={d.id} />
+                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} demandaId={d.id} agora={agora} />
               ))}
             </div>
           )}
 
           {/* ── Nova Informação ── */}
-          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:12 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>📝 NOVA INFORMAÇÃO GERAL</div>
-            <MencaoTextarea
+          <div className="acn-dav-det-51">
+            <div className="acn-dav-g-3">📝 NOVA INFORMAÇÃO GERAL</div>
+            <MencaoTextarea className="acn-dav-det-52"
               value={novaInfo}
               onChange={setNovaInfo}
               rows={3}
               placeholder="Atualização geral, ocorrência, decisão... use @Nome para mencionar"
-              style={{ fontSize:11, borderColor:'#bfdbfe', marginBottom:6 }}
             />
-            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-              <button onClick={adicionarInfo} disabled={salvando || !novaInfo.trim()}
-                style={{ background:'#1d4ed8', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+            <div className="acn-dav-g-1">
+              <Botao className="acn-dav-b acn-dav-det-22" onClick={adicionarInfo} disabled={salvando || !novaInfo.trim()}>
                 {salvando ? '...' : '+ Adicionar'}
-              </button>
-              <label style={{ fontSize:10, color:'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+              </Botao>
+              <label className="acn-dav-det-53">
                 📎 Anexar arquivo
-                <input type="file" multiple ref={fileRef}
-                  onChange={e => { if (e.target.files?.length) uploadFiles(e.target.files); }}
-                  style={{ display:'none' }} />
+                <input className="acn-dav-det-54" type="file" multiple ref={fileRef}
+                  onChange={e => { if (e.target.files?.length) uploadFiles(e.target.files); }} />
               </label>
             </div>
           </div>
@@ -1096,19 +1129,18 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {/* ── Informações anteriores ── */}
           {(d.informacoes || []).length > 0 && (
             <div>
-              <div style={{ fontWeight:700, fontSize:9, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>
+              <div className="acn-dav-det-55">
                 Histórico ({d.informacoes.length})
               </div>
               {[...(d.informacoes || [])].reverse().map((info: any, i: number) => {
                 const isReprog = info.tipo === 'reprogramacao';
                 return (
-                  <div key={i} style={{ borderLeft:`3px solid ${isReprog?'#f97316':'#2563eb'}`, paddingLeft:10, marginBottom:8,
-                    background: isReprog?'#fff7ed':'transparent', borderRadius: isReprog?'0 4px 4px 0':'0', padding: isReprog?'6px 10px':'0 10px' }}>
-                    <div style={{ fontSize:9, color:'#9ca3af' }}>
-                      {isReprog && <span style={{ fontWeight:700, color:'#f97316', marginRight:4 }}>📅 REPROGRAMAÇÃO</span>}
+                  <div key={i} className={'acn-dav-hist' + (isReprog ? ' reprog' : '')}>
+                    <div className="acn-dav-det-56">
+                      {isReprog && <span className="acn-dav-det-57">📅 REPROGRAMAÇÃO</span>}
                       {info.usuario} · {fmtDT(info.data)}
                     </div>
-                    <div style={{ fontSize:11, color: isReprog?'#9a3412':'#1f2937', marginTop:2, fontWeight: isReprog?600:400 }}>{info.texto}</div>
+                    <div className={'acn-dav-hist-txt' + (isReprog ? ' reprog' : '')}>{info.texto}</div>
                   </div>
                 );
               })}
@@ -1118,20 +1150,18 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {/* ── Anexos ── */}
           {anexos.length > 0 && (
             <div>
-              <div style={{ fontWeight:700, fontSize:9, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>
+              <div className="acn-dav-det-55">
                 Arquivos ({anexos.length})
               </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+              <div className="acn-dav-det-58">
                 {anexos.map(a => (
-                  <div key={a.id} style={{ display:'flex', alignItems:'center', flexWrap:'wrap', gap:8, padding:'5px 8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:4 }}>
-                    <span style={{ fontSize:14 }}>{a.tipo === 'foto' ? '🖼️' : '📄'}</span>
-                    <a href={a.url} target="_blank" rel="noreferrer"
-                      style={{ flex:1, fontSize:11, color:'#2563eb', fontWeight:600, wordBreak:'break-all' }}>
+                  <div className="acn-dav-det-59" key={a.id}>
+                    <span className="acn-dav-det-60">{a.tipo === 'foto' ? '🖼️' : '📄'}</span>
+                    <a className="acn-dav-det-61" href={a.url} target="_blank" rel="noreferrer">
                       {a.nome}
                     </a>
-                    <span style={{ fontSize:9, color:'#9ca3af', flexShrink:0 }}>{a.criado_por}</span>
-                    <button onClick={() => excluirAnexo(a.id)}
-                      style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12 }}>✕</button>
+                    <span className="acn-dav-g-8">{a.criado_por}</span>
+                    <Botao className="acn-dav-b acn-dav-det-62" onClick={() => excluirAnexo(a.id)}>✕</Botao>
                     <DescricaoDoAnexo anexo={a} pode={podeMexerNaDemanda || a.criado_por === currentUser?.nome} onSaved={reload} />
                   </div>
                 ))}
@@ -1144,12 +1174,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   );
 }
 
-function InfoBlock({ label, value, alert = null, color = null }) {
+function InfoBlock({ label, value, alert = null, tom = null }) {   // `tom` no lugar da cor escrita: "prio-alta", "info"…
   return (
-    <div style={{ borderBottom:'1px solid #f1f5f9', paddingBottom:5 }}>
-      <div style={{ fontSize:8, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.4px' }}>{label}</div>
-      <div style={{ fontSize:11, fontWeight: (alert || color) ? 700 : 400,
-        color: alert === 'vencida' ? '#dc2626' : alert === 'urgente' ? '#d97706' : color || '#1f2937' }}>
+    <div className="acn-dav-inf-1">
+      <div className="acn-dav-inf-2">{label}</div>
+      <div className={'acn-dav-inf-val' + (alert ? ' al-' + alert : tom ? ' ' + tom : '')}>
         {value}{alert === 'vencida' ? ' 🔴' : alert === 'urgente' ? ' 🟡' : ''}
       </div>
     </div>
@@ -1373,38 +1402,35 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}
+    <div className="acn-dav-nova-1"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(560px,97vw)', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between', flexShrink:0 }}>
+      <div className="acn-dav-nova-2">
+        <div className="acn-dav-nova-3">
           <span>{setorAlvo === 'Compras' ? '+ Nova solicitação de compra' : '+ Nova Demanda Avulsa'}</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
+          <Botao className="acn-dav-b acn-dav-nova-4" onClick={onClose}>✕</Botao>
         </div>
 
-        <div style={{ overflowY:'auto', flex:1, padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="acn-dav-nova-5">
           {/* Setor de destino — só aparece quando o painel permite despachar
               pra outros setores (substitui o antigo "Enviar Demanda para Setor") */}
           {setoresDestino && setoresDestino.length > 1 && (
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
-                Setor(es) de destino * <span style={{ fontWeight:400, textTransform:'none' }}>— escolha um ou vários</span>
+              <label className="acn-dav-nova-6">
+                Setor(es) de destino * <span className="acn-dav-nova-7">— escolha um ou vários</span>
               </label>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              <div className="acn-dav-nova-8">
                 {setoresDestino.map(s => (
-                  <button key={s} onClick={() => alternarSetor(s)} aria-pressed={setoresAlvo.includes(s)}
-                    style={{ padding:'6px 12px', border:`1.5px solid ${setoresAlvo.includes(s)?'#2563eb':'#d1d5db'}`,
-                      background: setoresAlvo.includes(s) ? '#dbeafe' : '#fff',
-                      color: setoresAlvo.includes(s) ? '#1d4ed8' : '#374151',
-                      borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                  <Botao key={s} onClick={() => alternarSetor(s)} aria-pressed={setoresAlvo.includes(s)}
+                    className={'acn-dav-b ' + ('acn-dav-setor' + (setoresAlvo.includes(s) ? ' sel' : ''))}>
                     {s}
-                  </button>
+                  </Botao>
                 ))}
               </div>
             </div>
           )}
 
           {composta && (
-            <div style={{ border:'1px solid #c7d2fe', background:'#eef2ff', borderRadius:6, padding:'7px 10px', fontSize:11, color:'#3730a3' }}>
+            <div className="acn-dav-nova-9">
               🧩 <strong>Demanda composta para {setoresAlvo.length} setores ({setoresAlvo.join(', ')}).</strong> Cada setor recebe a SUA parte, com responsável e andamento próprios; quem criou acompanha todas as partes e a demanda só fecha quando todas concluem.
               {' '}O responsável de cada parte é definido por cada setor.
             </div>
@@ -1417,45 +1443,42 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           {/* Campo do setor de destino — Compras: centro de custo */}
           {campos.centroCusto && (
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+              <label className="acn-dav-nova-6">
                 Centro de Custo
               </label>
               <CentroCustoSelect value={centroCustoId} onChange={setCentroCustoId} style={{ width:'100%', fontSize:11 }} />
-              <div style={{ fontSize:9, color:'#9ca3af', marginTop:3 }}>
+              <div className="acn-dav-nova-10">
                 Onde a compra desta demanda será apontada. Dá para deixar em branco e informar depois.
               </div>
             </div>
           )}
 
           {/* Dados principais */}
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div className="acn-dav-g-5">
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Título *</label>
+              <label className="acn-dav-nova-11">Título *</label>
               <input value={form.titulo} onChange={e=>set('titulo',e.target.value)} autoFocus
                 placeholder="Ex: Revisar BOM do projeto X"
-                style={{ width:'100%', padding:'6px 8px', border: form.titulo ? '1px solid #d1d5db' : '1px solid #fca5a5', borderRadius:4, fontSize:12, boxSizing:'border-box' }} />
+                className={'acn-dav-nova-tit' + (form.titulo ? '' : ' falta')} />
             </div>
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+              <label className="acn-dav-nova-11">
                 {setorAlvo === 'Compras' ? 'Descrição — motivo da compra' : 'Descrição'}
               </label>
-              <MencaoTextarea value={form.descricao} onChange={v=>set('descricao',v)} rows={2} style={{fontSize:11}} />
+              <MencaoTextarea className="acn-dav-g-6" value={form.descricao} onChange={v=>set('descricao',v)} rows={2} />
             </div>
             {campos.pintura && <PinturaCampos valor={pintura} onChange={v => setPintura(p => ({ ...p, ...v }))} />}
             <ItensDemandaEditor itens={itens} onChange={setItens} categoriaPreferida={CATEGORIA_DO_SETOR[setorAlvo] || ''}
               comValor={!!campos.valorItens} dica={campos.valorItens ? 'Valor é opcional: se não souber, o comprador completa.' : ''}
               titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : CATEGORIA_DO_SETOR[setorAlvo] ? 'Modelos e quantidades' : 'Itens (opcional)'} />
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>
-              <div style={{ display:'flex', gap:6 }}>
+              <label className="acn-dav-nova-6">Prioridade</label>
+              <div className="acn-dav-g-7">
                 {['Alta','Média','Baixa'].map(p => (
-                  <button key={p} onClick={() => set('prioridade',p)}
-                    style={{ flex:1, padding:'6px', border:`1.5px solid ${form.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
-                      background: form.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
-                      color: form.prioridade===p ? PRIO_COR[p] : '#374151',
-                      borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                  <Botao key={p} onClick={() => set('prioridade',p)}
+                    className={'acn-dav-b ' + ('acn-dav-prio-nova prio-' + chavePrio(p) + (form.prioridade === p ? ' sel' : ''))}>
                     {p}
-                  </button>
+                  </Botao>
                 ))}
               </div>
             </div>
@@ -1467,7 +1490,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 
           {/* Vínculo opcional a um processo já em andamento */}
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+            <label className="acn-dav-nova-6">
               Vincular a processos (opcional — várias OPs ou o lote inteiro)
             </label>
             <VinculosEditor vinculos={vinculos} onChange={setVinculos} />
@@ -1475,7 +1498,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 
           {/* Anexos já na criação (foto, planilha, PDF...) */}
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+            <label className="acn-dav-nova-6">
               Anexos (opcional)
             </label>
             <EscolherAnexos arquivos={anexos} onChange={setAnexos} />
@@ -1483,34 +1506,32 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           </div>
 
           {/* Seletor de quantidade de etapas */}
-          <div style={{ display: composta ? 'none' : undefined, background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:12 }}>
-            <label style={{ fontSize:9, fontWeight:700, color:'#166534', display:'block', marginBottom:8, textTransform:'uppercase' }}>
+          <div className={'acn-dav-qtd' + (composta ? ' oculto' : '')}>
+            <label className="acn-dav-nova-12">
               Quantidade de Etapas
             </label>
-            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <button onClick={() => mudarQtd(qtdEtapas - 1)} disabled={qtdEtapas <= 1}
-                style={{ width:32, height:32, border:'1.5px solid #16a34a', borderRadius:6, background:'#fff', color:'#16a34a', fontSize:18, fontWeight:700, cursor:'pointer', lineHeight:1 }}>−</button>
-              <span style={{ fontSize:22, fontWeight:800, color:'#16a34a', minWidth:32, textAlign:'center' }}>{qtdEtapas}</span>
-              <button onClick={() => mudarQtd(qtdEtapas + 1)} disabled={qtdEtapas >= 10}
-                style={{ width:32, height:32, border:'1.5px solid #16a34a', borderRadius:6, background:'#fff', color:'#16a34a', fontSize:18, fontWeight:700, cursor:'pointer', lineHeight:1 }}>+</button>
-              <span style={{ fontSize:10, color:'#6b7280' }}>
+            <div className="acn-dav-nova-13">
+              <Botao className="acn-dav-b acn-dav-nova-14" onClick={() => mudarQtd(qtdEtapas - 1)} disabled={qtdEtapas <= 1}>−</Botao>
+              <span className="acn-dav-nova-15">{qtdEtapas}</span>
+              <Botao className="acn-dav-b acn-dav-nova-14" onClick={() => mudarQtd(qtdEtapas + 1)} disabled={qtdEtapas >= 10}>+</Botao>
+              <span className="acn-dav-nova-16">
                 {qtdEtapas === 1 ? 'Demanda simples' : `${qtdEtapas} etapas independentes`}
               </span>
             </div>
           </div>
 
           {/* Formulários por etapa */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div className="acn-dav-nova-17">
             {etapas.map((e, i) => (
-              <div key={i} style={{ border:`1.5px solid ${qtdEtapas > 1 ? '#2563eb' : '#e2e8f0'}`, borderRadius:8, padding:12, background: qtdEtapas > 1 ? '#eff6ff' : '#f8fafc' }}>
+              <div key={i} className={'acn-dav-nova-et' + (qtdEtapas > 1 ? ' varias' : '')}>
                 {qtdEtapas > 1 && (
-                  <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>
+                  <div className="acn-dav-g-3">
                     ETAPA {i + 1} de {qtdEtapas}
                   </div>
                 )}
-                <div style={{ display:'grid', gridTemplateColumns: composta ? '1fr' : '1fr 1fr', gap:8, marginBottom:8 }}>
-                  <div style={{ display: composta ? 'none' : undefined }}>
-                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                <div className={'acn-dav-nova-grade' + (composta ? ' composta' : '')}>
+                  <div className={composta ? 'acn-dav-oculto' : undefined}>
+                    <label className="acn-dav-nova-11">
                       Responsável{qtdEtapas > 1 ? ' *' : ''}
                     </label>
                     <ColaboradorSelect value={e.responsavel_nome}
@@ -1518,21 +1539,21 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                       incluirUsuariosDaAba={abaDoSetor(e.setor || setorAlvo)}
                       departamentos={departamentosDoSetor(e.setor || setorAlvo)}
                       placeholder="Selecione o responsável"
-                      style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.responsavel_nome?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                      className={'acn-dav-campo-resp' + (qtdEtapas > 1 && !e.responsavel_nome ? ' falta' : '')} />
                   </div>
                   <div>
-                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                    <label className="acn-dav-nova-11">
                       Prazo{qtdEtapas > 1 ? ' *' : ''}
                     </label>
                     <input type="date" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
-                      style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.prazo?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                      className={'acn-dav-campo-data' + (qtdEtapas > 1 && !e.prazo ? ' falta' : '')} />
                   </div>
                 </div>
                 {/* Vínculo próprio só faz sentido quando há mais de uma etapa;
                     na demanda simples vale o vínculo geral lá de cima */}
                 {qtdEtapas > 1 && (
-                  <div style={{ marginBottom:8 }}>
-                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                  <div className="acn-dav-g-4">
+                    <label className="acn-dav-nova-11">
                       Processo desta etapa, se for outro (opcional)
                     </label>
                     <VinculoPicker
@@ -1543,9 +1564,8 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                   </div>
                 )}
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observações</label>
-                  <textarea value={e.obs_criacao} onChange={ev=>setEtapa(i,'obs_criacao',ev.target.value)} rows={2}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+                  <label className="acn-dav-nova-11">Observações</label>
+                  <textarea className="acn-dav-nova-18" value={e.obs_criacao} onChange={ev=>setEtapa(i,'obs_criacao',ev.target.value)} rows={2} />
                 </div>
               </div>
             ))}
@@ -1553,12 +1573,11 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           </>)}
         </div>
 
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end', flexShrink:0 }}>
-          <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
+        <div className="acn-dav-nova-19">
+          <Botao className="acn-dav-b acn-dav-nova-20" onClick={onClose}>Cancelar</Botao>
+          <Botao className="acn-dav-b acn-dav-nova-21" onClick={salvar} disabled={salvando}>
             {salvando ? 'Salvando...' : setorAlvo === 'Compras' ? 'Enviar para Compras' : composta ? `+ Criar para ${setoresAlvo.length} setores` : `+ Criar${qtdEtapas > 1 ? ` (${qtdEtapas} etapas)` : ''}`}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>
@@ -1568,11 +1587,10 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DA LISTA
 // ─────────────────────────────────────────────────────────────────────────────
-function DemandaCard({ d, onClick, grupo }: any) {
+function DemandaCard({ d, onClick, grupo, agora }: any) {
   const alerta = alertClass(d.prazo, d.status);
   const diasV = diasParaVencer(d.prazo);
-  const corBorda = alerta === 'vencida' ? '#dc2626' : alerta === 'urgente' ? '#d97706' : STATUS_COR[d.status] || '#e2e8f0';
-  const bgCard = alerta === 'vencida' ? '#fff5f5' : alerta === 'urgente' ? '#fffbeb' : '#fff';
+  const modCor = alerta ? 'al-' + alerta : 'st-' + chaveStatus(d.status);   // atraso manda (borda e fundo); sem atraso vale a cor do status
   const etapas: any[] = d.etapas || [];
   const temEtapas = etapas.length > 0;
   const etapasConcluidas = etapas.filter(e => e.status === 'Concluída').length;
@@ -1584,67 +1602,64 @@ function DemandaCard({ d, onClick, grupo }: any) {
 
   return (
     <div onClick={onClick}
-      style={{ background:bgCard, border:`1px solid ${corBorda}40`, borderLeft:`4px solid ${corBorda}`,
-        borderRadius:6, padding:'9px 12px', cursor:'pointer', marginBottom:6, boxShadow:'0 1px 2px #0001' }}
-      onMouseEnter={e=>(e.currentTarget.style.boxShadow='0 2px 8px #0002')}
-      onMouseLeave={e=>(e.currentTarget.style.boxShadow='0 1px 2px #0001')}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
-        <div style={{ flex:1 }}>
-          <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:3, flexWrap:'wrap' }}>
-            <span style={{ background:STATUS_COR[d.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{d.status}</span>
-            <span style={{ background:PRIO_COR[d.prioridade]+'18', color:PRIO_COR[d.prioridade], border:`1px solid ${PRIO_COR[d.prioridade]}40`, borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>{d.prioridade}</span>
+      className={'acn-dav-card ' + modCor}>
+      <div className="acn-dav-card-1">
+        <div className="acn-dav-g-2">
+          <div className="acn-dav-card-2">
+            <span className={'acn-dav-st st-' + chaveStatus(d.status)}>{d.status}</span>
+            <span className={'acn-dav-prio-selo prio-' + chavePrio(d.prioridade)}>{d.prioridade}</span>
             {temEtapas && (
-              <span style={{ background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+              <span className="acn-dav-card-3">
                 📋 {etapasConcluidas}/{etapas.length} etapas
               </span>
             )}
-            {etapasVencidas > 0 && <span style={{ fontSize:9, fontWeight:700, color:'#dc2626' }}>🔴 {etapasVencidas} etapa(s) vencida(s)</span>}
-            {etapasUrgentes > 0 && etapasVencidas === 0 && <span style={{ fontSize:9, fontWeight:700, color:'#d97706' }}>🟡 {etapasUrgentes} urgente(s)</span>}
+            {etapasVencidas > 0 && <span className="acn-dav-card-4">🔴 {etapasVencidas} etapa(s) vencida(s)</span>}
+            {etapasUrgentes > 0 && etapasVencidas === 0 && <span className="acn-dav-card-5">🟡 {etapasUrgentes} urgente(s)</span>}
             {!temEtapas && alerta && (
-              <span style={{ fontSize:9, fontWeight:700, color: alerta==='vencida'?'#dc2626':'#d97706' }}>
+              <span className={'acn-dav-al-txt al-' + alerta}>
                 {alerta==='vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d`}
               </span>
             )}
             {d.vinculo_tipo && (
-              <span style={{ background:'#eff6ff', color:'#1d4ed8', border:'1px solid #93c5fd', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+              <span className="acn-dav-card-6">
                 🔗 {TIPO_LABEL[d.vinculo_tipo] || d.vinculo_tipo}: {d.vinculo_descricao}
                 {vinculosDaDemanda(d).length > 1 && ` +${vinculosDaDemanda(d).length - 1}`}
               </span>
             )}
             {grupo && grupo.total > 1 && (
-              <span title="Demanda composta: uma parte por setor" style={{ background:'#eef2ff', color:'#3730a3', border:'1px solid #c7d2fe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+              <span className="acn-dav-card-7" title="Demanda composta: uma parte por setor">
                 🧩 {grupo.concluidas}/{grupo.total} setores
               </span>
             )}
             <MembrosResumo d={d} />
             {(d.itens || []).length > 0 && (
-              <span style={{ background:'#f5f3ff', color:'#6d28d9', border:'1px solid #ddd6fe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+              <span className="acn-dav-card-8">
                 📦 {d.itens.length} ite{d.itens.length > 1 ? 'ns' : 'm'}
               </span>
             )}
           </div>
-          <div style={{ fontSize:12, fontWeight:700, color:'#1f2937' }}>{d.titulo}</div>
-          {d.descricao && <div style={{ fontSize:10, color:'#6b7280', marginTop:1, maxWidth:380, wordBreak:'break-word' }}>{d.descricao}</div>}
+          <div className="acn-dav-card-9">{d.titulo}</div>
+          {d.descricao && <div className="acn-dav-card-10">{d.descricao}</div>}
 
           {/* Barra de progresso (multi-etapa) */}
           {temEtapas && (
-            <div style={{ marginTop:6, background:'#e2e8f0', borderRadius:3, height:4, overflow:'hidden' }}>
-              <div style={{ height:'100%', width:`${pct}%`, background: pct===100?'#16a34a':'#2563eb', transition:'width .3s' }} />
+            <div className="acn-dav-card-11">
+              <div className={'acn-dav-card-prog-fill' + (pct === 100 ? ' ok' : '')} style={{ width: `${pct}%` }} />
             </div>
           )}
 
           {!temEtapas && (
-            <div style={{ marginTop:5, display:'flex', gap:10, flexWrap:'wrap' }}>
-              {d.responsavel_nome && <span style={{ fontSize:9, color:'#374151' }}>👤 {d.responsavel_nome}</span>}
-              {d.prazo && <span style={{ fontSize:9, color: alerta?corBorda:'#6b7280' }}>⏰ {fmtDate(d.prazo)}</span>}
-              {d.data_inicio && !d.data_fim && (
-                <span style={{ fontSize:9, color:'#2563eb' }}>▶ {fmtH((Date.now() - new Date(d.data_inicio).getTime()) / 3600000)}</span>
+            <div className="acn-dav-card-12">
+              {d.responsavel_nome && <span className="acn-dav-card-13">👤 {d.responsavel_nome}</span>}
+              {d.prazo && <span className={'acn-dav-card-prazo' + (alerta ? ' al-' + alerta : '')}>⏰ {fmtDate(d.prazo)}</span>}
+              {d.data_inicio && !d.data_fim && d.status === 'Em Andamento' && (
+                <span className="acn-dav-card-14" title="Tempo trabalhado em horas úteis">{situacaoDoRelogio(d, agora) === 'rodando' ? '▶' : '⏸'} {fmtTempo(tempoEmTexto(d, agora).totalMs)}</span>
               )}
             </div>
           )}
         </div>
         {(d.informacoes?.length > 0) && (
-          <span style={{ fontSize:9, color:'#9ca3af', flexShrink:0 }}>💬 {d.informacoes.length}</span>
+          <span className="acn-dav-g-8">💬 {d.informacoes.length}</span>
         )}
       </div>
     </div>
@@ -1665,6 +1680,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
   abrirComVinculo?: VinculoValue | null;
   onAbrirComVinculoConsumido?: () => void;
 }) {
+  const agoraDaLista = useAgora(60000);   // pausa e horas úteis (16/10/2026): o cartão troca ▶ por ⏸ às 17:48 sem recarregar
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('ativas');
@@ -1759,42 +1775,37 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
   }).length;
 
   return (
-    <div className="sec-card" style={{ marginTop:12 }}>
+    <div className="sec-card acn-dav-pn-1">
       <div className="sec-hdr">
-        <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <span className="acn-dav-g-1">
           ⚡ Demandas Avulsas — {setor}
           {vencidas > 0 && (
             <span onClick={() => setFiltroStatus(filtroStatus==='vencidas'?'ativas':'vencidas')}
-              style={{ background:'#dc2626', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, cursor:'pointer',
-                outline: filtroStatus==='vencidas'?'2px solid white':'none' }}>
+              className={'acn-dav-badge-venc' + (filtroStatus === 'vencidas' ? ' ativo' : '')}>
               🔴 {vencidas} vencida{vencidas>1?'s':''}
             </span>
           )}
           {urgentes > 0 && filtroStatus!=='vencidas' && (
-            <span style={{ background:'#d97706', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>
+            <span className="acn-dav-pn-2">
               🟡 {urgentes} urgente{urgentes>1?'s':''}
             </span>
           )}
         </span>
-        <button onClick={() => { setVinculoParaNova(null); setModalNova(true); }}
-          style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'4px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+        <Botao className="acn-dav-b acn-dav-pn-3" onClick={() => { setVinculoParaNova(null); setModalNova(true); }}>
           + Nova Demanda
-        </button>
+        </Botao>
       </div>
 
-      <div style={{ padding:'6px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+      <div className="acn-dav-pn-4">
         {[['ativas','Ativas'],['concluidas','Encerradas'],['vencidas','Vencidas'],['todas','Todas']].map(([v,l]) => (
-          <button key={v} onClick={() => setFiltroStatus(v)}
-            style={{ border:'none', borderRadius:12, padding:'2px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
-              background: filtroStatus===v?(v==='vencidas'?'#dc2626':'#2563eb'):'#f1f5f9',
-              color: filtroStatus===v?'#fff':'#374151' }}>
+          <Botao key={v} onClick={() => setFiltroStatus(v)}
+            className={'acn-dav-b ' + ('acn-dav-chip' + (filtroStatus === v ? ' sel' : '') + (v === 'vencidas' ? ' venc' : ''))}>
             {v==='vencidas'?'🔴 ':''}{ l}
-          </button>
+          </Botao>
         ))}
-        <div style={{ width:1, background:'#e2e8f0', height:18, margin:'0 2px' }} />
+        <div className="acn-dav-pn-5" />
         {/* Filtro por status específico */}
-        <select value={filtroStatusSpec} onChange={e=>{const v=e.target.value;setFiltroStatusSpec(v);if(ENCERRADA(v))setFiltroStatus('concluidas');else if(v&&filtroStatus==='concluidas')setFiltroStatus('ativas');}}
-          style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
+        <select className="acn-dav-pn-6" value={filtroStatusSpec} onChange={e=>{const v=e.target.value;setFiltroStatusSpec(v);if(ENCERRADA(v))setFiltroStatus('concluidas');else if(v&&filtroStatus==='concluidas')setFiltroStatus('ativas');}}>
           <option value="">Status: Todos</option>
           <option value="Pendente">Pendente</option>
           <option value="Em Andamento">Em Andamento</option>
@@ -1803,22 +1814,20 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
         </select>
         {/* Filtro por responsável */}
         {responsaveis.length > 0 && (
-          <select value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}
-            style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
+          <select className="acn-dav-pn-6" value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
             <option value="">Responsável: Todos</option>
             {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         )}
         {(filtroResp || filtroStatusSpec) && (
-          <button onClick={() => { setFiltroResp(''); setFiltroStatusSpec(''); }}
-            style={{ fontSize:9, padding:'2px 8px', border:'1px solid #fca5a5', borderRadius:8, background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontWeight:700 }}>
+          <Botao className="acn-dav-b acn-dav-pn-7" onClick={() => { setFiltroResp(''); setFiltroStatusSpec(''); }}>
             ✕ Limpar filtros
-          </button>
+          </Botao>
         )}
-        <span style={{ marginLeft:'auto', fontSize:9, color:'#9ca3af', lineHeight:'22px' }}>{lista.length} demandas</span>
+        <span className="acn-dav-pn-8">{lista.length} demandas</span>
       </div>
 
-      <div className="sec-body" style={{ padding:'10px 12px' }}>
+      <div className="sec-body acn-dav-pn-9">
         {erroLista && (
           <Faixa tom="erro">Não foi possível ler as demandas ({erroLista}). A lista abaixo pode estar incompleta ou desatualizada.</Faixa>
         )}
@@ -1830,7 +1839,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
           </div>
         )) : (
           lista.map(d => (
-            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} grupo={d.grupo_id ? grupos[d.grupo_id] : undefined} />
+            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} grupo={d.grupo_id ? grupos[d.grupo_id] : undefined} agora={agoraDaLista} />
           ))
         )}
       </div>
