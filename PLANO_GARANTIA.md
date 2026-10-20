@@ -1,7 +1,7 @@
 # Atendimento em garantia — desenho e etapas
 
 > Proposta de **08/10/2026**, a pedido do usuário ("Lista pedido Bruna": procedimento de atendimento em garantia).
-> **G1, G2 e G3 construídas em 19/10/2026** (ver "Como ficou a G1", "G2" e "G3" no fim); **G4 a G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
+> **G1, G2 e G3 construídas em 19/10/2026 e a G4 em 20/10/2026** (ver "Como ficou a G1" a "G4" no fim); **G5 e G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
 > produção sozinha, com teste e com este plano atualizado (mesmo padrão dos outros planos do projeto).
 
 ## Ponto de partida (o que existe hoje)
@@ -43,7 +43,7 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 | **G1** ✅ | **Ficha e abertura**: tabela do atendimento, formulário com campos obrigatórios, lista/quadro dentro do SAC (aba "Garantia"), histórico de movimentação e permissões. | 1, 12 |
 | **G2** ✅ | **Avaliação e fornecedor**: parecer técnico, cobertura, consulta ao fornecedor, quem executa; trava do pedido de peça no Compras. | 2, 3, 5 |
 | **G3** ✅ | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
-| **G4** | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
+| **G4** ✅ | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
 | **G5** | **Partes e avisos**: responsáveis e copiados por atendimento, avisos automáticos a cada mudança. | 11 |
 | **G6** | **Relatório semanal** (tela + PDF) e encerramento do atendimento. | 10 |
 
@@ -122,6 +122,24 @@ Da lista de decisões com os setores, só resta **o prazo para cobrar atendiment
 **Testado:** **102 verificações das regras** (as 67 anteriores e 35 novas) e **86 no navegador** (as 56 anteriores e 30 novas; banco da garantia simulado em memória, nenhuma gravação real): fora da garantia a faixa diz o que falta; custo com valor que não é número e negociado sem "quem negociou" são recusados; custo gravado em reais; alinhamento "aguardando" não libera e o "aceitou" acrescentado vale; o valor do pedido já vem com o que a empresa paga; **quem pediu não vê Aprovar/Negar**; **quem executa recusa e o pedido de peça fica desligado** enquanto falta a direção; a direção nega (com o porquê) e depois aprova um novo pedido; com as duas condições o atendimento segue; o custo do terceiro entra no quadro e o total passa a somar os dois; aprovar linha guarda quem aprovou; o copiado vê sem nenhum botão. **Achado do teste:** o banco devolve os campos de uma linha em outra ordem e, sem cuidado, "salvar igual" pareceria mudança — a comparação ignora a ordem (testado). **Nenhum dado real foi alterado.**
 
 **Fica para as próximas etapas:** controle de envio e retorno das peças em garantia e os apontamentos de falha, horas, técnicos e solução (G4); avisos aos copiados e responsáveis (G5 — a direção também só vai saber do pedido de autorização quando a G5 avisar; hoje ela precisa abrir a ficha); relatório semanal e encerramento (G6).
+
+## Decisão do usuário em 20/10/2026 (G4)
+
+**Quem registra os apontamentos e o envio/retorno das peças:** o **responsável pelo atendimento** e a **gerência** (a mesma regra das etapas anteriores, inclusive as horas dos técnicos).
+
+## Como ficou a G4 (20/10/2026)
+
+**Banco (migração `garantia_g4_pecas_e_apontamentos`):** duas colunas novas na ficha — `pecas` e `apontamentos` (jsonb, padrão vazio); as fichas existentes não mudam.
+
+**Tela (duas seções no detalhe, depois do pedido de peça ao Compras; `GarantiaPecas.tsx`, regras em `GarantiaModelo.ts`):**
+- **Peças em garantia (envio e retorno):** cada peça tem descrição, quantidade (inteira, de 1 para cima) e número de série e uma **trilha de movimentos**: *a enviar* → *enviada ao fornecedor* → *em análise* → *retornou*, *reposta* ou *descartada*. Cada movimento leva **data** (não futura e não antes do movimento anterior), **rastreio** e observação; **descartar exige o porquê**. A tela só oferece os passos seguintes possíveis (de "a enviar" só vai a "enviada" ou "descartada"); *retornou*, *reposta* e *descartada* são o **fim** do caminho. A trilha **só se acrescenta**: engano se corrige com **"Desfazer o último movimento"** (pede o motivo, que vai ao histórico); a peça cadastrada por engano só pode ser **tirada da ficha enquanto não teve nenhum movimento**. A seção mostra **"N ainda não voltaram"** e, em cada peça pendente, **há quantos dias** está parada no último movimento — a base do "o que está parado" do relatório da G6.
+- **Apontamentos do atendimento (diário técnico):** **dia** (não futuro), **técnico**, **horas** (entre 0 e 24), **falha encontrada** (obrigatória), **solução adotada** e **peças aplicadas** (opcionais, podem ser preenchidas depois). Mostra o total de horas, geral e por técnico. Editar mantém o mesmo apontamento (mesmo id); o histórico diz quantos entraram e saíram e o total de horas.
+- **Não exigem avaliação nem fornecedor** (o diagnóstico e o envio de peça para análise acontecem antes), e **não são travados pela regra do "fora da garantia"** (que trava quem executa e o pedido de peça ao Compras). Só o responsável e a gerência registram; quem abriu e os copiados veem sem botões; atendimento cancelado não recebe registro.
+- **Horas não viram custo sozinhas** (não há valor da hora cadastrado): o custo de mão de obra continua sendo lançado no quadro de custos.
+
+**Testado:** **127 verificações das regras** (as 102 anteriores e 25 novas) e **106 no navegador** (as 86 anteriores e 20 novas; banco da garantia simulado em memória, nenhuma gravação real): cadastro da peça com quantidade e série, as opções de movimento por situação, o rastreio gravado, descartar sem motivo recusado, "retornou" como fim (a seção passa a "Todas resolvidas"), desfazer com motivo, tirar só a peça sem movimento, apontamento sem horas / com horas que não são número / sem a falha recusados, o total de horas por técnico e completar a solução mantendo o mesmo apontamento. **Achado do teste:** o banco devolve os campos em outra ordem e, sem cuidado, "salvar igual" pareceria mudança — a comparação ignora a ordem (testado também nos apontamentos). **Nenhum dado real foi alterado.**
+
+**Fica para as próximas etapas:** avisos aos responsáveis e copiados a cada mudança (G5 — hoje nada avisa ninguém); relatório semanal (inclusive as peças que não voltaram e os atendimentos parados) e encerramento (G6).
 
 ## Regras de segurança que valem em todas as etapas
 

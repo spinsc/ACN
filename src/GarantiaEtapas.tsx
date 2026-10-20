@@ -18,6 +18,7 @@ import {
   registrarAvaliacao, registrarFornecedor, registrarExecucao, registrarPedidoDePeca,
 } from './GarantiaModelo';
 import { SecaoCustos, SecaoCliente, SecaoDirecao } from './GarantiaCustos';
+import { SecaoPecasGarantia, SecaoApontamentos } from './GarantiaPecas';
 import { mdiClose, mdiCartOutline } from '@mdi/js';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -281,6 +282,8 @@ export function SecoesGarantia({ g, currentUser, executar, ocupado }: any) {
       <SecaoDirecao {...comum} />
       <SecaoExecucao {...comum} />
       <SecaoPecas {...comum} />
+      <SecaoPecasGarantia {...comum} />
+      <SecaoApontamentos {...comum} />
     </div>
   );
 }

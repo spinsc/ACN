@@ -90,7 +90,8 @@ export const evento = (tipo: string, u: any, texto: string | null, agora: string
 export const FRASES_GARANTIA: Record<string, string> = { aberto: 'Atendimento aberto', editado: 'Dados alterados', cancelado: 'Atendimento cancelado', reaberto: 'Atendimento reaberto', encerrado: 'Atendimento encerrado',
   avaliacao: 'Avaliação técnica registrada', fornecedor: 'Fornecedor', execucao: 'Quem executa definido', peca_pedida: 'Peça pedida ao Compras',
   custos: 'Quadro de custos alterado', alinhamento: 'Alinhamento com o cliente', autorizacao_pedida: 'Autorização pedida à direção', autorizacao_aprovada: 'Direção aprovou',
-  autorizacao_negada: 'Direção negou', autorizacao_cancelada: 'Pedido de autorização cancelado' };
+  autorizacao_negada: 'Direção negou', autorizacao_cancelada: 'Pedido de autorização cancelado',
+  peca_adicionada: 'Peça em garantia cadastrada', peca_movimento: 'Peça em garantia', peca_movimento_desfeito: 'Movimento de peça desfeito', peca_removida: 'Peça tirada da ficha', apontamentos: 'Apontamentos alterados' };
 export const fraseDoEvento = (e: any) => (FRASES_GARANTIA[e.tipo] || e.tipo) + (e.texto && e.tipo !== 'aberto' ? `: ${e.texto}` : '');
 
 const ROTULOS_CAMPO: Record<string, string> = {
@@ -406,6 +407,123 @@ export function cancelarAutorizacao(g: any, id: string, u: any, motivo: string, 
   return { patch: { autorizacoes: lista, historico } };
 }
 const mesmoEmailG = (a: any, b: any) => semAcento(a) !== '' && semAcento(a) === semAcento(b);
+
+// ── G4 (20/10/2026): peças em garantia (envio e retorno) e apontamentos do atendimento ─────────────────────────────────────
+// Decisão do usuário em 20/10/2026: quem registra é o responsável pelo atendimento e a gerência. Cada peça tem uma trilha de movimentos (a enviar → enviada ao fornecedor → em análise →
+// retornou / reposta / descartada), com data e rastreio; a trilha só se acrescenta (dá para desfazer o último, com motivo). "Peças que ainda não voltaram" = as que não chegaram a um fim.
+// Os apontamentos são o diário técnico: dia, técnico, horas, falha encontrada, solução e peças aplicadas.
+export const SITUACOES_PECA: Record<string, string> = { a_enviar: 'A enviar', enviada: 'Enviada ao fornecedor', em_analise: 'Em análise', retornou: 'Retornou', reposta: 'Reposta', descartada: 'Descartada' };
+const SEGUINTES_PECA: Record<string, string[]> = {
+  a_enviar: ['enviada', 'descartada'],
+  enviada: ['em_analise', 'retornou', 'reposta', 'descartada'],
+  em_analise: ['retornou', 'reposta', 'descartada'],
+  retornou: [], reposta: [], descartada: [],
+};
+export const seguintesDaPeca = (situacao: string) => SEGUINTES_PECA[situacao] || [];
+export const FINS_PECA = ['retornou', 'reposta', 'descartada'];
+export const situacaoDaPeca = (p: any) => { const m = Array.isArray(p?.movimentos) ? p.movimentos : []; return m.length ? m[m.length - 1].situacao : 'a_enviar'; };
+export const ultimoMovimento = (p: any) => { const m = Array.isArray(p?.movimentos) ? p.movimentos : []; return m.length ? m[m.length - 1] : null; };
+const diasEntre = (de: string, ate: string) => Math.floor((Date.parse(String(ate).slice(0, 10) + 'T00:00:00Z') - Date.parse(String(de).slice(0, 10) + 'T00:00:00Z')) / 86400000);
+/** As peças que ainda não chegaram a um fim, com os dias desde o último movimento. */
+export function pecasPendentes(g: any, hoje: string) {
+  return (Array.isArray(g?.pecas) ? g.pecas : []).filter((p: any) => !FINS_PECA.includes(situacaoDaPeca(p))).map((p: any) => ({ ...p, situacao: situacaoDaPeca(p), dias: Math.max(0, diasEntre(ultimoMovimento(p)?.data || hoje, hoje)) }));
+}
+
+export function adicionarPeca(g: any, u: any, c: any, agora: string, hoje: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const descricao = txt(c?.descricao, 300);
+  if (!descricao) return { erro: 'Descreva a peça em garantia.' };
+  const q = Number(c?.quantidade ?? 1);
+  if (!Number.isFinite(q) || q < 1 || q > 9999 || Math.round(q) !== q) return { erro: 'A quantidade precisa ser um número inteiro, de 1 para cima.' };
+  const lista = copiar(g.pecas) || [];
+  if (lista.length >= 60) return { erro: 'A ficha aceita até 60 peças.' };
+  const peca = { id: `p${Date.parse(agora)}${lista.length}`, descricao, quantidade: q, numero_serie: txt(c?.numero_serie, 100), movimentos: [{ situacao: 'a_enviar', data: hoje, rastreio: '', nota: '', por: u?.nome || '', em: agora }] };
+  lista.push(peca);
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('peca_adicionada', u, `${q}× ${descricao}`, agora));
+  return { patch: { pecas: lista, historico } };
+}
+
+export function moverPeca(g: any, id: string, u: any, c: any, agora: string, hoje: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const lista = copiar(g.pecas) || [];
+  const p = lista.find((x: any) => x.id === id);
+  if (!p) return { erro: 'Não foi possível achar a peça: a ficha mudou. A tela foi atualizada.' };
+  const atual = situacaoDaPeca(p);
+  if (!seguintesDaPeca(atual).includes(c?.situacao)) return { erro: seguintesDaPeca(atual).length ? `De "${SITUACOES_PECA[atual]}" a peça só pode ir para: ${seguintesDaPeca(atual).map(s => SITUACOES_PECA[s]).join(', ')}.` : `A peça já está "${SITUACOES_PECA[atual]}": é o fim do caminho. Se foi engano, desfaça o último movimento.` };
+  if (!diaOk(c?.data)) return { erro: 'Informe a data do movimento.' };
+  if (String(c.data) > hoje) return { erro: 'A data do movimento não pode ser no futuro.' };
+  const ult = ultimoMovimento(p);
+  if (ult && String(c.data) < String(ult.data)) return { erro: `A data não pode ser antes do movimento anterior (${ult.data.split('-').reverse().join('/')}).` };
+  const nota = txt(c?.nota, 500);
+  if (c.situacao === 'descartada' && !nota) return { erro: 'Diga por que a peça foi descartada.' };
+  p.movimentos.push({ situacao: c.situacao, data: c.data, rastreio: txt(c?.rastreio, 120), nota, por: u?.nome || '', em: agora });
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('peca_movimento', u, `${p.descricao}: ${SITUACOES_PECA[c.situacao]}${txt(c?.rastreio, 120) ? ` (rastreio ${txt(c.rastreio, 120)})` : ''}`, agora));
+  return { patch: { pecas: lista, historico } };
+}
+
+/** Engano acontece: desfaz o último movimento (nunca o primeiro), com motivo, que fica no histórico. */
+export function desfazerMovimentoDaPeca(g: any, id: string, u: any, motivo: string, agora: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const lista = copiar(g.pecas) || [];
+  const p = lista.find((x: any) => x.id === id);
+  if (!p) return { erro: 'Não foi possível achar a peça: a ficha mudou. A tela foi atualizada.' };
+  if ((p.movimentos || []).length < 2) return { erro: 'Não há movimento para desfazer: a peça está no começo. Se foi cadastrada por engano, tire a peça.' };
+  const m = txt(motivo, 300);
+  if (!m) return { erro: 'Escreva o motivo.' };
+  const tirado = p.movimentos.pop();
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('peca_movimento_desfeito', u, `${p.descricao}: voltou de "${SITUACOES_PECA[tirado.situacao]}" para "${SITUACOES_PECA[situacaoDaPeca(p)]}" — ${m}`, agora));
+  return { patch: { pecas: lista, historico } };
+}
+
+/** Só se tira a peça que não saiu do começo (sem movimento além do cadastro). */
+export function tirarPeca(g: any, id: string, u: any, agora: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const lista = copiar(g.pecas) || [];
+  const p = lista.find((x: any) => x.id === id);
+  if (!p) return { erro: 'Não foi possível achar a peça: a ficha mudou. A tela foi atualizada.' };
+  if ((p.movimentos || []).length > 1) return { erro: 'A peça já tem movimento (envio, análise…). Desfaça os movimentos antes, ou deixe a trilha como está.' };
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('peca_removida', u, p.descricao, agora));
+  return { patch: { pecas: lista.filter((x: any) => x.id !== id), historico } };
+}
+
+/** O diário técnico: troca a lista inteira (como o quadro de custos); o histórico diz o que entrou e o que saiu. */
+export function salvarApontamentos(g: any, u: any, linhas: any[], agora: string, hoje: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const antes = Array.isArray(g.apontamentos) ? g.apontamentos : [];
+  const novas: any[] = [];
+  for (const [n, l] of (Array.isArray(linhas) ? linhas : []).entries()) {
+    const quem = `Apontamento ${n + 1}`;
+    if (!diaOk(l?.data)) return { erro: `${quem}: informe o dia.` };
+    if (String(l.data) > hoje) return { erro: `${quem}: o dia não pode ser no futuro.` };
+    const tecnico = txt(l?.tecnico, 200);
+    if (!tecnico) return { erro: `${quem}: diga qual técnico.` };
+    const horas = reais(l?.horas);
+    if (horas === null || Number.isNaN(horas) || horas <= 0 || horas > 24) return { erro: `${quem}: as horas precisam ser um número entre 0 e 24.` };
+    const falha = txt(l?.falha);
+    if (!falha) return { erro: `${quem}: escreva a falha encontrada.` };
+    novas.push({ id: txt(l?.id, 40) || `t${Date.parse(agora)}${n}`, data: l.data, tecnico, horas, falha, solucao: txt(l?.solucao), pecas_aplicadas: txt(l?.pecas_aplicadas, 500) });
+  }
+  if (novas.length > 200) return { erro: 'A ficha aceita até 200 apontamentos.' };
+  const canon = (v: any) => JSON.stringify(v, (_k, val) => (val && typeof val === 'object' && !Array.isArray(val) ? Object.keys(val).sort().reduce((o: any, k) => { o[k] = val[k]; return o; }, {}) : val));
+  if (canon(novas) === canon(antes)) return { erro: 'Nada foi alterado nos apontamentos.' };
+  const total = Math.round(novas.reduce((s, a) => s + a.horas, 0) * 100) / 100;
+  const entraram = novas.filter(n => !antes.some((a: any) => a.id === n.id)).length;
+  const sairam = antes.filter((a: any) => !novas.some(n => n.id === a.id)).length;
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('apontamentos', u, `${novas.length} apontamento(s), ${String(total).replace('.', ',')} h no total${entraram ? `; ${entraram} novo(s)` : ''}${sairam ? `; ${sairam} tirado(s)` : ''}`, agora));
+  return { patch: { apontamentos: novas, historico } };
+}
+/** Horas no total e por técnico. */
+export function totaisDeApontamentos(g: any) {
+  const lista = Array.isArray(g?.apontamentos) ? g.apontamentos : [];
+  const porTecnico: Record<string, number> = {};
+  lista.forEach((a: any) => { porTecnico[a.tecnico] = Math.round(((porTecnico[a.tecnico] || 0) + Number(a.horas)) * 100) / 100; });
+  return { total: Math.round(lista.reduce((s: number, a: any) => s + Number(a.horas), 0) * 100) / 100, porTecnico };
+}
 
 /** Registra na ficha o pedido que acabou de nascer no Compras. A trava é conferida aqui também (a tela só desliga o botão). */
 export function registrarPedidoDePeca(g: any, u: any, { pedido_id, numero_pedido, titulo }: any, agora: string) {
