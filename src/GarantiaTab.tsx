@@ -14,6 +14,7 @@ import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { Botao, Chips, Faixa, Selo, hojeISO, diaBR } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { SecoesGarantia } from './GarantiaEtapas';
+import { avisosDaGravacao, descricaoDoAviso } from './GarantiaAvisos';
 import { ParticipantesPicker, useUsuariosParticipar } from './Participantes';
 import {
   ORIGENS_GARANTIA, SITUACOES_GARANTIA, normalizarPlaca, normalizarChassi, podeAbrirGarantia, podeVerGarantia, podeMexerNaGarantia,
@@ -25,8 +26,31 @@ const TABELA = 'garantia_atendimentos';
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const FAMILIA_SITUACAO: Record<string, string> = { aberto: 'info', encerrado: 'ok', cancelado: 'neutro' };
 
+/** Manda os avisos de uma gravação para a caixa de Menções (o sino), levando direto à ficha (G5, 20/10/2026). Falha de aviso não desfaz a gravação: devolve a lista do que não foi possível avisar. */
+async function avisarGarantia(antes: any, depois: any, autor: any): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.from('auth_usuarios').select('id, nome, email, perfil, ativo');
+    if (error) return [`não foi possível ler os usuários (${error.message})`];
+    const usuarios = (data || []).filter((u: any) => u.ativo !== false && u.email);
+    const falhas: string[] = [];
+    for (const a of avisosDaGravacao(antes, depois, autor, usuarios)) {
+      const u = usuarios.find((x: any) => String(x.email).toLowerCase() === String(a.email).toLowerCase());
+      if (!u) { falhas.push(`${a.nome} (usuário não encontrado)`); continue; }
+      const { error: erroAviso } = await supabase.from('mencoes').insert({
+        mencionado_id: String(u.id), mencionado_nome: u.nome,
+        mencionante_id: String(autor?.id || ''), mencionante_nome: autor?.nome || autor?.email || 'Sistema',
+        contexto: 'garantia', contexto_id: String(depois.id), contexto_descricao: descricaoDoAviso(depois), campo: 'atendimento',
+        texto_trecho: String(a.texto || '').slice(0, 200), aba_destino: 'sac', lida: false, criado_em: new Date().toISOString(),
+      });
+      if (erroAviso) falhas.push(`${a.nome} (${erroAviso.message})`);
+    }
+    return falhas;
+  } catch (e: any) { return [`não foi possível mandar os avisos (${e?.message || e})`]; }
+}
+const dizerFalhasDeAviso = (falhas: string[]) => { if (falhas.length) mostrarAviso(`Gravado, mas não foi possível avisar: ${falhas.join('; ')}.`, 'atencao'); };
+
 /** Lê a ficha, aplica a operação do modelo e grava num UPDATE que só pega se ninguém mexeu desde a leitura (confere `atualizado_em`). Devolve o resultado, ou null (e já avisou o motivo). */
-async function gravarGarantia(id: string, operacao: (g: any, agora: string) => any) {
+async function gravarGarantia(id: string, operacao: (g: any, agora: string) => any, autor: any) {
   const agora = new Date().toISOString();
   const { data: g, error } = await supabase.from(TABELA).select('*').eq('id', id).maybeSingle();
   if (error || !g) { alert(`Não foi possível ler o atendimento antes de gravar (${error?.message || 'ele não existe mais'}). Nada foi alterado.`); return null; }
@@ -37,6 +61,7 @@ async function gravarGarantia(id: string, operacao: (g: any, agora: string) => a
   const { data: gravadas, error: erroGrava } = await q.select('id');
   if (erroGrava) { alert(`Não foi possível gravar: ${erroGrava.message}`); return null; }
   if (!gravadas?.length) { alert('Não foi possível gravar: outra pessoa mexeu neste atendimento ao mesmo tempo. A tela foi atualizada; confira e tente de novo.'); return 'conflito'; }
+  dizerFalhasDeAviso(await avisarGarantia(g, { ...g, ...r.patch, atualizado_em: agora }, autor));
   return r;
 }
 
@@ -89,7 +114,7 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
     trava.current = true; setSalvando(true);
     try {
       if (editando) {
-        const r = await gravarGarantia(inicial.id, (g, agora) => aplicarEdicao(g, c, currentUser, hojeISO(), agora));
+        const r = await gravarGarantia(inicial.id, (g, agora) => aplicarEdicao(g, c, currentUser, hojeISO(), agora), currentUser);
         if (r) { onGravou(inicial.id); onFechar(); }
         return;
       }
@@ -97,6 +122,9 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
       const { data, error } = await supabase.rpc('garantia_abrir', { p: carga });
       if (error) { alert(`Não foi possível abrir o atendimento: ${error.message}`); return; }
       mostrarAviso(`Atendimento ${data?.numero || ''} aberto.`, 'ok');
+      // os avisos saem da ficha como o banco a gravou (com o número e o histórico de abertura)
+      const { data: ficha, error: erroFicha } = await supabase.from(TABELA).select('*').eq('id', data?.id).maybeSingle();
+      dizerFalhasDeAviso(ficha ? await avisarGarantia(null, ficha, currentUser) : [`não foi possível reler o atendimento aberto (${erroFicha?.message || 'não encontrado'})`]);
       onGravou(data?.id); onFechar();
     } finally { trava.current = false; setSalvando(false); }
   };
@@ -192,7 +220,7 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
     if (ocupado) return;
     setOcupado(true);
     try {
-      const r = await gravarGarantia(g.id, operacao);
+      const r = await gravarGarantia(g.id, operacao, currentUser);
       if (r) onMudou();                       // gravou (ou houve conflito): relê a lista
       return r === 'conflito' ? null : r;     // quem chamou só fecha o formulário se gravou de verdade
     } finally { setOcupado(false); }
@@ -272,11 +300,24 @@ export default function GarantiaTab({ currentUser }: any) {
   };
   useEffect(() => { carregar(); }, []);
 
+  // Link de um aviso (sino de Menções): abre a ficha direto. Lê o global além do evento porque a aba pode montar depois do clique (mesmo padrão de Compras e Engenharia).
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'garantia') return;
+      (window as any).__acnDeepLink = null;
+      setDetalheId(String(pend.contextoId));
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const visiveis = (lista || []).filter(g => podeVerGarantia(g, currentUser));
   const base = visiveis.filter(g => combinaBusca([g.numero, g.cliente_nome, g.veiculo_nome, g.placa, g.chassi, g.origem_ref, g.descricao_falha, g.responsavel?.nome], busca));
   const conta = (s: string) => base.filter(g => g.situacao === s).length;
   const filtradas = base.filter(g => filtro === 'todos' || g.situacao === filtro);
-  const detalhe = detalheId ? (lista || []).find(g => g.id === detalheId) : null;
+  const detalhe = detalheId ? (lista || []).find(g => g.id === detalheId && podeVerGarantia(g, currentUser)) : null;   // o link de um aviso só abre o que a pessoa pode ver
 
   return (
     <div>

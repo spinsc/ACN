@@ -1,7 +1,7 @@
 # Atendimento em garantia — desenho e etapas
 
 > Proposta de **08/10/2026**, a pedido do usuário ("Lista pedido Bruna": procedimento de atendimento em garantia).
-> **G1, G2 e G3 construídas em 19/10/2026 e a G4 em 20/10/2026** (ver "Como ficou a G1" a "G4" no fim); **G5 e G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
+> **G1, G2 e G3 construídas em 19/10/2026 e a G4 e a G5 em 20/10/2026** (ver "Como ficou a G1" a "G5" no fim); **a G6 ainda não começou.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
 > produção sozinha, com teste e com este plano atualizado (mesmo padrão dos outros planos do projeto).
 
 ## Ponto de partida (o que existe hoje)
@@ -44,7 +44,7 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 | **G2** ✅ | **Avaliação e fornecedor**: parecer técnico, cobertura, consulta ao fornecedor, quem executa; trava do pedido de peça no Compras. | 2, 3, 5 |
 | **G3** ✅ | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
 | **G4** ✅ | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
-| **G5** | **Partes e avisos**: responsáveis e copiados por atendimento, avisos automáticos a cada mudança. | 11 |
+| **G5** ✅ | **Partes e avisos**: responsáveis e copiados por atendimento, avisos automáticos a cada mudança. | 11 |
 | **G6** | **Relatório semanal** (tela + PDF) e encerramento do atendimento. | 10 |
 
 ## O que precisa ser decidido com os setores (a mensagem original pede ao Luciano que coordene)
@@ -140,6 +140,28 @@ Da lista de decisões com os setores, só resta **o prazo para cobrar atendiment
 **Testado:** **127 verificações das regras** (as 102 anteriores e 25 novas) e **106 no navegador** (as 86 anteriores e 20 novas; banco da garantia simulado em memória, nenhuma gravação real): cadastro da peça com quantidade e série, as opções de movimento por situação, o rastreio gravado, descartar sem motivo recusado, "retornou" como fim (a seção passa a "Todas resolvidas"), desfazer com motivo, tirar só a peça sem movimento, apontamento sem horas / com horas que não são número / sem a falha recusados, o total de horas por técnico e completar a solução mantendo o mesmo apontamento. **Achado do teste:** o banco devolve os campos em outra ordem e, sem cuidado, "salvar igual" pareceria mudança — a comparação ignora a ordem (testado também nos apontamentos). **Nenhum dado real foi alterado.**
 
 **Fica para as próximas etapas:** avisos aos responsáveis e copiados a cada mudança (G5 — hoje nada avisa ninguém); relatório semanal (inclusive as peças que não voltaram e os atendimentos parados) e encerramento (G6).
+
+## Decisão do usuário em 20/10/2026 (G5)
+
+- **Onde o aviso chega:** na caixa de **Menções (o sino)**, levando direto à ficha do atendimento; vai ao **responsável e aos copiados**, e **quem fez a ação não se avisa**.
+- **Sempre avisam:** abertura, cancelamento, reabertura, **pedido de autorização** (e aí a **direção toda**, isto é, todos os Admin ativos) e a **decisão da direção**.
+- **Também avisam (o usuário marcou todas as categorias opcionais):** avaliação, fornecedor, quem executa e peça pedida ao Compras; alinhamento com o cliente e quadro de custos; **cada movimento** de peça em garantia (cadastro, envio, retorno, desfazer, tirar); apontamentos do diário técnico.
+
+## Como ficou a G5 (20/10/2026)
+
+**Sem mudança no banco:** o aviso é uma linha na tabela de menções que já existia (`contexto = 'garantia'`, `contexto_id` = a ficha, aba de destino SAC); nenhuma migração.
+
+**A regra é uma só (`GarantiaAvisos.ts`, regra pura):** **cada evento novo do histórico da ficha gera aviso.** Como todas as categorias opcionais foram marcadas, não há chave para ligar e desligar por categoria; se um dia a gerência quiser silenciar uma categoria, é um filtro por tipo de evento nessa função.
+- Quem recebe: o **responsável e os copiados** da ficha, sem repetir, **menos quem gravou**. O **pedido de autorização** também vai a **todo Admin ativo** (com a frase "Pedido de autorização à direção: …"). A **decisão da direção** vai também a **quem fez o pedido**, mesmo que ele não seja responsável nem copiado (a pessoa é achada pelo nome gravado no pedido).
+- **Edição das partes:** quem **entrou** na ficha recebe "Você passou a participar deste atendimento"; quem **saiu** recebe "Você saiu deste atendimento"; os que ficam recebem a frase de sempre ("Dados alterados: copiados").
+- **Quando sai:** logo depois de cada gravação que deu certo (`gravarGarantia`) e depois da abertura (a ficha é relida do banco, para o aviso sair com o número e o histórico reais). **Falha de aviso não desfaz a gravação:** a tela diz "Gravado, mas não foi possível avisar: fulano (motivo)" em vermelho e parada.
+- **O link do aviso:** o sino (`MencoesInboxPanel`) ganhou o selo **Garantia** e **não oferece "Responder"** nesses avisos (a conversa é na ficha). Clicar em "SAC →" abre a aba **Garantia** do SAC **e a ficha**, esteja o SAC fechado ou já aberto em outra aba (`window.__acnDeepLink`, o mesmo padrão de Compras e Engenharia). O link **só abre ficha que a pessoa pode ver**.
+- **Copiado sem a aba SAC liberada:** recebe o aviso do mesmo jeito (ele pode ser de outro setor, como a Engenharia). Para essa pessoa o SAC abre **só com a Garantia**: as abas de ordens de serviço, chamados e cadastros continuam fechadas, como estão para ela no menu (`SacTab.tsx`, `semAcessoAoSac`, mesma regra do menu).
+- **Quem abriu a ficha** só é avisado se for o responsável ou um copiado (a decisão foi "responsável e copiados"); como a janela de abertura já põe quem abre como responsável, o caso comum fica coberto. Se o autor indicar outra pessoa como responsável e não se copiar, ele deixa de receber os avisos.
+
+**Testado:** **30 verificações da regra de avisos** (quem recebe e o texto, em cada tipo de evento, com direção, quem pediu, quem entrou e quem saiu, sem lista de usuários e sem evento novo), as **127 das regras da ficha** e as **214 do Desenvolvimento** sem mudança, e **133 no navegador** (as 106 anteriores e 27 novas; banco da garantia, lista de usuários e caixa de menções simulados em memória, nenhuma gravação real): o fluxo inteiro de autorização gera os avisos certos (direção toda duas vezes, decisão a quem pediu, Admin inativo e autor sem aviso); cancelar, reabrir e editar avisam o copiado; com a caixa de menções fora do ar a gravação vale e a tela diz quem ficou sem aviso; o sino mostra o aviso com o número e o cliente, sem caixa de resposta; o link abre a ficha com o SAC fechado e com o SAC aberto em outra aba; quem não tem a aba SAC vê só a Garantia; link para ficha de outra pessoa não abre nada. **Nenhum dado real foi alterado.**
+
+**Fica para a próxima etapa:** relatório semanal (inclusive as peças que não voltaram e os atendimentos parados) e **encerramento** (a situação "encerrado" já existe no banco, mas nenhuma tela encerra). Continua em aberto o **prazo para cobrar atendimento parado** (G6).
 
 ## Regras de segurança que valem em todas as etapas
 

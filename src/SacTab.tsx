@@ -200,8 +200,20 @@ function EtiquetaEmpresaOS({ os, onTrocar }: { os: any; onTrocar: (os: any) => v
   );
 }
 
+// G5 (20/10/2026): quem é copiado numa garantia recebe o aviso mesmo sem ter a aba SAC liberada. Para essa pessoa o link do aviso abre só a Garantia — as outras abas do SAC
+// (ordens de serviço, chamados, cadastros) continuam fechadas, como estão para ela no menu. Mesma regra de visibilidade do menu (DashboardTab.isVisible).
+const semAcessoAoSac = (u: any) => {
+  if (!u || u.perfil === 'Admin') return false;
+  const abas = u.abas_permitidas;
+  return Array.isArray(abas) && abas.length > 0 && !abas.includes('sac');
+};
 export default function SacTab({ currentUser }) {
-  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'|'garantia'>('os');
+  if (semAcessoAoSac(currentUser)) return <div className="acn-sac-so-garantia"><GarantiaTab currentUser={currentUser} /></div>;
+  return <SacTabCompleto currentUser={currentUser} />;
+}
+
+function SacTabCompleto({ currentUser }) {
+  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'|'garantia'>(() => (window as any).__acnDeepLink?.contexto === 'garantia' ? 'garantia' : 'os');
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
   const [loadNfc,      setLoadNfc]      = useState(false);
   const [nfcStatus,    setNfcStatus]    = useState('');
@@ -289,6 +301,17 @@ export default function SacTab({ currentUser }) {
   // Lote de OS (pedido do usuário em 07/10/2026): com vários equipamentos, "uma OS para cada" — cada uma com o seu número, ligadas por lote_id; o quadro mostra o lote num card só.
   const [criarEmLote, setCriarEmLote]       = useState(false);
   const [lotesAbertos, setLotesAbertos]     = useState<Set<string>>(new Set());
+
+  // Link de um aviso de garantia (G5, 20/10/2026) com o SAC já aberto: troca para a aba Garantia, que abre a ficha. O evento traz o mesmo dado do global; não se limpa o global aqui
+  // porque quem o consome é a própria aba Garantia.
+  useEffect(() => {
+    const irParaGarantia = (e?: any) => {
+      const pend = (window as any).__acnDeepLink || e?.detail;
+      if (pend?.contexto === 'garantia') setAbaAtiva('garantia');
+    };
+    window.addEventListener('acn:abrir-registro', irParaGarantia);
+    return () => window.removeEventListener('acn:abrir-registro', irParaGarantia);
+  }, []);
 
   useEffect(() => {
     fetchOrdens(); fetchEquipamentos(); fetchCategorias(); fetchTiposServico();
