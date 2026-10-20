@@ -1716,8 +1716,10 @@ function PainelRecebimento({ currentUser }: any) {
     const { data } = await supabase.from('pcp_pedidos_compra')
       // vinculo_* e quantidade_comprada TÊM de vir: sem eles a janela de recebimento não sabe que é reposição de
       // estoque e não credita nada (pedido PC-FU6DS9, 29/09/2026)
-      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, quantidade_comprada, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome, vinculo_tipo, vinculo_id, vinculo_descricao')
+      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, quantidade_comprada, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome, vinculo_tipo, vinculo_id, vinculo_descricao, forma_recebimento, coletado_em, coletado_por_nome')
       .eq('status_compra', 'Comprado')
+      // coleta marcada e ainda não feita não é recebimento: o Compras busca a mercadoria e registra a coleta (20/10/2026)
+      .or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null')
       .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
     setPedidos(data || []);
     setLoading(false);
@@ -1730,7 +1732,8 @@ function PainelRecebimento({ currentUser }: any) {
   // R7 (13/10/2026): na tela, o valor respeita a marca "ver valores" (desligada = ***)
   const fmt = (v: any) => v != null ? (podeVerValores(currentUser) ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '***') : '—';
   const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-  const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(hojeISO());
+  // mercadoria coletada pelo Compras já está aqui: não está "atrasada", espera a conferência
+  const atrasado = (p: any) => !p.coletado_em && p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(hojeISO());
 
   return (
     <div className="sec-card">
@@ -1749,7 +1752,7 @@ function PainelRecebimento({ currentUser }: any) {
                   <td>{p.fornecedor || '—'}</td>
                   <td className="acn-num">{p.quantidade ?? '—'}</td>
                   <td className="acn-num">{fmt(p.valor_compra)}</td>
-                  <td>{fmtDt(p.data_prevista_recebimento)}{atrasado(p) && <> <Selo familia="erro" ponto={false}>atrasado</Selo></>}</td>
+                  <td>{p.coletado_em ? <>Coletado em {fmtDt(p.coletado_em)}{p.coletado_por_nome ? <div className="acn-fraco">por {p.coletado_por_nome}</div> : null}</> : fmtDt(p.data_prevista_recebimento)}{p.coletado_em && <> <Selo familia="info" ponto={false}>coleta</Selo></>}{atrasado(p) && <> <Selo familia="erro" ponto={false}>atrasado</Selo></>}</td>
                   <td><Botao pequeno variante="primario" icone={mdiTrayArrowDown} onClick={() => abrirReceber(p)}>Receber</Botao></td>
                 </tr>
               ))}
@@ -1933,7 +1936,7 @@ export default function LogisticaTab({ currentUser }) {
     setLoading(true);
     const [{ data: mData }, { data: pcData }] = await Promise.all([
       supabase.from('logistica_manifestos').select('*').order('data', { ascending: false }),
-      supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material, data_prevista_recebimento').eq('status_compra', 'Comprado').order('data_prevista_recebimento', { ascending: true }),
+      supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material, data_prevista_recebimento').eq('status_compra', 'Comprado').or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null').order('data_prevista_recebimento', { ascending: true }),
     ]);
     setManifestos(mData || []);
     setPedidosCompra(pcData || []);

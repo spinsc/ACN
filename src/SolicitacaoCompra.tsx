@@ -12,8 +12,8 @@
 // (enviarSolicitacaoCompra, que passa por criarRequisicaoCompra) e UMA janela
 // (ModalSolicitarCompra). Quem pede compra — CRM, Licitações, a "Nova demanda" do
 // Compras — usa as mesmas peças e ganha o mesmo comportamento: lista de itens
-// (com busca no catálogo), prioridade, prazo, centro de custo, vínculo, fornecedor
-// sugerido, link, anexos e observações com @menção. A requisição que nasce sozinha
+// (com busca no catálogo, e fornecedor sugerido e link por item), prioridade, prazo, centro de custo, vínculo,
+// anexos e observações com @menção. A requisição que nasce sozinha
 // (reposição de estoque, pintura) já passava por criarRequisicaoCompra.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
@@ -64,8 +64,9 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
         <MencaoTextarea value={valor.descricao} onChange={v => set('descricao', v)} rows={2}
           placeholder="Para que serve, urgência, referências... @Nome para mencionar" />
       </div>
-      <ItensDemandaEditor itens={valor.itens} onChange={v => set('itens', v)} titulo="Itens a comprar" comValor
-        dica="Valor é opcional: se não souber, o comprador completa." />
+      {/* 20/10/2026: fornecedor sugerido e link são POR ITEM, numa linha abaixo da descrição; saiu o fornecedor e o link gerais da lista toda */}
+      <ItensDemandaEditor itens={valor.itens} onChange={v => set('itens', v)} titulo="Itens a comprar" comValor comFornecedor
+        dica="Valor, fornecedor sugerido e link são opcionais: se não souber, o comprador completa." />
       <div className="form-group">
         <label className="acn-label">Prioridade</label>
         <div className="acn-sco-prio">
@@ -90,15 +91,6 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
         <label className="acn-label">Vincular a um processo (opcional)</label>
         <VinculoPicker value={valor.vinculo} onSelect={v => set('vinculo', v)} onClear={() => set('vinculo', null)} />
         <div className="acn-ajuda">OP, OS, PV, outra compra… A compra com OP vinculada aparece como "Demanda de OP".</div>
-      </div>
-      <div className="form-group">
-        <label className="acn-label">Fornecedor sugerido (opcional)</label>
-        <input className="acn-input" value={valor.fornecedor} onChange={e => set('fornecedor', e.target.value)} placeholder="Nome do fornecedor…" />
-      </div>
-      <div className="form-group">
-        <label className="acn-label">Link (opcional)</label>
-        <input className="acn-input" value={valor.linkUrl} onChange={e => set('linkUrl', e.target.value)}
-          placeholder="https://… (página do produto, especificação, cotação online)" />
       </div>
       <div className="form-group">
         <label className="acn-label">Comprador responsável (opcional)</label>

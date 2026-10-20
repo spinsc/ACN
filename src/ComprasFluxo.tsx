@@ -29,7 +29,8 @@ import { horasUteis } from './utils/horasUteis';
 import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import { Botao, Selo, Faixa } from './Interface';
 import { confirmar } from './Feedback';
-import { ItensDemandaEditor, itemVazio, itensPreenchidos } from './DemandaItens';
+import { ItensDemandaEditor, ItensDemandaView, itemVazio, itensPreenchidos, enderecoDoLink } from './DemandaItens';
+import Linkify from './Linkify';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { AvisoSaldoCentro } from './CentroCustoUso';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload, mdiClose } from '@mdi/js';
@@ -179,6 +180,48 @@ function ResumoPedido({ p }: any) {
       </div>
       <div className="acn-flx-resumo-desc">{p.descricao_material}</div>
       <div className="acn-fraco">Qtd {p.quantidade || 1}{p.criado_por_nome ? ` · solicitado por ${p.criado_por_nome}` : ''}</div>
+    </div>
+  );
+}
+
+// ── Coleta (pedido do usuário em 20/10/2026) ─────────────────────────────────
+// Ao efetivar a compra o Compras escolhe como a mercadoria chega: o fornecedor ENVIA (como sempre) ou o Compras COLETA (fornecedores da região em que vale mais a pena buscar; o setor separa um
+// dia para buscar tudo). A data combinada fica em data_prevista_recebimento nos dois casos (na coleta é o dia da coleta), então alertas, card da OP e relatórios continuam funcionando.
+// Coleta marcada e ainda não feita = "aguardando coleta": só depois de registrada a coleta (coletado_em) a compra entra no recebimento da Logística, que confere a quantidade e credita o estoque.
+export const ehColeta = (p: any) => p?.forma_recebimento === 'coleta';
+export const aguardandoColeta = (p: any) => ehColeta(p) && !p?.coletado_em && p?.status_compra === 'Comprado';
+
+// ── O que foi pedido, por inteiro, para o comprador ───────────────────────────
+// Pedido do usuário em 20/10/2026: tudo que a pessoa preenche na solicitação tem de aparecer para o comprador (o fornecedor sugerido, por exemplo, não aparecia onde ele trabalha).
+const diaDoPedido = (d: any) => (d ? new Date(String(d).length <= 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR') : '');
+export function QuadroDaSolicitacao({ p, canVerValor = false, currentUser, mostrarSolicitante = true, podeEditarAnexos = false }: any) {
+  const itens = Array.isArray(p?.itens) ? p.itens.filter((i: any) => String(i?.nome || '').trim()) : [];
+  const obsCompra = String(p?.observacoes_compra || '');
+  const prioridade = (/(?:^|\n)Prioridade:\s*(Alta|Média|Baixa)/.exec(obsCompra) || [])[1] || '';
+  const observacoes = obsCompra.split('\n').filter(l => !/^Prioridade:/.test(l)).join('\n').trim();
+  // a descrição guarda o título, o motivo e as linhas dos itens; as linhas dos itens já aparecem na lista abaixo
+  const geradas = new Set(itens.map((i: any) => `${i.quantidade || 1}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}`));
+  const texto = String(p?.descricao_material || '').split('\n').filter(l => !geradas.has(l)).join('\n').trim();
+  // depois da cotação escolhida, p.fornecedor passa a ser o vencedor; antes, é o que a pessoa sugeriu (solicitações antigas, com um fornecedor só para a lista toda)
+  const sugerido = ['Pendente', 'Em Andamento'].includes(p?.status_compra) ? String(p?.fornecedor || '').trim() : '';
+  const Linha = ({ k, v }: any) => (v ? <div className="acn-ficha-linha acn-cmp-ficha"><span>{k}</span><span>{v}</span></div> : null);
+  return (
+    <div className="acn-quadro" data-solicitacao>
+      <div className="acn-quadro-titulo">O que foi pedido</div>
+      {texto && <div className="acn-prod-texto">{texto}</div>}
+      {itens.length > 0 && <ItensDemandaView itens={itens} mostrarValor={canVerValor} />}
+      <div>
+        <Linha k="Prioridade" v={prioridade} />
+        <Linha k="Prazo desejado" v={diaDoPedido(p?.prazo_entrega)} />
+        <Linha k="Centro de custo" v={p?.centro_custo} />
+        <Linha k="Vínculo" v={p?.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : ''} />
+        <Linha k="Comprador indicado" v={p?.comprador_nome} />
+        {mostrarSolicitante && <Linha k="Solicitado por" v={[p?.criado_por_nome || p?.criado_por, p?.criado_por_setor].filter(Boolean).join(' · ')} />}
+        <Linha k="Fornecedor sugerido" v={sugerido} />
+        <Linha k="Link" v={p?.link_url ? (enderecoDoLink(p.link_url) ? <a href={enderecoDoLink(p.link_url)!} target="_blank" rel="noreferrer">{p.link_url}</a> : p.link_url) : ''} />
+      </div>
+      {observacoes && <div><div className="acn-quadro-titulo">Observações</div><div className="acn-prod-texto"><Linkify text={observacoes} /></div></div>}
+      <div><div className="acn-quadro-titulo">Anexos</div><AnexosCompra pedido={p} currentUser={currentUser} podeEditar={podeEditarAnexos} /></div>
     </div>
   );
 }
@@ -382,6 +425,8 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
 // numa compra de vários materiais, e a OC lista item a item.
 export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
   const [prazo, setPrazo] = useState(pedido.data_prevista_recebimento ? String(pedido.data_prevista_recebimento).slice(0, 10) : '');
+  // 20/10/2026: o fornecedor envia (como sempre) ou o Compras coleta; a data é o prazo de entrega ou o dia da coleta
+  const [forma, setForma] = useState<'envio' | 'coleta'>(pedido.forma_recebimento === 'coleta' ? 'coleta' : 'envio');
   const [salvando, setSalvando] = useState(false);
   const umaVez = useUmaVez();
 
@@ -399,14 +444,14 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
   const mudou = Math.abs(totalComprado - totalPedido) > 0.0001;
 
   const salvar = umaVez(async () => {
-    if (!prazo) { alert('Informe o prazo de entrega combinado com o fornecedor.'); return; }
+    if (!prazo) { alert(forma === 'coleta' ? 'Informe o dia da coleta.' : 'Informe o prazo de entrega combinado com o fornecedor.'); return; }
     if (totalComprado <= 0) { alert('Informe a quantidade comprada.'); return; }
     setSalvando(true);
     // devolve a lista com o comprado por item, para a OC sair certa
     const itensComprados = itensBase.length
       ? itensBase.map((i: any, n: number) => ({ ...i, quantidade_comprada: num(qtds[n]) }))
       : null;
-    const ok = await onConfirmar(pedido, prazo, totalComprado, itensComprados);
+    const ok = await onConfirmar(pedido, prazo, totalComprado, itensComprados, forma);
     setSalvando(false);
     if (ok !== false) onClose?.();
   });
@@ -447,9 +492,16 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
         </div>
       )}
 
-      <Rotulo>Prazo de entrega do pedido *</Rotulo>
-      <input type="date" className="acn-input" value={prazo} onChange={e => setPrazo(e.target.value)} />
-      <div className="acn-ajuda">Se o recebimento não for registrado até esta data, Compras e Almoxarifado recebem um alerta.</div>
+      <Rotulo>Como a mercadoria chega *</Rotulo>
+      <div className="acn-sco-prio" data-forma>
+        <Botao pequeno variante={forma === 'envio' ? 'primario' : 'secundario'} aria-pressed={forma === 'envio'} onClick={() => setForma('envio')}>O fornecedor envia</Botao>
+        <Botao pequeno variante={forma === 'coleta' ? 'primario' : 'secundario'} aria-pressed={forma === 'coleta'} onClick={() => setForma('coleta')}>Coleta pelo Compras</Botao>
+      </div>
+      <Rotulo>{forma === 'coleta' ? 'Dia da coleta *' : 'Prazo de entrega do pedido *'}</Rotulo>
+      <input type="date" className="acn-input" aria-label={forma === 'coleta' ? 'Dia da coleta' : 'Prazo de entrega do pedido'} value={prazo} onChange={e => setPrazo(e.target.value)} />
+      <div className="acn-ajuda">{forma === 'coleta'
+        ? 'O Compras busca a mercadoria neste dia (a compra aparece na lista de Coletas). Se a coleta não for registrada até a data, Compras e Almoxarifado recebem um alerta. Depois de coletada, a compra segue para a conferência do recebimento na Logística.'
+        : 'Se o recebimento não for registrado até esta data, Compras e Almoxarifado recebem um alerta.'}</div>
       <Rodape>
         <Botao variante="secundario" onClick={onClose} disabled={salvando}>Cancelar</Botao>
         <Botao variante="primario" onClick={salvar} disabled={salvando}>{salvando ? 'Confirmando…' : 'Confirmar compra'}</Botao>
@@ -561,9 +613,9 @@ export function AnexosCompra({ pedido, currentUser, podeEditar }: any) {
 // ── Histórico ────────────────────────────────────────────────────────────────
 const TIPO_HIST: Record<string, string> = {
   avanco: 'Avançou', retorno: 'Reprocesso', descarte: 'Descartada', reativacao: 'Reativada',
-  parado: 'Justificativa (parada)', posicao_entrega: 'Posição da entrega', edicao: 'Solicitação editada', anexo: 'Anexos',
+  parado: 'Justificativa (parada)', posicao_entrega: 'Posição da entrega', edicao: 'Solicitação editada', anexo: 'Anexos', coleta: 'Coleta',
 };
-const FAMILIA_HIST: Record<string, string> = { retorno: 'atencao', descarte: 'erro', parado: 'atencao', posicao_entrega: 'info', avanco: 'ok', reativacao: 'ok' };
+const FAMILIA_HIST: Record<string, string> = { retorno: 'atencao', descarte: 'erro', parado: 'atencao', posicao_entrega: 'info', coleta: 'info', avanco: 'ok', reativacao: 'ok' };
 
 export function HistoricoCompra({ pedidoId, recarregar = 0 }: any) {
   const [itens, setItens] = useState<any[] | null>(null);
@@ -624,7 +676,7 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
     // com lista de itens a quantidade é a soma deles (como na criação); sem lista, vale o campo
     const qtd = itensNovos.length ? itensNovos.reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0) : Number(String(form.quantidade).replace(',', '.'));
     if (!(qtd > 0)) { alert('Informe uma quantidade maior que zero.'); return; }
-    const chave = (l: any[]) => JSON.stringify((l || []).filter((i: any) => String(i?.nome || '').trim()).map((i: any) => [String(i.nome).trim(), Number(i.quantidade) || 1, String(i.descricao || '').trim(), i.valor_unitario ?? null]));
+    const chave = (l: any[]) => JSON.stringify((l || []).filter((i: any) => String(i?.nome || '').trim()).map((i: any) => [String(i.nome).trim(), Number(i.quantidade) || 1, String(i.descricao || '').trim(), i.valor_unitario ?? null, String(i.fornecedor_sugerido || '').trim(), String(i.link_url || '').trim()]));
     const itensMudaram = chave(itensNovos) !== chave(pedido.itens);
     // Etapa 15c (05/10/2026): o centro de custo também se corrige aqui (antes só no Financeiro); o texto antigo acompanha o código
     const centroMudou = (form.centroId || null) !== (pedido.centro_custo_id || null);
@@ -665,16 +717,14 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
       <Rotulo>Descrição do material / serviço *</Rotulo>
       <Texto value={form.descricao_material} onChange={e => set('descricao_material', e.target.value)} rows={3} />
       <div className="acn-flx-bloco">
-        <ItensDemandaEditor itens={itens} onChange={setItens} titulo="Itens a comprar" comValor
-          dica="Valor é opcional: se não souber, o comprador completa." />
+        <ItensDemandaEditor itens={itens} onChange={setItens} titulo="Itens a comprar" comValor comFornecedor
+          dica="Valor, fornecedor sugerido e link são opcionais: se não souber, o comprador completa." />
       </div>
       <div className="acn-flx-bloco acn-flx-qtdforn">
         <div><Rotulo>Quantidade *</Rotulo>
           {itensPreenchidos(itens).length
             ? <div className="acn-ajuda">{itensPreenchidos(itens).reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0)} (soma dos itens)</div>
             : <input className="acn-input" type="number" min={0} step="any" value={form.quantidade} onChange={e => set('quantidade', e.target.value)} />}</div>
-        <div><Rotulo>Fornecedor sugerido</Rotulo>
-          <input className="acn-input" value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} /></div>
       </div>
       <div className="acn-flx-bloco">
         <Rotulo>Centro de custo</Rotulo>
@@ -685,10 +735,6 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
       <div className="acn-flx-bloco">
         <Rotulo>Vincular a um processo (opcional)</Rotulo>
         <VinculoPicker value={form.vinculo} onSelect={v => set('vinculo', v)} onClear={() => set('vinculo', null)} />
-      </div>
-      <div className="acn-flx-bloco">
-        <Rotulo>Link (opcional)</Rotulo>
-        <input className="acn-input" value={form.link_url} onChange={e => set('link_url', e.target.value)} placeholder="https://…" />
       </div>
       <div className="acn-flx-bloco">
         <Rotulo>Observações</Rotulo>
@@ -718,7 +764,7 @@ export function calcularAlertasCompras(pedidos: any[], agora = new Date()) {
     if (LIMITE_HORAS[st] != null) {
       const h = horasUteis(ultima, agora);
       if (h >= LIMITE_HORAS[st]) alertas.push({ tipo: 'parado', pedido: p, horas: h, limite: LIMITE_HORAS[st] });
-    } else if (st === 'Comprado' && p.data_prevista_recebimento) {
+    } else if (st === 'Comprado' && p.data_prevista_recebimento && !(ehColeta(p) && p.coletado_em)) {   // coleta já feita: a mercadoria está aqui, não há o que cobrar do fornecedor
       const prazo = String(p.data_prevista_recebimento).slice(0, 10);
       if (prazo < hojeISO) {
         const fimPrazo = new Date(prazo + 'T17:45:00');
@@ -726,7 +772,7 @@ export function calcularAlertasCompras(pedidos: any[], agora = new Date()) {
         // sem posição desde que o prazo venceu, ou última posição com mais de 24h úteis
         if (ultimaDt < fimPrazo || horasUteis(ultimaDt, agora) >= 24) {
           const dias = Math.floor((new Date(hojeISO + 'T12:00:00').getTime() - new Date(prazo + 'T12:00:00').getTime()) / 86400000);
-          alertas.push({ tipo: 'entrega', pedido: p, dias });
+          alertas.push({ tipo: 'entrega', pedido: p, dias, coleta: ehColeta(p) });
         }
       }
     }
@@ -747,7 +793,7 @@ export function alertasDoUsuario(alertas: any[], u: any) {
   });
 }
 
-const CAMPOS_ALERTA = 'id, numero_pedido, descricao_material, quantidade, fornecedor, status_compra, ultima_movimentacao_em, data_atualizacao, data_criacao, data_prevista_recebimento, criado_por, criado_por_nome, comprador_email, comprador_nome, reprocessos, alerta_entrega_mencionado_em, numero_oc';
+const CAMPOS_ALERTA = 'id, numero_pedido, descricao_material, quantidade, fornecedor, forma_recebimento, coletado_em, status_compra, ultima_movimentacao_em, data_atualizacao, data_criacao, data_prevista_recebimento, criado_por, criado_por_nome, comprador_email, comprador_nome, reprocessos, alerta_entrega_mencionado_em, numero_oc';
 
 // Etapa 7.58: se a leitura falhar, LANÇA o erro (antes devolvia "nenhum alerta" e a janela de justificativa obrigatória deixava de aparecer);
 // quem chama mantém os alertas que já tinha na tela.
@@ -765,7 +811,7 @@ export async function dispararMencoesEntrega(alertas: any[], user: any) {
       .eq('id', a.pedido.id).is('alerta_entrega_mencionado_em', null).select('id');
     if (!data?.length) continue;
     await mencionarPerfis(['Compras', 'Almoxarifado'], a.pedido,
-      `Entrega atrasada: a requisição ${a.pedido.numero_pedido}${a.pedido.numero_oc ? ` (${a.pedido.numero_oc})` : ''} — ${a.pedido.descricao_material || ''} — tinha entrega prevista para ${fmtData(a.pedido.data_prevista_recebimento)} e ainda não foi recebida. Registre a posição em Avisos.`,
+      `${a.coleta ? 'Coleta atrasada' : 'Entrega atrasada'}: a requisição ${a.pedido.numero_pedido}${a.pedido.numero_oc ? ` (${a.pedido.numero_oc})` : ''} — ${a.pedido.descricao_material || ''} — tinha ${a.coleta ? 'coleta marcada' : 'entrega prevista'} para ${fmtData(a.pedido.data_prevista_recebimento)} e ${a.coleta ? 'a coleta ainda não foi registrada' : 'ainda não foi recebida'}. Registre a posição em Avisos.`,
       { id: '', nome: 'Sistema' }, 'entrega_atrasada');
   }
 }
@@ -791,7 +837,7 @@ function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: a
   const p = alerta.pedido;
   const entrega = alerta.tipo === 'entrega';
   const salvar = umaVez(async () => {
-    if (!texto.trim()) { alert(entrega ? 'Informe a posição da entrega.' : 'Informe o motivo de estar parada.'); return; }
+    if (!texto.trim()) { alert(entrega ? (alerta.coleta ? 'Informe a posição da coleta.' : 'Informe a posição da entrega.') : 'Informe o motivo de estar parada.'); return; }
     setSalvando(true);
     const gravou = await registrarJustificativa(alerta, texto.trim(), currentUser);
     setSalvando(false);
@@ -803,16 +849,16 @@ function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: a
     <div className={'acn-flx-alerta ' + (entrega ? 'entrega' : 'parada')}>
       <div className="acn-flx-alerta-topo">
         <strong className="acn-mono">{p.numero_pedido}</strong>
-        <Selo familia={entrega ? 'erro' : 'atencao'}>{entrega ? `Entrega atrasada · ${alerta.dias} d` : `${p.status_compra} · parada há ${horasTexto(alerta.horas)} úteis`}</Selo>
+        <Selo familia={entrega ? 'erro' : 'atencao'}>{entrega ? `${alerta.coleta ? 'Coleta atrasada' : 'Entrega atrasada'} · ${alerta.dias} d` : `${p.status_compra} · parada há ${horasTexto(alerta.horas)} úteis`}</Selo>
         {p.reprocessos > 0 && <Selo familia="neutro" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
       </div>
       <div className="acn-flx-alerta-desc">{String(p.descricao_material || '').slice(0, 180)}</div>
       <div className="acn-ajuda">
         {p.criado_por_nome ? `Solicitado por ${p.criado_por_nome}` : ''}{p.comprador_nome ? ` · Comprador: ${p.comprador_nome}` : ''}
-        {entrega ? ` · Prazo: ${fmtData(p.data_prevista_recebimento)}${p.fornecedor ? ` · ${p.fornecedor}` : ''}` : ''}
+        {entrega ? ` · ${alerta.coleta ? 'Coleta marcada para' : 'Prazo:'} ${fmtData(p.data_prevista_recebimento)}${p.fornecedor ? ` · ${p.fornecedor}` : ''}` : ''}
       </div>
       <textarea className="acn-input acn-flx-alerta-texto" rows={compacto ? 2 : 2}
-        placeholder={entrega ? 'Posição: o que aconteceu com a entrega e qual a nova previsão *' : p.status_compra === 'Aprovado' ? 'Por que a compra ainda não foi efetivada? *' : 'Por que está parada? *'}
+        placeholder={entrega ? (alerta.coleta ? 'Posição: o que aconteceu com a coleta e qual o novo dia *' : 'Posição: o que aconteceu com a entrega e qual a nova previsão *') : p.status_compra === 'Aprovado' ? 'Por que a compra ainda não foi efetivada? *' : 'Por que está parada? *'}
         value={texto} onChange={e => setTexto(e.target.value)} aria-label="Justificativa" />
       <div className="acn-flx-alerta-acoes">
         <Botao pequeno variante="primario" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando…' : entrega ? 'Registrar posição' : 'Registrar motivo'}</Botao>

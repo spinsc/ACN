@@ -1051,7 +1051,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                     ))}
                   </div>
                 </div>
-                <ItensDemandaEditor itens={itensEdit} onChange={setItensEdit} comValor={!!camposSetor.valorItens}
+                <ItensDemandaEditor itens={itensEdit} onChange={setItensEdit} comValor={!!camposSetor.valorItens} comFornecedor={!!camposSetor.valorItens}
                   categoriaPreferida={CATEGORIA_DO_SETOR[d.setor] || ''} />
                 <div>
                   <label className="acn-dav-det-31">VÍNCULOS (OPCIONAL)</label>
@@ -1404,7 +1404,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   return (
     <div className="acn-dav-nova-1"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="acn-dav-nova-2">
+      <div className={'acn-dav-nova-2' + (setorAlvo === 'Compras' ? ' acn-dav-nova-compras' : '')}>
         <div className="acn-dav-nova-3">
           <span>{setorAlvo === 'Compras' ? '+ Nova solicitação de compra' : '+ Nova Demanda Avulsa'}</span>
           <Botao className="acn-dav-b acn-dav-nova-4" onClick={onClose}>✕</Botao>
@@ -1469,7 +1469,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
             </div>
             {campos.pintura && <PinturaCampos valor={pintura} onChange={v => setPintura(p => ({ ...p, ...v }))} />}
             <ItensDemandaEditor itens={itens} onChange={setItens} categoriaPreferida={CATEGORIA_DO_SETOR[setorAlvo] || ''}
-              comValor={!!campos.valorItens} dica={campos.valorItens ? 'Valor é opcional: se não souber, o comprador completa.' : ''}
+              comValor={!!campos.valorItens} comFornecedor={!!campos.valorItens} dica={campos.valorItens ? 'Valor é opcional: se não souber, o comprador completa.' : ''}
               titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : CATEGORIA_DO_SETOR[setorAlvo] ? 'Modelos e quantidades' : 'Itens (opcional)'} />
             <div>
               <label className="acn-dav-nova-6">Prioridade</label>

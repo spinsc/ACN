@@ -5756,3 +5756,27 @@ html body .modal-box.acn-modal-cadastro.acn-gar-jan { width: min(880px, 96vw); m
 .acn-gar-rel td.acn-dir, .acn-gar-rel th.acn-dir { text-align: right; }
 html body .modal-box.acn-modal-cadastro.acn-gar-jan.acn-gar-rel { width: min(1100px, 96vw); max-width: 1100px; }
 .acn-gar-encerrar { display: flex; align-items: center; gap: 10px; margin-right: auto; flex-wrap: wrap; max-width: 60%; }
+
+/* ══ Solicitação de compra (20/10/2026) — fornecedor sugerido e link por item ══ */
+.acn-dmi-forn { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+@media (max-width: 640px) { .acn-dmi-forn { grid-template-columns: 1fr; } }
+.acn-dmi-view-forn { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-left: 48px; font-size: 12px; color: var(--acn-muted); overflow-wrap: anywhere; }
+.acn-dmi-view-forn strong { color: var(--acn-ink); }
+
+/* ══ Compras e solicitação de compra — janelas mais largas (pedido do usuário em 20/10/2026, "para melhor visualização") ══
+   Todas as janelas do Compras ganharam largura; o limite de 95% da tela continua valendo no celular. */
+html body .modal-box.acn-modal-cadastro.acn-cmp-j380 { width: min(760px, 95vw); max-width: 760px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j420 { width: min(780px, 95vw); max-width: 780px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j460 { width: min(800px, 95vw); max-width: 800px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j480 { width: min(840px, 95vw); max-width: 840px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j500 { width: min(880px, 95vw); max-width: 880px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j560 { width: min(1000px, 95vw); max-width: 1000px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j640 { width: min(1280px, 96vw); max-width: 1280px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-j680 { width: min(1120px, 96vw); max-width: 1120px; }
+html body .modal-box.acn-modal-cadastro.acn-cmp-recebidos { width: min(1280px, 96vw); max-width: 1280px; }
+html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(960px, 96vw); max-width: 960px; }
+/* confirmar compra, editar solicitação, voltar etapa, descartar…: a largura pedida em cada janela (520 ou 620) ganha 300 px */
+html body .modal-box.acn-modal-cadastro.acn-flx-jan { width: min(calc(var(--acn-flx-larg, 520px) + 300px), 95vw); max-width: calc(var(--acn-flx-larg, 520px) + 300px); }
+/* "+ Nova solicitação de compra" (Compras — Demandas) */
+html body .acn-main .acn-dav-nova-2.acn-dav-nova-compras { width: min(960px, 97vw); }
+html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([type]) { width: 100%; box-sizing: border-box; }

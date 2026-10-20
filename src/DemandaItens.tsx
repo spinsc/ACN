@@ -38,6 +38,9 @@ export type ItemDemanda = {
   produto_codigo?: string | null;
   item_id?: string | null;           // item do catálogo (cadastro_itens)
   valor_unitario?: number | string | null;  // Compras: quem pede ou o comprador informa
+  // Pedido do usuário em 20/10/2026: na solicitação de compra o fornecedor e o link são POR ITEM (antes eram um só para a lista toda e o comprador não os via)
+  fornecedor_sugerido?: string;
+  link_url?: string;
   estrutura?: any[];                 // por unidade do produto
 };
 
@@ -58,10 +61,19 @@ export function itensPreenchidos(itens: ItemDemanda[]) {
     .filter(i => String(i.nome || '').trim())
     .map(i => ({
       ...i, nome: String(i.nome).trim(), descricao: String(i.descricao || '').trim(), quantidade: num(i.quantidade) || 1,
+      ...(i.fornecedor_sugerido !== undefined ? { fornecedor_sugerido: String(i.fornecedor_sugerido || '').trim() } : {}),
+      ...(i.link_url !== undefined ? { link_url: String(i.link_url || '').trim() } : {}),
       ...(i.valor_unitario !== undefined ? { valor_unitario: String(i.valor_unitario ?? '').trim() === '' ? null : num(i.valor_unitario) } : {}),
     }));
 }
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+/** O endereço de um link digitado à mão: aceita "www.site.com" (põe https://) e só devolve http(s); qualquer outra coisa (javascript:, por exemplo) não vira link. */
+export function enderecoDoLink(texto: any): string | null {
+  const t = String(texto || '').trim();
+  if (!t) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return /^https?:\/\//i.test(t) ? t : null;
+  return /^[^\s/]+\.[^\s]+$/.test(t) || /^[^\s/]+\.[^\s/]+\/\S*$/.test(t) ? 'https://' + t : null;
+}
 /** Total dos itens com valor (null se nenhum tem valor) */
 export function totalDosItens(itens: ItemDemanda[]) {
   const comValor = (itens || []).filter(i => i.valor_unitario != null && i.valor_unitario !== '');
@@ -140,7 +152,7 @@ export function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categor
 }
 
 // ── Editor da lista de itens ─────────────────────────────────────────────────
-export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean }) {
+export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false, comFornecedor = false }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean; comFornecedor?: boolean }) {
   const [abertos, setAbertos] = useState<Record<number, boolean>>({});
   const set = (i: number, patch: Partial<ItemDemanda>) => onChange(itens.map((x, j) => j === i ? { ...x, ...patch } : x));
   const escolher = async (i: number, s: any) => {
@@ -180,6 +192,12 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
             </div>
             <input value={it.descricao} onChange={e => set(i, { descricao: e.target.value })} placeholder="Descrição (opcional)" aria-label="Descrição do item"
               className="acn-input acn-dmi-desc" />
+            {comFornecedor && (
+              <div className="acn-dmi-forn">
+                <input value={it.fornecedor_sugerido || ''} onChange={e => set(i, { fornecedor_sugerido: e.target.value })} placeholder="Fornecedor sugerido (opcional)" aria-label="Fornecedor sugerido do item" className="acn-input" />
+                <input value={it.link_url || ''} onChange={e => set(i, { link_url: e.target.value })} placeholder="Link do produto (opcional)" aria-label="Link do item" className="acn-input" />
+              </div>
+            )}
             {(it.produto_codigo || it.estrutura?.length > 0) && (
               <div className="acn-dmi-meta">
                 {it.produto_codigo && <span>Cadastro: {it.produto_codigo}</span>}
@@ -291,6 +309,14 @@ export function ItensDemandaView({ itens, mostrarValor = false, onSalvarValores 
             )}
           </div>
           {it.descricao && <div className="acn-ajuda acn-dmi-view-desc">{it.descricao}</div>}
+          {(it.fornecedor_sugerido || it.link_url) && (
+            <div className="acn-dmi-view-forn" data-item-forn>
+              {it.fornecedor_sugerido && <span>Fornecedor sugerido: <strong>{it.fornecedor_sugerido}</strong></span>}
+              {it.link_url && (enderecoDoLink(it.link_url)
+                ? <span>Link: <a href={enderecoDoLink(it.link_url)!} target="_blank" rel="noreferrer">{it.link_url}</a></span>
+                : <span>Link: {it.link_url}</span>)}
+            </div>
+          )}
           {it.produto_id && <div className="acn-dmi-view-arqs"><ProdutoArquivos produtoId={it.produto_id} somenteLeitura compacto /></div>}
           {abertos[i] && <TabelaEstrutura estrutura={it.estrutura} quantidade={num(it.quantidade) || 1} />}
         </div>

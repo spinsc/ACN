@@ -26,7 +26,7 @@ import { listarEsperandoAprovacao, rotuloDaAlcada } from './AprovacaoCompras';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
   ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao,
-  podeAprovarCompra, carregarAprovadoresCompra, lerAprovadoresCompra } from './ComprasFluxo';
+  podeAprovarCompra, carregarAprovadoresCompra, lerAprovadoresCompra, QuadroDaSolicitacao, ehColeta, aguardandoColeta, mencionarPerfis } from './ComprasFluxo';
 
 const VAZIO_COTACAO = {
   fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
@@ -369,7 +369,7 @@ function imprimirSolicitacao(p: any) {
         ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade_comprada ?? p.quantidade) || '—'}${p.quantidade_comprada != null && Number(p.quantidade_comprada) !== Number(p.quantidade) ? ` <span style="color:#94a3b8">(pedido ${esc(p.quantidade)})</span>` : ''}</td></tr>`}
         <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
-        <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
+        <tr><td><b>${ehColeta(p) ? 'Coleta pelo comprador em' : 'Previsão de Recebimento'}</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
         <tr><td><b>Status</b></td><td><span class="badge">${esc(p.status_compra) || '—'}</span></td></tr>
         <tr><td><b>Data da Solicitação</b></td><td>${p.data_criacao ? new Date(p.data_criacao).toLocaleDateString('pt-BR') : '—'}</td></tr>
         ${p.observacoes_compra ? `<tr><td><b>Observações</b></td><td style="white-space:pre-wrap">${esc(p.observacoes_compra)}</td></tr>` : ''}
@@ -413,7 +413,7 @@ export function imprimirOrdemCompra(p: any) {
         <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
         <tr><td><b>Centro de Custo</b></td><td>${esc(p.centro_custo) || '—'}</td></tr>
-        <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
+        <tr><td><b>${ehColeta(p) ? 'Coleta pelo comprador em' : 'Previsão de Recebimento'}</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
         <tr><td><b>Justificativa da Vencedora</b></td><td>${esc(p.justificativa_vencedora) || '—'}</td></tr>
       </table>
       ${blocoItensImpressao(p, fmt)}
@@ -714,6 +714,85 @@ function ModalRecebidos({ lista, canVerValor, onAbrir, onClose }) {
   );
 }
 
+// ─── COLETAS (pedido do usuário em 20/10/2026) ───────────────────────────────
+// O Compras separa um dia para buscar o que comprou de fornecedores da região. Esta lista mostra as compras com coleta marcada e ainda não feita, agrupadas por dia, para o comprador ver o que
+// buscar em cada dia e registrar a coleta (só depois disso a compra entra no recebimento da Logística, que confere a quantidade e credita o estoque).
+const diaSemana = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+function ModalColetas({ onRegistrar, onMudarDia, onAbrir, onClose }: any) {
+  const [lista, setLista] = useState<any[] | null>(null);
+  const [erro, setErro] = useState('');
+  const [tentativa, setTentativa] = useState(0);
+  const [ocupado, setOcupado] = useState(false);
+  const [dias_, setDias] = useState<Record<string, string>>({});
+  const hoje = new Date().toLocaleDateString('sv-SE');
+  useEffect(() => {
+    supabase.from('pcp_pedidos_compra')
+      .select('id,numero_pedido,numero_oc,descricao_material,itens,fornecedor,quantidade,quantidade_comprada,data_prevista_recebimento,opl,status_compra,forma_recebimento,coletado_em,comprador_nome')
+      .eq('status_compra', 'Comprado').eq('forma_recebimento', 'coleta').is('coletado_em', null).order('data_prevista_recebimento', { ascending: true, nullsFirst: false })
+      .then(({ data, error }) => { if (error) { setErro(error.message); setLista(prev => prev ?? []); } else { setErro(''); setLista(data || []); } });
+  }, [tentativa]);
+  const grupos: { dia: string; itens: any[] }[] = [];
+  (lista || []).forEach((p: any) => {
+    const dia = String(p.data_prevista_recebimento || '').slice(0, 10) || 'sem-dia';
+    const g = grupos.find(x => x.dia === dia);
+    if (g) g.itens.push(p); else grupos.push({ dia, itens: [p] });
+  });
+  const resumoItens = (p: any) => {
+    const its = Array.isArray(p.itens) ? p.itens.filter((i: any) => String(i?.nome || '').trim()) : [];
+    return its.length ? its.map((i: any) => `${i.quantidade_comprada ?? i.quantidade ?? 1}× ${i.nome}`).join(' · ') : String(p.descricao_material || '').split('\n')[0];
+  };
+  const registrar = async (p: any, dia: string) => {
+    if (ocupado) return;
+    setOcupado(true);
+    try { await onRegistrar(p, dia); setTentativa(n => n + 1); } finally { setOcupado(false); }
+  };
+  const registrarTodas = async (g: any) => {
+    if (ocupado) return;
+    if (!await confirmar(`Registrar a coleta de ${g.itens.length} compra(s) como feita hoje?`)) return;
+    setOcupado(true);
+    try { for (const p of g.itens) await onRegistrar(p, hoje); setTentativa(n => n + 1); } finally { setOcupado(false); }
+  };
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro acn-cmp-recebidos" role="dialog" aria-label="Coletas">
+        <div className="acn-modal-cab"><span className="modal-title acn-prod-ic"><Icone path={mdiCartOutline} size={16} /> Coletas pelo Compras{lista ? ` (${lista.length})` : ''}</span></div>
+        <div className="acn-modal-corpo">
+          <div className="acn-ajuda">Compras com coleta marcada que ainda não foram buscadas, por dia. Ao registrar a coleta, a compra segue para a conferência do recebimento na Logística.</div>
+          {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={() => setTentativa(n => n + 1)}>Tentar de novo</Botao>}>Não foi possível ler as coletas ({erro}). Isso não quer dizer que não haja coleta marcada.</Faixa>}
+          {lista === null ? <div className="acn-fraco">Carregando…</div> : lista.length === 0 && !erro ? <div className="acn-empty">Nenhuma coleta pendente.</div> : grupos.map(g => {
+            const atras = g.dia !== 'sem-dia' && g.dia < hoje;
+            const dias = g.dia !== 'sem-dia' ? Math.floor((Date.parse(hoje + 'T12:00:00Z') - Date.parse(g.dia + 'T12:00:00Z')) / 86400000) : 0;
+            return (
+              <div key={g.dia} className="acn-quadro" data-coleta-dia={g.dia}>
+                <div className="acn-cmp-chiplinha">
+                  <strong className="acn-quadro-titulo">{g.dia === 'sem-dia' ? 'Sem dia marcado' : diaSemana(g.dia)}</strong>
+                  {g.dia === hoje && <Selo familia="info" ponto={false}>hoje</Selo>}
+                  {atras && <Selo familia="erro" ponto={false}>atrasada · {dias} d</Selo>}
+                  <span className="acn-ajuda">{g.itens.length} compra(s)</span>
+                  {g.dia <= hoje && g.itens.length > 1 && <Botao pequeno disabled={ocupado} onClick={() => registrarTodas(g)}>Todas coletadas hoje</Botao>}
+                </div>
+                {g.itens.map((p: any) => (
+                  <div key={p.id} className="acn-cmp-res-cot">
+                    <span className="acn-forte">{p.numero_pedido}{p.numero_oc ? ` · ${p.numero_oc}` : ''}</span>
+                    <span>{p.fornecedor || 'Fornecedor não informado'}</span>
+                    <span className="acn-ajuda">{resumoItens(p)}</span>
+                    <input type="date" className="acn-input" aria-label={`Dia em que ${p.numero_pedido} foi coletada`} max={hoje} value={dias_[p.id] ?? hoje}
+                      onChange={e => setDias(d => ({ ...d, [p.id]: e.target.value }))} />
+                    <Botao pequeno variante="primario" disabled={ocupado} onClick={() => registrar(p, dias_[p.id] ?? hoje)}>Registrar coleta</Botao>
+                    <Botao pequeno disabled={ocupado} onClick={() => onMudarDia(p)}>Mudar o dia</Botao>
+                    <Botao pequeno variante="discreto" onClick={() => onAbrir(p)}>Abrir</Botao>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        <div className="acn-modal-rodape"><Botao variante="primario" onClick={onClose}>Fechar</Botao></div>
+      </div>
+    </div>
+  );
+}
+
 function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, currentUser }) {
   const [cotacoes, setCotacoes] = useState<any[] | null>(null);
   const [aprovacoes, setAprovacoes] = useState<any[]>([]);
@@ -755,34 +834,23 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
           <Botao onClick={onClose}>Fechar</Botao>
         </div>
         <div className="acn-modal-corpo">
-          <div className="acn-quadro-titulo">Solicitação</div>
-          <div className="acn-quadro acn-prod-texto">
-            {p.descricao_material || '—'}
-          </div>
+          <QuadroDaSolicitacao p={p} canVerValor={canVerValor} currentUser={currentUser} mostrarSolicitante={false} podeEditarAnexos={podeEditarSolicitacao(p, currentUser)} />
           <div>
             <Linha k="Tipo" v={origemDaRequisicao(p).label} />
             <Linha k="Quantidade" v={p.quantidade} />
             <Linha k="OP" v={p.opl} />
-            <Linha k="Vínculo" v={p.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : null} />
-            <Linha k="Link" v={p.link_url ? <a href={p.link_url} target="_blank" rel="noreferrer">{p.link_url}</a> : null} />
-            <Linha k="Fornecedor" v={p.fornecedor} />
+            <Linha k="Fornecedor" v={['Pendente', 'Em Andamento'].includes(p.status_compra) ? null : p.fornecedor} />
             {canVerValor && <Linha k="Valor da compra" v={p.valor_compra ? moeda(p.valor_compra) : null} />}
-            <Linha k="Centro de custo" v={p.centro_custo} />
             <Linha k="Departamento" v={dep?.nome} />
-            <Linha k="Prev. recebimento" v={p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null} />
+            <Linha k="Como chega" v={ehColeta(p) ? 'Coleta pelo Compras' : null} />
+            <Linha k={ehColeta(p) ? 'Coleta marcada para' : 'Prev. recebimento'} v={p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null} />
+            <Linha k="Coletado em" v={p.coletado_em ? `${data(p.coletado_em)}${p.coletado_por_nome ? ` por ${p.coletado_por_nome}` : ''}` : null} />
             <Linha k="Prazo prometido" v={p.prazo_prometido_entrega ? `${data(p.prazo_prometido_entrega)} (${p.prazo_prometido_destino === 'cliente' ? 'cliente' : 'produção'})` : null} />
             <Linha k="NF" v={p.numero_nf} />
             <Linha k="Solicitado por" v={[p.criado_por_nome || p.criado_por, p.data_criacao ? data(p.data_criacao) : null].filter(Boolean).join(' · ')} />
-            <Linha k="Comprador" v={p.comprador_nome} />
             <Linha k="Reprocessos" v={p.reprocessos > 0 ? `${p.reprocessos} (ver histórico)` : null} />
             <Linha k="Descarte" v={p.status_compra === 'Descartada' ? `${p.motivo_descarte || '—'}${p.descartado_por_nome ? ` — ${p.descartado_por_nome}` : ''}` : null} />
           </div>
-          {p.observacoes_compra && (
-            <>
-              <div className="acn-quadro-titulo">Observações</div>
-              <div className="acn-prod-texto"><Linkify text={p.observacoes_compra} /></div>
-            </>
-          )}
           {errosLeitura.length > 0 && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={() => setTentativa(n => n + 1)}>Tentar de novo</Botao>}>
               Não foi possível ler {errosLeitura.join('; ')}. Isso não quer dizer que não haja.
@@ -813,8 +881,6 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
               ))}
             </>
           )}
-          <div className="acn-quadro-titulo">Anexos</div>
-          <AnexosCompra pedido={p} currentUser={currentUser} podeEditar={podeEditarSolicitacao(p, currentUser)} />
           <div className="acn-quadro-titulo">Histórico da requisição</div>
           <HistoricoCompra pedidoId={p.id} />
           {acomp.length > 0 && (
@@ -1005,6 +1071,8 @@ export default function ComprasTab({ currentUser }) {
   const [modalResumo, setModalResumo]           = useState<any>(null);
   const [modalVinculo, setModalVinculo]         = useState<any>(null);
   const [modalRecebidos, setModalRecebidos]     = useState<any[]|null>(null);
+  const [modalColetas, setModalColetas]         = useState(false);
+  const [qtdColetas, setQtdColetas]               = useState(0);
   // Tabela x Kanban (por status) — lembra a escolha neste navegador
   const [visao, setVisaoState] = useState<'tabela'|'kanban'>(() => {
     try { return localStorage.getItem('acn:compras-visao') === 'kanban' ? 'kanban' : 'tabela'; } catch { return 'tabela'; }
@@ -1203,6 +1271,9 @@ export default function ComprasTab({ currentUser }) {
 
   const load = async (silent=false) => {
     carregarEsperando();
+    // quantas coletas esperam o comprador (o número do botão "Coletas")
+    supabase.from('pcp_pedidos_compra').select('id', { count: 'exact', head: true }).eq('status_compra', 'Comprado').eq('forma_recebimento', 'coleta').is('coletado_em', null)
+      .then(({ count, error }) => { if (!error) setQtdColetas(count || 0); });
     if (!silent) setLoading(true);
     setQueryError(null);
     let q = supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', {ascending:false});
@@ -1732,9 +1803,12 @@ export default function ComprasTab({ currentUser }) {
   // (status_compra='Comprado'), gera número de OC (trigger) e cria a demanda de
   // acompanhamento — antes disso, o pedido fica em 'Aprovado' esperando essa
   // confirmação, mesmo que quem aprovou também tenha alçada pra isso.
-  const confirmarCompra = async (pedido: any, prazo?: string, qtdComprada?: number, itensComprados?: any[] | null) => {
+  const confirmarCompra = async (pedido: any, prazo?: string, qtdComprada?: number, itensComprados?: any[] | null, forma: 'envio' | 'coleta' = 'envio') => {
     const upd: any = { status_compra: 'Comprado' };
     if (prazo) upd.data_prevista_recebimento = prazo;
+    // 20/10/2026: o fornecedor envia ou o Compras coleta; na coleta a data é o dia da coleta e ela ainda não foi feita
+    upd.forma_recebimento = forma;
+    upd.coletado_em = null; upd.coletado_por_nome = null;
     // Quanto foi de fato comprado. `quantidade` fica intacta com o que foi
     // PEDIDO: são fatos diferentes e o "pediu 9" é a régua para conferir
     // depois se o mínimo do estoque está bem calibrado (25/09/2026).
@@ -1747,13 +1821,29 @@ export default function ComprasTab({ currentUser }) {
     const difQtd = qtdComprada != null && Number(pedido.quantidade) !== qtdComprada
       ? `Pedido de ${pedido.quantidade}, comprado ${qtdComprada}.` : '';
     await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aprovado', para: 'Comprado',
-      motivo: [difQtd, prazo ? `Prazo de entrega: ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : '']
+      motivo: [difQtd, prazo ? `${forma === 'coleta' ? 'Coleta pelo Compras marcada para' : 'Prazo de entrega:'} ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : '']
         .filter(Boolean).join(' ') || null }, currentUser);
     const erroDemanda = await criarDemandaComprasFinalizada(pedido.id);
     if (erroDemanda) alert('A compra foi confirmada, mas a demanda de acompanhamento em "Compras — Demandas" NÃO foi criada: ' + erroDemanda + '\n\nAvise o Compras para abrir à mão.');   // 7.57
     await notificarCriadorPedido(pedido, `Compra confirmada — pedido ${pedido.numero_pedido}.`);
     setFiltro('');
     load();
+    return true;
+  };
+
+  // Registra que a mercadoria foi buscada (20/10/2026). A partir daqui a compra aparece no recebimento da Logística, que confere a quantidade (a entrada no estoque continua automática).
+  const registrarColeta = async (p: any, dia: string): Promise<boolean> => {
+    const hoje = new Date().toLocaleDateString('sv-SE');
+    if (!dia || dia > hoje) { alert('Não foi possível registrar a coleta: informe o dia em que a mercadoria foi buscada (não pode ser no futuro).'); return false; }
+    const { data, error } = await supabase.from('pcp_pedidos_compra').update({ coletado_em: dia, coletado_por_nome: currentUser?.nome || null })
+      .eq('id', p.id).eq('status_compra', 'Comprado').is('coletado_em', null).select('id');
+    if (error) { alert('Não foi possível registrar a coleta: ' + error.message); return false; }
+    if (!data?.length) { alert('Não foi possível registrar a coleta: a compra já foi coletada ou mudou de situação. A lista foi atualizada.'); load(true); return false; }
+    logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: p.id, changeType: 'UPDATE', oldRow: { coletado_em: null }, newRow: { coletado_em: dia }, user: currentUser });
+    const diaBr = new Date(dia + 'T12:00:00').toLocaleDateString('pt-BR');
+    await registrarHistorico(p.id, { tipo: 'coleta', de: 'Comprado', para: 'Comprado', motivo: `Mercadoria coletada em ${diaBr}. Segue para a conferência do recebimento na Logística.` }, currentUser);
+    await mencionarPerfis(['Almoxarifado'], p, `Coleta feita: a requisição ${p.numero_pedido}${p.numero_oc ? ` (${p.numero_oc})` : ''} foi coletada em ${diaBr}. Confira o recebimento na Logística.`, currentUser, 'coleta_feita');
+    load(true);
     return true;
   };
 
@@ -2139,6 +2229,7 @@ export default function ComprasTab({ currentUser }) {
           ) : (
             <div className="acn-cmp-chiplinha">
               {fmtData(p.data_prevista_recebimento)}
+              {ehColeta(p) && <Selo familia={p.coletado_em ? 'ok' : 'info'} ponto={false} title={p.coletado_em ? 'Mercadoria já coletada' : 'O Compras coleta no dia marcado'}>{p.coletado_em ? 'Coletado' : 'Coleta'}</Selo>}
               {podeGerirCompras(currentUser) && !['Pendente', DESCARTADA].includes(p.status_compra) && (
                 <Botao pequeno variante="discreto" icone={mdiPencilOutline}
                   onClick={()=>setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0,10) : '', motivo: '' })}
@@ -2214,11 +2305,15 @@ export default function ComprasTab({ currentUser }) {
           )}
 
           {/* Comprado → Recebido — só via conferência técnica na Logística (Fase 3) */}
-          {p.status_compra==='Comprado' && (
+          {p.status_compra==='Comprado' && (aguardandoColeta(p) ? (
+            <Botao pequeno variante="primario" icone={mdiPackageVariantClosed} title="Coleta marcada: abra a lista de Coletas para registrar quando a mercadoria for buscada" onClick={()=>setModalColetas(true)}>
+              Aguardando coleta
+            </Botao>
+          ) : (
             <span className="acn-ajuda acn-cmp-aguarda acn-prod-ic" title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar">
-              <Icone path={mdiPackageVariantClosed} size={12} /> Aguarda recebimento na Logística
+              <Icone path={mdiPackageVariantClosed} size={12} /> {ehColeta(p) ? 'Coletada — aguarda conferência na Logística' : 'Aguarda recebimento na Logística'}
             </span>
-          )}
+          ))}
 
           {/* Resumo da solicitação */}
           <Botao pequeno icone={mdiMagnify} onClick={()=>setModalResumo(p)} title="Resumo da solicitação">
@@ -2258,6 +2353,7 @@ export default function ComprasTab({ currentUser }) {
         <div className="acn-cmp-cab-esq">
           <h2 className="acn-cmp-titulo"><Icone path={mdiCartOutline} size={18} /> Requisições de Compra</h2>
           <Botao pequeno icone={mdiCogOutline} onClick={()=>setModalGerCentros(true)}>Centros de Custo</Botao>
+          <Botao pequeno icone={mdiCartOutline} variante={qtdColetas > 0 ? 'primario' : 'secundario'} onClick={()=>setModalColetas(true)}>Coletas{qtdColetas > 0 ? ` (${qtdColetas})` : ''}</Botao>
         </div>
         <div className="acn-cmp-filtros">
           <Chips rotulo="Visão" ativo={visao} onChange={(v) => setVisao(v as any)}
@@ -2363,6 +2459,7 @@ export default function ComprasTab({ currentUser }) {
                       <span className="acn-ajuda">
                         {canVerValor && p.valor_compra ? <strong className="acn-txt-ok acn-cmp-card-valor">{fmt(p.valor_compra)}</strong> : null}
                         {p.data_prevista_recebimento ? fmtData(p.data_prevista_recebimento) : null}
+                        {ehColeta(p) && <> <Selo familia={p.coletado_em ? 'ok' : 'info'} ponto={false}>{p.coletado_em ? 'Coletado' : 'Coleta'}</Selo></>}
                       </span>
                       <div className="acn-acoes-linha quebra">
                         {p.status_compra==='Pendente' && <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>avancarStatus(p)}>Iniciar</Botao>}
@@ -2669,9 +2766,8 @@ export default function ComprasTab({ currentUser }) {
               <span className="modal-title acn-prod-ic"><Icone path={mdiTagOutline} size={16} /> Mesa de Cotações — {modalCotacoes.numero_pedido}</span>
             </div>
             <div className="acn-modal-corpo acn-form-cheio">
-              <div className="acn-ajuda">
-                {modalCotacoes.descricao_material} · recomendado 3 cotações, mas pode aprovar com menos quando não houver 3 fornecedores disponíveis.
-              </div>
+              <QuadroDaSolicitacao p={modalCotacoes} canVerValor={canVerValor} currentUser={currentUser} />
+              <div className="acn-ajuda">Recomendado 3 cotações, mas pode aprovar com menos quando não houver 3 fornecedores disponíveis.</div>
 
               {erroMesa && (
                 <Faixa tom="erro" acao={<Botao pequeno onClick={() => abrirModalCotacoes(modalCotacoes)}>Tentar de novo</Botao>}>
@@ -2943,6 +3039,11 @@ export default function ComprasTab({ currentUser }) {
               : { tipo: 'posicao_entrega', de: 'Comprado', para: 'Comprado', motivo: 'Recebimento com divergência — a compra continua em Comprado até resolver.' }, currentUser);
             setModalFluxo(null); load();
           }} />
+      )}
+      {modalColetas && (
+        <ModalColetas onRegistrar={registrarColeta} onClose={() => setModalColetas(false)}
+          onMudarDia={(p: any) => { setModalColetas(false); setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0, 10) : '', motivo: '' }); }}
+          onAbrir={(p: any) => { setModalColetas(false); setModalResumo(p); }} />
       )}
       {modalRecebidos && (
         <ModalRecebidos lista={modalRecebidos} canVerValor={canVerValor}
