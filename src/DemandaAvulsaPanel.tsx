@@ -821,19 +821,19 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             : <Botao className="acn-dav-b acn-dav-bt-retomar ativa" onClick={() => mudarRelogio('retomada')} disabled={salvando}>▶ Retomar</Botao>)}
           {!temEtapas && d.status !== 'Cancelada' && (
             <Botao onClick={() => setMostrarDesignar(v => !v)}
-              className={'acn-dav-b acn-dav-bt-designar' + (mostrarDesignar ? ' aberto' : ' ativa')}>
+              className={'acn-dav-b acn-dav-bt-designar' + (mostrarDesignar ? '' : ' ativa')}>
               👤 {d.responsavel_nome ? 'Reatribuir' : 'Designar'}
             </Botao>
           )}
           {!ENCERRADA(d.status) && (
             <Botao onClick={() => { setMostrarReprogramar(v => !v); setMostrarDesignar(false); setEditando(false); }}
-              className={'acn-dav-b acn-dav-bt-reprogramar' + (mostrarReprogramar ? ' aberto' : ' ativa')}>
+              className={'acn-dav-b acn-dav-bt-reprogramar' + (mostrarReprogramar ? '' : ' ativa')}>
               📅 Reprogramar
             </Botao>
           )}
           {d.status !== 'Cancelada' && (
             <Botao onClick={() => { setEditando(v => !v); setMostrarDesignar(false); setMostrarReprogramar(false); }}
-              className={'acn-dav-b acn-dav-bt-editar' + (editando ? ' aberto' : '') + (acoesDaBarra === 1 ? ' solo' : '')}>
+              className={'acn-dav-b acn-dav-bt-editar' + (acoesDaBarra === 1 ? ' solo' : '')}>
               ✏️ Editar
             </Botao>
           )}
@@ -846,7 +846,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {ehAdmin && ENCERRADA(d.status) && (
             <Botao onClick={() => setMostrarReabrir(v => !v)}
               title="Admin: volta a demanda concluída ou cancelada por engano"
-              className={'acn-dav-b acn-dav-bt-reabrir' + (mostrarReabrir ? ' aberto' : '') + (acoesDaBarra === 1 ? ' solo' : '')}>
+              className={'acn-dav-b acn-dav-bt-reabrir' + (acoesDaBarra === 1 ? ' solo' : '')}>
               ↺ Reabrir
             </Botao>
           )}

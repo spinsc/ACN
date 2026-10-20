@@ -5039,7 +5039,7 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 html body .acn-b.acn-dav-b:not(#acn) { display: block; align-items: normal; justify-content: normal; gap: normal; height: auto; width: auto; margin: 0; padding: 0; border: 0 none; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; font-weight: 400; line-height: normal; letter-spacing: normal; text-align: center; white-space: normal; cursor: pointer; transition: background-color .12s, border-color .12s, color .12s; }
 html body .acn-main .acn-dav-al-txt { display: block; color: #d97706; font-size: 12px; font-weight: 700; line-height: 1.45; }
 html body .acn-main .acn-dav-al-txt.al-vencida { color: #dc2626; }
-html body .acn-b.acn-dav-b.acn-dav-bt-cancelar:not(#acn) { padding: 5px 12px; margin-left: 61.4219px; font-size: 12px; white-space: nowrap; }
+html body .acn-b.acn-dav-b.acn-dav-bt-cancelar:not(#acn) { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
 html body .acn-b.acn-dav-b.acn-dav-bt-cancelar.aberto:not(#acn) { margin-left: auto; }
 html body .acn-b.acn-dav-b.acn-dav-bt-designar:not(#acn) { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
 html body .acn-b.acn-dav-b.acn-dav-bt-editar:not(#acn) { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
@@ -5077,9 +5077,7 @@ html body .acn-b.acn-dav-b.acn-dav-nova-4:not(#acn) { padding: 1px 6px; color: #
 html body .acn-b.acn-dav-b.acn-dav-pn-3:not(#acn) { padding: 4px 12px; border-radius: 4px; color: #ffffff; background-color: #0e7068; font-size: 12px; font-weight: 700; white-space: nowrap; }
 html body .acn-b.acn-dav-b.acn-dav-pn-7:not(#acn) { padding: 2px 8px; border: 1px solid #e3b5b1; border-radius: 8px; color: #b9302a; background-color: #ffffff; font-size: 12px; font-weight: 700; white-space: nowrap; }
 html body .acn-b.acn-dav-b.acn-dav-prio-ed:not(#acn) { padding: 4px; border: 1px solid #dee4ea; border-radius: 4px; background-color: #ffffff; font-size: 12px; font-weight: 700; flex-grow: 1; flex-basis: 0%; }
-html body .acn-b.acn-dav-b.acn-dav-prio-ed.prio-media:not(#acn) { background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); color: #ffffff; }
 html body .acn-b.acn-dav-b.acn-dav-prio-nova:not(#acn) { padding: 6px; border: 1px solid #dee4ea; border-radius: 4px; background-color: #ffffff; font-weight: 700; flex-grow: 1; flex-basis: 0%; }
-html body .acn-b.acn-dav-b.acn-dav-prio-nova.prio-media:not(#acn) { background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); color: #ffffff; }
 html body .acn-b.acn-dav-b.acn-dav-setor:not(#acn) { padding: 6px 12px; border: 1px solid #dee4ea; border-radius: 4px; background-color: #ffffff; font-weight: 700; white-space: nowrap; }
 html body .acn-b.acn-dav-b.acn-dav-setor.sel:not(#acn) { color: #0a544e; background-color: #e3f2ef; border-top-color: #9fd0c8; border-right-color: #9fd0c8; border-bottom-color: #9fd0c8; border-left-color: #9fd0c8; }
 html body .acn-main .acn-dav-badge-venc { padding: 1px 7px; border-radius: 10px; overflow: hidden; display: block; color: #b9302a; background-color: #fbe9e7; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; vertical-align: middle; }
@@ -5167,7 +5165,6 @@ html body .acn-main .acn-dav-det-60 { display: block; font-size: 14px; line-heig
 html body .acn-main .acn-dav-det-61 { display: block; color: #2563eb; font-weight: 600; word-break: break-all; cursor: pointer; flex-grow: 1; flex-basis: 0%; }
 html body .acn-main .acn-dav-det-8 { background-color: #e2e8f0; flex-shrink: 0; }
 html body .acn-main .acn-dav-det-9 { padding: 8px 16px; display: flex; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: #e2e8f0; flex-shrink: 0; background-color: #f8fafc; gap: 6px; }
-html body .acn-main .acn-dav-det-9.acn-pilulas { padding: 3px; background-color: #eef1f4; gap: 2px; }
 html body .acn-main .acn-dav-det-alerta { padding: 6px 16px; color: #d97706; background-color: #fffbeb; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: #fcd34d; font-weight: 700; flex-shrink: 0; }
 html body .acn-main .acn-dav-det-alerta.al-vencida { color: #dc2626; background-color: #fef2f2; border-bottom-color: #fca5a5; }
 html body .acn-main .acn-dav-det-cab { padding: 12px 16px; display: flex; color: #ffffff; flex-shrink: 0; align-items: flex-start; justify-content: space-between; }
@@ -5239,7 +5236,7 @@ html body .acn-main .acn-dav-nova-16 { display: block; color: #6b7280; font-size
 html body .acn-main .acn-dav-nova-17 { display: flex; flex-direction: column; gap: 10px; }
 html body .acn-main .acn-dav-nova-18:not(#acn) { padding: 5px 8px; border-radius: 4px; border-top-color: #d1d5db; border-right-color: #d1d5db; border-bottom-color: #d1d5db; border-left-color: #d1d5db; font-size: 13px; }
 html body .acn-main .acn-dav-nova-19 { padding: 10px 16px; display: flex; border-top-width: 1px; border-top-style: solid; border-top-color: #e2e8f0; flex-shrink: 0; justify-content: flex-end; gap: 8px; }
-html body .acn-main .acn-dav-nova-2 { border-radius: 8px; display: flex; background-color: #ffffff; box-shadow: rgba(0, 0, 0, 0.267) 0px 8px 32px 0px; flex-direction: column; max-height: 900px; }
+html body .acn-main .acn-dav-nova-2 { border-radius: 8px; display: flex; background-color: #ffffff; box-shadow: rgba(0, 0, 0, 0.267) 0px 8px 32px 0px; flex-direction: column; max-height: 90vh; }
 html body .acn-main .acn-dav-nova-3 { padding: 12px 16px; display: flex; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: #e2e8f0; font-size: 14px; font-weight: 700; line-height: 1.45; flex-shrink: 0; justify-content: space-between; }
 html body .acn-main .acn-dav-nova-5 { padding: 16px; overflow: auto; display: flex; flex-direction: column; flex-grow: 1; flex-basis: 0%; gap: 12px; }
 html body .acn-main .acn-dav-nova-6 { display: block; margin-bottom: 4px; color: #6b7280; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; cursor: default; }
@@ -5277,7 +5274,6 @@ html body .acn-b.acn-dav-b.acn-dav-et-2.reprog-aberto:not(#acn), html body .acn-
 .acn-dav-card-11 { height: 4px; }
 .acn-dav-card-12 { flex-wrap: wrap; }
 .acn-dav-card-2 { flex-wrap: wrap; }
-.acn-dav-det-1 { inset: 0; }
 .acn-dav-det-14 { flex-wrap: wrap; }
 .acn-dav-det-18 { flex-wrap: wrap; }
 .acn-dav-det-2 { height: 100vh; width: min(620px,96vw); }
@@ -5289,18 +5285,15 @@ html body .acn-b.acn-dav-b.acn-dav-et-2.reprog-aberto:not(#acn), html body .acn-
 .acn-dav-det-46 { width: 100%; }
 .acn-dav-det-48 { grid-template-columns: 1fr 1fr; }
 .acn-dav-det-49 { grid-column: 1/-1; }
-.acn-dav-det-52 { border-color: #bfdbfe; }
 .acn-dav-det-59 { flex-wrap: wrap; }
 .acn-dav-det-8 { height: 5px; }
 .acn-dav-det-9 { flex-wrap: wrap; }
 .acn-dav-et-12 { grid-template-columns: 1fr 1fr 1fr; }
-.acn-dav-et-19 { text-decoration: underline; }
 .acn-dav-et-4 { flex-wrap: wrap; }
 .acn-dav-et-8 { width: 100%; }
-.acn-dav-nova-1 { inset: 0; }
 html body .acn-b.acn-dav-b.acn-dav-nova-14:not(#acn) { height: 32px; width: 32px; }
 .acn-dav-nova-18 { width: 100%; }
-.acn-dav-nova-2 { max-height: 90vh; width: min(560px,97vw); }
+.acn-dav-nova-2 { width: min(560px,97vw); }
 .acn-dav-nova-8 { flex-wrap: wrap; }
 .acn-dav-pn-4 { flex-wrap: wrap; }
 .acn-dav-pn-5 { height: 18px; width: 1px; }
@@ -5318,8 +5311,10 @@ html body .acn-main .acn-dav-card-prog-fill { transition: width .3s; }
 /* o cartão ganhava sombra maior com o mouse em cima (escrita em linha por código); agora é :hover */
 html body .acn-main .acn-dav-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.133); }
 html body .acn-main .acn-dav-prazo.al-vencida { color: #dc2626; }
-html body.dark .acn-main .acn-dav-al-txt.al-vencida { color: #fca5a5; }
-html body.dark .acn-main .acn-dav-al-txt { color: #fdba74; font-size: 12px; font-weight: 700; line-height: 1.45; }
+/* prioridade escolhida nos formulários Editar e Nova demanda: botão principal (o tom das outras escolhas); a Alta escolhida fica vermelha, como o botão de perigo */
+html body .acn-b.acn-dav-b.acn-dav-prio-ed.sel:not(#acn), html body .acn-b.acn-dav-b.acn-dav-prio-nova.sel:not(#acn) { background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); color: #ffffff; }
+html body .acn-b.acn-dav-b.acn-dav-prio-ed.sel.prio-alta:not(#acn), html body .acn-b.acn-dav-b.acn-dav-prio-nova.sel.prio-alta:not(#acn) { background-color: #b9302a; }
+html body.dark .acn-main .acn-dav-al-txt { font-size: 12px; font-weight: 700; line-height: 1.45; }
 html body.dark .acn-b.acn-dav-b.acn-dav-bt-reabrir.solo:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-b.acn-dav-b.acn-dav-chip.sel:not(#acn) { color: #ffffff; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
 html body.dark .acn-b.acn-dav-b.acn-dav-chip:not(#acn) { color: #cbd5e1; background-color: #162032; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
@@ -5338,9 +5333,7 @@ html body.dark .acn-b.acn-dav-b.acn-dav-nova-20:not(#acn) { color: #cbd5e1; back
 html body.dark .acn-b.acn-dav-b.acn-dav-nova-4:not(#acn) { color: #94a3b8; }
 html body.dark .acn-b.acn-dav-b.acn-dav-pn-7:not(#acn) { color: #fca5a5; background-color: #2d0a0a; border-top-color: #6b2a26; border-right-color: #6b2a26; border-bottom-color: #6b2a26; border-left-color: #6b2a26; }
 html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
-html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed.prio-media:not(#acn) { color: #fcecdb; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
 html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
-html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova.prio-media:not(#acn) { color: #fcecdb; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
 html body.dark .acn-b.acn-dav-b.acn-dav-setor.sel:not(#acn) { color: #93c5fd; background-color: #1e3a5f; border-top-color: #1f6f67; border-right-color: #1f6f67; border-bottom-color: #1f6f67; border-left-color: #1f6f67; }
 html body.dark .acn-b.acn-dav-b.acn-dav-setor:not(#acn) { color: #cbd5e1; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-main .acn-dav-badge-venc { color: rgb(248, 188, 183); background-color: rgba(240, 106, 95, 0.24); font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
@@ -5369,7 +5362,7 @@ html body.dark .acn-main .acn-dav-det-2 { background-color: #1e293b; }
 html body.dark .acn-main .acn-dav-det-24 { color: #86efac; background-color: #0d2818; cursor: pointer; }
 html body.dark .acn-main .acn-dav-det-25 { color: inherit; font-weight: 700; }
 html body.dark .acn-main .acn-dav-det-26 { color: #c4b5fd; font-weight: 700; }
-html body.dark .acn-main .acn-dav-det-27 { color: rgb(188, 210, 244); background-color: rgba(107, 155, 230, 0.24); font-size: 11px; font-weight: 600; line-height: 1.2; letter-spacing: normal; white-space: nowrap; }
+html body.dark .acn-main .acn-dav-det-27 { background-color: rgba(107, 155, 230, 0.24); font-size: 11px; font-weight: 600; line-height: 1.2; letter-spacing: normal; white-space: nowrap; }
 html body.dark .acn-main .acn-dav-det-28 { color: inherit; font-size: 12px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-29 { color: #fca5a5; background-color: #2d0a0a; }
 html body.dark .acn-main .acn-dav-det-3 { font-size: 12px; font-weight: 600; line-height: 1.45; }
@@ -5396,7 +5389,7 @@ html body.dark .acn-main .acn-dav-det-60 { font-size: 14px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-det-61 { color: #93c5fd; font-weight: 600; word-break: break-all; cursor: pointer; }
 html body.dark .acn-main .acn-dav-det-8 { color: #94a3b8; background-color: #334155; }
 html body.dark .acn-main .acn-dav-det-9 { background-color: #1e293b; }
-html body.dark .acn-main .acn-dav-det-alerta { color: #fca5a5; background-color: #2d0a0a; font-weight: 700; }
+html body.dark .acn-main .acn-dav-det-alerta { font-weight: 700; }
 html body.dark .acn-main .acn-dav-det-cab { color: #ffffff; }
 html body.dark .acn-main .acn-dav-et-13 { color: #94a3b8; font-size: 11px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
 html body.dark .acn-main .acn-dav-et-14 { font-weight: 600; }
@@ -5417,7 +5410,7 @@ html body.dark .acn-main .acn-dav-et-prazo { color: #94a3b8; }
 html body.dark .acn-main .acn-dav-et-prazo.al-vencida { color: #fca5a5; font-weight: 700; }
 html body.dark .acn-main .acn-dav-et-prazo.al-urgente { color: #fdba74; font-weight: 700; }
 html body.dark .acn-main .acn-dav-g-3 { color: inherit; font-size: 12px; font-weight: 700; line-height: 1.45; }
-html body.dark .acn-main .acn-dav-g-8 { color: inherit; font-size: 12px; line-height: 1.45; }
+html body.dark .acn-main .acn-dav-g-8 { font-size: 12px; line-height: 1.45; }
 html body.dark .acn-main .acn-dav-hist.reprog { color: #fdba74; background-color: #1c1505; }
 html body.dark .acn-main .acn-dav-hist-txt.reprog { color: inherit; font-weight: 600; }
 html body.dark .acn-main .acn-dav-hist-txt { color: #94a3b8; }
@@ -5449,7 +5442,7 @@ html body.dark .acn-main .acn-dav-prio-selo.prio-alta { background-color: rgba(2
 html body.dark .acn-main .acn-dav-prio-selo.prio-baixa { background-color: rgba(63, 181, 106, 0.24); border-top-color: rgba(63, 181, 106, 0.22); border-right-color: rgba(63, 181, 106, 0.22); border-bottom-color: rgba(63, 181, 106, 0.22); border-left-color: rgba(63, 181, 106, 0.22); }
 html body.dark .acn-main .acn-dav-qtd { color: #86efac; background-color: #1e293b; border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
 html body.dark .acn-main .acn-dav-st { color: inherit; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
-html body.dark .acn-main .acn-dav-st.st-concluida { color: rgb(169, 222, 188); background-color: rgba(63, 181, 106, 0.24); }
+html body.dark .acn-main .acn-dav-st.st-concluida { background-color: rgba(63, 181, 106, 0.24); }
 html body.dark .acn-main .acn-dav-st.st-pendente { background-color: rgba(224, 161, 58, 0.24); }
 html body.dark .acn-main .acn-dav-st.st-andamento { background-color: rgba(107, 155, 230, 0.24); }
 html body.dark .acn-main .acn-dav-st.st-cancelada { background-color: rgba(148, 163, 184, 0.24); }
@@ -5471,6 +5464,22 @@ html body.dark .acn-main .acn-dav-et-cab .acn-dav-st.st-concluida { color: rgb(1
 html body.dark .acn-main .acn-badge.acn-dav-det-27 { color: rgb(188, 210, 244) !important; }
 /* o prazo vencido do formulário de reprogramar fica vermelho (no escuro, o vermelho claro dos avisos) */
 html body.dark .acn-main .acn-dav-prazo.al-vencida { color: rgb(252, 165, 165); }
+/* prioridade escolhida (Editar e Nova demanda): fundo principal para qualquer uma; o texto tem o tom claro da própria prioridade (Média: creme, Baixa: verde claro, Alta: rosado sobre o vermelho) */
+html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed.sel:not(#acn), html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova.sel:not(#acn) { background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
+html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed.sel.prio-media:not(#acn), html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova.sel.prio-media:not(#acn) { color: #fcecdb; }
+html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed.sel.prio-baixa:not(#acn), html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova.sel.prio-baixa:not(#acn) { color: rgb(206, 249, 221); }
+html body.dark .acn-b.acn-dav-b.acn-dav-prio-ed.sel.prio-alta:not(#acn), html body.dark .acn-b.acn-dav-b.acn-dav-prio-nova.sel.prio-alta:not(#acn) { background-color: #b9302a; color: rgb(254, 241, 241); }
+/* "Iniciar" da etapa pendente com o "Reprogramar" aberto: toma o tom principal (o gerador só viu isso no "Concluir", da etapa em andamento) */
+html body.dark .acn-b.acn-dav-b.acn-dav-et-2.reprog-aberto:not(#acn) { color: #ffffff; background-color: #0e7068; border-top-color: rgba(0, 0, 0, 0); border-right-color: rgba(0, 0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0); border-left-color: rgba(0, 0, 0, 0); }
+/* achados das cenas de escuro acrescentadas em 19/10/2026 (as que só existiam no claro): o aviso de prazo do detalhe é âmbar quando "vence em N dias" e vermelho só quando vencido;
+   o "100 %" do detalhe fica verde; o filtro "Vencidas" escolhido fica vermelho; o "Editar" sozinho tem borda do escuro */
+html body.dark .acn-main .acn-dav-det-alerta { color: rgb(253, 230, 138); background-color: rgb(28, 21, 5); }
+html body.dark .acn-main .acn-dav-det-alerta.al-vencida { color: rgb(252, 165, 165); background-color: rgb(45, 10, 10); }
+html body.dark .acn-main .acn-dav-pct.ok { color: rgb(134, 239, 172); }
+html body.dark .acn-b.acn-dav-b.acn-dav-chip.sel.venc:not(#acn) { background-color: #b9302a; }
+html body.dark .acn-b.acn-dav-b.acn-dav-bt-editar.solo:not(#acn) { border-top-color: #334155; border-right-color: #334155; border-bottom-color: #334155; border-left-color: #334155; }
+/* o prazo "vence em N dias" no bloco de informação do detalhe: âmbar (só o vencido estava na bateria do escuro) */
+html body.dark .acn-main .acn-dav-inf-val.al-urgente { color: #fdba74; font-weight: 700; }
 @media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
   html body .acn-main .acn-dav-al-txt.al-vencida { color: #dc2626; }
   html body .acn-main .acn-dav-al-txt { color: #d97706; font-size: 12px; font-weight: 700; line-height: 1.45; }
@@ -5526,7 +5535,6 @@ html body.dark .acn-main .acn-dav-prazo.al-vencida { color: rgb(252, 165, 165); 
   html body .acn-main .acn-dav-det-6 { font-size: 12px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-60 { font-size: 14px; line-height: 1.45; }
   html body .acn-main .acn-dav-det-61 { color: #2563eb; font-weight: 600; word-break: break-all; cursor: pointer; }
-  html body .acn-main .acn-dav-det-alerta { color: #dc2626; font-weight: 700; }
   html body .acn-main .acn-dav-det-cab { color: #ffffff; }
   html body .acn-main .acn-dav-et-13 { color: #9ca3af; font-size: 12px; font-weight: 700; line-height: 1.45; text-transform: uppercase; }
   html body .acn-main .acn-dav-et-14 { font-weight: 600; }
