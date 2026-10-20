@@ -147,7 +147,7 @@ as 3 fichas de veículo de nome curto (a equipe corrige pela tela) e as suposiç
 **Ao encerrar, fazer, nesta ordem:**
 1. Atualizar o plano com o quadro final (o que foi feito, o que ficou esperando decisão ou outra pessoa).
 2. **Avisar o usuário** com a ferramenta `PushNotification` (carregue-a com `ToolSearch` se estiver como ferramenta adiada), texto curto, por exemplo:
-   *"ACN: o plano de UX/fluxo foi encerrado. Para iniciar a Garantia (G1), digite /garantia."*
+   *"ACN: o plano de UX/fluxo foi encerrado. A Garantia já foi concluída em 20/10/2026; o próximo projeto é a Etapa 17 (fechar o banco por perfil)."*
 3. Na mensagem final da conversa, dizer em linguagem de processo: o que foi entregue, os números reais, o que ficou pendente com o usuário/RH/equipe, a nota do dia pronta para ele
-   conferir — e **terminar com: "Para iniciar a Garantia, digite `/garantia`."**
-4. **Não iniciar a Garantia sozinho:** ela tem decisões que o usuário precisa tomar com os setores (ver `PLANO_GARANTIA.md`). O comando `/garantia` conduz essa retomada.
+   conferir — e **terminar dizendo que a Garantia já está concluída (ver `PLANOS CONCLUIDOS/PLANO_GARANTIA.md`) e que o próximo projeto é a Etapa 17.**
+4. **A Garantia já foi concluída (20/10/2026):** `PLANOS CONCLUIDOS/PLANO_GARANTIA.md`; não há o que iniciar. O próximo projeto indicado é a Etapa 17 (segurança do banco), que também só começa com o usuário.

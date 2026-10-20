@@ -15,12 +15,15 @@ import { Botao, Chips, Faixa, Selo, hojeISO, diaBR } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { SecoesGarantia } from './GarantiaEtapas';
 import { avisosDaGravacao, descricaoDoAviso } from './GarantiaAvisos';
+import GarantiaRelatorioTela from './GarantiaRelatorioTela';
+import { podeVerRelatorioGarantia } from './GarantiaRelatorio';
 import { ParticipantesPicker, useUsuariosParticipar } from './Participantes';
 import {
   ORIGENS_GARANTIA, SITUACOES_GARANTIA, normalizarPlaca, normalizarChassi, podeAbrirGarantia, podeVerGarantia, podeMexerNaGarantia,
   validarGarantia, cargaDaGarantia, aplicarEdicao, cancelarGarantia, reabrirGarantia, fraseDoEvento, etapaDaGarantia, ROTULOS_ETAPA_GARANTIA,
+  podeConduzirGarantia, encerrarGarantia, bloqueiosParaEncerrar, estaParada, diasParada, ultimaMovimentacao, PRAZO_PARADO_DIAS,
 } from './GarantiaModelo';
-import { mdiShieldCheckOutline, mdiPlus, mdiMagnify, mdiRefresh, mdiPencilOutline, mdiCancel, mdiBackupRestore, mdiClose } from '@mdi/js';
+import { mdiShieldCheckOutline, mdiPlus, mdiMagnify, mdiRefresh, mdiPencilOutline, mdiCancel, mdiBackupRestore, mdiClose, mdiLockCheckOutline, mdiFileChartOutline } from '@mdi/js';
 
 const TABELA = 'garantia_atendimentos';
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -215,6 +218,9 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
 // ─── Detalhe do atendimento ────────────────────────────────────────────────────────────────────────────────────
 function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
   const mexe = podeMexerNaGarantia(g, currentUser);
+  const conduz = podeConduzirGarantia(g, currentUser);
+  const hoje = hojeISO();
+  const falta = g.situacao === 'aberto' ? bloqueiosParaEncerrar(g, hoje) : [];
   const [ocupado, setOcupado] = useState(false);
   const executar = async (operacao: any) => {
     if (ocupado) return;
@@ -237,6 +243,8 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
           </span>
         </div>
         <div className="acn-modal-corpo">
+          {g.situacao === 'encerrado' && <Faixa tom="ok">Atendimento encerrado por {g.encerramento?.por || '—'} em {diaBR(g.encerramento?.em)}. {g.encerramento?.texto}</Faixa>}
+          {estaParada(g, hoje) && <Faixa tom="atencao">Atendimento parado: sem nenhum movimento na ficha há {diasParada(g, hoje)} dias (último: {fraseDoEvento(ultimaMovimentacao(g).evento || {})}). O relatório semanal cobra a partir de {PRAZO_PARADO_DIAS} dias.</Faixa>}
           {g.situacao === 'cancelado' && <Faixa tom="atencao">Atendimento cancelado. Motivo: {g.motivo_cancelamento || '—'}. Nada foi apagado; quem abriu, o responsável ou a gerência pode reabrir.</Faixa>}
           <div className="acn-gar-grade">
             {campo('Cliente', g.cliente_nome)}
@@ -271,7 +279,16 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
               executar((x: any, agora: string) => cancelarGarantia(x, currentUser, m, agora));
             }}>Cancelar atendimento</Botao>
           </>}
-          {mexe && g.situacao === 'cancelado' && <Botao icone={mdiBackupRestore} disabled={ocupado} onClick={async () => {
+          {conduz && g.situacao === 'aberto' && <div className="acn-gar-encerrar" data-encerrar>
+            {falta.length > 0 && <span className="acn-ajuda">Para encerrar falta: {falta.join('; ')}.</span>}
+            <Botao icone={mdiLockCheckOutline} disabled={ocupado || falta.length > 0} onClick={async () => {
+              const t = await pedirTexto('Texto de fechamento (o que foi feito e como o atendimento terminou):');
+              if (!t || !String(t).trim()) return;
+              if (!await confirmar(`Encerrar o atendimento ${g.numero}? Depois de encerrado ele não recebe mais registros (dá para reabrir).`)) return;
+              executar((x: any, agora: string) => encerrarGarantia(x, currentUser, t, agora, hojeISO()));
+            }}>Encerrar atendimento</Botao>
+          </div>}
+          {(g.situacao === 'cancelado' ? mexe : g.situacao === 'encerrado' && conduz) && <Botao icone={mdiBackupRestore} disabled={ocupado} onClick={async () => {
             if (!await confirmar(`Reabrir o atendimento ${g.numero}?`)) return;
             executar((x: any, agora: string) => reabrirGarantia(x, currentUser, agora));
           }}>Reabrir</Botao>}
@@ -290,6 +307,7 @@ export default function GarantiaTab({ currentUser }: any) {
   const [busca, setBusca] = useState('');
   const [janela, setJanela] = useState<null | { modo: string; g?: any }>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [relatorio, setRelatorio] = useState(false);
   const abre = podeAbrirGarantia(currentUser);
 
   const carregar = async () => {
@@ -324,7 +342,10 @@ export default function GarantiaTab({ currentUser }: any) {
       <div className="sec-card">
         <div className="sec-hdr">
           <span className="acn-dev-titulo"><Icone path={mdiShieldCheckOutline} size={16} /> Atendimentos em garantia {lista && <>({filtradas.length})</>}</span>
-          {abre && <Botao variante="primario" pequeno icone={mdiPlus} onClick={() => setJanela({ modo: 'novo' })}>Novo atendimento</Botao>}
+          <span className="acn-dev-selos">
+            {podeVerRelatorioGarantia(currentUser) && <Botao pequeno icone={mdiFileChartOutline} disabled={!lista} onClick={() => setRelatorio(true)}>Relatório semanal</Botao>}
+            {abre && <Botao variante="primario" pequeno icone={mdiPlus} onClick={() => setJanela({ modo: 'novo' })}>Novo atendimento</Botao>}
+          </span>
         </div>
         <div className="acn-filtros">
           <Chips rotulo="Situação" ativo={filtro} onChange={setFiltro} itens={[
@@ -370,7 +391,7 @@ export default function GarantiaTab({ currentUser }: any) {
                         <td className="acn-gar-falha">{g.descricao_falha}</td>
                         <td>{diaBR(g.data_ocorrencia)}</td>
                         <td>{g.responsavel?.nome}</td>
-                        <td>{g.situacao === 'aberto' ? ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)] : '—'}</td>
+                        <td>{g.situacao === 'aberto' ? ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)] : '—'}{estaParada(g, hojeISO()) && <> <Selo familia="atencao" ponto={false} title="Sem nenhum movimento na ficha">Parado há {diasParada(g, hojeISO())} d</Selo></>}</td>
                         <td><Selo familia={FAMILIA_SITUACAO[g.situacao]}>{SITUACOES_GARANTIA[g.situacao]}</Selo></td>
                       </tr>
                     ))}
@@ -383,6 +404,7 @@ export default function GarantiaTab({ currentUser }: any) {
       {detalhe && !janela && (
         <DetalheGarantia g={detalhe} currentUser={currentUser} onFechar={() => setDetalheId(null)} onMudou={carregar} onEditar={() => setJanela({ modo: 'editar', g: detalhe })} />
       )}
+      {relatorio && <GarantiaRelatorioTela fichas={lista || []} currentUser={currentUser} onFechar={() => setRelatorio(false)} />}
       {janela && (
         <JanelaGarantia modo={janela.modo} inicial={janela.g} currentUser={currentUser} onFechar={() => setJanela(null)}
           onGravou={async (id: string) => { await carregar(); if (id) setDetalheId(id); }} />

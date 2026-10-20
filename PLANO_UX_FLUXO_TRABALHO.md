@@ -20,8 +20,7 @@ apresentar o mapa completo e as etapas propostas.
 
 **Atualização de 12/10/2026 (a rotina da madrugada de 13/10):** o usuário autorizou, **depois de avisado do risco**, **push de tudo a cada fatia, com o deploy acompanhado**, inclusive as mudanças de regra de negócio e a migração de dado real da Etapa 18. **Para parar, ele manda "pare"** (ou parecido): termina-se o passo em andamento (commit, push e deploy) e o Claude entrega **um relatório resumido de tudo o que foi feito e o rascunho da nota de atualização do dia para ele analisar e aprovar** — a nota só é gravada depois do OK. A fila e as regras estão na seção **"Fila da madrugada de 13/10/2026"**, mais abaixo.
 
-**Ao encerrar tudo o que depende só do Claude, ele AVISA o usuário** (`PushNotification` + mensagem final) **e diz: "Para iniciar a Garantia, digite `/garantia`."** A Garantia (`PLANO_GARANTIA.md`,
-etapas G1 a G6) **não começa sozinha**: tem decisões que o usuário toma com os setores.
+**Ao encerrar tudo o que depende só do Claude, ele AVISA o usuário** (`PushNotification` + mensagem final) **e diz que a Garantia já foi concluída (20/10/2026, `PLANOS CONCLUIDOS/PLANO_GARANTIA.md`) e que o próximo projeto é a Etapa 17.** (Linha escrita em 08/10, quando a Garantia ainda não existia.)
 
 **Checklist do encerramento** (o que ainda falta, medido em 08/10/2026; marcar ✅ aqui conforme sair):
 
@@ -5311,7 +5310,7 @@ Registro feito em 08/10/2026 (a regra do projeto é o plano andar junto do códi
 | **Comissão do vendedor por tipo de venda** (Revenda, Venda, Pós-vendas) | 08/10 | Migração `rh_funcionarios_percentuais_por_tipo`; tela e PDF usam o percentual do tipo do card do CRM. |
 | **PV 1325**: item do lote contado duas vezes por técnico | 08/10 | Linha repetida em `responsaveis_producao`. O cálculo conta uma vez; a gravação da Produção não repete; **6 linhas apagadas com autorização (251 → 245)** e trava no banco (`responsaveis_producao_unica`). Total de outubro R$ 100,31 → R$ 87,61. |
 | **Demandas**: envolvidos (estilo Trello), demanda para vários setores (uma parte por setor, `grupo_id`) e descrição do anexo; **Selecionar todos** nos participantes | 08/10 | `DemandaExtras.tsx`; migrações `demandas_membros_grupo_descricao_anexo` e `remove_demandas_setoriais_membros` (coluna sem uso, removida com a confirmação do usuário). |
-| **Garantia** — desenho em `PLANO_GARANTIA.md` (G1 a G6) e o comando `/garantia` | 08/10 | Nada construído; começa pelo comando, depois do encerramento deste plano. |
+| **Garantia** — `PLANOS CONCLUIDOS/PLANO_GARANTIA.md` (G1 a G6) e o comando `/garantia` | 08/10 | **Concluída em 20/10/2026** (G1 a G3 em 19/10; G4 a G6 em 20/10). |
 
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex — **bloqueada** (medido em 02/10/2026)
 

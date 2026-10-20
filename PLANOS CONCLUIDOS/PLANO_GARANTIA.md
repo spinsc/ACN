@@ -1,7 +1,9 @@
 # Atendimento em garantia — desenho e etapas
 
+> **PLANO CONCLUÍDO — 20/10/2026.** As seis etapas (G1 a G6) estão em produção. O `/garantia` serve só para consulta ou ajuste.
+
 > Proposta de **08/10/2026**, a pedido do usuário ("Lista pedido Bruna": procedimento de atendimento em garantia).
-> **G1, G2 e G3 construídas em 19/10/2026 e a G4 e a G5 em 20/10/2026** (ver "Como ficou a G1" a "G5" no fim); **a G6 ainda não começou.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
+> **G1, G2 e G3 construídas em 19/10/2026 e G4, G5 e G6 em 20/10/2026** (ver "Como ficou a G1" a "G6" no fim). Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
 > produção sozinha, com teste e com este plano atualizado (mesmo padrão dos outros planos do projeto).
 
 ## Ponto de partida (o que existe hoje)
@@ -45,7 +47,7 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 | **G3** ✅ | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
 | **G4** ✅ | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
 | **G5** ✅ | **Partes e avisos**: responsáveis e copiados por atendimento, avisos automáticos a cada mudança. | 11 |
-| **G6** | **Relatório semanal** (tela + PDF) e encerramento do atendimento. | 10 |
+| **G6** ✅ | **Relatório semanal** (tela + PDF) e encerramento do atendimento. | 10 |
 
 ## O que precisa ser decidido com os setores (a mensagem original pede ao Luciano que coordene)
 
@@ -162,6 +164,33 @@ Da lista de decisões com os setores, só resta **o prazo para cobrar atendiment
 **Testado:** **30 verificações da regra de avisos** (quem recebe e o texto, em cada tipo de evento, com direção, quem pediu, quem entrou e quem saiu, sem lista de usuários e sem evento novo), as **127 das regras da ficha** e as **214 do Desenvolvimento** sem mudança, e **133 no navegador** (as 106 anteriores e 27 novas; banco da garantia, lista de usuários e caixa de menções simulados em memória, nenhuma gravação real): o fluxo inteiro de autorização gera os avisos certos (direção toda duas vezes, decisão a quem pediu, Admin inativo e autor sem aviso); cancelar, reabrir e editar avisam o copiado; com a caixa de menções fora do ar a gravação vale e a tela diz quem ficou sem aviso; o sino mostra o aviso com o número e o cliente, sem caixa de resposta; o link abre a ficha com o SAC fechado e com o SAC aberto em outra aba; quem não tem a aba SAC vê só a Garantia; link para ficha de outra pessoa não abre nada. **Nenhum dado real foi alterado.**
 
 **Fica para a próxima etapa:** relatório semanal (inclusive as peças que não voltaram e os atendimentos parados) e **encerramento** (a situação "encerrado" já existe no banco, mas nenhuma tela encerra). Continua em aberto o **prazo para cobrar atendimento parado** (G6).
+
+## Decisões do usuário em 20/10/2026 (G6)
+
+1. **Prazo para cobrar atendimento parado: 5 dias** sem nenhum movimento na ficha (o mesmo prazo vale para a peça que não voltou). Era a última decisão em aberto da lista com os setores.
+2. **Quem encerra:** o **responsável pelo atendimento** e a **gerência** (a mesma regra das etapas anteriores).
+3. **O que impede de encerrar** (o usuário marcou as quatro): peça em garantia que ainda não voltou; pedido de autorização esperando a direção; falta de apontamento com a solução adotada; falta da avaliação técnica. Sempre com um **texto de fechamento**.
+4. **Onde fica o relatório e quem o vê:** dentro da aba **Garantia** do SAC (botão "Relatório semanal"), para a **gerência e o Admin**, com **todos** os atendimentos — não só os que a pessoa vê na lista. (Por isso o plano original, "Relatórios › Garantia", não foi usado: a tela de Relatórios ainda não foi migrada para o visual novo.)
+
+## Como ficou a G6 (20/10/2026)
+
+**Banco (migração `garantia_g6_encerramento`):** uma coluna nova na ficha, `encerramento` (jsonb: texto, quem, quando), vazia nas fichas existentes. A situação "encerrado" já existia.
+
+**Encerrar (no detalhe, ao lado de Editar e Cancelar; regras em `GarantiaModelo.ts`):**
+- O botão **"Encerrar atendimento"** é do responsável e da gerência e fica **desligado enquanto algo impede**; ao lado, a tela diz em português o que falta ("Para encerrar falta: registrar a avaliação técnica; dar fim a 1 peça em garantia que ainda não voltou…"). Liberado, pede o **texto de fechamento** e uma confirmação.
+- Encerrado, a ficha mostra a faixa verde com quem encerrou, quando e o texto, e **deixa de receber registros** (mesma regra do cancelado). O encerramento **avisa** o responsável e os copiados (G5).
+- **Reabrir** vale para o cancelado (quem abriu, responsável e gerência, como antes) e agora também para o **encerrado**, só para o **responsável e a gerência** (a mesma regra de quem encerra); limpa o encerramento e o histórico guarda "encerrado" e "reaberto".
+- **Atendimento parado:** aberto e sem movimento há **5 dias ou mais** ganha o selo **"Parado há N d"** na lista e uma faixa de aviso no detalhe com o último movimento. Qualquer registro novo zera a conta.
+
+**Relatório semanal (`GarantiaRelatorio.ts` a conta, `GarantiaRelatorioTela.tsx` a tela, `GarantiaRelatorioPdf.ts` o PDF em A4 paisagem, no desenho do documento de comissões):**
+- **Semana de segunda a domingo**, com "Semana anterior", "Semana seguinte", "Esta semana" e um campo para escolher um dia. **Nove indicadores:** abertos, encerrados e cancelados na semana; em aberto hoje; parados; peças que não voltaram; esperando a direção; horas apontadas na semana; custo considerado dos movimentados.
+- **Seções:** atendimentos **movimentados na semana** (situação, etapa, custo considerado, quanto a empresa paga e horas, com total no rodapé), **encerrados** (com o texto de fechamento), **parados** (com os dias), **peças que não voltaram** (peça, quantidade, situação, rastreio e dias parada), **esperando a direção** (valor, quem pediu e há quantos dias) e **horas por técnico**. Seção sem nada diz "Nenhum…" em vez de tabela vazia.
+- **O que é da semana e o que é de hoje:** abertos, encerrados, cancelados, movimentados e horas contam os dias da semana escolhida; em aberto, parados, peças pendentes e pedidos esperando a direção são sempre a **situação de hoje** (a ficha só guarda o último estado, não dá para reconstruir o que estava parado numa semana passada) — o relatório diz isso no cabeçalho. Atendimento cancelado fica fora da soma de custos e de horas.
+- A tela e o PDF saem do **mesmo modelo**: o que uma soma, o outro soma.
+
+**Testado:** **49 verificações das regras novas** (o que impede de encerrar, encerrar e reabrir com as permissões, atendimento parado, as contas da semana e do relatório, e o **PDF gerado de verdade**, com e sem dados), as **127 das regras da ficha**, as **30 dos avisos** e as **214 do Desenvolvimento** sem mudança, e **165 no navegador** (as 133 anteriores e 32 novas; banco da garantia, usuários e menções simulados em memória, nenhuma gravação real): selo e faixa de parado, o botão de encerrar desligado com o que falta (avaliação, peça que não voltou), encerrar com texto vazio recusado, encerrar de verdade com o aviso ao copiado, reabrir, o copiado sem botão de reabrir nem encerrar, o botão do relatório só para a gerência e o Admin (inclusive o gerente que nem vê as fichas), a semana certa, os indicadores e seções com os números esperados, navegar de semana e **o PDF baixado de fato pelo navegador**. **Nenhum dado real foi alterado** (o banco da garantia continua sem nenhum atendimento).
+
+**Pontas que ficam fora do plano:** a **ligação real da Garantia com o Desenvolvimento** (o campo "Para a Garantia" do pacote técnico continua só uma anotação, ver `PLANO_DESENVOLVIMENTO_ENGENHARIA.md`) e o **fechamento do banco por perfil** (Etapa 17: hoje a visibilidade da Garantia vale na tela e o banco ainda não filtra por pessoa).
 
 ## Regras de segurança que valem em todas as etapas
 

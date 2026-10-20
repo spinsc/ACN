@@ -538,10 +538,60 @@ export function registrarPedidoDePeca(g: any, u: any, { pedido_id, numero_pedido
   return { patch: { pedidos_compra: pedidos, historico } };
 }
 
+/** Reabre o atendimento cancelado (quem abriu, o responsável e a gerência) ou encerrado (o responsável e a gerência, a mesma regra de quem encerra — G6, 20/10/2026). */
 export function reabrirGarantia(g: any, u: any, agora: string) {
-  if (g.situacao !== 'cancelado') return { erro: 'Só o atendimento cancelado pode ser reaberto.' };
-  if (!podeMexerNaGarantia(g, u)) return { erro: 'Só quem abriu, o responsável ou a gerência reabre o atendimento.' };
+  if (g.situacao !== 'cancelado' && g.situacao !== 'encerrado') return { erro: 'Só o atendimento cancelado ou encerrado pode ser reaberto.' };
+  if (g.situacao === 'encerrado' ? !podeConduzirGarantia(g, u) : !podeMexerNaGarantia(g, u)) {
+    return { erro: g.situacao === 'encerrado' ? 'Só o responsável pelo atendimento ou a gerência reabre um atendimento encerrado.' : 'Só quem abriu, o responsável ou a gerência reabre o atendimento.' };
+  }
   const historico = copiar(g.historico) || [];
-  historico.push(evento('reaberto', u, null, agora));
-  return { patch: { situacao: 'aberto', motivo_cancelamento: null, historico } };
+  historico.push(evento('reaberto', u, g.situacao === 'encerrado' ? 'estava encerrado' : null, agora));
+  return { patch: { situacao: 'aberto', motivo_cancelamento: null, encerramento: null, historico } };
 }
+
+// ── G6 (20/10/2026): encerramento e atendimento parado ─────────────────────────────────────────────────────────────────────
+// Decisões do usuário em 20/10/2026: encerra o RESPONSÁVEL e a gerência, sempre com um texto de fechamento; o botão só libera sem pendência: avaliação técnica registrada, nenhuma peça em
+// garantia que ainda não voltou, nenhum pedido de autorização esperando a direção e ao menos um apontamento com a solução adotada. "Parado" = aberto e sem nenhum movimento na ficha
+// há 5 dias ou mais (o mesmo prazo vale para a peça que não voltou); o relatório semanal (GarantiaRelatorio.ts) usa essa conta.
+export const PRAZO_PARADO_DIAS = 5;
+/** O dia (AAAA-MM-DD, no fuso de quem usa) de um carimbo; coluna só de data sai do texto. */
+export const diaLocalDoCarimbo = (v: any): string => {
+  const t = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** O último movimento da ficha: o último evento do histórico (ou a abertura, se o histórico estiver vazio). */
+export function ultimaMovimentacao(g: any): { em: string; dia: string; evento: any } {
+  const h = Array.isArray(g?.historico) ? g.historico : [];
+  const e = h.length ? h[h.length - 1] : null;
+  const em = e?.em || g?.criado_em || '';
+  return { em, dia: diaLocalDoCarimbo(em), evento: e };
+}
+/** Dias sem movimento na ficha até `hoje` (AAAA-MM-DD). */
+export const diasParada = (g: any, hoje: string): number => { const d = ultimaMovimentacao(g).dia; return d ? Math.max(0, diasEntre(d, hoje)) : 0; };
+export const estaParada = (g: any, hoje: string) => g?.situacao === 'aberto' && diasParada(g, hoje) >= PRAZO_PARADO_DIAS;
+
+/** Tudo que ainda impede de encerrar, em português para a pessoa; vazio = pode encerrar. */
+export function bloqueiosParaEncerrar(g: any, hoje: string): string[] {
+  const falta: string[] = [];
+  if (!g?.avaliacao) falta.push('registrar a avaliação técnica');
+  const pend = pecasPendentes(g, hoje);
+  if (pend.length) falta.push(`dar fim a ${pend.length} peça${pend.length === 1 ? '' : 's'} em garantia que ainda não voltou${pend.length === 1 ? '' : 'ram'} (retornou, reposta ou descartada)`);
+  if ((Array.isArray(g?.autorizacoes) ? g.autorizacoes : []).some((a: any) => a.status === 'pedida')) falta.push('esperar a decisão da direção (ou cancelar) o pedido de autorização');
+  if (!(Array.isArray(g?.apontamentos) ? g.apontamentos : []).some((a: any) => String(a?.solucao || '').trim())) falta.push('registrar ao menos um apontamento com a solução adotada');
+  return falta;
+}
+
+export function encerrarGarantia(g: any, u: any, texto: string, agora: string, hoje: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro: erro.replace('receber registros', 'ser encerrado').replace('faz este registro', 'encerra o atendimento') };
+  const t = txt(texto);
+  if (!t) return { erro: 'Escreva o texto de fechamento: o que foi feito e como o atendimento terminou.' };
+  const falta = bloqueiosParaEncerrar(g, hoje);
+  if (falta.length) return { erro: `Ainda não dá para encerrar. Falta: ${falta.join('; ')}.` };
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('encerrado', u, t, agora));
+  return { patch: { situacao: 'encerrado', encerramento: { texto: t, por: u?.nome || '', em: agora }, historico } };
+}
+
