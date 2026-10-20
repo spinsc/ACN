@@ -215,7 +215,9 @@ export const marcarFeito = (d: any, idx: number, id: string, feito: boolean, u: 
 // D3 (19/10/2026) acrescenta os da etapa de Desenvolvimento: desenhos com revisão, lista de materiais preliminar, riscos e revisão de projeto.
 export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto',
   // D4 (19/10/2026): Prototipagem e Validação
-  'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas'];
+  'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas',
+  // D5 (19/10/2026): Produção, Acabamento e Entrega
+  'item_catalogo', 'instrucao_montagem', 'primeira_unidade', 'custo_real', 'padrao_acabamento', 'amostra', 'pacote_tecnico', 'licoes'];
 export const temFormulario = (id: string) => ENTREGAVEIS_COM_FORMULARIO.includes(id);
 export const PRIORIDADES: Record<string, string> = { obrigatorio: 'Obrigatório', desejavel: 'Desejável' };
 // critérios de partida da matriz (nome, peso de 1 a 5); a Engenharia troca, tira e acrescenta
@@ -290,6 +292,20 @@ export function riscosSemTeste(d: any, dados: any) {
 export function normasSemResposta(d: any, dados: any) {
   const itens = dados?.itens || [];
   return normasDoProjeto(d).filter((n: any) => !itens.some((i: any) => i.norma_id === n.id && SITUACOES_NORMA[i.situacao]));
+}
+
+// ── D5: Produção, Acabamento e Entrega ─────────────────────────────────────────────────────────────────────────────
+export const RESULTADOS_UNIDADE: Record<string, string> = { pendente: 'Ainda não conferida', conforme: 'Conforme o desenho', nao_conforme: 'Não conforme' };
+export const ITENS_DE_ACABAMENTO: [string, string][] = [['pintura', 'Pintura ou tratamento'], ['identificacao', 'Identificação (etiqueta, gravação)'], ['embalagem', 'Embalagem'], ['manual', 'Manual ou instrução ao cliente']];
+
+/** O custo real da primeira unidade contra a meta (Concepção) e o estimado (lista de materiais). */
+export function custoRealContra(d: any) {
+  const real = Number(dadosDoEntregavel(d, 'custo_real')?.custo_real) || 0;
+  if (!real) return null;
+  const meta = Number(dadosDoEntregavel(d, 'meta_custo')?.custo_alvo) || 0;
+  const bom = dadosDoEntregavel(d, 'bom_prelim');
+  const est = bom?.linhas?.length ? custoEstimado(bom) : 0;
+  return { real, meta, estimado: est, contraMeta: meta ? Math.round(((real - meta) / meta) * 1000) / 10 : null, contraEstimado: est ? Math.round(((real - est) / est) * 1000) / 10 : null };
 }
 
 /** O que ainda falta preencher para o formulário valer como feito (lista vazia = completo). */
@@ -373,6 +389,37 @@ export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
     const sem = normasSemResposta(d, x);
     if (sem.length) falta.push(`a situação de cada norma (faltam ${sem.length})`);
     if ((x.itens || []).some((i: any) => i.situacao === 'nao_atende' && normasDoProjeto(d).some((n: any) => n.id === i.norma_id))) falta.push('o produto não atende a uma norma: ajuste o projeto e confira de novo');
+  } else if (id === 'item_catalogo') {
+    if (!x.item_id) falta.push('o item do catálogo');
+    const vs = x.veiculos || [];
+    const sem = vs.filter((v: any) => v.estrutura !== true);
+    if (x.item_id && !String(x.dispensa || '').trim()) {
+      if (!vs.length) falta.push('os veículos de aplicação (ou justificar que o item não entra em estrutura)');
+      else if (sem.length) falta.push(`a estrutura de instalação em: ${sem.map((v: any) => v.nome).join(', ')} (ou justificar que não se aplica)`);
+    }
+  } else if (id === 'instrucao_montagem') {
+    if (!(x.passos || []).length) falta.push('ao menos um passo da montagem');
+  } else if (id === 'primeira_unidade') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''))) falta.push('a data da conferência');
+    if (x.resultado !== 'conforme') falta.push('resultado "conforme o desenho"');
+    const vigente = revisaoVigente(d)?.rev;
+    if (vigente && x.revisao_conferida && x.revisao_conferida !== vigente) falta.push(`repetir a conferência: o desenho mudou (conferida na Rev ${x.revisao_conferida}, vigente a Rev ${vigente})`);
+  } else if (id === 'custo_real') {
+    if (!(Number(x.custo_real) > 0)) falta.push('o custo real por unidade');
+    const meta = Number(dadosDoEntregavel(d, 'meta_custo')?.custo_alvo) || 0;
+    if (Number(x.custo_real) > 0 && meta && Number(x.custo_real) > meta && !String(x.justificativa || '').trim()) falta.push('a justificativa do custo real acima da meta');
+  } else if (id === 'padrao_acabamento') {
+    const sem = ITENS_DE_ACABAMENTO.filter(([k]) => !(String(x[k]?.texto || '').trim() || x[k]?.na));
+    if (sem.length) falta.push(`${sem.map(([, r]) => r.toLowerCase()).join('; ')} (escreva ou marque "não se aplica")`);
+  } else if (id === 'amostra') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''))) falta.push('a data da amostra');
+    if (!String(x.local || '').trim()) falta.push('onde a amostra está guardada');
+  } else if (id === 'pacote_tecnico') {
+    if (!(x.arquivos || []).length) falta.push('ao menos um arquivo do pacote técnico');
+    const vigente = revisaoVigente(d)?.rev;
+    if (vigente && x.revisao_do_pacote && x.revisao_do_pacote !== vigente) falta.push(`atualizar o pacote: o desenho mudou (pacote na Rev ${x.revisao_do_pacote}, vigente a Rev ${vigente})`);
+  } else if (id === 'licoes') {
+    if (!(x.funcionou || []).length && !(x.diferente || []).length) falta.push('ao menos uma lição');
   }
   return falta;
 }
@@ -428,6 +475,18 @@ export function limparDados(id: string, dados: any) {
     resultado: RESULTADOS_TESTE[t.resultado] ? t.resultado : 'pendente', evidencia: txt(t.evidencia, LIMITES.texto), data: diaOuVazio(t.data),
   })).filter((t: any) => t.descricao) };
   if (id === 'teste_instalacao') return { veiculo: txt(x.veiculo, LIMITES.nome), data: diaOuVazio(x.data), resultado: RESULTADOS_TESTE[x.resultado] ? x.resultado : 'pendente', observacoes: txt(x.observacoes, 2000), fotos: fotos(x.fotos) };
+  if (id === 'item_catalogo') return {
+    item_id: txt(x.item_id, 60) || null, item_nome: txt(x.item_nome, 200), item_codigo: txt(x.item_codigo, 60),
+    veiculos: lista(x.veiculos, 40).map((v: any) => ({ id: txt(v.id, 60), nome: txt(v.nome, 200), estrutura: v.estrutura === true ? true : v.estrutura === false ? false : null, verificado_em: txt(v.verificado_em, 40) })).filter((v: any) => v.id),
+    dispensa: txt(x.dispensa, LIMITES.texto),
+  };
+  if (id === 'instrucao_montagem') return { passos: lista(x.passos, 60).map((p: any) => ({ id: txt(p.id, 20), texto: txt(p.texto, LIMITES.texto) })).filter((p: any) => p.texto), tempo_min: numero(x.tempo_min) };
+  if (id === 'primeira_unidade') return { data: diaOuVazio(x.data), referencia: txt(x.referencia, LIMITES.nome), resultado: RESULTADOS_UNIDADE[x.resultado] ? x.resultado : 'pendente', observacoes: txt(x.observacoes, 2000), fotos: fotos(x.fotos), revisao_conferida: txt(x.revisao_conferida, 4) || null };
+  if (id === 'custo_real') return { custo_real: numero(x.custo_real), justificativa: txt(x.justificativa, LIMITES.texto), observacao: txt(x.observacao, LIMITES.texto) };
+  if (id === 'padrao_acabamento') return Object.fromEntries(ITENS_DE_ACABAMENTO.map(([k]) => [k, { texto: txt(x[k]?.texto, LIMITES.texto), na: !!x[k]?.na }]));
+  if (id === 'amostra') return { data: diaOuVazio(x.data), local: txt(x.local, LIMITES.nome), observacao: txt(x.observacao, LIMITES.texto), fotos: fotos(x.fotos) };
+  if (id === 'pacote_tecnico') return { arquivos: fotos(x.arquivos), garantia: txt(x.garantia, 2000), revisao_do_pacote: txt(x.revisao_do_pacote, 4) || null };
+  if (id === 'licoes') { const l = (v: any) => lista(v, 30).map((i: any) => ({ id: txt(i.id, 20), texto: txt(i.texto, LIMITES.texto) })).filter((i: any) => i.texto); return { funcionou: l(x.funcionou), diferente: l(x.diferente) }; }
   if (id === 'conferencia_normas') return { itens: lista(x.itens, LIMITES.itens).map((i: any) => ({ norma_id: txt(i.norma_id, 20), texto: txt(i.texto, LIMITES.texto), situacao: SITUACOES_NORMA[i.situacao] ? i.situacao : '', obs: txt(i.obs, LIMITES.texto) })).filter((i: any) => i.norma_id) };
   return {};
 }
@@ -447,6 +506,8 @@ export function salvarDados(d: any, idx: number, id: string, dados: any, u: any,
       const rev = etapa.entregaveis?.revisao_projeto;
       if (novos.length > antes.length && rev?.feito && rev.dados?.revisao_analisada && rev.dados.revisao_analisada !== novos[novos.length - 1].rev) { rev.feito = false; rev.feito_por = null; rev.feito_em = null; }
     }
+    if (id === 'primeira_unidade') limpo.revisao_conferida = revisaoVigente(d)?.rev || null;   // a conferência vale para a Rev do desenho vigente NESTE momento
+    if (id === 'pacote_tecnico') limpo.revisao_do_pacote = revisaoVigente(d)?.rev || null;
     if (id === 'revisao_projeto') limpo.revisao_analisada = revisaoVigente(d)?.rev || null;   // a revisão de projeto vale para a revisão do desenho vigente NESTE momento
     e.dados = limpo;
     if (id === 'conceitos') {
@@ -579,6 +640,93 @@ export const cancelarDemanda = (d: any, u: any, motivo: string, agora: string) =
 export const reabrirDemanda = (d: any, u: any, agora: string) => mudarSituacao(d, u, ['cancelada'], 'ativa', 'reabriu', null, false, agora);
 
 // ── texto do histórico ─────────────────────────────────────────────────────────────────────────────
+// ── pedido de mudança depois da liberação (D5, 19/10/2026) ────────────────────────────────────────────────────────
+// Regra do plano: depois que a Produção é liberada (etapa 6 concluída), mudar o projeto não é mais "voltar etapa": é um pedido curto — motivo, o que muda, impacto em custo e nas OPs
+// abertas — aprovado pelo solicitante e pelo gerente, que gera a PRÓXIMA REVISÃO do desenho. Nada de editar a revisão liberada. Fica em `mudancas` (jsonb) na própria demanda.
+export const liberada = (d: any) => d?.etapas?.[5]?.status === 'concluida';
+export const STATUS_MUDANCA: Record<string, string> = { pedida: 'Aguardando aprovação', aprovada: 'Aprovada: falta a nova revisão do desenho', implementada: 'Implementada', recusada: 'Recusada', cancelada: 'Cancelada' };
+const PAPEIS_MUDANCA = ['solicitante', 'gerente'];
+const papeisNaMudanca = (d: any, u: any) => papeisQueOUsuarioCobre(d, { nome: 'Mudança' }, u);
+
+function prepararMudanca(d: any, id: string | null, exigeLiberada = true) {
+  if (!modeloGuiado(d)) return { erro: 'Defina primeiro o tipo de desenvolvimento desta demanda.' };
+  const parada = naoAtiva(d); if (parada) return { erro: parada };
+  if (exigeLiberada && !liberada(d)) return { erro: 'Pedido de mudança só existe depois da liberação para a Produção; antes disso, o gerente pode voltar a etapa.' };
+  const mudancas = copiar(d.mudancas) || [];
+  const historico = copiar(d.historico) || [];
+  const m = id ? mudancas.find((x: any) => x.id === id) : null;
+  if (id && !m) return { erro: 'Não foi possível achar o pedido de mudança: a demanda mudou. A tela foi atualizada.' };
+  return { mudancas, historico, m };
+}
+
+export function pedirMudanca(d: any, u: any, { motivo, o_que_muda, impacto_custo, impacto_ops }: any, agora: string) {
+  const p = prepararMudanca(d, null); if (p.erro) return p;
+  const { mudancas, historico } = p;
+  const campos = { motivo: txt(motivo, LIMITES.texto), o_que_muda: txt(o_que_muda, LIMITES.texto), impacto_custo: txt(impacto_custo, LIMITES.texto), impacto_ops: txt(impacto_ops, LIMITES.texto) };
+  if (!campos.motivo) return { erro: 'Escreva o motivo da mudança.' };
+  if (!campos.o_que_muda) return { erro: 'Escreva o que vai mudar no projeto.' };
+  if (!campos.impacto_custo || !campos.impacto_ops) return { erro: 'Diga o impacto em custo e nas OPs abertas (se não há, escreva "nenhum").' };
+  if (mudancas.some((m: any) => m.status === 'pedida' || m.status === 'aprovada')) return { erro: 'Já há uma mudança em andamento. Conclua ou cancele antes de pedir outra.' };
+  const numero = `M${mudancas.length + 1}`;
+  mudancas.push({ id: `m${Date.parse(agora)}${mudancas.length}`, numero, ...campos, status: 'pedida', pedida_por: u?.nome || '', pedida_em: agora, decisoes: [], rev_gerada: null, implementada_em: null });
+  historico.push(evento('mudanca_pedida', null, u, `${numero}: ${campos.motivo}`, agora));
+  return { patch: { mudancas, historico } };
+}
+
+/** decisao: 'aprovou' | 'recusou' (texto obrigatório). Aprovam o solicitante e o gerente; uma recusa encerra o pedido. */
+export function decidirMudanca(d: any, id: string, u: any, { decisao, texto }: any, agora: string) {
+  const p = prepararMudanca(d, id); if (p.erro) return p;
+  const { mudancas, historico, m } = p;
+  if (m.status !== 'pedida') return { erro: 'Este pedido não está mais aguardando decisão. A tela foi atualizada.' };
+  if (!['aprovou', 'recusou'].includes(decisao)) return { erro: 'Escolha uma decisão.' };
+  const t = txt(texto, LIMITES.texto);
+  if (decisao === 'recusou' && !t) return { erro: 'Escreva por que a mudança foi recusada.' };
+  const ja = new Set((m.decisoes || []).flatMap((x: any) => x.papeis || []));
+  const meus = papeisNaMudanca(d, u).filter(papel => !ja.has(papel));
+  if (!meus.length) return { erro: 'Você não pode decidir este pedido (ou já decidiu).' };
+  m.decisoes = [...(m.decisoes || []), { papeis: meus, por: u?.nome || '', em: agora, decisao, texto: t || null }];
+  if (decisao === 'recusou') { m.status = 'recusada'; historico.push(evento('mudanca_recusada', null, u, `${m.numero}: ${t}`, agora)); }
+  else {
+    historico.push(evento('mudanca_aprovou', null, u, `${m.numero} (${meus.map(x => ROTULO_PAPEL[x]).join(' e ')})`, agora));
+    const faltam = PAPEIS_MUDANCA.filter(papel => !m.decisoes.some((x: any) => (x.papeis || []).includes(papel)));
+    if (!faltam.length) { m.status = 'aprovada'; historico.push(evento('mudanca_aprovada', null, u, `${m.numero}: registre a nova revisão do desenho`, agora)); }
+  }
+  return { patch: { mudancas, historico } };
+}
+
+/** A mudança aprovada vira a próxima revisão do desenho (a única forma de mexer no desenho depois da liberação). */
+export function implementarMudanca(d: any, id: string, u: any, { descricao, anexos }: any, agora: string) {
+  const p = prepararMudanca(d, id); if (p.erro) return p;
+  const { mudancas, historico, m } = p;
+  if (m.status !== 'aprovada') return { erro: 'Só a mudança aprovada gera a nova revisão do desenho.' };
+  const desc = txt(descricao, LIMITES.texto);
+  const arq = (Array.isArray(anexos) ? anexos : []).slice(0, 20).map((a: any) => ({ nome: txt(a.nome, 200), url: txt(a.url, 1000) })).filter((a: any) => a.nome);
+  if (!desc || !arq.length) return { erro: 'A nova revisão precisa de uma descrição do que mudou e de ao menos um arquivo.' };
+  const etapas = copiar(d.etapas);
+  const iDes = etapas.findIndex((e: any) => e.entregaveis?.desenhos);
+  const alvo = iDes >= 0 ? etapas[iDes] : etapas[2];
+  alvo.entregaveis = alvo.entregaveis || {};
+  const ent = alvo.entregaveis.desenhos = alvo.entregaveis.desenhos || { feito: true, feito_por: u?.nome || '', feito_em: agora, anexos: [], nota: '' };
+  const revisoes = ent.dados?.revisoes || [];
+  const rev = letraDaRevisao(revisoes.length);
+  ent.dados = { ...(ent.dados || {}), revisoes: [...revisoes, { id: `r${Date.parse(agora)}${revisoes.length}`, rev, descricao: desc, anexos: arq, por: u?.nome || '', em: agora, mudanca: m.numero }] };
+  m.status = 'implementada'; m.rev_gerada = rev; m.implementada_em = agora; m.implementada_por = u?.nome || '';
+  historico.push(evento('mudanca_implementada', null, u, `${m.numero} gerou a Rev ${rev}`, agora));
+  return { patch: { etapas, mudancas, historico } };
+}
+
+export function cancelarMudanca(d: any, id: string, u: any, motivo: string, agora: string) {
+  const p = prepararMudanca(d, id); if (p.erro) return p;
+  const { mudancas, historico, m } = p;
+  if (m.status !== 'pedida' && m.status !== 'aprovada') return { erro: 'Este pedido já foi encerrado. A tela foi atualizada.' };
+  if (!(ehGerenteDev(u) || mesmoNome(m.pedida_por, u?.nome))) return { erro: 'Só quem pediu a mudança, ou um gerente, pode cancelá-la.' };
+  const t = txt(motivo, LIMITES.texto);
+  if (!t) return { erro: 'Escreva o motivo do cancelamento.' };
+  m.status = 'cancelada'; m.cancelada_motivo = t;
+  historico.push(evento('mudanca_cancelada', null, u, `${m.numero}: ${t}`, agora));
+  return { patch: { mudancas, historico } };
+}
+
 const FRASES: Record<string, (e: any) => string> = {
   criada: () => 'Demanda criada',
   tipo: e => e.texto || 'Tipo definido',
@@ -595,5 +743,11 @@ const FRASES: Record<string, (e: any) => string> = {
   retomou: () => 'Retomou a demanda',
   cancelou: () => 'Cancelou a demanda',
   reabriu: () => 'Reabriu a demanda cancelada',
+  mudanca_pedida: () => 'Pediu uma mudança depois da liberação',
+  mudanca_aprovou: () => 'Aprovou a mudança',
+  mudanca_aprovada: () => 'Mudança aprovada por todos',
+  mudanca_recusada: () => 'Recusou a mudança',
+  mudanca_implementada: () => 'Registrou a revisão do desenho da mudança',
+  mudanca_cancelada: () => 'Cancelou a mudança',
 };
 export const frasePorEvento = (e: any) => (FRASES[e.tipo] ? FRASES[e.tipo](e) : String(e.tipo || '')) + ((e.tipo === 'tipo') || !e.texto ? '' : `: ${e.texto}`);

@@ -6,15 +6,19 @@
 // meta de custo e prazo, matriz de escolha entre conceitos e o conceito escolhido. As regras (o que falta para valer como feito, limites, pontuação) estão em
 // DesenvolvimentoModelo.ts; aqui ficam só os campos. O que se digita fica no rascunho da tela até "Salvar" — a gravação é a de sempre (DesenvolvimentoPorta.gravarDemanda).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Icone from './Icone';
-import { Botao, Selo, Faixa, hojeISO } from './Interface';
+import { supabase } from './supabaseClient';
+import { lerPaginado } from './LerPaginado';
+import { itensAtivosDoCatalogo } from './ConfigEstrutura';
+import { Botao, Selo, Faixa, hojeISO, SelectBusca } from './Interface';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { lerValorDigitado } from './LerValor';
 import {
   PRIORIDADES, CRITERIOS_SUGERIDOS, NOTA_MAXIMA, ranking, faltaNoEntregavel, dadosDoEntregavel, entregaveisDaEtapa, solicitanteDaDemanda,
   letraDaRevisao, revisaoVigente, custoEstimado, nivelDoRisco, AREAS_REVISAO, CONCLUSOES_REVISAO,
   RESULTADOS_TESTE, SITUACOES_NORMA, requisitosSemTeste, riscosSemTeste, normasSemResposta,
+  custoRealContra, ITENS_DE_ACABAMENTO, RESULTADOS_UNIDADE,
 } from './DesenvolvimentoModelo';
 import { mdiPlus, mdiClose, mdiContentSaveOutline, mdiPaperclip } from '@mdi/js';
 
@@ -604,9 +608,236 @@ function EditorNormas({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) 
   );
 }
 
+// ── D5: Produção, Acabamento e Entrega ──────────────────────────────────────────────────────────────────────────
+function ListaDeTextos({ itens, onChange, rotulo, placeholder }: any) {
+  const mudar = (n: number, v: string) => onChange(itens.map((x: any, i: number) => (i === n ? { ...x, texto: v } : x)));
+  return (
+    <div className="acn-dev-form-lista">
+      {itens.map((it: any, n: number) => (
+        <div key={it.id} className="acn-dev-form-linha">
+          <input className="acn-input" aria-label={`${rotulo} ${n + 1}`} placeholder={placeholder} value={it.texto} onChange={e => mudar(n, e.target.value)} />
+          <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar ${rotulo.toLowerCase()} ${n + 1}`} title="Tirar" onClick={() => onChange(itens.filter((_: any, i: number) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={() => onChange([...itens, { id: novoId(), texto: '' }])}>Adicionar {rotulo.toLowerCase()}</Botao></div>
+    </div>
+  );
+}
+
+/** Lê no banco quais veículos já têm a estrutura de instalação deste item. Devolve null se a leitura falhar (nunca "sem estrutura" por engano). */
+async function lerEstruturaDoItem(itemId: string, veiculoIds: string[]) {
+  if (!itemId || !veiculoIds.length) return new Set<string>();
+  try {
+    const linhas = await lerPaginado(() => supabase.from('veiculo_item_materiais').select('veiculo_id').eq('item_id', itemId).in('veiculo_id', veiculoIds).order('id'));
+    return new Set<string>(linhas.map((l: any) => String(l.veiculo_id)));
+  } catch (e: any) {
+    alert(`Não foi possível conferir a estrutura de instalação no banco (${e?.message || 'falha'}). Nada foi assumido.`);
+    return null;
+  }
+}
+
+function EditorCatalogo({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [itens, setItens] = useState<any[] | null>(null);
+  const [veiculos, setVeiculos] = useState<any[] | null>(null);
+  const [itemId, setItemId] = useState(inicial?.item_id || '');
+  const [lista, setLista] = useState<any[]>((inicial?.veiculos || []).map((v: any) => ({ ...v })));
+  const [dispensa, setDispensa] = useState(inicial?.dispensa || '');
+  const [conferindo, setConferindo] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    itensAtivosDoCatalogo('id,codigo,nome').then(l => { if (vivo) setItens(l); });
+    lerPaginado(() => supabase.from('veiculos').select('id,nome_exibicao').eq('ativo', true).order('nome_exibicao').order('id'))
+      .then(l => { if (vivo) setVeiculos(l); }).catch(() => { if (vivo) setVeiculos([]); });
+    return () => { vivo = false; };
+  }, []);
+  const item = (itens || []).find(i => String(i.id) === String(itemId));
+  const nomeDoItem = item?.nome || inicial?.item_nome || '';
+  const conferir = async (): Promise<any[] | null> => {
+    setConferindo(true);
+    try {
+      const tem = await lerEstruturaDoItem(itemId, lista.map(v => v.id));
+      if (!tem) return null;
+      const agora = new Date().toISOString();
+      const nova = lista.map(v => ({ ...v, estrutura: tem.has(String(v.id)), verificado_em: agora }));
+      setLista(nova);
+      return nova;
+    } finally { setConferindo(false); }
+  };
+  const salvar = async () => {
+    // o que fica gravado é sempre a conferência feita AGORA, não a de quando a janela abriu
+    let vs = lista;
+    if (itemId && lista.length) { const c = await conferir(); if (c) vs = c; }
+    onSalvar({ item_id: itemId || null, item_nome: nomeDoItem, item_codigo: item?.codigo || inicial?.item_codigo || '', veiculos: vs, dispensa });
+  };
+  const abrirEstrutura = (v: any) => window.dispatchEvent(new CustomEvent('engenharia:abrir-estruturas', { detail: { item_id: itemId, veiculo_id: v.id } }));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">O item do catálogo é o produto pronto para vender e instalar. A estrutura de instalação diz o que leva em cada veículo. Esta janela só liga e confere; não cria nem muda nada no catálogo.</div>
+      <div>
+        <label className="acn-label">Item do catálogo *</label>
+        {itens === null ? <div className="acn-ajuda">Carregando o catálogo…</div>
+          : <SelectBusca opcoes={itens.map(i => ({ valor: String(i.id), rotulo: i.nome, detalhe: i.codigo ? `código ${i.codigo}` : undefined, busca: [i.codigo, i.nome] }))} valor={itemId ? String(itemId) : null} onChange={v => { setItemId(v); setLista(l => l.map(x => ({ ...x, estrutura: null, verificado_em: '' }))); }} placeholder="Digite o código ou o nome do item…" />}
+        {itemId && !item && itens !== null && <div className="acn-ajuda atencao">O item escolhido ({nomeDoItem || itemId}) não está mais ativo no catálogo.</div>}
+      </div>
+      <div className="acn-dev-porta-tit">Veículos de aplicação</div>
+      {lista.map((v, n) => (
+        <div key={v.id} className="acn-dev-form-linha" data-veiculo={v.id}>
+          <strong className="acn-dev-norma-texto">{v.nome}</strong>
+          <Selo familia={v.estrutura === true ? 'ok' : v.estrutura === false ? 'erro' : 'neutro'} ponto={false}>{v.estrutura === true ? 'Estrutura cadastrada' : v.estrutura === false ? 'Sem estrutura' : 'Não conferida'}</Selo>
+          {itemId && v.estrutura !== true && <Botao pequeno variante="discreto" onClick={() => abrirEstrutura(v)}>Cadastrar estrutura</Botao>}
+          <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar veículo ${n + 1}`} title="Tirar" onClick={() => setLista(l => l.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
+        </div>
+      ))}
+      {veiculos === null ? <div className="acn-ajuda">Carregando os veículos…</div>
+        : <SelectBusca opcoes={veiculos.filter(v => !lista.some(x => String(x.id) === String(v.id))).map(v => ({ valor: String(v.id), rotulo: v.nome_exibicao }))} valor={null} placeholder="Acrescentar veículo de aplicação…"
+          onChange={vid => { const v = veiculos.find(x => String(x.id) === vid); if (v) setLista(l => [...l, { id: String(v.id), nome: v.nome_exibicao, estrutura: null, verificado_em: '' }]); }} />}
+      <div className="acn-dev-acoes">
+        <Botao pequeno disabled={!itemId || !lista.length || conferindo} onClick={conferir}>{conferindo ? 'Conferindo…' : 'Conferir a estrutura agora'}</Botao>
+      </div>
+      <div><label className="acn-label">Ou: este item não entra em estrutura de instalação (justifique)</label>
+        <textarea className="acn-input" rows={2} aria-label="Por que não entra em estrutura" placeholder="Ex: peça avulsa, vendida sem instalação em veículo" value={dispensa} onChange={e => setDispensa(e.target.value)} /></div>
+      <Rodape ocupado={ocupado || conferindo} onSalvar={salvar} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorMontagem({ inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [passos, setPassos] = useState<any[]>((inicial?.passos || []).map((p: any) => ({ ...p })));
+  const [tempo, setTempo] = useState(comoTexto(inicial?.tempo_min));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Como a Produção monta o produto, passo a passo, na ordem.</div>
+      <ListaDeTextos itens={passos} onChange={setPassos} rotulo="Passo" placeholder="Ex: soldar o suporte na base" />
+      <div className="acn-dev-campo-data"><label className="acn-label">Tempo de montagem (minutos)</label>
+        <input className="acn-input" aria-label="Tempo de montagem" inputMode="decimal" placeholder="opcional" value={tempo} onChange={e => setTempo(e.target.value)} /></div>
+      <Rodape ocupado={ocupado} onSalvar={() => { const t = num(tempo); if (t === 'invalido') { alert('O tempo de montagem não parece um número.'); return; } onSalvar({ passos, tempo_min: t }); }} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorPrimeiraUnidade({ demanda, inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const vigente = revisaoVigente(demanda)?.rev;
+  const [x, setX] = useState({ data: inicial?.data || hojeISO(), referencia: inicial?.referencia || '', resultado: inicial?.resultado || 'pendente', observacoes: inicial?.observacoes || '', fotos: [...(inicial?.fotos || [])] });
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">{vigente ? <>A primeira unidade feita pela Produção, conferida contra o desenho na <strong>Rev {vigente}</strong>. Se o desenho mudar depois, a conferência precisa ser repetida.</> : 'A primeira unidade feita pela Produção, conferida contra o desenho.'}</div>
+      <div className="acn-dev-campos">
+        <div className="acn-dev-campo-data"><label className="acn-label">Data da conferência *</label>
+          <input type="date" className="acn-input" aria-label="Data da conferência" value={x.data} onChange={e => setX({ ...x, data: e.target.value })} /></div>
+        <div className="acn-dev-campo-resp"><label className="acn-label">OP ou unidade conferida</label>
+          <input className="acn-input" aria-label="OP ou unidade conferida" placeholder="Ex: OP A1704.2610/01" value={x.referencia} onChange={e => setX({ ...x, referencia: e.target.value })} /></div>
+        <div className="acn-dev-campo-data"><label className="acn-label">Resultado *</label>
+          <select className="acn-input" aria-label="Resultado da primeira unidade" value={x.resultado} onChange={e => setX({ ...x, resultado: e.target.value })}>
+            {Object.entries(RESULTADOS_UNIDADE).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select></div>
+      </div>
+      <textarea className="acn-input" rows={3} aria-label="Observações da conferência" placeholder="O que foi conferido e o que apareceu" value={x.observacoes} onChange={e => setX({ ...x, observacoes: e.target.value })} />
+      <CampoDeFotos fotos={x.fotos} onChange={(f: any[]) => setX({ ...x, fotos: f })} enviar={enviar} />
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar(x)} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorCustoReal({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [custo, setCusto] = useState(comoTexto(inicial?.custo_real));
+  const [just, setJust] = useState(inicial?.justificativa || '');
+  const [obs, setObs] = useState(inicial?.observacao || '');
+  const meta = Number(dadosDoEntregavel(demanda, 'meta_custo')?.custo_alvo) || 0;
+  const bom = dadosDoEntregavel(demanda, 'bom_prelim');
+  const est = bom?.linhas?.length ? custoEstimado(bom) : 0;
+  const v = lerValorDigitado(custo).valor || 0;
+  const acima = meta > 0 && v > meta;
+  const pct = (a: number, b: number) => `${Math.abs(Math.round(((a - b) / b) * 1000) / 10).toLocaleString('pt-BR')}% ${a > b ? 'acima' : 'abaixo'}`;
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-dev-campo-data"><label className="acn-label">Custo real por unidade (R$) *</label>
+        <input className="acn-input" aria-label="Custo real" inputMode="decimal" placeholder="0,00" value={custo} onChange={e => setCusto(e.target.value)} /></div>
+      {v > 0 && meta > 0 && <Faixa tom={acima ? 'atencao' : 'ok'}>Meta da Concepção: {brl(meta)} — o custo real está {pct(v, meta)} da meta.</Faixa>}
+      {v > 0 && est > 0 && <div className="acn-ajuda">Estimado na lista de materiais: {brl(est)} — o real está {pct(v, est)} do estimado.</div>}
+      {acima && <div><label className="acn-label">Por que o custo real ficou acima da meta *</label>
+        <textarea className="acn-input" rows={2} aria-label="Justificativa do custo real" value={just} onChange={e => setJust(e.target.value)} /></div>}
+      <textarea className="acn-input" rows={2} aria-label="Observação do custo real" placeholder="De onde vem o número (material, horas, perdas)" value={obs} onChange={e => setObs(e.target.value)} />
+      <Rodape ocupado={ocupado} onSalvar={() => { const r = lerValorDigitado(custo); if (r.invalido) { alert('O custo real não parece um valor em reais. Escreva, por exemplo, 1.250,00.'); return; } onSalvar({ custo_real: r.valor ?? null, justificativa: just, observacao: obs }); }} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorAcabamento({ inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [x, setX] = useState<any>(Object.fromEntries(ITENS_DE_ACABAMENTO.map(([k]) => [k, { texto: inicial?.[k]?.texto || '', na: !!inicial?.[k]?.na }])));
+  const mudar = (k: string, campo: string, v: any) => setX((s: any) => ({ ...s, [k]: { ...s[k], [campo]: v } }));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Como o produto sai da fábrica. Cada item: escreva o padrão ou marque que não se aplica.</div>
+      {ITENS_DE_ACABAMENTO.map(([k, rotulo]) => (
+        <div key={k} className="acn-dev-conceito" data-acabamento={k}>
+          <label className="acn-label">{rotulo}</label>
+          <textarea className="acn-input" rows={2} aria-label={rotulo} disabled={x[k].na} value={x[k].texto} onChange={e => mudar(k, 'texto', e.target.value)} />
+          <label className="acn-dev-form-nenhum"><input type="checkbox" aria-label={`${rotulo}: não se aplica`} checked={x[k].na} onChange={e => mudar(k, 'na', e.target.checked)} /> Não se aplica</label>
+        </div>
+      ))}
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar(x)} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorAmostra({ inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const [x, setX] = useState({ data: inicial?.data || hojeISO(), local: inicial?.local || '', observacao: inicial?.observacao || '', fotos: [...(inicial?.fotos || [])] });
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Uma unidade acabada que serve de referência para as próximas.</div>
+      <div className="acn-dev-campos">
+        <div className="acn-dev-campo-data"><label className="acn-label">Data *</label>
+          <input type="date" className="acn-input" aria-label="Data da amostra" value={x.data} onChange={e => setX({ ...x, data: e.target.value })} /></div>
+        <div className="acn-dev-campo-resp"><label className="acn-label">Onde está guardada *</label>
+          <input className="acn-input" aria-label="Onde a amostra está guardada" placeholder="Ex: armário 3, sala da Qualidade" value={x.local} onChange={e => setX({ ...x, local: e.target.value })} /></div>
+      </div>
+      <textarea className="acn-input" rows={2} aria-label="Observação da amostra" value={x.observacao} onChange={e => setX({ ...x, observacao: e.target.value })} />
+      <CampoDeFotos fotos={x.fotos} onChange={(f: any[]) => setX({ ...x, fotos: f })} enviar={enviar} />
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar(x)} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorPacote({ demanda, inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const vigente = revisaoVigente(demanda)?.rev;
+  const [arquivos, setArquivos] = useState<any[]>([...(inicial?.arquivos || [])]);
+  const [garantia, setGarantia] = useState(inicial?.garantia || '');
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">O que fica guardado do projeto: {vigente ? <>desenho final (<strong>Rev {vigente}</strong>), </> : 'desenho final, '}lista de materiais e manual. Se o desenho mudar depois, o pacote precisa ser atualizado.</div>
+      <CampoDeFotos fotos={arquivos} onChange={setArquivos} enviar={enviar} rotulo="Anexar arquivos do pacote" />
+      <div><label className="acn-label">Para a Garantia</label>
+        <textarea className="acn-input" rows={3} aria-label="Observações para a Garantia" placeholder="Pontos de atenção que o atendimento em garantia precisa saber: peças que gastam, ajustes comuns, o que NÃO cobre" value={garantia} onChange={e => setGarantia(e.target.value)} /></div>
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ arquivos, garantia })} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
+function EditorLicoes({ inicial, onSalvar, onCancelar, ocupado }: any) {
+  const [funcionou, setFuncionou] = useState<any[]>((inicial?.funcionou || []).map((i: any) => ({ ...i })));
+  const [diferente, setDiferente] = useState<any[]>((inicial?.diferente || []).map((i: any) => ({ ...i })));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-dev-porta-tit">O que funcionou</div>
+      <ListaDeTextos itens={funcionou} onChange={setFuncionou} rotulo="O que funcionou" placeholder="Ex: o gabarito de furação" />
+      <div className="acn-dev-porta-tit">O que faria diferente</div>
+      <ListaDeTextos itens={diferente} onChange={setDiferente} rotulo="O que faria diferente" placeholder="Ex: pedir a chapa antes de fechar o desenho" />
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar({ funcionou, diferente })} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
 /** O formulário do entregável (abre ao clicar em Preencher/Editar). */
 export function FormularioDoEntregavel({ id, demanda, dados, onSalvar, onCancelar, ocupado, enviar }: any) {
   const comum = { onSalvar, onCancelar, ocupado, inicial: dados, demanda, enviar };
+  if (id === 'item_catalogo') return <EditorCatalogo {...comum} />;
+  if (id === 'instrucao_montagem') return <EditorMontagem {...comum} />;
+  if (id === 'primeira_unidade') return <EditorPrimeiraUnidade {...comum} />;
+  if (id === 'custo_real') return <EditorCustoReal {...comum} />;
+  if (id === 'padrao_acabamento') return <EditorAcabamento {...comum} />;
+  if (id === 'amostra') return <EditorAmostra {...comum} />;
+  if (id === 'pacote_tecnico') return <EditorPacote {...comum} />;
+  if (id === 'licoes') return <EditorLicoes {...comum} />;
   if (id === 'prototipos') return <EditorPrototipos {...comum} />;
   if (id === 'problemas') return <EditorProblemas {...comum} />;
   if (id === 'plano_testes') return <EditorTestes {...comum} />;
@@ -761,13 +992,80 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
       {x.itens.map((i: any) => <li key={i.norma_id}>{i.texto} <Selo familia={i.situacao === 'atende' ? 'ok' : i.situacao === 'nao_atende' ? 'erro' : 'neutro'} ponto={false}>{SITUACOES_NORMA[i.situacao] || 'Sem resposta'}</Selo>{i.obs && <span className="acn-ajuda"> — {i.obs}</span>}</li>)}
     </ul>
   );
+  const links = (arr: any[]) => (arr || []).length > 0 && <div className="acn-dev-anexos-lista">{arr.map((f: any, i: number) => f.url ? <a key={i} href={f.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</a> : <span key={i} className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {f.nome}</span>)}</div>;
+  if (id === 'item_catalogo' && (x.item_id || x.dispensa)) return (
+    <div className="acn-dev-resumo">
+      {x.item_id && <div>Item do catálogo: <strong>{x.item_nome || x.item_id}</strong>{x.item_codigo ? <span className="acn-ajuda"> (código {x.item_codigo})</span> : null}</div>}
+      {(x.veiculos || []).map((v: any) => <div key={v.id}>{v.nome} <Selo familia={v.estrutura === true ? 'ok' : v.estrutura === false ? 'erro' : 'neutro'} ponto={false}>{v.estrutura === true ? 'Estrutura cadastrada' : v.estrutura === false ? 'Sem estrutura' : 'Não conferida'}</Selo></div>)}
+      {x.dispensa && <div className="acn-ajuda">Não entra em estrutura: {x.dispensa}</div>}
+    </div>
+  );
+  if (id === 'instrucao_montagem' && (x.passos || []).length) return (
+    <div className="acn-dev-resumo">
+      <ol className="acn-dev-resumo-lista">{x.passos.map((p: any) => <li key={p.id}>{p.texto}</li>)}</ol>
+      {x.tempo_min !== null && x.tempo_min !== undefined && <div className="acn-ajuda">Tempo de montagem: {x.tempo_min} min</div>}
+    </div>
+  );
+  if (id === 'primeira_unidade' && (x.data || x.resultado)) {
+    const vigente = revisaoVigente(demanda)?.rev;
+    return (
+      <div className="acn-dev-resumo">
+        <div>{dataBR(x.data)}{x.referencia ? ` · ${x.referencia}` : ''} · <Selo familia={x.resultado === 'conforme' ? 'ok' : x.resultado === 'nao_conforme' ? 'erro' : 'neutro'} ponto={false}>{RESULTADOS_UNIDADE[x.resultado]}</Selo>{x.revisao_conferida && <> · conferida na Rev {x.revisao_conferida}</>}</div>
+        {x.observacoes && <div className="acn-ajuda">{x.observacoes}</div>}
+        {links(x.fotos)}
+        {vigente && x.revisao_conferida && vigente !== x.revisao_conferida && <div className="acn-ajuda atencao">O desenho mudou depois desta conferência (agora está na Rev {vigente}).</div>}
+      </div>
+    );
+  }
+  if (id === 'custo_real' && x.custo_real) {
+    const c = custoRealContra(demanda);
+    return (
+      <div className="acn-dev-resumo">
+        <div>Custo real: <strong>{brl(x.custo_real)}</strong> por unidade
+          {c?.contraMeta !== null && c?.contraMeta !== undefined && <> <Selo familia={c.contraMeta > 0 ? 'atencao' : 'ok'} ponto={false}>{Math.abs(c.contraMeta).toLocaleString('pt-BR')}% {c.contraMeta > 0 ? 'acima' : 'abaixo'} da meta ({brl(c.meta)})</Selo></>}
+          {c?.contraEstimado !== null && c?.contraEstimado !== undefined && <span className="acn-ajuda"> · estimado {brl(c.estimado)}</span>}
+        </div>
+        {x.justificativa && <div className="acn-ajuda">Justificativa: {x.justificativa}</div>}
+        {x.observacao && <div className="acn-ajuda">{x.observacao}</div>}
+      </div>
+    );
+  }
+  if (id === 'padrao_acabamento' && ITENS_DE_ACABAMENTO.some(([k]) => x[k]?.texto || x[k]?.na)) return (
+    <ul className="acn-dev-resumo acn-dev-resumo-lista">
+      {ITENS_DE_ACABAMENTO.map(([k, r]) => <li key={k}><strong>{r}:</strong> {x[k]?.na ? <span className="acn-ajuda">não se aplica</span> : x[k]?.texto || <span className="acn-ajuda">—</span>}</li>)}
+    </ul>
+  );
+  if (id === 'amostra' && (x.data || x.local)) return (
+    <div className="acn-dev-resumo">
+      <div>Amostra de {dataBR(x.data)} — guardada em <strong>{x.local || '—'}</strong></div>
+      {x.observacao && <div className="acn-ajuda">{x.observacao}</div>}
+      {links(x.fotos)}
+    </div>
+  );
+  if (id === 'pacote_tecnico' && ((x.arquivos || []).length || x.garantia)) {
+    const vigente = revisaoVigente(demanda)?.rev;
+    return (
+      <div className="acn-dev-resumo">
+        {links(x.arquivos)}
+        {x.revisao_do_pacote && <div className="acn-ajuda">Pacote na Rev {x.revisao_do_pacote}</div>}
+        {x.garantia && <div><span className="acn-pdp-rotulo">Para a Garantia</span><div className="acn-ajuda">{x.garantia}</div></div>}
+        {vigente && x.revisao_do_pacote && vigente !== x.revisao_do_pacote && <div className="acn-ajuda atencao">O desenho mudou depois do pacote (agora está na Rev {vigente}): atualize o pacote.</div>}
+      </div>
+    );
+  }
+  if (id === 'licoes' && ((x.funcionou || []).length || (x.diferente || []).length)) return (
+    <div className="acn-dev-resumo">
+      {(x.funcionou || []).length > 0 && <><div className="acn-pdp-rotulo">O que funcionou</div><ul className="acn-dev-resumo-lista">{x.funcionou.map((i: any) => <li key={i.id}>{i.texto}</li>)}</ul></>}
+      {(x.diferente || []).length > 0 && <><div className="acn-pdp-rotulo">O que faria diferente</div><ul className="acn-dev-resumo-lista">{x.diferente.map((i: any) => <li key={i.id}>{i.texto}</li>)}</ul></>}
+    </div>
+  );
   return null;
 }
 
 /** Resumo do que a Concepção e a Criação definiram, para consulta nas etapas seguintes. */
 export function ResumoDoProjeto({ demanda }: any) {
-  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto', 'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas'];
-  const rotulos: Record<string, string> = { prototipos: 'Protótipos', problemas: 'Problemas e ações', plano_testes: 'Plano de testes', teste_instalacao: 'Instalação em veículo', conferencia_normas: 'Conferência das normas', briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
+  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto', 'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas', 'item_catalogo', 'instrucao_montagem', 'primeira_unidade', 'custo_real', 'padrao_acabamento', 'amostra', 'pacote_tecnico', 'licoes'];
+  const rotulos: Record<string, string> = { item_catalogo: 'Item no catálogo e estrutura', instrucao_montagem: 'Instrução de montagem', primeira_unidade: 'Primeira unidade', custo_real: 'Custo real', padrao_acabamento: 'Padrão de acabamento', amostra: 'Amostra', pacote_tecnico: 'Pacote técnico', licoes: 'Lições aprendidas', prototipos: 'Protótipos', problemas: 'Problemas e ações', plano_testes: 'Plano de testes', teste_instalacao: 'Instalação em veículo', conferencia_normas: 'Conferência das normas', briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
   const com = ids.filter(id => dadosDoEntregavel(demanda, id) && faltaNoEntregavel(id, dadosDoEntregavel(demanda, id), demanda).length === 0);
   if (!com.length) return null;
   return (

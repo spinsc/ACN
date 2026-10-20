@@ -95,7 +95,7 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 | **D2** | Concepção e Criação: requisitos com prioridade, meta de custo, normas, matriz de escolha de conceitos | ✅ 19/10/2026 (ver "Como ficou a D2"; 94 regras + 76 verificações no navegador) |
 | **D3** | Desenvolvimento: revisões do desenho (Rev A, B…), lista de materiais preliminar, custo estimado × meta, lista de riscos, revisão de projeto | ✅ 19/10/2026 (ver "Como ficou a D3"; 125 regras + 99 verificações no navegador) |
 | **D4** | Prototipagem e Validação: registro de protótipos, problemas com ação, plano de testes ligado aos requisitos, parecer da Qualidade, "volta ao Desenvolvimento" | ✅ 19/10/2026 (ver "Como ficou a D4"; 155 regras + 124 verificações no navegador) |
-| **D5** | Produção, Acabamento e Entrega: liberação com item no catálogo e estrutura de instalação, primeira unidade, custo real, pedido de mudança, pacote técnico, aceite, ligação com a Garantia | não feita |
+| **D5** | Produção, Acabamento e Entrega: liberação com item no catálogo e estrutura de instalação, primeira unidade, custo real, pedido de mudança, pacote técnico, aceite, ligação com a Garantia | ✅ 19/10/2026 (ver "Como ficou a D5"; 193 regras + 155 verificações no navegador) |
 | **D6** | Painel: atrasadas, esperando aprovação, etapa parada há dias, custo estimado × meta; filtros novos | não feita |
 
 ### Como ficou a D1 (19/10/2026)
@@ -151,6 +151,18 @@ Sem mudança no banco. Regras em `DesenvolvimentoModelo.ts` (`requisitosSemTeste
 - **Parecer da Qualidade:** quem aprova pela Qualidade (a pessoa indicada ao iniciar a Validação, ou o Admin cobrindo esse papel) **precisa escrever o parecer**; o texto fica na decisão e no histórico. Solicitante e gerente continuam só confirmando.
 - **Resumo do projeto** inclui protótipos, problemas, plano de testes, instalação e conferência de normas.
 - **Para a D5:** o item do catálogo e a estrutura de instalação nascem do que ficou aprovado aqui; a primeira unidade da Produção é conferida contra a Rev vigente do desenho.
+
+### Como ficou a D5 (19/10/2026)
+
+**Banco (migração `desenvolvimento_pedidos_de_mudanca`):** coluna nova `mudancas` (jsonb, padrão vazio) em `engenharia_desenvolvimento`; as demandas existentes não mudam. Regras em `DesenvolvimentoModelo.ts`; campos em `DesenvolvimentoFormularios.tsx`; o quadro de mudanças em `DesenvolvimentoMudancas.tsx`.
+
+- **Item no catálogo e estrutura de instalação (Produção):** escolhe o item entre os ativos do catálogo (`cadastro_itens`, busca por código ou nome) e os **veículos de aplicação**; a janela **confere no banco** (`veiculo_item_materiais`) quais veículos já têm a estrutura daquele item, mostra "Estrutura cadastrada / Sem estrutura" com o atalho **"Cadastrar estrutura"** (o mesmo da Engenharia) e **regrava a conferência a cada "Salvar"**, para o que fica gravado ser a de agora. Só vale como feito com a estrutura em **todos** os veículos, ou com a justificativa de que o item não entra em estrutura. **Decisão de projeto: a janela só liga e confere; não cria nem muda nada no catálogo** (cadastrar o item continua sendo feito na tela do catálogo).
+- **Primeira unidade conferida:** data, OP ou unidade, resultado (só "conforme o desenho" vale), observações e fotos; **guarda a Rev do desenho conferida** e, se o desenho mudar depois, pede para repetir.
+- **Custo real × meta:** custo real por unidade comparado com a **meta da Concepção** e com o **estimado da lista de materiais** (em %); **acima da meta exige justificativa**.
+- **Instrução de montagem** (passos em ordem e tempo), **padrão de acabamento** (pintura, identificação, embalagem e manual: texto ou "não se aplica" em cada um) e **amostra** (data e onde está guardada, com fotos).
+- **Entrega:** **pacote técnico** (arquivos, guarda a Rev do pacote; se o desenho mudar depois, pede para atualizar) com o campo **"Para a Garantia"** — **hoje é só uma anotação guardada**; a ligação de verdade com o atendimento em garantia nasce quando o `PLANO_GARANTIA.md` começar — e **lições aprendidas** (o que funcionou, o que faria diferente). O aceite do solicitante é a própria porta da Entrega.
+- **Pedido de mudança depois da liberação** (Produção concluída): o projeto liberado não se edita. Pede-se a mudança com **motivo, o que muda, impacto em custo e impacto nas OPs abertas** (todos obrigatórios; "nenhum" vale); **solicitante e gerente aprovam** (uma recusa, com o porquê, encerra); a mudança aprovada **gera a próxima revisão do desenho** (Rev C, D…, ligada à M1, M2…, com arquivo obrigatório) — **a única forma de mexer no desenho depois da liberação**; a Rev anterior fica como estava. Uma mudança por vez; quem pediu ou um gerente cancela. Tudo vai ao histórico da demanda.
+- **Resumo do projeto** inclui os novos entregáveis.
 
 Regras de cada fatia: `npx vite build` antes de commitar; teste no navegador com gravações bloqueadas (padrão `scratchpad/fstest/`);
 nenhum dado real alterado; relatar números reais; push só com a pergunta clicável de autorização.

@@ -5134,3 +5134,9 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-cmp-j640 .acn-modal-corpo, .acn-cmp-j680 .acn-modal-corpo { font-size: 14px; }
 .acn-cmp-j640 .acn-quadro { padding: 12px 14px; }
 .acn-cmp-j640 .acn-quadro-titulo { font-size: 14px; margin-bottom: 8px; }
+
+/* ══ Engenharia > Desenvolvimento (D5, 19/10/2026) — Produção, Acabamento, Entrega e mudanças depois da liberação ══ */
+.acn-dev-norma-texto { flex: 1; min-width: 160px; font-size: 13px; }
+.acn-dev-form-lista { display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-mudancas { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-dev-mudanca { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-neutral-soft); font-size: 13px; }

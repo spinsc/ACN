@@ -62,7 +62,7 @@ export async function enviarArquivos(demandaId: string, etapaNome: string, entId
 }
 
 /** Uma gravação por vez em cada painel (clique duplo não grava duas vezes). */
-function useExecutar(demandaId: string, onAtualizado: () => void) {
+export function useExecutar(demandaId: string, onAtualizado: () => void) {
   const [ocupado, setOcupado] = useState(false);
   const trava = useRef(false);
   const executar = async (operacao: (linha: any, agora: string) => any) => {
