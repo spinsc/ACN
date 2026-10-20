@@ -1,7 +1,7 @@
 # Atendimento em garantia — desenho e etapas
 
 > Proposta de **08/10/2026**, a pedido do usuário ("Lista pedido Bruna": procedimento de atendimento em garantia).
-> **G1 construída em 19/10/2026** (ver "Como ficou a G1" no fim); **G2 a G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
+> **G1 e G2 construídas em 19/10/2026** (ver "Como ficou a G1" e "Como ficou a G2" no fim); **G3 a G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
 > produção sozinha, com teste e com este plano atualizado (mesmo padrão dos outros planos do projeto).
 
 ## Ponto de partida (o que existe hoje)
@@ -41,7 +41,7 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 | Etapa | Entrega | Cobre os pontos |
 |---|---|---|
 | **G1** ✅ | **Ficha e abertura**: tabela do atendimento, formulário com campos obrigatórios, lista/quadro dentro do SAC (aba "Garantia"), histórico de movimentação e permissões. | 1, 12 |
-| **G2** | **Avaliação e fornecedor**: parecer técnico, cobertura, consulta ao fornecedor, quem executa; trava do pedido de peça no Compras. | 2, 3, 5 |
+| **G2** ✅ | **Avaliação e fornecedor**: parecer técnico, cobertura, consulta ao fornecedor, quem executa; trava do pedido de peça no Compras. | 2, 3, 5 |
 | **G3** | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
 | **G4** | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
 | **G5** | **Partes e avisos**: responsáveis e copiados por atendimento, avisos automáticos a cada mudança. | 11 |
@@ -76,6 +76,29 @@ Continuam em aberto (não impedem a G1; entram quando a etapa que depende delas 
 **Testado:** 36 verificações das regras e **31 no navegador** (banco da garantia e a função de abertura simulados em memória; nenhuma gravação real): quem vê o quê para cinco perfis, abrir vazio, OP e OS escolhidas na lista, placa inválida e corrigida, a carga exata que vai ao banco, o detalhe com o número, editar (só a carga, com o campo no histórico), cancelar com motivo, reabrir, conflito e leitura recusada. **Nenhum dado real foi alterado** (o banco real ficou com 0 atendimentos).
 
 **Fica para as próximas etapas:** avaliação técnica e fornecedor (G2), custos, cliente e direção (G3), peças e apontamentos (G4), avisos aos copiados e responsáveis (G5; hoje abrir **não avisa ninguém**), relatório semanal e **encerramento** (G6; a situação "encerrado" já existe no banco, mas nenhuma tela encerra ainda).
+
+## Decisões do usuário em 19/10/2026 (G2)
+
+1. **Quem registra a avaliação técnica:** o **responsável pelo atendimento** e a **gerência** (Admin e perfis "Gerente …").
+2. **Quem registra a consulta ao fornecedor e pede a peça ao Compras:** a mesma regra — o responsável e a gerência.
+
+Com isso, da lista de decisões com os setores só restam **o critério de autorização da direção, quem é a "direção" no sistema e o prazo para cobrar atendimento parado** (G3, G5 e G6).
+
+## Como ficou a G2 (19/10/2026)
+
+**Banco (migração `garantia_g2_avaliacao_fornecedor_execucao`):** na própria ficha, quatro colunas novas — `avaliacao`, `fornecedor`, `execucao` (jsonb, vazias) e `pedidos_compra` (jsonb, padrão vazio). As fichas existentes não mudam. A coluna `etapa` passa a ser gravada a cada registro.
+
+**Tela (seções no detalhe do atendimento; `GarantiaEtapas.tsx`, regras em `GarantiaModelo.ts`):**
+- **Avaliação técnica:** parecer (obrigatório) e **cobertura: dentro, fora ou a confirmar** (obrigatória). Ao avaliar, a tela lê a **garantia da OP** (`prazo_garantia`, ex. "12 MESES", e o dia da entrega) quando a origem é uma OP e mostra o **apoio**: "garantia de 12 meses, entregue em 10/01/2026, termina em 10/01/2027; a falha foi em 10/10/2026: dentro do prazo (faltavam 92 dias)". **É só apoio: quem decide é o técnico**; o apoio do momento fica gravado com a avaliação. Sem OP, sem prazo ou sem dia de entrega a tela **não afirma nada** e manda decidir pelo contrato ou pela nota; se a leitura da OP falhar, diz que não conseguiu ler. Dá para refazer a avaliação (fica no histórico).
+- **Sem avaliação, não segue:** fornecedor e "quem executa" só se registram depois da avaliação; a tela avisa e não oferece o botão. A etapa do atendimento (Avaliação técnica → Fornecedor → Quem executa → Em atendimento) aparece no cabeçalho e na lista.
+- **Fornecedor:** **consulta** (fornecedor, protocolo, data da consulta, prazo de resposta, a resposta com a decisão — *cobre*, *cobre em parte* ou *não cobre* — e a data) ou **"não se aplica" com justificativa**. A consulta pode ser registrada sem resposta e completada depois; **resposta atrasada** (passou o prazo) vira selo vermelho. Datas no futuro e resposta antes da consulta são recusadas.
+- **Quem executa:** **equipe própria** (um ou mais técnicos, sem repetir) ou **terceiro** (nome e custo previsto em reais; o custo pode ficar em branco por enquanto — entra no quadro de custos na G3).
+- **Pedido de peça ao Compras:** o botão **só abre com a avaliação registrada e a consulta ao fornecedor respondida (ou dispensada com justificativa)**; fechado, a tela diz o que falta. Aberto, usa **a mesma janela de solicitação de compra do resto do sistema** (itens, centro de custo, anexos…), com o título "Peça em garantia — GAR-…", o vínculo com a OP (a compra aparece como "Demanda de OP") e, nas observações, o número da garantia, o cliente, o veículo e a resposta do fornecedor; o setor de origem é "Garantia". O pedido que nasce é **registrado na ficha e no histórico**; se a ficha não gravar depois de o pedido já ter nascido, a tela dá o número do pedido para ninguém abrir outro. **A trava vale no botão da ficha**: uma compra aberta por outro caminho do Compras não sabe que é de garantia.
+- Só o responsável e a gerência registram; quem abriu e os copiados **veem as seções, sem botões**. Atendimento cancelado não recebe registro.
+
+**Testado:** 67 verificações das regras (as 36 da G1 e 31 novas) e **56 no navegador** (as 31 da G1 e 25 novas; fichas, a garantia da OP e o pedido de compra simulados em memória, nenhuma gravação real): a etapa inicial; sem avaliação, fornecedor e execução recusam; o apoio "dentro do prazo (faltavam 92 dias)"; avaliação sem parecer recusada e com ele gravada com o apoio; consulta sem fornecedor recusada; consulta sem resposta mantém a trava; resposta sem a decisão recusada; resposta completa libera o botão; terceiro sem nome recusado e com custo gravado; o pedido nasce no Compras com o número da garantia, o fornecedor, o setor e o vínculo da OP e fica na ficha e no histórico; o copiado não vê botão e o Admin conduz qualquer ficha. **Achado do teste:** depois de gravar, o formulário da seção ficava aberto (a rotina de gravação não devolvia o resultado); corrigido. **Nenhum dado real foi alterado.**
+
+**Fica para as próximas etapas:** custos negociados, alinhamento com o cliente e autorização da direção (G3; é lá que "fora da garantia" passa a ter consequência — na G2 a cobertura só informa), peças em garantia com envio e retorno e os apontamentos (G4), avisos (G5) e relatório e encerramento (G6).
 
 ## Regras de segurança que valem em todas as etapas
 

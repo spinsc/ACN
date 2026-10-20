@@ -13,10 +13,11 @@ import Icone from './Icone';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { Botao, Chips, Faixa, Selo, hojeISO, diaBR } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
+import { SecoesGarantia } from './GarantiaEtapas';
 import { ParticipantesPicker, useUsuariosParticipar } from './Participantes';
 import {
   ORIGENS_GARANTIA, SITUACOES_GARANTIA, normalizarPlaca, normalizarChassi, podeAbrirGarantia, podeVerGarantia, podeMexerNaGarantia,
-  validarGarantia, cargaDaGarantia, aplicarEdicao, cancelarGarantia, reabrirGarantia, fraseDoEvento,
+  validarGarantia, cargaDaGarantia, aplicarEdicao, cancelarGarantia, reabrirGarantia, fraseDoEvento, etapaDaGarantia, ROTULOS_ETAPA_GARANTIA,
 } from './GarantiaModelo';
 import { mdiShieldCheckOutline, mdiPlus, mdiMagnify, mdiRefresh, mdiPencilOutline, mdiCancel, mdiBackupRestore, mdiClose } from '@mdi/js';
 
@@ -190,7 +191,11 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
   const executar = async (operacao: any) => {
     if (ocupado) return;
     setOcupado(true);
-    try { const r = await gravarGarantia(g.id, operacao); if (r) onMudou(); } finally { setOcupado(false); }
+    try {
+      const r = await gravarGarantia(g.id, operacao);
+      if (r) onMudou();                       // gravou (ou houve conflito): relê a lista
+      return r === 'conflito' ? null : r;     // quem chamou só fecha o formulário se gravou de verdade
+    } finally { setOcupado(false); }
   };
   const campo = (rotulo: string, valor: any) => <div className="acn-gar-campo"><div className="acn-pdp-rotulo">{rotulo}</div><div>{valor || '—'}</div></div>;
   return (
@@ -199,6 +204,7 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
         <div className="acn-modal-cab">
           <span className="modal-title"><Icone path={mdiShieldCheckOutline} size={18} /> {g.numero}</span>
           <span className="acn-dev-selos">
+            {g.situacao === 'aberto' && <Selo familia="neutro" ponto={false}>{ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)]}</Selo>}
             <Selo familia={FAMILIA_SITUACAO[g.situacao]}>{SITUACOES_GARANTIA[g.situacao]}</Selo>
           </span>
         </div>
@@ -217,6 +223,7 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
           </div>
           {campo('Descrição da falha', <span className="acn-gar-texto">{g.descricao_falha}</span>)}
           {campo('Copiados', (g.copiados || []).map((p: any) => p.nome).join(', '))}
+          <SecoesGarantia g={g} currentUser={currentUser} executar={executar} ocupado={ocupado} />
           <details className="acn-dev-historico" open>
             <summary>Histórico do atendimento ({(g.historico || []).length})</summary>
             <ul>
@@ -309,7 +316,7 @@ export default function GarantiaTab({ currentUser }: any) {
             <div className="sec-card">
               <div className="sec-body acn-gar-tabela">
                 <table className="acn-tabela acn-densa">
-                  <thead><tr><th>Número</th><th>Cliente</th><th>Veículo</th><th>Placa / chassi</th><th>Origem</th><th>Falha</th><th>Ocorrência</th><th>Responsável</th><th>Situação</th></tr></thead>
+                  <thead><tr><th>Número</th><th>Cliente</th><th>Veículo</th><th>Placa / chassi</th><th>Origem</th><th>Falha</th><th>Ocorrência</th><th>Responsável</th><th>Etapa</th><th>Situação</th></tr></thead>
                   <tbody>
                     {filtradas.map(g => (
                       <tr key={g.id} className="acn-gar-linha" tabIndex={0} role="button" onClick={() => setDetalheId(g.id)}
@@ -322,6 +329,7 @@ export default function GarantiaTab({ currentUser }: any) {
                         <td className="acn-gar-falha">{g.descricao_falha}</td>
                         <td>{diaBR(g.data_ocorrencia)}</td>
                         <td>{g.responsavel?.nome}</td>
+                        <td>{g.situacao === 'aberto' ? ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)] : '—'}</td>
                         <td><Selo familia={FAMILIA_SITUACAO[g.situacao]}>{SITUACOES_GARANTIA[g.situacao]}</Selo></td>
                       </tr>
                     ))}
