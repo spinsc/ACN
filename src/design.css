@@ -5147,3 +5147,13 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-dev-alertas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .acn-dev-custos { margin: 0 0 12px; padding: 8px 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-dev-custos table { margin-top: 6px; }
+
+/* ══ SAC > Garantia (G1, 19/10/2026) — ficha do atendimento em garantia ══ */
+.acn-gar-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.acn-gar-campo { display: flex; flex-direction: column; gap: 2px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.acn-gar-texto { white-space: pre-wrap; }
+.acn-gar-escolhida { display: flex; align-items: center; gap: 6px; }
+.acn-gar-tabela { overflow-x: auto; padding: 0; }
+.acn-gar-linha { cursor: pointer; }
+.acn-gar-linha:hover { background: var(--acn-neutral-soft); }
+.acn-gar-falha { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
