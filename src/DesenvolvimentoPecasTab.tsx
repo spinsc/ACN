@@ -26,6 +26,9 @@ import PedidoDoPcp from './PedidoDesenvolvimentoPcp';
 import { modeloGuiado, TIPOS_DEV, rotuloDoTipoDev, mesmoNome, ehGerenteDev } from './DesenvolvimentoModelo';
 import { ResumoDoProjeto } from './DesenvolvimentoFormularios';
 import { PainelDeMudancas } from './DesenvolvimentoMudancas';
+import { PainelDaEngenharia, SelosDeAlerta, TabelaDeCustos, passaNoAlerta } from './DesenvolvimentoPainel';
+import { alertasDaDemanda } from './DesenvolvimentoModelo';
+import { hojeISO } from './Interface';
 import { PainelGuiado, FaixaDeTipo, RessalvasAbertas, HistoricoDaDemanda, MenuDaDemanda } from './DesenvolvimentoPorta';
 import { mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh } from '@mdi/js';
 
@@ -372,6 +375,7 @@ function DemandaComEtapas({ demanda, onAtualizado, currentUser }: any) {
         </span>
       </div>
       <div className="sec-body">
+        <SelosDeAlerta al={alertasDaDemanda(demanda, currentUser, hojeISO(), Date.now())} />
         {(demanda.cliente_nome || demanda.descricao) && (
           <div className="acn-dev-info">
             {demanda.cliente_nome && <div><strong>Cliente:</strong> {demanda.cliente_nome}</div>}
@@ -558,6 +562,7 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
   const [erroLista, setErroLista] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'andamento' | 'concluidas' | 'canceladas'>('todas');
   const [busca, setBusca] = useState(buscaInicial || '');
+  const [alerta, setAlerta] = useState('todos');
   const [modalNova, setModalNova] = useState(false);
 
   // Deep-link da busca global (DashboardTab.tsx) — chega depois da
@@ -585,12 +590,16 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
   const nAndamento = baseBusca.filter(d => !estaCancelada(d) && !estaFinalizada(d)).length;
   const nConcluidas = baseBusca.filter(d => !estaCancelada(d) && estaFinalizada(d)).length;
   const nCanceladas = baseBusca.filter(estaCancelada).length;
-  const filtradas = baseBusca.filter(d => {
+  // D6: o alerta (cartões do painel) é um segundo filtro, somado ao da situação; a conta de cada alerta é a de alertasDaDemanda
+  const agoraMs = Date.now(), hoje = hojeISO();
+  const comAlertas = baseBusca.map(d => ({ d, al: alertasDaDemanda(d, currentUser, hoje, agoraMs) }));
+  const filtradas = comAlertas.filter(({ d, al }) => {
+    if (!passaNoAlerta(al, alerta)) return false;
     if (filtro === 'andamento') return !estaCancelada(d) && !estaFinalizada(d);
     if (filtro === 'concluidas') return !estaCancelada(d) && estaFinalizada(d);
     if (filtro === 'canceladas') return estaCancelada(d);
     return true;
-  });
+  }).map(x => x.d);
 
   return (
     <div>
@@ -614,6 +623,13 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
         </div>
       </div>
 
+      {demandas !== null && (
+        <>
+          <PainelDaEngenharia itens={comAlertas.filter(({ d }) => !estaCancelada(d) && !estaFinalizada(d))} alerta={alerta} onAlerta={setAlerta} />
+          <TabelaDeCustos itens={comAlertas.filter(({ d }) => !estaCancelada(d))} />
+        </>
+      )}
+
       {erroLista && (
         <Faixa tom="erro" acao={<Botao pequeno icone={mdiRefresh} onClick={carregar}>Tentar de novo</Botao>}>
           Não foi possível ler as demandas ({erroLista}). Isso não quer dizer que não existam demandas{demandas ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
@@ -624,7 +640,8 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
         <div className="acn-empty">Carregando...</div>
       ) : demandas === null ? null : filtradas.length === 0 ? (
         <div className="acn-empty">
-          {busca.trim() ? 'Nenhuma demanda com essa busca.' : `Nenhuma demanda de desenvolvimento ${filtro !== 'todas' ? 'nesse filtro' : 'cadastrada ainda'}.`}
+          {alerta !== 'todos' ? <>Nenhuma demanda com esse alerta. <Botao pequeno variante="discreto" onClick={() => setAlerta('todos')}>Ver todas</Botao></>
+            : busca.trim() ? 'Nenhuma demanda com essa busca.' : `Nenhuma demanda de desenvolvimento ${filtro !== 'todas' ? 'nesse filtro' : 'cadastrada ainda'}.`}
         </div>
       ) : (
         filtradas.map(d => (

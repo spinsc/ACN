@@ -96,7 +96,7 @@ nas OPs abertas, aprovação solicitante + gerente) que gera a próxima revisão
 | **D3** | Desenvolvimento: revisões do desenho (Rev A, B…), lista de materiais preliminar, custo estimado × meta, lista de riscos, revisão de projeto | ✅ 19/10/2026 (ver "Como ficou a D3"; 125 regras + 99 verificações no navegador) |
 | **D4** | Prototipagem e Validação: registro de protótipos, problemas com ação, plano de testes ligado aos requisitos, parecer da Qualidade, "volta ao Desenvolvimento" | ✅ 19/10/2026 (ver "Como ficou a D4"; 155 regras + 124 verificações no navegador) |
 | **D5** | Produção, Acabamento e Entrega: liberação com item no catálogo e estrutura de instalação, primeira unidade, custo real, pedido de mudança, pacote técnico, aceite, ligação com a Garantia | ✅ 19/10/2026 (ver "Como ficou a D5"; 193 regras + 155 verificações no navegador) |
-| **D6** | Painel: atrasadas, esperando aprovação, etapa parada há dias, custo estimado × meta; filtros novos | não feita |
+| **D6** | Painel: atrasadas, esperando aprovação, etapa parada há dias, custo estimado × meta; filtros novos | ✅ 19/10/2026 (ver "Como ficou a D6"; 214 regras + 177 verificações no navegador) |
 
 ### Como ficou a D1 (19/10/2026)
 
@@ -163,6 +163,18 @@ Sem mudança no banco. Regras em `DesenvolvimentoModelo.ts` (`requisitosSemTeste
 - **Entrega:** **pacote técnico** (arquivos, guarda a Rev do pacote; se o desenho mudar depois, pede para atualizar) com o campo **"Para a Garantia"** — **hoje é só uma anotação guardada**; a ligação de verdade com o atendimento em garantia nasce quando o `PLANO_GARANTIA.md` começar — e **lições aprendidas** (o que funcionou, o que faria diferente). O aceite do solicitante é a própria porta da Entrega.
 - **Pedido de mudança depois da liberação** (Produção concluída): o projeto liberado não se edita. Pede-se a mudança com **motivo, o que muda, impacto em custo e impacto nas OPs abertas** (todos obrigatórios; "nenhum" vale); **solicitante e gerente aprovam** (uma recusa, com o porquê, encerra); a mudança aprovada **gera a próxima revisão do desenho** (Rev C, D…, ligada à M1, M2…, com arquivo obrigatório) — **a única forma de mexer no desenho depois da liberação**; a Rev anterior fica como estava. Uma mudança por vez; quem pediu ou um gerente cancela. Tudo vai ao histórico da demanda.
 - **Resumo do projeto** inclui os novos entregáveis.
+
+### Como ficou a D6 (19/10/2026)
+
+Sem mudança no banco. A conta de cada alerta é uma só, `alertasDaDemanda` em `DesenvolvimentoModelo.ts`; a tela está em `DesenvolvimentoPainel.tsx`.
+
+- **Seis cartões no alto da aba**, cada um também um **filtro da lista** (clicar de novo desliga; soma com o filtro de situação e com a busca): **Esperando a minha decisão** (portas e mudanças que EU posso decidir, pelo mesmo cálculo dos botões de aprovar), **Esperando decisão** (qualquer porta ou mudança pedida), **Atrasadas** (a data prevista da etapa em andamento passou, ou o prazo do projeto da Concepção venceu), **Paradas há 7+ dias** (ninguém gravou nada na demanda), **Custo acima da meta** (estimado ou real maior que a meta) e **Com ressalva em aberto**.
+- **Selos no cartão de cada demanda** dizem o mesmo, com os dias ("Etapa atrasada há 5 dias", "Parada há 10 dias", "Esperando a sua decisão", "Custo acima da meta", "1 ressalva em aberto").
+- **Tabela "Custo estimado × meta por demanda"** (recolhida): meta, estimado e real de cada demanda, com a diferença em %.
+- **Regras:** cancelada e pedido do PCP ficam de fora; **pausada não conta como atrasada nem parada** (a pausa já é a explicação); concluída por inteiro também não. O limite de "parada" (7 dias) está numa constante (`DIAS_PARADA`).
+- **Achado do teste:** o teste montou as datas com `toISOString` (dia de Londres) e errou por um dia à noite — o mesmo erro que o projeto já evita com `hojeISO`; a tela sempre usou a data local.
+
+**Plano concluído:** as sete fatias (D0 a D6) estão feitas. O que o plano deixou conscientemente para depois: a **ligação de verdade com a Garantia** (hoje o campo "Para a Garantia" do pacote técnico é só anotação) e **não criar o item no catálogo pela tela** (a Produção só liga e confere).
 
 Regras de cada fatia: `npx vite build` antes de commitar; teste no navegador com gravações bloqueadas (padrão `scratchpad/fstest/`);
 nenhum dado real alterado; relatar números reais; push só com a pergunta clicável de autorização.

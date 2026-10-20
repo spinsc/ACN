@@ -727,6 +727,46 @@ export function cancelarMudanca(d: any, id: string, u: any, motivo: string, agor
   return { patch: { mudancas, historico } };
 }
 
+// ── painel: o que precisa de atenção em cada demanda (D6, 19/10/2026) ───────────────────────────────────────────────
+// Uma demanda parada há 7 dias ou mais (sem ninguém gravar nada nela) é "parada"; o número é o mesmo para todos e fica aqui, num lugar só, para o painel e os selos dos cartões
+// dizerem a mesma coisa. Cancelada e pedido do PCP ficam de fora (o PCP fecha pelos itens, não pelas etapas); pausada não conta como atrasada nem parada: a pausa já é a explicação.
+export const DIAS_PARADA = 7;
+const diasEntreDatas = (de: string, ate: string) => Math.floor((Date.parse(String(ate).slice(0, 10) + 'T00:00:00Z') - Date.parse(String(de).slice(0, 10) + 'T00:00:00Z')) / 86400000);
+
+export function alertasDaDemanda(d: any, u: any, hojeIso: string, agoraMs: number) {
+  const r = { atrasadaEtapa: 0, prazoVencido: 0, parada: 0, esperandoDecisao: false, esperandoMinha: false, custoAcima: false, ressalvas: 0, mudancaPendente: false, pausada: d?.situacao === 'pausada' };
+  if (!d || d.origem === 'pcp' || d.situacao === 'cancelada') return r;
+  const etapas = d.etapas || [];
+  const idxAtiva = etapas.findIndex((e: any) => e.status !== 'concluida');
+  const finalizada = etapas.length > 0 && idxAtiva === -1;
+  if (!finalizada && d.situacao !== 'pausada') {
+    const ativa = etapas[idxAtiva];
+    if (ativa?.status === 'em_andamento' && ativa.data_prevista && String(ativa.data_prevista).slice(0, 10) < hojeIso) r.atrasadaEtapa = diasEntreDatas(ativa.data_prevista, hojeIso);
+    const prazo = dadosDoEntregavel(d, 'meta_custo')?.prazo;
+    if (prazo && String(prazo) < hojeIso) r.prazoVencido = diasEntreDatas(prazo, hojeIso);
+    if (d.atualizado_em) { const dias = Math.floor((agoraMs - Date.parse(d.atualizado_em)) / 86400000); if (dias >= DIAS_PARADA) r.parada = dias; }
+  }
+  if (modeloGuiado(d)) {
+    for (const e of etapas) {
+      if (e.porta?.pedida_em && e.status !== 'concluida') {
+        r.esperandoDecisao = true;
+        if (u) { const est = estadoDaPorta(d, e); if (papeisQueOUsuarioCobre(d, e, u).some(p => est.faltam.includes(p))) r.esperandoMinha = true; }
+      }
+    }
+    for (const m of d.mudancas || []) {
+      if (m.status === 'pedida') {
+        r.esperandoDecisao = true; r.mudancaPendente = true;
+        if (u) { const ja = new Set((m.decisoes || []).flatMap((x: any) => x.papeis || [])); if (papeisNaMudanca(d, u).some(p => !ja.has(p))) r.esperandoMinha = true; }
+      } else if (m.status === 'aprovada') r.mudancaPendente = true;
+    }
+    const est = custoContraMeta(d), real = custoRealContra(d);
+    r.custoAcima = (!!est && est.diferenca > 0) || (!!real && real.contraMeta !== null && real.contraMeta > 0);
+    for (const e of etapas) r.ressalvas += (e.porta?.ressalvas || []).filter((x: any) => !x.resolvida_em).length;
+  }
+  return r;
+}
+export const temAlerta = (a: any) => !!(a.atrasadaEtapa || a.prazoVencido || a.parada || a.esperandoDecisao || a.custoAcima || a.ressalvas);
+
 const FRASES: Record<string, (e: any) => string> = {
   criada: () => 'Demanda criada',
   tipo: e => e.texto || 'Tipo definido',
