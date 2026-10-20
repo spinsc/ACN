@@ -88,7 +88,9 @@ export function cargaDaGarantia(c: any) {
 // ── histórico e edição ──────────────────────────────────────────────────────────────────────────────────────
 export const evento = (tipo: string, u: any, texto: string | null, agora: string) => ({ em: agora, por: u?.nome || '', tipo, texto: texto || null });
 export const FRASES_GARANTIA: Record<string, string> = { aberto: 'Atendimento aberto', editado: 'Dados alterados', cancelado: 'Atendimento cancelado', reaberto: 'Atendimento reaberto', encerrado: 'Atendimento encerrado',
-  avaliacao: 'Avaliação técnica registrada', fornecedor: 'Fornecedor', execucao: 'Quem executa definido', peca_pedida: 'Peça pedida ao Compras' };
+  avaliacao: 'Avaliação técnica registrada', fornecedor: 'Fornecedor', execucao: 'Quem executa definido', peca_pedida: 'Peça pedida ao Compras',
+  custos: 'Quadro de custos alterado', alinhamento: 'Alinhamento com o cliente', autorizacao_pedida: 'Autorização pedida à direção', autorizacao_aprovada: 'Direção aprovou',
+  autorizacao_negada: 'Direção negou', autorizacao_cancelada: 'Pedido de autorização cancelado' };
 export const fraseDoEvento = (e: any) => (FRASES_GARANTIA[e.tipo] || e.tipo) + (e.texto && e.tipo !== 'aberto' ? `: ${e.texto}` : '');
 
 const ROTULOS_CAMPO: Record<string, string> = {
@@ -185,6 +187,8 @@ export function podePedirPeca(g: any): { ok: boolean; motivo: string } {
   if (g?.situacao !== 'aberto') return { ok: false, motivo: 'O atendimento não está aberto.' };
   if (!g?.avaliacao) return { ok: false, motivo: 'Registre antes a avaliação técnica.' };
   if (!fornecedorLiberado(g)) return { ok: false, motivo: g?.fornecedor?.modo === 'consulta' ? 'Falta a resposta do fornecedor (ou a justificativa de que não se aplica).' : 'Registre antes a consulta ao fornecedor (ou a justificativa de que não se aplica).' };
+  const fora = bloqueioForaDaGarantia(g);
+  if (fora.bloqueado) return { ok: false, motivo: `Atendimento fora da garantia: falta ${fora.faltas.join(' e ')}.` };
   return { ok: true, motivo: '' };
 }
 
@@ -237,6 +241,8 @@ export function registrarFornecedor(g: any, u: any, c: any, agora: string, hoje:
 
 export function registrarExecucao(g: any, u: any, { tipo, tecnicos, terceiro_nome, terceiro_custo }: any, agora: string) {
   const erro = preparar(g, u, true); if (erro) return { erro };
+  const fora = bloqueioForaDaGarantia(g);
+  if (fora.bloqueado) return { erro: `Atendimento fora da garantia não segue sem ${fora.faltas.join(' e sem ')}.` };
   const historico = copiar(g.historico) || [];
   let execucao: any;
   if (tipo === 'propria') {
@@ -255,6 +261,151 @@ export function registrarExecucao(g: any, u: any, { tipo, tecnicos, terceiro_nom
   } else return { erro: 'Escolha quem executa: equipe própria ou terceiro.' };
   return { patch: comEtapa(g, { execucao, historico }) };
 }
+
+// ── G3 (19/10/2026): custos, alinhamento com o cliente e autorização da direção ──────────────────────────────────────────
+// Decisões do usuário em 19/10/2026: a DIREÇÃO é quem tem o perfil Admin; TUDO que é fora da garantia ou cortesia vai para a direção (sem faixa de valor); custos, alinhamento e pedido
+// de autorização são registrados pelo responsável pelo atendimento e pela gerência. O atendimento FORA da garantia não segue (quem executa, pedido de peça) sem o alinhamento aceito
+// pelo cliente e sem uma autorização aprovada pela direção. Cobertura "a confirmar" não trava, mas a tela avisa.
+export const TIPOS_CUSTO: Record<string, string> = { diagnostico: 'Diagnóstico', deslocamento: 'Deslocamento', frete: 'Frete', mao_de_obra: 'Mão de obra', peca: 'Peça', terceiro: 'Terceiro', outro: 'Outro' };
+export const PAGADORES_GARANTIA: Record<string, string> = { empresa: 'Nós (empresa)', cliente: 'Cliente', fornecedor: 'Fornecedor' };
+export const CANAIS_CLIENTE: Record<string, string> = { telefone: 'Telefone', whatsapp: 'WhatsApp', email: 'E-mail', presencial: 'Presencial', outro: 'Outro' };
+export const ACEITES_CLIENTE: Record<string, string> = { sim: 'O cliente aceitou', nao: 'O cliente não aceitou', aguardando: 'Aguardando o cliente' };
+export const TIPOS_AUTORIZACAO: Record<string, string> = { fora_da_garantia: 'Despesa fora da garantia', cortesia: 'Cortesia' };
+/** A direção: quem tem o perfil Admin. */
+export const ehDirecaoGarantia = (u: any) => ehAdminG(u);
+
+const reais = (v: any) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : NaN);
+export const custoConsiderado = (l: any) => (l?.negociado !== null && l?.negociado !== undefined ? Number(l.negociado) : Number(l?.previsto) || 0);
+/** Totais do quadro: o previsto, o considerado (o negociado quando há, senão o previsto), o já aprovado e quem paga cada parte. */
+export function totaisDeCustos(g: any) {
+  const linhas = Array.isArray(g?.custos) ? g.custos : [];
+  const soma = (f: (l: any) => number) => Math.round(linhas.reduce((s: number, l: any) => s + f(l), 0) * 100) / 100;
+  return {
+    previsto: soma(l => Number(l.previsto) || 0),
+    considerado: soma(custoConsiderado),
+    aprovado: soma(l => (l.aprovado ? custoConsiderado(l) : 0)),
+    porPagador: { empresa: soma(l => ((l.pagador || 'empresa') === 'empresa' ? custoConsiderado(l) : 0)), cliente: soma(l => (l.pagador === 'cliente' ? custoConsiderado(l) : 0)), fornecedor: soma(l => (l.pagador === 'fornecedor' ? custoConsiderado(l) : 0)) },
+  };
+}
+
+export function salvarCustos(g: any, u: any, linhas: any[], agora: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const antes = Array.isArray(g.custos) ? g.custos : [];
+  const novas: any[] = [];
+  for (const [n, l] of (Array.isArray(linhas) ? linhas : []).entries()) {
+    if (!TIPOS_CUSTO[l?.tipo]) return { erro: `Linha ${n + 1}: escolha o tipo do custo.` };
+    const previsto = reais(l.previsto);
+    if (previsto === null || Number.isNaN(previsto) || previsto < 0) return { erro: `Linha ${n + 1}: informe o valor previsto em reais (zero ou maior).` };
+    const negociado = reais(l.negociado);
+    if (Number.isNaN(negociado as number) || (negociado !== null && negociado < 0)) return { erro: `Linha ${n + 1}: o valor negociado precisa ser em reais, zero ou maior.` };
+    const negociadoPor = txt(l.negociado_por, 200);
+    if (negociado !== null && !negociadoPor) return { erro: `Linha ${n + 1}: diga quem negociou o valor.` };
+    const pagador = l.pagador || 'empresa';
+    if (!PAGADORES_GARANTIA[pagador]) return { erro: `Linha ${n + 1}: escolha quem paga.` };
+    const id = txt(l.id, 40) || `c${Date.parse(agora)}${n}`;
+    const anterior = antes.find((x: any) => x.id === id);
+    const aprovado = !!l.aprovado;
+    novas.push({
+      id, tipo: l.tipo, descricao: txt(l.descricao, 300), previsto, negociado, negociado_por: negociado === null ? '' : negociadoPor, pagador, origem: anterior?.origem || txt(l.origem, 20) || null,
+      aprovado, aprovado_por: aprovado ? (anterior?.aprovado ? anterior.aprovado_por : u?.nome || '') : null, aprovado_em: aprovado ? (anterior?.aprovado ? anterior.aprovado_em : agora) : null,
+    });
+  }
+  if (novas.length > 40) return { erro: 'O quadro aceita até 40 linhas.' };
+  // o banco guarda jsonb e devolve as chaves em outra ordem: a comparação não pode depender dela
+  const canon = (v: any) => JSON.stringify(v, (_k, val) => (val && typeof val === 'object' && !Array.isArray(val) ? Object.keys(val).sort().reduce((o: any, k) => { o[k] = val[k]; return o; }, {}) : val));
+  if (canon(novas) === canon(antes)) return { erro: 'Nada foi alterado no quadro de custos.' };
+  const total = totaisDeCustos({ custos: novas });
+  const adicionadas = novas.filter(n => !antes.some((a: any) => a.id === n.id)).length;
+  const removidas = antes.filter((a: any) => !novas.some(n => n.id === a.id));
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('custos', u, `${novas.length} linha(s), considerado R$ ${total.considerado.toFixed(2).replace('.', ',')}${adicionadas ? `; ${adicionadas} nova(s)` : ''}${removidas.length ? `; tirou: ${removidas.map((r: any) => `${TIPOS_CUSTO[r.tipo]}${r.descricao ? ' ' + r.descricao : ''}`).join(', ')}` : ''}`, agora));
+  return { patch: { custos: novas, historico } };
+}
+
+/** O custo previsto do terceiro (G2) entra no quadro com um clique; só uma vez. */
+export function lancarCustoDoTerceiro(g: any, u: any, agora: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const t = g?.execucao?.terceiro;
+  if (g?.execucao?.tipo !== 'terceiro' || t?.custo_previsto === null || t?.custo_previsto === undefined) return { erro: 'Não há custo previsto de terceiro para lançar.' };
+  if ((g.custos || []).some((l: any) => l.origem === 'execucao')) return { erro: 'O custo do terceiro já está no quadro.' };
+  return salvarCustos(g, u, [...(g.custos || []), { id: '', tipo: 'terceiro', descricao: t.nome, previsto: t.custo_previsto, negociado: null, pagador: 'empresa', aprovado: false, origem: 'execucao' }], agora);
+}
+
+export const alinhamentoAtual = (g: any) => { const l = Array.isArray(g?.alinhamentos) ? g.alinhamentos : []; return l.length ? l[l.length - 1] : null; };
+/** Só se acrescenta (o que o cliente disse em cada contato fica guardado); vale o último. */
+export function registrarAlinhamento(g: any, u: any, c: any, agora: string, hoje: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  const quem = txt(c?.quem_falou, 200), combinado = txt(c?.combinado);
+  if (!quem) return { erro: 'Diga com quem do cliente se falou.' };
+  if (!diaOk(c?.quando)) return { erro: 'Informe o dia da conversa.' };
+  if (String(c.quando) > hoje) return { erro: 'O dia da conversa não pode ser no futuro.' };
+  if (!CANAIS_CLIENTE[c?.canal]) return { erro: 'Escolha por onde foi a conversa.' };
+  if (!combinado) return { erro: 'Escreva o que ficou combinado.' };
+  if (!ACEITES_CLIENTE[c?.aceitou]) return { erro: 'Diga se o cliente aceitou, não aceitou ou se ainda aguarda.' };
+  const lista = copiar(g.alinhamentos) || [];
+  lista.push({ id: `a${Date.parse(agora)}${lista.length}`, quem_falou: quem, quando: c.quando, canal: c.canal, combinado, aceitou: c.aceitou, por: u?.nome || '', em: agora });
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('alinhamento', u, `${ACEITES_CLIENTE[c.aceitou]} (${CANAIS_CLIENTE[c.canal]}, com ${quem})`, agora));
+  return { patch: { alinhamentos: lista, historico } };
+}
+
+/** Atendimento fora da garantia: o que falta para seguir. */
+export function bloqueioForaDaGarantia(g: any): { bloqueado: boolean; faltas: string[] } {
+  if (g?.avaliacao?.cobertura !== 'fora') return { bloqueado: false, faltas: [] };
+  const faltas: string[] = [];
+  if (alinhamentoAtual(g)?.aceitou !== 'sim') faltas.push('o alinhamento com o cliente, aceito por ele');
+  if (!(Array.isArray(g.autorizacoes) ? g.autorizacoes : []).some((a: any) => a.status === 'aprovada')) faltas.push('a autorização da direção');
+  return { bloqueado: faltas.length > 0, faltas };
+}
+
+export function pedirAutorizacao(g: any, u: any, { tipo, valor, motivo }: any, agora: string) {
+  const erro = preparar(g, u, false); if (erro) return { erro };
+  if (!TIPOS_AUTORIZACAO[tipo]) return { erro: 'Escolha o que está sendo pedido: despesa fora da garantia ou cortesia.' };
+  const v = reais(valor);
+  if (v === null || Number.isNaN(v) || v < 0) return { erro: 'Informe o valor da despesa em reais (zero ou maior).' };
+  const m = txt(motivo);
+  if (!m) return { erro: 'Escreva o motivo do pedido.' };
+  const lista = copiar(g.autorizacoes) || [];
+  if (lista.some((a: any) => a.status === 'pedida')) return { erro: 'Já há um pedido de autorização esperando a direção.' };
+  lista.push({ id: `z${Date.parse(agora)}${lista.length}`, tipo, valor: v, motivo: m, status: 'pedida', pedida_por: u?.nome || '', pedida_em: agora, decisao: null });
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('autorizacao_pedida', u, `${TIPOS_AUTORIZACAO[tipo]}, R$ ${v.toFixed(2).replace('.', ',')}`, agora));
+  return { patch: { autorizacoes: lista, historico } };
+}
+
+/** Só a direção decide. decisao: 'aprovou' | 'negou' (texto obrigatório). */
+export function decidirAutorizacao(g: any, id: string, u: any, { decisao, texto }: any, agora: string) {
+  if (g?.situacao !== 'aberto') return { erro: 'Só o atendimento aberto recebe decisão.' };
+  if (!ehDirecaoGarantia(u)) return { erro: 'Só a direção (perfil Admin) decide a autorização.' };
+  const lista = copiar(g.autorizacoes) || [];
+  const a = lista.find((x: any) => x.id === id);
+  if (!a) return { erro: 'Não foi possível achar o pedido: a ficha mudou. A tela foi atualizada.' };
+  if (a.status !== 'pedida') return { erro: 'Este pedido já foi decidido ou cancelado. A tela foi atualizada.' };
+  if (!['aprovou', 'negou'].includes(decisao)) return { erro: 'Escolha: aprovar ou negar.' };
+  const t = txt(texto);
+  if (decisao === 'negou' && !t) return { erro: 'Escreva por que foi negado.' };
+  a.status = decisao === 'aprovou' ? 'aprovada' : 'negada';
+  a.decisao = { por: u?.nome || '', em: agora, texto: t || null };
+  const historico = copiar(g.historico) || [];
+  historico.push(evento(decisao === 'aprovou' ? 'autorizacao_aprovada' : 'autorizacao_negada', u, `${TIPOS_AUTORIZACAO[a.tipo]}, R$ ${Number(a.valor).toFixed(2).replace('.', ',')}${t ? ` — ${t}` : ''}`, agora));
+  return { patch: { autorizacoes: lista, historico } };
+}
+
+export function cancelarAutorizacao(g: any, id: string, u: any, motivo: string, agora: string) {
+  if (g?.situacao !== 'aberto') return { erro: 'Só o atendimento aberto recebe registros.' };
+  const lista = copiar(g.autorizacoes) || [];
+  const a = lista.find((x: any) => x.id === id);
+  if (!a) return { erro: 'Não foi possível achar o pedido: a ficha mudou. A tela foi atualizada.' };
+  if (a.status !== 'pedida') return { erro: 'Só o pedido que espera a direção pode ser cancelado.' };
+  if (!(podeConduzirGarantia(g, u) || mesmoEmailG(a.pedida_por, u?.nome))) return { erro: 'Só o responsável, a gerência ou quem pediu cancela o pedido.' };
+  const t = txt(motivo);
+  if (!t) return { erro: 'Escreva o motivo do cancelamento.' };
+  a.status = 'cancelada'; a.cancelada_motivo = t;
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('autorizacao_cancelada', u, t, agora));
+  return { patch: { autorizacoes: lista, historico } };
+}
+const mesmoEmailG = (a: any, b: any) => semAcento(a) !== '' && semAcento(a) === semAcento(b);
 
 /** Registra na ficha o pedido que acabou de nascer no Compras. A trava é conferida aqui também (a tela só desliga o botão). */
 export function registrarPedidoDePeca(g: any, u: any, { pedido_id, numero_pedido, titulo }: any, agora: string) {

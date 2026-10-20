@@ -1,7 +1,7 @@
 # Atendimento em garantia — desenho e etapas
 
 > Proposta de **08/10/2026**, a pedido do usuário ("Lista pedido Bruna": procedimento de atendimento em garantia).
-> **G1 e G2 construídas em 19/10/2026** (ver "Como ficou a G1" e "Como ficou a G2" no fim); **G3 a G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
+> **G1, G2 e G3 construídas em 19/10/2026** (ver "Como ficou a G1", "G2" e "G3" no fim); **G4 a G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
 > produção sozinha, com teste e com este plano atualizado (mesmo padrão dos outros planos do projeto).
 
 ## Ponto de partida (o que existe hoje)
@@ -42,7 +42,7 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 |---|---|---|
 | **G1** ✅ | **Ficha e abertura**: tabela do atendimento, formulário com campos obrigatórios, lista/quadro dentro do SAC (aba "Garantia"), histórico de movimentação e permissões. | 1, 12 |
 | **G2** ✅ | **Avaliação e fornecedor**: parecer técnico, cobertura, consulta ao fornecedor, quem executa; trava do pedido de peça no Compras. | 2, 3, 5 |
-| **G3** | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
+| **G3** ✅ | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
 | **G4** | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
 | **G5** | **Partes e avisos**: responsáveis e copiados por atendimento, avisos automáticos a cada mudança. | 11 |
 | **G6** | **Relatório semanal** (tela + PDF) e encerramento do atendimento. | 10 |
@@ -99,6 +99,29 @@ Com isso, da lista de decisões com os setores só restam **o critério de autor
 **Testado:** 67 verificações das regras (as 36 da G1 e 31 novas) e **56 no navegador** (as 31 da G1 e 25 novas; fichas, a garantia da OP e o pedido de compra simulados em memória, nenhuma gravação real): a etapa inicial; sem avaliação, fornecedor e execução recusam; o apoio "dentro do prazo (faltavam 92 dias)"; avaliação sem parecer recusada e com ele gravada com o apoio; consulta sem fornecedor recusada; consulta sem resposta mantém a trava; resposta sem a decisão recusada; resposta completa libera o botão; terceiro sem nome recusado e com custo gravado; o pedido nasce no Compras com o número da garantia, o fornecedor, o setor e o vínculo da OP e fica na ficha e no histórico; o copiado não vê botão e o Admin conduz qualquer ficha. **Achado do teste:** depois de gravar, o formulário da seção ficava aberto (a rotina de gravação não devolvia o resultado); corrigido. **Nenhum dado real foi alterado.**
 
 **Fica para as próximas etapas:** custos negociados, alinhamento com o cliente e autorização da direção (G3; é lá que "fora da garantia" passa a ter consequência — na G2 a cobertura só informa), peças em garantia com envio e retorno e os apontamentos (G4), avisos (G5) e relatório e encerramento (G6).
+
+## Decisões do usuário em 19/10/2026 (G3)
+
+1. **A "direção" é quem tem o perfil Admin** (hoje 4 pessoas); não há cadastro novo.
+2. **Critério de autorização: tudo vai para a direção** — qualquer despesa fora da garantia e qualquer cortesia espera a direção, **sem faixa de valor** (o gerente não decide).
+3. **Quem registra custos, alinhamento com o cliente e pede a autorização:** o responsável pelo atendimento e a gerência.
+
+Da lista de decisões com os setores, só resta **o prazo para cobrar atendimento parado** (G6).
+
+## Como ficou a G3 (19/10/2026)
+
+**Banco (migração `garantia_g3_custos_cliente_direcao`):** três colunas novas na ficha — `custos`, `alinhamentos` e `autorizacoes` (jsonb, padrão vazio); as fichas existentes não mudam.
+
+**Tela (seções no detalhe, depois do fornecedor; `GarantiaCustos.tsx`, regras em `GarantiaModelo.ts`):**
+- **Quadro de custos:** cada linha tem **tipo** (diagnóstico, deslocamento, frete, mão de obra, peça, terceiro, outro), descrição, **valor previsto**, **valor negociado** (e **quem negociou**, obrigatório quando há negociado), **quem paga** (nós, cliente ou fornecedor — acréscimo meu, porque o alinhamento com o cliente trata justamente de quem paga) e **aprovado** (guarda quem aprovou e quando). Mostra **previsto, considerado (o negociado quando há, senão o previsto), aprovado e a divisão por quem paga**. O quadro **não exige a avaliação** (o diagnóstico vem antes dela). Dá para tirar uma linha: o histórico diz qual saiu. **O custo previsto do terceiro (G2) entra no quadro com um clique** ("Lançar o custo do terceiro"), uma vez só.
+- **Alinhamento com o cliente:** com quem do cliente se falou, o dia, por onde (telefone, WhatsApp, e-mail, presencial ou outro), o que ficou combinado (condições e **quem paga**) e se o cliente **aceitou**, **não aceitou** ou **está aguardando**. **Só se acrescenta** (cada conversa é um registro, nada se reescreve) e **vale o último**.
+- **Autorização da direção:** pedido com **tipo** (despesa fora da garantia ou cortesia), **valor** (já vem o que a empresa paga no quadro) e **motivo**. **Só a direção (Admin) aprova ou nega**; negar exige o porquê; fica gravado **quem decidiu e quando**; o pedido negado continua no histórico e dá para pedir de novo; um pedido esperando a direção por vez; quem pediu ou a gerência cancela com motivo. **O responsável e o gerente não decidem** (nem o próprio responsável).
+- **A regra "fora da garantia não segue":** se a avaliação diz **fora da garantia**, **definir quem executa** e **pedir peça ao Compras** ficam travados até haver **o alinhamento aceito pelo cliente** e **uma autorização aprovada pela direção**; a ficha mostra uma faixa dizendo exatamente o que falta e o botão de peça mostra o mesmo motivo. **"Dentro" e "a confirmar" não travam**, mas "a confirmar" mostra um aviso (se ficar fora, será preciso o alinhamento e a autorização). A cortesia pode ser pedida em qualquer cobertura.
+- As janelas da Garantia ficaram **largas** (o quadro de custos não cabia em 500 px).
+
+**Testado:** **102 verificações das regras** (as 67 anteriores e 35 novas) e **86 no navegador** (as 56 anteriores e 30 novas; banco da garantia simulado em memória, nenhuma gravação real): fora da garantia a faixa diz o que falta; custo com valor que não é número e negociado sem "quem negociou" são recusados; custo gravado em reais; alinhamento "aguardando" não libera e o "aceitou" acrescentado vale; o valor do pedido já vem com o que a empresa paga; **quem pediu não vê Aprovar/Negar**; **quem executa recusa e o pedido de peça fica desligado** enquanto falta a direção; a direção nega (com o porquê) e depois aprova um novo pedido; com as duas condições o atendimento segue; o custo do terceiro entra no quadro e o total passa a somar os dois; aprovar linha guarda quem aprovou; o copiado vê sem nenhum botão. **Achado do teste:** o banco devolve os campos de uma linha em outra ordem e, sem cuidado, "salvar igual" pareceria mudança — a comparação ignora a ordem (testado). **Nenhum dado real foi alterado.**
+
+**Fica para as próximas etapas:** controle de envio e retorno das peças em garantia e os apontamentos de falha, horas, técnicos e solução (G4); avisos aos copiados e responsáveis (G5 — a direção também só vai saber do pedido de autorização quando a G5 avisar; hoje ela precisa abrir a ficha); relatório semanal e encerramento (G6).
 
 ## Regras de segurança que valem em todas as etapas
 

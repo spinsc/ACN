@@ -14,9 +14,10 @@ import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import Icone from './Icone';
 import { Botao, Selo, Faixa, hojeISO, diaBR, diaISO, diasAtraso } from './Interface';
 import {
-  COBERTURAS_GARANTIA, DECISOES_FORNECEDOR, podeConduzirGarantia, apoioDeCobertura, fornecedorLiberado, podePedirPeca,
+  COBERTURAS_GARANTIA, DECISOES_FORNECEDOR, podeConduzirGarantia, bloqueioForaDaGarantia, apoioDeCobertura, fornecedorLiberado, podePedirPeca,
   registrarAvaliacao, registrarFornecedor, registrarExecucao, registrarPedidoDePeca,
 } from './GarantiaModelo';
+import { SecaoCustos, SecaoCliente, SecaoDirecao } from './GarantiaCustos';
 import { mdiClose, mdiCartOutline } from '@mdi/js';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -267,10 +268,17 @@ function SecaoPecas({ g, conduz, executar, ocupado, currentUser }: any) {
 export function SecoesGarantia({ g, currentUser, executar, ocupado }: any) {
   const conduz = g.situacao === 'aberto' && podeConduzirGarantia(g, currentUser);
   const comum = { g, conduz, executar, ocupado, currentUser };
+  // G3: fora da garantia o atendimento não segue sem o alinhamento aceito pelo cliente e a autorização da direção; "a confirmar" não trava, mas avisa
+  const fora = bloqueioForaDaGarantia(g);
   return (
     <div className="acn-gar-secoes">
+      {g.situacao === 'aberto' && fora.bloqueado && <Faixa tom="atencao">Atendimento fora da garantia: para definir quem executa e pedir peça falta {fora.faltas.join(' e ')}.</Faixa>}
+      {g.situacao === 'aberto' && g.avaliacao?.cobertura === 'a_confirmar' && <Faixa tom="info">A cobertura ainda está a confirmar. Se ficar fora da garantia, será preciso o alinhamento com o cliente e a autorização da direção para seguir.</Faixa>}
       <SecaoAvaliacao {...comum} />
       <SecaoFornecedor {...comum} />
+      <SecaoCustos {...comum} />
+      <SecaoCliente {...comum} />
+      <SecaoDirecao {...comum} />
       <SecaoExecucao {...comum} />
       <SecaoPecas {...comum} />
     </div>

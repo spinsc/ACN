@@ -5163,3 +5163,9 @@ html body.dark table tr.acn-est-tr-cab:not(#acn) { background-color: #162032 !im
 .acn-gar-secao { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); font-size: 13px; }
 .acn-gar-secao-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .acn-gar-pedido { font-size: 13px; }
+
+/* ══ SAC > Garantia (G3, 19/10/2026) — custos, alinhamento com o cliente e autorização da direção ══ */
+.acn-gar-secao .acn-gar-tabela { overflow-x: auto; }
+.acn-gar-pedido { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-neutral-soft); }
+/* as janelas da Garantia são largas: o quadro de custos e a ficha não cabem em 500 px */
+html body .modal-box.acn-modal-cadastro.acn-gar-jan { width: min(880px, 96vw); max-width: 880px; }

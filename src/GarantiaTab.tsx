@@ -104,7 +104,7 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
   // sem fechar ao clicar fora: um clique solto perdia a ficha inteira já digitada
   return (
     <div className="modal-overlay">
-      <div className="modal-box acn-modal-cadastro acn-modal-larga" role="dialog" aria-label={editando ? 'Editar atendimento em garantia' : 'Novo atendimento em garantia'}>
+      <div className="modal-box acn-modal-cadastro acn-gar-jan" role="dialog" aria-label={editando ? 'Editar atendimento em garantia' : 'Novo atendimento em garantia'}>
         <div className="acn-modal-cab">
           <span className="modal-title"><Icone path={mdiShieldCheckOutline} size={18} /> {editando ? `Editar ${inicial.numero}` : 'Novo atendimento em garantia'}</span>
         </div>
@@ -200,7 +200,7 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
   const campo = (rotulo: string, valor: any) => <div className="acn-gar-campo"><div className="acn-pdp-rotulo">{rotulo}</div><div>{valor || '—'}</div></div>;
   return (
     <div className="modal-overlay">
-      <div className="modal-box acn-modal-cadastro acn-modal-larga" role="dialog" aria-label={`Atendimento ${g.numero}`}>
+      <div className="modal-box acn-modal-cadastro acn-gar-jan" role="dialog" aria-label={`Atendimento ${g.numero}`}>
         <div className="acn-modal-cab">
           <span className="modal-title"><Icone path={mdiShieldCheckOutline} size={18} /> {g.numero}</span>
           <span className="acn-dev-selos">
