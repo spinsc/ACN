@@ -5693,6 +5693,15 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-dev-resumo-lista li { margin-bottom: 2px; }
 .acn-dev-resumo-bloco { margin-top: 8px; }
 
+/* ══ Engenharia > Desenvolvimento (D3, 19/10/2026) — desenhos com revisão, lista de materiais, riscos e revisão de projeto ══ */
+.acn-dev-revisao { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); font-size: 13px; }
+.acn-dev-revisao-corpo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.acn-dev-bom-linha .acn-input:first-child { min-width: 180px; }
+.acn-dev-bom-num { width: 96px; }
+.acn-dev-bom-un { width: 64px; }
+.acn-dev-bom-sub { min-width: 84px; text-align: right; }
+.acn-dev-bom-total { font-size: 14px; }
+
 /* 19/10/2026: pedido do usuário — modais do Compras maiores e mais claros. A mesa de cotações usa a largura toda:
    as cotações lançadas ficam lado a lado em duas colunas e o item marcado numa cotação ocupa a linha inteira. */
 .acn-cmp-mesa-lista { grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); display: grid; gap: 10px; }
@@ -5702,3 +5711,26 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-cmp-j640 .acn-modal-corpo, .acn-cmp-j680 .acn-modal-corpo { font-size: 14px; }
 .acn-cmp-j640 .acn-quadro { padding: 12px 14px; }
 .acn-cmp-j640 .acn-quadro-titulo { font-size: 14px; margin-bottom: 8px; }
+
+/* ══ Engenharia > Desenvolvimento (D5, 19/10/2026) — Produção, Acabamento, Entrega e mudanças depois da liberação ══ */
+.acn-dev-norma-texto { flex: 1; min-width: 160px; font-size: 13px; }
+.acn-dev-form-lista { display: flex; flex-direction: column; gap: 6px; }
+.acn-dev-mudancas { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-dev-mudanca { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-neutral-soft); font-size: 13px; }
+
+/* ══ Engenharia > Desenvolvimento (D6, 19/10/2026) — painel de atenção e selos de alerta ══ */
+.acn-kpi.clicavel.ativo { border-color: var(--acn-brand); box-shadow: 0 0 0 2px var(--acn-brand-soft); }
+.acn-dev-painel-kpis { margin-top: 12px; }
+.acn-dev-alertas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.acn-dev-custos { margin: 0 0 12px; padding: 8px 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-dev-custos table { margin-top: 6px; }
+
+/* ══ SAC > Garantia (G1, 19/10/2026) — ficha do atendimento em garantia ══ */
+.acn-gar-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.acn-gar-campo { display: flex; flex-direction: column; gap: 2px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.acn-gar-texto { white-space: pre-wrap; }
+.acn-gar-escolhida { display: flex; align-items: center; gap: 6px; }
+.acn-gar-tabela { overflow-x: auto; padding: 0; }
+.acn-gar-linha { cursor: pointer; }
+.acn-gar-linha:hover { background: var(--acn-neutral-soft); }
+.acn-gar-falha { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

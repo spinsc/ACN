@@ -1,7 +1,7 @@
 # Atendimento em garantia — desenho e etapas
 
 > Proposta de **08/10/2026**, a pedido do usuário ("Lista pedido Bruna": procedimento de atendimento em garantia).
-> **Nada foi construído ainda.** Este arquivo é o desenho para aprovação; cada etapa só começa depois do OK e vai para
+> **G1 construída em 19/10/2026** (ver "Como ficou a G1" no fim); **G2 a G6 ainda não começaram.** Este arquivo é o desenho; cada etapa só começa depois do OK e vai para
 > produção sozinha, com teste e com este plano atualizado (mesmo padrão dos outros planos do projeto).
 
 ## Ponto de partida (o que existe hoje)
@@ -40,7 +40,7 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 
 | Etapa | Entrega | Cobre os pontos |
 |---|---|---|
-| **G1** | **Ficha e abertura**: tabela do atendimento, formulário com campos obrigatórios, lista/quadro dentro do SAC (aba "Garantia"), histórico de movimentação e permissões. | 1, 12 |
+| **G1** ✅ | **Ficha e abertura**: tabela do atendimento, formulário com campos obrigatórios, lista/quadro dentro do SAC (aba "Garantia"), histórico de movimentação e permissões. | 1, 12 |
 | **G2** | **Avaliação e fornecedor**: parecer técnico, cobertura, consulta ao fornecedor, quem executa; trava do pedido de peça no Compras. | 2, 3, 5 |
 | **G3** | **Custos, cliente e direção**: quadro de custos, alinhamento com o cliente, autorização da direção. | 4, 6, 7 |
 | **G4** | **Peças e apontamentos**: controle de envio/retorno de peças; falhas, horas, técnicos e solução. | 8, 9 |
@@ -54,6 +54,28 @@ Cada etapa funciona sozinha e vai para produção sozinha.
 3. **Quem é a "direção"** no sistema (perfil ou pessoas nomeadas).
 4. **Lista final de campos obrigatórios** e de quem é copiado por padrão.
 5. **Prazo para cobrar** atendimento parado (ex.: sem movimento em 5 dias aparece no relatório).
+
+## Decisões do usuário em 19/10/2026 (G1)
+
+1. **Campos obrigatórios na abertura: os do plano, como estão** — cliente (nome e contato), veículo do catálogo, placa **ou** chassi, OP/OS de origem **ou** nota fiscal, descrição da falha, data da ocorrência, responsável e quem é copiado (ao menos uma pessoa); quem abriu entra sozinho.
+2. **Quem abre:** SAC, Comercial e gerentes (Admin incluído). **Quem vê:** quem abriu, o responsável, os copiados e o Admin.
+3. **Numeração:** `GAR-0001/2026` (sequencial por ano).
+
+Continuam em aberto (não impedem a G1; entram quando a etapa que depende delas for construída): responsáveis por etapa, critério de autorização da direção, quem é a "direção" no sistema e o prazo para cobrar atendimento parado.
+
+## Como ficou a G1 (19/10/2026)
+
+**Banco (migração `garantia_g1_ficha_e_abertura`):** tabelas `garantia_atendimentos` (a ficha) e `garantia_contadores` (o número por ano) e a função **`garantia_abrir`**, que **dá o número e grava a ficha no mesmo passo**: se o cadastro é recusado por qualquer regra, o número volta junto (testado no banco, numa transação desfeita: abriu o 0001, uma abertura recusada e outra sem copiado **não consumiram número**, a seguinte saiu 0002; 0 linhas e 0 contadores ficaram). Os **campos obrigatórios também são regra do banco** (não só da tela): textos não vazios, placa **ou** chassi, ao menos um copiado, origem de um dos três tipos. **Atendimento não se apaga: o `DELETE` foi retirado do banco** para a chave pública e para quem está logado; só cancela (com motivo) e reabre. A tabela nasce com a regra "libera tudo" que o gatilho do banco exige (como as demais tabelas operacionais); **quem vê o quê vale na tela, e o banco só passa a filtrar por pessoa quando a Etapa 17 fechar as tabelas operacionais**.
+
+**Tela (aba "Garantia" dentro do SAC; `GarantiaTab.tsx`, regras em `GarantiaModelo.ts`):**
+- **Lista** com filtros Abertos / Encerrados / Cancelados / Todos (com contagem), busca sem acento (número, cliente, veículo, placa, OP, falha, responsável) e só o que a pessoa pode ver; leitura recusada mostra uma faixa de erro, nunca "nenhum atendimento".
+- **Abrir:** janela com todos os campos; o **veículo vem do catálogo** (o mesmo seletor das OPs); a **OP ou a OS é escolhida numa busca** (a OP traz o cliente; a OS traz cliente, contato e chassi, só no que estava em branco) e a **nota fiscal é só o número**; **placa e chassi** se escrevem em maiúscula e sem traço e são conferidos (placa antiga ou Mercosul; chassi de 17 caracteres sem I, O e Q); a data da ocorrência não pode ser futura; o responsável já vem sendo quem abre; os copiados usam o seletor de pessoas que o resto do sistema usa (a G5 usará essa lista para os avisos). Faltando algo, a tela lista tudo o que falta de uma vez e não grava.
+- **Detalhe** com todos os dados, o **histórico do atendimento** (aberto, alterado com o nome do campo, cancelado, reaberto) e, para quem abriu, o responsável e a gerência: **Editar** (só aberto), **Cancelar atendimento** (pede o motivo e confirma) e **Reabrir**. Quem é só copiado vê e não mexe.
+- Toda gravação **relê a ficha e só grava se ninguém mexeu desde a leitura** (confere `atualizado_em`); se mexeram, avisa e não grava por cima.
+
+**Testado:** 36 verificações das regras e **31 no navegador** (banco da garantia e a função de abertura simulados em memória; nenhuma gravação real): quem vê o quê para cinco perfis, abrir vazio, OP e OS escolhidas na lista, placa inválida e corrigida, a carga exata que vai ao banco, o detalhe com o número, editar (só a carga, com o campo no histórico), cancelar com motivo, reabrir, conflito e leitura recusada. **Nenhum dado real foi alterado** (o banco real ficou com 0 atendimentos).
+
+**Fica para as próximas etapas:** avaliação técnica e fornecedor (G2), custos, cliente e direção (G3), peças e apontamentos (G4), avisos aos copiados e responsáveis (G5; hoje abrir **não avisa ninguém**), relatório semanal e **encerramento** (G6; a situação "encerrado" já existe no banco, mas nenhuma tela encerra ainda).
 
 ## Regras de segurança que valem em todas as etapas
 

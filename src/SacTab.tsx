@@ -12,6 +12,7 @@ import { combinaBusca } from './SearchUtils';
 import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
+import GarantiaTab from './GarantiaTab';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
@@ -19,7 +20,7 @@ import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDo
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
+import { mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
@@ -200,7 +201,7 @@ function EtiquetaEmpresaOS({ os, onTrocar }: { os: any; onTrocar: (os: any) => v
 }
 
 export default function SacTab({ currentUser }) {
-  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'>('os');
+  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'|'garantia'>('os');
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
   const [loadNfc,      setLoadNfc]      = useState(false);
   const [nfcStatus,    setNfcStatus]    = useState('');
@@ -1481,8 +1482,12 @@ OK = ACN   |   Cancelar = DETECH`;
       <Abas className="acn-sac-abas" ativa={abaAtiva} onChange={id => { setAbaAtiva(id as any); if (id === 'chamados_nfc') carregarChamadosNfc(); }} itens={[
         { id:'os',           rotulo:'Ordens de Serviço', icone:mdiClipboardTextOutline },
         { id:'chamados_nfc', rotulo:'Chamados NFC',      icone:mdiCellphoneNfc },
+        { id:'garantia',     rotulo:'Garantia',          icone:mdiShieldCheckOutline },   // G1 do PLANO_GARANTIA.md (19/10/2026)
         { id:'cadastros',    rotulo:'Cadastros',         icone:mdiCogOutline },
       ]} />
+
+      {/* ── ABA GARANTIA (G1, 19/10/2026) ── */}
+      {abaAtiva === 'garantia' && <GarantiaTab currentUser={currentUser} />}
 
       {/* ── ABA CHAMADOS NFC ── */}
       {abaAtiva === 'chamados_nfc' && (
