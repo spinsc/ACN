@@ -17,6 +17,7 @@ import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
 import { SelectBusca, Botao } from './Interface';
+import { normalizarBusca } from './SearchUtils';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
 
@@ -139,7 +140,23 @@ export const bomPreenchida = (linhas: any[]) => (linhas || [])
   .filter(l => String(l.nome || '').trim())
   .map(l => ({ ...l, nome: String(l.nome).trim(), descricao: String(l.descricao || '').trim(), quantidade: num(l.quantidade) || 1, nao_cadastrado: !l.item_id }));
 
-/** BOM sugerida pelo vendido: kit/produto com estrutura abre nos itens; item do catálogo entra direto */
+/**
+ * O cadastro de um item vendido que veio só com o NOME (21/10/2026). OP aberta por lote, importação ou texto digitado à mão guarda o item sem `item_id`/`produto_id`, e a BOM sugerida
+ * achava que não havia o que sugerir (caso real: A1700.2610, quatro itens que existem no cadastro com o mesmo nome). Casa pelo nome sem acento e sem diferença de maiúscula, e SÓ quando
+ * acha exatamente um cadastro — dois cadastros com o mesmo nome é ambíguo e não se chuta. Item do cadastro primeiro, depois produto/kit. Leitura que falha conta como "não achou".
+ */
+async function acharNoCadastroPeloNome(nome: string): Promise<{ item_id?: string; produto_id?: string } | null> {
+  const chave = normalizarBusca(String(nome || '')).trim();
+  if (!chave) return null;
+  const itens = await supabase.from('cadastro_itens').select('id').eq('nome_norm', chave).neq('ativo', false).limit(2);
+  if (!itens.error && itens.data?.length === 1) return { item_id: itens.data[0].id };
+  if (!itens.error && (itens.data?.length || 0) > 1) return null;
+  const produtos = await supabase.from('cadastro_produtos').select('id').eq('nome_norm', chave).neq('ativo', false).limit(2);
+  if (!produtos.error && produtos.data?.length === 1) return { produto_id: produtos.data[0].id };
+  return null;
+}
+
+/** BOM sugerida pelo vendido: kit/produto com estrutura abre nos itens; item do catálogo entra direto. Item vendido só com o nome é procurado no cadastro pelo nome; o que não se achou vai em `semCadastro` do resultado. */
 export async function sugerirBom(vendidos: any[]) {
   const porItem = new Map<string, any>();
   const somar = (l: any) => {
@@ -147,8 +164,15 @@ export async function sugerirBom(vendidos: any[]) {
     const atual = porItem.get(chave);
     if (atual) atual.quantidade += l.quantidade; else porItem.set(chave, { ...l });
   };
-  for (const v of vendidos || []) {
+  const semCadastro: string[] = [];
+  for (const v0 of vendidos || []) {
+    let v = v0;
+    if (!v.produto_id && !v.item_id && String(v.nome || '').trim()) {
+      const achado = await acharNoCadastroPeloNome(v.nome);
+      if (achado) v = { ...v, ...achado };
+    }
     const q = num(v.quantidade) || 1;
+    if (!v.produto_id && !v.item_id) semCadastro.push(String(v.nome || '').trim());
     if (v.produto_id) {
       const estrutura = v.estrutura?.length ? v.estrutura : await estruturaParaDemanda(v.produto_id);
       estrutura.forEach((e: any) => somar({ item_id: e.item_id, codigo: e.codigo || '', nome: e.nome, unidade: e.unidade || 'UN', quantidade: num(e.quantidade) * q, descricao: `do ${v.nome}`, nao_cadastrado: !e.item_id }));
@@ -161,13 +185,16 @@ export async function sugerirBom(vendidos: any[]) {
   // película, instalação do kit, garantia estendida, plotagem, licença…) continuam na venda e na proposta, mas NÃO são
   // material para o Almoxarifado separar — saem da BOM sugerida. Se a leitura das categorias falhar, a lista segue
   // como estava (melhor sobrar um serviço do que sumir um material).
-  const sugeridas = [...porItem.values()];
+  const sugeridas: any[] & { semCadastro?: string[] } = [...porItem.values()];
+  sugeridas.semCadastro = semCadastro;
   const idsSug = sugeridas.map(l => l.item_id).filter(Boolean);
   if (!idsSug.length) return sugeridas;
   const { data: cats, error: erroCats } = await supabase.from('cadastro_itens').select('id,categoria').in('id', idsSug);
   if (erroCats) return sugeridas;
   const genericos = new Set((cats || []).filter((c: any) => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map((c: any) => String(c.id)));
-  return sugeridas.filter(l => !l.item_id || !genericos.has(String(l.item_id)));
+  const filtradas: any[] & { semCadastro?: string[] } = sugeridas.filter(l => !l.item_id || !genericos.has(String(l.item_id)));
+  filtradas.semCadastro = semCadastro;
+  return filtradas;
 }
 
 /**
@@ -303,8 +330,16 @@ export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; 
     setSugerindo(true);
     const sug = await sugerirBom(vendidos);
     setSugerindo(false);
-    if (!sug.length) { alert('Os itens vendidos não têm estrutura nem código do cadastro para sugerir a BOM. Monte a lista buscando os itens.'); return; }
-    onChange([...bomPreenchida(lista), ...sug]);
+    const fora: string[] = (sug as any).semCadastro || [];
+    if (!sug.length) { alert('Os itens vendidos não têm estrutura nem código do cadastro para sugerir a BOM' + (fora.length ? ` (não achei no cadastro: ${fora.join(', ')})` : '') + '. Monte a lista buscando os itens.'); return; }
+    // a BOM já pode ter vindo preenchida pela sugestão automática da janela: o botão só acrescenta o que ainda não está na lista (antes duplicava tudo)
+    const atuais = bomPreenchida(lista);
+    const jaTem = new Set(atuais.map((l: any) => l.item_id || `txt:${l.nome}`));
+    const novas = sug.filter((l: any) => !jaTem.has(l.item_id || `txt:${l.nome}`));
+    if (!novas.length) { alert('A BOM já tem todos os itens que o vendido sugere.'); return; }
+    onChange([...atuais, ...novas]);
+    // o que não está no cadastro não vira linha da BOM: avisa quais ficaram de fora para a pessoa buscar à mão
+    if (fora.length) alert(`A BOM foi sugerida, mas estes itens vendidos não estão no cadastro (nem com o mesmo nome) e ficaram de fora: ${fora.join(', ')}. Busque-os à mão.`);
   };
   const naoCad = bomPreenchida(lista).filter(l => l.nao_cadastrado).length;
   return (
