@@ -16,7 +16,7 @@ import { ModalDevolverOp } from './DevolverOp';
 import ModalConfigurarOp, { ModalLiberacaoParcialSerralheria } from './ConfigurarOp';
 import ModalSolicitarDesenvolvimento from './SolicitarDesenvolvimento';
 import { confirmar } from './Feedback';
-import { MenuAcoes, Botao, Faixa, Selo, diaBR } from './Interface';
+import { MenuAcoes, Botao, Faixa, Selo, Chips, diaBR } from './Interface';
 import Icone from './Icone';
 import {
   mdiClipboardTextOutline, mdiCogOutline, mdiCancel, mdiPackageVariantClosed, mdiWrenchOutline, mdiToolboxOutline, mdiTrayArrowUp, mdiEyeOutline, mdiPlus, mdiArrowULeftTop, mdiLinkVariant, mdiFactory, mdiChevronUp, mdiChevronDown, mdiCheckCircleOutline, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline,
@@ -85,6 +85,8 @@ export default function PCPTab({ currentUser }) {
   const [resumoLote, setResumoLote] = useState<any>(null);   // { base, irmaos }: cartão de resumo do lote como uma coisa só (08/10/2026)
   const [obsDevolver, setObsDevolver] = useState('');
   const [busca, setBusca] = useState('');
+  // Filtro da triagem (pedido do usuário em 21/10/2026): o que falta configurar, o que já foi liberado para o kiting e o que está pronto para ir à produção
+  const [filtroTriagem, setFiltroTriagem] = useState('todas');
   // Vínculo pronto pra abrir a Nova Demanda Avulsa já ligada àquela OP — ver
   // botão "+Demanda" por linha da tabela e o painel montado mais abaixo.
   const [pendingVinculoOP, setPendingVinculoOP] = useState(null);
@@ -606,6 +608,18 @@ export default function PCPTab({ currentUser }) {
   // bloco que só acompanha abre recolhido; se passar a pedir ação, o className muda e ele abre sozinho
   const classeBloco = (temAcao) => 'sec-card' + (temAcao ? '' : ' sec-collapsed');
 
+  // Os três recortes da triagem. "Faltam configurar" = BOM ainda não liberada (o botão CONFIGURAR é o próximo passo); "Liberados no kiting" = o PCP já liberou e o Almoxarifado está separando o material
+  // ('Aguardando Almox'); "Prontos para a produção" = o Almoxarifado concluiu (kit 100% ou com pendência aceita) e o botão "Liberar produção" já está aberto para o PCP (podeLiberar; envio não vai à produção).
+  const FILTROS_TRIAGEM: Record<string, (o: any) => boolean> = {
+    faltam: (o) => o.status_bom !== 'BOM Liberado',
+    kiting: (o) => o.status_geral === 'Aguardando Almox',
+    producao: (o) => podeLiberar(o),
+  };
+  const baseTriagem = filtrarOpls(opls, busca);
+  const passaFiltroTriagem = (o: any) => filtroTriagem === 'todas' || !!FILTROS_TRIAGEM[filtroTriagem]?.(o);
+  const listaTriagem = baseTriagem.filter(passaFiltroTriagem);
+  const nTriagem = (id: string) => baseTriagem.filter(FILTROS_TRIAGEM[id]).length;
+
   // Etapa 12e14 (06/10/2026): a tela inteira no molde do guia (faixa de prioridades, tabelas, selos, botões, janela do kiting). Nenhum
   // campo, texto, consulta, gravação ou regra foi mexido: só a aparência. A cor de cada situação vem da família do guia.
   const FAMILIA_STATUS_PCP = {
@@ -653,9 +667,19 @@ export default function PCPTab({ currentUser }) {
           problema — em dia cheio de pendência era preciso rolar a tela para
           chegar no que se faz o dia inteiro. Os alertas seguem logo abaixo. */}
       <div className="sec-card" id="pcp-bloco-triagem">
-        <div className="sec-hdr"><span>Triagem de OPs — PCP ({filtrarOpls(opls, busca).length})
+        <div className="sec-hdr"><span>Triagem de OPs — PCP ({listaTriagem.length})
           {!loading && opls.length > 0 && <PilulaAcao acao={nTriagemAgir} textoAcao="pedem ação" textoAcomp="nada a liberar agora" />}</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
+        {!loading && opls.length > 0 && (
+          <div className="acn-filtros" data-filtros-triagem>
+            <Chips rotulo="Filtrar a triagem" ativo={filtroTriagem} onChange={setFiltroTriagem} itens={[
+              { id: 'todas', rotulo: 'Todas', contagem: baseTriagem.length },
+              { id: 'faltam', rotulo: 'Faltam configurar', contagem: nTriagem('faltam'), titulo: 'OPs cuja BOM ainda não foi liberada: o próximo passo é CONFIGURAR' },
+              { id: 'kiting', rotulo: 'Liberadas no kiting', contagem: nTriagem('kiting'), titulo: 'O PCP já liberou o kiting e o Almoxarifado está separando o material' },
+              { id: 'producao', rotulo: 'Prontas para a produção', contagem: nTriagem('producao'), titulo: 'O Almoxarifado concluiu o kit (100% ou com pendência aceita): dá para liberar a produção' },
+            ]} />
+          </div>
+        )}
         <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             <div className="acn-empty">Nenhuma OP em triagem PCP.</div>
@@ -669,7 +693,7 @@ export default function PCPTab({ currentUser }) {
                 {(() => {
                   // Agrupa OPs desmembradas (mesmo numero base) numa unica
                   // linha "LOTE" colapsavel — mesmo padrao de EngenhariaTab.tsx.
-                  const listaFiltrada = filtrarOpls(opls, busca);
+                  const listaFiltrada = listaTriagem;
                   const basesJaRenderizadas = new Set();
                   const itens = [];
                   for (const o of listaFiltrada) {
@@ -683,6 +707,7 @@ export default function PCPTab({ currentUser }) {
                       itens.push({ tipo: 'single', row: o });
                     }
                   }
+                  if (!itens.length) return (<tr><td colSpan={11} className="acn-centro acn-fraco">Nenhuma OP neste filtro{busca.trim() ? ' com essa busca' : ''}.</td></tr>);
 
                   const renderLinhaOpl = (o) => (
                     <tr key={o.id} className={isEnvioDireto(o) ? 'acn-linha-envio' : oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
