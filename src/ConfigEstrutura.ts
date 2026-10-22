@@ -106,10 +106,15 @@ export async function perguntasDaVenda(itemIds: string[], vendidosIds: string[] 
 
 // ── Pergunta de quantidade e condição de itens (etapa 2, 15/10/2026) ─────────
 
-/** A pergunta só vale quando TODOS os itens de `quando_itens` estão na venda (vazio = sempre). */
+/**
+ * A pergunta só vale quando TODOS os itens de `quando_itens` estão na venda (vazio = sempre) e, se houver `quando_algum_item`, quando PELO MENOS UM deles está.
+ * Decidido com o usuário em 22/10/2026: "Slimled será fixado no PCI ou na GRADE?" só aparece com parachoque de impulsão vendido junto com slimled — e slimled
+ * tem vários modelos e cores, por isso o "algum de".
+ */
 export function perguntaCabeNaVenda(p: any, vendidos: Set<string>) {
   const cond = (p?.quando_itens || []).map(String).filter(Boolean);
-  return cond.every((id: string) => vendidos.has(id));
+  const algum = (p?.quando_algum_item || []).map(String).filter(Boolean);
+  return cond.every((id: string) => vendidos.has(id)) && (!algum.length || algum.some((id: string) => vendidos.has(id)));
 }
 
 /**
