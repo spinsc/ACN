@@ -1440,18 +1440,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           {setorAlvo === 'Compras' ? (
             <CamposSolicitacaoCompra valor={sc} onChange={setSc} />
           ) : (<>
-          {/* Campo do setor de destino — Compras: centro de custo */}
-          {campos.centroCusto && (
-            <div>
-              <label className="acn-dav-nova-6">
-                Centro de Custo
-              </label>
-              <CentroCustoSelect value={centroCustoId} onChange={setCentroCustoId} style={{ width:'100%', fontSize:11 }} />
-              <div className="acn-dav-nova-10">
-                Onde a compra desta demanda será apontada. Dá para deixar em branco e informar depois.
-              </div>
-            </div>
-          )}
+          {/* 22/10/2026: o campo "Centro de Custo" que ficava aqui nunca aparecia (só o setor Compras tem centro de custo, e Compras usa o formulário compartilhado acima, que já o traz); saiu por decisão do usuário. */}
 
           {/* Dados principais */}
           <div className="acn-dav-g-5">
