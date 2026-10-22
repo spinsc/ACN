@@ -27,6 +27,7 @@ const fmtR  = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('
 /** "A1704.2610/05" → "A1704.2610" (o número do lote). */
 export const baseDoLote = (opl) => String(opl || '').trim().replace(/\/\d+$/, '');
 /** "A1704.2610/05" → "05" (o número da unidade; "—" se a OP não tiver sufixo). */
+import { textosDasOps, legendaDasUnidades } from './TextosDaOp';
 const sufixoDe = (opl) => (String(opl || '').match(/\/(\d+)$/) || [])[1] || '—';
 
 const TITULO_GRUPO = {
@@ -94,6 +95,7 @@ export function resumirLote(dados) {
   return {
     base: dados.base, n: ops.length, primeira, origem: ds[0]?.origem || {}, unidades, porSituacao: [...porSituacao.entries()],
     gruposDeItens: [...gruposDeItens.values()], vinculos, pendencias, valorTotal,
+    textos: textosDasOps(ops, o => '/' + sufixoDe(o.opl)),
     prazoMin: ops.map(o => o.prazo_entrega_comercial || o.data_prevista_entrega).filter(Boolean).sort()[0] || null,
     prazoMax: ops.map(o => o.prazo_entrega_comercial || o.data_prevista_entrega).filter(Boolean).sort().slice(-1)[0] || null,
   };
@@ -142,6 +144,17 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
 
   titulo('SITUAÇÃO DO LOTE');
   tabela(['Situação', 'Unidades'], r.porSituacao.map(([s, n]) => [s, String(n)]));
+
+  if (r.textos.length) {
+    titulo('DESCRIÇÃO E OBSERVAÇÕES');
+    r.textos.forEach(tx => tx.grupos.forEach(g => {
+      const leg = legendaDasUnidades(g, r.n);
+      const linhas = doc.splitTextToSize(`${tx.rotulo}${leg ? ` (${leg})` : ''}: ${g.texto}`, 180);
+      novaPagina(linhas.length * 4 + 3); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(tx.atencao ? 180 : 0, tx.atencao ? 30 : 0, 0);
+      doc.text(linhas, 14, y); doc.setTextColor(0, 0, 0); y += linhas.length * 3.6 + 2;
+    }));
+    y += 2;
+  }
 
   titulo('ITENS VENDIDOS (POR CARRO)');
   r.gruposDeItens.forEach(g => {
@@ -274,6 +287,17 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
           ))}
         </div>
       </Secao>
+
+      {r.textos.length > 0 && (
+        <Secao titulo="Descrição e observações" cor="#b45309">
+          {r.textos.map(tx => tx.grupos.map((g, k) => (
+            <div key={tx.campo + k} style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: tx.atencao ? '#b91c1c' : '#94a3b8', textTransform: 'uppercase' }}>{tx.rotulo}{legendaDasUnidades(g, r.n) ? ` · ${legendaDasUnidades(g, r.n)}` : ''}</div>
+              <div style={{ fontSize: 11.5, whiteSpace: 'pre-wrap' }}>{g.texto}</div>
+            </div>
+          )))}
+        </Secao>
+      )}
 
       <Secao titulo="Itens vendidos (por carro)" cor="#1d4ed8">
         {r.gruposDeItens.map((g, i) => (

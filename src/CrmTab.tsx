@@ -5064,9 +5064,11 @@ function ColunaRolavel({ children }: any) {
     {/* ── Modal Acompanhamentos/Notas OPL ── */}
     {oplAcomp && (
       <OplAcompModal
-        referenciaId={oplAcomp.id}
+        // 22/10/2026: a nota do CRM passa a ser guardada como as do PCP, Produção e Almoxarifado (tipo "op" + número da OP); as antigas (tipo "opl" + id) continuam sendo lidas
+        referenciaId={oplAcomp.opl}
+        outrasChaves={[{ tipo: 'opl', id: String(oplAcomp.id) }]}
         referenciaDesc={`OP ${oplAcomp.opl} — ${oplAcomp.cliente_nome||''}`}
-        referenciaType="opl"
+        referenciaType="op"
         setor="Comercial/CRM"
         currentUser={currentUser}
         onClose={() => setOplAcomp(null)}

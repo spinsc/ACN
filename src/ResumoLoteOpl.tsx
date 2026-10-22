@@ -4,6 +4,7 @@ import { Botao, Selo } from './Interface';
 import { mdiClose, mdiPackageVariantClosed, mdiSendOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 import { podeVerValores } from './utils/permissoes';
+import { textosDasOps, legendaDasUnidades } from './TextosDaOp';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESUMO DO LOTE — pedido do usuário em 08/10/2026
@@ -55,6 +56,8 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
   const modelos = [...new Set(irmaos.map((o: any) => String(o.modelo || '').trim()).filter(Boolean))];
   const tecnicos = [...new Set(irmaos.map((o: any) => o.tecnico || o.tecnico_producao_2_nome).filter(Boolean))];
 
+  // 22/10/2026: os textos da OP (resumo dos serviços, especificações, observações) também aparecem no resumo do lote
+  const textos = useMemo(() => textosDasOps(irmaos, (o: any) => '/' + (String(o.opl || '').match(/\/(\d+)$/) || [])[1]), [irmaos]);
   const linha = (rot: string, v: any) => (vazio(v) ? null : <div className="acn-ficha-linha"><span>{rot}</span><span>{v}</span></div>);
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -80,6 +83,18 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
             {linha('Técnico(s)', tecnicos.join(', '))}
             {desde && <div className="acn-ficha-linha"><span>Parada</span><span>a unidade mais parada: {desde}</span></div>}
           </div>
+
+          {textos.length > 0 && (
+            <div className="acn-quadro" data-textos-op>
+              <div className="acn-quadro-titulo">Descrição e observações</div>
+              {textos.map((t: any) => t.grupos.map((g: any, k: number) => (
+                <div key={t.campo + k} className="acn-ficha-linha">
+                  <span className={t.atencao ? 'acn-txt-erro' : undefined}>{t.rotulo}{legendaDasUnidades(g, dados.n) ? <span className="acn-fraco"> ({legendaDasUnidades(g, dados.n)})</span> : null}</span>
+                  <span className="acn-prod-texto">{g.texto}</span>
+                </div>
+              )))}
+            </div>
+          )}
 
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Em que etapa está</div>

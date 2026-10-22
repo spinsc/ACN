@@ -262,8 +262,10 @@ export async function linhaDoTempo(op: any) {
 }
 
 export async function acompanhamentos(op: any) {
+  // 22/10/2026: as notas do PCP, Produção e Almoxarifado são do tipo "op" com o número da OP; as antigas do CRM, "opl" com o id. O dossiê lia só as do id.
   return tentar(supabase.from('op_acompanhamentos').select('*')
-    .eq('referencia_id', op.id).order('criado_em', { ascending: true }));
+    .or(`and(referencia_tipo.eq.op,referencia_id.eq."${op.opl}"),and(referencia_tipo.eq.opl,referencia_id.eq."${op.id}")`)
+    .order('criado_em', { ascending: true }));
 }
 
 /** Horas por setor já medidas pelo próprio sistema (colunas tempo_*_horas). */

@@ -5780,3 +5780,7 @@ html body .modal-box.acn-modal-cadastro.acn-flx-jan { width: min(calc(var(--acn-
 /* "+ Nova solicitação de compra" (Compras — Demandas) */
 html body .acn-main .acn-dav-nova-2.acn-dav-nova-compras { width: min(960px, 97vw); }
 html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([type]) { width: 100%; box-sizing: border-box; }
+
+/* ══ Notas da OP (22/10/2026) — editar e apagar a nota que a pessoa escreveu ══ */
+.acn-aco-edicao { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.acn-aco-edicao-botoes { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
