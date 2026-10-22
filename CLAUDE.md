@@ -15,9 +15,9 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 >   já foram migradas para o design system (12e9 e 12e10) e, em 06/10/2026, a aba Tarefas (12e11) e as telas médias e grandes — Almoxarifado, Engenharia, PCP (12e12 a 12e14), os setores (12e15),
 >   a Produção inteira (12e16 a 12e18), o Compras (12e19 a 12e21), a Formação de Preços (12e22 a 12e27), as Cotações (12e28 a 12e30) e as Licitações (12e31 a 12e34) —, cada
 >   fatia com uma etapa 7.x de achados antes. O `/ux-fluxo` segue pelas telas grandes, pelos componentes compartilhados e pelas respostas que pedem desenho com o usuário
->   (R1+R8+R3, R6, R7, R17); R4 e R9 estão parciais (ver o quadro de "Respostas a aplicar"). **A Etapa 17 (fechar o banco por perfil — segurança) é a próxima, decidida em 14/10/2026.**
+>   (R1+R8+R3, R6, R7, R17); R4 e R9 estão parciais (ver o quadro de "Respostas a aplicar"). **A Etapa 17 (fechar o banco — segurança) foi feita até a onda 2 em 22/10/2026: o banco só aceita quem entrou, menos nos dois portais do cliente; o que falta é separar por aba/perfil, setor a setor, com decisão do usuário (ver o plano).**
 >   A rotina automática da noite (trabalhar, commitar, push e deploy, próximo passo; "pare no próximo commit" interrompe) está descrita no `/ux-fluxo`.
->   **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:** a Garantia já foi concluída (20/10/2026); o que sobra fora do `/ux-fluxo` é a Etapa 17 (fechar o banco por perfil).
+>   **Ao encerrar tudo o que tem no `/ux-fluxo`, o Claude avisa o usuário e indica o próximo projeto:** a Garantia já foi concluída (20/10/2026); o que sobra fora do `/ux-fluxo` é o que resta da Etapa 17 (separar o banco por aba/perfil).
 >   **Modo de trabalho (decidido em 16/10/2026): de dia, os outros planos (Garantia, Etapa 17 etc.); de madrugada, o `/ux-fluxo`.** Tudo que nasce de dia já nasce no padrão novo (`Interface.tsx`, `Feedback.tsx`, classes, `Botao`; sem `style` solto). **Se o trabalho do dia vai mexer numa tela que o `/ux-fluxo` ainda não migrou, fazer antes a fatia dela** (7.x e migração) e só então a mudança; **nos quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`), perguntar ao usuário** se vale construir só a peça nova no padrão, sem migrar a tela inteira. Detalhe no quadro de decisões do plano de UX.
 > - **Concluídos — pasta [PLANOS CONCLUIDOS](PLANOS%20CONCLUIDOS/):**
 >   [PLANO_DESENVOLVIMENTO_ENGENHARIA.md](PLANOS%20CONCLUIDOS/PLANO_DESENVOLVIMENTO_ENGENHARIA.md) (a aba Engenharia > Desenvolvimento deixou de ter 8 etapas iguais: tipo de desenvolvimento, entregáveis e porta de decisão por etapa, desenhos com revisão, protótipos, testes, produção e entrega, pedido de mudança e painel de atenção; D0 a D6, concluído em 19/10/2026; falta só a ligação real com a Garantia, hoje o campo "Para a Garantia" do pacote técnico é anotação),
@@ -79,8 +79,14 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 **hardcoded** em `src/supabaseClient.ts` — não usar `.env`.
 
 - Autenticação é pela tabela própria `auth_usuarios`, **não** pelo Supabase Auth.
-- Tabela nova precisa de **policy permissiva de RLS** — existe um trigger `ensure_rls`
-  que recusa tabela sem policy.
+- **Desde 22/10/2026 (Etapa 17, onda 2) o banco não aceita a chave pública** (a do navegador): só quem entrou
+  (crachá = sessão do banco, ver `SessaoBanco.ts`) lê e grava; a única exceção são os dois portais do cliente
+  (`public/portal.html` e `veiculo.html`), que usam 4 tabelas (`configuracoes_sistema`, `veiculos_nfc`,
+  `servicos_executados_nfc`, `chamados_suporte`). **Tabela nova:** ligar RLS (o trigger `ensure_rls` já liga) e criar
+  a política `create policy etapa17_logado on public.<tabela> for all to authenticated using (public.esta_logado()) with check (public.esta_logado())`
+  — sem política ninguém lê. **Nunca** dar direito à chave pública (`anon`) nem política "libera tudo": o padrão do banco
+  já não dá. **Função nova:** quem entrou executa; a chave pública não. Dado sensível (RH, WhatsApp, e-mail, cópia de segurança)
+  já nasce com regra por perfil, como em `supabase/sql/etapa17_onda1a.sql`. O que a Etapa 17 ainda não fez (separar por aba) está no plano.
 - Colunas `*_norm` guardam o texto sem acento para busca (ver `SearchUtils`).
 - Toda migração é feita por `apply_migration`, com comentário explicando o porquê.
 
@@ -129,7 +135,11 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 O padrão do projeto é Puppeteer headless em `scratchpad/fstest/`, com o Chrome do
 Windows (`C:/Program Files/Google/Chrome/Application/chrome.exe`):
 
-- injetar o usuário em `localStorage.user` para entrar no sistema;
+- injetar o usuário em `localStorage.user` para entrar no sistema **e o crachá real da conta de teste em `localStorage.acn_sessao_banco`** (desde 22/10/2026 o banco recusa a
+  chave pública para ler, então o crachá "de mentira" não serve mais): conta `ZZTESTE (conta de teste)`, e-mail `zzteste@teste.acn.invalid`, perfil Almoxarifado, **sem nenhuma aba** (privilégio mínimo:
+  lê o que todo mundo que entrou lê; RH, comissões, WhatsApp, e-mail e lixeira vêm **vazios** — telas desses assuntos devem simular a leitura). A senha **não está no repositório**: fica em
+  `%USERPROFILE%\.acn-teste\zzteste.json` (se o arquivo não existir na máquina, peça ao usuário para definir uma senha para a conta no Admin → Usuários e crie o arquivo `{"email","senha"}`); o crachá sai da função de servidor `entrar`
+  (a mesma da tela de entrada), vale 1 hora, e o teste a pede uma vez por execução. A conta precisa estar **ativa**;
 - **o menu lateral é uma gaveta escondida** (Etapa 14a): para trocar de tela, clique por script em `.sidebar-item` pelo texto de `.sidebar-rotulo` (funciona escondido) ou abra pelo botão `.acn-hamburger` (Etapa 14b: ao abrir, só o grupo da tela atual vem aberto e os outros recolhidos — clique no título do grupo antes de procurar o item); a área útil das telas é a janela inteira;
 - **interceptar e abortar toda requisição externa que não seja GET/HEAD/OPTIONS** —
   assim nenhum teste grava em produção, e dá para ler o corpo do que *seria* gravado;

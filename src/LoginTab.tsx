@@ -29,16 +29,16 @@ export default function LoginTab() {
 
     try {
       // Etapa 17a (12/10/2026): quem confere é a função de servidor `entrar`, que além do usuário devolve o "crachá" do banco (sessão), guardado em SessaoBanco.ts.
-      // Se ela não responder (rede, servidor), a entrada cai para a conferência direta de antes (`auth_login`), sem crachá — nada exige o crachá ainda, então ninguém deixa de entrar.
+      // Etapa 17b, onda 2 (22/10/2026): a conferência direta de antes (`auth_login` pela chave pública) deixou de existir — o banco não aceita mais a chave pública (só a função de servidor
+      // `entrar` chama `auth_login`) e entrar sem crachá já não valia desde que a trava foi ligada. Se `entrar` não responder (rede, servidor), a pessoa vê o aviso de segurança, não um erro técnico de permissão.
       let data: any = null;
       try {
         const r = await supabase.functions.invoke('entrar', { body: { email: email.trim(), senha: password } });
         if (r.error || !r.data) throw r.error || new Error('sem resposta');
         data = r.data;
       } catch {
-        const r2 = await supabase.rpc('auth_login', { p_email: email.trim(), p_senha: password });
-        if (r2.error) throw r2.error;
-        data = r2.data;
+        setError('Não foi possível concluir a entrada com segurança. Tente de novo em instantes.');
+        setLoading(false); return;
       }
 
       if (!data?.ok) {
