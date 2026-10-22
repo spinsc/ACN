@@ -5780,3 +5780,11 @@ html body .modal-box.acn-modal-cadastro.acn-flx-jan { width: min(calc(var(--acn-
 /* "+ Nova solicitação de compra" (Compras — Demandas) */
 html body .acn-main .acn-dav-nova-2.acn-dav-nova-compras { width: min(960px, 97vw); }
 html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([type]) { width: 100%; box-sizing: border-box; }
+
+/* ══ Garantia ↔ Desenvolvimento (22/10/2026) — projeto de origem na ficha e atendimentos de garantia no projeto ══ */
+.acn-gar-projeto { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-neutral-soft); }
+.acn-gar-projeto-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.acn-gar-projeto-texto { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.acn-gar-projeto-lista { margin: 2px 0 0; padding-left: 18px; font-size: 13px; }
+.acn-dev-garantias { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-dev-garantia { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-neutral-soft); font-size: 13px; }

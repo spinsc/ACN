@@ -879,6 +879,21 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return () => window.removeEventListener('crm:navegar-sac', handler);
   }, []);
 
+  // Navegação cross-tab genérica (22/10/2026, ligação Garantia ↔ Desenvolvimento): `acn:ir-para-aba` com { aba, depois? }. Só troca de aba se a pessoa tem a aba liberada (a mesma regra do menu);
+  // `depois` é o evento que a aba de destino recebe assim que abre (as abas montam depois do clique, então ele sai com um pequeno atraso, como na busca global).
+  useEffect(() => {
+    const handler = (e: any) => {
+      const aba = e?.detail?.aba;
+      if (!aba) return;
+      if (!isVisible(aba)) { alert('Você não tem acesso a essa aba. Peça a liberação a um Admin.'); return; }
+      setActiveTab(aba);
+      const depois = e?.detail?.depois;
+      if (depois?.nome) setTimeout(() => window.dispatchEvent(new CustomEvent(depois.nome, { detail: depois.detalhe })), 400);
+    };
+    window.addEventListener('acn:ir-para-aba', handler);
+    return () => window.removeEventListener('acn:ir-para-aba', handler);
+  }, [currentUser?.id, currentUser?.perfil, JSON.stringify(currentUser?.abas_permitidas || null)]);
+
   // Navegação cross-tab: Telecom → Licitações ou CRM (abre card específico)
   useEffect(() => {
     const handler = (e: any) => {

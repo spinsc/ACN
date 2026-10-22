@@ -4,7 +4,7 @@ import { Faixa } from './Interface';
 import { confirmar } from './Feedback';
 import {
   dentroDoExpediente, podeAbrirTrechoAgora, situacaoDoRelogio, proximaPausaAutomatica, limiteDoTrecho, trechosDe,
-  avisoForaDoExpediente, horaDe, fmtTempo, tempoDoItem, somarTempo, type ItemComRelogio,
+  avisoForaDoExpediente, horaDe, fmtTempo, tempoDoItem, somarTempo, horasUteisEntre, type ItemComRelogio,
 } from './HorarioDemanda';
 
 // Pausa e horas úteis da demanda avulsa (pedido do usuário em 16/10/2026). As contas estão em HorarioDemanda.ts; aqui ficam o relógio da tela, a pergunta de quem vai
@@ -44,7 +44,8 @@ export function descricaoDoRelogio(item: ItemComRelogio, agora: Date) {
   const sit = situacaoDoRelogio(item, agora);
   const ult = trechosDe(item).slice(-1)[0];
   if (sit === 'rodando') {
-    const extra = ult && !ult.continuo && !dentroDoExpediente(new Date(ult.de)) && !dentroDoExpediente(agora);
+    // 22/10/2026: é hora extra pelo instante em que o trecho COMEÇOU (quem começou às 7:20 segue em hora extra mesmo depois das 8:00)
+    const extra = !!ult && !ult.continuo && !dentroDoExpediente(new Date(ult.de));
     const fim = proximaPausaAutomatica(item, agora);
     return { sit, extra, fim, texto: extra ? `Em hora extra. Para sozinha às ${fim ? horaDe(fim) : '22:00'}.` : `Em execução. Pausa sozinha às ${fim ? horaDe(fim) : '17:48'}.` };
   }
@@ -70,8 +71,20 @@ export function tempoEmTexto(item: ItemComRelogio, agora: Date) {
   return { uteis: fmtTempo(t.uteisMs), extras: t.extrasMs > 0 ? fmtTempo(t.extrasMs) : null, totalMs: t.uteisMs + t.extrasMs, extrasMs: t.extrasMs };
 }
 
-/** Tempo da demanda composta: a soma do tempo de todas as etapas. */
+/** Soma do trabalho de todas as etapas (o que cada pessoa trabalhou, em hora útil e em hora extra). */
 export function tempoDasEtapas(etapas: ItemComRelogio[], agora: Date) {
   const t = somarTempo((etapas || []).flatMap(e => trechosDe(e)), agora);
   return { uteis: fmtTempo(t.uteisMs), extras: t.extrasMs > 0 ? fmtTempo(t.extrasMs) : null, totalMs: t.uteisMs + t.extrasMs, extrasMs: t.extrasMs };
+}
+
+/**
+ * Tempo da demanda COMPOSTA no topo do detalhe (decidido com o usuário em 22/10/2026): do início da primeira etapa até a conclusão (ou até agora, ou até o cancelamento), contado só em horas úteis
+ * — etapas feitas ao mesmo tempo não somam duas vezes, e a pausa de uma etapa não desconta. A hora extra continua sendo a das etapas. A soma do trabalho de cada etapa fica no cabeçalho das etapas.
+ */
+export function tempoDaDemandaComEtapas(d: { data_inicio?: string | null; data_fim?: string | null; cancelada_em?: string | null }, etapas: ItemComRelogio[], agora: Date) {
+  const soma = tempoDasEtapas(etapas, agora);
+  if (!d.data_inicio) return { ...soma, uteis: fmtTempo(0), uteisMs: 0 };
+  const fim = d.data_fim ? new Date(d.data_fim) : d.cancelada_em ? new Date(d.cancelada_em) : agora;
+  const uteisMs = horasUteisEntre(new Date(d.data_inicio), fim);
+  return { uteis: fmtTempo(uteisMs), uteisMs, extras: soma.extras, extrasMs: soma.extrasMs, totalMs: uteisMs + soma.extrasMs };
 }

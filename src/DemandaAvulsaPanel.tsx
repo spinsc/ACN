@@ -41,7 +41,7 @@ import { confirmar } from './Feedback';
 import { Faixa, hojeISO, Botao } from './Interface';
 // pausa e horas úteis (16/10/2026): a conta fica em HorarioDemanda.ts, o relógio e as perguntas da tela em PausaDaDemanda.tsx
 import { abrirTrecho, fecharTrecho, situacaoDoRelogio, fmtTempo, dentroDoExpediente } from './HorarioDemanda';
-import { useAgora, confirmarAbertura, entradaDoRelogio, FaixaDoRelogio, tempoEmTexto, tempoDasEtapas } from './PausaDaDemanda';
+import { useAgora, confirmarAbertura, entradaDoRelogio, FaixaDoRelogio, tempoEmTexto, tempoDasEtapas, tempoDaDemandaComEtapas } from './PausaDaDemanda';
 import {
   ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView, CATEGORIA_DO_SETOR,
   itemVazio, itensPreenchidos, vinculosDaDemanda, camposDosVinculos,
@@ -479,7 +479,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const ligou = await gravarDemanda({
       pedido_compra_id: novo.id, informacoes: info, atualizado_em: agora,
       // pausa e horas úteis (16/10/2026): gerar o pedido marca o início, mas só abre o relógio dentro do expediente (a hora extra não nasce sem a pessoa decidir)
-      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora, trechos: dentroDoExpediente(new Date(agora)) ? abrirTrecho({ trechos: [] }, new Date(agora), currentUser?.nome || '') : [] } : {}),
+      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora, trechos: dentroDoExpediente(new Date(agora)) ? abrirTrecho({ trechos: Array.isArray(d.trechos) ? d.trechos : [] }, new Date(agora), currentUser?.nome || '') : (Array.isArray(d.trechos) ? d.trechos : []) } : {}),   // 22/10/2026: reaberta como Pendente mantém o tempo de antes
     }, `ligar a demanda ao pedido ${novo.numero_pedido} (o pedido foi criado em Compras, mas a demanda NÃO ficou ligada a ele; não gere outro pedido)`);
     setSalvando(false);
     if (!ligou) return;
@@ -503,8 +503,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       texto: `Reaberta (${d.status} → ${reabrirForm.status}) — Motivo: ${reabrirForm.motivo.trim()}` }];
     const { error } = await supabase.from('demandas_avulsas').update({
       status: reabrirForm.status, data_fim: null,
-      // pausa e horas úteis (16/10/2026): reaberta como Pendente zera o tempo (como já zerava o início); reaberta em andamento guarda o que foi trabalhado e fica PAUSADA até alguém retomar
-      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null, trechos: null } : { trechos: fecharTrecho(d, new Date(d.data_fim || d.cancelada_em || agora)) }),
+      // pausa e horas úteis: reaberta guarda o que foi trabalhado (decidido com o usuário em 22/10/2026; antes, como Pendente, o tempo zerava) e fica PAUSADA até alguém retomar; como Pendente o início volta a ficar em branco,
+      // mas o tempo de antes segue na lista de trechos e soma com o da próxima vez que for iniciada
+      trechos: fecharTrecho(d, new Date(d.data_fim || d.cancelada_em || agora)),
+      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null } : {}),
       cancelada_em: null, cancelada_por: null, motivo_cancelamento: null,
       informacoes: info, atualizado_em: agora,
     }).eq('id', d.id);
@@ -621,7 +623,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const agora = ag.toISOString();
     // pausa e horas úteis (16/10/2026): iniciar abre o primeiro trecho; fora do expediente conta como hora extra e fica no histórico
     if (!await gravarDemanda({
-      status: 'Em Andamento', data_inicio: agora, atualizado_em: agora, trechos: abrirTrecho({ trechos: [] }, ag, currentUser?.nome || ''),
+      status: 'Em Andamento', data_inicio: agora, atualizado_em: agora, trechos: abrirTrecho({ trechos: Array.isArray(d.trechos) ? d.trechos : [] }, ag, currentUser?.nome || ''),   // 22/10/2026: reaberta como Pendente mantém o tempo de antes
       ...(dentroDoExpediente(ag) ? {} : { informacoes: [...(d.informacoes || []), entradaDoRelogio('inicio', currentUser?.nome || '', ag)] }),
     }, 'marcar o início da execução')) return;
     await reload(); onRefresh();
@@ -754,7 +756,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   // pausa e horas úteis (16/10/2026): em que pé está o relógio da demanda simples e quanto já se trabalhou (a composta soma o tempo das etapas)
   const sitRelogio = !temEtapas && d.status === 'Em Andamento' ? situacaoDoRelogio(d, agora) : 'parada';   // demanda cancelada ou concluída não tem relógio
-  const tempoDemanda = temEtapas ? tempoDasEtapas(etapas, agora) : tempoEmTexto(d, agora);
+  const tempoDemanda = temEtapas ? tempoDaDemandaComEtapas(d, etapas, agora) : tempoEmTexto(d, agora);   // com etapas: do início ao fim em horas úteis (decidido em 22/10/2026)
+  const tempoSomaEtapas = temEtapas ? tempoDasEtapas(etapas, agora) : null;
 
   // Quantas ações a barra mostra (decidido na migração visual, 16/10/2026): com duas ou mais ela é um seletor em pílulas — o visual que o repintor já dava a esses botões soltos —
   // e as ações "do momento" (iniciar, concluir, designar, reprogramar, gerar pedido) ganham a pílula branca; com uma só, o botão fica sozinho, sem o trilho.
@@ -1095,8 +1098,14 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {/* ── ETAPAS MÚLTIPLAS ── */}
           {temEtapas && !editando && (
             <div>
+              {d.data_inicio && (
+                <div className="acn-dav-det-48">
+                  <InfoBlock label="Do início ao fim (horas úteis)" value={tempoDemanda.uteis} tom="info" />
+                  {tempoDemanda.extras && <InfoBlock label="Hora extra" value={tempoDemanda.extras} tom="info" />}
+                </div>
+              )}
               <div className="acn-dav-det-50">
-                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas){tempoDemanda.totalMs > 0 ? ` · ${tempoDemanda.uteis} trabalhadas${tempoDemanda.extras ? ` + ${tempoDemanda.extras} de hora extra` : ''}` : ''}</span>
+                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas){tempoSomaEtapas && tempoSomaEtapas.totalMs > 0 ? ` · ${tempoSomaEtapas.uteis} trabalhadas nas etapas${tempoSomaEtapas.extras ? ` + ${tempoSomaEtapas.extras} de hora extra` : ''}` : ''}</span>
                 <span className={'acn-dav-pct' + (pct === 100 ? ' ok' : '')}>{pct}%</span>
               </div>
               {etapas.map((e, i) => (

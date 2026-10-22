@@ -659,7 +659,8 @@ function prepararMudanca(d: any, id: string | null, exigeLiberada = true) {
   return { mudancas, historico, m };
 }
 
-export function pedirMudanca(d: any, u: any, { motivo, o_que_muda, impacto_custo, impacto_ops }: any, agora: string) {
+// 22/10/2026: o pedido pode nascer de um atendimento de garantia (`garantia: { id, numero }`): o número da garantia fica no pedido e no histórico do projeto, e a ficha da Garantia lê daqui
+export function pedirMudanca(d: any, u: any, { motivo, o_que_muda, impacto_custo, impacto_ops, garantia }: any, agora: string) {
   const p = prepararMudanca(d, null); if (p.erro) return p;
   const { mudancas, historico } = p;
   const campos = { motivo: txt(motivo, LIMITES.texto), o_que_muda: txt(o_que_muda, LIMITES.texto), impacto_custo: txt(impacto_custo, LIMITES.texto), impacto_ops: txt(impacto_ops, LIMITES.texto) };
@@ -668,8 +669,9 @@ export function pedirMudanca(d: any, u: any, { motivo, o_que_muda, impacto_custo
   if (!campos.impacto_custo || !campos.impacto_ops) return { erro: 'Diga o impacto em custo e nas OPs abertas (se não há, escreva "nenhum").' };
   if (mudancas.some((m: any) => m.status === 'pedida' || m.status === 'aprovada')) return { erro: 'Já há uma mudança em andamento. Conclua ou cancele antes de pedir outra.' };
   const numero = `M${mudancas.length + 1}`;
-  mudancas.push({ id: `m${Date.parse(agora)}${mudancas.length}`, numero, ...campos, status: 'pedida', pedida_por: u?.nome || '', pedida_em: agora, decisoes: [], rev_gerada: null, implementada_em: null });
-  historico.push(evento('mudanca_pedida', null, u, `${numero}: ${campos.motivo}`, agora));
+  const origem = garantia?.id ? { id: txt(String(garantia.id), 60), numero: txt(garantia.numero, 30) } : null;
+  mudancas.push({ id: `m${Date.parse(agora)}${mudancas.length}`, numero, ...campos, ...(origem ? { garantia: origem } : {}), status: 'pedida', pedida_por: u?.nome || '', pedida_em: agora, decisoes: [], rev_gerada: null, implementada_em: null });
+  historico.push(evento('mudanca_pedida', null, u, `${numero}${origem ? ` (atendimento de garantia ${origem.numero})` : ''}: ${campos.motivo}`, agora));
   return { patch: { mudancas, historico } };
 }
 

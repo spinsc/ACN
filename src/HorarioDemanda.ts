@@ -7,7 +7,8 @@
 // DERIVADO: um trecho aberto dentro do expediente para sozinho às 17:48 do mesmo dia (quem for trabalhar depois retoma à mão); um trecho aberto fora do expediente (noite, fim de
 // semana) corre até as 22:00 do dia em que começou e conta como HORA EXTRA — só marcação do tempo, sem pedido ao gestor e fora do relatório de horas extras (decisão do usuário).
 // Teto das 22:00 definido com o usuário em 16/10/2026 (ele recusou 23:59 e "sem teto": tarefa esquecida não soma madrugada). Depois das 22:00 não se inicia nem se retoma.
-// Trecho aberto antes das 08:00 conta como extra até as 08:00 e como hora útil dali até as 17:48 (suposição a confirmar).
+// Quem manda é o instante em que o trecho COMEÇA (decidido com o usuário em 22/10/2026): começou entre 08:00 e 17:48 de segunda a sexta = hora útil, e para sozinho às 17:48; começou fora disso
+// (antes das 08:00, à noite, no fim de semana) = o trecho inteiro é hora extra, até a pessoa pausar ou até as 22:00. Antes de 22/10 o que vinha antes das 08:00 era extra e dali em diante útil.
 //
 // Demanda ou etapa iniciada antes desta regra não tem trechos: conta como hora útil corrida (sem parada às 17:48) da data de início até a conclusão ou até agora — é o mais próximo
 // do que ela mostrava; a primeira pausa grava os trechos a partir dali.
@@ -43,7 +44,8 @@ export function podeAbrirTrechoAgora(d: Date): boolean { return d < hhmm(d, FIM_
 
 /** Até quando um trecho aberto em `de` corre sem ninguém mexer: 17:48 do mesmo dia (se começou antes disso num dia útil) ou 22:00 (hora extra). Aberto depois das 22:00 não corre. */
 export function limiteDoTrecho(de: Date): Date {
-  if (diaUtil(de) && de < hhmm(de, FIM_EXPEDIENTE_MIN)) return hhmm(de, FIM_EXPEDIENTE_MIN);
+  // 22/10/2026: só quem COMEÇA dentro do expediente para às 17:48; quem começa antes das 08:00 é hora extra e corre até as 22:00, como à noite e no fim de semana
+  if (dentroDoExpediente(de)) return hhmm(de, FIM_EXPEDIENTE_MIN);
   const vinteEDuas = hhmm(de, FIM_EXTRA_MIN);
   return de < vinteEDuas ? vinteEDuas : de;
 }
@@ -82,8 +84,14 @@ export function fimEfetivo(t: Trecho, agora: Date): Date {
 
 export function tempoDoTrecho(t: Trecho, agora: Date): Tempo {
   const de = new Date(t.de); const fim = fimEfetivo(t, agora);
-  return t.continuo ? fatiarCorrido(de, fim) : fatiar(de, fim);
+  if (t.continuo) return fatiarCorrido(de, fim);
+  // 22/10/2026: trecho que começou fora do expediente é hora extra do começo ao fim (mesmo que passe das 08:00); o que começou dentro nunca passa das 17:48 e é todo útil
+  if (!dentroDoExpediente(de)) return { uteisMs: 0, extrasMs: fim > de ? fim.getTime() - de.getTime() : 0 };
+  return fatiar(de, fim);
 }
+
+/** Horas úteis (segunda a sexta, 08:00 às 17:48) que passaram entre dois instantes, sem descontar pausa: o "do início ao fim" da demanda com etapas. */
+export function horasUteisEntre(inicio: Date, fim: Date): number { return fatiar(inicio, fim).uteisMs; }
 
 export function somarTempo(trechos: Trecho[], agora: Date): Tempo {
   let uteisMs = 0, extrasMs = 0;
