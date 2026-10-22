@@ -20,8 +20,9 @@ import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { Botao } from './Interface';
+import { confirmar } from './Feedback';
 import Icone from './Icone';
-import { mdiMessageTextOutline, mdiNoteTextOutline, mdiPlus } from '@mdi/js';
+import { mdiMessageTextOutline, mdiNoteTextOutline, mdiPlus, mdiPencilOutline, mdiTrashCanOutline } from '@mdi/js';
 
 // 12e48 (09/10/2026): a cor de cada setor saiu daqui para o design.css ([data-acomp-setor="…"] define --acn-aco-cor; setor fora da lista fica com a cor padrão, como antes). Atenção: as chaves são sem acento ("Producao"), como sempre foram.
 
@@ -43,24 +44,32 @@ interface Props {
    *  nenhuma tinha acompanhamento. Um clique aqui já vira histórico na OP e
    *  notificação para quem vendeu. */
   sugestoes?:     string[];
+  /** Outras chaves em que a mesma nota pode ter sido guardada (a OP do CRM usava o tipo "opl" com o id). Só leitura: as notas novas vão sempre na chave principal. */
+  outrasChaves?:  { tipo: string; id: string }[];
 }
 
 export default function OplAcompModal({
-  referenciaId, referenciaDesc, referenciaType, setor, currentUser, onClose, sugestoes,
+  referenciaId, referenciaDesc, referenciaType, setor, currentUser, onClose, sugestoes, outrasChaves,
 }: Props) {
   const [lista,    setLista]    = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [texto,    setTexto]    = useState('');
   const [salvando, setSalvando] = useState(false);
+  // 22/10/2026: a nota escrita pode ser editada ou apagada por quem a escreveu (e pelo Admin)
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [textoEdit, setTextoEdit] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const podeMexer = (item: any) => currentUser?.perfil === 'Admin' || (!!item.usuario_id && String(item.usuario_id) === String(currentUser?.id));
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('op_acompanhamentos')
-      .select('*')
-      .eq('referencia_id', referenciaId)
-      .eq('referencia_tipo', referenciaType)
-      .order('criado_em', { ascending: false });
+    // chave principal + as antigas; o valor vai entre aspas para aceitar "/" e "." do número da OP
+    const chaves = [{ tipo: referenciaType, id: referenciaId }, ...(outrasChaves || [])];
+    let q = supabase.from('op_acompanhamentos').select('*');
+    q = chaves.length > 1
+      ? q.or(chaves.map(c => `and(referencia_tipo.eq.${c.tipo},referencia_id.eq."${String(c.id).replace(/"/g, '')}")`).join(','))
+      : q.eq('referencia_id', referenciaId).eq('referencia_tipo', referenciaType);
+    const { data, error } = await q.order('criado_em', { ascending: false });
     if (error) console.error('[OplAcompModal] load:', error.message);
     setLista(data || []);
     setLoading(false);
@@ -121,6 +130,29 @@ export default function OplAcompModal({
     await load();
   };
 
+  const salvarEdicao = async (item: any) => {
+    const novo = textoEdit.trim();
+    if (!novo || ocupado) return;
+    if (novo === String(item.texto || '').trim()) { setEditandoId(null); return; }
+    setOcupado(true);
+    const { data, error } = await supabase.from('op_acompanhamentos')
+      .update({ texto: novo, editado_em: new Date().toISOString(), texto_original: item.texto_original || item.texto })
+      .eq('id', item.id).select('id');
+    setOcupado(false);
+    if (error || !data?.length) { alert('Não foi possível salvar a edição da nota' + (error ? ': ' + error.message : ' (ela não existe mais).') + ' O texto continua aí.'); return; }
+    setEditandoId(null); setTextoEdit('');
+    await load();
+  };
+  const apagar = async (item: any) => {
+    if (ocupado) return;
+    if (!await confirmar('Apagar esta nota? Não dá para desfazer.')) return;
+    setOcupado(true);
+    const { data, error } = await supabase.from('op_acompanhamentos').delete().eq('id', item.id).select('id');
+    setOcupado(false);
+    if (error || !data?.length) { alert('Não foi possível apagar a nota' + (error ? ': ' + error.message : ' (ela não existe mais).')); return; }
+    await load();
+  };
+
   const fmtDT = (v: string) => {
     if (!v) return '—';
     try {
@@ -175,14 +207,32 @@ export default function OplAcompModal({
                         </span>
                       </div>
                       <span className="acn-ajuda acn-aco-quando">
-                        {fmtDT(item.criado_em)}
+                        {fmtDT(item.criado_em)}{item.editado_em ? ` · editada em ${fmtDT(item.editado_em)}` : ''}
                       </span>
                     </div>
 
                     {/* Texto */}
-                    <div className="acn-aco-texto">
-                      <Linkify text={item.texto} />
-                    </div>
+                    {editandoId === item.id ? (
+                      <div className="acn-aco-edicao" data-edicao-nota>
+                        <MencaoTextarea value={textoEdit} onChange={setTextoEdit} rows={3} placeholder="Texto da nota" />
+                        <div className="acn-aco-edicao-botoes">
+                          <Botao pequeno variante="primario" disabled={!textoEdit.trim() || ocupado} onClick={() => salvarEdicao(item)}>{ocupado ? 'Salvando…' : 'Salvar'}</Botao>
+                          <Botao pequeno disabled={ocupado} onClick={() => { setEditandoId(null); setTextoEdit(''); }}>Cancelar</Botao>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="acn-aco-texto">
+                          <Linkify text={item.texto} />
+                        </div>
+                        {podeMexer(item) && (
+                          <div className="acn-aco-edicao-botoes">
+                            <Botao pequeno variante="discreto" icone={mdiPencilOutline} disabled={ocupado} onClick={() => { setEditandoId(item.id); setTextoEdit(item.texto || ''); }}>Editar</Botao>
+                            <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} disabled={ocupado} onClick={() => apagar(item)}>Apagar</Botao>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

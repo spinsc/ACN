@@ -5788,3 +5788,7 @@ html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([typ
 .acn-gar-projeto-lista { margin: 2px 0 0; padding-left: 18px; font-size: 13px; }
 .acn-dev-garantias { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
 .acn-dev-garantia { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r1); background: var(--acn-neutral-soft); font-size: 13px; }
+
+/* ══ Notas da OP (22/10/2026) — editar e apagar a nota que a pessoa escreveu ══ */
+.acn-aco-edicao { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.acn-aco-edicao-botoes { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }

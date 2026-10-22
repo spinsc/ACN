@@ -20,6 +20,7 @@ import { RespostasDaOp } from './RespostasDaOp';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
 import { diaBR } from './Interface';
+import { textosDasOps } from './TextosDaOp';
 import { OndeEstaAgora } from './OndeEstaAgora';
 import { DossieLote, baseDoLote } from './OpDossieLote';
 
@@ -219,6 +220,18 @@ export function DossieOp({ op, dossieCarregado = null }) {
             </>
           ) : null}
         </Secao>
+
+        {/* ── Descrição e observações (22/10/2026: não apareciam no dossiê) ── */}
+        {textosDasOps([o]).length > 0 && (
+          <Secao titulo="Descrição e observações" cor="#b45309">
+            {textosDasOps([o]).map(tx => (
+              <div key={tx.campo} style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: tx.atencao ? '#b91c1c' : '#94a3b8', textTransform: 'uppercase' }}>{tx.rotulo}</div>
+                <div style={{ fontSize: 11.5, whiteSpace: 'pre-wrap' }}>{tx.grupos[0].texto}</div>
+              </div>
+            ))}
+          </Secao>
+        )}
 
         {/* ── Vendido × BOM × Separado ── */}
         <Secao titulo="O que foi vendido, o que a BOM pediu e o que saiu do estoque" cor="#0f766e"
