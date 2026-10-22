@@ -5792,3 +5792,6 @@ html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([typ
 /* ══ Notas da OP (22/10/2026) — editar e apagar a nota que a pessoa escreveu ══ */
 .acn-aco-edicao { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .acn-aco-edicao-botoes { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+
+/* ══ Cadastro de itens (CadastroItensTab.tsx) — 7.x de 22/10/2026; a migração visual da tela vem em seguida (12e69) ══════════════ */
+.acn-cit-faixa { margin-bottom: 10px; }

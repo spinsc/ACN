@@ -8,7 +8,8 @@ import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { CamposEstoqueItem, CamposEstruturaChicote } from './Estoque';
-import { hojeISO } from './Interface';
+import { hojeISO, Faixa, Botao } from './Interface';
+import { lerPaginado } from './LerPaginado';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -216,6 +217,15 @@ function ItemModal({
 
   const handleSave = async () => {
     if (!form.nome?.trim()) return;
+    // 7.x (22/10/2026): os campos já declaram o limite (mínimo 0, porcentagem até 100, markup até 1000), mas o navegador só o aplica nas setas — digitado, "-5" passava e ia gravado
+    // (um custo negativo desce o preço; um IPI negativo desconta do custo). Agora recusa dizendo qual campo.
+    const LIMITES = [
+      { k: 'custo_unit', r: 'Custo unitário', max: Infinity }, { k: 'custo_embalagem', r: 'Custo da embalagem', max: Infinity },
+      { k: 'ipi_pct', r: 'IPI (%)', max: 100 }, { k: 'st_pct', r: 'ST (%)', max: 100 }, { k: 'difal_pct', r: 'DIFAL (%)', max: 100 },
+      { k: 'imposto_pct', r: 'Impostos s/Venda (%)', max: 100 }, { k: 'custo_fixo_pct', r: 'Custo Fixo (%)', max: 100 }, { k: 'markup_pct', r: 'Markup sugerido (%)', max: 1000 },
+    ];
+    const fora = LIMITES.find(l => form[l.k] !== '' && form[l.k] != null && (Number(form[l.k]) < 0 || Number(form[l.k]) > l.max));
+    if (fora) { alert(`"${fora.r}" está fora do limite (de 0 a ${fora.max === Infinity ? 'sem teto' : fora.max}). Corrija antes de salvar.`); return; }
     setSalvando(true);
     const payload = {
       codigo:        form.codigo?.trim() || null,
@@ -566,24 +576,25 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   const [resultadoImport, setResultadoImport] = useState<{ novos: number; atualizados: number; ignorados: number; mantidosInativos?: number; conjuntosInativos?: number; erro?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const POR_PAG = 50;
+  // 7.x do Cadastro de itens (22/10/2026): leitura recusada não pode virar "Nenhum item cadastrado" (a pessoa cadastraria de novo o que já existe): fica a faixa de erro e a última lista lida
+  const [erroLeitura, setErroLeitura] = useState('');
 
   // ── Carregar itens ──────────────────────────────────────────────────────────
   const carregar = useCallback(async () => {
     setLoading(true);
-    // Supabase limita a 1000 linhas por requisição — pagina até esgotar
-    // (necessário desde a importação em massa que passou de 4.000 itens).
-    const PAGINA_SUPABASE = 1000;
-    let lista: any[] = [];
-    for (let offset = 0; ; offset += PAGINA_SUPABASE) {
-      const { data } = await supabase
-        .from('cadastro_itens')
-        .select('*')
-        .order(ordenar.col, { ascending: ordenar.dir === 'asc' })
-        .range(offset, offset + PAGINA_SUPABASE - 1);
-      const pagina = data || [];
-      lista = lista.concat(pagina);
-      if (pagina.length < PAGINA_SUPABASE) break;
+    // Supabase limita a 1000 linhas por requisição — pagina até esgotar (necessário desde a importação em massa que passou de 4.000 itens).
+    // 7.x (22/10/2026): a ordem leva o `id` como desempate — ordenando por marca, categoria ou fornecedor (milhares de linhas iguais) um item podia aparecer em
+    // dois blocos de 1.000 ou em nenhum — e a leitura recusada deixou de valer como "acabou a lista".
+    let lista: any[];
+    try {
+      lista = await lerPaginado(() => supabase.from('cadastro_itens').select('*')
+        .order(ordenar.col, { ascending: ordenar.dir === 'asc' }).order('id'));
+    } catch (e: any) {
+      setErroLeitura(e?.message || 'sem resposta');
+      setLoading(false);
+      return;
     }
+    setErroLeitura('');
     setItens(lista);
 
     // Extrair categorias únicas (merge com default)
@@ -662,6 +673,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
 
     setImportando(true);
     setResultadoImport(null);
+    let atualizados = 0, novos = 0;   // fora do try: se a importação parar no meio, a mensagem diz o que já estava gravado
     try {
       const linhas = await lerArquivoItens(file);
       if (linhas.length === 0) {
@@ -671,20 +683,23 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
 
       const comCodigo = linhas.filter(l => l.codigo);
       const semCodigo = linhas.filter(l => !l.codigo);
-      let atualizados = 0, novos = 0;
       const TAM_LOTE = 500;
 
       // Itens com código: upsert (atualiza se já existir, cria se não existir)
       let mantidosInativos = 0, conjuntosInativos = 0;
       for (let i = 0; i < comCodigo.length; i += TAM_LOTE) {
         const codigosLote = comCodigo.slice(i, i + TAM_LOTE).map(it => it.codigo);
-        const { data: existentes } = await supabase
+        // 7.x (22/10/2026): estas duas conferências recusadas valiam como "nenhum existe" e "nenhum foi unificado" — o item que já existia era contado como novo, o "Conjunto Elétrico PV …"
+        // que já estava no catálogo ativo entrava INATIVO e o item unificado voltava ativo. Agora a importação PARA antes de gravar o bloco e diz por quê.
+        const { data: existentes, error: erroExistentes } = await supabase
           .from('cadastro_itens').select('codigo').in('codigo', codigosLote);
+        if (erroExistentes) throw new Error(`Não foi possível conferir quais itens já estão cadastrados (${erroExistentes.message}); a importação parou antes de gravar este bloco.`);
         const codigosExistentes = new Set((existentes || []).map((e: any) => e.codigo));
         // Unificação de itens repetidos (pedido do usuário em 29/09/2026): o item unificado fica inativo e a
         // planilha do ERP, que traz "Ativo = Sim", não pode reativá-lo — senão o repetido volta a cada importação.
-        const { data: unificados } = await supabase
+        const { data: unificados, error: erroUnificados } = await supabase
           .from('itens_unificacoes').select('codigo_duplicado').in('codigo_duplicado', codigosLote);
+        if (erroUnificados) throw new Error(`Não foi possível conferir os itens já unificados (${erroUnificados.message}); a importação parou antes de gravar este bloco, para não reativar item repetido.`);
         const jaUnificados = new Set((unificados || []).map((u: any) => u.codigo_duplicado));
         const lote = comCodigo.slice(i, i + TAM_LOTE).map(it => {
           const base = { ...it, criado_por: currentUser?.email || '' };
@@ -710,7 +725,11 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
       setResultadoImport({ novos, atualizados, ignorados: 0, mantidosInativos, conjuntosInativos });
       await carregar();
     } catch (err: any) {
-      setResultadoImport({ novos: 0, atualizados: 0, ignorados: 0, erro: err?.message || 'Erro ao importar arquivo.' });
+      // 7.x: o erro vinha sem dizer que os blocos anteriores JÁ estavam gravados (e o resumo mostrava 0 novos, 0 atualizados)
+      const jaGravado = novos + atualizados > 0
+        ? ` Antes de parar já estavam gravados ${novos} novo(s) e ${atualizados} atualizado(s); confira a lista antes de importar de novo.`
+        : ' Nada foi gravado.';
+      setResultadoImport({ novos, atualizados, ignorados: 0, erro: (err?.message || 'Erro ao importar arquivo.') + jaGravado });
     } finally {
       setImportando(false);
     }
@@ -819,6 +838,15 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
         </div>
       </div>
 
+      {/* ── Leitura recusada (7.x): a lista abaixo é a última que deu certo ── */}
+      {erroLeitura && (
+        <div className="acn-cit-faixa">
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregar()}>Tentar de novo</Botao>}>
+            Não foi possível ler o Cadastro de itens ({erroLeitura}). Isso não quer dizer que não haja item cadastrado{itens.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+          </Faixa>
+        </div>
+      )}
+
       {/* ── Resultado da importação ── */}
       {resultadoImport && (
         <div style={{
@@ -897,7 +925,8 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
           📄 Baixar modelo
         </button>
         <span style={{ fontSize: 10, color: '#64748b' }}>
-          {total} item{total !== 1 ? 'ns' : ''}
+          {/* 7.x: o texto saía "111 itemns" (o 'ns' era somado ao 'item' em vez de trocá-lo) */}
+          {total} {total !== 1 ? 'itens' : 'item'}
         </span>
       </div>
 
@@ -909,6 +938,9 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
           <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>
             Carregando itens...
           </div>
+        ) : visiveis.length === 0 && erroLeitura && itens.length === 0 ? (
+          // 7.x: com a leitura recusada e nenhuma lista anterior, não se diz "Nenhum item cadastrado" (a faixa de erro acima explica)
+          <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>Os itens não foram lidos.</div>
         ) : visiveis.length === 0 ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11, fontStyle: 'italic' }}>
             {itens.length === 0
