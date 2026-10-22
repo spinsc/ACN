@@ -1,5 +1,7 @@
 # Plano — Desenvolvimento de produto na Engenharia
 
+> **✅ PLANO CONCLUÍDO — 19/10/2026 (D0 a D6).** Movido para a pasta `PLANOS CONCLUIDOS` em 22/10/2026, depois de conferir etapa por etapa (quadro da seção 6). A **ligação real com a Garantia foi feita em 22/10/2026** (ver `PLANO_GARANTIA.md`, seção "Ligação com o Desenvolvimento": a ficha mostra o projeto de origem, o projeto mostra os atendimentos de garantia do veículo e o atendimento pede mudança no projeto). Fica de fora, de propósito, **criar o item no catálogo pela tela**.
+
 > Pedido do usuário em 19/10/2026: "todas as etapas do desenvolvimento são iguais e têm as mesmas features; os processos
 > estão certos, mas precisava ser algo mais concreto para um desenvolvimento de engenharia". Retomado pelo próprio
 > `PLANO_DESENVOLVIMENTO_ENGENHARIA.md`: abrir este arquivo e seguir a próxima etapa não feita (quadro no fim).

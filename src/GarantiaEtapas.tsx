@@ -19,6 +19,7 @@ import {
 } from './GarantiaModelo';
 import { SecaoCustos, SecaoCliente, SecaoDirecao } from './GarantiaCustos';
 import { SecaoPecasGarantia, SecaoApontamentos } from './GarantiaPecas';
+import { ProjetoDeOrigem } from './GarantiaProjeto';
 import { mdiClose, mdiCartOutline } from '@mdi/js';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -266,6 +267,15 @@ function SecaoPecas({ g, conduz, executar, ocupado, currentUser }: any) {
   );
 }
 
+// Projeto de origem no Desenvolvimento (22/10/2026): o que a Engenharia deixou para a Garantia e o pedido de mudança no projeto; as regras estão em GarantiaDesenvolvimento.ts
+function SecaoProjeto({ g, currentUser, executar, ocupado }: any) {
+  return (
+    <Secao id="projeto" titulo="Projeto de origem (Desenvolvimento)">
+      <ProjetoDeOrigem g={g} currentUser={currentUser} executar={executar} ocupado={ocupado} />
+    </Secao>
+  );
+}
+
 export function SecoesGarantia({ g, currentUser, executar, ocupado }: any) {
   const conduz = g.situacao === 'aberto' && podeConduzirGarantia(g, currentUser);
   const comum = { g, conduz, executar, ocupado, currentUser };
@@ -275,6 +285,7 @@ export function SecoesGarantia({ g, currentUser, executar, ocupado }: any) {
     <div className="acn-gar-secoes">
       {g.situacao === 'aberto' && fora.bloqueado && <Faixa tom="atencao">Atendimento fora da garantia: para definir quem executa e pedir peça falta {fora.faltas.join(' e ')}.</Faixa>}
       {g.situacao === 'aberto' && g.avaliacao?.cobertura === 'a_confirmar' && <Faixa tom="info">A cobertura ainda está a confirmar. Se ficar fora da garantia, será preciso o alinhamento com o cliente e a autorização da direção para seguir.</Faixa>}
+      <SecaoProjeto {...comum} />
       <SecaoAvaliacao {...comum} />
       <SecaoFornecedor {...comum} />
       <SecaoCustos {...comum} />

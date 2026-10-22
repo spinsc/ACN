@@ -95,7 +95,7 @@ export function PainelDeMudancas({ demanda, currentUser, onAtualizado }: any) {
               <strong>{m.numero}</strong>
               <Selo familia={FAMILIA[m.status]} ponto={false}>{STATUS_MUDANCA[m.status]}{m.rev_gerada ? ` (Rev ${m.rev_gerada})` : ''}</Selo>
             </div>
-            <div className="acn-ajuda">Pedida por {m.pedida_por} em {fmtDtHr(m.pedida_em)}</div>
+            <div className="acn-ajuda">Pedida por {m.pedida_por} em {fmtDtHr(m.pedida_em)}{m.garantia?.numero ? ` · origem: atendimento de garantia ${m.garantia.numero}` : ''}</div>
             <div><strong>Motivo:</strong> {m.motivo}</div>
             <div><strong>O que muda:</strong> {m.o_que_muda}</div>
             <div className="acn-ajuda">Custo: {m.impacto_custo} · OPs abertas: {m.impacto_ops}</div>

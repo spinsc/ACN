@@ -91,7 +91,7 @@ export const FRASES_GARANTIA: Record<string, string> = { aberto: 'Atendimento ab
   avaliacao: 'Avaliação técnica registrada', fornecedor: 'Fornecedor', execucao: 'Quem executa definido', peca_pedida: 'Peça pedida ao Compras',
   custos: 'Quadro de custos alterado', alinhamento: 'Alinhamento com o cliente', autorizacao_pedida: 'Autorização pedida à direção', autorizacao_aprovada: 'Direção aprovou',
   autorizacao_negada: 'Direção negou', autorizacao_cancelada: 'Pedido de autorização cancelado',
-  peca_adicionada: 'Peça em garantia cadastrada', peca_movimento: 'Peça em garantia', peca_movimento_desfeito: 'Movimento de peça desfeito', peca_removida: 'Peça tirada da ficha', apontamentos: 'Apontamentos alterados' };
+  peca_adicionada: 'Peça em garantia cadastrada', peca_movimento: 'Peça em garantia', peca_movimento_desfeito: 'Movimento de peça desfeito', peca_removida: 'Peça tirada da ficha', apontamentos: 'Apontamentos alterados', mudanca_projeto: 'Mudança pedida no projeto do Desenvolvimento' };
 export const fraseDoEvento = (e: any) => (FRASES_GARANTIA[e.tipo] || e.tipo) + (e.texto && e.tipo !== 'aberto' ? `: ${e.texto}` : '');
 
 const ROTULOS_CAMPO: Record<string, string> = {
