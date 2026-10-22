@@ -14,7 +14,13 @@ export const EXIGIR_CRACHA = true;
 
 const MARGEM_SEGUNDOS = 60;   // renova um minuto antes de vencer
 
-type Sessao = { access_token: string; refresh_token: string; expires_at: number };
+// `vence_local`: quando o crachá vence pelo relógio DESTE computador, contado a partir do instante em que ele chegou (e não pelo `expires_at`, que é a hora do servidor).
+// Decidido em 22/10/2026: o relógio do computador que o usuário usava estava 3 min 24 s atrasado em relação ao servidor; o sistema achava o crachá válido por mais
+// uns minutos depois de vencer e o banco respondia "JWT expired" (cerca de mil recusas por hora no escritório, a cada virada de hora). Medindo só o tempo corrido
+// no próprio computador, a diferença entre os relógios deixa de importar.
+type Sessao = { access_token: string; refresh_token: string; expires_at: number; vence_local?: number };
+
+const venceEm = (s: Sessao) => s.vence_local ?? s.expires_at;
 
 let aoMudar: ((token: string | null) => void) | null = null;
 /** O cliente do banco registra aqui o que fazer quando o crachá muda (avisar o canal de tempo real). */
@@ -33,8 +39,10 @@ function ler(): Sessao | null {
 export function temSessao(): boolean { return !!ler(); }
 
 export function guardarSessao(s: { access_token: string; refresh_token: string; expires_at?: number; expires_in?: number }) {
-  const expires_at = s.expires_at || (Math.floor(Date.now() / 1000) + (s.expires_in || 3600));
-  try { localStorage.setItem(CHAVE_ARMAZENAMENTO, JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at })); } catch { /* sem armazenamento: segue sem crachá */ }
+  const agora = Math.floor(Date.now() / 1000);
+  const expires_at = s.expires_at || (agora + (s.expires_in || 3600));
+  const vence_local = agora + (s.expires_in || 3600);
+  try { localStorage.setItem(CHAVE_ARMAZENAMENTO, JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at, vence_local })); } catch { /* sem armazenamento: segue sem crachá */ }
   esperarAte = 0;
   if (aoMudar) aoMudar(s.access_token);
 }
@@ -48,13 +56,14 @@ let renovando: Promise<string | null> | null = null;
 let esperarAte = 0;   // depois de uma renovação que falhou por rede/servidor, não insiste por 30 segundos (cada chamada ao banco tentaria de novo)
 
 /** O crachá válido agora, ou null (e aí a chamada vai com a chave pública). Renova sozinho perto de vencer; um crachá vencido nunca é enviado (o banco o recusaria). */
-export function tokenAtual(chavePublica: string): Promise<string | null> {
+export function tokenAtual(chavePublica: string, forcar = false): Promise<string | null> {
   const s = ler();
   if (!s) return Promise.resolve(null);
   const agora = Math.floor(Date.now() / 1000);
-  if (s.expires_at - agora > MARGEM_SEGUNDOS) return Promise.resolve(s.access_token);
-  const semRenovar = s.expires_at > agora ? s.access_token : null;
-  if (!renovando && Date.now() < esperarAte) return Promise.resolve(semRenovar);
+  // `forcar`: o banco acabou de dizer "JWT expired" — renova na hora, qualquer que seja a conta do relógio
+  if (!forcar && venceEm(s) - agora > MARGEM_SEGUNDOS) return Promise.resolve(s.access_token);
+  const semRenovar = !forcar && venceEm(s) > agora ? s.access_token : null;
+  if (!renovando && !forcar && Date.now() < esperarAte) return Promise.resolve(semRenovar);
   if (!renovando) {
     renovando = (async () => {
       try {
