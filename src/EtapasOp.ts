@@ -13,6 +13,7 @@
 // mão agora; `estado` diz o que ela está esperando, sem repetir o setor.
 // ─────────────────────────────────────────────────────────────────────────────
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, eraLiberacaoComercial } from './FluxoEntrega';
+import { separaNoTelecom, STATUS_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { marcosDaOp } from './OpVinculos';
 import { diaISO, hojeISO } from './Interface';
 import { supabase } from './supabaseClient';
@@ -51,10 +52,17 @@ export const ETAPAS_OP: EtapaOp[] = [
   { match: ['Faturado'], pct: 100, label: 'Faturado', setor: null, estado: 'entregue, ciclo fechado', concluida: true },
 ];
 
-/** A etapa de um status; status desconhecido volta como está, sem setor. */
-export function etapaDaOp(status: string): EtapaOp {
+/** A etapa de um status; status desconhecido volta como está, sem setor.
+ *  Com a OP em mãos (`op`), a etapa de separar/embalar vale para o setor certo: rádio em envio é do Telecom, não do Almoxarifado (pedido do usuário em 22/10/2026;
+ *  a OP segue com os mesmos status — só o nome do setor muda). Sem `op`, ou com uma OP sem tipo/fluxo (o resumo do card do CRM antes de trazê-los), é o Almoxarifado de sempre. */
+export function etapaDaOp(status: string, op?: any): EtapaOp {
   const achou = ETAPAS_OP.find(e => e.match.includes(status));
-  return achou || { match: [], pct: 5, label: status || 'Iniciado', setor: null, estado: status || 'sem status', retrabalho: false };
+  const base: EtapaOp = achou || { match: [], pct: 5, label: status || 'Iniciado', setor: null, estado: status || 'sem status', retrabalho: false };
+  if (op && achou && STATUS_DE_SEPARACAO.includes(status) && separaNoTelecom(op)) {
+    return { ...base, label: base.label.replace('Almoxarifado', 'Telecom'), setor: SETOR_TELECOM,
+      estado: status === 'Aguardando Almox' ? 'aguardando separar, pôr o serial e embalar' : base.estado };
+  }
+  return base;
 }
 
 /** Dois nomes de status são a mesma etapa? O histórico (logs, auditoria) guarda o nome
@@ -160,12 +168,12 @@ export function desdeQuandoDaLista(op: any, dataDoEvento?: string | null) {
  * quando alguma unidade está em retrabalho/devolvida.
  * `ops` traz, por OP, o número, o status e o "desde quando" (desdeQuandoDaLista).
  */
-export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any }>) {
+export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any; tipo_projeto?: string | null; fluxo_entrega?: string | null }>) {
   if (!ops || !ops.length) return null;
-  const encerrada = (o: any) => o.status_geral === 'Cancelado' || !!etapaDaOp(o.status_geral).concluida;
+  const encerrada = (o: any) => o.status_geral === 'Cancelado' || !!etapaDaOp(o.status_geral, o).concluida;
   const abertas = ops.filter(o => !encerrada(o));
   const linha = (o: any) => {
-    const e = etapaDaOp(o.status_geral);
+    const e = etapaDaOp(o.status_geral, o);
     const onde = o.status_geral === 'Cancelado' ? 'cancelada' : e.concluida ? 'concluída' : `${e.setor || e.label} — ${e.estado}`;
     const quando = !encerrada(o) && o.desde
       ? ` · desde ${o.desde.fonte === 'marco' ? '≈ ' : ''}${textoData(o.desde.data)} (${textoDias(diasDesde(o.desde.data))})` : '';
@@ -177,13 +185,13 @@ export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; des
     const canceladas = ops.every(o => o.status_geral === 'Cancelado');
     return { texto: canceladas ? 'Cancelada' : 'Concluída', familia: (canceladas ? 'neutro' : 'ok') as 'neutro' | 'ok', titulo: dica };
   }
-  const setores = Array.from(new Set(abertas.map(o => { const e = etapaDaOp(o.status_geral); return e.setor || e.label; })));
+  const setores = Array.from(new Set(abertas.map(o => { const e = etapaDaOp(o.status_geral, o); return e.setor || e.label; })));
   const setor = setores.length === 1 ? setores[0] : `${setores.length} setores`;
   const maisParada = abertas.filter(o => o.desde)
     .sort((a, b) => new Date(a.desde.data).getTime() - new Date(b.desde.data).getTime())[0];
   const dias = maisParada ? diasDesde(maisParada.desde.data) : null;
   const texto = dias == null ? setor : `${setor} · ${maisParada.desde.fonte === 'marco' ? '≈ ' : ''}${textoDias(dias)}`;
-  const familia = (abertas.some(o => etapaDaOp(o.status_geral).retrabalho) ? 'atencao' : 'info') as 'atencao' | 'info';
+  const familia = (abertas.some(o => etapaDaOp(o.status_geral, o).retrabalho) ? 'atencao' : 'info') as 'atencao' | 'info';
   const rodape = ops.length > 1 ? '\n(o número do selo é o da unidade há mais tempo na etapa)' : '';
   return { texto, familia, titulo: `${dica}${rodape}\nClique para abrir ${ops.length > 1 ? 'a primeira unidade' : 'a OP'}.` };
 }

@@ -447,7 +447,8 @@ export const situacaoDaLinha = (l: any, saldos: any = {}) => {
  * Item sob controle sem saldo não marca. A saída continua sendo separar o que
  * tem, salvar, e fechar o kit quando o resto chegar.
  */
-export function ConferenciaKit({ linhas, onChange, saldos = {} }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any }) {
+// `semEstoque` (22/10/2026): o Telecom usa o mesmo checklist, mas ainda não tem estoque — o texto de rodapé não pode prometer baixa
+export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean }) {
   if (!linhas?.length) return null;
   const set = (i: number, patch: any) => onChange(linhas.map((l, j) => j === i ? { ...l, ...patch } : l));
   const div = divergencias(linhas).length;
@@ -514,7 +515,9 @@ export function ConferenciaKit({ linhas, onChange, saldos = {} }: { linhas: any[
         </tbody>
       </table>
       <div className="acn-ajuda">
-        Marcar e desmarcar não mexem no estoque. A baixa acontece quando você salva a separação.
+        {semEstoque
+          ? 'Ainda não há estoque neste setor: marcar só registra o que foi separado, nada dá baixa.'
+          : 'Marcar e desmarcar não mexem no estoque. A baixa acontece quando você salva a separação.'}
       </div>
     </div>
   );

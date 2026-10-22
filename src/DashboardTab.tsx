@@ -15,6 +15,7 @@ import LogisticaTab from './LogisticaTab';
 import VistoriasPatio from './VistoriasPatio';
 import MarketingTab from './MarketingTab';
 import SetorDemandaTab from './SetorDemandaTab';
+import TelecomTab from './TelecomTab';
 import ComprasTab from './ComprasTab';
 import CadastroItensTab from './CadastroItensTab';
 import CadastroProdutosTab from './CadastroProdutosTab';
@@ -1114,7 +1115,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     switch (activeTab) {
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
-      case 'telecom':      return <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />;
+      case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
       case 'minhas_solicitacoes': return <MinhasSolicitacoesTab currentUser={currentUser} />;
       case 'pcp':          return <PCPTab currentUser={currentUser} />;

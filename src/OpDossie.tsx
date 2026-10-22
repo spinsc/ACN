@@ -158,7 +158,7 @@ export function DossieOp({ op, dossieCarregado = null }) {
 
       <OndeEstaAgora op={o} vinculos={vinculos} logs={logs} />
 
-      <OplProgressBar status={o.status_geral} />
+      <OplProgressBar status={o.status_geral} op={o} />
 
       {/* ── Pendências em aberto: o que interessa de imediato ── */}
       {pendencias.length > 0 && (

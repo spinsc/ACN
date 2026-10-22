@@ -6,6 +6,7 @@ import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, L
 import { LinkLote } from './OpLote';
 import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERECO } from './EnderecoEntrega';
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
+import { setorDaSeparacao, SETOR_ALMOXARIFADO, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -31,7 +32,12 @@ import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa
 
 const semDado = (v) => !v || !String(v).trim();
 
-export default function AlmoxarifadoTab({ currentUser }) {
+// `setor` (pedido do usuário em 22/10/2026): a mesma tela serve ao Telecom. OP de RÁDIO em envio é separada, serializada e embalada pelo Telecom, com o MESMO processo do
+// Almoxarifado, só que SEM ESTOQUE por enquanto (nada dá baixa, nada é reservado, sem painel de estoque nem reposição). Quem decide de quem é cada OP é `setorDaSeparacao`
+// (SeparacaoEnvio.ts); cada fila mostra só as suas. O padrão é o Almoxarifado: sem a propriedade, a tela se comporta exatamente como sempre.
+export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFADO }) {
+  const doTelecom = setor === SETOR_TELECOM;
+  const modulo = doTelecom ? 'telecom' : 'almoxarifado';   // módulo do histórico de alterações (AuditSystem)
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
   // Linhas com alteração não vista por este usuário ganham borda amarela —
@@ -89,6 +95,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
    * não conta o material duas vezes.
    */
   const baixarNoLote = async (o) => {
+    if (doTelecom) return null;                             // Telecom: ainda não há estoque (22/10/2026)
     if (o?.status_almox) return null;                       // já passou pelo almox: ignora
     const linhas = conferenciaInicial({ bom_itens: o?.bom_itens || [] }, { completo: true });
     if (!linhas.length) return null;
@@ -104,7 +111,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [minhasSolicitacoes, setMinhasSolicitacoes] = useState([]);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
-  useEffect(() => { fetchSolicitacoes(); }, []);
+  useEffect(() => { if (!doTelecom) fetchSolicitacoes(); }, []);   // reposição de estoque é do Almoxarifado
 
   // Etapa 7.50: leitura que falha não pode parecer "nenhuma OP aguardando" nem "nenhuma solicitação ainda"
   const [erroLeitura, setErroLeitura] = useState('');
@@ -140,14 +147,16 @@ export default function AlmoxarifadoTab({ currentUser }) {
       // serralheria com envio) e voltou só para ser pesada, medida e embalada.
       // É uma segunda passagem pelo Almoxarifado, com trabalho diferente do
       // kiting — por isso status próprio (ver FluxoEntrega.ts).
-      .in('status_geral', ['Aguardando Almox', STATUS_EMBALAGEM])
+      .in('status_geral', STATUS_DE_SEPARACAO)
       .order('data_entrada', { ascending: false });
     // se a leitura falhou, fica a lista que já estava na tela (em vez de esvaziar e dizer "nenhuma OP aguardando")
     if (erroOpls) { setErroLeitura(erroOpls.message); if (!silent) setLoading(false); return; }
     setErroLeitura('');
-    setOpls(data || []);
+    // cada setor vê só as OPs que são dele (22/10/2026): rádio em envio é do Telecom, o resto do Almoxarifado (SeparacaoEnvio.ts)
+    const daFila = (data || []).filter(o => setorDaSeparacao(o) === setor);
+    setOpls(daFila);
     // remessas ativas das Vendas para Envio da fila; leitura que falha deixa a que já estava na tela (a lista de OPs não depende disto)
-    const rem = await lerRemessasAtivasDe((data || []).filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
+    const rem = await lerRemessasAtivasDe(daFila.filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
     if (!rem.erro) setRemessasPorOp(rem.porOp);
 
     // O painel de recebimento lista TODA OP com material esperando conferência,
@@ -163,7 +172,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
     //
     // Aparecer nos dois lugares é de propósito: em cima é a fila de separar,
     // aqui embaixo é o que dá para resolver agora.
-    const ids = [...mapa.keys()];
+    const ids = doTelecom ? [] : [...mapa.keys()];   // o painel de recebimento de pendência (fabricação/compra) é do Almoxarifado
     if (ids.length) {
       const { data: pend, error: erroPend } = await supabase.from('oples')
         .select('id,opl,cliente_nome,modelo,status_geral,pendencias_kit')
@@ -191,12 +200,12 @@ export default function AlmoxarifadoTab({ currentUser }) {
     // dito na tela com a OP parada no banco). Agora devolve false e quem chamou para; o estoque já baixado não duplica ao repetir
     // (a baixa trabalha por diferença).
     if (erroOp) { alert(`Não foi possível atualizar a OP ${opl.opl}: ${erroOp.message}`); return false; }
-    logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+    logChange({ module: modulo, entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_almox: opl.status_almox, status_geral: opl.status_geral, obs_almox: opl.obs_almox },
       newRow: { status_almox: statusAlmox, status_geral: statusGeral, obs_almox: obs }, user: currentUser });
     const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
-      evento: `Kiting: ${statusAlmox}${obs ? ' — '+obs : ''}`,
+      opl_id: opl.id, numero_opl: opl.opl, setor,
+      evento: `${doTelecom ? 'Separação' : 'Kiting'}: ${statusAlmox}${obs ? ' — '+obs : ''}`,
       status_anterior: opl.status_geral, status_novo: statusGeral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -286,7 +295,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
     const linhas = opl.kit_conferencia ? [] : conferenciaInicial(opl);
     setConferencia(linhas);
     setSaldosKit({});
-    if (linhas.length) saldosDoKit({ opl, linhas }).then(setSaldosKit);
+    // Telecom (22/10/2026): o checklist de separação é o mesmo, mas sem estoque — não consulta saldo (sem saldo nenhuma linha fica travada) e, ao concluir, nada dá baixa
+    if (linhas.length && !doTelecom) saldosDoKit({ opl, linhas }).then(setSaldosKit);
     // fatia 5 (14/10/2026): Venda para Envio pode sair em remessas. Lê as da OP; com remessas anteriores, a janela começa pelo SALDO (os seriais já enviados não voltam para a tela)
     let remessas: any[] = []; let erroRem = '';
     if (ehVendaEnvioOp(opl)) { const r = await lerRemessas(opl.id); remessas = r.remessas; erroRem = r.erro || ''; }
@@ -424,7 +434,7 @@ Embalar e enviar assim mesmo?`)) return;
     // aqui, então é aqui que o material dá baixa. Quem já foi conferido no
     // kiting chega com `conferencia` vazia e não movimenta nada de novo.
     // (Com remessas, a conferência e a baixa são do kit INTEIRO e acontecem uma vez só, na primeira remessa: depois dela `kit_conferencia` já está gravado.)
-    const baixaEmb = conferencia.length
+    const baixaEmb = conferencia.length && !doTelecom   // Telecom: ainda não há estoque, nada dá baixa (22/10/2026)
       ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser })
       : null;
     const obsEmb = [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · ');
@@ -475,11 +485,11 @@ Embalar e enviar assim mesmo?`)) return;
         alert(`A remessa ${numeroRemessa} foi gravada, mas a OP ${opl.opl} não foi atualizada: ${erroOp.message}\n\nAbra "EMBALAR" de novo e use "Cancelar remessa ${numeroRemessa}" para refazer.`);
         return;
       }
-      logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      logChange({ module: modulo, entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
         oldRow: { seriais_itens: opl.seriais_itens, obs_almox: opl.obs_almox }, newRow: { seriais_itens: seriaisDaOp, obs_almox: obsEmb }, user: currentUser });
       const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
-        opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
-        evento: `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} un.) — a OP continua no Almoxarifado`,
+        opl_id: opl.id, numero_opl: opl.opl, setor,
+        evento: `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} un.) — a OP continua no ${setor}`,
         status_anterior: opl.status_geral, status_novo: opl.status_geral,
         usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
       }]);
@@ -534,7 +544,7 @@ Embalar e enviar assim mesmo?`)) return;
         const rot = (k: string) => k === 'destino_cep' ? 'CEP' : k === 'destino_cidade' ? 'cidade' : k === 'destino_uf' ? 'UF' : (CAMPOS_ENDERECO.find(c => c.campo === k)?.rotulo.split(' (')[0] || k);
         const texto = mudou.map(k => `${rot(k)}: ${String(opl[k] ?? '').trim() || '—'} → ${String(f[k] ?? '').trim() || '—'}`).join('; ');
         const { error: erroEnd } = await supabase.from('logs_movimentacao_opl').insert([{
-          opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
+          opl_id: opl.id, numero_opl: opl.opl, setor,
           evento: `Endereço de entrega conferido/ajustado na embalagem por ${currentUser?.nome || '—'} — ${texto}`,
           status_anterior: opl.status_geral, status_novo: opl.status_geral,
           usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
@@ -550,14 +560,14 @@ Embalar e enviar assim mesmo?`)) return;
     const irDireto = freteComCliente && statusDepois !== 'Aguardando Cotacao Frete';
     const recado = comRemessa
       ? `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidade(s)): ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. `
-        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no Almoxarifado. ` : 'Foi a última remessa: a OP segue. ')
+        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no ${setor}. ` : 'Foi a última remessa: a OP segue. ')
         + (freteComCliente ? 'Frete por conta do cliente (FOB).' : 'Solicitação de frete aberta para a Logística cotar.')
       : freteComCliente
       ? `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Frete por conta do cliente (FOB) — liberado direto para o Comercial.`
       : `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Solicitação de frete aberta para a Logística cotar.`;
     await supabase.from('op_acompanhamentos').insert({
       referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`,
-      setor: 'Almoxarifado', texto: recado,
+      setor, texto: recado,
       usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
       criado_em: new Date().toISOString(),
     });
@@ -571,7 +581,7 @@ Embalar e enviar assim mesmo?`)) return;
     if (parcial) {
       alert(`Remessa ${numeroRemessa} registrada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidades). `
         + (error ? `Houve erro ao abrir a solicitação de frete: ${error.message}. ` : freteComCliente ? 'Frete por conta do cliente (FOB). ' : 'Solicitação de frete aberta para a Logística cotar. ')
-        + `A OP ${opl.opl} continua no Almoxarifado com ${saldoOp - unidadesRemessa} unidade(s) por enviar.`);
+        + `A OP ${opl.opl} continua no ${setor} com ${saldoOp - unidadesRemessa} unidade(s) por enviar.`);
     }
     else if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
     else if (irDireto) { alert(`Embalagem registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`); }
@@ -593,7 +603,7 @@ Embalar e enviar assim mesmo?`)) return;
       if (erroFr) { alert('Não consegui conferir o frete desta remessa: ' + erroFr.message); return; }
       if (fr?.status === 'Entregue') { alert(`O frete da remessa ${r.numero} já foi entregue — não dá para cancelar a remessa.`); return; }
       if (fr && fr.status !== 'Cancelado') {
-        const { error: erroCf } = await supabase.from('pcp_fretes').update({ status: 'Cancelado', observacoes: [fr.observacoes, `Cancelado: remessa ${r.numero} cancelada no Almoxarifado — ${String(motivo).trim()}`].filter(Boolean).join(' · ') }).eq('id', fr.id);
+        const { error: erroCf } = await supabase.from('pcp_fretes').update({ status: 'Cancelado', observacoes: [fr.observacoes, `Cancelado: remessa ${r.numero} cancelada no ${setor} — ${String(motivo).trim()}`].filter(Boolean).join(' · ') }).eq('id', fr.id);
         if (erroCf) { alert('Não consegui cancelar o frete desta remessa: ' + erroCf.message + '\n\nNada foi cancelado.'); return; }
       }
     }
@@ -603,13 +613,13 @@ Embalar e enviar assim mesmo?`)) return;
     const sobraram = tirarSeriais(opl.seriais_itens, r.itens);
     const { error: erroOp } = await supabase.from('oples').update({ seriais_itens: sobraram, seriais_equipamentos: sobraram.map(x => `${x.produto}: ${x.serial}`).join('\n') }).eq('id', opl.id);
     if (erroOp) mostrarAviso(`A remessa foi cancelada, mas não consegui tirar os seriais dela da OP: ${erroOp.message}`, 'atencao');
-    logChange({ module: 'almoxarifado', entityType: 'op_remessas', entityId: r.id, changeType: 'UPDATE', oldRow: { cancelada: false }, newRow: { cancelada: true, motivo_cancelamento: String(motivo).trim() }, user: currentUser });
+    logChange({ module: modulo, entityType: 'op_remessas', entityId: r.id, changeType: 'UPDATE', oldRow: { cancelada: false }, newRow: { cancelada: true, motivo_cancelamento: String(motivo).trim() }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado', evento: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo) — ${String(motivo).trim()}`,
+      opl_id: opl.id, numero_opl: opl.opl, setor, evento: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo) — ${String(motivo).trim()}`,
       status_anterior: opl.status_geral, status_novo: opl.status_geral, usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
     }]);
     await supabase.from('op_acompanhamentos').insert({
-      referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`, setor: 'Almoxarifado',
+      referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`, setor,
       texto: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo): ${String(motivo).trim()}.`,
       usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
     });
@@ -875,7 +885,7 @@ Embalar e enviar assim mesmo?`)) return;
     <div>
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
-          Não foi possível ler as OPs do Almoxarifado ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+          Não foi possível ler as OPs {doTelecom ? 'do Telecom' : 'do Almoxarifado'} ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
         </Faixa>
       )}
       {oplsPendenciaAlmox.length > 0 && (
@@ -909,11 +919,11 @@ Embalar e enviar assim mesmo?`)) return;
       )}
 
       <div className="sec-card">
-        <div className="sec-hdr"><span>Kiting — OPs Aguardando Conferencia ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr"><span>{doTelecom ? 'Separação e envio — OPs de rádio aguardando o Telecom' : 'Kiting — OPs Aguardando Conferencia'} ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OP aguardando Almoxarifado.</div>
+            <div className="acn-empty">Nenhuma OP aguardando {doTelecom ? 'o Telecom' : 'Almoxarifado'}.</div>
           ) : (
             <table className="acn-tabela acn-densa">
               <thead><tr>
@@ -1107,6 +1117,9 @@ Embalar e enviar assim mesmo?`)) return;
         </div>
       </div>
 
+      {/* Telecom (22/10/2026): só a fila de separar e embalar. Estoque, reposição, fabricação pronta e as demandas do setor não existem para o Telecom por enquanto
+          (as demandas e as análises dele vivem na outra aba da tela do Telecom). */}
+      {!doTelecom && (<>
       {/* FABRICAÇÃO PRONTA — peça feita aqui dentro esperando a conferência que
           faz o saldo subir. Vem antes do painel de estoque de propósito: é fila
           de balcão, tem gente esperando do outro lado. */}
@@ -1159,6 +1172,7 @@ Embalar e enviar assim mesmo?`)) return;
       <DemandaAvulsaPanel currentUser={currentUser} setor="Almoxarifado" />
       <OplMovimentadas setor="Almoxarifado" />
       <DemandaFooter setor="Almoxarifado" />
+      </>)}
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
@@ -1271,7 +1285,7 @@ Embalar e enviar assim mesmo?`)) return;
                         onChange={e => setEmbForm(f => ({ ...f, unidades: e.target.value }))} />
                       <div className="acn-ajuda">
                         {parcial
-                          ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no Almoxarifado para a próxima remessa.`
+                          ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no ${setor} para a próxima remessa.`
                           : `Saldo: ${saldo} unidade(s). Enviando todas, a OP segue para o próximo passo.`}
                       </div>
                     </div>
@@ -1412,7 +1426,7 @@ Embalar e enviar assim mesmo?`)) return;
                 );
               })()}
 
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} semEstoque={doTelecom} />
               <div className="form-group">
                 <label className="acn-label" htmlFor="alm-obs">Observações</label>
                 <textarea id="alm-obs" className="acn-input" rows={2}
@@ -1485,9 +1499,10 @@ Embalar e enviar assim mesmo?`)) return;
           onClose={() => setModalKitEnvioLote(null)} onConfirmar={aplicarKitEnvioLote} />
       )}
       {modalDevolver && (
-        <ModalDevolverOp opl={modalDevolver} setorOrigem="Almoxarifado" currentUser={currentUser}
-          // refazer o kit só faz sentido se já houve kit; senão, só o PCP (18e, 13/10/2026: a BOM agora é dele, a Engenharia não recebe mais OP)
-          destinos={modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox ? ['almox', 'pcp'] : ['pcp']}
+        <ModalDevolverOp opl={modalDevolver} setorOrigem={setor} currentUser={currentUser}
+          // refazer o kit só faz sentido se já houve kit; senão, só o PCP (18e, 13/10/2026: a BOM agora é dele, a Engenharia não recebe mais OP).
+          // Telecom (22/10/2026): não há "kit" a refazer (sem estoque nem conferência), então a devolução é sempre para o PCP rever.
+          destinos={!doTelecom && (modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox) ? ['almox', 'pcp'] : ['pcp']}
           onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); fetchAll(); }} />
       )}
 

@@ -529,7 +529,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!errPc) setPedidosCompra(pcData || []);
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
     const { data: oplsDosCards, error: errOplsCards } = await supabase
-      .from('oples').select('id,opl,status_geral,crm_oportunidade_id,frete_responsavel,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
+      .from('oples').select('id,opl,status_geral,tipo_projeto,fluxo_entrega,crm_oportunidade_id,frete_responsavel,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
     if (errOplsCards) { carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
     const porCard: Record<string, string[]> = {};
     (oplsDosCards || []).forEach((o: any) => {
@@ -549,7 +549,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       const info: Record<string, any[]> = {};
       (oplsDosCards || []).forEach((o: any) => {
         const k = String(o.crm_oportunidade_id);
-        (info[k] = info[k] || []).push({ id: o.id, opl: o.opl, status_geral: o.status_geral, desde: desdeQuandoDaLista(o, eventos.get(String(o.id))) });
+        (info[k] = info[k] || []).push({ id: o.id, opl: o.opl, status_geral: o.status_geral, tipo_projeto: o.tipo_projeto, fluxo_entrega: o.fluxo_entrega, desde: desdeQuandoDaLista(o, eventos.get(String(o.id))) });
       });
       setOplsInfoPorCard(info);
     }).catch(e => console.error('Selo "onde está" dos cards:', e));

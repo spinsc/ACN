@@ -50,13 +50,14 @@ export function dividirValorEmUnidades(valor: number|null|undefined, qtd: number
 // ─── Progresso da OP/OS ao longo do pipeline (Comercial → Faturado) ──────────
 // Os nomes e percentuais das etapas moraram aqui; agora vêm de EtapasOp.ts, que a faixa
 // "Onde está agora" também usa (Etapa 6 do PLANO_UX_FLUXO_TRABALHO.md). A barra é a mesma.
-function progressoOpl(status: string) {
-  const e = etapaDaOp(status);
+function progressoOpl(status: string, op?: any) {
+  const e = etapaDaOp(status, op);
   return { pct: e.pct, label: e.label, retrabalho: !!e.retrabalho };
 }
 
-export function OplProgressBar({ status }: { status: string }) {
-  const { pct, label, retrabalho } = progressoOpl(status);
+// `op` (opcional, 22/10/2026): com a OP em mãos a etapa de separar/embalar mostra o setor certo (rádio em envio é do Telecom)
+export function OplProgressBar({ status, op }: { status: string; op?: any }) {
+  const { pct, label, retrabalho } = progressoOpl(status, op);
   const tom = retrabalho ? 'retrab' : pct >= 100 ? 'ok' : 'and';
   return (
     <div className="acn-ats-prog">
@@ -1004,7 +1005,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <div className="acn-opl-situacao">
           {erroOpl && <div className="acn-opl-aviso erro">Não foi possível atualizar os dados desta OP ({erroOpl}). Estão aparecendo os da lista, que podem estar desatualizados.</div>}
           <OndeEstaAgoraAuto op={opl} onAbrirDossie={() => setVerDossie(true)} />
-          {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
+          {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} op={opl} />}
 
           {/* LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) */}
           {aguardaLiberacaoComercial(opl.status_geral) && (
