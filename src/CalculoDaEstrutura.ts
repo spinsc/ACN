@@ -68,7 +68,7 @@ export function calcularDaEstrutura(base: any, salvas: Record<string, string>) {
   // podadas: resposta a pergunta "filha" cuja resposta-pai foi trocada não vale, senão o material dela entraria
   const validas = podarRespostas(base.perguntas, respostas);
   Object.keys(respostas).forEach(k => { if (!validas[k]) delete respostas[k]; });
-  const doRegras = avaliarRegras(base.regras, { respostas, vendidosIds: base.idsVendidos, perguntas: base.perguntas });
+  const doRegras = avaliarRegras(base.regras, { respostas, vendidosIds: base.idsVendidos, perguntas: base.perguntas, materiais: base.materiais });
   const linhas = montarMaterial([...base.materiais, ...doRegras.linhas], respostas, base.qtdPorItem);
   return { respostas, doRegras, linhas };
 }

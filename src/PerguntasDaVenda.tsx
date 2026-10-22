@@ -240,7 +240,7 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     // Se a leitura das regras falhar, o material por item continua sendo calculado e a falha é dita — sem o chicote, a OP não pode parecer completa.
     let doRegras: any = { linhas: [] };
     try {
-      doRegras = avaliarRegras(await regrasDoVeiculo(opl.veiculo_id), { respostas: podarRespostas(perguntas, todas), vendidosIds: ids, perguntas });
+      doRegras = avaliarRegras(await regrasDoVeiculo(opl.veiculo_id), { respostas: podarRespostas(perguntas, todas), vendidosIds: ids, perguntas, materiais });
     } catch (e: any) {
       falhas.push(`as regras de chicote e suporte do veículo não puderam ser lidas (${e?.message || e}); a lista de material saiu sem elas`);
     }

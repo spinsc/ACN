@@ -188,6 +188,14 @@ export async function itensSemEstrutura(veiculoId: string, itemIds: string[]) {
   return ids.filter(id => !comEstrutura.has(id));
 }
 
+/** Perguntas de quantidade que algum material deste veículo usa para multiplicar. Lança erro se a leitura falhar (a tela diria "sem regra" para pergunta que tem uso). */
+export async function perguntasQueMultiplicamNoVeiculo(veiculoId: string) {
+  if (!veiculoId) return new Set<string>();
+  const linhas = await lerPaginado(() => supabase.from('veiculo_item_materiais').select('multiplicar_pergunta_id')
+    .eq('veiculo_id', veiculoId).not('multiplicar_pergunta_id', 'is', null).order('id'));
+  return new Set<string>(linhas.map((l: any) => String(l.multiplicar_pergunta_id)));
+}
+
 /**
  * Resumo do material POR ITEM de um veículo: para cada item, quantas linhas valem sempre e quantas dependem de uma resposta. Só para a tela da Estrutura mostrar,
  * ao lado das regras, tudo o que decide material naquele carro (Fase 3, 16/10/2026). Lança erro se a leitura falhar: lista vazia por falha pareceria "nenhum item tem material".
@@ -217,12 +225,18 @@ export function montarMaterial(materiais: any[], respostas: Record<string, strin
   const escolhidas = new Set(Object.values(respostas || {}).filter(Boolean));
   const vale = (m: any) => !m.opcao_id || escolhidas.has(m.opcao_id);
   const linhas = (materiais || []).filter(vale);
-  const mult = (m: any) => num(qtdPorItem?.[m.item_id]) || 1;
+  // 22/10/2026 (pedido do usuário, Slimled): a linha pode multiplicar pela RESPOSTA de uma pergunta de quantidade do item ("Quantos na frente?") em vez da
+  // quantidade vendida — só a dianteira leva suporte e parafuso, e a venda sempre diz quantos vão na frente e quantos atrás. Sem resposta vale 0: o material
+  // não entra até alguém responder (a pergunta aparece pendente na OP), em vez de entrar na quantidade errada.
+  const mult = (m: any) => m.multiplicar_pergunta_id
+    ? (valorDeQuantidade(respostas?.[m.multiplicar_pergunta_id]) ?? 0)
+    : (num(qtdPorItem?.[m.item_id]) || 1);
 
   const soma = new Map<string, any>();
   for (const m of linhas.filter(x => x.acao !== 'remover')) {
     const it = m.material || {};
     const q = num(m.quantidade) * mult(m);
+    if (q <= 0) continue;
     const atual = soma.get(m.material_item_id);
     if (atual) atual.quantidade += q;
     else soma.set(m.material_item_id, {
@@ -277,7 +291,7 @@ export async function regrasDoVeiculo(veiculoId: string) {
  * `semRegra` é o "chicote a definir": pergunta da OP ou de quantidade que foi respondida e que NENHUMA regra aplicada deste veículo usa. Quantidade 0
  * não entra ("0 na frente" não pede chicote). Resposta de pergunta de item por opção não entra: essas seguem pelo material do item no veículo.
  */
-export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas }: { respostas: Record<string, string>; vendidosIds: string[]; perguntas: any[] }) {
+export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas, materiais }: { respostas: Record<string, string>; vendidosIds: string[]; perguntas: any[]; materiais?: any[] }) {
   const escolhidas = new Set(Object.values(respostas || {}).filter(Boolean));
   const vendidos = new Set((vendidosIds || []).filter(Boolean).map(String));
   const vale = (c: any) => c.tipo === 'resposta' ? escolhidas.has(c.opcao_id)
@@ -289,6 +303,8 @@ export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas
   const linhas = aplicadas.flatMap(r => (r.materiais || []).map((m: any) => ({ ...m, regra_id: r.id, opcao_id: null, item_id: null })));
   const itensCobertos = new Set<string>();
   const perguntasCobertas = new Set<string>();
+  // pergunta de quantidade que o material do item usa para multiplicar (Slimled: "Quantos na frente?") já tem o que fazer: não é "chicote a definir"
+  (materiais || []).forEach((m: any) => { if (m.multiplicar_pergunta_id) perguntasCobertas.add(String(m.multiplicar_pergunta_id)); });
   const perguntaDaOpcao = new Map<string, string>();
   (perguntas || []).forEach(p => (p.opcoes || []).forEach((o: any) => perguntaDaOpcao.set(o.id, p.id)));
   aplicadas.forEach(r => r.condicoes.forEach((c: any) => {

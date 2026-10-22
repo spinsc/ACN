@@ -40,7 +40,7 @@ import { SelectBusca, Botao, Selo, Faixa } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiLockOutline, mdiHelpCircleOutline, mdiChevronRight, mdiChevronDown, mdiAlertOutline, mdiClose, mdiPlus, mdiPencilOutline, mdiContentCopy, mdiTrashCanOutline } from '@mdi/js';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade, copiarEstruturaDeItem, resumoDaCopia, registrarNaEstrutura, ondeOItemEUsado, fraseDeOndeOItemEUsado, resumoDoMaterialPorItem } from './ConfigEstrutura';
+import { perguntasDoItem, perguntasDaOp, materiaisDoVeiculo, itensAtivosDoCatalogo, regrasDoVeiculo, todasAsPerguntas, copiarRegras, ehQuantidade, copiarEstruturaDeItem, resumoDaCopia, registrarNaEstrutura, ondeOItemEUsado, fraseDeOndeOItemEUsado, resumoDoMaterialPorItem, perguntasQueMultiplicamNoVeiculo } from './ConfigEstrutura';
 import { coberturaDoVeiculo, perguntasSemRegra, lerUsoDasRespostas, usosDaResposta, oQueApagarRespostaLeva, oQueApagarPerguntaLeva, fraseDoQueLeva } from './CoberturaDaEstrutura';
 import { EditorDeItens, FraseDaRegra, CoberturaDasRegras, SimuladorDaEstrutura, rotuloDoItem } from './ConfigEstruturaPecas';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -84,6 +84,7 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   const loteUsoItem = useRef(0);
   const [matPorItem, setMatPorItem] = useState(null);         // { lista } ou { falha }: o material por item do veículo escolhido (Fase 3, 16/10/2026)
   const loteMatPorItem = useRef(0);
+  const [multiplicam, setMultiplicam] = useState(() => new Set<string>());   // perguntas de quantidade que o material do veículo usa para multiplicar (Slimled, 22/10/2026)
   // 18d (13/10/2026): quem desenvolve o item cadastra a estrutura dele no veículo (decisão do usuário em 12/10/2026) — a Engenharia entra junto do PCP
   const pode = ehAdminOuGerente(currentUser) || ['PCP', 'Engenharia'].includes(String(currentUser?.perfil || '').trim());
   const item = itens.find(i => i.id === itemId);
@@ -126,7 +127,10 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   const recMatPorItem = async () => {
     const meu = ++loteMatPorItem.current;
     if (!veiculoId) { setMatPorItem(null); return; }
-    try { const l = await resumoDoMaterialPorItem(veiculoId); if (meu === loteMatPorItem.current) setMatPorItem({ lista: l }); }
+    try {
+      const [l, m] = await Promise.all([resumoDoMaterialPorItem(veiculoId), perguntasQueMultiplicamNoVeiculo(veiculoId)]);
+      if (meu === loteMatPorItem.current) { setMatPorItem({ lista: l }); setMultiplicam(m); }
+    }
     catch (e) { if (meu === loteMatPorItem.current) setMatPorItem({ falha: e?.message || 'falha ao ler' }); }
   };
   // do resumo do veículo para o item: escolhe o item e leva a tela até o quadro dele
@@ -147,7 +151,7 @@ export default function ConfigEstruturaTela({ currentUser, itemInicial = '', vei
   const aposMudarRegras = () => { recRegras(); recUso(); recUsoDoItem(); };
 
   const cobertura = useMemo(() => (veiculoId ? coberturaDoVeiculo(regras, perguntasTodas) : { eixos: [], linhas: [], total: 0, truncado: false, condicionais: [] }), [veiculoId, regras, perguntasTodas]);
-  const semRegra = useMemo(() => (veiculoId ? perguntasSemRegra(regras, perguntasTodas) : []), [veiculoId, regras, perguntasTodas]);
+  const semRegra = useMemo(() => (veiculoId ? perguntasSemRegra(regras, perguntasTodas, multiplicam) : []), [veiculoId, regras, perguntasTodas, multiplicam]);
   const falhaCobertura = falhaRegras || falhaPerguntas;
 
   // 64 combinações já enchem a tela: "Criar regra" leva as respostas daquela linha para o formulário
@@ -874,7 +878,10 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
 }
 
 function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pode, currentUser, aoMudar }) {
-  const [novo, setNovo] = useState({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
+  const [novo, setNovo] = useState({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '', multiplicar_pergunta_id: '' });
+  // perguntas de quantidade DESTE item ("Quantos na frente?"): a linha pode multiplicar por elas em vez de pela quantidade vendida (Slimled, 22/10/2026)
+  const perguntasDeQuantidade = perguntas.filter(p => ehQuantidade(p));
+  const textoDaPergunta = (id) => perguntas.find(p => p.id === id)?.texto || 'pergunta apagada';
 
   const add = async () => {
     if (!novo.material_item_id) { alert('Escolha o material.'); return; }
@@ -882,6 +889,7 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
     const { data: nova, error } = await supabase.from('veiculo_item_materiais').insert([{
       veiculo_id: veiculoId, item_id: itemId,
       opcao_id: novo.opcao_id || null,
+      multiplicar_pergunta_id: novo.multiplicar_pergunta_id || null,
       material_item_id: novo.material_item_id,
       quantidade,
       acao: novo.acao, ordem: materiais.length,
@@ -895,7 +903,7 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
         detalhes: { veiculo_id: veiculoId, item_id: itemId, opcao_id: novo.opcao_id || null },
       });
     }
-    setNovo({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
+    setNovo({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '', multiplicar_pergunta_id: '' });
     aoMudar();
   };
   const apagar = async (id) => {
@@ -927,6 +935,7 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
     <div className="acn-cet-linha">
       <span className={'acn-cet-acao' + (m.acao === 'remover' ? ' remover' : '')}>
         {m.acao === 'remover' ? '− tira' : '+ usa'} {m.quantidade}
+        {m.multiplicar_pergunta_id ? <span title="Multiplica pela resposta, não pela quantidade vendida"> × "{textoDaPergunta(m.multiplicar_pergunta_id)}"</span> : null}
       </span>
       <span className="acn-cet-mat-nome">
         {m.material?.codigo ? <b>{m.material.codigo} — </b> : null}{m.material?.nome || '(item)'}
@@ -979,6 +988,12 @@ function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pod
                 <option key={o.id} value={o.id}>{p.texto} → {o.rotulo}</option>
               )))}
             </select>
+            {perguntasDeQuantidade.length > 0 && (
+              <select className="acn-input" value={novo.multiplicar_pergunta_id} onChange={e => setNovo(f => ({ ...f, multiplicar_pergunta_id: e.target.value }))}>
+                <option value="">por unidade vendida</option>
+                {perguntasDeQuantidade.map(p => <option key={p.id} value={p.id}>por "{p.texto}"</option>)}
+              </select>
+            )}
             <Botao pequeno variante="primario" onClick={add}>Adicionar</Botao>
           </div>
           <div className="acn-ajuda">

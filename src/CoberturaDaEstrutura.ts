@@ -43,8 +43,9 @@ export function perguntasUsadasPelasRegras(regras: any[], perguntas: any[]): Set
  * Perguntas da OP (e de quantidade) que NENHUMA regra do veículo usa: qualquer que seja a resposta, a OP mostra "chicote/suporte a definir" para elas
  * (é a mesma regra do `semRegra` de `avaliarRegras`). Pergunta de item por opções não entra: essa segue pelo material do item no veículo.
  */
-export function perguntasSemRegra(regras: any[], perguntas: any[]) {
-  const usadas = perguntasUsadasPelasRegras(regras, perguntas);
+export function perguntasSemRegra(regras: any[], perguntas: any[], perguntasDoMaterial: Set<string> = new Set()) {
+  // pergunta de quantidade que o material de um item do veículo usa para multiplicar (Slimled: "Quantos na frente?", 22/10/2026) também tem o que fazer
+  const usadas = new Set([...perguntasUsadasPelasRegras(regras, perguntas), ...perguntasDoMaterial]);
   return (perguntas || []).filter(p => (ehPerguntaDaOp(p) || ehQuantidade(p)) && !usadas.has(String(p.id)));
 }
 
