@@ -17,7 +17,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
 import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial, CAMPOS_OPL_COMERCIAL } from './OplEdicao';
-import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote } from './EdicaoDeLote';
+import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote, loteComProblema } from './EdicaoDeLote';
 import { LinkLote } from './OpLote';
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
@@ -1323,7 +1323,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       } else {
         const r = await aplicarNoLote({ op: oplEditando, mudados, usuario: currentUser, ehGerente: podeEditarOplCompleta(currentUser), origem: 'Edição do Comercial (vale para o lote inteiro)' });
         const totalOutras = r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length);
-        mostrarAviso(textoDoResultadoLote(r, totalOutras), r.erroLeitura || r.falhas.length ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
+        mostrarAviso(textoDoResultadoLote(r, totalOutras), loteComProblema(r) ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
       }
     }
     setOplEditando(null);

@@ -15,7 +15,7 @@ import { Botao } from './Interface';
 import { DossieLote } from './OpDossieLote';
 import { ItensVendidosEditor } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
-import { aplicarNoLote, lerOutrasUnidadesDoLote, textoDoResultadoLote } from './EdicaoDeLote';
+import { aplicarNoLote, lerOutrasUnidadesDoLote, textoDoResultadoLote, loteComProblema } from './EdicaoDeLote';
 import { confirmar, mostrarAviso } from './Feedback';
 import { ehAdminOuGerente, podeVerValores } from './utils/permissoes';
 import { lerValorDigitado } from './LerValor';
@@ -74,7 +74,7 @@ function PainelItensDoLote({ base, usuario, aoFechar, aoSalvar }: any) {
     setSalvando(true);
     const r = await aplicarNoLote({ op: lotePorBase(base), mudados: { itens_vendidos: lista }, usuario, ehGerente: ehAdminOuGerente(usuario), origem: 'Itens vendidos alterados (tela do lote)' });
     setSalvando(false);
-    mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length), true), r.erroLeitura || r.falhas.length ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
+    mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length), true), loteComProblema(r) ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
     aoSalvar();
   };
   return (
@@ -154,7 +154,7 @@ function PainelDadosDoLote({ base, usuario, aoFechar, aoSalvar }: any) {
     setSalvando(true);
     const r = await aplicarNoLote({ op: lotePorBase(base), mudados, usuario, ehGerente: ehAdminOuGerente(usuario), origem: 'Dados do lote alterados (tela do lote)' });
     setSalvando(false);
-    mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length), true), r.erroLeitura || r.falhas.length ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
+    mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length), true), loteComProblema(r) ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
     aoSalvar();
   };
   return (

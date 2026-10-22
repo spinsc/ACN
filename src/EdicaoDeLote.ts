@@ -53,8 +53,12 @@ export type ResultadoLote = {
   iguais: number;                 // já estavam com o valor
   puladas: { opl: string; motivo: string }[];
   falhas: string[];
+  // 22/10/2026: a unidade FOI alterada mas a linha do histórico não gravou. Antes entrava em `falhas` e na conta do total ao mesmo tempo ("13 de 26 alteradas" num lote de 13).
+  semHistorico: { opl: string; motivo: string }[];
   erroLeitura?: string;
 };
+/** O resultado pede atenção da pessoa: houve unidade que falhou ou ficou sem registro no histórico. */
+export const loteComProblema = (r: ResultadoLote) => !!r.erroLeitura || r.falhas.length > 0 || (r.semHistorico || []).length > 0;
 
 /** Lê as OTHER unidades do lote (todas menos a aberta). Devolve o erro em vez de "lista vazia" quando a leitura falha. */
 export async function lerOutrasUnidadesDoLote(op: any): Promise<{ lista: any[]; erro: string }> {
@@ -71,7 +75,7 @@ export async function lerOutrasUnidadesDoLote(op: any): Promise<{ lista: any[]; 
  * `origem`: texto do histórico, ex.: "Edição do Comercial (vale para o lote)".
  */
 export async function aplicarNoLote({ op, mudados, usuario, ehGerente, origem }: { op: any; mudados: Record<string, any>; usuario: any; ehGerente: boolean; origem: string }): Promise<ResultadoLote> {
-  const r: ResultadoLote = { atualizadas: [], iguais: 0, puladas: [], falhas: [] };
+  const r: ResultadoLote = { atualizadas: [], iguais: 0, puladas: [], falhas: [], semHistorico: [] };
   const campos = camposDoLote(mudados);
   if (!campos.length) return r;
   const { lista, erro } = await lerOutrasUnidadesDoLote(op);
@@ -101,7 +105,7 @@ export async function aplicarNoLote({ op, mudados, usuario, ehGerente, origem }:
       status_anterior: u.status_geral, status_novo: u.status_geral,
       usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: agora,
     }]);
-    if (erroLog) r.falhas.push(`${u.opl}: alterada, mas sem registro no histórico (${erroLog.message})`);
+    if (erroLog) r.semHistorico.push({ opl: u.opl, motivo: erroLog.message });
     r.atualizadas.push(u.opl);
   }
   return r;
@@ -117,5 +121,7 @@ export function textoDoResultadoLote(r: ResultadoLote, totalOutras: number, toda
   if (r.iguais) partes.push(`${r.iguais} já estavam assim`);
   if (r.puladas.length) partes.push(`${r.puladas.length} não mexidas (${[...new Set(r.puladas.map(p => p.motivo))].join('; ')})`);
   if (r.falhas.length) partes.push(`FALHOU em ${r.falhas.length}: ${r.falhas.slice(0, 3).join(' | ')}`);
+  const sem = r.semHistorico || [];
+  if (sem.length) partes.push(`${sem.length} alterada(s) mas SEM registro no histórico da OP (${[...new Set(sem.map(x => x.motivo))].slice(0, 2).join(' | ')}): ${sem.slice(0, 3).map(x => x.opl).join(', ')}${sem.length > 3 ? '…' : ''}`);
   return partes.join(' · ') + '.';
 }
