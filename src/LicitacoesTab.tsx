@@ -922,19 +922,81 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // Quadro no formulário da licitação (lado esquerdo): valor de cada lote e o
 // unitário do lote (total ÷ soma das quantidades dos itens) da ÚLTIMA versão da formação
 // de preços vinculada. Só leitura; atualiza sozinho quando a formação é salva.
-function QuadroFormacaoLicitacao({ licitacaoId }: any) {
-  const [cot, setCot] = useState<any>(null);
+// PARCEIROS DA LICITAÇÃO (pedido do usuário em 22/10/2026): pode haver vários, cada um com a sua formação de preços, e ao marcar a licitação como Vencida escolhe-se
+// o parceiro vencedor. "Venda direta" (sem parceiro) é uma das escolhas possíveis do vencedor — fica como "nenhum parceiro marcado".
+function QuadroParceiros({ licitacaoId, parceiros, erro, aoMudar, currentUser, ehVencida, aoDefinirVencedor }: any) {
+  const [nome, setNome] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const adicionar = async () => {
+    const n = nome.trim().replace(/\s+/g, ' ');
+    if (!n || salvando) return;
+    if (parceiros.some((p: any) => p.nome.trim().toLowerCase() === n.toLowerCase())) { alert('Este parceiro já está na lista.'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('licitacao_parceiros')
+      .insert([{ licitacao_id: licitacaoId, nome: n, criado_por_nome: currentUser?.nome || currentUser?.email || null }]);
+    setSalvando(false);
+    if (error) { alert(error.code === '23505' ? 'Este parceiro já está na lista.' : 'Não foi possível adicionar o parceiro: ' + error.message); return; }
+    setNome('');
+    aoMudar();
+  };
+  const remover = async (p: any) => {
+    if (!await confirmar(`Remover o parceiro "${p.nome}" desta licitação?\n\nAs formações de preços dele continuam na licitação; só deixam de estar ligadas a ele.`)) return;
+    const { error } = await supabase.from('licitacao_parceiros').delete().eq('id', p.id);
+    if (error) { alert('Não foi possível remover o parceiro: ' + error.message); return; }
+    aoMudar();
+  };
+  const vencedor = parceiros.find((p: any) => p.vencedor);
+  return (
+    <div className="acn-quadro acn-lic-parceiros">
+      <div className="acn-quadro-titulo">PARCEIROS ({parceiros.length})</div>
+      {erro && <div className="acn-lic-parc-erro">Não foi possível ler os parceiros ({erro}). Recarregue a licitação antes de mexer neles.</div>}
+      {!erro && !parceiros.length && <div className="acn-ajuda">Nenhum parceiro. Quando houver, cada um pode ter a sua formação de preços.</div>}
+      {parceiros.map((p: any) => (
+        <div key={p.id} className="acn-lic-parc-linha">
+          <span className="acn-forte">{p.nome}</span>
+          {p.vencedor && <Selo familia="ok" ponto={false}>Vencedor</Selo>}
+          <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Remover o parceiro ${p.nome}`} title="Remover parceiro" onClick={() => remover(p)} />
+        </div>
+      ))}
+      {ehVencida && parceiros.length > 0 && (
+        <div className="acn-lic-parc-venc">
+          <div className="acn-label">Parceiro vencedor</div>
+          <Chips ativo={vencedor?.id || 'direta'} rotulo="Parceiro vencedor" onChange={(id: string) => aoDefinirVencedor(id === 'direta' ? null : id)}
+            itens={[...parceiros.map((p: any) => ({ id: p.id, rotulo: p.nome })), { id: 'direta', rotulo: 'Venda direta (sem parceiro)' }]} />
+        </div>
+      )}
+      <div className="acn-lic-parc-novo">
+        <input className="acn-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do parceiro" aria-label="Nome do parceiro"
+          onKeyDown={e => { if (e.key === 'Enter') adicionar(); }} />
+        <Botao pequeno variante="secundario" icone={mdiPlus} disabled={salvando || !nome.trim()} onClick={adicionar}>Adicionar parceiro</Botao>
+      </div>
+    </div>
+  );
+}
+
+// Quadro no formulário da licitação (lado esquerdo): valor de cada lote e o unitário do lote (total ÷ soma das quantidades dos itens) da ÚLTIMA versão de cada formação de preços
+// vinculada. Só leitura; atualiza sozinho quando a formação é salva. Com parceiros (22/10/2026), cada FAMÍLIA de formação (a raiz das versões) mostra de qual parceiro é,
+// com a escolha ali mesmo; sem parceiro nem outra formação, fica como sempre foi.
+function QuadroFormacaoLicitacao({ licitacaoId, parceiros = [] }: any) {
+  const [cots, setCots] = useState<any[]>([]);
+  const [ligacoes, setLigacoes] = useState<Record<string, string>>({});   // raiz da formação → parceiro
+  const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const raizDe = (m: any) => m?.versao_raiz_id || m?.id;
   const carregar = useCallback(async () => {
-    const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+    const { data: vinc, error: erroVinc } = await supabase.from('cotacoes_precos_vinculos')
       .select('cotacao_id').eq('tipo', 'licitacao').eq('processo_id', licitacaoId);
+    if (erroVinc) { setErro(erroVinc.message); setCarregando(false); return; }
     const ids = [...new Set((vinc || []).map((v: any) => v.cotacao_id))];
-    if (!ids.length) { setCot(null); setCarregando(false); return; }
-    const { data } = await supabase.from('cotacoes_precos')
-      .select('id,nome,versao,criado_em,atualizado_em,itens,parametros_globais,status').in('id', ids);
-    const ultima = [...(data || [])].sort((a: any, b: any) =>
-      (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0] || null;
-    setCot(ultima);
+    if (!ids.length) { setCots([]); setErro(''); setCarregando(false); return; }
+    const [rc, rl] = await Promise.all([
+      supabase.from('cotacoes_precos').select('id,nome,versao,versao_raiz_id,criado_em,atualizado_em,itens,parametros_globais,status').in('id', ids),
+      supabase.from('licitacao_formacao_parceiro').select('versao_raiz_id,parceiro_id').eq('licitacao_id', licitacaoId),
+    ]);
+    if (rc.error || rl.error) { setErro((rc.error || rl.error)!.message); setCarregando(false); return; }
+    setErro('');
+    setCots(rc.data || []);
+    setLigacoes(Object.fromEntries((rl.data || []).map((l: any) => [l.versao_raiz_id, l.parceiro_id])));
     setCarregando(false);
   }, [licitacaoId]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -944,45 +1006,77 @@ function QuadroFormacaoLicitacao({ licitacaoId }: any) {
     return () => window.removeEventListener('acn:formacao-salva', h);
   }, [carregar, licitacaoId]);
 
-  if (carregando || !cot) return null;
-  const est = estruturaFormacao(cot.itens || [], cot.parametros_globais || {}, calcItem);
-  if (!est.lotes.length) return null;
+  const trocarParceiro = async (raizId: string, parceiroId: string) => {
+    const { error } = parceiroId
+      ? await supabase.from('licitacao_formacao_parceiro').upsert([{ licitacao_id: licitacaoId, versao_raiz_id: raizId, parceiro_id: parceiroId }], { onConflict: 'licitacao_id,versao_raiz_id' })
+      : await supabase.from('licitacao_formacao_parceiro').delete().eq('licitacao_id', licitacaoId).eq('versao_raiz_id', raizId);
+    if (error) { alert('Não foi possível ligar a formação ao parceiro: ' + error.message); return; }
+    carregar();
+  };
+
+  if (erro) return <div className="acn-lic-parc-erro">Não foi possível ler a formação de preços desta licitação ({erro}).</div>;
+  if (carregando || !cots.length) return null;
+  const ultimaDe = (lista: any[]) => [...lista].sort((a: any, b: any) =>
+    (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+  const porFamilia = new Map<string, any[]>();
+  cots.forEach(c => { const k = raizDe(c); porFamilia.set(k, [...(porFamilia.get(k) || []), c]); });
+  // o que mostra é a última versão de cada família; a do parceiro vencedor vem primeiro
+  const familias = [...porFamilia.entries()].map(([raizId, lista]) => ({ raizId, cot: ultimaDe(lista), parceiroId: ligacoes[raizId] || '' }))
+    .sort((a, b) => Number(!!parceiros.find((p: any) => p.id === b.parceiroId && p.vencedor)) - Number(!!parceiros.find((p: any) => p.id === a.parceiroId && p.vencedor))
+      || String(a.cot.criado_em).localeCompare(String(b.cot.criado_em)));
   const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  return (
-    <div className="acn-quadro tom-info acn-lic-formacao">
-      <div className="acn-lic-formacao-cab">
-        <span className="acn-quadro-titulo">Formação de preços</span>
-        <span className="acn-ajuda">
-          v{cot.versao || 1}{cot.nome ? ` · ${cot.nome}` : ''}{cot.status === 'finalizada' ? ' · final' : ''}
-        </span>
+  const porParceiro = parceiros.length > 0 || familias.length > 1;
+  const blocos = familias.map(({ raizId, cot, parceiroId }) => {
+    const est = estruturaFormacao(cot.itens || [], cot.parametros_globais || {}, calcItem);
+    if (!est.lotes.length) return null;
+    const parceiro = parceiros.find((p: any) => p.id === parceiroId);
+    return (
+      <div key={raizId} className="acn-quadro tom-info acn-lic-formacao">
+        <div className="acn-lic-formacao-cab">
+          <span className="acn-quadro-titulo">Formação de preços</span>
+          <span className="acn-ajuda">
+            v{cot.versao || 1}{cot.nome ? ` · ${cot.nome}` : ''}{cot.status === 'finalizada' ? ' · final' : ''}
+          </span>
+          {parceiro?.vencedor && <Selo familia="ok" ponto={false}>Parceiro vencedor</Selo>}
+        </div>
+        {porParceiro && (
+          <div className="acn-lic-formacao-parc">
+            <label className="acn-label" htmlFor={`parc-${raizId}`}>Parceiro desta formação</label>
+            <select id={`parc-${raizId}`} className="acn-input acn-lic-parc-sel" value={parceiroId} onChange={e => trocarParceiro(raizId, e.target.value)}>
+              <option value="">— venda direta (sem parceiro) —</option>
+              {parceiros.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+        )}
+        <table className="acn-lic-mini">
+          <thead>
+            <tr>
+              <th className="esq">Lote</th>
+              <th className="dir" title="Total do lote ÷ soma das quantidades dos itens">Valor unitário</th>
+              <th className="dir">Valor do lote</th>
+            </tr>
+          </thead>
+          <tbody>
+            {est.lotes.map((l: any) => (
+              <tr key={l.nome}>
+                <td className="esq acn-forte">{l.nome}</td>
+                <td className="dir">{brl(l.unit.totVendas)}</td>
+                <td className="dir acn-forte acn-txt-info">{brl(l.total.totVendas)}</td>
+              </tr>
+            ))}
+            {est.lotes.length > 1 && (
+              <tr className="total">
+                <td className="esq acn-forte">Total</td>
+                <td />
+                <td className="dir acn-forte acn-txt-info">{brl(est.geral.totVendas)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-      <table className="acn-lic-mini">
-        <thead>
-          <tr>
-            <th className="esq">Lote</th>
-            <th className="dir" title="Total do lote ÷ soma das quantidades dos itens">Valor unitário</th>
-            <th className="dir">Valor do lote</th>
-          </tr>
-        </thead>
-        <tbody>
-          {est.lotes.map((l: any) => (
-            <tr key={l.nome}>
-              <td className="esq acn-forte">{l.nome}</td>
-              <td className="dir">{brl(l.unit.totVendas)}</td>
-              <td className="dir acn-forte acn-txt-info">{brl(l.total.totVendas)}</td>
-            </tr>
-          ))}
-          {est.lotes.length > 1 && (
-            <tr className="total">
-              <td className="esq acn-forte">Total</td>
-              <td />
-              <td className="dir acn-forte acn-txt-info">{brl(est.geral.totVendas)}</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+    );
+  });
+  return <>{blocos}</>;
 }
 
 // Colunas da lista de licitações — todas menos areas_livres (ver fetchLicit).
@@ -1111,6 +1205,32 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const [salvando, setSalvando] = useState(false);
   const [obsEncerramento, setObsEncerramento] = useState('');
   const [confirmStatus, setConfirmStatus] = useState<string|null>(null);
+  // parceiros da licitação (22/10/2026): lista, erro de leitura e o vencedor escolhido na janela "Mover para Vencida"
+  const [parceiros, setParceiros] = useState<any[]>([]);
+  const [erroParceiros, setErroParceiros] = useState('');
+  const [vencedorSel, setVencedorSel] = useState('');   // id do parceiro, 'direta' (sem parceiro) ou '' (ainda não escolheu)
+  const carregarParceiros = useCallback(async () => {
+    const { data, error } = await supabase.from('licitacao_parceiros').select('*').eq('licitacao_id', licit.id).order('criado_em').order('id');
+    if (error) { setErroParceiros(error.message); return; }   // a lista que já estava na tela fica
+    setErroParceiros('');
+    setParceiros(data || []);
+  }, [licit.id]);
+  useEffect(() => { carregarParceiros(); }, [carregarParceiros]);
+  // grava o vencedor (null = venda direta, nenhum parceiro marcado): limpa o anterior antes, porque só pode haver um por licitação. Devolve a mensagem de erro, ou null.
+  const gravarVencedor = async (parceiroId: string | null): Promise<string | null> => {
+    const { error: e1 } = await supabase.from('licitacao_parceiros').update({ vencedor: false }).eq('licitacao_id', licit.id).eq('vencedor', true);
+    if (e1) return e1.message;
+    if (parceiroId) {
+      const { error: e2 } = await supabase.from('licitacao_parceiros').update({ vencedor: true }).eq('id', parceiroId);
+      if (e2) return e2.message;
+    }
+    await carregarParceiros();
+    return null;
+  };
+  const trocarVencedor = async (parceiroId: string | null) => {
+    const erroV = await gravarVencedor(parceiroId);
+    if (erroV) alert('Não foi possível gravar o parceiro vencedor: ' + erroV);
+  };
   // 7.61: uma ação por vez nos botões que gravam — o estado `salvando` só muda no desenho seguinte e o clique duplo gravava duas vezes
   const emAcao = useRef(new Set<string>());
   const umaVez = (chave: string, fn: (...a: any[]) => Promise<any>) => async (...args: any[]) => {
@@ -1452,15 +1572,26 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   // ── Mudar status ──────────────────────────────────────────────────────────
   const mudarStatus = umaVez('status', async (novoStatus: string) => {
+    // com parceiros na licitação, quem marca Vencida escolhe o parceiro vencedor (ou "venda direta"); sem escolha não confirma (22/10/2026)
+    const exigeVencedor = novoStatus === 'Vencida' && parceiros.length > 0;
+    if (exigeVencedor && !vencedorSel) { alert('Escolha o parceiro vencedor (ou "Venda direta") antes de confirmar.'); return; }
     setSalvando(true);
     const agora = new Date().toISOString();
-    const hist = [...(licit.historico || []), { status: novoStatus, usuario: currentUser?.nome, data: agora, obs: obsEncerramento || '' }];
+    const nomeVencedor = exigeVencedor ? (vencedorSel === 'direta' ? 'venda direta (sem parceiro)' : parceiros.find((p: any) => p.id === vencedorSel)?.nome || '') : '';
+    const hist = [...(licit.historico || []), { status: novoStatus, usuario: currentUser?.nome, data: agora,
+      obs: [obsEncerramento || '', nomeVencedor ? `Parceiro vencedor: ${nomeVencedor}` : ''].filter(Boolean).join(' · ') }];
     const novoRow = { status: novoStatus, historico: hist, obs_encerramento: obsEncerramento || null, atualizado_em: agora };
     const { error: erroStatus } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
     // 7.61: o erro era ignorado — a janela fechava como se a licitação tivesse mudado de status (inclusive "Vencida") e o histórico registrava a troca
     if (erroStatus) { alert('Não foi possível mudar o status para "' + novoStatus + '": ' + erroStatus.message); setSalvando(false); return; }
     logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
       oldRow: licit, newRow: { ...licit, ...novoRow }, user: currentUser });
+    if (exigeVencedor) {
+      // o status já mudou; se o vencedor não gravar, a pessoa escolhe de novo no quadro Parceiros (a janela fica aberta, no painel da vitória)
+      const erroV = await gravarVencedor(vencedorSel === 'direta' ? null : vencedorSel);
+      if (erroV) alert('A licitação foi marcada como Vencida, mas o parceiro vencedor NÃO foi gravado (' + erroV + '). Escolha de novo no quadro Parceiros.');
+    }
+    setVencedorSel('');
     setConfirmStatus(null);
     setObsEncerramento('');
     setSalvando(false);
@@ -1763,7 +1894,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
-            <QuadroFormacaoLicitacao licitacaoId={licit.id} />
+            <QuadroParceiros licitacaoId={licit.id} parceiros={parceiros} erro={erroParceiros} aoMudar={carregarParceiros} currentUser={currentUser}
+              ehVencida={ehVencida} aoDefinirVencedor={trocarVencedor} />
+            <QuadroFormacaoLicitacao key={parceiros.map((p: any) => p.id).join(',')} licitacaoId={licit.id} parceiros={parceiros} />
 
             {/* PRAZOS */}
             <div className="acn-quadro">
@@ -1981,14 +2114,21 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <div className="acn-forte">
                   Mover para: <span className="acn-lic-status-cor" data-acn-familia={FAMILIA_STATUS_LICIT[confirmStatus] || 'neutro'}>{confirmStatus}</span>
                 </div>
+                {confirmStatus === 'Vencida' && parceiros.length > 0 && (
+                  <div className="acn-lic-parc-venc">
+                    <div className="acn-label">Parceiro vencedor *</div>
+                    <Chips ativo={vencedorSel} onChange={setVencedorSel} rotulo="Parceiro vencedor"
+                      itens={[...parceiros.map((p: any) => ({ id: p.id, rotulo: p.nome })), { id: 'direta', rotulo: 'Venda direta (sem parceiro)' }]} />
+                  </div>
+                )}
                 <RichTextInput value={obsEncerramento} onChange={html=>setObsEncerramento(html)}
                   placeholder="Observação (opcional)... (selecione um trecho pra formatar)" minHeight={36}
                   style={{ width:'100%' }} />
                 <div className="acn-lic-form-botoes">
-                  <Botao variante="primario" icone={mdiCheck} className="acn-lic-cresce" onClick={() => mudarStatus(confirmStatus)} disabled={salvando}>
+                  <Botao variante="primario" icone={mdiCheck} className="acn-lic-cresce" onClick={() => mudarStatus(confirmStatus)} disabled={salvando || (confirmStatus === 'Vencida' && parceiros.length > 0 && !vencedorSel)}>
                     {salvando ? '...' : 'Confirmar'}
                   </Botao>
-                  <Botao onClick={() => { setConfirmStatus(null); setObsEncerramento(''); }}>
+                  <Botao onClick={() => { setConfirmStatus(null); setObsEncerramento(''); setVencedorSel(''); }}>
                     Cancelar
                   </Botao>
                 </div>
