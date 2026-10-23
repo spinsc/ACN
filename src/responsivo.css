@@ -106,7 +106,7 @@
   html body .dm-del-btn { opacity: 1; }
 
   /* ── Janelas (modais) e painéis ────────────────────────────────────────── */
-  html body :is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, [style*="position: fixed"][style*="inset: 0px"]) > :not([style*="position: absolute"], style) {
+  html body :is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, [style*="position: fixed"][style*="inset: 0px"]) > :not([style*="position: absolute"], style) {
     max-width: calc(100vw - 16px) !important;
     max-height: calc(100dvh - 16px) !important;
   }
@@ -164,10 +164,10 @@
   html body .acn-nav-quebra > .acn-faixa-rolavel { width: 100%; }
 
   /* Janelas em tela cheia */
-  html body :is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, [style*="position: fixed"][style*="inset: 0px"]) {
+  html body :is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, [style*="position: fixed"][style*="inset: 0px"]) {
     padding: 0 !important; align-items: stretch !important; justify-content: stretch !important;
   }
-  html body :is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, [style*="position: fixed"][style*="inset: 0px"]) > :not([style*="position: absolute"], style) {
+  html body :is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, [style*="position: fixed"][style*="inset: 0px"]) > :not([style*="position: absolute"], style) {
     width: 100% !important; max-width: 100% !important; min-width: 0 !important;
     height: 100% !important; max-height: 100% !important;
     margin: 0 !important; border-radius: 0 !important; overflow-y: auto !important;
@@ -175,12 +175,13 @@
   html body .modal-overlay .modal-box { padding: 16px !important; }
   /* 12e63 (14/10/2026): as janelas dos Contatos do CRM (contato e interação) têm a classe acn-ctt-ov em vez do estilo solto "inset: 0px", e entram nas mesmas quatro listas (tela cheia, caixa que cabe na tela, e a que esconde o pin de avisos e o botão do chat) */
   /* 12e64 (15/10/2026): o mesmo vale para a janela de criação de OP/OS (acn-nop-ov), que também trocou o estilo solto por classe */
+  /* 12e69 (22/10/2026): a janela do Cadastro de itens (acn-cit-fundo) também trocou o estilo solto por classe e entra nas mesmas listas */
   /* Chat aberto ocupa a tela toda (12e62, 13/10/2026: as janelas do chat agora têm a classe acn-chat-ov em vez do estilo solto "inset: 0px", e precisam continuar de fora do que se esconde) */
   html body .acn-chat-raiz:has(> .acn-chat-painel) { inset: 0 !important; gap: 0 !important; }
   html body .acn-chat-raiz > .acn-chat-painel { width: 100% !important; height: 100% !important; border-radius: 0 !important; border: none !important; }
   html body .acn-chat-raiz:has(> .acn-chat-painel) > :not(.acn-chat-painel, style, .acn-chat-ov, [style*="inset: 0px"]) { display: none !important; }
   /* Com uma janela aberta, pin de avisos e botão do chat saem da frente */
-  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
+  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
     display: none !important;
   }
 

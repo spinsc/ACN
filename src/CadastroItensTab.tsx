@@ -165,32 +165,23 @@ async function lerArquivoItens(file: File): Promise<any[]> {
 // envolve os campos do formulario, cada tecla digitada remontava o <input> e o
 // foco era perdido -- tinha que clicar de novo a cada caractere. Nao mover isto
 // de volta para dentro do componente.
-const inp: React.CSSProperties = {
-  width: '100%', padding: '5px 7px', border: '1px solid #d1d5db',
-  borderRadius: 4, fontSize: 11, boxSizing: 'border-box', background: '#fff', color: '#374151',
-};
-const lbl: React.CSSProperties = {
-  display: 'block', fontSize: 9, fontWeight: 700, color: '#6b7280',
-  marginBottom: 2, textTransform: 'uppercase', letterSpacing: '.4px',
-};
-
+// 12e69 (22/10/2026): a aparência vive em design.css (classes acn-cit-*); aqui ficam só as regras e os textos.
+// O campo (input/select/textarea) é `acn-cit-inp`, com os modificadores `desab`, `falta`, `area` e `calc`; o rótulo é `acn-cit-lbl`.
 const Section = ({ title }: { title: string }) => (
-  <div style={{
-    fontSize: 9, fontWeight: 800, color: '#0f766e', textTransform: 'uppercase',
-    letterSpacing: '.6px', borderBottom: '1px solid #e2e8f0', paddingBottom: 3,
-    marginBottom: 8, marginTop: 14,
-  }}>
+  <div className="acn-cit-secao">
     {title}
   </div>
 );
 
 const Row = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>{children}</div>
+  <div className="acn-cit-linha">{children}</div>
 );
 
-const Field = ({ label, width = 'auto', flex = 1, children }: any) => (
-  <div style={{ flex, minWidth: 90, width }}>
-    <span style={lbl}>{label}</span>
+// o peso de cada campo na linha (o `flex` de antes) vira classe; 1 é o padrão e não leva nenhuma
+const PESO_DO_CAMPO: Record<number, string> = { 0.4: 'f04', 0.5: 'f05', 1.2: 'f12', 1.3: 'f13', 2: 'f2', 3: 'f3' };
+const Field = ({ label, flex = 1, children }: any) => (
+  <div className={'acn-cit-campo' + (PESO_DO_CAMPO[flex] ? ' ' + PESO_DO_CAMPO[flex] : '')}>
+    <span className="acn-cit-lbl">{label}</span>
     {children}
   </div>
 );
@@ -290,10 +281,7 @@ function ItemModal({
   const precoFinal = precoUnitario(custoCImp, form.markup_pct, form.difal_pct);
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
-    }}
+    <div className="acn-cit-fundo"
       // Só fecha quando o clique COMEÇA e TERMINA no fundo. Antes bastava soltar
       // o botão aqui: selecionar o número de um campo arrastando para fora
       // fechava o modal e perdia tudo o que tinha sido digitado.
@@ -303,33 +291,22 @@ function ItemModal({
         fundoRef.current = false;
         if (noFundo) fechar();
       }}>
-      <div style={{
-        background: '#fff', borderRadius: 10, width: 660, maxWidth: '96vw',
-        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 16px 48px rgba(0,0,0,.28)',
-      }}>
+      <div className="acn-cit-caixa">
         {/* Header */}
-        <div style={{
-          background: '#0f766e', color: '#fff', padding: '12px 16px',
-          borderRadius: '10px 10px 0 0', display: 'flex',
-          alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
-        }}>
+        <div className="acn-cit-cab">
           <div>
-            <div style={{ fontWeight: 800, fontSize: 13 }}>
+            <div className="acn-cit-cab-tit">
               {isEdit ? '✏️ Editar Item' : '➕ Novo Item'}
             </div>
-            <div style={{ fontSize: 10, color: '#99f6e4', marginTop: 1 }}>
+            <div className="acn-cit-cab-sub">
               Cadastro de Itens — base para cotações e compras
             </div>
           </div>
-          <button onClick={fechar} style={{
-            background: 'none', border: 'none', color: '#fff',
-            fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 4,
-          }}>✕</button>
+          <Botao className="acn-cit-b acn-cit-x" onClick={fechar}>✕</Botao>
         </div>
 
         {/* Body */}
-        <div style={{ overflowY: 'auto', padding: '14px 16px', flex: 1 }}>
+        <div className="acn-cit-corpo">
 
           <Section title="📦 Identificação" />
           <Row>
@@ -338,41 +315,40 @@ function ItemModal({
                   código gerado pelo sistema (o banco dá o próximo número ao gravar). Por isso não se digita código
                   em item novo; item que já existe mantém o dele. */}
               {isEdit
-                ? <input style={inp} value={form.codigo} onChange={e => set('codigo', e.target.value)} placeholder="Ex: ELT-001" />
-                : <input style={{ ...inp, background: '#f1f5f9', color: '#64748b' }} value="" disabled placeholder="Gerado ao salvar" title="O sistema dá o próximo código ao salvar o item" />}
+                ? <input className="acn-cit-inp" value={form.codigo} onChange={e => set('codigo', e.target.value)} placeholder="Ex: ELT-001" />
+                : <input className="acn-cit-inp desab" value="" disabled placeholder="Gerado ao salvar" title="O sistema dá o próximo código ao salvar o item" />}
             </Field>
             <Field label="Nome / Produto *" flex={2}>
-              <input style={{ ...inp, borderColor: !form.nome ? '#f87171' : '#d1d5db' }}
+              <input className={'acn-cit-inp' + (!form.nome ? ' falta' : '')}
                 value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Descrição do item" />
             </Field>
           </Row>
           <Row>
             <Field label="Descrição completa" flex={3}>
-              <textarea style={{ ...inp, resize: 'vertical', minHeight: 50 }}
+              <textarea className="acn-cit-inp area"
                 value={form.descricao} onChange={e => set('descricao', e.target.value)}
                 placeholder="Especificações, referências, observações..." />
             </Field>
           </Row>
           <Row>
             <Field label="Categoria">
-              <select style={inp} value={form.categoria} onChange={e => set('categoria', e.target.value)}>
+              <select className="acn-cit-inp" value={form.categoria} onChange={e => set('categoria', e.target.value)}>
                 <option value="">— Selecionar —</option>
                 {categorias.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
             <Field label="Unidade">
-              <select style={inp} value={form.unidade} onChange={e => set('unidade', e.target.value)}>
+              <select className="acn-cit-inp" value={form.unidade} onChange={e => set('unidade', e.target.value)}>
                 {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </Field>
             <Field label="NCM">
-              <input style={inp} value={form.ncm} onChange={e => set('ncm', e.target.value)} placeholder="0000.00.00" />
+              <input className="acn-cit-inp" value={form.ncm} onChange={e => set('ncm', e.target.value)} placeholder="0000.00.00" />
             </Field>
             <Field label="Ativo" flex={0.4}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-                <input type="checkbox" checked={form.ativo} onChange={e => set('ativo', e.target.checked)}
-                  style={{ accentColor: '#0f766e', width: 14, height: 14 }} />
-                <span style={{ fontSize: 10, color: '#374151' }}>Sim</span>
+              <div className="acn-cit-ativo">
+                <input type="checkbox" className="acn-cit-chk" checked={form.ativo} onChange={e => set('ativo', e.target.checked)} />
+                <span className="acn-cit-ativo-rot">Sim</span>
               </div>
             </Field>
           </Row>
@@ -380,22 +356,22 @@ function ItemModal({
           <Section title="🏭 Fornecedor / Fabricante" />
           <Row>
             <Field label="Marca">
-              <input style={inp} value={form.marca} onChange={e => set('marca', e.target.value)} placeholder="Ex: Schneider" />
+              <input className="acn-cit-inp" value={form.marca} onChange={e => set('marca', e.target.value)} placeholder="Ex: Schneider" />
             </Field>
             <Field label="Fornecedor preferencial">
-              <input style={inp} value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} placeholder="Ex: Distribuidora ABC" />
+              <input className="acn-cit-inp" value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} placeholder="Ex: Distribuidora ABC" />
             </Field>
           </Row>
 
           <Section title="💰 Custo e Moeda" />
           <Row>
             <Field label="Moeda" flex={0.5}>
-              <select style={inp} value={form.moeda} onChange={e => set('moeda', e.target.value)}>
+              <select className="acn-cit-inp" value={form.moeda} onChange={e => set('moeda', e.target.value)}>
                 {MOEDAS.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
             <Field label={`Custo Unitário (${moedaSimbolo(form.moeda)})`} flex={1.2}>
-              <input style={inp} type="number" min={0} step="0.01"
+              <input className="acn-cit-inp" type="number" min={0} step="0.01"
                 value={form.custo_unit} onChange={e => set('custo_unit', e.target.value)}
                 placeholder="0,00" disabled={emEmbalagem}
                 title={emEmbalagem ? 'Calculado a partir do custo da embalagem' : ''} />
@@ -407,10 +383,8 @@ function ItemModal({
               do par, mas a fábrica vende a unidade. Quem digitava o preço do
               par no custo unitário fazia a formação calcular o preço de venda
               em cima do dobro do custo. */}
-          <div style={{ border: '1px solid ' + (emEmbalagem ? '#fcd34d' : '#e2e8f0'),
-            background: emEmbalagem ? '#fffbeb' : '#f8fafc', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
-              fontSize: 11, fontWeight: 700, color: emEmbalagem ? '#92400e' : '#334155' }}>
+          <div className={'acn-cit-emb' + (emEmbalagem ? ' ligado' : '')}>
+            <label className={'acn-cit-emb-rot' + (emEmbalagem ? ' ligado' : '')}>
               <input type="checkbox" checked={emEmbalagem}
                 onChange={e => {
                   const liga = e.target.checked;
@@ -421,7 +395,7 @@ function ItemModal({
                 }} />
               📦 Este item é comprado em embalagem com mais de uma unidade
             </label>
-            <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+            <div className="acn-cit-emb-ajuda">
               {emEmbalagem
                 ? 'O custo unitário passa a ser calculado: é o custo da embalagem dividido pelas unidades que vêm nela. É esse valor que a Formação de Preços usa.'
                 : 'É o caso do rádio, que o fornecedor vende em par. Ligue e informe o preço da embalagem como vem na nota.'}
@@ -429,16 +403,15 @@ function ItemModal({
             {emEmbalagem && (
               <Row>
                 <Field label="Unidades por embalagem" flex={1}>
-                  <input style={inp} type="number" min={1} step="1" value={form.compra_multiplo ?? 2}
+                  <input className="acn-cit-inp" type="number" min={1} step="1" value={form.compra_multiplo ?? 2}
                     onChange={e => set('compra_multiplo', Math.max(1, parseInt(e.target.value, 10) || 1))} />
                 </Field>
                 <Field label={`Custo da embalagem (${moedaSimbolo(form.moeda)})`} flex={1.2}>
-                  <input style={inp} type="number" min={0} step="0.01" value={form.custo_embalagem ?? ''}
+                  <input className="acn-cit-inp" type="number" min={0} step="0.01" value={form.custo_embalagem ?? ''}
                     onChange={e => set('custo_embalagem', e.target.value)} placeholder="como vem na nota" />
                 </Field>
                 <Field label="Custo por unidade" flex={1.2}>
-                  <div style={{ ...inp, background: '#fff7ed', color: '#92400e', fontWeight: 800,
-                    display: 'flex', alignItems: 'center' }}>
+                  <div className="acn-cit-inp calc">
                     {moedaSimbolo(form.moeda)} {custoPorUnidade.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </div>
                 </Field>
@@ -452,7 +425,7 @@ function ItemModal({
           <Section title="🏭 Origem do item" />
           <Row>
             <Field label="Como este item chega" flex={1.3}>
-              <select style={inp} value={form.origem_producao || 'externa'}
+              <select className="acn-cit-inp" value={form.origem_producao || 'externa'}
                 onChange={e => { const v = e.target.value; set('origem_producao', v); if (v !== 'interna') set('setor_fabricante', ''); }}>
                 <option value="externa">Comprado de fornecedor</option>
                 <option value="interna">Fabricado aqui dentro</option>
@@ -460,7 +433,7 @@ function ItemModal({
             </Field>
             {form.origem_producao === 'interna' && (
               <Field label="Setor que fabrica" flex={1.3}>
-                <select style={inp} value={form.setor_fabricante || ''}
+                <select className="acn-cit-inp" value={form.setor_fabricante || ''}
                   onChange={e => set('setor_fabricante', e.target.value)}>
                   <option value="">— escolha o setor —</option>
                   {SETORES_FABRICANTES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -468,7 +441,7 @@ function ItemModal({
               </Field>
             )}
             <Field label=" " flex={2}>
-              <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.45 }}>
+              <div className="acn-cit-origem-ajuda">
                 {form.origem_producao === 'interna'
                   ? (form.setor_fabricante
                       ? `Ao liberar o kiting de uma OP com este item, o PCP vê a sugestão de mandar fabricar em ${form.setor_fabricante} — e decide, porque pode já ter no estoque.`
@@ -486,46 +459,40 @@ function ItemModal({
           )}
 
           <Section title="📊 Impostos e Markup (sugestão de partida)" />
-          <div style={{
-            fontSize: 10, color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0',
-            borderRadius: 4, padding: '6px 9px', marginBottom: 8, lineHeight: 1.5,
-          }}>
+          <div className="acn-cit-aviso-taxas">
             Estes percentuais são só o ponto de partida do catálogo. O preço de cada venda é
             fechado na <strong>Formação de Preços</strong>, onde markup, custo e DIFAL são livres —
             global ou item a item — e mexer numa proposta não altera as outras nem este cadastro.
           </div>
           <Row>
             <Field label="IPI (%)">
-              <input style={inp} type="number" min={0} max={100} step="0.01"
+              <input className="acn-cit-inp" type="number" min={0} max={100} step="0.01"
                 value={form.ipi_pct} onChange={e => set('ipi_pct', e.target.value)} />
             </Field>
             <Field label="ST (%)">
-              <input style={inp} type="number" min={0} max={100} step="0.01"
+              <input className="acn-cit-inp" type="number" min={0} max={100} step="0.01"
                 value={form.st_pct} onChange={e => set('st_pct', e.target.value)} />
             </Field>
             <Field label="DIFAL (%) — 0 dentro do estado">
-              <input style={inp} type="number" min={0} max={100} step="0.01"
+              <input className="acn-cit-inp" type="number" min={0} max={100} step="0.01"
                 value={form.difal_pct} onChange={e => set('difal_pct', e.target.value)} />
             </Field>
             <Field label="Impostos s/Venda (%)">
-              <input style={inp} type="number" min={0} max={100} step="0.01"
+              <input className="acn-cit-inp" type="number" min={0} max={100} step="0.01"
                 value={form.imposto_pct} onChange={e => set('imposto_pct', e.target.value)} />
             </Field>
           </Row>
           <Row>
             <Field label="Markup sugerido (%)">
-              <input style={inp} type="number" min={0} max={1000} step="1"
+              <input className="acn-cit-inp" type="number" min={0} max={1000} step="1"
                 value={form.markup_pct} onChange={e => set('markup_pct', e.target.value)} />
             </Field>
             <Field label="Custo Fixo (%)">
-              <input style={inp} type="number" min={0} max={100} step="0.5"
+              <input className="acn-cit-inp" type="number" min={0} max={100} step="0.5"
                 value={form.custo_fixo_pct} onChange={e => set('custo_fixo_pct', e.target.value)} />
             </Field>
             <Field label="Preço de referência (a formação decide)" flex={2}>
-              <div style={{
-                padding: '5px 10px', background: '#f0fdf4', border: '1px solid #86efac',
-                borderRadius: 4, fontSize: 13, fontWeight: 800, color: '#15803d',
-              }}>
+              <div className="acn-cit-preco">
                 {fmtMoeda(precoFinal, form.moeda)}
               </div>
             </Field>
@@ -533,27 +500,14 @@ function ItemModal({
         </div>
 
         {/* Footer */}
-        <div style={{
-          padding: '10px 16px', borderTop: '1px solid #e2e8f0', display: 'flex',
-          justifyContent: 'flex-end', gap: 8, flexShrink: 0, background: '#fafafa',
-          borderRadius: '0 0 10px 10px',
-        }}>
-          <button onClick={fechar} style={{
-            padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 5,
-            background: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#374151',
-          }}>Cancelar</button>
-          <button
+        <div className="acn-cit-rodape">
+          <Botao className="acn-cit-b acn-cit-cancelar" onClick={fechar}>Cancelar</Botao>
+          <Botao className={'acn-cit-b acn-cit-salvar' + (!form.nome?.trim() ? ' sem-nome' : '') + (salvando ? ' ocupado' : '')}
             onClick={handleSave}
             disabled={salvando || !form.nome?.trim()}
-            style={{
-              padding: '6px 18px', border: 'none', borderRadius: 5,
-              background: !form.nome?.trim() ? '#9ca3af' : '#0f766e', color: '#fff',
-              cursor: !form.nome?.trim() ? 'not-allowed' : 'pointer',
-              fontSize: 11, fontWeight: 700, opacity: salvando ? .6 : 1,
-            }}
           >
             {salvando ? 'Salvando...' : isEdit ? '💾 Salvar Alterações' : '✅ Cadastrar Item'}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>
@@ -747,7 +701,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   // Funcao de render (nao componente): declarado aqui dentro, viraria um tipo
   // novo a cada render e o React remontaria o icone em vez de atualiza-lo.
   const sortIcon = (col: string) => ordenar.col !== col
-    ? <span style={{ opacity: .3 }}>⇅</span>
+    ? <span className="acn-cit-ord-off">⇅</span>
     : <span>{ordenar.dir === 'asc' ? '↑' : '↓'}</span>;
 
   // ── Estatísticas ────────────────────────────────────────────────────────────
@@ -757,44 +711,26 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
     cats: new Set(itens.filter(i => i.categoria).map(i => i.categoria)).size,
   };
 
-  const thStyle: React.CSSProperties = {
-    background: '#1e293b', color: '#cbd5e1', padding: '6px 8px',
-    fontSize: 9, fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap',
-    cursor: 'pointer', userSelect: 'none', borderRight: '1px solid #334155',
-  };
-
-  const tdStyle: React.CSSProperties = {
-    padding: '5px 8px', fontSize: 10, borderBottom: '1px solid #f1f5f9',
-    verticalAlign: 'middle', color: '#374151',
-  };
-
   return (
-    <div style={{ padding: 10 }}>
+    <div className="acn-cit-tela">
       {/* ── Cabeçalho ── */}
-      <div className="acn-quebra" style={{
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-        padding: '10px 14px', marginBottom: 10,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-      }}>
+      <div className="acn-quebra acn-cit-topo">
         <div>
-          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>📦 Cadastro de Itens (CODITEM)</div>
-          <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
+          <div className="acn-cit-tit">📦 Cadastro de Itens (CODITEM)</div>
+          <div className="acn-cit-sub">
             Base de itens para composição de preços, compras e orçamentos
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="acn-cit-acoes">
           {/* Stats */}
           {[
-            { label: 'Total de itens', value: stats.total, cor: '#0f766e' },
-            { label: 'Ativos',         value: stats.ativos, cor: '#16a34a' },
-            { label: 'Categorias',     value: stats.cats, cor: '#7c3aed' },
+            { label: 'Total de itens', value: stats.total, tom: 'teal' },
+            { label: 'Ativos',         value: stats.ativos, tom: 'verde' },
+            { label: 'Categorias',     value: stats.cats, tom: 'roxo' },
           ].map(s => (
-            <div key={s.label} style={{
-              textAlign: 'center', background: '#f8fafc',
-              borderRadius: 6, padding: '5px 12px', border: '1px solid #e2e8f0',
-            }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: s.cor }}>{s.value}</div>
-              <div style={{ fontSize: 8, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{s.label}</div>
+            <div key={s.label} className="acn-cit-stat">
+              <div className={'acn-cit-stat-v ' + s.tom}>{s.value}</div>
+              <div className="acn-cit-stat-r">{s.label}</div>
             </div>
           ))}
           <input
@@ -802,39 +738,26 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
             type="file"
             accept={EXT_PLANILHAS_IMPORTACAO}
             onChange={handleArquivoSelecionado}
-            style={{ display: 'none' }}
+            hidden
           />
-          <button
+          <Botao className={'acn-cit-b acn-cit-sec' + (importando ? ' ocupado' : '')}
             onClick={() => fileInputRef.current?.click()}
             disabled={importando}
             title="Importar itens de planilha (Excel .xlsx/.xlsm/.xlsb/.xls, LibreOffice .ods, Numbers, CSV...)"
-            style={{
-              padding: '7px 12px', background: '#fff', color: '#0f766e', border: '1px solid #0f766e',
-              borderRadius: 6, cursor: importando ? 'wait' : 'pointer', fontWeight: 700, fontSize: 11,
-              opacity: importando ? .6 : 1,
-            }}
           >
             {importando ? '⏳ Importando...' : '📥 Importar'}
-          </button>
-          <button
+          </Botao>
+          <Botao className="acn-cit-b acn-cit-sec"
             onClick={handleExportar}
             title="Exportar itens filtrados para Excel (.xlsx)"
-            style={{
-              padding: '7px 12px', background: '#fff', color: '#0f766e', border: '1px solid #0f766e',
-              borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 11,
-            }}
           >
             📤 Exportar ({filtrados.length})
-          </button>
-          <button
+          </Botao>
+          <Botao className="acn-cit-b acn-cit-prim"
             onClick={() => setModal({})}
-            style={{
-              padding: '7px 14px', background: '#0f766e', color: '#fff', border: 'none',
-              borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11,
-            }}
           >
             ➕ Novo Item
-          </button>
+          </Botao>
         </div>
       </div>
 
@@ -849,13 +772,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
 
       {/* ── Resultado da importação ── */}
       {resultadoImport && (
-        <div style={{
-          background: resultadoImport.erro ? '#fef2f2' : '#f0fdf4',
-          border: `1px solid ${resultadoImport.erro ? '#fca5a5' : '#86efac'}`,
-          borderRadius: 8, padding: '8px 14px', marginBottom: 10,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          fontSize: 11, color: resultadoImport.erro ? '#991b1b' : '#15803d', fontWeight: 600,
-        }}>
+        <div className={'acn-cit-import ' + (resultadoImport.erro ? 'erro' : 'ok')}>
           <span>
             {resultadoImport.erro
               ? `❌ ${resultadoImport.erro}`
@@ -863,187 +780,145 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
                 + (resultadoImport.conjuntosInativos ? ` ${resultadoImport.conjuntosInativos} "Conjunto Elétrico PV …" entraram inativos (o Conjunto Elétrico é um item só).` : '')
                 + (resultadoImport.mantidosInativos ? ` ${resultadoImport.mantidosInativos} item(ns) já unificado(s) continuaram inativos.` : '')}
           </span>
-          <button onClick={() => setResultadoImport(null)} style={{
-            background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'inherit',
-          }}>✕</button>
+          <Botao className="acn-cit-b acn-cit-import-x" onClick={() => setResultadoImport(null)}>✕</Botao>
         </div>
       )}
 
       {/* ── Filtros ── */}
-      <div style={{
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-        padding: '8px 12px', marginBottom: 10,
-        display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
-      }}>
+      <div className="acn-cit-filtros">
         <input
           placeholder="🔍 Buscar por nome, código, marca, fornecedor, NCM..."
           value={busca}
           onChange={e => { setBusca(e.target.value); setPagina(0); }}
-          style={{
-            flex: 1, minWidth: 220, padding: '5px 9px', border: '1px solid #d1d5db',
-            borderRadius: 5, fontSize: 11, color: '#374151',
-          }}
+          className="acn-cit-busca"
         />
         <select
           value={filtCat}
           onChange={e => { setFiltCat(e.target.value); setPagina(0); }}
-          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, color: '#374151' }}
+          className="acn-cit-filtro-sel"
         >
           <option value="">Todas as categorias</option>
           {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         {(['todos', 'ativo', 'inativo'] as const).map(v => (
-          <button
+          <Botao
             key={v}
+            className={'acn-cit-b acn-cit-chip' + (filtAtivo === v ? ' on' : '')}
             onClick={() => { setFiltAtivo(v); setPagina(0); }}
-            style={{
-              padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 5,
-              fontSize: 10, fontWeight: 600, cursor: 'pointer',
-              background: filtAtivo === v ? '#0f766e' : '#fff',
-              color: filtAtivo === v ? '#fff' : '#374151',
-            }}
           >
             {v === 'todos' ? 'Todos' : v === 'ativo' ? '✅ Ativos' : '⛔ Inativos'}
-          </button>
+          </Botao>
         ))}
         {(busca || filtCat || filtAtivo !== 'ativo') && (
-          <button
+          <Botao className="acn-cit-b acn-cit-limpar"
             onClick={() => { setBusca(''); setFiltCat(''); setFiltAtivo('ativo'); setPagina(0); }}
-            style={{ padding: '4px 8px', border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b', borderRadius: 5, fontSize: 10, cursor: 'pointer' }}
           >
             ✕ Limpar
-          </button>
+          </Botao>
         )}
-        <button
+        <Botao className="acn-cit-b acn-cit-modelo"
           onClick={handleBaixarModelo}
           title="Baixar planilha modelo com as colunas esperadas na importação"
-          style={{
-            padding: '4px 8px', border: '1px dashed #94a3b8', background: '#f8fafc',
-            color: '#475569', borderRadius: 5, fontSize: 10, cursor: 'pointer', marginLeft: 'auto',
-          }}
         >
           📄 Baixar modelo
-        </button>
-        <span style={{ fontSize: 10, color: '#64748b' }}>
+        </Botao>
+        <span className="acn-cit-contagem">
           {/* 7.x: o texto saía "111 itemns" (o 'ns' era somado ao 'item' em vez de trocá-lo) */}
           {total} {total !== 1 ? 'itens' : 'item'}
         </span>
       </div>
 
       {/* ── Tabela ── */}
-      <div style={{
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden',
-      }}>
+      <div className="acn-cit-card">
         {loading ? (
-          <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>
+          <div className="acn-cit-vazio">
             Carregando itens...
           </div>
         ) : visiveis.length === 0 && erroLeitura && itens.length === 0 ? (
           // 7.x: com a leitura recusada e nenhuma lista anterior, não se diz "Nenhum item cadastrado" (a faixa de erro acima explica)
-          <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>Os itens não foram lidos.</div>
+          <div className="acn-cit-vazio">Os itens não foram lidos.</div>
         ) : visiveis.length === 0 ? (
-          <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11, fontStyle: 'italic' }}>
+          <div className="acn-cit-vazio it">
             {itens.length === 0
               ? 'Nenhum item cadastrado. Clique em "Novo Item" para começar.'
               : 'Nenhum item encontrado para os filtros aplicados.'}
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="acn-cit-rola">
+            <table className="acn-cit-tab">
               <thead>
                 <tr>
-                  <th style={thStyle} onClick={() => sortBy('codigo')}>Código {sortIcon('codigo')}</th>
-                  <th style={thStyle} onClick={() => sortBy('nome')}>Nome / Produto {sortIcon('nome')}</th>
-                  <th style={thStyle} onClick={() => sortBy('categoria')}>Categoria {sortIcon('categoria')}</th>
-                  <th style={thStyle} onClick={() => sortBy('marca')}>Marca {sortIcon('marca')}</th>
-                  <th style={thStyle} onClick={() => sortBy('fornecedor')}>Fornecedor {sortIcon('fornecedor')}</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Un.</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Moeda</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }} onClick={() => sortBy('custo_unit')}>Custo Unit. {sortIcon('custo_unit')}</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>IPI%</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>ST%</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Markup%</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>NCM</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Ativo</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Ações</th>
+                  <th className="acn-cit-th" onClick={() => sortBy('codigo')}>Código {sortIcon('codigo')}</th>
+                  <th className="acn-cit-th" onClick={() => sortBy('nome')}>Nome / Produto {sortIcon('nome')}</th>
+                  <th className="acn-cit-th" onClick={() => sortBy('categoria')}>Categoria {sortIcon('categoria')}</th>
+                  <th className="acn-cit-th" onClick={() => sortBy('marca')}>Marca {sortIcon('marca')}</th>
+                  <th className="acn-cit-th" onClick={() => sortBy('fornecedor')}>Fornecedor {sortIcon('fornecedor')}</th>
+                  <th className="acn-cit-th centro">Un.</th>
+                  <th className="acn-cit-th centro">Moeda</th>
+                  <th className="acn-cit-th dir" onClick={() => sortBy('custo_unit')}>Custo Unit. {sortIcon('custo_unit')}</th>
+                  <th className="acn-cit-th dir">IPI%</th>
+                  <th className="acn-cit-th dir">ST%</th>
+                  <th className="acn-cit-th dir">Markup%</th>
+                  <th className="acn-cit-th centro">NCM</th>
+                  <th className="acn-cit-th centro">Ativo</th>
+                  <th className="acn-cit-th centro">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {visiveis.map(it => (
-                  <tr key={it.id} style={{ background: it.ativo ? '#fff' : '#fafafa' }}>
-                    <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize: 9 }}>
+                  <tr key={it.id} className={'acn-cit-tr' + (it.ativo ? '' : ' inativo')}>
+                    <td className="acn-cit-td cod">
                       {it.codigo || '—'}
                     </td>
-                    <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 200 }}>
-                      <div style={{ lineHeight: 1.3 }}>{it.nome}</div>
+                    <td className="acn-cit-td nome">
+                      <div className="acn-cit-nome-l">{it.nome}</div>
                       {it.descricao && (
-                        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 2, maxWidth: 200, wordBreak:'break-word' }}>
+                        <div className="acn-cit-desc">
                           {it.descricao}
                         </div>
                       )}
                     </td>
-                    <td style={tdStyle}>
+                    <td className="acn-cit-td">
                       {it.categoria ? (
-                        <span style={{
-                          background: '#e0f2fe', color: '#0369a1',
-                          padding: '1px 6px', borderRadius: 10, fontSize: 9, fontWeight: 700,
-                        }}>{it.categoria}</span>
-                      ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                        <span className="acn-cit-cat">{it.categoria}</span>
+                      ) : <span className="acn-cit-traco">—</span>}
                     </td>
-                    <td style={tdStyle}>{it.marca || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={tdStyle}>{it.fornecedor || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                      <span style={{
-                        background: '#f1f5f9', color: '#475569',
-                        padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 700,
-                      }}>{it.unidade}</span>
+                    <td className="acn-cit-td">{it.marca || <span className="acn-cit-traco">—</span>}</td>
+                    <td className="acn-cit-td">{it.fornecedor || <span className="acn-cit-traco">—</span>}</td>
+                    <td className="acn-cit-td centro">
+                      <span className="acn-cit-un">{it.unidade}</span>
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'center', fontSize: 9, fontWeight: 700, color: it.moeda !== 'REAL' ? '#7c3aed' : '#374151' }}>
+                    <td className={'acn-cit-td centro moeda' + (it.moeda !== 'REAL' ? ' estrangeira' : '')}>
                       {it.moeda}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
+                    <td className="acn-cit-td dir custo">
                       {fmtMoeda(it.custo_unit, it.moeda)}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#6b7280' }}>{fmtPct(it.ipi_pct)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#6b7280' }}>{fmtPct(it.st_pct)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#7c3aed' }}>{fmtPct(it.markup_pct)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize: 9, color: '#9ca3af' }}>
+                    <td className="acn-cit-td dir cinza">{fmtPct(it.ipi_pct)}</td>
+                    <td className="acn-cit-td dir cinza">{fmtPct(it.st_pct)}</td>
+                    <td className="acn-cit-td dir markup">{fmtPct(it.markup_pct)}</td>
+                    <td className="acn-cit-td centro ncm">
                       {it.ncm || '—'}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                      <button
+                    <td className="acn-cit-td centro">
+                      <Botao className={'acn-cit-b acn-cit-tog ' + (it.ativo ? 'ativo' : 'inativo')}
                         onClick={() => toggleAtivo(it)}
                         title={it.ativo ? 'Desativar item' : 'Reativar item'}
-                        style={{
-                          padding: '2px 8px', border: 'none', borderRadius: 10, cursor: 'pointer',
-                          fontSize: 9, fontWeight: 700,
-                          background: it.ativo ? '#dcfce7' : '#fee2e2',
-                          color: it.ativo ? '#15803d' : '#991b1b',
-                        }}
                       >
                         {it.ativo ? '✅ Ativo' : '⛔ Inativo'}
-                      </button>
+                      </Botao>
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                        <button
+                    <td className="acn-cit-td centro">
+                      <div className="acn-cit-acoes-linha">
+                        <Botao className="acn-cit-b acn-cit-ed"
                           onClick={() => setModal(it)}
                           title="Editar"
-                          style={{
-                            padding: '3px 8px', border: '1px solid #d1d5db', background: '#fff',
-                            borderRadius: 4, cursor: 'pointer', fontSize: 10,
-                          }}
-                        >✏️</button>
-                        <button
+                        >✏️</Botao>
+                        <Botao className="acn-cit-b acn-cit-ex"
                           onClick={() => excluirItem(it.id)}
                           disabled={deletando === it.id}
                           title="Excluir"
-                          style={{
-                            padding: '3px 8px', border: '1px solid #fca5a5', background: '#fef2f2',
-                            borderRadius: 4, cursor: deletando === it.id ? 'not-allowed' : 'pointer',
-                            fontSize: 10, opacity: deletando === it.id ? .5 : 1,
-                          }}
-                        >🗑️</button>
+                        >🗑️</Botao>
                       </div>
                     </td>
                   </tr>
@@ -1055,45 +930,32 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
 
         {/* ── Paginação ── */}
         {paginas > 1 && (
-          <div style={{
-            padding: '8px 14px', borderTop: '1px solid #f1f5f9',
-            display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap',
-          }}>
-            <span style={{ fontSize: 9, color: '#6b7280', marginRight: 6 }}>
+          <div className="acn-cit-pag">
+            <span className="acn-cit-pag-info">
               {pagina * POR_PAG + 1}–{Math.min((pagina + 1) * POR_PAG, total)} de {total}
             </span>
-            <button
+            <Botao className="acn-cit-b acn-cit-pg"
               onClick={() => setPagina(0)} disabled={pagina === 0}
-              style={{ padding: '2px 6px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: pagina === 0 ? 'not-allowed' : 'pointer', fontSize: 10, opacity: pagina === 0 ? .4 : 1 }}
-            >«</button>
-            <button
+            >«</Botao>
+            <Botao className="acn-cit-b acn-cit-pg"
               onClick={() => setPagina(p => p - 1)} disabled={pagina === 0}
-              style={{ padding: '2px 6px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: pagina === 0 ? 'not-allowed' : 'pointer', fontSize: 10, opacity: pagina === 0 ? .4 : 1 }}
-            >‹</button>
+            >‹</Botao>
             {Array.from({ length: Math.min(paginas, 7) }, (_, i) => {
               const p = paginas <= 7 ? i : Math.max(0, Math.min(paginas - 7, pagina - 3)) + i;
               return (
-                <button
+                <Botao
                   key={p}
+                  className={'acn-cit-b acn-cit-pg num' + (pagina === p ? ' on' : '')}
                   onClick={() => setPagina(p)}
-                  style={{
-                    padding: '2px 7px', border: '1px solid #e2e8f0', borderRadius: 4,
-                    fontSize: 10, cursor: 'pointer',
-                    background: pagina === p ? '#0f766e' : '#fff',
-                    color: pagina === p ? '#fff' : '#374151',
-                    fontWeight: pagina === p ? 700 : 400,
-                  }}
-                >{p + 1}</button>
+                >{p + 1}</Botao>
               );
             })}
-            <button
+            <Botao className="acn-cit-b acn-cit-pg"
               onClick={() => setPagina(p => p + 1)} disabled={pagina >= paginas - 1}
-              style={{ padding: '2px 6px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: pagina >= paginas - 1 ? 'not-allowed' : 'pointer', fontSize: 10, opacity: pagina >= paginas - 1 ? .4 : 1 }}
-            >›</button>
-            <button
+            >›</Botao>
+            <Botao className="acn-cit-b acn-cit-pg"
               onClick={() => setPagina(paginas - 1)} disabled={pagina >= paginas - 1}
-              style={{ padding: '2px 6px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: pagina >= paginas - 1 ? 'not-allowed' : 'pointer', fontSize: 10, opacity: pagina >= paginas - 1 ? .4 : 1 }}
-            >»</button>
+            >»</Botao>
           </div>
         )}
       </div>

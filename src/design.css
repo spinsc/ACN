@@ -5792,6 +5792,186 @@ html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([typ
 /* ══ Notas da OP (22/10/2026) — editar e apagar a nota que a pessoa escreveu ══ */
 .acn-aco-edicao { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .acn-aco-edicao-botoes { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
-
-/* ══ Cadastro de itens (CadastroItensTab.tsx) — 7.x de 22/10/2026; a migração visual da tela vem em seguida (12e69) ══════════════ */
-.acn-cit-faixa { margin-bottom: 10px; }
+/* ══ Cadastro de itens (CadastroItensTab.tsx, 12e69 — 22/10/2026) ═══════════════════════════════════════════════════════════════════════════
+   Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar: o tamanho mínimo de letra,
+   os tons e as cores que os ajustes de tela aplicavam por cima). Cada elemento leva uma classe principal (acn-cit-b, acn-cit-td, acn-cit-inp…) e variações (centro, dir, ativo, on…);
+   as regras vêm da principal para as variações. Os botões do guia (Botao) ganham aqui o desenho que tinham como botão cru. */
+html body .acn-cit-td:not(#acn) { color: rgb(55, 65, 81); }
+html body .acn-cit-td.centro:not(#acn) { text-align: center; }
+html body .acn-cit-td.centro.moeda:not(#acn) { font-weight: 700; }
+html body .acn-cit-td.centro.moeda.estrangeira:not(#acn) { color: rgb(124, 58, 237); }
+html body .acn-cit-td.centro.ncm:not(#acn) { color: rgb(156, 163, 175); font-family: "ACN Icones", "IBM Plex Mono", monospace; }
+html body .acn-cit-td.dir:not(#acn) { color: rgb(107, 114, 128); font-family: "ACN Icones", "IBM Plex Mono", monospace; font-weight: 700; text-align: right; }
+html body .acn-cit-td.dir.cinza:not(#acn) { font-family: "ACN Icones", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 400; }
+html body .acn-cit-td.dir.custo:not(#acn) { color: rgb(15, 118, 110); }
+html body .acn-cit-td.dir.markup:not(#acn) { color: rgb(124, 58, 237); font-family: "ACN Icones", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+html body .acn-cit-td.cod:not(#acn) { color: rgb(156, 163, 175); font-family: "ACN Icones", "IBM Plex Mono", monospace; }
+html body .acn-cit-td.nome:not(#acn) { font-weight: 600; }
+html body .acn-b.acn-cit-b:not(#acn) { border-color: rgb(159, 208, 200); border-width: 0px; border-style: none; border-radius: 4px; display: block; padding-top: 3px; padding-right: 8px; padding-bottom: 3px; padding-left: 8px; background-color: rgb(227, 242, 239); color: rgb(10, 84, 78); font-size: 12px; font-weight: 400; line-height: normal; white-space: normal; align-items: normal; justify-content: normal; opacity: 0.4; box-shadow: none; transition-property: all; transition-duration: 0s; }
+html body .acn-b.acn-cit-b.acn-cit-tog:not(#acn) { border-color: rgb(227, 181, 177); border-width: 1px; border-style: solid; border-radius: 10px; display: inline-block; padding-top: 2px; padding-bottom: 2px; background-color: rgb(255, 255, 255); color: rgb(185, 48, 42); font-weight: 700; white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-tog.ativo:not(#acn) { border-color: rgb(159, 208, 200); background-color: rgb(227, 242, 239); color: rgb(10, 84, 78); }
+html body .acn-b.acn-cit-b.acn-cit-ed:not(#acn) { border-color: rgb(222, 228, 234); border-width: 1px; border-style: solid; background-color: rgb(255, 255, 255); color: rgb(23, 33, 43); white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-ex:not(#acn) { border-width: 1px; border-style: solid; white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-pg:not(#acn) { border-color: rgb(222, 228, 234); border-width: 1px; border-style: solid; padding-top: 2px; padding-right: 6px; padding-bottom: 2px; padding-left: 6px; background-color: rgb(255, 255, 255); color: rgb(23, 33, 43); white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-pg.num:not(#acn) { padding-right: 7px; padding-left: 7px; opacity: 1; }
+html body .acn-b.acn-cit-b.acn-cit-pg.num.on:not(#acn) { border-color: rgba(0, 0, 0, 0); background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-weight: 700; }
+html body .acn-b.acn-cit-b.acn-cit-chip:not(#acn) { border-color: rgb(222, 228, 234); border-width: 1px; border-style: solid; border-radius: 5px; padding-top: 4px; padding-right: 10px; padding-bottom: 4px; padding-left: 10px; background-color: rgb(255, 255, 255); color: rgb(23, 33, 43); font-weight: 600; white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-chip.on:not(#acn) { border-color: rgba(0, 0, 0, 0); background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); }
+html body .acn-b.acn-cit-b.acn-cit-sec:not(#acn) { border-color: rgb(222, 228, 234); border-width: 1px; border-style: solid; border-radius: 6px; padding-top: 7px; padding-right: 12px; padding-bottom: 7px; padding-left: 12px; background-color: rgb(255, 255, 255); color: rgb(23, 33, 43); font-size: 13px; font-weight: 700; white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-prim:not(#acn) { border-radius: 6px; padding-top: 7px; padding-right: 14px; padding-bottom: 7px; padding-left: 14px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-size: 13px; font-weight: 800; white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-modelo:not(#acn) { border-color: rgb(222, 228, 234); border-width: 1px; border-style: dashed; border-radius: 5px; padding-top: 4px; padding-bottom: 4px; background-color: rgb(255, 255, 255); color: rgb(23, 33, 43); white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-x:not(#acn) { padding: 4px; border-radius: 0px; background-color: rgba(0, 0, 0, 0); color: rgb(255, 255, 255); font-size: 18px; line-height: 1; opacity: 1; }
+html body .acn-b.acn-cit-b.acn-cit-cancelar:not(#acn) { border-radius: 5px; padding-top: 6px; padding-right: 14px; padding-bottom: 6px; padding-left: 14px; background-color: rgba(0, 0, 0, 0); color: rgb(59, 72, 86); font-size: 13px; font-weight: 500; white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-salvar:not(#acn) { border-radius: 5px; padding-top: 6px; padding-right: 18px; padding-bottom: 6px; padding-left: 18px; background-color: rgb(255, 255, 255); color: rgb(23, 33, 43); font-size: 13px; font-weight: 600; white-space: nowrap; opacity: 1; box-shadow: rgba(23, 33, 43, 0.06) 0px 1px 2px 0px; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-salvar.sem-nome:not(#acn) { background-color: rgba(0, 0, 0, 0); color: rgb(59, 72, 86); font-weight: 500; box-shadow: none; }
+html body .acn-b.acn-cit-b.acn-cit-limpar:not(#acn) { border-color: rgb(227, 181, 177); border-width: 1px; border-style: solid; border-radius: 5px; padding-top: 4px; padding-bottom: 4px; background-color: rgb(255, 255, 255); color: rgb(185, 48, 42); white-space: nowrap; opacity: 1; transition-property: background-color, border-color, color; transition-duration: 0.12s, 0.12s, 0.12s; }
+html body .acn-b.acn-cit-b.acn-cit-import-x:not(#acn) { border-radius: 0px; padding-top: 1px; padding-right: 6px; padding-bottom: 1px; padding-left: 6px; background-color: rgba(0, 0, 0, 0); color: inherit; opacity: 1; }
+html body .acn-cit-traco { color: rgb(209, 213, 219); }
+html body .acn-cit-tr { background-color: rgb(255, 255, 255); }
+html body .acn-cit-tr.inativo { background-color: rgb(250, 250, 250); }
+html body .acn-cit-nome-l { line-height: 1.3; }
+html body .acn-cit-un { border-radius: 3px; display: inline-block; padding-top: 1px; padding-right: 5px; padding-bottom: 1px; padding-left: 5px; background-color: rgb(231, 239, 250); color: rgb(36, 95, 184); font-weight: 700; line-height: 1.35; white-space: nowrap; overflow-x: hidden; overflow-y: hidden; text-overflow: ellipsis; vertical-align: middle; }
+html body .acn-cit-acoes-linha { gap: 4px; display: flex; justify-content: center; }
+html body .acn-cit-cat { border-radius: 10px; display: inline-block; padding-top: 1px; padding-right: 6px; padding-bottom: 1px; padding-left: 6px; background-color: rgb(231, 239, 250); color: rgb(36, 95, 184); font-weight: 700; line-height: 1.35; white-space: nowrap; overflow-x: hidden; overflow-y: hidden; text-overflow: ellipsis; vertical-align: middle; }
+html body .acn-cit-campo { flex-grow: 1; flex-basis: 0%; }
+html body .acn-cit-campo.f2 { flex-grow: 2; }
+html body .acn-cit-campo.f05 { flex-grow: 0.5; }
+html body .acn-cit-campo.f12 { flex-grow: 1.2; }
+html body .acn-cit-campo.f13 { flex-grow: 1.3; }
+html body .acn-cit-campo.f3 { flex-grow: 3; }
+html body .acn-cit-campo.f04 { flex-grow: 0.4; }
+html body .acn-cit-lbl { display: block; margin-bottom: 2px; color: rgb(107, 114, 128); font-size: 12px; font-weight: 700; line-height: 1.45; letter-spacing: 0.4px; text-transform: uppercase; }
+html body .acn-cit-inp { border-color: rgb(209, 213, 219); border-width: 1px; border-style: solid; border-radius: 4px; padding-top: 5px; padding-right: 7px; padding-bottom: 5px; padding-left: 7px; font-size: 13px; }
+html body .acn-cit-inp.area { resize: vertical; }
+html body .acn-cit-inp.falta { border-color: rgb(248, 113, 113); }
+html body .acn-cit-inp.calc { display: flex; background-color: rgb(255, 247, 237); color: rgb(146, 64, 14); font-weight: 800; align-items: center; }
+html body .acn-cit-th:not(#acn) { cursor: pointer; user-select: none; }
+html body .acn-cit-th.centro:not(#acn) { text-align: center; }
+html body .acn-cit-th.dir:not(#acn) { text-align: right; }
+html body .acn-cit-linha { gap: 8px; display: flex; margin-bottom: 8px; flex-wrap: wrap; }
+html body .acn-cit-desc { margin-top: 2px; color: rgb(156, 163, 175); word-break: break-word; }
+html body .acn-cit-secao { margin-top: 14px; margin-bottom: 8px; padding-bottom: 3px; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: rgb(226, 232, 240); color: rgb(15, 118, 110); font-size: 12px; font-weight: 800; line-height: 1.45; letter-spacing: 0.6px; text-transform: uppercase; }
+html body .acn-cit-ord-off { opacity: 0.3; }
+html body .acn-cit-stat { border-color: rgb(226, 232, 240); border-width: 1px; border-style: solid; border-radius: 6px; padding-top: 5px; padding-right: 12px; padding-bottom: 5px; padding-left: 12px; background-color: rgb(248, 250, 252); text-align: center; }
+html body .acn-cit-stat-v { font-size: 16px; font-weight: 800; line-height: 1.45; }
+html body .acn-cit-stat-v.teal { color: rgb(15, 118, 110); }
+html body .acn-cit-stat-v.verde { color: rgb(22, 163, 74); }
+html body .acn-cit-stat-v.roxo { color: rgb(124, 58, 237); }
+html body .acn-cit-stat-r { color: rgb(156, 163, 175); font-size: 11px; font-weight: 600; line-height: 1.45; text-transform: uppercase; }
+html body .acn-cit-tela { padding: 10px; }
+html body .acn-cit-topo { border-color: rgb(226, 232, 240); border-width: 1px; border-style: solid; border-radius: 8px; gap: 10px; display: flex; margin-bottom: 10px; padding-top: 10px; padding-right: 14px; padding-bottom: 10px; padding-left: 14px; background-color: rgb(255, 255, 255); align-items: center; justify-content: space-between; }
+html body .acn-cit-tit { color: rgb(15, 23, 42); font-size: 14px; font-weight: 800; line-height: 1.45; }
+html body .acn-cit-sub { margin-top: 1px; color: rgb(100, 116, 139); font-size: 12px; line-height: 1.45; }
+html body .acn-cit-acoes { gap: 10px; display: flex; flex-wrap: wrap; align-items: center; }
+html body .acn-cit-filtros { border-color: rgb(226, 232, 240); border-width: 1px; border-style: solid; border-radius: 8px; gap: 8px; display: flex; margin-bottom: 10px; padding-top: 8px; padding-right: 12px; padding-bottom: 8px; padding-left: 12px; background-color: rgb(255, 255, 255); flex-wrap: wrap; align-items: center; }
+html body .acn-cit-busca { border-color: rgb(209, 213, 219); border-width: 1px; border-style: solid; border-radius: 5px; display: block; padding-top: 5px; padding-right: 9px; padding-bottom: 5px; padding-left: 9px; font-size: 13px; flex-grow: 1; flex-basis: 0%; }
+html body .acn-cit-filtro-sel { border-color: rgb(209, 213, 219); border-radius: 5px; display: block; padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 13px; }
+html body .acn-cit-contagem { display: block; color: rgb(100, 116, 139); font-size: 12px; line-height: 1.45; }
+html body .acn-cit-card { border-color: rgb(226, 232, 240); border-width: 1px; border-style: solid; border-radius: 8px; background-color: rgb(255, 255, 255); overflow-x: hidden; overflow-y: hidden; }
+html body .acn-cit-fundo { display: flex; position: fixed; z-index: 2000; background-color: rgba(0, 0, 0, 0.5); align-items: center; justify-content: center; }
+html body .acn-cit-caixa { border-radius: 10px; display: flex; background-color: rgb(255, 255, 255); flex-direction: column; box-shadow: rgba(0, 0, 0, 0.28) 0px 16px 48px 0px; }
+html body .acn-cit-cab { display: flex; padding-top: 12px; padding-right: 16px; padding-bottom: 12px; padding-left: 16px; border-top-left-radius: 10px; border-top-right-radius: 10px; background-color: rgb(15, 118, 110); color: rgb(255, 255, 255); flex-shrink: 0; align-items: center; justify-content: space-between; }
+html body .acn-cit-cab-tit { font-weight: 800; }
+html body .acn-cit-cab-sub { margin-top: 1px; color: rgb(153, 246, 228); font-size: 12px; line-height: 1.45; }
+html body .acn-cit-corpo { padding-top: 14px; padding-right: 16px; padding-bottom: 14px; padding-left: 16px; overflow-x: auto; overflow-y: auto; flex-grow: 1; flex-basis: 0%; }
+html body .acn-cit-ativo { gap: 5px; display: flex; margin-top: 4px; align-items: center; }
+html body .acn-cit-chk { display: block; accent-color: rgb(15, 118, 110); }
+html body .acn-cit-ativo-rot { display: block; font-size: 12px; line-height: 1.45; }
+html body .acn-cit-emb { border-color: rgb(226, 232, 240); border-width: 1px; border-style: solid; border-radius: 6px; margin-bottom: 10px; padding-top: 8px; padding-right: 10px; padding-bottom: 8px; padding-left: 10px; background-color: rgb(248, 250, 252); }
+html body .acn-cit-emb.ligado { border-color: rgb(252, 211, 77); background-color: rgb(255, 251, 235); }
+html body .acn-cit-emb-rot { gap: 7px; display: flex; color: rgb(51, 65, 85); font-weight: 700; align-items: center; cursor: pointer; }
+html body .acn-cit-emb-rot.ligado { color: rgb(10, 84, 78); }
+html body .acn-cit-emb-ajuda { margin-top: 4px; color: rgb(100, 116, 139); font-size: 12px; line-height: 1.45; }
+html body .acn-cit-origem-ajuda { color: rgb(71, 85, 105); font-size: 12px; line-height: 1.45; }
+html body .acn-cit-aviso-taxas { border-color: rgb(226, 232, 240); border-width: 1px; border-style: solid; border-radius: 4px; margin-bottom: 8px; padding-top: 6px; padding-right: 9px; padding-bottom: 6px; padding-left: 9px; background-color: rgb(248, 250, 252); color: rgb(71, 85, 105); font-size: 12px; line-height: 1.5; }
+html body .acn-cit-preco { border-color: rgb(134, 239, 172); border-width: 1px; border-style: solid; border-radius: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; background-color: rgb(240, 253, 244); color: rgb(21, 128, 61); font-weight: 800; }
+html body .acn-cit-rodape { padding: 3px; border-radius: 6px; gap: 2px; display: flex; border-top-width: 1px; border-top-style: solid; border-top-color: rgb(226, 232, 240); background-color: rgb(238, 241, 244); flex-shrink: 0; justify-content: flex-end; }
+html body .acn-cit-rola { overflow-x: auto; overflow-y: auto; }
+html body .acn-cit-pag { gap: 4px; display: flex; padding-top: 8px; padding-right: 14px; padding-bottom: 8px; padding-left: 14px; border-top-width: 1px; border-top-style: solid; border-top-color: rgb(241, 245, 249); flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+html body .acn-cit-pag-info { display: block; margin-right: 6px; color: rgb(107, 114, 128); font-size: 12px; line-height: 1.45; }
+html body .acn-cit-vazio { padding: 30px; color: rgb(156, 163, 175); text-align: center; }
+html body .acn-cit-vazio.it { font-style: italic; }
+html body .acn-cit-faixa { margin-bottom: 10px; }
+html body .acn-cit-import { border-color: rgb(134, 239, 172); border-width: 1px; border-style: solid; border-radius: 8px; gap: 10px; display: flex; margin-bottom: 10px; padding-top: 8px; padding-right: 14px; padding-bottom: 8px; padding-left: 14px; background-color: rgb(240, 253, 244); color: rgb(21, 128, 61); font-weight: 600; align-items: center; justify-content: space-between; }
+html body .acn-cit-import.erro { border-color: rgb(252, 165, 165); background-color: rgb(254, 242, 242); color: rgb(153, 27, 27); }
+html body .acn-cit-busca { min-width: 220px; }
+html body .acn-cit-td.nome { max-width: 200px; }
+/* no toque, uma regra geral limita as caixas a 100% da tela; a descrição segura os 200px que sempre teve */
+html body .acn-cit-desc:not(#acn) { max-width: 200px; }
+html body .acn-cit-campo { min-width: 90px; }
+html body .acn-cit-caixa { width: 660px; max-width: 96vw; max-height: 90vh; }
+html body .acn-cit-fundo { top: 0; right: 0; bottom: 0; left: 0; }
+html body .acn-cit-inp { width: 100%; }
+html body .acn-cit-inp.area { min-height: 50px; }
+/* a caixinha de marcar tem 20px no toque (regra geral); aqui ela volta aos 14px que sempre teve */
+html body .acn-cit-chk:not(#acn) { width: 14px; height: 14px; }
+html body .acn-cit-tab { width: 100%; }
+html body .acn-b.acn-cit-b.acn-cit-pg:disabled:not(#acn) { opacity: 0.4; }
+html body .acn-b.acn-cit-b.acn-cit-ex:disabled:not(#acn) { cursor: not-allowed; opacity: 0.5; }
+html body .acn-cit-cat { max-width: 100%; }
+html body .acn-cit-un { max-width: 100%; }
+html body .acn-b.acn-cit-b:not(#acn) { height: auto; }
+/* o "Baixar modelo" vai para o canto direito quando a linha de filtros quebra (no computador a busca ocupa a sobra e a margem dá 0) */
+html body .acn-b.acn-cit-b.acn-cit-modelo:not(#acn) { margin-left: auto; }
+html body.dark .acn-b.acn-cit-b:not(#acn):not(#acn) { border-color: rgb(31, 111, 103); }
+html body.dark .acn-b.acn-cit-b.acn-cit-tog:not(#acn):not(#acn) { border-color: rgb(107, 42, 38); background-color: rgba(20, 134, 124, 0.22); color: rgb(134, 239, 172); }
+html body.dark .acn-b.acn-cit-b.acn-cit-tog.ativo:not(#acn):not(#acn) { border-color: rgb(31, 111, 103); }
+html body.dark .acn-b.acn-cit-b.acn-cit-tog.inativo:not(#acn):not(#acn) { background-color: rgb(45, 10, 10); color: rgb(252, 165, 165); }
+html body.dark .acn-b.acn-cit-b.acn-cit-ed:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-b.acn-cit-b.acn-cit-ex:not(#acn):not(#acn) { background-color: rgb(45, 10, 10); color: rgb(252, 165, 165); }
+html body.dark .acn-b.acn-cit-b.acn-cit-pg:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-b.acn-cit-b.acn-cit-pg.num.on:not(#acn):not(#acn) { background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); }
+html body.dark .acn-b.acn-cit-b.acn-cit-chip:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-b.acn-cit-b.acn-cit-chip.on:not(#acn):not(#acn) { background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); }
+html body.dark .acn-b.acn-cit-b.acn-cit-sec:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-b.acn-cit-b.acn-cit-modelo:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-b.acn-cit-b.acn-cit-cancelar:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-b.acn-cit-b.acn-cit-salvar:not(#acn):not(#acn) { background-color: rgb(51, 65, 85); color: rgb(241, 245, 249); }
+html body.dark .acn-b.acn-cit-b.acn-cit-salvar.sem-nome:not(#acn):not(#acn) { background-color: rgba(0, 0, 0, 0); color: rgb(148, 163, 184); }
+html body.dark .acn-b.acn-cit-b.acn-cit-limpar:not(#acn):not(#acn) { border-color: rgb(107, 42, 38); background-color: rgb(45, 10, 10); color: rgb(252, 165, 165); }
+html body.dark .acn-b.acn-cit-b.acn-cit-import-x:not(#acn):not(#acn) { color: inherit; }
+html body.dark .acn-cit-tr:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-tr.inativo:not(#acn):not(#acn) { background-color: rgb(29, 40, 58); }
+html body.dark .acn-cit-un:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); }
+html body.dark .acn-cit-cat:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); }
+html body.dark .acn-cit-lbl:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-inp:not(#acn):not(#acn) { background-color: rgb(30, 41, 59) !important; }
+html body.dark .acn-cit-inp.desab:not(#acn):not(#acn) { background-color: rgb(22, 32, 50) !important; }
+html body.dark .acn-cit-inp.calc:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(28, 21, 5) !important; color: rgb(253, 186, 116) !important; }
+html body.dark .acn-cit-secao:not(#acn):not(#acn) { color: rgb(45, 212, 191); }
+html body.dark .acn-cit-stat:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-stat-v.teal:not(#acn):not(#acn) { color: rgb(45, 212, 191); }
+html body.dark .acn-cit-stat-v.verde:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-cit-stat-v.roxo:not(#acn):not(#acn) { color: rgb(196, 181, 253); }
+html body.dark .acn-cit-stat-r:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-topo:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-tit:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-sub:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-filtros:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-busca:not(#acn):not(#acn) { color: rgb(148, 163, 184) !important; }
+html body.dark .acn-cit-filtro-sel:not(#acn):not(#acn) { color: rgb(148, 163, 184) !important; }
+html body.dark .acn-cit-contagem:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-card:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-caixa:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-chk:not(#acn):not(#acn) { color: rgb(45, 212, 191) !important; }
+html body.dark .acn-cit-ativo-rot:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-emb:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-emb.ligado:not(#acn):not(#acn) { border-color: rgb(252, 211, 77); background-color: rgb(28, 21, 5); color: rgb(253, 230, 138); }
+html body.dark .acn-cit-emb-rot:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-emb-rot.ligado:not(#acn):not(#acn) { color: rgb(253, 186, 116); }
+html body.dark .acn-cit-emb-ajuda:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-origem-ajuda:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-aviso-taxas:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-cit-preco:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-cit-rodape:not(#acn):not(#acn) { background-color: rgb(15, 23, 42); }
+html body.dark .acn-cit-pag-info:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-vazio:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-cit-import:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-cit-import.erro:not(#acn):not(#acn) { background-color: rgb(45, 10, 10); color: rgb(252, 165, 165); }
+html body.dark .acn-cit-aviso-taxas:not(#acn):not(#acn) { color: rgb(203, 213, 225); }
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  html body .acn-cit-stat-r:not(#acn):not(#acn) { font-size: 12px; line-height: 1.45; }
+}
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  html body :is(select.acn-cit-inp, select.acn-cit-filtro-sel, textarea.acn-cit-inp.area):not(#acn):not(#acn) { font-size: 13px !important; }
+}
