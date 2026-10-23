@@ -5,9 +5,8 @@
 //   • ENDEREÇO → coordenada: Nominatim (OpenStreetMap). Uso leve, uma consulta por vez; a política deles pede no máximo 1 por segundo.
 //   • ROTA: OSRM (servidor público de demonstração). "route" para a ordem que a pessoa montou; "trip" para achar a melhor ordem das paradas (caixeiro-viajante).
 //   Os dois aceitam chamada direto do navegador. Nenhum dos dois entrega PEDÁGIO nem tem garantia de disponibilidade.
-//   PEDÁGIO (23/10/2026): depois que o mapa gratuito decide a ordem das paradas, a rota final pode ser mandada a um provedor que devolve km, tempo e pedágio de cada trecho. Quem fala com o
-//   provedor é a função de servidor `viagem-rota` (supabase/functions/viagem-rota, HERE; a chave fica lá como segredo); aqui entra só a função `buscarPedagio` que a tela passa.
-//   Se o provedor não estiver ligado, falhar ou vier incompleto, a rota fica a do mapa gratuito, o pedágio segue à mão e `rota.pedagio.estado` diz o porquê — nunca um valor inventado.
+//   PEDÁGIO: decidido com o usuário em 23/10/2026 — nenhum serviço que exija cadastro ou chave (HERE, TollGuru, Google, brasileiros pagos) entra no sistema; o pedágio é lançado à mão
+//   (ViagemCalculo.ts). Uma tentativa com função de servidor + HERE foi construída e retirada no mesmo dia.
 //
 // Toda falha (sem internet, serviço fora do ar, endereço sem rota) vira um Error com texto em português: a tela mostra, nunca finge que calculou.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,13 +16,10 @@ const OSRM = 'https://router.project-osrm.org';
 const TEMPO_LIMITE_MS = 20000;
 
 export type Ponto = { id?: string; texto: string; lat: number; lng: number };
-export type PernaDaRota = { de: string; para: string; km: number; horas: number; pedagio?: number | null };
-/** O que se sabe do pedágio desta rota. "calculado": o provedor informou; "sem_pedagio_informado": ligado mas sem valor (pode não haver pedágio ou o trecho não ter dados); "nao_configurado": provedor desligado; "falhou": houve erro (motivo). */
-export type PedagioDaRota = { estado: 'calculado' | 'sem_pedagio_informado' | 'nao_configurado' | 'falhou'; total: number | null; moeda: string; fonte: string; motivo?: string; avisos?: string[] };
+export type PernaDaRota = { de: string; para: string; km: number; horas: number };
 export type RotaCalculada = {
   km: number; horas: number; pernas: PernaDaRota[]; ordem: string[];   // ordem = ids das paradas, na sequência da rota
   assinatura: string; calculada_em: string; provedor: string; otimizada: boolean;
-  pedagio?: PedagioDaRota;
 };
 
 async function buscar(url: string): Promise<any> {
@@ -104,12 +100,7 @@ export function assinaturaDoRoteiro(origem: Ponto | null, paradas: Ponto[], idaE
 /**
  * Calcula a rota: origem → paradas (→ origem, se ida e volta). Com `otimizar`, o servidor escolhe a melhor ordem das paradas e a função devolve essa ordem em `ordem`.
  */
-export async function calcularRota({ origem, paradas, idaEVolta, otimizar, buscarPedagio }: { origem: Ponto; paradas: Ponto[]; idaEVolta: boolean; otimizar: boolean; buscarPedagio?: (pontos: Ponto[]) => Promise<any> }): Promise<RotaCalculada> {
-  const { rota, sequencia } = await rotaPeloMapaLivre({ origem, paradas, idaEVolta, otimizar });
-  return buscarPedagio ? await comPedagio(rota, sequencia, buscarPedagio) : rota;
-}
-
-async function rotaPeloMapaLivre({ origem, paradas, idaEVolta, otimizar }: { origem: Ponto; paradas: Ponto[]; idaEVolta: boolean; otimizar: boolean }): Promise<{ rota: RotaCalculada; sequencia: Ponto[] }> {
+export async function calcularRota({ origem, paradas, idaEVolta, otimizar }: { origem: Ponto; paradas: Ponto[]; idaEVolta: boolean; otimizar: boolean }): Promise<RotaCalculada> {
   if (!origem) throw new Error('escolha o ponto de saída');
   if (!paradas?.length) throw new Error('acrescente ao menos uma parada');
   const coord = (p: Ponto) => `${p.lng},${p.lat}`;
@@ -123,13 +114,13 @@ async function rotaPeloMapaLivre({ origem, paradas, idaEVolta, otimizar }: { ori
     // waypoints[i] corresponde ao ponto i que enviamos; waypoint_index é a posição dele na rota
     const naRota = pontos.map((p, i) => ({ p, pos: d.waypoints?.[i]?.waypoint_index ?? i })).sort((a, b) => a.pos - b.pos).map(x => x.p);
     const ordenados = idaEVolta ? [...naRota, naRota[0]] : naRota;
-    return { rota: montar(d.trips[0].legs, ordenados, assinatura, true, naRota.slice(1).map(p => String(p.id || ''))), sequencia: ordenados };
+    return montar(d.trips[0].legs, ordenados, assinatura, true, naRota.slice(1).map(p => String(p.id || '')));
   }
 
   const sequencia = idaEVolta ? [...pontos, origem] : pontos;
   const d = await buscar(`${OSRM}/route/v1/driving/${sequencia.map(coord).join(';')}?overview=false&steps=false`);
   if (d.code !== 'Ok' || !d.routes?.[0]) throw new Error(d.message || 'o serviço não achou uma rota entre estes pontos');
-  return { rota: montar(d.routes[0].legs, sequencia, assinatura, false, paradas.map(p => String(p.id || ''))), sequencia };
+  return montar(d.routes[0].legs, sequencia, assinatura, false, paradas.map(p => String(p.id || '')));
 }
 
 function montar(legs: any[], seq: Ponto[], assinatura: string, otimizada: boolean, ordem: string[]): RotaCalculada {
@@ -141,33 +132,5 @@ function montar(legs: any[], seq: Ponto[], assinatura: string, otimizada: boolea
     km: Math.round(pernas.reduce((s, p) => s + p.km, 0) * 10) / 10,
     horas: Math.round(pernas.reduce((s, p) => s + p.horas, 0) * 100) / 100,
     pernas, ordem, assinatura, calculada_em: new Date().toISOString(), provedor: 'OSRM', otimizada,
-  };
-}
-
-const semPedagio = (estado: PedagioDaRota['estado'], motivo?: string): PedagioDaRota => ({ estado, total: null, moeda: 'BRL', fonte: estado === 'nao_configurado' ? '' : 'HERE', ...(motivo ? { motivo } : {}) });
-
-/**
- * Pergunta ao provedor de pedágio (pela função `buscarPedagio` que a tela passa) o km, o tempo e o pedágio de cada trecho da rota JÁ ORDENADA. Em qualquer problema devolve a rota do mapa
- * gratuito com o estado do pedágio explicado: o cálculo da viagem nunca fica sem rota por causa do pedágio.
- */
-export async function comPedagio(rota: RotaCalculada, sequencia: Ponto[], buscarPedagio: (pontos: Ponto[]) => Promise<any>): Promise<RotaCalculada> {
-  let r: any;
-  try { r = await buscarPedagio(sequencia); }
-  catch (e: any) { return { ...rota, pedagio: semPedagio('falhou', String(e?.message || 'falha na consulta do pedágio')) }; }
-  if (!r || r.configurado === false) return { ...rota, pedagio: semPedagio('nao_configurado') };
-  if (r.erro) return { ...rota, pedagio: semPedagio('falhou', String(r.erro)) };
-  const trechos: any[] = r.trechos;
-  const bom = Array.isArray(trechos) && trechos.length === sequencia.length - 1 && trechos.every(t => Number.isFinite(Number(t?.km)) && Number.isFinite(Number(t?.horas)));
-  if (!bom) return { ...rota, pedagio: semPedagio('falhou', 'a resposta do pedágio veio incompleta') };
-  const moeda = String(r.pedagio?.moeda || 'BRL');
-  if (moeda !== 'BRL') return { ...rota, pedagio: semPedagio('falhou', `o pedágio veio em ${moeda}, não em reais`) };
-  const pernas: PernaDaRota[] = rota.pernas.map((p, i) => ({ ...p, km: Number(trechos[i].km), horas: Number(trechos[i].horas), pedagio: trechos[i].pedagio === null || trechos[i].pedagio === undefined ? null : Number(trechos[i].pedagio) }));
-  const informado = !!r.pedagio?.informado && Number.isFinite(Number(r.pedagio?.total));
-  return {
-    ...rota, pernas,
-    km: Math.round(pernas.reduce((s, p) => s + p.km, 0) * 10) / 10,
-    horas: Math.round(pernas.reduce((s, p) => s + p.horas, 0) * 100) / 100,
-    provedor: rota.otimizada ? 'HERE (ordem das paradas pelo OSRM)' : 'HERE',
-    pedagio: { estado: informado ? 'calculado' : 'sem_pedagio_informado', total: informado ? Math.round(Number(r.pedagio.total) * 100) / 100 : null, moeda: 'BRL', fonte: 'HERE', ...(Array.isArray(r.avisos) && r.avisos.length ? { avisos: r.avisos.map(String) } : {}) },
   };
 }

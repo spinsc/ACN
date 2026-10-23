@@ -1826,8 +1826,6 @@ html body .acn-vg-cand:hover, html body .acn-vg-cand:focus-visible { background:
 .acn-vg-colar-falhas { margin: 4px 0 0; padding-left: 18px; }
 .acn-vg-colar-it { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--acn-line); }
 .acn-vg-colar-linha { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--acn-ink); }
-/* pedágio calculado pela rota (23/10/2026) */
-.acn-vg-pedagio-auto { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); }
 /* roteiro dia a dia (23/10/2026) */
 .acn-vg-dias { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
 .acn-vg-dia { border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); overflow: hidden; }

@@ -59,24 +59,6 @@ function CampoNumero({ rotulo, valor, onChange, sufixo, ajuda, vazioNulo = false
   );
 }
 
-/**
- * Pergunta à função de servidor `viagem-rota` o km, o tempo e o pedágio da rota já ordenada (23/10/2026). A chave do provedor fica lá, como segredo. 404 = a função ainda não foi
- * publicada: vale como "desligado" (a viagem segue com o mapa gratuito e o pedágio à mão).
- */
-async function pedirPedagioAoServidor(pontos: any[]) {
-  const corpo = { pontos: pontos.map((p: any) => ({ lat: p.lat, lng: p.lng })) };
-  const espera = new Promise((_, recusa) => setTimeout(() => recusa(new Error('o serviço de pedágio demorou demais para responder')), 30000));
-  const { data, error } = (await Promise.race([supabase.functions.invoke('viagem-rota', { body: corpo }), espera])) as any;
-  if (error) {
-    const resposta = error.context;
-    if (resposta?.status === 404) return { configurado: false };
-    let texto = '';
-    try { texto = (await resposta.json())?.erro || ''; } catch { /* sem corpo legível */ }
-    throw new Error(texto || error.message || 'falha ao falar com o serviço de pedágio');
-  }
-  return data;
-}
-
 /** Procura um endereço ou cidade e deixa escolher entre os candidatos. */
 function BuscaDeEndereco({ rotulo, placeholder, onEscolher }: any) {
   const [q, setQ] = useState('');
@@ -198,11 +180,10 @@ function abrirImpressao(v: any, r: any) {
   const esc = (t: any) => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const texto = esc(textoDoOrcamento(v, r)).replace(/\n/g, '<br>');
   const roteiroTexto = esc(textoDoRoteiro(v, montarRoteiro(v))).replace(/\n/g, '<br>').replace(/ {2}/g, '&nbsp;&nbsp;');
-  const comPedagio = (v.rota?.pernas || []).some((p: any) => p.pedagio !== undefined);
-  const pernas = (v.rota?.pernas || []).map((p: any) => `<tr><td>${esc(nomeCurto(p.de))}</td><td>${esc(nomeCurto(p.para))}</td><td style="text-align:right">${fmtKm(p.km)}</td><td style="text-align:right">${fmtHoras(p.horas)}</td>${comPedagio ? `<td style="text-align:right">${p.pedagio === null || p.pedagio === undefined ? '—' : fmtReais(p.pedagio)}</td>` : ''}</tr>`).join('');
+  const pernas = (v.rota?.pernas || []).map((p: any) => `<tr><td>${esc(nomeCurto(p.de))}</td><td>${esc(nomeCurto(p.para))}</td><td style="text-align:right">${fmtKm(p.km)}</td><td style="text-align:right">${fmtHoras(p.horas)}</td></tr>`).join('');
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Orçamento de viagem</title>
     <style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:24px}h2{margin:0 0 12px}table{border-collapse:collapse;width:100%;margin:12px 0}td,th{border:1px solid #ccc;padding:5px 8px;text-align:left}th{background:#f1f5f9}</style></head>
-    <body><h2>Orçamento de viagem</h2><div>${texto}</div>${roteiroTexto ? `<h3>Roteiro dia a dia</h3><div>${roteiroTexto}</div>` : ''}${pernas ? `<h3>Trechos</h3><table><thead><tr><th>De</th><th>Para</th><th>Distância</th><th>Tempo</th>${comPedagio ? '<th>Pedágio</th>' : ''}</tr></thead><tbody>${pernas}</tbody></table>` : ''}
+    <body><h2>Orçamento de viagem</h2><div>${texto}</div>${roteiroTexto ? `<h3>Roteiro dia a dia</h3><div>${roteiroTexto}</div>` : ''}${pernas ? `<h3>Trechos</h3><table><thead><tr><th>De</th><th>Para</th><th>Distância</th><th>Tempo</th></tr></thead><tbody>${pernas}</tbody></table>` : ''}
     <script>window.onload=function(){window.print()}<\/script></body></html>`;
   const w = window.open('', '_blank', 'width=820,height=700');
   if (!w) { alert('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.'); return; }
@@ -219,8 +200,6 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
   const setCusto = (campo: string, valor: any) => setV((x: any) => ({ ...x, custos: { ...x.custos, [campo]: valor } }));
   const r = useMemo(() => calcularViagem(v), [v]);
   const roteiro = useMemo(() => montarRoteiro(v), [v]);
-  const pedagioDaRota = v.rota?.pedagio;
-  const temPedagioPorTrecho = !!v.rota && (v.rota.pernas || []).some((p: any) => p.pedagio !== undefined);
   const assinaturaAtual = assinaturaDoRoteiro(v.origem, v.paradas, v.ida_e_volta, v.otimizar_ordem);
   const rotaVelha = !!v.rota && v.rota.assinatura !== assinaturaAtual;
   const podeApagar = !!v.id && (ehAdminOuGerente(currentUser) || String(v.criado_por_nome || '') === String(currentUser?.nome || currentUser?.email || ''));
@@ -236,7 +215,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
   const calcular = async () => {
     setErroRota(''); setCalculando(true);
     try {
-      const rota = await calcularRota({ origem: v.origem, paradas: v.paradas, idaEVolta: v.ida_e_volta, otimizar: v.otimizar_ordem, buscarPedagio: pedirPedagioAoServidor });
+      const rota = await calcularRota({ origem: v.origem, paradas: v.paradas, idaEVolta: v.ida_e_volta, otimizar: v.otimizar_ordem });
       setV((x: any) => {
         let paradas = x.paradas;
         if (rota.otimizada) { const porId = new Map(x.paradas.map((p: any) => [p.id, p])); paradas = rota.ordem.map((id: string) => porId.get(id)).filter(Boolean); }
@@ -350,12 +329,12 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
             {rotaVelha && !erroRota && <Faixa tom="atencao">O roteiro mudou depois do último cálculo: recalcule a rota para o km, o tempo e os custos valerem.</Faixa>}
             {v.rota && (
               <table className="acn-tabela acn-vg-pernas">
-                <thead><tr><th>De</th><th>Para</th><th className="dir">Distância</th><th className="dir">Tempo</th>{temPedagioPorTrecho && <th className="dir">Pedágio</th>}</tr></thead>
+                <thead><tr><th>De</th><th>Para</th><th className="dir">Distância</th><th className="dir">Tempo</th></tr></thead>
                 <tbody>
                   {v.rota.pernas.map((p: any, i: number) => (
-                    <tr key={i}><td>{nomeCurto(p.de)}</td><td>{nomeCurto(p.para)}</td><td className="dir acn-num">{fmtKm(p.km)}</td><td className="dir acn-num">{fmtHoras(p.horas)}</td>{temPedagioPorTrecho && <td className="dir acn-num">{p.pedagio === null || p.pedagio === undefined ? '—' : fmtReais(p.pedagio)}</td>}</tr>
+                    <tr key={i}><td>{nomeCurto(p.de)}</td><td>{nomeCurto(p.para)}</td><td className="dir acn-num">{fmtKm(p.km)}</td><td className="dir acn-num">{fmtHoras(p.horas)}</td></tr>
                   ))}
-                  <tr className="total"><td colSpan={2}><strong>Total{v.ida_e_volta ? ' (ida e volta)' : ''}</strong></td><td className="dir acn-num"><strong>{fmtKm(v.rota.km)}</strong></td><td className="dir acn-num"><strong>{fmtHoras(v.rota.horas)}</strong></td>{temPedagioPorTrecho && <td className="dir acn-num"><strong>{v.rota.pedagio?.estado === 'calculado' ? fmtReais(v.rota.pedagio.total) : '—'}</strong></td>}</tr>
+                  <tr className="total"><td colSpan={2}><strong>Total{v.ida_e_volta ? ' (ida e volta)' : ''}</strong></td><td className="dir acn-num"><strong>{fmtKm(v.rota.km)}</strong></td><td className="dir acn-num"><strong>{fmtHoras(v.rota.horas)}</strong></td></tr>
                 </tbody>
               </table>
             )}
@@ -405,19 +384,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
               <CampoNumero rotulo="Valor do km rodado" valor={c.valor_km_rodado} vazioNulo sufixo="R$/km" placeholder={`custo real (${fmtReais(r.custoPorKm)})`} ajuda="O que se cobra ou reembolsa por km. Em branco = o custo real por km." onChange={(n: number | null) => setCusto('valor_km_rodado', n)} />
               <CampoNumero rotulo="Margem sobre o custo" valor={c.margem_pct} sufixo="%" onChange={(n: number) => setCusto('margem_pct', n)} />
             </div>
-            {pedagioDaRota?.estado === 'calculado' && (
-              <div className="acn-vg-pedagio-auto">
-                <div className="acn-quadro-titulo">PEDÁGIO CALCULADO PELA ROTA</div>
-                <div><strong className="acn-num">{fmtReais(pedagioDaRota.total)}</strong> <span className="acn-ajuda">({pedagioDaRota.fonte}{v.ida_e_volta ? ', ida e volta' : ''}; carro de passeio)</span></div>
-                <label className="acn-vg-check"><input type="checkbox" checked={c.usar_pedagio_auto !== false} onChange={e => setCusto('usar_pedagio_auto', e.target.checked)} /> Somar este valor ao orçamento</label>
-                {(pedagioDaRota.avisos || []).length > 0 && <div className="acn-ajuda">Avisos do serviço: {pedagioDaRota.avisos.join('; ')}</div>}
-                <div className="acn-ajuda">Confira o valor antes de passar ao cliente. As linhas lançadas à mão abaixo SOMAM a este valor: não lance de novo o que a rota já calculou.</div>
-              </div>
-            )}
-            {pedagioDaRota?.estado === 'sem_pedagio_informado' && <Faixa tom="info">O serviço de rotas não informou pedágio para esta rota: pode não haver pedágio no caminho ou o serviço não ter dados do trecho. Confira e lance à mão o que houver.</Faixa>}
-            {pedagioDaRota?.estado === 'falhou' && <Faixa tom="atencao">Não foi possível calcular o pedágio automaticamente ({pedagioDaRota.motivo}). Lance à mão ou calcule a rota de novo.</Faixa>}
-            {pedagioDaRota?.estado === 'nao_configurado' && <div className="acn-ajuda">O cálculo automático de pedágio ainda não está ligado neste sistema: lance os pedágios à mão.</div>}
-            <ListaDeLinhas titulo={pedagioDaRota?.estado === 'calculado' ? 'Pedágios lançados à mão (somam ao calculado)' : 'Pedágios'} linhas={c.pedagios} placeholder="Ex.: Rodovia dos Bandeirantes (ida e volta)" ajuda="Lançados à mão." onChange={(l: any[]) => setCusto('pedagios', l)} />
+            <ListaDeLinhas titulo="Pedágios" linhas={c.pedagios} placeholder="Ex.: Rodovia dos Bandeirantes (ida e volta)" ajuda="Lançados à mão: as fontes gratuitas de mapa não informam pedágio." onChange={(l: any[]) => setCusto('pedagios', l)} />
             <ListaDeLinhas titulo="Outros custos" linhas={c.outros} placeholder="Ex.: estacionamento, balsa, aluguel de carro" onChange={(l: any[]) => setCusto('outros', l)} />
           </div>
 
@@ -431,7 +398,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
                 <tr><td>Desgaste do veículo</td><td className="dir acn-num">{fmtReais(r.desgaste)}</td></tr>
                 <tr><td>Hospedagem</td><td className="dir acn-num">{fmtReais(r.hospedagem)}</td></tr>
                 <tr><td>Alimentação</td><td className="dir acn-num">{fmtReais(r.alimentacao)}</td></tr>
-                <tr><td>Pedágios{r.pedagiosAuto > 0 ? ` (inclui ${fmtReais(r.pedagiosAuto)} calculados pela rota)` : ''}</td><td className="dir acn-num">{fmtReais(r.pedagios)}</td></tr>
+                <tr><td>Pedágios</td><td className="dir acn-num">{fmtReais(r.pedagios)}</td></tr>
                 <tr><td>Outros</td><td className="dir acn-num">{fmtReais(r.outros)}</td></tr>
                 <tr className="total"><td><strong>Custo total</strong></td><td className="dir acn-num"><strong>{fmtReais(r.custoTotal)}</strong></td></tr>
                 {c.margem_pct > 0 && <tr><td>Margem ({c.margem_pct}%)</td><td className="dir acn-num">{fmtReais(r.margem)}</td></tr>}

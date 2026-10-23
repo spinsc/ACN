@@ -9,8 +9,7 @@
 //     partir do dia seguinte à chegada. Uma viagem que cabe no dia, sem dia no local, é 1 dia e não tem pernoite. Sem o desenho do roteiro (rota velha), vale a conta antiga:
 //     dias de estrada (horas ÷ horas por dia, para cima) + dias lá.
 //   • HOSPEDAGEM "se necessário": noites sugeridas = dias − 1. A pessoa pode trocar o número de noites; vazio = automático.
-//   • PEDÁGIO = o que a rota calculou (provedor ligado em ViagemRota.ts, `rota.pedagio`, se a pessoa deixar "usar o pedágio calculado") + as linhas lançadas à mão. O valor calculado nunca
-//     substitui as linhas à mão: soma com elas, e a tela mostra os dois separados para não contar em dobro. Sem provedor ligado, só as linhas à mão (como era em 22/10/2026).
+//   • PEDÁGIO é lançado à mão (linhas). Decidido com o usuário em 23/10/2026: nenhum serviço que exija cadastro ou chave entra no sistema, então não há cálculo automático de pedágio.
 //   • KM RODADO tem dois números: o custo real por km (combustível + desgaste) e o valor por km que se cobra ou reembolsa (digitado; vazio = o custo real).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -29,7 +28,6 @@ export type CustosDaViagem = {
   quartos: number;
   noites: number | null;           // nulo = automático (dias − 1)
   alimentacao_pessoa_dia: number;  // R$ por pessoa por dia
-  usar_pedagio_auto: boolean;      // soma o pedágio que a rota calculou (se houver) ao orçamento
   pedagios: LinhaDeCusto[];
   outros: LinhaDeCusto[];
   valor_km_rodado: number | null;  // R$ por km cobrado/reembolsado; nulo = custo real por km
@@ -39,7 +37,7 @@ export type CustosDaViagem = {
 export const CUSTOS_PADRAO: CustosDaViagem = {
   consumo_km_l: 10, preco_combustivel: 0, custo_km_desgaste: 0, horas_por_dia: 8, hora_saida: '08:00',
   diaria_quarto: 0, quartos: 1, noites: null, alimentacao_pessoa_dia: 0,
-  usar_pedagio_auto: true, pedagios: [], outros: [], valor_km_rodado: null, margem_pct: 0,
+  pedagios: [], outros: [], valor_km_rodado: null, margem_pct: 0,
 };
 
 export const custosDaViagem = (v: any): CustosDaViagem => ({ ...CUSTOS_PADRAO, ...(v?.custos || {}) });
@@ -51,7 +49,7 @@ const soma = (l: LinhaDeCusto[]) => cent((l || []).reduce((s, x) => s + Math.max
 export type ResultadoViagem = {
   km: number; horasDirecao: number; diasDeEstrada: number; diasNoLocal: number; dias: number;
   noitesSugeridas: number; noites: number;
-  combustivel: number; desgaste: number; hospedagem: number; alimentacao: number; pedagios: number; pedagiosAuto: number; pedagiosManual: number; outros: number;
+  combustivel: number; desgaste: number; hospedagem: number; alimentacao: number; pedagios: number; outros: number;
   custoTotal: number; custoPorKm: number; valorKmRodado: number; kmRodadoTotal: number;
   margem: number; orcamento: number; temRota: boolean;
 };
@@ -74,9 +72,7 @@ export function calcularViagem(v: any): ResultadoViagem {
   const desgaste = cent(km * Math.max(0, c.custo_km_desgaste));
   const hospedagem = cent(noites * Math.max(0, Math.floor(num(c.quartos)) || 0) * Math.max(0, c.diaria_quarto));
   const alimentacao = cent(pessoas * dias * Math.max(0, c.alimentacao_pessoa_dia));
-  const pedagiosManual = soma(c.pedagios);
-  const pedagiosAuto = c.usar_pedagio_auto !== false && v?.rota?.pedagio?.estado === 'calculado' ? cent(Math.max(0, num(v.rota.pedagio.total))) : 0;
-  const pedagios = cent(pedagiosManual + pedagiosAuto);
+  const pedagios = soma(c.pedagios);
   const outros = soma(c.outros);
   const custoTotal = cent(combustivel + desgaste + hospedagem + alimentacao + pedagios + outros);
 
@@ -86,7 +82,7 @@ export function calcularViagem(v: any): ResultadoViagem {
   const margem = cent(custoTotal * Math.max(0, num(c.margem_pct)) / 100);
   return {
     km, horasDirecao, diasDeEstrada, diasNoLocal, dias, noitesSugeridas, noites,
-    combustivel, desgaste, hospedagem, alimentacao, pedagios, pedagiosAuto, pedagiosManual, outros,
+    combustivel, desgaste, hospedagem, alimentacao, pedagios, outros,
     custoTotal, custoPorKm, valorKmRodado, kmRodadoTotal, margem, orcamento: cent(custoTotal + margem), temRota,
   };
 }
@@ -138,7 +134,7 @@ export function textoDoOrcamento(v: any, r: ResultadoViagem) {
     `Desgaste do veículo: ${fmtReais(r.desgaste)}`,
     `Hospedagem: ${fmtReais(r.hospedagem)}`,
     `Alimentação: ${fmtReais(r.alimentacao)}`,
-    `Pedágios: ${fmtReais(r.pedagios)}${r.pedagiosAuto > 0 ? ` (${fmtReais(r.pedagiosAuto)} calculados pela rota${r.pedagiosManual > 0 ? ` + ${fmtReais(r.pedagiosManual)} lançados à mão` : ''})` : ''}`,
+    `Pedágios: ${fmtReais(r.pedagios)}`,
     ...((c.outros || []).filter(o => o.descricao || num(o.valor)).map(o => `${o.descricao || 'Outro'}: ${fmtReais(num(o.valor))}`)),
     `CUSTO TOTAL: ${fmtReais(r.custoTotal)}`,
     c.margem_pct ? `Margem (${c.margem_pct}%): ${fmtReais(r.margem)}` : '',
