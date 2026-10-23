@@ -481,6 +481,49 @@ function EditorPrototipos({ demanda, inicial, onSalvar, onCancelar, ocupado, env
   );
 }
 
+// Circular técnica (pedido do usuário em 22/10/2026): o comunicado do fim do protótipo — assunto, para quais áreas, o que ficou definido ou mudou e o que cada área precisa fazer.
+function EditorCircular({ demanda, inicial, onSalvar, onCancelar, ocupado, enviar }: any) {
+  const vigente = revisaoVigente(demanda)?.rev;
+  const prototipos = dadosDoEntregavel(demanda, 'prototipos')?.itens || [];
+  const [x, setX] = useState({
+    assunto: inicial?.assunto || '', data: inicial?.data || hojeISO(), areas: [...(inicial?.areas || [])],
+    prototipo_id: inicial?.prototipo_id || prototipos[prototipos.length - 1]?.id || '', resumo: inicial?.resumo || '', acoes: inicial?.acoes || '', arquivos: [...(inicial?.arquivos || [])],
+  });
+  const alternar = (a: string) => setX(v => ({ ...v, areas: v.areas.includes(a) ? v.areas.filter(i => i !== a) : [...v.areas, a] }));
+  return (
+    <div className="acn-dev-form">
+      <div className="acn-ajuda">Comunicado técnico ao fim do protótipo: o que ficou definido ou mudou e o que cada área precisa fazer.{vigente ? <> Vale para o desenho na <strong>Rev {vigente}</strong>.</> : ''}</div>
+      <div className="acn-dev-campos">
+        <div className="acn-dev-campo-resp"><label className="acn-label">Assunto *</label>
+          <input className="acn-input" aria-label="Assunto da circular" placeholder="Ex: Protótipo P2 aprovado — troca do suporte" value={x.assunto} onChange={e => setX({ ...x, assunto: e.target.value })} /></div>
+        <div className="acn-dev-campo-data"><label className="acn-label">Data *</label>
+          <input type="date" className="acn-input" aria-label="Data da circular" value={x.data} onChange={e => setX({ ...x, data: e.target.value })} /></div>
+      </div>
+      <div>
+        <label className="acn-label">Para quem *</label>
+        <div className="acn-dev-areas" role="group" aria-label="Áreas que recebem a circular">
+          {AREAS_REVISAO.filter(a => a !== 'Outra').map(a => (
+            <Botao key={a} pequeno variante={x.areas.includes(a) ? 'primario' : 'secundario'} aria-pressed={x.areas.includes(a)} onClick={() => alternar(a)}>{a}</Botao>
+          ))}
+        </div>
+      </div>
+      {prototipos.length > 0 && (
+        <div><label className="acn-label">Protótipo a que se refere</label>
+          <select className="acn-input acn-dev-form-prio" aria-label="Protótipo da circular" value={x.prototipo_id} onChange={e => setX({ ...x, prototipo_id: e.target.value })}>
+            <option value="">— nenhum em especial —</option>
+            {prototipos.map((p: any) => <option key={p.id} value={p.id}>{p.numero}</option>)}
+          </select></div>
+      )}
+      <div><label className="acn-label">Resumo técnico *</label>
+        <textarea className="acn-input" rows={4} aria-label="Resumo técnico da circular" placeholder="O que o protótipo definiu ou mudou (medidas, materiais, peças, montagem)" value={x.resumo} onChange={e => setX({ ...x, resumo: e.target.value })} /></div>
+      <div><label className="acn-label">O que cada área precisa fazer</label>
+        <textarea className="acn-input" rows={3} aria-label="O que cada área precisa fazer" placeholder="Ex: Produção: usar o gabarito novo. Compras: cotar a chapa de 3 mm." value={x.acoes} onChange={e => setX({ ...x, acoes: e.target.value })} /></div>
+      <CampoDeFotos fotos={x.arquivos} onChange={(f: any[]) => setX({ ...x, arquivos: f })} enviar={enviar} rotulo="Anexar arquivos da circular" />
+      <Rodape ocupado={ocupado} onSalvar={() => onSalvar(x)} onCancelar={onCancelar} />
+    </div>
+  );
+}
+
 function EditorProblemas({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
   const revs = opcoesRevisao(demanda);
   const prototipos = dadosDoEntregavel(demanda, 'prototipos')?.itens || [];
@@ -840,6 +883,7 @@ export function FormularioDoEntregavel({ id, demanda, dados, onSalvar, onCancela
   if (id === 'licoes') return <EditorLicoes {...comum} />;
   if (id === 'prototipos') return <EditorPrototipos {...comum} />;
   if (id === 'problemas') return <EditorProblemas {...comum} />;
+  if (id === 'circular_tecnica') return <EditorCircular {...comum} />;
   if (id === 'plano_testes') return <EditorTestes {...comum} />;
   if (id === 'teste_instalacao') return <EditorInstalacao {...comum} />;
   if (id === 'conferencia_normas') return <EditorNormas {...comum} />;
@@ -1035,6 +1079,18 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
       {ITENS_DE_ACABAMENTO.map(([k, r]) => <li key={k}><strong>{r}:</strong> {x[k]?.na ? <span className="acn-ajuda">não se aplica</span> : x[k]?.texto || <span className="acn-ajuda">—</span>}</li>)}
     </ul>
   );
+  if (id === 'circular_tecnica' && (x.assunto || x.resumo)) {
+    const proto = (dadosDoEntregavel(demanda, 'prototipos')?.itens || []).find((p: any) => p.id === x.prototipo_id);
+    return (
+      <div className="acn-dev-resumo">
+        <div><strong>{x.assunto || '—'}</strong> · {dataBR(x.data)}{x.revisao_do_desenho ? ` · Rev ${x.revisao_do_desenho}` : ''}{proto ? ` · ${proto.numero}` : ''}</div>
+        <div className="acn-ajuda">Para: {(x.areas || []).join(', ') || '—'}</div>
+        {x.resumo && <div>{x.resumo}</div>}
+        {x.acoes && <div><span className="acn-pdp-rotulo">O que cada área faz</span><div className="acn-ajuda">{x.acoes}</div></div>}
+        {links(x.arquivos)}
+      </div>
+    );
+  }
   if (id === 'amostra' && (x.data || x.local)) return (
     <div className="acn-dev-resumo">
       <div>Amostra de {dataBR(x.data)} — guardada em <strong>{x.local || '—'}</strong></div>
@@ -1064,8 +1120,8 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
 
 /** Resumo do que a Concepção e a Criação definiram, para consulta nas etapas seguintes. */
 export function ResumoDoProjeto({ demanda }: any) {
-  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto', 'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas', 'item_catalogo', 'instrucao_montagem', 'primeira_unidade', 'custo_real', 'padrao_acabamento', 'amostra', 'pacote_tecnico', 'licoes'];
-  const rotulos: Record<string, string> = { item_catalogo: 'Item no catálogo e estrutura', instrucao_montagem: 'Instrução de montagem', primeira_unidade: 'Primeira unidade', custo_real: 'Custo real', padrao_acabamento: 'Padrão de acabamento', amostra: 'Amostra', pacote_tecnico: 'Pacote técnico', licoes: 'Lições aprendidas', prototipos: 'Protótipos', problemas: 'Problemas e ações', plano_testes: 'Plano de testes', teste_instalacao: 'Instalação em veículo', conferencia_normas: 'Conferência das normas', briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
+  const ids = ['briefing', 'meta_custo', 'requisitos', 'normas', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto', 'prototipos', 'problemas', 'circular_tecnica', 'plano_testes', 'teste_instalacao', 'conferencia_normas', 'item_catalogo', 'instrucao_montagem', 'primeira_unidade', 'custo_real', 'padrao_acabamento', 'amostra', 'pacote_tecnico', 'licoes'];
+  const rotulos: Record<string, string> = { item_catalogo: 'Item no catálogo e estrutura', instrucao_montagem: 'Instrução de montagem', primeira_unidade: 'Primeira unidade', custo_real: 'Custo real', padrao_acabamento: 'Padrão de acabamento', amostra: 'Amostra', pacote_tecnico: 'Pacote técnico', licoes: 'Lições aprendidas', prototipos: 'Protótipos', problemas: 'Problemas e ações', circular_tecnica: 'Circular técnica', plano_testes: 'Plano de testes', teste_instalacao: 'Instalação em veículo', conferencia_normas: 'Conferência das normas', briefing: 'Briefing', meta_custo: 'Meta de custo e prazo', requisitos: 'Requisitos', normas: 'Normas aplicáveis', conceito_escolhido: 'Conceito escolhido', desenhos: 'Desenhos (revisões)', bom_prelim: 'Lista de materiais e custo estimado', riscos: 'Riscos', revisao_projeto: 'Revisão de projeto' };
   const com = ids.filter(id => dadosDoEntregavel(demanda, id) && faltaNoEntregavel(id, dadosDoEntregavel(demanda, id), demanda).length === 0);
   if (!com.length) return null;
   return (

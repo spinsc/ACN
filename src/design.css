@@ -1786,6 +1786,8 @@ html body .acn-fp-ir-mmcaixa input { flex: 1; min-width: 0; padding: 5px 8px; bo
 .acn-fp-ir-mmsep { align-self: stretch; width: 1px; margin: 5px 0; background: var(--acn-line); }
 .acn-fp-ir-cu { width: 96px; }
 .acn-fp-ir-df { width: 74px; }
+/* Circular técnica do Desenvolvimento (22/10/2026): as áreas que recebem, como botões de liga/desliga */
+.acn-dev-areas { display: flex; flex-wrap: wrap; gap: 6px; }
 .acn-fp-ir-acoes { display: flex; align-items: center; gap: 6px; flex: none; }
 /* celular: o produto e a caixa de marca/modelo ocupam a linha toda; os botões (Custo/impostos e remover) descem juntos */
 @media (max-width: 560px) {
