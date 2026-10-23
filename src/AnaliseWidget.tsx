@@ -27,6 +27,13 @@ export const ANALISE_GRUPOS = [
     ],
   },
   {
+    // pedido do usuário em 22/10/2026: "análise de prazo no PV comercial" — o Comercial pede ao PCP, pelo card, quanto tempo a venda leva para ser entregue; o parecer do PCP é o prazo
+    grupo: 'Prazo',
+    opcoes: [
+      { id: 'Prazo', label: 'Análise de Prazo (PCP)' },
+    ],
+  },
+  {
     grupo: 'Departamento',
     opcoes: [
       { id: 'Chicotes',    label: 'Chicotes' },
@@ -42,6 +49,7 @@ export const SETOR_LABEL: Record<string, string> = {
   Telecom:    'Téc. Telecom',
   Engenharia: 'Téc. Engenharia',
   Orcamento:  'Orçamento',
+  Prazo:      'Prazo (PCP)',
   Chicotes:   'Chicotes',
   Serralheria:'Serralheria',
   Producao:   'Produção',

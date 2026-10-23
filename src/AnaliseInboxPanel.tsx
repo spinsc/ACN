@@ -31,6 +31,7 @@ const SETOR_ABA: Record<string, string | null> = {
   Telecom:     'telecom',
   Engenharia:  'engenharia',
   Orcamento:   null,
+  Prazo:       'pcp',   // a análise de prazo cai na caixa do PCP (22/10/2026)
   Chicotes:    'chicotes',
   Serralheria: 'serralheria',
   Producao:    'producao',
