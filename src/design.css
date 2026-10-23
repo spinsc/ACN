@@ -1775,7 +1775,14 @@ html body .acn-input.acn-fp-ac-campo { width: 100%; box-sizing: border-box; padd
 .acn-fp-ac-criar:hover { background: var(--acn-brand-soft); }
 /* a linha de um item da formação */
 .acn-fp-ir { margin-bottom: 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
-.acn-fp-ir-cab { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 8px 10px; }
+.acn-fp-ir-cab { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; }
+/* 22/10/2026 (pedido do usuário): a linha do produto em duas linhas — l1: produto, qt, custo, markup, DIFAL, markup reverso, valor unit., total; l2: marca e modelo */
+.acn-fp-ir-l1 { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.acn-fp-ir-l2 { display: flex; flex-wrap: wrap; gap: 10px; }
+.acn-fp-ir-l2 .acn-fp-ir-c1 { flex: 0 1 240px; min-width: 120px; }
+.acn-fp-ir-cu { width: 96px; }
+.acn-fp-ir-df { width: 74px; }
+.acn-fp-ir-mr { width: 150px; }
 .acn-fp-ir-prod { flex: 2 1 200px; min-width: 160px; position: relative; }
 .acn-fp-ir-c1 { flex: 1 1 90px; min-width: 80px; }
 .acn-fp-ir-qt { width: 64px; }
@@ -2214,10 +2221,22 @@ body.dark .acn-lic-temp-btn:not(.on) { background: #1e293b; color: #94a3b8; }
 body.dark .acn-lic-campo.nao-lido { background: rgba(212, 161, 6, .14); }
 .acn-lic-campo.acn-lic-fluxo { padding: 7px 9px; margin: 0 0 6px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 30%, transparent); border-radius: var(--acn-r2); }
 .acn-lic-fluxo-ajuda { margin-top: 3px; font-size: 12px; color: var(--acn-info); }
-.acn-lic-linha-valor { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
-.acn-lic-campo.acn-lic-c-valor { flex: 1 1 140px; min-width: 130px; }
-.acn-lic-campo.acn-lic-c-julg { flex: 0 1 auto; }
-.acn-lic-campo.acn-lic-c-forma { flex: 1 1 120px; min-width: 110px; }
+/* 22/10/2026 (pedido do usuário): Portal, valor previsto, julgamento e forma de disputa numa linha só; só em tela estreita (celular) volta a quebrar */
+.acn-lic-linha-valor { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 8px; }
+.acn-lic-campo.acn-lic-c-portal { flex: 1.3 1 130px; min-width: 0; }
+.acn-lic-campo.acn-lic-c-valor { flex: 1 1 110px; min-width: 0; }
+.acn-lic-campo.acn-lic-c-julg { flex: 1 1 120px; min-width: 0; }
+.acn-lic-campo.acn-lic-c-forma { flex: 1 1 110px; min-width: 0; }
+/* o painel da licitação pode ficar estreito (divisão da tela em dois): quebra pela largura do PRÓPRIO painel, não da janela (container query; navegador antigo só usa a regra do celular acima) */
+.acn-lic-form { container-type: inline-size; }
+@container (max-width: 520px) {
+  .acn-lic-linha-valor { flex-wrap: wrap; }
+  .acn-lic-campo.acn-lic-c-portal, .acn-lic-campo.acn-lic-c-valor, .acn-lic-campo.acn-lic-c-julg, .acn-lic-campo.acn-lic-c-forma { flex-basis: 140px; }
+}
+@media (max-width: 760px) {
+  .acn-lic-linha-valor { flex-wrap: wrap; }
+  .acn-lic-campo.acn-lic-c-portal, .acn-lic-campo.acn-lic-c-valor, .acn-lic-campo.acn-lic-c-julg, .acn-lic-campo.acn-lic-c-forma { flex-basis: 140px; }
+}
 .acn-lic-secao { border-top: 1px solid var(--acn-line-soft); padding-top: 8px; }
 .acn-lic-hist { display: flex; gap: 8px; margin: 6px 0; }
 .acn-lic-hist-ponto { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; flex-shrink: 0; background: var(--acn-f); }
@@ -5979,3 +5998,16 @@ html body.dark .acn-cit-aviso-taxas:not(#acn):not(#acn) { color: rgb(203, 213, 2
 @media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
   html body :is(select.acn-cit-inp, select.acn-cit-filtro-sel, textarea.acn-cit-inp.area):not(#acn):not(#acn) { font-size: 13px !important; }
 }
+
+/* Seleção múltipla (SelectMultiplo, Interface.tsx — 22/10/2026): caixa com etiquetas e lista com marcas. A lista vai em portal, por isso position fixed. */
+.acn-selmulti { position: relative; min-width: 0; }
+html body .acn-selmulti-btn { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; cursor: pointer; overflow: hidden; }
+.acn-selmulti-tags { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; white-space: nowrap; }
+.acn-selmulti-tag { flex: none; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.5; color: var(--acn-brand-ink); background: var(--acn-brand-soft); }
+.acn-selmulti-vazio { color: var(--acn-muted); overflow: hidden; text-overflow: ellipsis; }
+.acn-selmulti-lista { position: fixed; z-index: 4000; max-height: 260px; overflow-y: auto; padding: 4px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: 0 6px 20px rgba(15, 23, 42, .18); }
+html body .acn-selmulti-op { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--acn-r2); background: transparent; color: var(--acn-ink); font: 500 13px var(--acn-font); text-align: left; cursor: pointer; }
+html body .acn-selmulti-op:hover, html body .acn-selmulti-op:focus-visible { background: var(--acn-surface-2); outline: none; }
+html body .acn-selmulti-op.on { font-weight: 700; }
+.acn-selmulti-marca { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--acn-line); border-radius: 4px; color: var(--acn-brand-ink); background: var(--acn-surface); }
+.acn-selmulti-op.on .acn-selmulti-marca { border-color: var(--acn-brand); background: var(--acn-brand-soft); }

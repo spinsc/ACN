@@ -935,65 +935,98 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           rótulos ficam alinhados no topo e os campos/botões alinhados
           embaixo, tudo na mesma linha de base ── */}
       <div className="acn-fp-ir-cab">
-        <div className="acn-fp-ir-prod">
-          <div className="acn-fp-ir-rot">Produto / Descrição</div>
-          <ProdutoAutocomplete
-            value={item.produto}
-            params={params}
-            onFill={dados => onFill(dados)}
-            onExpand={linhas => onExpand(linhas)}
-          />
-        </div>
-        <div className="acn-fp-ir-c1">
-          <div className="acn-fp-ir-rot">Marca</div>
-          <input className="acn-input acn-fp-ir-campo"
-            value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
-        </div>
-        <div className="acn-fp-ir-c1">
-          <div className="acn-fp-ir-rot">Modelo</div>
-          <input className="acn-input acn-fp-ir-campo"
-            value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
-        </div>
-        <div className="acn-fp-ir-qt">
-          <div className="acn-fp-ir-rot"
-            title='Quantidade deste produto DENTRO DE 1 unidade do Item (ex.: 2 antenas por viatura). Para a quantidade de viaturas/unidades do Item inteiro, use o campo "Quantidade do Item", acima da lista.'>
-            Qt/un.
+        {/* 22/10/2026 (pedido do usuário): a linha do produto tem DUAS linhas. Em cima: produto, quantidade, custo, markup, DIFAL, markup reverso, valor unitário e valor
+            total; embaixo: marca e modelo. O restante continua em "Custo/impostos". Custo, DIFAL e markup reverso só aparecem para quem vê custo: o vendedor não vê. */}
+        <div className="acn-fp-ir-l1">
+          <div className="acn-fp-ir-prod">
+            <div className="acn-fp-ir-rot">Produto / Descrição</div>
+            <ProdutoAutocomplete
+              value={item.produto}
+              params={params}
+              onFill={dados => onFill(dados)}
+              onExpand={linhas => onExpand(linhas)}
+            />
           </div>
-          <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-            min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
-        </div>
-        {/* Markup (ou desconto, no modo TABELA) deste produto — ao lado da quantidade,
-            à vista e editável por todos os usuários. Com "Markup Global" ligado fica
-            travado mostrando o valor global, como antes. */}
-        <div className="acn-fp-ir-mk">
-          <div className="acn-fp-ir-rot"
-            title={usarMarkupGlobal ? 'Markup Global ligado: vale o markup dos parâmetros globais' : undefined}>
-            {modoTabela ? 'Desconto %' : 'Markup %'}
+          <div className="acn-fp-ir-qt">
+            <div className="acn-fp-ir-rot"
+              title='Quantidade deste produto DENTRO DE 1 unidade do Item (ex.: 2 antenas por viatura). Para a quantidade de viaturas/unidades do Item inteiro, use o campo "Quantidade do Item", acima da lista.'>
+              Qt/un.
+            </div>
+            <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
+              min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
           </div>
-          <input type="number"
-            className={'acn-input acn-fp-ir-campo acn-fp-num' + (usarMarkupGlobal ? ' acn-fp-mk-global' : item.markup_pct < 0 ? ' acn-fp-neg' : '')}
-            aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
-            step="0.0001" value={item.markup_pct}
-            onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-            readOnly={!!usarMarkupGlobal}
-            title={usarMarkupGlobal ? 'Vale o markup global. Clique para liberar a edição item a item.' : undefined}
-            onClick={() => { if (usarMarkupGlobal) onLiberarMarkup?.(); }} />
+          {temDetalhe && (
+            <div className="acn-fp-ir-cu">
+              <div className="acn-fp-ir-rot" title="Custo unitário do produto, na moeda escolhida em Custo/impostos (sem IPI e ST)">
+                Custo unit.{item.moeda && item.moeda !== 'BRL' ? ` (${item.moeda})` : ''}
+              </div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+            </div>
+          )}
+          {/* Markup (ou desconto, no modo TABELA) deste produto — à vista e editável por todos os usuários. Com "Markup Global" ligado fica
+              travado mostrando o valor global, como antes. */}
+          <div className="acn-fp-ir-mk">
+            <div className="acn-fp-ir-rot"
+              title={usarMarkupGlobal ? 'Markup Global ligado: vale o markup dos parâmetros globais' : undefined}>
+              {modoTabela ? 'Desconto %' : 'Markup %'}
+            </div>
+            <input type="number"
+              className={'acn-input acn-fp-ir-campo acn-fp-num' + (usarMarkupGlobal ? ' acn-fp-mk-global' : item.markup_pct < 0 ? ' acn-fp-neg' : '')}
+              aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
+              step="0.0001" value={item.markup_pct}
+              onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+              readOnly={!!usarMarkupGlobal}
+              title={usarMarkupGlobal ? 'Vale o markup global. Clique para liberar a edição item a item.' : undefined}
+              onClick={() => { if (usarMarkupGlobal) onLiberarMarkup?.(); }} />
+          </div>
+          {temDetalhe && (
+            <div className="acn-fp-ir-df">
+              <div className="acn-fp-ir-rot">DIFAL %</div>
+              <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
+                aria-label="DIFAL % do produto" step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+                readOnly={usarParamsGlobais}
+                title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
+                onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
+            </div>
+          )}
+          {/* Markup reverso DESTE produto: digita o preço unitário desejado e o markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
+              É a mesma conta da calculadora "Markup Reverso" do rodapé, que só mostrava o número, sem aplicar em produto nenhum. */}
+          {temDetalhe && (
+            <div className="acn-fp-ir-mr">
+              <MarkupReversoProduto item={item} custoUnitBrl={custoUnitBrl} modoTabela={modoTabela}
+                bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
+            </div>
+          )}
+          <div className="acn-fp-ir-uni">
+            <div className="acn-fp-ir-rot">Valor Unit.</div>
+            <div className="acn-fp-ir-vu" data-acn-familia="info">{fmtR(valorUnit)}</div>
+          </div>
+          <div className="acn-fp-ir-tot">
+            <div className="acn-fp-ir-rot">Valor Total</div>
+            <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
+          </div>
+          {temDetalhe && (
+            <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
+              onClick={() => setAberto(v => !v)} title="Moeda, IPI, ST, impostos e informações do produto">
+              {aberto ? 'Menos' : 'Custo/impostos'}
+            </Botao>
+          )}
+          <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
         </div>
-        <div className="acn-fp-ir-uni">
-          <div className="acn-fp-ir-rot">Valor Unit.</div>
-          <div className="acn-fp-ir-vu" data-acn-familia="info">{fmtR(valorUnit)}</div>
+        <div className="acn-fp-ir-l2">
+          <div className="acn-fp-ir-c1">
+            <div className="acn-fp-ir-rot">Marca</div>
+            <input className="acn-input acn-fp-ir-campo"
+              value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
+          </div>
+          <div className="acn-fp-ir-c1">
+            <div className="acn-fp-ir-rot">Modelo</div>
+            <input className="acn-input acn-fp-ir-campo"
+              value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
+          </div>
         </div>
-        <div className="acn-fp-ir-tot">
-          <div className="acn-fp-ir-rot">Valor Total</div>
-          <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
-        </div>
-        {temDetalhe && (
-          <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
-            onClick={() => setAberto(v => !v)} title="Custo, impostos e informações do produto">
-            {aberto ? 'Menos' : 'Custo/impostos'}
-          </Botao>
-        )}
-        <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
       </div>
 
       {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
@@ -1010,11 +1043,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               </select>
             </div>
             <div>
-              <div className="acn-fp-ir-rot2">Custo Unit.</div>
-              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-                min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
-            </div>
-            <div>
               <div className="acn-fp-ir-rot2">IPI%</div>
               <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
@@ -1029,25 +1057,10 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <Chips className="acn-fp-ir-tc" ativo={item.tipo_calculo || 'CUSTO'} onChange={t => onSet('tipo_calculo', t)}
                 itens={[{ id: 'CUSTO', rotulo: 'CUSTO' }, { id: 'TABELA', rotulo: 'TABELA' }]} />
             </div>
-            {/* Markup reverso DESTE produto: digita o preço unitário desejado e o
-                markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
-                É a mesma conta da calculadora "Markup Reverso" do rodapé, que
-                só mostrava o número, sem aplicar em produto nenhum. */}
-            <MarkupReversoProduto item={item} custoUnitBrl={custoUnitBrl} modoTabela={modoTabela}
-              bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
           </div>
 
           {secao(mdiReceiptTextOutline, 'Impostos & Validação')}
           <div className="acn-fp-ir-grade">
-            <div>
-              <div className="acn-fp-ir-rot2">DIFAL%</div>
-              <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
-                step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
-                onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
-                readOnly={usarParamsGlobais}
-                title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
-                onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
-            </div>
             <div>
               <div className="acn-fp-ir-rot2">Imposto%</div>
               <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}

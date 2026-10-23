@@ -85,6 +85,8 @@ export async function resolverMencoesDeTodos(opts: {
   contextoId: string;
   porNome?: string;
   motivo?: string;
+  /** chamado com a mensagem do banco quando a gravação falha: sem isto a falha só ia para o console e a menção ficava aberta sem ninguém saber (22/10/2026) */
+  aoFalhar?: (mensagem: string) => void;
 }) {
   const { contexto, contextoId } = opts;
   if (!contexto || !contextoId) return 0;
@@ -96,7 +98,7 @@ export async function resolverMencoesDeTodos(opts: {
     .eq('contexto', contexto).eq('contexto_id', String(contextoId))
     .eq('resolvida', false)
     .select('id');
-  if (error) { console.error('[resolverMencoesDeTodos] erro:', error.message); return 0; }
+  if (error) { console.error('[resolverMencoesDeTodos] erro:', error.message); opts.aoFalhar?.(error.message); return 0; }
   return (data || []).length;
 }
 

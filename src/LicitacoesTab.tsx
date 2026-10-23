@@ -19,7 +19,7 @@ import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput'
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
-import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO } from './Interface';
+import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO, SelectMultiplo } from './Interface';
 import { podeEditarAtualizacao } from './utils/permissoes';
 import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import Icone from './Icone';
@@ -1657,7 +1657,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           <div className="acn-lic-cab" data-acn-familia={FAMILIA_STATUS_LICIT[s] || 'neutro'}>
             <div className="acn-lic-cab-info">
               <div className="acn-lic-cab-linha1">{s.toUpperCase()} · {licit.classificacao} · {formEdit.faturamento_empresa||'ACN'}</div>
-              <div className="acn-lic-cab-titulo">{licit.numero} — {licit.nome_projeto}</div>
+              {/* 22/10/2026 (pedido do usuário): o nome do órgão saiu do cabeçalho; ele continua no campo "Nome completo do Órgão" do formulário */}
+              <div className="acn-lic-cab-titulo">{licit.numero}</div>
               <div className="acn-lic-cab-orgao">{licit.orgao}</div>
             </div>
             <div className="acn-lic-cab-acoes">
@@ -1745,28 +1746,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </>)}
 
             <div className={campoCls('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
-            <div className={campoCls('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
 
-            <QuadroFormacaoLicitacao licitacaoId={licit.id} />
+            {/* 22/10/2026 (pedido do usuário): Portal, valor previsto, julgamento e forma de disputa numa linha só */}
             <div className="acn-lic-linha-valor">
+              <div className={campoCls('orgao', 'acn-lic-c-portal')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
               <div className={campoCls('valor_estimado', 'acn-lic-c-valor')}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
               <div className={campoCls('julgamento', 'acn-lic-c-julg')}>
                 <label className="acn-label">Julgamento</label>
-                <div className="acn-lic-opcoes quebra">
-                  {JULGAMENTO_OPCOES.map(opt => {
-                    const ativos: string[] = formEdit.julgamento || [];
-                    const sel = ativos.includes(opt);
-                    return (
-                      <Botao key={opt} pequeno variante={sel ? 'primario' : 'secundario'} aria-pressed={sel} icone={sel ? mdiCheck : undefined}
-                        onClick={() => setFormEdit((f:any) => {
-                          const at = f.julgamento || [];
-                          return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
-                        })}>
-                        {opt}
-                      </Botao>
-                    );
-                  })}
-                </div>
+                <SelectMultiplo rotulo="Julgamento" placeholder="—" opcoes={JULGAMENTO_OPCOES.map(o => ({ valor: o, rotulo: o }))}
+                  valores={formEdit.julgamento || []} onChange={(v: string[]) => setF('julgamento', v)} />
               </div>
               <div className={campoCls('forma_disputa', 'acn-lic-c-forma')}>
                 <label className="acn-label">Forma de Disputa</label>
@@ -1776,6 +1764,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 </select>
               </div>
             </div>
+
+            <QuadroFormacaoLicitacao licitacaoId={licit.id} />
 
             {/* PRAZOS */}
             <div className="acn-quadro">
@@ -2352,22 +2342,8 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             <ModalNovaInput label="Valor Global Previsto (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="money" />
             <div>
               <label className="acn-label">Julgamento</label>
-              <div className="acn-lic-opcoes quebra">
-                {JULGAMENTO_OPCOES.map(opt => {
-                  const ativos: string[] = form.julgamento || [];
-                  const sel = ativos.includes(opt);
-                  return (
-                    <Botao key={opt} pequeno variante={sel ? 'primario' : 'secundario'} aria-pressed={sel}
-                      icone={sel ? mdiCheck : undefined}
-                      onClick={() => setForm((f:any) => {
-                        const at = f.julgamento || [];
-                        return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
-                      })}>
-                      {opt}
-                    </Botao>
-                  );
-                })}
-              </div>
+              <SelectMultiplo rotulo="Julgamento" placeholder="—" opcoes={JULGAMENTO_OPCOES.map(o => ({ valor: o, rotulo: o }))}
+                valores={form.julgamento || []} onChange={(v: string[]) => set('julgamento', v)} />
             </div>
           </div>
 
