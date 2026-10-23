@@ -2161,6 +2161,9 @@ body.dark .acn-kmeta .acn-lic-disputa:not(.urgente):not(.vencida) { color: #e2e8
 .acn-lic-orgao-link { color: var(--acn-brand-ink); word-break: break-all; }
 .acn-lic-pipe-bloco { margin-bottom: 12px; }
 html body .sec-card.acn-pipe.acn-lic-pipe4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* 23/10/2026 (bug visto no celular): a regra acima, mais forte que as da `.acn-pipe` (2 colunas até 1100 px, 1 no celular), mantinha as 4 colunas e os valores em reais se sobrepunham; agora a faixa segue as mesmas quebras das outras */
+@media (max-width: 1100px) { html body .sec-card.acn-pipe.acn-lic-pipe4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 639.98px) { html body .sec-card.acn-pipe.acn-lic-pipe4 { grid-template-columns: minmax(0, 1fr); } }
 .acn-lic-pipe-mes { margin: 8px 2px 0; gap: 8px; }
 html body .acn-input.acn-lic-mes { width: auto; height: 28px; }
 .acn-lic-undo { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 5000; display: flex; align-items: center; gap: 12px; padding: 10px 16px; font-size: 13px; color: #fff; background: var(--acn-ink); border-radius: var(--acn-r3); box-shadow: var(--acn-shadow-3); }
@@ -2474,6 +2477,8 @@ body.dark .acn-crm-rec-linha { background: #1e293b; border-color: #334155; }
 
 /* ── CRM · 12e36 (07/10/2026): a aba Faturamentos, a nota livre do card aberto e a janela "Venda Direta" ── */
 html body .sec-card.acn-pipe.acn-crm-fat-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
+/* 23/10/2026: mesma causa da faixa das Licitações — no celular os três valores (Total vendido, Faturado, A faturar) ficam um por linha */
+@media (max-width: 639.98px) { html body .sec-card.acn-pipe.acn-crm-fat-kpis { grid-template-columns: minmax(0, 1fr); } }
 .acn-crm-fat-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .acn-crm-fat-sep { width: 1px; height: 20px; background: var(--acn-line); }
 html body .sec-card.acn-crm-fat-tabela { overflow: auto; margin-bottom: 0; }
