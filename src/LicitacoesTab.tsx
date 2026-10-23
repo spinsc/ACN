@@ -182,7 +182,6 @@ const SORT_OPTIONS = [
   { value:'ultimas_alteracoes',          label:'🔔 Últimas Alterações' },
   { value:'data_disputa',                label:'Data de Disputa' },
   { value:'data_limite_proposta',        label:'Limite de Proposta' },
-  { value:'data_limite_analise_tecnica', label:'Limite Análise Técnica' },
   { value:'orgao',                       label:'Órgão' },
   { value:'status',                      label:'Status' },
   { value:'disputa_recente',             label:'Mais Recentes (disputa)' },
@@ -1255,11 +1254,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Salvar form esquerdo ──────────────────────────────────────────────────
   const salvarForm = umaVez('form', async () => {
     // Barra data absurda antes de gravar (digito a mais no ano)
+    // 22/10/2026 (pedido do usuário): as licitações mantêm só as datas de Proposta e de Disputa; Esclarecimentos/Impugnação e Análise Técnica saíram da tela
+    // (os valores já gravados continuam no banco, intactos)
     const camposData: [string,string][] = [
-      ['data_limite_esclarecimentos','Limite de Esclarecimentos'],
       ['data_limite_proposta','Limite de Proposta'],
       ['data_disputa','Data da Disputa'],
-      ['data_limite_analise_tecnica','Limite de Análise Técnica'],
     ];  // Prazo de Entrega agora é texto livre
     for (const [campo, rotulo] of camposData) {
       if (dataForaDeFaixa((formEdit as any)[campo])) {
@@ -1273,13 +1272,12 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     // e toggleMarcador) direto no banco — formEdit é uma cópia tirada só na abertura do
     // modal e nunca é resincronizada, então incluir esses campos aqui sobrescreveria
     // qualquer alteração feita por esses outros caminhos com o valor antigo do mount.
-    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, ...editaveis } = formEdit;
+    // as datas de Esclarecimentos e de Análise Técnica saíram da tela (22/10/2026): ficam FORA do que se grava, para o salvamento não regravar (nem converter de fuso) o valor antigo
+    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, data_limite_esclarecimentos: _esc, data_limite_analise_tecnica: _ana, ...editaveis } = formEdit;
     const novoRow = {
       ...editaveis,
-      data_limite_esclarecimentos: inputBRParaUtc(editaveis.data_limite_esclarecimentos),
       data_limite_proposta:        inputBRParaUtc(editaveis.data_limite_proposta),
       data_disputa:                inputBRParaUtc(editaveis.data_disputa),
-      data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
       prazo_entrega: (editaveis.prazo_entrega || '').trim() || null,   // texto livre (ex.: 30 dias após o empenho)
       // campo de valor apagado = sem valor (antes ia texto vazio e o banco recusava o salvamento)
       ...Object.fromEntries(Object.keys(editaveis).filter(k => k.startsWith('valor_'))
@@ -1771,10 +1769,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             <div className="acn-quadro">
               <div className="acn-quadro-titulo">PRAZOS</div>
               <div className="acn-grade-2">
-                <div className={campoCls('data_limite_esclarecimentos')}><FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" /></div>
                 <div className={campoCls('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
                 <div className={campoCls('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
-                <div className={campoCls('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
                 <div className={campoCls('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} placeholder="Ex.: 30 dias após o empenho" /></div>
               </div>
             </div>
@@ -2362,10 +2358,8 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">PRAZOS</div>
             <div className="acn-grade-2">
-              <ModalNovaInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" value={form.data_limite_esclarecimentos} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Limite Cadastro da Proposta" field="data_limite_proposta" value={form.data_limite_proposta} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Data/Hora de Disputa" field="data_disputa" value={form.data_disputa} onChange={set} type="datetime-local" />
-              <ModalNovaInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" value={form.data_limite_analise_tecnica} onChange={set} type="datetime-local" />
             </div>
           </div>
         </div>

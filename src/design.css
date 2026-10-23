@@ -2378,6 +2378,9 @@ body.dark .acn-crm-rel-tit { color: #f1f5f9; }
 .acn-crm-coluna-rol { box-sizing: border-box; scrollbar-gutter: stable; }
 .acn-crm-kanban { display: flex; gap: 12px; align-items: flex-start; padding-bottom: 8px; min-width: max-content; }
 .acn-kcol.acn-crm-col { flex-shrink: 0; }
+/* Carros previstos (coluna Aguardando empenho, 23/10/2026) */
+.acn-crm-prev { font-size: 11px; color: var(--acn-muted); }
+html body .acn-input.acn-crm-prev-in { width: 76px; min-height: 28px; padding: 3px 7px; text-align: right; }
 .acn-crm-col-acoes { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .acn-crm-col-sub { font-size: 12px; font-weight: 500; color: var(--acn-muted); white-space: nowrap; }
 .acn-crm-zona { border-radius: var(--acn-r2); min-height: 120px; transition: background .15s; }

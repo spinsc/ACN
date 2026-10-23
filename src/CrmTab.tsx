@@ -102,6 +102,7 @@ const VAZIO_OP: any = {
   data_validade_ata: '',
   sub_status: 'andamento',
   empresa_vencedora: '',
+  carros_previstos: '',   // coluna Aguardando empenho (23/10/2026): quantos carros o cliente deve empenhar
   valor_registrado: '',
   valor_acn: '',
   numero_pv: '',
@@ -898,12 +899,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // converte string vazia → null (evita 400 em colunas date/uuid no Postgres)
   const limpar = (v: any) => (v === '' || v === undefined) ? null : v;
+  // inteiro >= 0 ou null (campo vazio = sem previsão); o banco recusa negativo
+  const inteiroOuNull = (v: any) => { const d = String(v ?? '').replace(/\D/g, ''); return d === '' ? null : Number(d.slice(0, 5)); };
 
   const salvarOportunidade = umaVez('salvar-oportunidade', async () => {
     if (!formOp.titulo?.trim()) return;
     setSalvando(true);
     const p: any = {
       funil,
+      carros_previstos:  inteiroOuNull(formOp.carros_previstos),
       titulo:            formOp.titulo?.trim() || null,
       tipo_licitacao:    formOp.tipo_licitacao  || 'ordinaria',
       numero_edital:     limpar(formOp.numero_edital),
@@ -1754,6 +1758,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setSalvando(true);
     const p: any = {
       numero_pv:         numeroPvFinal,
+      carros_previstos:  inteiroOuNull(formOp.carros_previstos),
       titulo:            formOp.titulo?.trim() || null,
       tipo_licitacao:    formOp.tipo_licitacao  || 'ordinaria',
       numero_edital:     limpar(formOp.numero_edital),
@@ -1939,13 +1944,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (novaOp) {
       await supabase.from('crm_historico').insert({
         oportunidade_id: op.id, tipo: 'conversao_op',
-        conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}${itensVendidos?.length ? ` (${itensVendidos.length} item(ns) vendido(s) da formação de preços)` : ' (sem formação de preços: informe os itens vendidos no detalhe da OP)'}${incompleta ? ` — devolvida ao Comercial: faltam ${listaEmTexto(faltam)}` : ''}`, usuario_nome: currentUser?.nome,
+        conteudo: `OP criada automaticamente ao entrar em Empenhado: ${baseOpl}${itensVendidos?.length ? ` (${itensVendidos.length} item(ns) vendido(s) da formação de preços)` : ' (sem formação de preços: informe os itens vendidos no detalhe da OP)'}${incompleta ? ` — devolvida ao Comercial: faltam ${listaEmTexto(faltam)}` : ''}`, usuario_nome: currentUser?.nome,
       });
       if (incompleta) {
         // o histórico da OP é o que diz, na lista de OPs em aberto, quem devolveu e quando (o campo do evento tem 200 caracteres)
         const { error: errLogNasce } = await supabase.from('logs_movimentacao_opl').insert([{
           opl_id: novaOp.id, numero_opl: baseOpl, setor: 'CRM',
-          evento: `OP criada sozinha ao entrar em Vencido, mas faltam dados para seguir ao PCP: ${listaEmTexto(faltam)}`.slice(0, 200),
+          evento: `OP criada sozinha ao entrar em Empenhado, mas faltam dados para seguir ao PCP: ${listaEmTexto(faltam)}`.slice(0, 200),
           status_anterior: null, status_novo: 'Devolvida Comercial',
           usuario_nome: currentUser?.nome || 'Sistema', data_hora: agora,
         }]);
@@ -2106,7 +2111,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setModalEmpresaVenc(null);
     if (errEmp) {
       await load();
-      mostrarAviso(`O card foi para "Vencido", mas a empresa vencedora não foi gravada\n${errEmp.message}. A OP não foi criada: abra o card, informe a empresa e salve.`, 'erro');
+      mostrarAviso(`O card foi para "Empenhado", mas a empresa vencedora não foi gravada\n${errEmp.message}. A OP não foi criada: abra o card, informe a empresa e salve.`, 'erro');
       return;
     }
     // OP nasce sozinha, já numerada a partir do PV (A/D+PV+.+MMAA)
@@ -2208,6 +2213,26 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         conteudo: `Tipo de negócio alterado para: ${novoTipo || '(não definido)'}`, usuario_nome: currentUser?.nome,
       });
     }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CARROS PREVISTOS (coluna Aguardando empenho — pedido do usuário em 23/10/2026): quantos carros se espera empenhar. Edição direta no card, sem janela.
+  // ─────────────────────────────────────────────────────────────────────────
+  const salvarCarrosPrevistos = async (op: any, texto: string) => {
+    const novo = inteiroOuNull(texto);
+    if (novo === (op.carros_previstos ?? null)) return;
+    setOps(prev => prev.map(o => o.id === op.id ? { ...o, carros_previstos: novo } : o)); // otimista
+    const { error } = await supabase.from('crm_oportunidades').update({ carros_previstos: novo, atualizado_em: new Date().toISOString() }).eq('id', op.id);
+    if (error) {
+      setOps(prev => prev.map(o => o.id === op.id ? { ...o, carros_previstos: op.carros_previstos ?? null } : o));
+      mostrarAviso(`Não foi possível salvar os carros previstos\n${error.message}`, 'erro');
+      return;
+    }
+    const { error: errHist } = await supabase.from('crm_historico').insert({
+      oportunidade_id: op.id, tipo: 'observacao',
+      conteudo: `Carros previstos para o empenho: ${novo === null ? '(sem previsão)' : novo}`, usuario_nome: currentUser?.nome,
+    });
+    if (errHist) mostrarAviso(`Os carros previstos foram salvos, mas o registro no histórico não foi gravado\n${errHist.message}`, 'atencao');
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2514,7 +2539,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
         )}
 
-        {/* Empresa vencedora — coluna Vencido */}
+        {/* Carros previstos — coluna Aguardando empenho (campo para preencher); nas demais colunas, só aparece se já foi preenchido */}
+        {col?.tipo === 'aguardando_empenho' ? (
+          <div className="acn-kmeta" data-nao-abrir>
+            <label className="acn-crm-prev" htmlFor={`prev-${op.id}`}>Carros previstos</label>
+            <input id={`prev-${op.id}`} key={`${op.id}-${op.carros_previstos ?? ''}`} className="acn-input acn-crm-prev-in" type="text" inputMode="numeric"
+              placeholder="qtd" defaultValue={op.carros_previstos ?? ''}
+              onClick={e => e.stopPropagation()}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              onBlur={e => salvarCarrosPrevistos(op, e.target.value)} />
+          </div>
+        ) : (op.carros_previstos !== null && op.carros_previstos !== undefined && (
+          <div className="acn-kmeta">
+            <span>Carros previstos</span><Tag>{op.carros_previstos}</Tag>
+          </div>
+        ))}
+
+        {/* Empresa vencedora — coluna Empenhado (antes Vencido) */}
         {col?.tipo === 'ganho' && (
           <div className="acn-kmeta">
             <span>Vencedora</span>
@@ -4640,6 +4681,15 @@ function ColunaRolavel({ children }: any) {
                     </div>
                   );
                 })()}
+
+                {(getEst(formOp.estagio_id)?.tipo === 'aguardando_empenho' || (formOp.carros_previstos !== '' && formOp.carros_previstos != null)) && (
+                  <div className="acn-crm-ab-campo" style={campoDestaque('carros_previstos')}>
+                    <div className="acn-label">Carros previstos <span className="acn-crm-ab-dica">· quantos carros se espera empenhar</span></div>
+                    <input className="acn-input acn-crm-prev-in" type="text" inputMode="numeric" placeholder="qtd" aria-label="Carros previstos"
+                      value={formOp.carros_previstos ?? ''}
+                      onChange={e => setFormOp(f => ({ ...f, carros_previstos: e.target.value.replace(/\D/g, '').slice(0, 5) }))} />
+                  </div>
+                )}
 
                 {isGanho(getEst(formOp.estagio_id)) && (
                   <div className="acn-crm-ab-campo" style={campoDestaque('empresa_vencedora')}>
