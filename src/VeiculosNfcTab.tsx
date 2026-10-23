@@ -7,7 +7,7 @@ import { supabase } from './supabaseClient';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { perfilComPoderes } from './utils/permissoes';
-import { CabecalhoTela, Botao, diaISO } from './Interface';
+import { CabecalhoTela, Botao, Faixa, diaISO } from './Interface';
 import { mdiPlus } from '@mdi/js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -17,6 +17,12 @@ function calcGarantia(dataFim) {
   const hoje = new Date();
   const fim  = new Date(dataFim + 'T23:59:59');
   return fim >= hoje;
+}
+
+// 7.x do NFC (23/10/2026): copiar pode falhar (navegador sem permissão, página sem https). Antes a tela dizia "URL copiada!" mesmo assim, ou não dizia nada.
+async function copiarTexto(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; }
+  catch { alert('Não foi possível copiar. Selecione o endereço e copie à mão.'); return false; }
 }
 
 function fmtData(d) {
@@ -55,8 +61,10 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
   const [resultados,setResultados]= useState([]);
   const [aberto,    setAberto]    = useState(false);
   const [buscando,  setBuscando]  = useState(false);
+  const [erroBusca, setErroBusca] = useState('');
   const timerRef = useRef(null);
   const wrapRef  = useRef(null);
+  const seqRef   = useRef(0);   // 7.x (23/10/2026): resposta de uma busca antiga não pode sobrescrever a da busca mais nova
 
   // Fecha dropdown ao clicar fora
   useEffect(() => {
@@ -68,16 +76,22 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
   const pesquisar = (texto) => {
     setBusca(texto);
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!texto || texto.length < 2) { setResultados([]); setAberto(false); return; }
+    seqRef.current++;
+    // a vírgula e os parênteses quebram o filtro "ou" do banco ("Polícia Civil, SC" dava erro e a lista dizia "Nenhuma OP encontrada"): saem do termo
+    const termo = String(texto || '').replace(/[%,()\\*]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (termo.length < 2) { setResultados([]); setErroBusca(''); setBuscando(false); setAberto(false); return; }
     timerRef.current = setTimeout(async () => {
+      const minha = ++seqRef.current;
       setBuscando(true);
-      const { data } = await supabase.from('oples')
+      const { data, error } = await supabase.from('oples')
         .select('id, opl, cliente_nome, status_geral, chassi, modelo, data_prevista_entrega')
         .not('status_geral', 'eq', 'Cancelado')
-        .or(`opl.ilike.%${texto}%,cliente_nome.ilike.%${texto}%,chassi.ilike.%${texto}%`)
+        .or(`opl.ilike.%${termo}%,cliente_nome.ilike.%${termo}%,chassi.ilike.%${termo}%`)
         .order('opl', { ascending: false })
         .limit(10);
-      setResultados(data || []);
+      if (minha !== seqRef.current) return;   // outra busca começou depois desta
+      setErroBusca(error ? (error.message || 'falha na consulta') : '');
+      setResultados(error ? [] : (data || []));
       setAberto(true);
       setBuscando(false);
     }, 300);
@@ -132,6 +146,8 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
           boxShadow:'0 4px 16px #0002', maxHeight:240, overflowY:'auto' }}>
           {buscando ? (
             <div style={{ padding:'10px 12px', fontSize:10, color:'#9ca3af' }}>Buscando...</div>
+          ) : erroBusca ? (
+            <div style={{ padding:'10px 12px', fontSize:10, color:'#dc2626' }}>Não foi possível buscar as OPs ({erroBusca}). Isso não quer dizer que a OP não exista.</div>
           ) : resultados.length === 0 ? (
             <div style={{ padding:'10px 12px', fontSize:10, color:'#9ca3af' }}>Nenhuma OP encontrada.</div>
           ) : resultados.map(r => {
@@ -172,11 +188,10 @@ function ModalGravarTag({ url, chassi, onClose }) {
   const [erroMsg,   setErroMsg]   = useState('');
   const [copiado,   setCopiado]   = useState(false);
 
-  const copiarUrl = () => {
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    });
+  const copiarUrl = async () => {
+    if (!await copiarTexto(url)) return;
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
   };
 
   const gravarViaNfc = async () => {
@@ -372,6 +387,9 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
   const [prodGar, setProdGar] = useState<any[]>(veiculo?.produtos_instalados || []);
   const [prodSearch, setProdSearch] = useState('');
   const [prodResults, setProdResults] = useState<any[]>([]);
+  const [erroProd, setErroProd] = useState('');
+  const seqProd = useRef(0);        // 7.x: a resposta de uma busca antiga não sobrescreve a da mais nova
+  const salvandoRef = useRef(false);   // 7.x: clique duplo gravava duas vezes
 
   const calcFimGarantia = (dataEntrega: string, meses: number) => {
     if (!dataEntrega) return '';
@@ -383,11 +401,14 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
   };
 
   const buscarProdutos = async (q: string) => {
-    if (q.length < 2) { setProdResults([]); return; }
-    const { data } = await buscarPorPalavras(supabase.from('cadastro_produtos')
+    const minha = ++seqProd.current;
+    if (q.length < 2) { setProdResults([]); setErroProd(''); return; }
+    const { data, error } = await buscarPorPalavras(supabase.from('cadastro_produtos')
       .select('id, nome, garantia_meses, codigo')
       .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(8);
-    setProdResults(data || []);
+    if (minha !== seqProd.current) return;
+    setErroProd(error ? (error.message || 'falha na consulta') : '');
+    setProdResults(error ? [] : (data || []));
   };
 
   const addProduto = (prod: any) => {
@@ -422,7 +443,9 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
   };
 
   const salvar = async () => {
+    if (salvandoRef.current) return;
     if (!form.chassi.trim()) { alert('Chassi obrigatório.'); return; }
+    salvandoRef.current = true;
     setSalvando(true);
     const payload = {
       chassi:            form.chassi.trim().toUpperCase(),
@@ -440,12 +463,15 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
     };
     let error;
     if (editando) {
-      ({ error } = await supabase.from('veiculos_nfc').update(payload).eq('id', veiculo.id));
+      // .select('id'): atualização que o banco recusa sem erro (0 linhas) não pode valer como "atualizado"
+      const r = await supabase.from('veiculos_nfc').update(payload).eq('id', veiculo.id).select('id');
+      error = r.error || ((r.data || []).length ? null : { message: 'o banco não atualizou nenhum veículo (ele pode ter sido excluído por outra pessoa)' });
     } else {
       ({ error } = await supabase.from('veiculos_nfc').insert([payload]));
     }
+    salvandoRef.current = false;
     setSalvando(false);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert(error.code === '23505' ? 'Já existe um veículo com este chassi. Confira o chassi ou abra o veículo que já está cadastrado.' : 'Não foi possível salvar o veículo: ' + error.message); return; }
     onSalvo();
     onClose();
   };
@@ -533,6 +559,11 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
                 </div>
               )}
             </div>
+            {erroProd && (
+              <div style={{ fontSize:9, color:'#dc2626', marginBottom:6 }}>
+                Não foi possível buscar os produtos ({erroProd}). Isso não quer dizer que o produto não exista.
+              </div>
+            )}
             {/* Lista de produtos com garantia */}
             {prodGar.length === 0 ? (
               <div style={{ fontSize:9, color:'#86efac', textAlign:'center', padding:'6px 0' }}>
@@ -616,9 +647,13 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
 
 // ─── Painel de Detalhe do Veículo ─────────────────────────────────────────────
 
-function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onDeletar, onClose, carregarVeiculos }) {
+function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, enderecos, isAdmin, onEditar, onDeletar, onClose, carregarVeiculos }) {
   const [servicos, setServicos] = useState([]);
   const [chamados, setChamados] = useState([]);
+  const [servLido, setServLido] = useState(false);   // 7.x: a leitura recusada não pode parecer "nenhum serviço"
+  const [erroServ, setErroServ] = useState('');
+  const [erroCham, setErroCham] = useState('');
+  const salvServRef = useRef(false);
   const [novoServ, setNovoServ] = useState({ item_servico:'', descricao_tecnica:'', categoria:'' });
   const [addingServ, setAddingServ] = useState(false);
   const [salvServ,  setSalvServ]  = useState(false);
@@ -627,70 +662,79 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
   const [regenerando, setRegenerando] = useState(false);
   const [portalToken, setPortalToken] = useState(veiculo.portal_token || '');
 
-  const urlPublica  = `${baseUrl}?chassi=${encodeURIComponent(veiculo.chassi)}`;
-  const urlPortal   = portalToken ? `${portalBaseUrl}?token=${portalToken}` : null;
+  // 7.x (23/10/2026): sem o endereço configurado (ou com a leitura recusada) o link saía com o endereço de exemplo ("seudominio.com.br") — o QR, a etiqueta gravada e o link do cliente ficavam errados sem aviso
+  const urlPublica  = enderecos.base ? `${baseUrl}?chassi=${encodeURIComponent(veiculo.chassi)}` : null;
+  const urlPortal   = portalToken && enderecos.portal ? `${portalBaseUrl}?token=${portalToken}` : null;
 
-  const copiarPortal = () => {
+  const copiarPortal = async () => {
     if (!urlPortal) return;
-    navigator.clipboard.writeText(urlPortal).then(() => {
-      setCopiadoPortal(true);
-      setTimeout(() => setCopiadoPortal(false), 2000);
-    });
+    if (!await copiarTexto(urlPortal)) return;
+    setCopiadoPortal(true);
+    setTimeout(() => setCopiadoPortal(false), 2000);
   };
 
   const regenerarToken = async () => {
     if (!await confirmar('Regenerar o token invalida o link antigo. Confirma?')) return;
     setRegenerando(true);
     const novoToken = crypto.randomUUID();
-    const { error } = await supabase.from('veiculos_nfc')
-      .update({ portal_token: novoToken }).eq('id', veiculo.id);
-    if (!error) {
+    const { data: trocados, error } = await supabase.from('veiculos_nfc')
+      .update({ portal_token: novoToken }).eq('id', veiculo.id).select('id');
+    if (!error && (trocados || []).length) {
       setPortalToken(novoToken);
       alert('Novo link gerado! Copie e envie ao cliente.');
     } else {
-      alert('Erro ao regenerar token: ' + error.message);
+      alert('Não foi possível gerar o novo link: ' + (error?.message || 'o banco não atualizou o veículo') + '. O link antigo continua valendo.');
     }
     setRegenerando(false);
   };
 
   const carregarServicos = useCallback(async () => {
-    const { data } = await supabase.from('servicos_executados_nfc')
+    const { data, error } = await supabase.from('servicos_executados_nfc')
       .select('*').eq('veiculo_id', veiculo.id).order('ordem').order('criado_em');
+    if (error) { setErroServ(error.message || 'falha na consulta'); return; }   // mantém a última lista lida
+    setErroServ(''); setServLido(true);
     setServicos(data || []);
   }, [veiculo.id]);
 
   const carregarChamados = useCallback(async () => {
-    const { data } = await supabase.from('chamados_suporte')
+    const { data, error } = await supabase.from('chamados_suporte')
       .select('*').eq('veiculo_id', veiculo.id).order('created_at', { ascending:false }).limit(5);
+    if (error) { setErroCham(error.message || 'falha na consulta'); return; }
+    setErroCham('');
     setChamados(data || []);
   }, [veiculo.id]);
 
   useEffect(() => { carregarServicos(); carregarChamados(); }, [carregarServicos, carregarChamados]);
 
   const adicionarServico = async () => {
-    if (!novoServ.item_servico.trim()) return;
+    if (!novoServ.item_servico.trim() || salvServRef.current) return;
+    salvServRef.current = true;
     setSalvServ(true);
-    await supabase.from('servicos_executados_nfc').insert([{
+    const { error } = await supabase.from('servicos_executados_nfc').insert([{
       veiculo_id:        veiculo.id,
       item_servico:      novoServ.item_servico.trim(),
       descricao_tecnica: novoServ.descricao_tecnica.trim() || null,
       categoria:         novoServ.categoria.trim() || null,
     }]);
+    salvServRef.current = false;
+    setSalvServ(false);
+    // 7.x: com a gravação recusada o formulário era esvaziado e fechado como se tivesse dado certo — o que a pessoa digitou se perdia
+    if (error) { alert('Não foi possível adicionar o serviço: ' + error.message); return; }
     setNovoServ({ item_servico:'', descricao_tecnica:'', categoria:'' });
     setAddingServ(false);
-    setSalvServ(false);
     carregarServicos();
   };
 
   const deletarServico = async (id) => {
     if (!await confirmar('Remover este serviço?')) return;
-    await supabase.from('servicos_executados_nfc').delete().eq('id', id);
+    const { data: apagados, error } = await supabase.from('servicos_executados_nfc').delete().eq('id', id).select('id');
+    if (error || !(apagados || []).length) { alert('Não foi possível remover o serviço: ' + (error?.message || 'o banco não apagou nada') + '.'); carregarServicos(); return; }
     carregarServicos();
   };
 
-  const copiarUrl = () => {
-    navigator.clipboard.writeText(urlPublica);
-    alert('URL copiada!');
+  const copiarUrl = async () => {
+    if (!urlPublica) return;
+    if (await copiarTexto(urlPublica)) alert('URL copiada!');
   };
 
   const garantiaAtiva = calcGarantia(veiculo.data_fim_garantia);
@@ -745,7 +789,7 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
               { label:'Fim Garantia', val: fmtData(veiculo.data_fim_garantia) },
               { label:'OP',      val: veiculo.opl_numero || '—' },
               { label:'PIN Restrita', val: veiculo.pin_acesso || '123456', mono: true },
-              { label:'Chamados abertos', val: chamados.filter(c=>c.status==='Aberto').length },
+              { label:'Chamados abertos', val: erroCham ? '—' : chamados.filter(c=>c.status==='Aberto').length },
             ].map(({ label, val, mono }) => (
               <div key={label} style={{ background:'#f8fafc', border:'1px solid #e2e8f0',
                 borderRadius:6, padding:'8px 10px' }}>
@@ -800,6 +844,17 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
           )}
 
           {/* QR Code + URL */}
+          {!urlPublica ? (
+            <div style={{ marginBottom:14 }}>
+              <Faixa tom="atencao">
+                {enderecos.erro
+                  ? `Não foi possível ler o endereço da página NFC (${enderecos.erro}). Sem ele o QR Code e o link não servem para gravar a etiqueta; tente de novo mais tarde.`
+                  : enderecos.lido
+                    ? 'O endereço da página NFC ainda não foi configurado (Administração › Configurações do Dossiê NFC). Sem ele o QR Code e o link não servem para gravar a etiqueta.'
+                    : 'Lendo o endereço da página NFC…'}
+              </Faixa>
+            </div>
+          ) : (
           <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8,
             padding:'12px 14px', marginBottom:14, display:'flex', gap:14, alignItems:'center' }}>
             <img
@@ -841,6 +896,7 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
               </div>
             </div>
           </div>
+          )}
 
           {/* Portal do Cliente */}
           <div style={{ background:'#ede9fe', border:'1px solid #c4b5fd', borderRadius:8,
@@ -878,6 +934,14 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
                   💡 Envie este link ao cliente — ele dá acesso a chamados, manual e status do veículo sem precisar ler a tag NFC.
                 </div>
               </>
+            ) : portalToken && !enderecos.portal ? (
+              <div style={{ fontSize:10, color:'#92400e' }}>
+                {enderecos.erro
+                  ? `Não foi possível ler o endereço do portal do cliente (${enderecos.erro}); sem ele o link não pode ser montado.`
+                  : enderecos.lido
+                    ? 'O endereço do portal do cliente ainda não foi configurado (Administração › Configurações do Dossiê NFC); sem ele o link não pode ser montado.'
+                    : 'Lendo o endereço do portal do cliente…'}
+              </div>
             ) : (
               <div style={{ fontSize:10, color:'#64748b' }}>
                 Token de portal não encontrado. Execute o SQL <code>portal_cliente.sql</code> no Supabase para gerar automaticamente.
@@ -928,10 +992,19 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
               </div>
             )}
 
-            {servicos.length === 0 && !addingServ ? (
-              <div style={{ textAlign:'center', padding:16, color:'#9ca3af', fontSize:10 }}>
-                Nenhum serviço cadastrado.
+            {erroServ && (
+              <div style={{ marginBottom:8 }}>
+                <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarServicos()}>Tentar de novo</Botao>}>
+                  Não foi possível ler os serviços instalados ({erroServ}). {servLido ? 'A lista abaixo é a última que foi lida.' : 'Isso não quer dizer que não haja serviços cadastrados.'}
+                </Faixa>
               </div>
+            )}
+            {servicos.length === 0 && !addingServ ? (
+              servLido ? (
+                <div style={{ textAlign:'center', padding:16, color:'#9ca3af', fontSize:10 }}>
+                  Nenhum serviço cadastrado.
+                </div>
+              ) : null
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                 {servicos.map(s => (
@@ -966,6 +1039,13 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
           </div>
 
           {/* Chamados Recentes */}
+          {erroCham && (
+            <div style={{ marginBottom:8 }}>
+              <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarChamados()}>Tentar de novo</Botao>}>
+                Não foi possível ler os chamados de suporte ({erroCham}). O número de chamados abertos acima não pôde ser conferido.
+              </Faixa>
+            </div>
+          )}
           {chamados.length > 0 && (
             <div>
               <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', marginBottom:8 }}>
@@ -1029,13 +1109,17 @@ export default function VeiculosNfcTab({ currentUser }) {
   const [modalForm,   setModalForm]   = useState(null); // null | {} (novo) | {...veiculo} (editar)
   const [baseUrl,     setBaseUrl]     = useState('https://seudominio.com.br/veiculo.html');
   const [portalUrl,   setPortalUrl]   = useState('https://seudominio.com.br/portal.html');
+  const [enderecos,   setEnderecos]   = useState({ base: false, portal: false, lido: false, erro: '' });   // 7.x: o endereço de exemplo nunca vale como configurado
+  const [erroLista,   setErroLista]   = useState('');
+  const [listaLida,   setListaLida]   = useState(false);   // 7.x: a leitura recusada não pode parecer "nenhum veículo"
   const isAdmin = ['Admin', 'Gerente', 'Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   const carregarVeiculos = useCallback(async () => {
     setCarregando(true);
-    const { data } = await supabase.from('veiculos_nfc')
+    const { data, error } = await supabase.from('veiculos_nfc')
       .select('*').eq('ativo', true).order('criado_em', { ascending: false });
-    setVeiculos(data || []);
+    if (error) setErroLista(error.message || 'falha na consulta');   // mantém a última lista lida
+    else { setErroLista(''); setListaLida(true); setVeiculos(data || []); }
     setCarregando(false);
   }, []);
 
@@ -1053,12 +1137,18 @@ export default function VeiculosNfcTab({ currentUser }) {
     if (!confirm2) return;
 
     // Excluir chamados (SET NULL não exclui — apagamos manualmente)
-    await supabase.from('chamados_suporte').delete().eq('veiculo_id', v.id);
+    // 7.x (23/10/2026): se os chamados não saíram, o veículo fica (a confirmação prometeu apagar os dois juntos)
+    const { error: erroChamados } = await supabase.from('chamados_suporte').delete().eq('veiculo_id', v.id);
+    if (erroChamados) {
+      alert('Não foi possível excluir os chamados de suporte do veículo, então o veículo foi mantido: ' + erroChamados.message);
+      return;
+    }
     // Excluir veículo (cascata para servicos_executados_nfc)
-    const { error } = await supabase.from('veiculos_nfc').delete().eq('id', v.id);
+    const { data: apagados, error } = await supabase.from('veiculos_nfc').delete().eq('id', v.id).select('id');
 
-    if (error) {
-      alert('Erro ao excluir: ' + error.message);
+    if (error || !(apagados || []).length) {
+      alert('Não foi possível excluir o veículo: ' + (error?.message || 'o banco não apagou nada') + '.');
+      carregarVeiculos();
       return;
     }
 
@@ -1068,13 +1158,16 @@ export default function VeiculosNfcTab({ currentUser }) {
   };
 
   const carregarConfig = useCallback(async () => {
-    const { data } = await supabase.from('configuracoes_sistema')
+    const { data, error } = await supabase.from('configuracoes_sistema')
       .select('chave,valor')
       .in('chave', ['nfc_base_url', 'nfc_portal_url']);
+    if (error) { setEnderecos(e => ({ ...e, lido: true, erro: error.message || 'falha na consulta' })); return; }
+    let base = false, portal = false;
     (data || []).forEach(r => {
-      if (r.chave === 'nfc_base_url'   && r.valor) setBaseUrl(r.valor);
-      if (r.chave === 'nfc_portal_url' && r.valor) setPortalUrl(r.valor);
+      if (r.chave === 'nfc_base_url'   && r.valor) { setBaseUrl(r.valor); base = true; }
+      if (r.chave === 'nfc_portal_url' && r.valor) { setPortalUrl(r.valor); portal = true; }
     });
+    setEnderecos({ base, portal, lido: true, erro: '' });
   }, []);
 
   useEffect(() => { carregarVeiculos(); carregarConfig(); }, [carregarVeiculos, carregarConfig]);
@@ -1105,6 +1198,14 @@ export default function VeiculosNfcTab({ currentUser }) {
         acoes={isAdmin && <Botao variante="primario" icone={mdiPlus} onClick={() => setModalForm({})}>Novo veículo</Botao>}
       />
 
+      {erroLista && (
+        <div style={{ marginBottom:12 }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregarVeiculos()}>Tentar de novo</Botao>}>
+            Não foi possível ler os veículos ({erroLista}). {listaLida ? 'A lista abaixo é a última que foi lida.' : 'Isso não quer dizer que não haja veículos cadastrados.'}
+          </Faixa>
+        </div>
+      )}
+
       {/* Filtros */}
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
         padding:'10px 12px', marginBottom:12, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
@@ -1129,6 +1230,7 @@ export default function VeiculosNfcTab({ currentUser }) {
       {carregando ? (
         <div style={{ textAlign:'center', padding:40, color:'#9ca3af' }}>Carregando...</div>
       ) : veiculosFiltrados.length === 0 ? (
+        !listaLida ? null : (
         <div style={{ textAlign:'center', padding:40, color:'#9ca3af', fontSize:11 }}>
           Nenhum veículo encontrado.
           {isAdmin && (
@@ -1141,6 +1243,7 @@ export default function VeiculosNfcTab({ currentUser }) {
             </div>
           )}
         </div>
+        )
       ) : (
         <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
           <div style={{ overflowX:'auto' }}>
@@ -1215,6 +1318,7 @@ export default function VeiculosNfcTab({ currentUser }) {
           veiculo={detalhe}
           baseUrl={baseUrl}
           portalBaseUrl={portalUrl}
+          enderecos={enderecos}
           isAdmin={isAdmin}
           onEditar={(v) => { setDetalhe(null); setModalForm(v); }}
           onDeletar={(v) => { setDetalhe(null); deletarVeiculo(v); }}
