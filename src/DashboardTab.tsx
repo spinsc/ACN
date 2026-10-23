@@ -23,6 +23,7 @@ import CotacoesTab from './CotacoesTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
+import ViagensTab from './ViagensTab';
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
@@ -45,7 +46,7 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
@@ -61,7 +62,7 @@ const ICONE_ABA: Record<string, string> = {
   logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, minhas_solicitacoes: mdiClipboardListOutline, compras: mdiCartOutline,
   financeiro: mdiCashMultiple, cadastro_itens: mdiPackageVariantClosed, cadastro_produtos: mdiTagMultipleOutline,
   rh: mdiAccountTieOutline, comissoes_tecnicos: mdiCurrencyUsd, fiscal: mdiReceiptTextOutline, relatorios: mdiChartBoxOutline,
-  formacao_precos: mdiCalculatorVariantOutline, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
+  formacao_precos: mdiCalculatorVariantOutline, viagens: mdiMapMarkerPath, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
 };
 import { contarAnalisesPendentesPorSetor } from './AnaliseWidget';
 import MencoesInboxPanel from './MencoesInboxPanel';
@@ -108,6 +109,7 @@ const SIDEBAR_GROUPS = [
       { id: 'cotacoes',   label: 'Cotações' },
       { id: 'clientes',  label: 'Clientes' },
       { id: 'marketing', label: 'Marketing' },
+      { id: 'viagens',   label: 'Viagens' },   // 22/10/2026 (pedido do usuário): roteiro, km, tempo, hospedagem, pedágios e orçamento da viagem
     ],
   },
   {
@@ -1147,6 +1149,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':      return <RelatoriosTab currentUser={currentUser} />;
       case 'formacao_precos': return <FormacaoPrecosTab currentUser={currentUser} />;
+      case 'viagens':         return <ViagensTab currentUser={currentUser} />;
       case 'admin':           return <AdminTab />;
       default: return null;
     }

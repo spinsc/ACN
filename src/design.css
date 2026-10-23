@@ -1786,6 +1786,48 @@ html body .acn-fp-ir-mmcaixa input { flex: 1; min-width: 0; padding: 5px 8px; bo
 .acn-fp-ir-mmsep { align-self: stretch; width: 1px; margin: 5px 0; background: var(--acn-line); }
 .acn-fp-ir-cu { width: 96px; }
 .acn-fp-ir-df { width: 74px; }
+/* Viagens (22/10/2026): lista de cartões e o editor (roteiro, custos, orçamento) */
+.acn-vg-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin-top: 10px; }
+.acn-vg-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; text-align: left; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); color: var(--acn-ink); font: inherit; cursor: pointer; }
+.acn-vg-card:hover { border-color: var(--acn-brand); }
+.acn-vg-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.acn-vg-card-rota { font-size: 12px; color: var(--acn-muted); }
+.acn-vg-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12px; color: var(--acn-text); }
+.acn-vg-card-valor { margin-left: auto; font-weight: 800; color: var(--acn-ink); }
+.acn-vg-jan { width: min(980px, 96vw); max-height: 94vh; }
+.acn-vg-corpo { display: flex; flex-direction: column; gap: 12px; }
+.acn-vg-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: start; }
+.acn-vg-largo { grid-column: span 2; }
+.acn-vg-campo { min-width: 0; }
+.acn-vg-campo-in { display: flex; align-items: center; gap: 6px; }
+.acn-vg-campo-in .acn-input { flex: 1; min-width: 0; }
+.acn-vg-suf { flex: none; font-size: 12px; color: var(--acn-muted); white-space: nowrap; }
+.acn-vg-erro { margin-top: 3px; font-size: 12px; color: var(--acn-bad); }
+.acn-vg-busca-linha { display: flex; align-items: center; gap: 6px; }
+.acn-vg-busca-linha .acn-input { flex: 1; min-width: 0; }
+.acn-vg-cands { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-height: 220px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 4px; background: var(--acn-surface); }
+html body .acn-vg-cand { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: var(--acn-r2); background: transparent; color: var(--acn-ink); font: 500 13px var(--acn-font); text-align: left; cursor: pointer; }
+html body .acn-vg-cand:hover, html body .acn-vg-cand:focus-visible { background: var(--acn-surface-2); outline: none; }
+.acn-vg-ponto { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--acn-ink); }
+.acn-vg-parada { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-vg-n { flex: none; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--acn-brand-soft); color: var(--acn-brand-ink); font-size: 11px; font-weight: 800; }
+.acn-vg-parada-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--acn-ink); }
+.acn-vg-parada-dias { flex: none; width: 150px; }
+.acn-vg-opcoes { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0; }
+.acn-vg-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--acn-ink); }
+.acn-vg-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.acn-vg-pernas { margin-top: 8px; }
+.acn-vg-linhas { margin-top: 10px; }
+.acn-vg-linha { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; align-items: center; margin-top: 4px; }
+.acn-vg-resumo .acn-tabela td { padding: 4px 8px; }
+html body .acn-vg-apagar { margin-left: auto; }
+@media (max-width: 640px) {
+  .acn-vg-largo { grid-column: span 1; }
+  .acn-vg-parada { flex-wrap: wrap; }
+  .acn-vg-parada-dias { width: 100%; order: 3; }
+  .acn-vg-linha { grid-template-columns: minmax(0, 1fr) auto; }
+  .acn-vg-linha .acn-vg-campo { grid-column: 1 / 2; }
+}
 /* Formações vinculadas entre si (22/10/2026) */
 .acn-fp-relac { margin: 8px 0; }
 .acn-fp-relac-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
