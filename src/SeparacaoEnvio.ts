@@ -59,13 +59,42 @@ export function setoresDaSeparacao(o: any): SetorDaSeparacao[] {
 /** Venda composta: linhas dos dois setores na mesma OP (rádio + material de adaptação). */
 export const ehVendaComposta = (o: any): boolean => setoresDaSeparacao(o).length > 1;
 
-/** O setor que separa, embala e abre o frete desta OP. Na venda composta (fatia T3) são os dois; enquanto ela não anda, fica com o Almoxarifado. */
+/** O setor que separa, embala e abre o frete desta OP quando ela tem um setor só. Na venda composta são os dois (use `setoresPendentes`); aqui devolve o Almoxarifado,
+ *  que é quem fecha a OP no caso de ela ser lida sem as partes. */
 export function setorDaSeparacao(o: any): SetorDaSeparacao {
   const setores = setoresDaSeparacao(o);
   return setores.length === 1 ? setores[0] : SETOR_ALMOXARIFADO;
 }
 
 export const separaNoTelecom = (o: any): boolean => setorDaSeparacao(o) === SETOR_TELECOM;
+
+// ── Venda composta, fatia T3 (22/10/2026): uma OP, duas separações, um só frete ───────────────────────────────────────────────────────────────────────────────────────
+// Cada setor embala a sua parte e a guarda em `oples.envio_partes[setor]`; o setor que termina primeiro some da fila dele ("aguardando o outro setor") e, quando o último
+// termina, nasce o frete único. Só a venda COMPOSTA tem partes: numa OP de um setor só a OP anda inteira, como sempre andou.
+
+export const outroSetor = (setor: string): SetorDaSeparacao => (setor === SETOR_TELECOM ? SETOR_ALMOXARIFADO : SETOR_TELECOM);
+
+/** As partes já embaladas da OP, por nome do setor (vazio quando nenhuma foi). */
+export const partesEmbaladas = (o: any): Record<string, any> => (o?.envio_partes && typeof o.envio_partes === 'object' && !Array.isArray(o.envio_partes) ? o.envio_partes : {});
+
+/** A parte deste setor já foi embalada? Só conta na venda composta (se a venda deixou de ser composta, a marca antiga não segura a OP). */
+export const parteConcluida = (o: any, setor: string): boolean => ehVendaComposta(o) && !!partesEmbaladas(o)[setor]?.concluida_em;
+
+/** Os setores que ainda têm a separar nesta OP. Fora da venda composta é o setor da OP; na composta, os que ainda não embalaram a parte. Se as duas partes constam como embaladas
+ *  e a OP ainda está na separação (não deveria acontecer), a OP volta para os dois, em vez de ficar sem dono. */
+export function setoresPendentes(o: any): SetorDaSeparacao[] {
+  const setores = setoresDaSeparacao(o);
+  if (setores.length < 2) return setores;
+  const faltam = setores.filter(s => !parteConcluida(o, s));
+  return faltam.length ? faltam : setores;
+}
+
+/** A OP está na fila deste setor? (o filtro da tela do Almoxarifado e da do Telecom) */
+export const estaNaFilaDe = (o: any, setor: string): boolean => setoresPendentes(o).includes(setor as SetorDaSeparacao);
+
+/** A parte deste setor já está embalada e o outro setor ainda não terminou: a OP fica "aguardando o outro setor" (painel de cada tela). */
+export const aguardaOutroSetor = (o: any, setor: string): boolean =>
+  ehVendaComposta(o) && parteConcluida(o, setor) && !parteConcluida(o, outroSetor(setor));
 
 /** Status em que a OP está na mão de quem separa/embala (a fila do Almoxarifado e a do Telecom leem os mesmos dois). */
 export const STATUS_DE_SEPARACAO = ['Aguardando Almox', 'Aguardando Embalagem'];

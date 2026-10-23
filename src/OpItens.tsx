@@ -17,7 +17,7 @@ import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
 import { SelectBusca, Botao, Selo } from './Interface';
-import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, SETOR_TELECOM } from './SeparacaoEnvio';
+import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { normalizarBusca } from './SearchUtils';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
@@ -589,6 +589,25 @@ export function QuadroItensOp({ opl }: { opl: any }) {
           </div>
         )}
       </div>
+      {/* Telecom, T3 (22/10/2026): na venda composta, a embalagem de cada setor (a caixa de cada um; o frete é um só, com a soma) */}
+      {ehVendaComposta(opl) && (
+        <div className="acn-opit-box info" data-teste="partes-da-embalagem">
+          <div className="acn-opit-box-cab"><Icone path={mdiPackageVariantClosed} size={14} />Embalagem por setor</div>
+          <table className="acn-opit-leitura"><tbody>
+            {SETORES_DE_SEPARACAO.map(s => {
+              const p = partesEmbaladas(opl)[s];
+              return (
+                <tr key={s}>
+                  <td>{s}</td>
+                  <td>{p?.concluida_em
+                    ? <>embalada em {new Date(p.concluida_em).toLocaleDateString('pt-BR')} por {p.por || '—'}<div className="acn-opit-peq bloco">{fmtQ(p.altura)} × {fmtQ(p.largura)} × {fmtQ(p.comprimento)} cm · {fmtQ(p.peso_total)} kg · {p.volumes || 1} volume(s)</div></>
+                    : 'aguardando separar e embalar'}</td>
+                </tr>
+              );
+            })}
+          </tbody></table>
+        </div>
+      )}
     </div>
   );
 }

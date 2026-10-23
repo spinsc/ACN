@@ -13,7 +13,7 @@ import { supabase } from './supabaseClient';
 import { Abas } from './Interface';
 import SetorDemandaTab from './SetorDemandaTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
-import { setorDaSeparacao, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
+import { estaNaFilaDe, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 
 export default function TelecomTab({ currentUser }) {
   const [aba, setAba] = useState('demandas');
@@ -24,9 +24,9 @@ export default function TelecomTab({ currentUser }) {
   useEffect(() => {
     let vivo = true;
     const contar = async () => {
-      const { data, error } = await supabase.from('oples').select('id,tipo_projeto,fluxo_entrega,itens_vendidos').in('status_geral', STATUS_DE_SEPARACAO);
+      const { data, error } = await supabase.from('oples').select('id,tipo_projeto,fluxo_entrega,itens_vendidos,envio_partes').in('status_geral', STATUS_DE_SEPARACAO);
       if (!vivo || error) return;
-      setEsperando((data || []).filter(o => setorDaSeparacao(o) === SETOR_TELECOM).length);
+      setEsperando((data || []).filter(o => estaNaFilaDe(o, SETOR_TELECOM)).length);
     };
     contar();
     const t = setInterval(contar, 60000);

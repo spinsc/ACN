@@ -13,7 +13,7 @@
 // mão agora; `estado` diz o que ela está esperando, sem repetir o setor.
 // ─────────────────────────────────────────────────────────────────────────────
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, eraLiberacaoComercial } from './FluxoEntrega';
-import { separaNoTelecom, STATUS_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
+import { ehVendaComposta, setoresPendentes, STATUS_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { marcosDaOp } from './OpVinculos';
 import { diaISO, hojeISO } from './Interface';
 import { supabase } from './supabaseClient';
@@ -58,9 +58,21 @@ export const ETAPAS_OP: EtapaOp[] = [
 export function etapaDaOp(status: string, op?: any): EtapaOp {
   const achou = ETAPAS_OP.find(e => e.match.includes(status));
   const base: EtapaOp = achou || { match: [], pct: 5, label: status || 'Iniciado', setor: null, estado: status || 'sem status', retrabalho: false };
-  if (op && achou && STATUS_DE_SEPARACAO.includes(status) && separaNoTelecom(op)) {
-    return { ...base, label: base.label.replace('Almoxarifado', 'Telecom'), setor: SETOR_TELECOM,
-      estado: status === 'Aguardando Almox' ? 'aguardando separar, pôr o serial e embalar' : base.estado };
+  if (op && achou && STATUS_DE_SEPARACAO.includes(status)) {
+    // venda composta (Telecom, T3, 22/10/2026): enquanto as duas partes esperam, o setor é "Almoxarifado e Telecom"; com uma embalada, é o que falta
+    const composta = ehVendaComposta(op);
+    const pendentes = setoresPendentes(op);
+    if (composta && pendentes.length === 2) {
+      return { ...base, label: base.label.replace('Almoxarifado', 'Almoxarifado e Telecom'), setor: 'Almoxarifado e Telecom',
+        estado: status === 'Aguardando Almox' ? 'aguardando as duas separações (Almoxarifado e Telecom)' : base.estado };
+    }
+    if (pendentes.length === 1 && pendentes[0] === SETOR_TELECOM) {
+      return { ...base, label: base.label.replace('Almoxarifado', 'Telecom'), setor: SETOR_TELECOM,
+        estado: status === 'Aguardando Almox' ? 'aguardando separar, pôr o serial e embalar' + (composta ? ' (a parte do Almoxarifado já está embalada)' : '') : base.estado };
+    }
+    if (composta && pendentes.length === 1) {
+      return { ...base, estado: status === 'Aguardando Almox' ? 'aguardando separar (a parte do Telecom já está embalada)' : base.estado };
+    }
   }
   return base;
 }
@@ -168,7 +180,7 @@ export function desdeQuandoDaLista(op: any, dataDoEvento?: string | null) {
  * quando alguma unidade está em retrabalho/devolvida.
  * `ops` traz, por OP, o número, o status e o "desde quando" (desdeQuandoDaLista).
  */
-export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any; tipo_projeto?: string | null; fluxo_entrega?: string | null; itens_vendidos?: any }>) {
+export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any; tipo_projeto?: string | null; fluxo_entrega?: string | null; itens_vendidos?: any; envio_partes?: any }>) {
   if (!ops || !ops.length) return null;
   const encerrada = (o: any) => o.status_geral === 'Cancelado' || !!etapaDaOp(o.status_geral, o).concluida;
   const abertas = ops.filter(o => !encerrada(o));
