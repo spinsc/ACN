@@ -85,10 +85,12 @@ export function numerosDasCopias(texto: string, origem: any, agora: Date = new D
 
 // ── a cópia da OP ────────────────────────────────────────────────────────────
 
-/** Os dados da OP nova: as colunas copiadas + o que faz dela uma OP nova (número, data, status, quem criou). */
-export function payloadDaCopiaDaOp(origem: any, numero: string, usuario: any, agora: Date = new Date()) {
+/** Os dados da OP nova: as colunas copiadas + o que faz dela uma OP nova (número, data, status, quem criou). `crmId` é o card do CRM da cópia, escolhido por quem copia (ver `cardDaCopia`):
+ *  não informado (undefined) mantém o card da OP de origem; null deixa a cópia sem card. */
+export function payloadDaCopiaDaOp(origem: any, numero: string, usuario: any, agora: Date = new Date(), crmId?: string | null) {
   const p: any = {};
   for (const c of CAMPOS_COPIADOS_DA_OP) if (origem?.[c] !== undefined) p[c] = clonar(origem[c]);
+  if (crmId !== undefined) p.crm_oportunidade_id = crmId;
   return {
     ...p,
     opl: numero,
@@ -102,6 +104,46 @@ export function payloadDaCopiaDaOp(origem: any, numero: string, usuario: any, ag
   };
 }
 
+// ── o card do CRM de cada cópia ──────────────────────────────────────────────
+// Decidido com o usuário em 23/10/2026: cada número liga ao SEU PRÓPRIO card ou ao MESMO card da OP de origem, e quem escolhe é o vendedor, cópia por cópia.
+// O card próprio é o da Nova OP: o que tem o mesmo pedido de venda (`crm_oportunidades.numero_pv`) do número da OP.
+
+export type EscolhaDeCard = 'mesmo' | 'proprio' | 'nenhum';
+
+/** O pedido de venda de um número de OP ("A1801.2610" → "1801"); número livre, sem pedido de venda, devolve null. */
+export function pvDoNumero(numero: string): string | null {
+  const m = String(numero || '').match(/^[AD](\d{4})\./);
+  return m ? m[1] : null;
+}
+
+/** Os cards do CRM que têm cada um destes pedidos de venda. A leitura que falha volta com o erro (e nunca vale como "nenhum card"). */
+export async function buscarCardsPorPv(pvs: string[]): Promise<{ porPv: Record<string, any[]>; erro?: string }> {
+  const lista = [...new Set(pvs.filter(Boolean))];
+  if (!lista.length) return { porPv: {} };
+  const { data, error } = await supabase.from('crm_oportunidades').select('id,titulo,orgao,numero_pv').in('numero_pv', lista);
+  if (error) return { porPv: {}, erro: error.message };
+  const porPv: Record<string, any[]> = {};
+  for (const c of (data || [])) (porPv[String(c.numero_pv)] = porPv[String(c.numero_pv)] || []).push(c);
+  return { porPv };
+}
+
+const nomeDoCard = (c: any) => String(c?.titulo || c?.orgao || 'card sem título');
+
+/** Qual card a cópia recebe, e o que a janela escreve sobre isso. `cardOrigem` é o card da OP de origem (ou null); `porPv`, o que o CRM respondeu para os pedidos de venda. */
+export function cardDaCopia(escolha: EscolhaDeCard, numero: string, origem: any, cardOrigem: any, porPv: Record<string, any[]>): { id: string | null; texto: string; atencao: boolean } {
+  if (escolha === 'nenhum') return { id: null, texto: 'sem card', atencao: false };
+  if (escolha === 'mesmo') {
+    return origem?.crm_oportunidade_id
+      ? { id: origem.crm_oportunidade_id, texto: "o mesmo da OP de origem: " + nomeDoCard(cardOrigem), atencao: false }
+      : { id: null, texto: 'sem card (a OP de origem não tem)', atencao: false };
+  }
+  const pv = pvDoNumero(numero);
+  if (!pv) return { id: null, texto: 'sem card (este número não tem pedido de venda)', atencao: true };
+  const achados = porPv[pv] || [];
+  if (achados.length === 1) return { id: achados[0].id, texto: "o do pedido de venda " + pv + ": " + nomeDoCard(achados[0]), atencao: false };
+  return { id: null, texto: achados.length ? "sem card: há " + achados.length + " cards com o pedido de venda " + pv : "sem card: nenhum card com o pedido de venda " + pv, atencao: true };
+}
+
 /** Os anexos que a cópia leva: documentos (proposta, orçamento, arquivos). Foto e checklist de entrega são do carro/da entrega e ficam na OP de origem. */
 export const ehAnexoDeDocumento = (a: any) => !['foto', 'checklist_entrega'].includes(String(a?.tipo || ''));
 
@@ -109,7 +151,7 @@ type Resultado = { criadas: { id: string; numero: string }[]; avisos: string[]; 
 
 /** Cria uma OP por número, todas de uma vez: as OPs entram numa gravação só (ou entram todas, ou nenhuma), depois vêm as respostas sobre o carro, os anexos e o histórico.
  *  Tudo o que pode falhar na LEITURA é lido antes de gravar qualquer coisa: leitura recusada não vira cópia sem as respostas ou sem os anexos. */
-export async function copiarOp({ origem, numeros, usuario }: { origem: any; numeros: string[]; usuario: any }): Promise<Resultado> {
+export async function copiarOp({ origem, numeros, usuario, crmPorNumero }: { origem: any; numeros: string[]; usuario: any; crmPorNumero?: Record<string, string | null> }): Promise<Resultado> {
   const vazio = (erro: string): Resultado => ({ criadas: [], avisos: [], erro });
   if (!origem?.id) return vazio('Não achei a OP de origem.');
   if (!numeros.length) return vazio('Informe o número de pelo menos uma cópia.');
@@ -127,7 +169,7 @@ export async function copiarOp({ origem, numeros, usuario }: { origem: any; nume
 
   const agora = new Date();
   const { data: novas, error: erroInsere } = await supabase.from('oples')
-    .insert(numeros.map(n => payloadDaCopiaDaOp(lida, n, usuario, agora))).select('id,opl');
+    .insert(numeros.map(n => payloadDaCopiaDaOp(lida, n, usuario, agora, crmPorNumero ? crmPorNumero[n] : undefined))).select('id,opl');
   if (erroInsere || !novas?.length) {
     return vazio(erroInsere?.code === '23505'
       ? 'Algum destes números acabou de ser usado por outra OP. Nada foi criado: confira os números e tente de novo.'
