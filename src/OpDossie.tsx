@@ -371,11 +371,14 @@ async function gerarPdfDossie(d, setGerando) {
       titulo('VENDIDO × BOM × SEPARADO');
       if (vendidos.length) tabela(['Vendido ao cliente', 'Qt', 'Descrição'],
         vendidos.map(i => [i.nome || '—', String(i.quantidade ?? '—'), i.descricao || '']));
-      if (bom.length) tabela(['BOM (material da OP)', 'Qt', 'Separado', 'Observação'],
-        bom.map((b, i) => {
-          const c = conf.find(x => x.nome === b.nome) || conf[i];
-          return [b.nome || '—', String(b.quantidade ?? '—'), c ? String(c.separado ?? '—') : '—', c?.obs || ''];
-        }));
+      if (bom.length) {
+        const comSerial = conf.some(x => String(x?.seriais || '').trim());   // o serial de cada item (separação do Almoxarifado, 23/10/2026) só ganha coluna quando existe
+        tabela(['BOM (material da OP)', 'Qt', 'Separado', ...(comSerial ? ['Serial(is)'] : []), 'Observação'],
+          bom.map((b, i) => {
+            const c = conf.find(x => x.nome === b.nome) || conf[i];
+            return [b.nome || '—', String(b.quantidade ?? '—'), c ? String(c.separado ?? '—') : '—', ...(comSerial ? [c?.seriais || ''] : []), c?.obs || ''];
+          }));
+      }
     }
 
     if (pendencias.length) {

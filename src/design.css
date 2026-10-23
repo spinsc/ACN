@@ -1308,8 +1308,8 @@ html body .sec-hdr.acn-alm-hdr-atencao { background: var(--acn-warn-soft); borde
 .acn-alm-solic-texto { flex: 1; min-width: 0; }
 /* janelas */
 html body .modal-box.acn-modal-cadastro.acn-alm-jan { width: min(480px, 95vw); max-width: 480px; }
-html body .modal-box.acn-modal-cadastro.acn-alm-emb { width: min(560px, 96vw); max-width: 560px; max-height: 92vh; }
-html body .modal-box.acn-modal-cadastro.acn-alm-kiting { width: min(640px, 96vw); max-width: 640px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-alm-emb { width: min(900px, 96vw); max-width: 900px; max-height: 92vh; }
+html body .modal-box.acn-modal-cadastro.acn-alm-kiting { width: min(1040px, 96vw); max-width: 1040px; max-height: 92vh; }
 html body .modal-box.acn-modal-cadastro.acn-alm-lote-jan { width: min(980px, 95vw); max-width: 980px; max-height: 92vh; }
 .acn-alm-jan .form-group, .acn-alm-emb .form-group, .acn-alm-kiting .form-group, .acn-alm-lote-jan .form-group { margin-bottom: 0; }
 .acn-alm-emb .acn-modal-corpo > *, .acn-alm-kiting .acn-modal-corpo > *, .acn-alm-lote-jan .acn-modal-corpo > *, .acn-alm-jan .acn-modal-corpo > * { flex-shrink: 0; }
@@ -2895,6 +2895,20 @@ html body .acn-input.acn-opit-sep { width: 72px; text-align: right; }
 html body .acn-input.acn-opit-sep.difere { border-color: var(--acn-warn); }
 html body .acn-input.acn-opit-obs { width: 100%; box-sizing: border-box; }
 html body .acn-input.acn-opit-obs.falta { border-color: var(--acn-bad); }
+/* serial de cada item da separação (23/10/2026) */
+.acn-opit-tabela td.acn-opit-ser { min-width: 190px; }
+html body .acn-input.acn-opit-serial { width: 100%; box-sizing: border-box; }
+/* no celular a separação com serial vira um cartão por item (a coluna do serial ficava fora da tela): nome, depois Separado, Serial e Observação, cada um com o seu rótulo */
+@media (max-width: 639.98px) {
+  .acn-opit-tabela.com-serial thead { display: none; }
+  .acn-opit-tabela.com-serial, .acn-opit-tabela.com-serial tbody { display: block; }
+  .acn-opit-tabela.com-serial tr { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--acn-line); }
+  html body .acn-opit-tabela.com-serial td { border: 0; padding: 0; min-width: 0; background: transparent; }
+  .acn-opit-tabela.com-serial td[data-rot] { grid-column: 1 / -1; }
+  .acn-opit-tabela.com-serial td[data-rot]::before { content: attr(data-rot); display: block; margin-bottom: 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+  .acn-opit-tabela.com-serial td.dir { text-align: left; }
+  html body .acn-opit-tabela.com-serial .acn-input.acn-opit-sep { width: 100%; text-align: left; }
+}
 .acn-opit-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-bottom: 8px; }
 .acn-opit-box { overflow: hidden; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
 .acn-opit-box.info { border-color: color-mix(in srgb, var(--acn-info) 35%, transparent); }

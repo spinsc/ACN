@@ -15,7 +15,7 @@ import { VinculoPicker } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
 import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
-import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
+import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia, textoDosSeriais, seriaisOutrosDaOp } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
 import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesAbertosDaOp, descricaoDaRemessa } from './Remessas';
@@ -294,6 +294,10 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     }
   };
 
+  // Seriais da embalagem de envio que NÃO é "Venda para Envio" (23/10/2026): com a lista de separação na tela, cada item tem o seu serial e a caixa de texto vira "outros seriais";
+  // sem lista (kit já conferido antes), a caixa de texto continua sendo a única — como sempre foi.
+  const seriaisDaEmbalagem = (f) => (conferencia.length ? textoDosSeriais(conferencia, f.seriais) : String(f.seriais || '').trim());
+
   const abrirModalEmbalagem = async (opl) => {
     // venda composta (Telecom, T3, 22/10/2026): a BOM é do material de adaptação, então o checklist de separação é da parte do Almoxarifado; a do Telecom não tem checklist
     const composta = ehVendaComposta(opl);
@@ -349,7 +353,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     // 2) grava a parte deste setor
     const parte = {
       concluida_em: agora, por: currentUser?.nome || null,
-      seriais: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : (f.seriais || '').trim(),
+      seriais: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : seriaisDaEmbalagem(f),
       ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
       peso_total: num(f.peso_total), volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
       altura: num(f.altura), largura: num(f.largura), comprimento: num(f.comprimento),
@@ -366,7 +370,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     const serialTexto = SETORES_DE_SEPARACAO.map(s => partes[s]?.seriais).filter(Boolean).join('\n');
     const serialItens = SETORES_DE_SEPARACAO.reduce((acc, s) => mesclarSeriais(acc, partes[s]?.seriais_itens || []), []);
     const extraOp = {
-      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
+      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser, false, vendaEnvio ? '' : f.seriais) } : {}),
       seriais_equipamentos: serialTexto,
       ...(vendaEnvio ? { seriais_itens: serialItens } : {}),
       destino_cidade: f.destino_cidade.trim(), destino_uf: f.destino_uf, destino_cep: formatarCep(f.destino_cep),
@@ -500,7 +504,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         alert(`Informe o serial ACN de cada produto: ${comRemessa ? `são ${qtdVendida} unidade(s) nesta remessa` : `são ${qtdVendida} unidade(s) vendida(s)`} e há ${itensSeriais.length} serial(is).`);
         return;
       }
-    } else if (serialObrig && !f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
+    } else if (serialObrig && !seriaisDaEmbalagem(f))  { alert(conferencia.length ? 'Informe o número de série de pelo menos um item da lista de separação (coluna Serial) ou em "Outros números de série".' : 'Informe os números de série dos equipamentos.'); return; }
     if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
     // Medidas obrigatórias (pedido do usuário em 15/10/2026): o frete nasce desta janela e a transportadora cota pelas medidas;
     // uma embalagem foi gravada só com o peso e o frete seguiu para cotação sem as três medidas.
@@ -596,8 +600,8 @@ Embalar e enviar assim mesmo?`)) return;
     // seriais da OP: com remessa, o que já estava + os das remessas ativas + os desta, sem repetir serial (gravar de novo não duplica linha)
     const seriaisDaOp = comRemessa ? mesclarSeriais(mesclarSeriais(opl.seriais_itens, remessasAtivas.flatMap(r => r.itens || [])), itensSeriais) : itensSeriais;
     const extraOp = {
-      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
-      seriais_equipamentos: vendaEnvio ? seriaisDaOp.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
+      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser, false, vendaEnvio ? '' : f.seriais) } : {}),
+      seriais_equipamentos: vendaEnvio ? seriaisDaOp.map(x => `${x.produto}: ${x.serial}`).join('\n') : seriaisDaEmbalagem(f),
       ...(vendaEnvio ? { seriais_itens: seriaisDaOp } : {}),
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
@@ -790,13 +794,14 @@ Embalar e enviar assim mesmo?`)) return;
     const linhas = conferenciaInicial(opl);
     setConferencia(linhas);
     setSaldosKit({});
-    setSeriaisKitForm(opl.seriais_equipamentos || '');
+    setSeriaisKitForm(seriaisOutrosDaOp(opl));   // o serial de cada item volta na própria linha da conferência; aqui só os "outros" (e o texto antigo das OPs de uma caixa só)
     setModalSeriais({ ...opl, _pendenciaSanada: pendenciaSanada });
     setSaldosKit(await saldosDoKit({ opl, linhas }));
   };
 
   const confirmarKitOkComSeriais = async () => {
-    if (!seriaisKitForm.trim()) { alert('Informe os números de série dos equipamentos deste kit.'); return; }
+    const textoSeriais = textoDosSeriais(conferencia, seriaisKitForm);
+    if (!textoSeriais) { alert(conferencia.length ? 'Informe o número de série de pelo menos um item do kit (coluna Serial) ou em "Outros números de série".' : 'Informe os números de série dos equipamentos deste kit.'); return; }
     // Kit 100% quer dizer "está tudo aqui". Com peça de Serralheria/Chicotes ou
     // compra ainda em aberto (ou já pronta mas não recebida), o caminho é
     // LIBERAR C/ PENDÊNCIA — que continua do lado, funcionando como sempre.
@@ -829,8 +834,8 @@ Embalar e enviar assim mesmo?`)) return;
       if (!segue) return;
     }
 
-    const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };
-    if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser);
+    const extra: any = { seriais_equipamentos: textoSeriais };
+    if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser, false, seriaisKitForm);
 
     // O material sai da prateleira aqui, tanto no Kit OK quanto no liberado com
     // pendência — nos dois casos o que foi separado já saiu. Só item com
@@ -885,7 +890,7 @@ Embalar e enviar assim mesmo?`)) return;
       const recado = textoDaBaixa(baixa);
       const prontas = conferencia.filter(l => Number(l.separado) >= Number(l.planejado)).length;
       const { error: erroSep } = await supabase.from('oples').update({
-        kit_conferencia: registroConferencia(conferencia, currentUser),
+        kit_conferencia: registroConferencia(conferencia, currentUser, false, seriaisKitForm),   // guarda também o serial já digitado em cada item
         responsavel_almox: currentUser?.nome,
       }).eq('id', opl.id);
       // 7.50: o estoque já baixou; se a conferência não gravou, a pessoa precisa saber para salvar de novo (não baixa duas vezes)
@@ -1525,12 +1530,14 @@ Embalar e enviar assim mesmo?`)) return;
                   </div>
                 </div>
               ) : (<>
+              {!conferencia.length && (
               <div className="form-group">
                 <label className="acn-label" htmlFor="alm-seriais">Números de série{ehVendaComposta(modalEmbalagem) && !doTelecom ? ' (opcional nesta parte)' : ' *'}</label>
                 <textarea id="alm-seriais" className="acn-input" rows={2}
                   value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
                   placeholder="Um por linha" />
               </div>
+              )}
               </>)}
 
               <div className="acn-quadro-titulo acn-alm-secao">
@@ -1626,7 +1633,16 @@ Embalar e enviar assim mesmo?`)) return;
                 );
               })()}
 
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} semEstoque={doTelecom} />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} semEstoque={doTelecom} comSerial={!ehVendaEnvioOp(modalEmbalagem)} />
+              {/* o serial de cada item vai na linha dele (coluna Serial da separação, logo acima); esta caixa é só para serial de algo que NÃO está na lista (e guarda o texto de OPs antigas) */}
+              {conferencia.length > 0 && !ehVendaEnvioOp(modalEmbalagem) && (
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-seriais">Outros números de série (de algo que não está na lista de separação){ehVendaComposta(modalEmbalagem) && !doTelecom ? ' — opcional' : ' — opcional se já informou nos itens'}</label>
+                  <textarea id="alm-seriais" className="acn-input" rows={2}
+                    value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
+                    placeholder="Um por linha" />
+                </div>
+              )}
               <div className="form-group">
                 <label className="acn-label" htmlFor="alm-obs">Observações</label>
                 <textarea id="alm-obs" className="acn-input" rows={2}
@@ -1666,15 +1682,16 @@ Embalar e enviar assim mesmo?`)) return;
             </div>
             <div className="acn-modal-corpo acn-form-cheio">
               <div className="acn-ajuda">
-                Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
+                Informe o número de série de cada equipamento na linha do próprio item (coluna Serial) antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
               </div>
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} comSerial />
               <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
                 modo="almox" currentUser={currentUser}
                 onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />
+              {/* o serial de cada item vai na linha dele (coluna Serial); esta caixa é só para serial de algo que NÃO está na lista (e guarda o texto de OPs antigas) */}
               <div className="form-group">
-                <label className="acn-label" htmlFor="alm-seriais-kit">Números de série dos equipamentos instalados *</label>
-                <textarea id="alm-seriais-kit" autoFocus className="acn-input acn-alm-mono" rows={3}
+                <label className="acn-label" htmlFor="alm-seriais-kit">{conferencia.length ? 'Outros números de série (de algo que não está na lista acima) — opcional' : 'Números de série dos equipamentos instalados *'}</label>
+                <textarea id="alm-seriais-kit" autoFocus={!conferencia.length} className="acn-input acn-alm-mono" rows={conferencia.length ? 2 : 3}
                   placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
                   value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
               </div>

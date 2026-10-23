@@ -418,6 +418,7 @@ export const conferenciaInicial = (opl: any, { completo = false }: any = {}) => 
       ...b, planejado: num(b.quantidade),
       separado: ant ? num(ant.separado) : (completo ? num(b.quantidade) : 0),
       obs: ant?.obs || '',
+      seriais: ant?.seriais || '',
     };
   });
 };
@@ -430,12 +431,37 @@ export const validarConferencia = (linhas: any[]) => {
   const semObs = divergencias(linhas).filter(l => !String(l.obs || '').trim());
   return semObs.length ? `Explique a diferença em: ${semObs.map(l => l.nome).join(', ')}.` : '';
 };
-export const registroConferencia = (linhas: any[], currentUser: any, emLote = false) => ({
-  linhas: (linhas || []).map(l => ({ item_id: l.item_id, codigo: l.codigo, nome: l.nome, unidade: l.unidade, planejado: num(l.planejado), separado: num(l.separado), obs: String(l.obs || '').trim() })),
+// ── Seriais por item da separação (pedido do usuário em 23/10/2026) ───────────
+// Antes havia UMA caixa para os seriais de todos os itens do kit. Agora cada linha da separação tem o seu campo de serial (vários, separados por vírgula, quando o item tem mais de uma
+// unidade). Fica guardado na própria conferência (kit_conferencia.linhas[].seriais), então "salvar separação" e continuar amanhã não perde nada. O texto de oples.seriais_equipamentos
+// (e-mail ao Fiscal, dossiê e telas antigas leem esse) é montado daqui: uma linha por item ("ITEM: SN1, SN2"). Sobrou uma caixa pequena para os "outros seriais" (de algo que não está na
+// lista); numa OP antiga, o texto de seriais que já existia entra nela inteiro, para nada se perder (kit_conferencia.seriais_outros).
+/** Unidades em que cada peça é uma unidade (e pode ter o seu serial): UN, PC, CJ, KIT, PAR. Metro, quilo e litro não têm um serial por unidade. */
+export const ehUnidadeContada = (u: any) => /^(un|und|unid|unidade|pc|pç|pca|peça|peca|cj|conjunto|kit|par)s?\.?$/i.test(String(u ?? '').trim());
+/** "SN1, SN2" ou um por linha → lista sem vazios nem repetidos */
+export const listaDeSeriais = (t: any): string[] => [...new Set(String(t ?? '').split(/[\n,;]+/).map(s => s.trim()).filter(Boolean))];
+/** O texto de oples.seriais_equipamentos: uma linha por item com serial, depois os "outros seriais" como foram digitados. */
+export const textoDosSeriais = (linhas: any[], outros: any = '') => [
+  ...(linhas || []).map(l => { const s = listaDeSeriais(l?.seriais); return s.length ? `${l.nome}: ${s.join(', ')}` : ''; }).filter(Boolean),
+  ...String(outros ?? '').split(/\r?\n/).map(s => s.trim()).filter(Boolean),
+].join('\n');
+/** Os seriais que não são de um item da lista: os guardados em kit_conferencia.seriais_outros; numa OP em que o texto antigo (uma caixa só) é tudo o que existe, ele inteiro. */
+export const seriaisOutrosDaOp = (opl: any) => {
+  const reg = opl?.kit_conferencia;
+  if (typeof reg?.seriais_outros === 'string') return reg.seriais_outros;
+  const temPorItem = (reg?.linhas || []).some((l: any) => String(l?.seriais || '').trim());
+  return temPorItem ? '' : String(opl?.seriais_equipamentos || '');
+};
+export const registroConferencia = (linhas: any[], currentUser: any, emLote = false, outrosSeriais: any = '') => ({
+  linhas: (linhas || []).map(l => ({
+    item_id: l.item_id, codigo: l.codigo, nome: l.nome, unidade: l.unidade, planejado: num(l.planejado), separado: num(l.separado), obs: String(l.obs || '').trim(),
+    ...(listaDeSeriais(l.seriais).length ? { seriais: listaDeSeriais(l.seriais).join(', ') } : {}),
+  })),
   divergente: divergencias(linhas).length > 0,
   conferido_por: currentUser?.nome || null,
   conferido_em: new Date().toISOString(),
   em_lote: emLote,
+  ...(String(outrosSeriais ?? '').trim() ? { seriais_outros: String(outrosSeriais).trim() } : {}),
 });
 
 /**
@@ -464,7 +490,8 @@ export const situacaoDaLinha = (l: any, saldos: any = {}) => {
  * tem, salvar, e fechar o kit quando o resto chegar.
  */
 // `semEstoque` (22/10/2026): o Telecom usa o mesmo checklist, mas ainda não tem estoque — o texto de rodapé não pode prometer baixa
-export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean }) {
+// `comSerial` (23/10/2026): cada linha ganha o seu campo de serial (kiting e embalagem de envio); sem ele a tabela é a de sempre
+export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false, comSerial = false }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean; comSerial?: boolean }) {
   if (!linhas?.length) return null;
   const set = (i: number, patch: any) => onChange(linhas.map((l, j) => j === i ? { ...l, ...patch } : l));
   const div = divergencias(linhas).length;
@@ -484,12 +511,13 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
           {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
         </Botao>
       </div>
-      <table className="acn-opit-tabela">
+      <table className={'acn-opit-tabela' + (comSerial ? ' com-serial' : '')}>
         <thead><tr>
           <th className="chk"></th>
           <th>Item</th>
           <th className="dir">BOM</th>
           <th className="dir">Separado</th>
+          {comSerial && <th>Serial(is)</th>}
           <th>Observação</th>
         </tr></thead>
         <tbody>
@@ -515,12 +543,32 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
                   </div>}
                 </td>
                 <td className="dir sem-quebra">{fmtQ(l.planejado)} {l.unidade}</td>
-                <td className="dir">
+                <td className="dir" data-rot="Separado">
                   <input type="number" min="0" step="any" value={l.separado} aria-label={`Separado de ${l.nome}`}
                     className={'acn-input acn-opit-sep' + (difere ? ' difere' : '')}
                     onChange={e => set(i, { separado: e.target.value })} />
                 </td>
-                <td>
+                {comSerial && (
+                  <td className="acn-opit-ser" data-rot="Serial(is)">
+                    <input className="acn-input acn-alm-mono acn-opit-serial" value={l.seriais || ''} aria-label={`Serial de ${l.nome}`}
+                      placeholder={num(l.planejado) > 1 ? 'ex.: SN1, SN2' : 'nº de série, se tiver'}
+                      onChange={e => set(i, { seriais: e.target.value })}
+                      onPaste={e => {
+                        // colar uma coluna do Excel (um serial por linha) vira "SN1, SN2, SN3" na mesma caixa
+                        const t = e.clipboardData?.getData('text') || '';
+                        if (!/[\n\t]/.test(t)) return;
+                        e.preventDefault();
+                        set(i, { seriais: [...listaDeSeriais(l.seriais), ...listaDeSeriais(t.replace(/\t/g, ','))].join(', ') });
+                      }} />
+                    {listaDeSeriais(l.seriais).length > 1 && (
+                      // item contado em unidades (UN, PC, CJ…): avisa se o número de seriais não bate com a quantidade; metro, quilo e afins não têm um serial por unidade
+                      <span className={'acn-opit-peq' + (ehUnidadeContada(l.unidade) && listaDeSeriais(l.seriais).length !== num(l.planejado) ? ' aviso' : '')}>
+                        {listaDeSeriais(l.seriais).length}{ehUnidadeContada(l.unidade) ? ` de ${fmtQ(l.planejado)}` : ''} serial(is)
+                      </span>
+                    )}
+                  </td>
+                )}
+                <td data-rot="Observação">
                   <input value={l.obs || ''} placeholder={difere ? 'Obrigatório: por que mudou?' : ''} aria-label={`Observação de ${l.nome}`}
                     className={'acn-input acn-opit-obs' + (difere && !String(l.obs || '').trim() ? ' falta' : '')}
                     onChange={e => set(i, { obs: e.target.value })} />
@@ -535,6 +583,7 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
           ? 'Ainda não há estoque neste setor: marcar só registra o que foi separado, nada dá baixa.'
           : 'Marcar e desmarcar não mexem no estoque. A baixa acontece quando você salva a separação.'}
       </div>
+      {comSerial && <div className="acn-ajuda">O número de série vai na linha do próprio item (nem todo item tem). Item com mais de uma unidade: um serial por unidade, separados por vírgula; dá para colar uma coluna do Excel.</div>}
     </div>
   );
 }
@@ -574,7 +623,8 @@ export function QuadroItensOp({ opl }: { opl: any }) {
                 return (
                   <tr key={i} className={difere ? 'difere' : undefined}>
                     <td>{b.nome}{b.codigo && <span className="acn-opit-peq">{b.codigo}</span>}
-                      {c?.obs && <div className="acn-opit-peq bloco dif">{c.obs}</div>}</td>
+                      {c?.obs && <div className="acn-opit-peq bloco dif">{c.obs}</div>}
+                      {c?.seriais && <div className="acn-opit-peq bloco">Serial: {c.seriais}</div>}</td>
                     <td className="dir sem-quebra">{fmtQ(b.quantidade)} {b.unidade}</td>
                     <td className={'dir' + (difere ? ' dif' : '')}>{c ? fmtQ(c.separado) : '—'}</td>
                   </tr>
