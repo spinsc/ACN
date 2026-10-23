@@ -1786,6 +1786,14 @@ html body .acn-fp-ir-mmcaixa input { flex: 1; min-width: 0; padding: 5px 8px; bo
 .acn-fp-ir-mmsep { align-self: stretch; width: 1px; margin: 5px 0; background: var(--acn-line); }
 .acn-fp-ir-cu { width: 96px; }
 .acn-fp-ir-df { width: 74px; }
+/* Formações vinculadas entre si (22/10/2026) */
+.acn-fp-relac { margin: 8px 0; }
+.acn-fp-relac-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.acn-fp-relac-linha { display: flex; align-items: center; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
+.acn-fp-relac-nome { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acn-fp-relac-nova { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.acn-fp-relac-nova > :first-child { flex: 1 1 240px; min-width: 0; }
+.acn-fp-relac-erro { padding: 4px 0; font-size: 12px; color: var(--acn-bad); }
 /* Circular técnica do Desenvolvimento (22/10/2026): as áreas que recebem, como botões de liga/desliga */
 .acn-dev-areas { display: flex; flex-wrap: wrap; gap: 6px; }
 .acn-fp-ir-acoes { display: flex; align-items: center; gap: 6px; flex: none; }

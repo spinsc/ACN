@@ -11,7 +11,7 @@ import { buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
-import { Faixa, Botao, Selo, Chips, Abas, Tag } from './Interface';
+import { Faixa, Botao, Selo, Chips, Abas, Tag, SelectBusca } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
@@ -1731,6 +1731,102 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
   );
 }
 
+// ─── FORMAÇÕES VINCULADAS ENTRE SI ───────────────────────────────────────────────
+// Pedido do usuário em 22/10/2026: "poder vincular uma formação de preço a outra formação de preço". A ligação é entre FAMÍLIAS (a raiz das versões, `versao_raiz_id` ou o id
+// da v1) e vale nos dois sentidos: quem abre qualquer das duas vê a outra, com a última versão e o total, e abre com um clique. Só liga e desliga; não copia nem soma nada.
+const raizDaCotacao = (m: any) => m?.versao_raiz_id || m?.id;
+const ultimaVersaoDe = (lista: any[]) => [...lista].sort((a: any, b: any) => (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+
+function FormacoesVinculadasEntreSi({ cotacaoId, currentUser, aoAbrir }: any) {
+  const [raiz, setRaiz] = useState<string | null>(null);
+  const [vinculadas, setVinculadas] = useState<any[]>([]);
+  const [erro, setErro] = useState('');
+  const [adicionando, setAdicionando] = useState(false);
+  const [candidatas, setCandidatas] = useState<any[]>([]);
+  const [escolha, setEscolha] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+
+  const carregar = useCallback(async () => {
+    if (!cotacaoId) { setRaiz(null); setVinculadas([]); return; }
+    const { data: eu, error: erroEu } = await supabase.from('cotacoes_precos').select('id,versao_raiz_id').eq('id', cotacaoId).maybeSingle();
+    if (erroEu || !eu) { setErro(erroEu?.message || 'formação não encontrada'); return; }
+    const minha = raizDaCotacao(eu);
+    setRaiz(minha);
+    const { data: ligacoes, error: erroLig } = await supabase.from('cotacoes_precos_relacionadas').select('raiz_id,raiz_relacionada_id')
+      .or(`raiz_id.eq.${minha},raiz_relacionada_id.eq.${minha}`);
+    if (erroLig) { setErro(erroLig.message); return; }
+    const outras = [...new Set((ligacoes || []).map((l: any) => (l.raiz_id === minha ? l.raiz_relacionada_id : l.raiz_id)))];
+    if (!outras.length) { setErro(''); setVinculadas([]); return; }
+    const lista = outras.join(',');
+    const { data: cots, error: erroCots } = await supabase.from('cotacoes_precos')
+      .select('id,nome,versao,versao_raiz_id,criado_em,itens,parametros_globais,status,orgao_cliente').or(`id.in.(${lista}),versao_raiz_id.in.(${lista})`);
+    if (erroCots) { setErro(erroCots.message); return; }
+    setErro('');
+    const porFamilia = new Map<string, any[]>();
+    (cots || []).forEach((c: any) => { const k = raizDaCotacao(c); porFamilia.set(k, [...(porFamilia.get(k) || []), c]); });
+    setVinculadas([...porFamilia.entries()].map(([r, l]) => ({ raiz: r, cot: ultimaVersaoDe(l) })));
+  }, [cotacaoId]);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const abrirEscolha = async () => {
+    setAdicionando(true);
+    const { data, error } = await supabase.from('cotacoes_precos').select('id,nome,versao,versao_raiz_id,criado_em,orgao_cliente').order('criado_em', { ascending: false });
+    if (error) { setErro(error.message); setAdicionando(false); return; }
+    const jaLigadas = new Set(vinculadas.map((v: any) => v.raiz));
+    const porFamilia = new Map<string, any[]>();
+    (data || []).forEach((c: any) => { const k = raizDaCotacao(c); if (k !== raiz && !jaLigadas.has(k)) porFamilia.set(k, [...(porFamilia.get(k) || []), c]); });
+    setCandidatas([...porFamilia.entries()].map(([r, l]) => ({ raiz: r, cot: ultimaVersaoDe(l) })));
+  };
+  const vincular = async () => {
+    if (!escolha || !raiz || ocupado) return;
+    setOcupado(true);
+    const { error } = await supabase.from('cotacoes_precos_relacionadas').insert([{ raiz_id: raiz, raiz_relacionada_id: escolha, criado_por_nome: currentUser?.nome || currentUser?.email || null }]);
+    setOcupado(false);
+    if (error) { alert(error.code === '23505' ? 'Estas formações já estão vinculadas.' : 'Não foi possível vincular as formações: ' + error.message); return; }
+    setAdicionando(false); setEscolha('');
+    carregar();
+  };
+  const desvincular = async (v: any) => {
+    if (!await confirmar(`Desvincular "${v.cot.nome || 'formação sem nome'}" desta formação?\n\nNenhuma das duas é apagada; só deixam de estar ligadas.`)) return;
+    const { error } = await supabase.from('cotacoes_precos_relacionadas').delete()
+      .or(`and(raiz_id.eq.${raiz},raiz_relacionada_id.eq.${v.raiz}),and(raiz_id.eq.${v.raiz},raiz_relacionada_id.eq.${raiz})`);
+    if (error) { alert('Não foi possível desvincular: ' + error.message); return; }
+    carregar();
+  };
+
+  if (!cotacaoId) return null;
+  const rotulo = (c: any) => `${c.nome || 'Formação sem nome'} · v${c.versao || 1}${c.orgao_cliente ? ' · ' + c.orgao_cliente : ''}`;
+  return (
+    <div className="acn-quadro acn-fp-relac">
+      <div className="acn-fp-relac-cab">
+        <span className="acn-quadro-titulo"><Icone path={mdiLinkVariant} size={13} /> Formações vinculadas a esta ({vinculadas.length})</span>
+        {!adicionando && <Botao pequeno icone={mdiPlus} onClick={abrirEscolha}>Vincular outra formação</Botao>}
+      </div>
+      {erro && <div className="acn-fp-relac-erro">Não foi possível ler as formações vinculadas ({erro}).</div>}
+      {!erro && !vinculadas.length && !adicionando && <div className="acn-ajuda">Nenhuma. Vincule quando uma formação depender ou se relacionar com outra (por exemplo, a de um parceiro).</div>}
+      {vinculadas.map((v: any) => {
+        const total = estruturaFormacao(v.cot.itens || [], v.cot.parametros_globais || {}, calcItem).geral.totVendas;
+        return (
+          <div key={v.raiz} className="acn-fp-relac-linha">
+            <span className="acn-fp-relac-nome" title={rotulo(v.cot)}>{rotulo(v.cot)}</span>
+            <span className="acn-num acn-forte">{fmtR(total)}</span>
+            <Botao pequeno icone={mdiFolderOpenOutline} onClick={() => aoAbrir(v.cot.id)}>Abrir</Botao>
+            <Botao pequeno variante="discreto" icone={mdiLinkVariantOff} aria-label={`Desvincular ${v.cot.nome || 'formação'}`} title="Desvincular" onClick={() => desvincular(v)} />
+          </div>
+        );
+      })}
+      {adicionando && (
+        <div className="acn-fp-relac-nova">
+          <SelectBusca opcoes={candidatas.map((c: any) => ({ valor: c.raiz, rotulo: rotulo(c.cot), busca: [c.cot.nome, c.cot.orgao_cliente] }))}
+            valor={escolha} onChange={setEscolha} placeholder="Procure a formação (nome ou órgão)" />
+          <Botao pequeno variante="primario" disabled={!escolha || ocupado} onClick={vincular}>Vincular</Botao>
+          <Botao pequeno onClick={() => { setAdicionando(false); setEscolha(''); }}>Cancelar</Botao>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 // `vinculo` — { tipo:'crm'|'licitacao', id, label? } — quando informado, o
 // componente roda "embutido" dentro do processo (CrmTab.tsx/LicitacoesTab.tsx):
@@ -2485,6 +2581,21 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     }
     carregarModelo(m);
     setEditandoId(m.id);
+  };
+
+  // abre OUTRA formação (a vinculada); mesmo cuidado de trocarVersao: o que não foi salvo fica no rascunho local desta, e é oferecido de volta quando ela for aberta de novo
+  const abrirFormacaoVinculada = async (id: string) => {
+    if (!id || id === editandoId) return;
+    if (temNaoSalvo) {
+      if (!await confirmar('Esta formação tem alterações NÃO salvas.\n\nAbrir a outra mesmo assim? As alterações ficam no rascunho desta e são oferecidas de volta quando você abri-la de novo.')) return;
+      try {
+        localStorage.setItem(chaveRascunho(editandoId), JSON.stringify({ conteudo: edicaoAtual(), salvoEm: new Date().toISOString(), usuario: currentUser?.nome || currentUser?.email || null }));
+      } catch { /* rascunho é best-effort */ }
+    }
+    const { data, error } = await supabase.from('cotacoes_precos').select('*').eq('id', id).maybeSingle();
+    if (error || !data) { alert('Não foi possível abrir a formação vinculada: ' + (error?.message || 'formação não encontrada')); return; }
+    carregarModelo(data);
+    setEditandoId(data.id);
   };
 
   const carregarModelos = useCallback(async () => {
@@ -3286,6 +3397,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               )}
             </div>
           )}
+
+          {/* formações vinculadas entre si (22/10/2026) — só com a formação já salva */}
+          {editandoId && <FormacoesVinculadasEntreSi key={editandoId} cotacaoId={editandoId} currentUser={currentUser} aoAbrir={abrirFormacaoVinculada} />}
 
           {/* ── HEADER ── */}
           <div className="acn-fp-cab">
