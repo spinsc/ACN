@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -25,7 +25,8 @@ import { ehEnvioDeMaterial, setorPadraoDaVenda } from './SeparacaoEnvio';
 import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
-import { podeAlterarNumeroOplPv, podeVerValores } from './utils/permissoes';
+import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente } from './utils/permissoes';
+import CopiarOpModal from './CopiarOpModal';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
@@ -784,6 +785,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     recarregarLogs();
   };
   const [editando, setEditando] = useState(false);
+  // Copiar OP (pedido do usuário em 23/10/2026): várias OPs iguais, cada uma com o seu número
+  const [copiando, setCopiando] = useState(false);
   const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
@@ -957,6 +960,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         </Suspense>
       )}
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
+      {copiando && <CopiarOpModal origem={opl} currentUser={usuario} onClose={() => setCopiando(false)} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
           onSalvo={(nova: any) => { setOpl(nova); setEditando(false); recarregarLogs(); }} />
@@ -997,6 +1001,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
               { rotulo: `Resumo do lote (${qtdLote})`, icone: mdiFormatListNumbered, onClick: () => setVerResumoLote(true), oculto: qtdLote <= 1 },
               { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
+              // quem abre OP (Admin, gerentes e a equipe de Comercial/CRM e Licitações, que valem como gerente do setor); a cópia nasce como OP nova, no PCP
+              { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
             ]} />
             <button type="button" className="acn-opl-x" onClick={fecharEMarcarLido} aria-label="Fechar" title="Fechar"><Icone path={mdiClose} size={20} /></button>
           </div>
