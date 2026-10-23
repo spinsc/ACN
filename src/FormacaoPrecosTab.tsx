@@ -1004,7 +1004,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             <div className="acn-fp-ir-rot">Valor Total</div>
             <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
           </div>
-          <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
         </div>
         <div className="acn-fp-ir-l2">
           {/* 23/10/2026 (usuário): marca e modelo numa caixa só — um campo com os dois valores, separados por um traço; no cadastro continuam dois dados */}
@@ -1016,13 +1015,16 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <input aria-label="Modelo" placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
             </div>
           </div>
-          {temDetalhe && (
-            <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
-              onClick={() => setAberto(v => !v)} title="Moeda, IPI, ST, impostos e informações do produto">
-              {aberto ? 'Menos' : 'Custo/impostos'}
-            </Botao>
-          )}
           {!temDetalhe && campoQt}
+          <div className="acn-fp-ir-acoes">
+            {temDetalhe && (
+              <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
+                onClick={() => setAberto(v => !v)} title="Moeda, IPI, ST, impostos e informações do produto">
+                {aberto ? 'Menos' : 'Custo/impostos'}
+              </Botao>
+            )}
+            <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
+          </div>
         </div>
       </div>
 
@@ -1039,6 +1041,11 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
                 value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
                 {MOEDAS.map(m=><option key={m}>{m}</option>)}
               </select>
+            </div>
+            <div>
+              <div className="acn-fp-ir-rot2">Custo Unit.</div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto (dentro de Custo/impostos)" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
             </div>
             <div>
               <div className="acn-fp-ir-rot2">IPI%</div>
@@ -1064,6 +1071,15 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 
           {secao(mdiReceiptTextOutline, 'Impostos & Validação')}
           <div className="acn-fp-ir-grade">
+            <div>
+              <div className="acn-fp-ir-rot2">DIFAL%</div>
+              <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
+                aria-label="DIFAL % do produto (dentro de Custo/impostos)" step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+                readOnly={usarParamsGlobais}
+                title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
+                onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
+            </div>
             <div>
               <div className="acn-fp-ir-rot2">Imposto%</div>
               <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}

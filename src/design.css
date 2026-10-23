@@ -1786,6 +1786,12 @@ html body .acn-fp-ir-mmcaixa input { flex: 1; min-width: 0; padding: 5px 8px; bo
 .acn-fp-ir-mmsep { align-self: stretch; width: 1px; margin: 5px 0; background: var(--acn-line); }
 .acn-fp-ir-cu { width: 96px; }
 .acn-fp-ir-df { width: 74px; }
+.acn-fp-ir-acoes { display: flex; align-items: center; gap: 6px; flex: none; }
+/* celular: o produto e a caixa de marca/modelo ocupam a linha toda; os botões (Custo/impostos e remover) descem juntos */
+@media (max-width: 560px) {
+  .acn-fp-ir-l1 .acn-fp-ir-prod, .acn-fp-ir-l2 .acn-fp-ir-mm { flex: 1 1 100%; }
+  .acn-fp-ir-l1 .acn-fp-ir-uni, .acn-fp-ir-l1 .acn-fp-ir-tot { flex: 1 1 40%; text-align: left; }
+}
 .acn-fp-ir-prod { flex: 2 1 150px; min-width: 150px; position: relative; }
 .acn-fp-ir-c1 { flex: 1 1 90px; min-width: 80px; }
 .acn-fp-ir-qt { width: 64px; }
