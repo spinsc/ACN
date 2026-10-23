@@ -80,17 +80,20 @@ export async function localizarPessoa(pessoaNome: string) {
 }
 
 // ─── Horas extras e feriados carregados ───────────────────────────────────────
-export type ContextoHorario = { feriados: Set<string>; extras: any[] };
+export type ContextoHorario = { feriados: Set<string>; extras: any[]; erro?: string };
 export const CONTEXTO_VAZIO: ContextoHorario = { feriados: new Set(), extras: [] };
 
 export async function carregarContextoHorario(): Promise<ContextoHorario> {
-  const [{ data: feriados }, { data: extras }] = await Promise.all([
+  const [{ data: feriados, error: erroFeriados }, { data: extras, error: erroExtras }] = await Promise.all([
     supabase.from('feriados').select('data'),
     supabase.from('horas_extras').select('*').in('status', ['pendente', 'aprovada']).order('inicio', { ascending: false }),
   ]);
   return {
     feriados: new Set((feriados || []).map((f: any) => String(f.data).slice(0, 10))),
     extras: extras || [],
+    // 7.x (23/10/2026): leitura recusada valia como "nenhum feriado e nenhuma hora extra aprovada" — o relógio contava feriado como dia útil, escondia a hora extra e a pausa automática
+    // podia parar uma tarefa que estava em hora extra aprovada. Quem usa o contexto precisa olhar `erro` antes de gravar qualquer pausa.
+    erro: [erroFeriados && ('feriados: ' + erroFeriados.message), erroExtras && ('horas extras: ' + erroExtras.message)].filter(Boolean).join('; '),
   };
 }
 export const intervaloDe = (x: any): Intervalo => [new Date(x.inicio).getTime(), new Date(x.fim).getTime()];

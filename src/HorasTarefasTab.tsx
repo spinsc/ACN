@@ -43,14 +43,16 @@ function fmtDuracao(segundos: number) {
 
 // Iniciar e retomar gravam atualizado_em: a pausa automática só é gravada se a
 // tarefa não mudou desde que foi lida.
-async function iniciarTarefa(tarefa: any) {
+// 7.x (23/10/2026): iniciar, retomar, pausar e concluir ignoravam o erro do banco e a tela seguia como se tivesse gravado; agora devolvem o motivo da falha ('' = gravou)
+async function iniciarTarefa(tarefa: any): Promise<string> {
   const agora = new Date().toISOString();
-  await supabase.from('engenharia_horas_tarefas').update({
+  const { data, error } = await supabase.from('engenharia_horas_tarefas').update({
     status: 'em_andamento', data_inicio: agora, atualizado_em: agora,
-  }).eq('id', tarefa.id);
+  }).eq('id', tarefa.id).select('id');
+  return error ? error.message : ((data || []).length ? '' : 'o banco não atualizou a tarefa (ela pode ter sido excluída)');
 }
 
-async function retomarTarefa(tarefa: any) {
+async function retomarTarefa(tarefa: any): Promise<string> {
   const pausas = [...(tarefa.pausas || [])];
   const ultima = pausas[pausas.length - 1];
   let acumulado = tarefa.tempo_pausado_segundos || 0;
@@ -59,9 +61,10 @@ async function retomarTarefa(tarefa: any) {
     acumulado += (new Date(agoraIso).getTime() - new Date(ultima.pausado_em).getTime()) / 1000;
     pausas[pausas.length - 1] = { ...ultima, retomado_em: agoraIso };
   }
-  await supabase.from('engenharia_horas_tarefas').update({
+  const { data, error } = await supabase.from('engenharia_horas_tarefas').update({
     status: 'em_andamento', pausas, tempo_pausado_segundos: acumulado, atualizado_em: agoraIso,
-  }).eq('id', tarefa.id);
+  }).eq('id', tarefa.id).select('id');
+  return error ? error.message : ((data || []).length ? '' : 'o banco não atualizou a tarefa (ela pode ter sido excluída)');
 }
 
 // ─── Busca de OP/OS para vincular à tarefa ────────────────────────────────────
@@ -70,10 +73,17 @@ async function retomarTarefa(tarefa: any) {
 function BuscaOplTarefa({ selecionada, onSelecionar }: { selecionada: any; onSelecionar: (o: any) => void }) {
   const [busca, setBusca] = useState(selecionada?.opl || '');
   const [resultados, setResultados] = useState<any[]>([]);
+  const [erroBusca, setErroBusca] = useState('');
+  const seq = useRef(0);   // 7.x: a resposta de uma busca antiga não sobrescreve a da mais nova
   const buscar = async (q: string) => {
     setBusca(q);
-    if (!q.trim()) { setResultados([]); onSelecionar(null); return; }
-    const { data } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q.trim()}%`).order('opl', { ascending: false }).limit(8);
+    const minha = ++seq.current;
+    if (!q.trim()) { setResultados([]); setErroBusca(''); onSelecionar(null); return; }
+    const { data, error } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q.trim()}%`).order('opl', { ascending: false }).limit(8);
+    if (minha !== seq.current) return;
+    // 7.x: leitura recusada valia como "nenhuma OP" e ainda soltava a OP que já estava escolhida
+    if (error) { setErroBusca(error.message || 'falha na consulta'); setResultados([]); return; }
+    setErroBusca('');
     const lista = data || [];
     setResultados(lista);
     const exata = lista.find((o: any) => String(o.opl).trim().toLowerCase() === q.trim().toLowerCase());
@@ -94,6 +104,7 @@ function BuscaOplTarefa({ selecionada, onSelecionar }: { selecionada: any; onSel
           ))}
         </div>
       )}
+      {erroBusca && <div style={{ fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>Não foi possível buscar as OPs ({erroBusca}). Isso não quer dizer que a OP não exista.</div>}
       {selecionada && <div style={{ fontSize: 10, color: '#15803d', marginBottom: 8 }}>✅ Vinculado a {selecionada.opl}</div>}
     </>
   );
@@ -154,7 +165,7 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
       criado_por_nome: currentUser?.nome,
     }]).select('id').single();
     setSalvando(false);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Não foi possível criar a tarefa: ' + error.message); return; }
     // @menção no título e aviso aos participantes (a tarefa já está salva: se um aviso falhar, diz quem não foi avisado)
     await salvarMencoes({ texto: titulo, mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
       contexto: 'tarefa_engenharia', contextoId: String(criada?.id || ''), contextoDescricao: 'Tarefa da Engenharia: ' + titulo.trim(), campo: 'titulo', abaDestino: 'engenharia' });
@@ -202,10 +213,11 @@ function ModalPausar({ tarefa, onClose, onPausado }: any) {
     if (!motivo.trim()) { alert('Informe o motivo da pausa.'); return; }
     setSalvando(true);
     const pausas = [...(tarefa.pausas || []), { motivo: motivo.trim(), pausado_em: new Date().toISOString(), retomado_em: null }];
-    await supabase.from('engenharia_horas_tarefas').update({
+    const { data, error } = await supabase.from('engenharia_horas_tarefas').update({
       status: 'pausada', pausas, atualizado_em: new Date().toISOString(),
-    }).eq('id', tarefa.id);
+    }).eq('id', tarefa.id).select('id');
     setSalvando(false);
+    if (error || !(data || []).length) { alert('Não foi possível pausar a tarefa: ' + (error?.message || 'o banco não atualizou a tarefa') + '.'); return; }   // o motivo digitado fica na janela
     onPausado();
   };
 
@@ -272,6 +284,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
   const [modalOpl, setModalOpl] = useState(false);
   const [modalAnexos, setModalAnexos] = useState(false);
   const [modalParticipantes, setModalParticipantes] = useState(false);
+  const ocupado = useRef(false);   // 7.x: clique duplo repetia a gravação
   const temObs = !!String(tarefa.observacoes || '').trim();
   // contagem vem da lista (uma consulta para todas as tarefas, não uma por linha)
   const qtdAnexos = tarefa._anexos || 0;
@@ -298,23 +311,35 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
     .find((x: any) => new Date(x.fim).getTime() > agora);
 
   const iniciar = async () => {
+    if (ocupado.current) return;
     if (!liberadoAgora()) { onForaDoHorario(tarefa, 'iniciar'); return; }
-    await iniciarTarefa(tarefa);
+    ocupado.current = true;
+    const erro = await iniciarTarefa(tarefa);
+    ocupado.current = false;
+    if (erro) { alert('Não foi possível iniciar a tarefa: ' + erro + '.'); return; }
     onAtualizado();
   };
 
   const retomar = async () => {
+    if (ocupado.current) return;
     if (!liberadoAgora()) { onForaDoHorario(tarefa, 'retomar'); return; }
-    await retomarTarefa(tarefa);
+    ocupado.current = true;
+    const erro = await retomarTarefa(tarefa);
+    ocupado.current = false;
+    if (erro) { alert('Não foi possível retomar a tarefa: ' + erro + '.'); return; }
     onAtualizado();
   };
 
   const concluir = async () => {
+    if (ocupado.current) return;
     if (!await confirmar('Concluir esta tarefa?')) return;
+    ocupado.current = true;
     const total = segundosContados(tarefa, Date.now(), ctx.feriados, extras);
-    await supabase.from('engenharia_horas_tarefas').update({
+    const { data, error } = await supabase.from('engenharia_horas_tarefas').update({
       status: 'concluida', data_conclusao: new Date().toISOString(), tempo_total_segundos: total,
-    }).eq('id', tarefa.id);
+    }).eq('id', tarefa.id).select('id');
+    ocupado.current = false;
+    if (error || !(data || []).length) { alert('Não foi possível concluir a tarefa: ' + (error?.message || 'o banco não atualizou a tarefa') + '.'); return; }
     onAtualizado();
   };
 
@@ -517,6 +542,7 @@ function RelatorioGerencial() {
   const [agora, setAgora] = useState(() => Date.now());
   const [ctx, setCtx] = useState<ContextoHorario>(CONTEXTO_VAZIO);
   const [pedidos, setPedidos] = useState<any[]>([]);
+  const [incompleto, setIncompleto] = useState('');   // 7.x: leitura que falhou deixava o relatório sem os clientes, os pedidos ou os feriados, sem avisar
 
   const buscar = async () => {
     if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
@@ -525,16 +551,21 @@ function RelatorioGerencial() {
     if (error) { setCarregando(false); alert('Não foi possível carregar as tarefas: ' + error.message); return; }
     const ids = [...new Set(lista.map(t => t.opl_id).filter(Boolean))];
     let mapa: Record<string, string> = {};
+    const faltou: string[] = [];
     if (ids.length) {
-      const { data: ops } = await supabase.from('oples').select('id, cliente_nome').in('id', ids);
+      const { data: ops, error: erroOps } = await supabase.from('oples').select('id, cliente_nome').in('id', ids);
+      if (erroOps) faltou.push('os nomes dos clientes (' + erroOps.message + ')');
       mapa = Object.fromEntries((ops || []).map(o => [o.id, o.cliente_nome || '—']));
     }
-    const [contexto, { data: pedidosDoPeriodo }] = await Promise.all([
+    const [contexto, { data: pedidosDoPeriodo, error: erroPedidos }] = await Promise.all([
       carregarContextoHorario(),
       supabase.from('horas_extras').select('*')
         .lt('inicio', new Date(ate + 'T23:59:59').toISOString()).gt('fim', new Date(de + 'T00:00:00').toISOString())
         .order('inicio', { ascending: false }),
     ]);
+    if (erroPedidos) faltou.push('os pedidos de hora extra (' + erroPedidos.message + ')');
+    if (contexto.erro) faltou.push('os feriados e as horas extras aprovadas (' + contexto.erro + ')');
+    setIncompleto(faltou.join('; '));
     setDados(lista); setClientes(mapa); setCtx(contexto); setPedidos(pedidosDoPeriodo || []);
     setPeriodo({ de, ate }); setAgora(Date.now());
     setCarregando(false);
@@ -658,6 +689,8 @@ function RelatorioGerencial() {
           O tempo conta {HORARIO_CONTAGEM_TEXTO}, sem as pausas; fora disso, só com hora extra aprovada. Entram as tarefas criadas no período ou em execução em algum momento dele.
         </div>
       </div>
+
+      {incompleto && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">Não foi possível ler {incompleto}. O relatório está incompleto: as horas podem sair diferentes do real.</Faixa></div>}
 
       <div className="acn-kpis">
         {kpi('Horas trabalhadas', fmtHoras(totalSeg), totalExtra ? `${fmtHoras(totalExtra)} de hora extra` : 'no período, sem hora extra', 'var(--acn-brand)')}
@@ -836,6 +869,7 @@ function RelatorioHoras({ currentUser }: any) {
   const [carregando, setCarregando] = useState(false);
   const [agora, setAgora] = useState(() => Date.now());
   const [ctx, setCtx] = useState<ContextoHorario>(CONTEXTO_VAZIO);
+  const [incompleto, setIncompleto] = useState('');
 
   const buscar = async () => {
     if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
@@ -848,6 +882,7 @@ function RelatorioHoras({ currentUser }: any) {
       carregarContextoHorario(),
     ]);
     setDados(tarefas.filter(t => gestor || mesmaPessoa(t.responsavel_nome, meusNomes)));
+    setIncompleto(contexto.erro ? 'os feriados e as horas extras aprovadas (' + contexto.erro + ')' : '');   // 7.x: o relógio contaria feriado como dia útil sem avisar
     setCtx(contexto); setPeriodo({ de, ate }); setAgora(Date.now());
     setCarregando(false);
   };
@@ -899,6 +934,8 @@ function RelatorioHoras({ currentUser }: any) {
           </div>
         </div>
       </div>
+
+      {incompleto && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">Não foi possível ler {incompleto}. O relatório está incompleto: as horas podem sair diferentes do real.</Faixa></div>}
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Totais do Período</span></div>
@@ -971,6 +1008,9 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
 
   const [ctx, setCtx] = useState<ContextoHorario>(CONTEXTO_VAZIO);
   const [ctxPronto, setCtxPronto] = useState(false);
+  const [ctxErro, setCtxErro] = useState('');   // 7.x: sem os feriados e as horas extras aprovadas lidos, a pausa automática NÃO grava (parava tarefa que estava em hora extra aprovada)
+  const [erroLista, setErroLista] = useState('');
+  const [tarefasLidas, setTarefasLidas] = useState(false);   // 7.x: a leitura recusada apagava a lista e valia como "nenhuma tarefa cadastrada ainda"
   const [horaExtra, setHoraExtra] = useState<{ tarefa: any; acao: 'iniciar' | 'retomar' } | null>(null);
   const tentativasPausa = useRef<Record<string, number>>({});
   // quem não é gerente/admin vê só as tarefas em que é o responsável
@@ -981,16 +1021,19 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
   // tarefas + feriados e horas extras; a cada minuto em silêncio
   const carregar = async (silencioso = false) => {
     if (!silencioso) setLoading(true);
-    const [{ data }, contexto] = await Promise.all([
+    const [{ data, error }, contexto] = await Promise.all([
       supabase.from('engenharia_horas_tarefas').select('*').order('criado_em', { ascending: false }),
       carregarContextoHorario(),
     ]);
+    // 7.x: a atualização do minuto, em silêncio, deixava a tela vazia a cada falha de leitura; agora mantém a última lista lida e avisa
+    if (error) { setErroLista(error.message || 'falha na consulta'); setCtxErro(contexto.erro || ''); if (!silencioso) setLoading(false); return; }
+    setErroLista(''); setTarefasLidas(true);
     // quantos anexos cada tarefa tem, numa consulta só para a lista inteira —
     // uma por linha deixaria a tela lenta conforme as tarefas acumulam
     const lista = data || [];
     const contagem = await contarAnexosDasTarefas(lista.map((t: any) => t.id));
     setTarefas(lista.map((t: any) => ({ ...t, _anexos: contagem.get(t.id) || 0 })));
-    setCtx(contexto); setCtxPronto(true);
+    setCtx(contexto); setCtxErro(contexto.erro || ''); setCtxPronto(true);
     if (!silencioso) setLoading(false);
   };
 
@@ -1009,7 +1052,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
   // extra) fica registrada como pausada no instante em que o horário acabou.
   const minuto = Math.floor(tick / 60000);
   useEffect(() => {
-    if (!ctxPronto) return;
+    if (!ctxPronto || ctxErro) return;
     const agoraMs = Date.now();
     const pendentes = tarefas
       .map(t => ({ t, corte: pausaAutomaticaPendente(t, agoraMs, ctx.feriados, extrasAprovadas(ctx, t.responsavel_nome || '')) }))
@@ -1028,7 +1071,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
       }
       if (gravou) carregar(true);
     })();
-  }, [tarefas, ctx, ctxPronto, minuto]);
+  }, [tarefas, ctx, ctxPronto, ctxErro, minuto]);
 
   // Iniciar/retomar fora do horário: pede (ou registra) hora extra
   const foraDoHorario = (tarefa: any, acao: 'iniciar' | 'retomar') => {
@@ -1046,7 +1089,8 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
     const agoraMs = Date.now();
     // gerente/admin: a hora extra já vale, então a tarefa inicia ou retoma na hora
     if (alvo && registro?.status === 'aprovada' && new Date(registro.inicio).getTime() <= agoraMs && agoraMs < new Date(registro.fim).getTime()) {
-      if (alvo.acao === 'iniciar') await iniciarTarefa(alvo.tarefa); else await retomarTarefa(alvo.tarefa);
+      const erro = alvo.acao === 'iniciar' ? await iniciarTarefa(alvo.tarefa) : await retomarTarefa(alvo.tarefa);
+      if (erro) alert('A hora extra foi registrada, mas não foi possível ' + (alvo.acao === 'iniciar' ? 'iniciar' : 'retomar') + ' a tarefa: ' + erro + '.');
     }
     carregar(true);
   };
@@ -1091,6 +1135,18 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
               </Faixa>
             </div>
           )}
+          {erroLista && (
+            <div style={{ marginBottom: 10 }}>
+              <Faixa tom="erro" acao={<button className="acn-b acn-b-secundario acn-b-p" onClick={() => carregar()}>Tentar de novo</button>}>
+                Não foi possível ler as tarefas ({erroLista}). {tarefasLidas ? 'A lista abaixo é a última que foi lida.' : 'Isso não quer dizer que não haja tarefas.'}
+              </Faixa>
+            </div>
+          )}
+          {ctxErro && (
+            <div style={{ marginBottom: 10 }}>
+              <Faixa tom="atencao">Não foi possível ler {ctxErro}. Enquanto isso o tempo pode aparecer diferente do real e a pausa automática fica suspensa.</Faixa>
+            </div>
+          )}
           <div className="sec-card">
             <div className="sec-hdr">
               <span>⏱️ {gestor ? 'Controle de Horas/Tarefas' : 'Minhas tarefas'} ({filtradas.length})</span>
@@ -1118,7 +1174,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
             </div>
             <div className="sec-body" style={{ overflowX: 'auto', paddingTop: 0 }}>
               {loading || (!gestor && !meusNomes) ? <div className="acn-empty">Carregando...</div> : filtradas.length === 0 ? (
-                <div className="acn-empty">Nenhuma tarefa {filtro !== 'todas' ? 'nesse filtro' : 'cadastrada ainda'}.</div>
+                !tarefasLidas ? null : <div className="acn-empty">Nenhuma tarefa {filtro !== 'todas' ? 'nesse filtro' : 'cadastrada ainda'}.</div>
               ) : (
                 <table>
                   <thead><tr><th>Tarefa</th><th>Responsável</th><th>Status</th><th>Tempo</th><th>Início</th><th>Ações</th></tr></thead>
