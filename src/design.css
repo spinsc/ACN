@@ -6085,3 +6085,327 @@ html body .acn-selmulti-op:hover, html body .acn-selmulti-op:focus-visible { bac
 html body .acn-selmulti-op.on { font-weight: 700; }
 .acn-selmulti-marca { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--acn-line); border-radius: 4px; color: var(--acn-brand-ink); background: var(--acn-surface); }
 .acn-selmulti-op.on .acn-selmulti-marca { border-color: var(--acn-brand); background: var(--acn-brand-soft); }
+/* @@nfc-ini */
+/* ══ Dossiê NFC (VeiculosNfcTab.tsx, 12e70 — 23/10/2026) ══════════════════════════════════════════════════════════════════════════════════════════
+   Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar: o tamanho mínimo de letra, os tons
+   e as cores que os ajustes de tela aplicavam por cima). A classe de cada peça sai do próprio estilo que ela tinha (acn-nfc-c = caixa, s = etiqueta, b = botão, td/cel = célula,
+   inp = campo…); as variações por estado (garantia ativa ou expirada, linha par ou ímpar, status) são classes à parte. O escuro e o celular guardam só o que muda em relação ao claro. */
+html body .acn-nfc-bt:not(#acn) { height: auto; box-shadow: none; }
+html body .acn-nfc-s36:not(#acn) { color: #9ca3af; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-s38:not(#acn) { border-radius: 10px; padding: 2px 8px; font-size: 12px; font-weight: 700; display: inline-block; overflow-x: hidden; overflow-y: hidden; max-width: 100%; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-c114:not(#acn) { position: relative; margin-bottom: 10px; }
+html body .acn-nfc-lb115:not(#acn) { font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 3px; line-height: 1.45; }
+html body .acn-nfc-c118:not(#acn) { position: relative; }
+html body .acn-nfc-inp124:not(#acn) { width: 100%; border: 1px solid #d1d5db; border-radius: 5px; padding: 6px 28px 6px 8px; font-size: 12px; box-sizing: border-box; outline: none; }
+html body .acn-nfc-b128:not(#acn) { border-radius: 0px; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 14px; line-height: 1; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; padding-top: 1px; padding-right: 6px; padding-bottom: 1px; padding-left: 6px; font-weight: 400; white-space: normal; transition-property: all; transition-duration: 0s; transition-timing-function: ease; transition-delay: 0s; text-wrap-mode: wrap; }
+html body .acn-nfc-c137:not(#acn) { font-size: 11px; color: #16a34a; font-weight: 700; margin-top: 3px; line-height: 1.45; }
+html body .acn-nfc-c144:not(#acn) { position: absolute; top: 100%; left: 0; right: 0; z-index: 999; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 16px #0002; max-height: 240px; overflow-y: auto; }
+html body .acn-nfc-c148:not(#acn) { padding: 10px 12px; font-size: 12px; color: #9ca3af; line-height: 1.45; }
+html body .acn-nfc-c150:not(#acn) { padding: 10px 12px; font-size: 10px; color: #dc2626; }
+html body .acn-nfc-c156:not(#acn) { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+html body .acn-nfc-c159:not(#acn) { font-weight: 700; font-size: 12px; color: #1e293b; line-height: 1.45; }
+html body .acn-nfc-c160:not(#acn) { font-size: 12px; color: #64748b; line-height: 1.45; }
+html body .acn-nfc-c162:not(#acn) { font-size: 11px; color: #94a3b8; margin-top: 1px; line-height: 1.45; }
+html body .acn-nfc-s167:not(#acn) { border-radius: 8px; padding: 2px 7px; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-left: 8px; overflow-x: hidden; overflow-y: hidden; max-width: 100%; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-c223:not(#acn) { position: fixed; inset: 0; background: #0009; z-index: 3000; display: flex; align-items: center; justify-content: center; }
+html body .acn-nfc-c226:not(#acn) { background: #fff; border-radius: 10px; width: 500px; max-width: 97vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 8px 32px #0004; }
+html body .acn-nfc-c230:not(#acn) { background: linear-gradient(135deg,#14532d 0%,#16a34a 100%); padding: 14px 16px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
+html body .acn-nfc-c234:not(#acn) { color: #86efac; font-size: 12px; font-weight: 700; line-height: 1.45; }
+html body .acn-nfc-c235:not(#acn) { color: #fff; font-weight: 800; font-size: 14px; }
+html body .acn-nfc-c236:not(#acn) { color: #bbf7d0; font-size: 12px; margin-top: 2px; line-height: 1.45; }
+html body .acn-nfc-b239:not(#acn) { border-radius: 0px; background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; padding-top: 1px; padding-right: 6px; padding-bottom: 1px; padding-left: 6px; font-weight: 400; line-height: normal; white-space: normal; transition-property: all; transition-duration: 0s; transition-timing-function: ease; transition-delay: 0s; text-wrap-mode: wrap; }
+html body .acn-nfc-c242:not(#acn) { padding: 16px; }
+html body .acn-nfc-c245:not(#acn) { background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 12px; align-items: center; }
+html body .acn-nfc-img250:not(#acn) { border-radius: 6px; border: 3px solid #16a34a; flex-shrink: 0; }
+html body .acn-nfc-c251:not(#acn) { flex: 1; min-width: 0; }
+html body .acn-nfc-c252:not(#acn) { font-size: 11px; font-weight: 700; color: #16a34a; margin-bottom: 4px; line-height: 1.45; }
+html body .acn-nfc-c255:not(#acn) { font-size: 12px; color: #1e293b; word-break: break-all; background: #fff; border: 1px solid #bbf7d0; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; font-family: 'ACN Icones', 'IBM Plex Mono', monospace; line-height: 1.45; }
+html body .acn-nfc-b261:not(#acn) { color: #fff; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .2s; display: inline-block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; line-height: normal; }
+html body .acn-nfc-c270:not(#acn) { background: #1e293b; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+html body .acn-nfc-c271:not(#acn) { color: #94a3b8; font-size: 12px; font-weight: 700; margin-bottom: 6px; line-height: 1.45; }
+html body .acn-nfc-b275:not(#acn) { width: 100%; color: #fff; border: none; border-radius: 6px; padding: 12px; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; line-height: normal; white-space: normal; text-wrap-mode: wrap; }
+html body .acn-nfc-s280:not(#acn) { font-size: 18px; line-height: normal; white-space: normal; text-wrap-mode: wrap; }
+html body .acn-nfc-c283:not(#acn) { font-size: 11px; color: #64748b; margin-top: 6px; text-align: center; line-height: 1.45; }
+html body .acn-nfc-c288:not(#acn) { background: #dcfce7; border: 1px solid #86efac; border-radius: 6px; padding: 8px 12px; margin-top: 8px; color: #16a34a; font-weight: 700; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-c294:not(#acn) { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 8px 12px; margin-top: 8px; color: #dc2626; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-c300:not(#acn) { background: #fef9c3; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; margin-top: 8px; color: #92400e; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-c308:not(#acn) { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+html body .acn-nfc-c309:not(#acn) { background: #f8fafc; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 700; font-size: 13px; color: #1e293b; line-height: 1.45; }
+html body .acn-nfc-s312:not(#acn) { margin-left: 8px; font-size: 12px; color: #64748b; font-weight: 400; line-height: 1.45; }
+html body .acn-nfc-c316:not(#acn) { padding: 12px 14px; }
+html body .acn-nfc-c318:not(#acn) { display: flex; gap: 10px; align-items: flex-start; }
+html body .acn-nfc-c320:not(#acn) { width: 20px; height: 20px; background: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 800; flex-shrink: 0; margin-top: 1px; line-height: 1.45; }
+html body .acn-nfc-c325:not(#acn) { font-size: 12px; color: #374151; line-height: 1.4; }
+html body .acn-nfc-s328:not(#acn) { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; font-size: 11px; color: #0369a1; word-break: break-all; background: #eff6ff; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 2px; line-height: 1.4; }
+html body .acn-nfc-c337:not(#acn) { margin-top: 12px; background: #fef9c3; border: 1px solid #fde68a; border-radius: 5px; padding: 6px 10px; font-size: 12px; color: #78350f; line-height: 1.45; }
+html body .acn-nfc-c346:not(#acn) { padding: 0 16px 16px; text-align: right; }
+html body .acn-nfc-b348:not(#acn) { border-width: 1px !important; border-style: solid !important; border-color: rgb(222, 228, 234) !important; background: #f1f5f9; border: none; border-radius: 5px; padding: 8px 20px; font-size: 12px; font-weight: 600; color: rgb(23, 33, 43); cursor: pointer; display: inline-block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); line-height: normal; }
+html body .acn-nfc-inp481:not(#acn) { width: 100%; border: 1px solid #d1d5db; border-radius: 5px; padding: 6px 8px; font-size: 12px; box-sizing: border-box; outline: none; }
+html body .acn-nfc-c488:not(#acn) { position: fixed; inset: 0; background: #0008; z-index: 2000; display: flex; align-items: center; justify-content: center; }
+html body .acn-nfc-c491:not(#acn) { background: #fff; border-radius: 10px; width: 500px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px #0003; }
+html body .acn-nfc-c493:not(#acn) { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #16a34a; border-radius: 10px 10px 0 0; }
+html body .acn-nfc-c496:not(#acn) { color: #fff; font-weight: 800; font-size: 13px; }
+html body .acn-nfc-b500:not(#acn) { border-radius: 0px; background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; padding-top: 1px; padding-right: 6px; padding-bottom: 1px; padding-left: 6px; font-weight: 400; line-height: normal; white-space: normal; transition-property: all; transition-duration: 0s; transition-timing-function: ease; transition-delay: 0s; text-wrap-mode: wrap; }
+html body .acn-nfc-c503:not(#acn) { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+html body .acn-nfc-c529:not(#acn) { margin-bottom: 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 7px; padding: 10px; }
+html body .acn-nfc-c530:not(#acn) { font-size: 12px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; line-height: 1.45; }
+html body .acn-nfc-c534:not(#acn) { position: relative; margin-bottom: 8px; }
+html body .acn-nfc-inp539:not(#acn) { width: 100%; border: 1px solid #86efac; border-radius: 5px; padding: 5px 8px; font-size: 12px; box-sizing: border-box; outline: none; }
+html body .acn-nfc-c543:not(#acn) { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #d1d5db; border-radius: 5px; z-index: 10; box-shadow: 0 4px 12px #0002; max-height: 160px; overflow-y: auto; }
+html body .acn-nfc-c547:not(#acn) { padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; line-height: 1.45; }
+html body .acn-nfc-s550:not(#acn) { color: #16a34a; font-weight: 700; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-c557:not(#acn) { font-size: 12px; color: #dc2626; margin-bottom: 6px; line-height: 1.45; }
+html body .acn-nfc-c563:not(#acn) { font-size: 12px; color: #86efac; text-align: center; padding: 6px 0; line-height: 1.45; }
+html body .acn-nfc-tb567:not(#acn) { width: 100%; border-collapse: collapse; font-size: 9px; }
+html body .acn-nfc-tr569:not(#acn) { background: #dcfce7; }
+html body .acn-nfc-cel570:not(#acn) { padding: 4px 6px; text-align: left; font-weight: 700; color: #166534; }
+html body .acn-nfc-cel571:not(#acn) { padding: 4px 6px; text-align: center; font-weight: 700; color: #166534; width: 90px; }
+html body .acn-nfc-cel573:not(#acn) { width: 24px; }
+html body .acn-nfc-tr578:not(#acn) { border-bottom: 1px solid #d1fae5; }
+html body .acn-nfc-td579:not(#acn) { padding: 4px 6px; color: #166534; }
+html body .acn-nfc-td580:not(#acn) { padding: 4px 6px; text-align: center; }
+html body .acn-nfc-sel583:not(#acn) { border: 1px solid #86efac; border-radius: 4px; padding: 2px 4px; font-size: 12px; color: #166534; background: #fff; }
+html body .acn-nfc-td590:not(#acn) { padding: 4px 6px; text-align: center; font-weight: 700; }
+html body .acn-nfc-td593:not(#acn) { padding: 2px; }
+html body .acn-nfc-b595:not(#acn) { border-radius: 0px; background: none; border: none; color: rgb(185, 48, 42); cursor: pointer; font-size: 12px; line-height: 1; display: inline-block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; padding-top: 1px; padding-right: 6px; padding-bottom: 1px; padding-left: 6px; font-weight: 400; white-space: normal; transition-property: all; transition-duration: 0s; transition-timing-function: ease; transition-delay: 0s; text-wrap-mode: wrap; }
+html body .acn-nfc-c603:not(#acn) { font-size: 9px; color: #d97706; margin-top: 6px; }
+html body .acn-nfc-inp617:not(#acn) { width: 120px; border: 1px solid #d1d5db; border-radius: 5px; padding: 6px 8px; font-size: 13px; font-weight: 700; letter-spacing: 4px; text-align: center; }
+html body .acn-nfc-s619:not(#acn) { margin-left: 8px; font-size: 12px; color: #9ca3af; line-height: 1.45; }
+html body .acn-nfc-c624:not(#acn) { padding: 0 16px 16px; display: flex; gap: 8px; justify-content: flex-end; }
+html body .acn-nfc-b626:not(#acn) { border-width: 1px !important; border-style: solid !important; border-color: rgb(222, 228, 234) !important; background: #f1f5f9; border: none; border-radius: 5px; padding: 7px 16px; font-size: 12px; color: rgb(23, 33, 43); cursor: pointer; font-weight: 600; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); line-height: normal; }
+html body .acn-nfc-b631:not(#acn) { background: #16a34a; color: #fff; border: none; border-radius: 5px; padding: 7px 18px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(14, 112, 104); line-height: normal; }
+html body .acn-nfc-c738:not(#acn) { position: fixed; inset: 0; background: #0008; z-index: 1900; display: flex; align-items: center; justify-content: center; }
+html body .acn-nfc-c741:not(#acn) { background: #fff; border-radius: 10px; width: 640px; max-width: 97vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 8px 32px #0003; }
+html body .acn-nfc-c745:not(#acn) { background: #14532d; padding: 14px 16px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: flex-start; }
+html body .acn-nfc-c748:not(#acn) { color: #86efac; font-size: 12px; font-weight: 700; margin-bottom: 2px; line-height: 1.45; }
+html body .acn-nfc-c758:not(#acn) { display: flex; gap: 6px; align-items: center; }
+html body .acn-nfc-b760:not(#acn) { background: #16a34a; color: #fff; border: none; border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(14, 112, 104); line-height: normal; }
+html body .acn-nfc-b766:not(#acn) { background: #dc2626; color: #fff; border: none; border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(185, 48, 42); line-height: normal; }
+html body .acn-nfc-c779:not(#acn) { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+html body .acn-nfc-c788:not(#acn) { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
+html body .acn-nfc-c790:not(#acn) { font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 3px; line-height: 1.45; }
+html body .acn-nfc-c791:not(#acn) { font-size: 13px; font-weight: 700; color: #1e293b; line-height: 1.45; }
+html body .acn-nfc-c801:not(#acn) { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+html body .acn-nfc-cel808:not(#acn) { padding: 3px 6px; text-align: left; color: #166534; font-weight: 700; }
+html body .acn-nfc-cel809:not(#acn) { padding: 3px 6px; text-align: center; color: #166534; font-weight: 700; width: 70px; }
+html body .acn-nfc-cel810:not(#acn) { padding: 3px 6px; text-align: center; color: #166534; font-weight: 700; width: 90px; }
+html body .acn-nfc-td821:not(#acn) { padding: 4px 6px; color: #1e293b; }
+html body .acn-nfc-td822:not(#acn) { padding: 4px 6px; text-align: center; color: #64748b; }
+html body .acn-nfc-s828:not(#acn) { background: #dcfce7; color: rgb(27, 127, 67); font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 10px; display: inline-block; overflow-x: hidden; overflow-y: hidden; max-width: 100%; background-color: rgb(230, 244, 234); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-s829:not(#acn) { background: #fee2e2; color: rgb(185, 48, 42); font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 10px; display: inline-block; overflow-x: hidden; overflow-y: hidden; max-width: 100%; background-color: rgb(251, 233, 231); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-s830:not(#acn) { color: #9ca3af; font-size: 11px; line-height: 1.45; }
+html body .acn-nfc-c842:not(#acn) { margin-bottom: 14px; }
+html body .acn-nfc-c852:not(#acn) { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 14px; align-items: center; }
+html body .acn-nfc-c858:not(#acn) { flex: 1; }
+html body .acn-nfc-c859:not(#acn) { font-size: 12px; font-weight: 700; color: #16a34a; margin-bottom: 4px; line-height: 1.45; }
+html body .acn-nfc-c862:not(#acn) { font-size: 12px; color: #374151; word-break: break-all; background: #fff; border-radius: 4px; padding: 4px 8px; border: 1px solid #bbf7d0; margin-bottom: 8px; line-height: 1.45; }
+html body .acn-nfc-c867:not(#acn) { display: flex; gap: 6px; }
+html body .acn-nfc-b869:not(#acn) { border-width: 1px !important; border-style: solid !important; border-color: rgb(222, 228, 234) !important; background: #16a34a; border: none; color: rgb(23, 33, 43); border-radius: 4px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); line-height: normal; }
+html body .acn-nfc-a874:not(#acn) { background: #0369a1; color: #fff; border: none; border-radius: 4px; padding: 5px 10px; font-size: 12px; font-weight: 700; text-decoration: none; overflow-x: hidden; overflow-y: hidden; max-width: 100%; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-b879:not(#acn) { background: #7c3aed; color: #fff; border: none; border-radius: 4px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(14, 112, 104); line-height: normal; }
+html body .acn-nfc-a885:not(#acn) { background: #dc2626; color: #fff; border: none; border-radius: 4px; padding: 5px 10px; font-size: 12px; font-weight: 700; text-decoration: none; overflow-x: hidden; overflow-y: hidden; max-width: 100%; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-c896:not(#acn) { background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+html body .acn-nfc-c898:not(#acn) { font-size: 12px; font-weight: 700; color: #7c3aed; margin-bottom: 6px; line-height: 1.45; }
+html body .acn-nfc-c903:not(#acn) { font-size: 12px; color: #374151; word-break: break-all; background: #fff; border-radius: 4px; padding: 4px 8px; border: 1px solid #c4b5fd; margin-bottom: 8px; line-height: 1.45; }
+html body .acn-nfc-c908:not(#acn) { display: flex; gap: 6px; flex-wrap: wrap; }
+html body .acn-nfc-b910:not(#acn) { color: #fff; border: none; border-radius: 4px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .2s; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; line-height: normal; }
+html body .acn-nfc-b921:not(#acn) { border-color: rgb(222, 228, 234) !important; background: #f1f5f9; border: 1px solid #d1d5db; color: rgb(23, 33, 43); border-radius: 4px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); line-height: normal; }
+html body .acn-nfc-c927:not(#acn) { font-size: 11px; color: #7c3aed; margin-top: 6px; line-height: 1.45; }
+html body .acn-nfc-c932:not(#acn) { font-size: 12px; color: #92400e; line-height: 1.45; }
+html body .acn-nfc-c940:not(#acn) { font-size: 12px; color: #64748b; line-height: 1.45; }
+html body .acn-nfc-c948:not(#acn) { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+html body .acn-nfc-c949:not(#acn) { font-weight: 700; font-size: 13px; color: #1e293b; line-height: 1.45; }
+html body .acn-nfc-s951:not(#acn) { background: #e2e8f0; margin-left: 6px; border-radius: 10px; padding: 1px 7px; font-size: 12px; color: rgb(86, 99, 111); display: inline-block; overflow-x: hidden; overflow-y: hidden; max-width: 100%; background-color: rgb(238, 241, 244); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-b957:not(#acn) { color: #fff; border: none; border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; line-height: normal; }
+html body .acn-nfc-c965:not(#acn) { background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+html body .acn-nfc-c967:not(#acn) { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; margin-bottom: 6px; }
+html body .acn-nfc-inp970:not(#acn) { border: 1px solid #d1d5db; border-radius: 4px; padding: 5px 8px; font-size: 12px; }
+html body .acn-nfc-ta978:not(#acn) { width: 100%; border: 1px solid #d1d5db; border-radius: 4px; padding: 5px 8px; font-size: 12px; box-sizing: border-box; resize: vertical; margin-bottom: 6px; font-family: inherit; }
+html body .acn-nfc-b982:not(#acn) { background: #16a34a; color: #fff; border: none; border-radius: 4px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(14, 112, 104); line-height: normal; }
+html body .acn-nfc-c990:not(#acn) { margin-bottom: 8px; }
+html body .acn-nfc-c998:not(#acn) { text-align: center; padding: 16px; color: #9ca3af; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-c1003:not(#acn) { display: flex; flex-direction: column; gap: 4px; }
+html body .acn-nfc-c1006:not(#acn) { display: flex; justify-content: space-between; align-items: flex-start; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; }
+html body .acn-nfc-c1008:not(#acn) { flex: 1; }
+html body .acn-nfc-s1012:not(#acn) { background: #dbeafe; margin-left: 6px; color: rgb(36, 95, 184); border-radius: 8px; padding: 1px 7px; font-size: 11px; font-weight: 600; display: inline-block; overflow-x: hidden; overflow-y: hidden; max-width: 100%; background-color: rgb(231, 239, 250); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-c1019:not(#acn) { font-size: 12px; color: #64748b; margin-top: 2px; line-height: 1.45; }
+html body .acn-nfc-b1025:not(#acn) { border-width: 1px !important; border-style: solid !important; border-color: rgb(227, 181, 177) !important; background: #fee2e2; border: none; color: rgb(185, 48, 42); border-radius: 4px; padding: 3px 7px; font-size: 12px; cursor: pointer; margin-left: 8px; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); font-weight: 400; line-height: normal; }
+html body .acn-nfc-c1045:not(#acn) { font-weight: 700; font-size: 13px; color: #1e293b; margin-bottom: 8px; line-height: 1.45; }
+html body .acn-nfc-c1050:not(#acn) { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; margin-bottom: 4px; }
+html body .acn-nfc-c1052:not(#acn) { display: flex; justify-content: space-between; align-items: center; }
+html body .acn-nfc-c1053:not(#acn) { font-size: 12px; font-weight: 700; color: #1e293b; line-height: 1.45; }
+html body .acn-nfc-s1055:not(#acn) { font-weight: 400; color: #64748b; margin-left: 6px; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-s1059:not(#acn) { border-radius: 8px; padding: 2px 8px; font-size: 11px; font-weight: 700; overflow-x: hidden; overflow-y: hidden; max-width: 100%; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-wrap-mode: nowrap; }
+html body .acn-nfc-c1064:not(#acn) { font-size: 12px; color: #475569; margin-top: 3px; line-height: 1.45; }
+html body .acn-nfc-c1068:not(#acn) { font-size: 11px; color: #9ca3af; margin-top: 2px; line-height: 1.45; }
+html body .acn-nfc-c1184:not(#acn) { padding: 0 0 24px; font-family: 'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif; }
+html body .acn-nfc-c1192:not(#acn) { margin-bottom: 12px; }
+html body .acn-nfc-c1200:not(#acn) { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+html body .acn-nfc-inp1204:not(#acn) { flex: 1 1 260px; border: 1px solid #d1d5db; border-radius: 5px; padding: 6px 10px; font-size: 12px; outline: none; }
+html body .acn-nfc-sel1207:not(#acn) { border: 1px solid #d1d5db; border-radius: 5px; padding: 6px 10px; font-size: 12px; }
+html body .acn-nfc-b1213:not(#acn) { border-color: rgb(222, 228, 234) !important; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 12px; font-size: 12px; color: rgb(23, 33, 43); cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); font-weight: 400; line-height: normal; }
+html body .acn-nfc-c1221:not(#acn) { text-align: center; padding: 40px; color: #9ca3af; }
+html body .acn-nfc-c1224:not(#acn) { text-align: center; padding: 40px; color: #9ca3af; font-size: 13px; line-height: 1.45; }
+html body .acn-nfc-c1227:not(#acn) { margin-top: 12px; font-size: 13px; line-height: 1.45; }
+html body .acn-nfc-b1229:not(#acn) { background: #16a34a; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(14, 112, 104); line-height: normal; }
+html body .acn-nfc-c1238:not(#acn) { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+html body .acn-nfc-c1239:not(#acn) { overflow-x: auto; }
+html body .acn-nfc-tb1240:not(#acn) { width: 100%; border-collapse: collapse; font-size: 10px; }
+html body .acn-nfc-tr1242:not(#acn) { background: #14532d; color: #bbf7d0; }
+html body .acn-nfc-cel1244:not(#acn) { padding: 8px 10px; text-align: left; font-weight: 600; white-space: nowrap; }
+html body .acn-nfc-tr1252:not(#acn) { cursor: pointer; }
+html body .acn-nfc-td1254:not(#acn) { padding: 7px 10px; }
+html body .acn-nfc-c1255:not(#acn) { font-weight: 700; color: #1e293b; font-size: 12px; line-height: 1.45; }
+html body .acn-nfc-c1256:not(#acn) { font-size: 11px; color: #64748b; line-height: 1.45; }
+html body .acn-nfc-td1258:not(#acn) { padding: 7px 10px; color: #374151; max-width: 180px; word-break: break-word; }
+html body .acn-nfc-td1261:not(#acn) { padding: 7px 10px; color: #374151; }
+html body .acn-nfc-td1262:not(#acn) { padding: 7px 10px; color: #0369a1; font-weight: 600; }
+html body .acn-nfc-td1265:not(#acn) { padding: 7px 10px; color: #475569; white-space: nowrap; }
+html body .acn-nfc-c1272:not(#acn) { display: flex; gap: 4px; }
+html body .acn-nfc-b1274:not(#acn) { border-width: 1px !important; border-style: solid !important; border-color: rgb(222, 228, 234) !important; background: #0369a1; border: none; color: rgb(23, 33, 43); border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(255, 255, 255); line-height: normal; }
+html body .acn-nfc-b1280:not(#acn) { background: #f59e0b; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(14, 112, 104); line-height: normal; }
+html body .acn-nfc-b1287:not(#acn) { background: #dc2626; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; background-color: rgb(185, 48, 42); line-height: normal; }
+html body .acn-nfc-sts-ok:not(#acn) { background: #dcfce7; color: rgb(27, 127, 67); background-color: rgb(230, 244, 234); }
+html body .acn-nfc-sts-atencao:not(#acn) { background: #fef9c3; color: rgb(154, 87, 8); background-color: rgb(252, 241, 223); }
+html body .acn-nfc-sts-info:not(#acn) { background: #dbeafe; color: rgb(36, 95, 184); background-color: rgb(231, 239, 250); }
+html body .acn-nfc-sts-padrao:not(#acn) { background: #f1f5f9; color: rgb(36, 95, 184); background-color: rgb(231, 239, 250); }
+html body .acn-nfc-cst-ok:not(#acn) { background: #dcfce7; color: rgb(27, 127, 67); background-color: rgb(230, 244, 234); }
+html body .acn-nfc-cst-atend:not(#acn) { background: #fef9c3; color: rgb(154, 87, 8); background-color: rgb(252, 241, 223); }
+html body .acn-nfc-cst-aberto:not(#acn) { background: #fee2e2; color: rgb(185, 48, 42); background-color: rgb(251, 233, 231); }
+html body .acn-nfc-s38-2:not(#acn) { border-color: color(srgb 0.105882 0.498039 0.262745 / 0.22) !important; background: #dcfce7; border: 1px solid #86efac; color: rgb(27, 127, 67); background-color: rgb(230, 244, 234); }
+html body .acn-nfc-s38-3:not(#acn) { border-color: color(srgb 0.72549 0.188235 0.164706 / 0.22) !important; background: #fee2e2; border: 1px solid #fca5a5; color: rgb(185, 48, 42); background-color: rgb(251, 233, 231); }
+html body .acn-nfc-b261-2:not(#acn) { background: #16a34a; background-color: rgb(14, 112, 104); }
+html body .acn-nfc-b261-3:not(#acn) { background: #0369a1; background-color: rgb(14, 112, 104); }
+html body .acn-nfc-b275-2:not(#acn) { background: #475569; cursor: not-allowed; }
+html body .acn-nfc-b275-3:not(#acn) { background: #16a34a; cursor: pointer; background-color: rgb(14, 112, 104); }
+html body .acn-nfc-c318-2:not(#acn) { margin-bottom: 10px; }
+html body .acn-nfc-c318-3:not(#acn) { margin-bottom: 0; }
+html body .acn-nfc-td590-2:not(#acn) { color: #166534; }
+html body .acn-nfc-td590-3:not(#acn) { color: #9ca3af; }
+html body .acn-nfc-b631-2:not(#acn) { opacity: 0.5; }
+html body .acn-nfc-b631-3:not(#acn) { opacity: 1; }
+html body .acn-nfc-c791-2:not(#acn) { font-family: monospace; letter-spacing: 2px; }
+html body .acn-nfc-c791-3:not(#acn) { font-family: inherit; letter-spacing: 0; }
+html body .acn-nfc-td823:not(#acn) { color: #dc2626; }
+html body .acn-nfc-b910-2:not(#acn) { background: #7c3aed; background-color: rgb(14, 112, 104); }
+html body .acn-nfc-b910-3:not(#acn) { background: #6d28d9; background-color: rgb(14, 112, 104); }
+html body .acn-nfc-b957-2:not(#acn) { background: #dc2626; background-color: rgb(185, 48, 42); }
+html body .acn-nfc-tr1252-2:not(#acn) { background: #fff; }
+html body .acn-nfc-tr1252-3:not(#acn) { background: #f8fafc; }
+html body.dark .acn-nfc-s36:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-lb115:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-b128:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c137:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c144:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-c148:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c159:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c160:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c226:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-c245:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-img250:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c251:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c252:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c255:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c283:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c288:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c294:not(#acn):not(#acn) { background-color: rgb(45, 10, 10); color: rgb(252, 165, 165); }
+html body.dark .acn-nfc-c300:not(#acn):not(#acn) { color: rgb(253, 186, 116); }
+html body.dark .acn-nfc-c308:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); }
+html body.dark .acn-nfc-c309:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-s312:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c325:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-s328:not(#acn):not(#acn) { background-color: rgb(30, 58, 95); color: rgb(147, 197, 253); }
+html body.dark .acn-nfc-c337:not(#acn):not(#acn) { color: rgb(253, 186, 116); }
+html body.dark .acn-nfc-b348:not(#acn):not(#acn) { border-color: rgb(51, 65, 85) !important; background-color: rgb(22, 32, 50); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c491:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-c529:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c530:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c534:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c543:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); text-decoration-color: rgb(203, 213, 225); outline-color: rgb(203, 213, 225); caret-color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c547:not(#acn):not(#acn) { color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-s550:not(#acn):not(#acn) { color: rgb(134, 239, 172); caret-color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c557:not(#acn):not(#acn) { color: rgb(252, 165, 165); }
+html body.dark .acn-nfc-tb567:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-tr569:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-tr578:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-sel583:not(#acn):not(#acn) { background-color: rgb(30, 41, 59) !important; }
+html body.dark .acn-nfc-b595:not(#acn):not(#acn) { color: rgb(252, 165, 165); }
+html body.dark .acn-nfc-s619:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-b626:not(#acn):not(#acn) { border-color: rgb(51, 65, 85) !important; background-color: rgb(22, 32, 50); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c741:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-c788:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-c791:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c801:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-s828:not(#acn):not(#acn) { background-color: color(srgb 0.247059 0.709804 0.415686 / 0.24); }
+html body.dark .acn-nfc-s829:not(#acn):not(#acn) { background-color: color(srgb 0.941176 0.415686 0.372549 / 0.24); }
+html body.dark .acn-nfc-c852:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c858:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c859:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c862:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c867:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-b869:not(#acn):not(#acn) { border-color: rgb(51, 65, 85) !important; background-color: rgb(30, 41, 59); color: rgb(226, 232, 240); }
+html body.dark .acn-nfc-c898:not(#acn):not(#acn) { color: rgb(196, 181, 253); }
+html body.dark .acn-nfc-c903:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-b921:not(#acn):not(#acn) { border-color: rgb(51, 65, 85) !important; background-color: rgb(22, 32, 50); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c927:not(#acn):not(#acn) { color: rgb(196, 181, 253); }
+html body.dark .acn-nfc-c932:not(#acn):not(#acn) { color: rgb(253, 186, 116); }
+html body.dark .acn-nfc-c940:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c949:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-s951:not(#acn):not(#acn) { background-color: color(srgb 0.580392 0.639216 0.721569 / 0.24); color: color(srgb 0.811176 0.837647 0.874706); }
+html body.dark .acn-nfc-c965:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c967:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-nfc-c998:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1006:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-s1012:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); color: color(srgb 0.738824 0.823529 0.955882); }
+html body.dark .acn-nfc-c1019:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-b1025:not(#acn):not(#acn) { border-color: rgb(107, 42, 38) !important; background-color: rgb(45, 10, 10); color: rgb(252, 165, 165); }
+html body.dark .acn-nfc-c1045:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1050:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-c1053:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-s1055:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1064:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1068:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1200:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-b1213:not(#acn):not(#acn) { border-color: rgb(51, 65, 85) !important; background-color: rgb(22, 32, 50); color: rgb(203, 213, 225); }
+html body.dark .acn-nfc-c1224:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1227:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-nfc-c1238:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-b1274:not(#acn):not(#acn) { border-color: rgb(51, 65, 85) !important; background-color: rgb(30, 41, 59); color: rgb(226, 232, 240); }
+html body.dark .acn-nfc-sts-ok:not(#acn):not(#acn) { background-color: color(srgb 0.247059 0.709804 0.415686 / 0.24); color: color(srgb 0.661177 0.869412 0.737059); }
+html body.dark .acn-nfc-sts-atencao:not(#acn):not(#acn) { background-color: color(srgb 0.878431 0.631373 0.227451 / 0.24); color: color(srgb 0.945294 0.834118 0.652353); }
+html body.dark .acn-nfc-sts-info:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); color: color(srgb 0.738824 0.823529 0.955882); }
+html body.dark .acn-nfc-sts-padrao:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); color: color(srgb 0.738824 0.823529 0.955882); }
+html body.dark .acn-nfc-cst-ok:not(#acn):not(#acn) { background-color: color(srgb 0.247059 0.709804 0.415686 / 0.24); color: color(srgb 0.661177 0.869412 0.737059); }
+html body.dark .acn-nfc-cst-atend:not(#acn):not(#acn) { background-color: color(srgb 0.878431 0.631373 0.227451 / 0.24); color: color(srgb 0.945294 0.834118 0.652353); }
+html body.dark .acn-nfc-cst-aberto:not(#acn):not(#acn) { background-color: color(srgb 0.941176 0.415686 0.372549 / 0.24); color: color(srgb 0.973529 0.737059 0.717647); }
+html body.dark .acn-nfc-s38-2:not(#acn):not(#acn) { border-color: color(srgb 0.247059 0.709804 0.415686 / 0.22) !important; background-color: color(srgb 0.247059 0.709804 0.415686 / 0.24); color: color(srgb 0.661177 0.869412 0.737059); text-decoration-color: color(srgb 0.661177 0.869412 0.737059); outline-color: color(srgb 0.661177 0.869412 0.737059); caret-color: color(srgb 0.661177 0.869412 0.737059); }
+html body.dark .acn-nfc-s38-3:not(#acn):not(#acn) { border-color: color(srgb 0.941176 0.415686 0.372549 / 0.22) !important; background-color: color(srgb 0.941176 0.415686 0.372549 / 0.24); color: color(srgb 0.973529 0.737059 0.717647); text-decoration-color: color(srgb 0.973529 0.737059 0.717647); outline-color: color(srgb 0.973529 0.737059 0.717647); caret-color: color(srgb 0.973529 0.737059 0.717647); }
+html body.dark .acn-nfc-tr1252-2:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-nfc-tr1252-3:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  html body .acn-nfc-c137:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-c162:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-s167:not(#acn) { font-size: 12px; line-height: 1.35; }
+  html body .acn-nfc-c252:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-c283:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-s328:not(#acn) { font-size: 12px; line-height: 1.4; }
+  html body .acn-nfc-sel583:not(#acn) { font-size: 12px !important; }
+  html body .acn-nfc-c790:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-s828:not(#acn) { font-size: 12px; line-height: 1.35; }
+  html body .acn-nfc-s829:not(#acn) { font-size: 12px; line-height: 1.35; }
+  html body .acn-nfc-s830:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-c927:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-ta978:not(#acn) { font-size: 12px !important; }
+  html body .acn-nfc-s1012:not(#acn) { font-size: 12px; line-height: 1.35; }
+  html body .acn-nfc-s1059:not(#acn) { font-size: 12px; line-height: 1.35; }
+  html body .acn-nfc-c1068:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-sel1207:not(#acn) { font-size: 12px !important; }
+  html body .acn-nfc-c1256:not(#acn) { font-size: 12px; line-height: 1.45; }
+  html body .acn-nfc-b1274:not(#acn) { font-size: 12px; }
+  html body .acn-nfc-b1280:not(#acn) { font-size: 12px; }
+  html body .acn-nfc-b1287:not(#acn) { font-size: 12px; }
+}
+/* a linha da lista e os itens das buscas ficam verdes sob o mouse (era feito por JavaScript, trocando o fundo do elemento) */
+html body .acn-nfc-hv:hover:not(#acn) { background-color: rgb(240, 253, 244); }
+html body.dark .acn-nfc-hv:hover:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+/* @@nfc-fim */
