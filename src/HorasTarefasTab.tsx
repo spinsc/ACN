@@ -12,7 +12,7 @@ import { DEPTOS } from './RhDepartamentos';
 import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ParticipantesPicker, ModalEditarParticipantes, ListaParticipantes, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
-import { Faixa, MenuAcoes } from './Interface';
+import { Faixa, MenuAcoes, Botao } from './Interface';
 import { LinkOpl } from './AcnTabShared';
 import { ModalAnexosTarefa, contarAnexosDasTarefas } from './TarefaAnexos';
 import {
@@ -24,9 +24,6 @@ import {
   janelaNoInstante, segundosContados, pausaAutomaticaPendente, somaMs, MOTIVO_PAUSA_AUTOMATICA, HORARIO_CONTAGEM_TEXTO,
 } from './HorarioContagem';
 
-const STATUS_COR: Record<string, string> = {
-  nao_iniciada: '#94a3b8', em_andamento: '#3b82f6', pausada: '#f59e0b', concluida: '#22c55e',
-};
 const STATUS_LABEL: Record<string, string> = {
   nao_iniciada: 'Não Iniciada', em_andamento: 'Em Andamento', pausada: 'Pausada', concluida: 'Concluída',
 };
@@ -91,21 +88,20 @@ function BuscaOplTarefa({ selecionada, onSelecionar }: { selecionada: any; onSel
   };
   return (
     <>
-      <input className="acn-input" style={{ width: '100%', marginBottom: 4 }} aria-label="Buscar OP"
+      <input className="acn-input acn-ht-inp91" aria-label="Buscar OP"
         placeholder="Buscar por número da OP..." value={busca} onChange={e => buscar(e.target.value)} />
       {resultados.length > 0 && !(selecionada && resultados.length === 1) && (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, marginBottom: 8, maxHeight: 140, overflowY: 'auto' }}>
+        <div className="acn-ht-c94">
           {resultados.map(o => (
             <div key={o.id} onClick={() => { onSelecionar(o); setBusca(o.opl); setResultados([]); }}
-              style={{ padding: '5px 8px', fontSize: 11, cursor: 'pointer', borderBottom: '1px solid #f1f5f9',
-                background: selecionada?.id === o.id ? '#f0fdf4' : undefined }}>
+ className={(selecionada?.id === o.id ? 'acn-ht-opsel' : '') + ' acn-ht-c97'}>
               <strong>{o.opl}</strong> — {o.cliente_nome || '—'}
             </div>
           ))}
         </div>
       )}
-      {erroBusca && <div style={{ fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>Não foi possível buscar as OPs ({erroBusca}). Isso não quer dizer que a OP não exista.</div>}
-      {selecionada && <div style={{ fontSize: 10, color: '#15803d', marginBottom: 8 }}>✅ Vinculado a {selecionada.opl}</div>}
+      {erroBusca && <div className="acn-ht-c104">Não foi possível buscar as OPs ({erroBusca}). Isso não quer dizer que a OP não exista.</div>}
+      {selecionada && <div className="acn-ht-c105">✅ Vinculado a {selecionada.opl}</div>}
     </>
   );
 }
@@ -124,19 +120,19 @@ function ModalVincularOpl({ tarefa, onClose, onSalvo }: any) {
   };
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 440 }}>
+      <div className="modal-box acn-ht-c124">
         <div className="modal-title">🔗 OP da tarefa — {tarefa.titulo}</div>
         <BuscaOplTarefa selecionada={op} onSelecionar={setOp} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando || !op} onClick={() => salvar(op)}>
+        <div className="acn-ht-c127">
+          <Botao className="acn-ht-bt acn-ht-b128" disabled={salvando || !op} onClick={() => salvar(op)}>
             {salvando ? 'Salvando...' : 'Vincular'}
-          </button>
+          </Botao>
           {tarefa.opl_id && (
-            <button className="acn-btn" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #fca5a5' }} disabled={salvando} onClick={() => salvar(null)}>
+            <Botao className="acn-ht-bt acn-ht-b132" disabled={salvando} onClick={() => salvar(null)}>
               Tirar vínculo
-            </button>
+            </Botao>
           )}
-          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Fechar</button>
+          <Botao className="acn-ht-bt acn-ht-b136" onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -177,14 +173,14 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 460 }}>
+      <div className="modal-box acn-ht-c177">
         <div className="modal-title">+ Nova Tarefa</div>
 
         <label className="acn-label">Título da Tarefa *</label>
-        <MencaoTextarea value={titulo} onChange={v => setTitulo(v.replace(/\n/g, ' '))} rows={1} placeholder="Ex: Revisão de desenho técnico — @Nome para mencionar alguém" style={{ marginBottom: 8 }} />
+        <MencaoTextarea value={titulo} onChange={v => setTitulo(v.replace(/\n/g, ' '))} rows={1} placeholder="Ex: Revisão de desenho técnico — @Nome para mencionar alguém" className="acn-ht-x181" />
 
         <label className="acn-label">Responsável</label>
-        <div style={{ marginBottom: 8 }}>
+        <div className="acn-ht-c184">
           <ColaboradorSelect departamentos={DEPTOS.engenharia} value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
         </div>
 
@@ -193,11 +189,11 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
 
         <ParticipantesPicker value={participantes} onChange={setParticipantes} donoEmail={currentUser?.email} />
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando} onClick={criar}>
+        <div className="acn-ht-c193">
+          <Botao className="acn-ht-bt acn-ht-b194" disabled={salvando} onClick={criar}>
             {salvando ? 'Criando...' : '✅ Criar Tarefa'}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao className="acn-ht-bt acn-ht-b136" onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -223,17 +219,17 @@ function ModalPausar({ tarefa, onClose, onPausado }: any) {
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 420 }}>
+      <div className="modal-box acn-ht-c223">
         <div className="modal-title">⏸ Pausar Tarefa — {tarefa.titulo}</div>
         <label className="acn-label">Motivo da Pausa *</label>
-        <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', marginBottom: 12 }}
+        <textarea className="acn-input acn-ht-ta226" rows={3}
           placeholder="Ex: Aguardando material, reunião, fim do expediente..."
           value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="acn-btn" style={{ background: '#f59e0b', flex: 1 }} disabled={salvando} onClick={confirmar}>
+        <div className="acn-ht-c229">
+          <Botao className="acn-ht-bt acn-ht-b230" disabled={salvando} onClick={confirmar}>
             {salvando ? 'Salvando...' : '⏸ Confirmar Pausa'}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao className="acn-ht-bt acn-ht-b136" onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -258,17 +254,17 @@ function ModalObs({ tarefa, onClose, onSalvo }: any) {
   };
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 480 }}>
+      <div className="modal-box acn-ht-c258">
         <div className="modal-title">📝 Observações — {tarefa.titulo}</div>
-        <textarea className="acn-input" rows={7} style={{ width: '100%', resize: 'vertical', marginBottom: 12 }}
+        <textarea className="acn-input acn-ht-ta226" rows={7}
           placeholder="Anote informações desta tarefa: medidas, pendências, contatos, decisões..."
           aria-label="Observações da tarefa" value={texto} onChange={e => setTexto(e.target.value)} autoFocus
           onFocus={e => { const n = e.target.value.length; e.target.setSelectionRange(n, n); }} />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando || texto === (tarefa.observacoes || '')} onClick={salvar}>
+        <div className="acn-ht-c229">
+          <Botao className="acn-ht-bt acn-ht-b265" disabled={salvando || texto === (tarefa.observacoes || '')} onClick={salvar}>
             {salvando ? 'Salvando...' : temAntes ? 'Salvar alterações' : 'Salvar observação'}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Fechar</button>
+          </Botao>
+          <Botao className="acn-ht-bt acn-ht-b136" onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -348,61 +344,61 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
       <tr>
         <td>
           {editTitulo != null ? (
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <input className="acn-input" autoFocus value={editTitulo} onChange={e => setEditTitulo(e.target.value)}
+            <div className="acn-ht-c348">
+              <input className="acn-input acn-ht-inp351" autoFocus value={editTitulo} onChange={e => setEditTitulo(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') salvarTitulo(); if (e.key === 'Escape') setEditTitulo(null); }}
-                aria-label="Descrição da tarefa" style={{ minWidth: 200, fontSize: 11 }} />
-              <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={salvarTitulo}>Salvar</button>
-              <button className="acn-btn" style={{ background: '#94a3b8', fontSize: 9 }} onClick={() => setEditTitulo(null)}>Cancelar</button>
+                aria-label="Descrição da tarefa" />
+              <Botao className="acn-ht-bt acn-ht-b352" onClick={salvarTitulo}>Salvar</Botao>
+              <Botao className="acn-ht-bt acn-ht-b353" onClick={() => setEditTitulo(null)}>Cancelar</Botao>
             </div>
           ) : (
             <>
               {tarefa.titulo}
               {temObs && (
-                <button onClick={() => setModalObs(true)} title="Tem observações — clique para ver" aria-label="Ver observações"
-                  style={{ marginLeft: 5, border: 'none', background: 'none', cursor: 'pointer', fontSize: 10, padding: 0, opacity: .6 }}>📝</button>
+                <Botao onClick={() => setModalObs(true)} title="Tem observações — clique para ver" aria-label="Ver observações"
+                  className="acn-ht-bt acn-ht-b360">📝</Botao>
               )}
             </>
           )}
           {participantesDe(tarefa).length > 0 && (
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}><ListaParticipantes item={tarefa} usuario={currentUser} /></div>
+            <div className="acn-ht-c365"><ListaParticipantes item={tarefa} usuario={currentUser} /></div>
           )}
           {tarefa.numero_opl && (
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
+            <div className="acn-ht-c365">
               🔗 <LinkOpl opl={tarefa.numero_opl} currentUser={currentUser} color="#94a3b8" discreto />
             </div>
           )}
         </td>
         <td>{tarefa.responsavel_nome || '—'}</td>
         <td>
-          <span className="acn-badge" style={{ background: STATUS_COR[tarefa.status] }}>{STATUS_LABEL[tarefa.status]}</span>
-          {pausaAutomatica && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>automática · fim do horário</div>}
+          <span className={'acn-badge acn-ht-st-' + tarefa.status}>{STATUS_LABEL[tarefa.status]}</span>
+          {pausaAutomatica && <div className="acn-ht-c376">automática · fim do horário</div>}
           {tarefa.status !== 'concluida' && extraAgora && (
-            <div style={{ fontSize: 10, color: '#15803d', marginTop: 2 }}>
+            <div className="acn-ht-c378">
               hora extra até {new Date(extraAgora[1]).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}
           {tarefa.status !== 'concluida' && !extraAgora && pedidoPendente && (
-            <div style={{ fontSize: 10, color: '#b45309', marginTop: 2 }}>hora extra aguardando aprovação</div>
+            <div className="acn-ht-c383">hora extra aguardando aprovação</div>
           )}
         </td>
-        <td style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontWeight: 700, color: tarefa.status === 'pausada' ? '#f59e0b' : '#2563eb' }}>
+        <td className={'acn-ht-td386' + (tarefa.status === 'pausada' ? ' acn-ht-td386-2' : ' acn-ht-td386-3')}>
           {tarefa.data_inicio ? fmtDuracao(decorrido) : '—'}
         </td>
-        <td style={{ fontSize: 10 }}>{fmtDtHr(tarefa.data_inicio)}</td>
+        <td className="acn-ht-td389">{fmtDtHr(tarefa.data_inicio)}</td>
         <td>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <div className="acn-ht-c391">
             {tarefa.status === 'nao_iniciada' && (
-              <button className="acn-btn" style={{ background: '#2563eb', fontSize: 9 }} onClick={iniciar}>▶ Iniciar</button>
+              <Botao className="acn-ht-bt acn-ht-b393" onClick={iniciar}>▶ Iniciar</Botao>
             )}
             {tarefa.status === 'em_andamento' && (
-              <button className="acn-btn" style={{ background: '#f59e0b', fontSize: 9 }} onClick={() => setModalPausar(true)}>⏸ Pausar</button>
+              <Botao className="acn-ht-bt acn-ht-b396" onClick={() => setModalPausar(true)}>⏸ Pausar</Botao>
             )}
             {tarefa.status === 'pausada' && (
-              <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={retomar}>▶ Retomar</button>
+              <Botao className="acn-ht-bt acn-ht-b399" onClick={retomar}>▶ Retomar</Botao>
             )}
             {(tarefa.status === 'em_andamento' || tarefa.status === 'pausada') && (
-              <button className="acn-btn" style={{ background: '#22c55e', fontSize: 9 }} onClick={concluir}>✅ Concluir</button>
+              <Botao className="acn-ht-bt acn-ht-b402" onClick={concluir}>✅ Concluir</Botao>
             )}
             {/* Só as ações rápidas ficam à vista; o resto vai para o ⋯ */}
             <MenuAcoes rotulo="Mais ações da tarefa" itens={[
@@ -420,11 +416,11 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
       </tr>
       {verLog && (
         <tr>
-          <td colSpan={6} style={{ background: '#f8fafc', padding: '8px 12px' }}>
+          <td colSpan={6} className="acn-ht-td420">
             {(tarefa.pausas || []).map((p: any, i: number) => (
-              <div key={i} style={{ fontSize: 10, marginBottom: 4, borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>
+              <div key={i} className="acn-ht-c422">
                 <strong>{fmtDtHr(p.pausado_em)}</strong>{p.retomado_em ? ` → ${fmtDtHr(p.retomado_em)}` : ' (pausa ativa)'}
-                <div style={{ color: '#475569' }}>Motivo: {p.motivo}</div>
+                <div className="acn-ht-c424">Motivo: {p.motivo}</div>
               </div>
             ))}
           </td>
@@ -662,18 +658,17 @@ function RelatorioGerencial() {
 
   const kpi = (rot: string, val: any, sub: string, cor: string) => (
     <div key={rot} className="acn-kpi">
-      <span className="rot"><i style={{ background: cor }} />{rot}</span>
+      <span className="rot"><i className={'acn-ht-kpi-' + cor} />{rot}</span>
       <span className="val acn-num">{carregando ? '…' : val}</span>
       <span className="sub">{sub}</span>
     </div>
   );
-  const direita = { textAlign: 'right' } as const;
   const vazio = <div className="acn-empty">Nenhuma tarefa com atividade no período.</div>;
 
   return (
     <div>
       <div className="sec-card">
-        <div className="acn-filtros" style={{ alignItems: 'flex-end' }}>
+        <div className="acn-filtros acn-ht-c672">
           <div><label className="acn-label">De</label><input type="date" className="acn-input" value={de} onChange={e => setDe(e.target.value)} /></div>
           <div><label className="acn-label">Até</label><input type="date" className="acn-input" value={ate} onChange={e => setAte(e.target.value)} /></div>
           <div><label className="acn-label">Pessoa</label>
@@ -682,41 +677,41 @@ function RelatorioGerencial() {
               {pessoas.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          <button className="acn-b acn-b-primario" onClick={buscar} disabled={carregando}>{carregando ? 'Carregando…' : 'Atualizar'}</button>
-          <button className="acn-b acn-b-secundario acn-filtros-dir" onClick={imprimir} disabled={carregando || !itens.length}>Imprimir</button>
+          <Botao variante="primario" onClick={buscar} disabled={carregando}>{carregando ? 'Carregando…' : 'Atualizar'}</Botao>
+          <Botao variante="secundario" className="acn-filtros-dir" onClick={imprimir} disabled={carregando || !itens.length}>Imprimir</Botao>
         </div>
-        <div className="sec-body acn-fraco" style={{ fontSize: 12 }}>
+        <div className="sec-body acn-fraco acn-ht-c684">
           O tempo conta {HORARIO_CONTAGEM_TEXTO}, sem as pausas; fora disso, só com hora extra aprovada. Entram as tarefas criadas no período ou em execução em algum momento dele.
         </div>
       </div>
 
-      {incompleto && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">Não foi possível ler {incompleto}. O relatório está incompleto: as horas podem sair diferentes do real.</Faixa></div>}
+      {incompleto && <div className="acn-ht-c689"><Faixa tom="atencao">Não foi possível ler {incompleto}. O relatório está incompleto: as horas podem sair diferentes do real.</Faixa></div>}
 
       <div className="acn-kpis">
-        {kpi('Horas trabalhadas', fmtHoras(totalSeg), totalExtra ? `${fmtHoras(totalExtra)} de hora extra` : 'no período, sem hora extra', 'var(--acn-brand)')}
-        {kpi('Tarefas', itens.length, `${concluidas.length} concluídas · ${itens.filter(x => x.aberta).length} em aberto`, 'var(--acn-info)')}
-        {kpi('Média por tarefa', fmtHoras(media(concluidas)), 'das concluídas no período', 'var(--acn-ok)')}
-        {kpi('Tempo em pausa', fmtHoras(totalPausado), `${nPausas} pausa(s) no período`, 'var(--acn-warn)')}
+        {kpi('Horas trabalhadas', fmtHoras(totalSeg), totalExtra ? `${fmtHoras(totalExtra)} de hora extra` : 'no período, sem hora extra', 'brand')}
+        {kpi('Tarefas', itens.length, `${concluidas.length} concluídas · ${itens.filter(x => x.aberta).length} em aberto`, 'info')}
+        {kpi('Média por tarefa', fmtHoras(media(concluidas)), 'das concluídas no período', 'ok')}
+        {kpi('Tempo em pausa', fmtHoras(totalPausado), `${nPausas} pausa(s) no período`, 'warn')}
       </div>
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Por pessoa</span></div>
-        <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+        <div className="sec-body acn-ht-c700">
           {porPessoa.length === 0 ? vazio : (
             <table className="acn-tabela">
-              <thead><tr><th>Pessoa</th><th style={direita}>Tarefas</th><th style={direita}>Concluídas</th><th style={direita}>Em aberto</th><th style={direita}>Não iniciadas</th><th style={direita}>Horas</th><th style={direita}>Hora extra</th><th style={direita}>Média/tarefa</th><th style={direita}>Em pausa</th></tr></thead>
+              <thead><tr><th>Pessoa</th><th className="acn-ht-cel703">Tarefas</th><th className="acn-ht-cel703">Concluídas</th><th className="acn-ht-cel703">Em aberto</th><th className="acn-ht-cel703">Não iniciadas</th><th className="acn-ht-cel703">Horas</th><th className="acn-ht-cel703">Hora extra</th><th className="acn-ht-cel703">Média/tarefa</th><th className="acn-ht-cel703">Em pausa</th></tr></thead>
               <tbody>
                 {porPessoa.map(p => (
                   <tr key={p.nome}>
                     <td className="acn-forte">{p.nome}</td>
-                    <td className="acn-num" style={direita}>{p.tarefas}</td>
-                    <td className="acn-num" style={direita}>{p.concluidas}</td>
-                    <td className="acn-num" style={direita}>{p.abertas}</td>
-                    <td className="acn-num" style={direita}>{p.naoIniciadas}</td>
-                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(p.seg)}</td>
-                    <td className="acn-num" style={direita}>{fmtHoras(p.extra)}</td>
-                    <td className="acn-num" style={direita}>{fmtHoras(p.media)}</td>
-                    <td className="acn-num" style={direita}>{fmtHoras(p.pausado)}{p.pausas ? ` (${p.pausas})` : ''}</td>
+                    <td className="acn-num acn-ht-td708">{p.tarefas}</td>
+                    <td className="acn-num acn-ht-td708">{p.concluidas}</td>
+                    <td className="acn-num acn-ht-td708">{p.abertas}</td>
+                    <td className="acn-num acn-ht-td708">{p.naoIniciadas}</td>
+                    <td className="acn-num acn-forte acn-ht-td708">{fmtHoras(p.seg)}</td>
+                    <td className="acn-num acn-ht-td708">{fmtHoras(p.extra)}</td>
+                    <td className="acn-num acn-ht-td708">{fmtHoras(p.media)}</td>
+                    <td className="acn-num acn-ht-td708">{fmtHoras(p.pausado)}{p.pausas ? ` (${p.pausas})` : ''}</td>
                   </tr>
                 ))}
               </tbody>
@@ -728,16 +723,16 @@ function RelatorioGerencial() {
       {porDia.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr"><span>Horas por dia</span></div>
-          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="sec-body acn-ht-c700">
             <table className="acn-tabela">
-              <thead><tr><th>Dia</th>{porPessoa.map(p => <th key={p.nome} style={direita}>{p.nome}</th>)}<th style={direita}>Hora extra</th><th style={direita}>Total</th></tr></thead>
+              <thead><tr><th>Dia</th>{porPessoa.map(p => <th key={p.nome} className="acn-ht-cel703">{p.nome}</th>)}<th className="acn-ht-cel703">Hora extra</th><th className="acn-ht-cel703">Total</th></tr></thead>
               <tbody>
                 {porDia.map(l => (
                   <tr key={l.dia}>
                     <td className="acn-num">{new Date(l.dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td>
-                    {porPessoa.map(p => <td key={p.nome} className="acn-num" style={direita}>{fmtHoras(l[p.nome])}</td>)}
-                    <td className="acn-num" style={direita}>{fmtHoras(l.extra)}</td>
-                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(l.total)}</td>
+                    {porPessoa.map(p => <td key={p.nome} className="acn-num acn-ht-td708">{fmtHoras(l[p.nome])}</td>)}
+                    <td className="acn-num acn-ht-td708">{fmtHoras(l.extra)}</td>
+                    <td className="acn-num acn-forte acn-ht-td708">{fmtHoras(l.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -749,19 +744,19 @@ function RelatorioGerencial() {
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Horas por OP</span>
-          {opsComHoras.length > 0 && <span className="acn-fraco" style={{ fontWeight: 400 }}>média de {fmtHoras(mediaPorOp)} por OP</span>}
+          {opsComHoras.length > 0 && <span className="acn-fraco acn-ht-s748">média de {fmtHoras(mediaPorOp)} por OP</span>}
         </div>
-        <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+        <div className="sec-body acn-ht-c700">
           {porOp.length === 0 ? vazio : (
             <table className="acn-tabela">
-              <thead><tr><th>OP</th><th>Cliente</th><th style={direita}>Tarefas</th><th style={direita}>Horas</th><th>Pessoas</th></tr></thead>
+              <thead><tr><th>OP</th><th>Cliente</th><th className="acn-ht-cel703">Tarefas</th><th className="acn-ht-cel703">Horas</th><th>Pessoas</th></tr></thead>
               <tbody>
                 {porOp.map(o => (
                   <tr key={o.nome}>
                     <td className="acn-mono acn-forte">{o.nome}</td>
                     <td>{o.cliente}</td>
-                    <td className="acn-num" style={direita}>{o.tarefas}</td>
-                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(o.seg)}</td>
+                    <td className="acn-num acn-ht-td708">{o.tarefas}</td>
+                    <td className="acn-num acn-forte acn-ht-td708">{fmtHoras(o.seg)}</td>
                     <td className="acn-fraco">{[...o.pessoas].join(', ')}</td>
                   </tr>
                 ))}
@@ -774,16 +769,16 @@ function RelatorioGerencial() {
       {porCliente.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr"><span>Horas por cliente</span></div>
-          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="sec-body acn-ht-c700">
             <table className="acn-tabela">
-              <thead><tr><th>Cliente</th><th style={direita}>OPs</th><th style={direita}>Tarefas</th><th style={direita}>Horas</th></tr></thead>
+              <thead><tr><th>Cliente</th><th className="acn-ht-cel703">OPs</th><th className="acn-ht-cel703">Tarefas</th><th className="acn-ht-cel703">Horas</th></tr></thead>
               <tbody>
                 {porCliente.map(c => (
                   <tr key={c.nome}>
                     <td className="acn-forte">{c.nome}</td>
-                    <td className="acn-num" style={direita}>{c.ops.size}</td>
-                    <td className="acn-num" style={direita}>{c.tarefas}</td>
-                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(c.seg)}</td>
+                    <td className="acn-num acn-ht-td708">{c.ops.size}</td>
+                    <td className="acn-num acn-ht-td708">{c.tarefas}</td>
+                    <td className="acn-num acn-forte acn-ht-td708">{fmtHoras(c.seg)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -795,10 +790,10 @@ function RelatorioGerencial() {
       {motivos.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr"><span>Motivos de pausa</span></div>
-          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="sec-body acn-ht-c700">
             <table className="acn-tabela">
-              <thead><tr><th>Motivo</th><th style={direita}>Vezes</th><th style={direita}>Horas em pausa</th></tr></thead>
-              <tbody>{motivos.map(m => <tr key={m.motivo}><td style={{ whiteSpace: 'pre-wrap' }}>{m.motivo}</td><td className="acn-num" style={direita}>{m.vezes}</td><td className="acn-num" style={direita}>{fmtHoras(m.seg)}</td></tr>)}</tbody>
+              <thead><tr><th>Motivo</th><th className="acn-ht-cel703">Vezes</th><th className="acn-ht-cel703">Horas em pausa</th></tr></thead>
+              <tbody>{motivos.map(m => <tr key={m.motivo}><td className="acn-ht-td797">{m.motivo}</td><td className="acn-num acn-ht-td708">{m.vezes}</td><td className="acn-num acn-ht-td708">{fmtHoras(m.seg)}</td></tr>)}</tbody>
             </table>
           </div>
         </div>
@@ -807,19 +802,19 @@ function RelatorioGerencial() {
       {pedidosVisiveis.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr"><span>Pedidos de hora extra ({pedidosVisiveis.length})</span></div>
-          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="sec-body acn-ht-c700">
             <table className="acn-tabela">
               <thead><tr><th>Pessoa</th><th>Quando</th><th>Motivo</th><th>Situação</th><th>Decidido por</th></tr></thead>
               <tbody>
                 {pedidosVisiveis.map(x => (
                   <tr key={x.id}>
                     <td className="acn-forte">{x.pessoa_nome}</td>
-                    <td className="acn-num" style={{ whiteSpace: 'nowrap' }}>{textoPeriodo(x.inicio, x.fim)}</td>
-                    <td style={{ minWidth: 200, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.motivo}</td>
+                    <td className="acn-num acn-ht-td813">{textoPeriodo(x.inicio, x.fim)}</td>
+                    <td className="acn-ht-td814">{x.motivo}</td>
                     <td>{SITUACAO_EXTRA[x.status] || x.status}{x.registro_direto ? ' (direto)' : ''}</td>
                     <td>
                       {x.decidido_por_nome || (x.status === 'pendente' ? `com ${x.aprovador_nome || '—'}` : '—')}
-                      {x.resposta && <div className="acn-fraco" style={{ fontSize: 12 }}>{x.resposta}</div>}
+                      {x.resposta && <div className="acn-fraco acn-ht-c684">{x.resposta}</div>}
                     </td>
                   </tr>
                 ))}
@@ -831,21 +826,21 @@ function RelatorioGerencial() {
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Atividades do período ({itens.length})</span></div>
-        <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+        <div className="sec-body acn-ht-c700">
           {itens.length === 0 ? vazio : (
             <table className="acn-tabela">
-              <thead><tr><th>Tarefa</th><th>Pessoa</th><th>OP</th><th>Status</th><th>Início</th><th>Conclusão</th><th style={direita}>No período</th><th style={direita}>Total</th></tr></thead>
+              <thead><tr><th>Tarefa</th><th>Pessoa</th><th>OP</th><th>Status</th><th>Início</th><th>Conclusão</th><th className="acn-ht-cel703">No período</th><th className="acn-ht-cel703">Total</th></tr></thead>
               <tbody>
                 {itens.map(({ t, seg, total }) => (
                   <tr key={t.id}>
-                    <td style={{ minWidth: 200 }}>{t.titulo}</td>
+                    <td className="acn-ht-td837">{t.titulo}</td>
                     <td>{nomeResp(t)}</td>
                     <td className="acn-mono">{t.numero_opl || '—'}</td>
                     <td>{STATUS_LABEL[t.status] || t.status}</td>
                     <td className="acn-num">{fmtDtHr(t.data_inicio)}</td>
                     <td className="acn-num">{fmtDtHr(t.data_conclusao)}</td>
-                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(seg)}</td>
-                    <td className="acn-num" style={direita}>{fmtHoras(total)}</td>
+                    <td className="acn-num acn-forte acn-ht-td708">{fmtHoras(seg)}</td>
+                    <td className="acn-num acn-ht-td708">{fmtHoras(total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -910,47 +905,47 @@ function RelatorioHoras({ currentUser }: any) {
           <div className="form-row">
             <div className="form-group">
               <label className="acn-label">De</label>
-              <input type="date" className="acn-input" style={{ width: '100%' }} value={de} onChange={e => setDe(e.target.value)} />
+              <input type="date" className="acn-input acn-ht-inp909" value={de} onChange={e => setDe(e.target.value)} />
             </div>
             <div className="form-group">
               <label className="acn-label">Até</label>
-              <input type="date" className="acn-input" style={{ width: '100%' }} value={ate} onChange={e => setAte(e.target.value)} />
+              <input type="date" className="acn-input acn-ht-inp909" value={ate} onChange={e => setAte(e.target.value)} />
             </div>
             {gestor && (
               <div className="form-group">
                 <label className="acn-label">Pessoa</label>
-                <select className="acn-input" style={{ width: '100%' }} value={pessoa} onChange={e => setPessoa(e.target.value)}>
+                <select className="acn-input acn-ht-sel918" value={pessoa} onChange={e => setPessoa(e.target.value)}>
                   <option value="">Equipe inteira</option>
                   {pessoasRel.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="acn-btn" style={{ background: '#1e293b' }} onClick={buscar}>Filtrar</button>
+            <div className="acn-ht-c924">
+              <Botao className="acn-ht-bt acn-ht-b925" onClick={buscar}>Filtrar</Botao>
             </div>
           </div>
-          <div className="acn-fraco" style={{ fontSize: 12, marginTop: 6 }}>
+          <div className="acn-fraco acn-ht-c928">
             O tempo conta {HORARIO_CONTAGEM_TEXTO}, sem as pausas; fora disso, só com hora extra aprovada. Entram as tarefas criadas no período ou em execução em algum momento dele.
           </div>
         </div>
       </div>
 
-      {incompleto && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">Não foi possível ler {incompleto}. O relatório está incompleto: as horas podem sair diferentes do real.</Faixa></div>}
+      {incompleto && <div className="acn-ht-c689"><Faixa tom="atencao">Não foi possível ler {incompleto}. O relatório está incompleto: as horas podem sair diferentes do real.</Faixa></div>}
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Totais do Período</span></div>
         <div className="sec-body">
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="acn-ht-c939">
             {[
-              { label: 'Tarefas no Período', val: itens.length, cor: '#1e293b' },
-              { label: 'Concluídas no Período', val: concluidas.length, cor: '#22c55e' },
-              { label: 'Em Andamento/Pausadas', val: itens.filter(x => x.aberta).length, cor: '#3b82f6' },
-              { label: 'Horas Trabalhadas', val: fmtHoras(tempoTotal), cor: '#7c3aed' },
-              { label: 'Horas Extras', val: fmtHoras(tempoExtra), cor: '#b45309' },
+              { label: 'Tarefas no Período', val: itens.length, cor: 'escuro' },
+              { label: 'Concluídas no Período', val: concluidas.length, cor: 'verde' },
+              { label: 'Em Andamento/Pausadas', val: itens.filter(x => x.aberta).length, cor: 'azul' },
+              { label: 'Horas Trabalhadas', val: fmtHoras(tempoTotal), cor: 'roxo' },
+              { label: 'Horas Extras', val: fmtHoras(tempoExtra), cor: 'ambar' },
             ].map(c => (
-              <div key={c.label} style={{ flex: '1 1 150px', minWidth: 130, background: 'white', border: '1px solid #e2e8f0', borderTop: `3px solid ${c.cor}`, borderRadius: 4, padding: '8px 10px' }}>
-                <div style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}>{c.label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: c.cor }}>{carregando ? '...' : c.val}</div>
+              <div key={c.label} className={('acn-ht-tot acn-ht-tot-' + c.cor) + ' acn-ht-c947'}>
+                <div className="acn-ht-c948">{c.label}</div>
+                <div className={('acn-ht-totv-' + c.cor) + ' acn-ht-c949'}>{carregando ? '...' : c.val}</div>
               </div>
             ))}
           </div>
@@ -959,7 +954,7 @@ function RelatorioHoras({ currentUser }: any) {
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Por Responsável</span></div>
-        <div className="sec-body" style={{ overflowX: 'auto' }}>
+        <div className="sec-body acn-ht-c958">
           {porResponsavel.length === 0 ? <div className="acn-empty">Nenhuma tarefa no período.</div> : (
             <table>
               <thead><tr><th>Responsável</th><th>Tarefas</th><th>Concluídas</th><th>Horas</th><th>Hora extra</th></tr></thead>
@@ -978,7 +973,7 @@ function RelatorioHoras({ currentUser }: any) {
       {Object.keys(motivosPausa).length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr"><span>Motivos de Pausa Mais Frequentes</span></div>
-          <div className="sec-body" style={{ overflowX: 'auto' }}>
+          <div className="sec-body acn-ht-c958">
             <table>
               <thead><tr><th>Motivo</th><th>Ocorrências</th></tr></thead>
               <tbody>
@@ -1112,16 +1107,16 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '2px solid #1e293b' }}>
-        <button style={{ flex: 1, padding: '8px', background: aba === 'tarefas' ? '#1e293b' : 'white', color: aba === 'tarefas' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
-          onClick={() => setAba('tarefas')}>⏱️ Tarefas</button>
-        <button style={{ flex: 1, padding: '8px', background: aba === 'relatorio' ? '#1e293b' : 'white', color: aba === 'relatorio' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
-          onClick={() => setAba('relatorio')}>📊 Relatório por Período</button>
-        <button style={{ flex: 1, padding: '8px', background: aba === 'extras' ? '#1e293b' : 'white', color: aba === 'extras' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
-          onClick={() => setAba('extras')}>🕒 Horas extras{aguardandoMinhaAprovacao ? ` (${aguardandoMinhaAprovacao})` : ''}</button>
+      <div className="acn-ht-c1111">
+        <Botao className={'acn-ht-bt acn-ht-b1112' + (aba === 'tarefas' ? ' acn-ht-b1112-2' : ' acn-ht-b1112-3')}
+          onClick={() => setAba('tarefas')}>⏱️ Tarefas</Botao>
+        <Botao className={'acn-ht-bt acn-ht-b1112' + (aba === 'relatorio' ? ' acn-ht-b1112-2' : ' acn-ht-b1112-3')}
+          onClick={() => setAba('relatorio')}>📊 Relatório por Período</Botao>
+        <Botao className={'acn-ht-bt acn-ht-b1112' + (aba === 'extras' ? ' acn-ht-b1112-2' : ' acn-ht-b1112-3')}
+          onClick={() => setAba('extras')}>🕒 Horas extras{aguardandoMinhaAprovacao ? ` (${aguardandoMinhaAprovacao})` : ''}</Botao>
         {gestor && (
-          <button style={{ flex: 1, padding: '8px', background: aba === 'gerencial' ? '#1e293b' : 'white', color: aba === 'gerencial' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
-            onClick={() => setAba('gerencial')}>📈 Relatório gerencial</button>
+          <Botao className={'acn-ht-bt acn-ht-b1112' + (aba === 'gerencial' ? ' acn-ht-b1112-2' : ' acn-ht-b1112-3')}
+            onClick={() => setAba('gerencial')}>📈 Relatório gerencial</Botao>
         )}
       </div>
 
@@ -1129,50 +1124,50 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
         : aba === 'gerencial' && gestor ? <RelatorioGerencial /> : aba === 'relatorio' ? <RelatorioHoras currentUser={currentUser} /> : (
         <>
           {aguardandoMinhaAprovacao > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <Faixa tom="atencao" acao={<button className="acn-b acn-b-secundario acn-b-p" onClick={() => setAba('extras')}>Ver pedidos</button>}>
+            <div className="acn-ht-c689">
+              <Faixa tom="atencao" acao={<Botao variante="secundario" pequeno onClick={() => setAba('extras')}>Ver pedidos</Botao>}>
                 {aguardandoMinhaAprovacao === 1 ? '1 pedido de hora extra aguarda' : `${aguardandoMinhaAprovacao} pedidos de hora extra aguardam`} sua aprovação.
               </Faixa>
             </div>
           )}
           {erroLista && (
-            <div style={{ marginBottom: 10 }}>
-              <Faixa tom="erro" acao={<button className="acn-b acn-b-secundario acn-b-p" onClick={() => carregar()}>Tentar de novo</button>}>
+            <div className="acn-ht-c689">
+              <Faixa tom="erro" acao={<Botao variante="secundario" pequeno onClick={() => carregar()}>Tentar de novo</Botao>}>
                 Não foi possível ler as tarefas ({erroLista}). {tarefasLidas ? 'A lista abaixo é a última que foi lida.' : 'Isso não quer dizer que não haja tarefas.'}
               </Faixa>
             </div>
           )}
           {ctxErro && (
-            <div style={{ marginBottom: 10 }}>
+            <div className="acn-ht-c689">
               <Faixa tom="atencao">Não foi possível ler {ctxErro}. Enquanto isso o tempo pode aparecer diferente do real e a pausa automática fica suspensa.</Faixa>
             </div>
           )}
           <div className="sec-card">
             <div className="sec-hdr">
               <span>⏱️ {gestor ? 'Controle de Horas/Tarefas' : 'Minhas tarefas'} ({filtradas.length})</span>
-              <button className="acn-btn" style={{ background: '#0f766e', fontSize: 10 }} onClick={() => setModalNova(true)}>+ Nova Tarefa</button>
+              <Botao className="acn-ht-bt acn-ht-b1149" onClick={() => setModalNova(true)}>+ Nova Tarefa</Botao>
             </div>
-            <div className="sec-body" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="sec-body acn-ht-c1151">
               {(['todas', 'nao_iniciada', 'em_andamento', 'pausada', 'concluida'] as const).map(f => (
-                <button key={f} className="acn-btn"
-                  style={{ background: filtro === f ? '#1e293b' : '#e2e8f0', color: filtro === f ? '#fff' : '#475569', fontSize: 10 }}
+                <Botao key={f}
+                  className={'acn-ht-bt acn-ht-b1154' + (filtro === f ? ' acn-ht-b1154-2' : ' acn-ht-b1154-3')}
                   onClick={() => setFiltro(f)}>
                   {f === 'todas' ? 'Todas' : STATUS_LABEL[f]}
-                </button>
+                </Botao>
               ))}
               <input placeholder="🔍 Buscar por título, OP ou responsável..." value={busca} onChange={e => setBusca(e.target.value)}
-                style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
-              <span className="acn-fraco" style={{ fontSize: 12, flexBasis: '100%' }}>
+                className="acn-ht-inp1160" />
+              <span className="acn-fraco acn-ht-s1161">
                 O tempo conta {HORARIO_CONTAGEM_TEXTO}. Às 19:45 a tarefa pausa sozinha; fora do horário, só com hora extra.
               </span>
               {gestor && (
-                <select className="acn-input" value={operador} onChange={e => setOperador(e.target.value)} aria-label="Operador" style={{ width: 'auto', minWidth: 180 }}>
+                <select className="acn-input acn-ht-sel1165" value={operador} onChange={e => setOperador(e.target.value)} aria-label="Operador">
                   <option value="">Operador: todos</option>
                   {operadores.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               )}
             </div>
-            <div className="sec-body" style={{ overflowX: 'auto', paddingTop: 0 }}>
+            <div className="sec-body acn-ht-c1171">
               {loading || (!gestor && !meusNomes) ? <div className="acn-empty">Carregando...</div> : filtradas.length === 0 ? (
                 !tarefasLidas ? null : <div className="acn-empty">Nenhuma tarefa {filtro !== 'todas' ? 'nesse filtro' : 'cadastrada ainda'}.</div>
               ) : (

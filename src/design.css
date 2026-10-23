@@ -6720,3 +6720,146 @@ html body.dark .acn-cp-s1384-3:not(#acn):not(#acn) { background-color: color(srg
 html body .acn-cp-hv:hover:not(#acn) { background-color: rgb(240, 253, 244); }
 html body.dark .acn-cp-hv:hover:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
 /* @@cp-fim */
+/* @@ht-ini */
+/* ══ Horas/Tarefas da Engenharia (HorasTarefasTab.tsx, 12e72 — 23/10/2026) ═══════════════════════════════════════════════════════════════════════
+   Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar: o tamanho mínimo de letra, os tons
+   e as cores que os ajustes de tela aplicavam por cima). A classe de cada peça sai do próprio estilo que ela tinha (acn-ht-c = caixa, b = botão, td/cel = célula…);
+   as variações por estado (status da tarefa, OP escolhida, cor de cada total e de cada indicador) são classes à parte. O escuro e o celular guardam só o que muda em relação ao claro. */
+html body .acn-ht-bt:not(#acn) { height: auto; box-shadow: none; border-top-width: 0px !important; border-right-width: 0px !important; border-left-width: 0px !important; border-top-style: none !important; border-right-style: none !important; border-left-style: none !important; opacity: 0.4 !important; border-bottom-width: 1px; border-bottom-style: solid; color: rgb(23, 33, 43); }
+html body .acn-ht-inp91:not(#acn) { width: 100%; margin-bottom: 4px; }
+html body .acn-ht-c94:not(#acn) { border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 8px; max-height: 140px; overflow-y: auto; }
+html body .acn-ht-c97:not(#acn) { padding: 5px 8px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f5f9; line-height: 1.45; }
+html body .acn-ht-c104:not(#acn) { font-size: 12px; color: #b91c1c; margin-bottom: 8px; line-height: 1.45; }
+html body .acn-ht-c105:not(#acn) { font-size: 12px; color: #15803d; margin-bottom: 8px; line-height: 1.45; }
+html body .acn-ht-c124:not(#acn) { max-width: 440px; }
+html body .acn-ht-c127:not(#acn) { display: flex; gap: 8px; margin-top: 6px; }
+html body .acn-ht-b128:not(#acn) { border-width: 0px; border-style: none; background: #0f766e; flex: 1; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-size: 12px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1; }
+html body .acn-ht-b132:not(#acn) { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; }
+html body .acn-ht-b136:not(#acn) { background: #94a3b8; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; background-color: rgb(255, 255, 255); font-size: 12px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; border-top-width: 1px !important; border-right-width: 1px !important; border-left-width: 1px !important; border-top-style: solid !important; border-right-style: solid !important; border-left-style: solid !important; opacity: 1 !important; }
+html body .acn-ht-c177:not(#acn) { max-width: 460px; }
+html body .acn-ht-x181:not(#acn) { margin-bottom: 8px; }
+html body .acn-ht-c184:not(#acn) { margin-bottom: 8px; }
+html body .acn-ht-c193:not(#acn) { display: flex; gap: 8px; margin-top: 10px; }
+html body .acn-ht-b194:not(#acn) { background: #0f766e; flex: 1; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; border-bottom-width: 0px; border-bottom-style: none; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); opacity: 1 !important; font-size: 12px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; }
+html body .acn-ht-c223:not(#acn) { max-width: 420px; }
+html body .acn-ht-ta226:not(#acn) { width: 100%; resize: vertical; margin-bottom: 12px; }
+html body .acn-ht-c229:not(#acn) { display: flex; gap: 8px; }
+html body .acn-ht-b230:not(#acn) { border-width: 0px; border-style: none; background: #f59e0b; flex: 1; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-size: 12px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1 !important; }
+html body .acn-ht-c258:not(#acn) { max-width: 480px; }
+html body .acn-ht-b265:not(#acn) { background: #0f766e; flex: 1; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; border-bottom-width: 0px; border-bottom-style: none; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-size: 12px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; }
+html body .acn-ht-c348:not(#acn) { display: flex; gap: 4px; align-items: center; }
+html body .acn-ht-inp351:not(#acn) { min-width: 200px; font-size: 13px; }
+html body .acn-ht-b352:not(#acn) { background: #16a34a; font-size: 11px; row-gap: 4px; column-gap: 4px; padding-top: 3px; padding-right: 7px; padding-bottom: 3px; padding-left: 7px; min-height: 24px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; border-bottom-width: 0px; border-bottom-style: none; color: rgb(255, 255, 255); border-top-width: 1px; border-right-width: 1px; border-left-width: 1px; border-top-style: solid; border-right-style: solid; border-left-style: solid; opacity: 1 !important; background-color: rgb(14, 112, 104); }
+html body .acn-ht-b353:not(#acn) { background: #94a3b8; font-size: 11px; row-gap: 4px; column-gap: 4px; padding-top: 3px; padding-right: 7px; padding-bottom: 3px; padding-left: 7px; min-height: 24px; background-color: rgb(255, 255, 255); font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; border-top-width: 1px !important; border-right-width: 1px !important; border-left-width: 1px !important; border-top-style: solid !important; border-right-style: solid !important; border-left-style: solid !important; opacity: 1 !important; }
+html body .acn-ht-b360:not(#acn) { border-radius: 0px; margin-left: 5px; border: none; background: none; cursor: pointer; font-size: 12px; padding: 0; opacity: 0.6 !important; display: inline-block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; color: rgb(0, 0, 0); font-weight: 400; line-height: normal; white-space: normal; transition-property: all; transition-duration: 0s; transition-timing-function: ease; transition-delay: 0s; text-wrap-mode: wrap; }
+html body .acn-ht-c365:not(#acn) { font-size: 12px; color: #94a3b8; margin-top: 1px; line-height: 1.45; }
+html body .acn-ht-c376:not(#acn) { font-size: 10px; color: #64748b; margin-top: 2px; }
+html body .acn-ht-c378:not(#acn) { font-size: 10px; color: #15803d; margin-top: 2px; }
+html body .acn-ht-c383:not(#acn) { font-size: 12px; color: #b45309; margin-top: 2px; line-height: 1.45; }
+html body .acn-ht-td386:not(#acn) { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; font-weight: 700; }
+html body .acn-ht-td389:not(#acn) { font-size: 10px; }
+html body .acn-ht-c391:not(#acn) { display: flex; gap: 4px; flex-wrap: wrap; }
+html body .acn-ht-b393:not(#acn) { border-width: 0px; border-style: none; background: #2563eb; font-size: 11px; row-gap: 4px; column-gap: 4px; padding-top: 3px; padding-right: 7px; padding-bottom: 3px; padding-left: 7px; min-height: 24px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1 !important; }
+html body .acn-ht-b396:not(#acn) { background: #f59e0b; font-size: 11px; row-gap: 4px; column-gap: 4px; padding-top: 3px; padding-right: 7px; padding-bottom: 3px; padding-left: 7px; min-height: 24px; background-color: rgb(255, 255, 255); font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; border-top-width: 1px !important; border-right-width: 1px !important; border-left-width: 1px !important; border-top-style: solid !important; border-right-style: solid !important; border-left-style: solid !important; opacity: 1 !important; }
+html body .acn-ht-b399:not(#acn) { background: #16a34a; font-size: 11px; row-gap: 4px; column-gap: 4px; padding-top: 3px; padding-right: 7px; padding-bottom: 3px; padding-left: 7px; min-height: 24px; border-top-width: 1px !important; border-right-width: 1px !important; border-left-width: 1px !important; border-top-style: solid !important; border-right-style: solid !important; border-left-style: solid !important; background-color: rgb(255, 255, 255); opacity: 1 !important; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; }
+html body .acn-ht-b402:not(#acn) { border-width: 0px; border-style: none; background: #22c55e; font-size: 11px; row-gap: 4px; column-gap: 4px; padding-top: 3px; padding-right: 7px; padding-bottom: 3px; padding-left: 7px; min-height: 24px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1 !important; }
+html body .acn-ht-td420:not(#acn) { background: #f8fafc; padding: 8px 12px; }
+html body .acn-ht-c422:not(#acn) { font-size: 10px; margin-bottom: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+html body .acn-ht-c424:not(#acn) { color: #475569; }
+html body .acn-ht-c672:not(#acn) { align-items: flex-end; }
+html body .acn-ht-c684:not(#acn) { font-size: 12px; }
+html body .acn-ht-c689:not(#acn) { margin-bottom: 10px; }
+html body .acn-ht-c700:not(#acn) { overflow-x: auto; padding: 0; }
+html body .acn-ht-cel703:not(#acn) { text-align: right; }
+html body .acn-ht-td708:not(#acn) { text-align: right; }
+html body .acn-ht-s748:not(#acn) { font-weight: 400; }
+html body .acn-ht-td797:not(#acn) { white-space: pre-wrap; }
+html body .acn-ht-td813:not(#acn) { white-space: nowrap; }
+html body .acn-ht-td814:not(#acn) { min-width: 200px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-ht-td837:not(#acn) { min-width: 200px; }
+html body .acn-ht-inp909:not(#acn) { width: 100%; }
+html body .acn-ht-sel918:not(#acn) { width: 100%; }
+html body .acn-ht-c924:not(#acn) { display: flex; align-items: flex-end; }
+html body .acn-ht-b925:not(#acn) { border-width: 0px; border-style: none; background: #1e293b; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-size: 12px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1 !important; }
+html body .acn-ht-c928:not(#acn) { font-size: 12px; margin-top: 6px; }
+html body .acn-ht-c939:not(#acn) { display: flex; gap: 8px; flex-wrap: wrap; }
+html body .acn-ht-c947:not(#acn) { flex: 1 1 150px; min-width: 130px; background: white; border: 1px solid #e2e8f0; border-top-width: 3px; border-radius: 4px; padding: 8px 10px; }
+html body .acn-ht-c948:not(#acn) { font-size: 12px; color: #64748b; margin-bottom: 2px; line-height: 1.45; }
+html body .acn-ht-c949:not(#acn) { font-size: 18px; font-weight: 700; }
+html body .acn-ht-c958:not(#acn) { overflow-x: auto; }
+html body .acn-ht-c1111:not(#acn) { border-radius: 0px !important; border-radius: 6px; border: 2px solid #1e293b; gap: 0; overflow: hidden; display: flex; margin-bottom: 10px; overflow-x: visible; overflow-y: visible; row-gap: 4px; column-gap: 4px; border-top-width: 0px; border-right-width: 0px; border-bottom-width: 1px; border-left-width: 0px; border-top-style: none; border-right-style: none; border-left-style: none; border-bottom-color: rgb(222, 228, 234); }
+html body .acn-ht-b1112:not(#acn) { border-radius: 0px; border: none; padding: 8px; flex: 1; font-weight: 700; font-size: 13px; cursor: pointer; display: block; align-items: normal; justify-content: normal; row-gap: normal; column-gap: normal; margin-bottom: -1px; padding-top: 9px; padding-right: 12px; padding-bottom: 10px; padding-left: 12px; border-bottom-width: 2px; border-bottom-style: solid; line-height: normal; white-space: normal; text-wrap-mode: wrap; opacity: 1 !important; }
+html body .acn-ht-b1149:not(#acn) { border-width: 0px; border-style: none; background: #0f766e; font-size: 12px; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; background-color: rgb(14, 112, 104); color: rgb(255, 255, 255); font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1 !important; }
+html body .acn-ht-c1151:not(#acn) { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+html body .acn-ht-b1154:not(#acn) { font-size: 12px; row-gap: 4px; column-gap: 4px; padding-top: 5px; padding-right: 10px; padding-bottom: 5px; padding-left: 10px; min-height: 28px; font-weight: 600; line-height: 1.2; transition-property: filter, box-shadow; transition-duration: 0.12s, 0.12s; transition-timing-function: ease, ease; transition-delay: 0s, 0s; opacity: 1 !important; }
+html body .acn-ht-inp1160:not(#acn) { padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; min-width: 220px; }
+html body .acn-ht-s1161:not(#acn) { font-size: 12px; flex-basis: 100%; }
+html body .acn-ht-sel1165:not(#acn) { width: auto; min-width: 180px; }
+html body .acn-ht-c1171:not(#acn) { overflow-x: auto; padding-top: 0; }
+html body .acn-ht-opsel:not(#acn) { background: #f0fdf4; }
+html body .acn-ht-st-nao_iniciada:not(#acn) { background: #94a3b8; background-color: rgb(231, 239, 250); color: rgb(36, 95, 184); }
+html body .acn-ht-st-em_andamento:not(#acn) { background: #3b82f6; background-color: rgb(231, 239, 250); color: rgb(36, 95, 184); }
+html body .acn-ht-st-pausada:not(#acn) { background: #f59e0b; background-color: rgb(252, 241, 223); color: rgb(154, 87, 8); }
+html body .acn-ht-st-concluida:not(#acn) { background: #22c55e; background-color: rgb(230, 244, 234); color: rgb(27, 127, 67); }
+html body .acn-ht-kpi-brand:not(#acn) { background: var(--acn-brand); }
+html body .acn-ht-kpi-info:not(#acn) { background: var(--acn-info); }
+html body .acn-ht-kpi-ok:not(#acn) { background: var(--acn-ok); }
+html body .acn-ht-kpi-warn:not(#acn) { background: var(--acn-warn); }
+html body .acn-ht-tot-escuro:not(#acn) { border-top-color: #1e293b; }
+html body .acn-ht-tot-verde:not(#acn) { border-top-color: #22c55e; }
+html body .acn-ht-tot-azul:not(#acn) { border-top-color: #3b82f6; }
+html body .acn-ht-tot-roxo:not(#acn) { border-top-color: #7c3aed; }
+html body .acn-ht-tot-ambar:not(#acn) { border-top-color: #b45309; }
+html body .acn-ht-totv-escuro:not(#acn) { color: #1e293b; }
+html body .acn-ht-totv-verde:not(#acn) { color: #22c55e; }
+html body .acn-ht-totv-azul:not(#acn) { color: #3b82f6; }
+html body .acn-ht-totv-roxo:not(#acn) { color: #7c3aed; }
+html body .acn-ht-totv-ambar:not(#acn) { color: #b45309; }
+html body .acn-ht-td386-2:not(#acn) { color: #f59e0b; }
+html body .acn-ht-td386-3:not(#acn) { color: #2563eb; }
+html body .acn-ht-b1112-2:not(#acn) { background: #1e293b; color: rgb(23, 33, 43); border-bottom-color: rgb(14, 112, 104); background-color: rgba(0, 0, 0, 0); font-weight: 600; }
+html body .acn-ht-b1112-3:not(#acn) { background: white; color: rgb(107, 120, 134); border-bottom-color: rgba(0, 0, 0, 0); background-color: rgba(0, 0, 0, 0); font-weight: 500; }
+html body .acn-ht-b1154-2:not(#acn) { border-width: 0px; border-style: none; background: #1e293b; color: #fff; background-color: rgb(14, 112, 104); }
+html body .acn-ht-b1154-3:not(#acn) { background: #e2e8f0; color: rgb(23, 33, 43); background-color: rgb(255, 255, 255); border-top-width: 1px !important; border-right-width: 1px !important; border-left-width: 1px !important; border-top-style: solid !important; border-right-style: solid !important; border-left-style: solid !important; }
+html body.dark .acn-ht-c94:not(#acn):not(#acn) { border-color: rgb(51, 65, 85); }
+html body.dark .acn-ht-c104:not(#acn):not(#acn) { color: rgb(252, 165, 165); }
+html body.dark .acn-ht-c105:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-ht-b136:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(255, 255, 255); }
+html body.dark .acn-ht-b353:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(255, 255, 255); }
+html body.dark .acn-ht-b360:not(#acn):not(#acn) { color: rgb(255, 255, 255); }
+html body.dark .acn-ht-b396:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(255, 255, 255); }
+html body.dark .acn-ht-b399:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); color: rgb(255, 255, 255); }
+html body.dark .acn-ht-c947:not(#acn):not(#acn) { background-color: rgb(30, 41, 59); }
+html body.dark .acn-ht-c948:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-ht-c1111:not(#acn):not(#acn) { border-bottom-color: rgb(51, 65, 85); }
+html body.dark .acn-ht-opsel:not(#acn):not(#acn) { background-color: rgb(13, 40, 24); color: rgb(134, 239, 172); }
+html body.dark .acn-ht-st-nao_iniciada:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); color: color(srgb 0.738824 0.823529 0.955882) !important; }
+html body.dark .acn-ht-st-em_andamento:not(#acn):not(#acn) { background-color: color(srgb 0.419608 0.607843 0.901961 / 0.24); color: color(srgb 0.738824 0.823529 0.955882) !important; }
+html body.dark .acn-ht-st-pausada:not(#acn):not(#acn) { background-color: color(srgb 0.878431 0.631373 0.227451 / 0.24); color: color(srgb 0.945294 0.834118 0.652353) !important; }
+html body.dark .acn-ht-st-concluida:not(#acn):not(#acn) { background-color: color(srgb 0.247059 0.709804 0.415686 / 0.24); color: color(srgb 0.661177 0.869412 0.737059) !important; }
+html body.dark .acn-ht-totv-escuro:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-ht-totv-verde:not(#acn):not(#acn) { color: rgb(134, 239, 172); }
+html body.dark .acn-ht-totv-azul:not(#acn):not(#acn) { color: rgb(147, 197, 253); }
+html body.dark .acn-ht-totv-roxo:not(#acn):not(#acn) { color: rgb(196, 181, 253); }
+html body.dark .acn-ht-totv-ambar:not(#acn):not(#acn) { color: rgb(253, 186, 116); }
+html body.dark .acn-ht-b1112-2:not(#acn):not(#acn) { color: rgb(241, 245, 249); }
+html body.dark .acn-ht-b1112-3:not(#acn):not(#acn) { color: rgb(148, 163, 184); }
+html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 65, 85); color: rgb(255, 255, 255); }
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  html body .acn-ht-bt:not(#acn) { min-height: 36px; }
+  html body .acn-ht-b128:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b136:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b194:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b230:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b265:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b352:not(#acn) { padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 12px; line-height: 1.2; }
+  html body .acn-ht-b353:not(#acn) { padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 12px; line-height: 1.2; }
+  html body .acn-ht-b393:not(#acn) { padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 12px; line-height: 1.2; }
+  html body .acn-ht-b396:not(#acn) { padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 12px; line-height: 1.2; }
+  html body .acn-ht-b399:not(#acn) { padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 12px; line-height: 1.2; }
+  html body .acn-ht-b402:not(#acn) { padding-top: 5px; padding-right: 8px; padding-bottom: 5px; padding-left: 8px; font-size: 12px; line-height: 1.2; }
+  html body .acn-ht-b925:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b1149:not(#acn) { padding-right: 8px; padding-left: 8px; }
+  html body .acn-ht-b1154:not(#acn) { padding-right: 8px; padding-left: 8px; }
+}
+/* @@ht-fim */
