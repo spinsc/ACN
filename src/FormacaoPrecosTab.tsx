@@ -948,7 +948,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
       <div className="acn-fp-ir-cab">
         {/* 22/10/2026 (pedido do usuário, refeito no mesmo dia porque a primeira versão não seguiu a lista): a linha do produto tem DUAS linhas. Em cima, exatamente:
             produto – custo – markup – DIFAL – valor unitário – valor total. Embaixo: marca e modelo. O restante, inclusive a quantidade por unidade e o markup reverso, fica em
-            "Custo/impostos". Custo e DIFAL só aparecem para quem vê custo: o vendedor não vê — e, como ele não tem "Custo/impostos", a quantidade dele
+            "Custo/impostos", cujo botão fica ao lado de marca e modelo (linha de baixo). Custo e DIFAL só aparecem para quem vê custo: o vendedor não vê — e, como ele não tem "Custo/impostos", a quantidade dele
             fica na linha de baixo, ao lado do modelo, para não sumir. */}
         <div className="acn-fp-ir-l1">
           <div className="acn-fp-ir-prod">
@@ -1004,12 +1004,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             <div className="acn-fp-ir-rot">Valor Total</div>
             <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
           </div>
-          {temDetalhe && (
-            <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
-              onClick={() => setAberto(v => !v)} title="Moeda, IPI, ST, impostos e informações do produto">
-              {aberto ? 'Menos' : 'Custo/impostos'}
-            </Botao>
-          )}
           <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
         </div>
         <div className="acn-fp-ir-l2">
@@ -1022,6 +1016,12 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <input aria-label="Modelo" placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
             </div>
           </div>
+          {temDetalhe && (
+            <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
+              onClick={() => setAberto(v => !v)} title="Moeda, IPI, ST, impostos e informações do produto">
+              {aberto ? 'Menos' : 'Custo/impostos'}
+            </Botao>
+          )}
           {!temDetalhe && campoQt}
         </div>
       </div>

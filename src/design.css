@@ -1778,7 +1778,7 @@ html body .acn-input.acn-fp-ac-campo { width: 100%; box-sizing: border-box; padd
 .acn-fp-ir-cab { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; }
 /* 22/10/2026 (pedido do usuário): a linha do produto em duas linhas — l1: produto, custo, markup, DIFAL, valor unit., total; l2: marca e modelo */
 .acn-fp-ir-l1 { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
-.acn-fp-ir-l2 { display: flex; flex-wrap: wrap; gap: 10px; }
+.acn-fp-ir-l2 { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .acn-fp-ir-mm { flex: 0 1 480px; min-width: 220px; }
 html body .acn-input.acn-fp-ir-mmcaixa { display: flex; align-items: center; width: 100%; box-sizing: border-box; padding: 0; min-height: 32px; }
 .acn-fp-ir-mmcaixa:focus-within { border-color: var(--acn-brand); box-shadow: var(--acn-focus); }
@@ -1786,7 +1786,7 @@ html body .acn-fp-ir-mmcaixa input { flex: 1; min-width: 0; padding: 5px 8px; bo
 .acn-fp-ir-mmsep { align-self: stretch; width: 1px; margin: 5px 0; background: var(--acn-line); }
 .acn-fp-ir-cu { width: 96px; }
 .acn-fp-ir-df { width: 74px; }
-.acn-fp-ir-prod { flex: 2 1 200px; min-width: 160px; position: relative; }
+.acn-fp-ir-prod { flex: 2 1 150px; min-width: 150px; position: relative; }
 .acn-fp-ir-c1 { flex: 1 1 90px; min-width: 80px; }
 .acn-fp-ir-qt { width: 64px; }
 .acn-fp-ir-mk { width: 92px; }
