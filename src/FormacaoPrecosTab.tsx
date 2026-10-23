@@ -1013,15 +1013,14 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
         </div>
         <div className="acn-fp-ir-l2">
-          <div className="acn-fp-ir-c1">
-            <div className="acn-fp-ir-rot">Marca</div>
-            <input className="acn-input acn-fp-ir-campo"
-              value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
-          </div>
-          <div className="acn-fp-ir-c1">
-            <div className="acn-fp-ir-rot">Modelo</div>
-            <input className="acn-input acn-fp-ir-campo"
-              value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
+          {/* 23/10/2026 (usuário): marca e modelo numa caixa só — um campo com os dois valores, separados por um traço; no cadastro continuam dois dados */}
+          <div className="acn-fp-ir-mm">
+            <div className="acn-fp-ir-rot">Marca e modelo</div>
+            <div className="acn-input acn-fp-ir-mmcaixa">
+              <input aria-label="Marca" placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
+              <span className="acn-fp-ir-mmsep" aria-hidden="true" />
+              <input aria-label="Modelo" placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
+            </div>
           </div>
           {!temDetalhe && campoQt}
         </div>
