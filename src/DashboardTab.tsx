@@ -1312,8 +1312,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   // Etapa 14a: com o menu escondido, os avisos dos itens (análises técnicas de Engenharia/Produção e as mensagens de WhatsApp do CRM) vêm somados no botão do menu
   const totalAvisosMenu = SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => isVisible(i.id)).reduce((soma, i) => {
-    const setor = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[i.id];
-    return soma + (setor ? (analisesPorSetor[setor] || 0) : 0) + (i.id === 'crm' ? waNotifCount : 0) + (i.id === 'compras' ? comprasEsperando : 0);
+    const setores = ({ engenharia: ['Engenharia', 'Prazo'], producao: ['Producao'] } as Record<string, string[]>)[i.id] || [];   // a análise de prazo pedida pelo Comercial é da Engenharia (23/10/2026)
+    return soma + setores.reduce((n, s) => n + (analisesPorSetor[s] || 0), 0) + (i.id === 'crm' ? waNotifCount : 0) + (i.id === 'compras' ? comprasEsperando : 0);
   }, 0);
 
   return (
@@ -1359,8 +1359,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                       <Icone path={ICONE_ABA[item.id] || mdiViewDashboardOutline} size={18} className="sidebar-icone" />
                       <span className="sidebar-rotulo">{item.label}</span>
                       {(() => {
-                        const setorDaAba = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[item.id];
-                        const n = setorDaAba ? (analisesPorSetor[setorDaAba] || 0) : 0;
+                        const setoresDaAba = ({ engenharia: ['Engenharia', 'Prazo'], producao: ['Producao'] } as Record<string, string[]>)[item.id] || [];
+                        const n = setoresDaAba.reduce((soma, s) => soma + (analisesPorSetor[s] || 0), 0);
                         return n > 0 ? (
                           <span className="sidebar-contador" title={`${n} análise(s) técnica(s) aguardando este setor`}>{n}</span>
                         ) : null;
