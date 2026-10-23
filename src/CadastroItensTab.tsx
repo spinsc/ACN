@@ -8,7 +8,7 @@ import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { CamposEstoqueItem, CamposEstruturaChicote } from './Estoque';
-import { hojeISO, Faixa, Botao } from './Interface';
+import { hojeISO, Faixa, Botao, Selo } from './Interface';
 import { lerPaginado } from './LerPaginado';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -27,6 +27,8 @@ const ITEM_VAZIO = {
   // Fabricação interna: é o que faz o PCP abrir a demanda do setor sozinho ao
   // liberar o kiting, e o que já roteia a reposição do Almoxarifado.
   origem_producao: 'externa', setor_fabricante: '',
+  // Telecom, fatia T2 (pedido do usuário em 22/10/2026): quem separa e embala este item numa venda de envio. Vazio = Almoxarifado (o padrão da venda).
+  setor_separacao: '',
   // Controle de estoque é opt-in (ver Estoque.tsx): item nasce sem controle e
   // só passa a dar baixa, conferir mínimo e travar liberação quando alguém do
   // Almoxarifado ligar o checkbox — decidido com o usuário em 24/09/2026.
@@ -243,6 +245,8 @@ function ItemModal({
       custo_fixo_pct: Number(form.custo_fixo_pct) || 0,
       origem_producao: form.origem_producao === 'interna' ? 'interna' : 'externa',
       setor_fabricante: form.origem_producao === 'interna' ? (form.setor_fabricante || null) : null,
+      // só o Telecom precisa ser dito; vazio (null) é o Almoxarifado, que é o padrão da venda (SeparacaoEnvio.ts)
+      setor_separacao: form.setor_separacao === 'Telecom' ? 'Telecom' : null,
       // `estoque_atual` de propósito fora daqui: saldo só muda por contagem,
       // baixa ou entrada, pela função do banco (ver Estoque.tsx). Se saísse
       // neste payload, salvar o cadastro sobrescreveria o saldo real.
@@ -457,6 +461,23 @@ function ItemModal({
               <CamposEstruturaChicote item={form} currentUser={currentUser} />
             </>
           )}
+
+          <Section title="📡 Quem separa numa venda de envio" />
+          <Row>
+            <Field label="Separa, serializa e embala" flex={1.3}>
+              <select className="acn-cit-inp" value={form.setor_separacao || ''} onChange={e => set('setor_separacao', e.target.value)}>
+                <option value="">Almoxarifado</option>
+                <option value="Telecom">Telecom</option>
+              </select>
+            </Field>
+            <Field label=" " flex={2}>
+              <div className="acn-cit-origem-ajuda">
+                {form.setor_separacao === 'Telecom'
+                  ? 'Numa venda de envio de material, a linha deste item é separada, serializada e embalada pelo Telecom (rádio e acessórios de rádio). O vendedor ainda pode trocar na venda.'
+                  : 'Padrão: o Almoxarifado separa e embala. Marque Telecom para rádio e acessórios de rádio.'}
+              </div>
+            </Field>
+          </Row>
 
           <Section title="📊 Impostos e Markup (sugestão de partida)" />
           <div className="acn-cit-aviso-taxas">
@@ -882,8 +903,11 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
                       {it.categoria ? (
                         <span className="acn-cit-cat">{it.categoria}</span>
                       ) : <span className="acn-cit-traco">—</span>}
+                      {it.setor_separacao === 'Telecom' && (
+                        <div><Selo familia="info" ponto={false} title="Numa venda de envio, quem separa e embala este item é o Telecom">Telecom separa</Selo></div>
+                      )}
                     </td>
-                    <td className="acn-cit-td">{it.marca || <span className="acn-cit-traco">—</span>}</td>
+                    <td className="acn-cit-td">{it.marca ||<span className="acn-cit-traco">—</span>}</td>
                     <td className="acn-cit-td">{it.fornecedor || <span className="acn-cit-traco">—</span>}</td>
                     <td className="acn-cit-td centro">
                       <span className="acn-cit-un">{it.unidade}</span>

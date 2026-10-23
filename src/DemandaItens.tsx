@@ -37,6 +37,8 @@ export type ItemDemanda = {
   produto_id?: string | null;
   produto_codigo?: string | null;
   item_id?: string | null;           // item do catálogo (cadastro_itens)
+  // Telecom, fatia T2 (22/10/2026): quem separa esta linha numa venda de envio ('Almoxarifado' ou 'Telecom'). Ausente = o padrão da venda (SeparacaoEnvio.ts).
+  setor?: string;
   valor_unitario?: number | string | null;  // Compras: quem pede ou o comprador informa
   // Pedido do usuário em 20/10/2026: na solicitação de compra o fornecedor e o link são POR ITEM (antes eram um só para a lista toda e o comprador não os via)
   fornecedor_sugerido?: string;
@@ -110,7 +112,7 @@ export function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categor
     if (q.trim().length < 2) { setSugestoes([]); setAberto(false); return; }
     const [p, i] = await Promise.all([
       buscarPorPalavras(supabase.from('cadastro_produtos').select('id,codigo,nome,unidade,categoria').eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(8),
-      buscarPorPalavras(supabase.from('cadastro_itens').select('id,codigo,nome,unidade'), ['nome_norm', 'codigo_norm'], q).limit(6),
+      buscarPorPalavras(supabase.from('cadastro_itens').select('id,codigo,nome,unidade,setor_separacao'), ['nome_norm', 'codigo_norm'], q).limit(6),
     ]);
     // modelos da categoria do setor (ex.: Chicote) aparecem primeiro
     const produtos = [...(p.data || [])].sort((a: any, b: any) =>
@@ -152,16 +154,18 @@ export function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categor
 }
 
 // ── Editor da lista de itens ─────────────────────────────────────────────────
-export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false, comFornecedor = false }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean; comFornecedor?: boolean }) {
+export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false, comFornecedor = false, comSetor = false, setorPadrao = 'Almoxarifado' }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean; comFornecedor?: boolean; comSetor?: boolean; setorPadrao?: string }) {
   const [abertos, setAbertos] = useState<Record<number, boolean>>({});
   const set = (i: number, patch: Partial<ItemDemanda>) => onChange(itens.map((x, j) => j === i ? { ...x, ...patch } : x));
+  // Telecom, T2 (22/10/2026): escolher um item do cadastro traz o "Quem separa" dele; sem marca no cadastro a linha volta a valer o padrão da venda (e some a marca do item anterior da linha)
+  const marcaDoCadastro = (s: any) => (comSetor ? { setor: s.tipo === 'item' && s.setor_separacao ? s.setor_separacao : undefined } : {});
   const escolher = async (i: number, s: any) => {
     if (s.tipo === 'produto') {
-      set(i, { nome: s.nome, produto_id: s.id, produto_codigo: s.codigo || null, item_id: null, estrutura: [] });
+      set(i, { nome: s.nome, produto_id: s.id, produto_codigo: s.codigo || null, item_id: null, estrutura: [], ...marcaDoCadastro(s) });
       const estrutura = s.temEstrutura ? await estruturaParaDemanda(s.id) : [];
-      onChange(itens.map((x, j) => j === i ? { ...x, nome: s.nome, produto_id: s.id, produto_codigo: s.codigo || null, item_id: null, estrutura } : x));
+      onChange(itens.map((x, j) => j === i ? { ...x, nome: s.nome, produto_id: s.id, produto_codigo: s.codigo || null, item_id: null, estrutura, ...marcaDoCadastro(s) } : x));
     } else {
-      set(i, { nome: s.nome, item_id: s.id, produto_id: null, produto_codigo: s.codigo || null, estrutura: [] });
+      set(i, { nome: s.nome, item_id: s.id, produto_id: null, produto_codigo: s.codigo || null, estrutura: [], ...marcaDoCadastro(s) });
     }
   };
   // 07/10/2026: pergunta antes de tirar uma linha que já foi preenchida (linha em branco sai direto)
@@ -184,6 +188,14 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
                 onEscolher={s => escolher(i, s)} />
               <input type="number" min="0" step="any" value={it.quantidade} aria-label="Quantidade" className="acn-input acn-dmi-qtd"
                 onChange={e => set(i, { quantidade: e.target.value })} />
+              {comSetor && (
+                <select value={it.setor || setorPadrao} aria-label="Quem separa" className="acn-input acn-dmi-setor"
+                  title="Quem separa, serializa e embala esta linha numa venda de envio de material"
+                  onChange={e => set(i, { setor: e.target.value })}>
+                  <option value="Almoxarifado">Almoxarifado</option>
+                  <option value="Telecom">Telecom</option>
+                </select>
+              )}
               {comValor && (
                 <input inputMode="decimal" value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário" className="acn-input acn-dmi-val"
                   onChange={e => set(i, { valor_unitario: e.target.value })} />

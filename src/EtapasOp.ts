@@ -168,7 +168,7 @@ export function desdeQuandoDaLista(op: any, dataDoEvento?: string | null) {
  * quando alguma unidade está em retrabalho/devolvida.
  * `ops` traz, por OP, o número, o status e o "desde quando" (desdeQuandoDaLista).
  */
-export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any; tipo_projeto?: string | null; fluxo_entrega?: string | null }>) {
+export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any; tipo_projeto?: string | null; fluxo_entrega?: string | null; itens_vendidos?: any }>) {
   if (!ops || !ops.length) return null;
   const encerrada = (o: any) => o.status_geral === 'Cancelado' || !!etapaDaOp(o.status_geral, o).concluida;
   const abertas = ops.filter(o => !encerrada(o));

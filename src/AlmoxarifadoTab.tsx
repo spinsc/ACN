@@ -6,7 +6,7 @@ import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, L
 import { LinkLote } from './OpLote';
 import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERECO } from './EnderecoEntrega';
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
-import { setorDaSeparacao, SETOR_ALMOXARIFADO, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
+import { setorDaSeparacao, ehVendaComposta, linhasDoSetor, SETOR_ALMOXARIFADO, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -958,6 +958,12 @@ Embalar e enviar assim mesmo?`)) return;
                         {o.status_geral === STATUS_EMBALAGEM && (
                           <div className="acn-alm-embalar"><Selo familia="info" ponto={false}>
                             <Icone path={mdiPackageVariantClosed} size={13} /> {ehEnvio(o) ? 'EMBALAR — NÃO PASSA POR PRODUÇÃO' : 'EMBALAR — PRODUÇÃO CONCLUÍDA'}
+                          </Selo></div>
+                        )}
+                        {/* Telecom, T2 (22/10/2026): venda com linhas dos dois setores. Até a separação dividida entre os dois (fatia T3) o Almoxarifado separa a OP inteira, e o aviso diz o que é do Telecom */}
+                        {ehVendaComposta(o) && (
+                          <div className="acn-alm-embalar"><Selo familia="atencao" ponto={false} title={'Linhas do Telecom nesta venda: ' + linhasDoSetor(o, SETOR_TELECOM).map(l => l.nome).join('; ')}>
+                            VENDA COMPOSTA — {linhasDoSetor(o, SETOR_TELECOM).length} linha(s) do Telecom
                           </Selo></div>
                         )}
                         {(remessasPorOp.get(String(o.id)) || []).length > 0 && (

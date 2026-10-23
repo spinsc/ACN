@@ -21,6 +21,7 @@ import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
 import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, aguardaLiberacaoComercial, fluxoLabel } from './FluxoEntrega';
+import { ehEnvioDeMaterial, setorPadraoDaVenda } from './SeparacaoEnvio';
 import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
@@ -767,7 +768,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     if (error) { alert('Não foi possível salvar: ' + error.message); return; }
     await registrarNoHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: usuario?.perfil || 'Comercial',
-      evento: `Itens vendidos alterados: ${itens.map((v: any) => `${v.quantidade}× ${v.nome}`).join('; ')}`,
+      // a marca de quem separa (Telecom, T2, 22/10/2026) entra no texto: mudar o setor muda quem separa a linha, e isso tem que ficar no histórico
+      evento: `Itens vendidos alterados: ${itens.map((v: any) => `${v.quantidade}× ${v.nome}${v.setor ? ` (separa: ${v.setor})` : ''}`).join('; ')}`,
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: new Date().toISOString(),
     });
@@ -1043,7 +1045,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 {editandoVendido ? (
                   <div>
                     <SeletorEscopo opl={opl.opl} tamanho={qtdLote} valor={escopoVendido} onChange={setEscopoVendido} />
-                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} unidades={qtdLote > 1 ? qtdLote : 1} />
+                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} unidades={qtdLote > 1 ? qtdLote : 1}
+                      comSetor={ehEnvioDeMaterial(opl)} setorPadrao={setorPadraoDaVenda(opl)} />
                     <div className="acn-opl-botoes">
                       <Botao variante="primario" onClick={salvarVendido}>{escopoVendido === 'lote' && qtdLote > 1 ? `Salvar nas ${qtdLote} unidades` : 'Salvar itens vendidos'}</Botao>
                       <Botao onClick={() => { setEscopoVendido('unidade'); setEditandoVendido(null); }}>Cancelar</Botao>

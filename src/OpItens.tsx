@@ -16,7 +16,8 @@ import React, { useState } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
-import { SelectBusca, Botao } from './Interface';
+import { SelectBusca, Botao, Selo } from './Interface';
+import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, SETOR_TELECOM } from './SeparacaoEnvio';
 import { normalizarBusca } from './SearchUtils';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
@@ -54,7 +55,19 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
     produto_id: l.kit_id || null,
     item_id: l.item_id || null,
   }));
-  return { formacao: f, itens };
+  // Telecom, T2 (22/10/2026): a linha que vem do cadastro traz o "Quem separa" do item (só quando o cadastro diz Telecom; vazio vale o padrão da venda).
+  // Se a leitura do cadastro falhar a lista vem sem a marca e a tela avisa: a marca é uma ajuda e não impede carregar a formação.
+  let erroSetor = '';
+  const idsDosItens = [...new Set(itens.map((l: any) => l.item_id).filter(Boolean))];
+  if (idsDosItens.length) {
+    const { data: cad, error: erroCad } = await supabase.from('cadastro_itens').select('id,setor_separacao').in('id', idsDosItens);
+    if (erroCad) erroSetor = erroCad.message;
+    else {
+      const porId = new Map((cad || []).map((c: any) => [String(c.id), c.setor_separacao]));
+      itens.forEach((l: any) => { const s = l.item_id ? porId.get(String(l.item_id)) : null; if (s) l.setor = s; });
+    }
+  }
+  return { formacao: f, itens, erroSetor };
 }
 
 /**
@@ -72,8 +85,10 @@ export function itensQueParecemTotalDoLote(itens: any[], unidades: number) {
 }
 
 /** Editor dos itens vendidos, com "carregar da formação" e "dividir por unidade" */
-export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unidades = 1 }: {
+export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unidades = 1, comSetor = false, setorPadrao = 'Almoxarifado' }: {
   itens: any[]; onChange: (v: any[]) => void; crmId?: string | null; licitacaoId?: string | null; unidades?: number;
+  /** Telecom, T2 (22/10/2026): mostra o "Quem separa" de cada linha; só faz sentido quando a rota é envio de material. `setorPadrao` é o que vale para a linha sem marca. */
+  comSetor?: boolean; setorPadrao?: string;
 }) {
   const [carregando, setCarregando] = useState(false);
   const [aviso, setAviso] = useState('');
@@ -90,13 +105,14 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
   };
   const carregar = async () => {
     setCarregando(true); setAviso('');
-    const { formacao, itens: vindos } = await itensDaFormacao({ crmId, licitacaoId });
+    const { formacao, itens: vindos, erroSetor } = await itensDaFormacao({ crmId, licitacaoId });
     setCarregando(false);
     if (!formacao || !vindos.length) { setAviso('Nenhuma formação de preços com itens ligada a esta venda. Preencha à mão.'); return; }
     const jaPreenchidos = itensPreenchidos(itens);
     onChange([...jaPreenchidos, ...vindos]);
     setAviso(`Carregado da formação ${formacao.vencedora ? 'oficial' : '(nenhuma marcada como oficial; usada a mais recente)'} "${formacao.nome || 'formação'}" v${formacao.versao || 1}: ${vindos.length} item(ns). Confira nomes e quantidades.`
-      + (unidades > 1 ? ' As quantidades da formação são do total da venda.' : ''));
+      + (unidades > 1 ? ' As quantidades da formação são do total da venda.' : '')
+      + (comSetor && erroSetor ? ` Não consegui ler quem separa cada item no cadastro (${erroSetor}): confira a coluna "Quem separa" antes de salvar.` : ''));
   };
   const dividir = () => {
     onChange(itens.map(i => {
@@ -129,7 +145,7 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
           <Botao pequeno onClick={corrigirSuspeitos}>Corrigir para por carro</Botao>
         </div>
       )}
-      <ItensDemandaEditor itens={itens.length ? itens : [itemVazio()]} onChange={onChange} titulo="" />
+      <ItensDemandaEditor itens={itens.length ? itens : [itemVazio()]} onChange={onChange} titulo="" comSetor={comSetor} setorPadrao={setorPadrao} />
     </div>
   );
 }
@@ -528,6 +544,8 @@ export function QuadroItensOp({ opl }: { opl: any }) {
   const vendidos = opl?.itens_vendidos || [];
   const bom = opl?.bom_itens || [];
   const conf = opl?.kit_conferencia?.linhas || [];
+  // Telecom, T2 (22/10/2026): numa venda de envio de material com linha do Telecom, cada linha diz quem a separa (sem ruído nas OPs que são todas do Almoxarifado)
+  const mostraSetor = ehEnvioDeMaterial(opl) && (ehVendaComposta(opl) || setorPadraoDaVenda(opl) === SETOR_TELECOM || vendidos.some((v: any) => v?.setor === SETOR_TELECOM));
   if (!vendidos.length && !bom.length) return null;
   return (
     <div className="acn-opit-grade">
@@ -537,7 +555,7 @@ export function QuadroItensOp({ opl }: { opl: any }) {
           <table className="acn-opit-leitura"><tbody>
             {vendidos.map((v: any, i: number) => (
               <tr key={i}><td className="qtd">{fmtQ(v.quantidade)}×</td>
-                <td>{v.nome}{v.descricao && <div className="acn-opit-peq bloco">{v.descricao}</div>}</td></tr>
+                <td>{v.nome}{mostraSetor && <> <Selo familia={setorDaLinha(v, opl) === SETOR_TELECOM ? 'info' : 'neutro'} ponto={false} title="Quem separa, serializa e embala esta linha">{setorDaLinha(v, opl)}</Selo></>}{v.descricao && <div className="acn-opit-peq bloco">{v.descricao}</div>}</td></tr>
             ))}
           </tbody></table>
         ) : <div className="acn-opit-vazio">Não informado (OP anterior à lista obrigatória).</div>}

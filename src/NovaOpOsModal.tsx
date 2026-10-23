@@ -9,6 +9,7 @@ import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
 import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo, terminaEmEnvio } from './FluxoEntrega';
+import { ehEnvioDeMaterial, setorPadraoDaVenda } from './SeparacaoEnvio';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { dividirValorEmUnidades } from './AcnTabShared';
@@ -772,7 +773,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   </div>
                   <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
                     crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null}
-                    unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
+                    unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1}
+                    comSetor={ehEnvioDeMaterial(form)} setorPadrao={setorPadraoDaVenda(form)} />
                 </div>
               )}
 

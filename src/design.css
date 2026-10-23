@@ -2816,6 +2816,10 @@ body.dark .acn-dmi-sugestoes { background: #1e293b; border-color: #334155; }
 .acn-dmi-linha { display: flex; gap: 6px; align-items: center; }
 html body .acn-input.acn-dmi-qtd { width: 76px; flex-shrink: 0; }
 html body .acn-input.acn-dmi-val { width: 90px; flex-shrink: 0; }
+/* Telecom, T2 (22/10/2026): "Quem separa" por linha da venda (Almoxarifado ou Telecom) */
+html body .acn-input.acn-dmi-setor { width: 128px; flex-shrink: 0; }
+/* no celular o nome do item ocupa a linha de cima e quantidade, setor e remover descem para a de baixo (sem isso o nome ficava com ~100 px) */
+@media (max-width: 640px) { .acn-dmi-linha:has(.acn-dmi-setor) { flex-wrap: wrap; } .acn-dmi-linha:has(.acn-dmi-setor) > .acn-dmi-busca { flex: 1 1 100%; } }
 html body .acn-input.acn-dmi-desc { width: 100%; box-sizing: border-box; margin-top: 4px; }
 html body .acn-dmi-item .acn-input, html body .acn-dmi-view .acn-input { min-height: 28px; padding: 3px 8px; font-size: 12px; }
 .acn-dmi-meta { display: flex; gap: 8px; align-items: center; margin-top: 3px; font-size: 11px; color: var(--acn-muted); }

@@ -24,7 +24,7 @@ export default function TelecomTab({ currentUser }) {
   useEffect(() => {
     let vivo = true;
     const contar = async () => {
-      const { data, error } = await supabase.from('oples').select('id,tipo_projeto,fluxo_entrega').in('status_geral', STATUS_DE_SEPARACAO);
+      const { data, error } = await supabase.from('oples').select('id,tipo_projeto,fluxo_entrega,itens_vendidos').in('status_geral', STATUS_DE_SEPARACAO);
       if (!vivo || error) return;
       setEsperando((data || []).filter(o => setorDaSeparacao(o) === SETOR_TELECOM).length);
     };
