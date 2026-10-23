@@ -1,17 +1,14 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
-import { createClient } from '@supabase/supabase-js';
+// 23/10/2026: usa o cliente compartilhado (que leva o crachá de quem entrou). Esta tela tinha um cliente PRÓPRIO só com a chave pública: desde a Etapa 17 (22/10) o banco
+// recusa essa chave para gravar em veiculos_nfc e servicos_executados_nfc e para ler oples e cadastro_produtos — salvar, editar, apagar e a busca de OP ficavam sem funcionar.
+import { supabase } from './supabaseClient';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { perfilComPoderes } from './utils/permissoes';
 import { CabecalhoTela, Botao, diaISO } from './Interface';
 import { mdiPlus } from '@mdi/js';
-
-const supabase = createClient(
-  'https://qgemelnuqdilnggxmrdw.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k'
-);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
