@@ -6,7 +6,8 @@ import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
-import { linhasDoKit, linhasDoKitComErro, custoDoKit, usosDoKit } from './KitEstrutura';
+import { linhasDoKitComErro, custoDoKitComErro, usosDoKitComErro } from './KitEstrutura';
+import { Faixa, Botao } from './Interface';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
 
@@ -17,6 +18,14 @@ const CATEGORIAS_DEFAULT = [
   // modelos fabricados internamente (a demanda do setor busca estes primeiro)
   'Chicote', 'Serralheria', 'Outro',
 ];
+
+/** Percentual digitado: campo vazio vale o padrão; 0 vale 0 (antes `Number(x) || padrão` trocava o 0 digitado pelo padrão na gravação, enquanto a prévia do preço usava o 0). */
+function numOuPadrao(v: any, padrao: number) {
+  const t = String(v ?? '').trim().replace(',', '.');
+  if (t === '') return padrao;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : padrao;
+}
 
 function fmtR(v: number) {
   return `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -48,16 +57,21 @@ function ItemBuscador({ onSelect, excluirIds = [] }: { onSelect: (item: any) => 
   const [q, setQ]           = useState('');
   const [itens, setItens]   = useState<any[]>([]);
   const [open, setOpen]     = useState(false);
+  const [erro, setErro]     = useState('');
+  const seq                 = useRef(0);   // 7.x: a resposta de uma busca antiga não sobrescreve a da mais nova
   const ref                 = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!q.trim()) { setItens([]); setOpen(false); return; }
+    const minha = ++seq.current;
+    if (!q.trim()) { setItens([]); setErro(''); setOpen(false); return; }
     const t = setTimeout(async () => {
-      const { data } = await buscarPorPalavras(supabase
+      const { data, error } = await buscarPorPalavras(supabase
         .from('cadastro_itens')
         .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
         .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(20);
-      setItens((data || []).filter(i => !excluirIds.includes(i.id)));
+      if (minha !== seq.current) return;
+      setErro(error ? (error.message || 'falha na consulta') : '');
+      setItens(error ? [] : (data || []).filter(i => !excluirIds.includes(i.id)));
       setOpen(true);
     }, 250);
     return () => clearTimeout(t);
@@ -81,12 +95,13 @@ function ItemBuscador({ onSelect, excluirIds = [] }: { onSelect: (item: any) => 
         }}
         onFocus={() => { if (itens.length) setOpen(true); }}
       />
-      {open && itens.length > 0 && (
+      {open && (itens.length > 0 || erro) && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
           background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
           boxShadow: '0 8px 24px rgba(0,0,0,.15)', maxHeight: 240, overflowY: 'auto',
         }}>
+          {erro && <div style={{ padding: '8px 10px', fontSize: 10, color: '#dc2626' }}>Não foi possível buscar os itens ({erro}). Isso não quer dizer que o item não exista.</div>}
           {itens.map(it => (
             <div
               key={it.id}
@@ -132,7 +147,9 @@ async function itensPorCodigo(codigos: string[]) {
   const unicos = [...new Set(codigos.map(c => normalizarBusca(String(c ?? '').trim())).filter(Boolean))];
   for (let i = 0; i < unicos.length; i += 150) {
     const lote = unicos.slice(i, i + 150);
-    const { data } = await supabase.from('cadastro_itens').select('*').in('codigo_norm', lote);
+    const { data, error } = await supabase.from('cadastro_itens').select('*').in('codigo_norm', lote);
+    // 7.x (23/10/2026): leitura recusada valia como "esses códigos não existem" e o relatório listava todos como não encontrados
+    if (error) { const e: any = new Error('Não foi possível consultar o catálogo (' + (error.message || 'falha na consulta') + ').'); e.daConsulta = true; throw e; }
     (data || []).forEach((it: any) => achados.set(normalizarBusca(String(it.codigo || '').trim()), it));
   }
   return achados;
@@ -160,16 +177,22 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
   const [kitSel, setKitSel] = useState('');
   const [processando, setProcessando] = useState(false);
   const [relatorio, setRelatorio] = useState<any>(null);
+  const [erroBusca, setErroBusca] = useState('');
+  const [erroKits, setErroKits] = useState('');
+  const seqBusca = useRef(0);   // 7.x: a resposta de uma busca antiga não sobrescreve a da mais nova
 
   // busca por código ou nome, com bem mais resultados que o campo de um item só
   useEffect(() => {
-    if (!q.trim()) { setResultados([]); return; }
+    const minha = ++seqBusca.current;
+    if (!q.trim()) { setResultados([]); setErroBusca(''); setBuscando(false); return; }
     setBuscando(true);
     const t = setTimeout(async () => {
-      const { data } = await buscarPorPalavras(supabase.from('cadastro_itens')
+      const { data, error } = await buscarPorPalavras(supabase.from('cadastro_itens')
         .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
         .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).order('nome').limit(200);
-      setResultados(data || []);
+      if (minha !== seqBusca.current) return;
+      setErroBusca(error ? (error.message || 'falha na consulta') : '');
+      setResultados(error ? [] : (data || []));
       setBuscando(false);
     }, 250);
     return () => clearTimeout(t);
@@ -178,7 +201,11 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
   useEffect(() => {
     if (modo !== 'kit' || produtos.length) return;
     supabase.from('cadastro_produtos').select('id, codigo, nome, categoria').eq('ativo', true).order('nome')
-      .then(({ data }) => setProdutos((data || []).filter((p: any) => p.id !== produtoId)));
+      .then(({ data, error }) => {
+        if (error) { setErroKits(error.message || 'falha na consulta'); return; }
+        setErroKits('');
+        setProdutos((data || []).filter((p: any) => p.id !== produtoId));
+      });
   }, [modo, produtoId]);
 
   const marcar = (item: any) => setMarcados(m => {
@@ -205,7 +232,9 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
     const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(lerLinhaDaLista);
     if (!linhas.length) { alert('Cole a lista de códigos (um por linha).'); return; }
     setProcessando(true);
-    const achados = await itensPorCodigo(linhas.map(l => l.codigo));
+    let achados: Map<string, any>;
+    try { achados = await itensPorCodigo(linhas.map(l => l.codigo)); }
+    catch (e: any) { alert(e.message + ' Nada foi adicionado.'); setProcessando(false); return; }   // a lista colada continua na caixa
     const itens: any[] = [];
     const faltando: string[] = [];
     linhas.forEach(l => {
@@ -249,7 +278,7 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
       });
       concluir(itens, faltando);
     } catch (e: any) {
-      alert('Não foi possível ler a planilha: ' + e.message);
+      alert(e.daConsulta ? e.message + ' Nada foi adicionado.' : 'Não foi possível ler a planilha: ' + e.message);
       setProcessando(false);
     }
   };
@@ -259,16 +288,18 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
     setProcessando(true);
     const kit = produtos.find((p: any) => p.id === kitSel);
     const r = await onVincularKit(kit);
-    setRelatorio({ adicionados: r.novos, somados: r.somados, naoEncontrados: [], kit: kit?.nome });
+    if (!r.falhou) setRelatorio({ adicionados: r.novos, somados: r.somados, naoEncontrados: [], kit: kit?.nome });
     setProcessando(false);
   };
 
   const trazerDoKit = async () => {
     if (!kitSel) { alert('Escolha o kit de onde vêm os itens.'); return; }
     setProcessando(true);
-    const { data } = await supabase.from('cadastro_produtos_itens')
+    const { data, error } = await supabase.from('cadastro_produtos_itens')
       .select('quantidade, observacoes, cadastro_itens(*)')
       .eq('produto_id', kitSel).order('ordem');
+    // 7.x: leitura recusada valia como "esse kit não tem itens"
+    if (error) { alert('Não foi possível ler os itens desse kit (' + (error.message || 'falha na consulta') + '). Nada foi copiado.'); setProcessando(false); return; }
     const itens = (data || []).filter((l: any) => l.cadastro_itens)
       .map((l: any) => ({ item: l.cadastro_itens, quantidade: Number(l.quantidade) || 1, observacoes: l.observacoes || '' }));
     if (!itens.length) { alert('Esse kit não tem itens na estrutura.'); setProcessando(false); return; }
@@ -344,8 +375,8 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
                   );
                 })}
                 {!buscando && !resultados.length && (
-                  <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 11, fontStyle: 'italic' }}>
-                    {q.trim() ? 'Nenhum item encontrado.' : 'Digite parte do código ou do nome do item.'}
+                  <div style={{ padding: 20, textAlign: 'center', color: erroBusca ? '#dc2626' : '#9ca3af', fontSize: 11, fontStyle: erroBusca ? 'normal' : 'italic' }}>
+                    {erroBusca ? `Não foi possível buscar os itens (${erroBusca}). Isso não quer dizer que o item não exista.` : q.trim() ? 'Nenhum item encontrado.' : 'Digite parte do código ou do nome do item.'}
                   </div>
                 )}
               </div>
@@ -383,6 +414,7 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
                 <br />
                 <b>Copiar itens</b> traz os itens de uma vez, e depois cada kit segue seu caminho.
               </div>
+              {erroKits && <div style={{ fontSize: 10, color: '#dc2626', marginBottom: 6 }}>Não foi possível ler a lista de kits ({erroKits}).</div>}
               <select value={kitSel} onChange={e => setKitSel(e.target.value)} style={cx}>
                 <option value="">Escolha o kit…</option>
                 {produtos.map(p => <option key={p.id} value={p.id}>{[p.codigo, p.nome].filter(Boolean).join(' — ')}</option>)}
@@ -447,6 +479,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
   const [bomCarregado, setBomCarregado] = useState(!(produto?.id || copiarBomDe));
   const [erroBom, setErroBom] = useState('');
   const [adicionarVarios, setAdicionarVarios] = useState(false);
+  const salvandoRef = useRef(false);   // 7.x: clique duplo gravava duas vezes
   // Fotos e catálogo
   const [fotos, setFotos]         = useState<string[]>(produto?.fotos || []);
   const [catalogoUrl, setCatalogoUrl] = useState<string>(produto?.catalogo_url || '');
@@ -497,16 +530,20 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
       .then(async ({ linhas: linhasSalvas, erro }: { linhas: any[]; erro: string }) => {
         if (erro) { setErroBom(erro); setLoadingBom(false); return; }
         const montadas = [];
+        let erroCusto = '';
         for (const l of linhasSalvas) {
           const base = { ...l, id: produto?.id ? l.id : undefined, _tmpId: Math.random().toString(36).slice(2) };
           if (l.produto_filho_id) {
             // sub-kit vinculado: custo é o do kit de origem, sempre o atual
-            const custo = await custoDoKit(l.produto_filho_id);
+            const { custo, erro: ec } = await custoDoKitComErro(l.produto_filho_id);
+            if (ec) erroCusto = erroCusto || ec;
             montadas.push({ ...base, _kit: l.filho || { nome: l.item_nome }, _item: { nome: l.item_nome, custo_unit: custo, ipi_pct: 0, st_pct: 0 } });
           } else {
             montadas.push({ ...base, _item: l.cadastro_itens || { nome: l.item_nome, custo_unit: 0 } });
           }
         }
+        // 7.x: com a leitura de um sub-kit recusada o custo saía menor e o preço sugerido era gravado assim; a estrutura só vale como lida com todos os custos
+        if (erroCusto) { setErroBom('o custo de um kit vinculado não pôde ser lido: ' + erroCusto); setLoadingBom(false); return; }
         setLinhas(montadas);
         setBomCarregado(true);
         setLoadingBom(false);
@@ -551,8 +588,9 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
   // Kit dentro de kit VINCULADO: guarda a referência, não os itens. A composição
   // do sub-kit é sempre lida do cadastro dele — mudou lá, muda aqui.
   const vincularKit = async (kit: any, quantidade = 1) => {
-    if (produto?.id && kit.id === produto.id) { alert('Um kit não pode conter ele mesmo.'); return { novos: 0, somados: 0 }; }
-    const custo = await custoDoKit(kit.id);
+    if (produto?.id && kit.id === produto.id) { alert('Um kit não pode conter ele mesmo.'); return { novos: 0, somados: 0, falhou: true }; }
+    const { custo, erro: erroCusto } = await custoDoKitComErro(kit.id);
+    if (erroCusto) { alert('Não foi possível ler a composição do kit "' + (kit.nome || '') + '" (' + erroCusto + '). O kit não foi vinculado.'); return { novos: 0, somados: 0, falhou: true }; }
     let resumo = { novos: 0, somados: 0 };
     setLinhas(prev => {
       const i = prev.findIndex(l => l.produto_filho_id === kit.id);
@@ -584,11 +622,16 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
     setLinhas(prev => prev.map((l, i) => i === idx ? { ...l, [k]: v } : l));
 
   const { custoTotal, precoVenda } = calcProduto(
-    linhas, form.markup_pct, form.difal_pct, form.imposto_pct, form.custo_fixo_pct,
+    linhas, numOuPadrao(form.markup_pct, 100), numOuPadrao(form.difal_pct, 0), numOuPadrao(form.imposto_pct, 16), numOuPadrao(form.custo_fixo_pct, 3),
   );
 
   const handleSave = async () => {
-    if (!form.nome?.trim()) return;
+    if (!form.nome?.trim() || salvandoRef.current) return;
+    // 7.x: os campos de percentual declaram 0 a 200, mas o navegador só aplica isso nas setas
+    for (const [k, rot] of [['markup_pct', 'Markup'], ['custo_fixo_pct', 'Custo fixo'], ['imposto_pct', 'Impostos s/ venda'], ['difal_pct', 'DIFAL']] as const) {
+      const n = numOuPadrao(form[k], 0);
+      if (n < 0 || n > 200) { alert(`O campo "${rot}" precisa estar entre 0 e 200.`); return; }
+    }
     // sem a estrutura lida, salvar regravaria uma lista vazia por cima da que existe
     if (!bomCarregado) {
       alert(erroBom
@@ -596,7 +639,21 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
         : 'A estrutura do kit ainda está carregando. Aguarde um instante e salve de novo.');
       return;
     }
+    salvandoRef.current = true;
     setSalvando(true);
+    try { await gravarProduto(); } finally { salvandoRef.current = false; setSalvando(false); }
+  };
+
+  const gravarProduto = async () => {
+    // 7.x (23/10/2026): lê a estrutura que já existe ANTES de gravar qualquer coisa (leitura recusada deixava de saber o que apagar e a estrutura nova ia somada à antiga) e pergunta antes de apagar tudo
+    let idsAntigos: string[] = [];
+    if (isEdit) {
+      const { data: antigas, error: erroAntigas } = await supabase.from('cadastro_produtos_itens').select('id').eq('produto_id', produtoIdLocal);
+      if (erroAntigas) { alert('Não foi possível ler a estrutura que o produto já tem (' + erroAntigas.message + '). Nada foi gravado.'); return; }
+      idsAntigos = (antigas || []).map((a: any) => a.id);
+      if (linhas.length === 0 && idsAntigos.length > 0
+          && !await confirmar(`Este kit tem ${idsAntigos.length} item(ns) na estrutura e a lista está vazia.\n\nSalvar assim APAGA a estrutura inteira. Confirmar?`)) return;
+    }
 
     const payload: any = {
       codigo:        form.codigo?.trim() || null,
@@ -605,10 +662,10 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
       categoria:     form.categoria?.trim() || null,
       unidade:       form.unidade || 'UN',
       ncm:           form.ncm?.trim() || null,
-      markup_pct:    Number(form.markup_pct) || 100,
-      custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
-      imposto_pct:   Number(form.imposto_pct) || 16,
-      difal_pct:     Number(form.difal_pct) || 0,   // antes "|| 16" transformava um 0 digitado em 16
+      markup_pct:    numOuPadrao(form.markup_pct, 100),   // 7.x: o 0 digitado fica 0 (antes "|| 100" o trocava pelo padrão)
+      custo_fixo_pct: numOuPadrao(form.custo_fixo_pct, 3),
+      imposto_pct:   numOuPadrao(form.imposto_pct, 16),
+      difal_pct:     numOuPadrao(form.difal_pct, 0),
       garantia_meses: Number(form.garantia_meses) || 12,
       fotos:         fotos,
       catalogo_url:  catalogoUrl || null,
@@ -619,26 +676,23 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
     };
 
     let produtoId = produtoIdLocal;
+    // 7.x: a gravação do produto recusada (ou que o banco não fez, 0 linhas) seguia como salva e a estrutura era regravada por cima
     if (isEdit) {
-      await supabase.from('cadastro_produtos').update(payload).eq('id', produtoId);
+      const { data: atualizados, error: erroUpd } = await supabase.from('cadastro_produtos').update(payload).eq('id', produtoId).select('id');
+      if (erroUpd || !(atualizados || []).length) { alert('Não foi possível salvar o produto: ' + (erroUpd?.message || 'o banco não atualizou nenhum produto (ele pode ter sido excluído por outra pessoa)') + '. A estrutura não foi mexida.'); return; }
     } else {
       payload.id = produtoIdLocal;
       payload.criado_por = currentUser?.email;
-      await supabase.from('cadastro_produtos').insert([payload]);
+      const { error: erroIns } = await supabase.from('cadastro_produtos').insert([payload]);
+      if (erroIns) { alert('Não foi possível cadastrar o produto: ' + erroIns.message); return; }
     }
 
     if (produtoId) {
       // Recria a estrutura: grava as linhas NOVAS primeiro e só então remove as ANTIGAS. Antes era apagar e
       // depois inserir — uma falha no meio deixava o kit sem estrutura.
-      const { data: antigas } = await supabase.from('cadastro_produtos_itens').select('id').eq('produto_id', produtoId);
-      const idsAntigos = (antigas || []).map((a: any) => a.id);
-      if (isEdit && linhas.length === 0 && idsAntigos.length > 0
-          && !await confirmar(`Este kit tem ${idsAntigos.length} item(ns) na estrutura e a lista está vazia.\n\nSalvar assim APAGA a estrutura inteira. Confirmar?`)) {
-        setSalvando(false);
-        return;
-      }
+      let novosIds: string[] = [];
       if (linhas.length > 0) {
-        const { error: erroInsert } = await supabase.from('cadastro_produtos_itens').insert(
+        const { data: inseridas, error: erroInsert } = await supabase.from('cadastro_produtos_itens').insert(
           linhas.map((l, idx) => ({
             produto_id:  produtoId,
             item_id:     l.item_id || null,
@@ -650,17 +704,24 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
             observacoes: l.observacoes || null,
             ordem:       idx,
           }))
-        );
+        ).select('id');
         if (erroInsert) {
-          setSalvando(false);
           alert('Os dados do produto foram salvos, mas a estrutura NÃO foi gravada (a anterior continua como estava): ' + erroInsert.message);
           return;
         }
+        novosIds = (inseridas || []).map((x: any) => x.id);
       }
-      if (idsAntigos.length) await supabase.from('cadastro_produtos_itens').delete().in('id', idsAntigos);
+      if (idsAntigos.length) {
+        // 7.x: se as linhas antigas não saíram, a estrutura ficava em dobro sem aviso; desfaz as novas para a anterior continuar valendo
+        const { error: erroApagar } = await supabase.from('cadastro_produtos_itens').delete().in('id', idsAntigos);
+        if (erroApagar) {
+          if (novosIds.length) await supabase.from('cadastro_produtos_itens').delete().in('id', novosIds);
+          alert('Os dados do produto foram salvos, mas a estrutura NÃO foi trocada (a anterior continua como estava): ' + erroApagar.message);
+          return;
+        }
+      }
     }
 
-    setSalvando(false);
     onSave();
   };
 
@@ -1042,22 +1103,35 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
 function BomViewer({ produto, onClose }: any) {
   const [linhas, setLinhas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
+  const [custosKit, setCustosKit] = useState<Record<string, number>>({});
 
+  // 7.x (23/10/2026): a leitura recusada dizia "Nenhum item na estrutura" e a linha de kit vinculado valia zero no total (o item vem do outro kit e a linha não tem item do catálogo)
   useEffect(() => {
-    supabase
-      .from('cadastro_produtos_itens')
-      .select('*, cadastro_itens(custo_unit, ipi_pct, st_pct)')
-      .eq('produto_id', produto.id)
-      .order('ordem')
-      .then(({ data }) => { setLinhas(data || []); setLoading(false); });
+    let vivo = true;
+    (async () => {
+      const { linhas: salvas, erro: e } = await linhasDoKitComErro(produto.id);
+      if (!vivo) return;
+      if (e) { setErro(e); setLoading(false); return; }
+      const custos: Record<string, number> = {};
+      let erroCusto = '';
+      for (const l of salvas) if (l.produto_filho_id) {
+        const r = await custoDoKitComErro(l.produto_filho_id);
+        if (r.erro) erroCusto = erroCusto || r.erro; else custos[l.produto_filho_id] = r.custo;
+      }
+      if (!vivo) return;
+      setErro(erroCusto ? 'o custo de um kit vinculado não pôde ser lido: ' + erroCusto : '');
+      setCustosKit(custos); setLinhas(salvas); setLoading(false);
+    })();
+    return () => { vivo = false; };
   }, [produto.id]);
 
-  const custoTotal = linhas.reduce((acc, l) => {
+  const custoLinha = (l: any) => {
+    if (l.produto_filho_id) return custosKit[l.produto_filho_id] || 0;
     const item = l.cadastro_itens || {};
-    const cu   = Number(item.custo_unit) || 0;
-    const cu_c = cu * (1 + (Number(item.ipi_pct) || 0) / 100) * (1 + (Number(item.st_pct) || 0) / 100);
-    return acc + cu_c * (Number(l.quantidade) || 1);
-  }, 0);
+    return (Number(item.custo_unit) || 0) * (1 + (Number(item.ipi_pct) || 0) / 100) * (1 + (Number(item.st_pct) || 0) / 100);
+  };
+  const custoTotal = linhas.reduce((acc, l) => acc + custoLinha(l) * (Number(l.quantidade) || 1), 0);
 
   return (
     <div style={{
@@ -1074,10 +1148,15 @@ function BomViewer({ produto, onClose }: any) {
         </div>
         <div style={{ overflowY: 'auto', flex: 1, padding: 14 }}>
           <div style={{ marginBottom: 8 }}><ProdutoArquivos produtoId={produto.id} somenteLeitura /></div>
+          {erro && (
+            <div style={{ marginBottom: 8 }}>
+              <Faixa tom="erro">Não foi possível ler a estrutura ({erro}). {linhas.length ? 'O custo total abaixo está incompleto.' : 'Isso não quer dizer que o produto não tenha itens.'}</Faixa>
+            </div>
+          )}
           {loading ? (
             <div style={{ textAlign: 'center', padding: 20, color: '#9ca3af' }}>Carregando...</div>
           ) : linhas.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 20, color: '#9ca3af', fontStyle: 'italic' }}>Nenhum item na estrutura.</div>
+            erro ? null : <div style={{ textAlign: 'center', padding: 20, color: '#9ca3af', fontStyle: 'italic' }}>Nenhum item na estrutura.</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -1089,14 +1168,14 @@ function BomViewer({ produto, onClose }: any) {
               </thead>
               <tbody>
                 {linhas.map((l, idx) => {
-                  const item  = l.cadastro_itens || {};
-                  const cu    = Number(item.custo_unit) || 0;
-                  const cu_c  = cu * (1 + (Number(item.ipi_pct) || 0) / 100) * (1 + (Number(item.st_pct) || 0) / 100);
-                  const total = cu_c * (Number(l.quantidade) || 1);
+                  const total = custoLinha(l) * (Number(l.quantidade) || 1);
                   return (
                     <tr key={l.id} style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
                       <td style={{ padding: '4px 8px', fontSize: 9, color: '#9ca3af', textAlign: 'center' }}>{idx + 1}</td>
-                      <td style={{ padding: '4px 8px', fontSize: 10, fontWeight: 600 }}>{l.item_nome}</td>
+                      <td style={{ padding: '4px 8px', fontSize: 10, fontWeight: 600 }}>
+                        {l.produto_filho_id && <span title="Kit vinculado: a composição vem do cadastro dele" style={{ background: '#ede9fe', color: '#6d28d9', borderRadius: 10, padding: '1px 6px', fontSize: 8, fontWeight: 800, marginRight: 4 }}>🧩 KIT</span>}
+                        {l.item_nome}
+                      </td>
                       <td style={{ padding: '4px 8px', fontSize: 10, textAlign: 'right' }}>{l.quantidade}</td>
                       <td style={{ padding: '4px 8px', fontSize: 10, color: '#6b7280' }}>{l.unidade}</td>
                       <td style={{ padding: '4px 8px', fontSize: 10, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
@@ -1137,14 +1216,18 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
   const [duplicarDe, setDuplicarDe]   = useState<string | null>(null);
   const [deletando, setDeletando]     = useState<string | null>(null);
   const [ordenar, setOrdenar]         = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'nome', dir: 'asc' });
+  const [erroLista, setErroLista]     = useState('');
+  const [listaLida, setListaLida]     = useState(false);   // 7.x: a leitura recusada não pode parecer "nenhum produto cadastrado"
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('cadastro_produtos')
       .select('*')
-      .order(ordenar.col, { ascending: ordenar.dir === 'asc' });
-    setProdutos(data || []);
+      .order(ordenar.col, { ascending: ordenar.dir === 'asc' })
+      .order('id');   // desempate: a ordem por marca/categoria repete valores
+    if (error) setErroLista(error.message || 'falha na consulta');   // mantém a última lista lida
+    else { setErroLista(''); setListaLida(true); setProdutos(data || []); }
     setLoading(false);
   }, [ordenar]);
 
@@ -1170,7 +1253,13 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
   const excluir = async (id: string) => {
     setDeletando(id);
     // produto usado em outro kit ou numa formação de preço não pode sumir
-    const { kits, formacoes, bloqueado } = await usosDoKit(id);
+    const { kits, formacoes, bloqueado, erro: erroUso } = await usosDoKitComErro(id);
+    // 7.x: sem saber se o produto está em uso (leitura recusada) ele não é apagado — a ligação com a formação de preço o banco não impede
+    if (erroUso) {
+      setDeletando(null);
+      alert('Não foi possível conferir se o produto está em uso (' + erroUso + '). Por segurança ele não foi excluído.');
+      return;
+    }
     if (bloqueado) {
       setDeletando(null);
       const partes = [
@@ -1181,9 +1270,9 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
       return;
     }
     if (!await confirmar('Excluir este produto? A estrutura BOM também será removida.')) { setDeletando(null); return; }
-    const { error } = await supabase.from('cadastro_produtos').delete().eq('id', id);
+    const { data: apagados, error } = await supabase.from('cadastro_produtos').delete().eq('id', id).select('id');
     setDeletando(null);
-    if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+    if (error || !(apagados || []).length) { alert('Não foi possível excluir: ' + (error?.message || 'o banco não apagou nada') + '.'); return; }
     setProdutos(prev => prev.filter(p => p.id !== id));
   };
 
@@ -1230,6 +1319,14 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
         </div>
       </div>
 
+      {erroLista && (
+        <div style={{ marginBottom: 10 }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregar()}>Tentar de novo</Botao>}>
+            Não foi possível ler os produtos ({erroLista}). {listaLida ? 'A lista abaixo é a última que foi lida.' : 'Isso não quer dizer que não haja produtos cadastrados.'}
+          </Faixa>
+        </div>
+      )}
+
       {/* Filtros */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
@@ -1256,11 +1353,13 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
         {loading ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>Carregando produtos...</div>
         ) : filtrados.length === 0 ? (
+          !listaLida ? null : (
           <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 11, fontStyle: 'italic' }}>
             {produtos.length === 0
               ? 'Nenhum produto cadastrado. Clique em "Novo Produto" para começar.'
               : 'Nenhum produto encontrado para os filtros aplicados.'}
           </div>
+          )
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

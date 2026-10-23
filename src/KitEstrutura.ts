@@ -68,6 +68,25 @@ export async function custoDoKit(produtoId: string) {
   return linhas.reduce((s, l) => s + custoDoItem(l.item) * l.quantidade, 0);
 }
 
+/** Igual a `custoDoKit`, mas diz quando alguma leitura falhou: com a leitura recusada o custo saía MENOR (sub-kit valendo zero) e o preço sugerido era gravado assim (7.x, 23/10/2026). */
+export async function custoDoKitComErro(produtoId: string): Promise<{ custo: number; erro: string }> {
+  let erro = '';
+  const visitar = async (id: string, quantidade: number, vistos: string[]): Promise<number> => {
+    if (!id || vistos.includes(id)) return 0;
+    const { linhas, erro: e } = await linhasDoKitComErro(id);
+    if (e) { erro = erro || e; return 0; }
+    let soma = 0;
+    for (const l of linhas as any[]) {
+      const qt = (Number(l.quantidade) || 1) * quantidade;
+      if (l.produto_filho_id) soma += await visitar(l.produto_filho_id, qt, [...vistos, id]);
+      else if (l.cadastro_itens) soma += custoDoItem(l.cadastro_itens) * qt;
+    }
+    return soma;
+  };
+  const custo = await visitar(produtoId, 1, []);
+  return { custo, erro };
+}
+
 /** Kits que usam este kit dentro deles */
 export async function kitsQueUsam(produtoId: string) {
   const { data } = await supabase.from('cadastro_produtos_itens')
@@ -84,6 +103,20 @@ export async function formacoesQueUsam(produtoId: string) {
     .select('id, nome, numero_cotacao, status')
     .contains('itens', JSON.stringify([{ kit_id: produtoId }]));
   return data || [];
+}
+
+/** Igual a `usosDoKit`, mas diz quando a leitura falhou: sem saber se o produto está em uso ele não pode ser apagado (a ligação com a formação de preço fica dentro do texto da formação,
+ *  o banco não impede). Antes, leitura recusada valia como "não está em uso" (7.x, 23/10/2026). */
+export async function usosDoKitComErro(produtoId: string) {
+  const [a, b] = await Promise.all([
+    supabase.from('cadastro_produtos_itens').select('pai:cadastro_produtos!produto_id(id, codigo, nome)').eq('produto_filho_id', produtoId),
+    supabase.from('cotacoes_precos').select('id, nome, numero_cotacao, status').contains('itens', JSON.stringify([{ kit_id: produtoId }])),
+  ]);
+  const porId = new Map<string, any>();
+  (a.data || []).forEach((l: any) => { if (l.pai) porId.set(l.pai.id, l.pai); });
+  const kits = [...porId.values()];
+  const formacoes = b.data || [];
+  return { kits, formacoes, bloqueado: kits.length > 0 || formacoes.length > 0, erro: a.error?.message || b.error?.message || '' };
 }
 
 /** Quem impede apagar o produto: kits que o usam e formações de preço feitas com ele */
