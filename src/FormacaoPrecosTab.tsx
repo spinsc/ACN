@@ -504,8 +504,8 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
     setPreco('');
   };
   return (
-    <div title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Markup reverso: digite o preço unitário que você quer e aplique — o markup é calculado'}>
-      <div className="acn-fp-ir-rot com-ic"><Icone path={mdiRefresh} size={12} /> {modoTabela ? 'Desconto reverso' : 'Markup reverso'}</div>
+    <div title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
+      <div className="acn-fp-ir-rot2 com-ic"><Icone path={mdiRefresh} size={12} /> Preço unit. desejado</div>
       <div className="acn-fp-mr-linha">
         <input className="acn-input acn-fp-ir-campo acn-fp-num"
           placeholder={bloqueado ? 'markup global' : 'R$'} value={preco} disabled={bloqueado}
@@ -947,8 +947,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           embaixo, tudo na mesma linha de base ── */}
       <div className="acn-fp-ir-cab">
         {/* 22/10/2026 (pedido do usuário, refeito no mesmo dia porque a primeira versão não seguiu a lista): a linha do produto tem DUAS linhas. Em cima, exatamente:
-            produto – custo – markup – DIFAL – markup (reverso) – valor unitário – valor total. Embaixo: marca e modelo. O restante, inclusive a quantidade por unidade, fica em
-            "Custo/impostos". Custo, DIFAL e markup reverso só aparecem para quem vê custo: o vendedor não vê — e, como ele não tem "Custo/impostos", a quantidade dele
+            produto – custo – markup – DIFAL – valor unitário – valor total. Embaixo: marca e modelo. O restante, inclusive a quantidade por unidade e o markup reverso, fica em
+            "Custo/impostos". Custo e DIFAL só aparecem para quem vê custo: o vendedor não vê — e, como ele não tem "Custo/impostos", a quantidade dele
             fica na linha de baixo, ao lado do modelo, para não sumir. */}
         <div className="acn-fp-ir-l1">
           <div className="acn-fp-ir-prod">
@@ -994,14 +994,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
                 readOnly={usarParamsGlobais}
                 title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
                 onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
-            </div>
-          )}
-          {/* Markup reverso DESTE produto: digita o preço unitário desejado e o markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
-              É a mesma conta da calculadora "Markup Reverso" do rodapé, que só mostrava o número, sem aplicar em produto nenhum. */}
-          {temDetalhe && (
-            <div className="acn-fp-ir-mr">
-              <MarkupReversoProduto item={item} custoUnitBrl={custoUnitBrl} modoTabela={modoTabela}
-                bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
             </div>
           )}
           <div className="acn-fp-ir-uni">
@@ -1064,6 +1056,11 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <Chips className="acn-fp-ir-tc" ativo={item.tipo_calculo || 'CUSTO'} onChange={t => onSet('tipo_calculo', t)}
                 itens={[{ id: 'CUSTO', rotulo: 'CUSTO' }, { id: 'TABELA', rotulo: 'TABELA' }]} />
             </div>
+            {/* Markup reverso DESTE produto: digita o preço unitário desejado e o markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
+                É a mesma conta da calculadora "Markup Reverso" do rodapé, que só mostrava o número, sem aplicar em produto nenhum.
+                23/10/2026 (usuário): fica DENTRO de "Custo/impostos", não na linha de cima. */}
+            <MarkupReversoProduto item={item} custoUnitBrl={custoUnitBrl} modoTabela={modoTabela}
+              bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
           </div>
 
           {secao(mdiReceiptTextOutline, 'Impostos & Validação')}

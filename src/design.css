@@ -1776,13 +1776,12 @@ html body .acn-input.acn-fp-ac-campo { width: 100%; box-sizing: border-box; padd
 /* a linha de um item da formação */
 .acn-fp-ir { margin-bottom: 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
 .acn-fp-ir-cab { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; }
-/* 22/10/2026 (pedido do usuário): a linha do produto em duas linhas — l1: produto, qt, custo, markup, DIFAL, markup reverso, valor unit., total; l2: marca e modelo */
+/* 22/10/2026 (pedido do usuário): a linha do produto em duas linhas — l1: produto, custo, markup, DIFAL, valor unit., total; l2: marca e modelo */
 .acn-fp-ir-l1 { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .acn-fp-ir-l2 { display: flex; flex-wrap: wrap; gap: 10px; }
 .acn-fp-ir-l2 .acn-fp-ir-c1 { flex: 0 1 240px; min-width: 120px; }
 .acn-fp-ir-cu { width: 96px; }
 .acn-fp-ir-df { width: 74px; }
-.acn-fp-ir-mr { width: 150px; }
 .acn-fp-ir-prod { flex: 2 1 200px; min-width: 160px; position: relative; }
 .acn-fp-ir-c1 { flex: 1 1 90px; min-width: 80px; }
 .acn-fp-ir-qt { width: 64px; }
