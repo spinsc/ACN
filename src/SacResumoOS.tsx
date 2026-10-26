@@ -3,6 +3,7 @@ import React from 'react';
 import { Botao, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiMessageTextOutline } from '@mdi/js';
+import { QuadroComprasLigadas } from './ComprasLigadas';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESUMO COMPLETO DA OS — pedido do usuário em 08/10/2026
@@ -31,7 +32,7 @@ function Grupo({ titulo, linhas, children }: any) {
   );
 }
 
-export default function SacResumoOS({ os, onClose, onAcompanhamento }: any) {
+export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser = null }: any) {
   if (!os) return null;
   const veicular = !!os.is_manutencao_veicular;
   const itens = lista(os.itens_revisados).length ? lista(os.itens_revisados) : lista(os.itens_cotacao);
@@ -123,6 +124,10 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento }: any) {
               <ul className="acn-srs-lista nu">{materiais.map((m: any, i: number) => <li key={i}>{typeof m === 'string' ? m : [m.descricao || m.nome, m.quantidade != null && '× ' + m.quantidade].filter(Boolean).join(' ')}</li>)}</ul>
             </Grupo>
           )}
+
+          {/* 26/10/2026: o SAC pede compra a partir da OS e vê aqui o andamento (a compra fica ligada à OS pelo vínculo; ver ComprasLigadas.tsx) */}
+          <QuadroComprasLigadas vinculoTipo="os" vinculoId={os.id} descricao={`${os.numero_os || ''} — ${os.cliente_nome || os.equipamento_nome || ''}`.replace(/ — $/, '')}
+            titulo="Compras desta OS" origemSetor="SAC" currentUser={currentUser} podePedir={!['Entregue', 'Cancelada'].includes(os.status)} />
 
           <Grupo titulo="Responsáveis" linhas={[
             ['Responsável da OS', os.responsavel_nome], ['Técnico', os.tecnico_responsavel], ['Segundo técnico', os.tecnico_producao_2_nome],

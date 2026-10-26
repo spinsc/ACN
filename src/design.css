@@ -3623,6 +3623,9 @@ html body .acn-participante-chip .acn-b.acn-ptp-x:hover:not(:disabled) { opacity
 .acn-com-barra .acn-input.acn-fta-nf { width: 150px; }
 html body .modal-box.acn-modal-cadastro.acn-sac-resumo { width: min(860px, 96vw); max-width: min(860px, 96vw); }
 .acn-srs-acoes { display: flex; gap: 6px; }
+/* Compras ligadas a uma OS/OP (ComprasLigadas.tsx, 26/10/2026): título com o botão ao lado e a janela "Compras da OS" */
+.acn-cl-titulo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+html body .modal-box.acn-modal-cadastro.acn-cl-jan { width: min(860px, 96vw); max-width: min(860px, 96vw); }
 .acn-modal-corpo.acn-srs-corpo { max-height: 78vh; }
 .acn-srs-lista { margin: 4px 0 0 18px; padding: 0; }
 .acn-srs-lista.nu { margin-top: 0; }

@@ -585,9 +585,9 @@ function DescricaoCompacta({ texto, linhas = 2 }: { texto: string; linhas?: numb
 function SeloOrigemCompra({ p, grande = false }: { p: any; grande?: boolean }) {
   const o = origemDaRequisicao(p);
   return (
-    <span className={'acn-cmp-origem' + (grande ? ' grande' : '')} data-acn-familia={o.tipo === 'estoque' ? 'ok' : o.tipo === 'op' ? 'marca' : 'neutro'}
+    <span className={'acn-cmp-origem' + (grande ? ' grande' : '')} data-acn-familia={o.tipo === 'estoque' ? 'ok' : o.tipo === 'op' ? 'marca' : o.tipo === 'os' ? 'atencao' : 'neutro'}
       title={o.detalhe ? `${o.label}: ${o.detalhe}` : o.label}>
-      <Icone path={o.tipo === 'op' ? mdiLinkVariant : o.tipo === 'estoque' ? mdiPackageVariantClosed : mdiClipboardTextOutline} size={12} /> {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
+      <Icone path={o.tipo === 'op' || o.tipo === 'os' ? mdiLinkVariant : o.tipo === 'estoque' ? mdiPackageVariantClosed : mdiClipboardTextOutline} size={12} /> {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
     </span>
   );
 }

@@ -23,6 +23,7 @@ import { diaBR } from './Interface';
 import { textosDasOps } from './TextosDaOp';
 import { OndeEstaAgora } from './OndeEstaAgora';
 import { DossieLote, baseDoLote } from './OpDossieLote';
+import { QuadroComprasLigadas, podePedirCompraDaOp, usuarioAtual } from './ComprasLigadas';
 
 // Entrada, prazo e data do pedido são colunas do tipo date, e a data dos vínculos mistura date e data com hora: `diaBR` lê do texto a data pura e converte a que tem hora (R16, 05/10/2026; antes `new Date(d)`: 0 de 32 batiam com o banco).
 const fmtD   = (d) => diaBR(d);
@@ -244,6 +245,12 @@ export function DossieOp({ op, dossieCarregado = null }) {
             </>
           ) : null}
         </Secao>
+
+        {/* 26/10/2026: o SAC pede compra a partir da OP; a compra nasce ligada à OP e aparece no grupo "Compras" logo abaixo (a lista não se repete aqui) */}
+        {podePedirCompraDaOp(usuarioAtual()) && (
+          <QuadroComprasLigadas vinculoTipo="op" vinculoId={o.id} descricao={`${o.opl || ''} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '')}
+            titulo="Pedir compra para esta OP" origemSetor="SAC" opl={o.opl} mostrarLista={false} />
+        )}
 
         {/* ── Grupos de vínculos ── */}
         {GRUPOS.map(g => {

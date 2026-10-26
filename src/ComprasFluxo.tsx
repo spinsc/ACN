@@ -947,6 +947,10 @@ export function origemDaRequisicao(p: any) {
     return { tipo: 'estoque' as const, label: 'Reposição de estoque', cor: '#0f766e',
       detalhe: p?.vinculo_descricao || '' };
   }
+  // 26/10/2026: compra pedida pelo SAC a partir de uma OS (vínculo 'os' = OS do SAC) ganha selo próprio, para o Compras saber que o pedido nasceu de um atendimento
+  if (p?.vinculo_tipo === 'os') {
+    return { tipo: 'os' as const, label: 'Demanda de OS (SAC)', cor: '#b45309', detalhe: p?.vinculo_descricao || '' };
+  }
   const temOp = p?.vinculo_tipo === 'op' || p?.vinculo_tipo === 'opl' || !!String(p?.opl || '').trim();
   return temOp
     ? { tipo: 'op' as const, label: 'Demanda de OP', cor: '#7c3aed',

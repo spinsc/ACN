@@ -19,9 +19,10 @@ import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
+import { ModalComprasDaOS } from './ComprasLigadas';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
-  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
+  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline, mdiCartOutline } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -239,6 +240,7 @@ function SacTabCompleto({ currentUser }) {
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
+  const [comprasOS, setComprasOS]       = useState<any>(null); // janela "Compras da OS" (menu ⋯ da OS, 26/10/2026)
 
   // Cadastros estados
   const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'|'tipos_servico'>('equipamentos');
@@ -1217,6 +1219,7 @@ OK = ACN   |   Cancelar = DETECH`;
         onClick: ()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); } },
       { rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
         onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??'',data_faturamento:(os.data_faturamento||'').slice(0,10)});setModalFinanceiro(os);} },
+      { rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
       { rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
       { rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
     ]} />);
@@ -3005,7 +3008,8 @@ OK = ACN   |   Cancelar = DETECH`;
       )}
 
       {/* MODAL ACOMPANHAMENTO DA OS */}
-      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} onClose={() => setResumoOS(null)} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
+      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
+      {comprasOS && <ModalComprasDaOS os={ordens.find((x: any) => x.id === comprasOS.id) || comprasOS} currentUser={currentUser} onClose={() => setComprasOS(null)} />}
       {modalAcomp && (
         <OplAcompModal
           referenciaId={String(modalAcomp.id)}

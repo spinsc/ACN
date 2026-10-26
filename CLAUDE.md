@@ -112,6 +112,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 | Itens vendidos × BOM × kiting | `OpItens.tsx` |
 | Itens e vínculos de demanda | `DemandaItens.tsx` |
 | Requisição de compra | `ComprasFluxo.tsx` — `criarRequisicaoCompra`, `origemDaRequisicao` |
+| Compras ligadas a uma OS do SAC ou a uma OP (lista com o andamento + "Solicitar compra") | `ComprasLigadas.tsx` — `QuadroComprasLigadas` (no resumo da OS, no Dossiê da OP) e `ModalComprasDaOS` (menu ⋯ da OS); o elo é o vínculo da própria compra (`vinculo_tipo` 'os' = OS do SAC, 'op' = OP), sem tabela nova; o selo no Compras é "Demanda de OS (SAC)" (`origemDaRequisicao`) |
 | Pintura da serralheria | `PinturaSerralheria.tsx` |
 | Busca sem acento | `SearchUtils.ts` |
 | Ler tabela grande (o banco corta em 1.000 linhas por consulta) | `LerPaginado.ts` — `lerPaginado` (lê em blocos de 1.000; ponha `.order('id')` como desempate) |
