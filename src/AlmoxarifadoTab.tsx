@@ -6,6 +6,7 @@ import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, L
 import { LinkLote } from './OpLote';
 import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERECO } from './EnderecoEntrega';
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
+import { estaNaFilaDe, aguardaOutroSetor, ehVendaComposta, linhasDoSetor, outroSetor, parteConcluida, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_ALMOXARIFADO, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -14,7 +15,7 @@ import { VinculoPicker } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
 import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
-import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
+import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia, textoDosSeriais, seriaisOutrosDaOp } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
 import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesAbertosDaOp, descricaoDaRemessa } from './Remessas';
@@ -31,8 +32,15 @@ import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa
 
 const semDado = (v) => !v || !String(v).trim();
 
-export default function AlmoxarifadoTab({ currentUser }) {
+// `setor` (pedido do usuário em 22/10/2026): a mesma tela serve ao Telecom. OP de RÁDIO em envio é separada, serializada e embalada pelo Telecom, com o MESMO processo do
+// Almoxarifado, só que SEM ESTOQUE por enquanto (nada dá baixa, nada é reservado, sem painel de estoque nem reposição). Quem decide de quem é cada OP é `estaNaFilaDe` (as linhas vendidas e a venda composta, T2 e T3)
+// (SeparacaoEnvio.ts); cada fila mostra só as suas. O padrão é o Almoxarifado: sem a propriedade, a tela se comporta exatamente como sempre.
+export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFADO }) {
+  const doTelecom = setor === SETOR_TELECOM;
+  const modulo = doTelecom ? 'telecom' : 'almoxarifado';   // módulo do histórico de alterações (AuditSystem)
   const [opls, setOpls] = useState([]);
+  // vendas compostas em que este setor já embalou a sua parte e o outro ainda não (Telecom, T3, 22/10/2026)
+  const [aguardandoOutro, setAguardandoOutro] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   // Linhas com alteração não vista por este usuário ganham borda amarela —
   // mesmo padrão usado nas outras telas de OP (ver AuditSystem.tsx).
@@ -89,6 +97,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
    * não conta o material duas vezes.
    */
   const baixarNoLote = async (o) => {
+    if (doTelecom) return null;                             // Telecom: ainda não há estoque (22/10/2026)
     if (o?.status_almox) return null;                       // já passou pelo almox: ignora
     const linhas = conferenciaInicial({ bom_itens: o?.bom_itens || [] }, { completo: true });
     if (!linhas.length) return null;
@@ -104,7 +113,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [minhasSolicitacoes, setMinhasSolicitacoes] = useState([]);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
-  useEffect(() => { fetchSolicitacoes(); }, []);
+  useEffect(() => { if (!doTelecom) fetchSolicitacoes(); }, []);   // reposição de estoque é do Almoxarifado
 
   // Etapa 7.50: leitura que falha não pode parecer "nenhuma OP aguardando" nem "nenhuma solicitação ainda"
   const [erroLeitura, setErroLeitura] = useState('');
@@ -140,14 +149,18 @@ export default function AlmoxarifadoTab({ currentUser }) {
       // serralheria com envio) e voltou só para ser pesada, medida e embalada.
       // É uma segunda passagem pelo Almoxarifado, com trabalho diferente do
       // kiting — por isso status próprio (ver FluxoEntrega.ts).
-      .in('status_geral', ['Aguardando Almox', STATUS_EMBALAGEM])
+      .in('status_geral', STATUS_DE_SEPARACAO)
       .order('data_entrada', { ascending: false });
     // se a leitura falhou, fica a lista que já estava na tela (em vez de esvaziar e dizer "nenhuma OP aguardando")
     if (erroOpls) { setErroLeitura(erroOpls.message); if (!silent) setLoading(false); return; }
     setErroLeitura('');
-    setOpls(data || []);
+    // cada setor vê só as OPs que são dele (22/10/2026): rádio em envio é do Telecom, o resto do Almoxarifado (SeparacaoEnvio.ts)
+    // (venda composta, T3, 22/10/2026: a OP entra na fila dos dois setores até cada um embalar a sua parte; quem já embalou a dele vê a OP no painel "aguardando o outro setor")
+    const daFila = (data || []).filter(o => estaNaFilaDe(o, setor));
+    setOpls(daFila);
+    setAguardandoOutro((data || []).filter(o => aguardaOutroSetor(o, setor)));
     // remessas ativas das Vendas para Envio da fila; leitura que falha deixa a que já estava na tela (a lista de OPs não depende disto)
-    const rem = await lerRemessasAtivasDe((data || []).filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
+    const rem = await lerRemessasAtivasDe(daFila.filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
     if (!rem.erro) setRemessasPorOp(rem.porOp);
 
     // O painel de recebimento lista TODA OP com material esperando conferência,
@@ -163,7 +176,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
     //
     // Aparecer nos dois lugares é de propósito: em cima é a fila de separar,
     // aqui embaixo é o que dá para resolver agora.
-    const ids = [...mapa.keys()];
+    const ids = doTelecom ? [] : [...mapa.keys()];   // o painel de recebimento de pendência (fabricação/compra) é do Almoxarifado
     if (ids.length) {
       const { data: pend, error: erroPend } = await supabase.from('oples')
         .select('id,opl,cliente_nome,modelo,status_geral,pendencias_kit')
@@ -191,12 +204,12 @@ export default function AlmoxarifadoTab({ currentUser }) {
     // dito na tela com a OP parada no banco). Agora devolve false e quem chamou para; o estoque já baixado não duplica ao repetir
     // (a baixa trabalha por diferença).
     if (erroOp) { alert(`Não foi possível atualizar a OP ${opl.opl}: ${erroOp.message}`); return false; }
-    logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+    logChange({ module: modulo, entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_almox: opl.status_almox, status_geral: opl.status_geral, obs_almox: opl.obs_almox },
       newRow: { status_almox: statusAlmox, status_geral: statusGeral, obs_almox: obs }, user: currentUser });
     const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
-      evento: `Kiting: ${statusAlmox}${obs ? ' — '+obs : ''}`,
+      opl_id: opl.id, numero_opl: opl.opl, setor,
+      evento: `${doTelecom ? 'Separação' : 'Kiting'}: ${statusAlmox}${obs ? ' — '+obs : ''}`,
       status_anterior: opl.status_geral, status_novo: statusGeral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -281,17 +294,25 @@ export default function AlmoxarifadoTab({ currentUser }) {
     }
   };
 
+  // Seriais da embalagem de envio que NÃO é "Venda para Envio" (23/10/2026): com a lista de separação na tela, cada item tem o seu serial e a caixa de texto vira "outros seriais";
+  // sem lista (kit já conferido antes), a caixa de texto continua sendo a única — como sempre foi.
+  const seriaisDaEmbalagem = (f) => (conferencia.length ? textoDosSeriais(conferencia, f.seriais) : String(f.seriais || '').trim());
+
   const abrirModalEmbalagem = async (opl) => {
+    // venda composta (Telecom, T3, 22/10/2026): a BOM é do material de adaptação, então o checklist de separação é da parte do Almoxarifado; a do Telecom não tem checklist
+    const composta = ehVendaComposta(opl);
     // se o kit já foi conferido (kiting em lote), não pede de novo
-    const linhas = opl.kit_conferencia ? [] : conferenciaInicial(opl);
+    const linhas = (opl.kit_conferencia || (composta && doTelecom)) ? [] : conferenciaInicial(opl);
     setConferencia(linhas);
     setSaldosKit({});
-    if (linhas.length) saldosDoKit({ opl, linhas }).then(setSaldosKit);
+    // Telecom (22/10/2026): o checklist de separação é o mesmo, mas sem estoque — não consulta saldo (sem saldo nenhuma linha fica travada) e, ao concluir, nada dá baixa
+    if (linhas.length && !doTelecom) saldosDoKit({ opl, linhas }).then(setSaldosKit);
     // fatia 5 (14/10/2026): Venda para Envio pode sair em remessas. Lê as da OP; com remessas anteriores, a janela começa pelo SALDO (os seriais já enviados não voltam para a tela)
+    // Venda composta não sai em remessas: cada setor embala a parte dele e o frete é um só (T3)
     let remessas: any[] = []; let erroRem = '';
-    if (ehVendaEnvioOp(opl)) { const r = await lerRemessas(opl.id); remessas = r.remessas; erroRem = r.erro || ''; }
+    if (ehVendaEnvioOp(opl) && !composta) { const r = await lerRemessas(opl.id); remessas = r.remessas; erroRem = r.erro || ''; }
     setRemessasDaOp(remessas); setErroRemessas(erroRem);
-    const saldo = ehVendaEnvioOp(opl) ? Math.max(1, saldoDeUnidades(opl, remessas)) : 0;
+    const saldo = ehVendaEnvioOp(opl) ? (composta ? unidadesDaOp(opl) : Math.max(1, saldoDeUnidades(opl, remessas))) : 0;
     const jaTemRemessa = remessas.some(r => !r.cancelada);
     setEmbForm({
       itens: ehVendaEnvioOp(opl) && jaTemRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais(opl),
@@ -315,6 +336,149 @@ export default function AlmoxarifadoTab({ currentUser }) {
     aplicarCep(opl.destino_cep, opl.destino_cidade, opl.destino_uf, true);
   };
 
+  // ── Venda composta, fatia T3 (22/10/2026): uma OP, duas separações, um só frete ─────────────────────────────────────────────────────────────────────────────────
+  // Cada setor embala a parte dele (as linhas vendidas dele). A parte é gravada em oples.envio_partes pela função do banco `oples_gravar_parte_envio` (uma gravação só, com a linha travada:
+  // os dois podem embalar ao mesmo tempo sem um apagar a parte do outro); a resposta traz as partes de agora e é ela que diz quem é o ÚLTIMO. Quem não é o último deixa a OP "aguardando o
+  // outro setor" (ela some da fila dele); o último abre o frete único — peso e volumes somados, as medidas de cada caixa descritas (decidido com o usuário em 22/10/2026) — e a OP segue como hoje.
+  const concluirParteDaVendaComposta = async (f, itensSeriais) => {
+    const opl = modalEmbalagem; const outro = outroSetor(setor); const agora = new Date().toISOString();
+    const vendaEnvio = ehVendaEnvioOp(opl);
+    const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
+    const freteComCliente = f.frete_responsavel === 'FOB';
+    setSalvandoEmb(true);
+    // 1) o material do checklist (só a parte do Almoxarifado tem) dá baixa no estoque; a baixa trabalha por diferença, então repetir não conta duas vezes
+    const difEmb = divergencias(conferencia).length ? 'Diferença com a BOM — ' + resumoDivergencias(conferencia) : '';
+    const baixaEmb = conferencia.length && !doTelecom ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser }) : null;
+    const obsEmb = [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · ');
+    // 2) grava a parte deste setor
+    const parte = {
+      concluida_em: agora, por: currentUser?.nome || null,
+      seriais: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : seriaisDaEmbalagem(f),
+      ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
+      peso_total: num(f.peso_total), volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
+      altura: num(f.altura), largura: num(f.largura), comprimento: num(f.comprimento),
+      observacoes: f.observacoes || null,
+    };
+    const { data: partes, error: erroParte } = await supabase.rpc('oples_gravar_parte_envio', { p_id: opl.id, p_setor: setor, p_parte: parte });
+    if (erroParte || !partes) {
+      setSalvandoEmb(false);
+      alert(`Não foi possível gravar a parte do ${setor} da OP ${opl.opl}: ${erroParte?.message || 'sem resposta'}\n\nNada foi enviado; tente de novo (o estoque já baixado não baixa duas vezes).`);
+      return;
+    }
+    const ultima = !!partes[outro]?.concluida_em;
+    // 3) dados da OP comuns aos dois casos: destino, quem paga o frete, conferência do kit e os seriais das duas partes juntos
+    const serialTexto = SETORES_DE_SEPARACAO.map(s => partes[s]?.seriais).filter(Boolean).join('\n');
+    const serialItens = SETORES_DE_SEPARACAO.reduce((acc, s) => mesclarSeriais(acc, partes[s]?.seriais_itens || []), []);
+    const extraOp = {
+      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser, false, vendaEnvio ? '' : f.seriais) } : {}),
+      seriais_equipamentos: serialTexto,
+      ...(vendaEnvio ? { seriais_itens: serialItens } : {}),
+      destino_cidade: f.destino_cidade.trim(), destino_uf: f.destino_uf, destino_cep: formatarCep(f.destino_cep),
+      destino_logradouro: f.destino_logradouro?.trim() || null, destino_numero: f.destino_numero?.trim() || null, destino_bairro: f.destino_bairro?.trim() || null,
+      destino_complemento: f.destino_complemento?.trim() || null, destino_destinatario: f.destino_destinatario?.trim() || null, destino_telefone: f.destino_telefone?.trim() || null,
+      frete_responsavel: f.frete_responsavel,
+    };
+    const destinoTxt = [f.destino_cidade, f.destino_uf].filter(Boolean).join('/');
+    const registrarRecado = async (texto, assunto) => {
+      await supabase.from('op_acompanhamentos').insert({
+        referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`, setor, texto,
+        usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
+      });
+      await notificarEnvolvidosOp({ ref: opl.opl, texto, assunto, autorId: currentUser?.id ? String(currentUser.id) : null, autorNome: currentUser?.nome || null });
+    };
+
+    if (!ultima) {
+      // 4a) primeira parte a ficar pronta: a OP não anda; só recebe a parte, o destino e os seriais, e fica "aguardando o outro setor"
+      const { error: erroOp } = await supabase.from('oples').update({ obs_almox: obsEmb, responsavel_almox: currentUser?.nome, ...extraOp }).eq('id', opl.id);
+      if (erroOp) {
+        setSalvandoEmb(false); fetchAll();
+        alert(`A parte do ${setor} foi gravada, mas os dados da OP ${opl.opl} não foram atualizados: ${erroOp.message}\n\nA OP está em "aguardando o ${outro}"; use "Refazer a parte" se quiser embalar de novo.`);
+        return;
+      }
+      logChange({ module: modulo, entityType: 'oples', entityId: opl.id, changeType: 'UPDATE', oldRow: { envio_partes: opl.envio_partes }, newRow: { envio_partes: partes }, user: currentUser });
+      const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: opl.id, numero_opl: opl.opl, setor,
+        evento: `Parte do ${setor} embalada (${f.volumes || 1} volume(s), ${f.peso_total} kg) — a OP espera o ${outro}; o frete único abre quando ele terminar`,
+        status_anterior: opl.status_geral, status_novo: opl.status_geral, usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+      }]);
+      if (erroLog) mostrarAviso(`A parte foi registrada, mas o histórico de movimentação da OP ${opl.opl} não foi gravado: ${erroLog.message}`, 'atencao');
+      await registrarRecado(`Parte do ${setor} embalada: ${f.volumes || 1} volume(s), ${f.peso_total} kg. A OP espera o ${outro} para abrir o frete único.`, 'Parte da venda embalada');
+      setSalvandoEmb(false);
+      alert(`Parte do ${setor} registrada. A OP ${opl.opl} sai da sua fila e espera o ${outro}; o frete único abre quando ele terminar.`);
+      setModalEmbalagem(null); fetchAll();
+      return;
+    }
+
+    // 4b) a última parte: as caixas de cada setor viram UM pedido de frete (peso e volumes somados; as medidas de cada caixa descritas; nas três colunas vão as da caixa maior)
+    const caixas = SETORES_DE_SEPARACAO.map(s => ({ s, p: partes[s] })).filter(c => c.p);
+    const soma = (k) => caixas.reduce((t, c) => t + (Number(c.p[k]) || 0), 0);
+    const pesoTotal = soma('peso_total'); const volumesTotal = soma('volumes') || null;
+    const volumeCm3 = (p) => (Number(p.altura) || 0) * (Number(p.largura) || 0) * (Number(p.comprimento) || 0);
+    const maior = [...caixas].sort((a, b) => volumeCm3(b.p) - volumeCm3(a.p))[0].p;
+    const fmtN = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    const descCaixas = caixas.map(c => `Caixa ${c.s}: ${fmtN(c.p.altura)} × ${fmtN(c.p.largura)} × ${fmtN(c.p.comprimento)} cm, ${fmtN(c.p.peso_total)} kg, ${c.p.volumes || 1} volume(s)`).join(' · ');
+    const obsFrete = [descCaixas, ...caixas.map(c => c.p.observacoes && `${c.s}: ${c.p.observacoes}`)].filter(Boolean).join(' · ');
+    const statusDepois = freteComCliente ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete';
+    const gravouOp = await setAlmox(opl, 'Kit OK', statusDepois, obsEmb, extraOp);
+    if (!gravouOp) {
+      setSalvandoEmb(false); fetchAll();
+      alert(`As duas partes estão embaladas, mas a OP ${opl.opl} não andou. Abra "EMBALAR" de novo no ${setor} para concluir (a parte do ${outro} já está guardada).`);
+      return;
+    }
+    const { data: freteCriado, error } = freteComCliente ? { data: null, error: null } : await supabase.from('pcp_fretes').insert([{
+      direcao: 'outbound',
+      descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)}) — venda composta: ${SETORES_DE_SEPARACAO.join(' + ')}`.trim(),
+      destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
+      cep_destino: formatarCep(f.destino_cep),
+      destino_endereco: enderecoEmLinha(f) || null,
+      destino_destinatario: f.destino_destinatario?.trim() || null,
+      destino_telefone: f.destino_telefone?.trim() || null,
+      data_prevista: opl.data_prevista_entrega || null,
+      quantidade_volumes: volumesTotal, peso_total: pesoTotal,
+      medida_altura: num(maior.altura), medida_largura: num(maior.largura), medida_comprimento: num(maior.comprimento),
+      vinculo_tipo: 'op_os', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}`,
+      observacoes: obsFrete || null,
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+    }]).select('id');
+    {
+      const CHAVES = ['destino_cep', 'destino_cidade', 'destino_uf', ...CAMPOS_ENDERECO.map(c => c.campo)];
+      const norm = (k: string, v: any) => (k === 'destino_cep' ? String(v ?? '').replace(/\D/g, '') : String(v ?? '').trim());
+      const mudou = CHAVES.filter(k => norm(k, opl[k]) !== norm(k, f[k]));
+      if (mudou.length) {
+        const rot = (k: string) => k === 'destino_cep' ? 'CEP' : k === 'destino_cidade' ? 'cidade' : k === 'destino_uf' ? 'UF' : (CAMPOS_ENDERECO.find(c => c.campo === k)?.rotulo.split(' (')[0] || k);
+        const texto = mudou.map(k => `${rot(k)}: ${String(opl[k] ?? '').trim() || '—'} → ${String(f[k] ?? '').trim() || '—'}`).join('; ');
+        const { error: erroEnd } = await supabase.from('logs_movimentacao_opl').insert([{
+          opl_id: opl.id, numero_opl: opl.opl, setor,
+          evento: `Endereço de entrega conferido/ajustado na embalagem por ${currentUser?.nome || '—'} — ${texto}`,
+          status_anterior: opl.status_geral, status_novo: opl.status_geral, usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+        }]);
+        if (erroEnd) mostrarAviso(`A embalagem foi gravada, mas o histórico do ajuste de endereço da OP ${opl.opl} não: ${erroEnd.message}`, 'atencao');
+      }
+    }
+    logChange({ module: modulo, entityType: 'oples', entityId: opl.id, changeType: 'UPDATE', oldRow: { envio_partes: opl.envio_partes }, newRow: { envio_partes: partes }, user: currentUser });
+    await registrarRecado(`Última parte embalada (${setor}): ${volumesTotal || 1} volume(s) no total, ${fmtN(pesoTotal)} kg, destino ${destinoTxt}. ${descCaixas}. `
+      + (freteComCliente ? 'Frete por conta do cliente (FOB) — liberado direto para o Comercial.' : 'Solicitação de frete único aberta para a Logística cotar.'), 'Embalagem e frete único');
+    setSalvandoEmb(false);
+    if (error) alert(`As duas partes estão embaladas, mas houve erro ao abrir a solicitação de frete: ${error.message}`);
+    else if (freteComCliente) alert(`Última parte registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`);
+    else alert(`Última parte registrada. Solicitação de frete único aberta para a Logística cotar (OP ${opl.opl}): ${volumesTotal || 1} volume(s), ${fmtN(pesoTotal)} kg.`);
+    setModalEmbalagem(null); fetchAll();
+  };
+
+  // O setor que já embalou a parte dele pode desfazê-la enquanto o outro não terminou (a OP volta para a fila dele). O estoque que já deu baixa não volta sozinho: acerta-se por contagem.
+  const refazerMinhaParte = async (o) => {
+    if (!await confirmar(`Refazer a parte do ${setor} da OP ${o.opl}?\n\nA parte que foi embalada é descartada e a OP volta para a sua fila. O estoque que já deu baixa não volta sozinho: se precisar, acerte por contagem.`)) return;
+    const { error } = await supabase.rpc('oples_gravar_parte_envio', { p_id: o.id, p_setor: setor, p_parte: null });
+    if (error) { alert(`Não foi possível reabrir a parte do ${setor} da OP ${o.opl}: ${error.message}`); return; }
+    logChange({ module: modulo, entityType: 'oples', entityId: o.id, changeType: 'UPDATE', oldRow: { envio_partes: o.envio_partes }, newRow: { envio_partes: 'parte do ' + setor + ' reaberta' }, user: currentUser });
+    const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: o.id, numero_opl: o.opl, setor, evento: `Parte do ${setor} reaberta para refazer — a OP volta para a fila do ${setor}`,
+      status_anterior: o.status_geral, status_novo: o.status_geral, usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+    }]);
+    if (erroLog) mostrarAviso(`A parte foi reaberta, mas o histórico de movimentação da OP ${o.opl} não foi gravado: ${erroLog.message}`, 'atencao');
+    fetchAll();
+  };
+
   const confirmarEmbalagem = async () => {
     const f = embForm;
     const vendaEnvio = ehVendaEnvioOp(modalEmbalagem);
@@ -324,20 +488,23 @@ export default function AlmoxarifadoTab({ currentUser }) {
     // fatia 5 (14/10/2026): remessa. `unidadesRemessa` = quantas unidades saem agora (o padrão da janela é o saldo inteiro: envio de uma vez só = o caminho de sempre, sem registro de remessa).
     // Parcial = menos que o saldo: grava a remessa, abre o frete dela e a OP continua na fila. Última remessa (já há remessa anterior): grava a remessa e a OP segue como sempre seguiu.
     if (vendaEnvio && erroRemessas) { mostrarAviso(`Não consegui ler as remessas desta OP (${erroRemessas}). Sem isso não dá para saber o que já foi enviado — feche a janela e tente de novo.`, 'atencao'); return; }
-    const saldoOp = vendaEnvio ? Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp)) : 0;
-    const unidadesRemessa = vendaEnvio ? Math.floor(Number(f.unidades)) : 0;
+    // venda composta (Telecom, T3, 22/10/2026): cada setor embala a parte dele, sem remessas; o serial é de quem serializa (o Telecom) e a parte do Almoxarifado pode seguir sem ele
+    const composta = ehVendaComposta(modalEmbalagem);
+    const serialObrig = !(composta && !doTelecom);
+    const saldoOp = vendaEnvio ? (composta ? unidadesDaOp(modalEmbalagem) : Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp))) : 0;
+    const unidadesRemessa = vendaEnvio ? (composta ? saldoOp : Math.floor(Number(f.unidades))) : 0;
     if (vendaEnvio && !(unidadesRemessa >= 1 && unidadesRemessa <= saldoOp)) { alert(`Informe quantas unidades vão nesta remessa: de 1 a ${saldoOp}.`); return; }
-    const remessasAtivas = remessasDaOp.filter(r => !r.cancelada);
-    const parcial = vendaEnvio && unidadesRemessa < saldoOp;
-    const comRemessa = vendaEnvio && (parcial || remessasAtivas.length > 0);
+    const remessasAtivas = composta ? [] : remessasDaOp.filter(r => !r.cancelada);
+    const parcial = vendaEnvio && !composta && unidadesRemessa < saldoOp;
+    const comRemessa = vendaEnvio && !composta && (parcial || remessasAtivas.length > 0);
     if (vendaEnvio) {
       const qtdVendida = unidadesRemessa;
       if (itensSeriais.some(x => !x.produto)) { alert('Informe o produto de cada serial.'); return; }
-      if (itensSeriais.length < qtdVendida) {
+      if (serialObrig && itensSeriais.length < qtdVendida) {
         alert(`Informe o serial ACN de cada produto: ${comRemessa ? `são ${qtdVendida} unidade(s) nesta remessa` : `são ${qtdVendida} unidade(s) vendida(s)`} e há ${itensSeriais.length} serial(is).`);
         return;
       }
-    } else if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
+    } else if (serialObrig && !seriaisDaEmbalagem(f))  { alert(conferencia.length ? 'Informe o número de série de pelo menos um item da lista de separação (coluna Serial) ou em "Outros números de série".' : 'Informe os números de série dos equipamentos.'); return; }
     if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
     // Medidas obrigatórias (pedido do usuário em 15/10/2026): o frete nasce desta janela e a transportadora cota pelas medidas;
     // uma embalagem foi gravada só com o peso e o frete seguiu para cotação sem as três medidas.
@@ -395,6 +562,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
 ${textoFaltando(faltaEnvio)}
 
 Embalar e enviar assim mesmo?`)) return;
+    // venda composta: a parte deste setor é gravada à parte e o frete único só nasce quando o último setor terminar (T3, 22/10/2026)
+    if (composta) { await concluirParteDaVendaComposta(f, itensSeriais); return; }
     setSalvandoEmb(true);
     const opl = modalEmbalagem;
     const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
@@ -424,15 +593,15 @@ Embalar e enviar assim mesmo?`)) return;
     // aqui, então é aqui que o material dá baixa. Quem já foi conferido no
     // kiting chega com `conferencia` vazia e não movimenta nada de novo.
     // (Com remessas, a conferência e a baixa são do kit INTEIRO e acontecem uma vez só, na primeira remessa: depois dela `kit_conferencia` já está gravado.)
-    const baixaEmb = conferencia.length
+    const baixaEmb = conferencia.length && !doTelecom   // Telecom: ainda não há estoque, nada dá baixa (22/10/2026)
       ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser })
       : null;
     const obsEmb = [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · ');
     // seriais da OP: com remessa, o que já estava + os das remessas ativas + os desta, sem repetir serial (gravar de novo não duplica linha)
     const seriaisDaOp = comRemessa ? mesclarSeriais(mesclarSeriais(opl.seriais_itens, remessasAtivas.flatMap(r => r.itens || [])), itensSeriais) : itensSeriais;
     const extraOp = {
-      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
-      seriais_equipamentos: vendaEnvio ? seriaisDaOp.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
+      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser, false, vendaEnvio ? '' : f.seriais) } : {}),
+      seriais_equipamentos: vendaEnvio ? seriaisDaOp.map(x => `${x.produto}: ${x.serial}`).join('\n') : seriaisDaEmbalagem(f),
       ...(vendaEnvio ? { seriais_itens: seriaisDaOp } : {}),
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
@@ -475,11 +644,11 @@ Embalar e enviar assim mesmo?`)) return;
         alert(`A remessa ${numeroRemessa} foi gravada, mas a OP ${opl.opl} não foi atualizada: ${erroOp.message}\n\nAbra "EMBALAR" de novo e use "Cancelar remessa ${numeroRemessa}" para refazer.`);
         return;
       }
-      logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      logChange({ module: modulo, entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
         oldRow: { seriais_itens: opl.seriais_itens, obs_almox: opl.obs_almox }, newRow: { seriais_itens: seriaisDaOp, obs_almox: obsEmb }, user: currentUser });
       const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
-        opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
-        evento: `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} un.) — a OP continua no Almoxarifado`,
+        opl_id: opl.id, numero_opl: opl.opl, setor,
+        evento: `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} un.) — a OP continua no ${setor}`,
         status_anterior: opl.status_geral, status_novo: opl.status_geral,
         usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
       }]);
@@ -534,7 +703,7 @@ Embalar e enviar assim mesmo?`)) return;
         const rot = (k: string) => k === 'destino_cep' ? 'CEP' : k === 'destino_cidade' ? 'cidade' : k === 'destino_uf' ? 'UF' : (CAMPOS_ENDERECO.find(c => c.campo === k)?.rotulo.split(' (')[0] || k);
         const texto = mudou.map(k => `${rot(k)}: ${String(opl[k] ?? '').trim() || '—'} → ${String(f[k] ?? '').trim() || '—'}`).join('; ');
         const { error: erroEnd } = await supabase.from('logs_movimentacao_opl').insert([{
-          opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
+          opl_id: opl.id, numero_opl: opl.opl, setor,
           evento: `Endereço de entrega conferido/ajustado na embalagem por ${currentUser?.nome || '—'} — ${texto}`,
           status_anterior: opl.status_geral, status_novo: opl.status_geral,
           usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
@@ -550,14 +719,14 @@ Embalar e enviar assim mesmo?`)) return;
     const irDireto = freteComCliente && statusDepois !== 'Aguardando Cotacao Frete';
     const recado = comRemessa
       ? `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidade(s)): ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. `
-        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no Almoxarifado. ` : 'Foi a última remessa: a OP segue. ')
+        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no ${setor}. ` : 'Foi a última remessa: a OP segue. ')
         + (freteComCliente ? 'Frete por conta do cliente (FOB).' : 'Solicitação de frete aberta para a Logística cotar.')
       : freteComCliente
       ? `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Frete por conta do cliente (FOB) — liberado direto para o Comercial.`
       : `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Solicitação de frete aberta para a Logística cotar.`;
     await supabase.from('op_acompanhamentos').insert({
       referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`,
-      setor: 'Almoxarifado', texto: recado,
+      setor, texto: recado,
       usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
       criado_em: new Date().toISOString(),
     });
@@ -571,7 +740,7 @@ Embalar e enviar assim mesmo?`)) return;
     if (parcial) {
       alert(`Remessa ${numeroRemessa} registrada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidades). `
         + (error ? `Houve erro ao abrir a solicitação de frete: ${error.message}. ` : freteComCliente ? 'Frete por conta do cliente (FOB). ' : 'Solicitação de frete aberta para a Logística cotar. ')
-        + `A OP ${opl.opl} continua no Almoxarifado com ${saldoOp - unidadesRemessa} unidade(s) por enviar.`);
+        + `A OP ${opl.opl} continua no ${setor} com ${saldoOp - unidadesRemessa} unidade(s) por enviar.`);
     }
     else if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
     else if (irDireto) { alert(`Embalagem registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`); }
@@ -593,7 +762,7 @@ Embalar e enviar assim mesmo?`)) return;
       if (erroFr) { alert('Não consegui conferir o frete desta remessa: ' + erroFr.message); return; }
       if (fr?.status === 'Entregue') { alert(`O frete da remessa ${r.numero} já foi entregue — não dá para cancelar a remessa.`); return; }
       if (fr && fr.status !== 'Cancelado') {
-        const { error: erroCf } = await supabase.from('pcp_fretes').update({ status: 'Cancelado', observacoes: [fr.observacoes, `Cancelado: remessa ${r.numero} cancelada no Almoxarifado — ${String(motivo).trim()}`].filter(Boolean).join(' · ') }).eq('id', fr.id);
+        const { error: erroCf } = await supabase.from('pcp_fretes').update({ status: 'Cancelado', observacoes: [fr.observacoes, `Cancelado: remessa ${r.numero} cancelada no ${setor} — ${String(motivo).trim()}`].filter(Boolean).join(' · ') }).eq('id', fr.id);
         if (erroCf) { alert('Não consegui cancelar o frete desta remessa: ' + erroCf.message + '\n\nNada foi cancelado.'); return; }
       }
     }
@@ -603,13 +772,13 @@ Embalar e enviar assim mesmo?`)) return;
     const sobraram = tirarSeriais(opl.seriais_itens, r.itens);
     const { error: erroOp } = await supabase.from('oples').update({ seriais_itens: sobraram, seriais_equipamentos: sobraram.map(x => `${x.produto}: ${x.serial}`).join('\n') }).eq('id', opl.id);
     if (erroOp) mostrarAviso(`A remessa foi cancelada, mas não consegui tirar os seriais dela da OP: ${erroOp.message}`, 'atencao');
-    logChange({ module: 'almoxarifado', entityType: 'op_remessas', entityId: r.id, changeType: 'UPDATE', oldRow: { cancelada: false }, newRow: { cancelada: true, motivo_cancelamento: String(motivo).trim() }, user: currentUser });
+    logChange({ module: modulo, entityType: 'op_remessas', entityId: r.id, changeType: 'UPDATE', oldRow: { cancelada: false }, newRow: { cancelada: true, motivo_cancelamento: String(motivo).trim() }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado', evento: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo) — ${String(motivo).trim()}`,
+      opl_id: opl.id, numero_opl: opl.opl, setor, evento: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo) — ${String(motivo).trim()}`,
       status_anterior: opl.status_geral, status_novo: opl.status_geral, usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
     }]);
     await supabase.from('op_acompanhamentos').insert({
-      referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`, setor: 'Almoxarifado',
+      referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`, setor,
       texto: `Remessa ${r.numero} cancelada (${r.unidades} unidade(s) voltam ao saldo): ${String(motivo).trim()}.`,
       usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
     });
@@ -625,13 +794,14 @@ Embalar e enviar assim mesmo?`)) return;
     const linhas = conferenciaInicial(opl);
     setConferencia(linhas);
     setSaldosKit({});
-    setSeriaisKitForm(opl.seriais_equipamentos || '');
+    setSeriaisKitForm(seriaisOutrosDaOp(opl));   // o serial de cada item volta na própria linha da conferência; aqui só os "outros" (e o texto antigo das OPs de uma caixa só)
     setModalSeriais({ ...opl, _pendenciaSanada: pendenciaSanada });
     setSaldosKit(await saldosDoKit({ opl, linhas }));
   };
 
   const confirmarKitOkComSeriais = async () => {
-    if (!seriaisKitForm.trim()) { alert('Informe os números de série dos equipamentos deste kit.'); return; }
+    const textoSeriais = textoDosSeriais(conferencia, seriaisKitForm);
+    if (!textoSeriais) { alert(conferencia.length ? 'Informe o número de série de pelo menos um item do kit (coluna Serial) ou em "Outros números de série".' : 'Informe os números de série dos equipamentos deste kit.'); return; }
     // Kit 100% quer dizer "está tudo aqui". Com peça de Serralheria/Chicotes ou
     // compra ainda em aberto (ou já pronta mas não recebida), o caminho é
     // LIBERAR C/ PENDÊNCIA — que continua do lado, funcionando como sempre.
@@ -664,8 +834,8 @@ Embalar e enviar assim mesmo?`)) return;
       if (!segue) return;
     }
 
-    const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };
-    if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser);
+    const extra: any = { seriais_equipamentos: textoSeriais };
+    if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser, false, seriaisKitForm);
 
     // O material sai da prateleira aqui, tanto no Kit OK quanto no liberado com
     // pendência — nos dois casos o que foi separado já saiu. Só item com
@@ -720,7 +890,7 @@ Embalar e enviar assim mesmo?`)) return;
       const recado = textoDaBaixa(baixa);
       const prontas = conferencia.filter(l => Number(l.separado) >= Number(l.planejado)).length;
       const { error: erroSep } = await supabase.from('oples').update({
-        kit_conferencia: registroConferencia(conferencia, currentUser),
+        kit_conferencia: registroConferencia(conferencia, currentUser, false, seriaisKitForm),   // guarda também o serial já digitado em cada item
         responsavel_almox: currentUser?.nome,
       }).eq('id', opl.id);
       // 7.50: o estoque já baixou; se a conferência não gravou, a pessoa precisa saber para salvar de novo (não baixa duas vezes)
@@ -875,7 +1045,7 @@ Embalar e enviar assim mesmo?`)) return;
     <div>
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
-          Não foi possível ler as OPs do Almoxarifado ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+          Não foi possível ler as OPs {doTelecom ? 'do Telecom' : 'do Almoxarifado'} ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
         </Faixa>
       )}
       {oplsPendenciaAlmox.length > 0 && (
@@ -909,11 +1079,11 @@ Embalar e enviar assim mesmo?`)) return;
       )}
 
       <div className="sec-card">
-        <div className="sec-hdr"><span>Kiting — OPs Aguardando Conferencia ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr"><span>{doTelecom ? 'Separação e envio — OPs de rádio aguardando o Telecom' : 'Kiting — OPs Aguardando Conferencia'} ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OP aguardando Almoxarifado.</div>
+            <div className="acn-empty">Nenhuma OP aguardando {doTelecom ? 'o Telecom' : 'Almoxarifado'}.</div>
           ) : (
             <table className="acn-tabela acn-densa">
               <thead><tr>
@@ -948,6 +1118,13 @@ Embalar e enviar assim mesmo?`)) return;
                         {o.status_geral === STATUS_EMBALAGEM && (
                           <div className="acn-alm-embalar"><Selo familia="info" ponto={false}>
                             <Icone path={mdiPackageVariantClosed} size={13} /> {ehEnvio(o) ? 'EMBALAR — NÃO PASSA POR PRODUÇÃO' : 'EMBALAR — PRODUÇÃO CONCLUÍDA'}
+                          </Selo></div>
+                        )}
+                        {/* Telecom, T3 (22/10/2026): venda com linhas dos dois setores. Cada um separa e embala só as linhas dele; o frete é um só, aberto quando o último terminar */}
+                        {ehVendaComposta(o) && (
+                          <div className="acn-alm-embalar"><Selo familia="atencao" ponto={false}
+                            title={`Suas linhas nesta venda: ${linhasDoSetor(o, setor).map(l => `${l.quantidade}× ${l.nome}`).join('; ')}\n\nLinhas do ${outroSetor(setor)}: ${linhasDoSetor(o, outroSetor(setor)).map(l => `${l.quantidade}× ${l.nome}`).join('; ')}`}>
+                            VENDA COMPOSTA — você separa {linhasDoSetor(o, setor).length} linha(s){parteConcluida(o, outroSetor(setor)) ? `; o ${outroSetor(setor)} já embalou a dele` : `; o ${outroSetor(setor)} separa as outras`}
                           </Selo></div>
                         )}
                         {(remessasPorOp.get(String(o.id)) || []).length > 0 && (
@@ -1107,6 +1284,35 @@ Embalar e enviar assim mesmo?`)) return;
         </div>
       </div>
 
+      {/* Venda composta (T3, 22/10/2026): a parte deste setor já está embalada e a OP espera o outro; enquanto ele não terminar dá para refazer a parte */}
+      {aguardandoOutro.length > 0 && (
+        <div className="sec-card" data-teste="aguardando-outro-setor">
+          <div className="sec-hdr"><span>Minha parte já embalada — aguardando o {outroSetor(setor)} ({aguardandoOutro.length})</span></div>
+          <div className="sec-body acn-rolagem">
+            <table className="acn-tabela acn-densa">
+              <thead><tr><th>OP</th><th>Cliente</th><th>Parte embalada</th><th>Aguardando</th><th>Acoes</th></tr></thead>
+              <tbody>
+                {aguardandoOutro.map(o => {
+                  const p = partesEmbaladas(o)[setor] || {};
+                  return (
+                    <tr key={o.id}>
+                      <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                      <td>{o.cliente_nome || '—'}</td>
+                      <td className="acn-texto-medio">{diaBR(p.concluida_em)} · {p.por || '—'} · {p.volumes || 1} volume(s), {p.peso_total} kg</td>
+                      <td><Selo familia="atencao" ponto={false}>{outroSetor(setor)} separa {linhasDoSetor(o, outroSetor(setor)).length} linha(s)</Selo></td>
+                      <td><Botao pequeno variante="perigo-sec" icone={mdiArrowULeftTop} title="Desfazer a parte embalada: a OP volta para a sua fila" onClick={() => refazerMinhaParte(o)}>Refazer a parte</Botao></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Telecom (22/10/2026): só a fila de separar e embalar. Estoque, reposição, fabricação pronta e as demandas do setor não existem para o Telecom por enquanto
+          (as demandas e as análises dele vivem na outra aba da tela do Telecom). */}
+      {!doTelecom && (<>
       {/* FABRICAÇÃO PRONTA — peça feita aqui dentro esperando a conferência que
           faz o saldo subir. Vem antes do painel de estoque de propósito: é fila
           de balcão, tem gente esperando do outro lado. */}
@@ -1159,6 +1365,7 @@ Embalar e enviar assim mesmo?`)) return;
       <DemandaAvulsaPanel currentUser={currentUser} setor="Almoxarifado" />
       <OplMovimentadas setor="Almoxarifado" />
       <DemandaFooter setor="Almoxarifado" />
+      </>)}
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
@@ -1223,6 +1430,16 @@ Embalar e enviar assim mesmo?`)) return;
                 {modalEmbalagem.status_geral === STATUS_EMBALAGEM ? 'produção concluída' : 'não passa por produção'}
               </div>
 
+              {/* Venda composta (T3, 22/10/2026): cada setor embala só as linhas dele; o frete é um só */}
+              {ehVendaComposta(modalEmbalagem) && (
+                <Faixa tom="info">
+                  <strong>Venda composta.</strong> Aqui o {setor} separa e embala: {linhasDoSetor(modalEmbalagem, setor).map(l => `${l.quantidade}× ${l.nome}`).join('; ')}.{' '}
+                  {parteConcluida(modalEmbalagem, outroSetor(setor))
+                    ? `O ${outroSetor(setor)} já embalou a parte dele: ao concluir, nasce o pedido de frete único (peso e volumes somados, as medidas de cada caixa descritas).`
+                    : `O ${outroSetor(setor)} ainda não embalou a parte dele: ao concluir, esta OP sai da sua fila e espera; o frete único abre quando ele terminar.`}
+                </Faixa>
+              )}
+
               {/* Quem paga o frete decide para onde esta OP vai daqui. Vinha
                   respondido do Comercial, mas nem todo fluxo era perguntado —
                   quando chega em branco, é aqui que se responde (24/09/2026). */}
@@ -1247,7 +1464,7 @@ Embalar e enviar assim mesmo?`)) return;
               </div>
 
               {/* Remessa (fatia 5, 14/10/2026): Venda para Envio com mais de uma unidade pode sair em partes. O padrão é o saldo inteiro: enviar tudo de uma vez não muda nada. */}
-              {ehVendaEnvioOp(modalEmbalagem) && (unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) && (() => {
+              {ehVendaEnvioOp(modalEmbalagem) && !ehVendaComposta(modalEmbalagem) && (unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) && (() => {
                 const saldo = Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp));
                 const n = Math.floor(Number(embForm.unidades));
                 const parcial = n >= 1 && n < saldo;
@@ -1271,7 +1488,7 @@ Embalar e enviar assim mesmo?`)) return;
                         onChange={e => setEmbForm(f => ({ ...f, unidades: e.target.value }))} />
                       <div className="acn-ajuda">
                         {parcial
-                          ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no Almoxarifado para a próxima remessa.`
+                          ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no ${setor} para a próxima remessa.`
                           : `Saldo: ${saldo} unidade(s). Enviando todas, a OP segue para o próximo passo.`}
                       </div>
                     </div>
@@ -1282,8 +1499,10 @@ Embalar e enviar assim mesmo?`)) return;
               {ehVendaEnvioOp(modalEmbalagem) ? (
                 <div className="acn-alm-bloco">
                   <div className="acn-label">
-                    Seriais ACN por produto * <span className="acn-ajuda">
-                      — pelo menos {Math.max(1, Math.floor(Number(embForm.unidades)) || 1)} (uma por unidade {(unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) ? 'desta remessa' : 'vendida'}). Dá para colar do Excel: produto ⇥ serial.
+                    Seriais ACN por produto{ehVendaComposta(modalEmbalagem) && !doTelecom ? '' : ' *'} <span className="acn-ajuda">
+                      {ehVendaComposta(modalEmbalagem) && !doTelecom
+                        ? '— opcional nesta parte (quem serializa a venda composta é o Telecom). Dá para colar do Excel: produto ⇥ serial.'
+                        : `— pelo menos ${Math.max(1, Math.floor(Number(embForm.unidades)) || 1)} (uma por unidade ${(unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) ? 'desta remessa' : 'vendida'}). Dá para colar do Excel: produto ⇥ serial.`}
                     </span>
                   </div>
                   <div className="acn-alm-seriais">
@@ -1311,12 +1530,14 @@ Embalar e enviar assim mesmo?`)) return;
                   </div>
                 </div>
               ) : (<>
+              {!conferencia.length && (
               <div className="form-group">
-                <label className="acn-label" htmlFor="alm-seriais">Números de série *</label>
+                <label className="acn-label" htmlFor="alm-seriais">Números de série{ehVendaComposta(modalEmbalagem) && !doTelecom ? ' (opcional nesta parte)' : ' *'}</label>
                 <textarea id="alm-seriais" className="acn-input" rows={2}
                   value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
                   placeholder="Um por linha" />
               </div>
+              )}
               </>)}
 
               <div className="acn-quadro-titulo acn-alm-secao">
@@ -1412,7 +1633,16 @@ Embalar e enviar assim mesmo?`)) return;
                 );
               })()}
 
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} semEstoque={doTelecom} comSerial={!ehVendaEnvioOp(modalEmbalagem)} />
+              {/* o serial de cada item vai na linha dele (coluna Serial da separação, logo acima); esta caixa é só para serial de algo que NÃO está na lista (e guarda o texto de OPs antigas) */}
+              {conferencia.length > 0 && !ehVendaEnvioOp(modalEmbalagem) && (
+                <div className="form-group">
+                  <label className="acn-label" htmlFor="alm-seriais">Outros números de série (de algo que não está na lista de separação){ehVendaComposta(modalEmbalagem) && !doTelecom ? ' — opcional' : ' — opcional se já informou nos itens'}</label>
+                  <textarea id="alm-seriais" className="acn-input" rows={2}
+                    value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
+                    placeholder="Um por linha" />
+                </div>
+              )}
               <div className="form-group">
                 <label className="acn-label" htmlFor="alm-obs">Observações</label>
                 <textarea id="alm-obs" className="acn-input" rows={2}
@@ -1426,6 +1656,10 @@ Embalar e enviar assim mesmo?`)) return;
                 {/* o botão dizia sempre "solicitar frete", inclusive em OP FOB,
                     onde nenhum frete é solicitado (24/09/2026) */}
                 {(() => {
+                  // venda composta (T3): o primeiro setor só registra a parte dele; o frete único abre quando o último terminar
+                  if (ehVendaComposta(modalEmbalagem) && !parteConcluida(modalEmbalagem, outroSetor(setor))) {
+                    return salvandoEmb ? 'Salvando...' : `Registrar a minha parte (o frete único abre quando o ${outroSetor(setor)} terminar)`;
+                  }
                   // remessa parcial (fatia 5): a OP não anda; só nasce a remessa (e o frete dela, se CIF)
                   const n = Math.floor(Number(embForm.unidades));
                   const parcialBtn = ehVendaEnvioOp(modalEmbalagem) && n >= 1 && n < Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp));
@@ -1448,15 +1682,16 @@ Embalar e enviar assim mesmo?`)) return;
             </div>
             <div className="acn-modal-corpo acn-form-cheio">
               <div className="acn-ajuda">
-                Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
+                Informe o número de série de cada equipamento na linha do próprio item (coluna Serial) antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
               </div>
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} comSerial />
               <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
                 modo="almox" currentUser={currentUser}
                 onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />
+              {/* o serial de cada item vai na linha dele (coluna Serial); esta caixa é só para serial de algo que NÃO está na lista (e guarda o texto de OPs antigas) */}
               <div className="form-group">
-                <label className="acn-label" htmlFor="alm-seriais-kit">Números de série dos equipamentos instalados *</label>
-                <textarea id="alm-seriais-kit" autoFocus className="acn-input acn-alm-mono" rows={3}
+                <label className="acn-label" htmlFor="alm-seriais-kit">{conferencia.length ? 'Outros números de série (de algo que não está na lista acima) — opcional' : 'Números de série dos equipamentos instalados *'}</label>
+                <textarea id="alm-seriais-kit" autoFocus={!conferencia.length} className="acn-input acn-alm-mono" rows={conferencia.length ? 2 : 3}
                   placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
                   value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
               </div>
@@ -1485,9 +1720,10 @@ Embalar e enviar assim mesmo?`)) return;
           onClose={() => setModalKitEnvioLote(null)} onConfirmar={aplicarKitEnvioLote} />
       )}
       {modalDevolver && (
-        <ModalDevolverOp opl={modalDevolver} setorOrigem="Almoxarifado" currentUser={currentUser}
-          // refazer o kit só faz sentido se já houve kit; senão, só o PCP (18e, 13/10/2026: a BOM agora é dele, a Engenharia não recebe mais OP)
-          destinos={modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox ? ['almox', 'pcp'] : ['pcp']}
+        <ModalDevolverOp opl={modalDevolver} setorOrigem={setor} currentUser={currentUser}
+          // refazer o kit só faz sentido se já houve kit; senão, só o PCP (18e, 13/10/2026: a BOM agora é dele, a Engenharia não recebe mais OP).
+          // Telecom (22/10/2026): não há "kit" a refazer (sem estoque nem conferência), então a devolução é sempre para o PCP rever.
+          destinos={!doTelecom && (modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox) ? ['almox', 'pcp'] : ['pcp']}
           onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); fetchAll(); }} />
       )}
 

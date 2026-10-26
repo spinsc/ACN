@@ -47,6 +47,8 @@ const CATALOGO: Record<string, [string, string, string, string][]> = {
   'Prototipagem': [
     ['prototipos', 'Registro dos protótipos', 'Cada protótipo: número, revisão do desenho usada, material, horas gastas e fotos.', 'oop-'],
     ['problemas', 'Problemas encontrados e ações', 'O que deu errado no protótipo e o que mudou no desenho por causa disso.', 'ppp-'],
+    // pedido do usuário em 22/10/2026: uma circular técnica no fim do protótipo. Opcional nos tipos que têm protótipo (não trava a porta de quem não precisa dela).
+    ['circular_tecnica', 'Circular técnica', 'Comunicado técnico ao fim do protótipo: o que ficou definido ou mudou e o que cada área precisa fazer.', 'ppp-'],
   ],
   'Validação': [
     ['plano_testes', 'Plano de testes ligado aos requisitos', 'Para cada requisito: o teste, o critério para passar, o resultado e a evidência.', 'ooo-'],
@@ -215,7 +217,7 @@ export const marcarFeito = (d: any, idx: number, id: string, feito: boolean, u: 
 // D3 (19/10/2026) acrescenta os da etapa de Desenvolvimento: desenhos com revisão, lista de materiais preliminar, riscos e revisão de projeto.
 export const ENTREGAVEIS_COM_FORMULARIO = ['briefing', 'requisitos', 'normas', 'similares', 'meta_custo', 'conceitos', 'conceito_escolhido', 'desenhos', 'bom_prelim', 'riscos', 'revisao_projeto',
   // D4 (19/10/2026): Prototipagem e Validação
-  'prototipos', 'problemas', 'plano_testes', 'teste_instalacao', 'conferencia_normas',
+  'prototipos', 'problemas', 'circular_tecnica', 'plano_testes', 'teste_instalacao', 'conferencia_normas',
   // D5 (19/10/2026): Produção, Acabamento e Entrega
   'item_catalogo', 'instrucao_montagem', 'primeira_unidade', 'custo_real', 'padrao_acabamento', 'amostra', 'pacote_tecnico', 'licoes'];
 export const temFormulario = (id: string) => ENTREGAVEIS_COM_FORMULARIO.includes(id);
@@ -372,6 +374,11 @@ export function faltaNoEntregavel(id: string, dados: any, d: any): string[] {
     if (!ps.length && !x.nenhum) falta.push('os problemas, ou marcar que nenhum apareceu');
     if (ps.some((p: any) => !String(p.acao || '').trim())) falta.push('a ação de cada problema');
     if (ps.some((p: any) => !p.resolvido)) falta.push('resolver os problemas em aberto');
+  } else if (id === 'circular_tecnica') {
+    if (!String(x.assunto || '').trim()) falta.push('o assunto da circular');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''))) falta.push('a data da circular');
+    if (!(x.areas || []).length) falta.push('para quais áreas a circular vai');
+    if (!String(x.resumo || '').trim()) falta.push('o resumo técnico do que o protótipo definiu ou mudou');
   } else if (id === 'plano_testes') {
     const ts = x.testes || [];
     if (!ts.length) falta.push('ao menos um teste');
@@ -470,6 +477,10 @@ export function limparDados(id: string, dados: any) {
   if (id === 'problemas') return { nenhum: !!x.nenhum, itens: lista(x.itens, LIMITES.itens).map((p: any) => ({
     id: txt(p.id, 20), descricao: txt(p.descricao, LIMITES.texto), prototipo_id: txt(p.prototipo_id, 20) || null, acao: txt(p.acao, LIMITES.texto), rev_corrigida: txt(p.rev_corrigida, 4), resolvido: !!p.resolvido,
   })).filter((p: any) => p.descricao) };
+  if (id === 'circular_tecnica') return {
+    assunto: txt(x.assunto, 200), data: diaOuVazio(x.data), areas: [...new Set(lista(x.areas, 12).filter((a: any) => AREAS_REVISAO.includes(a)))],
+    prototipo_id: txt(x.prototipo_id, 20) || null, resumo: txt(x.resumo, 3000), acoes: txt(x.acoes, 3000), arquivos: fotos(x.arquivos), revisao_do_desenho: txt(x.revisao_do_desenho, 4) || null,
+  };
   if (id === 'plano_testes') return { testes: lista(x.testes, 80).map((t: any) => ({
     id: txt(t.id, 20), requisito_id: txt(t.requisito_id, 20) || null, risco_id: txt(t.risco_id, 20) || null, descricao: txt(t.descricao, LIMITES.texto), criterio: txt(t.criterio, LIMITES.texto),
     resultado: RESULTADOS_TESTE[t.resultado] ? t.resultado : 'pendente', evidencia: txt(t.evidencia, LIMITES.texto), data: diaOuVazio(t.data),
@@ -508,6 +519,7 @@ export function salvarDados(d: any, idx: number, id: string, dados: any, u: any,
     }
     if (id === 'primeira_unidade') limpo.revisao_conferida = revisaoVigente(d)?.rev || null;   // a conferência vale para a Rev do desenho vigente NESTE momento
     if (id === 'pacote_tecnico') limpo.revisao_do_pacote = revisaoVigente(d)?.rev || null;
+    if (id === 'circular_tecnica') limpo.revisao_do_desenho = revisaoVigente(d)?.rev || null;   // a circular diz a que revisão do desenho se refere, no momento em que foi emitida
     if (id === 'revisao_projeto') limpo.revisao_analisada = revisaoVigente(d)?.rev || null;   // a revisão de projeto vale para a revisão do desenho vigente NESTE momento
     e.dados = limpo;
     if (id === 'conceitos') {

@@ -22,7 +22,7 @@ import { mdiMapMarkerOutline, mdiTimerOutline, mdiAlertOutline, mdiTruckOutline,
 export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = null, carregando = false }) {
   if (!op) return null;
   const cancelada = op.status_geral === 'Cancelado';
-  const et = etapaDaOp(op.status_geral);
+  const et = etapaDaOp(op.status_geral, op);
   const desde = desdeQuandoNaEtapa(op, logs);
   const dias = desde ? diasDesde(desde.data) : null;
   const pend = pendenciasEmAberto(vinculos);
@@ -94,7 +94,7 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
  *  não fecharam as três etapas (índice de OpPendencias); o Dossiê conta mais tipos. */
 export function OndeEstaCelula({ op, desde = null, pendencias = [] }) {
   if (!op) return null;
-  const et = etapaDaOp(op.status_geral);
+  const et = etapaDaOp(op.status_geral, op);
   const dias = desde ? diasDesde(desde.data) : null;
   const aprox = desde?.fonte === 'marco';
   return (

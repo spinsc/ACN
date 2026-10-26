@@ -15,6 +15,7 @@ import LogisticaTab from './LogisticaTab';
 import VistoriasPatio from './VistoriasPatio';
 import MarketingTab from './MarketingTab';
 import SetorDemandaTab from './SetorDemandaTab';
+import TelecomTab from './TelecomTab';
 import ComprasTab from './ComprasTab';
 import CadastroItensTab from './CadastroItensTab';
 import CadastroProdutosTab from './CadastroProdutosTab';
@@ -22,6 +23,7 @@ import CotacoesTab from './CotacoesTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
+import ViagensTab from './ViagensTab';
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
@@ -44,7 +46,7 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
@@ -60,7 +62,7 @@ const ICONE_ABA: Record<string, string> = {
   logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, minhas_solicitacoes: mdiClipboardListOutline, compras: mdiCartOutline,
   financeiro: mdiCashMultiple, cadastro_itens: mdiPackageVariantClosed, cadastro_produtos: mdiTagMultipleOutline,
   rh: mdiAccountTieOutline, comissoes_tecnicos: mdiCurrencyUsd, fiscal: mdiReceiptTextOutline, relatorios: mdiChartBoxOutline,
-  formacao_precos: mdiCalculatorVariantOutline, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
+  formacao_precos: mdiCalculatorVariantOutline, viagens: mdiMapMarkerPath, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
 };
 import { contarAnalisesPendentesPorSetor } from './AnaliseWidget';
 import MencoesInboxPanel from './MencoesInboxPanel';
@@ -107,6 +109,7 @@ const SIDEBAR_GROUPS = [
       { id: 'cotacoes',   label: 'Cotações' },
       { id: 'clientes',  label: 'Clientes' },
       { id: 'marketing', label: 'Marketing' },
+      { id: 'viagens',   label: 'Viagens' },   // 22/10/2026 (pedido do usuário): roteiro, km, tempo, hospedagem, pedágios e orçamento da viagem
     ],
   },
   {
@@ -1114,7 +1117,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     switch (activeTab) {
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
-      case 'telecom':      return <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />;
+      case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
       case 'minhas_solicitacoes': return <MinhasSolicitacoesTab currentUser={currentUser} />;
       case 'pcp':          return <PCPTab currentUser={currentUser} />;
@@ -1146,6 +1149,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':      return <RelatoriosTab currentUser={currentUser} />;
       case 'formacao_precos': return <FormacaoPrecosTab currentUser={currentUser} />;
+      case 'viagens':         return <ViagensTab currentUser={currentUser} />;
       case 'admin':           return <AdminTab />;
       default: return null;
     }
@@ -1308,8 +1312,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   // Etapa 14a: com o menu escondido, os avisos dos itens (análises técnicas de Engenharia/Produção e as mensagens de WhatsApp do CRM) vêm somados no botão do menu
   const totalAvisosMenu = SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => isVisible(i.id)).reduce((soma, i) => {
-    const setor = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[i.id];
-    return soma + (setor ? (analisesPorSetor[setor] || 0) : 0) + (i.id === 'crm' ? waNotifCount : 0) + (i.id === 'compras' ? comprasEsperando : 0);
+    const setores = ({ engenharia: ['Engenharia', 'Prazo'], producao: ['Producao'] } as Record<string, string[]>)[i.id] || [];   // a análise de prazo pedida pelo Comercial é da Engenharia (23/10/2026)
+    return soma + setores.reduce((n, s) => n + (analisesPorSetor[s] || 0), 0) + (i.id === 'crm' ? waNotifCount : 0) + (i.id === 'compras' ? comprasEsperando : 0);
   }, 0);
 
   return (
@@ -1355,8 +1359,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                       <Icone path={ICONE_ABA[item.id] || mdiViewDashboardOutline} size={18} className="sidebar-icone" />
                       <span className="sidebar-rotulo">{item.label}</span>
                       {(() => {
-                        const setorDaAba = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[item.id];
-                        const n = setorDaAba ? (analisesPorSetor[setorDaAba] || 0) : 0;
+                        const setoresDaAba = ({ engenharia: ['Engenharia', 'Prazo'], producao: ['Producao'] } as Record<string, string[]>)[item.id] || [];
+                        const n = setoresDaAba.reduce((soma, s) => soma + (analisesPorSetor[s] || 0), 0);
                         return n > 0 ? (
                           <span className="sidebar-contador" title={`${n} análise(s) técnica(s) aguardando este setor`}>{n}</span>
                         ) : null;

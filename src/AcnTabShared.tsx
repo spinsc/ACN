@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -21,10 +21,12 @@ import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
 import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, aguardaLiberacaoComercial, fluxoLabel } from './FluxoEntrega';
+import { ehEnvioDeMaterial, setorPadraoDaVenda } from './SeparacaoEnvio';
 import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
-import { podeAlterarNumeroOplPv, podeVerValores } from './utils/permissoes';
+import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente } from './utils/permissoes';
+import CopiarOpModal from './CopiarOpModal';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
@@ -50,13 +52,14 @@ export function dividirValorEmUnidades(valor: number|null|undefined, qtd: number
 // ─── Progresso da OP/OS ao longo do pipeline (Comercial → Faturado) ──────────
 // Os nomes e percentuais das etapas moraram aqui; agora vêm de EtapasOp.ts, que a faixa
 // "Onde está agora" também usa (Etapa 6 do PLANO_UX_FLUXO_TRABALHO.md). A barra é a mesma.
-function progressoOpl(status: string) {
-  const e = etapaDaOp(status);
+function progressoOpl(status: string, op?: any) {
+  const e = etapaDaOp(status, op);
   return { pct: e.pct, label: e.label, retrabalho: !!e.retrabalho };
 }
 
-export function OplProgressBar({ status }: { status: string }) {
-  const { pct, label, retrabalho } = progressoOpl(status);
+// `op` (opcional, 22/10/2026): com a OP em mãos a etapa de separar/embalar mostra o setor certo (rádio em envio é do Telecom)
+export function OplProgressBar({ status, op }: { status: string; op?: any }) {
+  const { pct, label, retrabalho } = progressoOpl(status, op);
   const tom = retrabalho ? 'retrab' : pct >= 100 ? 'ok' : 'and';
   return (
     <div className="acn-ats-prog">
@@ -766,7 +769,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     if (error) { alert('Não foi possível salvar: ' + error.message); return; }
     await registrarNoHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: usuario?.perfil || 'Comercial',
-      evento: `Itens vendidos alterados: ${itens.map((v: any) => `${v.quantidade}× ${v.nome}`).join('; ')}`,
+      // a marca de quem separa (Telecom, T2, 22/10/2026) entra no texto: mudar o setor muda quem separa a linha, e isso tem que ficar no histórico
+      evento: `Itens vendidos alterados: ${itens.map((v: any) => `${v.quantidade}× ${v.nome}${v.setor ? ` (separa: ${v.setor})` : ''}`).join('; ')}`,
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: new Date().toISOString(),
     });
@@ -781,6 +785,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     recarregarLogs();
   };
   const [editando, setEditando] = useState(false);
+  // Copiar OP (pedido do usuário em 23/10/2026): várias OPs iguais, cada uma com o seu número
+  const [copiando, setCopiando] = useState(false);
   const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
@@ -954,6 +960,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         </Suspense>
       )}
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
+      {copiando && <CopiarOpModal origem={opl} currentUser={usuario} onClose={() => setCopiando(false)} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
           onSalvo={(nova: any) => { setOpl(nova); setEditando(false); recarregarLogs(); }} />
@@ -994,6 +1001,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
               { rotulo: `Resumo do lote (${qtdLote})`, icone: mdiFormatListNumbered, onClick: () => setVerResumoLote(true), oculto: qtdLote <= 1 },
               { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
+              // quem abre OP (Admin, gerentes e a equipe de Comercial/CRM e Licitações, que valem como gerente do setor); a cópia nasce como OP nova, no PCP
+              { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
             ]} />
             <button type="button" className="acn-opl-x" onClick={fecharEMarcarLido} aria-label="Fechar" title="Fechar"><Icone path={mdiClose} size={20} /></button>
           </div>
@@ -1004,7 +1013,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <div className="acn-opl-situacao">
           {erroOpl && <div className="acn-opl-aviso erro">Não foi possível atualizar os dados desta OP ({erroOpl}). Estão aparecendo os da lista, que podem estar desatualizados.</div>}
           <OndeEstaAgoraAuto op={opl} onAbrirDossie={() => setVerDossie(true)} />
-          {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
+          {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} op={opl} />}
 
           {/* LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) */}
           {aguardaLiberacaoComercial(opl.status_geral) && (
@@ -1042,7 +1051,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 {editandoVendido ? (
                   <div>
                     <SeletorEscopo opl={opl.opl} tamanho={qtdLote} valor={escopoVendido} onChange={setEscopoVendido} />
-                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} unidades={qtdLote > 1 ? qtdLote : 1} />
+                    <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} unidades={qtdLote > 1 ? qtdLote : 1}
+                      comSetor={ehEnvioDeMaterial(opl)} setorPadrao={setorPadraoDaVenda(opl)} />
                     <div className="acn-opl-botoes">
                       <Botao variante="primario" onClick={salvarVendido}>{escopoVendido === 'lote' && qtdLote > 1 ? `Salvar nas ${qtdLote} unidades` : 'Salvar itens vendidos'}</Botao>
                       <Botao onClick={() => { setEscopoVendido('unidade'); setEditandoVendido(null); }}>Cancelar</Botao>

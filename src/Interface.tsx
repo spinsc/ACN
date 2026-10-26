@@ -8,7 +8,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icone from './Icone';
 import { combinaBusca } from './SearchUtils';
-import { mdiDotsHorizontal, mdiAlertCircleOutline, mdiInformationOutline, mdiCheckCircleOutline, mdiAlertOutline } from '@mdi/js';
+import { mdiDotsHorizontal, mdiAlertCircleOutline, mdiInformationOutline, mdiCheckCircleOutline, mdiAlertOutline, mdiCheck, mdiMenuDown } from '@mdi/js';
 
 // ── Cabeçalho da tela: título, resumo em uma linha, ações à direita e abas ────
 export function CabecalhoTela({ titulo, subtitulo, acoes, abas }: {
@@ -429,6 +429,97 @@ export function SelectBusca({
               Mostrando {visiveis.length} de {filtradas.length} — escreva mais para afinar a busca.
             </div>
           )}
+        </div>,
+        document.body)}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SELEÇÃO MÚLTIPLA — uma caixa que abre uma lista com várias escolhas (22/10/2026, pedido do usuário: "tornar-se slimselect")
+//
+// Serve para o que antes eram vários botões ligados/desligados ocupando uma linha inteira (ex.: Julgamento da licitação: Item, Lote, Global, Grupo). A caixa
+// mostra o que está escolhido como etiquetas pequenas; a lista fica aberta enquanto a pessoa marca (é múltipla) e fecha ao clicar fora ou com Esc.
+// A lista vai em portal, como a do SelectBusca, para um modal com rolagem não cortá-la. As escolhas voltam na ORDEM DAS OPÇÕES, não na ordem do clique,
+// para o texto gravado ser sempre o mesmo para a mesma combinação.
+// Já nasce no padrão novo: classes no design.css, sem estilo solto.
+// ─────────────────────────────────────────────────────────────────────────────
+export type OpcaoMultipla = { valor: string; rotulo: string };
+
+export function SelectMultiplo({ opcoes, valores, onChange, placeholder = 'Selecione…', rotulo, className }: {
+  opcoes: OpcaoMultipla[]; valores: string[]; onChange: (v: string[]) => void; placeholder?: string; rotulo?: string; className?: string;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const caixaRef = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const marcados = new Set(valores || []);
+  const escolhidas = opcoes.filter(o => marcados.has(o.valor));
+
+  useLayoutEffect(() => {
+    if (!aberto || !caixaRef.current) return;
+    const b = caixaRef.current.getBoundingClientRect();
+    const alt = listaRef.current?.offsetHeight || 160;
+    let top = b.bottom + 2;
+    if (top + alt > window.innerHeight - 8) top = Math.max(8, b.top - alt - 2);
+    const largura = Math.min(Math.max(b.width, 180), window.innerWidth - 16);
+    setPos({ top, left: Math.max(8, Math.min(b.left, window.innerWidth - largura - 8)), width: largura });
+  }, [aberto, valores]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (caixaRef.current?.contains(t) || listaRef.current?.contains(t)) return;
+      setAberto(false);
+    };
+    const rolar = (e: Event) => {
+      const t = e.target;
+      if (!(t instanceof Node) || !listaRef.current?.contains(t)) setAberto(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false); };
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    window.addEventListener('scroll', rolar, true);
+    window.addEventListener('resize', rolar);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+      window.removeEventListener('scroll', rolar, true);
+      window.removeEventListener('resize', rolar);
+    };
+  }, [aberto]);
+
+  const alternar = (v: string) => {
+    const novo = new Set(marcados);
+    if (novo.has(v)) novo.delete(v); else novo.add(v);
+    onChange(opcoes.filter(o => novo.has(o.valor)).map(o => o.valor));
+  };
+
+  return (
+    <div ref={caixaRef} className={'acn-selmulti' + (className ? ' ' + className : '')}>
+      <button type="button" className="acn-input acn-selmulti-btn" aria-haspopup="listbox" aria-expanded={aberto} aria-label={rotulo}
+        onClick={() => setAberto(a => !a)}>
+        <span className="acn-selmulti-tags">
+          {escolhidas.length
+            ? escolhidas.map(o => <span key={o.valor} className="acn-selmulti-tag">{o.rotulo}</span>)
+            : <span className="acn-selmulti-vazio">{placeholder}</span>}
+        </span>
+        <Icone path={mdiMenuDown} size={18} />
+      </button>
+      {aberto && createPortal(
+        <div ref={listaRef} className="acn-selmulti-lista" role="listbox" aria-multiselectable="true" aria-label={rotulo}
+          style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: pos?.width ?? 180 }}>
+          {opcoes.map(o => {
+            const on = marcados.has(o.valor);
+            return (
+              <button key={o.valor} type="button" role="option" aria-selected={on} className={'acn-selmulti-op' + (on ? ' on' : '')}
+                onMouseDown={e => e.preventDefault()} onClick={() => alternar(o.valor)}>
+                <span className="acn-selmulti-marca">{on && <Icone path={mdiCheck} size={14} />}</span>
+                {o.rotulo}
+              </button>
+            );
+          })}
         </div>,
         document.body)}
     </div>

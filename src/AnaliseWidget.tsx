@@ -27,6 +27,14 @@ export const ANALISE_GRUPOS = [
     ],
   },
   {
+    // pedido do usuário em 22/10/2026: "análise de prazo no PV comercial" — o Comercial pede, pelo card, quanto tempo a venda leva para ser entregue; o parecer é o prazo.
+    // Corrigido em 23/10/2026 (o usuário viu a primeira versão): quem responde é a ENGENHARIA, nas vendas que precisam de desenvolvimento — não o PCP (a primeira versão mandava para o PCP)
+    grupo: 'Prazo (venda que precisa de desenvolvimento)',
+    opcoes: [
+      { id: 'Prazo', label: 'Análise de Prazo (Engenharia)' },
+    ],
+  },
+  {
     grupo: 'Departamento',
     opcoes: [
       { id: 'Chicotes',    label: 'Chicotes' },
@@ -42,6 +50,7 @@ export const SETOR_LABEL: Record<string, string> = {
   Telecom:    'Téc. Telecom',
   Engenharia: 'Téc. Engenharia',
   Orcamento:  'Orçamento',
+  Prazo:      'Prazo (Engenharia)',
   Chicotes:   'Chicotes',
   Serralheria:'Serralheria',
   Producao:   'Produção',

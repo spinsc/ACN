@@ -53,7 +53,7 @@ export async function devolverOp({ opl, destino, motivo, setorOrigem, currentUse
   if (destino === 'pcp') Object.assign(upd, { status_bom: null, data_chegada_pcp: agora });
   const { error } = await supabase.from('oples').update(upd).eq('id', opl.id);
   if (error) return error;
-  logChange({ module: setorOrigem === 'PCP' ? 'pcp' : 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+  logChange({ module: setorOrigem === 'PCP' ? 'pcp' : setorOrigem === 'Telecom' ? 'telecom' : 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
     oldRow: { status_geral: opl.status_geral, status_almox: opl.status_almox }, newRow: upd, user: currentUser });
   await supabase.from('logs_movimentacao_opl').insert([{
     opl_id: opl.id, numero_opl: opl.opl, setor: setorOrigem,

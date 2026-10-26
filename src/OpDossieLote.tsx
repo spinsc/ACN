@@ -63,7 +63,7 @@ export function resumirLote(dados) {
   const primeira = ops[0] || {};
   const unidades = ds.map(d => {
     const o = d.op;
-    const et = etapaDaOp(o.status_geral);
+    const et = etapaDaOp(o.status_geral, o);
     const desde = desdeQuandoNaEtapa(o, d.logs);
     return {
       id: o.id, opl: o.opl, sufixo: sufixoDe(o.opl), modelo: o.modelo || o.veiculo || '', chassi: o.chassi || '', placa: o.placa || '',

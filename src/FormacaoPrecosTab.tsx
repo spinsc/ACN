@@ -11,7 +11,7 @@ import { buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
-import { Faixa, Botao, Selo, Chips, Abas, Tag } from './Interface';
+import { Faixa, Botao, Selo, Chips, Abas, Tag, SelectBusca } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
@@ -923,6 +923,17 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
     </div>
   );
 
+  const campoQt = (
+    <div className="acn-fp-ir-qt">
+      <div className="acn-fp-ir-rot2"
+        title='Quantidade deste produto DENTRO DE 1 unidade do Item (ex.: 2 antenas por viatura). Para a quantidade de viaturas/unidades do Item inteiro, use o campo "Quantidade do Item", acima da lista.'>
+        Qt/un.
+      </div>
+      <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num" aria-label="Quantidade deste produto por unidade do item"
+        min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
+    </div>
+  );
+
   return (
     // Sem overflow:hidden aqui de propósito — o dropdown de busca de produto
     // (ProdutoAutocomplete, position:absolute) precisa poder "vazar" pra fora
@@ -935,65 +946,86 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           rótulos ficam alinhados no topo e os campos/botões alinhados
           embaixo, tudo na mesma linha de base ── */}
       <div className="acn-fp-ir-cab">
-        <div className="acn-fp-ir-prod">
-          <div className="acn-fp-ir-rot">Produto / Descrição</div>
-          <ProdutoAutocomplete
-            value={item.produto}
-            params={params}
-            onFill={dados => onFill(dados)}
-            onExpand={linhas => onExpand(linhas)}
-          />
-        </div>
-        <div className="acn-fp-ir-c1">
-          <div className="acn-fp-ir-rot">Marca</div>
-          <input className="acn-input acn-fp-ir-campo"
-            value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
-        </div>
-        <div className="acn-fp-ir-c1">
-          <div className="acn-fp-ir-rot">Modelo</div>
-          <input className="acn-input acn-fp-ir-campo"
-            value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
-        </div>
-        <div className="acn-fp-ir-qt">
-          <div className="acn-fp-ir-rot"
-            title='Quantidade deste produto DENTRO DE 1 unidade do Item (ex.: 2 antenas por viatura). Para a quantidade de viaturas/unidades do Item inteiro, use o campo "Quantidade do Item", acima da lista.'>
-            Qt/un.
+        {/* 22/10/2026 (pedido do usuário, refeito no mesmo dia porque a primeira versão não seguiu a lista): a linha do produto tem DUAS linhas. Em cima, exatamente:
+            produto – custo – markup – DIFAL – valor unitário – valor total. Embaixo: marca e modelo. O restante, inclusive a quantidade por unidade e o markup reverso, fica em
+            "Custo/impostos", cujo botão fica ao lado de marca e modelo (linha de baixo). Custo e DIFAL só aparecem para quem vê custo: o vendedor não vê — e, como ele não tem "Custo/impostos", a quantidade dele
+            fica na linha de baixo, ao lado do modelo, para não sumir. */}
+        <div className="acn-fp-ir-l1">
+          <div className="acn-fp-ir-prod">
+            <div className="acn-fp-ir-rot">Produto / Descrição</div>
+            <ProdutoAutocomplete
+              value={item.produto}
+              params={params}
+              onFill={dados => onFill(dados)}
+              onExpand={linhas => onExpand(linhas)}
+            />
           </div>
-          <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-            min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
-        </div>
-        {/* Markup (ou desconto, no modo TABELA) deste produto — ao lado da quantidade,
-            à vista e editável por todos os usuários. Com "Markup Global" ligado fica
-            travado mostrando o valor global, como antes. */}
-        <div className="acn-fp-ir-mk">
-          <div className="acn-fp-ir-rot"
-            title={usarMarkupGlobal ? 'Markup Global ligado: vale o markup dos parâmetros globais' : undefined}>
-            {modoTabela ? 'Desconto %' : 'Markup %'}
+          {temDetalhe && (
+            <div className="acn-fp-ir-cu">
+              <div className="acn-fp-ir-rot" title="Custo unitário do produto, na moeda escolhida em Custo/impostos (sem IPI e ST)">
+                Custo unit.{item.moeda && item.moeda !== 'BRL' ? ` (${item.moeda})` : ''}
+              </div>
+              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+            </div>
+          )}
+          {/* Markup (ou desconto, no modo TABELA) deste produto — à vista e editável por todos os usuários. Com "Markup Global" ligado fica
+              travado mostrando o valor global, como antes. */}
+          <div className="acn-fp-ir-mk">
+            <div className="acn-fp-ir-rot"
+              title={usarMarkupGlobal ? 'Markup Global ligado: vale o markup dos parâmetros globais' : undefined}>
+              {modoTabela ? 'Desconto %' : 'Markup %'}
+            </div>
+            <input type="number"
+              className={'acn-input acn-fp-ir-campo acn-fp-num' + (usarMarkupGlobal ? ' acn-fp-mk-global' : item.markup_pct < 0 ? ' acn-fp-neg' : '')}
+              aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
+              step="0.0001" value={item.markup_pct}
+              onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+              readOnly={!!usarMarkupGlobal}
+              title={usarMarkupGlobal ? 'Vale o markup global. Clique para liberar a edição item a item.' : undefined}
+              onClick={() => { if (usarMarkupGlobal) onLiberarMarkup?.(); }} />
           </div>
-          <input type="number"
-            className={'acn-input acn-fp-ir-campo acn-fp-num' + (usarMarkupGlobal ? ' acn-fp-mk-global' : item.markup_pct < 0 ? ' acn-fp-neg' : '')}
-            aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
-            step="0.0001" value={item.markup_pct}
-            onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-            readOnly={!!usarMarkupGlobal}
-            title={usarMarkupGlobal ? 'Vale o markup global. Clique para liberar a edição item a item.' : undefined}
-            onClick={() => { if (usarMarkupGlobal) onLiberarMarkup?.(); }} />
+          {temDetalhe && (
+            <div className="acn-fp-ir-df">
+              <div className="acn-fp-ir-rot">DIFAL %</div>
+              <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
+                aria-label="DIFAL % do produto" step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+                readOnly={usarParamsGlobais}
+                title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
+                onClick={() => { if (usarParamsGlobais) onLiberarGlobais?.(); }} />
+            </div>
+          )}
+          <div className="acn-fp-ir-uni">
+            <div className="acn-fp-ir-rot">Valor Unit.</div>
+            <div className="acn-fp-ir-vu" data-acn-familia="info">{fmtR(valorUnit)}</div>
+          </div>
+          <div className="acn-fp-ir-tot">
+            <div className="acn-fp-ir-rot">Valor Total</div>
+            <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
+          </div>
         </div>
-        <div className="acn-fp-ir-uni">
-          <div className="acn-fp-ir-rot">Valor Unit.</div>
-          <div className="acn-fp-ir-vu" data-acn-familia="info">{fmtR(valorUnit)}</div>
+        <div className="acn-fp-ir-l2">
+          {/* 23/10/2026 (usuário): marca e modelo numa caixa só — um campo com os dois valores, separados por um traço; no cadastro continuam dois dados */}
+          <div className="acn-fp-ir-mm">
+            <div className="acn-fp-ir-rot">Marca e modelo</div>
+            <div className="acn-input acn-fp-ir-mmcaixa">
+              <input aria-label="Marca" placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
+              <span className="acn-fp-ir-mmsep" aria-hidden="true" />
+              <input aria-label="Modelo" placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
+            </div>
+          </div>
+          {!temDetalhe && campoQt}
+          <div className="acn-fp-ir-acoes">
+            {temDetalhe && (
+              <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
+                onClick={() => setAberto(v => !v)} title="Moeda, IPI, ST, impostos e informações do produto">
+                {aberto ? 'Menos' : 'Custo/impostos'}
+              </Botao>
+            )}
+            <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
+          </div>
         </div>
-        <div className="acn-fp-ir-tot">
-          <div className="acn-fp-ir-rot">Valor Total</div>
-          <div className="acn-fp-ir-vt" data-acn-familia="info">{fmtR(valorTotal)}</div>
-        </div>
-        {temDetalhe && (
-          <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
-            onClick={() => setAberto(v => !v)} title="Custo, impostos e informações do produto">
-            {aberto ? 'Menos' : 'Custo/impostos'}
-          </Botao>
-        )}
-        <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover item" aria-label="Remover item" onClick={onRemove} />
       </div>
 
       {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
@@ -1002,6 +1034,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 
           {secao(mdiCashMultiple, 'Precificação')}
           <div className="acn-fp-ir-grade">
+            {campoQt}
             <div>
               <div className="acn-fp-ir-rot2">Moeda</div>
               <select className="acn-input acn-fp-ir-campo"
@@ -1012,7 +1045,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             <div>
               <div className="acn-fp-ir-rot2">Custo Unit.</div>
               <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-                min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+                aria-label="Custo unitário do produto (dentro de Custo/impostos)" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
             </div>
             <div>
               <div className="acn-fp-ir-rot2">IPI%</div>
@@ -1029,10 +1062,9 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <Chips className="acn-fp-ir-tc" ativo={item.tipo_calculo || 'CUSTO'} onChange={t => onSet('tipo_calculo', t)}
                 itens={[{ id: 'CUSTO', rotulo: 'CUSTO' }, { id: 'TABELA', rotulo: 'TABELA' }]} />
             </div>
-            {/* Markup reverso DESTE produto: digita o preço unitário desejado e o
-                markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
-                É a mesma conta da calculadora "Markup Reverso" do rodapé, que
-                só mostrava o número, sem aplicar em produto nenhum. */}
+            {/* Markup reverso DESTE produto: digita o preço unitário desejado e o markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
+                É a mesma conta da calculadora "Markup Reverso" do rodapé, que só mostrava o número, sem aplicar em produto nenhum.
+                23/10/2026 (usuário): fica DENTRO de "Custo/impostos", não na linha de cima. */}
             <MarkupReversoProduto item={item} custoUnitBrl={custoUnitBrl} modoTabela={modoTabela}
               bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
           </div>
@@ -1042,7 +1074,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             <div>
               <div className="acn-fp-ir-rot2">DIFAL%</div>
               <input type="number" className={'acn-input acn-fp-ir-campo acn-fp-num' + classeGlobal}
-                step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                aria-label="DIFAL % do produto (dentro de Custo/impostos)" step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
                 onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
                 readOnly={usarParamsGlobais}
                 title={usarParamsGlobais ? 'Vale o parâmetro global. Clique para liberar a edição item a item.' : undefined}
@@ -1695,6 +1727,102 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── FORMAÇÕES VINCULADAS ENTRE SI ───────────────────────────────────────────────
+// Pedido do usuário em 22/10/2026: "poder vincular uma formação de preço a outra formação de preço". A ligação é entre FAMÍLIAS (a raiz das versões, `versao_raiz_id` ou o id
+// da v1) e vale nos dois sentidos: quem abre qualquer das duas vê a outra, com a última versão e o total, e abre com um clique. Só liga e desliga; não copia nem soma nada.
+const raizDaCotacao = (m: any) => m?.versao_raiz_id || m?.id;
+const ultimaVersaoDe = (lista: any[]) => [...lista].sort((a: any, b: any) => (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+
+function FormacoesVinculadasEntreSi({ cotacaoId, currentUser, aoAbrir }: any) {
+  const [raiz, setRaiz] = useState<string | null>(null);
+  const [vinculadas, setVinculadas] = useState<any[]>([]);
+  const [erro, setErro] = useState('');
+  const [adicionando, setAdicionando] = useState(false);
+  const [candidatas, setCandidatas] = useState<any[]>([]);
+  const [escolha, setEscolha] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+
+  const carregar = useCallback(async () => {
+    if (!cotacaoId) { setRaiz(null); setVinculadas([]); return; }
+    const { data: eu, error: erroEu } = await supabase.from('cotacoes_precos').select('id,versao_raiz_id').eq('id', cotacaoId).maybeSingle();
+    if (erroEu || !eu) { setErro(erroEu?.message || 'formação não encontrada'); return; }
+    const minha = raizDaCotacao(eu);
+    setRaiz(minha);
+    const { data: ligacoes, error: erroLig } = await supabase.from('cotacoes_precos_relacionadas').select('raiz_id,raiz_relacionada_id')
+      .or(`raiz_id.eq.${minha},raiz_relacionada_id.eq.${minha}`);
+    if (erroLig) { setErro(erroLig.message); return; }
+    const outras = [...new Set((ligacoes || []).map((l: any) => (l.raiz_id === minha ? l.raiz_relacionada_id : l.raiz_id)))];
+    if (!outras.length) { setErro(''); setVinculadas([]); return; }
+    const lista = outras.join(',');
+    const { data: cots, error: erroCots } = await supabase.from('cotacoes_precos')
+      .select('id,nome,versao,versao_raiz_id,criado_em,itens,parametros_globais,status,orgao_cliente').or(`id.in.(${lista}),versao_raiz_id.in.(${lista})`);
+    if (erroCots) { setErro(erroCots.message); return; }
+    setErro('');
+    const porFamilia = new Map<string, any[]>();
+    (cots || []).forEach((c: any) => { const k = raizDaCotacao(c); porFamilia.set(k, [...(porFamilia.get(k) || []), c]); });
+    setVinculadas([...porFamilia.entries()].map(([r, l]) => ({ raiz: r, cot: ultimaVersaoDe(l) })));
+  }, [cotacaoId]);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const abrirEscolha = async () => {
+    setAdicionando(true);
+    const { data, error } = await supabase.from('cotacoes_precos').select('id,nome,versao,versao_raiz_id,criado_em,orgao_cliente').order('criado_em', { ascending: false });
+    if (error) { setErro(error.message); setAdicionando(false); return; }
+    const jaLigadas = new Set(vinculadas.map((v: any) => v.raiz));
+    const porFamilia = new Map<string, any[]>();
+    (data || []).forEach((c: any) => { const k = raizDaCotacao(c); if (k !== raiz && !jaLigadas.has(k)) porFamilia.set(k, [...(porFamilia.get(k) || []), c]); });
+    setCandidatas([...porFamilia.entries()].map(([r, l]) => ({ raiz: r, cot: ultimaVersaoDe(l) })));
+  };
+  const vincular = async () => {
+    if (!escolha || !raiz || ocupado) return;
+    setOcupado(true);
+    const { error } = await supabase.from('cotacoes_precos_relacionadas').insert([{ raiz_id: raiz, raiz_relacionada_id: escolha, criado_por_nome: currentUser?.nome || currentUser?.email || null }]);
+    setOcupado(false);
+    if (error) { alert(error.code === '23505' ? 'Estas formações já estão vinculadas.' : 'Não foi possível vincular as formações: ' + error.message); return; }
+    setAdicionando(false); setEscolha('');
+    carregar();
+  };
+  const desvincular = async (v: any) => {
+    if (!await confirmar(`Desvincular "${v.cot.nome || 'formação sem nome'}" desta formação?\n\nNenhuma das duas é apagada; só deixam de estar ligadas.`)) return;
+    const { error } = await supabase.from('cotacoes_precos_relacionadas').delete()
+      .or(`and(raiz_id.eq.${raiz},raiz_relacionada_id.eq.${v.raiz}),and(raiz_id.eq.${v.raiz},raiz_relacionada_id.eq.${raiz})`);
+    if (error) { alert('Não foi possível desvincular: ' + error.message); return; }
+    carregar();
+  };
+
+  if (!cotacaoId) return null;
+  const rotulo = (c: any) => `${c.nome || 'Formação sem nome'} · v${c.versao || 1}${c.orgao_cliente ? ' · ' + c.orgao_cliente : ''}`;
+  return (
+    <div className="acn-quadro acn-fp-relac">
+      <div className="acn-fp-relac-cab">
+        <span className="acn-quadro-titulo"><Icone path={mdiLinkVariant} size={13} /> Formações vinculadas a esta ({vinculadas.length})</span>
+        {!adicionando && <Botao pequeno icone={mdiPlus} onClick={abrirEscolha}>Vincular outra formação</Botao>}
+      </div>
+      {erro && <div className="acn-fp-relac-erro">Não foi possível ler as formações vinculadas ({erro}).</div>}
+      {!erro && !vinculadas.length && !adicionando && <div className="acn-ajuda">Nenhuma. Vincule quando uma formação depender ou se relacionar com outra (por exemplo, a de um parceiro).</div>}
+      {vinculadas.map((v: any) => {
+        const total = estruturaFormacao(v.cot.itens || [], v.cot.parametros_globais || {}, calcItem).geral.totVendas;
+        return (
+          <div key={v.raiz} className="acn-fp-relac-linha">
+            <span className="acn-fp-relac-nome" title={rotulo(v.cot)}>{rotulo(v.cot)}</span>
+            <span className="acn-num acn-forte">{fmtR(total)}</span>
+            <Botao pequeno icone={mdiFolderOpenOutline} onClick={() => aoAbrir(v.cot.id)}>Abrir</Botao>
+            <Botao pequeno variante="discreto" icone={mdiLinkVariantOff} aria-label={`Desvincular ${v.cot.nome || 'formação'}`} title="Desvincular" onClick={() => desvincular(v)} />
+          </div>
+        );
+      })}
+      {adicionando && (
+        <div className="acn-fp-relac-nova">
+          <SelectBusca opcoes={candidatas.map((c: any) => ({ valor: c.raiz, rotulo: rotulo(c.cot), busca: [c.cot.nome, c.cot.orgao_cliente] }))}
+            valor={escolha} onChange={setEscolha} placeholder="Procure a formação (nome ou órgão)" />
+          <Botao pequeno variante="primario" disabled={!escolha || ocupado} onClick={vincular}>Vincular</Botao>
+          <Botao pequeno onClick={() => { setAdicionando(false); setEscolha(''); }}>Cancelar</Botao>
+        </div>
+      )}
     </div>
   );
 }
@@ -2453,6 +2581,21 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     }
     carregarModelo(m);
     setEditandoId(m.id);
+  };
+
+  // abre OUTRA formação (a vinculada); mesmo cuidado de trocarVersao: o que não foi salvo fica no rascunho local desta, e é oferecido de volta quando ela for aberta de novo
+  const abrirFormacaoVinculada = async (id: string) => {
+    if (!id || id === editandoId) return;
+    if (temNaoSalvo) {
+      if (!await confirmar('Esta formação tem alterações NÃO salvas.\n\nAbrir a outra mesmo assim? As alterações ficam no rascunho desta e são oferecidas de volta quando você abri-la de novo.')) return;
+      try {
+        localStorage.setItem(chaveRascunho(editandoId), JSON.stringify({ conteudo: edicaoAtual(), salvoEm: new Date().toISOString(), usuario: currentUser?.nome || currentUser?.email || null }));
+      } catch { /* rascunho é best-effort */ }
+    }
+    const { data, error } = await supabase.from('cotacoes_precos').select('*').eq('id', id).maybeSingle();
+    if (error || !data) { alert('Não foi possível abrir a formação vinculada: ' + (error?.message || 'formação não encontrada')); return; }
+    carregarModelo(data);
+    setEditandoId(data.id);
   };
 
   const carregarModelos = useCallback(async () => {
@@ -3254,6 +3397,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               )}
             </div>
           )}
+
+          {/* formações vinculadas entre si (22/10/2026) — só com a formação já salva */}
+          {editandoId && <FormacoesVinculadasEntreSi key={editandoId} cotacaoId={editandoId} currentUser={currentUser} aoAbrir={abrirFormacaoVinculada} />}
 
           {/* ── HEADER ── */}
           <div className="acn-fp-cab">

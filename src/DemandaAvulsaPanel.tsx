@@ -5,7 +5,7 @@ import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
-import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes, resolverMencoesDeTodos } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
@@ -409,6 +409,12 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     if (error) { alert(`Não foi possível ${oQue}: ${error.message}`); return false; }
     return true;
   };
+  // Demanda finalizada = assunto encerrado para TODOS os mencionados (pedido do usuário em 22/10/2026): a menção sai da caixa de cada um, como nas aprovações de compra
+  // (regra de 24/09/2026). Não apaga nada — só marca como resolvida, e dá para reabrir pela caixa. Se o banco recusar, a demanda já está concluída e a pessoa é avisada.
+  const resolverMencoesDaDemanda = () => resolverMencoesDeTodos({
+    contexto: 'demanda_avulsa', contextoId: String(d.id), porNome: currentUser?.nome || currentUser?.email || '',
+    aoFalhar: (msg) => alert(`A demanda foi concluída, mas as menções dela não foram marcadas como resolvidas (${msg}). Elas continuam na caixa de quem foi mencionado.`),
+  });
   const gravarCentroCusto = async (id: string | null) => {
     const c = centrosDet.find((x: any) => x.id === id);
     if (!await gravarDemanda({ centro_custo_id: id, centro_custo: c ? `${c.codigo} — ${c.nome}` : null, atualizado_em: new Date().toISOString() }, 'gravar o centro de custo')) return;
@@ -659,6 +665,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     const { data: fresca, error: erroLer } = await supabase.from('demandas_avulsas').select('trechos,data_inicio,data_fim').eq('id', d.id).maybeSingle();
     if (erroLer || !fresca) { alert(`Não foi possível ler a demanda antes de concluir: ${erroLer?.message || 'demanda não encontrada'}. Nada foi alterado.`); return; }
     if (!await gravarDemanda({ status: 'Concluída', data_fim: agora, atualizado_em: agora, ...(fresca.data_inicio ? { trechos: fecharTrecho(fresca, new Date(agora)) } : {}) }, 'concluir a demanda')) return;
+    await resolverMencoesDaDemanda();
     if (vaiPintar) {
       const r = await abrirPedidoPintura(d, currentUser);
       if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
@@ -687,6 +694,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       if (novoStatus === 'Concluída') upd.data_fim = agora;
     }
     if (!await gravarDemanda(upd, 'gravar a etapa')) return false;
+    if (upd.status === 'Concluída') await resolverMencoesDaDemanda();   // a última etapa concluída conclui a demanda
     if (upd.status === 'Concluída' && ehSerralheria(d.setor) && d.pintura && !d.pintura_pedido_id) {
       const r = await abrirPedidoPintura(d, currentUser);
       if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);

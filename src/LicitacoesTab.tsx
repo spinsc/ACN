@@ -19,7 +19,7 @@ import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput'
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
-import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO } from './Interface';
+import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO, SelectMultiplo } from './Interface';
 import { podeEditarAtualizacao } from './utils/permissoes';
 import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import Icone from './Icone';
@@ -182,7 +182,6 @@ const SORT_OPTIONS = [
   { value:'ultimas_alteracoes',          label:'🔔 Últimas Alterações' },
   { value:'data_disputa',                label:'Data de Disputa' },
   { value:'data_limite_proposta',        label:'Limite de Proposta' },
-  { value:'data_limite_analise_tecnica', label:'Limite Análise Técnica' },
   { value:'orgao',                       label:'Órgão' },
   { value:'status',                      label:'Status' },
   { value:'disputa_recente',             label:'Mais Recentes (disputa)' },
@@ -923,19 +922,81 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // Quadro no formulário da licitação (lado esquerdo): valor de cada lote e o
 // unitário do lote (total ÷ soma das quantidades dos itens) da ÚLTIMA versão da formação
 // de preços vinculada. Só leitura; atualiza sozinho quando a formação é salva.
-function QuadroFormacaoLicitacao({ licitacaoId }: any) {
-  const [cot, setCot] = useState<any>(null);
+// PARCEIROS DA LICITAÇÃO (pedido do usuário em 22/10/2026): pode haver vários, cada um com a sua formação de preços, e ao marcar a licitação como Vencida escolhe-se
+// o parceiro vencedor. "Venda direta" (sem parceiro) é uma das escolhas possíveis do vencedor — fica como "nenhum parceiro marcado".
+function QuadroParceiros({ licitacaoId, parceiros, erro, aoMudar, currentUser, ehVencida, aoDefinirVencedor }: any) {
+  const [nome, setNome] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const adicionar = async () => {
+    const n = nome.trim().replace(/\s+/g, ' ');
+    if (!n || salvando) return;
+    if (parceiros.some((p: any) => p.nome.trim().toLowerCase() === n.toLowerCase())) { alert('Este parceiro já está na lista.'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('licitacao_parceiros')
+      .insert([{ licitacao_id: licitacaoId, nome: n, criado_por_nome: currentUser?.nome || currentUser?.email || null }]);
+    setSalvando(false);
+    if (error) { alert(error.code === '23505' ? 'Este parceiro já está na lista.' : 'Não foi possível adicionar o parceiro: ' + error.message); return; }
+    setNome('');
+    aoMudar();
+  };
+  const remover = async (p: any) => {
+    if (!await confirmar(`Remover o parceiro "${p.nome}" desta licitação?\n\nAs formações de preços dele continuam na licitação; só deixam de estar ligadas a ele.`)) return;
+    const { error } = await supabase.from('licitacao_parceiros').delete().eq('id', p.id);
+    if (error) { alert('Não foi possível remover o parceiro: ' + error.message); return; }
+    aoMudar();
+  };
+  const vencedor = parceiros.find((p: any) => p.vencedor);
+  return (
+    <div className="acn-quadro acn-lic-parceiros">
+      <div className="acn-quadro-titulo">PARCEIROS ({parceiros.length})</div>
+      {erro && <div className="acn-lic-parc-erro">Não foi possível ler os parceiros ({erro}). Recarregue a licitação antes de mexer neles.</div>}
+      {!erro && !parceiros.length && <div className="acn-ajuda">Nenhum parceiro. Quando houver, cada um pode ter a sua formação de preços.</div>}
+      {parceiros.map((p: any) => (
+        <div key={p.id} className="acn-lic-parc-linha">
+          <span className="acn-forte">{p.nome}</span>
+          {p.vencedor && <Selo familia="ok" ponto={false}>Vencedor</Selo>}
+          <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Remover o parceiro ${p.nome}`} title="Remover parceiro" onClick={() => remover(p)} />
+        </div>
+      ))}
+      {ehVencida && parceiros.length > 0 && (
+        <div className="acn-lic-parc-venc">
+          <div className="acn-label">Parceiro vencedor</div>
+          <Chips ativo={vencedor?.id || 'direta'} rotulo="Parceiro vencedor" onChange={(id: string) => aoDefinirVencedor(id === 'direta' ? null : id)}
+            itens={[...parceiros.map((p: any) => ({ id: p.id, rotulo: p.nome })), { id: 'direta', rotulo: 'Venda direta (sem parceiro)' }]} />
+        </div>
+      )}
+      <div className="acn-lic-parc-novo">
+        <input className="acn-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do parceiro" aria-label="Nome do parceiro"
+          onKeyDown={e => { if (e.key === 'Enter') adicionar(); }} />
+        <Botao pequeno variante="secundario" icone={mdiPlus} disabled={salvando || !nome.trim()} onClick={adicionar}>Adicionar parceiro</Botao>
+      </div>
+    </div>
+  );
+}
+
+// Quadro no formulário da licitação (lado esquerdo): valor de cada lote e o unitário do lote (total ÷ soma das quantidades dos itens) da ÚLTIMA versão de cada formação de preços
+// vinculada. Só leitura; atualiza sozinho quando a formação é salva. Com parceiros (22/10/2026), cada FAMÍLIA de formação (a raiz das versões) mostra de qual parceiro é,
+// com a escolha ali mesmo; sem parceiro nem outra formação, fica como sempre foi.
+function QuadroFormacaoLicitacao({ licitacaoId, parceiros = [] }: any) {
+  const [cots, setCots] = useState<any[]>([]);
+  const [ligacoes, setLigacoes] = useState<Record<string, string>>({});   // raiz da formação → parceiro
+  const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const raizDe = (m: any) => m?.versao_raiz_id || m?.id;
   const carregar = useCallback(async () => {
-    const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+    const { data: vinc, error: erroVinc } = await supabase.from('cotacoes_precos_vinculos')
       .select('cotacao_id').eq('tipo', 'licitacao').eq('processo_id', licitacaoId);
+    if (erroVinc) { setErro(erroVinc.message); setCarregando(false); return; }
     const ids = [...new Set((vinc || []).map((v: any) => v.cotacao_id))];
-    if (!ids.length) { setCot(null); setCarregando(false); return; }
-    const { data } = await supabase.from('cotacoes_precos')
-      .select('id,nome,versao,criado_em,atualizado_em,itens,parametros_globais,status').in('id', ids);
-    const ultima = [...(data || [])].sort((a: any, b: any) =>
-      (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0] || null;
-    setCot(ultima);
+    if (!ids.length) { setCots([]); setErro(''); setCarregando(false); return; }
+    const [rc, rl] = await Promise.all([
+      supabase.from('cotacoes_precos').select('id,nome,versao,versao_raiz_id,criado_em,atualizado_em,itens,parametros_globais,status').in('id', ids),
+      supabase.from('licitacao_formacao_parceiro').select('versao_raiz_id,parceiro_id').eq('licitacao_id', licitacaoId),
+    ]);
+    if (rc.error || rl.error) { setErro((rc.error || rl.error)!.message); setCarregando(false); return; }
+    setErro('');
+    setCots(rc.data || []);
+    setLigacoes(Object.fromEntries((rl.data || []).map((l: any) => [l.versao_raiz_id, l.parceiro_id])));
     setCarregando(false);
   }, [licitacaoId]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -945,45 +1006,77 @@ function QuadroFormacaoLicitacao({ licitacaoId }: any) {
     return () => window.removeEventListener('acn:formacao-salva', h);
   }, [carregar, licitacaoId]);
 
-  if (carregando || !cot) return null;
-  const est = estruturaFormacao(cot.itens || [], cot.parametros_globais || {}, calcItem);
-  if (!est.lotes.length) return null;
+  const trocarParceiro = async (raizId: string, parceiroId: string) => {
+    const { error } = parceiroId
+      ? await supabase.from('licitacao_formacao_parceiro').upsert([{ licitacao_id: licitacaoId, versao_raiz_id: raizId, parceiro_id: parceiroId }], { onConflict: 'licitacao_id,versao_raiz_id' })
+      : await supabase.from('licitacao_formacao_parceiro').delete().eq('licitacao_id', licitacaoId).eq('versao_raiz_id', raizId);
+    if (error) { alert('Não foi possível ligar a formação ao parceiro: ' + error.message); return; }
+    carregar();
+  };
+
+  if (erro) return <div className="acn-lic-parc-erro">Não foi possível ler a formação de preços desta licitação ({erro}).</div>;
+  if (carregando || !cots.length) return null;
+  const ultimaDe = (lista: any[]) => [...lista].sort((a: any, b: any) =>
+    (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+  const porFamilia = new Map<string, any[]>();
+  cots.forEach(c => { const k = raizDe(c); porFamilia.set(k, [...(porFamilia.get(k) || []), c]); });
+  // o que mostra é a última versão de cada família; a do parceiro vencedor vem primeiro
+  const familias = [...porFamilia.entries()].map(([raizId, lista]) => ({ raizId, cot: ultimaDe(lista), parceiroId: ligacoes[raizId] || '' }))
+    .sort((a, b) => Number(!!parceiros.find((p: any) => p.id === b.parceiroId && p.vencedor)) - Number(!!parceiros.find((p: any) => p.id === a.parceiroId && p.vencedor))
+      || String(a.cot.criado_em).localeCompare(String(b.cot.criado_em)));
   const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  return (
-    <div className="acn-quadro tom-info acn-lic-formacao">
-      <div className="acn-lic-formacao-cab">
-        <span className="acn-quadro-titulo">Formação de preços</span>
-        <span className="acn-ajuda">
-          v{cot.versao || 1}{cot.nome ? ` · ${cot.nome}` : ''}{cot.status === 'finalizada' ? ' · final' : ''}
-        </span>
+  const porParceiro = parceiros.length > 0 || familias.length > 1;
+  const blocos = familias.map(({ raizId, cot, parceiroId }) => {
+    const est = estruturaFormacao(cot.itens || [], cot.parametros_globais || {}, calcItem);
+    if (!est.lotes.length) return null;
+    const parceiro = parceiros.find((p: any) => p.id === parceiroId);
+    return (
+      <div key={raizId} className="acn-quadro tom-info acn-lic-formacao">
+        <div className="acn-lic-formacao-cab">
+          <span className="acn-quadro-titulo">Formação de preços</span>
+          <span className="acn-ajuda">
+            v{cot.versao || 1}{cot.nome ? ` · ${cot.nome}` : ''}{cot.status === 'finalizada' ? ' · final' : ''}
+          </span>
+          {parceiro?.vencedor && <Selo familia="ok" ponto={false}>Parceiro vencedor</Selo>}
+        </div>
+        {porParceiro && (
+          <div className="acn-lic-formacao-parc">
+            <label className="acn-label" htmlFor={`parc-${raizId}`}>Parceiro desta formação</label>
+            <select id={`parc-${raizId}`} className="acn-input acn-lic-parc-sel" value={parceiroId} onChange={e => trocarParceiro(raizId, e.target.value)}>
+              <option value="">— venda direta (sem parceiro) —</option>
+              {parceiros.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+        )}
+        <table className="acn-lic-mini">
+          <thead>
+            <tr>
+              <th className="esq">Lote</th>
+              <th className="dir" title="Total do lote ÷ soma das quantidades dos itens">Valor unitário</th>
+              <th className="dir">Valor do lote</th>
+            </tr>
+          </thead>
+          <tbody>
+            {est.lotes.map((l: any) => (
+              <tr key={l.nome}>
+                <td className="esq acn-forte">{l.nome}</td>
+                <td className="dir">{brl(l.unit.totVendas)}</td>
+                <td className="dir acn-forte acn-txt-info">{brl(l.total.totVendas)}</td>
+              </tr>
+            ))}
+            {est.lotes.length > 1 && (
+              <tr className="total">
+                <td className="esq acn-forte">Total</td>
+                <td />
+                <td className="dir acn-forte acn-txt-info">{brl(est.geral.totVendas)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-      <table className="acn-lic-mini">
-        <thead>
-          <tr>
-            <th className="esq">Lote</th>
-            <th className="dir" title="Total do lote ÷ soma das quantidades dos itens">Valor unitário</th>
-            <th className="dir">Valor do lote</th>
-          </tr>
-        </thead>
-        <tbody>
-          {est.lotes.map((l: any) => (
-            <tr key={l.nome}>
-              <td className="esq acn-forte">{l.nome}</td>
-              <td className="dir">{brl(l.unit.totVendas)}</td>
-              <td className="dir acn-forte acn-txt-info">{brl(l.total.totVendas)}</td>
-            </tr>
-          ))}
-          {est.lotes.length > 1 && (
-            <tr className="total">
-              <td className="esq acn-forte">Total</td>
-              <td />
-              <td className="dir acn-forte acn-txt-info">{brl(est.geral.totVendas)}</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+    );
+  });
+  return <>{blocos}</>;
 }
 
 // Colunas da lista de licitações — todas menos areas_livres (ver fetchLicit).
@@ -1112,6 +1205,32 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const [salvando, setSalvando] = useState(false);
   const [obsEncerramento, setObsEncerramento] = useState('');
   const [confirmStatus, setConfirmStatus] = useState<string|null>(null);
+  // parceiros da licitação (22/10/2026): lista, erro de leitura e o vencedor escolhido na janela "Mover para Vencida"
+  const [parceiros, setParceiros] = useState<any[]>([]);
+  const [erroParceiros, setErroParceiros] = useState('');
+  const [vencedorSel, setVencedorSel] = useState('');   // id do parceiro, 'direta' (sem parceiro) ou '' (ainda não escolheu)
+  const carregarParceiros = useCallback(async () => {
+    const { data, error } = await supabase.from('licitacao_parceiros').select('*').eq('licitacao_id', licit.id).order('criado_em').order('id');
+    if (error) { setErroParceiros(error.message); return; }   // a lista que já estava na tela fica
+    setErroParceiros('');
+    setParceiros(data || []);
+  }, [licit.id]);
+  useEffect(() => { carregarParceiros(); }, [carregarParceiros]);
+  // grava o vencedor (null = venda direta, nenhum parceiro marcado): limpa o anterior antes, porque só pode haver um por licitação. Devolve a mensagem de erro, ou null.
+  const gravarVencedor = async (parceiroId: string | null): Promise<string | null> => {
+    const { error: e1 } = await supabase.from('licitacao_parceiros').update({ vencedor: false }).eq('licitacao_id', licit.id).eq('vencedor', true);
+    if (e1) return e1.message;
+    if (parceiroId) {
+      const { error: e2 } = await supabase.from('licitacao_parceiros').update({ vencedor: true }).eq('id', parceiroId);
+      if (e2) return e2.message;
+    }
+    await carregarParceiros();
+    return null;
+  };
+  const trocarVencedor = async (parceiroId: string | null) => {
+    const erroV = await gravarVencedor(parceiroId);
+    if (erroV) alert('Não foi possível gravar o parceiro vencedor: ' + erroV);
+  };
   // 7.61: uma ação por vez nos botões que gravam — o estado `salvando` só muda no desenho seguinte e o clique duplo gravava duas vezes
   const emAcao = useRef(new Set<string>());
   const umaVez = (chave: string, fn: (...a: any[]) => Promise<any>) => async (...args: any[]) => {
@@ -1255,11 +1374,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Salvar form esquerdo ──────────────────────────────────────────────────
   const salvarForm = umaVez('form', async () => {
     // Barra data absurda antes de gravar (digito a mais no ano)
+    // 22/10/2026 (pedido do usuário): as licitações mantêm só as datas de Proposta e de Disputa; Esclarecimentos/Impugnação e Análise Técnica saíram da tela
+    // (os valores já gravados continuam no banco, intactos)
     const camposData: [string,string][] = [
-      ['data_limite_esclarecimentos','Limite de Esclarecimentos'],
       ['data_limite_proposta','Limite de Proposta'],
       ['data_disputa','Data da Disputa'],
-      ['data_limite_analise_tecnica','Limite de Análise Técnica'],
     ];  // Prazo de Entrega agora é texto livre
     for (const [campo, rotulo] of camposData) {
       if (dataForaDeFaixa((formEdit as any)[campo])) {
@@ -1273,13 +1392,12 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     // e toggleMarcador) direto no banco — formEdit é uma cópia tirada só na abertura do
     // modal e nunca é resincronizada, então incluir esses campos aqui sobrescreveria
     // qualquer alteração feita por esses outros caminhos com o valor antigo do mount.
-    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, ...editaveis } = formEdit;
+    // as datas de Esclarecimentos e de Análise Técnica saíram da tela (22/10/2026): ficam FORA do que se grava, para o salvamento não regravar (nem converter de fuso) o valor antigo
+    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, data_limite_esclarecimentos: _esc, data_limite_analise_tecnica: _ana, ...editaveis } = formEdit;
     const novoRow = {
       ...editaveis,
-      data_limite_esclarecimentos: inputBRParaUtc(editaveis.data_limite_esclarecimentos),
       data_limite_proposta:        inputBRParaUtc(editaveis.data_limite_proposta),
       data_disputa:                inputBRParaUtc(editaveis.data_disputa),
-      data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
       prazo_entrega: (editaveis.prazo_entrega || '').trim() || null,   // texto livre (ex.: 30 dias após o empenho)
       // campo de valor apagado = sem valor (antes ia texto vazio e o banco recusava o salvamento)
       ...Object.fromEntries(Object.keys(editaveis).filter(k => k.startsWith('valor_'))
@@ -1454,15 +1572,26 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   // ── Mudar status ──────────────────────────────────────────────────────────
   const mudarStatus = umaVez('status', async (novoStatus: string) => {
+    // com parceiros na licitação, quem marca Vencida escolhe o parceiro vencedor (ou "venda direta"); sem escolha não confirma (22/10/2026)
+    const exigeVencedor = novoStatus === 'Vencida' && parceiros.length > 0;
+    if (exigeVencedor && !vencedorSel) { alert('Escolha o parceiro vencedor (ou "Venda direta") antes de confirmar.'); return; }
     setSalvando(true);
     const agora = new Date().toISOString();
-    const hist = [...(licit.historico || []), { status: novoStatus, usuario: currentUser?.nome, data: agora, obs: obsEncerramento || '' }];
+    const nomeVencedor = exigeVencedor ? (vencedorSel === 'direta' ? 'venda direta (sem parceiro)' : parceiros.find((p: any) => p.id === vencedorSel)?.nome || '') : '';
+    const hist = [...(licit.historico || []), { status: novoStatus, usuario: currentUser?.nome, data: agora,
+      obs: [obsEncerramento || '', nomeVencedor ? `Parceiro vencedor: ${nomeVencedor}` : ''].filter(Boolean).join(' · ') }];
     const novoRow = { status: novoStatus, historico: hist, obs_encerramento: obsEncerramento || null, atualizado_em: agora };
     const { error: erroStatus } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
     // 7.61: o erro era ignorado — a janela fechava como se a licitação tivesse mudado de status (inclusive "Vencida") e o histórico registrava a troca
     if (erroStatus) { alert('Não foi possível mudar o status para "' + novoStatus + '": ' + erroStatus.message); setSalvando(false); return; }
     logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
       oldRow: licit, newRow: { ...licit, ...novoRow }, user: currentUser });
+    if (exigeVencedor) {
+      // o status já mudou; se o vencedor não gravar, a pessoa escolhe de novo no quadro Parceiros (a janela fica aberta, no painel da vitória)
+      const erroV = await gravarVencedor(vencedorSel === 'direta' ? null : vencedorSel);
+      if (erroV) alert('A licitação foi marcada como Vencida, mas o parceiro vencedor NÃO foi gravado (' + erroV + '). Escolha de novo no quadro Parceiros.');
+    }
+    setVencedorSel('');
     setConfirmStatus(null);
     setObsEncerramento('');
     setSalvando(false);
@@ -1657,7 +1786,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           <div className="acn-lic-cab" data-acn-familia={FAMILIA_STATUS_LICIT[s] || 'neutro'}>
             <div className="acn-lic-cab-info">
               <div className="acn-lic-cab-linha1">{s.toUpperCase()} · {licit.classificacao} · {formEdit.faturamento_empresa||'ACN'}</div>
-              <div className="acn-lic-cab-titulo">{licit.numero} — {licit.nome_projeto}</div>
+              {/* 22/10/2026 (pedido do usuário): o nome do órgão saiu do cabeçalho; ele continua no campo "Nome completo do Órgão" do formulário */}
+              <div className="acn-lic-cab-titulo">{licit.numero}</div>
               <div className="acn-lic-cab-orgao">{licit.orgao}</div>
             </div>
             <div className="acn-lic-cab-acoes">
@@ -1745,28 +1875,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </>)}
 
             <div className={campoCls('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
-            <div className={campoCls('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
 
-            <QuadroFormacaoLicitacao licitacaoId={licit.id} />
+            {/* 22/10/2026 (pedido do usuário): Portal, valor previsto, julgamento e forma de disputa numa linha só */}
             <div className="acn-lic-linha-valor">
+              <div className={campoCls('orgao', 'acn-lic-c-portal')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
               <div className={campoCls('valor_estimado', 'acn-lic-c-valor')}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
               <div className={campoCls('julgamento', 'acn-lic-c-julg')}>
                 <label className="acn-label">Julgamento</label>
-                <div className="acn-lic-opcoes quebra">
-                  {JULGAMENTO_OPCOES.map(opt => {
-                    const ativos: string[] = formEdit.julgamento || [];
-                    const sel = ativos.includes(opt);
-                    return (
-                      <Botao key={opt} pequeno variante={sel ? 'primario' : 'secundario'} aria-pressed={sel} icone={sel ? mdiCheck : undefined}
-                        onClick={() => setFormEdit((f:any) => {
-                          const at = f.julgamento || [];
-                          return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
-                        })}>
-                        {opt}
-                      </Botao>
-                    );
-                  })}
-                </div>
+                <SelectMultiplo rotulo="Julgamento" placeholder="—" opcoes={JULGAMENTO_OPCOES.map(o => ({ valor: o, rotulo: o }))}
+                  valores={formEdit.julgamento || []} onChange={(v: string[]) => setF('julgamento', v)} />
               </div>
               <div className={campoCls('forma_disputa', 'acn-lic-c-forma')}>
                 <label className="acn-label">Forma de Disputa</label>
@@ -1777,14 +1894,16 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
+            <QuadroParceiros licitacaoId={licit.id} parceiros={parceiros} erro={erroParceiros} aoMudar={carregarParceiros} currentUser={currentUser}
+              ehVencida={ehVencida} aoDefinirVencedor={trocarVencedor} />
+            <QuadroFormacaoLicitacao key={parceiros.map((p: any) => p.id).join(',')} licitacaoId={licit.id} parceiros={parceiros} />
+
             {/* PRAZOS */}
             <div className="acn-quadro">
               <div className="acn-quadro-titulo">PRAZOS</div>
               <div className="acn-grade-2">
-                <div className={campoCls('data_limite_esclarecimentos')}><FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" /></div>
                 <div className={campoCls('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
                 <div className={campoCls('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
-                <div className={campoCls('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
                 <div className={campoCls('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} placeholder="Ex.: 30 dias após o empenho" /></div>
               </div>
             </div>
@@ -1995,14 +2114,21 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <div className="acn-forte">
                   Mover para: <span className="acn-lic-status-cor" data-acn-familia={FAMILIA_STATUS_LICIT[confirmStatus] || 'neutro'}>{confirmStatus}</span>
                 </div>
+                {confirmStatus === 'Vencida' && parceiros.length > 0 && (
+                  <div className="acn-lic-parc-venc">
+                    <div className="acn-label">Parceiro vencedor *</div>
+                    <Chips ativo={vencedorSel} onChange={setVencedorSel} rotulo="Parceiro vencedor"
+                      itens={[...parceiros.map((p: any) => ({ id: p.id, rotulo: p.nome })), { id: 'direta', rotulo: 'Venda direta (sem parceiro)' }]} />
+                  </div>
+                )}
                 <RichTextInput value={obsEncerramento} onChange={html=>setObsEncerramento(html)}
                   placeholder="Observação (opcional)... (selecione um trecho pra formatar)" minHeight={36}
                   style={{ width:'100%' }} />
                 <div className="acn-lic-form-botoes">
-                  <Botao variante="primario" icone={mdiCheck} className="acn-lic-cresce" onClick={() => mudarStatus(confirmStatus)} disabled={salvando}>
+                  <Botao variante="primario" icone={mdiCheck} className="acn-lic-cresce" onClick={() => mudarStatus(confirmStatus)} disabled={salvando || (confirmStatus === 'Vencida' && parceiros.length > 0 && !vencedorSel)}>
                     {salvando ? '...' : 'Confirmar'}
                   </Botao>
-                  <Botao onClick={() => { setConfirmStatus(null); setObsEncerramento(''); }}>
+                  <Botao onClick={() => { setConfirmStatus(null); setObsEncerramento(''); setVencedorSel(''); }}>
                     Cancelar
                   </Botao>
                 </div>
@@ -2352,22 +2478,8 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             <ModalNovaInput label="Valor Global Previsto (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="money" />
             <div>
               <label className="acn-label">Julgamento</label>
-              <div className="acn-lic-opcoes quebra">
-                {JULGAMENTO_OPCOES.map(opt => {
-                  const ativos: string[] = form.julgamento || [];
-                  const sel = ativos.includes(opt);
-                  return (
-                    <Botao key={opt} pequeno variante={sel ? 'primario' : 'secundario'} aria-pressed={sel}
-                      icone={sel ? mdiCheck : undefined}
-                      onClick={() => setForm((f:any) => {
-                        const at = f.julgamento || [];
-                        return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
-                      })}>
-                      {opt}
-                    </Botao>
-                  );
-                })}
-              </div>
+              <SelectMultiplo rotulo="Julgamento" placeholder="—" opcoes={JULGAMENTO_OPCOES.map(o => ({ valor: o, rotulo: o }))}
+                valores={form.julgamento || []} onChange={(v: string[]) => set('julgamento', v)} />
             </div>
           </div>
 
@@ -2386,10 +2498,8 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">PRAZOS</div>
             <div className="acn-grade-2">
-              <ModalNovaInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" value={form.data_limite_esclarecimentos} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Limite Cadastro da Proposta" field="data_limite_proposta" value={form.data_limite_proposta} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Data/Hora de Disputa" field="data_disputa" value={form.data_disputa} onChange={set} type="datetime-local" />
-              <ModalNovaInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" value={form.data_limite_analise_tecnica} onChange={set} type="datetime-local" />
             </div>
           </div>
         </div>

@@ -14,14 +14,15 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import GarantiaTab from './GarantiaTab';
 import { logChange, useUnreadMap } from './AuditSystem';
-import { confirmar, pedirTexto } from './Feedback';
+import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
 import { ModalComprasDaOS } from './ComprasLigadas';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
+import { mdiContentCopy, mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline, mdiCartOutline } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
@@ -1222,8 +1223,37 @@ OK = ACN   |   Cancelar = DETECH`;
       { rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
       { rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
       { rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
+      { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
     ]} />);
     return btns;
+  };
+
+  // ── COPIAR OS (pedido do usuário em 23/10/2026): várias OS iguais, cada uma com o seu número ──────────────────────────────────────────────────────────────────────────────
+  // A cópia NÃO grava direto: abre a Nova OS já preenchida com a OS de origem e com um equipamento por cópia (sem serial nem chassi), no modo lote — assim a OS nasce pelo caminho de sempre
+  // (status inicial pelo tipo, demanda do Laboratório ou da Engenharia, aviso) e cada uma recebe o seu número. Quem copia confere, preenche o serial de cada equipamento e cria.
+  const copiarOS = async (os: any) => {
+    const lista = Array.isArray(os.equipamentos_lista) ? os.equipamentos_lista.filter(Boolean) : [];
+    let quantidade = 1;
+    if (lista.length > 1) {
+      if (!await confirmar(`A ${os.numero_os} tem ${lista.length} equipamentos. A cópia traz os ${lista.length} numa OS só, sem serial nem chassi, e abre a Nova OS para você conferir. Para fazer mais de uma, repita o Copiar.
+
+Continuar?`)) return;
+    } else {
+      const t = await pedirTexto(`Quantas OS iguais à ${os.numero_os}? (de 1 a ${MAX_COPIAS_OS})
+
+A Nova OS abre preenchida, uma OS para cada equipamento, cada uma com o seu número; você confere e preenche o serial de cada um.
+
+Leva: ${LEVA_DA_OS.join('; ')}.
+Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
+      if (t === null) return;
+      quantidade = Math.floor(Number(String(t).trim()));
+      if (!(quantidade >= 1 && quantidade <= MAX_COPIAS_OS)) { mostrarAviso(`Informe um número de 1 a ${MAX_COPIAS_OS}.`, 'atencao'); return; }
+    }
+    const c = formularioDaCopiaDaOs(os, quantidade);
+    setForm({ ...FORM_VAZIO, ...c.form, _crm_titulo: os.crm_oportunidade_id ? 'o mesmo card do CRM da ' + os.numero_os : '' });
+    setEquipLista(c.equipLista); setCriarEmLote(c.emLote);
+    setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
+    setModalNova(true);
   };
 
   // ── ALTERAR RESPONSÁVEL DA OS ────────────────────────────────────────────
