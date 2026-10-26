@@ -6,6 +6,8 @@ import { logChange } from './AuditSystem';
 import { Botao, Selo, Faixa } from './Interface';
 import { LinkOpl } from './AcnTabShared';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import CampoDataDaNota from './CampoDataDaNota';
+import { resolverDataDaNota, avisoDaDataRetroativa, textoDaDataNoHistorico, instanteDaNota, lerFechamentosAprovadosDoMes } from './DataDaNota';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FATURAMENTO ANTECIPADO — faturar sem terminar a adaptação (08/10/2026)
@@ -54,6 +56,7 @@ export function FiscalAntecipadas({ currentUser }: any) {
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
   const [nf, setNf] = useState('');
   const [nfServ, setNfServ] = useState('');
+  const [dataNota, setDataNota] = useState('');   // 26/10/2026: vazio = hoje; um dia anterior lança a nota de mês passado (ver DataDaNota.ts)
   const [gravando, setGravando] = useState(false);
 
   const carregar = async () => {
@@ -74,22 +77,26 @@ export function FiscalAntecipadas({ currentUser }: any) {
     if (!nfe && !nfs) { alert('Informe o número da NF-e (material) e/ou da NFS-e (serviço).'); return; }
     if (!alvos.length) { alert('Marque as OPs que saem nesta nota.'); return; }
     const notas = [nfe && `NF-e ${nfe}`, nfs && `NFS-e ${nfs}`].filter(Boolean).join(' · ');
-    if (!await confirmar(`Registrar ${notas} em ${alvos.length} OP(s) com a adaptação ainda em andamento?\n\nA OP continua na adaptação; só a nota fica registrada.`)) return;
+    // `dataDaNota` e não `data`: dentro do laço, `data` é a resposta do banco
+    const dataDaNota = resolverDataDaNota(dataNota);
+    if (dataDaNota.erro) { alert(dataDaNota.erro); return; }
+    const fechamentos = dataDaNota.retroativa ? await lerFechamentosAprovadosDoMes(supabase, dataDaNota.dia) : null;
+    if (!await confirmar(`Registrar ${notas} em ${alvos.length} OP(s) com a adaptação ainda em andamento?\n\nA OP continua na adaptação; só a nota fica registrada.${avisoDaDataRetroativa(dataDaNota, { tipo: 'op', fechamentos })}`)) return;
     setGravando(true);
     const agora = new Date().toISOString(); const falhas: string[] = [];
     for (const o of alvos) {
-      const novoRow = { numero_nf: nfe || null, numero_nf_servico: nfs || null, data_emissao_nf: agora, responsavel_fiscal: currentUser?.nome };
+      const novoRow = { numero_nf: nfe || null, numero_nf_servico: nfs || null, data_emissao_nf: instanteDaNota(dataDaNota, agora), responsavel_fiscal: currentUser?.nome };
       // sem mudar o status; só vale se a nota ainda não foi registrada por outra sessão
       const { data, error } = await supabase.from('oples').update(novoRow).eq('id', o.id).is('data_emissao_nf', null).not('fat_antecipado_em', 'is', null).select('id');
       if (error || !data?.length) { falhas.push(`${o.opl}${error ? ': ' + error.message : ': a nota já tinha sido registrada'}`); continue; }
       logChange({ module: 'fiscal', entityType: 'oples', entityId: o.id, changeType: 'UPDATE', oldRow: o, newRow: { ...o, ...novoRow }, user: currentUser });
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
-        evento: `Faturamento antecipado: ${notas} registrada(s) com a adaptação em andamento (etapa: ${o.status_geral}). A OP segue na produção; ao aprovar o CQ vai direto para entrega.`,
+        evento: `Faturamento antecipado: ${notas} registrada(s) com a adaptação em andamento (etapa: ${o.status_geral}). A OP segue na produção; ao aprovar o CQ vai direto para entrega.${textoDaDataNoHistorico(dataDaNota)}`,
         status_anterior: o.status_geral, status_novo: o.status_geral, usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
     }
-    setGravando(false); setMarcadas(new Set()); setNf(''); setNfServ('');
+    setGravando(false); setMarcadas(new Set()); setNf(''); setNfServ(''); setDataNota('');
     if (falhas.length) alert('Algumas OPs não foram registradas:\n' + falhas.join('\n'));
     carregar();
   };
@@ -129,6 +136,7 @@ export function FiscalAntecipadas({ currentUser }: any) {
           <div className="acn-com-barra acn-fta-barra">
             <input className="acn-input acn-fta-nf" placeholder="NF-e (material)" value={nf} onChange={e => setNf(e.target.value)} />
             <input className="acn-input acn-fta-nf" placeholder="NFS-e (serviço)" value={nfServ} onChange={e => setNfServ(e.target.value)} />
+            <CampoDataDaNota valor={dataNota} onChange={setDataNota} />
             <Botao variante="primario" disabled={gravando || marcadas.size === 0} onClick={registrar}>
               {gravando ? '...' : `Registrar nota em ${marcadas.size} OP(s)`}
             </Botao>
