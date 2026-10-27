@@ -246,11 +246,11 @@ export async function indicePendencias() {
   };
 
   const [setoriais, avulsas, compras, desenvolvimentos] = await Promise.all([
-    supabase.from('demandas_setoriais').select('id,opl_id,setor_destino,descricao,status')
+    supabase.from('demandas_setoriais').select('id,opl_id,setor_destino,descricao,status,data_conclusao')
       .not('opl_id', 'is', null).in('setor_destino', SETORES_QUE_SEGURAM),
-    supabase.from('demandas_avulsas').select('id,setor,titulo,status,vinculo_id,vinculos')
+    supabase.from('demandas_avulsas').select('id,setor,titulo,status,vinculo_id,vinculos,data_fim,atualizado_em')
       .in('setor', SETORES_QUE_SEGURAM),
-    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,descricao_material,status_compra')
+    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,numero_oc,descricao_material,status_compra,data_prevista_recebimento,data_recebimento_real,data_conclusao')
       .not('vinculo_id', 'is', null),
     // 18c: só os pedidos do PCP seguram a OP (o desenvolvimento aberto pela própria Engenharia segue sendo apoio)
     supabase.from('engenharia_desenvolvimento').select('id,opl_id,opl_ids,titulo,concluida,origem').eq('origem', 'pcp'),
@@ -258,12 +258,12 @@ export async function indicePendencias() {
 
   (setoriais.data || []).forEach(d => add(d.opl_id, {
     id: d.id, setor: d.setor_destino, titulo: d.descricao || `Demanda ${d.setor_destino}`,
-    aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status,
+    aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status, concluidoEm: d.data_conclusao || null,
   }));
 
   (avulsas.data || []).forEach(d => {
     const item = { id: d.id, setor: d.setor, titulo: d.titulo || `Demanda ${d.setor}`,
-      aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status };
+      aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status, concluidoEm: d.data_fim || d.atualizado_em || null };
     add(d.vinculo_id, item);
     (Array.isArray(d.vinculos) ? d.vinculos : []).forEach(v => { if (v?.tipo === 'op' || !v?.tipo) add(v?.id, item); });
   });
@@ -287,6 +287,9 @@ export async function indicePendencias() {
     add(c.vinculo_id, {
       id: c.id, setor: 'Compras', titulo: c.descricao_material || c.numero_pedido || 'Pedido de compra',
       aberto: !ENCERRADOS.includes(String(c.status_compra || '')), statusBruto: c.status_compra,
+      // previsão de chegada (mostrada na fila do Almoxarifado) e quando chegou (para o alerta de pendência sanada, 27/10/2026)
+      previsao: c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : null,
+      concluidoEm: c.data_recebimento_real || c.data_conclusao || null, numero: c.numero_oc || c.numero_pedido || null,
     });
   });
 
