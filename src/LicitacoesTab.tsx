@@ -18,6 +18,7 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { conferirContatoDeLicitacao, licitacaoTemContato, mensagemContatoDaLicitacao, mensagemLicitacaoSemContato, lerContatosDaLicitacao, STATUS_QUE_NAO_PEDEM_CONTATO } from './ContatoObrigatorio';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
 import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO, SelectMultiplo } from './Interface';
 import { podeEditarAtualizacao } from './utils/permissoes';
@@ -364,6 +365,13 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
+  // 26/10/2026: quando salvar ou mudar o status é barrado por falta de contato, a licitação abre esta seção (recolhida por padrão) já com o formulário de novo contato.
+  useEffect(() => {
+    const abrir = (e: any) => { if (e?.detail?.id === licitacaoId) { setExpandido(true); setAdicionando(true); setEditandoId(null); setForm(contatoVazio); } };
+    window.addEventListener('acn:licitacao-contatos-abrir', abrir);
+    return () => window.removeEventListener('acn:licitacao-contatos-abrir', abrir);
+  }, [licitacaoId]);
+
   // Recarrega se um contato excluído foi restaurado via Ctrl+Z (UndoToast).
   useEffect(() => {
     const onRestaurado = (e: any) => { if (e.detail?.tabela === 'licitacao_contatos') fetchContatos(); };
@@ -385,7 +393,9 @@ function ContatosSection({ licitacaoId, currentUser }) {
   });
 
   const salvar = async () => {
-    if (!form.nome.trim()) { alert('Nome do contato obrigatório'); return; }
+    // 26/10/2026 (pedido do usuário): todo contato do processo precisa de nome e de telefone (8 dígitos ou mais) ou e-mail válido — é o que a licitação exige para existir
+    const conferencia = conferirContatoDeLicitacao({ nome: form.nome, email: form.email, telefones: form.telefones });
+    if (!conferencia.ok) { alert(mensagemContatoDaLicitacao(conferencia)); return; }
     if (emAcao.current) return;
     emAcao.current = true;
     try { await salvarInterno(); } finally { emAcao.current = false; }
@@ -416,6 +426,11 @@ function ContatosSection({ licitacaoId, currentUser }) {
   };
 
   const excluir = async (id: string) => {
+    // 26/10/2026: não se remove o último contato que serve (nome e telefone ou e-mail): a licitação passaria a ficar sem contato do cliente. Remover um contato incompleto, ou um entre vários, segue livre.
+    if (licitacaoTemContato(contatos) && !licitacaoTemContato(contatos.filter((c: any) => c.id !== id))) {
+      alert('Este é o único contato completo da licitação, e o contato do cliente é obrigatório. Cadastre outro contato (nome e telefone ou e-mail) antes de remover este.');
+      return;
+    }
     if (!await confirmar('Remover este contato?')) return;
     if (emAcao.current) return;
     emAcao.current = true;
@@ -495,8 +510,11 @@ function ContatosSection({ licitacaoId, currentUser }) {
     <div className="acn-lic-contatos">
       <div className="acn-lic-contatos-cab">
         <Botao variante="discreto" pequeno icone={expandido ? mdiChevronDown : mdiChevronRight} aria-expanded={expandido} onClick={() => setExpandido(e => !e)}>
-          CONTATOS DO PROCESSO {contatos.length > 0 ? `(${contatos.length})` : ''}
+          CONTATOS DO PROCESSO * {contatos.length > 0 ? `(${contatos.length})` : ''}
         </Botao>
+        {!loading && !erroLeitura && !licitacaoTemContato(contatos) && (
+          <Selo familia="atencao" ponto={false} title="O contato do cliente é obrigatório: nome e telefone ou e-mail">contato obrigatório</Selo>
+        )}
         {expandido && !adicionando && !editandoId && (
           <Botao pequeno icone={mdiPlus} onClick={() => { setAdicionando(true); setEditandoId(null); setForm(contatoVazio); }}>
             Contato
@@ -1371,6 +1389,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // uma alteração feita nela mesma enquanto o usuário está com ela aberta.
   useEffect(() => { marcarAbaLida(tabDir); }, [tabDir, abaAlteracoes]);
 
+  // 26/10/2026 (pedido do usuário): a licitação não é salva nem muda de etapa sem o contato do cliente (nome e telefone ou e-mail). Lê os contatos NO BANCO na hora (o painel ao lado
+  // pode estar recolhido ou desatualizado); leitura recusada não vale como "tem" nem como "não tem": avisa e não segue. Sem contato, abre o formulário de novo contato.
+  const exigirContatoDaLicitacao = async (acao: string): Promise<boolean> => {
+    const r = await lerContatosDaLicitacao(supabase, licit.id);
+    if (r.erro) { alert(`Não foi possível conferir os contatos da licitação (${r.erro}). Tente de novo.`); return false; }
+    if (!licitacaoTemContato(r.contatos)) {
+      alert(mensagemLicitacaoSemContato(acao));
+      window.dispatchEvent(new CustomEvent('acn:licitacao-contatos-abrir', { detail: { id: licit.id } }));
+      return false;
+    }
+    return true;
+  };
+
   // ── Salvar form esquerdo ──────────────────────────────────────────────────
   const salvarForm = umaVez('form', async () => {
     // Barra data absurda antes de gravar (digito a mais no ano)
@@ -1386,6 +1417,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         return;
       }
     }
+    if (!await exigirContatoDaLicitacao('salvar as alterações')) return;
     setSalvandoForm(true);
     const agora = new Date().toISOString();
     // areas_livres e marcadores são salvos por caminhos próprios (AreaLivre.salvarConteudo
@@ -1575,6 +1607,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     // com parceiros na licitação, quem marca Vencida escolhe o parceiro vencedor (ou "venda direta"); sem escolha não confirma (22/10/2026)
     const exigeVencedor = novoStatus === 'Vencida' && parceiros.length > 0;
     if (exigeVencedor && !vencedorSel) { alert('Escolha o parceiro vencedor (ou "Venda direta") antes de confirmar.'); return; }
+    // 26/10/2026: sem o contato do cliente a licitação não muda de etapa — menos para Perdida e Descartada, que encerram sem negócio
+    if (!STATUS_QUE_NAO_PEDEM_CONTATO.includes(novoStatus) && !await exigirContatoDaLicitacao(`mudar o status para "${novoStatus}"`)) return;
     setSalvando(true);
     const agora = new Date().toISOString();
     const nomeVencedor = exigeVencedor ? (vencedorSel === 'direta' ? 'venda direta (sem parceiro)' : parceiros.find((p: any) => p.id === vencedorSel)?.nome || '') : '';
@@ -2391,17 +2425,23 @@ function ModalNova({ currentUser, onClose, onSaved }) {
   const [salvando, setSalvando] = useState(false);
   const emAcao = useRef(false);   // 7.61: o clique duplo criava a licitação duas vezes
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  // 26/10/2026 (pedido do usuário): o contato do cliente é obrigatório já na abertura — nome e telefone ou e-mail; vira o primeiro item de "Contatos do processo"
+  const [contato, setContato] = useState({ nome: '', telefone: '', email: '' });
+  const setC = (k: string, v: string) => setContato(c => ({ ...c, [k]: v }));
 
   const salvar = async () => {
     if (!form.numero.trim()) { alert('Número da licitação obrigatório!'); return; }
     if (!form.nome_projeto.trim()) { alert('Nome do projeto obrigatório!'); return; }
     if (!form.orgao.trim()) { alert('Órgão obrigatório!'); return; }
+    const contatoNovo = { nome: contato.nome, email: contato.email, telefones: contato.telefone.trim() ? [{ numero: contato.telefone.trim(), tipo: 'Celular' }] : [] };
+    const conferenciaContato = conferirContatoDeLicitacao(contatoNovo);
+    if (!conferenciaContato.ok) { alert(mensagemContatoDaLicitacao(conferenciaContato)); return; }
     if (emAcao.current) return;
     emAcao.current = true;
     setSalvando(true);
     const agora = new Date().toISOString();
     const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs:'Licitação aberta.' }];
-    const { error } = await supabase.from('licitacoes').insert([{
+    const { data: criada, error } = await supabase.from('licitacoes').insert([{
       ...form,
       valor_estimado: form.valor_estimado ? parseFloat(form.valor_estimado) : null,
       data_registro: agora,
@@ -2416,10 +2456,15 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       criado_por_nome: currentUser?.nome,
       criado_em: agora,
       atualizado_em: agora,
+    }]).select('id').single();
+    if (error) { setSalvando(false); emAcao.current = false; alert('Erro ao salvar: ' + error.message); return; }
+    // a licitação já existe; se o contato não gravar, ela fica criada e a pessoa recebe o aviso (o salvar e a mudança de status pedem o contato até ele existir)
+    const { error: erroContato } = await supabase.from('licitacao_contatos').insert([{
+      licitacao_id: criada.id, nome: contatoNovo.nome.trim(), tipo_contato: '', email: contatoNovo.email.trim(), observacao: '', telefones: contatoNovo.telefones, criado_em: agora,
     }]);
     setSalvando(false);
     emAcao.current = false;
-    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    if (erroContato) mostrarAviso(`A licitação foi criada, mas o contato do cliente não foi gravado (${erroContato.message}). Abra a licitação e cadastre em "Contatos do processo".`, 'atencao');
     onSaved();
     onClose();
   };
@@ -2492,6 +2537,16 @@ function ModalNova({ currentUser, onClose, onSaved }) {
                   {opt}
                 </Botao>
               ))}
+            </div>
+          </div>
+
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">CONTATO DO CLIENTE *</div>
+            <div className="acn-ajuda">Obrigatório: o nome e o telefone ou o e-mail. Fica em "Contatos do processo", onde dá para cadastrar mais.</div>
+            <ModalNovaInput label="Nome do contato" field="nome" value={contato.nome} onChange={setC} required />
+            <div className="acn-grade-2">
+              <ModalNovaInput label="Telefone" field="telefone" value={contato.telefone} onChange={setC} />
+              <ModalNovaInput label="E-mail" field="email" value={contato.email} onChange={setC} />
             </div>
           </div>
 

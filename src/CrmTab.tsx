@@ -7,6 +7,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
+import { conferirContatoDoCard, mensagemContatoDoCard, conferirContatoDeLicitacao } from './ContatoObrigatorio';
 import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel } from './AnaliseWidget';
@@ -716,6 +717,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const estDest = getEst(estagioDestId);
     setDragging(null);
 
+    // 26/10/2026 (pedido do usuário): o contato do cliente (nome e telefone ou e-mail) é obrigatório. Card antigo sem contato abre para preencher antes de mudar de etapa; perder ou desistir
+    // não pede (ninguém deve preencher dado de cliente só para encerrar um card perdido).
+    if (!isPerdido(estDest) && !isDesistencia(estDest)) {
+      const contato = conferirContatoDoCard(op);
+      if (!contato.ok) {
+        mostrarAviso(mensagemContatoDoCard(contato, true) + '\nO card foi aberto para você preencher.', 'atencao');
+        setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText('');
+        return;
+      }
+    }
+
     if (estDest?.tipo === 'enviado') {
       setModalEnviado({ op, estagioDestId });
       setPvTexto(op.numero_pv || '');
@@ -904,6 +916,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   const salvarOportunidade = umaVez('salvar-oportunidade', async () => {
     if (!formOp.titulo?.trim()) return;
+    // 26/10/2026: contato do cliente obrigatório (nome e telefone ou e-mail), no card novo e na edição (card perdido ou desistido salva sem)
+    const estDestinoNovo = getEst(formOp.estagio_id);
+    if (!isPerdido(estDestinoNovo) && !isDesistencia(estDestinoNovo)) {
+      const contato = conferirContatoDoCard(formOp);
+      if (!contato.ok) { alert(mensagemContatoDoCard(contato)); return; }
+    }
     setSalvando(true);
     const p: any = {
       funil,
@@ -1719,6 +1737,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   const salvarAbrirForm = umaVez('salvar-abrir-form', async () => {
     if (!formOp.titulo?.trim() || !modalAbrir) return;
+    // 26/10/2026: contato do cliente obrigatório (nome e telefone ou e-mail). Card que está sendo PERDIDO ou DESISTIDO salva sem contato.
+    const estDestino = getEst(formOp.estagio_id);
+    if (!isPerdido(estDestino) && !isDesistencia(estDestino)) {
+      const contato = conferirContatoDoCard(formOp);
+      if (!contato.ok) { alert(mensagemContatoDoCard(contato)); return; }
+    }
     if (isGanho(getEst(formOp.estagio_id)) && !formOp.empresa_vencedora) {
       alert('Selecione a empresa vencedora.');
       return;
@@ -2156,6 +2180,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (novaLic) {
       const { error: errLig } = await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
       if (errLig) mostrarAviso(`A licitação foi criada, mas não foi ligada a este card\n${errLig.message}`, 'atencao');   // 7.62: o erro era ignorado
+      // 26/10/2026: o contato do cliente é obrigatório na licitação também; o card já o tem (nome e telefone ou e-mail), então vai junto para "Contatos do processo"
+      const contatoDoCard = { nome: op.nome_contato, email: op.contato_email, telefones: op.contato ? [{ numero: op.contato, tipo: 'Celular' }] : [] };
+      if (conferirContatoDeLicitacao(contatoDoCard).ok) {
+        const { error: errContato } = await supabase.from('licitacao_contatos').insert([{
+          licitacao_id: novaLic.id, nome: contatoDoCard.nome, tipo_contato: '', email: contatoDoCard.email || '', observacao: 'Contato do card do CRM', telefones: contatoDoCard.telefones, criado_em: agora,
+        }]);
+        if (errContato) mostrarAviso(`A licitação foi criada, mas o contato do card não foi copiado para ela\n${errContato.message}\nCadastre em "Contatos do processo".`, 'atencao');
+      }
     }
     setModalConverterLicit(null);
     await load();
@@ -3898,9 +3930,10 @@ function ColunaRolavel({ children }: any) {
 
               {/* ── Campos de contato ── */}
               <div className="acn-quadro tom-info">
-                <div className="acn-quadro-titulo acn-crm-tit-ic"><Icone path={mdiPhoneOutline} size={14} />CONTATO</div>
+                <div className="acn-quadro-titulo acn-crm-tit-ic"><Icone path={mdiPhoneOutline} size={14} />CONTATO DO CLIENTE *</div>
+                <div className="acn-ajuda">Obrigatório: o nome e o telefone ou o e-mail.</div>
                 <div>
-                  <label className="acn-label">Nome</label>
+                  <label className="acn-label">Nome *</label>
                   <input className="acn-input" placeholder="Nome do contato"
                     value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
                 </div>
@@ -4722,9 +4755,10 @@ function ColunaRolavel({ children }: any) {
                 </div>
 
                 <div className="acn-crm-ab-contato">
-                  <div className="acn-crm-ab-contato-tit"><Icone path={mdiPhoneOutline} size={13} /> Contato</div>
+                  <div className="acn-crm-ab-contato-tit"><Icone path={mdiPhoneOutline} size={13} /> Contato do cliente *</div>
+                  <div className="acn-ajuda">Obrigatório: o nome e o telefone ou o e-mail.</div>
                   <div className="acn-crm-ab-campo" style={campoDestaque('nome_contato')}>
-                    <div className="acn-label">Nome</div>
+                    <div className="acn-label">Nome *</div>
                     <input className="acn-input" placeholder="Nome do contato"
                       value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
                   </div>
