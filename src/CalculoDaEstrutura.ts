@@ -13,7 +13,7 @@
 import { supabase } from './supabaseClient';
 import {
   perguntasDaVenda, respostasAutomaticas, materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
-  itensConjunto, vendaTemConjunto, podarRespostas, regrasDoVeiculo, avaliarRegras, valorSalvo,
+  itensConjunto, vendaTemConjunto, completarItensPeloNome, podarRespostas, regrasDoVeiculo, avaliarRegras, valorSalvo,
 } from './ConfigEstrutura';
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
@@ -25,7 +25,8 @@ const chaveLinha = (l: any) => l?.item_id || `txt:${l?.nome}`;
  * Devolve `aplicavel: false` quando a estrutura não se aplica (sem veículo do catálogo, ou venda sem Conjunto Elétrico).
  */
 export async function lerBaseDaEstrutura(opl: any) {
-  const vendidos = opl?.itens_vendidos || [];
+  // linha vendida sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026: a venda tinha o Conjunto Elétrico escrito e a estrutura dizia que não)
+  const vendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
   const idsVendidos = vendidos.map((v: any) => v.item_id).filter(Boolean);
   const conj = await itensConjunto();
   const temConjunto = vendaTemConjunto(vendidos, conj.map((c: any) => c.id));

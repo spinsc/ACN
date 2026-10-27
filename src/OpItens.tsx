@@ -13,14 +13,16 @@
 //      "com pendência".
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { confirmarRemocao } from './Feedback';
+import { confirmarRemocao, mostrarAviso } from './Feedback';
+import { imprimirListaDeSeparacao } from './ListaDeSeparacao';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
 import { SelectBusca, Botao, Selo } from './Interface';
 import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { normalizarBusca } from './SearchUtils';
+import { completarItensPeloNome } from './ConfigEstrutura';
 import Icone from './Icone';
-import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
+import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline } from '@mdi/js';
 
 const num = (v: any) => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -55,6 +57,10 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
     produto_id: l.kit_id || null,
     item_id: l.item_id || null,
   }));
+  // 27/10/2026 (OP A1741.2610): linha da formação sem o vínculo com o cadastro é procurada pelo nome, para a OP nascer com o item ligado (é o vínculo que faz o sistema reconhecer o
+  // Conjunto Elétrico e montar a estrutura). Se a procura falhar a lista vem como estava e a tela avisa.
+  let erroVinculo = '';
+  try { const ligadas = await completarItensPeloNome(itens); ligadas.forEach((l: any, i: number) => { itens[i] = l; }); } catch (e: any) { erroVinculo = e?.message || 'falha ao procurar no cadastro'; }
   // Telecom, T2 (22/10/2026): a linha que vem do cadastro traz o "Quem separa" do item (só quando o cadastro diz Telecom; vazio vale o padrão da venda).
   // Se a leitura do cadastro falhar a lista vem sem a marca e a tela avisa: a marca é uma ajuda e não impede carregar a formação.
   let erroSetor = '';
@@ -67,7 +73,7 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
       itens.forEach((l: any) => { const s = l.item_id ? porId.get(String(l.item_id)) : null; if (s) l.setor = s; });
     }
   }
-  return { formacao: f, itens, erroSetor };
+  return { formacao: f, itens, erroSetor: erroSetor || (erroVinculo ? 'vínculo com o cadastro: ' + erroVinculo : '') };
 }
 
 /**
@@ -491,7 +497,8 @@ export const situacaoDaLinha = (l: any, saldos: any = {}) => {
  */
 // `semEstoque` (22/10/2026): o Telecom usa o mesmo checklist, mas ainda não tem estoque — o texto de rodapé não pode prometer baixa
 // `comSerial` (23/10/2026): cada linha ganha o seu campo de serial (kiting e embalagem de envio); sem ele a tabela é a de sempre
-export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false, comSerial = false }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean; comSerial?: boolean }) {
+// `opl` (27/10/2026): com a OP à mão o cabeçalho ganha o botão "Imprimir lista" (item, código e quantidade a separar — ListaDeSeparacao.ts); `setor` é o nome que sai no papel
+export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false, comSerial = false, opl = null, setor = 'Almoxarifado' }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean; comSerial?: boolean; opl?: any; setor?: string }) {
   if (!linhas?.length) return null;
   const set = (i: number, patch: any) => onChange(linhas.map((l, j) => j === i ? { ...l, ...patch } : l));
   const div = divergencias(linhas).length;
@@ -507,9 +514,17 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
         <div className={'acn-opit-tit ' + (tudo ? 'ok' : 'atencao')}>
           <Icone path={mdiPackageVariantClosed} size={15} />Separação — {prontas} de {linhas.length} {tudo ? 'itens separados' : 'itens separados, faltam ' + (linhas.length - prontas)}
         </div>
-        <Botao pequeno onClick={() => marcarTudo(!tudo)}>
-          {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
-        </Botao>
+        <span className="acn-opit-acoes">
+          {opl && (
+            <Botao pequeno icone={mdiPrinterOutline} title="Imprimir a lista do que separar: item, código e quantidade"
+              onClick={() => { if (!imprimirListaDeSeparacao(opl, linhas, setor)) mostrarAviso('Não foi possível abrir a janela de impressão: o navegador bloqueou. Libere as janelas deste site e tente de novo.', 'atencao'); }}>
+              Imprimir lista
+            </Botao>
+          )}
+          <Botao pequeno onClick={() => marcarTudo(!tudo)}>
+            {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
+          </Botao>
+        </span>
       </div>
       <table className={'acn-opit-tabela' + (comSerial ? ' com-serial' : '')}>
         <thead><tr>
