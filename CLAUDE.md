@@ -97,6 +97,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 ## Como escrever o código
 
 - Todo componente começa com `// @ts-nocheck` — não remover.
+- **Alerta é vermelho** (pedido do usuário em 27/10/2026): todo alerta novo — janela que interrompe, faixa, selo ou aviso que a pessoa precisa ver — usa o vermelho do design system (`--acn-bad` e `--acn-bad-soft`, ou a variante/tom de erro do `Botao`, do `Selo` e da `Faixa`), para chamar a atenção; verde só para "deu certo" sem pedir ação, âmbar só para atenção leve. Não reescrever os alertas que já existem sem pedido: vale para o que nasce daqui em diante (o aviso de pendência sanada do Almoxarifado já nasceu vermelho).
 - **Comentário explica o porquê, não o quê.** O padrão do projeto é registrar a decisão
   e a data ("regra definida com o usuário em 21/09/2026: ..."), para quem ler daqui a
   seis meses entender a razão.

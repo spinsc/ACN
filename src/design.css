@@ -1320,12 +1320,13 @@ html body .modal-box.acn-modal-cadastro.acn-alm-lote-jan { width: min(980px, 95v
 .acn-alm-jan .form-group, .acn-alm-emb .form-group, .acn-alm-kiting .form-group, .acn-alm-lote-jan .form-group { margin-bottom: 0; }
 .acn-alm-emb .acn-modal-corpo > *, .acn-alm-kiting .acn-modal-corpo > *, .acn-alm-lote-jan .acn-modal-corpo > *, .acn-alm-jan .acn-modal-corpo > * { flex-shrink: 0; }
 html body .acn-input.acn-alm-mono { font-family: 'ACN Icones', 'IBM Plex Mono', monospace; font-size: 12px; resize: vertical; }
-/* 27/10/2026: o aviso grande de pendência sanada (AvisoPendenciaSanada.tsx), no meio da tela do Almoxarifado; muitas pendências rolam dentro da janela */
-html body .modal-box.acn-modal-cadastro.acn-alm-sanada { width: min(560px, 95vw); max-width: 560px; max-height: 86vh; }
+/* 27/10/2026: o aviso grande de pendência sanada (AvisoPendenciaSanada.tsx), no meio da tela do Almoxarifado; muitas pendências rolam dentro da janela. Vermelho por pedido do usuário no mesmo dia (alerta usa vermelho, para chamar atenção) */
+html body .modal-box.acn-modal-cadastro.acn-alm-sanada { width: min(560px, 95vw); max-width: 560px; max-height: 86vh; border: 3px solid var(--acn-bad); }
 .acn-alm-sanada .acn-modal-corpo { display: grid; gap: 10px; overflow-y: auto; }
-.acn-alm-sanada-tit { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; color: var(--acn-ok); }
-.acn-alm-sanada-item { padding: 10px 12px; background: var(--acn-ok-soft); border: 1px solid var(--acn-line); border-left: 4px solid var(--acn-ok); border-radius: 6px; }
-.acn-alm-sanada-op { font-size: 14px; font-weight: 800; color: var(--acn-ink); }
+.acn-alm-sanada .acn-modal-cab { background: var(--acn-bad-soft); }
+html body .acn-alm-sanada .modal-title.acn-alm-sanada-tit { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: var(--acn-bad); }
+.acn-alm-sanada-item { padding: 10px 12px; background: var(--acn-bad-soft); border: 1px solid var(--acn-line); border-left: 4px solid var(--acn-bad); border-radius: 6px; }
+.acn-alm-sanada-op { font-size: 14px; font-weight: 800; color: var(--acn-bad); }
 .acn-alm-sanada-motivo { margin-top: 3px; font-size: 13px; color: var(--acn-ink); overflow-wrap: anywhere; }
 .acn-alm-sanada .acn-erro { padding: 8px 10px; font-size: 12px; font-weight: 700; color: var(--acn-bad); background: var(--acn-bad-soft); border-radius: 6px; }
 .acn-alm-bloco { display: grid; gap: 6px; }

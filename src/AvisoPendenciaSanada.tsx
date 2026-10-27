@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Botao } from './Interface';
 import Icone from './Icone';
-import { mdiCheckCircleOutline } from '@mdi/js';
+import { mdiAlertCircleOutline } from '@mdi/js';
 import { marcarVistos, chaveDoUsuario } from './PendenciasSanadas';
 
 const quandoBR = (v) => { const d = new Date(v); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR'); };
@@ -29,7 +29,7 @@ export default function AvisoPendenciaSanada({ avisos, currentUser, onEntendi })
       <div className="modal-box acn-modal-cadastro acn-alm-sanada" role="alertdialog" aria-label="Pendências sanadas">
         <div className="acn-modal-cab">
           <span className="modal-title acn-alm-sanada-tit">
-            <Icone path={mdiCheckCircleOutline} size={22} /> {avisos.length === 1 ? 'Uma pendência foi sanada' : `${avisos.length} pendências foram sanadas`}
+            <Icone path={mdiAlertCircleOutline} size={22} /> {avisos.length === 1 ? 'Uma pendência foi sanada' : `${avisos.length} pendências foram sanadas`}
           </span>
         </div>
         <div className="acn-modal-corpo">
