@@ -224,7 +224,10 @@ export function ChecklistPendenciasAuto({ op, modo = 'ver', currentUser, onMudou
 // parte das demandas em aberto dos três setores e devolve as OPs que elas
 // seguram. Duas consultas para a tela inteira.
 // ─────────────────────────────────────────────────────────────────────────────
-const ENCERRADOS = ['Concluido', 'Concluído', 'Concluida', 'Concluída', 'Cancelada', 'Cancelado', 'Descartado'];
+// 'Recebido'/'Recebida' é o encerramento da compra (a OC chegou): faltava aqui e o índice tratava a compra recebida como ainda aberta — a OP D0793
+// ficou presa em "Aguardando Almox" com a OC recebida (27/10/2026): o kit 100% barrava e o painel "Recebimento de pendências" não mostrava o botão
+// "Recebi", porque esse painel só lista o que o setor já concluiu. O dossiê da OP (OpVinculos.estaAberto) já lia "Recebido" como encerrado; os dois agora concordam.
+const ENCERRADOS = ['Concluido', 'Concluído', 'Concluida', 'Concluída', 'Recebido', 'Recebida', 'Cancelada', 'Cancelado', 'Descartado'];
 /** Cancelada/Descartado sai da lista de vez: não é pendência aguardando
  *  recebimento, é trabalho que não vai mais existir (ver foiCancelada acima). */
 const CANCELADOS_RE = /cancelad|descartad/i;
