@@ -22,8 +22,11 @@ import { ItensVendidosEditor } from './OpItens';
 import { Botao } from './Interface';
 import Icone from './Icone';
 import { mdiPlus, mdiCheck, mdiTrashCanOutline } from '@mdi/js';
+import { FluxoDoGrupo } from './FluxoMistoTela';
+import { destinoVazio } from './FluxoMisto';
 
-export type GrupoLote = { qtd: number; servicos: string; valor: string; itens: any[] };
+// `fluxo` e `destino` só existem quando a venda é de FLUXO MISTO (26/10/2026, PLANO_FLUXO_MISTO.md): cada grupo escolhe o seu fluxo de entrega e, se ele termina em envio, o seu destino e frete.
+export type GrupoLote = { qtd: number; servicos: string; valor: string; itens: any[]; fluxo?: string; destino?: any };
 
 export const LETRA = (i: number) => String.fromCharCode(65 + (i % 26));
 
@@ -52,6 +55,7 @@ export function validarGrupos(grupos: GrupoLote[], quantidade: number): string |
 
 /** Uma entrada por unidade, na ordem /01../NN. `valor` só vem se todos os grupos informaram. */
 export function unidadesDosGrupos(grupos: GrupoLote[]): { grupo: number; servicos: string; valor: number | null; itens: any[] }[] {
+  // (a ordem das unidades é a dos grupos: a unidade i pertence ao grupo `grupo` — é por ele que o fluxo misto acha o fluxo e o destino da OP /NN)
   const todosComValor = grupos.every(g => parseValor(g.valor) != null);
   const out: { grupo: number; servicos: string; valor: number | null; itens: any[] }[] = [];
   grupos.forEach((g, i) => {
@@ -62,9 +66,9 @@ export function unidadesDosGrupos(grupos: GrupoLote[]): { grupo: number; servico
   return out;
 }
 
-export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false, crmId = null, licitacaoId = null }: {
+export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false, crmId = null, licitacaoId = null, fluxoMisto = false }: {
   quantidade: number; grupos: GrupoLote[]; onChange: (g: GrupoLote[]) => void; compacto?: boolean;
-  crmId?: string | null; licitacaoId?: string | null;
+  crmId?: string | null; licitacaoId?: string | null; fluxoMisto?: boolean;
 }) {
   const soma = grupos.reduce((s, g) => s + (Number(g.qtd) || 0), 0);
   const set = (i: number, k: keyof GrupoLote, v: any) => onChange(grupos.map((g, j) => j === i ? { ...g, [k]: v } : g));
@@ -99,6 +103,7 @@ export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false
                 <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={async () => { if (!await confirmarRemocao('o grupo ' + LETRA(i) + ' do lote')) return; onChange(grupos.filter((_, j) => j !== i)); }} title={`Remover grupo ${LETRA(i)}`} />
               )}
             </div>
+            {fluxoMisto && <FluxoDoGrupo g={g} letra={LETRA(i)} onChange={patch => onChange(grupos.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
             <textarea className="acn-input acn-lot-servicos" rows={2} value={g.servicos}
               placeholder={i === 0 ? 'Ex.: Barra giroflex, 4 SlimLED, rádio' : 'Ex.: Barra giroflex, 4 SlimLED, rádio + cela'}
               onChange={e => set(i, 'servicos', e.target.value)} />
@@ -109,7 +114,7 @@ export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false
       })}
       <div className="acn-lot-rodape">
         <Botao pequeno icone={mdiPlus}
-          onClick={() => onChange([...grupos, { qtd: Math.max(1, quantidade - soma), servicos: '', valor: '', itens: [] }])}>
+          onClick={() => onChange([...grupos, { qtd: Math.max(1, quantidade - soma), servicos: '', valor: '', itens: [], ...(fluxoMisto ? { fluxo: '', destino: destinoVazio() } : {}) }])}>
           Grupo
         </Botao>
         <span className={'acn-lot-soma ' + (soma === quantidade ? 'ok' : 'erro')}>

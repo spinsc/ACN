@@ -3434,6 +3434,16 @@ body.dark .acn-lot-selo { color: #1e1b4b; }
 .acn-lot-qtd { width: 54px; }
 .acn-lot-valor { width: 90px; }
 .acn-lot-servicos { width: 100%; box-sizing: border-box; margin-bottom: 6px; resize: vertical; }
+/* Fluxo misto (26/10/2026): o fluxo de entrega do grupo e, nos grupos que terminam em envio, o frete e o destino do grupo */
+.acn-lot-fluxo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.acn-lot-fluxo > .acn-lot-rot { flex-wrap: wrap; font-weight: 700; }
+.acn-lot-fluxo-sel { flex: 1 1 240px; min-width: 0; }
+.acn-lot-fluxo-vazio { border-color: var(--acn-warn); box-shadow: 0 0 0 1px var(--acn-warn); }
+.acn-lot-destino { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border: 1px dashed color-mix(in srgb, var(--acn-lot-cor) 45%, transparent); border-radius: 6px; }
+.acn-lot-frete { display: flex; flex-wrap: wrap; gap: 6px; }
+.acn-lot-destino-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.acn-lot-destino-grade > .acn-lot-rot { flex-direction: column; align-items: stretch; gap: 2px; }
+.acn-lot-destino-grade .acn-input { width: 100%; box-sizing: border-box; }
 .acn-lot-rodape { display: flex; align-items: center; gap: 8px; }
 .acn-lot-soma { display: inline-flex; align-items: center; gap: 3px; font-size: .92em; font-weight: 700; }
 .acn-lot-soma.ok { color: var(--acn-ok); }
@@ -4563,6 +4573,7 @@ html body .acn-b.acn-nop-b.acn-nop-lote-bt.sel { color: #0a544e; background-colo
 .acn-nop-lote-grupos { margin-bottom: 10px; }
 .acn-nop-lote-nota { margin-top: 4px; color: #6b21a8; font-size: 12px; line-height: 1.45; }
 .acn-nop-un { display: grid; grid-template-columns: auto minmax(132px, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; margin-bottom: 6px; }
+.acn-nop-un-envio { grid-column: span 2; }
 .acn-nop-un-n { width: 28px; color: #7c3aed; font-size: 12px; font-weight: 800; line-height: 1.45; }
 .acn-nop-un-n.misto { width: 44px; }
 .acn-nop-un-g { display: inline-block; max-width: 100%; margin-left: 3px; padding: 0 3px; overflow: hidden; border-color: rgba(36, 95, 184, .22); border-radius: 3px; color: #245fb8; background-color: #e7effa; font-size: 11px; font-weight: 800; line-height: 1.35; letter-spacing: .18px; white-space: nowrap; text-overflow: ellipsis; vertical-align: middle; }

@@ -29,6 +29,7 @@ import { recusaPorPerguntasDoCarro, listaEmTexto } from './OpObrigatorios';
 import { exigeEnderecoCompleto, enderecoQueFalta } from './EnderecoEntrega';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
+import { FLUXO_MISTO, ROTULO_FLUXO_MISTO, validarFluxosDosGrupos, ajustarOpPeloFluxoDoGrupo, dividirSoEntreElegiveis, grupoEhDeEnvio, grupoPrecisaFrete, resumoDosFluxos } from './FluxoMisto';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -219,7 +220,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // Venda para Envio já define a rota (envio de material): o campo Fluxo de
   // Entrega some e tudo que depende do fluxo usa este valor.
   const ehVendaEnvio = form.tipo_projeto === TIPO_VENDA_ENVIO;
-  const fluxoEf = fluxoEfetivo(form.tipo_projeto, form.fluxo_entrega);
+  // FLUXO MISTO (26/10/2026, PLANO_FLUXO_MISTO.md): a venda tem unidades adaptadas aqui e unidades enviadas; cada grupo do lote escolhe o seu fluxo e cada unidade vira uma OP /NN com o fluxo do grupo.
+  // "misto" é só uma opção da tela (nunca gravada): para o resto do formulário a venda não tem um fluxo único, então `fluxoEf` fica vazio e o que depende do fluxo (frete, endereço, veículo) passa a valer POR GRUPO.
+  const ehFluxoMisto = !ehVendaEnvio && form.fluxo_entrega === FLUXO_MISTO;
+  const fluxoEf = ehFluxoMisto ? '' : fluxoEfetivo(form.tipo_projeto, form.fluxo_entrega);
 
   // O formulário se adapta ao tipo de venda: adaptação precisa do veículo, envio
   // nem sempre. Quem decide é a Administração (Etapa 7.2, 28/09/2026).
@@ -262,7 +266,22 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // Com lote misto ativo, serviços/itens/valor vêm do grupo de cada unidade —
   // os campos únicos (lá embaixo) somem pra não conviver com dois donos do
   // mesmo dado.
-  const loteEhMisto = loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf);
+  // (o fluxo misto SEMPRE usa os grupos: cada grupo é quem escolhe o fluxo)
+  const loteEhMisto = (loteMisto || ehFluxoMisto) && Number(form.quantidade) > 1 && !soEnvio(fluxoEf);
+  // Fluxo misto: a regra "veículo obrigatório" é da Administração POR FLUXO, então lê-se uma vez para cada fluxo que os grupos escolheram (uma leitura que falha barra o salvar, como na venda comum)
+  const [modosPorFluxo, setModosPorFluxo] = useState<Record<string, { modo: string; erro: string | null }>>({});
+  const fluxosDosGrupos = ehFluxoMisto ? [...new Set(grupos.map((g: any) => g.fluxo).filter(Boolean))].sort().join(',') : '';
+  useEffect(() => {
+    if (!fluxosDosGrupos) return;
+    let vivo = true;
+    Promise.all(fluxosDosGrupos.split(',').map(f => modoDoVeiculoOuErro(f).then(r => [f, r] as const)))
+      .then(pares => { if (vivo) setModosPorFluxo(Object.fromEntries(pares)); });
+    return () => { vivo = false; };
+  }, [fluxosDosGrupos, tentativaModo]);
+  // por unidade do lote: o grupo dela (só no fluxo misto), se é de envio (sem chassi nem placa) e se o seletor de veículo aparece (a configuração do fluxo daquele grupo)
+  const grupoDaUnidade = (i: number) => (ehFluxoMisto ? grupos[unidadesDosGrupos(grupos)[i]?.grupo] : null);
+  const unidadeSoEnvio = (i: number) => grupoEhDeEnvio(grupoDaUnidade(i));
+  const mostraVeiculoDaUnidade = (i: number) => (ehFluxoMisto ? modosPorFluxo[grupoDaUnidade(i)?.fluxo]?.modo !== 'oculto' : mostraVeiculo);
   const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos
 
   // Catálogo de modelos de reboque — cadastrável direto por aqui, fica salvo
@@ -411,12 +430,28 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
     // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
     // Adaptação por omissão — que é justamente o problema que isto resolve.
-    if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
+    if (form.tipo === 'OP' && !fluxoEf && !ehFluxoMisto) { setErro('Selecione o Fluxo de Entrega.'); return; }
+    // Fluxo misto (26/10/2026): 2 ou mais unidades, e cada grupo com o seu fluxo (e frete/endereço dos grupos de envio) — a regra está em FluxoMisto.ts
+    if (form.tipo === 'OP' && ehFluxoMisto) {
+      const errFluxos = validarFluxosDosGrupos(grupos, parseInt(String(form.quantidade)) || 1);
+      if (errFluxos) { setErro(errFluxos); return; }
+    }
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
     // Veículo obrigatório é por tipo de venda, configurado na Administração:
     // adaptação precisa saber qual carro; envio de material nem sempre.
     if (form.tipo === 'OP' && modoErro) { setErro(`Não foi possível conferir se este tipo de venda exige o veículo (${modoErro}). Toque em "Tentar de novo" antes de criar a OP.`); return; }
     if (form.tipo === 'OP' && !modoPronto) { setErro('Aguarde um instante: conferindo se este tipo de venda exige o veículo.'); return; }
+    // Fluxo misto: o veículo obrigatório é por fluxo, então cada unidade confere o do fluxo do seu grupo (a leitura que falha barra e tenta de novo)
+    if (form.tipo === 'OP' && ehFluxoMisto) {
+      const fluxosLidos = fluxosDosGrupos.split(',').filter(Boolean);
+      if (fluxosLidos.some(f => !modosPorFluxo[f])) { setErro('Aguarde um instante: conferindo se este tipo de venda exige o veículo.'); return; }
+      const falhou = fluxosLidos.map(f => modosPorFluxo[f]).find(m => m.erro);
+      if (falhou) { setTentativaModo(n => n + 1); setErro(`Não foi possível conferir se este tipo de venda exige o veículo (${falhou.erro}). Tente de novo em instantes.`); return; }
+      const semVeiculoMisto = unidadesDosGrupos(grupos)
+        .map((u, i) => ({ i, g: grupos[u.grupo] }))
+        .filter(({ i, g }) => modosPorFluxo[g.fluxo]?.modo === 'obrigatorio' && !((form.veiculos || [])[i]?.veiculo_id || form.veiculo_id));
+      if (semVeiculoMisto.length) { setErro(`Este tipo de venda exige o veículo. Falta escolher o veículo da(s) unidade(s): ${semVeiculoMisto.map(x => String(x.i + 1).padStart(2, '0')).join(', ')}.`); return; }
+    }
     // 7.x (14/10/2026): a lista de unidades (form.veiculos) só existe quando a quantidade passa de 1 — com UM veículo ela vinha vazia, "faltaEmAlguma" dava falso e o veículo obrigatório nunca barrava (desde 28/09/2026, 7 OPs de Adaptação na matriz saíram sem veículo).
     // Agora a conferência olha uma unidade por veículo do lote, e só o cabeçalho quando não há lote. Venda para Envio não tem veículo neste formulário e não é conferida.
     if (form.tipo === 'OP' && veiculoObrigatorio && !ehVendaEnvio) {
@@ -480,6 +515,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       const recusaCep = await conferirCepAntesDeSalvar(form.destino_cep, 'CEP de entrega');
       if (recusaCep) { setErro(recusaCep); return; }
     }
+    // Fluxo misto: cada grupo que termina em envio tem o seu CEP, conferido do mesmo jeito
+    if (form.tipo === 'OP' && ehFluxoMisto) {
+      for (let i = 0; i < grupos.length; i++) {
+        if (!grupoPrecisaFrete(grupos[i])) continue;
+        const recusaCepGrupo = await conferirCepAntesDeSalvar(grupos[i].destino?.destino_cep, `CEP de entrega do grupo ${LETRA(i)}`);
+        if (recusaCepGrupo) { setErro(recusaCepGrupo); return; }
+      }
+    }
 
 
     setSalvando(true);
@@ -493,7 +536,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         // de frete para uma remessa só. Nesse caso sai UMA OP com a quantidade.
         const semLote = soEnvio(fluxoEf);
         const desmembrar = qty > 1 && !semLote;
-        const misto = desmembrar && loteMisto;
+        const misto = desmembrar && (loteMisto || ehFluxoMisto);
         if (misto) {
           const errGrupos = validarGrupos(grupos, qty);
           if (errGrupos) { setErro(errGrupos); setSalvando(false); return; }
@@ -575,12 +618,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           // igualmente entre as unidades (resto de arredondamento na última).
           const veiculos = form.veiculos || [];
           const valoresTotal = dividirValorEmUnidades(parseMoedaOuNull(form.valor_total), qty);
-          const valoresMO     = dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra), qty);
-          const valoresMOSerr = dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra_serralheria), qty);
           const unidades = misto ? unidadesDosGrupos(grupos) : null;
+          // Fluxo misto: a mão de obra (de onde sai a comissão) só vale para as unidades que passam pela produção; as de envio ficam sem
+          const produz = unidades ? unidades.map(u => !grupoEhDeEnvio(grupos[u.grupo])) : null;
+          const valoresMO     = ehFluxoMisto && produz ? dividirSoEntreElegiveis(parseMoedaOuNull(form.valor_mao_de_obra), produz, dividirValorEmUnidades) : dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra), qty);
+          const valoresMOSerr = ehFluxoMisto && produz ? dividirSoEntreElegiveis(parseMoedaOuNull(form.valor_mao_de_obra_serralheria), produz, dividirValorEmUnidades) : dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra_serralheria), qty);
           for (let i = 0; i < qty; i++) {
             const suf = String(i + 1).padStart(2, '0');
-            const payload: any = makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] });
+            let payload: any = makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] });
+            // fluxo misto: a OP nasce com o fluxo (e o destino/frete) do grupo da unidade
+            if (ehFluxoMisto && unidades) payload = ajustarOpPeloFluxoDoGrupo(payload, grupos[unidades[i].grupo], cepParaGravar);
             if (unidades) {
               // lote misto: serviços, itens vendidos (e valor, se informado por grupo) da unidade vêm do grupo
               payload.resumo_servicos = unidades[i].servicos;
@@ -607,7 +654,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             if (i === 0) firstData = data;
           }
           onSaved?.(firstData, 'op');
-          alert(`${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`);
+          alert(`${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}${ehFluxoMisto ? `\n${resumoDosFluxos(grupos)}` : ''}`);
           // 7.x: as respostas sobre o carro e a lista de material são gravadas depois da OP; se falharem, a OP existe e a pessoa precisa saber
           if (avisosConfig.length) mostrarAviso(`As OPs foram criadas, mas nem tudo foi gravado:\n${avisosConfig.join('\n')}\nAbra a OP e confira as respostas sobre o carro e a lista de material.`, 'atencao');
           onClose();
@@ -909,15 +956,30 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               <div className="acn-nop-fluxo">
                 <div className="acn-nop-fluxo-tit">🚦 Fluxo de Entrega *</div>
                 <select className="acn-input acn-nop-w" value={form.fluxo_entrega}
-                  onChange={e => setF('fluxo_entrega', e.target.value)}>
+                  onChange={e => {
+                    setF('fluxo_entrega', e.target.value);
+                    // fluxo misto: os grupos do lote customizável passam a escolher o fluxo; parte dos grupos que já estavam preenchidos é aproveitada
+                    if (e.target.value === FLUXO_MISTO) {
+                      setLoteMisto(true);
+                      setGrupos(grupos.length > 1 || grupos[0]?.servicos || (grupos[0]?.itens || []).length
+                        ? grupos
+                        : grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || '', form.itens_vendidos || []));
+                    }
+                  }}>
                   <option value="">— Selecione como esta venda será entregue —</option>
                   {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
+                  <option value={FLUXO_MISTO}>{ROTULO_FLUXO_MISTO}</option>
                 </select>
                 <div className="acn-nop-fluxo-aj">
-                  {form.fluxo_entrega
-                    ? FLUXOS.find(f => f.valor === form.fluxo_entrega)?.ajuda
-                    : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
+                  {ehFluxoMisto
+                    ? 'Parte adaptada aqui e parte enviada, na mesma venda: cada grupo do lote (abaixo) escolhe o seu fluxo e, se for envio, o seu destino e frete. Cada unidade vira uma OP /01, /02…'
+                    : form.fluxo_entrega
+                      ? FLUXOS.find(f => f.valor === form.fluxo_entrega)?.ajuda
+                      : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
                 </div>
+                {ehFluxoMisto && !(Number(form.quantidade) > 1) && (
+                  <div className="acn-nop-aviso-erro">⚠️ O fluxo misto precisa de 2 ou mais unidades: aumente a quantidade, ou escolha o fluxo da venda direto.</div>
+                )}
               </div>
               )}
 
@@ -1029,6 +1091,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     🚗 Dados por Veículo (desmembramento)
                   </div>
                   {/* Lote misto: grupos de veículos com serviços diferentes */}
+                  {!ehFluxoMisto && (
                   <label className="acn-nop-lote-chk">
                     <input type="checkbox" checked={loteMisto}
                       onChange={e => {
@@ -1037,10 +1100,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       }} />
                     Adaptações e/ou itens diferentes entre os veículos (lote misto)
                   </label>
+                  )}
                   {/* O usuário pediu a escolha como dois botões, em 26/09/2026:
                       é a primeira decisão do lote e estava escondida num
                       checkbox de uma linha. A caixa acima continua e manda no
                       estado — os botões só a tornam visível. */}
+                  {!ehFluxoMisto && (
                   <div className="acn-nop-lote-bts">
                     {[{ misto:false, rotulo:'Lote igual', ajuda:'Todos os carros iguais — informe só a quantidade' },
                       { misto:true,  rotulo:'Lote customizável', ajuda:'Carro a carro: veículo e itens podem variar' }].map(op => (
@@ -1053,9 +1118,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       </Botao>
                     ))}
                   </div>
-                  {loteMisto && (
+                  )}
+                  {(loteMisto || ehFluxoMisto) && (
                     <div className="acn-nop-lote-grupos">
-                      <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos}
+                      <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos} fluxoMisto={ehFluxoMisto}
                         crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null} />
                       <div className="acn-nop-lote-nota">
                         Um grupo com 1 veículo é o carro personalizado sozinho — crie um grupo por unidade pra deixar o lote todo diferente.
@@ -1081,7 +1147,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                           grade o filho não encolhe abaixo do conteúdo por
                           padrão, e o nome do veículo empurrava a Placa para
                           fora da tela. */}
-                      {mostraVeiculo ? (
+                      {mostraVeiculoDaUnidade(i) ? (
                         <SelectVeiculo compacto style={{ minWidth: 0 }}
                           valor={v.veiculo_id || ''} currentUser={currentUser}
                           recarregarEm={form.veiculo_id}
@@ -1101,6 +1167,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                           veiculos[i] = { ...veiculos[i], modelo: e.target.value };
                           setF('veiculos', veiculos);
                         }} />
+                      {unidadeSoEnvio(i) ? (
+                        <span className="acn-ajuda acn-nop-un-envio" data-teste={'unidade-envio-' + (i + 1)}>Envio: sem chassi nem placa</span>
+                      ) : (<>
                       <input className="acn-input" placeholder="Chassi" value={v.chassi}
                         onChange={e => {
                           const veiculos = [...(form.veiculos||[])];
@@ -1113,6 +1182,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                           veiculos[i] = { ...veiculos[i], placa: e.target.value.toUpperCase() };
                           setF('veiculos', veiculos);
                         }} />
+                      </>)}
                     </div>
                   ))}
                 </div>
