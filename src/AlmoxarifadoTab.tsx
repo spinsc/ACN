@@ -20,6 +20,8 @@ import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia, textoDosSeriais, seriaisOutrosDaOp } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
+import { pendenciasSanadas, lerVistos, chaveDoUsuario, resumoDaFalta } from './PendenciasSanadas';
+import AvisoPendenciaSanada from './AvisoPendenciaSanada';
 import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesAbertosDaOp, descricaoDaRemessa } from './Remessas';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
@@ -141,6 +143,8 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   // ninguém consegue mais confirmar o recebimento — a pendência trava a
   // Produção para sempre. Achado em 23/09/2026 com as OPs 1653.2609/01 e /02.
   const [oplsPendenciaAlmox, setOplsPendenciaAlmox] = useState([]);
+  // O aviso grande de pendência sanada (27/10/2026): compra recebida ou fabricação concluída de OP que está com este setor; cada pessoa vê até clicar "Entendi" (PendenciasSanadas.ts)
+  const [avisosSanados, setAvisosSanados] = useState([]);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
@@ -178,6 +182,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     //
     // Aparecer nos dois lugares é de propósito: em cima é a fila de separar,
     // aqui embaixo é o que dá para resolver agora.
+    let pendAlmox = [];
     const ids = doTelecom ? [] : [...mapa.keys()];   // o painel de recebimento de pendência (fabricação/compra) é do Almoxarifado
     if (ids.length) {
       const { data: pend, error: erroPend } = await supabase.from('oples')
@@ -185,10 +190,20 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         .in('id', ids)
         .not('status_geral', 'in', '("Faturado","Faturado e Disponivel para Entrega","Cancelado")');
       if (erroPend) { setErroLeitura(erroPend.message); if (!silent) setLoading(false); return; }
-      setOplsPendenciaAlmox((pend || []).filter(o => travaRecebimento(mapa.get(String(o.id)) || [], o).length));
+      pendAlmox = (pend || []).filter(o => travaRecebimento(mapa.get(String(o.id)) || [], o).length);
+      setOplsPendenciaAlmox(pendAlmox);
     } else {
       setOplsPendenciaAlmox([]);
     }
+    // o aviso vale para as OPs que estão com este setor (a fila, as que esperam o outro setor e as que já saíram mas ainda pedem o "Recebi"); leitura que falha não mostra nada
+    // (melhor calar que repetir o mesmo aviso a cada abertura), e a pessoa continua vendo a pendência na própria linha da OP
+    try {
+      const doSetor = [...daFila, ...(data || []).filter(o => aguardaOutroSetor(o, setor)), ...(doTelecom ? [] : pendAlmox)];
+      const unicas = [...new Map(doSetor.map(o => [String(o.id), o])).values()];
+      const vistos = await lerVistos(chaveDoUsuario(currentUser));
+      if (vistos.erro) console.error('Avisos de pendência sanada (leitura dos já vistos):', vistos.erro);
+      else setAvisosSanados(pendenciasSanadas(mapa, unicas, vistos.ids));
+    } catch (e) { console.error('Avisos de pendência sanada:', e); }
     if (!silent) setLoading(false);
   };
 
@@ -1129,6 +1144,12 @@ Embalar e enviar assim mesmo?`)) return;
                             VENDA COMPOSTA — você separa {linhasDoSetor(o, setor).length} linha(s){parteConcluida(o, outroSetor(setor)) ? `; o ${outroSetor(setor)} já embalou a dele` : `; o ${outroSetor(setor)} separa as outras`}
                           </Selo></div>
                         )}
+                        {/* OP de envio não trava na pendência (só avisa na hora de embalar, para não impedir envio parcial): sem este selo a fila não mostrava que faltava chegar algo (D0797, 27/10/2026) */}
+                        {faltandoPara(o).length > 0 && (() => { const r = resumoDaFalta(faltandoPara(o)); return (
+                          <div className="acn-alm-embalar"><Selo familia="atencao" ponto={false} title={r.title}>
+                            <Icone path={mdiAlertOutline} size={13} /> {r.texto}
+                          </Selo></div>
+                        ); })()}
                         {(remessasPorOp.get(String(o.id)) || []).length > 0 && (
                           <div className="acn-alm-embalar"><Selo familia="atencao" ponto={false} title="Envio parcial: cada remessa tem o seu frete; a OP só segue quando tudo tiver saído">
                             <Icone path={mdiTruckOutline} size={13} /> ENVIO PARCIAL — {resumoDeRemessas(o, remessasPorOp.get(String(o.id)))}
@@ -1377,6 +1398,9 @@ Embalar e enviar assim mesmo?`)) return;
       </>)}
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
+
+      <AvisoPendenciaSanada avisos={avisosSanados} currentUser={currentUser}
+        onEntendi={(vistos) => setAvisosSanados(atual => atual.filter(a => !vistos.some(v => v.pendenciaId === a.pendenciaId && v.opId === a.opId)))} />
 
       {/* MODAL FALTA */}
       {modalFalta && (
