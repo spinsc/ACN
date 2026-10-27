@@ -43,6 +43,10 @@ const foiCancelada = (v) => /cancelad|descartad/.test(norm(v.status));
  *  própria (outra origem) continua sendo só apoio, como sempre foi. */
 export const ehDesenvolvimentoDoPcp = (v) => v?.tipo === 'engenharia_desenvolvimento' && v?.origem === 'pcp';
 
+/** Compra com a OC já "Recebido" no Compras/Logística: quem conferiu e deu a entrada foi o próprio Almoxarifado, então a etapa "almox recebeu" já vem cumprida
+ *  e não pede mais o clique em "Recebi" (decidido com o usuário em 27/10/2026, caso da OP D0793). Fabricação (Serralheria, Chicotes) continua pedindo o "Recebi". */
+export const compraJaRecebida = (v) => (v?.setor === 'Compras' || v?.grupo === 'compra') && /^recebid/.test(norm(v?.statusBruto ?? v?.status));
+
 const seguraAOp = (v) => {
   if (foiCancelada(v)) return false;
   if (v.tipo === 'engenharia_desenvolvimento') return v.origem === 'pcp';
@@ -56,7 +60,7 @@ export function etapasDaPendencia(v, op) {
   const reg = (op?.pendencias_kit || {})[v.id] || {};
   return {
     setor:    !v.aberto,                 // status da própria demanda
-    recebido: ehDesenvolvimentoDoPcp(v) || !!reg.recebido,
+    recebido: ehDesenvolvimentoDoPcp(v) || compraJaRecebida(v) || !!reg.recebido,
     liberado: !!reg.liberado,
     quemRecebeu:  reg.recebido || null,
     quemLiberou:  reg.liberado || null,
@@ -224,7 +228,10 @@ export function ChecklistPendenciasAuto({ op, modo = 'ver', currentUser, onMudou
 // parte das demandas em aberto dos três setores e devolve as OPs que elas
 // seguram. Duas consultas para a tela inteira.
 // ─────────────────────────────────────────────────────────────────────────────
-const ENCERRADOS = ['Concluido', 'Concluído', 'Concluida', 'Concluída', 'Cancelada', 'Cancelado', 'Descartado'];
+// 'Recebido'/'Recebida' é o encerramento da compra (a OC chegou): faltava aqui e o índice tratava a compra recebida como ainda aberta — a OP D0793
+// ficou presa em "Aguardando Almox" com a OC recebida (27/10/2026): o kit 100% barrava e o painel "Recebimento de pendências" não mostrava o botão
+// "Recebi", porque esse painel só lista o que o setor já concluiu. O dossiê da OP (OpVinculos.estaAberto) já lia "Recebido" como encerrado; os dois agora concordam.
+const ENCERRADOS = ['Concluido', 'Concluído', 'Concluida', 'Concluída', 'Recebido', 'Recebida', 'Cancelada', 'Cancelado', 'Descartado'];
 /** Cancelada/Descartado sai da lista de vez: não é pendência aguardando
  *  recebimento, é trabalho que não vai mais existir (ver foiCancelada acima). */
 const CANCELADOS_RE = /cancelad|descartad/i;
@@ -290,6 +297,7 @@ export async function indicePendencias() {
 const registroDaPendencia = (p, op) => {
   const reg = { ...((op?.pendencias_kit || {})[p.id] || {}) };
   if (p.semRecebimento && !reg.recebido) reg.recebido = { por: 'não se aplica', em: null };
+  if (compraJaRecebida(p) && !reg.recebido) reg.recebido = { por: 'compra recebida', em: null };
   return reg;
 };
 
