@@ -785,6 +785,7 @@ function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar,
                 {p.tipo === 'quantidade' && <Selo familia="info" ponto={false}>resposta numérica</Selo>}
                 {(p.quando_itens || []).length > 0 && <Selo familia="atencao" ponto={false} title="A pergunta só é feita quando todos estes itens estão na venda">só com: {codigosDaCondicao(p)}</Selo>}
                 {(p.quando_algum_item || []).length > 0 && <Selo familia="atencao" ponto={false} title="A pergunta só é feita quando pelo menos um destes itens está na venda">e com algum de {p.quando_algum_item.length} itens (ex.: slimled)</Selo>}
+                {(p.quando_tambem_algum_item || []).length > 0 && <Selo familia="atencao" ponto={false} title="A pergunta só é feita quando pelo menos um destes itens também está na venda">e com algum de {p.quando_tambem_algum_item.length} itens (ex.: parachoque de impulsão)</Selo>}
                 {p.tipo !== 'quantidade' && !opcoes.length && <Selo familia="atencao" ponto={false}>sem respostas — não faz nada ainda</Selo>}
               </span>
               {pode && (
