@@ -136,6 +136,11 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   const [pendPorOp, setPendPorOp] = useState(new Map());
   const pendenciasDe = (o) => pendPorOp.get(String(o?.id)) || [];
   const faltandoPara = (o) => travaKit100(pendenciasDe(o), o);
+  // Embalar e enviar também espera a pendência (pedido do usuário em 27/10/2026, OP D0797): enquanto houver fabricação, compra ou desenvolvimento que não chegou (ou chegou e aguarda o "Recebi"), o botão fica desligado, como o KITING 100%
+  const tituloEmbalar = (o, padrao) => {
+    const falta = faltandoPara(o);
+    return falta.length ? `Esperando material de fabricação/compra:\n${textoFaltando(falta)}\n\nO envio só libera quando a pendência for sanada.` : padrao;
+  };
 
   // Pendências que fecharam no setor DEPOIS que a OP já saiu do Almoxarifado
   // (kit liberado com pendência, produção começou, e só então a Serralheria/
@@ -590,17 +595,14 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         mostrarAviso(`Frete por conta da empresa: a Logística cota o frete pelo endereço de entrega. Falta: ${faltaEnd.join(', ')}.`, 'atencao'); return;
       }
     }
-    // Fluxo de envio: aqui a mercadoria sai da empresa. Se ainda há peça de
-    // fabricação ou compra em aberto, o risco é enviar incompleto — então
-    // avisa e pede confirmação (bloquear de vez pararia envio parcial, que é
-    // legítimo; o Kit 100% do kiting esse sim fica barrado).
+    // Fluxo de envio: aqui a mercadoria sai da empresa. Até 27/10/2026 a pendência de fabricação/compra só avisava e pedia confirmação (para não impedir envio parcial);
+    // por pedido do usuário (OP D0797, com uma compra a chegar e o botão habilitado) agora BARRA, como o Kit 100%: o botão já vem desligado e esta conferência vale para a
+    // janela que ficou aberta enquanto a pendência surgia.
     const faltaEnvio = faltandoPara(modalEmbalagem);
-    if (faltaEnvio.length && !await confirmar(
-      `Esta OP tem ${faltaEnvio.length} item(ns) de fabricação/compra em aberto:
-
-${textoFaltando(faltaEnvio)}
-
-Embalar e enviar assim mesmo?`)) return;
+    if (faltaEnvio.length) {
+      mostrarAviso(`Não é possível embalar e enviar a OP ${modalEmbalagem.opl}: ${faltaEnvio.length} item(ns) de fabricação/compra ainda não foram sanados.\n\n${textoFaltando(faltaEnvio)}`, 'erro');
+      return;
+    }
     // venda composta: a parte deste setor é gravada à parte e o frete único só nasce quando o último setor terminar (T3, 22/10/2026)
     if (composta) { await concluirParteDaVendaComposta(f, itensSeriais); return; }
     setSalvandoEmb(true);
@@ -1213,17 +1215,19 @@ Embalar e enviar assim mesmo?`)) return;
                               passagem, então essa checagem não serve aqui. */}
                           {o.status_geral === STATUS_EMBALAGEM ? (
                             <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
-                              title="Produção concluída: pesar, medir e abrir a cotação de frete"
+                              disabled={!!faltandoPara(o).length}
+                              title={tituloEmbalar(o, 'Produção concluída: pesar, medir e abrir a cotação de frete')}
                               onClick={()=>abrirModalEmbalagem(o)}>
-                              {rotuloEmbalar(o)}
+                              {rotuloEmbalar(o)}{faltandoPara(o).length ? ` (${faltandoPara(o).length} p/ chegar)` : ''}
                             </Botao>
                           ) : (<>
                           {o.status_almox !== 'Kit OK' && (
                             ehEnvio(o) ? (
                               <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
-                                title="Esta OP não passa por produção: separar, embalar e enviar"
+                                disabled={!!faltandoPara(o).length}
+                                title={tituloEmbalar(o, 'Esta OP não passa por produção: separar, embalar e enviar')}
                                 onClick={()=>abrirModalEmbalagem(o)}>
-                                {rotuloEmbalar(o)}
+                                {rotuloEmbalar(o)}{faltandoPara(o).length ? ` (${faltandoPara(o).length} p/ chegar)` : ''}
                               </Botao>
                             ) : (
                               (() => {
@@ -1309,11 +1313,17 @@ Embalar e enviar assim mesmo?`)) return;
                           <td className="acn-alm-celula-acoes">
                             <div className="acn-acoes-linha quebra">
                               {(qtdPendente + qtdFalta + qtdComPendencia) > 0 && (irmaos.every(ehVendaEnvioOp) ? (
-                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote}
-                                  title="Venda para Envio: seriais de todos os produtos de todas as unidades numa tela só"
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
+                                  disabled={processandoLote || irmaos.some(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK' && faltandoPara(o).length > 0)}
+                                  title={(() => {
+                                    const comFalta = irmaos.filter(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK' && faltandoPara(o).length);
+                                    return comFalta.length ? `${comFalta.length} unidade(s) ainda esperam material de fabricação/compra (${comFalta.map(o => o.opl).join(', ')}): o envio só libera quando a pendência for sanada.` : 'Venda para Envio: seriais de todos os produtos de todas as unidades numa tela só';
+                                  })()}
                                   onClick={()=>{
                                     const ops = irmaos.filter(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK');
                                     if (!ops.length) { alert('Nenhuma unidade do lote está aguardando kit.'); return; }
+                                    const comFalta = ops.filter(o => faltandoPara(o).length);
+                                    if (comFalta.length) { mostrarAviso(`Não é possível fechar o Kit 100% em lote: ${comFalta.length} unidade(s) ainda esperam material de fabricação/compra (${comFalta.map(o => o.opl).join(', ')}).`, 'erro'); return; }
                                     abrirKitEnvioLote(base, ops);
                                   }}>
                                   KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
