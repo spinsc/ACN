@@ -1642,7 +1642,7 @@ Embalar e enviar assim mesmo?`)) return;
                 );
               })()}
 
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} semEstoque={doTelecom} comSerial={!ehVendaEnvioOp(modalEmbalagem)} />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} semEstoque={doTelecom} comSerial={!ehVendaEnvioOp(modalEmbalagem)} opl={modalEmbalagem} setor={setor} />
               {/* o serial de cada item vai na linha dele (coluna Serial da separação, logo acima); esta caixa é só para serial de algo que NÃO está na lista (e guarda o texto de OPs antigas) */}
               {conferencia.length > 0 && !ehVendaEnvioOp(modalEmbalagem) && (
                 <div className="form-group">
@@ -1693,7 +1693,7 @@ Embalar e enviar assim mesmo?`)) return;
               <div className="acn-ajuda">
                 Informe o número de série de cada equipamento na linha do próprio item (coluna Serial) antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
               </div>
-              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} comSerial />
+              <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} comSerial opl={modalSeriais} setor={setor} />
               <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
                 modo="almox" currentUser={currentUser}
                 onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />

@@ -13,7 +13,8 @@
 //      "com pendência".
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { confirmarRemocao } from './Feedback';
+import { confirmarRemocao, mostrarAviso } from './Feedback';
+import { imprimirListaDeSeparacao } from './ListaDeSeparacao';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
 import { SelectBusca, Botao, Selo } from './Interface';
@@ -21,7 +22,7 @@ import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, p
 import { normalizarBusca } from './SearchUtils';
 import { completarItensPeloNome } from './ConfigEstrutura';
 import Icone from './Icone';
-import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
+import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline } from '@mdi/js';
 
 const num = (v: any) => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -496,7 +497,8 @@ export const situacaoDaLinha = (l: any, saldos: any = {}) => {
  */
 // `semEstoque` (22/10/2026): o Telecom usa o mesmo checklist, mas ainda não tem estoque — o texto de rodapé não pode prometer baixa
 // `comSerial` (23/10/2026): cada linha ganha o seu campo de serial (kiting e embalagem de envio); sem ele a tabela é a de sempre
-export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false, comSerial = false }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean; comSerial?: boolean }) {
+// `opl` (27/10/2026): com a OP à mão o cabeçalho ganha o botão "Imprimir lista" (item, código e quantidade a separar — ListaDeSeparacao.ts); `setor` é o nome que sai no papel
+export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = false, comSerial = false, opl = null, setor = 'Almoxarifado' }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any; semEstoque?: boolean; comSerial?: boolean; opl?: any; setor?: string }) {
   if (!linhas?.length) return null;
   const set = (i: number, patch: any) => onChange(linhas.map((l, j) => j === i ? { ...l, ...patch } : l));
   const div = divergencias(linhas).length;
@@ -512,9 +514,17 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
         <div className={'acn-opit-tit ' + (tudo ? 'ok' : 'atencao')}>
           <Icone path={mdiPackageVariantClosed} size={15} />Separação — {prontas} de {linhas.length} {tudo ? 'itens separados' : 'itens separados, faltam ' + (linhas.length - prontas)}
         </div>
-        <Botao pequeno onClick={() => marcarTudo(!tudo)}>
-          {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
-        </Botao>
+        <span className="acn-opit-acoes">
+          {opl && (
+            <Botao pequeno icone={mdiPrinterOutline} title="Imprimir a lista do que separar: item, código e quantidade"
+              onClick={() => { if (!imprimirListaDeSeparacao(opl, linhas, setor)) mostrarAviso('Não foi possível abrir a janela de impressão: o navegador bloqueou. Libere as janelas deste site e tente de novo.', 'atencao'); }}>
+              Imprimir lista
+            </Botao>
+          )}
+          <Botao pequeno onClick={() => marcarTudo(!tudo)}>
+            {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
+          </Botao>
+        </span>
       </div>
       <table className={'acn-opit-tabela' + (comSerial ? ' com-serial' : '')}>
         <thead><tr>
