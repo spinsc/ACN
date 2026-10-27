@@ -9,6 +9,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { statusAposCqAprovado, aguardaLiberacaoComercial, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { Botao, Faixa } from './Interface';
 import { itensConjunto } from './ConfigEstrutura';
+import { statusAposCQ } from './SacFluxo';
 import Icone from './Icone';
 import { mdiClipboardCheckOutline, mdiWrenchOutline, mdiEyeOutline, mdiCheck, mdiClose } from '@mdi/js';
 
@@ -189,7 +190,8 @@ export default function QualidadeTab({ currentUser }) {
 
     if (ehOS) {
       const novoRow = {
-        status: 'Aguardando Envio Fiscal',
+        // S1 (27/10/2026): a OS cobrada vai ao SAC enviar ao Fiscal; a OS sem cobrança (garantia dentro da cobertura ou cortesia) já está concluída e vai à entrega, sem Fiscal
+        status: statusAposCQ(row),
         resultado_cq: 'Aprovado',
         cq_auditor: currentUser?.nome,
         data_cq: agora,

@@ -261,6 +261,10 @@ export function formularioDaCopiaDaOs(origem: any, quantidade: number) {
     valor_total: origem?.valor_total ?? '', valor_mao_de_obra: origem?.valor_mao_de_obra ?? '',
     data_faturamento: '',
     crm_oportunidade_id: origem?.crm_oportunidade_id || null,
+    // S1 do PLANO_SAC_FLUXO.md (27/10/2026): a cópia de uma OS de garantia fica na MESMA ficha e com a mesma cobrança (OS antiga sem a marca vale pelo tipo de serviço)
+    garantia_id: origem?.garantia_id || null,
+    cobranca: origem?.cobranca === 'garantia' || origem?.cobranca === 'cobrada' ? origem.cobranca : '',
+    _garantia_numero: origem?.garantia_id ? 'a mesma ficha da ' + (origem?.numero_os || 'OS de origem') : '',
   };
   return { form, equipLista, emLote: !varios && qtd > 1, varios };
 }

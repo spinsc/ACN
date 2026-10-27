@@ -53,7 +53,7 @@ async function avisarGarantia(antes: any, depois: any, autor: any): Promise<stri
 const dizerFalhasDeAviso = (falhas: string[]) => { if (falhas.length) mostrarAviso(`Gravado, mas não foi possível avisar: ${falhas.join('; ')}.`, 'atencao'); };
 
 /** Lê a ficha, aplica a operação do modelo e grava num UPDATE que só pega se ninguém mexeu desde a leitura (confere `atualizado_em`). Devolve o resultado, ou null (e já avisou o motivo). */
-async function gravarGarantia(id: string, operacao: (g: any, agora: string) => any, autor: any) {
+export async function gravarGarantia(id: string, operacao: (g: any, agora: string) => any, autor: any) {
   const agora = new Date().toISOString();
   const { data: g, error } = await supabase.from(TABELA).select('*').eq('id', id).maybeSingle();
   if (error || !g) { alert(`Não foi possível ler o atendimento antes de gravar (${error?.message || 'ele não existe mais'}). Nada foi alterado.`); return null; }
@@ -216,7 +216,7 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
 }
 
 // ─── Detalhe do atendimento ────────────────────────────────────────────────────────────────────────────────────
-function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
+function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar, onGerarOS }: any) {
   const mexe = podeMexerNaGarantia(g, currentUser);
   const conduz = podeConduzirGarantia(g, currentUser);
   const hoje = hojeISO();
@@ -259,7 +259,7 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
           </div>
           {campo('Descrição da falha', <span className="acn-gar-texto">{g.descricao_falha}</span>)}
           {campo('Copiados', (g.copiados || []).map((p: any) => p.nome).join(', '))}
-          <SecoesGarantia g={g} currentUser={currentUser} executar={executar} ocupado={ocupado} />
+          <SecoesGarantia g={g} currentUser={currentUser} executar={executar} ocupado={ocupado} onGerarOS={onGerarOS} />
           <details className="acn-dev-historico" open>
             <summary>Histórico do atendimento ({(g.historico || []).length})</summary>
             <ul>
@@ -300,7 +300,8 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar }: any) {
 }
 
 // ─── A aba ──────────────────────────────────────────────────────────────────────────────────────────────────────
-export default function GarantiaTab({ currentUser }: any) {
+// `onGerarOS` (S1 do PLANO_SAC_FLUXO.md, 27/10/2026): só vem quando a aba está dentro do SAC; é ele que abre a Nova OS preenchida com a ficha. Sem ele a ficha não mostra o botão.
+export default function GarantiaTab({ currentUser, onGerarOS }: any) {
   const [lista, setLista] = useState<any[] | null>(null);
   const [erro, setErro] = useState('');
   const [filtro, setFiltro] = useState('aberto');
@@ -402,7 +403,7 @@ export default function GarantiaTab({ currentUser }: any) {
           )}
 
       {detalhe && !janela && (
-        <DetalheGarantia g={detalhe} currentUser={currentUser} onFechar={() => setDetalheId(null)} onMudou={carregar} onEditar={() => setJanela({ modo: 'editar', g: detalhe })} />
+        <DetalheGarantia g={detalhe} currentUser={currentUser} onFechar={() => setDetalheId(null)} onMudou={carregar} onEditar={() => setJanela({ modo: 'editar', g: detalhe })} onGerarOS={onGerarOS ? (x: any) => { setDetalheId(null); onGerarOS(x); } : undefined} />
       )}
       {relatorio && <GarantiaRelatorioTela fichas={lista || []} currentUser={currentUser} onFechar={() => setRelatorio(false)} />}
       {janela && (

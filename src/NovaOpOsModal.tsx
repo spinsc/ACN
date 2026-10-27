@@ -120,7 +120,7 @@ const TIPOS_OS = [
   'Instalação',
   'Visita Técnica',
   'Treinamento',
-  'Garantia',
+  // 'Garantia' saiu em 27/10/2026 (PLANO_SAC_FLUXO.md, S1): a OS de garantia nasce da ficha da aba Garantia (Gerar OS) ou da Nova OS do SAC com a ficha escolhida; pelo card do CRM ela abriria sem ficha
   'Suporte Remoto',
   'Outro',
 ];

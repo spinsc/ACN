@@ -12,7 +12,9 @@ import { combinaBusca } from './SearchUtils';
 import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
-import GarantiaTab from './GarantiaTab';
+import GarantiaTab, { gravarGarantia } from './GarantiaTab';
+import { registrarOsGerada } from './GarantiaModelo';
+import { osSemCobranca, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
@@ -188,6 +190,10 @@ const FORM_VAZIO = {
   // Vínculo CRM
   crm_oportunidade_id: null as string|null,
   _crm_titulo: '',
+  // Garantia (S1 do PLANO_SAC_FLUXO.md, 27/10/2026): a ficha da aba Garantia que originou a OS e se a OS é cobrada ou sem cobrança
+  garantia_id: null as string|null,
+  cobranca: '' as ''|'garantia'|'cobrada',
+  _garantia_numero: '',
 };
 
 // Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
@@ -303,6 +309,8 @@ function SacTabCompleto({ currentUser }) {
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
   // Lote de OS (pedido do usuário em 07/10/2026): com vários equipamentos, "uma OS para cada" — cada uma com o seu número, ligadas por lote_id; o quadro mostra o lote num card só.
   const [criarEmLote, setCriarEmLote]       = useState(false);
+  // Fichas da Garantia que já podem gerar OS (avaliação feita e, fora da garantia, alinhamento e autorização); lidas quando a Nova OS é de tipo Garantia sem ficha escolhida
+  const [fichas, setFichas] = useState<{ lista: any[]; erro: string; carregando: boolean; lida: boolean }>({ lista: [], erro: '', carregando: false, lida: false });
   const [lotesAbertos, setLotesAbertos]     = useState<Set<string>>(new Set());
 
   // Link de um aviso de garantia (G5, 20/10/2026) com o SAC já aberto: troca para a aba Garantia, que abre a ficha. O evento traz o mesmo dado do global; não se limpa o global aqui
@@ -383,6 +391,20 @@ function SacTabCompleto({ currentUser }) {
     fetchTiposServico();
   };
 
+  // S1 (27/10/2026): a Nova OS de garantia sem ficha lista os atendimentos que já podem gerar OS; a lista é lida de novo cada vez que a janela abre
+  useEffect(() => {
+    if (!modalNova) { setFichas(f => (f.lida || f.lista.length || f.erro) ? { lista: [], erro: '', carregando: false, lida: false } : f); return; }
+    if (form.tipo_servico !== 'Garantia' || form.garantia_id || fichas.lida || fichas.carregando) return;
+    let vivo = true;
+    setFichas(f => ({ ...f, carregando: true, erro: '' }));
+    supabase.from('garantia_atendimentos').select('*').eq('situacao', 'aberto').order('criado_em', { ascending: false }).then(({ data, error }: any) => {
+      if (!vivo) return;
+      if (error) { setFichas({ lista: [], erro: error.message, carregando: false, lida: true }); return; }
+      setFichas({ lista: (data || []).filter((g: any) => podeGerarOsDaGarantia(g, currentUser).ok), erro: '', carregando: false, lida: true });
+    });
+    return () => { vivo = false; };
+  }, [modalNova, form.tipo_servico, form.garantia_id, fichas.lida]);
+
   const fetchOrdens = async () => {
     setLoading(true);
     const { data } = await supabase.from('sac_ordens_servico').select('*').order('data_abertura', { ascending: false });
@@ -436,6 +458,9 @@ function SacTabCompleto({ currentUser }) {
 
   // ── CRIAR OS ──────────────────────────────────────────────────────────────
   const criarOS = async () => {
+    // S1 (27/10/2026): garantia começa pela ficha da aba Garantia; sem a ficha a OS não abre (é a primeira coisa conferida: o resto vem preenchido pela ficha)
+    const faltaFicha = faltaFichaDaGarantia({ tipo_servico: form.tipo_servico, garantia_id: form.garantia_id });
+    if (faltaFicha) { alert(faltaFicha); return; }
     if (!form.cliente_nome.trim()) { alert('Nome do cliente obrigatório!'); return; }
     if (!form.equipamento_nome.trim()) { alert('Informe o equipamento!'); return; }
     // Etapa 7.23 (resposta do usuário em 01/10/2026): o asterisco de "Defeito Reclamado *" sempre esteve na tela, mas a OS abria sem — 3 das 19 OS reais estão sem defeito. Agora é obrigatório, em cada equipamento da OS.
@@ -445,6 +470,9 @@ function SacTabCompleto({ currentUser }) {
     const agora = new Date().toISOString();
     const isGarantia = form.tipo_servico === 'Garantia';
     const ehVeicular = form.is_veiculo || isVeicular(form.tipo_projeto);
+    // cobrada ou sem cobrança: a OS de garantia diz na abertura (a ficha sugere); toda outra OS é cobrada
+    const cobranca: 'garantia' | 'cobrada' = isGarantia ? (form.cobranca === 'cobrada' ? 'cobrada' : 'garantia') : 'cobrada';
+    const semCobrar = cobranca === 'garantia';
 
     // Gera primeiro número e faz upload de fotos (uma única vez)
     let numero = await gerarNumeroOS();
@@ -496,12 +524,13 @@ function SacTabCompleto({ currentUser }) {
       email: form.email || null,
       prazo_orcamento: !isGarantia ? (form.prazo_orcamento || null) : null,
       data_prevista_entrega: isGarantia ? (form.data_prevista_entrega || null) : null,
-      status: ehVeicular
-        ? (form.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento')
-        : (isGarantia ? 'Aprovado' : 'Diagnóstico'),
-      aprovado: isGarantia && !ehVeicular ? true : null,
+      // S1 (27/10/2026): sem cobrança nunca nasce em cotação (a garantia veicular nasce em "Em Provisionamento"; a do Laboratório, "Aprovado")
+      status: statusInicialDaOS({ ehVeicular, tipoAvaliacao: form.tipo_avaliacao, cobranca }),
+      cobranca,
+      garantia_id: isGarantia ? (form.garantia_id || null) : null,
+      aprovado: semCobrar && !ehVeicular ? true : null,
       is_manutencao_veicular: ehVeicular,
-      tipo_avaliacao: ehVeicular ? form.tipo_avaliacao : null,
+      tipo_avaliacao: ehVeicular ? (semCobrar ? 'Presencial' : form.tipo_avaliacao) : null,
       acompanhamento_engenharia: form.acompanhamento_engenharia || false,
       itens_cotacao: form.itens_cotacao?.length > 0 ? form.itens_cotacao : null,
       cnpj_faturamento: form.cnpj_faturamento || null,
@@ -560,10 +589,10 @@ function SacTabCompleto({ currentUser }) {
     const falhasDemanda: string[] = [];
     // Auto-criar demanda para Laboratório (apenas OS não veiculares)
     if (!ehVeicular) {
-      const sac_fase = isGarantia ? 'execucao' : 'diagnostico';
+      const sac_fase = semCobrar ? 'execucao' : 'diagnostico';
       // Etapa 7.23 (resposta do usuário em 01/10/2026): a demanda dizia sempre "Ver OS" porque lia form.defeito_reclamado, que a tela nunca preenche (o defeito digitado fica em equipLista); só vale para OS novas
       const defeitoDemanda = String(equipLista[0]?.defeito || '').trim() || form.defeito_reclamado || 'Ver OS';
-      const descDemanda = isGarantia
+      const descDemanda = semCobrar
         ? `[SAC-EXEC] ${numero} — ${form.equipamento_nome} | ${defeitoDemanda}`
         : `[SAC-DIAG] ${numero} — ${form.equipamento_nome} | ${defeitoDemanda}`;
       const { error: errLab } = await supabase.from('demandas_setoriais').insert([{
@@ -577,8 +606,8 @@ function SacTabCompleto({ currentUser }) {
         sac_os_id: osData?.id,
         sac_fase,
         logs_demanda: [{
-          texto: isGarantia
-            ? `OS Garantia — aprovada automaticamente. Encaminhada para execução.`
+          texto: semCobrar
+            ? `OS Garantia (sem cobrança) — aprovada automaticamente. Encaminhada para execução.`
             : `OS aberta para diagnóstico e elaboração de orçamento.`,
           usuario: currentUser?.nome, hora: agora,
         }],
@@ -608,6 +637,11 @@ function SacTabCompleto({ currentUser }) {
     if (!emLote) notificarEvento('sac_os_aberta', `*Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
     else if (u === unidades.length - 1) notificarEvento('sac_os_aberta', `*Novo lote de ${criadas.length} OS*\n${criadas.join(', ')}\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
     }   // fim do laço por unidade
+
+    // S1: a ficha da Garantia registra as OS que nasceram dela (a OS já existe; se o registro falhar, o aviso diz)
+    if (isGarantia && form.garantia_id && criadas.length) {
+      await gravarGarantia(form.garantia_id, (g: any, agoraFicha: string) => registrarOsGerada(g, currentUser, criadas, cobranca, agoraFicha), currentUser);
+    }
 
     const _savedCliente = { formData: { ...form }, clienteId: form._cliente_id };
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAnexarFiles([]); setAcessInput('');
@@ -1080,8 +1114,14 @@ OK = ACN   |   Cancelar = DETECH`;
           </Botao>
         );
       }
+      // Em Cotação de uma OS SEM cobrança (garantia que nasceu antes da regra): não há cotação; só seguir para o atendimento
+      if (cotacaoSemSentido(os)) {
+        btns.push(
+          <Botao key="semcot" pequeno variante="primario" icone={mdiArrowRight} onClick={()=>seguirSemCotacao(os)}>Seguir sem cotação</Botao>
+        );
+      }
       // Remota: Em Cotação → SAC insere itens e envia cotação
-      if (os.status === 'Em Cotação') {
+      if (os.status === 'Em Cotação' && !cotacaoSemSentido(os)) {
         btns.push(
           <Botao key="itens" pequeno icone={mdiClipboardListOutline}
             onClick={()=>{ setLocalItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setHorasCobradas(os.horas_cobradas_cotacao!=null?String(os.horas_cobradas_cotacao):''); setModalItens(os); }}>
@@ -1141,6 +1181,12 @@ OK = ACN   |   Cancelar = DETECH`;
         );
         btns.push(
           <Botao key="entrega" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
+        );
+      }
+      // Concluído (OS veicular SEM cobrança, depois do CQ) → SAC entrega o veículo; não vai ao Fiscal
+      if (os.status === 'Concluído') {
+        btns.push(
+          <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
         );
       }
       // Aguardando CQ → sem ação do SAC, Qualidade que audita
@@ -1254,6 +1300,32 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     setEquipLista(c.equipLista); setCriarEmLote(c.emLote);
     setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
     setModalNova(true);
+  };
+
+  // ── GARANTIA: a OS nasce da ficha (S1 do PLANO_SAC_FLUXO.md, 27/10/2026) ─────────────────────────────────────────────────────────────────────
+  // "Gerar OS" na ficha (aba Garantia) abre a Nova OS já preenchida com o cliente, o contato, o veículo, o chassi e a falha; a mesma tela serve para campanha (vários equipamentos em lote).
+  const preencherComFicha = (g: any) => {
+    const c = formularioDaOsDeGarantia(g);
+    setForm(f => ({ ...f, ...c.form }));
+    setEquipLista(c.equipLista); setCriarEmLote(false);
+  };
+  const escolherFicha = (g: any) => preencherComFicha(g);
+  const abrirNovaOsDaGarantia = (g: any) => {
+    const c = formularioDaOsDeGarantia(g);
+    setForm({ ...FORM_VAZIO, ...c.form });
+    setEquipLista(c.equipLista); setCriarEmLote(false);
+    setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
+    setAbaAtiva('os'); setModalNova(true);
+  };
+
+  // OS de garantia que nasceu em "Em Cotação" antes desta regra: não há cotação a fazer; segue para o atendimento (a Produção marca a data). Quem decide é o SAC, uma OS por vez.
+  const seguirSemCotacao = async (os: any) => {
+    if (!await confirmar(`A ${os.numero_os} é garantia (sem cobrança): não tem cotação a enviar ao cliente.\n\nSeguir direto para o atendimento (Produção marca a data)?`)) return;
+    const agora = new Date().toISOString();
+    const { error } = await supabase.from('sac_ordens_servico').update({ status: 'Em Provisionamento', cobranca: 'garantia', tipo_avaliacao: 'Presencial', atualizado_em: agora }).eq('id', os.id).eq('status', 'Em Cotação');
+    if (error) { alert('Erro ao seguir sem cotação: ' + error.message); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status, cobranca: os.cobranca ?? null, tipo_avaliacao: os.tipo_avaliacao ?? null }, newRow: { status: 'Em Provisionamento', cobranca: 'garantia', tipo_avaliacao: 'Presencial' }, user: currentUser });
+    fetchOrdens();
   };
 
   // ── ALTERAR RESPONSÁVEL DA OS ────────────────────────────────────────────
@@ -1602,7 +1674,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       ]} />
 
       {/* ── ABA GARANTIA (G1, 19/10/2026) ── */}
-      {abaAtiva === 'garantia' && <GarantiaTab currentUser={currentUser} />}
+      {abaAtiva === 'garantia' && <GarantiaTab currentUser={currentUser} onGerarOS={abrirNovaOsDaGarantia} />}
 
       {/* ── ABA CHAMADOS NFC ── */}
       {abaAtiva === 'chamados_nfc' && (
@@ -2009,7 +2081,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                         {o.lote_id && <Selo familia="marca" ponto={false} title={o.lote_descricao || 'Faz parte de um lote de OS'}>Lote</Selo>}
                       </div>
                     </td>
-                    <td className="acn-texto-curto">{o.tipo_servico}</td>
+                    <td className="acn-texto-curto">{o.tipo_servico}{osSemCobranca(o) && o.tipo_servico !== 'Garantia' && <> <Selo familia="ok" ponto={false}>sem cobrança</Selo></>}</td>
                     <td>{o.tipo_avaliacao==='Remota' ? <Selo familia="neutro" ponto={false}><Icone path={mdiAccessPoint} size={13} /> Remota</Selo> : o.tipo_avaliacao==='Presencial' ? <Selo familia="neutro" ponto={false}><Icone path={mdiMapMarkerOutline} size={13} /> Presencial</Selo> : <span className="acn-fraco">—</span>}</td>
                     <td className="acn-texto-longo acn-sac-equip">
                       <div className="acn-duas">
@@ -2106,7 +2178,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               <div className="form-row">
                 <div className="form-group">
                   <label className="acn-label">Tipo de Serviço *</label>
-                  <select className="acn-input" value={form.tipo_servico} onChange={e=>setForm(f=>({...f,tipo_servico:e.target.value}))}>
+                  <select className="acn-input" value={form.tipo_servico} onChange={e=>{ const v = e.target.value; setForm(f=>({...f,tipo_servico:v, ...(v !== 'Garantia' ? { garantia_id:null, cobranca:'' as const, _garantia_numero:'' } : {})})); }}>
                     {tiposServico.filter(t=>t.ativo).map(t=>(
                       <option key={t.id} value={t.nome}>{t.nome}</option>
                     ))}
@@ -2140,6 +2212,48 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 </div>
               </div>
             </div>
+
+            {/* GARANTIA: a ficha da aba Garantia é a porta de entrada (S1 do PLANO_SAC_FLUXO.md, 27/10/2026) */}
+            {form.tipo_servico === 'Garantia' && (
+              <div className="acn-quadro tom-info" data-teste="ficha-da-garantia">
+                <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiShieldCheckOutline} size={14} /> Atendimento de garantia (ficha) *</span></div>
+                {form.garantia_id ? (
+                  <>
+                    <div className="acn-sac-crm-escolhido">
+                      <span className="acn-txt-ok acn-sac-icone-texto"><Icone path={mdiCheck} size={15} /> {form._garantia_numero || 'Ficha escolhida'}</span>
+                      <Botao pequeno variante="discreto" icone={mdiClose} onClick={()=>setForm(f=>({...f,garantia_id:null,cobranca:'' as const,_garantia_numero:''}))}>Trocar</Botao>
+                    </div>
+                    <div className="form-group">
+                      <label className="acn-label">Esta OS será *</label>
+                      <Chips ativo={form.cobranca || 'garantia'} rotulo="Cobrança da OS" onChange={v=>setForm(f=>({...f,cobranca:v as any}))}
+                        itens={[{ id: 'garantia', rotulo: ROTULOS_COBRANCA.garantia }, { id: 'cobrada', rotulo: ROTULOS_COBRANCA.cobrada }]} />
+                      <div className="acn-ajuda">
+                        {(form.cobranca || 'garantia') === 'garantia'
+                          ? 'Garantia dentro da cobertura ou cortesia: não passa por cotação nem aprovação do cliente e não vai ao Fiscal; termina em Entregue.'
+                          : 'Fora da cobertura e cobrada do cliente: segue o fluxo pago (cotação ou orçamento, aprovação, execução e Fiscal).'}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="acn-ajuda">A garantia começa pela ficha da aba Garantia (avaliação da cobertura, fornecedor, custos e autorização). Escolha o atendimento: o cliente, o veículo e a falha vêm preenchidos.</div>
+                    {fichas.carregando && <div className="acn-ajuda">Lendo os atendimentos de garantia...</div>}
+                    {fichas.erro && <Faixa tom="erro" acao={<Botao pequeno onClick={()=>setFichas({ lista: [], erro: '', carregando: false, lida: false })}>Tentar de novo</Botao>}>Não foi possível ler os atendimentos de garantia ({fichas.erro}).</Faixa>}
+                    {fichas.lida && !fichas.erro && fichas.lista.length === 0 && (
+                      <Faixa tom="atencao" acao={<Botao pequeno onClick={()=>{ setModalNova(false); setAbaAtiva('garantia'); }}>Abrir a aba Garantia</Botao>}>
+                        Nenhum atendimento de garantia liberado para gerar OS. Abra ou conduza a ficha na aba Garantia (a avaliação técnica precisa estar registrada).
+                      </Faixa>
+                    )}
+                    {fichas.lista.length > 0 && (
+                      <select className="acn-input" aria-label="Atendimento de garantia" value="" onChange={e=>{ const g = fichas.lista.find((x:any)=>x.id===e.target.value); if (g) escolherFicha(g); }}>
+                        <option value="">Escolha o atendimento de garantia...</option>
+                        {fichas.lista.map((g:any)=><option key={g.id} value={g.id}>{rotuloDaFicha(g)}</option>)}
+                      </select>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* EQUIPAMENTOS — um card por unidade */}
             <div className="acn-quadro">
@@ -2331,6 +2445,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <div className="form-row">
                   <div className="form-group">
                     <label className="acn-label">Tipo de Avaliação *</label>
+                    {form.tipo_servico === 'Garantia' && (form.cobranca || 'garantia') === 'garantia' ? (
+                      <div className="acn-ajuda" data-teste="sem-avaliacao-na-garantia">Garantia sem cobrança não tem cotação: a Produção marca a data de atendimento do veículo.</div>
+                    ) : (<>
                     <div className="acn-sac-avaliacao">
                       {['Presencial','Remota'].map(v=>(
                         <label key={v} className={'acn-sac-opcao' + (form.tipo_avaliacao===v ? ' on' : '')}>
@@ -2346,6 +2463,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                         ? '→ SAC define data de entrega do veículo (Provisionamento)'
                         : '→ SAC insere itens e envia cotação ao cliente para aprovação'}
                     </div>
+                    </>)}
                   </div>
                   <div className="form-group">
                     <label className="acn-check">
@@ -2359,8 +2477,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               </div>
             )}
 
-            {/* Dados de Faturamento */}
-            <div className="acn-quadro">
+            {/* Dados de Faturamento (OS sem cobrança não tem nota) */}
+            {!(form.tipo_servico === 'Garantia' && (form.cobranca || 'garantia') === 'garantia') && <div className="acn-quadro">
               <div className="acn-quadro-titulo">Dados de Faturamento (Fiscal / NF)</div>
               <div className="form-row">
                 <div className="form-group"><label className="acn-label">CNPJ / CPF Faturamento</label>
@@ -2373,7 +2491,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               <div className="form-group"><label className="acn-label">Endereço Faturamento</label>
                 <input className="acn-input"
                   value={form.endereco_faturamento} onChange={e=>setForm(f=>({...f,endereco_faturamento:e.target.value}))} /></div>
-            </div>
+            </div>}
 
             {/* Financeiro / Comissões */}
             <div className="acn-quadro tom-ok">

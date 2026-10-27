@@ -20,7 +20,8 @@ import {
 import { SecaoCustos, SecaoCliente, SecaoDirecao } from './GarantiaCustos';
 import { SecaoPecasGarantia, SecaoApontamentos } from './GarantiaPecas';
 import { ProjetoDeOrigem } from './GarantiaProjeto';
-import { mdiClose, mdiCartOutline } from '@mdi/js';
+import { mdiClose, mdiCartOutline, mdiClipboardPlusOutline } from '@mdi/js';
+import { podeGerarOsDaGarantia, cobrancaDaOS, ROTULOS_COBRANCA } from './SacFluxo';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -276,7 +277,40 @@ function SecaoProjeto({ g, currentUser, executar, ocupado }: any) {
   );
 }
 
-export function SecoesGarantia({ g, currentUser, executar, ocupado }: any) {
+// ─── Ordens de serviço desta garantia (S1 do PLANO_SAC_FLUXO.md, 27/10/2026) ─────────────────────────────────────────────────────────────────
+// A ficha é a porta de entrada da OS de garantia: aqui aparecem as OS de execução já geradas (com a etapa de cada uma) e o botão que abre a Nova OS do SAC já preenchida com os dados da ficha.
+// O botão só existe onde a aba Garantia está dentro do SAC (`onGerarOS`); quem vê só a Garantia, sem a aba SAC, não abre OS.
+function SecaoOrdens({ g, currentUser, onGerarOS }: any) {
+  const [ordens, setOrdens] = useState<any[] | null>(null);
+  const [erro, setErro] = useState('');
+  useEffect(() => {
+    let vivo = true;
+    supabase.from('sac_ordens_servico').select('id,numero_os,status,cobranca,tipo_servico,data_abertura,equipamento_nome').eq('garantia_id', g.id).order('data_abertura', { ascending: true })
+      .then(({ data, error }: any) => { if (!vivo) return; if (error) { setErro(error.message); setOrdens([]); } else { setErro(''); setOrdens(data || []); } });
+    return () => { vivo = false; };
+  }, [g.id, g.atualizado_em]);
+  const pode = podeGerarOsDaGarantia(g, currentUser);
+  return (
+    <Secao id="ordens" titulo="Ordens de serviço" selo={<Selo familia="neutro" ponto={false}>{ordens ? ordens.length : '…'}</Selo>}>
+      {erro && <Faixa tom="erro">Não foi possível ler as OS desta garantia ({erro}).</Faixa>}
+      {ordens && ordens.length === 0 && !erro && <div className="acn-ajuda">Nenhuma OS gerada ainda. A OS de execução nasce desta ficha: não passa por cotação e, dentro da garantia, não vai ao Fiscal.</div>}
+      {ordens && ordens.length > 0 && (
+        <ul className="acn-gar-lista-os">
+          {ordens.map(o => (
+            <li key={o.id} data-os={o.numero_os}><strong>{o.numero_os}</strong> — {o.status}{o.equipamento_nome ? ` · ${o.equipamento_nome}` : ''} <span className="acn-ajuda">({ROTULOS_COBRANCA[cobrancaDaOS(o)]})</span></li>
+          ))}
+        </ul>
+      )}
+      {g.situacao === 'aberto' && onGerarOS && (
+        pode.ok
+          ? <div><Botao pequeno variante="primario" icone={mdiClipboardPlusOutline} onClick={() => onGerarOS(g)}>Gerar OS de execução</Botao></div>
+          : <div className="acn-ajuda" data-teste="gerar-os-bloqueado">Para gerar a OS: {pode.motivo}</div>
+      )}
+    </Secao>
+  );
+}
+
+export function SecoesGarantia({ g, currentUser, executar, ocupado, onGerarOS }: any) {
   const conduz = g.situacao === 'aberto' && podeConduzirGarantia(g, currentUser);
   const comum = { g, conduz, executar, ocupado, currentUser };
   // G3: fora da garantia o atendimento não segue sem o alinhamento aceito pelo cliente e a autorização da direção; "a confirmar" não trava, mas avisa
@@ -292,6 +326,7 @@ export function SecoesGarantia({ g, currentUser, executar, ocupado }: any) {
       <SecaoCliente {...comum} />
       <SecaoDirecao {...comum} />
       <SecaoExecucao {...comum} />
+      <SecaoOrdens {...comum} onGerarOS={onGerarOS} />
       <SecaoPecas {...comum} />
       <SecaoPecasGarantia {...comum} />
       <SecaoApontamentos {...comum} />

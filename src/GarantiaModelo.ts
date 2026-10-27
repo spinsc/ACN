@@ -87,7 +87,7 @@ export function cargaDaGarantia(c: any) {
 
 // ── histórico e edição ──────────────────────────────────────────────────────────────────────────────────────
 export const evento = (tipo: string, u: any, texto: string | null, agora: string) => ({ em: agora, por: u?.nome || '', tipo, texto: texto || null });
-export const FRASES_GARANTIA: Record<string, string> = { aberto: 'Atendimento aberto', editado: 'Dados alterados', cancelado: 'Atendimento cancelado', reaberto: 'Atendimento reaberto', encerrado: 'Atendimento encerrado',
+export const FRASES_GARANTIA: Record<string, string> = { aberto: 'Atendimento aberto', os_gerada: 'Ordem de serviço gerada', editado: 'Dados alterados', cancelado: 'Atendimento cancelado', reaberto: 'Atendimento reaberto', encerrado: 'Atendimento encerrado',
   avaliacao: 'Avaliação técnica registrada', fornecedor: 'Fornecedor', execucao: 'Quem executa definido', peca_pedida: 'Peça pedida ao Compras',
   custos: 'Quadro de custos alterado', alinhamento: 'Alinhamento com o cliente', autorizacao_pedida: 'Autorização pedida à direção', autorizacao_aprovada: 'Direção aprovou',
   autorizacao_negada: 'Direção negou', autorizacao_cancelada: 'Pedido de autorização cancelado',
@@ -595,3 +595,15 @@ export function encerrarGarantia(g: any, u: any, texto: string, agora: string, h
   return { patch: { situacao: 'encerrado', encerramento: { texto: t, por: u?.nome || '', em: agora }, historico } };
 }
 
+
+// ── S1 do PLANO_SAC_FLUXO.md (27/10/2026): a OS de execução gerada a partir da ficha ─────────────────────────────────────────────────────
+// A ficha é a porta de entrada da OS de garantia (decisão do usuário em 27/10/2026): a OS guarda `garantia_id` e a ficha registra no histórico que a OS nasceu (e quem é avisado: os mesmos
+// avisos de qualquer evento novo do histórico — o responsável e os copiados). `numeros`: os números das OS criadas de uma vez (campanha/lote); `cobranca`: como foram abertas.
+export function registrarOsGerada(g: any, u: any, numeros: string[], cobranca: string, agora: string) {
+  if (g?.situacao !== 'aberto') return { erro: 'Só o atendimento aberto recebe registros.' };
+  const lista = (numeros || []).map(n => String(n || '').trim()).filter(Boolean);
+  if (!lista.length) return { erro: 'Nenhuma OS para registrar.' };
+  const historico = copiar(g.historico) || [];
+  historico.push(evento('os_gerada', u, `${lista.join(', ')} (${cobranca === 'cobrada' ? 'cobrada do cliente' : 'sem cobrança'})`, agora));
+  return { patch: { historico } };
+}

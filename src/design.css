@@ -5907,6 +5907,8 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-gar-secoes { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .acn-gar-secao { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); font-size: 13px; }
 .acn-gar-secao-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+/* OS de execução geradas pela ficha (S1 do PLANO_SAC_FLUXO.md, 27/10/2026) */
+.acn-gar-lista-os { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .acn-gar-pedido { font-size: 13px; }
 
 /* ══ SAC > Garantia (G3, 19/10/2026) — custos, alinhamento com o cliente e autorização da direção ══ */
