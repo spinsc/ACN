@@ -1545,7 +1545,10 @@ html body .acn-cmp-vermais { padding: 0 2px; height: auto; font-size: 11px; colo
 .acn-cmp-origem.grande { padding: 2px 9px; font-size: 12px; }
 .acn-cmp-vinculo { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; margin-top: 3px; }
 .acn-cmp-vinculo.compacto { margin-top: 2px; }
-html body .acn-cmp-link { height: auto; padding: 0 2px; font-size: 12px; color: var(--acn-info); text-decoration: underline; text-align: left; white-space: normal; }
+html body .acn-cmp-link { height: auto; padding: 0 2px; font-size: 12px; color: var(--acn-info); text-decoration: underline; text-align: left; }
+/* 26/10/2026: o texto do vínculo ("OP: A1726.2610 — CLIENTE - PV ... descrição longa") vazava para fora do cartão do Kanban. A regra genérica de botão do index.css (button:not([style*=...])×4) impõe
+   white-space: nowrap com peso maior que `html body .acn-cmp-link`; o `:not(#acn)` empata o jogo, como nos outros botões do projeto, e o texto passa a quebrar dentro da largura do cartão. */
+html body .acn-b.acn-cmp-link:not(#acn) { max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
 .acn-cmp-link-web { font-size: 12px; font-weight: 700; color: var(--acn-brand-ink); overflow-wrap: anywhere; }
 .acn-cmp-chipcel { max-width: 150px; }
 .acn-cmp-chiplinha { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }

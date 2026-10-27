@@ -102,6 +102,7 @@ Projeto `qgemelnuqdilnggxmrdw`, organização **ACN SINAL VERDE**. URL e chave a
 - Edições grandes: script Python no scratchpad, com `assert` de ocorrência única e
   escrita com `newline=''` + `os.replace`. **Heredoc de bash corrompe `\n` e `\u`** —
   não use para gerar código.
+- **Texto longo dentro de botão (`Botao`) vaza do cartão se a regra for `html body .classe`:** o `index.css` tem uma regra genérica de botão (`button:not([style*=...])` repetido quatro vezes) que impõe `white-space: nowrap` e pesa mais. Para o texto quebrar, use `html body .acn-b.classe:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }` (o `:not(#acn)` empata o peso; foi assim que o link de vínculo do Kanban do Compras foi corrigido em 26/10/2026) e confira no navegador medindo o que passa da borda do cartão.
 - Antes de criar algo novo, procure o utilitário que já existe:
 
 | Assunto | Onde |
