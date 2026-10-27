@@ -2893,6 +2893,9 @@ html body.dark .acn-opit-aviso[data-aviso="total-do-lote"] { border-color: #854d
 .acn-opit-rodape .acn-opit-naocad { white-space: normal; font-weight: 500; }
 html body .acn-input.acn-opit-qtd { width: 72px; flex-shrink: 0; }
 .acn-opit-un { width: 28px; flex-shrink: 0; font-size: 12px; color: var(--acn-muted); }
+/* 27/10/2026: a caixa "Serial" de cada linha da BOM (grava a marca no Cadastro de itens) */
+.acn-opit-serial { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--acn-muted); cursor: pointer; white-space: nowrap; }
+.acn-opit-serial.ligado { color: var(--acn-info); }
 html body .acn-input.acn-opit-desc { width: 160px; flex-shrink: 0; }
 .acn-opit-rodape { display: flex; align-items: center; gap: 10px; }
 .acn-opit-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }

@@ -8,6 +8,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 import { completarItensPeloNome } from './ConfigEstrutura';
+import { estruturaParaDemanda } from './DemandaItens';
+import { logChange } from './AuditSystem';
 import { normalizarBusca } from './SearchUtils';
 
 export type ModeloSerial = { produto: string; qtd: number };
@@ -21,7 +23,17 @@ const chaveDe = (p: any) => normalizarBusca(String(p || '')).trim();
  */
 export async function modeloDeSeriais(vendidos: any[]): Promise<{ erro: string | null; modelo: ModeloSerial[] }> {
   try {
-    const lista = await completarItensPeloNome(Array.isArray(vendidos) ? vendidos : []);
+    const base = await completarItensPeloNome(Array.isArray(vendidos) ? vendidos : []);
+    // linha vendida que é um kit (produto com estrutura) vale pelos itens dele, multiplicados pela quantidade vendida: a marca de serial é do ITEM, e é nele que se marca na BOM
+    const lista: any[] = [];
+    for (const v of base) {
+      if (!v) continue;
+      if (v.item_id) { lista.push(v); continue; }
+      if (v.produto_id) {
+        const q = Number(v.quantidade) || 1;
+        for (const e of await estruturaParaDemanda(v.produto_id)) if (e.item_id) lista.push({ item_id: e.item_id, nome: e.nome, quantidade: (Number(e.quantidade) || 1) * q });
+      }
+    }
     const ids = [...new Set(lista.map((v: any) => v?.item_id).filter(Boolean).map(String))];
     if (!ids.length) return { erro: null, modelo: [] };
     const { data, error } = await supabase.from('cadastro_itens').select('id,tem_serial,eh_conjunto_instalacao').in('id', ids);
@@ -34,6 +46,30 @@ export async function modeloDeSeriais(vendidos: any[]): Promise<{ erro: string |
   } catch (e: any) {
     return { erro: String(e?.message || e), modelo: [] };
   }
+}
+
+/** Quais dos itens (ids do cadastro) têm a marca de serial: mapa id → { tem, conjunto }. Leitura que falha devolve o erro. */
+export async function lerMarcasDeSerial(ids: string[]): Promise<{ erro: string | null; marcas: Record<string, { tem: boolean; conjunto: boolean }> }> {
+  const lista = [...new Set((ids || []).filter(Boolean).map(String))];
+  if (!lista.length) return { erro: null, marcas: {} };
+  const { data, error } = await supabase.from('cadastro_itens').select('id,tem_serial,eh_conjunto_instalacao').in('id', lista);
+  if (error) return { erro: error.message, marcas: {} };
+  return { erro: null, marcas: Object.fromEntries((data || []).map((i: any) => [String(i.id), { tem: !!i.tem_serial && !i.eh_conjunto_instalacao, conjunto: !!i.eh_conjunto_instalacao }])) };
+}
+
+/**
+ * Marca (ou desmarca) que o item recebe número de série, direto no Cadastro de itens (pedido do usuário em 27/10/2026: quem monta a BOM sabe se o item leva serial e não deveria ter que ir
+ * ao cadastro para dizer isso). O Conjunto Elétrico nunca tem. Devolve a mensagem de erro, ou null quando gravou; a alteração fica no histórico do item.
+ */
+export async function gravarMarcaDeSerial(item: { id: string; nome?: string }, tem: boolean, user?: any): Promise<string | null> {
+  const { data: atual, error: erroLeitura } = await supabase.from('cadastro_itens').select('id,tem_serial,eh_conjunto_instalacao').eq('id', item.id).maybeSingle();
+  if (erroLeitura) return erroLeitura.message;
+  if (!atual) return 'o item não foi encontrado no cadastro';
+  if (atual.eh_conjunto_instalacao) return 'o Conjunto Elétrico nunca tem número de série';
+  const { error } = await supabase.from('cadastro_itens').update({ tem_serial: !!tem }).eq('id', item.id);
+  if (error) return error.message;
+  logChange({ module: 'cadastro_itens', entityType: 'cadastro_itens', entityId: item.id, changeType: 'UPDATE', oldRow: { tem_serial: !!atual.tem_serial }, newRow: { tem_serial: !!tem }, user });
+  return null;
 }
 
 /** O modelo de várias OPs de uma vez (o kiting em lote): mapa id da OP → modelo. Uma leitura que falha derruba só o resultado todo (devolve o erro). */

@@ -1024,7 +1024,7 @@ export default function EngenhariaTab({ currentUser }) {
                   });
                 return [...mapa.values()];
               })} />
-              <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
+              <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} currentUser={currentUser} />
               <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom}
                 pinturaSlot={<PinturaCampos valor={pinturaBom} onChange={v => setPinturaBom(p => ({ ...p, ...v }))} />} />
               <div className="form-group">
@@ -1141,7 +1141,7 @@ export default function EngenhariaTab({ currentUser }) {
                   </>
                 );
               })()}
-              <BomEditor linhas={bomLote} onChange={setBomLote}
+              <BomEditor linhas={bomLote} onChange={setBomLote} currentUser={currentUser}
                 vendidos={(modalBomLote.irmaos.find(o => (o.itens_vendidos || []).length) || {}).itens_vendidos || []} />
               <div className="acn-ajuda">A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>
               <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length}
