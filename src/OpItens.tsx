@@ -19,6 +19,7 @@ import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estrutu
 import { SelectBusca, Botao, Selo } from './Interface';
 import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { normalizarBusca } from './SearchUtils';
+import { completarItensPeloNome } from './ConfigEstrutura';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix } from '@mdi/js';
 
@@ -55,6 +56,10 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
     produto_id: l.kit_id || null,
     item_id: l.item_id || null,
   }));
+  // 27/10/2026 (OP A1741.2610): linha da formação sem o vínculo com o cadastro é procurada pelo nome, para a OP nascer com o item ligado (é o vínculo que faz o sistema reconhecer o
+  // Conjunto Elétrico e montar a estrutura). Se a procura falhar a lista vem como estava e a tela avisa.
+  let erroVinculo = '';
+  try { const ligadas = await completarItensPeloNome(itens); ligadas.forEach((l: any, i: number) => { itens[i] = l; }); } catch (e: any) { erroVinculo = e?.message || 'falha ao procurar no cadastro'; }
   // Telecom, T2 (22/10/2026): a linha que vem do cadastro traz o "Quem separa" do item (só quando o cadastro diz Telecom; vazio vale o padrão da venda).
   // Se a leitura do cadastro falhar a lista vem sem a marca e a tela avisa: a marca é uma ajuda e não impede carregar a formação.
   let erroSetor = '';
@@ -67,7 +72,7 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
       itens.forEach((l: any) => { const s = l.item_id ? porId.get(String(l.item_id)) : null; if (s) l.setor = s; });
     }
   }
-  return { formacao: f, itens, erroSetor };
+  return { formacao: f, itens, erroSetor: erroSetor || (erroVinculo ? 'vínculo com o cadastro: ' + erroVinculo : '') };
 }
 
 /**

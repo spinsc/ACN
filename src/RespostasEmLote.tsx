@@ -31,7 +31,7 @@ import { Botao, Chips } from './Interface';
 import Icone from './Icone';
 import { mdiCarOutline, mdiAlertOutline } from '@mdi/js';
 import {
-  perguntasDaVenda, donaDaPergunta, ehPerguntaDaOp, respostasAutomaticas, itensConjunto, vendaTemConjunto,
+  perguntasDaVenda, donaDaPergunta, ehPerguntaDaOp, respostasAutomaticas, itensConjunto, vendaTemConjunto, completarItensPeloNome,
   podarRespostas, respostasDasOps,
   perguntaCabeNaVenda, ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
 } from './ConfigEstrutura';
@@ -125,7 +125,8 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo, aplicarNaB
         setCarregando(true); setFalha('');
         const conj = await itensConjunto();
         const idsConj = conj.map(c => c.id);
-        const comVeiculo = (ops || []).filter(o => o.veiculo_id);
+        // a venda sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026); as OPs seguem na tela já com os itens ligados
+        const comVeiculo = await Promise.all((ops || []).filter(o => o.veiculo_id).map(async o => ({ ...o, itens_vendidos: await completarItensPeloNome(o.itens_vendidos || []) })));
         const comConjunto = comVeiculo.filter(o => vendaTemConjunto(o.itens_vendidos || [], idsConj));
         // etapa 4 (15/10/2026): OP que já saiu do PCP ou tem material reservado não troca resposta por aqui (o Almoxarifado já trabalha com a lista dela)
         const situacao = await situacaoParaTrocarResposta(comConjunto);

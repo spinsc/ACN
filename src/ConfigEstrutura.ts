@@ -26,6 +26,7 @@
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { lerPaginado } from './LerPaginado';
+import { normalizarBusca } from './SearchUtils';
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
@@ -527,6 +528,28 @@ export async function itensConjunto() {
 export function vendaTemConjunto(vendidos: any[], idsConjunto: string[]) {
   const conj = new Set((idsConjunto || []).map(String));
   return (vendidos || []).some(v => v?.item_id && conj.has(String(v.item_id)));
+}
+
+/**
+ * Linha vendida SEM o vínculo com o cadastro (digitada à mão, ou vinda da formação de preços sem o item_id) ganha o item_id quando o NOME dela acha exatamente UM item ativo do
+ * cadastro (dois com o mesmo nome é ambíguo e não se chuta; a mesma regra da BOM sugerida). Sem isso a venda de uma OP com todas as linhas sem vínculo — caso da OP A1741.2610,
+ * 27/10/2026 — tinha o 'CONJUNTO ELETRICO' escrito e o sistema dizia que a venda não leva Conjunto Elétrico, porque o interruptor só reconhece o item pelo vínculo.
+ * Não grava nada: devolve cópias das linhas. A leitura que falha lança o erro (nunca vale como 'não achou').
+ */
+export async function completarItensPeloNome(vendidos: any[]): Promise<any[]> {
+  const lista = Array.isArray(vendidos) ? vendidos : [];
+  const faltam = lista.filter(v => v && !v.item_id && !v.produto_id && String(v.nome || '').trim());
+  if (!faltam.length) return lista;
+  const chaves = [...new Set(faltam.map(v => normalizarBusca(String(v.nome)).trim()).filter(Boolean))];
+  const { data, error } = await supabase.from('cadastro_itens').select('id,nome_norm').in('nome_norm', chaves).neq('ativo', false);
+  if (error) throw new Error('não foi possível procurar os itens vendidos no cadastro pelo nome (' + error.message + ')');
+  const porNome = new Map<string, string[]>();
+  for (const c of (data || [])) porNome.set(c.nome_norm, [...(porNome.get(c.nome_norm) || []), c.id]);
+  return lista.map(v => {
+    if (!v || v.item_id || v.produto_id || !String(v.nome || '').trim()) return v;
+    const achados = porNome.get(normalizarBusca(String(v.nome)).trim()) || [];
+    return achados.length === 1 ? { ...v, item_id: achados[0] } : v;
+  });
 }
 
 // ── Respostas das OPs ────────────────────────────────────────────────────────

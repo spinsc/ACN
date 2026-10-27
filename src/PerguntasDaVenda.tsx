@@ -17,7 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   perguntasDaVenda, donaDaPergunta, perguntasPendentes, respostasAutomaticas,
-  itensConjunto, vendaTemConjunto,
+  itensConjunto, vendaTemConjunto, completarItensPeloNome,
   materiaisDoVeiculo, montarMaterial,
   ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
   regrasDoVeiculo, avaliarRegras, podarRespostas,
@@ -210,7 +210,8 @@ export function respostasDaUnidade(respostas, un) {
 export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): Promise<string | null> {
   const falhas: string[] = [];
   try {
-    const vendidos = opl?.itens_vendidos || [];
+    // linha sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026)
+    const vendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
     const ids = vendidos.map(v => v.item_id).filter(Boolean);
     if (!opl?.veiculo_id || !ids.length) return;
 
