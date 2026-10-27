@@ -13,20 +13,28 @@ import React, { useState } from 'react';
 import { Botao } from './Interface';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiCheckCircleOutline } from '@mdi/js';
+import { linhasDeSerial } from './SerialDosItens';
 
-type Linha = { opId: string; opl: string; produto: string; serial: string };
+type Linha = { opId: string; opl: string; produto: string; serial: string; fixo?: boolean };
 
-const linhasIniciais = (ops: any[]): Linha[] => ops.flatMap(o => {
+// Lista de seriais pronta (27/10/2026): a unidade sem serial gravado ganha uma linha por item vendido com a marca "Tem serial" do Cadastro de itens (o Conjunto Elétrico não),
+// com o produto já escrito; só o serial é digitado. Sem item marcado, ou com serial já gravado, segue como sempre foi.
+const linhasIniciais = (ops: any[], modelos: Record<string, any[]> = {}): Linha[] => ops.flatMap(o => {
   const ja = Array.isArray(o.seriais_itens) ? o.seriais_itens : [];
+  const modelo = modelos[String(o.id)] || [];
+  if (!ja.length && modelo.length) {
+    const n = Math.max(1, Math.floor(Number(o.quantidade)) || 1);
+    return linhasDeSerial(modelo, n, n, {}, []).map(l => ({ opId: String(o.id), opl: o.opl, produto: l.produto, serial: '', fixo: true }));
+  }
   const qtd = Math.max(1, Number(o.quantidade) || 1, ja.length);
   return Array.from({ length: qtd }, (_, i) => ({ opId: String(o.id), opl: o.opl, produto: ja[i]?.produto || '', serial: ja[i]?.serial || '' }));
 });
 
-export function ModalKitingLoteEnvio({ base, ops, onClose, onConfirmar }: {
-  base: string; ops: any[]; onClose: () => void;
+export function ModalKitingLoteEnvio({ base, ops, modelos, onClose, onConfirmar }: {
+  base: string; ops: any[]; modelos?: Record<string, any[]>; onClose: () => void;
   onConfirmar: (porOp: Record<string, { produto: string; serial: string }[]>) => Promise<void>;
 }) {
-  const [linhas, setLinhas] = useState<Linha[]>(() => linhasIniciais(ops));
+  const [linhas, setLinhas] = useState<Linha[]>(() => linhasIniciais(ops, modelos));
   const [produtoPadrao, setProdutoPadrao] = useState('');
   const [salvando, setSalvando] = useState(false);
   const set = (i: number, k: 'produto' | 'serial', v: string) => setLinhas(ls => ls.map((l, j) => j === i ? { ...l, [k]: v } : l));
@@ -40,12 +48,12 @@ export function ModalKitingLoteEnvio({ base, ops, onClose, onConfirmar }: {
     });
     setLinhas(ls => ls.map((l, j) => {
       const c = coladas[j - i];
-      return j >= i && c ? { ...l, produto: c.produto || l.produto, serial: c.serial } : l;
+      return j >= i && c ? { ...l, produto: l.fixo ? l.produto : (c.produto || l.produto), serial: c.serial } : l;
     }));
   };
   const aplicarProdutoPadrao = () => {
     if (!produtoPadrao.trim()) return;
-    setLinhas(ls => ls.map(l => l.produto.trim() ? l : { ...l, produto: produtoPadrao.trim() }));
+    setLinhas(ls => ls.map(l => l.fixo || l.produto.trim() ? l : { ...l, produto: produtoPadrao.trim() }));
   };
   const completas = linhas.filter(l => l.produto.trim() && l.serial.trim()).length;
   const confirmar = async () => {
@@ -71,13 +79,16 @@ export function ModalKitingLoteEnvio({ base, ops, onClose, onConfirmar }: {
         </div>
         <div className="acn-modal-corpo acn-klt-corpo">
           <div className="acn-ajuda">
-            Venda para Envio: informe o serial ACN de cada produto de cada unidade. Pode colar do Excel (produto e serial em colunas,
-            uma linha por produto). Confirmar dá Kit OK nas {ops.length} unidades; a embalagem continua por unidade e já abre com estes seriais.
+            {linhas.length > 0 && linhas.every(l => l.fixo)
+              ? 'Venda para Envio: a lista vem pronta do que foi vendido (só os itens com número de série); digite o serial ACN de cada linha. Pode colar do Excel só a coluna do serial.'
+              : 'Venda para Envio: informe o serial ACN de cada produto de cada unidade. Pode colar do Excel (produto e serial em colunas, uma linha por produto).'} Confirmar dá Kit OK nas {ops.length} unidades; a embalagem continua por unidade e já abre com estes seriais.
           </div>
           <div className="acn-klt-barra">
+            {!linhas.every(l => l.fixo) && (<>
             <input className="acn-input acn-klt-padrao" placeholder="Produto padrão (preenche as linhas sem produto)"
               value={produtoPadrao} onChange={e => setProdutoPadrao(e.target.value)} aria-label="Produto padrão" />
             <Botao onClick={aplicarProdutoPadrao}>Aplicar</Botao>
+            </>)}
             <span className={'acn-klt-cont ' + (completas === linhas.length ? 'ok' : 'falta')}>
               {completas}/{linhas.length} preenchidas
             </span>
@@ -101,7 +112,7 @@ export function ModalKitingLoteEnvio({ base, ops, onClose, onConfirmar }: {
                         {novaOp ? l.opl : '↳'}
                       </td>
                       <td>
-                        <input className={'acn-input acn-klt-campo' + (l.produto.trim() ? '' : ' vazio')} value={l.produto} onChange={e => set(i, 'produto', e.target.value)} onPaste={e => colar(i, e)}
+                        <input className={'acn-input acn-klt-campo' + (l.produto.trim() ? '' : ' vazio') + (l.fixo ? ' acn-alm-produto-fixo' : '')} readOnly={!!l.fixo} tabIndex={l.fixo ? -1 : undefined} value={l.produto} onChange={e => set(i, 'produto', e.target.value)} onPaste={e => colar(i, e)}
                           aria-label={`Produto ${l.opl} linha ${i + 1}`} />
                       </td>
                       <td>
