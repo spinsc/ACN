@@ -174,7 +174,7 @@ a tela em branco e o teste engana.
 - **Kit 100%** não fecha com demanda de Serralheria, Chicotes ou Compras em aberto —
   o caminho nesse caso é "liberar com pendência". A **Produção não conclui** enquanto
   a pendência não fechar, e cada pendência fecha em três etapas: setor conclui →
-  Almoxarifado confirma o recebimento → PCP libera.
+  Almoxarifado confirma o recebimento → PCP libera. **Exceção (decidida em 27/10/2026, OP D0793):** na pendência de **compra**, a OC com status "Recebido" já vale como recebida pelo Almoxarifado (quem confere e dá a entrada é ele): a etapa do meio vem cumprida sozinha (`compraJaRecebida`, em `OpPendencias.tsx`) e só falta o PCP liberar; Serralheria e Chicotes continuam pedindo o "Recebi".
 - **Fabricação interna é sugestão, não pedido:** ao liberar o kiting o PCP vê o que é
   fabricado aqui dentro e marca o que quer solicitar. Nada vem marcado.
 - **Compras é uma tela só:** toda demanda de compra vira requisição no quadro, com

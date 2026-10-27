@@ -43,6 +43,10 @@ const foiCancelada = (v) => /cancelad|descartad/.test(norm(v.status));
  *  própria (outra origem) continua sendo só apoio, como sempre foi. */
 export const ehDesenvolvimentoDoPcp = (v) => v?.tipo === 'engenharia_desenvolvimento' && v?.origem === 'pcp';
 
+/** Compra com a OC já "Recebido" no Compras/Logística: quem conferiu e deu a entrada foi o próprio Almoxarifado, então a etapa "almox recebeu" já vem cumprida
+ *  e não pede mais o clique em "Recebi" (decidido com o usuário em 27/10/2026, caso da OP D0793). Fabricação (Serralheria, Chicotes) continua pedindo o "Recebi". */
+export const compraJaRecebida = (v) => (v?.setor === 'Compras' || v?.grupo === 'compra') && /^recebid/.test(norm(v?.statusBruto ?? v?.status));
+
 const seguraAOp = (v) => {
   if (foiCancelada(v)) return false;
   if (v.tipo === 'engenharia_desenvolvimento') return v.origem === 'pcp';
@@ -56,7 +60,7 @@ export function etapasDaPendencia(v, op) {
   const reg = (op?.pendencias_kit || {})[v.id] || {};
   return {
     setor:    !v.aberto,                 // status da própria demanda
-    recebido: ehDesenvolvimentoDoPcp(v) || !!reg.recebido,
+    recebido: ehDesenvolvimentoDoPcp(v) || compraJaRecebida(v) || !!reg.recebido,
     liberado: !!reg.liberado,
     quemRecebeu:  reg.recebido || null,
     quemLiberou:  reg.liberado || null,
@@ -293,6 +297,7 @@ export async function indicePendencias() {
 const registroDaPendencia = (p, op) => {
   const reg = { ...((op?.pendencias_kit || {})[p.id] || {}) };
   if (p.semRecebimento && !reg.recebido) reg.recebido = { por: 'não se aplica', em: null };
+  if (compraJaRecebida(p) && !reg.recebido) reg.recebido = { por: 'compra recebida', em: null };
   return reg;
 };
 
