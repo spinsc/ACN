@@ -29,6 +29,8 @@ const ITEM_VAZIO = {
   origem_producao: 'externa', setor_fabricante: '',
   // Telecom, fatia T2 (pedido do usuário em 22/10/2026): quem separa e embala este item numa venda de envio. Vazio = Almoxarifado (o padrão da venda).
   setor_separacao: '',
+  // Número de série (pedido do usuário em 27/10/2026): o item entra sozinho na lista de seriais da Venda para Envio no Almoxarifado
+  tem_serial: false,
   // Controle de estoque é opt-in (ver Estoque.tsx): item nasce sem controle e
   // só passa a dar baixa, conferir mínimo e travar liberação quando alguém do
   // Almoxarifado ligar o checkbox — decidido com o usuário em 24/09/2026.
@@ -247,6 +249,8 @@ function ItemModal({
       setor_fabricante: form.origem_producao === 'interna' ? (form.setor_fabricante || null) : null,
       // só o Telecom precisa ser dito; vazio (null) é o Almoxarifado, que é o padrão da venda (SeparacaoEnvio.ts)
       setor_separacao: form.setor_separacao === 'Telecom' ? 'Telecom' : null,
+      // o Conjunto Elétrico (gatilho da estrutura) nunca tem serial, mesmo que alguém marque
+      tem_serial: !!form.tem_serial && !form.eh_conjunto_instalacao,
       // `estoque_atual` de propósito fora daqui: saldo só muda por contagem,
       // baixa ou entrada, pela função do banco (ver Estoque.tsx). Se saísse
       // neste payload, salvar o cadastro sobrescreveria o saldo real.
@@ -475,6 +479,26 @@ function ItemModal({
                 {form.setor_separacao === 'Telecom'
                   ? 'Numa venda de envio de material, a linha deste item é separada, serializada e embalada pelo Telecom (rádio e acessórios de rádio). O vendedor ainda pode trocar na venda.'
                   : 'Padrão: o Almoxarifado separa e embala. Marque Telecom para rádio e acessórios de rádio.'}
+              </div>
+            </Field>
+          </Row>
+
+          <Section title="🔢 Número de série" />
+          <Row>
+            <Field label="Tem número de série" flex={1.3}>
+              <div className="acn-cit-ativo">
+                <input type="checkbox" className="acn-cit-chk" checked={!!form.tem_serial && !form.eh_conjunto_instalacao} disabled={!!form.eh_conjunto_instalacao}
+                  onChange={e => set('tem_serial', e.target.checked)} aria-label="Tem número de série" />
+                <span className="acn-cit-ativo-rot">Sim</span>
+              </div>
+            </Field>
+            <Field label=" " flex={2}>
+              <div className="acn-cit-origem-ajuda">
+                {form.eh_conjunto_instalacao
+                  ? 'O Conjunto Elétrico nunca tem número de série.'
+                  : form.tem_serial
+                    ? 'Numa Venda para Envio, este item entra sozinho na lista de seriais do Almoxarifado: ele só digita o número de série, uma linha por unidade vendida.'
+                    : 'Marque nos itens que recebem número de série (controlador, sirene, amplificador...). Sem a marca o item não entra na lista; frete e serviço não têm.'}
               </div>
             </Field>
           </Row>
@@ -903,6 +927,9 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
                       {it.categoria ? (
                         <span className="acn-cit-cat">{it.categoria}</span>
                       ) : <span className="acn-cit-traco">—</span>}
+                      {it.tem_serial && !it.eh_conjunto_instalacao && (
+                        <div><Selo familia="info" ponto={false} title="Numa Venda para Envio, entra sozinho na lista de seriais do Almoxarifado">Tem serial</Selo></div>
+                      )}
                       {it.setor_separacao === 'Telecom' && (
                         <div><Selo familia="info" ponto={false} title="Numa venda de envio, quem separa e embala este item é o Telecom">Telecom separa</Selo></div>
                       )}

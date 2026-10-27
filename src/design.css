@@ -1329,6 +1329,8 @@ html body .acn-alm-sanada .modal-title.acn-alm-sanada-tit { display: inline-flex
 .acn-alm-sanada-op { font-size: 14px; font-weight: 800; color: var(--acn-bad); }
 .acn-alm-sanada-motivo { margin-top: 3px; font-size: 13px; color: var(--acn-ink); overflow-wrap: anywhere; }
 .acn-alm-sanada .acn-erro { padding: 8px 10px; font-size: 12px; font-weight: 700; color: var(--acn-bad); background: var(--acn-bad-soft); border-radius: 6px; }
+/* 27/10/2026: na lista de seriais pronta o produto vem escrito e não se edita; só o serial é digitado */
+html body .acn-input.acn-alm-produto-fixo { background: var(--acn-surface-2); color: var(--acn-ink); cursor: default; }
 .acn-alm-bloco { display: grid; gap: 6px; }
 /* 14/10/2026 (fatia 5, remessas): uma linha por remessa já registrada, com o botão de cancelar ao lado */
 .acn-alm-remessa-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 0; font-size: 12px; }
@@ -2891,6 +2893,9 @@ html body.dark .acn-opit-aviso[data-aviso="total-do-lote"] { border-color: #854d
 .acn-opit-rodape .acn-opit-naocad { white-space: normal; font-weight: 500; }
 html body .acn-input.acn-opit-qtd { width: 72px; flex-shrink: 0; }
 .acn-opit-un { width: 28px; flex-shrink: 0; font-size: 12px; color: var(--acn-muted); }
+/* 27/10/2026: a caixa "Serial" de cada linha da BOM (grava a marca no Cadastro de itens) */
+.acn-opit-serial { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--acn-muted); cursor: pointer; white-space: nowrap; }
+.acn-opit-serial.ligado { color: var(--acn-info); }
 html body .acn-input.acn-opit-desc { width: 160px; flex-shrink: 0; }
 .acn-opit-rodape { display: flex; align-items: center; gap: 10px; }
 .acn-opit-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }

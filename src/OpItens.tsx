@@ -12,8 +12,9 @@
 //      separada de cada linha da BOM. Diferença exige observação e o kit sai
 //      "com pendência".
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { confirmarRemocao, mostrarAviso } from './Feedback';
+import { lerMarcasDeSerial, gravarMarcaDeSerial } from './SerialDosItens';
 import { imprimirListaDeSeparacao } from './ListaDeSeparacao';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
@@ -329,9 +330,28 @@ export function CopiarBomDeOutraOp({ oplAtual, onCopiar }: any) {
   );
 }
 
-export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; onChange: (v: any[]) => void; vendidos?: any[] }) {
+export function BomEditor({ linhas, onChange, vendidos = [], currentUser }: { linhas: any[]; onChange: (v: any[]) => void; vendidos?: any[]; currentUser?: any }) {
   const [sugerindo, setSugerindo] = useState(false);
   const lista = linhas.length ? linhas : [linhaBomVazia()];
+  // "Serial" por linha (27/10/2026): quem monta a BOM diz se o item recebe número de série e isso é gravado no próprio item do Cadastro (vale para todas as OPs) — é a marca que monta a lista de seriais do Almoxarifado
+  const [marcas, setMarcas] = useState<Record<string, { tem: boolean; conjunto: boolean }>>({});
+  const [gravandoMarca, setGravandoMarca] = useState<string>('');
+  const idsDaLista = [...new Set(lista.map((l: any) => l.item_id).filter(Boolean).map(String))].sort().join(',');
+  useEffect(() => {
+    const faltam = idsDaLista ? idsDaLista.split(',').filter(id => !(id in marcas)) : [];
+    if (!faltam.length) return;
+    let vivo = true;
+    lerMarcasDeSerial(faltam).then(r => { if (vivo && !r.erro) setMarcas(m => ({ ...m, ...r.marcas })); });   // leitura que falha só deixa a caixa de fora
+    return () => { vivo = false; };
+  }, [idsDaLista]);
+  const alternarSerial = async (l: any, tem: boolean) => {
+    setGravandoMarca(String(l.item_id));
+    const erro = await gravarMarcaDeSerial({ id: l.item_id, nome: l.nome }, tem, currentUser);
+    setGravandoMarca('');
+    if (erro) { mostrarAviso(`Não foi possível gravar a marca de serial de "${l.nome}": ${erro}`, 'erro'); return; }
+    setMarcas(m => ({ ...m, [String(l.item_id)]: { tem, conjunto: false } }));
+    mostrarAviso(tem ? `"${l.nome}" passou a ter número de série (fica no Cadastro de itens, vale para todas as OPs).` : `"${l.nome}" deixou de ter número de série.`, 'ok');
+  };
   const set = (i: number, patch: any) => onChange(lista.map((l, j) => j === i ? { ...l, ...patch } : l));
   const escolher = async (i: number, s: any) => {
     if (s.tipo === 'item') {
@@ -389,6 +409,13 @@ export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; 
             <span className="acn-opit-un">{l.unidade || 'UN'}</span>
             <input value={l.descricao || ''} placeholder="Descrição" aria-label="Descrição na BOM" className="acn-input acn-opit-desc"
               onChange={e => set(i, { descricao: e.target.value })} />
+            {l.item_id && marcas[String(l.item_id)] && (
+              <label className={'acn-opit-serial' + (marcas[String(l.item_id)].tem ? ' ligado' : '')}
+                title={marcas[String(l.item_id)].conjunto ? 'O Conjunto Elétrico nunca tem número de série' : 'Este item recebe número de série? Ao marcar, fica gravado no Cadastro de itens (vale para todas as OPs) e o item entra sozinho na lista de seriais do Almoxarifado na Venda para Envio.'}>
+                <input type="checkbox" checked={marcas[String(l.item_id)].tem} disabled={marcas[String(l.item_id)].conjunto || gravandoMarca === String(l.item_id)}
+                  aria-label={`Tem número de série: ${l.nome}`} onChange={e => alternarSerial(l, e.target.checked)} /> Serial
+              </label>
+            )}
             <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Remover linha" title="Remover"
               onClick={async () => { if (!await confirmarRemocao('esta linha da lista')) return; onChange(lista.length > 1 ? lista.filter((_, j) => j !== i) : [linhaBomVazia()]); }} />
           </div>

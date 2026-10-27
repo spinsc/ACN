@@ -22,6 +22,7 @@ import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, Checkli
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
 import { pendenciasSanadas, lerVistos, chaveDoUsuario, resumoDaFalta } from './PendenciasSanadas';
 import AvisoPendenciaSanada from './AvisoPendenciaSanada';
+import { modeloDeSeriais, modelosDasOps, linhasDeSerial, jaSerializadoPorProduto } from './SerialDosItens';
 import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesAbertosDaOp, descricaoDaRemessa } from './Remessas';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
@@ -135,6 +136,11 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   const [pendPorOp, setPendPorOp] = useState(new Map());
   const pendenciasDe = (o) => pendPorOp.get(String(o?.id)) || [];
   const faltandoPara = (o) => travaKit100(pendenciasDe(o), o);
+  // Embalar e enviar também espera a pendência (pedido do usuário em 27/10/2026, OP D0797): enquanto houver fabricação, compra ou desenvolvimento que não chegou (ou chegou e aguarda o "Recebi"), o botão fica desligado, como o KITING 100%
+  const tituloEmbalar = (o, padrao) => {
+    const falta = faltandoPara(o);
+    return falta.length ? `Esperando material de fabricação/compra:\n${textoFaltando(falta)}\n\nO envio só libera quando a pendência for sanada.` : padrao;
+  };
 
   // Pendências que fecharam no setor DEPOIS que a OP já saiu do Almoxarifado
   // (kit liberado com pendência, produção começou, e só então a Serralheria/
@@ -274,8 +280,10 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       const itens = [...f.itens];
       linhas.forEach((l, k) => {
         const alvo = i + k;
+        // lista pronta (27/10/2026): só se cola o serial nas linhas que existem; o produto é o da lista e não muda
+        if (f.auto && !itens[alvo]) return;
         const atual = itens[alvo] || { produto: '', serial: '' };
-        itens[alvo] = { produto: l.produto || atual.produto, serial: l.serial };
+        itens[alvo] = { ...atual, produto: f.auto ? atual.produto : (l.produto || atual.produto), serial: l.serial };
       });
       return { ...f, itens };
     });
@@ -331,8 +339,21 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     setRemessasDaOp(remessas); setErroRemessas(erroRem);
     const saldo = ehVendaEnvioOp(opl) ? (composta ? unidadesDaOp(opl) : Math.max(1, saldoDeUnidades(opl, remessas))) : 0;
     const jaTemRemessa = remessas.some(r => !r.cancelada);
+    // Lista de seriais pronta (pedido do usuário em 27/10/2026): entram sozinhos os itens vendidos com a marca "Tem serial" do Cadastro de itens (o Conjunto Elétrico não),
+    // uma linha por unidade, e o Almoxarifado só digita o serial. Sem nenhum item marcado, ou com serial já gravado antes (kiting em lote), segue como sempre foi.
+    let modeloSerial: any[] = [];
+    if (ehVendaEnvioOp(opl)) {
+      const m = await modeloDeSeriais(composta ? linhasDoSetor(opl, setor) : opl.itens_vendidos);
+      if (m.erro) mostrarAviso(`Não consegui conferir quais itens têm número de série (${m.erro}). Informe produto e serial à mão.`, 'atencao');
+      else modeloSerial = m.modelo;
+    }
+    const jaGuardados = Array.isArray(opl.seriais_itens) && opl.seriais_itens.length > 0;
+    const listaPronta = modeloSerial.length > 0 && (jaTemRemessa || !jaGuardados);
+    const jaSerial = jaTemRemessa ? jaSerializadoPorProduto(opl.seriais_itens) : {};
     setEmbForm({
-      itens: ehVendaEnvioOp(opl) && jaTemRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais(opl),
+      auto: listaPronta, modeloSerial, jaSerial, totalSerial: unidadesDaOp(opl),
+      itens: listaPronta ? linhasDeSerial(modeloSerial, saldo, unidadesDaOp(opl), jaSerial, [])
+        : ehVendaEnvioOp(opl) && jaTemRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais(opl),
       unidades: ehVendaEnvioOp(opl) ? String(saldo) : '',   // o padrão é mandar tudo o que falta: quem envia de uma vez só não muda nada
       seriais: opl.seriais_equipamentos || '',
       peso_total: '', volumes: '1',
@@ -517,7 +538,13 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     if (vendaEnvio) {
       const qtdVendida = unidadesRemessa;
       if (itensSeriais.some(x => !x.produto)) { alert('Informe o produto de cada serial.'); return; }
-      if (serialObrig && itensSeriais.length < qtdVendida) {
+      // lista pronta: cada linha da lista pede o seu serial (só o serial é digitado)
+      const semSerial = f.auto ? (f.itens || []).filter(x => !String(x.serial || '').trim()) : [];
+      if (f.auto && serialObrig && semSerial.length) {
+        alert(`Falta o serial de ${semSerial.length} item(ns) da lista:\n${[...new Set(semSerial.map(x => x.produto))].map(p => '• ' + p + ' (' + semSerial.filter(x => x.produto === p).length + ')').join('\n')}`);
+        return;
+      }
+      if (!f.auto && serialObrig && itensSeriais.length < qtdVendida) {
         alert(`Informe o serial ACN de cada produto: ${comRemessa ? `são ${qtdVendida} unidade(s) nesta remessa` : `são ${qtdVendida} unidade(s) vendida(s)`} e há ${itensSeriais.length} serial(is).`);
         return;
       }
@@ -568,17 +595,14 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         mostrarAviso(`Frete por conta da empresa: a Logística cota o frete pelo endereço de entrega. Falta: ${faltaEnd.join(', ')}.`, 'atencao'); return;
       }
     }
-    // Fluxo de envio: aqui a mercadoria sai da empresa. Se ainda há peça de
-    // fabricação ou compra em aberto, o risco é enviar incompleto — então
-    // avisa e pede confirmação (bloquear de vez pararia envio parcial, que é
-    // legítimo; o Kit 100% do kiting esse sim fica barrado).
+    // Fluxo de envio: aqui a mercadoria sai da empresa. Até 27/10/2026 a pendência de fabricação/compra só avisava e pedia confirmação (para não impedir envio parcial);
+    // por pedido do usuário (OP D0797, com uma compra a chegar e o botão habilitado) agora BARRA, como o Kit 100%: o botão já vem desligado e esta conferência vale para a
+    // janela que ficou aberta enquanto a pendência surgia.
     const faltaEnvio = faltandoPara(modalEmbalagem);
-    if (faltaEnvio.length && !await confirmar(
-      `Esta OP tem ${faltaEnvio.length} item(ns) de fabricação/compra em aberto:
-
-${textoFaltando(faltaEnvio)}
-
-Embalar e enviar assim mesmo?`)) return;
+    if (faltaEnvio.length) {
+      mostrarAviso(`Não é possível embalar e enviar a OP ${modalEmbalagem.opl}: ${faltaEnvio.length} item(ns) de fabricação/compra ainda não foram sanados.\n\n${textoFaltando(faltaEnvio)}`, 'erro');
+      return;
+    }
     // venda composta: a parte deste setor é gravada à parte e o frete único só nasce quando o último setor terminar (T3, 22/10/2026)
     if (composta) { await concluirParteDaVendaComposta(f, itensSeriais); return; }
     setSalvandoEmb(true);
@@ -803,7 +827,10 @@ Embalar e enviar assim mesmo?`)) return;
     const novas = await lerRemessas(opl.id); setRemessasDaOp(novas.remessas); setErroRemessas(novas.erro || '');
     const saldo = Math.max(1, saldoDeUnidades(opl, novas.remessas));
     setModalEmbalagem(o => o && ({ ...o, seriais_itens: sobraram }));
-    setEmbForm(fm => ({ ...fm, unidades: String(saldo), itens: novas.remessas.some(x => !x.cancelada) ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais({ ...opl, seriais_itens: sobraram }) }));
+    const temRemessa = novas.remessas.some(x => !x.cancelada);
+    setEmbForm(fm => fm.auto
+      ? { ...fm, unidades: String(saldo), jaSerial: temRemessa ? jaSerializadoPorProduto(sobraram) : {}, itens: linhasDeSerial(fm.modeloSerial, saldo, fm.totalSerial, temRemessa ? jaSerializadoPorProduto(sobraram) : {}, []) }
+      : { ...fm, unidades: String(saldo), itens: temRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais({ ...opl, seriais_itens: sobraram }) });
     fetchAll(true);
   };
 
@@ -991,6 +1018,13 @@ Embalar e enviar assim mesmo?`)) return;
       setModalSeriaisLote(null); setSeriaisLoteTexto('');
       fetchAll();
     }
+  };
+
+  // O kiting em lote também traz a lista de seriais pronta (27/10/2026): lê quais itens de cada unidade têm número de série antes de abrir a janela
+  const abrirKitEnvioLote = async (base, ops) => {
+    const r = await modelosDasOps(ops);
+    if (r.erro) mostrarAviso(`Não consegui conferir quais itens têm número de série (${r.erro}). Informe produto e serial à mão.`, 'atencao');
+    setModalKitEnvioLote({ base, ops, modelos: r.erro ? {} : r.modelos });
   };
 
   // Kit 100% do lote de Venda para Envio: seriais produto a produto (mesmo formato da
@@ -1181,17 +1215,19 @@ Embalar e enviar assim mesmo?`)) return;
                               passagem, então essa checagem não serve aqui. */}
                           {o.status_geral === STATUS_EMBALAGEM ? (
                             <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
-                              title="Produção concluída: pesar, medir e abrir a cotação de frete"
+                              disabled={!!faltandoPara(o).length}
+                              title={tituloEmbalar(o, 'Produção concluída: pesar, medir e abrir a cotação de frete')}
                               onClick={()=>abrirModalEmbalagem(o)}>
-                              {rotuloEmbalar(o)}
+                              {rotuloEmbalar(o)}{faltandoPara(o).length ? ` (${faltandoPara(o).length} p/ chegar)` : ''}
                             </Botao>
                           ) : (<>
                           {o.status_almox !== 'Kit OK' && (
                             ehEnvio(o) ? (
                               <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
-                                title="Esta OP não passa por produção: separar, embalar e enviar"
+                                disabled={!!faltandoPara(o).length}
+                                title={tituloEmbalar(o, 'Esta OP não passa por produção: separar, embalar e enviar')}
                                 onClick={()=>abrirModalEmbalagem(o)}>
-                                {rotuloEmbalar(o)}
+                                {rotuloEmbalar(o)}{faltandoPara(o).length ? ` (${faltandoPara(o).length} p/ chegar)` : ''}
                               </Botao>
                             ) : (
                               (() => {
@@ -1277,12 +1313,18 @@ Embalar e enviar assim mesmo?`)) return;
                           <td className="acn-alm-celula-acoes">
                             <div className="acn-acoes-linha quebra">
                               {(qtdPendente + qtdFalta + qtdComPendencia) > 0 && (irmaos.every(ehVendaEnvioOp) ? (
-                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote}
-                                  title="Venda para Envio: seriais de todos os produtos de todas as unidades numa tela só"
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
+                                  disabled={processandoLote || irmaos.some(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK' && faltandoPara(o).length > 0)}
+                                  title={(() => {
+                                    const comFalta = irmaos.filter(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK' && faltandoPara(o).length);
+                                    return comFalta.length ? `${comFalta.length} unidade(s) ainda esperam material de fabricação/compra (${comFalta.map(o => o.opl).join(', ')}): o envio só libera quando a pendência for sanada.` : 'Venda para Envio: seriais de todos os produtos de todas as unidades numa tela só';
+                                  })()}
                                   onClick={()=>{
                                     const ops = irmaos.filter(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK');
                                     if (!ops.length) { alert('Nenhuma unidade do lote está aguardando kit.'); return; }
-                                    setModalKitEnvioLote({ base, ops });
+                                    const comFalta = ops.filter(o => faltandoPara(o).length);
+                                    if (comFalta.length) { mostrarAviso(`Não é possível fechar o Kit 100% em lote: ${comFalta.length} unidade(s) ainda esperam material de fabricação/compra (${comFalta.map(o => o.opl).join(', ')}).`, 'erro'); return; }
+                                    abrirKitEnvioLote(base, ops);
                                   }}>
                                   KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
                                 </Botao>
@@ -1518,7 +1560,7 @@ Embalar e enviar assim mesmo?`)) return;
                     <div className="form-group">
                       <label className="acn-label" htmlFor="alm-unidades">Quantas unidades vão nesta remessa? *</label>
                       <input id="alm-unidades" className="acn-input" type="number" min={1} max={saldo} value={embForm.unidades || ''} disabled={!!erroRemessas}
-                        onChange={e => setEmbForm(f => ({ ...f, unidades: e.target.value }))} />
+                        onChange={e => setEmbForm(f => ({ ...f, unidades: e.target.value, ...(f.auto ? { itens: linhasDeSerial(f.modeloSerial, Number(e.target.value), f.totalSerial, f.jaSerial, f.itens) } : {}) }))} />
                       <div className="acn-ajuda">
                         {parcial
                           ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no ${setor} para a próxima remessa.`
@@ -1533,7 +1575,11 @@ Embalar e enviar assim mesmo?`)) return;
                 <div className="acn-alm-bloco">
                   <div className="acn-label">
                     Seriais ACN por produto{ehVendaComposta(modalEmbalagem) && !doTelecom ? '' : ' *'} <span className="acn-ajuda">
-                      {ehVendaComposta(modalEmbalagem) && !doTelecom
+                      {embForm.auto
+                        ? (ehVendaComposta(modalEmbalagem) && !doTelecom
+                          ? '— opcional nesta parte (quem serializa a venda composta é o Telecom). A lista vem pronta do que foi vendido: digite só o serial.'
+                          : '— a lista vem pronta do que foi vendido (só os itens com número de série): digite o serial de cada linha. Dá para colar do Excel só a coluna do serial.')
+                        : ehVendaComposta(modalEmbalagem) && !doTelecom
                         ? '— opcional nesta parte (quem serializa a venda composta é o Telecom). Dá para colar do Excel: produto ⇥ serial.'
                         : `— pelo menos ${Math.max(1, Math.floor(Number(embForm.unidades)) || 1)} (uma por unidade ${(unidadesDaOp(modalEmbalagem) > 1 || remessasDaOp.length > 0) ? 'desta remessa' : 'vendida'}). Dá para colar do Excel: produto ⇥ serial.`}
                     </span>
@@ -1542,22 +1588,27 @@ Embalar e enviar assim mesmo?`)) return;
                     {(embForm.itens || []).map((x, i) => (
                       <div key={i} className="acn-alm-serial-linha">
                         <span className="acn-ajuda">{i + 1}</span>
-                        <input className="acn-input" placeholder="Produto" value={x.produto}
+                        <input className={'acn-input' + (embForm.auto ? ' acn-alm-produto-fixo' : '')} placeholder="Produto" value={x.produto} readOnly={!!embForm.auto} tabIndex={embForm.auto ? -1 : undefined}
+                          aria-label={`Produto da linha ${i + 1}`}
                           onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'produto', e.target.value)} />
                         <input className="acn-input" placeholder="Serial ACN" value={x.serial}
                           onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'serial', e.target.value)} />
+                        {!embForm.auto && (
                         <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Remover linha" aria-label="Remover linha"
                           onClick={async () => { if (!await confirmarRemocao('esta linha do volume', !(x.produto || x.serial))) return; setEmbForm(f => ({ ...f, itens: f.itens.length > 1 ? f.itens.filter((_, j) => j !== i) : [{ produto:'', serial:'' }] })); }} />
+                        )}
                       </div>
                     ))}
                   </div>
                   <div className="acn-kb-linha">
+                    {!embForm.auto && (
                     <Botao pequeno onClick={() => setEmbForm(f => ({ ...f, itens: [...(f.itens || []), { produto:'', serial:'' }] }))}>
                       + Linha
                     </Botao>
+                    )}
                     {(() => {
                       const n = (embForm.itens || []).filter(x => String(x.serial || '').trim()).length;
-                      const q = Math.max(1, Math.floor(Number(embForm.unidades)) || 1);
+                      const q = embForm.auto ? (embForm.itens || []).length : Math.max(1, Math.floor(Number(embForm.unidades)) || 1);
                       return <span className={n >= q ? 'acn-txt-ok' : 'acn-txt-atencao'}>{n} de {q} serial(is)</span>;
                     })()}
                   </div>
@@ -1749,7 +1800,7 @@ Embalar e enviar assim mesmo?`)) return;
 
       {/* MODAL IMPORTAR SERIAIS EM LOTE — cada linha colada = uma unidade, na ordem /01..NN */}
       {modalKitEnvioLote && (
-        <ModalKitingLoteEnvio base={modalKitEnvioLote.base} ops={modalKitEnvioLote.ops}
+        <ModalKitingLoteEnvio base={modalKitEnvioLote.base} ops={modalKitEnvioLote.ops} modelos={modalKitEnvioLote.modelos}
           onClose={() => setModalKitEnvioLote(null)} onConfirmar={aplicarKitEnvioLote} />
       )}
       {modalDevolver && (

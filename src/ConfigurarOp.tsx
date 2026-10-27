@@ -197,7 +197,7 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
           {!lote && (
             <CopiarBomDeOutraOp oplAtual={ops[0]} onCopiar={(novas: any[], modo: string) => setLinhas(atuais => modo === 'substituir' ? novas : somarLinhas(atuais, novas))} />
           )}
-          <BomEditor linhas={linhas} onChange={setLinhas} vendidos={ref?.itens_vendidos || []} />
+          <BomEditor linhas={linhas} onChange={setLinhas} vendidos={ref?.itens_vendidos || []} currentUser={currentUser} />
           {lote && <div className="acn-ajuda">A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>}
           <div className="form-group">
             <label className="acn-label" htmlFor="pcp-obs-bom">Observações para o Almoxarifado{lote ? ' (aplicadas a todas as selecionadas)' : ''}</label>
