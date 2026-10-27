@@ -19,7 +19,9 @@ export function SeloFluxosDoLote({ unidades }: { unidades: any[] }) {
 
 // O pedaço do grupo do lote que escolhe o FLUXO de entrega (fluxo misto, 26/10/2026 — PLANO_FLUXO_MISTO.md): o fluxo do grupo e, quando ele termina com a mercadoria saindo daqui,
 // o frete e o destino DESTE grupo (um grupo pode ir para o cliente e outro para um terceiro). Quem recebe, o endereço completo e o CIF/FOB seguem a mesma regra de uma venda comum.
-export function FluxoDoGrupo({ g, letra, onChange }: { g: any; letra: string; onChange: (patch: any) => void }) {
+// `quem` troca o "do grupo A" dos rótulos (M3, 27/10/2026: a troca de fluxo de UMA unidade usa o mesmo pedaço de tela e fala "desta unidade"); `opcoes` limita os fluxos oferecidos (o atual não entra).
+export function FluxoDoGrupo({ g, letra, onChange, quem: quemPassado, opcoes }: { g: any; letra: string; onChange: (patch: any) => void; quem?: string; opcoes?: { valor: string; label: string }[] }) {
+  const quem = quemPassado || `do grupo ${letra}`;
   const fluxo = g.fluxo || '';
   const destino = g.destino || destinoVazio();
   const setD = (patch: any) => onChange({ destino: { ...destino, ...patch } });
@@ -29,16 +31,16 @@ export function FluxoDoGrupo({ g, letra, onChange }: { g: any; letra: string; on
   return (
     <div className="acn-lot-fluxo" data-teste={'fluxo-do-grupo-' + letra}>
       <label className="acn-lot-rot">
-        Fluxo de entrega do grupo {letra} *
-        <select className={'acn-input acn-lot-fluxo-sel' + (fluxo ? '' : ' acn-lot-fluxo-vazio')} value={fluxo} aria-label={`Fluxo de entrega do grupo ${letra}`} onChange={e => onChange({ fluxo: e.target.value })}>
-          <option value="">— escolha como este grupo será entregue —</option>
-          {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
+        Fluxo de entrega {quem} *
+        <select className={'acn-input acn-lot-fluxo-sel' + (fluxo ? '' : ' acn-lot-fluxo-vazio')} value={fluxo} aria-label={`Fluxo de entrega ${quem}`} onChange={e => onChange({ fluxo: e.target.value })}>
+          <option value="">— escolha como {quemPassado ? 'esta unidade' : 'este grupo'} será entregue —</option>
+          {(opcoes || FLUXOS).map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
         </select>
       </label>
       {ajuda && <div className="acn-ajuda">{ajuda}{grupoEhDeEnvio(g) ? ' Sem chassi nem placa: cada unidade leva o modelo do veículo, os itens e o destino abaixo.' : ''}</div>}
       {precisaFrete && (
         <div className="acn-lot-destino">
-          <div className="acn-lot-rot">Frete do grupo {letra} *</div>
+          <div className="acn-lot-rot">Frete {quem} *</div>
           <div className="acn-lot-frete">
             {[{ v: 'CIF', label: 'CIF — a empresa paga o frete' }, { v: 'FOB', label: 'FOB — o cliente paga o frete' }].map(opt => (
               <Botao key={opt.v} pequeno variante={destino.frete_responsavel === opt.v ? 'primario' : 'secundario'} aria-pressed={destino.frete_responsavel === opt.v}
@@ -56,7 +58,7 @@ export function FluxoDoGrupo({ g, letra, onChange }: { g: any; letra: string; on
               </select>
             </label>
             <div className="acn-lot-rot">CEP
-              <CampoCep valor={destino.destino_cep} onChange={v => setD({ destino_cep: v })} rotulo={`CEP de entrega do grupo ${letra}`}
+              <CampoCep valor={destino.destino_cep} onChange={v => setD({ destino_cep: v })} rotulo={`CEP de entrega ${quem}`}
                 onResultado={(r: any) => { if (r.status === 'ok') setD({ destino_cidade: r.cidade, destino_uf: r.uf }); }} />
             </div>
           </div>

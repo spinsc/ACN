@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -27,11 +27,12 @@ import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente } from './utils/permissoes';
 import CopiarOpModal from './CopiarOpModal';
+import TrocarFluxoModal from './TrocarFluxoModal';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
 import { SeletorEscopo } from './EscopoDaEdicao';
-import { aplicarNoLote, lerOutrasUnidadesDoLote, textoDoResultadoLote } from './EdicaoDeLote';
+import { aplicarNoLote, lerOutrasUnidadesDoLote, textoDoResultadoLote, ehUnidadeDeLote } from './EdicaoDeLote';
 import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
 import { FotosVeiculoVer } from './FotosVeiculo';
 import { itensPreenchidos } from './DemandaItens';
@@ -787,6 +788,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [editando, setEditando] = useState(false);
   // Copiar OP (pedido do usuário em 23/10/2026): várias OPs iguais, cada uma com o seu número
   const [copiando, setCopiando] = useState(false);
+  // Trocar o fluxo da unidade (fluxo misto, M3, 27/10/2026): uma unidade de lote passa de adaptação para envio, ou o contrário, até o Almoxarifado fechar o kit
+  const [trocandoFluxo, setTrocandoFluxo] = useState(false);
   const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
@@ -961,6 +964,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       )}
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
       {copiando && <CopiarOpModal origem={opl} currentUser={usuario} onClose={() => setCopiando(false)} />}
+      {trocandoFluxo && <TrocarFluxoModal op={opl} currentUser={usuario} onClose={() => setTrocandoFluxo(false)} onTrocada={() => { recarregarOpl(); recarregarLogs(); }} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
           onSalvo={(nova: any) => { setOpl(nova); setEditando(false); recarregarLogs(); }} />
@@ -1003,6 +1007,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
               // quem abre OP (Admin, gerentes e a equipe de Comercial/CRM e Licitações, que valem como gerente do setor); a cópia nasce como OP nova, no PCP
               { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
+              // só a unidade de um lote (o fluxo misto nasce no lote) e quem tem poder de gerente; a janela confere a etapa e explica quando não dá
+              { rotulo: 'Trocar o fluxo desta unidade', icone: mdiSwapHorizontal, onClick: () => setTrocandoFluxo(true), oculto: !(temPoderDeGerente(usuario) && qtdLote > 1 && ehUnidadeDeLote(opl?.opl)) },
             ]} />
             <button type="button" className="acn-opl-x" onClick={fecharEMarcarLido} aria-label="Fechar" title="Fechar"><Icone path={mdiClose} size={20} /></button>
           </div>
