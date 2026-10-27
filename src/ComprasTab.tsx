@@ -307,12 +307,16 @@ function blocoItensImpressao(p: any, moeda: (v: any) => string) {
   const temComprada = itens.some((i: any) =>
     i?.quantidade_comprada != null && Number(i.quantidade_comprada) !== Number(i.quantidade));
   const qtdVale = (i: any) => Number(i?.quantidade_comprada ?? i?.quantidade) || 0;
+  // Pedido do usuário em 26/10/2026: a OC impressa mostra o código do produto quando ele é do cadastro (produto_codigo vem da busca no cadastro de itens/produtos;
+  // item digitado à mão não tem). A coluna só existe quando algum item tem código: pedido sem item cadastrado sai como sempre saiu.
+  const temCodigo = itens.some((i: any) => String(i?.produto_codigo || '').trim());
   const linhas = itens.map((i: any, n: number) => {
     const qtd = qtdVale(i);
     const pedida = Number(i?.quantidade) || 0;
     const vu = Number(i?.valor_unitario) || 0;
     return `<tr>
       <td style="text-align:center;width:28px">${n + 1}</td>
+      ${temCodigo ? `<td style="white-space:nowrap">${esc(String(i?.produto_codigo || '').trim()) || '—'}</td>` : ''}
       <td><b>${esc(i.nome)}</b>${i.descricao ? `<div style="color:#475569;font-size:10px">${esc(i.descricao)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">${qtd || '—'}${
         temComprada && pedida && pedida !== qtd ? `<div style="color:#94a3b8;font-size:9px">pedido ${pedida}</div>` : ''}</td>
@@ -324,11 +328,11 @@ function blocoItensImpressao(p: any, moeda: (v: any) => string) {
     <h3 style="margin:22px 0 0;font-size:13px;color:#1a3a52">Itens solicitados (${itens.length})</h3>
     <table class="itens">
       <tr>
-        <th style="width:28px">#</th><th>Item</th><th style="text-align:right">Qtd</th>
+        <th style="width:28px">#</th>${temCodigo ? '<th>Código</th>' : ''}<th>Item</th><th style="text-align:right">Qtd</th>
         ${temValor ? '<th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th>' : ''}
       </tr>
       ${linhas}
-      ${temValor ? `<tr><td colspan="4" style="text-align:right"><b>Total</b></td>
+      ${temValor ? `<tr><td colspan="${temCodigo ? 5 : 4}" style="text-align:right"><b>Total</b></td>
         <td style="text-align:right"><b>${moeda(totalGeral)}</b></td></tr>` : ''}
     </table>`;
 }
