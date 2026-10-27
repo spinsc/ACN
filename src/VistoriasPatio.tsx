@@ -213,6 +213,18 @@ export default function VistoriasPatio({ currentUser }) {
 
   useEffect(() => { fetchAll(); }, []);
 
+  const abrirRetorno = (v) => { setModalRetorno(v); setRetornoForm({ km_retorno: '', obs_retorno: '', responsavel_recebimento: currentUser?.nome || '' }); setSigRet(null); };
+  // 26/10/2026: a Logística (aba "Aguardando Recebimento") lista as saídas que ainda não voltaram e o botão "Registrar retorno" de lá chega aqui com o id da saída em
+  // window.__acnDeepLink (a aba monta depois do clique, então o recado fica no global e é lido quando a lista já carregou, como nas outras abas).
+  useEffect(() => {
+    const pend = (window as any).__acnDeepLink;
+    if (!pend?.vistoriaRetorno || !vistorias.length) return;
+    (window as any).__acnDeepLink = null;
+    const v = vistorias.find(x => String(x.id) === String(pend.vistoriaRetorno));
+    if (v && v.status !== 'Retornou') abrirRetorno(v);
+    else if (!v) alert('Não encontrei essa saída na lista da vistoria. Atualize a tela e tente de novo.');
+  }, [vistorias]);
+
   const fetchAll = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('vistorias_patio').select('*').order('data_saida',{ascending:false});
@@ -254,6 +266,8 @@ export default function VistoriasPatio({ currentUser }) {
   const salvar = async () => {
     if (salvandoRef.current) return;
     if (!form.veiculo_placa || !form.responsavel_envio) { alert('Preencha placa e responsavel!'); return; }
+    // Pedido do usuário em 26/10/2026: tudo que sai da vistoria tem que voltar, e a Logística espera a volta pela previsão — saída sem previsão ficaria sem data para cobrar
+    if (!form.previsao_retorno) { alert('Informe a previsão de retorno: tudo que sai da vistoria tem que voltar, e a Logística acompanha a volta por essa data.'); return; }
     salvandoRef.current = true;
     try {
       if ((rascunho.envio || rascunho.receb) && !(await confirmar(AVISO_ASSINATURA))) return;
@@ -267,8 +281,8 @@ export default function VistoriasPatio({ currentUser }) {
 
       const novoRow = {
         ...form,
-        // previsão em branco vai como "sem data" (null): "" numa coluna de data o banco recusa, e ninguém
-        // conseguia registrar uma saída sem previsão. A hora digitada é a hora de quem está na tela, então
+        // "" numa coluna de data o banco recusa (por isso o `|| null`); desde 26/10/2026 a previsão é obrigatória (conferida acima), então o null só protege
+        // contra uma chamada que pule a tela. A hora digitada é a hora de quem está na tela, então
         // vira o instante certo (antes ia sem fuso e o banco lia como hora de Londres: 3h de diferença).
         previsao_retorno: form.previsao_retorno || null,
         data_saida: form.data_saida ? new Date(form.data_saida).toISOString() : new Date().toISOString(),
@@ -516,7 +530,7 @@ export default function VistoriasPatio({ currentUser }) {
                 <input type="datetime-local" className="acn-input" value={form.data_saida} onChange={e=>setForm({...form,data_saida:e.target.value})} />
               </div>
               <div className="form-group">
-                <label className="acn-label">Previsao de Retorno</label>
+                <label className="acn-label">Previsao de Retorno *</label>
                 <input type="date" className="acn-input" value={form.previsao_retorno} onChange={e=>setForm({...form,previsao_retorno:e.target.value})} />
               </div>
             </div>
@@ -597,7 +611,7 @@ export default function VistoriasPatio({ currentUser }) {
                     <td>
                       <div className="acn-acoes-linha">
                         <Botao pequeno onClick={()=>setModalVer(v)}>VER</Botao>
-                        <Botao pequeno variante="primario" onClick={()=>{setModalRetorno(v);setRetornoForm({km_retorno:'',obs_retorno:'',responsavel_recebimento:currentUser?.nome||''});setSigRet(null);}}>RETORNO</Botao>
+                        <Botao pequeno variante="primario" onClick={()=>abrirRetorno(v)}>RETORNO</Botao>
                         <Botao pequeno onClick={()=>gerarPDF(v)}>PDF</Botao>
                       </div>
                     </td>

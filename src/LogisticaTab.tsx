@@ -15,6 +15,7 @@ import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline, mdiPencilOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { opTemRemessas, contarFretesAbertosDaOp, oFreteLiberaAOp } from './Remessas';
+import QuadroRetornosDePatio from './RetornosDePatio';
 import { podeVerValores, ehAdminOuGerente } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
@@ -2030,7 +2031,8 @@ export default function LogisticaTab({ currentUser }) {
         { id: 'fretes',      rotulo: 'Fretes', icone: mdiTruckOutline },
       ]} />
 
-      {abaLog === 'recebimento' ? <PainelRecebimento currentUser={currentUser} /> : abaLog === 'relatorio' ? <RelatorioLogistica /> : abaLog === 'fretes' ? <FretesPanel currentUser={currentUser} /> : <>
+      {/* 26/10/2026: o que saiu da vistoria de pátio também volta pela Logística — o quadro de saídas aguardando retorno fica logo abaixo das compras a receber */}
+      {abaLog === 'recebimento' ? <><PainelRecebimento currentUser={currentUser} /><QuadroRetornosDePatio /></> : abaLog === 'relatorio' ? <RelatorioLogistica /> : abaLog === 'fretes' ? <FretesPanel currentUser={currentUser} /> : <>
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Logistica — Controle de Envio e Recebimento de Mercadorias</span>
