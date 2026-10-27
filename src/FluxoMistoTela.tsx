@@ -1,10 +1,21 @@
 // @ts-nocheck
 import React from 'react';
-import { Botao } from './Interface';
+import { Botao, Selo } from './Interface';
 import { FLUXOS, UFS } from './FluxoEntrega';
 import { exigeEnderecoCompleto } from './EnderecoEntrega';
 import { CampoCep } from './CampoCep';
-import { destinoVazio, grupoPrecisaFrete, grupoEhDeEnvio } from './FluxoMisto';
+import { destinoVazio, grupoPrecisaFrete, grupoEhDeEnvio, resumoDosFluxosDoLote } from './FluxoMisto';
+
+// O selo da linha do lote quando as unidades têm fluxos diferentes (M2, 27/10/2026): "Fluxo misto: 6 Adaptação na matriz · 4 Envio de material". Lote de um fluxo só não mostra nada.
+export function SeloFluxosDoLote({ unidades }: { unidades: any[] }) {
+  const r = resumoDosFluxosDoLote(unidades);
+  if (!r.misto) return null;
+  return (
+    <span data-teste="selo-fluxos-do-lote">
+      <Selo familia="info" ponto={false} title="Este lote tem fluxos de entrega diferentes: cada unidade segue o fluxo dela (produção ou envio)">Fluxo misto: {r.texto}</Selo>
+    </span>
+  );
+}
 
 // O pedaço do grupo do lote que escolhe o FLUXO de entrega (fluxo misto, 26/10/2026 — PLANO_FLUXO_MISTO.md): o fluxo do grupo e, quando ele termina com a mercadoria saindo daqui,
 // o frete e o destino DESTE grupo (um grupo pode ir para o cliente e outro para um terceiro). Quem recebe, o endereço completo e o CIF/FOB seguem a mesma regra de uma venda comum.

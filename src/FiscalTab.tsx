@@ -15,6 +15,7 @@ import { EquipeDaOpModal, situacaoDaEquipe, faltaApontar } from './EquipeDaOp';
 import { podeEditarEquipeDaOp } from './utils/permissoes';
 import { FiscalAntecipadas } from './FaturamentoAntecipado';
 import CampoDataDaNota from './CampoDataDaNota';
+import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { resolverDataDaNota, avisoDaDataRetroativa, textoDaDataNoHistorico, instanteDaNota, lerFechamentosAprovadosDoMes } from './DataDaNota';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -78,7 +79,7 @@ export default function FiscalTab({ currentUser }) {
         .order('data_cq', { ascending: true }),
       // todas as unidades com sufixo /NN, de qualquer fase, para o bloco do lote saber
       // quantas já chegaram, quantas já foram faturadas e quantas ainda faltam
-      supabase.from('oples').select('id,opl,status_geral,numero_nf,numero_nf_servico').like('opl', '%/%'),
+      supabase.from('oples').select('id,opl,status_geral,numero_nf,numero_nf_servico,fluxo_entrega,tipo_projeto').like('opl', '%/%'),   // fluxo e tipo: para o selo "Fluxo misto" do bloco do lote (27/10/2026)
     ]);
     const porBase = {};
     (lotesRes.data || []).forEach(u => { if (/\/\d+$/.test(u.opl || '')) { const b = baseOplDe(u.opl); (porBase[b] = porBase[b] || []).push(u); } });
@@ -437,6 +438,8 @@ export default function FiscalTab({ currentUser }) {
                 style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: 0 }}>{aberto ? '▾' : '▸'}</button>
               <strong className="acn-forte">🔗 {base}</strong>
               <Tag title="O lote é da produção; a nota é de uma venda só">Lote · {totalVenda || chegaram.length} unidades</Tag>
+              {/* fluxo misto (M2): as unidades de envio chegam ao Fiscal em outro ritmo que as adaptadas; faturar só parte do lote é a saída deliberada, já prevista abaixo */}
+              <SeloFluxosDoLote unidades={todas ? ativas : chegaram} />
               <span className="acn-fraco">{chegaram[0]?.cliente_nome || ''}</span>
             </div>
             <div className="acn-fraco" style={{ marginTop: 3, fontSize: 10 }}>

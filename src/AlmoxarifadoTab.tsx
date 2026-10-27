@@ -15,6 +15,8 @@ import { VinculoPicker } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
 import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
+import { loteTemEnvioEProducao, ehUnidadeDeEnvio } from './FluxoMisto';
+import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia, textoDosSeriais, seriaisOutrosDaOp } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
@@ -1214,10 +1216,15 @@ Embalar e enviar assim mesmo?`)) return;
                     const { base, irmaos } = item;
                     const expandido = !!lotesExpandidos[base];
                     const rep = irmaos[0];
-                    const qtdPendente = irmaos.filter(o => !o.status_almox).length;
-                    const qtdKitOk = irmaos.filter(o => o.status_almox === 'Kit OK').length;
-                    const qtdFalta = irmaos.filter(o => o.status_almox === 'Falta de Material').length;
-                    const qtdComPendencia = irmaos.filter(o => o.status_almox === 'Liberado com Pendencia').length;
+                    // Fluxo misto (M2, 27/10/2026): num lote com unidades de produção E de envio, o kit em lote, o "falta material" e o "com pendência" valem só para as de PRODUÇÃO (as de envio são
+                    // separadas, embaladas e enviadas uma a uma, cada uma com o seu destino); os números e os botões do lote falam só delas
+                    const mistoNoLote = loteTemEnvioEProducao(irmaos);
+                    const alvoLote = mistoNoLote ? irmaos.filter(o => !ehUnidadeDeEnvio(o)) : irmaos;
+                    const itemAlvo = mistoNoLote ? { ...item, irmaos: alvoLote } : item;
+                    const qtdPendente = alvoLote.filter(o => !o.status_almox).length;
+                    const qtdKitOk = alvoLote.filter(o => o.status_almox === 'Kit OK').length;
+                    const qtdFalta = alvoLote.filter(o => o.status_almox === 'Falta de Material').length;
+                    const qtdComPendencia = alvoLote.filter(o => o.status_almox === 'Liberado com Pendencia').length;
                     return (
                       <React.Fragment key={base}>
                         <tr className="acn-linha-marca">
@@ -1228,6 +1235,7 @@ Embalar e enviar assim mesmo?`)) return;
                               <Selo familia="marca" ponto={false}>
                                 LOTE — {irmaos.length} unidades
                               </Selo>
+                              <SeloFluxosDoLote unidades={irmaos} />
                             </div>
                           </td>
                           <td>—</td>
@@ -1235,6 +1243,7 @@ Embalar e enviar assim mesmo?`)) return;
                           <td className="acn-texto-medio">{rep.tipo_projeto}</td>
                           <td colSpan={2}>
                             <div className="acn-selos">
+                              {mistoNoLote && <Selo familia="info" ponto={false} title="As unidades de envio deste lote são separadas e embaladas uma a uma; as ações em lote abaixo valem só para as de produção">{irmaos.length - alvoLote.length} de envio (uma a uma)</Selo>}
                               {qtdPendente > 0 && <Selo familia="neutro" ponto={false}>{qtdPendente} pendente</Selo>}
                               {qtdKitOk > 0 && <Selo familia="ok" ponto={false}>{qtdKitOk} kit 100%</Selo>}
                               {qtdFalta > 0 && <Selo familia="erro" ponto={false}>{qtdFalta} falta mat.</Selo>}
@@ -1257,14 +1266,14 @@ Embalar e enviar assim mesmo?`)) return;
                                   KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
                                 </Botao>
                               ) : (
-                                <Botao variante="primario" pequeno icone={mdiTrayArrowDown} disabled={processandoLote} onClick={()=>kitOkLote(item)}>
+                                <Botao variante="primario" pequeno icone={mdiTrayArrowDown} disabled={processandoLote} onClick={()=>kitOkLote(itemAlvo)}>
                                   IMPORTAR SERIAIS EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
                                 </Botao>
                               ))}
-                              <Botao variante="perigo-sec" pequeno icone={mdiCloseCircleOutline} disabled={processandoLote} onClick={()=>abrirLoteAcao('falta', item)}>
+                              <Botao variante="perigo-sec" pequeno icone={mdiCloseCircleOutline} disabled={processandoLote} onClick={()=>abrirLoteAcao('falta', itemAlvo)}>
                                 FALTA MATERIAL EM LOTE
                               </Botao>
-                              <Botao pequeno icone={mdiAlertOutline} disabled={processandoLote} onClick={()=>abrirLoteAcao('pendencia', item)}>
+                              <Botao pequeno icone={mdiAlertOutline} disabled={processandoLote} onClick={()=>abrirLoteAcao('pendencia', itemAlvo)}>
                                 C/ PENDÊNCIA EM LOTE
                               </Botao>
                               <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>

@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
+import { camposQueChegamNaUnidade, fluxoDaOp, resumoDosFluxosDoLote } from './FluxoMisto';
 
 /** "A1704.2610/05" → "A1704.2610" */
 export const baseDoLoteDe = (opl: any) => String(opl || '').trim().replace(/\/\d+$/, '');
@@ -55,6 +56,8 @@ export type ResultadoLote = {
   falhas: string[];
   // 22/10/2026: a unidade FOI alterada mas a linha do histórico não gravou. Antes entrava em `falhas` e na conta do total ao mesmo tempo ("13 de 26 alteradas" num lote de 13).
   semHistorico: { opl: string; motivo: string }[];
+  // 27/10/2026 (fluxo misto, M2): lote com fluxos diferentes — frete, destino, M.O. e o próprio fluxo só vão para as unidades do mesmo fluxo; aqui, quem ficou sem e quais campos
+  deOutroFluxo?: { opl: string; campos: string[] }[];
   erroLeitura?: string;
 };
 /** O resultado pede atenção da pessoa: houve unidade que falhou ou ficou sem registro no histórico. */
@@ -73,17 +76,25 @@ export async function lerOutrasUnidadesDoLote(op: any): Promise<{ lista: any[]; 
  * Aplica `mudados` (campo → novo valor, só o que foi alterado) nas outras unidades do lote de `op`.
  * `ehGerente`: Admin/Gerente mexem nos itens vendidos mesmo com a BOM liberada; o Comercial, não.
  * `origem`: texto do histórico, ex.: "Edição do Comercial (vale para o lote)".
+ * `somenteFluxo` (fluxo misto, 27/10/2026): num lote com fluxos diferentes (parte adaptada, parte enviada), o que depende de COMO a unidade é entregue — o fluxo, o frete, o destino e a mão de obra —
+ *   só vai para as unidades do mesmo fluxo. Por padrão é o fluxo da unidade aberta (`op`); a tela do lote, que não tem unidade aberta, escolhe (ou deixa `null`: aí esses campos não vão para ninguém).
  */
-export async function aplicarNoLote({ op, mudados, usuario, ehGerente, origem }: { op: any; mudados: Record<string, any>; usuario: any; ehGerente: boolean; origem: string }): Promise<ResultadoLote> {
-  const r: ResultadoLote = { atualizadas: [], iguais: 0, puladas: [], falhas: [], semHistorico: [] };
+export async function aplicarNoLote({ op, mudados, usuario, ehGerente, origem, somenteFluxo }: { op: any; mudados: Record<string, any>; usuario: any; ehGerente: boolean; origem: string; somenteFluxo?: string | null }): Promise<ResultadoLote> {
+  const r: ResultadoLote = { atualizadas: [], iguais: 0, puladas: [], falhas: [], semHistorico: [], deOutroFluxo: [] };
   const campos = camposDoLote(mudados);
   if (!campos.length) return r;
   const { lista, erro } = await lerOutrasUnidadesDoLote(op);
   if (erro) { r.erroLeitura = erro; return r; }
   const agora = new Date().toISOString();
+  // todas as unidades do lote (a aberta, quando há, mais as outras) e o fluxo que serve de alvo para os campos que dependem dele
+  const todas = op?.id ? [op, ...lista] : lista;
+  const alvoDoFluxo = somenteFluxo !== undefined ? somenteFluxo : (op?.id ? fluxoDaOp(op) : null);
   for (const u of lista) {
     if (STATUS_FECHADOS_PARA_LOTE.includes(u.status_geral)) { r.puladas.push({ opl: u.opl, motivo: u.status_geral }); continue; }
-    let doCampos = campos;
+    const { aplicar, deixou } = camposQueChegamNaUnidade(campos, u, todas, alvoDoFluxo);
+    if (deixou.length) r.deOutroFluxo!.push({ opl: u.opl, campos: deixou });
+    if (!aplicar.length) continue;
+    let doCampos = aplicar;
     if (!ehGerente && u.status_bom === 'BOM Liberado' && doCampos.includes('itens_vendidos')) {
       doCampos = doCampos.filter(k => k !== 'itens_vendidos');
       if (!doCampos.length) { r.puladas.push({ opl: u.opl, motivo: 'BOM já liberada (itens vendidos)' }); continue; }
@@ -120,6 +131,11 @@ export function textoDoResultadoLote(r: ResultadoLote, totalOutras: number, toda
   const partes = [`Lote: ${r.atualizadas.length} de ${totalOutras} ${todas ? '' : 'outras '}unidades alteradas`];
   if (r.iguais) partes.push(`${r.iguais} já estavam assim`);
   if (r.puladas.length) partes.push(`${r.puladas.length} não mexidas (${[...new Set(r.puladas.map(p => p.motivo))].join('; ')})`);
+  const outroFluxo = r.deOutroFluxo || [];
+  if (outroFluxo.length) {
+    const campos = [...new Set(outroFluxo.flatMap(x => x.campos))];
+    partes.push(`${outroFluxo.length} de outro fluxo ficaram sem ${campos.join(', ')} (o fluxo, o frete, o destino e a mão de obra valem só para as unidades do mesmo fluxo: mude as outras separadamente)`);
+  }
   if (r.falhas.length) partes.push(`FALHOU em ${r.falhas.length}: ${r.falhas.slice(0, 3).join(' | ')}`);
   const sem = r.semHistorico || [];
   if (sem.length) partes.push(`${sem.length} alterada(s) mas SEM registro no histórico da OP (${[...new Set(sem.map(x => x.motivo))].slice(0, 2).join(' | ')}): ${sem.slice(0, 3).map(x => x.opl).join(', ')}${sem.length > 3 ? '…' : ''}`);

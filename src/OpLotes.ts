@@ -15,6 +15,7 @@
 // veículo, respeita como está.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { loteNasceuDoFluxoMisto } from './FluxoMisto';
 
 /** "1560.2608/15" → "1560.2608": a base que une os veículos do mesmo lote. */
 export const baseOplDe = (opl: any): string => String(opl || '').replace(/\/\d+$/, '');
@@ -26,6 +27,9 @@ export function divisorPorBaseDeLote(todasOps: any[]): Record<string, number> {
   const divisorPorBase: Record<string, number> = {};
   Object.entries(gruposBase).forEach(([base, itens]) => {
     if (itens.length <= 1) return;
+    // 27/10/2026 (fluxo misto, M2): lote que nasceu do fluxo misto (parte adaptada, parte enviada) já guarda o valor de CADA unidade (a venda foi dividida na criação, e a M.O. só nas que produzem);
+    // dividir de novo pelo nº de unidades, contando as de envio, pagaria comissão a menos. Lote antigo (inclusive o que mistura envio com unidades sem fluxo) continua como estava.
+    if (loteNasceuDoFluxoMisto(itens)) return;
     const mdoVals = new Set(itens.map((i: any) => i.valor_mao_de_obra).filter((v: any) => v != null));
     const totVals = new Set(itens.map((i: any) => i.valor_total).filter((v: any) => v != null));
     if (mdoVals.size <= 1 && totVals.size <= 1) divisorPorBase[base] = itens.length;
@@ -36,6 +40,6 @@ export function divisorPorBaseDeLote(todasOps: any[]): Record<string, number> {
 /** Lê a tabela inteira de OPs (só id/opl/valores, ~poucas centenas de linhas) e devolve o divisor de cada lote. */
 export async function lerDivisorPorBaseDeLote(): Promise<Record<string, number>> {
   const { data } = await supabase.from('oples')
-    .select('id,opl,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria');
+    .select('id,opl,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,fluxo_entrega,tipo_projeto');   // fluxo e tipo: para reconhecer o lote do fluxo misto
   return divisorPorBaseDeLote(data || []);
 }

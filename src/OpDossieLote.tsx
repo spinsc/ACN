@@ -15,6 +15,7 @@ import { supabase } from './supabaseClient';
 import { carregarDossie, pendenciasEmAberto } from './OpVinculos';
 import { etapaDaOp, desdeQuandoNaEtapa, diasDesde, textoDias } from './EtapasOp';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
+import { fluxoDaOp, ehUnidadeDeEnvio, resumoDosFluxosDoLote } from './FluxoMisto';
 import { diaBR } from './Interface';
 import { podeVerValores } from './utils/permissoes';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
@@ -67,6 +68,8 @@ export function resumirLote(dados) {
     const desde = desdeQuandoNaEtapa(o, d.logs);
     return {
       id: o.id, opl: o.opl, sufixo: sufixoDe(o.opl), modelo: o.modelo || o.veiculo || '', chassi: o.chassi || '', placa: o.placa || '',
+      // fluxo misto (M2, 27/10/2026): o fluxo de cada unidade e se ela é de envio (sem chassi nem placa)
+      fluxo: fluxoLabel(fluxoDaOp(o)), envio: ehUnidadeDeEnvio(o),
       situacao: o.status_geral || '—', onde: et.concluida ? 'Concluída' : (et.setor || et.label || '—'),
       desde: desde ? textoDias(diasDesde(desde.data)) : '—', pendencias: d.pendencias.length, valor: o.valor_total,
     };
@@ -92,8 +95,13 @@ export function resumirLote(dados) {
   const vinculos = [...unicos.values()];
   const pendencias = pendenciasEmAberto(vinculos);
   const valorTotal = ops.reduce((s, o) => s + (Number(o.valor_total) || 0), 0);
+  // fluxo misto (M2): o fluxo do lote deixa de ser "o da primeira OP"; o destino também pode mudar de uma unidade para outra
+  const fluxos = resumoDosFluxosDoLote(ops);
+  const porDestino = new Map();
+  ops.forEach(o => { const d = [o.destino_cidade, o.destino_uf].filter(Boolean).join('/'); if (d) porDestino.set(d, [...(porDestino.get(d) || []), sufixoDe(o.opl)]); });
+  const destino = porDestino.size <= 1 ? ([...porDestino.keys()][0] || '') : [...porDestino.entries()].map(([d, us]) => `${d} (${textoUnidades(us, ops.length)})`).join(' · ');
   return {
-    base: dados.base, n: ops.length, primeira, origem: ds[0]?.origem || {}, unidades, porSituacao: [...porSituacao.entries()],
+    base: dados.base, n: ops.length, primeira, origem: ds[0]?.origem || {}, unidades, porSituacao: [...porSituacao.entries()], fluxos, destino,
     gruposDeItens: [...gruposDeItens.values()], vinculos, pendencias, valorTotal,
     textos: textosDasOps(ops, o => '/' + sufixoDe(o.opl)),
     prazoMin: ops.map(o => o.prazo_entrega_comercial || o.data_prevista_entrega).filter(Boolean).sort()[0] || null,
@@ -134,9 +142,9 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
   titulo('RESUMO DO LOTE');
   const linhasResumo = [
     ['Cliente', o.cliente_nome || '—', 'Pedido de venda', r.origem.oportunidade?.numero_pv || '—'],
-    ['Tipo de projeto', o.tipo_projeto || '—', 'Fluxo de entrega', fluxoLabel(fluxoEfetivo(o.tipo_projeto, o.fluxo_entrega))],
+    ['Tipo de projeto', o.tipo_projeto || '—', 'Fluxo de entrega', r.fluxos.misto ? 'Misto — ' + r.fluxos.texto : fluxoLabel(fluxoEfetivo(o.tipo_projeto, o.fluxo_entrega))],
     ['Unidades', String(r.n), 'Empresa', o.faturamento_empresa || '—'],
-    ['Comercial', o.responsavel_comercial || o.vendedor || '—', 'Destino', [o.destino_cidade, o.destino_uf].filter(Boolean).join('/') || '—'],
+    ['Comercial', o.responsavel_comercial || o.vendedor || '—', 'Destino', r.destino || '—'],
     ['Entrada', fmtD(o.data_entrada), 'Prazo', r.prazoMin ? (r.prazoMin === r.prazoMax ? fmtD(r.prazoMin) : `${fmtD(r.prazoMin)} a ${fmtD(r.prazoMax)}`) : '—'],
   ];
   if (verValores) linhasResumo.push(['Valor total do lote', fmtR(r.valorTotal), 'Valor por carro (médio)', fmtR(r.n ? r.valorTotal / r.n : null)]);
@@ -164,8 +172,8 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
   if (!r.gruposDeItens.some(g => g.itens.length)) { doc.setFontSize(8); doc.text('Nenhum item vendido registrado.', 14, y); y += 6; }
 
   titulo('CARRO A CARRO');
-  tabela(['Unid.', 'Modelo', 'Chassi', 'Placa', 'Situação', 'Onde está', 'Há', 'Pend.'],
-    r.unidades.map(u => ['/' + u.sufixo, u.modelo || '—', u.chassi || '—', u.placa || '—', u.situacao, u.onde, u.desde, u.pendencias ? String(u.pendencias) : '—']));
+  tabela(['Unid.', ...(r.fluxos.misto ? ['Fluxo'] : []), 'Modelo', 'Chassi', 'Placa', 'Situação', 'Onde está', 'Há', 'Pend.'],
+    r.unidades.map(u => ['/' + u.sufixo, ...(r.fluxos.misto ? [u.fluxo] : []), u.modelo || '—', u.chassi || (r.fluxos.misto && u.envio ? 'envio' : '—'), u.placa || (r.fluxos.misto && u.envio ? 'envio' : '—'), u.situacao, u.onde, u.desde, u.pendencias ? String(u.pendencias) : '—']));
 
   if (r.pendencias.length) {
     titulo(`PENDÊNCIAS EM ABERTO (${r.pendencias.length})`, [180, 83, 9]);
@@ -270,8 +278,8 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
           {[
             ['Cliente', o.cliente_nome], ['Pedido de venda', r.origem.oportunidade?.numero_pv], ['Tipo de projeto', o.tipo_projeto],
-            ['Fluxo de entrega', fluxoLabel(fluxoEfetivo(o.tipo_projeto, o.fluxo_entrega))], ['Unidades', r.n], ['Empresa', o.faturamento_empresa],
-            ['Comercial', o.responsavel_comercial || o.vendedor], ['Destino', [o.destino_cidade, o.destino_uf].filter(Boolean).join('/')],
+            ['Fluxo de entrega', r.fluxos.misto ? 'Misto — ' + r.fluxos.texto : fluxoLabel(fluxoEfetivo(o.tipo_projeto, o.fluxo_entrega))], ['Unidades', r.n], ['Empresa', o.faturamento_empresa],
+            ['Comercial', o.responsavel_comercial || o.vendedor], ['Destino', r.destino],
             ['Entrada', fmtD(o.data_entrada)], ['Prazo', r.prazoMin ? (r.prazoMin === r.prazoMax ? fmtD(r.prazoMin) : `${fmtD(r.prazoMin)} a ${fmtD(r.prazoMax)}`) : null],
             ...(verValores ? [['Valor total do lote', fmtR(r.valorTotal)], ['Valor por carro (médio)', fmtR(r.n ? r.valorTotal / r.n : null)]] : []),
           ].map(([rot, val]) => (
@@ -318,10 +326,13 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
       <Secao titulo="Carro a carro" cor="#0f766e">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-            <thead><tr><th style={th}>Unid.</th><th style={th}>Modelo</th><th style={th}>Chassi</th><th style={th}>Placa</th><th style={th}>Situação</th><th style={th}>Onde está</th><th style={th}>Há</th><th style={th}>Pend.</th></tr></thead>
+            <thead><tr><th style={th}>Unid.</th>{r.fluxos.misto && <th style={th}>Fluxo</th>}<th style={th}>Modelo</th><th style={th}>Chassi</th><th style={th}>Placa</th><th style={th}>Situação</th><th style={th}>Onde está</th><th style={th}>Há</th><th style={th}>Pend.</th></tr></thead>
             <tbody>{r.unidades.map(u => (
               <tr key={u.id}>
-                <td style={td}><LinkOpl opl={u.opl} currentUser={usuario} /></td><td style={td}>{u.modelo || '—'}</td><td style={td}>{u.chassi || '—'}</td><td style={td}>{u.placa || '—'}</td>
+                <td style={td}><LinkOpl opl={u.opl} currentUser={usuario} /></td>{r.fluxos.misto && <td style={td}>{u.fluxo}</td>}<td style={td}>{u.modelo || '—'}</td>
+                {r.fluxos.misto && u.envio
+                  ? <td style={td} colSpan={2}><span style={{ color: '#64748b' }}>envio: sem chassi nem placa</span></td>
+                  : <><td style={td}>{u.chassi || '—'}</td><td style={td}>{u.placa || '—'}</td></>}
                 <td style={td}>{u.situacao}</td><td style={td}>{u.onde}</td><td style={td}>{u.desde}</td>
                 <td style={{ ...td, color: u.pendencias ? '#b45309' : undefined, fontWeight: u.pendencias ? 700 : 400 }}>{u.pendencias || '—'}</td>
               </tr>

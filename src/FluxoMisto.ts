@@ -2,7 +2,7 @@
 // FLUXO MISTO — a mesma venda com unidades adaptadas aqui e unidades enviadas (pedido do usuário em 26/10/2026; desenho e decisões em PLANO_FLUXO_MISTO.md).
 // Cada grupo do lote customizável escolhe o seu fluxo de entrega; cada unidade vira uma OP /NN com o fluxo do seu grupo. Todas as filas e telas já leem o fluxo da própria OP, então o que muda
 // é só como a OP NASCE. "misto" é um valor só da tela: nenhuma OP o grava. Este módulo é a regra pura (sem tela), para testar sem navegador.
-import { FLUXOS, soEnvio, terminaEmEnvio, fluxoLabel } from './FluxoEntrega';
+import { FLUXOS, soEnvio, terminaEmEnvio, fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { exigeEnderecoCompleto, enderecoQueFalta } from './EnderecoEntrega';
 
 /** Valor da opção "Misto" no campo Fluxo de Entrega da Nova OP. Só existe na tela. */
@@ -85,6 +85,69 @@ export function ajustarOpPeloFluxoDoGrupo(payload: any, grupo: any, formatarCep:
     delete out.tipos_servico_terceiro;
   }
   return out;
+}
+
+// ─── M2 (27/10/2026): as telas que falam do lote inteiro precisam saber quando o lote tem fluxos diferentes ──────────────────────────────────────────────────────────────────────────────
+
+/** O fluxo que vale de fato para a OP (o tipo "Venda para Envio" já diz que é envio de material). Vazio = OP anterior à regra do fluxo. */
+export const fluxoDaOp = (o: any): string => fluxoEfetivo(o?.tipo_projeto, o?.fluxo_entrega) || '';
+/** A unidade sai daqui sem passar pela produção (envio de material ou envio para adaptação de terceiro): não tem chassi nem placa. */
+export const ehUnidadeDeEnvio = (o: any): boolean => !!fluxoDaOp(o) && soEnvio(fluxoDaOp(o));
+
+/** A unidade tem um fluxo conhecido e passa pela produção (adaptação ou fabricação). Unidade SEM fluxo é de antes da regra e não conta como produção: lote antigo não vira "misto". */
+export const ehUnidadeDeProducao = (o: any): boolean => !!fluxoDaOp(o) && !soEnvio(fluxoDaOp(o));
+
+/** O lote tem unidades de envio E unidades que passam pela produção? É o caso em que "o lote inteiro" deixa de ser uma coisa só. */
+export function loteTemEnvioEProducao(unidades: any[]): boolean {
+  const u = unidades || [];
+  return u.some(ehUnidadeDeEnvio) && u.some(ehUnidadeDeProducao);
+}
+
+/**
+ * Quantas unidades há em cada fluxo (efetivo). `misto` = pelo menos DOIS fluxos conhecidos no lote (unidade sem fluxo, de antes da regra, não conta como um fluxo à parte: o lote
+ * antigo 1560.2608, com unidades sem fluxo e outras de envio, não vira "misto"). `texto`: "6 Adaptação na matriz · 4 Envio de material".
+ */
+export function resumoDosFluxosDoLote(unidades: any[]): { misto: boolean; partes: { fluxo: string; rotulo: string; n: number }[]; texto: string } {
+  const contagem = new Map<string, number>();
+  (unidades || []).forEach(o => { const f = fluxoDaOp(o); contagem.set(f, (contagem.get(f) || 0) + 1); });
+  const partes = [...contagem.entries()].map(([fluxo, n]) => ({ fluxo, rotulo: fluxo ? fluxoLabel(fluxo) : 'Não classificado', n })).sort((a, b) => b.n - a.n);
+  return { misto: partes.filter(p => p.fluxo).length > 1, partes, texto: partes.map(p => `${p.n} ${p.rotulo}`).join(' · ') };
+}
+
+/**
+ * O lote nasceu do fluxo misto? (a assinatura que a criação deixa: há unidades de envio E de produção, e TODA unidade de envio tem a mão de obra vazia).
+ * Nesse lote cada unidade já guarda o SEU valor (a venda foi dividida na criação), então a conta de comissão não pode dividir de novo "o valor do lote repetido"
+ * (OpLotes.ts). Um lote antigo com unidades de envio e outras (como o 1560.2608, com M.O. 0 em todas) NÃO bate nessa assinatura e continua como estava.
+ */
+export function loteNasceuDoFluxoMisto(unidades: any[]): boolean {
+  const u = unidades || [];
+  if (!loteTemEnvioEProducao(u)) return false;
+  return u.filter(ehUnidadeDeEnvio).every(o => o.valor_mao_de_obra == null);
+}
+
+/** Campos que dependem de COMO a unidade é entregue: num lote com fluxos diferentes, "o lote inteiro" não pode levá-los a todas as unidades. */
+export const CAMPOS_QUE_DEPENDEM_DO_FLUXO = new Set([
+  'fluxo_entrega', 'frete_responsavel',
+  'destino_cep', 'destino_cidade', 'destino_uf', 'destino_logradouro', 'destino_numero', 'destino_bairro', 'destino_complemento', 'destino_destinatario', 'destino_telefone',
+  'valor_mao_de_obra', 'valor_mao_de_obra_serralheria',
+  'servico_terceiro', 'tipos_servico_terceiro', 'tipo_servico_terceiro', 'obs_servico_terceiro', 'fotos_veiculo',
+]);
+
+/**
+ * Numa edição "no lote inteiro", dá a cada unidade o que ela recebe quando o lote tem fluxos diferentes:
+ *  • os campos comuns (prazo, responsável, descrição…) vão para todas;
+ *  • os que dependem do fluxo (frete, destino, M.O., fluxo…) vão SÓ para as unidades do mesmo fluxo de `fluxoAlvo`;
+ *  • sem `fluxoAlvo` (a tela do lote não sabe de quem se trata) eles NÃO vão para ninguém e a tela diz como escolher.
+ * Lote de um fluxo só: devolve os campos como vieram, para todas (comportamento de sempre).
+ */
+export function camposQueChegamNaUnidade(campos: string[], unidade: any, todas: any[], fluxoAlvo: string | null | undefined): { aplicar: string[]; deixou: string[] } {
+  if (!resumoDosFluxosDoLote(todas).misto) return { aplicar: campos, deixou: [] };
+  const aplicar: string[] = [], deixou: string[] = [];
+  for (const k of campos) {
+    if (!CAMPOS_QUE_DEPENDEM_DO_FLUXO.has(k)) { aplicar.push(k); continue; }
+    if (fluxoAlvo != null && fluxoDaOp(unidade) === fluxoAlvo) aplicar.push(k); else deixou.push(k);
+  }
+  return { aplicar, deixou };
 }
 
 /**

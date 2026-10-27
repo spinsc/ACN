@@ -4,6 +4,7 @@ import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { LinkLote } from './OpLote';
+import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
 import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp } from './OpPendencias';
 import { PinturaCampos } from './PinturaSerralheria';
@@ -802,6 +803,7 @@ export default function PCPTab({ currentUser }) {
                               {lotePedidoIgual(irmaos)
                                 ? <Selo familia="ok" ponto={false} title="Todas as unidades têm os mesmos itens vendidos: dá para tratar o lote como uma coisa só">carros iguais</Selo>
                                 : <Selo familia="atencao" ponto={false} title="As unidades NÃO têm todas os mesmos itens vendidos — confira unidade por unidade">itens diferentes</Selo>}
+                              <SeloFluxosDoLote unidades={irmaos} />
                             </div>
                           </td>
                           <td>—</td>

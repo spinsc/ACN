@@ -20,6 +20,8 @@ import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from
 import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial, CAMPOS_OPL_COMERCIAL } from './OplEdicao';
 import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote, loteComProblema } from './EdicaoDeLote';
 import { LinkLote } from './OpLote';
+import { loteTemEnvioEProducao, ehUnidadeDeEnvio } from './FluxoMisto';
+import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -349,6 +351,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   // Lançamento em lote de chassi/placa/CNPJ por unidade desmembrada
   const [modalLote, setModalLote]       = useState<any[]|null>(null); // irmaos do lote sendo editado
+  const [modalLoteFora, setModalLoteFora] = useState(0);              // fluxo misto (M2): quantas unidades de ENVIO ficaram fora da janela (sem chassi nem placa)
   const [loteForm, setLoteForm]         = useState<Record<string,any>>({}); // id -> {chassi,placa,cnpj_faturamento,razao_social_faturamento}
   const [loteColar, setLoteColar]       = useState('');
   const [loteSalvando, setLoteSalvando] = useState(false);
@@ -1354,7 +1357,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   // ── Lançamento em lote: chassi/placa/CNPJ de todas as unidades de um lote ──
   // (irmaos já vem ordenado por sufixo /01../NN pelo chamador)
-  const abrirModalLote = (irmaos: any[]) => {
+  const abrirModalLote = (todas: any[]) => {
+    // Fluxo misto (M2, 27/10/2026): lote com unidades de produção e de envio — chassi, placa e CNPJ só para as de produção; a colagem de chassis do Excel distribui "em ordem entre as unidades
+    // sem chassi", e sem este filtro ela entregaria chassi para unidade de envio. Lote de um fluxo só (inclusive o antigo só de envio) abre com todas, como sempre.
+    const irmaos = loteTemEnvioEProducao(todas) ? todas.filter((o: any) => !ehUnidadeDeEnvio(o)) : todas;
+    setModalLoteFora(todas.length - irmaos.length);
     const form: Record<string,any> = {};
     irmaos.forEach(o => {
       form[o.id] = {
@@ -3717,9 +3724,11 @@ function ColunaRolavel({ children }: any) {
                         const { base, irmaos } = item;
                         const expandido = !!lotesExpandidosOpls[base];
                         const rep = irmaos[0];
-                        const qtdSemChassi = irmaos.filter(o => semDado(o.chassi)).length;
-                        const qtdSemPlaca  = irmaos.filter(o => semDado(o.placa)).length;
-                        const qtdSemModelo = irmaos.filter(o => semDado(o.modelo)).length;
+                        // fluxo misto (M2): a unidade de envio não tem chassi nem placa, então não entra na conta do que falta
+                        const irmaosComVeiculo = loteTemEnvioEProducao(irmaos) ? irmaos.filter((o: any) => !ehUnidadeDeEnvio(o)) : irmaos;
+                        const qtdSemChassi = irmaosComVeiculo.filter(o => semDado(o.chassi)).length;
+                        const qtdSemPlaca  = irmaosComVeiculo.filter(o => semDado(o.placa)).length;
+                        const qtdSemModelo = irmaosComVeiculo.filter(o => semDado(o.modelo)).length;
                         const todasLoteSelecionadas = irmaos.every((o:any) => oplsSelecionadas.has(o.id));
                         const maisParada = irmaos.map((o:any) => desdeOpls[o.id]).filter(Boolean)
                           .sort((a:any, b:any) => new Date(a.data).getTime() - new Date(b.data).getTime())[0];
@@ -3738,6 +3747,7 @@ function ColunaRolavel({ children }: any) {
                                 <LinkLote base={base} currentUser={currentUser} className="acn-crm-opl-lote-base" tag="span" tamanho={13} />
                                 <div>
                                   <Selo familia="marca" ponto={false}>LOTE — {irmaos.length} unidades</Selo>
+                                  <SeloFluxosDoLote unidades={irmaos} />
                                 </div>
                               </td>
                               <td>{rep.cliente_nome||'—'}</td>
@@ -5057,6 +5067,7 @@ function ColunaRolavel({ children }: any) {
           <div className="acn-modal-corpo acn-form-cheio">
             <div className="acn-ajuda">
               {modalLote.length} unidades. Cada veículo pode ter seu próprio CNPJ de faturamento, diferente do cliente.
+              {modalLoteFora > 0 && <> As {modalLoteFora} unidade(s) de envio deste lote ficam de fora: não têm chassi nem placa.</>}
             </div>
 
             <div className="acn-quadro tom-info acn-crm-lote-quadro">

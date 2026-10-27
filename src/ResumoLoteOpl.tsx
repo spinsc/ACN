@@ -2,7 +2,8 @@
 import React, { useMemo } from 'react';
 import { Botao, Selo } from './Interface';
 import { mdiClose, mdiPackageVariantClosed, mdiSendOutline } from '@mdi/js';
-import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, fluxoLabel } from './FluxoEntrega';
+import { loteTemEnvioEProducao, ehUnidadeDeEnvio, resumoDosFluxosDoLote, fluxoDaOp } from './FluxoMisto';
 import { podeVerValores } from './utils/permissoes';
 import { textosDasOps, legendaDasUnidades } from './TextosDaOp';
 
@@ -43,14 +44,17 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
     irmaos.forEach((o: any) => { (grupos[assinaturaDeItens(o)] ||= []).push(o); });
     const gruposOrdenados = Object.values(grupos).sort((a, b) => b.length - a.length);
     const previsoes = irmaos.map((o: any) => o.data_prevista_entrega).filter(Boolean).sort();
+    // fluxo misto (M2, 27/10/2026): a unidade de envio não tem chassi nem placa, então não entra na conta do que falta cadastrar
+    const comVeiculo = loteTemEnvioEProducao(irmaos) ? irmaos.filter((o: any) => !ehUnidadeDeEnvio(o)) : irmaos;
     return {
       n, porStatus, totalLote, porVeiculo, gruposOrdenados,
-      semChassi: irmaos.filter((o: any) => vazio(o.chassi)).length, semPlaca: irmaos.filter((o: any) => vazio(o.placa)).length, semModelo: irmaos.filter((o: any) => vazio(o.modelo)).length,
+      semChassi: comVeiculo.filter((o: any) => vazio(o.chassi)).length, semPlaca: comVeiculo.filter((o: any) => vazio(o.placa)).length, semModelo: comVeiculo.filter((o: any) => vazio(o.modelo)).length,
       prevMin: previsoes[0], prevMax: previsoes[previsoes.length - 1],
       prontasFiscal: irmaos.filter((o: any) => o.status_geral === STATUS_AGUARDANDO_LIBERACAO_COMERCIAL).length,
     };
   }, [irmaos]);
   const rep = irmaos[0] || {};
+  const fluxos = resumoDosFluxosDoLote(irmaos);
   const principal = dados.gruposOrdenados[0] || [];
   const itensPrincipal = Array.isArray(principal[0]?.itens_vendidos) ? principal[0].itens_vendidos : [];
   const modelos = [...new Set(irmaos.map((o: any) => String(o.modelo || '').trim()).filter(Boolean))];
@@ -76,6 +80,7 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
             {linha('Cliente', rep.cliente_nome)}
             {linha('Faturamento', rep.faturamento_empresa || 'ACN')}
             {linha('Modelo(s)', modelos.join(' · '))}
+            {fluxos.misto && linha('Fluxo de entrega', 'Misto — ' + fluxos.texto)}
             {/* R7 (13/10/2026): quem está com a marca "ver valores" desligada no Admin não vê o valor do lote */}
             {podeVerValores(currentUser) && linha('Valor por veículo', dados.porVeiculo != null ? reais(dados.porVeiculo) : '')}
             {podeVerValores(currentUser) && linha('Valor do lote', dados.totalLote != null ? reais(dados.totalLote) : '')}
@@ -129,11 +134,16 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
             <div className="acn-quadro-titulo">Unidades</div>
             <div className="acn-rolagem">
               <table className="acn-tabela acn-compacta">
-                <thead><tr><th>OP</th><th>Etapa</th><th>Modelo</th><th>Chassi</th><th>Placa</th></tr></thead>
+                <thead><tr><th>OP</th><th>Etapa</th>{fluxos.misto && <th>Fluxo</th>}<th>Modelo</th><th>Chassi</th><th>Placa</th></tr></thead>
                 <tbody>{[...irmaos].sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })).map((o: any) => (
                   <tr key={o.id}>
                     <td className="acn-forte">{onAbrirUnidade ? <Botao variante="discreto" pequeno className="acn-rlo-abrir" onClick={() => onAbrirUnidade(o)}>{o.opl}</Botao> : o.opl}</td>
-                    <td>{o.status_geral}</td><td>{o.modelo || <span className="acn-txt-erro">—</span>}</td><td>{o.chassi || <span className="acn-txt-erro">—</span>}</td><td>{o.placa || <span className="acn-txt-erro">—</span>}</td>
+                    <td>{o.status_geral}</td>
+                    {fluxos.misto && <td>{fluxoLabel(fluxoDaOp(o))}</td>}
+                    <td>{o.modelo || <span className="acn-txt-erro">—</span>}</td>
+                    {fluxos.misto && ehUnidadeDeEnvio(o)
+                      ? <td colSpan={2} className="acn-fraco">envio: sem chassi nem placa</td>
+                      : <><td>{o.chassi || <span className="acn-txt-erro">—</span>}</td><td>{o.placa || <span className="acn-txt-erro">—</span>}</td></>}
                   </tr>
                 ))}</tbody>
               </table>

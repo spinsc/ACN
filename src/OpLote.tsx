@@ -21,6 +21,7 @@ import { ehAdminOuGerente, podeVerValores } from './utils/permissoes';
 import { lerValorDigitado } from './LerValor';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 import { UFS } from './FluxoEntrega';
+import { resumoDosFluxosDoLote, CAMPOS_QUE_DEPENDEM_DO_FLUXO } from './FluxoMisto';
 
 const usuarioDaSessao = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 /** Quem muda o lote inteiro: Admin, Gerente e Comercial (decidido com o usuário em 16/10/2026). */
@@ -118,6 +119,8 @@ function PainelDadosDoLote({ base, usuario, aoFechar, aoSalvar }: any) {
   const [v, setV] = useState<Record<string, string>>({});
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Fluxo misto (M2, 27/10/2026): num lote com fluxos diferentes o frete, o destino, a M.O. e o fluxo só valem para as unidades de UM fluxo, escolhido aqui
+  const [fluxoAlvo, setFluxoAlvo] = useState('');
   const verValores = podeVerValores(usuario);
   useEffect(() => {
     let vivo = true;
@@ -127,6 +130,7 @@ function PainelDadosDoLote({ base, usuario, aoFechar, aoSalvar }: any) {
   if (erro) return <div className="acn-opl-aviso erro">Não foi possível ler as unidades do lote ({erro}).</div>;
   if (!unidades) return <div className="acn-ajuda">Lendo as unidades do lote…</div>;
   const campos = CAMPOS_DO_LOTE.filter(c => !c.financeiro || verValores);
+  const fluxosDoLote = resumoDosFluxosDoLote(unidades);
   // o que as unidades têm hoje: igual em todas → mostra; diferente → "varia"
   const hoje = (k: string) => {
     const ehData = k.startsWith('data_') || k.startsWith('prazo_');   // coluna de data: só o dia (AAAA-MM-DD)
@@ -152,17 +156,37 @@ function PainelDadosDoLote({ base, usuario, aoFechar, aoSalvar }: any) {
     const chaves = Object.keys(mudados);
     if (!chaves.length) { mostrarAviso('Preencha pelo menos um campo: só o que você preencher muda nas unidades.', 'atencao'); return; }
     const rotulo = (k: string) => CAMPOS_DO_LOTE.find(c => c.campo === k)?.rotulo || k;
-    if (!await confirmar(`Aplicar nas ${unidades.length} unidades do lote ${base}?\n\n${chaves.map(k => `• ${rotulo(k)}: ${mudados[k]}`).join('\n')}\n\nSó estes campos mudam; chassi, placa, veículo, status e NF não. Unidade já faturada ou cancelada não é mexida.`)) return;
+    // lote com fluxos diferentes: frete, destino e M.O. exigem dizer para QUAIS unidades valem
+    const dependentes = chaves.filter(k => CAMPOS_QUE_DEPENDEM_DO_FLUXO.has(k));
+    if (fluxosDoLote.misto && dependentes.length && !fluxoAlvo) {
+      mostrarAviso(`Este lote tem fluxos diferentes (${fluxosDoLote.texto}). Escolha em "Frete, destino e valores valem para" quais unidades recebem ${dependentes.map(rotulo).join(', ')}.`, 'atencao');
+      return;
+    }
+    const doAlvo = fluxosDoLote.partes.find(p => p.fluxo === fluxoAlvo);
+    const linhaDoFluxo = fluxosDoLote.misto && dependentes.length && doAlvo
+      ? `\n\n${dependentes.map(rotulo).join(', ')}: só nas ${doAlvo.n} unidades de ${doAlvo.rotulo}. As outras unidades não mudam nisso.` : '';
+    if (!await confirmar(`Aplicar nas ${unidades.length} unidades do lote ${base}?\n\n${chaves.map(k => `• ${rotulo(k)}: ${mudados[k]}`).join('\n')}${linhaDoFluxo}\n\nSó estes campos mudam; chassi, placa, veículo, status e NF não. Unidade já faturada ou cancelada não é mexida.`)) return;
     setSalvando(true);
-    const r = await aplicarNoLote({ op: lotePorBase(base), mudados, usuario, ehGerente: ehAdminOuGerente(usuario), origem: 'Dados do lote alterados (tela do lote)' });
+    const r = await aplicarNoLote({ op: lotePorBase(base), mudados, usuario, ehGerente: ehAdminOuGerente(usuario), origem: 'Dados do lote alterados (tela do lote)', somenteFluxo: fluxosDoLote.misto ? (fluxoAlvo || null) : undefined });
     setSalvando(false);
-    mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length), true), loteComProblema(r) ? 'erro' : (r.puladas.length ? 'atencao' : 'ok'));
+    // o total é o do lote (as unidades de outro fluxo não entram na soma de quem mudou, mas são do lote)
+    mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : unidades.length, true), loteComProblema(r) ? 'erro' : ((r.puladas.length || (r.deOutroFluxo || []).length) ? 'atencao' : 'ok'));
     aoSalvar();
   };
   return (
     <div className="acn-quadro" data-painel="dados" style={{ marginBottom: 14 }}>
       <div className="acn-label" style={{ marginBottom: 2 }}>Dados do lote inteiro — valem para as {unidades.length} unidades</div>
       <div className="acn-ajuda" style={{ marginBottom: 8 }}>Preencha só o que quer mudar: campo em branco não mexe em nada. Valores em R$ são por carro e ficam iguais em todas. Para esvaziar um campo, edite a unidade.</div>
+      {fluxosDoLote.misto && (
+        <div className="acn-quadro tom-atencao" data-teste="alvo-do-fluxo" style={{ marginBottom: 8 }}>
+          <div className="acn-ajuda">Este lote tem fluxos diferentes ({fluxosDoLote.texto}). Prazo, responsável e descrição valem para todas as unidades; o <strong>frete, o destino e os valores de mão de obra</strong> valem só para as unidades do fluxo que você escolher aqui.</div>
+          <label className="acn-label" htmlFor="lote-fluxo-alvo">Frete, destino e valores valem para</label>
+          <select id="lote-fluxo-alvo" className="acn-input" value={fluxoAlvo} onChange={e => setFluxoAlvo(e.target.value)}>
+            <option value="">— nenhuma unidade (só os campos comuns) —</option>
+            {fluxosDoLote.partes.filter(p => p.fluxo).map(p => <option key={p.fluxo} value={p.fluxo}>{p.rotulo} ({p.n} unidades)</option>)}
+          </select>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
         {campos.map(c => (
           <div key={c.campo} style={{ gridColumn: c.tipo === 'area' ? '1 / -1' : undefined }}>
