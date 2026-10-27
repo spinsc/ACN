@@ -10,11 +10,12 @@ import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { Botao, Selo, Tag, MenuAcoes } from './Interface';
-import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose, mdiAccountMultipleOutline } from '@mdi/js';
+import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose, mdiAccountMultipleOutline, mdiCalendarEditOutline } from '@mdi/js';
 import { EquipeDaOpModal, situacaoDaEquipe, faltaApontar } from './EquipeDaOp';
 import { podeEditarEquipeDaOp } from './utils/permissoes';
 import { FiscalAntecipadas } from './FaturamentoAntecipado';
 import CampoDataDaNota from './CampoDataDaNota';
+import CorrigirDataDaNotaModal from './CorrigirDataDaNotaModal';
 import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { resolverDataDaNota, avisoDaDataRetroativa, textoDaDataNoHistorico, instanteDaNota, lerFechamentosAprovadosDoMes } from './DataDaNota';
 
@@ -43,6 +44,8 @@ export default function FiscalTab({ currentUser }) {
   const [oplsNfPorRemessa, setOplsNfPorRemessa] = useState<Set<string>>(() => new Set());
   const [nfsRemessa, setNfsRemessa] = useState<Record<string, string>>({});
   const [modalVer, setModalVer] = useState(null);
+  // Corrigir a data de uma nota já emitida (27/10/2026): `{}` abre a busca; `{ op }` abre já com a OP escolhida (atalho do menu da linha de "Faturados")
+  const [corrigindoData, setCorrigindoData] = useState<{ op?: any } | null>(null);
   // Quem trabalhou em cada OP (30/09/2026): a comissão dos técnicos sai do apontamento quando o Fiscal
   // fatura, e depois de faturar ele trava. Por isso o aviso e a correção aparecem AQUI, antes do clique.
   const [modalEquipe, setModalEquipe] = useState(null);
@@ -560,6 +563,10 @@ export default function FiscalTab({ currentUser }) {
           <span className="sub">{faturados.length} OP{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</span>
         </div>
       </div>
+      <div className="acn-fis-barra">
+        <Botao pequeno icone={mdiCalendarEditOutline} onClick={() => setCorrigindoData({})}
+          title="Procura uma nota já emitida (também as de OP já entregue) e corrige o dia em que ela foi emitida">Corrigir a data de uma nota emitida</Botao>
+      </div>
 
       {/* AGUARDANDO EMISSÃO */}
       <div className="sec-card">
@@ -718,6 +725,7 @@ export default function FiscalTab({ currentUser }) {
                         <Botao pequeno variante="primario" icone={mdiTruckCheckOutline} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>Confirmar entrega</Botao>
                         <MenuAcoes rotulo="Mais ações da OP" itens={[
                           { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
+                          { rotulo: 'Corrigir a data da nota', icone: mdiCalendarEditOutline, onClick: () => setCorrigindoData({ op: o }) },
                         ]} />
                       </div>
                     </td>
@@ -830,6 +838,7 @@ export default function FiscalTab({ currentUser }) {
       )}
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
+      {corrigindoData && <CorrigirDataDaNotaModal currentUser={currentUser} inicial={corrigindoData.op || null} onClose={() => setCorrigindoData(null)} onCorrigida={() => fetchAll(true)} />}
       {modalEquipe && (
         <EquipeDaOpModal opl={modalEquipe} currentUser={currentUser}
           aoFechar={()=>{ setModalEquipe(null); fetchAll(true); }} />
