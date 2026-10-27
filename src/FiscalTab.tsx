@@ -16,6 +16,7 @@ import { podeEditarEquipeDaOp } from './utils/permissoes';
 import { FiscalAntecipadas } from './FaturamentoAntecipado';
 import CampoDataDaNota from './CampoDataDaNota';
 import CorrigirDataDaNotaModal from './CorrigirDataDaNotaModal';
+import { equipamentoDaOsParaOFiscal, dataDeFaturamentoDaNota, STATUS_AGUARDANDO_NOTA, STATUS_OS_FATURADA } from './SacFluxo';
 import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { resolverDataDaNota, avisoDaDataRetroativa, textoDaDataNoHistorico, instanteDaNota, lerFechamentosAprovadosDoMes } from './DataDaNota';
 
@@ -76,10 +77,10 @@ export default function FiscalTab({ currentUser }) {
       supabase.from('oples').select('*')
         .in('status_geral', ['Aguarda Emissao NF','Faturado e Disponivel para Entrega'])
         .order('data_liberacao_comercial', { ascending: true }),
+      // S2 (27/10/2026): toda OS COBRADA enviada ao Fiscal aparece aqui — a veicular (depois do CQ) e a do Laboratório (depois de concluída); antes só a manutenção veicular chegava
       supabase.from('sac_ordens_servico').select('*')
-        .in('status', ['Aguardando Emissão NF','Faturada - Aguardando Entrega'])
-        .eq('is_manutencao_veicular', true)
-        .order('data_cq', { ascending: true }),
+        .in('status', [STATUS_AGUARDANDO_NOTA, STATUS_OS_FATURADA])
+        .order('data_envio_fiscal', { ascending: true, nullsFirst: false }).order('data_cq', { ascending: true }),
       // todas as unidades com sufixo /NN, de qualquer fase, para o bloco do lote saber
       // quantas já chegaram, quantas já foram faturadas e quantas ainda faltam
       supabase.from('oples').select('id,opl,status_geral,numero_nf,numero_nf_servico,fluxo_entrega,tipo_projeto').like('opl', '%/%'),   // fluxo e tipo: para o selo "Fluxo misto" do bloco do lote (27/10/2026)
@@ -124,7 +125,8 @@ export default function FiscalTab({ currentUser }) {
   const conferirDataDaNota = async (entrada, tipo = 'op') => {
     const dataNota = resolverDataDaNota(entrada);
     if (dataNota.erro) { alert(dataNota.erro); return null; }
-    const fechamentos = dataNota.retroativa && tipo === 'op' ? await lerFechamentosAprovadosDoMes(supabase, dataNota.dia) : null;
+    // a comissão da OS também lê o dia da nota (S2 do SAC, 27/10/2026): a conferência do mês aprovado vale para as duas
+    const fechamentos = dataNota.retroativa ? await lerFechamentosAprovadosDoMes(supabase, dataNota.dia) : null;
     return { dataNota, aviso: avisoDaDataRetroativa(dataNota, { tipo, fechamentos }) };
   };
   const limparDataNota = (chave) => setDatasNota(prev => { const n = { ...prev }; delete n[chave]; return n; });
@@ -313,18 +315,25 @@ export default function FiscalTab({ currentUser }) {
     if (!conf) return;
     if (!await confirmar(`Confirmar o faturamento da OS ${os.numero_os || ''} com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?${conf.aviso}`)) return;
     const agora = new Date().toISOString();
-    const inicioFiscal = os.data_cq ? new Date(os.data_cq) : null;
+    // o Fiscal conta o tempo dele do dia em que o SAC enviou a OS (a do Laboratório não passa por CQ); OS antiga sem esse dia segue contando do CQ
+    const inicioDoFiscal = os.data_envio_fiscal || os.data_cq;
+    const inicioFiscal = inicioDoFiscal ? new Date(inicioDoFiscal) : null;
     const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
     const novoRow = {
-      status: 'Faturada - Aguardando Entrega',
+      status: STATUS_OS_FATURADA,
       numero_nf: nf || null,
       numero_nf_servico: nfServ || null,
       data_emissao_nf: instanteDaNota(conf.dataNota, agora),
+      // decidido com o usuário em 27/10/2026: o DIA da nota é a data de faturamento da OS (a da comissão); o SAC deixou de digitá-la
+      data_faturamento: dataDeFaturamentoDaNota(conf.dataNota.dia),
       responsavel_fiscal: currentUser?.nome,
       ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
       atualizado_em: agora,
     };
-    await supabase.from('sac_ordens_servico').update(novoRow).eq('id', os.id);
+    // só pega se a OS ainda espera a nota (outra aba ou pessoa pode ter faturado); antes a gravação recusada seguia como se tivesse dado certo
+    const { data: gravada, error: erroFatura } = await supabase.from('sac_ordens_servico').update(novoRow).eq('id', os.id).eq('status', STATUS_AGUARDANDO_NOTA).select('id');
+    if (erroFatura) { alert(`Não foi possível faturar a OS ${os.numero_os || ''} (${erroFatura.message}). Nada foi alterado.`); return; }
+    if (!gravada?.length) { alert(`A OS ${os.numero_os || ''} já não está aguardando a nota (outra pessoa pode ter faturado). A lista foi atualizada.`); fetchAll(); return; }
     logChange({ module: 'fiscal', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: os, newRow: { ...os, ...novoRow }, user: currentUser });
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
@@ -741,22 +750,30 @@ export default function FiscalTab({ currentUser }) {
       {osAguardando.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr">
-            <span>OS veiculares aguardando emissão de nota fiscal <Selo familia="atencao" ponto={false}>{osAguardando.length}</Selo></span>
+            <span>OS aguardando emissão de nota fiscal <Selo familia="atencao" ponto={false}>{osAguardando.length}</Selo></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table className="acn-tabela">
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>NF-e (material)</th><th>NFS-e (serviço)</th><th title="Dia em que a nota foi emitida. Deixe em hoje para registrar agora; escolha um dia anterior para lançar uma nota de mês passado.">Data da nota</th><th>Ação</th></tr></thead>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo / equipamento</th><th>Faturar para</th><th>Valor</th><th>NF-e (material)</th><th>NFS-e (serviço)</th><th title="Dia em que a nota foi emitida. Deixe em hoje para registrar agora; escolha um dia anterior para lançar uma nota de mês passado.">Data da nota</th><th>Ação</th></tr></thead>
               <tbody>
                 {osAguardando.map(o => (
                   <tr key={o.id} className={osNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
                     <td><strong className="acn-forte">{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>
-                      <div className="acn-duas">
-                        <span>{semDado(o.veiculo_modelo) ? <Selo familia="atencao" ponto={false}>sem modelo</Selo> : o.veiculo_modelo}</span>
-                        <small>{semDado(o.chassi) ? <Selo familia="atencao" ponto={false}>sem chassi</Selo> : `Chassi ${o.chassi}`}</small>
+                      {(() => { const e = equipamentoDaOsParaOFiscal(o); return (
+                        <div className="acn-duas">
+                          <span>{semDado(e.titulo) ? <Selo familia="atencao" ponto={false}>{o.is_manutencao_veicular ? 'sem modelo' : 'sem equipamento'}</Selo> : e.titulo}</span>
+                          <small>{semDado(e.detalhe) ? (o.is_manutencao_veicular ? <Selo familia="atencao" ponto={false}>sem chassi</Selo> : null) : e.detalhe}</small>
+                        </div>); })()}
+                    </td>
+                    <td>
+                      <div className="acn-duas" data-teste="faturar-para">
+                        <span>{o.razao_social_faturamento || o.cliente_nome || '—'}</span>
+                        <small>{semDado(o.cnpj_faturamento || o.cpf_cnpj) ? <Selo familia="atencao" ponto={false}>sem CPF/CNPJ</Selo> : (o.cnpj_faturamento || o.cpf_cnpj)}</small>
                       </div>
                     </td>
+                    <td className="acn-num" data-teste="valor-da-os">{currentUser?.ver_valores === false ? '—' : (o.valor_total ?? o.valor_orcamento) == null ? '—' : Number(o.valor_total ?? o.valor_orcamento).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td>
                       <input className="acn-input" style={{width:130}} placeholder="NF-e (material)"
                         value={nfs[o.id] || ''}
@@ -789,7 +806,7 @@ export default function FiscalTab({ currentUser }) {
       {osFaturadas.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr">
-            <span>OS veiculares faturadas — aguardando entrega <Selo familia="ok" ponto={false}>{osFaturadas.length}</Selo></span>
+            <span>OS faturadas — aguardando entrega <Selo familia="ok" ponto={false}>{osFaturadas.length}</Selo></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table className="acn-tabela">

@@ -56,8 +56,8 @@ export async function lerFechamentosAprovadosDoMes(supabase: any, dia: string): 
 
 /**
  * O que a pergunta de confirmação acrescenta quando a data é retroativa ('' quando é hoje).
- * `tipo`: 'op' (a data da nota é a do relatório do mês, da comissão e da conciliação) ou 'os' (na OS do SAC a data fica registrada; a comissão da OS segue a
- * "Data de faturamento" que o SAC preenche).
+ * `tipo`: 'op' (a data da nota é a do relatório do mês, da comissão e da conciliação) ou 'os' (na OS do SAC o dia da nota é a "Data de faturamento" da OS,
+ * a que a comissão da OS lê; desde 27/10/2026 o SAC não a digita).
  */
 export function avisoDaDataRetroativa(r: DataDaNota, opts: { tipo?: 'op' | 'os'; agora?: Date; fechamentos?: { qtd: number; erro?: string } | null } = {}): string {
   if (!r.retroativa || !r.dia) return '';
@@ -68,11 +68,14 @@ export function avisoDaDataRetroativa(r: DataDaNota, opts: { tipo?: 'op' | 'os';
     linhas.push(mesmoMes
       ? 'É deste mês, então segue no relatório e na comissão do mês atual.'
       : `Ela entra em ${mesPorExtenso(r.dia)} no relatório de faturamento, na comissão e na conciliação bancária — e não no mês atual.`);
-    if (fechamentos?.erro) linhas.push(`Não consegui conferir se ${mesPorExtenso(r.dia)} já tem comissão aprovada (${fechamentos.erro}).`);
-    else if (fechamentos && fechamentos.qtd > 0) linhas.push(`ATENÇÃO: ${mesPorExtenso(r.dia)} já tem comissão aprovada para ${fechamentos.qtd} técnico${fechamentos.qtd > 1 ? 's' : ''}; esta nota não entra no valor já aprovado.`);
   } else {
-    linhas.push('A data fica registrada na OS; a comissão da OS segue a "Data de faturamento" do SAC.');
+    // decidido com o usuário em 27/10/2026 (S2 do SAC): o dia da nota virou a data de faturamento da OS, que é a que a comissão da OS lê; o SAC não a digita mais
+    linhas.push(mesmoMes
+      ? 'É deste mês, então a data de faturamento da OS e a comissão da OS ficam no mês atual.'
+      : `A data da nota passa a ser a data de faturamento da OS: ela entra em ${mesPorExtenso(r.dia)} na comissão da OS — e não no mês atual.`);
   }
+  if (fechamentos?.erro) linhas.push(`Não consegui conferir se ${mesPorExtenso(r.dia)} já tem comissão aprovada (${fechamentos.erro}).`);
+  else if (fechamentos && fechamentos.qtd > 0) linhas.push(`ATENÇÃO: ${mesPorExtenso(r.dia)} já tem comissão aprovada para ${fechamentos.qtd} técnico${fechamentos.qtd > 1 ? 's' : ''}; esta nota não entra no valor já aprovado.`);
   return linhas.join('\n');
 }
 

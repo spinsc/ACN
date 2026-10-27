@@ -108,3 +108,49 @@ export function faltaFichaDaGarantia({ tipo_servico, garantia_id }: { tipo_servi
 /** A linha da lista de fichas na Nova OS: "GAR-0001/2026 — cliente — veículo (dentro da garantia)". */
 export const rotuloDaFicha = (g: any): string =>
   `${g?.numero || '—'} — ${g?.cliente_nome || '—'} — ${g?.veiculo_nome || '—'}${g?.avaliacao?.cobertura ? ` (${COBERTURAS_GARANTIA[g.avaliacao.cobertura] || g.avaliacao.cobertura})` : ''}`;
+
+// ── S2 (PLANO_SAC_FLUXO.md, 27/10/2026): a OS COBRADA concluída chega ao Fiscal ──────────────────────────────────────────────────────────────
+// Decisão do usuário: toda OS cobrada (veicular e de Laboratório) depois de concluída vai ao Fiscal; a data da nota que o Fiscal emitiu vira a data de faturamento da OS (a da comissão),
+// e o SAC deixa de digitá-la. A OS sem cobrança nunca passa por aqui.
+export const STATUS_AGUARDANDO_NOTA = 'Aguardando Emissão NF';
+export const STATUS_OS_FATURADA = 'Faturada - Aguardando Entrega';
+
+/** O SAC pode enviar esta OS ao Fiscal agora? 'veicular' = depois do CQ (com os seriais dos itens); 'laboratorio' = depois de concluída (com o valor e os dados da nota). null = não. */
+export function caminhoParaOFiscal(os: any): 'veicular' | 'laboratorio' | null {
+  if (!os || osSemCobranca(os)) return null;
+  if (os.status === 'Aguardando Envio Fiscal' && os.is_manutencao_veicular) return 'veicular';
+  if (os.status === 'Concluído') return 'laboratorio';
+  return null;
+}
+
+const soDigitos = (v: any) => String(v ?? '').replace(/\D/g, '');
+
+/** O que falta para o Fiscal conseguir emitir a nota de uma OS do Laboratório; vazio = pode enviar. `valor`: o número já lido (ou null). */
+export function validarEnvioAoFiscal({ valor, documento }: { valor: number | null; documento: any }): string[] {
+  const falta: string[] = [];
+  if (valor == null || !(valor > 0)) falta.push('o valor total da OS (maior que zero)');
+  const d = soDigitos(documento);
+  if (d.length !== 11 && d.length !== 14) falta.push('o CPF (11 dígitos) ou o CNPJ (14 dígitos) para a nota');
+  return falta;
+}
+
+/** O que a janela "Enviar ao Fiscal" traz preenchido: o valor da OS (ou o do orçamento) e o documento de faturamento (ou o do cliente). */
+export function dadosIniciaisParaOFiscal(os: any) {
+  const valor = os?.valor_total ?? os?.valor_orcamento;
+  return {
+    valor: valor == null || valor === '' ? '' : String(valor).replace('.', ','),
+    documento: String(os?.cnpj_faturamento || os?.cpf_cnpj || ''),
+    razao: String(os?.razao_social_faturamento || os?.cliente_nome || ''),
+    endereco: String(os?.endereco_faturamento || os?.endereco || ''),
+  };
+}
+
+/** A data de faturamento da OS é o DIA da nota (AAAA-MM-DD); qualquer outra coisa vira null (nunca grava lixo na coluna de data). */
+export const dataDeFaturamentoDaNota = (dia: any): string | null => (/^\d{4}-\d{2}-\d{2}$/.test(String(dia || '')) ? String(dia) : null);
+
+/** O tipo de equipamento/veículo que o Fiscal vê na linha da OS. */
+export function equipamentoDaOsParaOFiscal(os: any): { titulo: string; detalhe: string } {
+  if (os?.is_manutencao_veicular) return { titulo: String(os?.veiculo_modelo || ''), detalhe: os?.chassi ? `Chassi ${os.chassi}` : '' };
+  const modelo = [os?.marca, os?.modelo].filter(Boolean).join(' ');
+  return { titulo: String(os?.equipamento_nome || ''), detalhe: [modelo, os?.numero_serie ? `Série ${os.numero_serie}` : ''].filter(Boolean).join(' · ') };
+}

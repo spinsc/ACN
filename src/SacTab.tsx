@@ -14,7 +14,8 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import GarantiaTab, { gravarGarantia } from './GarantiaTab';
 import { registrarOsGerada } from './GarantiaModelo';
-import { osSemCobranca, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
+import EnviarOsAoFiscalModal from './EnviarOsAoFiscalModal';
+import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
@@ -186,7 +187,7 @@ const FORM_VAZIO = {
   // Faturamento
   cnpj_faturamento:'', razao_social_faturamento:'', endereco_faturamento:'',
   // Financeiro / Comissões
-  valor_total: '' as string|number, valor_mao_de_obra: '' as string|number, data_faturamento: '',
+  valor_total: '' as string|number, valor_mao_de_obra: '' as string|number,
   // Vínculo CRM
   crm_oportunidade_id: null as string|null,
   _crm_titulo: '',
@@ -288,6 +289,7 @@ function SacTabCompleto({ currentUser }) {
   const [localItens, setLocalItens]               = useState<any[]>([]); // itens editáveis do modal de cotação
   const [horasCobradas, setHorasCobradas]         = useState<string>(''); // horas cobradas na cotação remota
   const [modalEnviarFiscal, setModalEnviarFiscal] = useState<any>(null); // Aguardando Envio Fiscal — captura nº de série
+  const [modalFiscalOS, setModalFiscalOS] = useState<any>(null);          // OS cobrada CONCLUÍDA do Laboratório → valor e documento da nota (S2, 27/10/2026)
   const [fiscalItens, setFiscalItens]             = useState<any[]>([]);
   const [modalOrcProd, setModalOrcProd]           = useState<any>(null); // ver/editar orçamento vindo da Produção
   const [orcProdModo, setOrcProdModo]             = useState<'ver'|'editar'>('ver');
@@ -298,7 +300,7 @@ function SacTabCompleto({ currentUser }) {
   const [modalEntregaVeic, setModalEntregaVeic] = useState<any>(null);
   const [nomeRecebeuVeic, setNomeRecebeuVeic]   = useState('');
   const [modalFinanceiro, setModalFinanceiro] = useState<any>(null);
-  const [financeiroForm, setFinanceiroForm] = useState({ valor_total:'', valor_mao_de_obra:'', data_faturamento:'' });
+  const [financeiroForm, setFinanceiroForm] = useState({ valor_total:'', valor_mao_de_obra:'' });
   // Editar responsável da OS
   const [modalEditRespOS, setModalEditRespOS] = useState<any>(null);
   const [editRespOSNome, setEditRespOSNome]   = useState('');
@@ -553,7 +555,6 @@ function SacTabCompleto({ currentUser }) {
       ) : null,
       valor_total: form.valor_total ? parseFloat(String(form.valor_total).replace(',','.')) : null,
       valor_mao_de_obra: form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(',','.')) : null,
-      data_faturamento: form.data_faturamento || null,
       crm_oportunidade_id: form.crm_oportunidade_id || null,
     };
 
@@ -906,12 +907,15 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     const os = modalEnviarFiscal;
     if (!os) return;
     const agora = new Date().toISOString();
-    const { error } = await supabase.from('sac_ordens_servico').update({
+    // S2 (27/10/2026): grava o dia do envio (o Fiscal conta o tempo dele daqui) e só pega se a OS ainda espera o envio (outra pessoa pode ter enviado); a linha devolvida confirma
+    const { data: gravadas, error } = await supabase.from('sac_ordens_servico').update({
       materiais_utilizados: fiscalItens,
-      status: 'Aguardando Emissão NF',
+      status: STATUS_AGUARDANDO_NOTA,
+      data_envio_fiscal: agora,
       atualizado_em: agora,
-    }).eq('id', os.id);
+    }).eq('id', os.id).eq('status', 'Aguardando Envio Fiscal').select('id');
     if (error) { alert('Erro ao enviar para o Fiscal: ' + error.message); return; }
+    if (!gravadas?.length) { alert('A OS já não está esperando o envio ao Fiscal (outra pessoa pode ter enviado). A lista foi atualizada.'); setModalEnviarFiscal(null); setFiscalItens([]); fetchOrdens(); return; }
     notificarEvento('sac_enviado_fiscal', `*Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
     setModalEnviarFiscal(null); setFiscalItens([]);
     fetchOrdens();
@@ -1183,11 +1187,11 @@ OK = ACN   |   Cancelar = DETECH`;
           <Botao key="entrega" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
         );
       }
-      // Concluído (OS veicular SEM cobrança, depois do CQ) → SAC entrega o veículo; não vai ao Fiscal
+      // Concluído (OS veicular): SEM cobrança → SAC entrega o veículo, não vai ao Fiscal; COBRADA → SAC envia ao Fiscal (S2)
       if (os.status === 'Concluído') {
-        btns.push(
-          <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
-        );
+        btns.push(osSemCobranca(os)
+          ? <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
+          : <Botao key="fiscal0" pequeno variante="primario" icone={mdiSendOutline} onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal</Botao>);
       }
       // Aguardando CQ → sem ação do SAC, Qualidade que audita
       if (os.status === 'Aguardando CQ') {
@@ -1253,10 +1257,18 @@ OK = ACN   |   Cancelar = DETECH`;
           </Botao>
         );
 
-      // Lab concluiu o reparo → SAC faz a entrega
+      // Lab concluiu o reparo → OS COBRADA vai ao Fiscal (S2, 27/10/2026); SEM cobrança → SAC faz a entrega
       if (os.status === 'Concluído')
+        btns.push(osSemCobranca(os)
+          ? <Botao key="saida" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega</Botao>
+          : <Botao key="fiscal" pequeno variante="primario" icone={mdiSendOutline} onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal</Botao>
+        );
+      // no Fiscal: sem ação do SAC; a nota emitida devolve a OS para a entrega
+      if (os.status === 'Aguardando Emissão NF')
+        btns.push(<span key="nf" className="acn-fraco acn-sac-espera">Aguardando Fiscal</span>);
+      if (os.status === 'Faturada - Aguardando Entrega')
         btns.push(
-          <Botao key="saida" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega</Botao>
+          <Botao key="saida2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega</Botao>
         );
     }
 
@@ -1265,10 +1277,12 @@ OK = ACN   |   Cancelar = DETECH`;
       { rotulo: 'Resp.', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
         onClick: ()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); } },
       { rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
-        onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??'',data_faturamento:(os.data_faturamento||'').slice(0,10)});setModalFinanceiro(os);} },
+        onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??''});setModalFinanceiro(os);} },
       { rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
       { rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
       { rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
+      // S2: a OS cobrada concluída pode sair SEM nota só com um motivo (cortesia): vira "sem cobrança" e segue para a entrega. É a saída de exceção; o caminho normal é "Enviar ao Fiscal"
+      { rotulo: 'Entregar sem nota (cortesia)', titulo: 'A OS concluída não será faturada: pede o motivo, passa a valer como sem cobrança e segue para a entrega', icone: mdiCloseCircleOutline, oculto: !(os.status === 'Concluído' && !osSemCobranca(os)), onClick: ()=>entregarSemNota(os) },
       { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
     ]} />);
     return btns;
@@ -1318,6 +1332,20 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     setAbaAtiva('os'); setModalNova(true);
   };
 
+  // Entregar sem nota (S2, 27/10/2026): uma OS cobrada concluída que, por decisão de quem atende, não será faturada (cortesia). Motivo obrigatório; só pega se ainda estiver "Concluído".
+  const entregarSemNota = async (os: any) => {
+    const motivo = await pedirTexto(`Por que a ${os.numero_os} sai SEM nota fiscal (cortesia)? O motivo fica no histórico e a OS passa a valer como sem cobrança.`);
+    if (motivo === null) return;
+    if (!String(motivo).trim()) { mostrarAviso('Escreva o motivo: ele fica no histórico da OS.', 'atencao'); return; }
+    const agora = new Date().toISOString();
+    const { data, error } = await supabase.from('sac_ordens_servico').update({ cobranca: 'garantia', atualizado_em: agora }).eq('id', os.id).eq('status', 'Concluído').select('id');
+    if (error) { alert('Erro ao liberar a OS sem nota: ' + error.message); return; }
+    if (!data?.length) { alert('A OS já não está "Concluído". A lista foi atualizada.'); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { cobranca: os.cobranca ?? null }, newRow: { cobranca: 'garantia', motivo_sem_nota: String(motivo).trim() }, user: currentUser });
+    fetchOrdens();
+    setModalSaida({ ...os, cobranca: 'garantia' }); setSaidaForm({ nome: '', sig: null }); setFotosSaidaFiles([]);
+  };
+
   // OS de garantia que nasceu em "Em Cotação" antes desta regra: não há cotação a fazer; segue para o atendimento (a Produção marca a data). Quem decide é o SAC, uma OS por vez.
   const seguirSemCotacao = async (os: any) => {
     if (!await confirmar(`A ${os.numero_os} é garantia (sem cobrança): não tem cotação a enviar ao cliente.\n\nSeguir direto para o atendimento (Produção marca a data)?`)) return;
@@ -1350,7 +1378,6 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     const payload: any = {
       valor_total: numeroOuVazio(financeiroForm.valor_total),
       valor_mao_de_obra: numeroOuVazio(financeiroForm.valor_mao_de_obra),
-      data_faturamento: financeiroForm.data_faturamento || null,
     };
     const { error } = await supabase.from('sac_ordens_servico').update(payload).eq('id', modalFinanceiro.id);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
@@ -1358,8 +1385,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     // O histórico só grava o que realmente mudou (e nada se nada mudou); a data do banco vem como DATA (o corte em 10 letras evita acusar mudança só por vir com hora).
     const dinheiro = (v: any) => v == null ? '—' : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalFinanceiro.id, changeType: 'UPDATE',
-      oldRow: { valor_total: modalFinanceiro.valor_total ?? null, valor_mao_de_obra: modalFinanceiro.valor_mao_de_obra ?? null, data_faturamento: (modalFinanceiro.data_faturamento || '').slice(0, 10) || null },
-      newRow: payload, formatters: { valor_total: dinheiro, valor_mao_de_obra: dinheiro, data_faturamento: fmtDataSAC }, user: currentUser });
+      oldRow: { valor_total: modalFinanceiro.valor_total ?? null, valor_mao_de_obra: modalFinanceiro.valor_mao_de_obra ?? null },
+      newRow: payload, formatters: { valor_total: dinheiro, valor_mao_de_obra: dinheiro }, user: currentUser });
     setModalFinanceiro(null);
     fetchOrdens();
   };
@@ -2503,9 +2530,6 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <div className="form-group acn-sac-valor-campo"><label className="acn-label">Mão de Obra (R$)</label>
                   <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
                     value={form.valor_mao_de_obra||''} onChange={e=>setForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
-                <div className="form-group acn-sac-valor-campo"><label className="acn-label">Data Faturamento</label>
-                  <input type="date" className="acn-input"
-                    value={form.data_faturamento||''} onChange={e=>setForm(f=>({...f,data_faturamento:e.target.value}))} /></div>
               </div>
             </div>
 
@@ -2927,6 +2951,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       )}
 
       {/* MODAL: Enviar para Fiscal — captura nº de série dos itens instalados */}
+      {modalFiscalOS && <EnviarOsAoFiscalModal os={modalFiscalOS} currentUser={currentUser} onClose={()=>setModalFiscalOS(null)} onEnviada={fetchOrdens} />}
       {modalEnviarFiscal && (
         <div className="modal-overlay">
           <div className="modal-box acn-modal-cadastro acn-sac-jan acn-sac-jan-larga">
@@ -3199,10 +3224,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
                   value={financeiroForm.valor_mao_de_obra} onChange={e=>setFinanceiroForm(f=>({...f,valor_mao_de_obra:e.target.value}))} />
               </div>
-              <div className="form-group">
-                <label className="acn-label">Data Faturamento</label>
-                <input type="date" className="acn-input"
-                  value={financeiroForm.data_faturamento} onChange={e=>setFinanceiroForm(f=>({...f,data_faturamento:e.target.value}))} />
+              <div className="acn-ajuda" data-teste="data-de-faturamento-da-os">
+                Data de faturamento: <strong>{modalFinanceiro?.data_faturamento ? fmtDataSAC(modalFinanceiro.data_faturamento) : '— (ainda sem nota)'}</strong>. É o dia da nota que o Fiscal emite (a que a comissão usa); não se digita aqui.
               </div>
             </div>
             {/* aqui o Cancelar vinha antes do Salvar no HTML: a ordem se mantém, então o rodapé é o comum (sem o "principal primeiro") */}
