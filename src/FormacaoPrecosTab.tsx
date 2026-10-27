@@ -12,6 +12,8 @@ import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { Faixa, Botao, Selo, Chips, Abas, Tag, SelectBusca } from './Interface';
+import { raizDaCotacao, ultimaVersaoDe } from './FormacaoFamilia';
+import { OrdensDeCompraDaFormacao } from './FormacaoOrdensCompra';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
@@ -1734,8 +1736,7 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
 // ─── FORMAÇÕES VINCULADAS ENTRE SI ───────────────────────────────────────────────
 // Pedido do usuário em 22/10/2026: "poder vincular uma formação de preço a outra formação de preço". A ligação é entre FAMÍLIAS (a raiz das versões, `versao_raiz_id` ou o id
 // da v1) e vale nos dois sentidos: quem abre qualquer das duas vê a outra, com a última versão e o total, e abre com um clique. Só liga e desliga; não copia nem soma nada.
-const raizDaCotacao = (m: any) => m?.versao_raiz_id || m?.id;
-const ultimaVersaoDe = (lista: any[]) => [...lista].sort((a: any, b: any) => (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+// (raizDaCotacao e ultimaVersaoDe moraram aqui; foram para FormacaoFamilia.ts em 26/10/2026, porque a ligação com a Ordem de compra, no Compras, usa a mesma regra)
 
 function FormacoesVinculadasEntreSi({ cotacaoId, currentUser, aoAbrir }: any) {
   const [raiz, setRaiz] = useState<string | null>(null);
@@ -3400,6 +3401,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
           {/* formações vinculadas entre si (22/10/2026) — só com a formação já salva */}
           {editandoId && <FormacoesVinculadasEntreSi key={editandoId} cotacaoId={editandoId} currentUser={currentUser} aoAbrir={abrirFormacaoVinculada} />}
+          {/* ordens de compra do Compras ligadas a esta formação (26/10/2026) — também só com a formação já salva */}
+          {editandoId && <OrdensDeCompraDaFormacao key={'oc-' + editandoId} cotacaoId={editandoId} currentUser={currentUser} />}
 
           {/* ── HEADER ── */}
           <div className="acn-fp-cab">

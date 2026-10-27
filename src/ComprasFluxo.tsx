@@ -33,6 +33,7 @@ import { ItensDemandaEditor, ItensDemandaView, itemVazio, itensPreenchidos, ende
 import Linkify from './Linkify';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { AvisoSaldoCentro } from './CentroCustoUso';
+import { FormacoesDoPedidoDeCompra } from './FormacaoOrdensCompra';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload, mdiClose } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
@@ -215,6 +216,8 @@ export function QuadroDaSolicitacao({ p, canVerValor = false, currentUser, mostr
         <Linha k="Prazo desejado" v={diaDoPedido(p?.prazo_entrega)} />
         <Linha k="Centro de custo" v={p?.centro_custo} />
         <Linha k="Vínculo" v={p?.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : ''} />
+        {/* 26/10/2026: a formação de preço que foi ligada à OC deste pedido (a ligação é feita na tela de Formação de Preços) */}
+        {p?.numero_oc && <FormacoesDoPedidoDeCompra pedidoId={p.id} />}
         <Linha k="Comprador indicado" v={p?.comprador_nome} />
         {mostrarSolicitante && <Linha k="Solicitado por" v={[p?.criado_por_nome || p?.criado_por, p?.criado_por_setor].filter(Boolean).join(' · ')} />}
         <Linha k="Fornecedor sugerido" v={sugerido} />
