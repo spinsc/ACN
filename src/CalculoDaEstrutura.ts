@@ -13,7 +13,7 @@
 import { supabase } from './supabaseClient';
 import {
   perguntasDaVenda, respostasAutomaticas, materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
-  itensConjunto, vendaTemConjunto, completarItensPeloNome, podarRespostas, regrasDoVeiculo, avaliarRegras, valorSalvo,
+  itensConjunto, vendaTemConjunto, completarItensPeloNome, itensInclusos, podarRespostas, regrasDoVeiculo, avaliarRegras, valorSalvo,
 } from './ConfigEstrutura';
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
@@ -26,11 +26,13 @@ const chaveLinha = (l: any) => l?.item_id || `txt:${l?.nome}`;
  */
 export async function lerBaseDaEstrutura(opl: any) {
   // linha vendida sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026: a venda tinha o Conjunto Elétrico escrito e a estrutura dizia que não)
-  const vendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
-  const idsVendidos = vendidos.map((v: any) => v.item_id).filter(Boolean);
+  const vendidos0 = await completarItensPeloNome(opl?.itens_vendidos || []);
   const conj = await itensConjunto();
-  const temConjunto = vendaTemConjunto(vendidos, conj.map((c: any) => c.id));
+  const temConjunto = vendaTemConjunto(vendidos0, conj.map((c: any) => c.id));
   if (!opl?.veiculo_id || !temConjunto) return { aplicavel: false, temConjunto, semVeiculo: !opl?.veiculo_id, conj };
+  // o amplificador que vem incluso com a barra G2 conta como vendido (28/10/2026): o material de instalação dele, as perguntas e as regras valem mesmo sem ele estar na venda
+  const vendidos = [...vendidos0, ...(await itensInclusos(vendidos0))];
+  const idsVendidos = vendidos.map((v: any) => v.item_id).filter(Boolean);
 
   // o próprio conjunto não tem estrutura: ele é o recipiente. Serviço e item genérico (categoria GENERICO: película, instalação do kit, garantia estendida,
   // plotagem…) também nunca consomem material de instalação: sem esta exceção eles apareceriam para sempre como "nunca adaptados neste carro"

@@ -536,6 +536,34 @@ export function vendaTemConjunto(vendidos: any[], idsConjunto: string[]) {
 }
 
 /**
+ * ITEM QUE VEM INCLUSO (regra do usuário em 28/10/2026): "barra sinalizadora G2 sempre leva o amplificador incluso". O item vendido pode trazer outro item junto (`cadastro_itens.inclui_item_id`; hoje o amplificador
+ * S100W nas barras G2), que NÃO está na venda mas entra na lista de material e conta como vendido no cálculo da estrutura (o material de instalação dele, as perguntas e as regras valem). Se a venda já traz o
+ * item incluso, ele não é somado de novo. A quantidade é a do item que o inclui. Devolve linhas prontas para a BOM (`incluso: true`); lança erro se a leitura falhar.
+ */
+export async function itensInclusos(vendidos: any[]): Promise<any[]> {
+  const lista = (Array.isArray(vendidos) ? vendidos : []).filter(v => v?.item_id);
+  const ids = [...new Set(lista.map((v: any) => String(v.item_id)))];
+  if (!ids.length) return [];
+  const { data, error } = await supabase.from('cadastro_itens').select('id,codigo,inclui_item_id').in('id', ids).not('inclui_item_id', 'is', null);
+  if (error) throw new Error('não foi possível conferir os itens que vêm incluídos (' + error.message + ')');
+  const quem = new Map<string, { qtd: number; de: string[] }>();
+  for (const d of (data || [])) {
+    const qtd = lista.filter((v: any) => String(v.item_id) === String(d.id)).reduce((s: number, v: any) => s + (num(v.quantidade) || 1), 0);
+    const alvo = String(d.inclui_item_id);
+    const x = quem.get(alvo) || { qtd: 0, de: [] };
+    x.qtd += qtd; x.de.push(d.codigo || ''); quem.set(alvo, x);
+  }
+  const faltam = [...quem.keys()].filter(id => !ids.includes(id));   // já vendido junto: não soma de novo
+  if (!faltam.length) return [];
+  const { data: itens, error: e2 } = await supabase.from('cadastro_itens').select('id,codigo,nome,unidade').in('id', faltam).neq('ativo', false);
+  if (e2) throw new Error('não foi possível ler os itens que vêm incluídos (' + e2.message + ')');
+  return (itens || []).map((i: any) => ({
+    item_id: i.id, codigo: i.codigo || '', nome: i.nome, unidade: i.unidade || 'UN', quantidade: quem.get(String(i.id))!.qtd,
+    descricao: `incluso com o item ${quem.get(String(i.id))!.de.filter(Boolean).join(', ')}`, nao_cadastrado: false, incluso: true,
+  }));
+}
+
+/**
  * Linha vendida SEM o vínculo com o cadastro (digitada à mão, ou vinda da formação de preços sem o item_id) ganha o item_id quando o NOME dela acha exatamente UM item ativo do
  * cadastro (dois com o mesmo nome é ambíguo e não se chuta; a mesma regra da BOM sugerida). Sem isso a venda de uma OP com todas as linhas sem vínculo — caso da OP A1741.2610,
  * 27/10/2026 — tinha o 'CONJUNTO ELETRICO' escrito e o sistema dizia que a venda não leva Conjunto Elétrico, porque o interruptor só reconhece o item pelo vínculo.

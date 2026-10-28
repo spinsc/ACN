@@ -21,7 +21,7 @@ import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estrutu
 import { SelectBusca, Botao, Selo } from './Interface';
 import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { normalizarBusca } from './SearchUtils';
-import { completarItensPeloNome } from './ConfigEstrutura';
+import { completarItensPeloNome, itensInclusos } from './ConfigEstrutura';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline } from '@mdi/js';
 
@@ -188,12 +188,14 @@ export async function sugerirBom(vendidos: any[]) {
     if (atual) atual.quantidade += l.quantidade; else porItem.set(chave, { ...l });
   };
   const semCadastro: string[] = [];
+  const resolvidos: any[] = [];   // as linhas vendidas já ligadas ao cadastro (para achar o que vem incluso)
   for (const v0 of vendidos || []) {
     let v = v0;
     if (!v.produto_id && !v.item_id && String(v.nome || '').trim()) {
       const achado = await acharNoCadastroPeloNome(v.nome);
       if (achado) v = { ...v, ...achado };
     }
+    if (v.item_id) resolvidos.push(v);
     const q = num(v.quantidade) || 1;
     if (!v.produto_id && !v.item_id) semCadastro.push(String(v.nome || '').trim());
     if (v.produto_id) {
@@ -208,6 +210,12 @@ export async function sugerirBom(vendidos: any[]) {
   // película, instalação do kit, garantia estendida, plotagem, licença…) continuam na venda e na proposta, mas NÃO são
   // material para o Almoxarifado separar — saem da BOM sugerida. Se a leitura das categorias falhar, a lista segue
   // como estava (melhor sobrar um serviço do que sumir um material).
+  // O item que vem INCLUSO com um vendido (barra G2 → amplificador, regra do usuário em 28/10/2026) entra na lista mesmo sem estar na venda; se a venda já o traz, não soma de novo.
+  try {
+    for (const l of await itensInclusos(resolvidos)) { if (!porItem.has(l.item_id)) porItem.set(l.item_id, { ...l }); }
+  } catch (e: any) {
+    mostrarAviso(`Não consegui conferir os itens que vêm incluídos (${e?.message || e}). Confira se o amplificador da barra G2 está na lista.`, 'atencao');
+  }
   const sugeridas: any[] & { semCadastro?: string[] } = [...porItem.values()];
   sugeridas.semCadastro = semCadastro;
   const idsSug = sugeridas.map(l => l.item_id).filter(Boolean);
