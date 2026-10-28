@@ -12,6 +12,9 @@ import { DIAS_PARADA, alertasDaDemanda, dadosDoEntregavel, custoEstimado, modelo
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export const ALERTAS: { id: string; rotulo: string; tom: string; vale: (a: any) => boolean }[] = [
+  // 28/10/2026: o material de uma compra chegou e o desenvolvimento ainda não começou (vermelho: é o que a Engenharia não pode deixar passar); esperar o material é só informação
+  { id: 'material', rotulo: 'Material chegou', tom: 'erro', vale: a => a.materialChegouDias !== null },
+  { id: 'espera', rotulo: 'Aguardando material', tom: 'atencao', vale: a => a.esperandoMaterial },
   { id: 'minha', rotulo: 'Esperando a minha decisão', tom: 'atencao', vale: a => a.esperandoMinha },
   { id: 'decisao', rotulo: 'Esperando decisão', tom: 'info', vale: a => a.esperandoDecisao },
   { id: 'atrasada', rotulo: 'Atrasadas', tom: 'erro', vale: a => a.atrasadaEtapa > 0 || a.prazoVencido > 0 },
@@ -22,6 +25,8 @@ export const ALERTAS: { id: string; rotulo: string; tom: string; vale: (a: any) 
 export const passaNoAlerta = (al: any, alerta: string) => alerta === 'todos' || !!ALERTAS.find(a => a.id === alerta)?.vale(al);
 
 const SUB: Record<string, (n: number, itens: any[]) => string> = {
+  material: (n) => (n ? 'falta iniciar o desenvolvimento' : 'nenhum esperando início'),
+  espera: (n) => (n ? 'esperam chegar uma compra' : 'nenhum esperando compra'),
   minha: (n, itens) => (n ? 'esperam você decidir' : 'nada esperando você'),
   decisao: (n) => (n ? 'portas ou mudanças pedidas' : 'nenhuma porta pedida'),
   atrasada: (n) => (n ? 'etapa ou prazo do projeto vencido' : 'tudo no prazo'),
@@ -56,6 +61,8 @@ export function PainelDaEngenharia({ itens, alerta, onAlerta }: any) {
 export function SelosDeAlerta({ al }: any) {
   const pl = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
   const itens: any[] = [];
+  if (al.materialChegouDias !== null && al.materialChegouDias !== undefined) itens.push(['erro', al.materialChegouDias === 0 ? 'Material chegou hoje: pode iniciar' : `Material chegou há ${pl(al.materialChegouDias, 'dia', 'dias')} e o desenvolvimento não começou`]);
+  if (al.esperandoMaterial) itens.push(['atencao', 'Aguardando material']);
   if (al.atrasadaEtapa > 0) itens.push(['erro', `Etapa atrasada há ${pl(al.atrasadaEtapa, 'dia', 'dias')}`]);
   if (al.prazoVencido > 0) itens.push(['erro', `Prazo do projeto vencido há ${pl(al.prazoVencido, 'dia', 'dias')}`]);
   if (al.parada > 0) itens.push(['atencao', `Parada há ${al.parada} dias`]);

@@ -181,6 +181,22 @@ Sem mudança no banco. A conta de cada alerta é uma só, `alertasDaDemanda` em 
 Regras de cada fatia: `npx vite build` antes de commitar; teste no navegador com gravações bloqueadas (padrão `scratchpad/fstest/`);
 nenhum dado real alterado; relatar números reais; push só com a pergunta clicável de autorização.
 
+### Adendo — espera por material (28/10/2026, pedido do usuário depois do plano concluído)
+
+**O caso:** há desenvolvimento que só pode começar quando um material comprado chega (o suporte da barra sinalizadora só se desenvolve quando chega o rack de teto, que a adaptação põe no lugar). Sem amarração, a Engenharia podia não ver que o material chegou e o desenvolvimento atrasava.
+
+**Decidido com o usuário:**
+1. **Liga a ITEM da OC, não à OC inteira.** Um desenvolvimento pode esperar um item que chega antes dos demais, ou vários desenvolvimentos podem esperar um item cada da mesma OC; cada um é liberado quando o seu chega. Uma demanda pode esperar mais de um item (de uma ou de várias OCs) e só libera quando **todos** os dela chegarem.
+2. **Quem diz que o item chegou é a Logística**, no recebimento ("Chegada de itens", ao lado de "Receber"), **sem mexer no recebimento da OC** (NF, conferência, pagamento e estoque ficam como sempre). Informa a **quantidade** que chegou e **a primeira unidade já libera**; quantidade 0 desfaz. A OC virar "Recebido" vale como chegada de todos os itens dela.
+3. **Enquanto falta item, nenhuma etapa pode ser iniciada** (a trava está na regra da gravação, não só no botão). **Só Admin ou gerente libera antes**, com motivo (fica no histórico). Retirar a espera também pede motivo.
+4. **Aviso:** quando todos os itens da demanda chegam, **o banco** (gatilho) marca `chegou_em`, escreve no histórico e põe um aviso na **caixa de Menções** das pessoas escolhidas ao ligar (por padrão, quem ligou e o solicitante); a demanda ganha o selo vermelho "Material chegou há N dias e o desenvolvimento não começou" e entra no painel de atenção (cartão "Material chegou"); a que ainda espera aparece no cartão "Aguardando material" e **não conta como "parada há 7+ dias"** (a espera é a explicação). A Logística vê o selo "Engenharia espera item desta compra" na fila de recebimento e, dentro da janela, quem espera cada item.
+
+**Como ficou no sistema:** tabela `compras_chegadas_itens` (OC + posição do item + nome, quantidade, quem, quando; política `etapa17_logado`), coluna `engenharia_desenvolvimento.espera_material` (jsonb), funções e gatilhos `engenharia_reavaliar_*` (migração `engenharia_espera_por_material`, cópia em `supabase/sql/engenharia_espera_por_material.sql`). O item da OC é identificado por **posição + nome** (os itens da OC nem sempre têm código); se o item mudar de nome ou de lugar na OC, a demanda mostra "o item mudou" e a chegada antiga não vale. Telas: `DesenvolvimentoEspera.tsx` (caixa "Material do desenvolvimento" e janela de escolha dos itens, com busca por número da OC/pedido/material para quando a demanda não tem OP), `ChegadaDeItens.tsx` (Logística), regras em `EsperaDeMaterial.ts` e `DesenvolvimentoModelo.ts` (`estadoGuardadoDaEspera`, `esperaBloqueia`).
+
+**Números reais:** regras 59/59; banco 14 conferências em transação desfeita (nada ficou gravado: item chegando, nome diferente, OC recebida, chegada desfeita, OC que volta de "Recebido", liberada à mão, demanda cancelada); navegador da Engenharia 27/27 e da Logística 19/19; defeitos plantados: **49/49** (33 nas regras, 16 nas telas; a primeira rodada apontou 48 de 49 e o que escapou, dois itens de mesmo nome na mesma OC, ganhou teste).
+
+**Fora desta rodada / a confirmar:** (a) a chegada só é marcada pela Logística (o Compras ainda não tem o botão na própria tela); (b) a demanda criada pelo "Precisa de Desenvolvimento" da análise da OP nasce sem espera: liga-se depois, na própria demanda; (c) o aviso vai só para a caixa de Menções (sem WhatsApp); (d) se a OC for descartada, a demanda mostra "a compra foi descartada, o material não vai chegar" e fica travada até alguém trocar os itens ou um gerente liberar; (e) OC que volta de "Recebido" para "Comprado" e chegada desfeita voltam a travar a demanda (o aviso é dado de novo quando chegar).
+
 ## 7. Fora do escopo desta rodada
 
 - Pedido do PCP e seus itens (continuam como estão).

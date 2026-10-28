@@ -19,7 +19,7 @@ import {
   TIPOS_DEV, rotuloDoTipoDev, ROTULO_PAPEL, entregaveisDaEtapa, entregaveisQueFaltam, estadoDaPorta, papeisQueOUsuarioCobre, solicitanteDaDemanda,
   ehGerenteDev, definirTipo, iniciarEtapa, observarEtapa, atualizarEntregavel, marcarFeito, pedirPorta, retirarPedido, decidirPorta, resolverRessalva,
   voltarEtapa, pausarDemanda, retomarDemanda, cancelarDemanda, reabrirDemanda, papeisExigidos, frasePorEvento,
-  temFormulario, faltaNoEntregavel, salvarDados,
+  temFormulario, faltaNoEntregavel, salvarDados, esperaBloqueia,
 } from './DesenvolvimentoModelo';
 import { FormularioDoEntregavel, ResumoDoEntregavel } from './DesenvolvimentoFormularios';
 import {
@@ -289,6 +289,7 @@ export function PainelGuiado({ demanda, etapa, idx, onAtualizado, currentUser }:
   const [obsTexto, setObsTexto] = useState('');
   const lista = entregaveisDaEtapa(etapa.nome, demanda.tipo_desenvolvimento);
   const parada = demanda.situacao !== 'ativa';
+  const esperando = esperaBloqueia(demanda);   // espera o material de uma compra: a regra também barra na gravação (iniciarEtapa)
   const pedida = !!etapa.porta?.pedida_em;
   const exigeQualidade = papeisExigidos(etapa.nome, demanda.tipo_desenvolvimento).includes('qualidade');
 
@@ -330,7 +331,10 @@ export function PainelGuiado({ demanda, etapa, idx, onAtualizado, currentUser }:
                 </div>
               )}
             </div>
-            <div><Botao variante="primario" icone={mdiPlay} disabled={ocupado || parada} onClick={iniciar}>Iniciar etapa</Botao></div>
+            <div>
+              <Botao variante="primario" icone={mdiPlay} disabled={ocupado || parada || esperando} onClick={iniciar}>Iniciar etapa</Botao>
+              {esperando && <div className="acn-ajuda" data-teste="inicio-travado">Não dá para iniciar: o desenvolvimento espera a chegada do material (veja “Material do desenvolvimento”, acima).</div>}
+            </div>
           </>
         )}
 

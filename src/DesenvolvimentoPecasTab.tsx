@@ -27,6 +27,7 @@ import { modeloGuiado, TIPOS_DEV, rotuloDoTipoDev, mesmoNome, ehGerenteDev } fro
 import { ResumoDoProjeto } from './DesenvolvimentoFormularios';
 import { PainelDeMudancas } from './DesenvolvimentoMudancas';
 import { GarantiasDoProjeto } from './GarantiaProjeto';
+import { CaixaDeEspera } from './DesenvolvimentoEspera';
 import { PainelDaEngenharia, SelosDeAlerta, TabelaDeCustos, passaNoAlerta } from './DesenvolvimentoPainel';
 import { alertasDaDemanda } from './DesenvolvimentoModelo';
 import { hojeISO } from './Interface';
@@ -418,6 +419,8 @@ function DemandaComEtapas({ demanda, onAtualizado, currentUser }: any) {
         {guiada && <ResumoDoProjeto demanda={demanda} />}
         {guiada && <PainelDeMudancas demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} />}
         {guiada && <GarantiasDoProjeto demanda={demanda} currentUser={currentUser} />}
+        {/* 28/10/2026: o desenvolvimento que só começa quando chega material de uma compra da OP (aviso e trava de início) */}
+        {(guiada || aDefinir) && !finalizada && situacao !== 'cancelada' && <CaixaDeEspera demanda={demanda} currentUser={currentUser} onAtualizado={onAtualizado} />}
 
         {!finalizada && !aDefinir && (
           // key: ao concluir uma etapa o painel da próxima é outro — sem isso ele herdava o responsável, a data e a observação digitada da anterior

@@ -16,6 +16,8 @@ import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutl
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { opTemRemessas, contarFretesAbertosDaOp, oFreteLiberaAOp } from './Remessas';
 import QuadroRetornosDePatio from './RetornosDePatio';
+import ModalChegadaDeItens from './ChegadaDeItens';
+import { lerDemandasQueEsperam } from './EsperaDeMaterial';
 import { podeVerValores, ehAdminOuGerente } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
@@ -1711,6 +1713,8 @@ function PainelRecebimento({ currentUser }: any) {
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalReceber, setModalReceber] = useState<any>(null);
+  const [modalChegada, setModalChegada] = useState<any>(null);   // chegada de UM item da OC: o desenvolvimento da Engenharia que espera o item é liberado e avisado (28/10/2026)
+  const [esperas, setEsperas] = useState<Map<string, any[]>>(new Map());
 
   const fetchAll = async () => {
     setLoading(true);
@@ -1723,6 +1727,9 @@ function PainelRecebimento({ currentUser }: any) {
       .or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null')
       .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
     setPedidos(data || []);
+    // leitura recusada aqui só tira o selo "Engenharia espera": a lista de recebimento segue igual
+    const e = await lerDemandasQueEsperam();
+    setEsperas(e.mapa);
     setLoading(false);
   };
 
@@ -1749,12 +1756,12 @@ function PainelRecebimento({ currentUser }: any) {
               {pedidos.map(p => (
                 <tr key={p.id} className={atrasado(p) ? 'acn-linha-alerta' : undefined}>
                   <td>{p.numero_pedido || '—'}{p.numero_oc ? <div className="acn-fraco">{p.numero_oc}</div> : null}</td>
-                  <td className="acn-texto-longo">{p.descricao_material || '—'}</td>
+                  <td className="acn-texto-longo">{p.descricao_material || '—'}{(esperas.get(String(p.id)) || []).length > 0 && <div><Selo familia="atencao" ponto={false} title={(esperas.get(String(p.id)) || []).map((x: any) => `${x.demanda.titulo} — espera: ${x.item.nome}`).join(' | ')}>Engenharia espera item desta compra</Selo></div>}</td>
                   <td>{p.fornecedor || '—'}</td>
                   <td className="acn-num">{p.quantidade ?? '—'}</td>
                   <td className="acn-num">{fmt(p.valor_compra)}</td>
                   <td>{p.coletado_em ? <>Coletado em {fmtDt(p.coletado_em)}{p.coletado_por_nome ? <div className="acn-fraco">por {p.coletado_por_nome}</div> : null}</> : fmtDt(p.data_prevista_recebimento)}{p.coletado_em && <> <Selo familia="info" ponto={false}>coleta</Selo></>}{atrasado(p) && <> <Selo familia="erro" ponto={false}>atrasado</Selo></>}</td>
-                  <td><Botao pequeno variante="primario" icone={mdiTrayArrowDown} onClick={() => abrirReceber(p)}>Receber</Botao></td>
+                  <td><div className="acn-dev-acoes"><Botao pequeno variante="primario" icone={mdiTrayArrowDown} onClick={() => abrirReceber(p)}>Receber</Botao><Botao pequeno icone={mdiPackageDown} title="Marcar que chegaram unidades de um item, sem receber a OC inteira" onClick={() => setModalChegada(p)}>Chegada de itens</Botao></div></td>
                 </tr>
               ))}
             </tbody>
@@ -1762,6 +1769,7 @@ function PainelRecebimento({ currentUser }: any) {
         )}
       </div>
 
+      {modalChegada && <ModalChegadaDeItens pedido={modalChegada} currentUser={currentUser} onClose={() => setModalChegada(null)} onSalvo={fetchAll} />}
       {modalReceber && (
         <ModalReceberPedido pedido={modalReceber} currentUser={currentUser}
           onClose={() => setModalReceber(null)}

@@ -5806,6 +5806,16 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-dev-obs { font-size: 13px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-dev-obs:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
 .acn-dev-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+/* espera por material (28/10/2026): a caixa na demanda e a janela de escolha dos itens da compra */
+.acn-dev-espera-vazia { display: flex; }
+.acn-chegada-qtd { max-width: 90px; }
+.acn-dev-busca-compra { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.acn-dev-busca-compra .acn-input { flex: 1 1 220px; min-width: 0; }
+.acn-dev-compra-bloco { border: 1px solid var(--acn-line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--acn-surface-2); }
+.acn-dev-compra-cab { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.acn-dev-compra-cab > .acn-fraco { flex-basis: 100%; }
+.acn-dev-compra-item { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; border-top: 1px solid var(--acn-line-soft); cursor: pointer; }
+.acn-dev-compra-item input { flex: none; }
 .acn-dev-anexos { display: flex; flex-direction: column; gap: 6px; }
 .acn-dev-anexos-lista { display: flex; gap: 6px; flex-wrap: wrap; }
 .acn-dev-anexo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: var(--acn-r1); background: var(--acn-ok-soft); color: var(--acn-ok); text-decoration: none; }

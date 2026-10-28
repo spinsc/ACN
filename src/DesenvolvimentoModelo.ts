@@ -75,6 +75,19 @@ export const ROTULO_PAPEL: Record<string, string> = { solicitante: 'Solicitante'
 
 export const modeloGuiado = (d: any) => !!d?.tipo_desenvolvimento && d.tipo_desenvolvimento !== 'a_definir';
 
+// ── espera por material (28/10/2026, pedido do usuário) ───────────────────────────────────────────────────────────────
+// Um desenvolvimento pode depender de itens de uma OC da OP (o suporte da barra só se desenvolve quando chega o rack de teto comprado). A demanda guarda em `espera_material` os itens
+// esperados; o banco marca `chegou_em` quando todos chegaram (a Logística marca a chegada de cada item, ou a OC vira "Recebido"). Enquanto falta item e um gerente não liberou, nenhuma
+// etapa pode ser iniciada. A conta é feita pelo que está GUARDADO, uma só, para a trava, o painel e os selos dizerem a mesma coisa; os detalhes (o que falta, quando chegou) vêm de EsperaDeMaterial.ts.
+export type EstadoDaEspera = 'sem' | 'aguardando' | 'chegou' | 'liberada';
+export function estadoGuardadoDaEspera(d: any): EstadoDaEspera {
+  const e = d?.espera_material;
+  if (!e || !Array.isArray(e.itens) || e.itens.length === 0) return 'sem';
+  if (e.liberada) return 'liberada';
+  return e.chegou_em ? 'chegou' : 'aguardando';
+}
+export const esperaBloqueia = (d: any) => estadoGuardadoDaEspera(d) === 'aguardando';
+
 /** Os entregáveis da etapa para o tipo (só os que se aplicam), com a marca de obrigatório. */
 export function entregaveisDaEtapa(nomeEtapa: string, tipo: string) {
   const col = COLUNAS.indexOf(tipo);
@@ -169,6 +182,8 @@ export function iniciarEtapa(d: any, idx: number, u: any, { responsavel, data_pr
   const { etapas, etapa, historico } = p;
   if (etapa.status !== 'pendente') return { erro: 'Esta etapa já foi iniciada por outra pessoa. A tela foi atualizada.' };
   if (idx !== idxAtiva(etapas)) return { erro: 'Não foi possível iniciar: há uma etapa anterior em aberto.' };
+  // 28/10/2026: o desenvolvimento espera o material de uma compra; só um gerente libera antes de chegar (com motivo, na caixa "Material do desenvolvimento")
+  if (esperaBloqueia(d)) return { erro: 'Não foi possível iniciar: este desenvolvimento espera a chegada de material. Quando chegar, a Engenharia é avisada; um gerente pode liberar antes.' };
   if (!String(responsavel || '').trim()) return { erro: 'Informe o responsável.' };
   if (papeisExigidos(etapa.nome, d.tipo_desenvolvimento).includes('qualidade') && !String(qualidade_nome || '').trim()) return { erro: 'Indique a pessoa da Qualidade que dará o parecer desta etapa.' };
   etapa.status = 'em_andamento';
@@ -748,17 +763,24 @@ export const DIAS_PARADA = 7;
 const diasEntreDatas = (de: string, ate: string) => Math.floor((Date.parse(String(ate).slice(0, 10) + 'T00:00:00Z') - Date.parse(String(de).slice(0, 10) + 'T00:00:00Z')) / 86400000);
 
 export function alertasDaDemanda(d: any, u: any, hojeIso: string, agoraMs: number) {
-  const r = { atrasadaEtapa: 0, prazoVencido: 0, parada: 0, esperandoDecisao: false, esperandoMinha: false, custoAcima: false, ressalvas: 0, mudancaPendente: false, pausada: d?.situacao === 'pausada' };
+  const r = { atrasadaEtapa: 0, prazoVencido: 0, parada: 0, esperandoDecisao: false, esperandoMinha: false, custoAcima: false, ressalvas: 0, mudancaPendente: false, pausada: d?.situacao === 'pausada',
+    esperandoMaterial: false, materialChegouDias: null as number | null };
   if (!d || d.origem === 'pcp' || d.situacao === 'cancelada') return r;
   const etapas = d.etapas || [];
   const idxAtiva = etapas.findIndex((e: any) => e.status !== 'concluida');
   const finalizada = etapas.length > 0 && idxAtiva === -1;
+  // espera por material: esperar já é a explicação (não conta como parada); chegou e ninguém iniciou é o que o painel precisa mostrar
+  const espera = estadoGuardadoDaEspera(d);
+  if (!finalizada && d.situacao !== 'pausada') {
+    if (espera === 'aguardando') r.esperandoMaterial = true;
+    if (espera === 'chegou' && etapas[idxAtiva]?.status === 'pendente') r.materialChegouDias = Math.max(0, Math.floor((agoraMs - Date.parse(d.espera_material.chegou_em)) / 86400000)) || 0;
+  }
   if (!finalizada && d.situacao !== 'pausada') {
     const ativa = etapas[idxAtiva];
     if (ativa?.status === 'em_andamento' && ativa.data_prevista && String(ativa.data_prevista).slice(0, 10) < hojeIso) r.atrasadaEtapa = diasEntreDatas(ativa.data_prevista, hojeIso);
     const prazo = dadosDoEntregavel(d, 'meta_custo')?.prazo;
     if (prazo && String(prazo) < hojeIso) r.prazoVencido = diasEntreDatas(prazo, hojeIso);
-    if (d.atualizado_em) { const dias = Math.floor((agoraMs - Date.parse(d.atualizado_em)) / 86400000); if (dias >= DIAS_PARADA) r.parada = dias; }
+    if (d.atualizado_em && espera !== 'aguardando') { const dias = Math.floor((agoraMs - Date.parse(d.atualizado_em)) / 86400000); if (dias >= DIAS_PARADA) r.parada = dias; }
   }
   if (modeloGuiado(d)) {
     for (const e of etapas) {
@@ -779,7 +801,7 @@ export function alertasDaDemanda(d: any, u: any, hojeIso: string, agoraMs: numbe
   }
   return r;
 }
-export const temAlerta = (a: any) => !!(a.atrasadaEtapa || a.prazoVencido || a.parada || a.esperandoDecisao || a.custoAcima || a.ressalvas);
+export const temAlerta = (a: any) => !!(a.atrasadaEtapa || a.prazoVencido || a.parada || a.esperandoDecisao || a.custoAcima || a.ressalvas || a.materialChegouDias !== null);
 
 const FRASES: Record<string, (e: any) => string> = {
   criada: () => 'Demanda criada',
@@ -803,5 +825,10 @@ const FRASES: Record<string, (e: any) => string> = {
   mudanca_recusada: () => 'Recusou a mudança',
   mudanca_implementada: () => 'Registrou a revisão do desenho da mudança',
   mudanca_cancelada: () => 'Cancelou a mudança',
+  espera_ligada: () => 'Passou a esperar material de uma compra',
+  espera_retirada: () => 'Retirou a espera por material',
+  espera_liberada: () => 'Liberou o desenvolvimento sem esperar o material',
+  material_chegou: () => 'Material chegou',
+  material_voltou: () => 'O material voltou a faltar',
 };
 export const frasePorEvento = (e: any) => (FRASES[e.tipo] ? FRASES[e.tipo](e) : String(e.tipo || '')) + ((e.tipo === 'tipo') || !e.texto ? '' : `: ${e.texto}`);
