@@ -109,13 +109,18 @@ export async function perguntasDaVenda(itemIds: string[], vendidosIds: string[] 
 
 /**
  * A pergunta só vale quando TODOS os itens de `quando_itens` estão na venda (vazio = sempre) e, se houver `quando_algum_item`, quando PELO MENOS UM deles está.
+ * `quando_tambem_algum_item` é um SEGUNDO "algum de", que também precisa ser cumprido (27/10/2026): o parachoque de impulsão não é um item só (o item-base 171 e um por carro, como o 4439 da Ranger),
+ * então "parachoque de impulsão vendido junto com slimled" = algum parachoque (esta lista) E algum slimled (`quando_algum_item`).
  * Decidido com o usuário em 22/10/2026: "Slimled será fixado no PCI ou na GRADE?" só aparece com parachoque de impulsão vendido junto com slimled — e slimled
  * tem vários modelos e cores, por isso o "algum de".
  */
 export function perguntaCabeNaVenda(p: any, vendidos: Set<string>) {
   const cond = (p?.quando_itens || []).map(String).filter(Boolean);
   const algum = (p?.quando_algum_item || []).map(String).filter(Boolean);
-  return cond.every((id: string) => vendidos.has(id)) && (!algum.length || algum.some((id: string) => vendidos.has(id)));
+  const tambem = (p?.quando_tambem_algum_item || []).map(String).filter(Boolean);
+  return cond.every((id: string) => vendidos.has(id))
+    && (!algum.length || algum.some((id: string) => vendidos.has(id)))
+    && (!tambem.length || tambem.some((id: string) => vendidos.has(id)));
 }
 
 /**
