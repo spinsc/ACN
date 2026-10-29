@@ -5,6 +5,8 @@
 // o que já foi pego. Imprime o que está planejado, não o que já foi marcado na tela: o papel é o mesmo em qualquer momento da separação.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { linhasEmOrdemDeArvore } from './BomEmArvore';
+
 const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 const fmtQtd = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 3 }) : esc(v); };
 
@@ -12,14 +14,16 @@ const fmtQtd = (v: any) => { const n = Number(String(v ?? '').replace(',', '.'))
 export function htmlDaListaDeSeparacao(opl: any, linhas: any[], setor = 'Almoxarifado', agora: Date = new Date()): string {
   const itens = (linhas || []).filter(l => String(l?.nome || '').trim());
   const veiculo = [opl?.modelo, opl?.placa].filter(Boolean).join(' · ');
-  const linhasHtml = itens.map((l, i) => `
-        <tr>
+  // BOM em pai e filho (29/10/2026): o item pai e, logo abaixo e recuado, o material que o instala; a numeração segue a ordem do papel
+  const ordem = linhasEmOrdemDeArvore(itens);
+  const linhasHtml = ordem.map(({ idx, filha, paiNome }, i) => { const l = itens[idx]; return `
+        <tr${filha ? ' class="filha"' : ''}>
           <td class="c">${i + 1}</td>
           <td class="cod">${esc(l.codigo) || '—'}</td>
-          <td>${esc(l.nome)}${l.descricao ? `<div class="desc">${esc(l.descricao)}</div>` : ''}</td>
+          <td>${filha ? '<span class="seta">↳</span> ' : ''}${esc(l.nome)}${l.descricao ? `<div class="desc">${esc(l.descricao)}</div>` : ''}${filha && paiNome && !l.descricao ? `<div class="desc">instala: ${esc(paiNome)}</div>` : ''}</td>
           <td class="q">${fmtQtd(l.planejado ?? l.quantidade)}${l.unidade ? ' ' + esc(l.unidade) : ''}</td>
           <td class="c"><span class="caixa"></span></td>
-        </tr>`).join('');
+        </tr>`; }).join('');
   return `<html><head><meta charset="utf-8"><title>Lista de separação — OP ${esc(opl?.opl)}</title>
     <style>
       body { font-family: Arial, sans-serif; font-size: 12px; padding: 24px; color: #000; }
@@ -30,6 +34,7 @@ export function htmlDaListaDeSeparacao(opl: any, linhas: any[], setor = 'Almoxar
       td { padding: 8px; border-bottom: 1px solid #cbd5e1; font-size: 12px; vertical-align: top; }
       .c { text-align: center; width: 40px; } .cod { width: 90px; font-family: monospace; } .q { width: 110px; text-align: right; font-weight: bold; white-space: nowrap; }
       .desc { color: #475569; font-size: 10px; margin-top: 2px; }
+      tr.filha td { padding-top: 5px; padding-bottom: 5px; font-size: 11px; background: #f8fafc; } tr.filha td:nth-child(3) { padding-left: 26px; } .seta { color: #64748b; }
       .caixa { display: inline-block; width: 16px; height: 16px; border: 1.5px solid #000; }
       .rodape { margin-top: 24px; font-size: 10px; color: #6b7280; }
       tr { page-break-inside: avoid; }

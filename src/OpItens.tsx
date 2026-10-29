@@ -22,6 +22,7 @@ import { SelectBusca, Botao, Selo } from './Interface';
 import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { normalizarBusca } from './SearchUtils';
 import { completarItensPeloNome, itensInclusos } from './ConfigEstrutura';
+import { agruparEmArvore, temFilhos } from './BomEmArvore';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline } from '@mdi/js';
 
@@ -159,6 +160,18 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
 
 // ── 2. BOM ───────────────────────────────────────────────────────────────────
 export const linhaBomVazia = () => ({ item_id: null, codigo: '', nome: '', unidade: 'UN', quantidade: 1, descricao: '', nao_cadastrado: false });
+/** Ordem em que as linhas aparecem na tela: a lista de sempre, ou em árvore (pai e, logo abaixo, os filhos) quando a BOM tem filhos. `i` é sempre o índice na lista (a edição continua por índice). */
+export function ordemParaTela(lista: any[]): any[] {
+  if (!temFilhos(lista)) return (lista || []).map((l, i) => ({ l, i, filha: false }));
+  const saida: any[] = [];
+  for (const g of agruparEmArvore(lista)) {
+    if (g.idx === null) saida.push({ cabecalho: g });   // o pai não está na BOM (ex.: o Conjunto Elétrico não é separado): só um título
+    else saida.push({ l: lista[g.idx], i: g.idx, filha: false });
+    g.filhos.forEach((f: number) => saida.push({ l: lista[f], i: f, filha: true }));
+  }
+  return saida;
+}
+
 export const bomPreenchida = (linhas: any[]) => (linhas || [])
   .filter(l => String(l.nome || '').trim())
   .map(l => ({ ...l, nome: String(l.nome).trim(), descricao: String(l.descricao || '').trim(), quantidade: num(l.quantidade) || 1, nao_cadastrado: !l.item_id }));
@@ -403,8 +416,12 @@ export function BomEditor({ linhas, onChange, vendidos = [], currentUser }: { li
         )}
       </div>
       <div className="acn-opit-linhas">
-        {lista.map((l, i) => (
-          <div key={i} className="acn-opit-linha">
+        {ordemParaTela(lista).map(({ l, i, filha, cabecalho }) => cabecalho ? (
+          <div key={cabecalho.chave} className="acn-opit-grupo" data-teste="bom-grupo">
+            {cabecalho.nome || 'Item'} <span className="acn-ajuda">— o material abaixo instala este item</span>
+          </div>
+        ) : (
+          <div key={i} className={'acn-opit-linha' + (filha ? ' filha' : '')} data-teste={filha ? 'bom-filha' : undefined}>
             <BuscaCadastro valor={l.nome} placeholder="Item do cadastro (ou kit, que abre nos itens)"
               onTexto={v => set(i, { nome: v, item_id: null, codigo: '', nao_cadastrado: true })}
               onEscolher={s => escolher(i, s)} />
@@ -571,13 +588,16 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
           <th>Observação</th>
         </tr></thead>
         <tbody>
-          {linhas.map((l, i) => {
+          {ordemParaTela(linhas).map(({ l, i, filha, cabecalho }) => {
+            if (cabecalho) return (
+              <tr key={cabecalho.chave} className="acn-opit-grupo-tr"><td colSpan={comSerial ? 6 : 5}>{cabecalho.nome || 'Item'} <span className="acn-ajuda">— o material abaixo instala este item</span></td></tr>
+            );
             const difere = num(l.separado) !== num(l.planejado);
             const marcado = num(l.separado) > 0;
             const st = situacaoDaLinha(l, saldos);
             const travado = st.semSaldo && !marcado;
             return (
-              <tr key={i} className={travado ? 'travado' : difere ? 'difere' : undefined}>
+              <tr key={i} className={[travado ? 'travado' : difere ? 'difere' : '', filha ? 'filha' : ''].filter(Boolean).join(' ') || undefined}>
                 <td className="chk">
                   <input type="checkbox" checked={!difere && marcado} disabled={travado} className="acn-opit-chk"
                     aria-label={`Separar ${l.nome}`}

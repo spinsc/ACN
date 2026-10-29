@@ -245,16 +245,21 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     // Regras "se… então…" do veículo (etapa 3, 15/10/2026): chicote e suporte pelas respostas, itens vendidos juntos e quantidades. Somam ao material por item.
     // Respostas podadas: a de uma pergunta-filha cuja resposta-pai foi trocada não pode escolher chicote.
     // Se a leitura das regras falhar, o material por item continua sendo calculado e a falha é dita — sem o chicote, a OP não pode parecer completa.
+    // BOM em pai e filho (29/10/2026): o material instala o item a que pertence; o das regras sem item instala o Conjunto Elétrico
+    const conjuntoDaVenda = (conj.find(c => ids.some(i => String(i) === String(c.id))) || conj[0])?.id;
+    const nomesPai = {};
+    conj.forEach(c => { nomesPai[String(c.id)] = c.nome; });
+    vendidos.forEach(v => { if (v?.item_id && v?.nome) nomesPai[String(v.item_id)] = v.nome; });
     let doRegras: any = { linhas: [] };
     try {
-      doRegras = avaliarRegras(await regrasDoVeiculo(opl.veiculo_id), { respostas: podarRespostas(perguntas, todas), vendidosIds: ids, perguntas, materiais });
+      doRegras = avaliarRegras(await regrasDoVeiculo(opl.veiculo_id), { respostas: podarRespostas(perguntas, todas), vendidosIds: ids, perguntas, materiais, conjuntoId: conjuntoDaVenda });
     } catch (e: any) {
       falhas.push(`as regras de chicote e suporte do veículo não puderam ser lidas (${e?.message || e}); a lista de material saiu sem elas`);
     }
     if (!materiais.length && !doRegras.linhas.length) return falhas.length ? falhas.join('; ') : null;
     const qtdPorItem = {};
     vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = Number(v.quantidade) || 1; });
-    const linhas = montarMaterial([...materiais, ...doRegras.linhas], todas, qtdPorItem);
+    const linhas = montarMaterial([...materiais, ...doRegras.linhas], todas, qtdPorItem, nomesPai);
     // nada calculado: a lista continua nascendo vazia e a Engenharia sugere na
     // hora de liberar, exatamente como sempre foi
     if (!linhas.length) return falhas.length ? falhas.join('; ') : null;
@@ -274,13 +279,14 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     const ehConj = (id) => conj.some(c => String(c.id) === String(id));
     const naVenda = conj.find(c => vendidos.some(v => String(v.item_id) === String(c.id)));
     const base = await sugerirBom(todosVendidos.filter(v => !ehConj(v.item_id)));
+    // com pai, a própria árvore diz de quem é a linha; só a linha sem pai (BOM em lista plana) leva o "do CONJUNTO ELÉTRICO"
     const conteudo = linhas.map(l => ({
-      ...l, descricao: l.descricao || `do ${naVenda?.nome || 'CONJUNTO ELÉTRICO'}`,
+      ...l, descricao: l.descricao || (l.pai_item_id ? '' : `do ${naVenda?.nome || 'CONJUNTO ELÉTRICO'}`),
     }));
 
     const mapa = new Map();
     [...base, ...conteudo].forEach(l => {
-      const chave = l.item_id || `txt:${l.nome}`;
+      const chave = `${l.pai_item_id || ''}|${l.item_id || `txt:${l.nome}`}`;
       const ja = mapa.get(chave);
       if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
       else mapa.set(chave, { ...l });

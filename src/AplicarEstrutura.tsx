@@ -234,8 +234,8 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
           <b>Material de instalação calculado ({e.linhas.length}):</b>
           <div className="acn-aep-sub">
             {e.linhas.map(l => (
-              <div key={l.item_id} className="acn-aep-linha">
-                • {fmt(l.quantidade)} {l.unidade || 'UN'} — {l.codigo ? l.codigo + ' ' : ''}{l.nome}
+              <div key={`${l.pai_item_id || ''}|${l.item_id}`} className="acn-aep-linha">
+                • {fmt(l.quantidade)} {l.unidade || 'UN'} — {l.codigo ? l.codigo + ' ' : ''}{l.nome}{l.pai_nome ? <span className="acn-ajuda"> · instala {l.pai_nome}</span> : null}
               </div>
             ))}
           </div>
@@ -244,7 +244,7 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
               também recebe os ids do conjunto para tirar a linha dele da BOM (as OPs criadas antes do fluxo automático
               partiam da sugestão antiga, que ainda traz o 1687). */}
           <Botao pequeno variante="primario" icone={mdiCheck} className="acn-aep-bom" onClick={() => onUsar?.(
-              e.linhas.map(l => ({ ...l, descricao: l.descricao || `do ${e.conj?.[0]?.nome || 'CONJUNTO ELETRICO'}` })),
+              e.linhas.map(l => ({ ...l, descricao: l.descricao || (l.pai_item_id ? '' : `do ${e.conj?.[0]?.nome || 'CONJUNTO ELETRICO'}`) })),   // com pai, a árvore da BOM já diz de quem é a linha
               (e.conj || []).map(c => String(c.id)))}>
             Jogar na BOM
           </Botao>

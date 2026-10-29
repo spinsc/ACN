@@ -1002,7 +1002,7 @@ export default function EngenhariaTab({ currentUser }) {
                   const mapa = new Map();
                   [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
                     .forEach(l => {
-                      const chave = l.item_id || `txt:${l.nome}`;
+                      const chave = `${l.pai_item_id || ''}|${l.item_id || `txt:${l.nome}`}`;
                       const ja = mapa.get(chave);
                       if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
                       else mapa.set(chave, { ...l });
@@ -1017,7 +1017,7 @@ export default function EngenhariaTab({ currentUser }) {
                 const mapa = new Map();
                 [...(atuais || []).filter(l => l?.item_id || String(l?.nome || '').trim()), ...linhas]
                   .forEach(l => {
-                    const chave = l.item_id || `txt:${l.nome}`;
+                    const chave = `${l.pai_item_id || ''}|${l.item_id || `txt:${l.nome}`}`;
                     const ja = mapa.get(chave);
                     if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
                     else mapa.set(chave, { ...l });
@@ -1131,7 +1131,7 @@ export default function EngenhariaTab({ currentUser }) {
                         const mapa = new Map();
                         [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
                           .forEach(l => {
-                            const c = l.item_id || `txt:${l.nome}`;
+                            const c = `${l.pai_item_id || ''}|${l.item_id || `txt:${l.nome}`}`;
                             const ja = mapa.get(c);
                             if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
                             else mapa.set(c, { ...l });

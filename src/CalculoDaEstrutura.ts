@@ -18,6 +18,8 @@ import {
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 const chaveLinha = (l: any) => l?.item_id || `txt:${l?.nome}`;
+// BOM em pai e filho (29/10/2026): o mesmo material sob pais diferentes são linhas diferentes
+const chaveComPai = (l: any) => `${l?.pai_item_id || ''}|${chaveLinha(l)}`;
 
 /**
  * Lê o que o cálculo da estrutura precisa para uma OP: perguntas, material por item, regras do veículo. Lança erro se uma leitura falhar — o chamador mostra a
@@ -74,21 +76,33 @@ export function calcularDaEstrutura(base: any, salvas: Record<string, string>) {
   // podadas: resposta a pergunta "filha" cuja resposta-pai foi trocada não vale, senão o material dela entraria
   const validas = podarRespostas(base.perguntas, respostas);
   Object.keys(respostas).forEach(k => { if (!validas[k]) delete respostas[k]; });
-  const doRegras = avaliarRegras(base.regras, { respostas, vendidosIds: base.idsVendidos, perguntas: base.perguntas, materiais: base.materiais });
-  const linhas = montarMaterial([...base.materiais, ...doRegras.linhas], respostas, base.qtdPorItem);
+  const { conjuntoId, nomesPai } = paisDaVenda(base);
+  const doRegras = avaliarRegras(base.regras, { respostas, vendidosIds: base.idsVendidos, perguntas: base.perguntas, materiais: base.materiais, conjuntoId });
+  const linhas = montarMaterial([...base.materiais, ...doRegras.linhas], respostas, base.qtdPorItem, nomesPai);
   return { respostas, doRegras, linhas };
+}
+
+/** BOM em pai e filho (29/10/2026): o Conjunto Elétrico da venda (pai do que nenhum item reivindica) e o nome de cada item vendido, para as linhas filhas saberem de quem são. */
+export function paisDaVenda(base: any) {
+  const conj = base?.conj || [];
+  const idsVendidos = (base?.idsVendidos || []).map(String);
+  const conjuntoId = (conj.find((c: any) => idsVendidos.includes(String(c.id))) || conj[0])?.id;
+  const nomesPai: Record<string, string> = {};
+  conj.forEach((c: any) => { nomesPai[String(c.id)] = c.nome; });
+  (base?.vendidos || []).forEach((v: any) => { if (v?.item_id && v?.nome) nomesPai[String(v.item_id)] = v.nome; });
+  return { conjuntoId, nomesPai };
 }
 
 // ── Diferença entre dois cálculos ────────────────────────────────────────────
 
-export type DiferencaDeMaterial = { item_id: string | null; nome: string; codigo: string; unidade: string; antes: number; depois: number; delta: number };
+export type DiferencaDeMaterial = { item_id: string | null; nome: string; codigo: string; unidade: string; antes: number; depois: number; delta: number; pai_item_id?: string; pai_nome?: string };
 
 /** O que mudou entre o material calculado antes e depois: só os itens cuja quantidade é diferente. */
 export function diferencaDeMaterial(antes: any[], depois: any[]): DiferencaDeMaterial[] {
   const mapa = new Map<string, any>();
   const somar = (lista: any[], campo: 'antes' | 'depois') => (lista || []).forEach(l => {
-    const k = chaveLinha(l);
-    const x = mapa.get(k) || { item_id: l.item_id || null, nome: l.nome, codigo: l.codigo || '', unidade: l.unidade || 'UN', antes: 0, depois: 0 };
+    const k = chaveComPai(l);
+    const x = mapa.get(k) || { item_id: l.item_id || null, nome: l.nome, codigo: l.codigo || '', unidade: l.unidade || 'UN', antes: 0, depois: 0, ...(l.pai_item_id ? { pai_item_id: l.pai_item_id, pai_nome: l.pai_nome || '' } : {}) };
     x[campo] += num(l.quantidade);
     mapa.set(k, x);
   });
@@ -116,10 +130,14 @@ export function aplicarDiferencaNaBom(bom: any[], dif: DiferencaDeMaterial[], no
   const naoAchou: DiferencaDeMaterial[] = [];
   for (const d of dif) {
     const k = d.item_id || `txt:${d.nome}`;
-    const idx = linhas.findIndex(l => chaveLinha(l) === k);
+    // BOM em pai e filho (29/10/2026): acha primeiro a linha do mesmo item SOB O MESMO PAI; se a BOM é antiga (sem pai) ou foi mexida à mão, cai no mesmo item de qualquer pai
+    const kPai = `${d.pai_item_id || ''}|${k}`;
+    let idx = linhas.findIndex(l => chaveComPai(l) === kPai);
+    if (idx < 0) idx = linhas.findIndex(l => chaveLinha(l) === k);
     if (d.delta > 0) {
       if (idx >= 0) linhas[idx].quantidade = num(linhas[idx].quantidade) + d.delta;
-      else linhas.push({ item_id: d.item_id, nome: d.nome, codigo: d.codigo, unidade: d.unidade || 'UN', quantidade: d.delta, nao_cadastrado: false, descricao: `do ${nomeConjunto}` });
+      else linhas.push({ item_id: d.item_id, nome: d.nome, codigo: d.codigo, unidade: d.unidade || 'UN', quantidade: d.delta, nao_cadastrado: false,
+        ...(d.pai_item_id ? { pai_item_id: d.pai_item_id, pai_nome: d.pai_nome || '', descricao: '' } : { descricao: `do ${nomeConjunto}` }) });
     } else {
       const tira = -d.delta;
       if (idx < 0) { naoAchou.push(d); continue; }

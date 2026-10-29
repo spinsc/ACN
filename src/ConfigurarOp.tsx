@@ -23,7 +23,7 @@ import { notificarEvento } from './whatsappHelper';
 import Icone from './Icone';
 import { mdiTrayArrowUp, mdiTagOutline, mdiWrenchOutline, mdiCogOutline } from '@mdi/js';
 
-const chaveLinha = (l: any) => l?.item_id || `txt:${l?.nome}`;
+const chaveLinha = (l: any) => `${l?.pai_item_id || ''}|${l?.item_id || `txt:${l?.nome}`}`;   // com o pai (BOM em árvore, 29/10/2026)
 const temConteudo = (l: any) => l?.item_id || String(l?.nome || '').trim();
 
 /** Soma por item: a mesma peça em duas linhas vira uma só, com a quantidade somada (o que a janela da Engenharia já fazia). */

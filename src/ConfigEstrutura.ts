@@ -232,7 +232,7 @@ export async function resumoDoMaterialPorItem(veiculoId: string) {
  * suporte" não teria efeito, e a regra do parachoque falharia em silêncio — o
  * pior tipo de falha para quem separa material.
  */
-export function montarMaterial(materiais: any[], respostas: Record<string, string>, qtdPorItem: Record<string, number> = {}) {
+export function montarMaterial(materiais: any[], respostas: Record<string, string>, qtdPorItem: Record<string, number> = {}, nomesPai: Record<string, string> = {}) {
   const escolhidas = new Set(Object.values(respostas || {}).filter(Boolean));
   const vale = (m: any) => !m.opcao_id || escolhidas.has(m.opcao_id);
   const linhas = (materiais || []).filter(vale);
@@ -243,24 +243,35 @@ export function montarMaterial(materiais: any[], respostas: Record<string, strin
     ? (valorDeQuantidade(respostas?.[m.multiplicar_pergunta_id]) ?? 0)
     : (num(qtdPorItem?.[m.item_id]) || 1);
 
+  // BOM em pai e filho (29/10/2026): o material soma POR PAI (o item que ele instala). O mesmo parafuso sob dois pais são duas linhas; quem soma por item (estoque, compras) já somava linhas repetidas.
+  const paiDe = (m: any) => (m.pai_item_id || m.item_id || null) as string | null;
   const soma = new Map<string, any>();
   for (const m of linhas.filter(x => x.acao !== 'remover')) {
     const it = m.material || {};
     const q = num(m.quantidade) * mult(m);
     if (q <= 0) continue;
-    const atual = soma.get(m.material_item_id);
+    const pai = paiDe(m);
+    const chave = `${pai || ''}|${m.material_item_id}`;
+    const atual = soma.get(chave);
     if (atual) atual.quantidade += q;
-    else soma.set(m.material_item_id, {
+    else soma.set(chave, {
       item_id: m.material_item_id, nome: it.nome || '(item)', codigo: it.codigo || '',
       unidade: it.unidade || 'UN', quantidade: q, nao_cadastrado: false,
+      ...(pai ? { pai_item_id: String(pai), pai_nome: nomesPai?.[String(pai)] || '' } : {}),
     });
   }
+  // "remover" tira o material de onde ele estiver: primeiro do mesmo pai, depois dos outros (sem pai informado, o efeito é o mesmo de antes: o material some da lista)
   for (const m of linhas.filter(x => x.acao === 'remover')) {
-    const atual = soma.get(m.material_item_id);
-    if (!atual) continue;
-    const q = num(m.quantidade) * mult(m);
-    if (!num(m.quantidade) || atual.quantidade <= q) soma.delete(m.material_item_id);
-    else atual.quantidade -= q;
+    const pai = paiDe(m) || '';
+    const alvos = [...soma.entries()].filter(([, v]) => String(v.item_id) === String(m.material_item_id))
+      .sort(([a], [b]) => Number(b.startsWith(`${pai}|`)) - Number(a.startsWith(`${pai}|`)));
+    if (!alvos.length) continue;
+    let resto = num(m.quantidade) ? num(m.quantidade) * mult(m) : Infinity;
+    for (const [k, v] of alvos) {
+      if (resto === Infinity || v.quantidade <= resto) { if (resto !== Infinity) resto -= v.quantidade; soma.delete(k); }
+      else { v.quantidade -= resto; resto = 0; }
+      if (resto <= 0) break;
+    }
   }
   return [...soma.values()];
 }
@@ -302,7 +313,7 @@ export async function regrasDoVeiculo(veiculoId: string) {
  * `semRegra` é o "chicote a definir": pergunta da OP ou de quantidade que foi respondida e que NENHUMA regra aplicada deste veículo usa. Quantidade 0
  * não entra ("0 na frente" não pede chicote). Resposta de pergunta de item por opção não entra: essas seguem pelo material do item no veículo.
  */
-export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas, materiais }: { respostas: Record<string, string>; vendidosIds: string[]; perguntas: any[]; materiais?: any[] }) {
+export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas, materiais, conjuntoId }: { respostas: Record<string, string>; vendidosIds: string[]; perguntas: any[]; materiais?: any[]; conjuntoId?: string }) {
   const escolhidas = new Set(Object.values(respostas || {}).filter(Boolean));
   const vendidos = new Set((vendidosIds || []).filter(Boolean).map(String));
   const vale = (c: any) => c.tipo === 'resposta' ? escolhidas.has(c.opcao_id)
@@ -311,7 +322,10 @@ export function avaliarRegras(regras: any[], { respostas, vendidosIds, perguntas
   // regra sem condição nenhuma não vale (valeria para toda OP): não deveria existir, e a tela não deixa criar
   const aplicadas = (regras || []).filter(r => (r.condicoes || []).length > 0 && r.condicoes.every(vale));
 
-  const linhas = aplicadas.flatMap(r => (r.materiais || []).map((m: any) => ({ ...m, regra_id: r.id, opcao_id: null, item_id: null })));
+  // BOM em pai e filho (29/10/2026, pedido do usuário): o material da regra instala o item da regra; quando a regra só depende de respostas ou quantidades (chicote principal,
+  // derivação), ele instala o Conjunto Elétrico. `pai_item_id` guarda o item; o nome vem de quem monta (a venda tem o nome).
+  const paiDaRegra = (r: any) => (r.condicoes || []).find((c: any) => c.tipo === 'item' && c.item_id)?.item_id || conjuntoId || null;
+  const linhas = aplicadas.flatMap(r => (r.materiais || []).map((m: any) => ({ ...m, regra_id: r.id, opcao_id: null, item_id: null, pai_item_id: paiDaRegra(r) })));
   const itensCobertos = new Set<string>();
   const perguntasCobertas = new Set<string>();
   // pergunta de quantidade que o material do item usa para multiplicar (Slimled: "Quantos na frente?") já tem o que fazer: não é "chicote a definir"

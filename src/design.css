@@ -2888,6 +2888,12 @@ html body.dark .acn-opit-aviso[data-aviso="total-do-lote"] { border-color: #854d
 .acn-opit-botoes { display: flex; gap: 6px; }
 .acn-opit-linhas { display: flex; flex-direction: column; gap: 5px; }
 .acn-opit-linha { display: flex; gap: 6px; align-items: center; }
+/* BOM em pai e filho (29/10/2026): o material que instala o item pai fica recuado logo abaixo dele, com um traço na esquerda */
+.acn-opit-linha.filha { margin-left: 22px; padding-left: 8px; border-left: 2px solid var(--acn-line); }
+.acn-opit-grupo { margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--acn-text); }
+.acn-opit-tabela tr.filha td:nth-child(2) { padding-left: 24px; }
+.acn-opit-tabela tr.filha td { background: var(--acn-surface-2); }
+.acn-opit-tabela tr.acn-opit-grupo-tr td { padding-top: 8px; font-size: 12px; font-weight: 700; color: var(--acn-text); }
 .acn-opit-cod { font-size: 11px; color: var(--acn-muted); font-family: ui-monospace, 'IBM Plex Mono', monospace; white-space: nowrap; }
 .acn-opit-naocad { font-size: 11px; font-weight: 700; color: var(--acn-warn); white-space: nowrap; }
 .acn-opit-rodape .acn-opit-naocad { white-space: normal; font-weight: 500; }
