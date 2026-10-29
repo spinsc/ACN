@@ -43,6 +43,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
   compra_aprovacao: 'Aprovação de Compra',
   hora_extra:       'Hora extra',
   frete_aprovacao:  'Aprovação de Frete',
+  frete_entrega:    'Frete sem entrega confirmada',
   garantia:         'Garantia',
 };
 
@@ -51,7 +52,8 @@ const CONTEXTO_LABEL: Record<string, string> = {
 // (ComprasTab.tsx/LogisticaTab.tsx chamam resolverMencoesRespondidas na
 // hora). Não faz sentido oferecer uma caixa de resposta de texto aqui.
 // 'garantia' (G5, 20/10/2026): é só aviso de andamento do atendimento; a conversa fica na ficha, então não há caixa de resposta aqui.
-const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra', 'garantia']);
+// 'frete_entrega' (29/10/2026): aviso da rotina do banco ao vendedor da OP (frete em trânsito sem entrega confirmada); a resposta é cobrar a Logística ou o cliente, fora do sistema.
+const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra', 'garantia', 'frete_entrega']);
 
 // Responder uma menção — grava a resposta EXATAMENTE no mesmo lugar que a
 // tela de origem gravaria (então ela aparece lá também, não só aqui), e em
