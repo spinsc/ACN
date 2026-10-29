@@ -588,12 +588,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   useEffect(() => {
     load();
+    // Os avisos em tempo real chegam UM POR LINHA alterada (arrastar um cartão mexia na coluna toda: dezenas de avisos de uma vez) e cada aviso recarregava o quadro inteiro. Agora o primeiro aviso agenda
+    // UM recarregamento para daqui a 1,5 s e os que chegam nesse intervalo entram nele (29/10/2026, queda do sistema de 28/10: ver `ColunaRolavel` e `carregarAnalisePorOrigem`).
+    let agendado: any = null;
+    const recarregarJunto = () => { if (agendado) return; agendado = setTimeout(() => { agendado = null; load(true); }, 1500); };
     const ch = supabase
       .channel('crm-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, ()=>load(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, ()=>load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, recarregarJunto)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, recarregarJunto)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (agendado) clearTimeout(agendado); supabase.removeChannel(ch); };
   }, [load]);
 
   useEffect(() => { setAbaInterna('kanban'); }, [funil]);
@@ -718,11 +722,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const [moved]   = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
 
-    const resultados = await Promise.all(
-      reordered.map((c, i) => supabase.from('crm_oportunidades').update({ posicao: i + 1 }).eq('id', c.id))
-    );
-    const falhaOrdem = resultados.find((r: any) => r.error);
-    if (falhaOrdem) mostrarAviso(`Não foi possível gravar a nova ordem dos cards\n${falhaOrdem.error.message}`, 'erro');   // 7.62: o erro era ignorado
+    // a nova ordem numa chamada só, que mexe apenas nos cartões cuja posição mudou (antes: uma gravação por cartão da coluna, e um aviso em tempo real para cada uma)
+    const { error: falhaOrdem } = await supabase.rpc('crm_reordenar_cards', { p_ids: reordered.map(c => c.id) });
+    if (falhaOrdem) mostrarAviso(`Não foi possível gravar a nova ordem dos cards\n${falhaOrdem.message}`, 'erro');   // 7.62: o erro era ignorado
     await load(true);
   };
 
