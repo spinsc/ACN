@@ -1,0 +1,26 @@
+-- 29/10/2026 (revisão pós-queda de 28/10): lote 1 dos índices das chaves estrangeiras sem índice, só nas tabelas com 100 linhas ou mais. Ver a migração de mesmo nome.
+create index if not exists idx_cadastro_itens_categoria_estoque_id on public.cadastro_itens (categoria_estoque_id);
+create index if not exists idx_cadastro_itens_inclui_item_id on public.cadastro_itens (inclui_item_id) where inclui_item_id is not null;
+create index if not exists idx_op_config_respostas_opcao_id on public.op_configuracao_respostas (opcao_id);
+create index if not exists idx_op_config_respostas_item_id on public.op_configuracao_respostas (item_id);
+create index if not exists idx_op_config_respostas_pergunta_id on public.op_configuracao_respostas (pergunta_id);
+create index if not exists idx_veiculo_item_materiais_material_item_id on public.veiculo_item_materiais (material_item_id);
+create index if not exists idx_veiculo_item_materiais_item_id on public.veiculo_item_materiais (item_id);
+create index if not exists idx_veiculo_item_materiais_opcao_id on public.veiculo_item_materiais (opcao_id);
+create index if not exists idx_veiculo_item_materiais_multiplicar_pergunta_id on public.veiculo_item_materiais (multiplicar_pergunta_id);
+create index if not exists idx_oples_veiculo_id on public.oples (veiculo_id);
+create index if not exists idx_oples_kit_produto_id on public.oples (kit_produto_id);
+create index if not exists idx_oples_tecnico_producao_id on public.oples (tecnico_producao_id);
+create index if not exists idx_demandas_setoriais_centro_custo_id on public.demandas_setoriais (centro_custo_id);
+create index if not exists idx_pcp_cotacoes_fornecedores_pedido_id on public.pcp_cotacoes_fornecedores (pedido_id);
+create index if not exists idx_logistica_manifestos_pedido_compra_id on public.logistica_manifestos (pedido_compra_id);
+create index if not exists idx_crm_oportunidades_responsavel_id on public.crm_oportunidades (responsavel_id);
+create index if not exists idx_crm_oportunidades_cliente_id on public.crm_oportunidades (cliente_id);
+create index if not exists idx_crm_oportunidades_estagio_id on public.crm_oportunidades (estagio_id);
+create index if not exists idx_crm_oportunidades_licitacao_processo_id on public.crm_oportunidades (licitacao_processo_id);
+create index if not exists idx_cotacoes_precos_licitacao_id on public.cotacoes_precos (licitacao_id);
+create index if not exists idx_pcp_pedidos_compra_departamento_id on public.pcp_pedidos_compra (departamento_id);
+create index if not exists idx_pcp_pedidos_compra_centro_custo_id on public.pcp_pedidos_compra (centro_custo_id);
+create index if not exists idx_pcp_pedidos_compra_vencedora_id on public.pcp_pedidos_compra (vencedora_id);
+create index if not exists idx_analise_logs_setor_id on public.analise_logs (setor_id);
+create index if not exists idx_analise_logs_solicitacao_id on public.analise_logs (solicitacao_id);
