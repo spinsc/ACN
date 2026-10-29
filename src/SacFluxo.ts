@@ -192,3 +192,106 @@ export function demandaDeExecucaoDaOsDoCrm({ numero, equipamento, defeito, usuar
     logs_demanda: [{ texto: 'OS lançada pelo card do CRM (serviço vendido): vai direto para a execução, sem cotação.', usuario: usuario?.nome, hora: agora }],
   };
 }
+
+// ── S4 (PLANO_SAC_FLUXO.md, 29/10/2026): o fim da OS por cancelamento e a OS parada ───────────────────────────────────────────────────────────────────
+// Antes não existia "cancelar" (o status "Cancelada" era previsto no menu, mas nada o gravava) e nada dizia há quantos dias a OS estava na mesma etapa nem quem tinha que agir: 8 OS esperavam o SAC enviar o
+// orçamento havia mais de 60 dias, sem ninguém cobrado. Decisões do usuário (29/10/2026): cancela quem tem a aba SAC, sempre com motivo; a demanda aberta do Laboratório/Engenharia recebe só um recado e
+// um aviso (o setor encerra; eu não fecho a demanda por ele); OS PARADA é a que está 7 dias ou mais na mesma etapa.
+export const STATUS_OS_CANCELADA = 'Cancelada';
+export const STATUS_OS_ENCERRADOS = ['Entregue', STATUS_OS_CANCELADA];
+export const PRAZO_OS_PARADA_DIAS = 7;
+export const OPCOES_OS_PARADA_DIAS = [7, 15, 30];
+export type QuemAge = 'SAC' | 'Laboratório' | 'Produção' | 'Qualidade' | 'Fiscal' | 'Cliente';
+export const QUEM_AGE: QuemAge[] = ['SAC', 'Laboratório', 'Produção', 'Qualidade', 'Fiscal', 'Cliente'];
+
+/** Desde quando a OS está na etapa em que está: o gatilho do banco (`status_desde`); a OS anterior à regra usa a última atualização (e, sem ela, a abertura) como aproximação. */
+export function desdeQuandoNaEtapa(os: any): Date | null {
+  const bruto = os?.status_desde || os?.atualizado_em || os?.data_abertura;
+  const d = bruto ? new Date(bruto) : null;
+  return d && !isNaN(d.getTime()) ? d : null;
+}
+
+/** Dias corridos na etapa atual (inteiro, nunca negativo); null se a OS não tem data nenhuma. */
+export function diasNaEtapa(os: any, agora: Date = new Date()): number | null {
+  const d = desdeQuandoNaEtapa(os);
+  return d ? Math.max(0, Math.floor((agora.getTime() - d.getTime()) / 86400000)) : null;
+}
+
+/** OS parada = ainda em andamento e há `limite` dias ou mais na mesma etapa. OS entregue ou cancelada nunca está parada. */
+export function osParada(os: any, limite: number = PRAZO_OS_PARADA_DIAS, agora: Date = new Date()): boolean {
+  if (!os || STATUS_OS_ENCERRADOS.includes(os.status)) return false;
+  const dias = diasNaEtapa(os, agora);
+  return dias != null && dias >= limite;
+}
+
+/**
+ * Quem tem que agir agora e o que fazer, pela etapa da OS. null = a OS está encerrada (entregue ou cancelada).
+ * A OS lançada pelo card (S3) segue `quem_executa`: o SAC, o Laboratório; a veicular em execução é da Produção.
+ */
+export function quemTemQueAgir(os: any): { quem: QuemAge; oque: string } | null {
+  if (!os || STATUS_OS_ENCERRADOS.includes(os.status)) return null;
+  const veicular = !!os.is_manutencao_veicular;
+  switch (os.status) {
+    case 'Aberta': return { quem: 'SAC', oque: 'OS sem caminho: decidir se segue, cancela ou cobra' };
+    case 'Diagnóstico': return { quem: veicular ? 'Produção' : 'Laboratório', oque: 'Terminar o diagnóstico e o orçamento' };
+    case 'Orçamento Pronto': return { quem: 'SAC', oque: 'Enviar o orçamento ao cliente' };
+    case 'Orç. Enviado': return { quem: 'Cliente', oque: 'Resposta do cliente ao orçamento (o SAC cobra)' };
+    case 'Aprovado': return { quem: 'Laboratório', oque: 'Iniciar a execução' };
+    case 'Em Cotação': return { quem: 'SAC', oque: osSemCobranca(os) ? 'Seguir sem cotação (garantia)' : 'Montar e enviar a cotação ao cliente' };
+    case 'Aguardando Aprovação Cliente': return { quem: 'Cliente', oque: 'Aprovação da cotação (o SAC cobra)' };
+    case 'Em Provisionamento': return { quem: 'Produção', oque: 'Marcar a data do atendimento' };
+    case 'Aguardando Aceite SAC': return { quem: 'SAC', oque: 'Confirmar a data definida pela Produção' };
+    case 'Provisionada': case 'Aguardando Início': return { quem: 'Produção', oque: 'Receber o veículo e iniciar' };
+    case 'Verificação e Orçamento': return { quem: 'Produção', oque: 'Verificar e orçar' };
+    case 'Em Execução': case 'Em Manutenção':
+      if (os.quem_executa === 'sac') return { quem: 'SAC', oque: 'Concluir a OS quando o serviço terminar' };
+      return { quem: veicular ? 'Produção' : 'Laboratório', oque: 'Executar o serviço' };
+    case 'Aguardando CQ': return { quem: 'Qualidade', oque: 'Auditar a OS' };
+    case 'Concluído': return osSemCobranca(os) ? { quem: 'SAC', oque: 'Entregar ao cliente' } : { quem: 'SAC', oque: 'Enviar ao Fiscal' };
+    case 'Manutenção Concluída': return { quem: 'SAC', oque: 'Entregar ao cliente' };
+    case 'Aguardando Envio Fiscal': return { quem: 'SAC', oque: 'Informar os seriais e enviar ao Fiscal' };
+    case 'Aguardando Emissão NF': return { quem: 'Fiscal', oque: 'Emitir a nota' };
+    case 'Faturada - Aguardando Entrega': return { quem: 'SAC', oque: 'Entregar ao cliente' };
+    case 'Reprovado': return { quem: 'SAC', oque: 'Reavaliar ou encerrar a OS' };
+    default: return { quem: 'SAC', oque: 'Conferir a OS' };
+  }
+}
+
+/** Por que a OS não pode ser cancelada agora; null = pode. Depois que o Fiscal recebeu a OS (nota em emissão ou emitida) ou ela foi entregue, não se cancela por aqui. */
+export function motivoQueNaoCancela(os: any): string | null {
+  if (!os) return 'OS não encontrada.';
+  if (os.status === STATUS_OS_CANCELADA) return 'A OS já está cancelada.';
+  if (os.status === 'Entregue') return 'A OS já foi entregue.';
+  if (os.status === STATUS_AGUARDANDO_NOTA || os.status === STATUS_OS_FATURADA) return 'A OS já está no Fiscal (nota em emissão ou emitida): o cancelamento passa pelo Fiscal.';
+  return null;
+}
+
+export const podeCancelarOS = (os: any): boolean => motivoQueNaoCancela(os) === null;
+
+/** As demandas do Laboratório/Engenharia que ainda estão abertas (nem concluídas nem canceladas): são as que recebem o recado do cancelamento. */
+export const demandasAbertasDaOS = (demandas: any[]): any[] =>
+  (demandas || []).filter((d: any) => !['Concluido', 'Concluida', 'Concluído', 'Concluída', 'Cancelada', 'Cancelado'].includes(String(d?.status || '')));
+
+/** O recado que vai no histórico da demanda aberta quando a OS é cancelada. */
+export const recadoDoCancelamento = (os: any, motivo: string, usuario: any, agora: string) =>
+  ({ texto: `OS ${os?.numero_os || ''} CANCELADA pelo SAC. Motivo: ${String(motivo).trim()}. Encerre esta demanda.`, usuario: usuario?.nome, hora: agora });
+
+/** O que a gravação do cancelamento põe na OS. */
+export const camposDoCancelamento = (motivo: string, usuario: any, agora: string) =>
+  ({ status: STATUS_OS_CANCELADA, motivo_cancelamento: String(motivo).trim(), cancelada_em: agora, cancelada_por: usuario?.nome || usuario?.email || null, atualizado_em: agora });
+
+/** O painel "o que está com o SAC hoje": quantas OS em andamento há com cada um que tem que agir, quantas já estão paradas e a lista do que é do SAC (as mais paradas primeiro). */
+export function resumoDoQueEstaComQuem(ordens: any[], limite: number = PRAZO_OS_PARADA_DIAS, agora: Date = new Date()) {
+  const porQuem: Record<string, { total: number; paradas: number }> = {};
+  for (const q of QUEM_AGE) porQuem[q] = { total: 0, paradas: 0 };
+  const doSac: { os: any; oque: string; dias: number | null }[] = [];
+  for (const os of ordens || []) {
+    const a = quemTemQueAgir(os);
+    if (!a) continue;
+    porQuem[a.quem].total++;
+    if (osParada(os, limite, agora)) porQuem[a.quem].paradas++;
+    if (a.quem === 'SAC') doSac.push({ os, oque: a.oque, dias: diasNaEtapa(os, agora) });
+  }
+  doSac.sort((x, y) => (y.dias ?? -1) - (x.dias ?? -1));
+  return { porQuem, doSac };
+}

@@ -15,7 +15,8 @@ import AgendaWidget from './AgendaWidget';
 import GarantiaTab, { gravarGarantia } from './GarantiaTab';
 import { registrarOsGerada } from './GarantiaModelo';
 import EnviarOsAoFiscalModal from './EnviarOsAoFiscalModal';
-import { podeConcluirPeloSac, estaComOLaboratorio } from './SacFluxo';
+import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, osParada, podeCancelarOS, motivoQueNaoCancela, demandasAbertasDaOS, recadoDoCancelamento, camposDoCancelamento,
+  resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE } from './SacFluxo';
 import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -61,6 +62,7 @@ const STATUS_COR: Record<string, string> = {
   'Aguardando Envio Fiscal':       '#f59e0b',
   'Aguardando Emissão NF':         '#0891b2',
   'Faturada - Aguardando Entrega': '#166534',
+  'Cancelada':                     '#6b7280',   // S4 (29/10/2026): cancelada pelo SAC, com motivo
 };
 
 // Etapa 12d3 (01/10/2026): na lista de OS a cor do status vem da FAMÍLIA do guia de interface (a mesma de todas as telas), não mais do hexadecimal acima — que segue valendo só para
@@ -70,7 +72,7 @@ const FAMILIA_STATUS_SAC: Record<string, string> = {
   'Em Execução': 'marca', 'Concluído': 'ok', 'Entregue': 'ok',
   'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'ok',
   'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Em Manutenção': 'marca', 'Manutenção Concluída': 'ok', 'Aguardando CQ': 'atencao',
-  'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok',
+  'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok', 'Cancelada': 'neutro',
 };
 
 // Etapa 7.21 (01/10/2026, R16): prazo_orcamento e data_prevista_pos_aprovacao são do tipo DATE ("2026-09-30"). new Date("2026-09-30") é meia-noite de Londres, que no
@@ -199,6 +201,22 @@ const FORM_VAZIO = {
 };
 
 // Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
+// S4 (29/10/2026): quem tem que agir na OS e há quantos dias ela está na etapa; vermelho quando já está parada (7 dias ou mais na mesma etapa)
+function QuemAgeDaOS({ os }: { os: any }) {
+  const a = quemTemQueAgir(os);
+  if (!a) return null;
+  const dias = diasNaEtapa(os);
+  const parada = osParada(os);
+  return (
+    <div className="acn-selos acn-sac-agir">
+      <Selo familia="neutro" ponto={false} title={a.oque}>Aguarda: {a.quem}</Selo>
+      {dias != null && (parada
+        ? <Selo familia="erro" ponto={false} title={`Há ${dias} dia(s) na mesma etapa. ${a.oque}.`}>parada há {dias} dias</Selo>
+        : <span className="acn-fraco">{dias === 0 ? 'nesta etapa desde hoje' : `há ${dias} dia${dias === 1 ? '' : 's'} nesta etapa`}</span>)}
+    </div>
+  );
+}
+
 // S3 (29/10/2026): o pedido de venda do card do CRM de onde a OS foi lançada (a OS antiga e a aberta pelo SAC não têm)
 function SeloPvDaOS({ os }: { os: any }) {
   return os?.numero_pv ? <Selo familia="neutro" ponto={false} title="Pedido de venda do card do CRM de onde esta OS foi lançada">PV {os.numero_pv}</Selo> : null;
@@ -251,6 +269,9 @@ function SacTabCompleto({ currentUser }) {
   const [filtroTipo, setFiltroTipo]         = useState('');
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [filtroEmpresa, setFiltroEmpresa]     = useState('');
+  // S4 (29/10/2026): quem tem que agir (SAC, Laboratório, Produção…) e "parada há N dias ou mais" (a OS na mesma etapa há N dias)
+  const [filtroQuem, setFiltroQuem]           = useState('');
+  const [filtroParada, setFiltroParada]       = useState('');
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
@@ -1019,15 +1040,20 @@ OK = ACN   |   Cancelar = DETECH`;
     if (filtroAvaliacao === 'Veicular' && !o.is_manutencao_veicular) return false;
     if (filtroEmpresa === 'sem' && o.empresa) return false;
     if (filtroEmpresa && filtroEmpresa !== 'sem' && o.empresa !== filtroEmpresa) return false;
+    // S4 (29/10/2026): a OS cancelada sai da lista e do quadro (era por isso que a lista só crescia); só aparece quando se filtra pelo status "Cancelada"
+    if (o.status === STATUS_OS_CANCELADA && filtroStatus !== STATUS_OS_CANCELADA) return false;
+    if (filtroQuem && quemTemQueAgir(o)?.quem !== filtroQuem) return false;
+    if (filtroParada && !osParada(o, Number(filtroParada))) return false;
     if (busca) return combinaBusca([o.numero_os, o.cliente_nome, o.equipamento_nome], busca);
     return true;
   });
+  const canceladasFora = ordens.filter((o: any) => o.status === STATUS_OS_CANCELADA).length;
 
   // KANBAN, 3 colunas, "só pela etapa de trabalho" (escolha do usuário em pergunta clicável, 05/10/2026):
   // PENDENTE = Aberta e Diagnóstico · CONCLUÍDO = Concluído, Entregue e Faturada · EM ANDAMENTO = tudo o que está entre o orçamento e a entrega.
   // Reprovado fica FORA do quadro (vê-se na lista, no filtro de status). Uma situação que ninguém classificou cai em EM ANDAMENTO, para nenhuma OS sumir do quadro.
   const colunaKanban = (status: string): 'pendente' | 'andamento' | 'concluido' | null => {
-    if (status === 'Reprovado') return null;
+    if (status === 'Reprovado' || status === STATUS_OS_CANCELADA) return null;
     if (['Aberta', 'Diagnóstico'].includes(status)) return 'pendente';
     if (['Concluído', 'Entregue', 'Faturada - Aguardando Entrega'].includes(status)) return 'concluido';
     return 'andamento';
@@ -1075,6 +1101,7 @@ OK = ACN   |   Cancelar = DETECH`;
                 <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /><SeloPvDaOS os={o} /></div>
                 <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}{o.numero_serie ? ' · SN ' + o.numero_serie : ''}</div>
                 <div className="acn-kb-meta"><Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo></div>
+                <QuemAgeDaOS os={o} />
                 <div className="acn-acoes-linha quebra">{renderAcoes(o)}</div>
               </div>
             ))}
@@ -1296,6 +1323,8 @@ OK = ACN   |   Cancelar = DETECH`;
       // S2: a OS cobrada concluída pode sair SEM nota só com um motivo (cortesia): vira "sem cobrança" e segue para a entrega. É a saída de exceção; o caminho normal é "Enviar ao Fiscal"
       { rotulo: 'Entregar sem nota (cortesia)', titulo: 'A OS concluída não será faturada: pede o motivo, passa a valer como sem cobrança e segue para a entrega', icone: mdiCloseCircleOutline, oculto: !(os.status === 'Concluído' && !osSemCobranca(os)), onClick: ()=>entregarSemNota(os) },
       { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
+      // S4 (29/10/2026): o fim da OS desistida, duplicada ou criada errada; some do quadro e da lista, com o motivo guardado
+      { rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
     ]} />);
     return btns;
   };
@@ -1312,6 +1341,36 @@ OK = ACN   |   Cancelar = DETECH`;
     if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Em Execução' }, newRow: { status: 'Concluído', data_finalizacao_execucao: agora }, user: currentUser });
     notificarEvento('sac_os_concluida', `*OS ${os.numero_os} concluída pelo SAC*\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}`);
+    fetchOrdens();
+  };
+
+  // S4 (29/10/2026): cancelar a OS. Quem tem a aba SAC cancela, sempre com motivo (vai à OS, à auditoria e ao aviso). A OS que já está no Fiscal ou foi entregue não se cancela por aqui. A gravação só pega
+  // se a OS ainda está na etapa que a pessoa viu. A demanda ABERTA do Laboratório/Engenharia não é fechada por mim (decisão do usuário): recebe um recado no histórico e o setor é avisado, e ele a encerra.
+  // Se a leitura das demandas falhar, o cancelamento não é feito (não se finge que "não há demanda").
+  const cancelarOS = async (os: any) => {
+    const naoPode = motivoQueNaoCancela(os);
+    if (naoPode) { alert(naoPode); return; }
+    const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+    if (erroDem) { alert(`Não foi possível conferir as demandas da ${os.numero_os} (${erroDem.message}). A OS NÃO foi cancelada: tente de novo.`); return; }
+    const abertas = demandasAbertasDaOS(dem || []);
+    const motivo = await pedirTexto(`Por que a ${os.numero_os} será cancelada? (desistência do cliente, OS duplicada, aberta por engano...)\n\nO motivo fica na OS e no histórico.`);
+    if (motivo === null) return;
+    if (!String(motivo).trim()) { alert('Informe o motivo do cancelamento.'); return; }
+    const setores = [...new Set(abertas.map((d: any) => d.setor_destino).filter(Boolean))];
+    if (!await confirmar(`Cancelar a ${os.numero_os} (${os.status})?\n\nMotivo: ${String(motivo).trim()}` + (abertas.length ? `\n\nHá ${abertas.length} demanda(s) aberta(s) (${setores.join(', ')}): elas recebem um recado e o setor é avisado, mas quem encerra é o setor.` : ''))) return;
+    const agora = new Date().toISOString();
+    const campos = camposDoCancelamento(motivo, currentUser, agora);
+    const { data, error } = await supabase.from('sac_ordens_servico').update(campos).eq('id', os.id).eq('status', os.status).select('id');
+    if (error) { alert('Não foi possível cancelar a OS: ' + error.message); return; }
+    if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada: confira e tente de novo.`); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: campos, user: currentUser });
+    const falhas: string[] = [];
+    for (const d of abertas) {
+      const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoCancelamento(os, motivo, currentUser, agora)] }).eq('id', d.id);
+      if (erroRecado) falhas.push(`${d.setor_destino}: ${erroRecado.message}`);
+    }
+    if (falhas.length) mostrarAviso(`A ${os.numero_os} foi cancelada, mas não foi possível deixar o recado em ${falhas.length} demanda(s): ${falhas.join('; ')}. Avise o setor para encerrar a demanda.`, 'erro');
+    notificarEvento('sac_os_cancelada', `*OS ${os.numero_os} CANCELADA*\nCliente: ${os.cliente_nome}\nMotivo: ${String(motivo).trim()}\nPor: ${currentUser?.nome}` + (setores.length ? `\nEncerrar a demanda: ${setores.join(', ')}` : ''));
     fetchOrdens();
   };
 
@@ -2031,6 +2090,43 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
           <span className="acn-fraco acn-sac-legenda-nota">(Lab executa diagnóstico e reparo)</span>
         </div>
 
+        {/* S4 (29/10/2026): o que está com cada setor hoje. O SAC vê o que é dele e há quantos dias está lá; clicar no setor filtra a lista e o quadro */}
+        {(() => {
+          const r = resumoDoQueEstaComQuem(ordens);
+          const paradasDoSac = r.doSac.filter(x => osParada(x.os));
+          return (
+            <div className="sec-body acn-sac-painel">
+              <div className="acn-quadro-titulo">O que está com cada setor hoje</div>
+              <Chips rotulo="Quem tem que agir" ativo={filtroQuem || 'todos'} onChange={id => setFiltroQuem(id === 'todos' ? '' : id)}
+                itens={[{ id: 'todos', rotulo: 'Todos' }, ...QUEM_AGE.map(q => ({ id: q, rotulo: `${q} (${r.porQuem[q].total}${r.porQuem[q].paradas ? ` · ${r.porQuem[q].paradas} paradas` : ''})` }))]} />
+              {paradasDoSac.length > 0 && (
+                <Faixa tom="erro" acao={<Botao pequeno onClick={() => { setFiltroQuem('SAC'); setFiltroParada(String(PRAZO_OS_PARADA_DIAS)); trocarVisaoOS('lista'); }}>Ver na lista</Botao>}>
+                  <strong>{paradasDoSac.length} OS esperam o SAC há {PRAZO_OS_PARADA_DIAS} dias ou mais.</strong> A mais parada é a {paradasDoSac[0].os.numero_os} ({paradasDoSac[0].oque.toLowerCase()}), há {paradasDoSac[0].dias} dias.
+                </Faixa>
+              )}
+              {r.doSac.length > 0 && (
+                <div className="acn-rolagem acn-sem-recuo">
+                  <table className="acn-tabela acn-densa" aria-label="OS que estão com o SAC">
+                    <thead><tr><th>OS</th><th>Cliente</th><th>Etapa</th><th>O que fazer</th><th className="acn-dir">Na etapa há</th></tr></thead>
+                    <tbody>
+                      {r.doSac.slice(0, 6).map(x => (
+                        <tr key={x.os.id} className={osParada(x.os) ? 'acn-linha-alerta' : undefined}>
+                          <td className="acn-forte">{x.os.numero_os}</td>
+                          <td>{x.os.cliente_nome || '—'}</td>
+                          <td><Selo familia={FAMILIA_STATUS_SAC[x.os.status] || 'neutro'}>{x.os.status}</Selo></td>
+                          <td>{x.oque}</td>
+                          <td className="acn-dir">{x.dias == null ? '—' : `${x.dias} dia${x.dias === 1 ? '' : 's'}`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {r.doSac.length > 6 && <div className="acn-fraco">Mostrando as 6 mais paradas de {r.doSac.length}; use o filtro "SAC" para ver todas.</div>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Filtros */}
         <div className="sec-body acn-sac-filtros">
           <input className="acn-input acn-sac-busca" aria-label="Buscar OS" placeholder="Buscar OS / cliente / equip."
@@ -2054,7 +2150,11 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             {EMPRESAS_OS.map(e=><option key={e} value={e}>{e}</option>)}
             <option value="sem">Sem empresa</option>
           </select>
-          <Botao pequeno onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setBusca('');}}>Limpar</Botao>
+          <select className="acn-input" aria-label="OS parada há mais de" value={filtroParada} onChange={e=>setFiltroParada(e.target.value)}>
+            <option value="">Parada há…</option>
+            {OPCOES_OS_PARADA_DIAS.map(n => <option key={n} value={n}>Paradas há {n} dias ou mais</option>)}
+          </select>
+          <Botao pequeno onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setFiltroQuem('');setFiltroParada('');setBusca('');}}>Limpar</Botao>
         </div>
 
         {/* ── KANBAN (05/10/2026) ── */}
@@ -2063,6 +2163,11 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             {reprovadasFiltradas > 0 && (
               <Faixa tom="atencao" acao={<Botao pequeno onClick={() => { setFiltroStatus('Reprovado'); trocarVisaoOS('lista'); }}>Ver na lista</Botao>}>
                 {reprovadasFiltradas} OS reprovada(s) ficam fora do quadro — estão na lista, no filtro de status.
+              </Faixa>
+            )}
+            {canceladasFora > 0 && (
+              <Faixa tom="info" acao={<Botao pequeno onClick={() => { setFiltroStatus(STATUS_OS_CANCELADA); trocarVisaoOS('lista'); }}>Ver na lista</Botao>}>
+                {canceladasFora} OS cancelada(s) ficam fora do quadro e da lista — estão no filtro de status "Cancelada".
               </Faixa>
             )}
             {loading ? <div className="acn-empty">Carregando...</div> : (
@@ -2093,6 +2198,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                                 <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
                                 {o.tipo_servico && <span className="acn-fraco">{o.tipo_servico}</span>}
                               </div>
+                              <QuemAgeDaOS os={o} />
                               <div className="acn-kb-meta acn-fraco">
                                 <span>Abertura {fmtDt(o.data_abertura)}</span>
                                 {o.prazo_orcamento && <span>Prazo orç. {fmtDt(o.prazo_orcamento)}</span>}
@@ -2128,7 +2234,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                   const difHoras = o.tipo_avaliacao==='Remota' && o.horas_cobradas_cotacao!=null && o.kpi_execucao_horas!=null && Math.abs(Number(o.horas_cobradas_cotacao)-Number(o.kpi_execucao_horas))>0.01;
                   const cobrouMais = Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas);
                   return (
-                  <tr key={o.id} className={ordensNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : o.status==='Reprovado' ? 'acn-linha-alerta' : ''}>
+                  <tr key={o.id} className={ordensNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : (o.status==='Reprovado' || osParada(o)) ? 'acn-linha-alerta' : ''}>
                     <td>
                       <div className="acn-duas acn-sac-id">
                         <strong className="acn-forte">{o.numero_os}</strong>
@@ -2178,6 +2284,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     </td>
                     <td>
                       <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
+                      <QuemAgeDaOS os={o} />
                       {o.revisao_pendente && (
                         <div><span className="acn-txt-erro acn-sac-icone-texto acn-sac-revisao"><Icone path={mdiAlertOutline} size={12} /> Revisão pendente</span></div>
                       )}

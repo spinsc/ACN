@@ -773,6 +773,9 @@ html body .acn-main table.acn-tabela tr.acn-linha-inativa > td { opacity: .55; }
 /* ── SAC · lista de Ordens de Serviço (Etapa 12d3, 01/10/2026): só aparência ──────────────────────────────────── */
 html body .sec-body.acn-sac-legenda { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 14px; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
 .acn-sac-legenda-nota { margin-left: 8px; font-size: 12px; }
+/* S4 (29/10/2026): o painel "o que está com cada setor hoje" e a linha "Aguarda: quem · há quantos dias" de cada OS */
+html body .sec-body.acn-sac-painel { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--acn-line); }
+.acn-sac-agir { align-items: center; margin-top: 4px; }
 html body .sec-body.acn-sac-filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--acn-line); }
 html body .acn-sac-filtros .acn-input { flex: 0 1 170px; min-width: 140px; width: auto; }
 html body .acn-sac-filtros .acn-input.acn-sac-busca { flex-basis: 230px; }
