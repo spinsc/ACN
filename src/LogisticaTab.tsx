@@ -13,8 +13,7 @@ import { creditarCompraRecebida, fmtQtd, avisosDaReposicao } from './Estoque';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline, mdiPencilOutline } from '@mdi/js';
-import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
-import { opTemRemessas, contarFretesAbertosDaOp, oFreteLiberaAOp } from './Remessas';
+import { liberarOpQuandoOFreteSai, freteSemEntrega, rotuloSemEntrega, explicacaoSemEntrega } from './FreteDaOp';
 import QuadroRetornosDePatio from './RetornosDePatio';
 import ModalChegadaDeItens from './ChegadaDeItens';
 import { lerDemandasQueEsperam } from './EsperaDeMaterial';
@@ -636,6 +635,24 @@ function FretesPanel({ currentUser }: any) {
     } catch (e) { console.warn('Falha ao notificar criador do frete:', e); }
   };
 
+  // O frete saiu ("Em Trânsito"): a OP não espera mais o canhoto, segue para a liberação comercial (pedido do usuário em 29/10/2026; regra e porquê em FreteDaOp.ts).
+  // Quem está na tela vê o que aconteceu; o histórico da OP e o recado no acompanhamento ficam gravados. Frete de OS, de licitação ou de OP que não esperava o frete não muda nada.
+  const liberarOpAoSairOFrete = async (frete: any) => {
+    const r = await liberarOpQuandoOFreteSai({ frete, quando: 'saida', usuario: currentUser });
+    if (r.erro) { mostrarAviso(`O frete saiu, mas não foi possível liberar a OP ${r.opl || ''} para o Comercial: ${r.erro}\nA OP continua em "Aguardando Cotação Frete".`, 'erro'); return; }
+    if (!r.opl || (!r.avancou && r.motivo !== 'outros')) return;
+    const texto = r.avancou
+      ? `🚚 Frete em trânsito — ${frete.descricao}\nTransportadora: ${frete.transportadora || '—'}. A OP segue para a liberação comercial sem esperar a entrega.`
+      : `🚚 Frete em trânsito — ${frete.descricao}\nAinda há ${r.abertos} frete(s) desta OP sem sair: ela segue para a liberação comercial quando todos saírem.`;
+    try {
+      await supabase.from('op_acompanhamentos').insert({
+        referencia_id: r.opl, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc, setor: 'Logística', texto,
+        usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('Falha ao postar o recado de saída do frete:', e); }
+    mostrarAviso(r.avancou ? `Frete em trânsito: a OP ${r.opl} seguiu para a liberação comercial.` : `Frete em trânsito. A OP ${r.opl} ainda tem ${r.abertos} frete(s) sem sair e segue quando todos saírem.`, r.avancou ? 'ok' : 'atencao');
+  };
+
   const confirmarFreteComVencedora = async () => {
     if (!modalFrete) return;
     // 3 cotações é o recomendado, não mais obrigatório — nem sempre dá pra
@@ -665,6 +682,7 @@ function FretesPanel({ currentUser }: any) {
       if (error) { alert('Erro: ' + error.message); return; }
       logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
         oldRow: modalFrete, newRow: { ...modalFrete, ...novoRow }, user: currentUser });
+      await liberarOpAoSairOFrete({ ...modalFrete, ...novoRow });
       fecharModalFrete();
       fetchAll();
       return;
@@ -729,6 +747,7 @@ function FretesPanel({ currentUser }: any) {
       logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
         oldRow: modalFrete, newRow: { ...modalFrete, ...novoRow }, user: currentUser });
       await notificarCriadorFrete(modalFrete, `Frete aprovado e liberado — ${modalFrete.descricao}.`);
+      await liberarOpAoSairOFrete({ ...modalFrete, ...novoRow });
     }
     setRespondendoAprovacao(false);
     fecharModalFrete();
@@ -791,9 +810,10 @@ function FretesPanel({ currentUser }: any) {
   // (embalagem → Aguardando Cotacao Frete, ver AlmoxarifadoTab.tsx) ficava
   // presa nesse status pra sempre — nada aqui avançava o status_geral dela
   // quando o frete chegava, então alguém precisava editar a OP na mão pra
-  // destravar. Agora, entregando um frete ligado a uma OP que ainda está
+  // destravar. Entregando um frete ligado a uma OP que ainda está
   // "Aguardando Cotacao Frete", ela segue sozinha pra liberação comercial —
-  // o mesmo destino que o caminho FOB (sem frete a cotar) já usa.
+  // o mesmo destino que o caminho FOB (sem frete a cotar) já usa. Desde 29/10/2026 ela segue
+  // antes, quando o frete SAI (ver `liberarOpAoSairOFrete`); a entrega só alcança a OP que ainda esperava.
   const postarAndamentoVinculo = async (frete: any) => {
     if (!frete.vinculo_tipo || !frete.vinculo_id) return;
     const valorFmt = frete.valor_frete
@@ -805,42 +825,27 @@ function FretesPanel({ currentUser }: any) {
       // nem tirá-la de "Aguardando Cotacao Frete" — o mesmo travamento que a Etapa 1 corrigiu para os fretes novos.
       // Nenhum dado foi alterado: a leitura é que passou a reconhecer os dois nomes.
       if (frete.vinculo_tipo === 'op_os' || frete.vinculo_tipo === 'opl') {
-        const { data: opl } = await supabase.from('oples').select('id,opl,status_geral').eq('id', frete.vinculo_id).maybeSingle();
+        // 29/10/2026: a OP já segue para a liberação comercial quando o frete SAI (liberarOpAoSairOFrete). Este é o caminho de quem ainda estava esperando: o frete anterior a essa regra, ou o de uma
+        // remessa que só pôde liberar a OP quando o último frete saísse. Fatia 5 das remessas (14/10/2026): OP com envio parcial tem um frete por remessa e só segue quando nenhum outro estiver sem sair.
+        const lib = await liberarOpQuandoOFreteSai({ frete, quando: 'entrega', usuario: currentUser });
+        if (lib.erro) console.warn('Falha ao liberar a OP pela entrega do frete:', lib.erro);
         // referencia_id do acompanhamento é o NÚMERO da OP (numero_opl), não o
         // UUID — é assim que OplAcompModal.tsx busca (AcnTabShared.tsx:1612,
         // `modalAcomp.numero_opl || String(modalAcomp.id)`). Bug irmão achado
         // na mesma varredura de 29/09/2026: com o UUID aqui, o recado nunca
         // aparecia na aba de Acompanhamento de ninguém, mesmo sendo gravado.
         await supabase.from('op_acompanhamentos').insert({
-          referencia_id: opl?.opl || frete.vinculo_id, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc,
+          referencia_id: lib.opl || frete.vinculo_id, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc,
           setor: 'Logística', texto,
           usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
           criado_em: new Date().toISOString(),
         });
-        // fatia 5 (14/10/2026, remessas): OP com envio parcial tem um frete por remessa. O frete entregue só leva a OP adiante quando NENHUM outro frete dela estiver aberto;
-        // antes o primeiro entregue já bastava. OP sem remessa: igual a sempre. Se a conferência falhar, segue como antes (melhor adiantar que deixar a OP presa sem ninguém para destravar).
-        const temRem = opl?.status_geral === 'Aguardando Cotacao Frete' ? await opTemRemessas(opl.id) : false;
-        const outros = temRem ? await contarFretesAbertosDaOp(opl.id, frete.id) : { abertos: 0, erro: null };
-        const aindaHaFrete = temRem && !outros.erro && !oFreteLiberaAOp({ temRemessas: temRem, outrosFretesAbertos: outros.abertos });
-        if (aindaHaFrete) {
+        if (lib.motivo === 'outros') {
           await supabase.from('op_acompanhamentos').insert({
-            referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc, setor: 'Logística',
-            texto: `Este frete foi entregue, mas ainda há ${outros.abertos} frete(s) de outras remessas em aberto: a OP segue para a liberação comercial quando todos forem entregues.`,
+            referencia_id: lib.opl, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc, setor: 'Logística',
+            texto: `Este frete foi entregue, mas ainda há ${lib.abertos} frete(s) de outras remessas sem sair: a OP segue para a liberação comercial quando todos saírem.`,
             usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: new Date().toISOString(),
           });
-        }
-        if (opl?.status_geral === 'Aguardando Cotacao Frete' && !aindaHaFrete) {
-          const statusNovo = statusDeLiberacaoComercial(opl);
-          await supabase.from('oples').update({ status_geral: statusNovo }).eq('id', opl.id);
-          logChange({ module: 'logistica', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
-            oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: statusNovo }, user: currentUser });
-          await supabase.from('logs_movimentacao_opl').insert({
-            opl_id: opl.id, numero_opl: opl.opl, setor: 'Logística',
-            evento: `Frete entregue — segue para liberação comercial`,
-            status_anterior: opl.status_geral, status_novo: statusNovo,
-            usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
-          });
-          notificarEvento('frete_entregue', `🚚 Frete da OP ${opl.opl} entregue — liberada para o Comercial.`);
         }
       } else if (frete.vinculo_tipo === 'licitacao') {
         await supabase.from('licitacao_documentos').insert({
@@ -1112,6 +1117,22 @@ function FretesPanel({ currentUser }: any) {
         </div>
       )}
 
+      {/* Frete que saiu e cuja entrega ninguém confirmou (pedido do usuário em 29/10/2026): 5 dias desde a coleta ou a data prevista já passada. A mesma conta avisa o vendedor da OP nas Menções (função do banco). */}
+      {!loading && (() => {
+        const semEntrega = fretes.map((f: any) => ({ f, a: freteSemEntrega(f) })).filter(x => x.a);
+        if (!semEntrega.length) return null;
+        const maisAntigo = semEntrega.reduce((m, x) => ((x.a.dias ?? 0) > (m.a.dias ?? 0) ? x : m), semEntrega[0]);
+        return (
+          <div className="sec-body">
+            <Faixa tom="erro" icone={mdiAlertOutline}>
+              <strong>{semEntrega.length} frete{semEntrega.length === 1 ? '' : 's'} em trânsito sem entrega confirmada.</strong>{' '}
+              O mais antigo é {maisAntigo.f.descricao}{maisAntigo.a.dias != null ? `, que saiu há ${maisAntigo.a.dias} dia${maisAntigo.a.dias === 1 ? '' : 's'}` : ''}.
+              Confirme a chegada e anexe o canhoto (botão "Canhoto"), ou cancele o frete se ele não saiu. O vendedor da OP também é avisado, pelas Menções.
+            </Faixa>
+          </div>
+        );
+      })()}
+
       {loading ? <div className="acn-empty">Carregando...</div>
         : fretes.length===0 ? <div className="acn-empty">Nenhum frete registrado.</div>
         : (
@@ -1125,8 +1146,8 @@ function FretesPanel({ currentUser }: any) {
               </tr>
             </thead>
             <tbody>
-              {fretes.map((f:any) => (
-                <tr key={f.id} className={fretesNaoLidos.has(String(f.id)) ? 'acn-linha-nova' : undefined}>
+              {fretes.map((f:any) => { const semEntrega = freteSemEntrega(f); return (
+                <tr key={f.id} className={fretesNaoLidos.has(String(f.id)) ? 'acn-linha-nova' : semEntrega ? 'acn-linha-alerta' : undefined}>
                   <td>
                     <span className="acn-direcao">
                       <Icone path={f.direcao==='outbound' ? mdiTrayArrowUp : mdiTrayArrowDown} size={15} />
@@ -1154,7 +1175,10 @@ function FretesPanel({ currentUser }: any) {
                     )}
                   </td>
                   <td className="acn-num">{fmt(f.valor_frete)}</td>
-                  <td><Selo status={f.status} /></td>
+                  <td>
+                    <Selo status={f.status} />
+                    {semEntrega && <div className="acn-selos"><Selo familia="erro" ponto={false} title={explicacaoSemEntrega(semEntrega)}>{rotuloSemEntrega(semEntrega)}</Selo></div>}
+                  </td>
                   <td className="acn-fraco">
                     {f.data_prevista && <div>Prev: {fmtDt(f.data_prevista)}</div>}
                     {f.data_coleta && <div>Coleta: {fmtDtHr(f.data_coleta)}</div>}
@@ -1174,7 +1198,7 @@ function FretesPanel({ currentUser }: any) {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ); })}
             </tbody>
           </table>
         </div>

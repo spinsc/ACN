@@ -23,7 +23,7 @@ import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
 import { pendenciasSanadas, lerVistos, chaveDoUsuario, resumoDaFalta } from './PendenciasSanadas';
 import AvisoPendenciaSanada from './AvisoPendenciaSanada';
 import { modeloDeSeriais, modelosDasOps, linhasDeSerial, jaSerializadoPorProduto } from './SerialDosItens';
-import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesAbertosDaOp, descricaoDaRemessa } from './Remessas';
+import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesQueNaoSairam, descricaoDaRemessa } from './Remessas';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
 import { diaBR, Faixa, Botao, Chips, Selo } from './Interface';
@@ -619,7 +619,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     // para uma leitura que falha não deixar a OP no meio do caminho
     let fretesAbertosAntes = 0;
     if (comRemessa && !parcial) {
-      const ab = await contarFretesAbertosDaOp(opl.id);
+      const ab = await contarFretesQueNaoSairam(opl.id);   // 29/10/2026: frete em trânsito não segura mais a OP, só o que ainda não saiu
       if (ab.erro) { setSalvandoEmb(false); mostrarAviso(`Não consegui conferir os fretes das remessas anteriores (${ab.erro}). Tente de novo.`, 'atencao'); return; }
       fretesAbertosAntes = ab.abertos;
     }

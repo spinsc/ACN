@@ -51,13 +51,14 @@ export function tirarSeriais(atuais: any[], retirar: any[]): { produto: string; 
   return (atuais || []).filter(x => !sai.has(String(x?.serial || '').trim().toLowerCase())).map(x => ({ produto: String(x?.produto || ''), serial: String(x?.serial || '') }));
 }
 
-/** O que a OP vira quando sai a ÚLTIMA remessa: espera a cotação de frete se a empresa paga (CIF) ou se ainda há frete de remessa anterior sem entregar;
- *  só quando é FOB e não há frete aberto vai direto para a liberação comercial (o que a embalagem de uma OP sem remessa sempre fez). */
+/** O que a OP vira quando sai a ÚLTIMA remessa: espera o frete se a empresa paga (CIF) ou se ainda há frete de remessa anterior que não saiu (cotação ou aprovação);
+ *  só quando é FOB e nenhum frete está esperando para sair vai direto para a liberação comercial (o que a embalagem de uma OP sem remessa sempre fez).
+ *  `fretesAbertos` = fretes que ainda não saíram (`contarFretesQueNaoSairam`); frete em trânsito não segura mais a OP (29/10/2026). */
 export function statusDepoisDaUltimaRemessa({ freteComCliente, fretesAbertos, statusLiberacao }: { freteComCliente: boolean; fretesAbertos: number; statusLiberacao: string }): string {
   return (!freteComCliente || fretesAbertos > 0) ? STATUS_COTACAO_FRETE : statusLiberacao;
 }
 
-/** Quando o frete de uma remessa é entregue, a OP só segue (para a liberação comercial) se NENHUM outro frete dela estiver aberto. OP sem remessa: segue como sempre (o primeiro entregue basta). */
+/** Quando o frete de uma remessa sai, a OP só segue (para a liberação comercial) se NENHUM outro frete dela estiver sem sair. OP sem remessa: segue como sempre (o primeiro que sai basta). */
 export function oFreteLiberaAOp({ temRemessas, outrosFretesAbertos }: { temRemessas: boolean; outrosFretesAbertos: number }): boolean {
   return !temRemessas || outrosFretesAbertos === 0;
 }
@@ -81,11 +82,15 @@ export async function lerRemessasAtivasDe(oplIds: string[]): Promise<{ porOp: Ma
   return { porOp, erro: null };
 }
 
-/** Quantos fretes da OP ainda não foram entregues nem cancelados (o frete que acabou de ser entregue pode ser ignorado). */
-export async function contarFretesAbertosDaOp(oplId: string, ignorarFreteId?: string | null): Promise<{ abertos: number; erro: string | null }> {
+/** Frete que ainda não saiu: está sendo cotado ou espera a aprovação da alçada. Depois disso ("Em Trânsito", "Entregue") a OP não espera mais por ele. */
+export const FRETE_AINDA_NAO_SAIU = ['Cotação', 'Aguardando Aprovação'];
+
+/** Quantos fretes da OP ainda não SAÍRAM (cotação ou aprovação; cancelado não conta). Antes de 29/10/2026 a conta era "ainda não entregues": a OP esperava o canhoto de todos. Agora o que segura a OP é o frete
+ *  que ainda nem saiu (ver FreteDaOp.ts). O frete que acabou de sair (`ignorarFreteId`) pode ser ignorado. */
+export async function contarFretesQueNaoSairam(oplId: string, ignorarFreteId?: string | null): Promise<{ abertos: number; erro: string | null }> {
   const { data, error } = await supabase.from('pcp_fretes').select('id,status').eq('vinculo_id', oplId).in('vinculo_tipo', ['op_os', 'opl']);
   if (error || !data) return { abertos: 0, erro: error ? error.message : 'sem resposta' };
-  return { abertos: data.filter((f: any) => f.id !== ignorarFreteId && f.status !== 'Entregue' && f.status !== 'Cancelado').length, erro: null };
+  return { abertos: data.filter((f: any) => f.id !== ignorarFreteId && FRETE_AINDA_NAO_SAIU.includes(f.status)).length, erro: null };
 }
 
 /** A OP tem alguma remessa ativa? (a Logística só muda o jeito de liberar a OP quando tem). */
