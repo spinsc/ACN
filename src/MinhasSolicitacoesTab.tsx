@@ -19,8 +19,9 @@ import { supabase } from './supabaseClient';
 import Icone from './Icone';
 import { Botao, Chips, Selo, Faixa, diaBR } from './Interface';
 import { abrirVinculo } from './VinculoPicker';
+import { imprimirOrdemDoSolicitante, temOrdemParaImprimir, tituloDaOrdem } from './OrdemDoSolicitante';
 import { combinaBusca } from './SearchUtils';
-import { mdiClipboardListOutline, mdiCartOutline, mdiClipboardTextOutline, mdiMagnify, mdiRefresh, mdiOpenInNew } from '@mdi/js';
+import { mdiClipboardListOutline, mdiCartOutline, mdiClipboardTextOutline, mdiMagnify, mdiRefresh, mdiOpenInNew, mdiPrinterOutline } from '@mdi/js';
 
 const LIMITE = 300;
 
@@ -70,7 +71,7 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
     const meu = (x: any) => String(x?.criado_por || '').trim().toLowerCase() === email;
     const [c, da, ds, an] = await Promise.all([
       supabase.from('pcp_pedidos_compra')
-        .select('id,numero_pedido,descricao_material,quantidade,status_compra,comprador_nome,fornecedor,valor_compra,prazo_entrega,data_prevista_recebimento,data_criacao,ultima_movimentacao_em,vinculo_tipo,vinculo_descricao,opl,centro_custo,motivo_descarte,reprocessos,observacoes_compra,itens,criado_por')
+        .select('id,numero_pedido,descricao_material,quantidade,status_compra,comprador_nome,fornecedor,valor_compra,prazo_entrega,data_prevista_recebimento,data_criacao,ultima_movimentacao_em,vinculo_tipo,vinculo_descricao,opl,numero_oc,centro_custo,motivo_descarte,reprocessos,observacoes_compra,itens,criado_por')
         .ilike('criado_por', padrao).order('data_criacao', { ascending: false }).limit(LIMITE),
       supabase.from('demandas_avulsas')
         .select('id,titulo,descricao,setor,status,prioridade,prazo,criado_em,atualizado_em,responsavel_nome,vinculo_descricao,itens,informacoes,motivo_cancelamento,criado_por')
@@ -210,7 +211,7 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
         </div>
       </div>
 
-      {ver && <JanelaSolicitacao item={ver} verValores={verValores} onClose={() => setVer(null)} />}
+      {ver && <JanelaSolicitacao item={ver} verValores={verValores} solicitante={nome} onClose={() => setVer(null)} />}
     </div>
   );
 }
@@ -231,7 +232,7 @@ function ListaItens({ itens }: any) {
   );
 }
 
-function JanelaSolicitacao({ item, verValores, onClose }: any) {
+function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
   const b = item.bruto;
   const reais = (v: any) => v != null && v !== '' ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : null;
   const andamentos = (item.tipo === 'demanda'
@@ -299,6 +300,9 @@ function JanelaSolicitacao({ item, verValores, onClose }: any) {
         <div className="acn-modal-rodape acn-sac-rodape">
           {item.tipo === 'compra' && (
             <Botao variante="primario" icone={mdiOpenInNew} onClick={() => { abrirVinculo({ tipo: 'compra', id: b.id, descricao: b.numero_pedido }); onClose(); }}>Abrir no Compras</Botao>
+          )}
+          {temOrdemParaImprimir(item) && (
+            <Botao icone={mdiPrinterOutline} onClick={() => { if (!imprimirOrdemDoSolicitante(item, solicitante)) alert('Não foi possível abrir a janela de impressão: o navegador bloqueou. Libere as janelas deste site e tente de novo.'); }}>Imprimir {tituloDaOrdem(item).toLowerCase()}</Botao>
           )}
           <Botao onClick={onClose}>Fechar</Botao>
         </div>
