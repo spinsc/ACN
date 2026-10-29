@@ -172,7 +172,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
   const { campoDestaque, marcarComoLido } = useFieldHighlight('rh_funcionarios', func?.id, currentUser);
   const fecharModal = () => { marcarComoLido(); onClose(); };
   const vazio = {
-    nome:'', email:'', cpf:'', cnpj:'', cargo:'', dep_ids: [] as string[], data_admissao:'',
+    nome:'', email:'', cpf:'', cnpj:'', cargo:'', dep_ids: [] as string[], data_admissao:'', data_nascimento:'',
     tipo_colaborador:'Funcionário',
     salario:'', valor_servicos:'', cargo_confianca: false,
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento', pct_tipo: {} as Record<string, string>,
@@ -183,6 +183,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
     cargo: func.cargo||'', dep_ids: (func.departamento_ids || []) as string[],
     data_admissao: func.data_admissao||'',
+    data_nascimento: func.data_nascimento ? String(func.data_nascimento).slice(0, 10) : '',
     tipo_colaborador: func.tipo_colaborador||'Funcionário',
     salario: func.salario!=null ? String(func.salario) : '',
     valor_servicos: func.valor_servicos!=null ? String(func.valor_servicos) : '',
@@ -210,6 +211,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
 
   const salvar = async () => {
     if (!form.nome.trim()) { alert('Informe o nome!'); return; }
+    // 29/10/2026: a data de nascimento é opcional, mas quando vem não pode ser futura nem absurda (o campo de data aceita qualquer ano digitado)
+    if (form.data_nascimento && (form.data_nascimento > hojeISO() || form.data_nascimento < '1900-01-01')) { alert('A data de nascimento não é válida: ela não pode ser no futuro nem antes de 1900.'); return; }
     // R17 (13/10/2026): o CEP, quando informado e mexido, precisa ser válido (a conferência da embalagem); o que já estava gravado e não mudou não trava o salvamento
     const recusaCep = await conferirCepAntesDeSalvar(form.cep, 'CEP', func?.cep);
     if (recusaCep) { alert(recusaCep); return; }
@@ -218,6 +221,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
       nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(), cnpj: form.cnpj.trim()||null,
       cargo: form.cargo.trim(),   // 14/10/2026: o texto antigo "departamento" não é mais gravado (fica no banco como histórico); os departamentos vão para rh_funcionario_departamentos
       data_admissao: form.data_admissao || null,
+      data_nascimento: form.data_nascimento || null,
       tipo_colaborador: form.tipo_colaborador,
       salario: form.salario ? Number(form.salario) : null,
       valor_servicos: form.valor_servicos ? Number(form.valor_servicos) : null,
@@ -282,10 +286,15 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Dados do Colaborador</div>
             {/* 14/10/2026: "Nome completo" passou a ser o campo novo (como consta no contrato); este é o nome com que a pessoa aparece nas OPs e nas listas — não se renomeia quem já tem OP */}
-            {[['nome','Nome no sistema *'],['nome_completo','Nome completo (como consta no contrato)'],['email','E-mail'],
-              ['cargo','Cargo / Função']].map(([k,l])=>(
+            {[['nome','Nome no sistema *'],['nome_completo','Nome completo (como consta no contrato)'],['email','E-mail']].map(([k,l])=>(
               <div key={k} style={campoDestaque(k)}>{lbl(l)}{inp(k)}</div>
             ))}
+            {/* 29/10/2026 (pedido do usuário): a data de nascimento ficou ao lado do e-mail; opcional, e fora da visão que todo usuário logado lê (é dado pessoal, só o RH enxerga) */}
+            <div style={campoDestaque('data_nascimento')}>
+              {lbl('Data de nascimento')}
+              <input type="date" className="acn-input" value={form.data_nascimento} min="1900-01-01" max={hojeISO()} onChange={e=>set('data_nascimento',e.target.value)} />
+            </div>
+            <div style={campoDestaque('cargo')}>{lbl('Cargo / Função')}{inp('cargo')}</div>
             <div style={campoDestaque('sexo')}>
               {lbl('Sexo')}
               {/* separa MASCULINO e FEMININO no relatório de uniformes; vazio = não informado */}
