@@ -402,28 +402,28 @@ export function ModalSolicitarAnalise({
 // ─────────────────────────────────────────────────────────────────────────────
 // STATUS BADGE  (para LicitCard e CRM card — mostra progresso da análise)
 // ─────────────────────────────────────────────────────────────────────────────
-export function AnaliseStatusBadge({ origemId }: { origemId: string }) {
-  const [info, setInfo] = useState<{ total:number; feitos:number } | null>(null);
+/**
+ * O andamento da análise de VÁRIOS cartões numa consulta só (28/10/2026). O selo antes fazia uma consulta por cartão: com ~200 cartões no CRM, cada vez que o quadro era desenhado saíam ~200
+ * consultas, e numa repetição em ciclo (8 pessoas com o CRM aberto, 28/10 às 15:25) foram ~180 por segundo, o que esgotou as conexões do banco e deixou o sistema fora por mais de 1 hora.
+ * Devolve origem_id → { total, feitos }; só entra quem tem análise em andamento. Lança erro se uma leitura falhar (quem chama mantém o que já estava na tela).
+ */
+export async function carregarAnalisePorOrigem(origemIds: string[]): Promise<Record<string, { total: number; feitos: number }>> {
+  const ids = [...new Set((origemIds || []).filter(Boolean).map(String))];
+  const saida: Record<string, { total: number; feitos: number }> = {};
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase.from('analise_solicitacoes').select('origem_id, analise_setores(status)')
+      .in('origem_id', ids.slice(i, i + 100)).eq('status', 'em_andamento');
+    if (error) throw new Error(error.message);
+    (data || []).forEach((sol: any) => {
+      const x = (saida[sol.origem_id] ||= { total: 0, feitos: 0 });
+      (sol.analise_setores || []).forEach((s: any) => { x.total++; if (s.status === 'analisado') x.feitos++; });
+    });
+  }
+  return saida;
+}
 
-  useEffect(() => {
-    supabase
-      .from('analise_solicitacoes')
-      .select('id, analise_setores(status)')
-      .eq('origem_id', origemId)
-      .eq('status', 'em_andamento')
-      .then(({ data }) => {
-        if (!data || !data.length) { setInfo(null); return; }
-        let total = 0, feitos = 0;
-        data.forEach((sol: any) => {
-          (sol.analise_setores || []).forEach((s: any) => {
-            total++;
-            if (s.status === 'analisado') feitos++;
-          });
-        });
-        setInfo({ total, feitos });
-      });
-  }, [origemId]);
-
+/** O selo não consulta mais o banco: quem desenha o quadro lê tudo de uma vez (`carregarAnalisePorOrigem`) e passa o `info` de cada cartão. */
+export function AnaliseStatusBadge({ info }: { origemId?: string; info?: { total: number; feitos: number } | null }) {
   if (!info || !info.total) return null;
 
   const done = info.feitos === info.total;

@@ -17,7 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   perguntasDaVenda, donaDaPergunta, perguntasPendentes, respostasAutomaticas,
-  itensConjunto, vendaTemConjunto, completarItensPeloNome,
+  itensConjunto, vendaTemConjunto, completarItensPeloNome, itensInclusos,
   materiaisDoVeiculo, montarMaterial,
   ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
   regrasDoVeiculo, avaliarRegras, podarRespostas,
@@ -211,9 +211,13 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
   const falhas: string[] = [];
   try {
     // linha sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026)
-    const todosVendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
+    const vendidos0 = await completarItensPeloNome(opl?.itens_vendidos || []);
     // linha marcada "Sem estrutura" (ex.: Interled2 com ventosa) não conta para o material da estrutura, mas continua na lista sugerida da BOM (mais abaixo)
-    const vendidos = todosVendidos.filter(v => !v?.sem_estrutura);
+    const comEstrutura = vendidos0.filter(v => !v?.sem_estrutura);
+    // o amplificador que vem incluso com a barra G2 conta como vendido (28/10/2026)
+    const inclusos = await itensInclusos(comEstrutura);
+    const vendidos = [...comEstrutura, ...inclusos];
+    const todosVendidos = [...vendidos0, ...inclusos];
     const ids = vendidos.map(v => v.item_id).filter(Boolean);
     if (!opl?.veiculo_id || !ids.length) return;
 

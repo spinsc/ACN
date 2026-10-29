@@ -10,7 +10,7 @@ import ContactosSection from './ContactosSection';
 import { conferirContatoDoCard, mensagemContatoDoCard, conferirContatoDeLicitacao } from './ContatoObrigatorio';
 import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
-import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel } from './AnaliseWidget';
+import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel, carregarAnalisePorOrigem } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import RichTextInput, { pareceHtmlFormatado } from './RichTextInput';
 import NovaOpOsModal from './NovaOpOsModal';
@@ -272,6 +272,19 @@ const fmtCompacto = (v: number) => v >= 1e6 ? 'R$ ' + (v / 1e6).toLocaleString('
   : v >= 1e3 ? 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'
   : 'R$ ' + Math.round(v).toLocaleString('pt-BR');
 
+/** Área de cards de uma coluna do kanban: altura de 10 cards, rola daí pra frente.
+ *  Fica no escopo do MÓDULO, fora do CrmTab, porque componente declarado dentro de componente remonta a cada render. Estava dentro (corrigido em 29/10/2026): qualquer troca de estado
+ *  do CRM (passar o cartão sobre uma coluna, digitar no filtro, o recarregamento do tempo real) refazia TODOS os cartões, e cada cartão refazia a sua consulta do selo "Análise" —
+ *  na queda do sistema de 28/10/2026 isso virou ~180 consultas por segundo. */
+function ColunaRolavel({ children }: any) {
+  const [ref, maxAltura] = useAlturaDeCards();
+  return (
+    <div ref={ref} className="acn-crm-coluna-rol" style={{ maxHeight: maxAltura || undefined, overflowY: maxAltura ? 'auto' : 'visible' }}>
+      {children}
+    </div>
+  );
+}
+
 export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }: { currentUser: any; autoOpenOpId?: string|null; onAutoOpenConsumed?: () => void }) {
   // ── permissões ──
   const pcrm = currentUser?.permissoes_crm || [];
@@ -507,6 +520,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
   // ─────────────────────────────────────────────────────────────────────────
+  const [analisePorOrigem, setAnalisePorOrigem] = useState<Record<string, { total: number; feitos: number }>>({});
   const load = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
     const [r1, r2, r3, r4, r5] = await Promise.all([
@@ -523,6 +537,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setErroCarga('');
     setEstagios(r1.data || []);
     setOps(r2.data || []);
+    // o selo "Análise x/y" dos cartões: uma consulta para o quadro inteiro (antes era uma por cartão e derrubou o banco em 28/10/2026); leitura que falha mantém o que já estava
+    carregarAnalisePorOrigem((r2.data || []).map((o: any) => o.id)).then(setAnalisePorOrigem).catch(e => console.error('Selo "Análise" dos cards:', e));
     setItens(r3.data || []);
     setProgresso(r4.data || []);
     setVendas(r5.data || []);
@@ -572,12 +588,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   useEffect(() => {
     load();
+    // Os avisos em tempo real chegam UM POR LINHA alterada (arrastar um cartão mexia na coluna toda: dezenas de avisos de uma vez) e cada aviso recarregava o quadro inteiro. Agora o primeiro aviso agenda
+    // UM recarregamento para daqui a 1,5 s e os que chegam nesse intervalo entram nele (29/10/2026, queda do sistema de 28/10: ver `ColunaRolavel` e `carregarAnalisePorOrigem`).
+    let agendado: any = null;
+    const recarregarJunto = () => { if (agendado) return; agendado = setTimeout(() => { agendado = null; load(true); }, 1500); };
     const ch = supabase
       .channel('crm-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, ()=>load(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, ()=>load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, recarregarJunto)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, recarregarJunto)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (agendado) clearTimeout(agendado); supabase.removeChannel(ch); };
   }, [load]);
 
   useEffect(() => { setAbaInterna('kanban'); }, [funil]);
@@ -702,11 +722,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const [moved]   = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
 
-    const resultados = await Promise.all(
-      reordered.map((c, i) => supabase.from('crm_oportunidades').update({ posicao: i + 1 }).eq('id', c.id))
-    );
-    const falhaOrdem = resultados.find((r: any) => r.error);
-    if (falhaOrdem) mostrarAviso(`Não foi possível gravar a nova ordem dos cards\n${falhaOrdem.error.message}`, 'erro');   // 7.62: o erro era ignorado
+    // a nova ordem numa chamada só, que mexe apenas nos cartões cuja posição mudou (antes: uma gravação por cartão da coluna, e um aviso em tempo real para cada uma)
+    const { error: falhaOrdem } = await supabase.rpc('crm_reordenar_cards', { p_ids: reordered.map(c => c.id) });
+    if (falhaOrdem) mostrarAviso(`Não foi possível gravar a nova ordem dos cards\n${falhaOrdem.message}`, 'erro');   // 7.62: o erro era ignorado
     await load(true);
   };
 
@@ -2499,7 +2517,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
             </span>
           )}
-          <AnaliseStatusBadge origemId={op.id} />
+          <AnaliseStatusBadge origemId={op.id} info={analisePorOrigem[op.id]} />
           <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
@@ -2837,19 +2855,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     suspenso:  'Documental',
     aguardando:'Orçamentária',
   };
-  /** Área de cards de uma coluna do kanban: altura de 10 cards, rola daí pra
- *  frente. Fica no escopo do módulo (e não dentro do CrmTab) porque componente
- *  declarado dentro de componente remonta a cada render — a coluna voltaria
- *  pro topo sozinha a cada digitada no filtro. */
-function ColunaRolavel({ children }: any) {
-  const [ref, maxAltura] = useAlturaDeCards();
-  return (
-    <div ref={ref} className="acn-crm-coluna-rol" style={{ maxHeight: maxAltura || undefined, overflowY: maxAltura ? 'auto' : 'visible' }}>
-      {children}
-    </div>
-  );
-}
-
   const atualizarSubStatus = async (opId: string, novoStatus: string) => {
     const { error } = await supabase.from('crm_oportunidades').update({ sub_status: novoStatus }).eq('id', opId);
     if (error) { mostrarAviso(`Não foi possível trocar a sub-etapa\n${error.message}`, 'erro'); return; }   // 7.62: o erro era ignorado
