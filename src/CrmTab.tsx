@@ -272,6 +272,19 @@ const fmtCompacto = (v: number) => v >= 1e6 ? 'R$ ' + (v / 1e6).toLocaleString('
   : v >= 1e3 ? 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'
   : 'R$ ' + Math.round(v).toLocaleString('pt-BR');
 
+/** Área de cards de uma coluna do kanban: altura de 10 cards, rola daí pra frente.
+ *  Fica no escopo do MÓDULO, fora do CrmTab, porque componente declarado dentro de componente remonta a cada render. Estava dentro (corrigido em 29/10/2026): qualquer troca de estado
+ *  do CRM (passar o cartão sobre uma coluna, digitar no filtro, o recarregamento do tempo real) refazia TODOS os cartões, e cada cartão refazia a sua consulta do selo "Análise" —
+ *  na queda do sistema de 28/10/2026 isso virou ~180 consultas por segundo. */
+function ColunaRolavel({ children }: any) {
+  const [ref, maxAltura] = useAlturaDeCards();
+  return (
+    <div ref={ref} className="acn-crm-coluna-rol" style={{ maxHeight: maxAltura || undefined, overflowY: maxAltura ? 'auto' : 'visible' }}>
+      {children}
+    </div>
+  );
+}
+
 export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }: { currentUser: any; autoOpenOpId?: string|null; onAutoOpenConsumed?: () => void }) {
   // ── permissões ──
   const pcrm = currentUser?.permissoes_crm || [];
@@ -2840,19 +2853,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     suspenso:  'Documental',
     aguardando:'Orçamentária',
   };
-  /** Área de cards de uma coluna do kanban: altura de 10 cards, rola daí pra
- *  frente. Fica no escopo do módulo (e não dentro do CrmTab) porque componente
- *  declarado dentro de componente remonta a cada render — a coluna voltaria
- *  pro topo sozinha a cada digitada no filtro. */
-function ColunaRolavel({ children }: any) {
-  const [ref, maxAltura] = useAlturaDeCards();
-  return (
-    <div ref={ref} className="acn-crm-coluna-rol" style={{ maxHeight: maxAltura || undefined, overflowY: maxAltura ? 'auto' : 'visible' }}>
-      {children}
-    </div>
-  );
-}
-
   const atualizarSubStatus = async (opId: string, novoStatus: string) => {
     const { error } = await supabase.from('crm_oportunidades').update({ sub_status: novoStatus }).eq('id', opId);
     if (error) { mostrarAviso(`Não foi possível trocar a sub-etapa\n${error.message}`, 'erro'); return; }   // 7.62: o erro era ignorado
