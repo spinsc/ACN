@@ -26,7 +26,9 @@ const chaveLinha = (l: any) => l?.item_id || `txt:${l?.nome}`;
  */
 export async function lerBaseDaEstrutura(opl: any) {
   // linha vendida sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026: a venda tinha o Conjunto Elétrico escrito e a estrutura dizia que não)
-  const vendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
+  // 29/10/2026 (pedido do usuário, Pulse): a linha marcada "Sem estrutura" (Interled2 com ventosa, mesmo código 225) não usa a estrutura do carro: sai da conta de material, de
+  // quantidade e do aviso "nunca adaptados". Continua na venda e na BOM; só a estrutura a ignora.
+  const vendidos = (await completarItensPeloNome(opl?.itens_vendidos || [])).filter((v: any) => !v?.sem_estrutura);
   const idsVendidos = vendidos.map((v: any) => v.item_id).filter(Boolean);
   const conj = await itensConjunto();
   const temConjunto = vendaTemConjunto(vendidos, conj.map((c: any) => c.id));

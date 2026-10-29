@@ -40,7 +40,7 @@ import {
   avisoDoQueNaoFoiTirado, situacaoParaTrocarResposta,
 } from './CalculoDaEstrutura';
 
-const idsVendidos = (o) => (o?.itens_vendidos || []).map(v => v.item_id).filter(Boolean).map(String);
+const idsVendidos = (o) => (o?.itens_vendidos || []).filter(v => !v?.sem_estrutura).map(v => v.item_id).filter(Boolean).map(String);   // "Sem estrutura" (ventosa) não entra
 // 15/10/2026: a pergunta da OP (sem item) vale para todas as OPs; as demais, só para as que venderam o item dono
 // Etapa 2 (15/10/2026): e só as que a condição "só quando estes itens foram vendidos juntos" deixa valer para a venda desta OP
 const perguntasDaOp = (perguntas, o) => {

@@ -36,7 +36,7 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
   const [abertas, setAbertas] = useState({});   // unidades destacadas do padrão
   const [falhaLeitura, setFalhaLeitura] = useState('');
 
-  const ids = (itensVendidos || []).map(v => v.item_id).filter(Boolean);
+  const ids = (itensVendidos || []).filter(v => !v?.sem_estrutura).map(v => v.item_id).filter(Boolean);   // "Sem estrutura" (ventosa) não gera pergunta
   const chave = ids.join(',');
 
   useEffect(() => {
@@ -211,7 +211,9 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
   const falhas: string[] = [];
   try {
     // linha sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026)
-    const vendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
+    const todosVendidos = await completarItensPeloNome(opl?.itens_vendidos || []);
+    // linha marcada "Sem estrutura" (ex.: Interled2 com ventosa) não conta para o material da estrutura, mas continua na lista sugerida da BOM (mais abaixo)
+    const vendidos = todosVendidos.filter(v => !v?.sem_estrutura);
     const ids = vendidos.map(v => v.item_id).filter(Boolean);
     if (!opl?.veiculo_id || !ids.length) return;
 
@@ -267,7 +269,7 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     // produto principal sumia da separação.
     const ehConj = (id) => conj.some(c => String(c.id) === String(id));
     const naVenda = conj.find(c => vendidos.some(v => String(v.item_id) === String(c.id)));
-    const base = await sugerirBom(vendidos.filter(v => !ehConj(v.item_id)));
+    const base = await sugerirBom(todosVendidos.filter(v => !ehConj(v.item_id)));
     const conteudo = linhas.map(l => ({
       ...l, descricao: l.descricao || `do ${naVenda?.nome || 'CONJUNTO ELÉTRICO'}`,
     }));

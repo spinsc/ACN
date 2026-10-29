@@ -2972,6 +2972,9 @@ html body .acn-input.acn-dmi-qtd { width: 76px; flex-shrink: 0; }
 html body .acn-input.acn-dmi-val { width: 90px; flex-shrink: 0; }
 /* Telecom, T2 (22/10/2026): "Quem separa" por linha da venda (Almoxarifado ou Telecom) */
 html body .acn-input.acn-dmi-setor { width: 128px; flex-shrink: 0; }
+/* "Sem estrutura" na linha vendida (29/10/2026): caixa pequena ao lado da quantidade */
+.acn-dmi-semestr { display: inline-flex; align-items: center; gap: 4px; flex: none; font-size: 12px; font-weight: 600; color: var(--acn-text-2, var(--acn-text)); cursor: pointer; white-space: nowrap; }
+@media (max-width: 640px) { .acn-dmi-linha:has(.acn-dmi-semestr) { flex-wrap: wrap; } .acn-dmi-linha:has(.acn-dmi-semestr) > .acn-dmi-busca { flex: 1 1 100%; } }
 /* no celular o nome do item ocupa a linha de cima e quantidade, setor e remover descem para a de baixo (sem isso o nome ficava com ~100 px) */
 @media (max-width: 640px) { .acn-dmi-linha:has(.acn-dmi-setor) { flex-wrap: wrap; } .acn-dmi-linha:has(.acn-dmi-setor) > .acn-dmi-busca { flex: 1 1 100%; } }
 html body .acn-input.acn-dmi-desc { width: 100%; box-sizing: border-box; margin-top: 4px; }
