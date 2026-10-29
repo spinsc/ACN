@@ -152,7 +152,7 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
           <Botao pequeno onClick={corrigirSuspeitos}>Corrigir para por carro</Botao>
         </div>
       )}
-      <ItensDemandaEditor itens={itens.length ? itens : [itemVazio()]} onChange={onChange} titulo="" comSetor={comSetor} setorPadrao={setorPadrao} comSemEstrutura />
+      <ItensDemandaEditor itens={itens.length ? itens : [itemVazio()]} onChange={onChange} titulo="" comSetor={comSetor} setorPadrao={setorPadrao} />
     </div>
   );
 }

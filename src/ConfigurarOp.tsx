@@ -75,6 +75,35 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
   // a OP de referência da estrutura é a primeira marcada com itens vendidos (no lote, em ordem de número)
   const ref = selecionadas.find((o: any) => (o.itens_vendidos || []).length) || selecionadas[0] || ops[0];
 
+  // "Sem estrutura" por linha vendida (29/10/2026): decidido pelo PCP aqui. As marcas valem na hora (a janela e o painel recalculam) e são gravadas na venda de cada OP igual.
+  const [marcas, setMarcas] = useState<Record<number, boolean>>({});
+  const [gravandoMarca, setGravandoMarca] = useState(false);
+  useEffect(() => { setMarcas({}); }, [ref?.id]);
+  const refComMarcas = { ...ref, itens_vendidos: (ref?.itens_vendidos || []).map((v: any, i: number) => (i in marcas ? { ...v, sem_estrutura: marcas[i] ? true : undefined } : v)) };
+  const alternarSemEstrutura = async (i: number, valor: boolean) => {
+    if (gravandoMarca) return;
+    const linhaRef = (ref?.itens_vendidos || [])[i];
+    if (!linhaRef) return;
+    setGravandoMarca(true);
+    try {
+      // vale para as OPs marcadas que têm a MESMA linha na mesma posição (lote: a mesma BOM vai para todas); as diferentes ficam como estavam e a janela diz quais
+      const alvos = selecionadas.filter((o: any) => (o.itens_vendidos || [])[i]?.nome === linhaRef.nome && (o.itens_vendidos || [])[i]?.item_id === linhaRef.item_id);
+      const fora = selecionadas.filter((o: any) => !alvos.includes(o)).map((o: any) => o.opl);
+      const falhas: string[] = [];
+      for (const o of alvos) {
+        if (!!(o.itens_vendidos || [])[i]?.sem_estrutura === valor) continue;   // essa OP já está como foi pedido: nada a gravar
+        const novos = (o.itens_vendidos || []).map((v: any, j: number) => (j === i ? { ...v, sem_estrutura: valor ? true : undefined } : v));
+        const { data, error } = await supabase.from('oples').update({ itens_vendidos: novos }).eq('id', o.id).select('id');
+        if (error || !data?.length) { falhas.push(`${o.opl} (${error?.message || 'a OP não foi encontrada'})`); continue; }
+        logChange({ module: 'pcp', entityType: 'oples', entityId: o.id, changeType: 'UPDATE', oldRow: { itens_vendidos: o.itens_vendidos }, newRow: { itens_vendidos: novos, sem_estrutura: valor ? linhaRef.nome : null }, user: currentUser });
+        o.itens_vendidos = novos;   // a lista que a tela guarda acompanha, para a próxima marcação partir do que está gravado
+      }
+      if (falhas.length) alert(`Não foi possível gravar a marca "Sem estrutura" em: ${falhas.join('; ')}. As demais foram gravadas.`);
+      else if (fora.length) alert(`A marca não foi aplicada em ${fora.join(', ')}: a venda delas não tem essa linha na mesma posição.`);
+      setMarcas(m => ({ ...m, [i]: valor }));
+    } finally { setGravandoMarca(false); }
+  };
+
   useEffect(() => {
     const inicial = ops.find((o: any) => (o.bom_itens || []).length) || ops.find((o: any) => (o.itens_vendidos || []).length) || ops[0];
     prepararBom(inicial, setLinhas);
@@ -166,9 +195,20 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
           )}
           {(ref?.itens_vendidos || []).length > 0 && (
             <div className="acn-quadro tom-info">
-              <div>
-                <strong>Vendido:</strong>{' '}
-                {ref.itens_vendidos.map((v: any) => `${Number(v.quantidade).toLocaleString('pt-BR')}× ${v.nome}`).join(' · ')}
+              <div><strong>Vendido:</strong></div>
+              {/* 29/10/2026 (pedido do usuário, Pulse): quem decide se uma linha vendida usa ou não a estrutura do carro é o PCP, aqui, na hora de montar a BOM (não o vendedor) */}
+              <div className="acn-vendido-lista">
+                {refComMarcas.itens_vendidos.map((v: any, i: number) => (
+                  <div key={i} className="acn-vendido-linha">
+                    <span className="acn-kb-cresce">{Number(v.quantidade).toLocaleString('pt-BR')}× {v.nome}{v.descricao ? <span className="acn-ajuda"> — {v.descricao}</span> : null}</span>
+                    {v.item_id && (
+                      <label className="acn-vendido-semestr" title="Marque quando esta linha NÃO usa a estrutura de instalação do carro (ex.: Interled2 fixado com ventosa). Ela continua na venda e na BOM com o mesmo código, mas não recebe material de instalação.">
+                        <input type="checkbox" checked={!!v.sem_estrutura} disabled={gravandoMarca} aria-label={`Sem estrutura: ${v.nome}`}
+                          onChange={e => alternarSemEstrutura(i, e.target.checked)} /> Sem estrutura
+                      </label>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -181,7 +221,7 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
           {lote && selecionadas.length > 0 && <AvisoRespostasDiferentes ops={selecionadas} refOpl={ref.opl} versao={versaoRespostas} />}
           {lote && <div className="acn-ajuda">Estrutura calculada com base na OP <b>{ref.opl}</b>.</div>}
           {ref && (
-            <PainelConferenciaEstrutura opl={ref} currentUser={currentUser}
+            <PainelConferenciaEstrutura opl={refComMarcas} currentUser={currentUser}
               opsParaResponder={lote ? selecionadas : undefined}
               onRespondido={lote ? () => setVersaoRespostas(v => v + 1) : undefined}
               onSolicitarDesenvolvimento={(itens: any[]) => setSolicitar({ itens })}

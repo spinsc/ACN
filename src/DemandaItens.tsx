@@ -155,7 +155,7 @@ export function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categor
 }
 
 // ── Editor da lista de itens ─────────────────────────────────────────────────
-export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false, comFornecedor = false, comSetor = false, setorPadrao = 'Almoxarifado', comSemEstrutura = false }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean; comFornecedor?: boolean; comSetor?: boolean; setorPadrao?: string; comSemEstrutura?: boolean }) {
+export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false, comFornecedor = false, comSetor = false, setorPadrao = 'Almoxarifado' }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean; comFornecedor?: boolean; comSetor?: boolean; setorPadrao?: string }) {
   const [abertos, setAbertos] = useState<Record<number, boolean>>({});
   const set = (i: number, patch: Partial<ItemDemanda>) => onChange(itens.map((x, j) => j === i ? { ...x, ...patch } : x));
   // Telecom, T2 (22/10/2026): escolher um item do cadastro traz o "Quem separa" dele; sem marca no cadastro a linha volta a valer o padrão da venda (e some a marca do item anterior da linha)
@@ -196,12 +196,6 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
                   <option value="Almoxarifado">Almoxarifado</option>
                   <option value="Telecom">Telecom</option>
                 </select>
-              )}
-              {comSemEstrutura && (
-                <label className="acn-dmi-semestr" title="Marque quando esta linha NÃO usa a estrutura de instalação do carro (ex.: Interled2 fixado com ventosa). Ela continua com o código do item, mas não recebe material de instalação nem entra no aviso de item nunca adaptado.">
-                  <input type="checkbox" checked={!!it.sem_estrutura} aria-label="Sem estrutura de instalação"
-                    onChange={e => set(i, { sem_estrutura: e.target.checked ? true : undefined })} /> Sem estrutura
-                </label>
               )}
               {comValor && (
                 <input inputMode="decimal" value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário" className="acn-input acn-dmi-val"

@@ -85,7 +85,7 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
       // 15/10/2026: a leitura das perguntas da OP lança erro de propósito; sem este desvio o painel ficaria em "Conferindo…" para sempre
       setEstado({ carregando: false, falhou: err?.message || 'Não foi possível ler as perguntas.' });
     });
-  }, [opl?.id, tick]);
+  }, [opl?.id, tick, (opl?.itens_vendidos || []).map((v: any) => (v?.sem_estrutura ? 1 : 0)).join('')]);   // a marca "Sem estrutura" do PCP também refaz a conta
 
   // 12e53 (09/10/2026): só aparência — as caixas coloridas passaram a ter um "tom" (info, neutro, atenção, erro, ok) que o design.css pinta com os
   // tons do guia (já mudam sozinhos no tema escuro); antes cada uma carregava três cores escritas no código
