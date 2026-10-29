@@ -243,12 +243,11 @@ export function quemTemQueAgir(os: any): { quem: QuemAge; oque: string } | null 
     case 'Aguardando Aceite SAC': return { quem: 'SAC', oque: 'Confirmar a data definida pela Produção' };
     case 'Provisionada': case 'Aguardando Início': return { quem: 'Produção', oque: 'Receber o veículo e iniciar' };
     case 'Verificação e Orçamento': return { quem: 'Produção', oque: 'Verificar e orçar' };
-    case 'Em Execução': case 'Em Manutenção':
+    case 'Em Execução':
       if (os.quem_executa === 'sac') return { quem: 'SAC', oque: 'Concluir a OS quando o serviço terminar' };
       return { quem: veicular ? 'Produção' : 'Laboratório', oque: 'Executar o serviço' };
     case 'Aguardando CQ': return { quem: 'Qualidade', oque: 'Auditar a OS' };
     case 'Concluído': return osSemCobranca(os) ? { quem: 'SAC', oque: 'Entregar ao cliente' } : { quem: 'SAC', oque: 'Enviar ao Fiscal' };
-    case 'Manutenção Concluída': return { quem: 'SAC', oque: 'Entregar ao cliente' };
     case 'Aguardando Envio Fiscal': return { quem: 'SAC', oque: 'Informar os seriais e enviar ao Fiscal' };
     case 'Aguardando Emissão NF': return { quem: 'Fiscal', oque: 'Emitir a nota' };
     case 'Faturada - Aguardando Entrega': return { quem: 'SAC', oque: 'Entregar ao cliente' };
@@ -294,4 +293,71 @@ export function resumoDoQueEstaComQuem(ordens: any[], limite: number = PRAZO_OS_
   }
   doSac.sort((x, y) => (y.dias ?? -1) - (x.dias ?? -1));
   return { porQuem, doSac };
+}
+
+// ── S5 (PLANO_SAC_FLUXO.md, 29/10/2026): a tela do SAC fala uma língua só ─────────────────────────────────────────────────────────────────────────
+// Antes: a lista tinha cor e filtro para "Em Manutenção" e "Manutenção Concluída", mas nada mais grava esses dois (a Produção e a Qualidade gravam "Em Execução"; o botão "Entrega" de "Manutenção
+// Concluída" era um atalho morto que pularia o CQ e o Fiscal); o único "fluxo" na tela era a legenda do Laboratório; e o quadro punha a OS faturada em "Concluído" mesmo faltando entregar.
+// Agora: cada caminho tem a sua lista de etapas (aqui), a barra de progresso e as legendas leem dela, e o quadro tem a coluna "No Fiscal / aguardando entrega".
+
+/** As etapas de cada caminho, na ordem em que a OS passa por elas. A OS lançada pelo card (S3) entra no caminho do Laboratório já "Aprovada": as etapas de antes contam como feitas. */
+export const CAMINHOS_DA_OS = {
+  laboratorio: ['Diagnóstico', 'Orçamento Pronto', 'Orç. Enviado', 'Aprovado', 'Em Execução', 'Concluído', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
+  laboratorioSemCobranca: ['Aprovado', 'Em Execução', 'Concluído', 'Entregue'],
+  veicularRemota: ['Em Cotação', 'Aguardando Aprovação Cliente', 'Em Provisionamento', 'Aguardando Aceite SAC', 'Provisionada', 'Em Execução', 'Aguardando CQ', 'Aguardando Envio Fiscal', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
+  veicularPresencial: ['Em Provisionamento', 'Aguardando Aceite SAC', 'Provisionada', 'Verificação e Orçamento', 'Aguardando Aprovação Cliente', 'Em Execução', 'Aguardando CQ', 'Aguardando Envio Fiscal', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
+  veicularSemCobranca: ['Em Provisionamento', 'Provisionada', 'Em Execução', 'Aguardando CQ', 'Concluído', 'Entregue'],
+} as const;
+
+/** Nomes que valem como outra etapa do caminho ("Aguardando Início" é a Provisionada à espera do início). */
+const ETAPA_EQUIVALENTE: Record<string, string> = { 'Aguardando Início': 'Provisionada' };
+
+/** O caminho (lista de etapas) em que a OS anda: depende de ser veicular ou do Laboratório, de ser cobrada ou sem cobrança e, no veicular cobrado, de a avaliação ser remota ou presencial. */
+export function etapasDoCaminho(os: any): readonly string[] {
+  const semCobranca = osSemCobranca(os);
+  if (os?.is_manutencao_veicular) return semCobranca ? CAMINHOS_DA_OS.veicularSemCobranca : os?.tipo_avaliacao === 'Remota' ? CAMINHOS_DA_OS.veicularRemota : CAMINHOS_DA_OS.veicularPresencial;
+  return semCobranca ? CAMINHOS_DA_OS.laboratorioSemCobranca : CAMINHOS_DA_OS.laboratorio;
+}
+
+export type PassoDaOS = { nome: string; estado: 'feita' | 'atual' | 'futura' };
+
+/** Onde a OS está no caminho dela: as etapas com o estado de cada uma e "etapa N de M". null = não há barra (cancelada, reprovada ou uma etapa que o caminho não conhece: melhor sem barra do que uma barra errada). */
+export function progressoDaOS(os: any): { passos: PassoDaOS[]; indice: number; total: number; percentual: number; atual: string } | null {
+  if (!os || os.status === STATUS_OS_CANCELADA || os.status === 'Reprovado') return null;
+  const etapas = etapasDoCaminho(os);
+  const atual = ETAPA_EQUIVALENTE[os.status] || os.status;
+  const indice = etapas.indexOf(atual);
+  if (indice < 0) return null;
+  return {
+    passos: etapas.map((nome, k) => ({ nome, estado: k < indice ? 'feita' : k === indice ? 'atual' : 'futura' })),
+    indice, total: etapas.length, percentual: Math.round(((indice + 1) / etapas.length) * 100), atual,
+  };
+}
+
+/** As legendas de fluxo da tela: o caminho do Laboratório e o do veículo (as duas cobradas; a OS sem cobrança pula o orçamento e o Fiscal). */
+export const LEGENDAS_DE_FLUXO: { rotulo: string; etapas: readonly string[] }[] = [
+  { rotulo: 'Laboratório', etapas: CAMINHOS_DA_OS.laboratorio },
+  { rotulo: 'Veículo (presencial)', etapas: CAMINHOS_DA_OS.veicularPresencial },
+  { rotulo: 'Veículo (remota)', etapas: CAMINHOS_DA_OS.veicularRemota },
+];
+
+export type ColunaDoQuadro = 'pendente' | 'andamento' | 'fiscal' | 'concluido';
+export const COLUNAS_DO_QUADRO: { id: ColunaDoQuadro; rotulo: string; familia: string }[] = [
+  { id: 'pendente', rotulo: 'PENDENTE', familia: 'atencao' },
+  { id: 'andamento', rotulo: 'EM ANDAMENTO', familia: 'info' },
+  { id: 'fiscal', rotulo: 'NO FISCAL / AGUARDANDO ENTREGA', familia: 'marca' },
+  { id: 'concluido', rotulo: 'CONCLUÍDO', familia: 'ok' },
+];
+
+/**
+ * Em que coluna do quadro a OS fica (escolha do usuário em 05/10/2026: "só pela etapa de trabalho"; a coluna do Fiscal veio na S5):
+ * PENDENTE = Aberta e Diagnóstico · NO FISCAL / AGUARDANDO ENTREGA = do envio ao Fiscal até a entrega ("Faturada" não parece mais terminada) · CONCLUÍDO = Concluído e Entregue · EM ANDAMENTO = o resto.
+ * Reprovado e Cancelada ficam FORA do quadro (null). Uma situação que ninguém classificou cai em EM ANDAMENTO, para nenhuma OS sumir.
+ */
+export function colunaDoQuadro(status: string): ColunaDoQuadro | null {
+  if (status === 'Reprovado' || status === STATUS_OS_CANCELADA) return null;
+  if (['Aberta', 'Diagnóstico'].includes(status)) return 'pendente';
+  if (['Aguardando Envio Fiscal', STATUS_AGUARDANDO_NOTA, STATUS_OS_FATURADA].includes(status)) return 'fiscal';
+  if (['Concluído', 'Entregue'].includes(status)) return 'concluido';
+  return 'andamento';
 }

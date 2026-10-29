@@ -4,6 +4,7 @@ import { Botao, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiMessageTextOutline } from '@mdi/js';
 import { QuadroComprasLigadas } from './ComprasLigadas';
+import { progressoDaOS } from './SacFluxo';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESUMO COMPLETO DA OS — pedido do usuário em 08/10/2026
@@ -32,8 +33,9 @@ function Grupo({ titulo, linhas, children }: any) {
   );
 }
 
-export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser = null }: any) {
+export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser = null, fichaNumero = '', onAbrirFicha = null }: any) {
   if (!os) return null;
+  const progresso = progressoDaOS(os);   // S5 (29/10/2026): onde a OS está no caminho dela (Laboratório ou veículo, cobrada ou sem cobrança)
   const veicular = !!os.is_manutencao_veicular;
   const itens = lista(os.itens_revisados).length ? lista(os.itens_revisados) : lista(os.itens_cotacao);
   const equipamentos = lista(os.equipamentos_lista);
@@ -55,6 +57,20 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
           </span>
         </div>
         <div className="acn-modal-corpo acn-srs-corpo">
+          {progresso && (
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Andamento da OS — etapa {progresso.indice + 1} de {progresso.total}</div>
+              <ol className="acn-sac-passos" aria-label="Etapas da OS">
+                {progresso.passos.map(p => <li key={p.nome} className={p.estado} aria-current={p.estado === 'atual' ? 'step' : undefined}>{p.nome}</li>)}
+              </ol>
+            </div>
+          )}
+          {os.garantia_id && onAbrirFicha && (
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Garantia</div>
+              <div className="acn-ficha-linha"><span>Ficha do atendimento</span><span><Botao pequeno onClick={onAbrirFicha}>Abrir a ficha {fichaNumero}</Botao></span></div>
+            </div>
+          )}
           <Grupo titulo="Serviço" linhas={[
             ['Tipo de serviço', os.tipo_servico], ['Tipo de projeto', os.tipo_projeto], ['Atendimento', os.tipo_avaliacao],
             ['Lote', os.lote_id ? (os.lote_descricao || 'Faz parte de um lote de OS') : ''], ['Setor de execução', os.setor_execucao],

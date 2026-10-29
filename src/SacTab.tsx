@@ -16,7 +16,7 @@ import GarantiaTab, { gravarGarantia } from './GarantiaTab';
 import { registrarOsGerada } from './GarantiaModelo';
 import EnviarOsAoFiscalModal from './EnviarOsAoFiscalModal';
 import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, osParada, podeCancelarOS, motivoQueNaoCancela, demandasAbertasDaOS, recadoDoCancelamento, camposDoCancelamento,
-  resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE } from './SacFluxo';
+  resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE, progressoDaOS, LEGENDAS_DE_FLUXO, COLUNAS_DO_QUADRO, colunaDoQuadro } from './SacFluxo';
 import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -56,8 +56,6 @@ const STATUS_COR: Record<string, string> = {
   'Provisionada':                  '#16a34a',
   'Aguardando Início':             '#f59e0b',
   'Verificação e Orçamento':       '#8b5cf6',
-  'Em Manutenção':                 '#dc2626',
-  'Manutenção Concluída':          '#0d9488',
   'Aguardando CQ':                 '#8b5cf6',
   'Aguardando Envio Fiscal':       '#f59e0b',
   'Aguardando Emissão NF':         '#0891b2',
@@ -71,7 +69,7 @@ const FAMILIA_STATUS_SAC: Record<string, string> = {
   'Diagnóstico': 'info', 'Aberta': 'info', 'Orçamento Pronto': 'marca', 'Orç. Enviado': 'atencao', 'Aprovado': 'ok', 'Reprovado': 'erro',
   'Em Execução': 'marca', 'Concluído': 'ok', 'Entregue': 'ok',
   'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'ok',
-  'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Em Manutenção': 'marca', 'Manutenção Concluída': 'ok', 'Aguardando CQ': 'atencao',
+  'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Aguardando CQ': 'atencao',
   'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok', 'Cancelada': 'neutro',
 };
 
@@ -201,6 +199,27 @@ const FORM_VAZIO = {
 };
 
 // Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
+// S5 (29/10/2026): a barra de progresso serve aos dois caminhos (Laboratório e veículo, cobrada ou sem cobrança): um bloco por etapa do caminho da OS (SacFluxo.ts, `progressoDaOS`), as feitas em verde, a atual em azul.
+// Sem barra para a OS cancelada, reprovada ou numa etapa que o caminho dela não conhece (melhor sem barra do que uma barra errada).
+function BarraDaOS({ os }: { os: any }) {
+  const p = progressoDaOS(os);
+  if (!p) return null;
+  return (
+    <div className="acn-sac-barra-wrap" title={`Etapa ${p.indice + 1} de ${p.total}: ${p.atual}`}>
+      <div className="acn-sac-barra" role="progressbar" aria-label={`Progresso da OS ${os.numero_os}`} aria-valuemin={1} aria-valuemax={p.total} aria-valuenow={p.indice + 1}>
+        {p.passos.map(x => <span key={x.nome} className={'passo ' + x.estado} />)}
+      </div>
+      <span className="acn-fraco">etapa {p.indice + 1} de {p.total}</span>
+    </div>
+  );
+}
+
+// S5 (29/10/2026): a OS de garantia aponta a ficha (a ficha já apontava a OS desde a S1); o clique abre a ficha na aba Garantia
+function SeloFichaDaOS({ os, numero, onAbrir }: { os: any; numero?: string; onAbrir: (os: any) => void }) {
+  if (!os?.garantia_id) return null;
+  return <Selo familia="marca" ponto={false} title="Abrir a ficha de garantia desta OS" onClick={(e: any) => { e.stopPropagation(); onAbrir(os); }}>Ficha {numero || 'de garantia'}</Selo>;
+}
+
 // S4 (29/10/2026): quem tem que agir na OS e há quantos dias ela está na etapa; vermelho quando já está parada (7 dias ou mais na mesma etapa)
 function QuemAgeDaOS({ os }: { os: any }) {
   const a = quemTemQueAgir(os);
@@ -433,6 +452,30 @@ function SacTabCompleto({ currentUser }) {
     });
     return () => { vivo = false; };
   }, [modalNova, form.tipo_servico, form.garantia_id, fichas.lida]);
+
+  // S5 (29/10/2026): o número da ficha de cada OS de garantia ("GAR-0001/2026"), para o selo que abre a ficha. É só um rótulo: se a leitura falhar, o selo diz "Ficha de garantia" e abre do mesmo jeito.
+  const [numerosFichas, setNumerosFichas] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const ids = [...new Set(ordens.map((o: any) => o.garantia_id).filter(Boolean))].filter((id: any) => !numerosFichas[id]);
+    if (!ids.length) return;
+    let vivo = true;
+    (async () => {
+      const novos: Record<string, string> = {};
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await supabase.from('garantia_atendimentos').select('id,numero').in('id', ids.slice(i, i + 100));
+        if (error) return;
+        (data || []).forEach((g: any) => { if (g.numero) novos[g.id] = g.numero; });
+      }
+      if (vivo && Object.keys(novos).length) setNumerosFichas(p => ({ ...p, ...novos }));
+    })();
+    return () => { vivo = false; };
+  }, [ordens]);
+  // o clique no selo da ficha: abre a aba Garantia direto na ficha (o mesmo atalho dos avisos da caixa de Menções)
+  const abrirFichaDaOS = (os: any) => {
+    (window as any).__acnDeepLink = { contexto: 'garantia', contextoId: String(os.garantia_id) };
+    setAbaAtiva('garantia');
+    window.dispatchEvent(new CustomEvent('acn:abrir-registro'));
+  };
 
   const fetchOrdens = async () => {
     setLoading(true);
@@ -1049,24 +1092,14 @@ OK = ACN   |   Cancelar = DETECH`;
   });
   const canceladasFora = ordens.filter((o: any) => o.status === STATUS_OS_CANCELADA).length;
 
-  // KANBAN, 3 colunas, "só pela etapa de trabalho" (escolha do usuário em pergunta clicável, 05/10/2026):
-  // PENDENTE = Aberta e Diagnóstico · CONCLUÍDO = Concluído, Entregue e Faturada · EM ANDAMENTO = tudo o que está entre o orçamento e a entrega.
-  // Reprovado fica FORA do quadro (vê-se na lista, no filtro de status). Uma situação que ninguém classificou cai em EM ANDAMENTO, para nenhuma OS sumir do quadro.
-  const colunaKanban = (status: string): 'pendente' | 'andamento' | 'concluido' | null => {
-    if (status === 'Reprovado' || status === STATUS_OS_CANCELADA) return null;
-    if (['Aberta', 'Diagnóstico'].includes(status)) return 'pendente';
-    if (['Concluído', 'Entregue', 'Faturada - Aguardando Entrega'].includes(status)) return 'concluido';
-    return 'andamento';
-  };
-  const COLUNAS_KANBAN = [
-    { id: 'pendente', rotulo: 'PENDENTE', familia: 'atencao' },
-    { id: 'andamento', rotulo: 'EM ANDAMENTO', familia: 'info' },
-    { id: 'concluido', rotulo: 'CONCLUÍDO', familia: 'ok' },
-  ];
+  // KANBAN, "só pela etapa de trabalho" (escolha do usuário em pergunta clicável, 05/10/2026). S5 (29/10/2026): ganhou a coluna "No Fiscal / aguardando entrega", para a OS faturada não parecer terminada.
+  // A regra de qual coluna é de cada etapa mora em SacFluxo.ts (`colunaDoQuadro`); Reprovado e Cancelada ficam FORA do quadro (vê-se na lista, no filtro de status).
+  const colunaKanban = colunaDoQuadro;
+  const COLUNAS_KANBAN = COLUNAS_DO_QUADRO;
   const reprovadasFiltradas = ordensFiltradas.filter(o => colunaKanban(o.status) === null).length;
-  // Lote no quadro (07/10/2026, decidido com o usuário): as OS de um mesmo lote viram UM card, que fica na etapa da OS mais atrasada (pendente antes de em andamento antes de concluído);
+  // Lote no quadro (07/10/2026, decidido com o usuário): as OS de um mesmo lote viram UM card, que fica na etapa da OS mais atrasada (pendente antes de em andamento antes do Fiscal antes de concluído);
   // ao abrir o lote aparecem as OS, cada uma com o seu status e as suas ações. OS sem lote seguem como cards próprios.
-  const ORDEM_COLUNA: Record<string, number> = { pendente: 0, andamento: 1, concluido: 2 };
+  const ORDEM_COLUNA: Record<string, number> = { pendente: 0, andamento: 1, fiscal: 2, concluido: 3 };
   const itensDaColuna = (colId: string) => {
     const vistos = new Set<string>(); const itens: any[] = [];
     for (const o of ordensFiltradas) {
@@ -1098,10 +1131,10 @@ OK = ACN   |   Cancelar = DETECH`;
           <div className="acn-kb-lote-lista">
             {item.oss.map((o: any) => (
               <div key={o.id} className="acn-kb-lote-os">
-                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /><SeloPvDaOS os={o} /></div>
+                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /><SeloPvDaOS os={o} /><SeloFichaDaOS os={o} numero={numerosFichas[o.garantia_id]} onAbrir={abrirFichaDaOS} /></div>
                 <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}{o.numero_serie ? ' · SN ' + o.numero_serie : ''}</div>
                 <div className="acn-kb-meta"><Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo></div>
-                <QuemAgeDaOS os={o} />
+                <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
                 <div className="acn-acoes-linha quebra">{renderAcoes(o)}</div>
               </div>
             ))}
@@ -1203,23 +1236,8 @@ OK = ACN   |   Cancelar = DETECH`;
           </Botao>
         );
       }
-      // Manutenção Concluída → SAC faz entrega ou renegocia itens
-      if (os.status === 'Manutenção Concluída') {
-        const itensRenegoc = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0
-          ? os.materiais_utilizados.map((i:any) => ({...i}))
-          : Array.isArray(os.itens_cotacao) && os.itens_cotacao.length > 0
-            ? os.itens_cotacao.map((i:any) => ({...i}))
-            : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0}];
-        btns.push(
-          <Botao key="renegoc" pequeno icone={mdiPencilOutline}
-            onClick={()=>{ setOrcProdItens(itensRenegoc); setOrcProdModo('editar'); setModalOrcProd(os); }}>
-            Renegociar
-          </Botao>
-        );
-        btns.push(
-          <Botao key="entrega" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
-        );
-      }
+      // S5 (29/10/2026): saiu o atalho de "Manutenção Concluída" (Entrega e Renegociar): nada mais grava esse status (a Produção e a Qualidade gravam "Em Execução" e a OS segue pelo CQ e pelo Fiscal),
+      // e o atalho entregaria a OS sem passar por eles. Nenhuma OS estava nesse status.
       // Concluído (OS veicular): SEM cobrança → SAC entrega o veículo, não vai ao Fiscal; COBRADA → SAC envia ao Fiscal (S2)
       if (os.status === 'Concluído') {
         btns.push(osSemCobranca(os)
@@ -2079,15 +2097,20 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
         </div>
 
         {/* Legenda de fluxo */}
+        {/* S5 (29/10/2026): as legendas leem os mesmos caminhos da barra de cada OS (SacFluxo.ts, CAMINHOS_DA_OS): Laboratório e veículo; a OS sem cobrança pula o orçamento e o Fiscal */}
         <div className="sec-body acn-sac-legenda">
-          <span className="acn-fraco">Fluxo:</span>
-          {['Diagnóstico','Orçamento Pronto','Orç. Enviado','Aprovado','Em Execução','Concluído','Entregue'].map((s,i,arr) => (
-            <React.Fragment key={s}>
-              <Selo familia={FAMILIA_STATUS_SAC[s] || 'neutro'}>{s}</Selo>
-              {i < arr.length-1 && <Icone path={mdiArrowRight} size={14} className="acn-fraco" />}
-            </React.Fragment>
+          {LEGENDAS_DE_FLUXO.map(l => (
+            <div key={l.rotulo} className="acn-sac-legenda-linha" aria-label={'Fluxo ' + l.rotulo}>
+              <span className="acn-fraco acn-sac-legenda-rotulo">{l.rotulo}:</span>
+              {l.etapas.map((s, i, arr) => (
+                <React.Fragment key={s}>
+                  <Selo familia={FAMILIA_STATUS_SAC[s] || 'neutro'}>{s}</Selo>
+                  {i < arr.length - 1 && <Icone path={mdiArrowRight} size={14} className="acn-fraco" />}
+                </React.Fragment>
+              ))}
+            </div>
           ))}
-          <span className="acn-fraco acn-sac-legenda-nota">(Lab executa diagnóstico e reparo)</span>
+          <span className="acn-fraco acn-sac-legenda-nota">A OS sem cobrança (garantia ou cortesia) pula o orçamento e o Fiscal.</span>
         </div>
 
         {/* S4 (29/10/2026): o que está com cada setor hoje. O SAC vê o que é dele e há quantos dias está lá; clicar no setor filtra a lista e o quadro */}
@@ -2171,7 +2194,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               </Faixa>
             )}
             {loading ? <div className="acn-empty">Carregando...</div> : (
-              <div className="acn-kb">
+              <div className="acn-kb com-fiscal">
                 {COLUNAS_KANBAN.map(col => {
                   const cards = itensDaColuna(col.id);
                   return (
@@ -2190,7 +2213,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                               <div className="acn-kb-topo">
                                 <strong className="acn-forte">{o.numero_os}</strong>
                                 <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
-                                <SeloPvDaOS os={o} />
+                                <SeloPvDaOS os={o} /><SeloFichaDaOS os={o} numero={numerosFichas[o.garantia_id]} onAbrir={abrirFichaDaOS} />
                               </div>
                               <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}</div>
                               {o.cliente_nome && <div className="acn-fraco">{o.cliente_nome}</div>}
@@ -2198,7 +2221,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                                 <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
                                 {o.tipo_servico && <span className="acn-fraco">{o.tipo_servico}</span>}
                               </div>
-                              <QuemAgeDaOS os={o} />
+                              <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
                               <div className="acn-kb-meta acn-fraco">
                                 <span>Abertura {fmtDt(o.data_abertura)}</span>
                                 {o.prazo_orcamento && <span>Prazo orç. {fmtDt(o.prazo_orcamento)}</span>}
@@ -2239,7 +2262,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                       <div className="acn-duas acn-sac-id">
                         <strong className="acn-forte">{o.numero_os}</strong>
                         <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
-                        <SeloPvDaOS os={o} />
+                        <SeloPvDaOS os={o} /><SeloFichaDaOS os={o} numero={numerosFichas[o.garantia_id]} onAbrir={abrirFichaDaOS} />
                         {o.lote_id && <Selo familia="marca" ponto={false} title={o.lote_descricao || 'Faz parte de um lote de OS'}>Lote</Selo>}
                       </div>
                     </td>
@@ -2284,7 +2307,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     </td>
                     <td>
                       <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
-                      <QuemAgeDaOS os={o} />
+                      <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
                       {o.revisao_pendente && (
                         <div><span className="acn-txt-erro acn-sac-icone-texto acn-sac-revisao"><Icone path={mdiAlertOutline} size={12} /> Revisão pendente</span></div>
                       )}
@@ -3374,7 +3397,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       )}
 
       {/* MODAL ACOMPANHAMENTO DA OS */}
-      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
+      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} fichaNumero={numerosFichas[resumoOS.garantia_id]} onAbrirFicha={() => { abrirFichaDaOS(resumoOS); setResumoOS(null); }} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
       {comprasOS && <ModalComprasDaOS os={ordens.find((x: any) => x.id === comprasOS.id) || comprasOS} currentUser={currentUser} onClose={() => setComprasOS(null)} />}
       {modalAcomp && (
         <OplAcompModal
