@@ -19,6 +19,8 @@ import { ItensVendidosEditor, itensQueParecemTotalDoLote } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
 import { hojeISO, Botao } from './Interface';
 import { lerValorDigitado } from './LerValor';
+import { quemExecutaValido, statusInicialDaOsDoCrm, numeroPvParaOS, demandaDeExecucaoDaOsDoCrm, ROTULOS_QUEM_EXECUTA } from './SacFluxo';
+import { notificarEvento } from './whatsappHelper';
 import { mostrarAviso, confirmar } from './Feedback';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
@@ -182,6 +184,7 @@ const VAZIO = {
   descricao_problema:     '',
   equipamento:            '',
   numero_serie:           '',
+  quem_executa:           'laboratorio',   // S3 (29/10/2026): 'laboratorio' (demanda de execução) ou 'sac' (o SAC conclui); ver SacFluxo.ts
 
   // ── Comum ─────────────────────────────────────────────────────────────────
   cliente_nome:           '',
@@ -426,6 +429,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       setErro(semPv ? 'Informe o número da OP.' : 'Informe o pedido de venda (4 dígitos) ou marque "OP sem pedido de venda".'); return;
     }
     if (form.tipo === 'OS' && !form.descricao_problema.trim()) { setErro('Descreva o problema/serviço.'); return; }
+    // S3 (29/10/2026): o valor da OS vendida vai para a OS (é o que o Fiscal fatura); valor ilegível não vira vazio em silêncio
+    if (form.tipo === 'OS' && lerValorDigitado(form.valor_total).invalido) { setErro(`Valor Total inválido: "${String(form.valor_total).trim()}". Use só números, por exemplo 450 ou 1.450,50.`); return; }
     if (!form.prazo_entrega) { setErro('Informe o prazo de entrega.'); return; }
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
     // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
@@ -687,7 +692,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           data_prevista_entrega: form.prazo_entrega || null,
           observacoes:          form.observacoes || null,
           resumo_servicos:      form.resumo_servicos || null,
-          status:               'Aberta',
+          // S3 (29/10/2026): a OS lançada aqui já vem vendida (valor e pedido de venda do card): não passa por cotação nem nasce "Aberta" sem dono; vai direto para a execução (SacFluxo.ts)
+          status:               statusInicialDaOsDoCrm(form.quem_executa),
+          cobranca:             'cobrada',
+          aprovado:             true,
+          quem_executa:         quemExecutaValido(form.quem_executa),
+          numero_pv:            numeroPvParaOS(crmCard?.numero_pv),
+          // (a leitura do valor vale a mesma da OP; o `parseMoedaOuNull` do ramo da OP não existe aqui, por isso a leitura direta)
+          valor_total:          (() => { const v = lerValorDigitado(form.valor_total); return v.valor !== undefined ? v.valor : null; })(),
           criado_por_nome:      currentUser?.nome,
           criado_por_email:     currentUser?.email,
           atualizado_em:        new Date().toISOString(),
@@ -702,6 +714,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           if (r.error.code !== '23505') throw r.error;
         }
         if (!data) throw new Error('Não foi possível gerar um número de OS único. Tente de novo.');
+        // S3 (29/10/2026): quem executa. Laboratório: a demanda de execução nasce junto (sem ela o Laboratório não enxerga a OS: foi o que deixou 3 OS sem dono); o SAC: a OS já está "Em Execução" e o
+        // botão "Concluir OS" é dele. A OS já existe aqui; se a demanda falhar, o aviso é vermelho e fica na tela (a janela fecha logo em seguida).
+        if (quemExecutaValido(form.quem_executa) === 'laboratorio') {
+          const { error: errDem } = await supabase.from('demandas_setoriais').insert([demandaDeExecucaoDaOsDoCrm({
+            numero: data.numero_os, equipamento: form.equipamento || form.tipo_servico, defeito: form.descricao_problema, usuario: currentUser, agora: new Date().toISOString(), osId: data.id,
+          })]);
+          if (errDem) mostrarAviso(`A OS ${data.numero_os} foi aberta, mas não foi possível criar a demanda de execução para o Laboratório (${errDem.message}). Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`, 'erro');
+        }
+        notificarEvento('sac_os_aberta', `*Nova OS ${data.numero_os}* (lançada pelo card do CRM)\nCliente: ${form.cliente_nome}\nServiço: ${form.tipo_servico}\nExecuta: ${ROTULOS_QUEM_EXECUTA[quemExecutaValido(form.quem_executa)]}\nPor: ${currentUser?.nome}`);
         onSaved?.(data, 'os');
       }
       onClose();
@@ -1373,6 +1394,27 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 <textarea className="acn-input acn-nop-w acn-nop-ta" rows={3}
                   placeholder="Descreva o que precisa ser feito..."
                   value={form.descricao_problema} onChange={e => setF('descricao_problema', e.target.value)} />
+              </div>
+              {/* S3 (29/10/2026): a OS lançada aqui já vem vendida: sem cotação, vai direto para a execução; o valor é o da venda e é o que o Fiscal fatura */}
+              <div className="acn-nop-gr g2">
+                <div>
+                  <div className="acn-nop-rot">Valor Total (R$){crmCard && form.valor_total && <span className="acn-nop-rot-sub"> · vem da venda do card</span>}</div>
+                  <input className="acn-input acn-nop-w" placeholder="Ex: 450" aria-label="Valor total da OS"
+                    value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
+                </div>
+                <div>
+                  <div className="acn-nop-rot">Quem executa *</div>
+                  <select className="acn-input acn-nop-w" value={form.quem_executa} aria-label="Quem executa a OS"
+                    onChange={e => setF('quem_executa', e.target.value)}>
+                    {Object.entries(ROTULOS_QUEM_EXECUTA).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="acn-nop-pv-nota ok">
+                {form.quem_executa === 'sac'
+                  ? 'A OS nasce Em Execução: quando o serviço terminar, o SAC usa "Concluir OS" e ela segue para o Fiscal.'
+                  : 'A OS nasce Aprovada e o Laboratório recebe a demanda de execução; quando ele concluir, o SAC envia ao Fiscal.'}
+                {crmCard?.numero_pv ? ` Pedido de venda ${numeroPvParaOS(crmCard.numero_pv)}.` : ''}
               </div>
               <div className="acn-nop-bl">
                 <div className="acn-nop-rot">Resumo dos Serviços a serem executados</div>

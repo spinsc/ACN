@@ -15,6 +15,7 @@ import AgendaWidget from './AgendaWidget';
 import GarantiaTab, { gravarGarantia } from './GarantiaTab';
 import { registrarOsGerada } from './GarantiaModelo';
 import EnviarOsAoFiscalModal from './EnviarOsAoFiscalModal';
+import { podeConcluirPeloSac, estaComOLaboratorio } from './SacFluxo';
 import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -198,6 +199,11 @@ const FORM_VAZIO = {
 };
 
 // Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
+// S3 (29/10/2026): o pedido de venda do card do CRM de onde a OS foi lançada (a OS antiga e a aberta pelo SAC não têm)
+function SeloPvDaOS({ os }: { os: any }) {
+  return os?.numero_pv ? <Selo familia="neutro" ponto={false} title="Pedido de venda do card do CRM de onde esta OS foi lançada">PV {os.numero_pv}</Selo> : null;
+}
+
 function EtiquetaEmpresaOS({ os, onTrocar }: { os: any; onTrocar: (os: any) => void }) {
   // Etapa 12d3: o mesmo botão de antes (clique troca a empresa), agora um Selo do guia — ACN verde-água da marca, DETECH azul, OS sem empresa cinza com "+ empresa"
   const familia = os.empresa === 'ACN' ? 'marca' : os.empresa === 'DETECH' ? 'info' : 'neutro';
@@ -1066,7 +1072,7 @@ OK = ACN   |   Cancelar = DETECH`;
           <div className="acn-kb-lote-lista">
             {item.oss.map((o: any) => (
               <div key={o.id} className="acn-kb-lote-os">
-                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /></div>
+                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /><SeloPvDaOS os={o} /></div>
                 <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}{o.numero_serie ? ' · SN ' + o.numero_serie : ''}</div>
                 <div className="acn-kb-meta"><Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo></div>
                 <div className="acn-acoes-linha quebra">{renderAcoes(o)}</div>
@@ -1257,6 +1263,12 @@ OK = ACN   |   Cancelar = DETECH`;
           </Botao>
         );
 
+      // S3 (29/10/2026): a OS lançada pelo card do CRM já vem vendida e vai direto para a execução. Com o Laboratório, o SAC só acompanha; quando é "o SAC conclui", o botão é dele
+      if (podeConcluirPeloSac(os))
+        btns.push(<Botao key="concluir" pequeno variante="primario" icone={mdiCheck} onClick={()=>concluirOsPeloSac(os)}>Concluir OS</Botao>);
+      if (estaComOLaboratorio(os))
+        btns.push(<span key="comlab" className="acn-fraco acn-sac-espera">{os.status === 'Aprovado' ? 'Aguardando o Laboratório iniciar' : 'Em execução no Laboratório'}</span>);
+
       // Lab concluiu o reparo → OS COBRADA vai ao Fiscal (S2, 27/10/2026); SEM cobrança → SAC faz a entrega
       if (os.status === 'Concluído')
         btns.push(osSemCobranca(os)
@@ -1286,6 +1298,21 @@ OK = ACN   |   Cancelar = DETECH`;
       { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
     ]} />);
     return btns;
+  };
+
+  // S3 (29/10/2026): o SAC conclui a OS que ele mesmo executa (lançada pelo card do CRM com "O SAC conclui"). A gravação só pega se a OS ainda está "Em Execução": duas pessoas não concluem a mesma OS.
+  // Concluída, a OS cobrada ganha o botão "Enviar ao Fiscal" (S2), que confere o valor e o CPF/CNPJ da nota.
+  const concluirOsPeloSac = async (os: any) => {
+    if (!await confirmar(`Concluir a ${os.numero_os}? O serviço foi executado; a OS segue para o Fiscal (botão "Enviar ao Fiscal").`)) return;
+    const agora = new Date().toISOString();
+    const { data, error } = await supabase.from('sac_ordens_servico')
+      .update({ status: 'Concluído', data_finalizacao_execucao: agora, atualizado_em: agora })
+      .eq('id', os.id).eq('status', 'Em Execução').select('id');
+    if (error) { alert('Não foi possível concluir a OS: ' + error.message); return; }
+    if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Em Execução' }, newRow: { status: 'Concluído', data_finalizacao_execucao: agora }, user: currentUser });
+    notificarEvento('sac_os_concluida', `*OS ${os.numero_os} concluída pelo SAC*\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}`);
+    fetchOrdens();
   };
 
   // ── COPIAR OS (pedido do usuário em 23/10/2026): várias OS iguais, cada uma com o seu número ──────────────────────────────────────────────────────────────────────────────
@@ -2058,6 +2085,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                               <div className="acn-kb-topo">
                                 <strong className="acn-forte">{o.numero_os}</strong>
                                 <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
+                                <SeloPvDaOS os={o} />
                               </div>
                               <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}</div>
                               {o.cliente_nome && <div className="acn-fraco">{o.cliente_nome}</div>}
@@ -2105,6 +2133,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                       <div className="acn-duas acn-sac-id">
                         <strong className="acn-forte">{o.numero_os}</strong>
                         <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
+                        <SeloPvDaOS os={o} />
                         {o.lote_id && <Selo familia="marca" ponto={false} title={o.lote_descricao || 'Faz parte de um lote de OS'}>Lote</Selo>}
                       </div>
                     </td>

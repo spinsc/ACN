@@ -154,3 +154,41 @@ export function equipamentoDaOsParaOFiscal(os: any): { titulo: string; detalhe: 
   const modelo = [os?.marca, os?.modelo].filter(Boolean).join(' ');
   return { titulo: String(os?.equipamento_nome || ''), detalhe: [modelo, os?.numero_serie ? `Série ${os.numero_serie}` : ''].filter(Boolean).join(' · ') };
 }
+
+// ── S3 (PLANO_SAC_FLUXO.md, 29/10/2026): a OS lançada pelo card do CRM nasce com caminho ──────────────────────────────────────────────────────────
+// Até aqui ela nascia "Aberta" e parava: sem botão para o SAC, sem demanda para o Laboratório (3 OS ficaram semanas sem dono). Decisão do usuário (27/10/2026): a OS do card já vem VENDIDA (o valor e o pedido
+// de venda são da venda), então não há cotação: vai direto para a execução. Quem executa o SAC escolhe ao lançar (resposta do usuário em 29/10/2026): o LABORATÓRIO (nasce "Aprovado" e recebe a demanda
+// de execução, como a garantia) ou "o SAC conclui" (nasce "Em Execução", para o serviço feito fora do Laboratório). Concluída, a OS COBRADA vai ao Fiscal pelo botão de sempre (S2).
+export type QuemExecuta = 'laboratorio' | 'sac';
+export const ROTULOS_QUEM_EXECUTA: Record<QuemExecuta, string> = { laboratorio: 'Laboratório', sac: 'O SAC conclui' };
+
+/** Qualquer coisa que não seja 'sac' vale como Laboratório (o padrão da tela). */
+export const quemExecutaValido = (v: any): QuemExecuta => (v === 'sac' ? 'sac' : 'laboratorio');
+
+/** A etapa em que a OS lançada pelo card NASCE: o Laboratório começa "Aprovado" (a demanda de execução o põe em "Em Execução" quando ele inicia); o SAC já começa "Em Execução". */
+export const statusInicialDaOsDoCrm = (quem: any): string => (quemExecutaValido(quem) === 'sac' ? 'Em Execução' : 'Aprovado');
+
+/** O SAC pode concluir esta OS agora? Só a que ele mesmo executa e está em execução. */
+export const podeConcluirPeloSac = (os: any): boolean => os?.quem_executa === 'sac' && os?.status === 'Em Execução';
+
+/** A OS está com o Laboratório (o SAC não tem o que fazer; é o texto que ocupa o lugar do botão)? Só a OS lançada com essa marca. */
+export const estaComOLaboratorio = (os: any): boolean => os?.quem_executa === 'laboratorio' && (os?.status === 'Aprovado' || os?.status === 'Em Execução');
+
+/** O pedido de venda do card, como a OS o guarda: só os dígitos, até 4 (o padrão do `numero_pv` do CRM); vazio = sem pedido de venda. */
+export const numeroPvParaOS = (pv: any): string | null => String(pv ?? '').replace(/\D/g, '').slice(0, 4) || null;
+
+/** A demanda de execução do Laboratório que nasce junto da OS do card (mesma forma da que a garantia cria na Nova OS do SAC). */
+export function demandaDeExecucaoDaOsDoCrm({ numero, equipamento, defeito, usuario, agora, osId }: { numero: string; equipamento?: string; defeito?: string; usuario: any; agora: string; osId: string }) {
+  return {
+    setor_destino: 'Laboratorio',
+    descricao: `[SAC-EXEC] ${numero} — ${equipamento || '—'} | ${String(defeito || '').trim() || 'Ver OS'}`,
+    numero_opl: numero,
+    status: 'Pendente',
+    criado_por: usuario?.email,
+    criado_por_nome: usuario?.nome,
+    data_abertura: agora,
+    sac_os_id: osId,
+    sac_fase: 'execucao',
+    logs_demanda: [{ texto: 'OS lançada pelo card do CRM (serviço vendido): vai direto para a execução, sem cotação.', usuario: usuario?.nome, hora: agora }],
+  };
+}
