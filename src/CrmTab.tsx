@@ -10,7 +10,7 @@ import ContactosSection from './ContactosSection';
 import { conferirContatoDoCard, mensagemContatoDoCard, conferirContatoDeLicitacao } from './ContatoObrigatorio';
 import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
-import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel } from './AnaliseWidget';
+import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel, carregarAnalisePorOrigem } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import RichTextInput, { pareceHtmlFormatado } from './RichTextInput';
 import NovaOpOsModal from './NovaOpOsModal';
@@ -507,6 +507,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
   // ─────────────────────────────────────────────────────────────────────────
+  const [analisePorOrigem, setAnalisePorOrigem] = useState<Record<string, { total: number; feitos: number }>>({});
   const load = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
     const [r1, r2, r3, r4, r5] = await Promise.all([
@@ -523,6 +524,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setErroCarga('');
     setEstagios(r1.data || []);
     setOps(r2.data || []);
+    // o selo "Análise x/y" dos cartões: uma consulta para o quadro inteiro (antes era uma por cartão e derrubou o banco em 28/10/2026); leitura que falha mantém o que já estava
+    carregarAnalisePorOrigem((r2.data || []).map((o: any) => o.id)).then(setAnalisePorOrigem).catch(e => console.error('Selo "Análise" dos cards:', e));
     setItens(r3.data || []);
     setProgresso(r4.data || []);
     setVendas(r5.data || []);
@@ -2499,7 +2502,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
             </span>
           )}
-          <AnaliseStatusBadge origemId={op.id} />
+          <AnaliseStatusBadge origemId={op.id} info={analisePorOrigem[op.id]} />
           <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
