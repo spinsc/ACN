@@ -18,7 +18,8 @@ begin
   select coalesce(array_agg(distinct x order by x), '{}') into fora from unnest(p_indices_fora) x;
   select * into ped from public.pcp_pedidos_compra where id = p_pedido_id for update;
   if not found then raise exception 'pedido não encontrado'; end if;
-  if ped.status_compra not in ('Pendente', 'Em Andamento') then
+  -- 30/10/2026 (pedido do usuário): só vale na coluna "Aguardando Aprovação"; em "Em Andamento" o comprador apenas lança as cotações antes de o pedido mudar de coluna
+  if ped.status_compra <> 'Aguardando Aprovação' then
     raise exception 'só dá para separar itens antes da aprovação (o pedido está em "%")', ped.status_compra;
   end if;
   if ped.itens is null or jsonb_typeof(ped.itens) <> 'array' then raise exception 'o pedido não tem lista de itens'; end if;
@@ -33,6 +34,16 @@ begin
   if exists (select 1 from public.pcp_cotacoes_fornecedores c where c.pedido_id = ped.id
              and (c.itens is null or jsonb_typeof(c.itens) <> 'array' or jsonb_array_length(c.itens) = 0)) then
     raise exception 'há cotação do pedido inteiro; não há item sem cotação para separar';
+  end if;
+  -- as cotações apontam para a POSIÇÃO do item: se a lista foi editada depois de cotar (item tirado, trocado ou reordenado), a posição não é mais a mesma e separar
+  -- levaria o item errado. Cada item cotado tem de continuar com o mesmo nome na posição que a cotação diz.
+  if exists (select 1 from public.pcp_cotacoes_fornecedores c, jsonb_array_elements(c.itens) x
+             where c.pedido_id = ped.id
+               and (x->>'indice')::int not between 0 and total - 1) or exists (
+             select 1 from public.pcp_cotacoes_fornecedores c, jsonb_array_elements(c.itens) x
+             where c.pedido_id = ped.id and (x->>'indice')::int between 0 and total - 1
+               and lower(btrim(coalesce(x->>'nome', ''))) <> lower(btrim(coalesce(ped.itens -> (x->>'indice')::int ->> 'nome', '')))) then
+    raise exception 'a lista de itens foi alterada depois das cotações; refaça as cotações dos itens que mudaram antes de separar';
   end if;
   if exists (select 1 from public.pcp_cotacoes_fornecedores c, jsonb_array_elements(c.itens) x
              where c.pedido_id = ped.id and (x->>'indice')::int = any(fora)) then

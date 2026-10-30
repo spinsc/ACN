@@ -15,8 +15,14 @@ type Item = { indice: number; nome: string; [k: string]: any };
 const numerados = (pedido: any): Item[] => Array.isArray(pedido?.itens)
   ? pedido.itens.map((i: any, indice: number) => ({ ...i, indice })).filter((i: any) => String(i?.nome || '').trim()) : [];
 
+/** A lista de itens do pedido foi editada depois das cotações? (a cotação aponta para a posição do item; o nome na posição tem de ser o mesmo) */
+export function listaAlteradaDepoisDeCotar(pedido: any, cotacoes: any[]): boolean {
+  const nomeDe = (s: any) => String(s ?? '').trim().toLowerCase();
+  return (cotacoes || []).some((c: any) => Array.isArray(c.itens) && c.itens.some((ci: any) => nomeDe(ci.nome) !== nomeDe(pedido?.itens?.[Number(ci.indice)]?.nome)));
+}
+
 /**
- * Dá para separar o resto ao aprovar? Só quando: o pedido tem vários itens e ainda não saiu da cotação (Pendente ou Em Andamento),
+ * Dá para separar o resto ao aprovar? Só quando: o pedido tem vários itens e está na coluna "Aguardando Aprovação" (cotações já lançadas, ainda sem aprovação),
  * há item que nenhuma cotação cobre, e a escolha de agora (`escolhidos`, os itens da cotação que está sendo aprovada) mais as vencedoras
  * das outras cotações (`vencedoras`) completam TODOS os itens que têm cotação. Cotação do formato antigo (sem lista de itens) cobre o
  * pedido inteiro: então não existe item "sem cotação".
@@ -27,9 +33,12 @@ export function situacaoDaDivisao({ pedido, cotacoes, vencedoras, escolhidos, co
   const nao = { pode: false, fora: [] as Item[] };
   const itens = numerados(pedido);
   if (itens.length < 2 || vencedoraId) return nao;
-  if (!['Pendente', 'Em Andamento'].includes(String(pedido?.status_compra))) return nao;
+  // pedido do usuário em 30/10/2026: só na coluna "Aguardando Aprovação" (em "Em Andamento" o comprador só lança as cotações antes de o pedido mudar de coluna)
+  if (String(pedido?.status_compra) !== 'Aguardando Aprovação') return nao;
   const lista = cotacoes || [];
   if (!lista.length || lista.some((c: any) => !Array.isArray(c.itens) || !c.itens.length)) return nao;
+  // as cotações apontam para a POSIÇÃO do item: se a lista foi editada depois de cotar (PC-00141), as posições já não batem e separar levaria o item errado
+  if (listaAlteradaDepoisDeCotar(pedido, lista)) return nao;
   const cobertos = new Set<number>(lista.flatMap((c: any) => c.itens.map((i: any) => Number(i.indice))));
   const fora = itens.filter(i => !cobertos.has(i.indice));
   const comCotacao = itens.filter(i => cobertos.has(i.indice));

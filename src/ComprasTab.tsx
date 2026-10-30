@@ -12,7 +12,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { combinaBusca } from './SearchUtils';
-import { situacaoDaDivisao, renumerarVencedoras, dividirPedido } from './DivisaoDoPedido';
+import { situacaoDaDivisao, renumerarVencedoras, dividirPedido, listaAlteradaDepoisDeCotar } from './DivisaoDoPedido';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { Botao, MenuAcoes, Selo, Faixa, Chips } from './Interface';
@@ -3033,7 +3033,12 @@ export default function ComprasTab({ currentUser }) {
               {(() => {
                 // itens que nenhuma cotação cobre: podem sair para um pedido novo, sem segurar os que já têm cotação
                 const div = situacaoDaDivisao({ pedido: modalCotacoes, cotacoes, vencedoras, escolhidos: itensEscolhidos, cotacaoId: modalConfirmarSenha.id, vencedoraId });
-                if (!div.pode) return null;
+                if (!div.pode) {
+                  // a lista foi editada depois das cotações (as posições não batem): explica por que o "separar o resto" não aparece, em vez de sumir sem dizer nada
+                  return modalCotacoes?.status_compra === 'Aguardando Aprovação' && listaAlteradaDepoisDeCotar(modalCotacoes, cotacoes)
+                    ? <Faixa tom="erro">A lista de itens deste pedido foi alterada depois das cotações, então não dá para separar o resto com segurança. Refaça as cotações dos itens que mudaram (ou peça ao suporte para acertar as posições) e tente de novo.</Faixa>
+                    : null;
+                }
                 return (
                   <Faixa tom="atencao">
                     {div.fora.length === 1 ? 'Este item não tem cotação' : `Estes ${div.fora.length} itens não têm cotação`}: <strong>{div.fora.map((i: any) => `${i.quantidade ?? 1}× ${i.nome}`).join('; ')}</strong>.
