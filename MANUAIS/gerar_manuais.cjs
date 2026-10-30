@@ -1,15 +1,42 @@
-// Gera o Manual do SAC a partir dos três arquivos de MANUAL_SAC/fonte:
-//   Manual_SAC.md    texto único (para ler em qualquer editor)
-//   Manual_SAC.html  página única com as fotos embutidas (abre sem internet)
-//   artefato.html    mesma página como fragmento, com as fotos em img/ (para publicar)
-// O PDF sai do Manual_SAC.html pelo Chrome (ver gerar_pdf.cjs).
-// Rodar: node MANUAL_SAC/build_manual.cjs
+// Gera os manuais do sistema (um por setor) a partir do texto em MANUAIS/<id>/fonte/*.md.
+//   node MANUAIS/gerar_manuais.cjs            gera todos e o catálogo
+//   node MANUAIS/gerar_manuais.cjs sac        gera só o manual de MANUAIS/sac
+// Cada manual tem: manual.json (setor, título, descrição, data, histórico de mudanças) e fonte/*.md (ordem alfabética).
+// Saída (vai para o GitHub Pages junto com o app): public/manuais/<id>/index.html (as fotos ficam em public/manuais/<id>/img/)
+// e public/manuais/catalogo.json (a lista que a tela "Manuais" lê). Para criar um manual novo: pasta nova em MANUAIS com esses dois itens.
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
-const RAIZ = __dirname;
-const FONTES = ['1_inicio_e_os.md', '2_passo_a_passo_os.md', '3_nfc_garantia_cadastros.md'];
-const TEXTO = FONTES.map(f => fs.readFileSync(path.join(RAIZ, 'fonte', f), 'utf8').replace(/\r\n/g, '\n').trim()).join('\n\n');
+const RAIZ = path.join(__dirname, '..');
+const PASTA_MANUAIS = __dirname;
+const SAIDA_GERAL = path.join(RAIZ, 'public', 'manuais');
+
+// sem argumento: gera todos (um processo por manual, para cada um começar do zero) e monta o catálogo
+if (!process.argv[2]) {
+  const ids = fs.readdirSync(PASTA_MANUAIS).filter(d => fs.existsSync(path.join(PASTA_MANUAIS, d, 'manual.json')));
+  const catalogo = [];
+  for (const id of ids) {
+    const r = spawnSync(process.execPath, [__filename, id], { stdio: 'inherit' });
+    if (r.status !== 0) { console.error('falhou:', id); process.exit(1); }
+    const c = JSON.parse(fs.readFileSync(path.join(PASTA_MANUAIS, id, 'manual.json'), 'utf8'));
+    catalogo.push({ ...c, caminho: 'manuais/' + id + '/index.html' });
+  }
+  catalogo.sort((a, b) => (a.ordem || 99) - (b.ordem || 99) || a.titulo.localeCompare(b.titulo, 'pt-BR'));
+  fs.mkdirSync(SAIDA_GERAL, { recursive: true });
+  fs.writeFileSync(path.join(SAIDA_GERAL, 'catalogo.json'), JSON.stringify(catalogo, null, 2) + '\n');
+  console.log('catálogo:', catalogo.map(c => c.id).join(', '));
+  process.exit(0);
+}
+
+const ID = process.argv[2];
+const CFG = JSON.parse(fs.readFileSync(path.join(PASTA_MANUAIS, ID, 'manual.json'), 'utf8'));
+const FONTE_DIR = path.join(PASTA_MANUAIS, ID, 'fonte');
+const SAIDA = path.join(SAIDA_GERAL, ID);
+fs.mkdirSync(path.join(SAIDA, 'img'), { recursive: true });
+const FONTES = fs.readdirSync(FONTE_DIR).filter(f => f.endsWith('.md')).sort();
+const TEXTO = FONTES.map(f => fs.readFileSync(path.join(FONTE_DIR, f), 'utf8').replace(/\r\n/g, '\n').trim()).join('\n\n');
+const dataBR = iso => iso.split('-').reverse().join('/');
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const slug = s => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-');
@@ -135,7 +162,7 @@ function blocos(linhas) {
 const corpo = blocos(TEXTO.split('\n')).join('\n');
 
 // ---------- sumário ----------
-let sumario = '';
+var sumario = '';
 {
   let aberto = false;
   for (const t of titulos) {
@@ -197,7 +224,8 @@ main{min-width:0}
 .capa .selo{display:inline-block;font:700 12px/1 "Bricolage Grotesque",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--verde-forte);background:var(--verde-claro);padding:6px 10px;border-radius:999px}
 .capa h1.titulo{font:800 clamp(34px,6vw,54px)/1.05 "Bricolage Grotesque","Segoe UI",sans-serif;margin:14px 0 10px;text-wrap:balance;letter-spacing:-.02em}
 .capa p{color:var(--suave);max-width:60ch;margin:0}
-.tema{float:right;background:var(--painel);color:var(--fg);border:1px solid var(--linha);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.embutido .imprimir{display:none}
+.tema{float:right;margin-left:8px;background:var(--painel);color:var(--fg);border:1px solid var(--linha);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
 h1,h2,h3,h4{font-family:"Bricolage Grotesque","Segoe UI",sans-serif;line-height:1.2;text-wrap:balance}
 main h1{font-size:clamp(28px,4.4vw,40px);font-weight:800;margin:72px 0 18px;padding-top:28px;border-top:3px solid var(--verde);letter-spacing:-.015em}
 main h1 .parte{display:block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--verde);font-weight:700;margin-bottom:6px}
@@ -286,54 +314,38 @@ const JS = `
 const CAPA = `
 <header class="capa">
   <button class="tema" type="button">Claro / escuro</button>
-  <span class="selo">ACN Sinal Verde · Setor SAC</span>
-  <h1 class="titulo">Manual do SAC</h1>
-  <p>Passo a passo de cada aba — Ordens de Serviço, Chamados NFC, Garantia e Cadastros —, com o que o sistema faz a cada clique e para onde a OS vai. Atualizado em 30/10/2026.</p>
+  <button class="tema imprimir" type="button">Imprimir / salvar em PDF</button>
+  <span class="selo">ACN Sinal Verde · ${esc(CFG.setor)}</span>
+  <h1 class="titulo">${esc(CFG.titulo)}</h1>
+  <p>${esc(CFG.descricao)} Atualizado em ${dataBR(CFG.atualizadoEm)}.</p>
 </header>`;
 
-function miolo(embutirImagens) {
-  let html = corpo;
-  if (embutirImagens) {
-    html = html.replace(/src="(img\/[^"]+)"/g, (_, rel) => {
-      const arq = path.join(RAIZ, rel);
-      const b64 = fs.readFileSync(arq).toString('base64');
-      return `src="data:image/jpeg;base64,${b64}"`;
-    });
-  }
-  return `<div class="pagina">
-<nav class="sum"><details open><summary>Sumário</summary><div class="conteudo"><h2>Sumário</h2><ul>${sumario}</ul></div></details></nav>
-<main>${CAPA}${html}</main>
-</div>`;
-}
+// histórico de mudanças do manual, no fim (cada ajuste de tela que mexe no manual entra em manual.json)
+const HISTORICO = '<h1 id="historico-do-manual"><span class="parte">Fim</span>Histórico deste manual</h1><ul class="lista">' +
+  (CFG.mudancas || []).map(m => '<li><strong>' + dataBR(m.data) + '</strong> — ' + inline(m.texto) + '</li>').join('') + '</ul>';
+sumario += '<li class="parte-sum"><a href="#historico-do-manual"><span>Fim</span>Histórico deste manual</a></li>';
 
-// fragmento para o Artefato (sem doctype/html/head/body)
-const fragmento = `<title>Manual do SAC</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-${FONTES_LINK}
-<style>${CSS}</style>
-${miolo(false)}
-<script>${JS}</script>
-`;
-fs.writeFileSync(path.join(RAIZ, 'artefato.html'), fragmento);
+const IMPRIME = `
+  var im=document.querySelector('.imprimir');if(im)im.addEventListener('click',function(){window.print();});
+  if(window.top!==window.self)document.documentElement.classList.add('embutido');`;
 
-// página única, fotos embutidas
-const unica = `<!doctype html>
+const pagina = `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Manual do SAC</title>
+<title>${esc(CFG.titulo)}</title>
 ${FONTES_LINK}
 <style>${CSS}</style></head><body>
-${miolo(true)}
-<script>${JS}</script>
+<div class="pagina">
+<nav class="sum"><details open><summary>Sumário</summary><div class="conteudo"><h2>Sumário</h2><ul>${sumario}</ul></div></details></nav>
+<main>${CAPA}${corpo}${HISTORICO}</main>
+</div>
+<script>${JS.replace("}catch(e){}", IMPRIME + "}catch(e){}")}</script>
 </body></html>
 `;
-fs.writeFileSync(path.join(RAIZ, 'Manual_SAC.html'), unica);
-
-// texto único
-fs.writeFileSync(path.join(RAIZ, 'Manual_SAC.md'), '# Manual do SAC — ACN Sinal Verde\n\n' + TEXTO.replace(/^# /gm, '# ') + '\n');
+fs.writeFileSync(path.join(SAIDA, 'index.html'), pagina);
 
 // confere se toda foto citada existe e se todo link interno tem destino
-const faltam = [...corpo.matchAll(/src="(img\/[^"]+)"/g)].map(m => m[1]).filter(r => !fs.existsSync(path.join(RAIZ, r)));
+const faltam = [...corpo.matchAll(/src="(img\/[^"]+)"/g)].map(m => m[1]).filter(r => !fs.existsSync(path.join(SAIDA, r)));
 const ids = new Set(titulos.map(t => t.id));
 const quebrados = [...corpo.matchAll(/href="#([^"]+)"/g)].map(m => m[1]).filter(h => !ids.has(h));
-console.log('titulos', titulos.length, '| fotos citadas', (corpo.match(/src="img\//g) || []).length, '| fotos faltando', faltam, '| links quebrados', quebrados);
-console.log('artefato.html', (fs.statSync(path.join(RAIZ, 'artefato.html')).size / 1024).toFixed(0) + ' KB', '| Manual_SAC.html', (fs.statSync(path.join(RAIZ, 'Manual_SAC.html')).size / 1048576).toFixed(1) + ' MB');
+console.log(ID + ': títulos', titulos.length, '| fotos citadas', (corpo.match(/src="img\//g) || []).length, '| fotos faltando', faltam, '| links quebrados', quebrados, '| index.html', (fs.statSync(path.join(SAIDA, 'index.html')).size / 1024).toFixed(0) + ' KB');
+if (faltam.length || quebrados.length) process.exit(1);
