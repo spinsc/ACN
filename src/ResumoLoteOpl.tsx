@@ -35,11 +35,12 @@ export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiber
     const n = irmaos.length;
     const porStatus: Record<string, number> = {};
     irmaos.forEach((o: any) => { const s = o.status_geral || '—'; porStatus[s] = (porStatus[s] || 0) + 1; });
-    // o valor lançado em cada unidade costuma ser o do LOTE inteiro, repetido (ver OpLotes.ts); se vierem valores diferentes por unidade, soma
+    // 30/10/2026 (pedido do usuário, lote A1226.2610): o valor de cada unidade é o valor DAQUELA OP (é o que a janela da OP mostra; a Nova OP e a cópia gravam assim), então o lote vale a
+    // soma das unidades e o valor por veículo é essa soma ÷ unidades, igual ao Dossiê do lote. Antes, valores iguais eram lidos como "o lote inteiro repetido": mostrava o valor de um
+    // carro como total do lote e ainda o dividia pelas unidades. (A conta de comissão em OpLotes.ts ainda trata o lote antigo assim; não foi mexida.)
     const vals = irmaos.map((o: any) => o.valor_total).filter((v: any) => v != null).map(Number);
-    const iguais = vals.length > 0 && vals.every(v => v === vals[0]);
-    const totalLote = vals.length ? (iguais ? vals[0] : vals.reduce((s, v) => s + v, 0)) : null;
-    const porVeiculo = totalLote != null ? (iguais ? totalLote / n : totalLote / n) : null;
+    const totalLote = vals.length ? vals.reduce((s, v) => s + v, 0) : null;
+    const porVeiculo = totalLote != null ? totalLote / n : null;
     const grupos: Record<string, any[]> = {};
     irmaos.forEach((o: any) => { (grupos[assinaturaDeItens(o)] ||= []).push(o); });
     const gruposOrdenados = Object.values(grupos).sort((a, b) => b.length - a.length);
