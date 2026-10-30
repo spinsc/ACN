@@ -30,6 +30,8 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 >   [PLANO_RH_DEPARTAMENTOS_ENVIOS.md](PLANOS%20CONCLUIDOS/PLANO_RH_DEPARTAMENTOS_ENVIOS.md) (as demandas avulsas de 14/10/2026: departamentos, responsáveis por setor, quadro de colaboradores,
 >   uniformes por sexo e envios parciais; concluído em 14/10/2026; `/rh-envios` só para consulta ou ajuste).
 
+> **Manual do SAC e análise de UX do SAC (30/10/2026):** [ANALISE_UX_SAC.md](ANALISE_UX_SAC.md) lista os pontos de melhoria da tela do SAC (A = alta, M = média, B = baixa; nada foi construído além do "Registrar atendimento já realizado"); o manual está em [MANUAL_SAC/](MANUAL_SAC/): o texto fica em `MANUAL_SAC/fonte/*.md`, as fotos (dados inventados) em `MANUAL_SAC/img/` e `node MANUAL_SAC/build_manual.cjs` gera `Manual_SAC.md`, `Manual_SAC.html` e `artefato.html`. **Mudou botão, etapa ou regra do SAC → atualize o texto da `fonte` e rode o gerador** (o PDF sai do HTML pelo Chrome).
+
 ---
 
 ## Como falar
