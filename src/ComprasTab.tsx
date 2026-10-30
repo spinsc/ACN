@@ -12,6 +12,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { combinaBusca } from './SearchUtils';
+import { situacaoDaDivisao, renumerarVencedoras, dividirPedido } from './DivisaoDoPedido';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { Botao, MenuAcoes, Selo, Faixa, Chips } from './Interface';
@@ -673,7 +674,7 @@ function ModalRecebidos({ lista, canVerValor, onAbrir, onClose }) {
   const moedaBr = (v:any) => v ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
   const dataBr  = (d:any) => d ? new Date(String(d).slice(0,10) + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
   const filtrados = busca.trim()
-    ? lista.filter((p:any) => combinaBusca([p.numero_pedido, p.numero_oc, p.descricao_material, p.fornecedor, p.opl], busca))
+    ? lista.filter((p:any) => combinaBusca([p.numero_pedido, p.codigo_antigo, p.numero_oc, p.descricao_material, p.fornecedor, p.opl], busca))
     : lista;
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -827,7 +828,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
       <div className="modal-box acn-modal-cadastro acn-cmp-j680" role="dialog" aria-label="Resumo da solicitação">
         <div className="acn-modal-cab acn-cmp-resumo-cab">
           <div className="acn-cmp-resumo-tit">
-            <span className="modal-title acn-prod-ic"><Icone path={mdiMagnify} size={16} /> Resumo — {p.numero_pedido}</span>
+            <span className="modal-title acn-prod-ic"><Icone path={mdiMagnify} size={16} /> Resumo — {p.numero_pedido}{p.codigo_antigo ? <span className="acn-fraco"> (antes {p.codigo_antigo})</span> : null}</span>
             <div className="acn-cmp-resumo-selos">
               <Selo familia={FAMILIA_COMPRA[p.status_compra] || 'neutro'}>{p.status_compra || '—'}</Selo>
               {p.numero_oc && <span className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</span>}
@@ -1033,6 +1034,8 @@ export default function ComprasTab({ currentUser }) {
   const [modalConfirmarSenha, setModalConfirmarSenha] = useState<any>(null); // cotação sendo aprovada
   // 19/10/2026: quem aprova escolhe, entre os itens da cotação, quais ela vence (o resto pode vencer em outra cotação, mais barata)
   const [itensEscolhidos, setItensEscolhidos] = useState<number[]>([]);
+  // "Aprovar e separar o resto" (30/10/2026): o botão liga a marca e chama a mesma confirmação da senha
+  const separarOrestoRef = useRef(false);
   const [senhaConfirmacao, setSenhaConfirmacao] = useState('');
   const [verificandoSenha, setVerificandoSenha] = useState(false);
   const [erroSenha, setErroSenha]               = useState('');
@@ -1969,6 +1972,8 @@ export default function ComprasTab({ currentUser }) {
   // como vencedora e resolve a aprovação pendente (se houver e for desta pessoa).
   const confirmarAprovacaoComSenha = umaVez('aprovar-senha', async () => {
     const cotacao = modalConfirmarSenha;
+    const separarOResto = separarOrestoRef.current;
+    separarOrestoRef.current = false;
     if (!cotacao || !modalCotacoes) return;
     if (!senhaConfirmacao) { setErroSenha('Digite sua senha.'); return; }
     setVerificandoSenha(true);
@@ -1997,6 +2002,7 @@ export default function ComprasTab({ currentUser }) {
     const porItens = Array.isArray(cotacao.itens) && cotacao.itens.length > 0 && ehDemandaDeVariosItens(modalCotacoes);
     let listaVencedoras: any[] | null = null;
     let faltamItens = false;
+    let divisao: any = null;
     if (porItens) {
       const atuais = vencedorasDoPedido(pedidoVenc);
       const indices = cotacao.itens.map((i: any) => i.indice).filter((ix: number) => itensEscolhidos.includes(ix));
@@ -2009,6 +2015,18 @@ export default function ComprasTab({ currentUser }) {
         { cotacao_id: cotacao.id, fornecedor: cotacao.fornecedor_nome, valor: valorDaParte, itens: indices }];
       const cobertos = new Set(listaVencedoras.flatMap((v: any) => v.itens));
       faltamItens = itensNumerados(modalCotacoes).some((i: any) => !cobertos.has(i.indice));
+      // 30/10/2026 (pedido do usuário): o item sem cotação não trava os que têm — vira um pedido novo (PC-00123-B) e o original segue só com o que tem cotação.
+      // A separação é do banco, tudo ou nada; só vale se nenhuma cotação cobre os itens que saem e se esta escolha completa os que têm cotação.
+      if (faltamItens && separarOResto) {
+        const sit = situacaoDaDivisao({ pedido: modalCotacoes, cotacoes, vencedoras: listaVencedoras, escolhidos: indices, cotacaoId: cotacao.id, vencedoraId });
+        if (!sit.pode) { setVerificandoSenha(false); setErroSenha('Não dá para separar o resto agora: a mesa mudou. Feche, abra de novo e confira os itens.'); return; }
+        const r = await dividirPedido(modalCotacoes.id, sit.fora.map((i: any) => i.indice), currentUser);
+        if (r.erro) { setVerificandoSenha(false); setErroSenha('Não foi possível separar os itens (nada foi alterado): ' + r.erro); return; }
+        divisao = r;
+        listaVencedoras = renumerarVencedoras(listaVencedoras, r.mapa);
+        faltamItens = false;
+        load();
+      }
       if (faltamItens) {
         const { error: erroLista } = await supabase.from('pcp_pedidos_compra').update({ vencedoras: listaVencedoras }).eq('id', modalCotacoes.id);
         setVerificandoSenha(false);
@@ -2037,7 +2055,9 @@ export default function ComprasTab({ currentUser }) {
     const error = resDisparo.error;
     if (error) {
       setVerificandoSenha(false);
-      setErroSenha('Erro: ' + error.message);
+      setErroSenha(divisao
+        ? `Os itens sem cotação já foram separados no pedido ${divisao.novo_numero}, mas a aprovação deste pedido falhou (${error.message}). Feche a Mesa, abra de novo e aprove a cotação.`
+        : 'Erro: ' + error.message);
       return;
     }
     // Pode ter nascido uma alçada nova (ou já existir uma pendência de
@@ -2062,6 +2082,12 @@ export default function ComprasTab({ currentUser }) {
     setModalCotacoes(null);
     setFiltro('');
     load();
+    if (divisao) {
+      await mencionarSolicitante(modalCotacoes,
+        `Os itens sem cotação do seu pedido ${modalCotacoes.numero_pedido} foram separados no pedido ${divisao.novo_numero}, que segue para cotação. O ${modalCotacoes.numero_pedido} continua com o que já tem cotação.`,
+        currentUser, 'divisao_pedido');
+      alert(`Os itens sem cotação foram separados no pedido ${divisao.novo_numero} (em Pendente, para cotar).`);
+    }
     if (avisoFalhou) alert('Aprovado/enviado para aprovação, mas o aviso aos aprovadores não saiu. Avise quem aprova diretamente.');
   });
 
@@ -3004,6 +3030,17 @@ export default function ComprasTab({ currentUser }) {
                   })}
                 </div>
               )}
+              {(() => {
+                // itens que nenhuma cotação cobre: podem sair para um pedido novo, sem segurar os que já têm cotação
+                const div = situacaoDaDivisao({ pedido: modalCotacoes, cotacoes, vencedoras, escolhidos: itensEscolhidos, cotacaoId: modalConfirmarSenha.id, vencedoraId });
+                if (!div.pode) return null;
+                return (
+                  <Faixa tom="atencao">
+                    {div.fora.length === 1 ? 'Este item não tem cotação' : `Estes ${div.fora.length} itens não têm cotação`}: <strong>{div.fora.map((i: any) => `${i.quantidade ?? 1}× ${i.nome}`).join('; ')}</strong>.
+                    {' '}Com <em>Aprovar e separar o resto</em>, eles saem para um pedido novo ({String(modalCotacoes.numero_pedido || '').replace(/-[A-Z]$/, '')}-B…), que volta para Pendente, e este pedido segue só com o que tem cotação. Com <em>Confirmar</em>, o pedido inteiro espera.
+                  </Faixa>
+                );
+              })()}
               <div className="form-group">
                 <label className="acn-label">Sua senha</label>
                 <input type="password" className="acn-input"
@@ -3014,7 +3051,19 @@ export default function ComprasTab({ currentUser }) {
               {erroSenha && <div className="acn-txt-erro">{erroSenha}</div>}
             </div>
             <div className="acn-modal-rodape acn-sac-rodape">
-              <Botao variante="primario" icone={mdiCheck} onClick={confirmarAprovacaoComSenha} disabled={verificandoSenha}>
+              {situacaoDaDivisao({ pedido: modalCotacoes, cotacoes, vencedoras, escolhidos: itensEscolhidos, cotacaoId: modalConfirmarSenha.id, vencedoraId }).pode && (
+                <Botao variante="primario" icone={mdiCheck} disabled={verificandoSenha}
+                  onClick={async () => {
+                    const sit = situacaoDaDivisao({ pedido: modalCotacoes, cotacoes, vencedoras, escolhidos: itensEscolhidos, cotacaoId: modalConfirmarSenha.id, vencedoraId });
+                    if (!senhaConfirmacao) { setErroSenha('Digite sua senha.'); return; }
+                    if (!(await confirmar(`Aprovar o que tem cotação e abrir um pedido novo com ${sit.fora.length} item(ns) sem cotação (${sit.fora.map((i: any) => i.nome).join(', ')})?`))) return;
+                    separarOrestoRef.current = true;
+                    confirmarAprovacaoComSenha();
+                  }}>
+                  Aprovar e separar o resto
+                </Botao>
+              )}
+              <Botao variante={situacaoDaDivisao({ pedido: modalCotacoes, cotacoes, vencedoras, escolhidos: itensEscolhidos, cotacaoId: modalConfirmarSenha.id, vencedoraId }).pode ? undefined : 'primario'} icone={mdiCheck} onClick={confirmarAprovacaoComSenha} disabled={verificandoSenha}>
                 {verificandoSenha?'Verificando...':'Confirmar'}
               </Botao>
               <Botao onClick={()=>setModalConfirmarSenha(null)}>Cancelar</Botao>

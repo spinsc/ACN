@@ -616,9 +616,9 @@ export function AnexosCompra({ pedido, currentUser, podeEditar }: any) {
 // ── Histórico ────────────────────────────────────────────────────────────────
 const TIPO_HIST: Record<string, string> = {
   avanco: 'Avançou', retorno: 'Reprocesso', descarte: 'Descartada', reativacao: 'Reativada',
-  parado: 'Justificativa (parada)', posicao_entrega: 'Posição da entrega', edicao: 'Solicitação editada', anexo: 'Anexos', coleta: 'Coleta',
+  parado: 'Justificativa (parada)', posicao_entrega: 'Posição da entrega', edicao: 'Solicitação editada', anexo: 'Anexos', coleta: 'Coleta', divisao: 'Itens separados',
 };
-const FAMILIA_HIST: Record<string, string> = { retorno: 'atencao', descarte: 'erro', parado: 'atencao', posicao_entrega: 'info', coleta: 'info', avanco: 'ok', reativacao: 'ok' };
+const FAMILIA_HIST: Record<string, string> = { retorno: 'atencao', descarte: 'erro', parado: 'atencao', posicao_entrega: 'info', coleta: 'info', divisao: 'info', avanco: 'ok', reativacao: 'ok' };
 
 export function HistoricoCompra({ pedidoId, recarregar = 0 }: any) {
   const [itens, setItens] = useState<any[] | null>(null);
