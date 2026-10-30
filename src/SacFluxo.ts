@@ -368,8 +368,74 @@ export function colunaDoQuadro(status: string): ColunaDoQuadro | null {
 // reprovar, iniciar e concluir a execução, enviar ao Fiscal, entregar, cancelar) e pode VOLTAR UMA etapa, com motivo. As etapas da Produção (Provisionada, Verificação…), da Qualidade (CQ) e do Fiscal
 // (Aguardando Emissão NF) continuam sendo dos setores: nenhum movimento entra nelas nem sai delas por aqui, para não pular o CQ nem o Fiscal. Esta parte é só a regra (sem tela, para testar em unidade).
 export type TipoMovimento = 'avancar' | 'voltar' | 'cancelar';
-export type Movimento = { id: string; processo: string; para: string; rotulo: string; ajuda: string; tipo: TipoMovimento };
-const mov = (processo: string, para: string, rotulo: string, ajuda: string, tipo: TipoMovimento = 'avancar'): Movimento => ({ id: `${processo}>${para}`, processo, para, rotulo, ajuda, tipo });
+// `menu`: o texto do item no menu ⋯ quando "Mover para X" não diz o que o passo faz (o registro de atendimento já realizado)
+export type Movimento = { id: string; processo: string; para: string; rotulo: string; ajuda: string; tipo: TipoMovimento; menu?: string };
+const mov = (processo: string, para: string, rotulo: string, ajuda: string, tipo: TipoMovimento = 'avancar', menu?: string): Movimento => ({ id: `${processo}>${para}`, processo, para, rotulo, ajuda, tipo, ...(menu ? { menu } : {}) });
+
+// ── REGISTRAR ATENDIMENTO JÁ REALIZADO (pedido do SAC em 30/10/2026) ──────────────────────────────────────────────────────────────────────────────────
+// O caso que originou: o lote de 7 viaturas da Defesa Civil de Taió (recall da prussiana, OS-0044 a 0050) foi atendido no local, fora da fábrica, mas as OS ficaram em "Em Cotação", e o único passo do SAC era
+// "Seguir sem cotação", que manda a OS à Produção e à Qualidade para refazerem no sistema o que já foi feito. Regras decididas com o usuário em 30/10/2026: o SAC registra o atendimento (data, quem fez e o que
+// foi feito, tudo obrigatório) e a OS vai direto a "Concluído"; vale para a OS que a fábrica AINDA NÃO executou, cobrada ou não (a cobrada segue ao Fiscal e a sem cobrança à entrega, como as outras); as OS de
+// um mesmo lote podem ser registradas de uma vez. O registro fica em `sac_ordens_servico.atendimento_externo` (jsonb). NÃO se grava `data_conclusao_manutencao` nem `tecnico_responsavel` de propósito: são os
+// campos que a comissão da Produção (RH) e o KPI da execução leem, e um serviço feito por fora não é produção da fábrica.
+export const ETAPAS_ANTES_DA_EXECUCAO = ['Aberta', 'Diagnóstico', 'Orçamento Pronto', 'Orç. Enviado', 'Aprovado', 'Em Cotação', 'Aguardando Aprovação Cliente', 'Em Provisionamento', 'Aguardando Aceite SAC', 'Provisionada', 'Aguardando Início'];
+
+/** Por que o atendimento desta OS não pode ser registrado como já realizado; null = pode. */
+export function motivoQueNaoRegistraAtendimento(os: any): string | null {
+  if (!os) return 'OS não encontrada.';
+  const n = os.numero_os || 'A OS';
+  if (STATUS_OS_ENCERRADOS.includes(os.status)) return `A ${n} está encerrada (${os.status}).`;
+  if (!ETAPAS_ANTES_DA_EXECUCAO.includes(os.status)) return `A ${n} está em "${os.status}": a fábrica já está com ela ou já a executou. Só se registra o atendimento de uma OS que a fábrica ainda não executou.`;
+  if (os.is_manutencao_veicular && os.data_chegada_veiculo) return `O veículo da ${n} já chegou à fábrica: o atendimento é da Produção, não um atendimento feito fora.`;
+  return null;
+}
+export const podeRegistrarAtendimentoRealizado = (os: any): boolean => motivoQueNaoRegistraAtendimento(os) === null;
+
+/** Para onde a OS vai depois de registrada: a cobrada ao Fiscal, a sem cobrança à entrega (a mesma regra de toda OS "Concluído"). */
+export const proximoPassoDoRegistro = (os: any): string => (osSemCobranca(os) ? 'Entrega' : 'Enviar ao Fiscal');
+
+export const CAMPOS_DO_REGISTRO: CampoDoMovimento[] = [
+  { chave: 'data', rotulo: 'Data do atendimento', tipo: 'data', obrigatorio: true, ajuda: 'O dia em que o serviço foi feito (não pode ser uma data futura).' },
+  { chave: 'executor', rotulo: 'Quem fez o atendimento', tipo: 'texto', obrigatorio: true },
+  { chave: 'observacao', rotulo: 'O que foi feito', tipo: 'area', obrigatorio: true, ajuda: 'Fica no registro da OS e no histórico: descreva o serviço, o local e o que ficou combinado.' },
+];
+
+/** O que falta (ou está errado) no registro; vazio = pode gravar. `hoje` é o dia de hoje (AAAA-MM-DD), passado de fora para a regra ser testável. */
+export function validarDadosDoRegistro(dados: any, hoje: string): string[] {
+  const falta: string[] = [];
+  const d = String(dados?.data || '').trim();
+  if (!d) falta.push('Data do atendimento: obrigatória');
+  else {
+    const [a, m, dia] = d.split('-').map(Number);
+    const dt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(a, m - 1, dia) : null;
+    if (!dt || dt.getFullYear() !== a || dt.getMonth() !== m - 1 || dt.getDate() !== dia) falta.push(`Data do atendimento: "${d}" não é uma data válida`);
+    else if (d > hoje) falta.push('Data do atendimento: não pode ser uma data futura');
+    else if (d < '2020-01-01') falta.push('Data do atendimento: confira o ano (antes de 2020)');
+  }
+  if (!String(dados?.executor || '').trim()) falta.push('Quem fez o atendimento: obrigatório');
+  if (!String(dados?.observacao || '').trim()) falta.push('O que foi feito: obrigatório');
+  return falta;
+}
+
+/** O que o registro grava na OS (a tela acrescenta nada: `atualizado_em` já vai aqui). O registro guarda a etapa de antes, para quem ler depois saber de onde a OS veio. */
+export function patchDoRegistroDoAtendimento(os: any, dados: any, usuario: any, agora: string): Record<string, any> {
+  return {
+    status: 'Concluído',
+    atendimento_externo: {
+      data: String(dados?.data || '').trim(),
+      executor: String(dados?.executor || '').trim(),
+      observacao: String(dados?.observacao || '').trim(),
+      registrado_por: usuario?.nome || usuario?.email || null,
+      registrado_em: agora,
+      etapa_de_antes: os?.status || null,
+    },
+    atualizado_em: agora,
+  };
+}
+
+/** O recado que a demanda aberta do setor (Laboratório/Engenharia) recebe: a OS foi concluída por fora dela; o setor encerra a demanda. */
+export const recadoDoRegistro = (os: any, dados: any, usuario: any, agora: string) =>
+  ({ texto: `OS ${os?.numero_os || ''}: o SAC registrou o atendimento como JÁ REALIZADO (feito em ${String(dados?.data || '').split('-').reverse().join('/')} por ${String(dados?.executor || '').trim()}). A OS foi de "${os?.status}" para "Concluído". Encerre esta demanda.`, usuario: usuario?.nome, hora: agora });
 
 /**
  * Os movimentos que o SAC pode fazer com a OS agora (vazio = nenhum: a OS está com outro setor, ou encerrada). Cada movimento tem um `processo`: o que a tela abre (uma janela que já existia, como "Enviar
@@ -411,7 +477,9 @@ export function movimentosDaOS(os: any): Movimento[] {
       break;
     case 'Concluído':
       m.push(semCobranca ? entrega() : mov('enviar_fiscal_lab', 'Aguardando Emissão NF', 'Enviar ao Fiscal', 'Abre a janela do Fiscal (valor e CPF ou CNPJ da nota)'));
-      if (!veicular) volta('Em Execução');   // o veículo concluído vem do CQ, que é da Qualidade
+      // a OS concluída pelo registro de atendimento já realizado (30/10/2026) nunca esteve em execução: o "voltar" dela é desfazer o registro (volta à etapa de antes, que o registro guardou) — é a saída de quem registrou por engano
+      if (os.atendimento_externo?.etapa_de_antes) m.push(mov('desfazer_registro', os.atendimento_externo.etapa_de_antes, 'Desfazer o registro do atendimento', `A OS volta para "${os.atendimento_externo.etapa_de_antes}" e o registro do atendimento é apagado (pede o motivo)`, 'voltar'));
+      else if (!veicular) volta('Em Execução');   // o veículo concluído vem do CQ, que é da Qualidade
       break;
     case 'Em Cotação':
       m.push(semCobranca ? mov('seguir_sem_cotacao', 'Em Provisionamento', 'Seguir sem cotação', 'Garantia: não há cotação a fazer; segue para a Produção marcar a data') : mov('enviar_cotacao', 'Aguardando Aprovação Cliente', 'Enviar a cotação', 'Envia a cotação ao cliente (precisa dos itens da cotação)'));
@@ -439,6 +507,8 @@ export function movimentosDaOS(os: any): Movimento[] {
       m.push(mov('reavaliar', veicular ? (os.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento') : 'Diagnóstico', 'Reavaliar', 'Reabre a OS para uma nova avaliação'));
       break;
   }
+  // 30/10/2026: o serviço que já foi feito fora da fábrica leva a OS direto a "Concluído" (vale em toda etapa antes da execução; soltar o cartão na coluna CONCLUÍDO também abre este passo)
+  if (podeRegistrarAtendimentoRealizado(os)) m.push(mov('registrar_realizado', 'Concluído', 'Registrar atendimento já realizado', 'O serviço já foi feito fora da fábrica: pede a data, quem fez e o que foi feito, e a OS vai direto para Concluído', 'avancar', 'Registrar atendimento já realizado'));
   if (podeCancelarOS(os)) m.push(mov('cancelar', STATUS_OS_CANCELADA, 'Cancelar a OS', 'Cancela a OS (pede o motivo)', 'cancelar'));
   return m;
 }
@@ -474,6 +544,7 @@ export const CAMPOS_DO_MOVIMENTO: Record<string, CampoDoMovimento[]> = {
   ],
   concluir_lab: [{ chave: 'observacao', rotulo: 'Observação da conclusão (opcional)', tipo: 'area' }],
   voltar: [{ chave: 'motivo', rotulo: 'Motivo para voltar a OS', tipo: 'area', obrigatorio: true }],
+  desfazer_registro: [{ chave: 'motivo', rotulo: 'Por que o registro será desfeito', tipo: 'area', obrigatorio: true }],
 };
 /** O passo usa a janela de dados (não tem janela própria)? Vale também para o que só pede a confirmação (sem campos), como abrir o diagnóstico. */
 export const movimentoPedeDados = (processo: string): boolean => processo in CAMPOS_DO_MOVIMENTO;
@@ -508,6 +579,7 @@ export function patchDoMovimento(os: any, movimento: Movimento, dados: any, agor
     case 'iniciar_execucao': return { status: 'Em Execução', tecnico_responsavel: String(dados?.executor || '').trim(), data_inicio_execucao_lab: /^\d{4}-\d{2}-\d{2}$/.test(String(dados?.inicio || '')) ? `${dados.inicio}T12:00:00-03:00` : agora };
     case 'concluir_lab': return { status: 'Concluído', data_finalizacao_execucao: agora };
     case 'voltar': return { status: movimento.para, ...(['Orç. Enviado', 'Orçamento Pronto', 'Diagnóstico'].includes(movimento.para) ? { aprovado: null } : {}) };
+    case 'desfazer_registro': return { status: movimento.para, atendimento_externo: null };
     default: return { status: movimento.para };
   }
 }

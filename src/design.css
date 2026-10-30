@@ -790,6 +790,13 @@ html body .sec-body.acn-sac-legenda { display: flex; flex-direction: column; ali
 .acn-kb-col.alvo-nao { opacity: .6; }
 .acn-modal-mover { max-width: 520px; width: 92vw; }
 .acn-mover-opcoes { display: flex; flex-direction: column; gap: 8px; }
+/* Registrar atendimento já realizado (30/10/2026): a janela de uma OS ou de várias do mesmo lote, com a lista para marcar */
+html body .modal-box.acn-modal-cadastro.acn-registro-jan { width: min(640px, 95vw); }
+.acn-registro-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.acn-registro-lista { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; border: 1px solid var(--acn-line); border-radius: 8px; padding: 6px; }
+.acn-registro-os { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; flex-wrap: wrap; }
+.acn-registro-os.on { background: var(--acn-ok-soft); }
+.acn-registro-quem { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 .acn-sac-passos { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .acn-sac-passos li { padding: 3px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--acn-line); color: var(--acn-ink-3, #5b6573); }
 .acn-sac-passos li.feita { background: var(--acn-ok-soft); border-color: var(--acn-ok); color: var(--acn-ok); }
