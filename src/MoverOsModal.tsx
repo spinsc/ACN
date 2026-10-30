@@ -66,6 +66,7 @@ const TEXTO_DO_PASSO: Record<string, string> = {
   iniciar_execucao: 'A OS passa para "Em Execução". O Laboratório normalmente inicia pela demanda dele; aqui o SAC registra o início.',
   concluir_lab: 'A OS passa para "Concluído" e fica pronta para o Fiscal ou a entrega. O Laboratório normalmente conclui pela demanda dele.',
   voltar: 'A OS volta uma etapa. O motivo fica no histórico, e a demanda aberta do setor recebe um recado.',
+  desfazer_registro: 'O registro do atendimento já realizado é apagado e a OS volta para a etapa em que estava antes de ser registrada. O motivo fica no histórico.',
 };
 
 export function DadosDoMovimentoModal({ os, movimento, onConfirmar, onClose, salvando = false }: any) {

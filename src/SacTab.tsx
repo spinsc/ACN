@@ -19,6 +19,8 @@ import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, 
   resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE, progressoDaOS, LEGENDAS_DE_FLUXO, COLUNAS_DO_QUADRO, colunaDoQuadro,
   movimentosDaOS, movimentosParaAColuna, porQueNaoVaiParaAColuna, movimentoPedeDados, patchDoMovimento, recadoDoMovimento, demandaDeExecucaoDaOsDoCrm, quemExecutaValido } from './SacFluxo';
 import { EscolherMovimentoModal, DadosDoMovimentoModal } from './MoverOsModal';
+import RegistrarAtendimentoModal from './RegistrarAtendimentoModal';
+import { podeRegistrarAtendimentoRealizado, motivoQueNaoRegistraAtendimento, patchDoRegistroDoAtendimento, recadoDoRegistro } from './SacFluxo';
 import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -299,6 +301,9 @@ function SacTabCompleto({ currentUser }) {
   const [movEscolha, setMovEscolha]           = useState<{ os: any; movs: any[] } | null>(null);
   const [movDados, setMovDados]               = useState<{ os: any; mov: any } | null>(null);
   const [movSalvando, setMovSalvando]         = useState(false);
+  // Registrar atendimento já realizado (30/10/2026): as OS que a janela oferece, quais vêm marcadas e quantas do lote ficaram de fora
+  const [registroAtend, setRegistroAtend]     = useState<{ candidatas: any[]; marcadas: string[]; naoEntram: number } | null>(null);
+  const [registroSalvando, setRegistroSalvando] = useState(false);
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
@@ -1135,6 +1140,11 @@ OK = ACN   |   Cancelar = DETECH`;
           onClick={() => setLotesAbertos(s => { const n = new Set(s); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n; })}>
           {aberto ? 'Fechar o lote' : 'Abrir o lote'}
         </Botao>
+        {/* 30/10/2026: o lote atendido fora da fábrica se registra de uma vez (a janela traz todas as OS do lote que ainda podem ser registradas, já marcadas) */}
+        {item.oss.some((x: any) => podeRegistrarAtendimentoRealizado(x)) && (
+          <Botao pequeno icone={mdiCheckCircleOutline} title="O serviço deste lote já foi feito fora da fábrica: registra a data, quem fez e o que foi feito, e as OS vão para Concluído"
+            onClick={() => abrirRegistroDeAtendimento(item.oss.find((x: any) => podeRegistrarAtendimentoRealizado(x)), true)}>Registrar atendimento já realizado</Botao>
+        )}
         {aberto && (
           <div className="acn-kb-lote-lista">
             {item.oss.map((o: any) => (
@@ -1353,7 +1363,7 @@ OK = ACN   |   Cancelar = DETECH`;
       { rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
       // Mover a OS entre as etapas (29/10/2026): os passos que o SAC pode fazer agora (avançar onde é ele quem age, voltar uma etapa); o mesmo que arrastar o cartão no quadro, e serve no celular
       ...movimentosDaOS(os).filter((m: any) => m.tipo !== 'cancelar').map((m: any) => ({
-        rotulo: m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`, titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : mdiArrowRight, onClick: () => executarMovimento(os, m),
+        rotulo: m.menu || (m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`), titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : m.processo === 'registrar_realizado' ? mdiCheckCircleOutline : mdiArrowRight, onClick: () => executarMovimento(os, m),
       })),
     ]} />);
     return btns;
@@ -1442,8 +1452,52 @@ OK = ACN   |   Cancelar = DETECH`;
     }
   };
   const executarMovimento = (os: any, mov: any) => {
+    if (mov.processo === 'registrar_realizado') { abrirRegistroDeAtendimento(os); return; }
     if (movimentoPedeDados(mov.processo)) { setMovDados({ os, mov }); return; }
     abrirProcessoExistente(os, mov.processo);
+  };
+
+  // ── REGISTRAR ATENDIMENTO JÁ REALIZADO (pedido do SAC em 30/10/2026; regras em SacFluxo.ts) ──────────────────────────────────────────────────────────────────────────────
+  // A janela traz a OS da pessoa e as OS do mesmo lote que também podem ser registradas. Aberta pelo menu da OS, só a dela vem marcada (as outras ela marca se quiser); aberta pelo cartão do lote, todas vêm marcadas.
+  // Cada OS é gravada sozinha e só pega se ainda está na etapa que a pessoa viu (duas pessoas não registram a mesma OS); o que falhar é dito pelo número, e as outras seguem. O registro não fecha a demanda aberta do
+  // Laboratório (decisão de sempre do SAC): deixa um recado e o setor encerra.
+  const abrirRegistroDeAtendimento = (os: any, todasDoLote = false) => {
+    const irmas = os.lote_id ? ordens.filter((x: any) => x.lote_id === os.lote_id) : [os];
+    const candidatas = irmas.filter((x: any) => podeRegistrarAtendimentoRealizado(x)).sort((a: any, b: any) => String(a.numero_os).localeCompare(String(b.numero_os)));
+    if (!candidatas.some((x: any) => x.id === os.id)) { mostrarAviso(motivoQueNaoRegistraAtendimento(os) || 'Esta OS não pode ser registrada agora.', 'atencao'); return; }
+    setRegistroAtend({ candidatas, marcadas: todasDoLote ? candidatas.map((x: any) => x.id) : [os.id], naoEntram: irmas.length - candidatas.length });
+  };
+  const registrarAtendimentos = async (dados: any, escolhidas: any[]) => {
+    if (registroSalvando) return;
+    const n = escolhidas.length;
+    if (!await confirmar(`Registrar o atendimento ${n > 1 ? `de ${n} OS` : `da ${escolhidas[0].numero_os}`} como JÁ REALIZADO?\n\nFeito em ${String(dados.data).split('-').reverse().join('/')} por ${String(dados.executor).trim()}. ${n > 1 ? 'As OS vão' : 'A OS vai'} direto para "Concluído", sem passar pela Produção nem pela Qualidade.`)) return;
+    setRegistroSalvando(true);
+    try {
+      const agora = new Date().toISOString();
+      const feitas: any[] = []; const falhas: string[] = []; const semRecado: string[] = [];
+      for (const os of escolhidas) {
+        const patch = patchDoRegistroDoAtendimento(os, dados, currentUser, agora);
+        const { data, error } = await supabase.from('sac_ordens_servico').update(patch).eq('id', os.id).eq('status', os.status).select('id');
+        if (error) { falhas.push(`${os.numero_os}: ${error.message}`); continue; }
+        if (!data || data.length === 0) { falhas.push(`${os.numero_os}: já mudou de etapa (outra pessoa mexeu nela)`); continue; }
+        feitas.push(os);
+        logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: { ...patch, motivo_da_mudanca: 'Atendimento já realizado fora da fábrica' }, user: currentUser });
+        const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+        if (erroDem) { semRecado.push(`${os.numero_os} (não consegui ler as demandas)`); continue; }
+        for (const d of demandasAbertasDaOS(dem || [])) {
+          const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoRegistro(os, dados, currentUser, agora)] }).eq('id', d.id);
+          if (erroRecado) semRecado.push(`${os.numero_os} (demanda de ${d.setor_destino})`);
+        }
+      }
+      if (feitas.length) {
+        notificarEvento('sac_os_atendimento_realizado', `*Atendimento já realizado registrado pelo SAC* (${feitas.length} OS)\n${feitas.map((o: any) => o.numero_os).join(', ')}\nCliente: ${feitas[0].cliente_nome}\nFeito em ${String(dados.data).split('-').reverse().join('/')} por ${String(dados.executor).trim()}\nPor: ${currentUser?.nome}`);
+        mostrarAviso(`${feitas.length} OS registrada${feitas.length > 1 ? 's' : ''} como atendimento já realizado e concluída${feitas.length > 1 ? 's' : ''}: ${feitas.map((o: any) => o.numero_os).join(', ')}.`, 'ok');
+      }
+      if (falhas.length) mostrarAviso(`Não foi possível registrar: ${falhas.join('; ')}. As outras foram registradas; confira a lista e tente de novo nas que faltam.`, 'erro');
+      if (semRecado.length) mostrarAviso(`As OS foram concluídas, mas o recado na demanda do setor não ficou em: ${semRecado.join('; ')}. Avise o setor para encerrar a demanda.`, 'erro');
+      setRegistroAtend(null);
+      fetchOrdens();
+    } finally { setRegistroSalvando(false); }
   };
   // O cartão foi solto numa coluna: sem passo possível, a frase diz por quê; com um, executa; com mais de um, a pessoa escolhe.
   const soltarNaColuna = (colId: string) => {
@@ -2432,6 +2486,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
           )}
         </div>}
       </div>
+
+      {registroAtend && <RegistrarAtendimentoModal candidatas={registroAtend.candidatas} marcadasInicio={registroAtend.marcadas} naoEntram={registroAtend.naoEntram} salvando={registroSalvando}
+        onConfirmar={registrarAtendimentos} onClose={() => setRegistroAtend(null)} />}
 
       {/* ════════ MODAL NOVA OS ════════ */}
       {/* Etapa 12d4 (01/10/2026): só aparência — mesmos campos, textos, ordem e lógica; seções em quadros, no molde das janelas do RH (cabeçalho, corpo que rola, rodapé fixo). Fecha só pelo ✕ ou pelo Cancelar, como antes. */}

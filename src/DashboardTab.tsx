@@ -5,6 +5,7 @@ import Chart from 'chart.js/auto';
 import EngenhariaTab from './EngenhariaTab';
 import AjustesProjetoTab from './AjustesProjetoTab';
 import MinhasSolicitacoesTab from './MinhasSolicitacoesTab';
+import ManuaisTab from './ManuaisTab';
 import PCPTab from './PCPTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
 import ProducaoTab from './ProducaoTab';
@@ -46,7 +47,7 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
@@ -59,7 +60,7 @@ const ICONE_ABA: Record<string, string> = {
   engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
   producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
   laboratorio: mdiFlaskOutline, qualidade: mdiShieldCheckOutline, telecom: mdiRadioTower,
-  logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, minhas_solicitacoes: mdiClipboardListOutline, compras: mdiCartOutline,
+  logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, minhas_solicitacoes: mdiClipboardListOutline, manuais: mdiBookOpenPageVariantOutline, compras: mdiCartOutline,
   financeiro: mdiCashMultiple, cadastro_itens: mdiPackageVariantClosed, cadastro_produtos: mdiTagMultipleOutline,
   rh: mdiAccountTieOutline, comissoes_tecnicos: mdiCurrencyUsd, fiscal: mdiReceiptTextOutline, relatorios: mdiChartBoxOutline,
   formacao_precos: mdiCalculatorVariantOutline, viagens: mdiMapMarkerPath, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
@@ -99,6 +100,7 @@ const SIDEBAR_GROUPS = [
       { id: 'calendario', label: 'Calendário' },
       { id: 'ajustes',    label: 'Demandas gerais' },
       { id: 'minhas_solicitacoes', label: 'Minhas solicitações' },
+      { id: 'manuais', label: 'Manuais' },   // 30/10/2026 (pedido do usuário): um manual por setor, o primeiro é o do SAC (ver ManuaisTab.tsx)
     ],
   },
   {
@@ -1108,6 +1110,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (id === 'painel_tv') return true;
     // "Minhas solicitações" (pedido do usuário em 05/10/2026) é de todos: cada pessoa vê só o que ela mesma pediu, então não depende das abas liberadas.
     if (id === 'minhas_solicitacoes') return true;
+    // Manuais (30/10/2026): o manual só explica a tela, não traz dado de ninguém; é de todos, como "Minhas solicitações".
+    if (id === 'manuais') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -1120,6 +1124,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
       case 'minhas_solicitacoes': return <MinhasSolicitacoesTab currentUser={currentUser} />;
+      case 'manuais':      return <ManuaisTab currentUser={currentUser} />;
       case 'pcp':          return <PCPTab currentUser={currentUser} />;
       case 'serralheria':  return <SetorDemandaTab currentUser={currentUser} setor="Serralheria" cor="#ea580c" />;
       case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" />;

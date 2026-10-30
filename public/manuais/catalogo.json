@@ -1,0 +1,17 @@
+[
+  {
+    "id": "sac",
+    "setor": "SAC",
+    "titulo": "Manual do SAC",
+    "descricao": "Passo a passo das quatro abas do SAC (Ordens de Serviço, Chamados NFC, Garantia e Cadastros): o que cada botão faz, o que o sistema grava e para onde a OS vai.",
+    "ordem": 1,
+    "atualizadoEm": "2026-10-30",
+    "mudancas": [
+      {
+        "data": "2026-10-30",
+        "texto": "Primeira versão: as quatro abas, os seis caminhos da OS, o registro de atendimento já realizado, o painel de quem age e a ficha de garantia por inteiro."
+      }
+    ],
+    "caminho": "manuais/sac/index.html"
+  }
+]

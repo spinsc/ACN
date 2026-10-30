@@ -113,6 +113,15 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
             ['Revisão de orçamento pendente', os.revisao_pendente ? 'Sim' : ''],
           ]} />
 
+          {/* 30/10/2026: o atendimento que o SAC registrou como já realizado fora da fábrica (a OS foi direto a "Concluído") */}
+          {os.atendimento_externo && (
+            <Grupo titulo="Atendimento já realizado (fora da fábrica)" linhas={[
+              ['Feito em', dia(os.atendimento_externo.data)], ['Quem fez', os.atendimento_externo.executor], ['O que foi feito', os.atendimento_externo.observacao],
+              ['Registrado por', [os.atendimento_externo.registrado_por, os.atendimento_externo.registrado_em && diaHora(os.atendimento_externo.registrado_em)].filter(Boolean).join(' · ')],
+              ['Etapa antes do registro', os.atendimento_externo.etapa_de_antes],
+            ]} />
+          )}
+
           <Grupo titulo="Valores" linhas={[
             ['Orçamento', reais(os.valor_orcamento)], ['Orçamento revisado', reais(os.valor_orcamento_revisado)], ['Valor total', reais(os.valor_total)], ['Mão de obra', reais(os.valor_mao_de_obra)],
             ['Deslocamento', reais(os.despesa_deslocamento)], ['Hospedagem', reais(os.despesa_hospedagem)], ['Alimentação', reais(os.despesa_alimentacao)], ['Total de despesas', reais(os.total_despesas)],
