@@ -1,4 +1,6 @@
-# Análise de uso, UX e UI do setor SAC
+# Plano: melhorias de uso, UX e UI do setor SAC
+
+**Situação (30/10/2026): PENDENTE, nada construído ainda.** Nasceu como análise e virou plano: cada código (A1, M3...) é uma fatia; o usuário diz quais fazer e em que ordem. Marque aqui cada achado como ✅ (com a data) quando for construído. Só o "Registrar atendimento já realizado" foi feito, antes da análise, e não está na lista. O manual do setor (`MANUAL_SAC/`) descreve a tela como ela é hoje: ao construir um achado, atualize o texto do manual e rode `node MANUAL_SAC/build_manual.cjs`.
 
 **Data:** 30/10/2026 · **Pedido:** "faça uma análise se tem como melhorar o uso, o UX e a UI do SAC, para os operadores entenderem melhor como operar".
 **Base:** leitura da tela inteira (Ordens de Serviço, Chamados NFC, Garantia, Cadastros), das regras de cada etapa e do passo a passo de 79 fotos tiradas com dados inventados.

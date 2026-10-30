@@ -511,7 +511,7 @@ Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado 
 
 # Apêndice: pontos de melhoria já mapeados
 
-A análise do setor (arquivo **ANALISE_UX_SAC.md**) lista o que pode ficar mais claro na tela. Os que mais afetam quem opera hoje:
+A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**) lista o que pode ficar mais claro na tela. Os que mais afetam quem opera hoje:
 
 - A **ajuda de "Presencial"** na Nova OS diz que o SAC define a data; **quem marca é a Produção**.
 - **Dois botões "Enviar ao Fiscal"** pedem coisas diferentes (seriais, ou valor e CPF/CNPJ); **três janelas de entrega** (a do veículo não colhe assinatura).
