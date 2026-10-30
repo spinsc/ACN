@@ -15,7 +15,10 @@ import AgendaWidget from './AgendaWidget';
 import GarantiaTab, { gravarGarantia } from './GarantiaTab';
 import { registrarOsGerada } from './GarantiaModelo';
 import EnviarOsAoFiscalModal from './EnviarOsAoFiscalModal';
-import { podeConcluirPeloSac, estaComOLaboratorio } from './SacFluxo';
+import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, osParada, podeCancelarOS, motivoQueNaoCancela, demandasAbertasDaOS, recadoDoCancelamento, camposDoCancelamento,
+  resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE, progressoDaOS, LEGENDAS_DE_FLUXO, COLUNAS_DO_QUADRO, colunaDoQuadro,
+  movimentosDaOS, movimentosParaAColuna, porQueNaoVaiParaAColuna, movimentoPedeDados, patchDoMovimento, recadoDoMovimento, demandaDeExecucaoDaOsDoCrm, quemExecutaValido } from './SacFluxo';
+import { EscolherMovimentoModal, DadosDoMovimentoModal } from './MoverOsModal';
 import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -55,12 +58,11 @@ const STATUS_COR: Record<string, string> = {
   'Provisionada':                  '#16a34a',
   'Aguardando Início':             '#f59e0b',
   'Verificação e Orçamento':       '#8b5cf6',
-  'Em Manutenção':                 '#dc2626',
-  'Manutenção Concluída':          '#0d9488',
   'Aguardando CQ':                 '#8b5cf6',
   'Aguardando Envio Fiscal':       '#f59e0b',
   'Aguardando Emissão NF':         '#0891b2',
   'Faturada - Aguardando Entrega': '#166534',
+  'Cancelada':                     '#6b7280',   // S4 (29/10/2026): cancelada pelo SAC, com motivo
 };
 
 // Etapa 12d3 (01/10/2026): na lista de OS a cor do status vem da FAMÍLIA do guia de interface (a mesma de todas as telas), não mais do hexadecimal acima — que segue valendo só para
@@ -69,8 +71,8 @@ const FAMILIA_STATUS_SAC: Record<string, string> = {
   'Diagnóstico': 'info', 'Aberta': 'info', 'Orçamento Pronto': 'marca', 'Orç. Enviado': 'atencao', 'Aprovado': 'ok', 'Reprovado': 'erro',
   'Em Execução': 'marca', 'Concluído': 'ok', 'Entregue': 'ok',
   'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'ok',
-  'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Em Manutenção': 'marca', 'Manutenção Concluída': 'ok', 'Aguardando CQ': 'atencao',
-  'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok',
+  'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Aguardando CQ': 'atencao',
+  'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok', 'Cancelada': 'neutro',
 };
 
 // Etapa 7.21 (01/10/2026, R16): prazo_orcamento e data_prevista_pos_aprovacao são do tipo DATE ("2026-09-30"). new Date("2026-09-30") é meia-noite de Londres, que no
@@ -199,6 +201,43 @@ const FORM_VAZIO = {
 };
 
 // Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
+// S5 (29/10/2026): a barra de progresso serve aos dois caminhos (Laboratório e veículo, cobrada ou sem cobrança): um bloco por etapa do caminho da OS (SacFluxo.ts, `progressoDaOS`), as feitas em verde, a atual em azul.
+// Sem barra para a OS cancelada, reprovada ou numa etapa que o caminho dela não conhece (melhor sem barra do que uma barra errada).
+function BarraDaOS({ os }: { os: any }) {
+  const p = progressoDaOS(os);
+  if (!p) return null;
+  return (
+    <div className="acn-sac-barra-wrap" title={`Etapa ${p.indice + 1} de ${p.total}: ${p.atual}`}>
+      <div className="acn-sac-barra" role="progressbar" aria-label={`Progresso da OS ${os.numero_os}`} aria-valuemin={1} aria-valuemax={p.total} aria-valuenow={p.indice + 1}>
+        {p.passos.map(x => <span key={x.nome} className={'passo ' + x.estado} />)}
+      </div>
+      <span className="acn-fraco">etapa {p.indice + 1} de {p.total}</span>
+    </div>
+  );
+}
+
+// S5 (29/10/2026): a OS de garantia aponta a ficha (a ficha já apontava a OS desde a S1); o clique abre a ficha na aba Garantia
+function SeloFichaDaOS({ os, numero, onAbrir }: { os: any; numero?: string; onAbrir: (os: any) => void }) {
+  if (!os?.garantia_id) return null;
+  return <Selo familia="marca" ponto={false} title="Abrir a ficha de garantia desta OS" onClick={(e: any) => { e.stopPropagation(); onAbrir(os); }}>Ficha {numero || 'de garantia'}</Selo>;
+}
+
+// S4 (29/10/2026): quem tem que agir na OS e há quantos dias ela está na etapa; vermelho quando já está parada (7 dias ou mais na mesma etapa)
+function QuemAgeDaOS({ os }: { os: any }) {
+  const a = quemTemQueAgir(os);
+  if (!a) return null;
+  const dias = diasNaEtapa(os);
+  const parada = osParada(os);
+  return (
+    <div className="acn-selos acn-sac-agir">
+      <Selo familia="neutro" ponto={false} title={a.oque}>Aguarda: {a.quem}</Selo>
+      {dias != null && (parada
+        ? <Selo familia="erro" ponto={false} title={`Há ${dias} dia(s) na mesma etapa. ${a.oque}.`}>parada há {dias} dias</Selo>
+        : <span className="acn-fraco">{dias === 0 ? 'nesta etapa desde hoje' : `há ${dias} dia${dias === 1 ? '' : 's'} nesta etapa`}</span>)}
+    </div>
+  );
+}
+
 // S3 (29/10/2026): o pedido de venda do card do CRM de onde a OS foi lançada (a OS antiga e a aberta pelo SAC não têm)
 function SeloPvDaOS({ os }: { os: any }) {
   return os?.numero_pv ? <Selo familia="neutro" ponto={false} title="Pedido de venda do card do CRM de onde esta OS foi lançada">PV {os.numero_pv}</Selo> : null;
@@ -251,6 +290,15 @@ function SacTabCompleto({ currentUser }) {
   const [filtroTipo, setFiltroTipo]         = useState('');
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [filtroEmpresa, setFiltroEmpresa]     = useState('');
+  // S4 (29/10/2026): quem tem que agir (SAC, Laboratório, Produção…) e "parada há N dias ou mais" (a OS na mesma etapa há N dias)
+  const [filtroQuem, setFiltroQuem]           = useState('');
+  const [filtroParada, setFiltroParada]       = useState('');
+  // Mover a OS entre as etapas (29/10/2026): o cartão que está sendo arrastado e a coluna sobre a qual ele está; a janela para escolher o passo e a janela de dados do passo
+  const [arrastandoId, setArrastandoId]       = useState<string | null>(null);
+  const [colunaSobre, setColunaSobre]         = useState<string | null>(null);
+  const [movEscolha, setMovEscolha]           = useState<{ os: any; movs: any[] } | null>(null);
+  const [movDados, setMovDados]               = useState<{ os: any; mov: any } | null>(null);
+  const [movSalvando, setMovSalvando]         = useState(false);
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
@@ -412,6 +460,30 @@ function SacTabCompleto({ currentUser }) {
     });
     return () => { vivo = false; };
   }, [modalNova, form.tipo_servico, form.garantia_id, fichas.lida]);
+
+  // S5 (29/10/2026): o número da ficha de cada OS de garantia ("GAR-0001/2026"), para o selo que abre a ficha. É só um rótulo: se a leitura falhar, o selo diz "Ficha de garantia" e abre do mesmo jeito.
+  const [numerosFichas, setNumerosFichas] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const ids = [...new Set(ordens.map((o: any) => o.garantia_id).filter(Boolean))].filter((id: any) => !numerosFichas[id]);
+    if (!ids.length) return;
+    let vivo = true;
+    (async () => {
+      const novos: Record<string, string> = {};
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await supabase.from('garantia_atendimentos').select('id,numero').in('id', ids.slice(i, i + 100));
+        if (error) return;
+        (data || []).forEach((g: any) => { if (g.numero) novos[g.id] = g.numero; });
+      }
+      if (vivo && Object.keys(novos).length) setNumerosFichas(p => ({ ...p, ...novos }));
+    })();
+    return () => { vivo = false; };
+  }, [ordens]);
+  // o clique no selo da ficha: abre a aba Garantia direto na ficha (o mesmo atalho dos avisos da caixa de Menções)
+  const abrirFichaDaOS = (os: any) => {
+    (window as any).__acnDeepLink = { contexto: 'garantia', contextoId: String(os.garantia_id) };
+    setAbaAtiva('garantia');
+    window.dispatchEvent(new CustomEvent('acn:abrir-registro'));
+  };
 
   const fetchOrdens = async () => {
     setLoading(true);
@@ -1019,28 +1091,23 @@ OK = ACN   |   Cancelar = DETECH`;
     if (filtroAvaliacao === 'Veicular' && !o.is_manutencao_veicular) return false;
     if (filtroEmpresa === 'sem' && o.empresa) return false;
     if (filtroEmpresa && filtroEmpresa !== 'sem' && o.empresa !== filtroEmpresa) return false;
+    // S4 (29/10/2026): a OS cancelada sai da lista e do quadro (era por isso que a lista só crescia); só aparece quando se filtra pelo status "Cancelada"
+    if (o.status === STATUS_OS_CANCELADA && filtroStatus !== STATUS_OS_CANCELADA) return false;
+    if (filtroQuem && quemTemQueAgir(o)?.quem !== filtroQuem) return false;
+    if (filtroParada && !osParada(o, Number(filtroParada))) return false;
     if (busca) return combinaBusca([o.numero_os, o.cliente_nome, o.equipamento_nome], busca);
     return true;
   });
+  const canceladasFora = ordens.filter((o: any) => o.status === STATUS_OS_CANCELADA).length;
 
-  // KANBAN, 3 colunas, "só pela etapa de trabalho" (escolha do usuário em pergunta clicável, 05/10/2026):
-  // PENDENTE = Aberta e Diagnóstico · CONCLUÍDO = Concluído, Entregue e Faturada · EM ANDAMENTO = tudo o que está entre o orçamento e a entrega.
-  // Reprovado fica FORA do quadro (vê-se na lista, no filtro de status). Uma situação que ninguém classificou cai em EM ANDAMENTO, para nenhuma OS sumir do quadro.
-  const colunaKanban = (status: string): 'pendente' | 'andamento' | 'concluido' | null => {
-    if (status === 'Reprovado') return null;
-    if (['Aberta', 'Diagnóstico'].includes(status)) return 'pendente';
-    if (['Concluído', 'Entregue', 'Faturada - Aguardando Entrega'].includes(status)) return 'concluido';
-    return 'andamento';
-  };
-  const COLUNAS_KANBAN = [
-    { id: 'pendente', rotulo: 'PENDENTE', familia: 'atencao' },
-    { id: 'andamento', rotulo: 'EM ANDAMENTO', familia: 'info' },
-    { id: 'concluido', rotulo: 'CONCLUÍDO', familia: 'ok' },
-  ];
+  // KANBAN, "só pela etapa de trabalho" (escolha do usuário em pergunta clicável, 05/10/2026). S5 (29/10/2026): ganhou a coluna "No Fiscal / aguardando entrega", para a OS faturada não parecer terminada.
+  // A regra de qual coluna é de cada etapa mora em SacFluxo.ts (`colunaDoQuadro`); Reprovado e Cancelada ficam FORA do quadro (vê-se na lista, no filtro de status).
+  const colunaKanban = colunaDoQuadro;
+  const COLUNAS_KANBAN = COLUNAS_DO_QUADRO;
   const reprovadasFiltradas = ordensFiltradas.filter(o => colunaKanban(o.status) === null).length;
-  // Lote no quadro (07/10/2026, decidido com o usuário): as OS de um mesmo lote viram UM card, que fica na etapa da OS mais atrasada (pendente antes de em andamento antes de concluído);
+  // Lote no quadro (07/10/2026, decidido com o usuário): as OS de um mesmo lote viram UM card, que fica na etapa da OS mais atrasada (pendente antes de em andamento antes do Fiscal antes de concluído);
   // ao abrir o lote aparecem as OS, cada uma com o seu status e as suas ações. OS sem lote seguem como cards próprios.
-  const ORDEM_COLUNA: Record<string, number> = { pendente: 0, andamento: 1, concluido: 2 };
+  const ORDEM_COLUNA: Record<string, number> = { pendente: 0, andamento: 1, fiscal: 2, concluido: 3 };
   const itensDaColuna = (colId: string) => {
     const vistos = new Set<string>(); const itens: any[] = [];
     for (const o of ordensFiltradas) {
@@ -1072,9 +1139,10 @@ OK = ACN   |   Cancelar = DETECH`;
           <div className="acn-kb-lote-lista">
             {item.oss.map((o: any) => (
               <div key={o.id} className="acn-kb-lote-os">
-                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /><SeloPvDaOS os={o} /></div>
+                <div className="acn-kb-topo"><strong className="acn-forte">{o.numero_os}</strong><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /><SeloPvDaOS os={o} /><SeloFichaDaOS os={o} numero={numerosFichas[o.garantia_id]} onAbrir={abrirFichaDaOS} /></div>
                 <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}{o.numero_serie ? ' · SN ' + o.numero_serie : ''}</div>
                 <div className="acn-kb-meta"><Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo></div>
+                <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
                 <div className="acn-acoes-linha quebra">{renderAcoes(o)}</div>
               </div>
             ))}
@@ -1176,23 +1244,8 @@ OK = ACN   |   Cancelar = DETECH`;
           </Botao>
         );
       }
-      // Manutenção Concluída → SAC faz entrega ou renegocia itens
-      if (os.status === 'Manutenção Concluída') {
-        const itensRenegoc = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0
-          ? os.materiais_utilizados.map((i:any) => ({...i}))
-          : Array.isArray(os.itens_cotacao) && os.itens_cotacao.length > 0
-            ? os.itens_cotacao.map((i:any) => ({...i}))
-            : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0}];
-        btns.push(
-          <Botao key="renegoc" pequeno icone={mdiPencilOutline}
-            onClick={()=>{ setOrcProdItens(itensRenegoc); setOrcProdModo('editar'); setModalOrcProd(os); }}>
-            Renegociar
-          </Botao>
-        );
-        btns.push(
-          <Botao key="entrega" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
-        );
-      }
+      // S5 (29/10/2026): saiu o atalho de "Manutenção Concluída" (Entrega e Renegociar): nada mais grava esse status (a Produção e a Qualidade gravam "Em Execução" e a OS segue pelo CQ e pelo Fiscal),
+      // e o atalho entregaria a OS sem passar por eles. Nenhuma OS estava nesse status.
       // Concluído (OS veicular): SEM cobrança → SAC entrega o veículo, não vai ao Fiscal; COBRADA → SAC envia ao Fiscal (S2)
       if (os.status === 'Concluído') {
         btns.push(osSemCobranca(os)
@@ -1296,6 +1349,12 @@ OK = ACN   |   Cancelar = DETECH`;
       // S2: a OS cobrada concluída pode sair SEM nota só com um motivo (cortesia): vira "sem cobrança" e segue para a entrega. É a saída de exceção; o caminho normal é "Enviar ao Fiscal"
       { rotulo: 'Entregar sem nota (cortesia)', titulo: 'A OS concluída não será faturada: pede o motivo, passa a valer como sem cobrança e segue para a entrega', icone: mdiCloseCircleOutline, oculto: !(os.status === 'Concluído' && !osSemCobranca(os)), onClick: ()=>entregarSemNota(os) },
       { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
+      // S4 (29/10/2026): o fim da OS desistida, duplicada ou criada errada; some do quadro e da lista, com o motivo guardado
+      { rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
+      // Mover a OS entre as etapas (29/10/2026): os passos que o SAC pode fazer agora (avançar onde é ele quem age, voltar uma etapa); o mesmo que arrastar o cartão no quadro, e serve no celular
+      ...movimentosDaOS(os).filter((m: any) => m.tipo !== 'cancelar').map((m: any) => ({
+        rotulo: m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`, titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : mdiArrowRight, onClick: () => executarMovimento(os, m),
+      })),
     ]} />);
     return btns;
   };
@@ -1313,6 +1372,128 @@ OK = ACN   |   Cancelar = DETECH`;
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Em Execução' }, newRow: { status: 'Concluído', data_finalizacao_execucao: agora }, user: currentUser });
     notificarEvento('sac_os_concluida', `*OS ${os.numero_os} concluída pelo SAC*\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}`);
     fetchOrdens();
+  };
+
+  // S4 (29/10/2026): cancelar a OS. Quem tem a aba SAC cancela, sempre com motivo (vai à OS, à auditoria e ao aviso). A OS que já está no Fiscal ou foi entregue não se cancela por aqui. A gravação só pega
+  // se a OS ainda está na etapa que a pessoa viu. A demanda ABERTA do Laboratório/Engenharia não é fechada por mim (decisão do usuário): recebe um recado no histórico e o setor é avisado, e ele a encerra.
+  // Se a leitura das demandas falhar, o cancelamento não é feito (não se finge que "não há demanda").
+  const cancelarOS = async (os: any) => {
+    const naoPode = motivoQueNaoCancela(os);
+    if (naoPode) { alert(naoPode); return; }
+    const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+    if (erroDem) { alert(`Não foi possível conferir as demandas da ${os.numero_os} (${erroDem.message}). A OS NÃO foi cancelada: tente de novo.`); return; }
+    const abertas = demandasAbertasDaOS(dem || []);
+    const motivo = await pedirTexto(`Por que a ${os.numero_os} será cancelada? (desistência do cliente, OS duplicada, aberta por engano...)\n\nO motivo fica na OS e no histórico.`);
+    if (motivo === null) return;
+    if (!String(motivo).trim()) { alert('Informe o motivo do cancelamento.'); return; }
+    const setores = [...new Set(abertas.map((d: any) => d.setor_destino).filter(Boolean))];
+    if (!await confirmar(`Cancelar a ${os.numero_os} (${os.status})?\n\nMotivo: ${String(motivo).trim()}` + (abertas.length ? `\n\nHá ${abertas.length} demanda(s) aberta(s) (${setores.join(', ')}): elas recebem um recado e o setor é avisado, mas quem encerra é o setor.` : ''))) return;
+    const agora = new Date().toISOString();
+    const campos = camposDoCancelamento(motivo, currentUser, agora);
+    const { data, error } = await supabase.from('sac_ordens_servico').update(campos).eq('id', os.id).eq('status', os.status).select('id');
+    if (error) { alert('Não foi possível cancelar a OS: ' + error.message); return; }
+    if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada: confira e tente de novo.`); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: campos, user: currentUser });
+    const falhas: string[] = [];
+    for (const d of abertas) {
+      const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoCancelamento(os, motivo, currentUser, agora)] }).eq('id', d.id);
+      if (erroRecado) falhas.push(`${d.setor_destino}: ${erroRecado.message}`);
+    }
+    if (falhas.length) mostrarAviso(`A ${os.numero_os} foi cancelada, mas não foi possível deixar o recado em ${falhas.length} demanda(s): ${falhas.join('; ')}. Avise o setor para encerrar a demanda.`, 'erro');
+    notificarEvento('sac_os_cancelada', `*OS ${os.numero_os} CANCELADA*\nCliente: ${os.cliente_nome}\nMotivo: ${String(motivo).trim()}\nPor: ${currentUser?.nome}` + (setores.length ? `\nEncerrar a demanda: ${setores.join(', ')}` : ''));
+    fetchOrdens();
+  };
+
+  // ── MOVER A OS ENTRE AS ETAPAS (pedido do usuário em 29/10/2026) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Arrastar o cartão para outra coluna do quadro, ou "Mover para…" no menu ⋯. As regras (quais passos o SAC faz: avançar onde é ele quem age e voltar UMA etapa com motivo) estão em SacFluxo.ts,
+  // `movimentosDaOS`. O passo que já tinha janela (enviar orçamento, aprovar, reprovar, Fiscal, entrega, cotação, aceite, cancelar) abre a janela de sempre; os que não tinham pedem os dados em `DadosDoMovimentoModal`.
+  const reavaliarOS = async (os: any) => {
+    if (!await confirmar(`Reabrir a ${os.numero_os} para uma nova avaliação?`)) return;
+    const para = os.is_manutencao_veicular ? (os.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento') : 'Diagnóstico';
+    const { data, error } = await supabase.from('sac_ordens_servico').update({ status: para, aprovado: null, motivo_reprovacao: null, atualizado_em: new Date().toISOString() }).eq('id', os.id).eq('status', 'Reprovado').select('id');
+    if (error) { alert('Não foi possível reabrir a OS: ' + error.message); return; }
+    if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Reprovado' }, newRow: { status: para }, user: currentUser });
+    fetchOrdens();
+  };
+  const abrirProcessoExistente = (os: any, processo: string) => {
+    switch (processo) {
+      case 'enviar_orcamento': setModalOrc(os); setOrcForm({ valor: os.valor_orcamento ? String(os.valor_orcamento) : '', condicoes: os.condicoes_pagamento || '' }); break;
+      case 'aprovar': setModalAprov(os); setAprovForm({ nome: '', sig: null, data_entrega: '' }); break;
+      case 'reprovar': setModalRepr(os); setReprForm({ motivo: '', data_retirada: '', nome_retirada: '' }); break;
+      case 'enviar_fiscal_lab': setModalFiscalOS(os); break;
+      case 'enviar_fiscal_veicular': {
+        const itens = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0 ? os.materiais_utilizados.map((i: any) => ({ ...i })) : [{ codigo: '', descricao: '', quantidade: 1, valor_unitario: 0, numero_serie: '' }];
+        setFiscalItens(itens); setModalEnviarFiscal(os); break;
+      }
+      case 'entregar_lab': setModalSaida(os); setSaidaForm({ nome: '', sig: null }); setFotosSaidaFiles([]); break;
+      case 'entregar_veicular': liberarEntregaVeicular(os); break;
+      case 'cancelar': cancelarOS(os); break;
+      case 'concluir_sac': concluirOsPeloSac(os); break;
+      case 'enviar_cotacao':
+        if (!(os.itens_cotacao?.length > 0)) { alert('Adicione os itens da cotação antes de enviar (botão "Itens" da OS).'); break; }
+        enviarCotacaoCliente(os); break;
+      case 'aprovar_cotacao': aprovarCotacao(os); break;
+      case 'aprovar_orcamento_presencial': aprovarOrcamentoPresencial(os); break;
+      case 'recusar_cotacao': recusarCotacao(os); break;
+      case 'aceite_sac': setModalAceiteSAC(os); break;
+      case 'seguir_sem_cotacao': seguirSemCotacao(os); break;
+      case 'reavaliar': reavaliarOS(os); break;
+    }
+  };
+  const executarMovimento = (os: any, mov: any) => {
+    if (movimentoPedeDados(mov.processo)) { setMovDados({ os, mov }); return; }
+    abrirProcessoExistente(os, mov.processo);
+  };
+  // O cartão foi solto numa coluna: sem passo possível, a frase diz por quê; com um, executa; com mais de um, a pessoa escolhe.
+  const soltarNaColuna = (colId: string) => {
+    const os = ordens.find((x: any) => x.id === arrastandoId);
+    setArrastandoId(null); setColunaSobre(null);
+    if (!os) return;
+    // várias etapas do SAC ficam DENTRO da mesma coluna ("Em andamento"): soltar na própria coluna oferece os passos dela, sempre pela janela de escolha (um arrasto acidental não executa nada)
+    const mesma = colunaDoQuadro(os.status) === colId;
+    const movs = movimentosParaAColuna(os, colId as any);
+    if (!movs.length) { if (!mesma) mostrarAviso(porQueNaoVaiParaAColuna(os, colId as any), 'atencao'); return; }
+    if (movs.length === 1 && !mesma) executarMovimento(os, movs[0]); else setMovEscolha({ os, movs });
+  };
+  // Grava os passos da janela de dados. A gravação só pega se a OS ainda está na etapa que a pessoa viu; a demanda aberta do setor recebe um recado (não é fechada por mim); abrir o diagnóstico e
+  // seguir como vendida (Laboratório) criam a demanda que a OS precisa para andar. A leitura das demandas que falhar avisa em vermelho (a OS já foi movida).
+  const gravarMovimento = async (os: any, mov: any, dados: any) => {
+    if (movSalvando) return;
+    setMovSalvando(true);
+    try {
+      const agora = new Date().toISOString();
+      const patch = { ...patchDoMovimento(os, mov, dados, agora), atualizado_em: agora };
+      const { data, error } = await supabase.from('sac_ordens_servico').update(patch).eq('id', os.id).eq('status', os.status).select('id');
+      if (error) { alert('Não foi possível mover a OS: ' + error.message); return; }
+      if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada: confira e tente de novo.`); setMovDados(null); fetchOrdens(); return; }
+      logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: { ...patch, motivo_da_mudanca: String(dados?.motivo || '').trim() || undefined }, user: currentUser });
+      setMovDados(null);
+      const falhas: string[] = [];
+      const defeito = os.defeito_reclamado || (Array.isArray(os.equipamentos_lista) ? os.equipamentos_lista[0]?.defeito : '') || '';
+      let novaDemanda: any = null;
+      if (mov.processo === 'abrir_diagnostico') {
+        novaDemanda = { setor_destino: 'Laboratorio', descricao: `[SAC-DIAG] ${os.numero_os} — ${os.equipamento_nome || '—'} | ${String(defeito).trim() || 'Ver OS'}`, numero_opl: os.numero_os, status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, data_abertura: agora, sac_os_id: os.id, sac_fase: 'diagnostico',
+          logs_demanda: [{ texto: 'OS aberta para diagnóstico e elaboração de orçamento (movida pelo SAC).', usuario: currentUser?.nome, hora: agora }] };
+      } else if (mov.processo === 'seguir_vendida' && quemExecutaValido(dados?.quem_executa) === 'laboratorio') {
+        novaDemanda = demandaDeExecucaoDaOsDoCrm({ numero: os.numero_os, equipamento: os.equipamento_nome, defeito, usuario: currentUser, agora, osId: os.id });
+      }
+      if (novaDemanda) {
+        const { error: erroNova } = await supabase.from('demandas_setoriais').insert([novaDemanda]);
+        if (erroNova) falhas.push(`a demanda para o Laboratório não foi criada (${erroNova.message})`);
+      } else {
+        // a OS foi movida por fora da demanda aberta do setor: ela recebe o recado (e o setor decide se a encerra)
+        const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+        if (erroDem) falhas.push(`não consegui ler as demandas da OS para deixar o recado (${erroDem.message})`);
+        else for (const d of demandasAbertasDaOS(dem || [])) {
+          const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoMovimento(os, mov, dados, currentUser, agora)] }).eq('id', d.id);
+          if (erroRecado) falhas.push(`o recado na demanda de ${d.setor_destino} (${erroRecado.message})`);
+        }
+      }
+      if (falhas.length) mostrarAviso(`A ${os.numero_os} foi movida para "${mov.para}", mas não foi possível concluir tudo: ${falhas.join('; ')}. Avise o setor.`, 'erro');
+      notificarEvento('sac_os_movida', `*OS ${os.numero_os} movida pelo SAC*\n${os.status} → ${mov.para}\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}` + (String(dados?.motivo || '').trim() ? `\nMotivo: ${String(dados.motivo).trim()}` : ''));
+      fetchOrdens();
+    } finally { setMovSalvando(false); }
   };
 
   // ── COPIAR OS (pedido do usuário em 23/10/2026): várias OS iguais, cada uma com o seu número ──────────────────────────────────────────────────────────────────────────────
@@ -2020,16 +2201,58 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
         </div>
 
         {/* Legenda de fluxo */}
+        {/* S5 (29/10/2026): as legendas leem os mesmos caminhos da barra de cada OS (SacFluxo.ts, CAMINHOS_DA_OS): Laboratório e veículo; a OS sem cobrança pula o orçamento e o Fiscal */}
         <div className="sec-body acn-sac-legenda">
-          <span className="acn-fraco">Fluxo:</span>
-          {['Diagnóstico','Orçamento Pronto','Orç. Enviado','Aprovado','Em Execução','Concluído','Entregue'].map((s,i,arr) => (
-            <React.Fragment key={s}>
-              <Selo familia={FAMILIA_STATUS_SAC[s] || 'neutro'}>{s}</Selo>
-              {i < arr.length-1 && <Icone path={mdiArrowRight} size={14} className="acn-fraco" />}
-            </React.Fragment>
+          {LEGENDAS_DE_FLUXO.map(l => (
+            <div key={l.rotulo} className="acn-sac-legenda-linha" aria-label={'Fluxo ' + l.rotulo}>
+              <span className="acn-fraco acn-sac-legenda-rotulo">{l.rotulo}:</span>
+              {l.etapas.map((s, i, arr) => (
+                <React.Fragment key={s}>
+                  <Selo familia={FAMILIA_STATUS_SAC[s] || 'neutro'}>{s}</Selo>
+                  {i < arr.length - 1 && <Icone path={mdiArrowRight} size={14} className="acn-fraco" />}
+                </React.Fragment>
+              ))}
+            </div>
           ))}
-          <span className="acn-fraco acn-sac-legenda-nota">(Lab executa diagnóstico e reparo)</span>
+          <span className="acn-fraco acn-sac-legenda-nota">A OS sem cobrança (garantia ou cortesia) pula o orçamento e o Fiscal.</span>
         </div>
+
+        {/* S4 (29/10/2026): o que está com cada setor hoje. O SAC vê o que é dele e há quantos dias está lá; clicar no setor filtra a lista e o quadro */}
+        {(() => {
+          const r = resumoDoQueEstaComQuem(ordens);
+          const paradasDoSac = r.doSac.filter(x => osParada(x.os));
+          return (
+            <div className="sec-body acn-sac-painel">
+              <div className="acn-quadro-titulo">O que está com cada setor hoje</div>
+              <Chips rotulo="Quem tem que agir" ativo={filtroQuem || 'todos'} onChange={id => setFiltroQuem(id === 'todos' ? '' : id)}
+                itens={[{ id: 'todos', rotulo: 'Todos' }, ...QUEM_AGE.map(q => ({ id: q, rotulo: `${q} (${r.porQuem[q].total}${r.porQuem[q].paradas ? ` · ${r.porQuem[q].paradas} paradas` : ''})` }))]} />
+              {paradasDoSac.length > 0 && (
+                <Faixa tom="erro" acao={<Botao pequeno onClick={() => { setFiltroQuem('SAC'); setFiltroParada(String(PRAZO_OS_PARADA_DIAS)); trocarVisaoOS('lista'); }}>Ver na lista</Botao>}>
+                  <strong>{paradasDoSac.length} OS esperam o SAC há {PRAZO_OS_PARADA_DIAS} dias ou mais.</strong> A mais parada é a {paradasDoSac[0].os.numero_os} ({paradasDoSac[0].oque.toLowerCase()}), há {paradasDoSac[0].dias} dias.
+                </Faixa>
+              )}
+              {r.doSac.length > 0 && (
+                <div className="acn-rolagem acn-sem-recuo">
+                  <table className="acn-tabela acn-densa" aria-label="OS que estão com o SAC">
+                    <thead><tr><th>OS</th><th>Cliente</th><th>Etapa</th><th>O que fazer</th><th className="acn-dir">Na etapa há</th></tr></thead>
+                    <tbody>
+                      {r.doSac.slice(0, 6).map(x => (
+                        <tr key={x.os.id} className={osParada(x.os) ? 'acn-linha-alerta' : undefined}>
+                          <td className="acn-forte">{x.os.numero_os}</td>
+                          <td>{x.os.cliente_nome || '—'}</td>
+                          <td><Selo familia={FAMILIA_STATUS_SAC[x.os.status] || 'neutro'}>{x.os.status}</Selo></td>
+                          <td>{x.oque}</td>
+                          <td className="acn-dir">{x.dias == null ? '—' : `${x.dias} dia${x.dias === 1 ? '' : 's'}`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {r.doSac.length > 6 && <div className="acn-fraco">Mostrando as 6 mais paradas de {r.doSac.length}; use o filtro "SAC" para ver todas.</div>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Filtros */}
         <div className="sec-body acn-sac-filtros">
@@ -2054,7 +2277,11 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             {EMPRESAS_OS.map(e=><option key={e} value={e}>{e}</option>)}
             <option value="sem">Sem empresa</option>
           </select>
-          <Botao pequeno onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setBusca('');}}>Limpar</Botao>
+          <select className="acn-input" aria-label="OS parada há mais de" value={filtroParada} onChange={e=>setFiltroParada(e.target.value)}>
+            <option value="">Parada há…</option>
+            {OPCOES_OS_PARADA_DIAS.map(n => <option key={n} value={n}>Paradas há {n} dias ou mais</option>)}
+          </select>
+          <Botao pequeno onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setFiltroQuem('');setFiltroParada('');setBusca('');}}>Limpar</Botao>
         </div>
 
         {/* ── KANBAN (05/10/2026) ── */}
@@ -2065,12 +2292,21 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 {reprovadasFiltradas} OS reprovada(s) ficam fora do quadro — estão na lista, no filtro de status.
               </Faixa>
             )}
+            {canceladasFora > 0 && (
+              <Faixa tom="info" acao={<Botao pequeno onClick={() => { setFiltroStatus(STATUS_OS_CANCELADA); trocarVisaoOS('lista'); }}>Ver na lista</Botao>}>
+                {canceladasFora} OS cancelada(s) ficam fora do quadro e da lista — estão no filtro de status "Cancelada".
+              </Faixa>
+            )}
             {loading ? <div className="acn-empty">Carregando...</div> : (
-              <div className="acn-kb">
+              <div className="acn-kb com-fiscal">
                 {COLUNAS_KANBAN.map(col => {
                   const cards = itensDaColuna(col.id);
                   return (
-                    <div key={col.id} className={'acn-kb-col ' + col.id} aria-label={col.rotulo}>
+                    <div key={col.id} aria-label={col.rotulo}
+                      className={'acn-kb-col ' + col.id + (arrastandoId ? (movimentosParaAColuna(ordens.find((x: any) => x.id === arrastandoId), col.id as any).length ? ' alvo-ok' : ' alvo-nao') + (colunaSobre === col.id ? ' sobre' : '') : '')}
+                      onDragOver={e => { if (arrastandoId) { e.preventDefault(); if (colunaSobre !== col.id) setColunaSobre(col.id); } }}
+                      onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setColunaSobre(c => (c === col.id ? null : c)); }}
+                      onDrop={e => { e.preventDefault(); soltarNaColuna(col.id); }}>
                       <div className="acn-kb-cab"><span>{col.rotulo}</span><Selo familia={col.familia} ponto={false}>{cards.length}</Selo></div>
                       <div className="acn-kb-corpo">
                         {cards.length === 0 && <div className="acn-empty">Nenhuma OS</div>}
@@ -2079,13 +2315,16 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                           const o = item.o;
                           const valor = valorDaOS(o);
                           return (
-                            <div key={o.id} className={'acn-kb-card abrivel' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '')}
+                            <div key={o.id} className={'acn-kb-card abrivel' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '') + (arrastandoId === o.id ? ' arrastando' : '')}
+                              draggable={movimentosDaOS(o).some((m: any) => m.tipo !== 'cancelar')}
+                              onDragStart={e => { setArrastandoId(o.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(o.id)); }}
+                              onDragEnd={() => { setArrastandoId(null); setColunaSobre(null); }}
                               title="Clique para ver o resumo completo da OS"
                               onClick={e => { if ((e.target as HTMLElement).closest('button, a, select, input, textarea, [data-nao-abrir]')) return; setResumoOS(o); }}>
                               <div className="acn-kb-topo">
                                 <strong className="acn-forte">{o.numero_os}</strong>
                                 <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
-                                <SeloPvDaOS os={o} />
+                                <SeloPvDaOS os={o} /><SeloFichaDaOS os={o} numero={numerosFichas[o.garantia_id]} onAbrir={abrirFichaDaOS} />
                               </div>
                               <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}</div>
                               {o.cliente_nome && <div className="acn-fraco">{o.cliente_nome}</div>}
@@ -2093,6 +2332,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                                 <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
                                 {o.tipo_servico && <span className="acn-fraco">{o.tipo_servico}</span>}
                               </div>
+                              <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
                               <div className="acn-kb-meta acn-fraco">
                                 <span>Abertura {fmtDt(o.data_abertura)}</span>
                                 {o.prazo_orcamento && <span>Prazo orç. {fmtDt(o.prazo_orcamento)}</span>}
@@ -2128,12 +2368,12 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                   const difHoras = o.tipo_avaliacao==='Remota' && o.horas_cobradas_cotacao!=null && o.kpi_execucao_horas!=null && Math.abs(Number(o.horas_cobradas_cotacao)-Number(o.kpi_execucao_horas))>0.01;
                   const cobrouMais = Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas);
                   return (
-                  <tr key={o.id} className={ordensNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : o.status==='Reprovado' ? 'acn-linha-alerta' : ''}>
+                  <tr key={o.id} className={ordensNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : (o.status==='Reprovado' || osParada(o)) ? 'acn-linha-alerta' : ''}>
                     <td>
                       <div className="acn-duas acn-sac-id">
                         <strong className="acn-forte">{o.numero_os}</strong>
                         <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
-                        <SeloPvDaOS os={o} />
+                        <SeloPvDaOS os={o} /><SeloFichaDaOS os={o} numero={numerosFichas[o.garantia_id]} onAbrir={abrirFichaDaOS} />
                         {o.lote_id && <Selo familia="marca" ponto={false} title={o.lote_descricao || 'Faz parte de um lote de OS'}>Lote</Selo>}
                       </div>
                     </td>
@@ -2178,6 +2418,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     </td>
                     <td>
                       <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
+                      <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
                       {o.revisao_pendente && (
                         <div><span className="acn-txt-erro acn-sac-icone-texto acn-sac-revisao"><Icone path={mdiAlertOutline} size={12} /> Revisão pendente</span></div>
                       )}
@@ -3267,7 +3508,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       )}
 
       {/* MODAL ACOMPANHAMENTO DA OS */}
-      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
+      {movEscolha && <EscolherMovimentoModal os={movEscolha.os} movimentos={movEscolha.movs} onClose={() => setMovEscolha(null)} onEscolher={(m: any) => { const os = movEscolha.os; setMovEscolha(null); executarMovimento(os, m); }} />}
+      {movDados && <DadosDoMovimentoModal os={movDados.os} movimento={movDados.mov} salvando={movSalvando} onClose={() => setMovDados(null)} onConfirmar={(d: any) => gravarMovimento(movDados.os, movDados.mov, d)} />}
+      {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} fichaNumero={numerosFichas[resumoOS.garantia_id]} onAbrirFicha={() => { abrirFichaDaOS(resumoOS); setResumoOS(null); }} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
       {comprasOS && <ModalComprasDaOS os={ordens.find((x: any) => x.id === comprasOS.id) || comprasOS} currentUser={currentUser} onClose={() => setComprasOS(null)} />}
       {modalAcomp && (
         <OplAcompModal
