@@ -11,6 +11,7 @@
 // Módulo sem tela: é a regra pura, para testar sem navegador.
 // ─────────────────────────────────────────────────────────────────────────────
 import { bloqueioForaDaGarantia, podeVerGarantia, COBERTURAS_GARANTIA } from './GarantiaModelo';
+import { lerValorDigitado } from './LerValor';
 
 export type Cobranca = 'garantia' | 'cobrada';
 export const ROTULOS_COBRANCA: Record<Cobranca, string> = { garantia: 'Sem cobrança (garantia ou cortesia)', cobrada: 'Cobrada do cliente' };
@@ -361,3 +362,156 @@ export function colunaDoQuadro(status: string): ColunaDoQuadro | null {
   if (['Concluído', 'Entregue'].includes(status)) return 'concluido';
   return 'andamento';
 }
+
+// ── MOVER A OS ENTRE AS ETAPAS (pedido do usuário em 29/10/2026) ──────────────────────────────────────────────────────────────────────────────────
+// O SAC passa a mover a OS arrastando o cartão no quadro ou pelo menu "Mover para…", com a janela de cada passo. Escopo decidido com o usuário: o SAC AVANÇA onde é ele quem age (enviar o orçamento, aprovar ou
+// reprovar, iniciar e concluir a execução, enviar ao Fiscal, entregar, cancelar) e pode VOLTAR UMA etapa, com motivo. As etapas da Produção (Provisionada, Verificação…), da Qualidade (CQ) e do Fiscal
+// (Aguardando Emissão NF) continuam sendo dos setores: nenhum movimento entra nelas nem sai delas por aqui, para não pular o CQ nem o Fiscal. Esta parte é só a regra (sem tela, para testar em unidade).
+export type TipoMovimento = 'avancar' | 'voltar' | 'cancelar';
+export type Movimento = { id: string; processo: string; para: string; rotulo: string; ajuda: string; tipo: TipoMovimento };
+const mov = (processo: string, para: string, rotulo: string, ajuda: string, tipo: TipoMovimento = 'avancar'): Movimento => ({ id: `${processo}>${para}`, processo, para, rotulo, ajuda, tipo });
+
+/**
+ * Os movimentos que o SAC pode fazer com a OS agora (vazio = nenhum: a OS está com outro setor, ou encerrada). Cada movimento tem um `processo`: o que a tela abre (uma janela que já existia, como "Enviar
+ * orçamento" ou "Enviar ao Fiscal", ou a janela de dados nova). "Cancelar" vale em qualquer etapa antes do Fiscal (a mesma regra da S4).
+ */
+export function movimentosDaOS(os: any): Movimento[] {
+  if (!os || STATUS_OS_ENCERRADOS.includes(os.status)) return [];
+  const m: Movimento[] = [];
+  const veicular = !!os.is_manutencao_veicular;
+  const semCobranca = osSemCobranca(os);
+  const volta = (para: string) => m.push(mov('voltar', para, `Voltar para ${para}`, 'Volta uma etapa: pede o motivo, que vai ao histórico', 'voltar'));
+  const entrega = () => mov(veicular ? 'entregar_veicular' : 'entregar_lab', 'Entregue', 'Entregar ao cliente', 'Abre a janela de entrega');
+  switch (os.status) {
+    case 'Aberta':
+      m.push(mov('abrir_diagnostico', 'Diagnóstico', 'Abrir o diagnóstico', 'Abre a demanda de diagnóstico para o Laboratório'));
+      m.push(mov('seguir_vendida', 'Aprovado', 'Seguir como vendida', 'A OS já está vendida: vai direto para a execução, sem cotação (o SAC escolhe quem executa)'));
+      break;
+    case 'Diagnóstico':
+      if (!veicular) m.push(mov('informar_orcamento', 'Orçamento Pronto', 'Informar o orçamento', 'Informa o valor do orçamento (o Laboratório normalmente faz isso na demanda dele)'));
+      break;
+    case 'Orçamento Pronto':
+      m.push(mov('enviar_orcamento', 'Orç. Enviado', 'Enviar o orçamento ao cliente', 'Abre a janela de envio do orçamento'));
+      volta('Diagnóstico');
+      break;
+    case 'Orç. Enviado':
+      m.push(mov('aprovar', 'Aprovado', 'Aprovado pelo cliente', 'Abre a janela de aprovação (nome de quem aprovou e assinatura)'));
+      m.push(mov('reprovar', 'Reprovado', 'Reprovado pelo cliente', 'Abre a janela de reprovação (motivo e retirada)'));
+      volta('Orçamento Pronto');
+      break;
+    case 'Aprovado':
+      m.push(mov('iniciar_execucao', 'Em Execução', 'Iniciar a execução', 'Informa quem executa e a data de início'));
+      if (!semCobranca && !os.quem_executa) volta('Orç. Enviado');   // a OS lançada pelo card e a garantia nasceram aprovadas: não há etapa de antes
+      break;
+    case 'Em Execução':
+      if (!veicular) {   // a execução do veículo é da Produção
+        m.push(os.quem_executa === 'sac' ? mov('concluir_sac', 'Concluído', 'Concluir a OS', 'O SAC conclui: confirma que o serviço terminou') : mov('concluir_lab', 'Concluído', 'Concluir a execução', 'Confirma a conclusão (o Laboratório normalmente faz isso na demanda dele)'));
+        if (os.quem_executa !== 'sac') volta('Aprovado');
+      }
+      break;
+    case 'Concluído':
+      m.push(semCobranca ? entrega() : mov('enviar_fiscal_lab', 'Aguardando Emissão NF', 'Enviar ao Fiscal', 'Abre a janela do Fiscal (valor e CPF ou CNPJ da nota)'));
+      if (!veicular) volta('Em Execução');   // o veículo concluído vem do CQ, que é da Qualidade
+      break;
+    case 'Em Cotação':
+      m.push(semCobranca ? mov('seguir_sem_cotacao', 'Em Provisionamento', 'Seguir sem cotação', 'Garantia: não há cotação a fazer; segue para a Produção marcar a data') : mov('enviar_cotacao', 'Aguardando Aprovação Cliente', 'Enviar a cotação', 'Envia a cotação ao cliente (precisa dos itens da cotação)'));
+      break;
+    case 'Aguardando Aprovação Cliente':
+      if (os.tipo_avaliacao === 'Remota' && !os.data_chegada_veiculo) {
+        m.push(mov('aprovar_cotacao', 'Em Provisionamento', 'Cotação aprovada', 'O cliente aprovou: a OS segue para a Produção provisionar'));
+        m.push(mov('recusar_cotacao', 'Reprovado', 'Cotação recusada', 'O cliente recusou a cotação'));
+        volta('Em Cotação');
+      } else {
+        m.push(mov('aprovar_orcamento_presencial', 'Aguardando Início', 'Orçamento aprovado', 'O cliente aprovou o orçamento de verificação: a manutenção pode iniciar'));
+        m.push(mov('recusar_cotacao', 'Reprovado', 'Orçamento recusado', 'O cliente recusou o orçamento'));
+      }
+      break;
+    case 'Aguardando Aceite SAC':
+      m.push(mov('aceite_sac', 'Provisionada', 'Dar o aceite da data', 'Abre a janela de aceite da data definida pela Produção'));
+      break;
+    case 'Aguardando Envio Fiscal':
+      m.push(mov('enviar_fiscal_veicular', STATUS_AGUARDANDO_NOTA, 'Enviar ao Fiscal', 'Informa os seriais dos itens e envia ao Fiscal'));
+      break;
+    case STATUS_OS_FATURADA:
+      m.push(entrega());
+      break;
+    case 'Reprovado':
+      m.push(mov('reavaliar', veicular ? (os.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento') : 'Diagnóstico', 'Reavaliar', 'Reabre a OS para uma nova avaliação'));
+      break;
+  }
+  if (podeCancelarOS(os)) m.push(mov('cancelar', STATUS_OS_CANCELADA, 'Cancelar a OS', 'Cancela a OS (pede o motivo)', 'cancelar'));
+  return m;
+}
+
+/** Por que a OS não vai para a coluna do quadro onde foi solta (a frase que a pessoa lê). */
+export function porQueNaoVaiParaAColuna(os: any, coluna: ColunaDoQuadro): string {
+  const rotulo = COLUNAS_DO_QUADRO.find(c => c.id === coluna)?.rotulo || coluna;
+  if (!os) return 'OS não encontrada.';
+  if (STATUS_OS_ENCERRADOS.includes(os.status)) return `A ${os.numero_os} está encerrada (${os.status}).`;
+  const a = quemTemQueAgir(os);
+  if (!movimentosDaOS(os).some(x => x.tipo !== 'cancelar')) return `A ${os.numero_os} está com ${a ? `${a.quem === 'SAC' ? 'o SAC' : a.quem === 'Cliente' ? 'o cliente' : `o setor ${a.quem}`} (${os.status}): ${a.oque.toLowerCase()}` : os.status}. O SAC não move a OS nessa etapa.`;
+  return `A ${os.numero_os} não vai para "${rotulo}" a partir de "${os.status}": só se move para a etapa seguinte (ou se volta uma etapa) pelas janelas de cada passo.`;
+}
+
+/** Os movimentos da OS cujo destino fica na coluna do quadro (o arrastar). O cancelamento não tem coluna: fica no menu. */
+export const movimentosParaAColuna = (os: any, coluna: ColunaDoQuadro): Movimento[] => movimentosDaOS(os).filter(x => x.tipo !== 'cancelar' && colunaDoQuadro(x.para) === coluna);
+
+// ── os dados que cada passo pede (só os passos SEM janela própria; os outros reaproveitam a janela que já existe) ─────────────────────────────────────
+export type CampoDoMovimento = { chave: string; rotulo: string; tipo: 'texto' | 'valor' | 'data' | 'select' | 'area'; obrigatorio?: boolean; opcoes?: { valor: string; rotulo: string }[]; ajuda?: string };
+export const CAMPOS_DO_MOVIMENTO: Record<string, CampoDoMovimento[]> = {
+  abrir_diagnostico: [],
+  seguir_vendida: [
+    { chave: 'quem_executa', rotulo: 'Quem executa', tipo: 'select', obrigatorio: true, opcoes: [{ valor: 'laboratorio', rotulo: ROTULOS_QUEM_EXECUTA.laboratorio }, { valor: 'sac', rotulo: ROTULOS_QUEM_EXECUTA.sac }] },
+    { chave: 'valor_total', rotulo: 'Valor da venda (R$)', tipo: 'valor', ajuda: 'Se a OS ainda não tem valor, informe: é o que o Fiscal fatura.' },
+  ],
+  informar_orcamento: [
+    { chave: 'valor', rotulo: 'Valor do orçamento (R$)', tipo: 'valor', obrigatorio: true },
+    { chave: 'condicoes', rotulo: 'Condições de pagamento', tipo: 'texto' },
+  ],
+  iniciar_execucao: [
+    { chave: 'executor', rotulo: 'Quem vai executar', tipo: 'texto', obrigatorio: true },
+    { chave: 'inicio', rotulo: 'Data de início', tipo: 'data', obrigatorio: true },
+  ],
+  concluir_lab: [{ chave: 'observacao', rotulo: 'Observação da conclusão (opcional)', tipo: 'area' }],
+  voltar: [{ chave: 'motivo', rotulo: 'Motivo para voltar a OS', tipo: 'area', obrigatorio: true }],
+};
+/** O passo usa a janela de dados (não tem janela própria)? Vale também para o que só pede a confirmação (sem campos), como abrir o diagnóstico. */
+export const movimentoPedeDados = (processo: string): boolean => processo in CAMPOS_DO_MOVIMENTO;
+
+/** O que falta (ou está ilegível) nos dados do passo; vazio = pode gravar. */
+export function validarDadosDoMovimento(processo: string, dados: any): string[] {
+  const falta: string[] = [];
+  for (const c of CAMPOS_DO_MOVIMENTO[processo] || []) {
+    const v = dados?.[c.chave];
+    const vazio = v == null || String(v).trim() === '';
+    if (c.tipo === 'valor') {
+      const r = lerValorDigitado(v);
+      if (r.invalido) falta.push(`${c.rotulo}: valor inválido ("${String(v).trim()}"); use só números, por exemplo 450 ou 1.450,50`);
+      else if (c.obrigatorio && (r.vazio || !(r.valor > 0))) falta.push(`${c.rotulo}: informe um valor maior que zero`);
+    } else if (c.obrigatorio && vazio) falta.push(`${c.rotulo}: obrigatório`);
+  }
+  return falta;
+}
+
+const valorOuNull = (v: any): number | null => { const r = lerValorDigitado(v); return r.valor !== undefined ? r.valor : null; };
+
+/** O que o passo grava na OS (a tela acrescenta `atualizado_em`). Voltar para antes da aprovação limpa a marca de aprovada; o resto da OS não é mexido. */
+export function patchDoMovimento(os: any, movimento: Movimento, dados: any, agora: string): Record<string, any> {
+  switch (movimento.processo) {
+    case 'abrir_diagnostico': return { status: 'Diagnóstico' };
+    case 'seguir_vendida': {
+      const quem = quemExecutaValido(dados?.quem_executa);
+      const valor = valorOuNull(dados?.valor_total);
+      return { status: statusInicialDaOsDoCrm(quem), cobranca: 'cobrada', aprovado: true, quem_executa: quem, ...(valor != null ? { valor_total: valor } : {}) };
+    }
+    case 'informar_orcamento': return { status: 'Orçamento Pronto', valor_orcamento: valorOuNull(dados?.valor), condicoes_pagamento: String(dados?.condicoes || '').trim() || null };
+    case 'iniciar_execucao': return { status: 'Em Execução', tecnico_responsavel: String(dados?.executor || '').trim(), data_inicio_execucao_lab: /^\d{4}-\d{2}-\d{2}$/.test(String(dados?.inicio || '')) ? `${dados.inicio}T12:00:00-03:00` : agora };
+    case 'concluir_lab': return { status: 'Concluído', data_finalizacao_execucao: agora };
+    case 'voltar': return { status: movimento.para, ...(['Orç. Enviado', 'Orçamento Pronto', 'Diagnóstico'].includes(movimento.para) ? { aprovado: null } : {}) };
+    default: return { status: movimento.para };
+  }
+}
+
+/** O recado que fica no histórico da demanda aberta do setor quando o SAC move a OS por fora dela. */
+export const recadoDoMovimento = (os: any, movimento: Movimento, dados: any, usuario: any, agora: string) =>
+  ({ texto: `OS ${os?.numero_os || ''} movida pelo SAC de "${os?.status}" para "${movimento.para}"${String(dados?.motivo || '').trim() ? `. Motivo: ${String(dados.motivo).trim()}` : ''}${String(dados?.observacao || '').trim() ? `. ${String(dados.observacao).trim()}` : ''}. Confira esta demanda.`, usuario: usuario?.nome, hora: agora });

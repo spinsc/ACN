@@ -16,7 +16,9 @@ import GarantiaTab, { gravarGarantia } from './GarantiaTab';
 import { registrarOsGerada } from './GarantiaModelo';
 import EnviarOsAoFiscalModal from './EnviarOsAoFiscalModal';
 import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, osParada, podeCancelarOS, motivoQueNaoCancela, demandasAbertasDaOS, recadoDoCancelamento, camposDoCancelamento,
-  resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE, progressoDaOS, LEGENDAS_DE_FLUXO, COLUNAS_DO_QUADRO, colunaDoQuadro } from './SacFluxo';
+  resumoDoQueEstaComQuem, STATUS_OS_CANCELADA, PRAZO_OS_PARADA_DIAS, OPCOES_OS_PARADA_DIAS, QUEM_AGE, progressoDaOS, LEGENDAS_DE_FLUXO, COLUNAS_DO_QUADRO, colunaDoQuadro,
+  movimentosDaOS, movimentosParaAColuna, porQueNaoVaiParaAColuna, movimentoPedeDados, patchDoMovimento, recadoDoMovimento, demandaDeExecucaoDaOsDoCrm, quemExecutaValido } from './SacFluxo';
+import { EscolherMovimentoModal, DadosDoMovimentoModal } from './MoverOsModal';
 import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -291,6 +293,12 @@ function SacTabCompleto({ currentUser }) {
   // S4 (29/10/2026): quem tem que agir (SAC, Laboratório, Produção…) e "parada há N dias ou mais" (a OS na mesma etapa há N dias)
   const [filtroQuem, setFiltroQuem]           = useState('');
   const [filtroParada, setFiltroParada]       = useState('');
+  // Mover a OS entre as etapas (29/10/2026): o cartão que está sendo arrastado e a coluna sobre a qual ele está; a janela para escolher o passo e a janela de dados do passo
+  const [arrastandoId, setArrastandoId]       = useState<string | null>(null);
+  const [colunaSobre, setColunaSobre]         = useState<string | null>(null);
+  const [movEscolha, setMovEscolha]           = useState<{ os: any; movs: any[] } | null>(null);
+  const [movDados, setMovDados]               = useState<{ os: any; mov: any } | null>(null);
+  const [movSalvando, setMovSalvando]         = useState(false);
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
@@ -1343,6 +1351,10 @@ OK = ACN   |   Cancelar = DETECH`;
       { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
       // S4 (29/10/2026): o fim da OS desistida, duplicada ou criada errada; some do quadro e da lista, com o motivo guardado
       { rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
+      // Mover a OS entre as etapas (29/10/2026): os passos que o SAC pode fazer agora (avançar onde é ele quem age, voltar uma etapa); o mesmo que arrastar o cartão no quadro, e serve no celular
+      ...movimentosDaOS(os).filter((m: any) => m.tipo !== 'cancelar').map((m: any) => ({
+        rotulo: m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`, titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : mdiArrowRight, onClick: () => executarMovimento(os, m),
+      })),
     ]} />);
     return btns;
   };
@@ -1390,6 +1402,98 @@ OK = ACN   |   Cancelar = DETECH`;
     if (falhas.length) mostrarAviso(`A ${os.numero_os} foi cancelada, mas não foi possível deixar o recado em ${falhas.length} demanda(s): ${falhas.join('; ')}. Avise o setor para encerrar a demanda.`, 'erro');
     notificarEvento('sac_os_cancelada', `*OS ${os.numero_os} CANCELADA*\nCliente: ${os.cliente_nome}\nMotivo: ${String(motivo).trim()}\nPor: ${currentUser?.nome}` + (setores.length ? `\nEncerrar a demanda: ${setores.join(', ')}` : ''));
     fetchOrdens();
+  };
+
+  // ── MOVER A OS ENTRE AS ETAPAS (pedido do usuário em 29/10/2026) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Arrastar o cartão para outra coluna do quadro, ou "Mover para…" no menu ⋯. As regras (quais passos o SAC faz: avançar onde é ele quem age e voltar UMA etapa com motivo) estão em SacFluxo.ts,
+  // `movimentosDaOS`. O passo que já tinha janela (enviar orçamento, aprovar, reprovar, Fiscal, entrega, cotação, aceite, cancelar) abre a janela de sempre; os que não tinham pedem os dados em `DadosDoMovimentoModal`.
+  const reavaliarOS = async (os: any) => {
+    if (!await confirmar(`Reabrir a ${os.numero_os} para uma nova avaliação?`)) return;
+    const para = os.is_manutencao_veicular ? (os.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento') : 'Diagnóstico';
+    const { data, error } = await supabase.from('sac_ordens_servico').update({ status: para, aprovado: null, motivo_reprovacao: null, atualizado_em: new Date().toISOString() }).eq('id', os.id).eq('status', 'Reprovado').select('id');
+    if (error) { alert('Não foi possível reabrir a OS: ' + error.message); return; }
+    if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Reprovado' }, newRow: { status: para }, user: currentUser });
+    fetchOrdens();
+  };
+  const abrirProcessoExistente = (os: any, processo: string) => {
+    switch (processo) {
+      case 'enviar_orcamento': setModalOrc(os); setOrcForm({ valor: os.valor_orcamento ? String(os.valor_orcamento) : '', condicoes: os.condicoes_pagamento || '' }); break;
+      case 'aprovar': setModalAprov(os); setAprovForm({ nome: '', sig: null, data_entrega: '' }); break;
+      case 'reprovar': setModalRepr(os); setReprForm({ motivo: '', data_retirada: '', nome_retirada: '' }); break;
+      case 'enviar_fiscal_lab': setModalFiscalOS(os); break;
+      case 'enviar_fiscal_veicular': {
+        const itens = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0 ? os.materiais_utilizados.map((i: any) => ({ ...i })) : [{ codigo: '', descricao: '', quantidade: 1, valor_unitario: 0, numero_serie: '' }];
+        setFiscalItens(itens); setModalEnviarFiscal(os); break;
+      }
+      case 'entregar_lab': setModalSaida(os); setSaidaForm({ nome: '', sig: null }); setFotosSaidaFiles([]); break;
+      case 'entregar_veicular': liberarEntregaVeicular(os); break;
+      case 'cancelar': cancelarOS(os); break;
+      case 'concluir_sac': concluirOsPeloSac(os); break;
+      case 'enviar_cotacao':
+        if (!(os.itens_cotacao?.length > 0)) { alert('Adicione os itens da cotação antes de enviar (botão "Itens" da OS).'); break; }
+        enviarCotacaoCliente(os); break;
+      case 'aprovar_cotacao': aprovarCotacao(os); break;
+      case 'aprovar_orcamento_presencial': aprovarOrcamentoPresencial(os); break;
+      case 'recusar_cotacao': recusarCotacao(os); break;
+      case 'aceite_sac': setModalAceiteSAC(os); break;
+      case 'seguir_sem_cotacao': seguirSemCotacao(os); break;
+      case 'reavaliar': reavaliarOS(os); break;
+    }
+  };
+  const executarMovimento = (os: any, mov: any) => {
+    if (movimentoPedeDados(mov.processo)) { setMovDados({ os, mov }); return; }
+    abrirProcessoExistente(os, mov.processo);
+  };
+  // O cartão foi solto numa coluna: sem passo possível, a frase diz por quê; com um, executa; com mais de um, a pessoa escolhe.
+  const soltarNaColuna = (colId: string) => {
+    const os = ordens.find((x: any) => x.id === arrastandoId);
+    setArrastandoId(null); setColunaSobre(null);
+    if (!os) return;
+    // várias etapas do SAC ficam DENTRO da mesma coluna ("Em andamento"): soltar na própria coluna oferece os passos dela, sempre pela janela de escolha (um arrasto acidental não executa nada)
+    const mesma = colunaDoQuadro(os.status) === colId;
+    const movs = movimentosParaAColuna(os, colId as any);
+    if (!movs.length) { if (!mesma) mostrarAviso(porQueNaoVaiParaAColuna(os, colId as any), 'atencao'); return; }
+    if (movs.length === 1 && !mesma) executarMovimento(os, movs[0]); else setMovEscolha({ os, movs });
+  };
+  // Grava os passos da janela de dados. A gravação só pega se a OS ainda está na etapa que a pessoa viu; a demanda aberta do setor recebe um recado (não é fechada por mim); abrir o diagnóstico e
+  // seguir como vendida (Laboratório) criam a demanda que a OS precisa para andar. A leitura das demandas que falhar avisa em vermelho (a OS já foi movida).
+  const gravarMovimento = async (os: any, mov: any, dados: any) => {
+    if (movSalvando) return;
+    setMovSalvando(true);
+    try {
+      const agora = new Date().toISOString();
+      const patch = { ...patchDoMovimento(os, mov, dados, agora), atualizado_em: agora };
+      const { data, error } = await supabase.from('sac_ordens_servico').update(patch).eq('id', os.id).eq('status', os.status).select('id');
+      if (error) { alert('Não foi possível mover a OS: ' + error.message); return; }
+      if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada: confira e tente de novo.`); setMovDados(null); fetchOrdens(); return; }
+      logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: { ...patch, motivo_da_mudanca: String(dados?.motivo || '').trim() || undefined }, user: currentUser });
+      setMovDados(null);
+      const falhas: string[] = [];
+      const defeito = os.defeito_reclamado || (Array.isArray(os.equipamentos_lista) ? os.equipamentos_lista[0]?.defeito : '') || '';
+      let novaDemanda: any = null;
+      if (mov.processo === 'abrir_diagnostico') {
+        novaDemanda = { setor_destino: 'Laboratorio', descricao: `[SAC-DIAG] ${os.numero_os} — ${os.equipamento_nome || '—'} | ${String(defeito).trim() || 'Ver OS'}`, numero_opl: os.numero_os, status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, data_abertura: agora, sac_os_id: os.id, sac_fase: 'diagnostico',
+          logs_demanda: [{ texto: 'OS aberta para diagnóstico e elaboração de orçamento (movida pelo SAC).', usuario: currentUser?.nome, hora: agora }] };
+      } else if (mov.processo === 'seguir_vendida' && quemExecutaValido(dados?.quem_executa) === 'laboratorio') {
+        novaDemanda = demandaDeExecucaoDaOsDoCrm({ numero: os.numero_os, equipamento: os.equipamento_nome, defeito, usuario: currentUser, agora, osId: os.id });
+      }
+      if (novaDemanda) {
+        const { error: erroNova } = await supabase.from('demandas_setoriais').insert([novaDemanda]);
+        if (erroNova) falhas.push(`a demanda para o Laboratório não foi criada (${erroNova.message})`);
+      } else {
+        // a OS foi movida por fora da demanda aberta do setor: ela recebe o recado (e o setor decide se a encerra)
+        const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+        if (erroDem) falhas.push(`não consegui ler as demandas da OS para deixar o recado (${erroDem.message})`);
+        else for (const d of demandasAbertasDaOS(dem || [])) {
+          const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoMovimento(os, mov, dados, currentUser, agora)] }).eq('id', d.id);
+          if (erroRecado) falhas.push(`o recado na demanda de ${d.setor_destino} (${erroRecado.message})`);
+        }
+      }
+      if (falhas.length) mostrarAviso(`A ${os.numero_os} foi movida para "${mov.para}", mas não foi possível concluir tudo: ${falhas.join('; ')}. Avise o setor.`, 'erro');
+      notificarEvento('sac_os_movida', `*OS ${os.numero_os} movida pelo SAC*\n${os.status} → ${mov.para}\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}` + (String(dados?.motivo || '').trim() ? `\nMotivo: ${String(dados.motivo).trim()}` : ''));
+      fetchOrdens();
+    } finally { setMovSalvando(false); }
   };
 
   // ── COPIAR OS (pedido do usuário em 23/10/2026): várias OS iguais, cada uma com o seu número ──────────────────────────────────────────────────────────────────────────────
@@ -2198,7 +2302,11 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 {COLUNAS_KANBAN.map(col => {
                   const cards = itensDaColuna(col.id);
                   return (
-                    <div key={col.id} className={'acn-kb-col ' + col.id} aria-label={col.rotulo}>
+                    <div key={col.id} aria-label={col.rotulo}
+                      className={'acn-kb-col ' + col.id + (arrastandoId ? (movimentosParaAColuna(ordens.find((x: any) => x.id === arrastandoId), col.id as any).length ? ' alvo-ok' : ' alvo-nao') + (colunaSobre === col.id ? ' sobre' : '') : '')}
+                      onDragOver={e => { if (arrastandoId) { e.preventDefault(); if (colunaSobre !== col.id) setColunaSobre(col.id); } }}
+                      onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setColunaSobre(c => (c === col.id ? null : c)); }}
+                      onDrop={e => { e.preventDefault(); soltarNaColuna(col.id); }}>
                       <div className="acn-kb-cab"><span>{col.rotulo}</span><Selo familia={col.familia} ponto={false}>{cards.length}</Selo></div>
                       <div className="acn-kb-corpo">
                         {cards.length === 0 && <div className="acn-empty">Nenhuma OS</div>}
@@ -2207,7 +2315,10 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                           const o = item.o;
                           const valor = valorDaOS(o);
                           return (
-                            <div key={o.id} className={'acn-kb-card abrivel' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '')}
+                            <div key={o.id} className={'acn-kb-card abrivel' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '') + (arrastandoId === o.id ? ' arrastando' : '')}
+                              draggable={movimentosDaOS(o).some((m: any) => m.tipo !== 'cancelar')}
+                              onDragStart={e => { setArrastandoId(o.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(o.id)); }}
+                              onDragEnd={() => { setArrastandoId(null); setColunaSobre(null); }}
                               title="Clique para ver o resumo completo da OS"
                               onClick={e => { if ((e.target as HTMLElement).closest('button, a, select, input, textarea, [data-nao-abrir]')) return; setResumoOS(o); }}>
                               <div className="acn-kb-topo">
@@ -3397,6 +3508,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       )}
 
       {/* MODAL ACOMPANHAMENTO DA OS */}
+      {movEscolha && <EscolherMovimentoModal os={movEscolha.os} movimentos={movEscolha.movs} onClose={() => setMovEscolha(null)} onEscolher={(m: any) => { const os = movEscolha.os; setMovEscolha(null); executarMovimento(os, m); }} />}
+      {movDados && <DadosDoMovimentoModal os={movDados.os} movimento={movDados.mov} salvando={movSalvando} onClose={() => setMovDados(null)} onConfirmar={(d: any) => gravarMovimento(movDados.os, movDados.mov, d)} />}
       {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} fichaNumero={numerosFichas[resumoOS.garantia_id]} onAbrirFicha={() => { abrirFichaDaOS(resumoOS); setResumoOS(null); }} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
       {comprasOS && <ModalComprasDaOS os={ordens.find((x: any) => x.id === comprasOS.id) || comprasOS} currentUser={currentUser} onClose={() => setComprasOS(null)} />}
       {modalAcomp && (

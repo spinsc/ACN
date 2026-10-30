@@ -782,6 +782,14 @@ html body .sec-body.acn-sac-legenda { display: flex; flex-direction: column; ali
 .acn-sac-barra .passo.feita { background: var(--acn-ok); }
 .acn-sac-barra .passo.atual { background: var(--acn-info); }
 .acn-kb.com-fiscal { grid-template-columns: repeat(4, minmax(230px, 1fr)); }
+/* Mover a OS arrastando (29/10/2026): o cartão arrastável, o que está sendo arrastado e as colunas que aceitam ou não a OS */
+.acn-kb-card[draggable="true"] { cursor: grab; }
+.acn-kb-card.arrastando { opacity: .45; }
+.acn-kb-col.alvo-ok { outline: 2px dashed var(--acn-ok); outline-offset: -2px; }
+.acn-kb-col.alvo-ok.sobre { background: var(--acn-ok-soft); }
+.acn-kb-col.alvo-nao { opacity: .6; }
+.acn-modal-mover { max-width: 520px; width: 92vw; }
+.acn-mover-opcoes { display: flex; flex-direction: column; gap: 8px; }
 .acn-sac-passos { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .acn-sac-passos li { padding: 3px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--acn-line); color: var(--acn-ink-3, #5b6573); }
 .acn-sac-passos li.feita { background: var(--acn-ok-soft); border-color: var(--acn-ok); color: var(--acn-ok); }
