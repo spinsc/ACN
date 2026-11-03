@@ -428,11 +428,11 @@ Há **três listas**, nas abas internas: **Equipamentos**, **Categorias (Tipo Pr
 
 1. Aba **Cadastros > Tipos de Serviço**.
 2. Digite o nome em **"Nome do tipo de serviço..."** e clique **Adicionar**.
-3. **Desativar / Ativar** liga e desliga.
+3. **Desativar / Ativar** liga e desliga. Antes de desativar, a tela **pergunta se você tem certeza**.
 
-> **Atenção:** o tipo **Garantia** é **especial**: o sistema reconhece a OS de garantia **por esse nome** (a ficha, a OS sem cobrança, tudo depende dele). **Não desative nem renomeie o tipo "Garantia"**: se desativar, **a garantia deixa de abrir OS**. A tela hoje **não protege** esse botão: está nos pontos de melhoria.
+> **Atenção:** o tipo **Garantia** é **especial**: o sistema reconhece a OS de garantia **por esse nome** (a ficha, a OS sem cobrança, tudo depende dele). Por isso ele aparece com o selo **"Tipo do sistema"** e **não tem o botão Desativar**. **Não renomeie** o tipo "Garantia".
 
-> **Atenção:** quando uma lista está **vazia**, a tela mostra uma mensagem técnica ("Rode o SQL ... no Supabase"). Se você a vir, **avise a TI**: significa que o cadastro não foi montado. A lista de tipos de serviço tem uma reserva (Orçamento, Conserto, Troca, Garantia) que aparece sozinha.
+> **Atenção:** quando uma lista está **vazia**, a tela mostra o aviso "Nenhum tipo de serviço cadastrado. Avise a TI." (ou o equivalente da lista). Se você o vir, **avise a TI**: significa que o cadastro não foi montado. A lista de tipos de serviço tem uma reserva (Orçamento, Conserto, Troca, Garantia) que aparece sozinha.
 
 ---
 
@@ -448,7 +448,7 @@ Há **três listas**, nas abas internas: **Equipamentos**, **Categorias (Tipo Pr
 | **Preciso abrir uma OS de garantia** | Primeiro a **ficha** (aba Garantia). Depois **Gerar OS de execução** na ficha |
 | **O cliente aprovou, mas a assinatura não subiu** | A aprovação **não foi registrada**. A janela fica aberta com o que você digitou: tente de novo (confira a conexão) |
 | **A OS "sumiu" da lista** | Confira os **filtros** (botão **Limpar**) e a faixa acima do quadro: OS **Reprovada** e **Cancelada** ficam fora do quadro e só aparecem na lista, pelo filtro de status |
-| **A OS está parada em outra etapa** | O cartão diz **"Aguarda: ..."** e **"parada há N dias"**. Use **Acomp.** para registrar a cobrança e **@Nome** para avisar o setor |
+| **A OS está parada em outra etapa** | O cartão diz **"Aguarda: ..."** e **"parada há N dias"**. Use **Acompanhamento** para registrar a cobrança e **@Nome** para avisar o setor |
 | **A OS está num setor e eu preciso adiantar** | Se é do **Laboratório**, o menu ⋯ tem **Mover para ...**. Se está com **Produção, Qualidade ou Fiscal**, o SAC **não move**: peça ao setor |
 | **Abri a OS por engano ou o cliente desistiu** | Menu ⋯ > **Cancelar OS** (com motivo). Se já está no Fiscal, o cancelamento passa pelo Fiscal |
 | **O cliente quer a OS sem cobrança, e ela já está concluída** | Menu ⋯ > **Entregar sem nota (cortesia)** (com motivo) |
@@ -513,9 +513,6 @@ Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado 
 
 A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**) lista o que pode ficar mais claro na tela. Os que mais afetam quem opera hoje:
 
-- A **ajuda de "Presencial"** na Nova OS diz que o SAC define a data; **quem marca é a Produção**.
-- **Dois botões "Enviar ao Fiscal"** pedem coisas diferentes (seriais, ou valor e CPF/CNPJ); **três janelas de entrega** (a do veículo não colhe assinatura).
-- **"Garantia"** em Cadastros tem o botão **Desativar** sem confirmação.
+- As **janelas de entrega** são três e a do veículo não colhe assinatura (os botões já dizem o que cada janela pede; unificar é decisão do SAC).
 - **Chamados NFC** não mostram há quantos dias estão abertos.
-- A **barra de progresso** da OS de veículo presencial **volta uma casa** depois da aprovação do orçamento (é só o desenho).
 - A OS de **veículo sem cobrança** ainda aparece nas etapas de verificação e aprovação, que, pela regra, ela não deveria ter (**a confirmar** com a Produção).

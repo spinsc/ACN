@@ -14,7 +14,7 @@
    - **Tipo de serviço\*:** Orçamento, Conserto, Troca ou Garantia (a lista vem da aba Cadastros).
    - **Categoria (tipo projeto):** o grupo do serviço (por exemplo, Manutenção Veicular, Serviço Externo, Laboratório).
    - **Tipo de equipamento\*:** o aparelho (Barra sinalizadora, Central de comando, Rádio portátil...). Se não existe, use **+ novo**: ele pede o nome e cadastra na hora.
-   - **Qtd:** quantos equipamentos iguais (de 1 a 20).
+   - **Quantidade:** quantos equipamentos iguais (de 1 a 20).
    ![Bloco Classificação](img/34a-nova-os-classificacao.jpg)
 3. **Se for manutenção em veículo**, marque a caixa **OS de Veículo / Manutenção Veicular**. Aparecem a **Manutenção Veicular** e a escolha do **Tipo de avaliação**: veja [OS de veículo](#os-de-veículo) abaixo.
 4. **Dados do equipamento.** Para cada equipamento:
@@ -45,7 +45,7 @@ Na janela, uma faixa avisa para onde a OS vai: na OS do Laboratório, *"será en
 
 ### Vários equipamentos de uma vez (lote)
 
-Aumente a **Qtd**. A janela mostra **um bloco por equipamento** (Equipamento 1 de 3, 2 de 3...). Marque a caixa **"Criar uma OS para cada equipamento (lote)"**: o sistema cria **uma OS para cada um, cada uma com o seu número**, e o quadro mostra o lote **num cartão só**.
+Aumente a **Quantidade**. A janela mostra **um bloco por equipamento** (Equipamento 1 de 3, 2 de 3...). Marque a caixa **"Criar uma OS para cada equipamento (lote)"**: o sistema cria **uma OS para cada um, cada uma com o seu número**, e o quadro mostra o lote **num cartão só**.
 
 ![Vários equipamentos e a opção de lote](img/34k-nova-os-varios-equipamentos-lote.jpg)
 
@@ -91,7 +91,7 @@ Na **garantia sem cobrança** o bloco não deixa escolher: diz que *"Garantia se
 | **Remota** | O preço sai **antes** de o veículo chegar. Você monta a **cotação** (itens e valores) e o cliente aprova. Depois a Produção marca a data | O defeito já é conhecido e dá para orçar sem ver o carro |
 | **Presencial** | O **veículo vem primeiro**: a Produção marca a data, o veículo chega, a Produção examina e **insere os materiais** do orçamento. Aí o cliente aprova | O defeito só se descobre com o veículo na oficina |
 
-> **Atenção:** a ajuda que aparece abaixo de "Presencial" na tela diz *"SAC define data de entrega do veículo (Provisionamento)"*. **Está desatualizada**: quem marca a data é a **Produção**; o SAC só dá o **aceite**. Este é um dos pontos de melhoria listados na análise.
+> **Dica:** a ajuda que aparece abaixo de "Presencial" na tela diz o que acontece de fato: *"A Produção marca a data do atendimento; o SAC confirma a data com o cliente (Aceite SAC)"*.
 
 **Acompanhamento de Engenharia** (caixa à direita): marque quando a Engenharia precisa acompanhar o serviço. Cria uma demanda a mais para ela.
 
@@ -204,7 +204,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Passo a passo:**
 
-1. **Ver Orç.** abre o orçamento só para leitura. **Editar** deixa trocar itens e valores. Ao salvar, o total é recalculado e uma eventual **revisão pendente** é resolvida.
+1. **Ver orçamento** abre o orçamento só para leitura. **Editar** deixa trocar itens e valores. Ao salvar, o total é recalculado e uma eventual **revisão pendente** é resolvida.
 2. Quando o cliente decidir, clique **Aprovado** (o sistema pede confirmação) ou **Recusado**.
 
 **O que acontece:** **Aprovado** grava a aprovação e leva a OS para **Aguardando Início**: a Produção atribui o técnico e inicia. **Recusado** leva a OS para **Reprovado**.
@@ -250,7 +250,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Passo a passo:**
 
-1. Clique **Enviar ao Fiscal** (botão verde).
+1. Clique **Enviar ao Fiscal — valor e CPF/CNPJ** (botão verde).
 2. Confira o **Valor total da OS (R$)\***: vem do orçamento aprovado quando existe. É o valor da nota. **Tem de ser maior que zero.**
 3. Digite o **CPF ou CNPJ para a nota\*** (**11 dígitos** para CPF, **14** para CNPJ). Pode ser o do cliente ou de outro, se a nota sai em outro nome.
 4. (Opcional) **Razão social ou nome na nota** e **Endereço de faturamento**.
@@ -268,7 +268,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Passo a passo:**
 
-1. Clique **Enviar para Fiscal** (botão verde).
+1. Clique **Enviar ao Fiscal — informar seriais** (botão verde).
 2. A janela lista os itens instalados (descrição e quantidade). Digite o **Nº de série** de cada item.
 3. Clique **Enviar para Fiscal**.
 
@@ -284,7 +284,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Entrega de OS do Laboratório:**
 
-1. Clique **Entrega**.
+1. Clique **Entrega — assinatura e fotos**.
 2. Digite o **Nome de quem retirou\***.
 3. (Opcional) **Fotos de saída**: escolha as imagens do equipamento entregue.
 4. Peça a **assinatura de retirada\*** e desenhe no quadro; clique **Confirmar assinatura**.
@@ -292,7 +292,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ![Janela Entrega (Laboratório)](img/20-entrega.jpg)
 
-**Entrega do veículo:** a janela é mais simples e pede só o **nome de quem recebeu o veículo\***. Não pede assinatura nem fotos.
+**Entrega do veículo:** o botão é **Entrega — nome de quem recebeu** e a janela é mais simples: pede só o **nome de quem recebeu o veículo\***. Não pede assinatura nem fotos.
 
 **O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome e, no Laboratório, a assinatura e as fotos. Avisa por WhatsApp ("OS entregue"). A OS entregue **continua na lista e no quadro**, em **Concluído**.
 
@@ -322,7 +322,7 @@ O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só apa
 
 | Item | O que faz | Quando aparece |
 |---|---|---|
-| **Resp.** | Troca o **responsável da OS** (escolha o novo na lista e **Salvar**) | Enquanto a OS não está Entregue nem Cancelada |
+| **Responsável** | Troca o **responsável da OS** (escolha o novo na lista e **Salvar**) | Enquanto a OS não está Entregue nem Cancelada |
 | **Financeiro** | **Valor total** e **Mão de obra** (a comissão lê). Mostra a **data de faturamento**, que vem da nota do Fiscal e **não se digita** | Sempre |
 | **Compras** | Lista as compras ligadas à OS e permite **Solicitar compra** ao Compras (fica ligada à OS) | Sempre |
 | **Anexar** | Envia arquivos (imagens, PDFs, Word, Excel) para a OS | Sempre |
@@ -344,14 +344,14 @@ O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só apa
 
 ![Anexar arquivos](img/25-anexar-arquivos.jpg)
 
-- **Resp.:** o novo responsável fica gravado no histórico de alterações.
+- **Responsável:** o novo responsável fica gravado no histórico de alterações.
 - **Financeiro:** só um campo **em branco** vira vazio; um valor **0** que já estava gravado continua 0. Valor e mão de obra mudados ficam no histórico, com o valor de antes.
 - **Compras:** mostra "Compras desta OS (N)" com o andamento de cada uma. **Solicitar compra** abre a solicitação **ligada à OS**; no Compras ela aparece com o selo **"Demanda de OS (SAC)"**.
 - **Anexar:** escolha os arquivos e clique **Enviar arquivos**. Se algum não subir, **nenhum é anexado** e a escolha fica para você tentar de novo.
 
 ### Acompanhamento
 
-O botão **Acomp.** (sempre à vista no cartão) abre a janela **Acompanhamentos** da OS: o caderno do atendimento. Escreva o andamento, uma decisão ou uma pendência no campo **Novo acompanhamento** (use **@Nome** para avisar alguém) e clique **Registrar**. Cada registro mostra quem escreveu e quando.
+O botão **Acompanhamento** (sempre à vista no cartão) abre a janela **Acompanhamentos** da OS: o caderno do atendimento. Escreva o andamento, uma decisão ou uma pendência no campo **Novo acompanhamento** (use **@Nome** para avisar alguém) e clique **Registrar**. Cada registro mostra quem escreveu e quando.
 
 ![Janela de acompanhamentos](img/21-acompanhamento.jpg)
 

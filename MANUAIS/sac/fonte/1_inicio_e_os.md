@@ -130,7 +130,7 @@ O quadro tem **quatro colunas**. Cada OS fica na coluna da etapa em que está:
 | **NO FISCAL / AGUARDANDO ENTREGA** | Aguardando Envio Fiscal, Aguardando Emissão NF, Faturada - Aguardando Entrega |
 | **CONCLUÍDO** | Concluído, Entregue |
 
-O número no canto de cada coluna é a quantidade de cartões. Você pode **arrastar o cartão** de uma coluna para outra: veja *Mover a OS entre as etapas*.
+O número no canto de cada coluna é a quantidade de cartões. Você pode **arrastar o cartão** de uma coluna para outra: veja *Mover a OS entre as etapas*. Uma dica acima do quadro lembra que, **no celular e no tablet, o arrastar não funciona**: use o menu **⋯ > Mover para…** do cartão.
 
 Duas faixas podem aparecer acima do quadro: **"N OS reprovadas ficam fora do quadro"** e **"N OS canceladas ficam fora do quadro e da lista"**. O botão **Ver na lista** leva até elas.
 
@@ -138,7 +138,7 @@ Duas faixas podem aparecer acima do quadro: **"N OS reprovadas ficam fora do qua
 
 ![A lista de OS](img/11-lista.jpg)
 
-Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, ficha e lote), **Tipo**, **Atend.** (Presencial ou Remota), **Equipamento**, **Cliente**, **Abertura**, **Prazo Orç.**, **Valor**, **KPI Orç.**, **KPI Exec.**, **Status** e **Ações**.
+Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, ficha e lote), **Tipo**, **Atendimento** (Presencial ou Remota), **Equipamento**, **Cliente**, **Abertura**, **Prazo do orçamento**, **Valor**, **Tempo do orçamento**, **Tempo da execução**, **Status** e **Ações**.
 
 - A linha fica **rosada** quando a OS está **Reprovada** ou **parada**.
 - **KPI Exec.** só aparece na OS remota: compara as **horas cobradas na cotação** com as **horas reais** apontadas pela Produção. **▲** quer dizer que você cobrou mais horas do que a Produção levou; **▼**, menos.
@@ -161,8 +161,8 @@ Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, fic
 | **Aguarda: SAC** | Quem tem que agir agora |
 | **há 3 dias nesta etapa** | Tempo na etapa. Vira **"parada há 9 dias"**, em vermelho, a partir de 7 dias |
 | **Barra com "etapa 2 de 9"** | Quanto da viagem a OS já fez, pelo caminho dela. As partes **verdes** estão feitas, a **azul** é a atual |
-| **Abertura, Prazo orç., R$** | Datas e valor |
-| **Acomp.** | Acompanhamento da OS (anotações do setor) |
+| **Abertura, prazo do orçamento, R$** | Datas e valor |
+| **Acompanhamento** | Acompanhamento da OS (anotações do setor) |
 | **Botão verde** (por exemplo, **Enviar**) | O passo que a OS espera de **você** nesta etapa |
 | **⋯** | Menu com as outras ações |
 
@@ -234,8 +234,6 @@ Na avaliação **presencial** o veículo vem primeiro e o orçamento sai da **ve
 | **Aguardando Início** | Produção | Atribui o técnico e inicia |
 | **Em Execução, Aguardando CQ** | Produção, Qualidade | Executam e conferem |
 | **Aguardando Envio Fiscal** e depois | **SAC**, Fiscal | Igual ao caminho 3 |
-
-> **Atenção:** a barra de progresso do cartão, neste caminho, **volta uma casa** quando você aprova o orçamento (a etapa "Aguardando Início" é desenhada como "Provisionada"). A OS não voltou: é só o desenho da barra.
 
 ### Caminho 5: veículo, sem cobrança (garantia ou cortesia)
 

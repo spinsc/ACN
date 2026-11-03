@@ -306,11 +306,11 @@ export const CAMINHOS_DA_OS = {
   laboratorio: ['Diagnóstico', 'Orçamento Pronto', 'Orç. Enviado', 'Aprovado', 'Em Execução', 'Concluído', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
   laboratorioSemCobranca: ['Aprovado', 'Em Execução', 'Concluído', 'Entregue'],
   veicularRemota: ['Em Cotação', 'Aguardando Aprovação Cliente', 'Em Provisionamento', 'Aguardando Aceite SAC', 'Provisionada', 'Em Execução', 'Aguardando CQ', 'Aguardando Envio Fiscal', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
-  veicularPresencial: ['Em Provisionamento', 'Aguardando Aceite SAC', 'Provisionada', 'Verificação e Orçamento', 'Aguardando Aprovação Cliente', 'Em Execução', 'Aguardando CQ', 'Aguardando Envio Fiscal', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
+  veicularPresencial: ['Em Provisionamento', 'Aguardando Aceite SAC', 'Provisionada', 'Verificação e Orçamento', 'Aguardando Aprovação Cliente', 'Aguardando Início', 'Em Execução', 'Aguardando CQ', 'Aguardando Envio Fiscal', 'Aguardando Emissão NF', 'Faturada - Aguardando Entrega', 'Entregue'],
   veicularSemCobranca: ['Em Provisionamento', 'Provisionada', 'Em Execução', 'Aguardando CQ', 'Concluído', 'Entregue'],
 } as const;
 
-/** Nomes que valem como outra etapa do caminho ("Aguardando Início" é a Provisionada à espera do início). */
+/** Nomes que valem como outra etapa do caminho ("Aguardando Início" é a Provisionada à espera do início). Só vale quando o caminho NÃO tem a etapa própria: o veículo presencial tem "Aguardando Início" depois da aprovação do orçamento (M11, 03/11/2026; antes a barra desenhava as duas na mesma casa e voltava uma casa quando o cliente aprovava). */
 const ETAPA_EQUIVALENTE: Record<string, string> = { 'Aguardando Início': 'Provisionada' };
 
 /** O caminho (lista de etapas) em que a OS anda: depende de ser veicular ou do Laboratório, de ser cobrada ou sem cobrança e, no veicular cobrado, de a avaliação ser remota ou presencial. */
@@ -326,7 +326,7 @@ export type PassoDaOS = { nome: string; estado: 'feita' | 'atual' | 'futura' };
 export function progressoDaOS(os: any): { passos: PassoDaOS[]; indice: number; total: number; percentual: number; atual: string } | null {
   if (!os || os.status === STATUS_OS_CANCELADA || os.status === 'Reprovado') return null;
   const etapas = etapasDoCaminho(os);
-  const atual = ETAPA_EQUIVALENTE[os.status] || os.status;
+  const atual = etapas.includes(os.status) ? os.status : (ETAPA_EQUIVALENTE[os.status] || os.status);
   const indice = etapas.indexOf(atual);
   if (indice < 0) return null;
   return {

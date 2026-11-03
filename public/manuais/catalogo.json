@@ -5,8 +5,12 @@
     "titulo": "Manual do SAC",
     "descricao": "Passo a passo das quatro abas do SAC (Ordens de Serviço, Chamados NFC, Garantia e Cadastros): o que cada botão faz, o que o sistema grava e para onde a OS vai.",
     "ordem": 1,
-    "atualizadoEm": "2026-10-30",
+    "atualizadoEm": "2026-11-03",
     "mudancas": [
+      {
+        "data": "2026-11-03",
+        "texto": "Textos e proteções da tela do SAC: botões e colunas com o nome por extenso (Acompanhamento, Responsável, Ver orçamento, Atendimento, Quantidade); os botões Enviar ao Fiscal e Entrega dizem o que a janela pede; o tipo Garantia vira Tipo do sistema (sem Desativar) e os outros cadastros pedem confirmação; o quadro avisa que no celular se usa o menu ⋯; a barra do veículo presencial deixa de voltar uma casa; a ajuda de Presencial e a mensagem de lista vazia foram corrigidas."
+      },
       {
         "data": "2026-10-30",
         "texto": "Primeira versão: as quatro abas, os seis caminhos da OS, o registro de atendimento já realizado, o painel de quem age e a ficha de garantia por inteiro."

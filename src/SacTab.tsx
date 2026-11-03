@@ -446,7 +446,12 @@ function SacTabCompleto({ currentUser }) {
     fetchTiposServico();
   };
 
+  // A4 (03/11/2026, PLANO_SAC_MELHORIAS_UX.md): o sistema reconhece a OS de garantia pelo NOME "Garantia" (a Nova OS pede a ficha, a ficha abre a OS sem cobrança). Desativar esse tipo tira a garantia da Nova OS,
+  // então ele é tipo do sistema: sem botão de desativar, e a função recusa mesmo que alguém chegue nela por outro caminho. Qualquer outro cadastro pede confirmação antes de sair de uso.
+  const ehTipoDoSistema = (t: any) => String(t?.nome || '').trim().toLowerCase() === 'garantia';
   const toggleTipoServico = async (t: any) => {
+    if (t.ativo && ehTipoDoSistema(t)) { mostrarAviso('"Garantia" é um tipo do sistema: sem ele a Nova OS deixa de abrir a OS de garantia. Ele não pode ser desativado.', 'atencao'); return; }
+    if (t.ativo && !await confirmar(`Desativar o tipo de serviço "${t.nome}"?\n\nEle deixa de aparecer na Nova OS. As OS que já existem não mudam.`)) return;
     const { error } = await supabase.from('sac_tipos_servico').update({ ativo: !t.ativo }).eq('id', t.id);
     if (error) { alert('Erro: ' + error.message); return; }
     fetchTiposServico();
@@ -1180,7 +1185,7 @@ OK = ACN   |   Cancelar = DETECH`;
     const btns = [
       // Botão de acompanhamento — sempre visível em qualquer status
       <Botao key="acomp" pequeno icone={mdiMessageTextOutline}
-        onClick={()=>setModalAcomp(os)}>Acomp.</Botao>,
+        onClick={()=>setModalAcomp(os)}>Acompanhamento</Botao>,
     ];
     const eh = os.is_manutencao_veicular;
 
@@ -1234,7 +1239,7 @@ OK = ACN   |   Cancelar = DETECH`;
           btns.push(
             <Botao key="ver" pequeno icone={mdiEyeOutline}
               onClick={()=>{ setOrcProdItens(Array.isArray(os.itens_cotacao)?os.itens_cotacao.map(i=>({...i})):[]); setOrcProdModo('ver'); setModalOrcProd(os); }}>
-              Ver Orç.
+              Ver orçamento
             </Botao>,
             <Botao key="edit" pequeno icone={mdiPencilOutline}
               onClick={()=>{ setOrcProdItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setOrcProdModo('editar'); setModalOrcProd(os); }}>
@@ -1259,8 +1264,8 @@ OK = ACN   |   Cancelar = DETECH`;
       // Concluído (OS veicular): SEM cobrança → SAC entrega o veículo, não vai ao Fiscal; COBRADA → SAC envia ao Fiscal (S2)
       if (os.status === 'Concluído') {
         btns.push(osSemCobranca(os)
-          ? <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
-          : <Botao key="fiscal0" pequeno variante="primario" icone={mdiSendOutline} onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal</Botao>);
+          ? <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede só o nome de quem recebeu o veículo" onClick={()=>liberarEntregaVeicular(os)}>Entrega — nome de quem recebeu</Botao>
+          : <Botao key="fiscal0" pequeno variante="primario" icone={mdiSendOutline} title="Pede o valor e o CPF ou CNPJ da nota" onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal — valor e CPF/CNPJ</Botao>);
       }
       // Aguardando CQ → sem ação do SAC, Qualidade que audita
       if (os.status === 'Aguardando CQ') {
@@ -1276,7 +1281,7 @@ OK = ACN   |   Cancelar = DETECH`;
                 : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0,numero_serie:''}];
               setFiscalItens(itens); setModalEnviarFiscal(os);
             }}>
-            Enviar para Fiscal
+            Enviar ao Fiscal — informar seriais
           </Botao>
         );
       }
@@ -1287,7 +1292,7 @@ OK = ACN   |   Cancelar = DETECH`;
       // Faturada - Aguardando Entrega → SAC entrega o veículo
       if (os.status === 'Faturada - Aguardando Entrega') {
         btns.push(
-          <Botao key="entrega2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
+          <Botao key="entrega2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede só o nome de quem recebeu o veículo" onClick={()=>liberarEntregaVeicular(os)}>Entrega — nome de quem recebeu</Botao>
         );
       }
       // Reprovado veicular → reavaliar
@@ -1335,21 +1340,21 @@ OK = ACN   |   Cancelar = DETECH`;
       // Lab concluiu o reparo → OS COBRADA vai ao Fiscal (S2, 27/10/2026); SEM cobrança → SAC faz a entrega
       if (os.status === 'Concluído')
         btns.push(osSemCobranca(os)
-          ? <Botao key="saida" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega</Botao>
-          : <Botao key="fiscal" pequeno variante="primario" icone={mdiSendOutline} onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal</Botao>
+          ? <Botao key="saida" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede o nome de quem recebeu, as fotos e a assinatura" onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega — assinatura e fotos</Botao>
+          : <Botao key="fiscal" pequeno variante="primario" icone={mdiSendOutline} title="Pede o valor e o CPF ou CNPJ da nota" onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal — valor e CPF/CNPJ</Botao>
         );
       // no Fiscal: sem ação do SAC; a nota emitida devolve a OS para a entrega
       if (os.status === 'Aguardando Emissão NF')
         btns.push(<span key="nf" className="acn-fraco acn-sac-espera">Aguardando Fiscal</span>);
       if (os.status === 'Faturada - Aguardando Entrega')
         btns.push(
-          <Botao key="saida2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega</Botao>
+          <Botao key="saida2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede o nome de quem recebeu, as fotos e a assinatura" onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega — assinatura e fotos</Botao>
         );
     }
 
     // Menu ⋯ com o que toda OS tem. Alterar responsável: disponível enquanto a OS não estiver encerrada
     btns.push(<MenuAcoes key="mais" rotulo="Mais ações da OS" itens={[
-      { rotulo: 'Resp.', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
+      { rotulo: 'Responsável', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
         onClick: ()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); } },
       { rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
         onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??''});setModalFinanceiro(os);} },
@@ -1888,6 +1893,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
   };
 
   const toggleEquipamento = async (e) => {
+    if (e.ativo && !await confirmar(`Desativar o equipamento "${e.nome}"?\n\nEle deixa de aparecer na Nova OS. As OS que já existem não mudam.`)) return;
     const { error } = await supabase.from('sac_equipamentos').update({ ativo: !e.ativo }).eq('id', e.id);
     if (error) { alert('Erro: ' + error.message); return; }
     fetchEquipamentos();
@@ -1910,6 +1916,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
   };
 
   const toggleCategoria = async (c) => {
+    if (c.ativo && !await confirmar(`Desativar a categoria "${c.nome}"?\n\nEla deixa de aparecer na Nova OS. As OS que já existem não mudam.` + (isVeicular(c.nome) ? '\n\nAtenção: o sistema reconhece a OS de veículo pelo nome desta categoria. Sem ela, a OS nova de veículo deixa de seguir o caminho do veículo.' : ''))) return;
     const { error } = await supabase.from('sac_categorias').update({ ativo: !c.ativo }).eq('id', c.id);
     if (error) { alert('Erro: ' + error.message); return; }
     fetchCategorias();
@@ -2217,13 +2224,15 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <table className="acn-tabela">
                   <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
                   <tbody>
-                    {tiposServico.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum tipo cadastrado. Rode o SQL sac_tipos_servico.sql no Supabase.</div></td></tr>}
+                    {tiposServico.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum tipo de serviço cadastrado. Avise a TI.</div></td></tr>}
                     {tiposServico.map((t: any) => (
                       <tr key={t.id} className={t.ativo ? '' : 'acn-linha-inativa'}>
                         <td className="acn-forte">{t.nome}</td>
                         <td><Selo familia={t.ativo ? 'ok' : 'neutro'} ponto={false}>{t.ativo?'Ativo':'Inativo'}</Selo></td>
                         <td>
-                          <Botao pequeno variante={t.ativo ? 'perigo-sec' : 'secundario'} onClick={()=>toggleTipoServico(t)}>{t.ativo?'Desativar':'Ativar'}</Botao>
+                          {t.ativo && ehTipoDoSistema(t)
+                            ? <Selo familia="info" ponto={false} title="O sistema reconhece a OS de garantia por este nome: não pode ser desativado">Tipo do sistema</Selo>
+                            : <Botao pequeno variante={t.ativo ? 'perigo-sec' : 'secundario'} onClick={()=>toggleTipoServico(t)}>{t.ativo?'Desativar':'Ativar'}</Botao>}
                         </td>
                       </tr>
                     ))}
@@ -2351,6 +2360,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 {canceladasFora} OS cancelada(s) ficam fora do quadro e da lista — estão no filtro de status "Cancelada".
               </Faixa>
             )}
+            <div className="acn-ajuda" data-teste="dica-mover">Para mover uma OS, arraste o cartão para outra coluna. No celular ou no tablet o arrastar não funciona: use o menu ⋯ do cartão &gt; Mover para…</div>
             {loading ? <div className="acn-empty">Carregando...</div> : (
               <div className="acn-kb com-fiscal">
                 {COLUNAS_KANBAN.map(col => {
@@ -2412,9 +2422,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
           ) : (
             <table className="acn-tabela acn-densa">
               <thead><tr>
-                <th>Nº OS</th><th>Tipo</th><th>Atend.</th><th>Equipamento</th><th>Cliente</th>
-                <th>Abertura</th><th>Prazo Orç.</th><th className="acn-dir">Valor</th>
-                <th>KPI Orç.</th><th>KPI Exec.</th><th>Status</th><th>Ações</th>
+                <th>Nº OS</th><th>Tipo</th><th>Atendimento</th><th>Equipamento</th><th>Cliente</th>
+                <th>Abertura</th><th>Prazo do orçamento</th><th className="acn-dir">Valor</th>
+                <th>Tempo do orçamento</th><th>Tempo da execução</th><th>Status</th><th>Ações</th>
               </tr></thead>
               <tbody>
                 {ordensFiltradas.map(o => {
@@ -2560,7 +2570,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                   </select>
                 </div>
                 <div className="form-group acn-sac-qtd">
-                  <label className="acn-label">Qtd</label>
+                  <label className="acn-label">Quantidade</label>
                   <input type="number" min={1} max={20} className="acn-input" value={form.quantidade}
                     onChange={e=>handleQtdChange(Number(e.target.value))} />
                 </div>
@@ -2814,7 +2824,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     </div>
                     <div className="acn-ajuda">
                       {form.tipo_avaliacao==='Presencial'
-                        ? '→ SAC define data de entrega do veículo (Provisionamento)'
+                        ? '→ A Produção marca a data do atendimento; o SAC confirma a data com o cliente (Aceite SAC)'
                         : '→ SAC insere itens e envia cotação ao cliente para aprovação'}
                     </div>
                     </>)}
