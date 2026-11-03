@@ -28,7 +28,7 @@ Até esta entrega o sistema só sabia enviar **unidades completas** em remessas 
 - Remessa com item faltando (ou com pendência de remessa anterior) **não leva a OP** para a cotação de frete / liberação comercial, mesmo saindo todas as unidades: a OP fica na fila do Almoxarifado, com a faixa vermelha na janela explicando.
 - Na fila: selo vermelho **"Falta enviar: remessa 1: 25 × CABO USB, … · há N dia(s)"** e, quando só resta o complemento (todas as unidades já saíram), o botão vira **"REGISTRAR COMPLEMENTO"** no lugar de "EMBALAR".
 - O **último complemento** fecha a OP: não nasce frete novo (cada remessa já tem o seu); se algum frete ainda não saiu a OP espera por ele em "Aguardando Cotacao Frete", senão vai para a liberação comercial.
-- **Prazo de alerta: 7 dias** com item pendente (`PRAZO_PENDENCIA_ENVIO_DIAS`, **a confirmar com o usuário**): passou, o selo acrescenta "— ATRASADO".
+- **Prazo de alerta: 7 dias** com item pendente (`PRAZO_PENDENCIA_ENVIO_DIAS`, **confirmado pelo usuário em 03/11/2026**): passou, o selo acrescenta "— ATRASADO".
 
 ## Testes (03/11/2026)
 `npx vite build` verde; navegador com gravações bloqueadas (`scratchpad/fstest/teste_envio_parcial.cjs`, 5 cenários): remessa de 5 kits com falta de 1 cabo por kit e rastreio (a OP **não** muda de etapa, o frete da remessa nasce); remessa de data passada (confirmação, **sem** `pcp_fretes`); data futura recusada; fila com "Falta enviar … ATRASADO" e botão "REGISTRAR COMPLEMENTO"; complemento total (a OP vai a "Aguardando Liberacao Comercial"); complemento acima do pendente recusado e complemento parcial (a OP continua).

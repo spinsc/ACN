@@ -175,7 +175,7 @@ export function diasComPendencia(remessas: any[], pend: PendenteDaRemessa[], hoj
   return Math.max(0, Math.round((b - a) / 86400000));
 }
 
-/** Prazo em dias a partir do qual o pendente vira alerta vermelho na fila (decisão do plano: "passar de N dias"; N = 7, a confirmar com o usuário). */
+/** Prazo em dias a partir do qual o pendente vira alerta vermelho na fila (decisão do plano: "passar de N dias"; N = 7, confirmado pelo usuário em 03/11/2026). */
 export const PRAZO_PENDENCIA_ENVIO_DIAS = 7;
 
 /** O que a janela de complemento precisa recusar: nada marcado, quantidade inválida ou acima do pendente. `linhas` = [{ chave, nome, enviar }]; `pendentes` = o pendente da remessa escolhida. Vazio = pode gravar. */
