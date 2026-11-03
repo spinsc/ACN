@@ -1367,6 +1367,13 @@ html body .acn-input.acn-alm-produto-fixo { background: var(--acn-surface-2); co
 .acn-alm-remessa-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 0; font-size: 12px; }
 .acn-alm-seriais { max-height: 220px; overflow-y: auto; padding: 6px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: grid; gap: 4px; }
 .acn-alm-serial-linha { display: grid; grid-template-columns: 24px 1.4fr 1fr auto; gap: 5px; align-items: center; }
+/* envio parcial (E1, 03/11/2026): linha de "item faltando" (nome, quanto falta em cada kit, total, tirar) e a linha de data + rastreio da remessa */
+.acn-alm-faltando-linha { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(5rem, 8rem) 4.5rem auto; gap: 5px; align-items: center; }
+.acn-alm-remessa-datas { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.acn-alm-remessa-datas .form-group { margin: 0; }
+.acn-alm-remessa-datas .acn-alm-rastreio { flex: 1 1 14rem; }
+.acn-alm-faltam { color: var(--acn-bad); }
+@media (max-width: 520px) { .acn-alm-faltando-linha { grid-template-columns: minmax(0, 1fr) 5rem auto; } .acn-alm-faltando-linha > .acn-ajuda { grid-column: 1 / -1; } }
 .acn-alm-secao { padding-bottom: 3px; border-bottom: 2px solid var(--acn-brand); color: var(--acn-brand-ink); }
 /* 03/11/2026: uma linha por volume — peso e três medidas, e a coluna estreita do botão de tirar o volume */
 .acn-alm-grade5 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; gap: 8px; }
