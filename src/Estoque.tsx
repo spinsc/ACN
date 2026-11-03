@@ -119,10 +119,10 @@ export async function reposicaoEmAberto(item: any, op?: any) {
  * de uma OP específica. Quando a Etapa 4 do plano chegar, a falta provocada por
  * uma OP vai nascer amarrada a ela.
  */
-async function abrirFabricacaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, currentUser }: any) {
+async function abrirFabricacaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, jaPedido, currentUser }: any) {
   const agora = new Date().toISOString();
   const texto = `${op ? `FALTA PARA A OP ${op.opl}` : 'Reposição de estoque'} — ${item.nome}${item.codigo ? ` (${item.codigo})` : ''}`;
-  const porque = motivoDaReposicao({ item, saldo, reservado, disponivel, op });
+  const porque = motivoDaReposicao({ item, saldo, reservado, disponivel, op, jaPedido });
   const { data, error } = await supabase.from('demandas_setoriais').insert([{
     setor_destino: item.setor_fabricante, setor_origem: 'Estoque (automático)',
     tipo_solicitacao: op ? 'falta_op' : 'reposicao_estoque', item_id: item.id,
@@ -141,7 +141,7 @@ async function abrirFabricacaoReposicao({ item, quantidade, saldo, reservado, di
 }
 
 /** Por que este pedido existe. Vai para a tela de quem vai atender. */
-function motivoDaReposicao({ item, saldo, reservado, disponivel, op }: any) {
+function motivoDaReposicao({ item, saldo, reservado, disponivel, op, jaPedido }: any) {
   const un = item.unidade || 'UN';
   const partes: string[] = [];
   if (num(reservado) > 0) {
@@ -153,6 +153,8 @@ function motivoDaReposicao({ item, saldo, reservado, disponivel, op }: any) {
   }
   if (op?.opl) {
     partes.push(`É o que falta para fazer a OP ${op.opl} — tem carro esperando, esta vem primeiro.`);
+    // 03/11/2026: a falta é do item inteiro, e outras OPs já tinham pedido parte dela; esta demanda traz só o que sobra além do que já está pedido
+    if (num(jaPedido) > 0) partes.push(`Outras OPs já têm ${fmtQtd(jaPedido)} ${item.unidade || 'UN'} pedidas deste item; esta demanda traz só o que falta além delas.`);
   } else if (item.estoque_ideal != null) {
     partes.push(`Repor a prateleira até o ideal de ${fmtQtd(item.estoque_ideal)}.`);
   }
@@ -281,7 +283,7 @@ export async function conferirDoisEstados({ item, reservado = 0, currentUser }: 
   return pedidos.filter(p => p?.criada || p?.erro);
 }
 
-export async function garantirRequisicaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, currentUser }: any) {
+export async function garantirRequisicaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, jaPedido, currentUser }: any) {
   const jaTem = await reposicaoEmAberto(item, op);
   if (jaTem?.erro) return { erro: `${jaTem.erro}. Nada foi pedido, para não pedir em dobro.` };
   if (jaTem) {
@@ -296,12 +298,12 @@ export async function garantirRequisicaoReposicao({ item, quantidade, saldo, res
   // Sem isso, o Compras recebia requisição de fornecedor para uma peça que sai
   // da bancada aqui dentro (regra definida com o usuário em 25/09/2026).
   if (ehFabricacaoInterna(item)) {
-    return await abrirFabricacaoReposicao({ item, quantidade: qtd, saldo, reservado, disponivel, op, currentUser });
+    return await abrirFabricacaoReposicao({ item, quantidade: qtd, saldo, reservado, disponivel, op, jaPedido, currentUser });
   }
 
   const r = await criarRequisicaoCompra({
     titulo: `Reposição de estoque — ${item.nome}`,
-    descricao: motivoDaReposicao({ item, saldo, reservado, disponivel, op }),
+    descricao: motivoDaReposicao({ item, saldo, reservado, disponivel, op, jaPedido }),
     itens: [{ nome: item.nome, quantidade: qtd, descricao: item.codigo || '' }],
     observacoes: 'Requisição aberta automaticamente pelo controle de estoque — ninguém digitou.',
     vinculo: { tipo: 'estoque', id: item.id, descricao: `${item.codigo ? item.codigo + ' · ' : ''}${item.nome}` },
@@ -584,6 +586,28 @@ export async function reservarParaOp({ oplId, currentUser }: any) {
 }
 
 /**
+ * Quanto deste item já está pedido (fabricação ou compra, ainda em aberto) por causa de FALTA DE OP.
+ *
+ * Regra de 03/11/2026, a partir do setor de Chicotes: a falta que o sistema enxerga é a do item inteiro (reservado menos saldo), mas a trava contra pedido
+ * repetido olhava uma OP de cada vez. Num lote de 39 carros a OP 34 pedia 6, a 35 pedia 7, a 36 pedia 8... (51 chicotes para 6 carros), e as duas OPs
+ * liberadas em 03/11 pediram 36, 40, 37 e 41 para precisar de 4. Cada OP nova só pede o que falta ALÉM do que as outras já pediram.
+ * Leitura recusada devolve `erro`: nunca vale como "nada pedido", senão a escada volta.
+ */
+export async function quantidadeJaPedidaParaOps(item: any) {
+  const { data: fab, error: erroFab } = await supabase.from('demandas_setoriais')
+    .select('quantidade').eq('item_id', String(item.id)).eq('tipo_solicitacao', 'falta_op')
+    .not('status', 'in', `(${FABRICACAO_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  if (erroFab) return { erro: `não foi possível conferir as fabricações em aberto (${erroFab.message})` };
+  const { data: compras, error: erroCompras } = await supabase.from('pcp_pedidos_compra')
+    .select('itens').eq('vinculo_tipo', 'estoque').eq('vinculo_id', String(item.id)).not('opl', 'is', null)
+    .not('status_compra', 'in', `(${COMPRA_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  if (erroCompras) return { erro: `não foi possível conferir as compras em aberto (${erroCompras.message})` };
+  const deFab = (fab || []).reduce((t: number, d: any) => t + num(d.quantidade), 0);
+  const deCompra = (compras || []).reduce((t: number, c: any) => t + (Array.isArray(c.itens) ? c.itens.reduce((u: number, i: any) => u + num(i?.quantidade), 0) : 0), 0);
+  return { total: deFab + deCompra };
+}
+
+/**
  * Abre o que falta, em DOIS pedidos separados quando for o caso.
  *
  * Decisão do usuário em 25/09/2026: faltando material para uma OP e para a
@@ -626,9 +650,14 @@ async function pedirOQueFaltou({ itemIds, op, currentUser }: any) {
 
     // 1) o que a OP precisa para andar — urgente, amarrada à OP
     if (n.faltaOp > 0 && op) {
-      const r = await garantirRequisicaoReposicao({ ...comum, quantidade: n.faltaOp, op });
-      if (r?.criada) abertos.push({ nome: item.nome, quantidade: n.faltaOp, para: 'OP', ...r });
-      else if (r?.erro) falhas.push(`${item.nome} (para a OP): ${r.erro}`);
+      const ja = await quantidadeJaPedidaParaOps(item);
+      if (ja.erro) falhas.push(`${item.nome} (para a OP): ${ja.erro}. Nada foi pedido, para não pedir em dobro`);
+      else if (n.faltaOp - ja.total > 0) {
+        const quantidadeOp = n.faltaOp - ja.total;
+        const r = await garantirRequisicaoReposicao({ ...comum, quantidade: quantidadeOp, op, jaPedido: ja.total });
+        if (r?.criada) abertos.push({ nome: item.nome, quantidade: quantidadeOp, para: 'OP', ...r });
+        else if (r?.erro) falhas.push(`${item.nome} (para a OP): ${r.erro}`);
+      }
     }
     // 2) o que a prateleira precisa para voltar ao ideal — sem OP amarrada
     if (n.reposicao > 0) {
