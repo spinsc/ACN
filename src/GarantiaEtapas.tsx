@@ -26,11 +26,20 @@ import { podeGerarOsDaGarantia, cobrancaDaOS, ROTULOS_COBRANCA } from './SacFlux
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-function Secao({ id, titulo, selo, children }: any) {
-  return (
+// `recolhida` (M6, 03/11/2026): a etapa já cumprida fica fechada, só com o título e o selo; um clique abre. Sem a propriedade a seção é a de sempre (aberta, sem seta).
+function Secao({ id, titulo, selo, children, recolhida }: any) {
+  if (recolhida === undefined) return (
     <div className="acn-gar-secao" data-secao={id}>
       <div className="acn-gar-secao-cab"><div className="acn-pdp-rotulo">{titulo}</div>{selo}</div>
       {children}
+    </div>
+  );
+  return (
+    <div className="acn-gar-secao" data-secao={id}>
+      <details open={!recolhida} className="acn-gar-secao-det">
+        <summary className="acn-gar-secao-cab"><div className="acn-pdp-rotulo">{titulo}</div>{selo}</summary>
+        <div className="acn-gar-secao-corpo">{children}</div>
+      </details>
     </div>
   );
 }
@@ -74,7 +83,7 @@ function SecaoAvaliacao({ g, conduz, executar, ocupado, currentUser }: any) {
     if (r) setEditando(false);
   };
   return (
-    <Secao id="avaliacao" titulo="Avaliação técnica" selo={a ? <Selo familia={a.cobertura === 'dentro' ? 'ok' : a.cobertura === 'fora' ? 'erro' : 'atencao'} ponto={false}>{COBERTURAS_GARANTIA[a.cobertura]}</Selo> : <Selo familia="atencao" ponto={false}>Falta avaliar</Selo>}>
+    <Secao id="avaliacao" recolhida={!!a && !editando} titulo="Avaliação técnica" selo={a ? <Selo familia={a.cobertura === 'dentro' ? 'ok' : a.cobertura === 'fora' ? 'erro' : 'atencao'} ponto={false}>{COBERTURAS_GARANTIA[a.cobertura]}</Selo> : <Selo familia="atencao" ponto={false}>Falta avaliar</Selo>}>
       {a && !editando && (
         <>
           <div className="acn-gar-texto">{a.parecer}</div>
@@ -122,7 +131,7 @@ function SecaoFornecedor({ g, conduz, executar, ocupado, currentUser }: any) {
       : fornecedorLiberado(g) ? <Selo familia={f.decisao === 'cobre' ? 'ok' : f.decisao === 'parcial' ? 'atencao' : 'erro'} ponto={false}>{DECISOES_FORNECEDOR[f.decisao]}</Selo>
         : atraso > 0 ? <Selo familia="erro" ponto={false}>Resposta atrasada há {atraso} dia{atraso === 1 ? '' : 's'}</Selo> : <Selo familia="atencao" ponto={false}>Aguardando resposta</Selo>;
   return (
-    <Secao id="fornecedor" titulo="Fornecedor (garantia da peça)" selo={selo}>
+    <Secao id="fornecedor" recolhida={fornecedorLiberado(g)} titulo="Fornecedor (garantia da peça)" selo={selo}>
       {!g.avaliacao && <div className="acn-ajuda">Sem a avaliação técnica o atendimento não segue: registre-a primeiro.</div>}
       {g.avaliacao && f && !editando && (
         f.modo === 'dispensa'
@@ -194,7 +203,7 @@ function SecaoExecucao({ g, conduz, executar, ocupado, currentUser }: any) {
     if (r) setEditando(false);
   };
   return (
-    <Secao id="execucao" titulo="Quem executa" selo={e ? <Selo familia="info" ponto={false}>{e.tipo === 'propria' ? 'Equipe própria' : 'Terceiro'}</Selo> : <Selo familia="neutro" ponto={false}>Não definido</Selo>}>
+    <Secao id="execucao" recolhida={!!e} titulo="Quem executa" selo={e ? <Selo familia="info" ponto={false}>{e.tipo === 'propria' ? 'Equipe própria' : 'Terceiro'}</Selo> : <Selo familia="neutro" ponto={false}>Não definido</Selo>}>
       {!g.avaliacao && <div className="acn-ajuda">Sem a avaliação técnica o atendimento não segue: registre-a primeiro.</div>}
       {g.avaliacao && e && !editando && (e.tipo === 'propria'
         ? <div>Técnicos: {(e.tecnicos || []).map((t: any) => t.nome).join(', ')}</div>
@@ -249,7 +258,7 @@ function SecaoPecas({ g, conduz, executar, ocupado, currentUser }: any) {
     if (!x) alert(`Não foi possível registrar o pedido na ficha, mas ele JÁ FOI aberto no Compras: ${r.numero_pedido}. Não abra outro; avise a gerência para ligar o pedido ao atendimento.`);
   };
   return (
-    <Secao id="pecas" titulo="Peças pedidas ao Compras" selo={pedidos.length ? <Selo familia="info" ponto={false}>{pedidos.length} pedido{pedidos.length === 1 ? '' : 's'}</Selo> : null}>
+    <Secao id="pecas" titulo="Compra de peça (reposição)" selo={pedidos.length ? <Selo familia="info" ponto={false}>{pedidos.length} pedido{pedidos.length === 1 ? '' : 's'}</Selo> : null}>
       {pedidos.length === 0 && <div className="acn-ajuda">Nenhum pedido de peça aberto por este atendimento.</div>}
       {pedidos.map((p: any) => <div key={p.id} className="acn-gar-pedido"><strong>{p.numero}</strong> <span className="acn-ajuda">{p.por}, {fmtDtHr(p.em)}</span></div>)}
       {conduz && (

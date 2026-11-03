@@ -21,7 +21,7 @@ import { ParticipantesPicker, useUsuariosParticipar } from './Participantes';
 import {
   ORIGENS_GARANTIA, SITUACOES_GARANTIA, normalizarPlaca, normalizarChassi, podeAbrirGarantia, podeVerGarantia, podeMexerNaGarantia,
   validarGarantia, cargaDaGarantia, aplicarEdicao, cancelarGarantia, reabrirGarantia, fraseDoEvento, etapaDaGarantia, ROTULOS_ETAPA_GARANTIA,
-  podeConduzirGarantia, encerrarGarantia, bloqueiosParaEncerrar, estaParada, diasParada, ultimaMovimentacao, PRAZO_PARADO_DIAS,
+  podeConduzirGarantia, encerrarGarantia, bloqueiosParaEncerrar, estaParada, diasParada, ultimaMovimentacao, PRAZO_PARADO_DIAS, proximoPassoDaGarantia,
 } from './GarantiaModelo';
 import { mdiShieldCheckOutline, mdiPlus, mdiMagnify, mdiRefresh, mdiPencilOutline, mdiCancel, mdiBackupRestore, mdiClose, mdiLockCheckOutline, mdiFileChartOutline } from '@mdi/js';
 
@@ -215,6 +215,15 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
   );
 }
 
+/** Leva a pessoa à seção da ficha onde o próximo passo se faz (abre a seção, se estiver recolhida). */
+function irParaSecao(id: string) {
+  const el = document.querySelector(`[data-secao="${id}"]`);
+  if (!el) return;
+  const d = el.querySelector('details'); if (d) d.open = true;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+const comInicialMaiuscula = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
 // ─── Detalhe do atendimento ────────────────────────────────────────────────────────────────────────────────────
 function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar, onGerarOS }: any) {
   const mexe = podeMexerNaGarantia(g, currentUser);
@@ -245,6 +254,11 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar, onGerarO
         <div className="acn-modal-corpo">
           {g.situacao === 'encerrado' && <Faixa tom="ok">Atendimento encerrado por {g.encerramento?.por || '—'} em {diaBR(g.encerramento?.em)}. {g.encerramento?.texto}</Faixa>}
           {estaParada(g, hoje) && <Faixa tom="atencao">Atendimento parado: sem nenhum movimento na ficha há {diasParada(g, hoje)} dias (último: {fraseDoEvento(ultimaMovimentacao(g).evento || {})}). O relatório semanal cobra a partir de {PRAZO_PARADO_DIAS} dias.</Faixa>}
+          {(() => { const passo = proximoPassoDaGarantia(g, hoje); return passo && (
+            <Faixa tom="info" acao={passo.secao ? <Botao pequeno onClick={() => irParaSecao(passo.secao)}>Ir para a seção</Botao> : undefined}>
+              <strong>Próximo passo:</strong> {passo.texto}.
+            </Faixa>
+          ); })()}
           {g.situacao === 'cancelado' && <Faixa tom="atencao">Atendimento cancelado. Motivo: {g.motivo_cancelamento || '—'}. Nada foi apagado; quem abriu, o responsável ou a gerência pode reabrir.</Faixa>}
           <div className="acn-gar-grade">
             {campo('Cliente', g.cliente_nome)}
@@ -306,6 +320,8 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
   const [erro, setErro] = useState('');
   const [filtro, setFiltro] = useState('aberto');
   const [busca, setBusca] = useState('');
+  // M7 (03/11/2026): por padrão os abertos vêm do mais parado para o menos parado; "Mais recentes" volta à ordem de abertura
+  const [ordem, setOrdem] = useState('parados');
   const [janela, setJanela] = useState<null | { modo: string; g?: any }>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [relatorio, setRelatorio] = useState(false);
@@ -335,7 +351,11 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
   const visiveis = (lista || []).filter(g => podeVerGarantia(g, currentUser));
   const base = visiveis.filter(g => combinaBusca([g.numero, g.cliente_nome, g.veiculo_nome, g.placa, g.chassi, g.origem_ref, g.descricao_falha, g.responsavel?.nome], busca));
   const conta = (s: string) => base.filter(g => g.situacao === s).length;
-  const filtradas = base.filter(g => filtro === 'todos' || g.situacao === filtro);
+  const filtradas = base.filter(g => filtro === 'todos' || g.situacao === filtro).sort((a, b) => {
+    if (ordem !== 'parados') return 0;   // a leitura já vem do mais recente para o mais antigo (e o sort é estável)
+    const pa = a.situacao === 'aberto' ? diasParada(a, hojeISO()) : -1, pb = b.situacao === 'aberto' ? diasParada(b, hojeISO()) : -1;
+    return pb - pa;
+  });
   const detalhe = detalheId ? (lista || []).find(g => g.id === detalheId && podeVerGarantia(g, currentUser)) : null;   // o link de um aviso só abre o que a pessoa pode ver
 
   return (
@@ -355,6 +375,7 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
             { id: 'cancelado', rotulo: 'Cancelados', contagem: lista ? conta('cancelado') : null },
             { id: 'todos', rotulo: 'Todos', contagem: lista ? base.length : null },
           ]} />
+          <Chips rotulo="Ordem" ativo={ordem} onChange={setOrdem} itens={[{ id: 'parados', rotulo: 'Mais parados primeiro' }, { id: 'recentes', rotulo: 'Mais recentes' }]} />
           <label className="acn-dev-busca">
             <Icone path={mdiMagnify} size={16} />
             <input className="acn-input" aria-label="Buscar atendimento" placeholder="Buscar por número, cliente, placa, OP…" value={busca} onChange={e => setBusca(e.target.value)} />
@@ -379,7 +400,7 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
             <div className="sec-card">
               <div className="sec-body acn-gar-tabela">
                 <table className="acn-tabela acn-densa">
-                  <thead><tr><th>Número</th><th>Cliente</th><th>Veículo</th><th>Placa / chassi</th><th>Origem</th><th>Falha</th><th>Ocorrência</th><th>Responsável</th><th>Etapa</th><th>Situação</th></tr></thead>
+                  <thead><tr><th>Número</th><th>Cliente</th><th>Veículo</th><th>Placa / chassi</th><th>Origem</th><th>Falha</th><th>Ocorrência</th><th>Responsável</th><th>Etapa e próximo passo</th><th>Situação</th></tr></thead>
                   <tbody>
                     {filtradas.map(g => (
                       <tr key={g.id} className="acn-gar-linha" tabIndex={0} role="button" onClick={() => setDetalheId(g.id)}
@@ -392,7 +413,7 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
                         <td className="acn-gar-falha">{g.descricao_falha}</td>
                         <td>{diaBR(g.data_ocorrencia)}</td>
                         <td>{g.responsavel?.nome}</td>
-                        <td>{g.situacao === 'aberto' ? ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)] : '—'}{estaParada(g, hojeISO()) && <> <Selo familia="atencao" ponto={false} title="Sem nenhum movimento na ficha">Parado há {diasParada(g, hojeISO())} d</Selo></>}</td>
+                        <td>{g.situacao === 'aberto' ? <><div>{ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)]}</div><div className="acn-fraco">Próximo: {proximoPassoDaGarantia(g, hojeISO())?.texto}</div></> : '—'}{estaParada(g, hojeISO()) && <> <Selo familia="atencao" ponto={false} title="Sem nenhum movimento na ficha">Parado há {diasParada(g, hojeISO())} d</Selo></>}</td>
                         <td><Selo familia={FAMILIA_SITUACAO[g.situacao]}>{SITUACOES_GARANTIA[g.situacao]}</Selo></td>
                       </tr>
                     ))}

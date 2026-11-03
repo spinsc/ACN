@@ -12,7 +12,7 @@ O chamado **não é uma OS**. É um pedido de ajuda. Quando o atendimento mostra
 
 - **Módulo NFC · Chamados de Suporte (NFC):** o título mostra **"N chamado(s) · N aberto(s)"**. O número de abertos é o **total real** de chamados abertos, mesmo quando o filtro mostra outra coisa.
 - **Filtro de status:** *Todos os status, Aberto, Em Atendimento, Concluído, Cancelado*. **Ao escolher, a lista já recarrega.**
-- **Carregar:** lê a lista de novo (serve para ver chamados que chegaram agora; a aba **não** atualiza sozinha).
+- **Atualizar:** lê a lista de novo (serve para ver chamados que chegaram agora; a aba **não** atualiza sozinha).
 
 Cada chamado é um cartão com:
 
@@ -24,6 +24,7 @@ Cada chamado é um cartão com:
 | **Órgão / cliente** | De quem é o veículo |
 | **Descrição do defeito** | O que o cliente escreveu (os primeiros 180 caracteres) |
 | **Aberto: data e hora · Atendente: nome** | Quando chegou e quem atende |
+| **Selo vermelho "Aberto há N dias"** | Aparece no chamado que **ainda não foi concluído** depois de **3 dias ou mais**. Antes disso, o cartão só diz "aberto há N dia(s)" em texto simples |
 
 A borda do cartão tem a cor do status: **vermelha** para o que ainda está **Aberto**.
 
@@ -37,7 +38,7 @@ A borda do cartão tem a cor do status: **vermelha** para o que ainda está **Ab
 2. Clique **Atender**. O chamado passa a **Em Atendimento** e **você fica como atendente**.
 3. Ligue ao cliente (clique no telefone), entenda o defeito e resolva.
 4. Clique **Notas** para registrar o que foi feito (veja abaixo).
-5. Terminou? Clique **Concluir**. O chamado passa a **Concluído** e você consta como quem concluiu.
+5. Terminou? Clique **Concluir**. A tela pergunta **"O que foi feito no chamado?"**: escreva o que foi feito e confirme. **A nota é obrigatória**: com o campo em branco o chamado **não** é concluído. O chamado passa a **Concluído**, você consta como quem concluiu e o texto entra nas Notas, com a data e o seu nome.
 
 **O que acontece:** o status e o nome do atendente ficam gravados. **A cada Atender ou Concluir o atendente é o último que clicou.**
 
@@ -52,10 +53,9 @@ O botão **Notas** abre a janela do chamado, com o resumo (quem abriu, telefone,
 ## O que o chamado vira depois
 
 - **O chamado se resolveu por telefone** (orientação): **Concluir**.
-- **Precisa de serviço**: abra uma **OS** (aba Ordens de Serviço > **Nova OS**) ou, se for caso de garantia, uma **ficha** (aba Garantia). **Anote nas Notas** o número da OS ou da ficha para o chamado não ficar solto. O chamado **não** abre a OS sozinho.
+- **Precisa de serviço**: clique **Abrir OS** no cartão. A **Nova OS** abre **já preenchida** com o cliente, o telefone, o chassi, o modelo e o defeito do chamado; confira, escolha o tipo e grave. Se for caso de garantia, abra uma **ficha** (aba Garantia). **Anote nas Notas** o número da OS ou da ficha para o chamado não ficar solto: o chamado **não** guarda o número da OS sozinho.
 - **Não houve atendimento possível** (engano, duplicado): o status **Cancelado** existe no filtro, mas **esta tela não tem botão para cancelar**. Conclua e registre o motivo nas Notas.
 
-> **Dica:** ao abrir a OS a partir do chamado, copie da tela do chamado o **chassi, a placa e o modelo**: eles já estão lá.
 
 ---
 
@@ -85,7 +85,8 @@ A **ficha de garantia** é o **prontuário** de um atendimento em garantia: do r
 - **Atendimentos em garantia (N):** o título.
 - **Abertos / Encerrados / Cancelados / Todos:** os filtros, com a contagem de cada um. O padrão é **Abertos**.
 - **Busca:** por **número, cliente, placa, OP...**
-- **Colunas:** Número (GAR-0001/2026), Cliente, Veículo, Placa/Chassi, Origem, Falha, Ocorrência, Responsável, **Etapa** e **Situação**.
+- **Ordem:** **Mais parados primeiro** (o padrão: o atendimento aberto há mais tempo sem movimento sobe para o topo) ou **Mais recentes**.
+- **Colunas:** Número (GAR-0001/2026), Cliente, Veículo, Placa/Chassi, Origem, Falha, Ocorrência, Responsável, **Etapa e próximo passo** e **Situação**. A coluna do meio diz a etapa e, embaixo, **"Próximo: …"**, o que falta fazer naquela ficha.
 - **Selo "Parado há N d" (âmbar):** o atendimento **aberto** e **sem nenhum movimento na ficha há 5 dias ou mais**. É o alerta para não deixar o cliente esperando.
 - Clique numa linha para **abrir a ficha**.
 
@@ -130,6 +131,8 @@ Abaixo vêm as **seções**. **Cada seção tem um selo** que mostra a situaçã
 FLUXO: Avaliação técnica > Fornecedor > Quem executa > Em atendimento
 
 **Regra da ficha: "sem avaliação, não segue".** O fornecedor e quem executa só se registram **depois** da avaliação técnica.
+
+**Faixa "Próximo passo".** Logo abaixo dos dados, uma faixa azul diz **o que falta fazer agora** naquele atendimento (por exemplo, "registrar a avaliação técnica" ou "definir quem executa o atendimento") e traz o botão **Ir para a seção**, que abre e leva até a seção certa. **As seções já concluídas (avaliação registrada, fornecedor liberado, quem executa definido) ficam recolhidas**: clique no título para abrir de novo.
 
 ![A ficha completa](img/54-garantia-ficha-completa.jpg)
 
@@ -263,7 +266,7 @@ Quem pediu, o responsável e a gerência ainda podem usar **Cancelar o pedido** 
 
 **O que acontece:** a seção mostra **a lista das OS geradas**, com a **etapa de cada uma** e se é **sem cobrança** ou **cobrada**. O histórico da ficha registra "Ordem de serviço gerada: OS-0130/2026 (sem cobrança)". Na OS, o selo **Ficha GAR-...** leva de volta à ficha com um clique.
 
-### 9. Peças pedidas ao Compras (reposição)
+### 9. Compra de peça (reposição)
 
 **Quando usar:** é preciso **comprar** uma peça para repor.
 
@@ -271,13 +274,13 @@ Quem pediu, o responsável e a gerência ainda podem usar **Cancelar o pedido** 
 2. A solicitação abre **com o título "Peça em garantia — GAR-0001/2026"** e o contexto da ficha (cliente, veículo, fornecedor consultado). Preencha como qualquer solicitação de compra e envie.
 3. O pedido **fica ligado à ficha**, com o número do pedido (**PC-0150/2026**).
 
-![Peças pedidas ao Compras](img/63-garantia-pecas-compras.jpg)
+![Compra de peça (reposição)](img/63-garantia-pecas-compras.jpg)
 
 > **Atenção:** o botão **fica desligado** até haver a **avaliação técnica** e a **consulta ao fornecedor respondida** (ou justificada). Quando está desligado, a frase embaixo diz o que falta. Se a ficha for **fora da garantia**, também exige alinhamento e autorização.
 
 > **Dica:** se o pedido **nasceu no Compras mas a ficha não gravou**, o sistema avisa o **número do pedido**: **não abra outro**, avise a gerência para ligar o pedido ao atendimento.
 
-### 10. Peças em garantia (envio e retorno)
+### 10. Peça defeituosa (envio ao fornecedor e retorno)
 
 **Quando usar:** a **peça defeituosa** vai ao fornecedor para análise ou troca, e depois **volta** (ou é reposta ou descartada). É diferente do "Pedir peça ao Compras": aqui você acompanha **a peça que saiu**.
 
@@ -301,7 +304,7 @@ FLUXO: A enviar > Enviada ao fornecedor > Em análise > Retornou / Reposta / Des
 4. Em cada movimento informe **Agora a peça está\*** (só aparecem as situações possíveis), a **Data\*** (não pode ser futura nem antes do movimento anterior), o **Rastreio** (código ou transportadora) e a **Observação**. Para **Descartada**, o campo vira **Por que foi descartada\*** e é obrigatório. Clique **Registrar movimento**.
 5. A **Trilha da peça (N)** mostra, do mais novo ao mais antigo, cada movimento com data e quem registrou.
 
-![Peças em garantia (envio e retorno)](img/64-garantia-pecas-envio-retorno.jpg)
+![Peça defeituosa (envio ao fornecedor e retorno)](img/64-garantia-pecas-envio-retorno.jpg)
 
 **Errou?**
 
@@ -455,7 +458,7 @@ Há **três listas**, nas abas internas: **Equipamentos**, **Categorias (Tipo Pr
 | **Chegaram vários equipamentos iguais** | Na **Nova OS**, aumente a **Qtd** e marque a caixa do lote. Para repetir uma OS existente: **Copiar OS** |
 | **Preciso do PDF para o cliente assinar** | Menu ⋯ > **PDF**. A assinatura do cliente fica no pé da folha |
 | **Duas pessoas mexeram na mesma OS** | O sistema avisa **"a OS já mudou de etapa (outra pessoa mexeu nela)"** e atualiza a lista. Confira e refaça se for o caso |
-| **Chamado NFC de cliente** | Aba **Chamados NFC** > **Atender** > **Notas** > **Concluir**. Se há serviço, abra a **OS** ou a **ficha** |
+| **Chamado NFC de cliente** | Aba **Chamados NFC** > **Atender** > **Notas** > **Concluir** (a nota do que foi feito é obrigatória). Se há serviço, **Abrir OS** no cartão ou abra a **ficha** |
 
 ## O que o sistema avisa por WhatsApp
 
@@ -514,5 +517,4 @@ Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado 
 A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**) lista o que pode ficar mais claro na tela. Os que mais afetam quem opera hoje:
 
 - As **janelas de entrega** são três e a do veículo não colhe assinatura (os botões já dizem o que cada janela pede; unificar é decisão do SAC).
-- **Chamados NFC** não mostram há quantos dias estão abertos.
 - A OS de **veículo sem cobrança** ainda aparece nas etapas de verificação e aprovação, que, pela regra, ela não deveria ter (**a confirmar** com a Produção).

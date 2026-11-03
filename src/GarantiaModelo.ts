@@ -607,3 +607,17 @@ export function registrarOsGerada(g: any, u: any, numeros: string[], cobranca: s
   historico.push(evento('os_gerada', u, `${lista.join(', ')} (${cobranca === 'cobrada' ? 'cobrada do cliente' : 'sem cobrança'})`, agora));
   return { patch: { historico } };
 }
+
+/** O próximo passo da ficha aberta (SAC M6/M7, 03/11/2026): o sistema já sabe a etapa, então diz o que fazer agora, na mesma ordem em que as travas valem (sem avaliação nada segue; o fornecedor vem antes de quem executa; fora da garantia
+ *  só segue com o alinhamento aceito e a autorização da direção). `secao` é a seção da ficha onde o passo se faz (null = não há uma só). Ficha que não está aberta não tem próximo passo. */
+export function proximoPassoDaGarantia(g: any, hoje: string): { texto: string; secao: string | null } | null {
+  if (g?.situacao !== 'aberto') return null;
+  if (!g.avaliacao) return { texto: 'registrar a avaliação técnica (sem ela nada mais segue)', secao: 'avaliacao' };
+  if (!fornecedorLiberado(g)) return { texto: 'consultar o fornecedor da peça, ou dispensar a consulta com uma justificativa', secao: 'fornecedor' };
+  const fora = bloqueioForaDaGarantia(g);
+  if (fora.bloqueado) return { texto: `fora da garantia: falta ${fora.faltas.join(' e ')}`, secao: alinhamentoAtual(g)?.aceitou !== 'sim' ? 'cliente' : 'direcao' };
+  if (!g.execucao) return { texto: 'definir quem executa o atendimento', secao: 'execucao' };
+  const falta = bloqueiosParaEncerrar(g, hoje);
+  if (falta.length) return { texto: `acompanhar o atendimento; para encerrar falta ${falta.join('; ')}`, secao: null };
+  return { texto: 'tudo registrado: encerrar o atendimento', secao: null };
+}

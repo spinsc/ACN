@@ -48,7 +48,7 @@ export function SecaoPecasGarantia({ g, conduz, executar, ocupado, currentUser }
     if (r) setMovendo(null);
   };
   return (
-    <Secao id="pecasgar" titulo="Peças em garantia (envio e retorno)"
+    <Secao id="pecasgar" titulo="Peça defeituosa (envio ao fornecedor e retorno)"
       selo={pecas.length === 0 ? <Selo familia="neutro" ponto={false}>Sem peças</Selo> : pendentes.length ? <Selo familia="atencao" ponto={false}>{pendentes.length} ainda não {pendentes.length === 1 ? 'voltou' : 'voltaram'}</Selo> : <Selo familia="ok" ponto={false}>Todas resolvidas</Selo>}>
       {pecas.length === 0 && !adicionando && <div className="acn-ajuda">Nenhuma peça em garantia cadastrada. A peça defeituosa que vai ao fornecedor é acompanhada aqui, do envio ao retorno.</div>}
       {pecas.map((p: any) => {

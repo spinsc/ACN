@@ -21,12 +21,12 @@ import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, 
 import { EscolherMovimentoModal, DadosDoMovimentoModal } from './MoverOsModal';
 import RegistrarAtendimentoModal from './RegistrarAtendimentoModal';
 import { podeRegistrarAtendimentoRealizado, motivoQueNaoRegistraAtendimento, patchDoRegistroDoAtendimento, recadoDoRegistro } from './SacFluxo';
-import { osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
+import { PRAZO_CHAMADO_NFC_DIAS, diasDoChamado, chamadoEsquecido, formularioDoChamadoNfc, textoDoFechamentoDoChamado, osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
-import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown } from '@mdi/js';
+import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
 import { ModalComprasDaOS } from './ComprasLigadas';
@@ -1953,7 +1953,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     setLoadNfc(false);
   };
 
-  const atualizarStatusNfc = async (id, novoStatus, notas?) => {
+  // `fechamento` (A6, 03/11/2026): a nota obrigatória de quem conclui o chamado; vai para o fim das notas e, como no Atender, quem clicou passa a constar como atendente
+  const atualizarStatusNfc = async (id, novoStatus, notas?, fechamento?: string) => {
     const payload: any = { status: novoStatus, atualizado_em: new Date().toISOString() };
     // Regra definida com o usuário em 01/10/2026 (R24): consta como atendente SÓ quem clicou em Atender ou Concluir. Salvar apenas as notas
     // (notas !== undefined) não troca o atendente — antes, quem editava as notas de um chamado já atendido passava a constar como o atendente.
@@ -1961,6 +1962,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       payload.atendido_por = currentUser?.nome || currentUser?.email || 'Sistema';
     }
     if (notas !== undefined) payload.notas_atendimento = notas;
+    if (fechamento) payload.notas_atendimento = textoDoFechamentoDoChamado((chamadosNfc.find((x: any) => x.id === id) || modalNfc)?.notas_atendimento, currentUser?.nome || currentUser?.email || '', new Date(), fechamento);
     // Etapa 7.18 (01/10/2026): antes o resultado da gravação era ignorado — "Salvar Notas" dizia "Notas salvas!" mesmo com a gravação recusada, e
     // "Atender" / "Concluir" falhavam em silêncio (a pessoa achava que tinha gravado). Agora o erro aparece e a função devolve se gravou.
     const { error } = await supabase.from('chamados_suporte').update(payload).eq('id', id);
@@ -1968,6 +1970,22 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     carregarChamadosNfc();
     if (modalNfc?.id === id) setModalNfc(prev => ({ ...prev, status: novoStatus, ...payload }));
     return true;
+  };
+
+  // A6: concluir o chamado pede o que foi feito (ou a OS ou ficha que o resolveu); sem a nota não conclui
+  const concluirChamadoNfc = async (c: any) => {
+    const nota = await pedirTexto(`O que foi feito no chamado de ${c.nome_solicitante || 'cliente'} (${c.chassi})? Escreva a solução ou o número da OS ou da ficha de garantia que o resolveu. A nota fica nas notas do chamado.`);
+    if (nota === null) return;
+    if (!String(nota).trim()) { mostrarAviso('Escreva o que foi feito: a nota é obrigatória para concluir o chamado.', 'atencao'); return; }
+    await atualizarStatusNfc(c.id, 'Concluído', undefined, String(nota).trim());
+  };
+  // M8: a Nova OS abre preenchida com os dados do chamado
+  const abrirNovaOsDoChamado = (c: any) => {
+    const f = formularioDoChamadoNfc(c);
+    setForm({ ...FORM_VAZIO, ...f.form });
+    setEquipLista(f.equipLista); setCriarEmLote(false);
+    setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
+    setAbaAtiva('os'); setModalNova(true);
   };
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -2009,7 +2027,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <option value="Concluído">Concluído</option>
                 <option value="Cancelado">Cancelado</option>
               </select>
-              <Botao pequeno icone={mdiRefresh} onClick={()=>carregarChamadosNfc()}>Carregar</Botao>
+              <Botao pequeno icone={mdiRefresh} title="Ler os chamados de novo (a aba não se atualiza sozinha)" onClick={()=>carregarChamadosNfc()}>Atualizar</Botao>
             </div>
           </div>
 
@@ -2019,7 +2037,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               <div className="acn-empty">Carregando...</div>
             ) : chamadosNfc.length === 0 ? (
               <div className="acn-empty">
-                Nenhum chamado encontrado. Clique em "Carregar" para atualizar.
+                Nenhum chamado encontrado. Clique em "Atualizar" para ler de novo.
               </div>
             ) : (
               <div className="acn-nfc-lista">
@@ -2057,6 +2075,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                         )}
                         <div className="acn-fraco acn-nfc-data">
                           Aberto: {new Date(c.created_at).toLocaleString('pt-BR')}
+                          {(c.status === 'Aberto' || c.status === 'Em Atendimento') && (chamadoEsquecido(c)
+                            ? <> · <Selo familia="erro" ponto={false} title={`Sem conclusão há ${PRAZO_CHAMADO_NFC_DIAS} dias ou mais`}>Aberto há {diasDoChamado(c)} dias</Selo></>
+                            : ` · aberto há ${diasDoChamado(c) === 0 ? 'menos de 1 dia' : diasDoChamado(c) + (diasDoChamado(c) === 1 ? ' dia' : ' dias')}`)}
                           {c.atendido_por && ` · Atendente: ${c.atendido_por}`}
                         </div>
                       </div>
@@ -2065,8 +2086,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                           <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>atualizarStatusNfc(c.id,'Em Atendimento')}>Atender</Botao>
                         )}
                         {c.status === 'Em Atendimento' && (
-                          <Botao pequeno variante="primario" icone={mdiCheck} onClick={()=>atualizarStatusNfc(c.id,'Concluído')}>Concluir</Botao>
+                          <Botao pequeno variante="primario" icone={mdiCheck} onClick={()=>concluirChamadoNfc(c)}>Concluir</Botao>
                         )}
+                        {(c.status === 'Aberto' || c.status === 'Em Atendimento') && <Botao pequeno icone={mdiClipboardPlusOutline} title="Abre a Nova OS já preenchida com o cliente, o veículo e o defeito deste chamado" onClick={()=>abrirNovaOsDoChamado(c)}>Abrir OS</Botao>}
                         <Botao pequeno icone={mdiNoteEditOutline} onClick={()=>setModalNfc(c)}>Notas</Botao>
                       </div>
                     </div>

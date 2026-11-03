@@ -587,3 +587,41 @@ export function patchDoMovimento(os: any, movimento: Movimento, dados: any, agor
 /** O recado que fica no histórico da demanda aberta do setor quando o SAC move a OS por fora dela. */
 export const recadoDoMovimento = (os: any, movimento: Movimento, dados: any, usuario: any, agora: string) =>
   ({ texto: `OS ${os?.numero_os || ''} movida pelo SAC de "${os?.status}" para "${movimento.para}"${String(dados?.motivo || '').trim() ? `. Motivo: ${String(dados.motivo).trim()}` : ''}${String(dados?.observacao || '').trim() ? `. ${String(dados.observacao).trim()}` : ''}. Confira esta demanda.`, usuario: usuario?.nome, hora: agora });
+
+// ── Chamados NFC (PLANO_SAC_MELHORIAS_UX.md, A6 e M8, 03/11/2026) ─────────────────────────────────────────────────────────────────────────────────
+/** Decidido com o usuário em 03/11/2026: chamado de cliente aberto (ou em atendimento) há 3 dias corridos ou mais vira alerta vermelho. */
+export const PRAZO_CHAMADO_NFC_DIAS = 3;
+
+/** Dias corridos desde a abertura do chamado (inteiro, nunca negativo, contando o dia do calendário local: aberto ontem à noite = 1). */
+export function diasDoChamado(c: any, agora: Date = new Date()): number {
+  const d = new Date(c?.created_at);
+  if (Number.isNaN(d.getTime())) return 0;
+  const dia = (x: Date) => Date.UTC(x.getFullYear(), x.getMonth(), x.getDate());
+  return Math.max(0, Math.round((dia(agora) - dia(d)) / 86400000));
+}
+
+/** Chamado esquecido = ainda não concluído nem cancelado e aberto há `limite` dias ou mais. */
+export function chamadoEsquecido(c: any, limite: number = PRAZO_CHAMADO_NFC_DIAS, agora: Date = new Date()): boolean {
+  return (c?.status === 'Aberto' || c?.status === 'Em Atendimento') && diasDoChamado(c, agora) >= limite;
+}
+
+/** A Nova OS preenchida com o que o chamado já traz (cliente, contato, veículo, chassi e defeito); quem abre confere e completa. O chamado não abre a OS sozinho. */
+export function formularioDoChamadoNfc(c: any, agora: Date = new Date()) {
+  const { telefone, email } = separarContato(c?.contato_telefone);
+  const quem = String(c?.nome_solicitante || '').trim();
+  const form = {
+    cliente_nome: String(c?.orgao_cliente || quem || ''), telefone, email,
+    defeito_reclamado: String(c?.descricao_defeito || ''),
+    is_veiculo: true,
+    observacoes: `Aberta a partir do chamado NFC${quem ? ' de ' + quem : ''} (chassi ${c?.chassi || '—'}), aberto em ${new Date(c?.created_at || agora).toLocaleDateString('pt-BR')}.`,
+  };
+  const equip = { marca: '', modelo: String(c?.modelo || ''), numero_serie: '', chassi: String(c?.chassi || ''), defeito: String(c?.descricao_defeito || ''), veiculo_id: '' };
+  return { form, equipLista: [equip] };
+}
+
+/** As notas do chamado depois de concluído: o que já estava escrito, mais uma linha com o dia, quem concluiu e o que foi feito (a nota de fechamento é obrigatória). */
+export function textoDoFechamentoDoChamado(notasAntes: any, quem: string, agora: Date, feito: string): string {
+  const antes = String(notasAntes || '').trim();
+  const linha = `[${agora.toLocaleDateString('pt-BR')} · ${quem || 'Sistema'}] Concluído: ${String(feito).trim()}`;
+  return antes ? antes + '\n\n' + linha : linha;
+}
