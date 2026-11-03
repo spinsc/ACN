@@ -23,10 +23,13 @@ import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
 import { pendenciasSanadas, lerVistos, chaveDoUsuario, resumoDaFalta } from './PendenciasSanadas';
 import AvisoPendenciaSanada from './AvisoPendenciaSanada';
 import { modeloDeSeriais, modelosDasOps, linhasDeSerial, jaSerializadoPorProduto } from './SerialDosItens';
-import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesQueNaoSairam, descricaoDaRemessa } from './Remessas';
+import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesQueNaoSairam, descricaoDaRemessa,
+  itensEscolhiveisDaBom, montarFaltando, erroDoFaltando, faltandoDaRemessa, textoDoQueFalta, erroDaDataDeEnvio, dataDaRemessa, porKitDigitado,
+  lerComplementos, lerComplementosAtivosDe, pendenteDaOp, textoDoPendente, diasComPendencia, PRAZO_PENDENCIA_ENVIO_DIAS } from './Remessas';
+import ComplementoDeRemessa from './ComplementoDeRemessa';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
-import { diaBR, Faixa, Botao, Chips, Selo } from './Interface';
+import { diaBR, hojeISO, Faixa, Botao, Chips, Selo } from './Interface';
 import Icone from './Icone';
 import {
   mdiToolboxOutline, mdiPackageVariantClosed, mdiArrowULeftTop, mdiEyeOutline, mdiLinkVariant, mdiTrayArrowDown,
@@ -79,6 +82,10 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   // Remessas (envio parcial de Venda para Envio — fatia 5 do PLANO_RH_DEPARTAMENTOS_ENVIOS.md, 14/10/2026): as remessas ativas de cada OP da fila (a linha mostra "enviadas 2 de 5")
   // e, com a janela de embalagem aberta, as da OP dela (todas, inclusive canceladas: o número da próxima depende delas)
   const [remessasPorOp, setRemessasPorOp] = useState<Map<string, any[]>>(new Map());
+  // E2/E3 do envio parcial (03/11/2026): os complementos (envio, em separado, dos itens que faltaram numa remessa) das OPs da fila — com eles se sabe o que ainda falta enviar
+  const [complementosPorOp, setComplementosPorOp] = useState<Map<string, any[]>>(new Map());
+  const [modalComplemento, setModalComplemento] = useState<any|null>(null);
+  const [complementosDaOp, setComplementosDaOp] = useState<any[]>([]);
   const [remessasDaOp, setRemessasDaOp] = useState<any[]>([]);
   const [erroRemessas, setErroRemessas] = useState('');
   // Conferência do kit contra a BOM da Engenharia (quando a OP tem BOM)
@@ -174,6 +181,9 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     // remessas ativas das Vendas para Envio da fila; leitura que falha deixa a que já estava na tela (a lista de OPs não depende disto)
     const rem = await lerRemessasAtivasDe(daFila.filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
     if (!rem.erro) setRemessasPorOp(rem.porOp);
+    // leitura de complementos que falha deixa o que já estava na tela (sem eles o "falta enviar" ficaria maior do que é)
+    const comp = await lerComplementosAtivosDe(daFila.filter(o => o.tipo_projeto === TIPO_VENDA_ENVIO).map(o => o.id));
+    if (!comp.erro) setComplementosPorOp(comp.porOp);
 
     // O painel de recebimento lista TODA OP com material esperando conferência,
     // inclusive as que ainda estão na fila de kiting aqui em cima.
@@ -261,7 +271,16 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   // "Venda para Envio" vale como envio mesmo sem o campo Fluxo de Entrega preenchido
   const ehEnvio = (o) => soEnvio(fluxoEfetivo(o?.tipo_projeto, o?.fluxo_entrega));
   // a OP já teve remessa? então o botão é o da próxima (fatia 5, 14/10/2026)
-  const rotuloEmbalar = (o) => (remessasPorOp.get(String(o?.id)) || []).length ? 'EMBALAR PRÓXIMA REMESSA' : 'EMBALAR E ENVIAR';
+  // O que ainda falta enviar da OP (itens que faltaram nas remessas, menos os complementos) e se só resta isso (todas as unidades já saíram): nesse caso a ação da fila é o complemento, não uma nova embalagem
+  const pendenteDe = (o) => pendenteDaOp(remessasPorOp.get(String(o?.id)) || [], complementosPorOp.get(String(o?.id)) || []);
+  const soComplemento = (o) => o?.tipo_projeto === TIPO_VENDA_ENVIO && (remessasPorOp.get(String(o?.id)) || []).length > 0 && saldoDeUnidades(o, remessasPorOp.get(String(o?.id)) || []) === 0 && pendenteDe(o).length > 0;
+  const rotuloEmbalar = (o) => soComplemento(o) ? 'REGISTRAR COMPLEMENTO' : (remessasPorOp.get(String(o?.id)) || []).length ? 'EMBALAR PRÓXIMA REMESSA' : 'EMBALAR E ENVIAR';
+  const abrirComplemento = async (o) => {
+    const r = await lerRemessas(o.id);
+    if (r.erro) { mostrarAviso(`Não consegui ler as remessas desta OP (${r.erro}). Tente de novo.`, 'atencao'); return; }
+    setModalComplemento({ opl: o, remessas: r.remessas });
+  };
+  const acaoEmbalar = (o) => soComplemento(o) ? abrirComplemento(o) : abrirModalEmbalagem(o);
   const linhasSeriaisIniciais = (o) => {
     if (Array.isArray(o?.seriais_itens) && o.seriais_itens.length) return o.seriais_itens.map(x => ({ produto: x.produto || '', serial: x.serial || '' }));
     return Array.from({ length: Math.max(1, Number(o?.quantidade) || 1) }, () => ({ produto: '', serial: '' }));
@@ -336,6 +355,10 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     // Venda composta não sai em remessas: cada setor embala a parte dele e o frete é um só (T3)
     let remessas: any[] = []; let erroRem = '';
     if (ehVendaEnvioOp(opl) && !composta) { const r = await lerRemessas(opl.id); remessas = r.remessas; erroRem = r.erro || ''; }
+    // E3: o que ainda falta enviar das remessas anteriores entra na conta de "a OP só sai com tudo completo"; leitura recusada trava a embalagem (não dá para fingir que nada falta)
+    let comps: any[] = [];
+    if (ehVendaEnvioOp(opl) && !composta && remessas.length) { const c = await lerComplementos(opl.id); comps = c.complementos.filter(x => !x.cancelado); if (c.erro) erroRem = erroRem || `complementos: ${c.erro}`; }
+    setComplementosDaOp(comps);
     setRemessasDaOp(remessas); setErroRemessas(erroRem);
     const saldo = ehVendaEnvioOp(opl) ? (composta ? unidadesDaOp(opl) : Math.max(1, saldoDeUnidades(opl, remessas))) : 0;
     const jaTemRemessa = remessas.some(r => !r.cancelada);
@@ -355,6 +378,8 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       itens: listaPronta ? linhasDeSerial(modeloSerial, saldo, unidadesDaOp(opl), jaSerial, [])
         : ehVendaEnvioOp(opl) && jaTemRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais(opl),
       unidades: ehVendaEnvioOp(opl) ? String(saldo) : '',   // o padrão é mandar tudo o que falta: quem envia de uma vez só não muda nada
+      // E1 do envio parcial (03/11/2026): o dia real do envio (hoje; pode ser passado), o rastreio e os itens que ficaram faltando em cada kit
+      data_envio: hojeISO(), rastreio: '', faltando: [],
       seriais: opl.seriais_equipamentos || '',
       peso_total: '', volumes: '1',
       altura: '', largura: '', comprimento: '',
@@ -534,7 +559,22 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     if (vendaEnvio && !(unidadesRemessa >= 1 && unidadesRemessa <= saldoOp)) { alert(`Informe quantas unidades vão nesta remessa: de 1 a ${saldoOp}.`); return; }
     const remessasAtivas = composta ? [] : remessasDaOp.filter(r => !r.cancelada);
     const parcial = vendaEnvio && !composta && unidadesRemessa < saldoOp;
-    const comRemessa = vendaEnvio && !composta && (parcial || remessasAtivas.length > 0);
+    // E1 do envio parcial (03/11/2026): data real do envio, rastreio e itens faltando. Qualquer um deles faz a venda virar REMESSA (é ela que guarda esses dados), mesmo enviando o saldo inteiro.
+    const remessaDaOp = vendaEnvio && !composta;
+    const erroData = remessaDaOp ? erroDaDataDeEnvio(f.data_envio, hojeISO()) : '';
+    if (erroData) { mostrarAviso(erroData, 'atencao'); return; }
+    const erroFalt = remessaDaOp ? erroDoFaltando(f.faltando) : '';
+    if (erroFalt) { mostrarAviso(erroFalt, 'atencao'); return; }
+    const faltandoItens = remessaDaOp ? montarFaltando(f.faltando, unidadesRemessa) : [];
+    const dataEnvio = remessaDaOp ? (String(f.data_envio || '').trim() || hojeISO()) : null;
+    const rastreio = remessaDaOp ? String(f.rastreio || '').trim() : '';
+    // remessa que JÁ SAIU (data anterior a hoje): a Logística não tem o que cotar, então não nasce pedido de frete (o rastreio fica na remessa)
+    const jaSaiu = !!dataEnvio && dataEnvio < hojeISO();
+    // E3 (03/11/2026): a OP só sai da fila com kits E itens completos. Com item faltando nesta remessa, ou ainda por complementar de uma anterior, ela fica no ${setor} mesmo enviando todas as unidades.
+    const pendenteAntes = remessaDaOp ? pendenteDaOp(remessasAtivas, complementosDaOp) : [];
+    const temPendencia = faltandoItens.length > 0 || pendenteAntes.length > 0;
+    const segura = !!parcial || (remessaDaOp && temPendencia);
+    const comRemessa = vendaEnvio && !composta && (parcial || remessasAtivas.length > 0 || faltandoItens.length > 0 || jaSaiu || !!rastreio);
     if (vendaEnvio) {
       const qtdVendida = unidadesRemessa;
       if (itensSeriais.some(x => !x.produto)) { alert('Informe o produto de cada serial.'); return; }
@@ -605,6 +645,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     }
     // venda composta: a parte deste setor é gravada à parte e o frete único só nasce quando o último setor terminar (T3, 22/10/2026)
     if (composta) { await concluirParteDaVendaComposta(f, itensSeriais); return; }
+    if (jaSaiu && !await confirmar(`Esta remessa já saiu em ${diaBR(dataEnvio)}.\n\nVou registrá-la com essa data e SEM abrir pedido de frete para a Logística (não há o que cotar). Confirma?`)) return;
     setSalvandoEmb(true);
     const opl = modalEmbalagem;
     const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
@@ -614,19 +655,20 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     // Vale o que está na tela: a OP pode ter chegado aqui sem resposta, ou o
     // Almoxarifado pode estar corrigindo o que o Comercial respondeu.
     const freteComCliente = f.frete_responsavel === 'FOB';
+    const semPedidoDeFrete = freteComCliente || jaSaiu;   // 03/11/2026: remessa que já saiu não abre cotação
 
     // fatia 5 (14/10/2026): na ÚLTIMA remessa, a OP só vai direto para o Comercial (FOB) se nenhum frete de remessa anterior ainda estiver aberto — lido ANTES de gravar qualquer coisa,
     // para uma leitura que falha não deixar a OP no meio do caminho
     let fretesAbertosAntes = 0;
-    if (comRemessa && !parcial) {
+    if (comRemessa && !segura) {
       const ab = await contarFretesQueNaoSairam(opl.id);   // 29/10/2026: frete em trânsito não segura mais a OP, só o que ainda não saiu
       if (ab.erro) { setSalvandoEmb(false); mostrarAviso(`Não consegui conferir os fretes das remessas anteriores (${ab.erro}). Tente de novo.`, 'atencao'); return; }
       fretesAbertosAntes = ab.abertos;
     }
     // para onde a OP vai depois desta embalagem: pra cotação de frete (CIF) ou já pra liberação comercial (FOB, sem cotação); a remessa parcial NÃO muda a etapa da OP
-    const statusDepois = comRemessa && !parcial
-      ? statusDepoisDaUltimaRemessa({ freteComCliente, fretesAbertos: fretesAbertosAntes, statusLiberacao: statusDeLiberacaoComercial(opl) })
-      : (freteComCliente ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete');
+    const statusDepois = comRemessa && !segura
+      ? statusDepoisDaUltimaRemessa({ freteComCliente: semPedidoDeFrete, fretesAbertos: fretesAbertosAntes, statusLiberacao: statusDeLiberacaoComercial(opl) })
+      : (semPedidoDeFrete ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete');
 
     // 1) a OP sai do caminho da produção
     const difEmb = divergencias(conferencia).length ? 'Diferença com a BOM — ' + resumoDivergencias(conferencia) : '';
@@ -665,6 +707,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         medida_altura: num(f.altura), medida_largura: num(f.largura), medida_comprimento: num(f.comprimento),
         destino_cep: formatarCep(f.destino_cep), destino_cidade: f.destino_cidade.trim(), destino_uf: f.destino_uf,
         frete_responsavel: f.frete_responsavel, observacoes: f.observacoes || null,
+        data_envio: dataEnvio, rastreio: rastreio || null, faltando: faltandoItens,
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
       }]).select('id');
       if (erroRem || !remNova?.[0]?.id) {
@@ -678,7 +721,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     }
 
     // 1b) a OP: parcial não muda de etapa (continua na fila do Almoxarifado com o saldo; só recebe seriais, a conferência do kit, o destino e o recado); as demais andam como sempre andaram
-    if (parcial) {
+    if (segura) {
       const { error: erroOp } = await supabase.from('oples').update({ obs_almox: obsEmb, responsavel_almox: currentUser?.nome, ...extraOp }).eq('id', opl.id);
       if (erroOp) {
         setSalvandoEmb(false); fetchAll();
@@ -706,7 +749,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
 
     // 2) nasce a solicitação de frete (status default 'Cotação') pra Logística
     //    — só quando é a empresa quem paga (CIF); com remessa, um pedido de frete por remessa
-    const { data: freteCriado, error } = freteComCliente ? { data: null, error: null } : await supabase.from('pcp_fretes').insert([{
+    const { data: freteCriado, error } = semPedidoDeFrete ? { data: null, error: null } : await supabase.from('pcp_fretes').insert([{
       direcao: 'outbound',
       descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim() + (comRemessa ? ` — ${descricaoDaRemessa(opl, numeroRemessa, unidadesRemessa)}` : ''),
       destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
@@ -757,11 +800,14 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     //    ninguém: "embalado, foi para cotação de frete" é exatamente o
     //    recado que falta hoje. Registra no acompanhamento e notifica.
     const destinoTxt = [f.destino_cidade, f.destino_uf].filter(Boolean).join('/');
-    const irDireto = freteComCliente && statusDepois !== 'Aguardando Cotacao Frete';
+    const irDireto = semPedidoDeFrete && statusDepois !== 'Aguardando Cotacao Frete';
+    const textoDoFrete = jaSaiu ? `Remessa que já saiu em ${diaBR(dataEnvio)}: sem pedido de frete à Logística.` : freteComCliente ? 'Frete por conta do cliente (FOB).' : 'Solicitação de frete aberta para a Logística cotar.';
     const recado = comRemessa
       ? `Remessa ${numeroRemessa} embalada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidade(s)): ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. `
-        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no ${setor}. ` : 'Foi a última remessa: a OP segue. ')
-        + (freteComCliente ? 'Frete por conta do cliente (FOB).' : 'Solicitação de frete aberta para a Logística cotar.')
+        + (parcial ? `Faltam ${saldoOp - unidadesRemessa} unidade(s): a OP continua no ${setor}. ` : segura ? `Todas as unidades saíram, mas faltam itens (${textoDoPendente([...pendenteAntes, ...faltandoItens.map(i => ({ ...i, remessa_id: '', remessa_numero: numeroRemessa }))])}): a OP continua no ${setor} até o complemento. ` : 'Foi a última remessa: a OP segue. ')
+        + textoDoFrete
+        + (rastreio ? ` Rastreio: ${rastreio}.` : '')
+        + (faltandoItens.length ? ` Faltam em cada kit: ${textoDoQueFalta(faltandoItens)}.` : '')
       : freteComCliente
       ? `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Frete por conta do cliente (FOB) — liberado direto para o Comercial.`
       : `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${destinoTxt}. Solicitação de frete aberta para a Logística cotar.`;
@@ -772,29 +818,43 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       criado_em: new Date().toISOString(),
     });
     await notificarEnvolvidosOp({
-      ref: opl.opl, texto: recado, assunto: parcial ? 'Remessa parcial e frete' : 'Embalagem e frete',
+      ref: opl.opl, texto: recado, assunto: segura ? 'Remessa parcial e frete' : 'Embalagem e frete',
       autorId: currentUser?.id ? String(currentUser.id) : null,
       autorNome: currentUser?.nome || null,
     });
 
     setSalvandoEmb(false);
-    if (parcial) {
+    if (segura) {
       alert(`Remessa ${numeroRemessa} registrada (${unidadesRemessa} de ${unidadesDaOp(opl)} unidades). `
-        + (error ? `Houve erro ao abrir a solicitação de frete: ${error.message}. ` : freteComCliente ? 'Frete por conta do cliente (FOB). ' : 'Solicitação de frete aberta para a Logística cotar. ')
-        + `A OP ${opl.opl} continua no ${setor} com ${saldoOp - unidadesRemessa} unidade(s) por enviar.`);
+        + (error ? `Houve erro ao abrir a solicitação de frete: ${error.message}. ` : textoDoFrete + ' ')
+        + (parcial ? `A OP ${opl.opl} continua no ${setor} com ${saldoOp - unidadesRemessa} unidade(s) por enviar.` : `Todas as unidades saíram, mas ainda falta enviar item: a OP ${opl.opl} continua no ${setor} até o complemento (botão REGISTRAR COMPLEMENTO).`));
     }
     else if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
     else if (irDireto) { alert(`Embalagem registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`); }
-    else if (freteComCliente) { alert(`Última remessa registrada. Frete por conta do cliente, mas ainda há frete de remessa anterior em aberto — a OP ${opl.opl} espera a entrega dele para seguir para o Comercial.`); }
+    else if (semPedidoDeFrete) { alert(`Última remessa registrada, mas ainda há frete de remessa anterior em aberto — a OP ${opl.opl} espera ele sair para seguir para o Comercial.`); }
     else { alert(`Embalagem registrada. Solicitação de frete aberta para a Logística cotar (OP ${opl.opl}).`); }
     setModalEmbalagem(null);
     fetchAll();
+  };
+
+  // E3: o último complemento fecha a OP. Não nasce frete novo (cada remessa já tem o seu): se algum frete ainda não saiu a OP espera por ele, senão vai para a liberação comercial.
+  const concluirDepoisDoComplemento = async (opl) => {
+    const ab = await contarFretesQueNaoSairam(opl.id);
+    if (ab.erro) { mostrarAviso(`O complemento foi registrado, mas não consegui conferir os fretes (${ab.erro}); a OP ${opl.opl} continua na fila. Abra o complemento de novo para concluir.`, 'atencao'); return; }
+    const statusDepois = ab.abertos > 0 ? 'Aguardando Cotacao Frete' : statusDeLiberacaoComercial(opl);
+    const gravou = await setAlmox(opl, 'Kit OK', statusDepois, opl.obs_almox || '', {});
+    if (!gravou) return;
+    setModalComplemento(null);
+    mostrarAviso(`Não falta mais nada da OP ${opl.opl}: ` + (ab.abertos > 0 ? 'ela espera os fretes das remessas saírem para seguir para o Comercial.' : 'ela segue para a liberação comercial.'), 'ok');
   };
 
   // Cancelar uma remessa (fatia 5, 14/10/2026): marca como cancelada (nada é apagado), cancela o frete dela se ainda não foi entregue e devolve as unidades — e os seriais — ao saldo da OP.
   // Só existe aqui, na janela de embalagem, ou seja, enquanto a OP ainda está na fila do Almoxarifado.
   const cancelarRemessa = async (r) => {
     const opl = modalEmbalagem; if (!opl) return;
+    const compsDaRemessa = await lerComplementos(opl.id);
+    if (compsDaRemessa.erro) { mostrarAviso(`Não consegui conferir os complementos desta remessa (${compsDaRemessa.erro}). Nada foi cancelado.`, 'atencao'); return; }
+    if (compsDaRemessa.complementos.some(c => !c.cancelado && c.remessa_id === r.id)) { mostrarAviso(`A remessa ${r.numero} tem complemento registrado: cancele o complemento antes (botão REGISTRAR COMPLEMENTO na fila).`, 'atencao'); return; }
     const motivo = await pedirTexto(`Motivo do cancelamento da remessa ${r.numero} (${r.unidades} unidade(s)):`);
     if (motivo === null) return;
     if (!String(motivo).trim()) { mostrarAviso('Escreva o motivo do cancelamento.', 'atencao'); return; }
@@ -1189,6 +1249,16 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                             <Icone path={mdiTruckOutline} size={13} /> ENVIO PARCIAL — {resumoDeRemessas(o, remessasPorOp.get(String(o.id)))}
                           </Selo></div>
                         )}
+                        {/* E3 (03/11/2026): a OP só sai da fila com kits E itens completos. Vermelho porque é pendência que alguém precisa resolver; passou do prazo, o selo diz. */}
+                        {pendenteDe(o).length > 0 && (() => {
+                          const pend = pendenteDe(o);
+                          const dias = diasComPendencia(remessasPorOp.get(String(o.id)) || [], pend, hojeISO());
+                          return (
+                            <div className="acn-alm-embalar"><Selo familia="erro" ponto={false} title="Itens que saíram faltando nas remessas e ainda não foram enviados. Clique para registrar o complemento." onClick={() => abrirComplemento(o)}>
+                              <Icone path={mdiAlertOutline} size={13} /> Falta enviar: {textoDoPendente(pend)}{dias > 0 ? ` · há ${dias} dia(s)` : ''}{dias >= PRAZO_PENDENCIA_ENVIO_DIAS ? ' — ATRASADO' : ''}
+                            </Selo></div>
+                          );
+                        })()}
                       </td>
                       <td className="acn-alm-veic">
                         <VeiculoOuEnvio o={o} />
@@ -1215,18 +1285,18 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                               passagem, então essa checagem não serve aqui. */}
                           {o.status_geral === STATUS_EMBALAGEM ? (
                             <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
-                              disabled={!!faltandoPara(o).length}
+                              disabled={!!faltandoPara(o).length && !soComplemento(o)}
                               title={tituloEmbalar(o, 'Produção concluída: pesar, medir e abrir a cotação de frete')}
-                              onClick={()=>abrirModalEmbalagem(o)}>
+                              onClick={()=>acaoEmbalar(o)}>
                               {rotuloEmbalar(o)}{faltandoPara(o).length ? ` (${faltandoPara(o).length} p/ chegar)` : ''}
                             </Botao>
                           ) : (<>
                           {o.status_almox !== 'Kit OK' && (
                             ehEnvio(o) ? (
                               <Botao variante="primario" pequeno icone={mdiPackageVariantClosed}
-                                disabled={!!faltandoPara(o).length}
+                                disabled={!!faltandoPara(o).length && !soComplemento(o)}
                                 title={tituloEmbalar(o, 'Esta OP não passa por produção: separar, embalar e enviar')}
-                                onClick={()=>abrirModalEmbalagem(o)}>
+                                onClick={()=>acaoEmbalar(o)}>
                                 {rotuloEmbalar(o)}{faltandoPara(o).length ? ` (${faltandoPara(o).length} p/ chegar)` : ''}
                               </Botao>
                             ) : (
@@ -1553,7 +1623,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                     </div>
                     {ativas.map(r => (
                       <div key={r.id} className="acn-alm-remessa-linha" data-teste="remessa-anterior">
-                        <span><strong>Remessa {r.numero}</strong> — {r.unidades} un. · {diaBR(r.criado_em)} · {r.frete_responsavel === 'FOB' ? 'frete do cliente (FOB)' : r.frete_id ? 'frete aberto' : 'sem frete ligado'}</span>
+                        <span><strong>Remessa {r.numero}</strong> — {r.unidades} un. · {diaBR(dataDaRemessa(r))} · {r.frete_responsavel === 'FOB' ? 'frete do cliente (FOB)' : r.frete_id ? 'frete aberto' : 'sem frete ligado'}{r.rastreio ? ` · rastreio ${r.rastreio}` : ''}{faltandoDaRemessa(r).length ? <> · <strong className="acn-alm-faltam" data-teste="remessa-faltam">faltam: {textoDoQueFalta(faltandoDaRemessa(r))}</strong></> : null}</span>
                         <Botao variante="perigo-sec" pequeno icone={mdiClose} title={`Cancelar a remessa ${r.numero}: as ${r.unidades} unidade(s) voltam ao saldo`} onClick={() => cancelarRemessa(r)}>Cancelar remessa {r.numero}</Botao>
                       </div>
                     ))}
@@ -1566,6 +1636,54 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                           ? `Remessa parcial: sobram ${saldo - n} unidade(s) e a OP continua aqui no ${setor} para a próxima remessa.`
                           : `Saldo: ${saldo} unidade(s). Enviando todas, a OP segue para o próximo passo.`}
                       </div>
+                    </div>
+                    <div className="acn-alm-remessa-datas">
+                      <div className="form-group">
+                        <label className="acn-label" htmlFor="alm-data-envio">Dia em que a remessa saiu</label>
+                        <input id="alm-data-envio" className="acn-input" type="date" max={hojeISO()} value={embForm.data_envio || ''} onChange={e => setEmbForm(fm => ({ ...fm, data_envio: e.target.value }))} />
+                      </div>
+                      <div className="form-group acn-alm-rastreio">
+                        <label className="acn-label" htmlFor="alm-rastreio">Rastreio (opcional)</label>
+                        <input id="alm-rastreio" className="acn-input" placeholder="Código do correio ou da transportadora" value={embForm.rastreio || ''} onChange={e => setEmbForm(fm => ({ ...fm, rastreio: e.target.value }))} />
+                      </div>
+                    </div>
+                    {embForm.data_envio && embForm.data_envio < hojeISO() && (
+                      <div className="acn-ajuda" data-teste="aviso-ja-saiu">Data passada: a remessa é registrada como <strong>já enviada</strong> em {diaBR(embForm.data_envio)} e não abre pedido de frete para a Logística.</div>
+                    )}
+                    <div className="form-group" data-teste="quadro-faltando">
+                      <div className="acn-label">Algum item ficou faltando nos kits desta remessa?</div>
+                      <div className="acn-ajuda">Diga quanto falta em <strong>cada kit</strong>; o total é calculado pelas {Math.max(0, n) || 0} unidade(s) desta remessa. Depois o complemento é registrado na própria remessa.</div>
+                      {(embForm.faltando || []).map((l, i) => {
+                        const por = porKitDigitado(l.por_kit);
+                        return (
+                          <div key={i} className="acn-alm-faltando-linha" data-teste="linha-faltando">
+                            <input className={'acn-input' + (l.livre ? '' : ' acn-alm-produto-fixo')} placeholder="Item que falta" value={l.nome} readOnly={!l.livre} tabIndex={l.livre ? undefined : -1}
+                              aria-label={`Item faltando ${i + 1}`} onChange={e => setEmbForm(fm => ({ ...fm, faltando: fm.faltando.map((x, j) => j === i ? { ...x, nome: e.target.value } : x) }))} />
+                            <input className="acn-input" type="number" min={0} step={1} placeholder="Falta em cada kit" value={l.por_kit} aria-label={`Quanto falta em cada kit de ${l.nome || 'item ' + (i + 1)}`}
+                              onChange={e => setEmbForm(fm => ({ ...fm, faltando: fm.faltando.map((x, j) => j === i ? { ...x, por_kit: e.target.value } : x) }))} />
+                            <span className="acn-ajuda">{por > 0 ? `= ${por * (Math.max(0, n) || 0)} un.` : ''}</span>
+                            <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Tirar este item" aria-label="Tirar este item"
+                              onClick={() => setEmbForm(fm => ({ ...fm, faltando: fm.faltando.filter((_, j) => j !== i) }))} />
+                          </div>
+                        );
+                      })}
+                      {(() => {
+                        const daBom = itensEscolhiveisDaBom(modalEmbalagem).filter(b => !(embForm.faltando || []).some(l => l.chave === b.chave));
+                        return (
+                          <select className="acn-input" data-teste="faltando-escolha" aria-label="Adicionar item que está faltando" value="" disabled={!!erroRemessas}
+                            onChange={e => {
+                              const v = e.target.value; if (!v) return;
+                              const novo = v === '__livre__' ? { chave: 'livre-' + Date.now(), item_id: null, nome: '', codigo: null, por_kit: '1', livre: true } : (() => { const b = daBom.find(x => x.chave === v); return b ? { ...b, por_kit: '1', livre: false } : null; })();
+                              if (novo) setEmbForm(fm => ({ ...fm, faltando: [...(fm.faltando || []), novo] }));
+                            }}>
+                            <option value="">+ Adicionar item que ficou faltando…</option>
+                            {daBom.map(b => <option key={b.chave} value={b.chave}>{b.nome}{b.codigo ? ` (${b.codigo})` : ''}</option>)}
+                            <option value="__livre__">Outro item (digitar o nome)</option>
+                          </select>
+                        );
+                      })()}
+                      {!itensEscolhiveisDaBom(modalEmbalagem).length && <div className="acn-ajuda">Esta OP ainda não tem BOM liberada pelo PCP: use "Outro item" e digite o nome.</div>}
+                      {(embForm.faltando || []).some(l => porKitDigitado(l.por_kit) > 0) && <Faixa tom="erro">Com item faltando, a OP <strong>continua no {setor}</strong> até o complemento ser registrado, mesmo saindo todas as unidades.</Faixa>}
                     </div>
                   </div>
                 );
@@ -1746,7 +1864,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                   }
                   // remessa parcial (fatia 5): a OP não anda; só nasce a remessa (e o frete dela, se CIF)
                   const n = Math.floor(Number(embForm.unidades));
-                  const parcialBtn = ehVendaEnvioOp(modalEmbalagem) && n >= 1 && n < Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp));
+                  const parcialBtn = ehVendaEnvioOp(modalEmbalagem) && ((n >= 1 && n < Math.max(1, saldoDeUnidades(modalEmbalagem, remessasDaOp))) || (embForm.faltando || []).some(l => porKitDigitado(l.por_kit) > 0));
                   return salvandoEmb ? 'Salvando...'
                     : parcialBtn ? (embForm.frete_responsavel === 'FOB' ? 'Registrar remessa (frete do cliente)' : 'Registrar remessa e solicitar frete')
                     : embForm.frete_responsavel === 'FOB' ? 'Finalizar e liberar para o Comercial'
@@ -1756,6 +1874,12 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
             </div>
           </div>
         </div>
+      )}
+
+      {modalComplemento && (
+        <ComplementoDeRemessa opl={modalComplemento.opl} remessas={modalComplemento.remessas} setor={setor} currentUser={currentUser} modulo={modulo}
+          onFechar={() => setModalComplemento(null)}
+          onGravado={({ completa }) => { fetchAll(true); if (completa) concluirDepoisDoComplemento(modalComplemento.opl); }} />
       )}
 
       {modalSeriais && (
