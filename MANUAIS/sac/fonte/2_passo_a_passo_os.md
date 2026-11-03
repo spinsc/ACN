@@ -287,19 +287,21 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Quando usar:** a OS está **Faturada - Aguardando Entrega**, ou **Concluído** e **sem cobrança**.
 
-**Entrega de OS do Laboratório:**
+**Entrega da OS (Laboratório ou veículo):** o botão é **Entrega — assinatura e fotos** nos dois casos e a janela pede o mesmo.
 
 1. Clique **Entrega — assinatura e fotos**.
-2. Digite o **Nome de quem retirou\***.
-3. (Opcional) **Fotos de saída**: escolha as imagens do equipamento entregue.
-4. Peça a **assinatura de retirada\*** e desenhe no quadro; clique **Confirmar assinatura**.
+2. Digite o **Nome de quem retirou\*** (na janela do veículo, **Nome de quem recebeu o veículo\***).
+3. (Opcional) **Fotos de saída** (no veículo, **Fotos do veículo na entrega**): escolha as imagens do que foi entregue.
+4. Peça a **assinatura de retirada\*** (no veículo, **Assinatura de quem recebeu\***) e desenhe no quadro; clique **Confirmar assinatura**.
 5. Clique **Confirmar entrega**.
 
 ![Janela Entrega (Laboratório)](img/20-entrega.jpg)
 
-**Entrega do veículo:** o botão é **Entrega — nome de quem recebeu** e a janela é mais simples: pede só o **nome de quem recebeu o veículo\***. Não pede assinatura nem fotos.
+**Entrega do veículo:** a janela mostra no alto o cliente, o modelo e a placa, e tem o mesmo conteúdo: a **assinatura é obrigatória** e as **fotos são opcionais**, como no Laboratório. Se o cliente ainda não assinou, o sistema avisa e não registra a entrega.
 
-**O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome e, no Laboratório, a assinatura e as fotos. Avisa por WhatsApp ("OS entregue"). A OS entregue **continua na lista e no quadro**, em **Concluído**.
+![Janela Entrega de Veículo](img/20b-entrega-do-veiculo.jpg)
+
+**O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome, a assinatura e as fotos (no Laboratório e no veículo). Avisa por WhatsApp ("OS entregue" ou "Veículo entregue"). A entrega do veículo só é gravada se a OS ainda estiver esperando a entrega: se outra pessoa já entregou, o sistema avisa e atualiza a lista. A OS entregue **continua na lista e no quadro**, em **Concluído**.
 
 > **Atenção:** se a assinatura ou uma foto **não subir**, a entrega **não é registrada** e o que você digitou fica na janela para tentar de novo.
 

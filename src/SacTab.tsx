@@ -375,7 +375,6 @@ function SacTabCompleto({ currentUser }) {
   const [modalAnexar, setModalAnexar] = useState<any>(null);
   const [anexarFiles, setAnexarFiles]   = useState<File[]>([]);
   const [modalEntregaVeic, setModalEntregaVeic] = useState<any>(null);
-  const [nomeRecebeuVeic, setNomeRecebeuVeic]   = useState('');
   const [modalFinanceiro, setModalFinanceiro] = useState<any>(null);
   const [financeiroForm, setFinanceiroForm] = useState({ valor_total:'', valor_mao_de_obra:'' });
   // Editar responsável da OS
@@ -852,26 +851,34 @@ function SacTabCompleto({ currentUser }) {
   };
 
   // ── SAÍDA / ENTREGA ───────────────────────────────────────────────────────
+  // A prova da entrega (assinatura e fotos) sobe ANTES de a OS ser gravada, e as duas entregas (Laboratório e veículo) usam este passo: a do veículo passou a pedir a mesma prova (A5, decidido com o
+  // usuário em 03/11/2026). Etapa 7.27: assinatura ou foto de saída que não subia era descartada em silêncio (a OS ficava "Entregue" sem a prova da retirada) e a gravação recusada seguia como se
+  // tivesse dado certo, com o WhatsApp de "OS entregue". Agora avisa e para; o formulário, a assinatura desenhada e as fotos escolhidas continuam como estão para tentar de novo. Devolve null se algo falhou.
+  const subirProvaDaEntrega = async (os: any, sig: string | null, files: File[]): Promise<{ assinatura: string; fotos: string[] } | null> => {
+    if (!sig) { alert('Assinatura obrigatória!'); return null; }
+    const pasta = os.numero_os.replace('/','_');
+    const assinatura = await uploadAssinatura(sig, `os_${pasta}_saida`);
+    if (!assinatura) { alert('Falha ao enviar a assinatura: ' + motivoDoUltimoEnvio() + '\n\nA entrega NÃO foi registrada: tente de novo.'); return null; }
+    const fotos: string[] = [];
+    for (const f of files) {
+      const u = await uploadFoto(f, `os_${pasta}/saida`);
+      if (!u) { alert(`Falha ao enviar a foto "${f.name}": ${motivoDoUltimoEnvio()}\n\nA entrega NÃO foi registrada: corrija e tente de novo, ou tire a foto da lista.`); return null; }
+      fotos.push(u);
+    }
+    return { assinatura, fotos };
+  };
+
   const salvarSaida = async () => {
     if (!saidaForm.nome.trim()) { alert('Informe o nome de quem retirou!'); return; }
-    if (!saidaForm.sig) { alert('Assinatura obrigatória!'); return; }
-    const url = await uploadAssinatura(saidaForm.sig, `os_${modalSaida.numero_os.replace('/','_')}_saida`);
-    // Etapa 7.27: assinatura ou foto de saída que não subia era descartada em silêncio (a OS ficava "Entregue" sem a prova da retirada) e a gravação recusada seguia como se tivesse dado certo, com o
-    // WhatsApp de "OS entregue". Agora avisa e para; o formulário, a assinatura desenhada e as fotos escolhidas continuam como estão para tentar de novo.
-    if (!url) { alert('Falha ao enviar a assinatura: ' + motivoDoUltimoEnvio() + '\n\nA entrega NÃO foi registrada: tente de novo.'); return; }
+    const prova = await subirProvaDaEntrega(modalSaida, saidaForm.sig, fotosSaidaFiles);
+    if (!prova) return;
     const agora = new Date().toISOString();
-    const urlsFotos: string[] = [];
-    for (const f of fotosSaidaFiles) {
-      const u = await uploadFoto(f, `os_${modalSaida.numero_os.replace('/','_')}/saida`);
-      if (!u) { alert(`Falha ao enviar a foto "${f.name}": ${motivoDoUltimoEnvio()}\n\nA entrega NÃO foi registrada: corrija e tente de novo, ou tire a foto da lista.`); return; }
-      urlsFotos.push(u);
-    }
     const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Entregue',
       nome_retirada_saida: saidaForm.nome,
-      assinatura_saida_url: url,
+      assinatura_saida_url: prova.assinatura,
       data_saida: agora,
-      fotos_saida: urlsFotos,
+      fotos_saida: prova.fotos,
       atualizado_em: agora,
     }).eq('id', modalSaida.id);
     if (error) { alert('Erro ao registrar a entrega: ' + explicarErroDoBanco(error)); return; }
@@ -1041,28 +1048,37 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     fetchOrdens();
   };
 
+  // A5 (03/11/2026, decidido com o usuário): a entrega do veículo colhe a mesma prova da do Laboratório — nome de quem recebeu, fotos (opcionais) e assinatura (obrigatória) — e usa o mesmo formulário
+  // (`saidaForm`, `fotosSaidaFiles`): só uma janela de entrega fica aberta por vez. Antes pedia só o nome.
   const liberarEntregaVeicular = (os: any) => {
-    setNomeRecebeuVeic('');
+    setSaidaForm({ nome: '', sig: null }); setFotosSaidaFiles([]);
     setModalEntregaVeic(os);
   };
 
   const confirmarEntregaVeicular = async () => {
-    if (!nomeRecebeuVeic.trim()) { alert('Informe o nome de quem recebeu o veículo!'); return; }
+    const nome = saidaForm.nome.trim();
+    if (!nome) { alert('Informe o nome de quem recebeu o veículo!'); return; }
     const os = modalEntregaVeic;
+    const prova = await subirProvaDaEntrega(os, saidaForm.sig, fotosSaidaFiles);
+    if (!prova) return;
     const agora = new Date().toISOString();
-    const { error } = await supabase.from('sac_ordens_servico').update({
+    // só pega se a OS ainda está na etapa que a janela viu (outra pessoa pode ter entregado); a linha devolvida confirma
+    const { data: gravadas, error } = await supabase.from('sac_ordens_servico').update({
       status: 'Entregue',
       data_saida: agora,
-      nome_retirada_saida: nomeRecebeuVeic.trim(),
+      nome_retirada_saida: nome,
+      assinatura_saida_url: prova.assinatura,
+      fotos_saida: prova.fotos,
       atualizado_em: agora,
-    }).eq('id', os.id);
+    }).eq('id', os.id).eq('status', os.status).select('id');
     if (error) { alert('Erro ao registrar a entrega do veículo: ' + explicarErroDoBanco(error)); return; }
+    if (!gravadas?.length) { alert('A OS já não está esperando a entrega (outra pessoa pode ter entregado). A lista foi atualizada.'); setModalEntregaVeic(null); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: { status: os.status }, newRow: { status: 'Entregue' }, user: currentUser });
     notificarEvento('sac_os_entregue', `*Veículo entregue — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
-Recebido por: ${nomeRecebeuVeic.trim()}`);
-    setModalEntregaVeic(null);
+Recebido por: ${nome}`);
+    setModalEntregaVeic(null); setSaidaForm({ nome: '', sig: null }); setFotosSaidaFiles([]);
     fetchOrdens();
   };
 
@@ -1301,7 +1317,7 @@ OK = ACN   |   Cancelar = DETECH`;
       // Concluído (OS veicular): SEM cobrança → SAC entrega o veículo, não vai ao Fiscal; COBRADA → SAC envia ao Fiscal (S2)
       if (os.status === 'Concluído') {
         btns.push(osSemCobranca(os)
-          ? <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede só o nome de quem recebeu o veículo" onClick={()=>liberarEntregaVeicular(os)}>Entrega — nome de quem recebeu</Botao>
+          ? <Botao key="entrega0" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede o nome de quem recebeu o veículo, as fotos e a assinatura" onClick={()=>liberarEntregaVeicular(os)}>Entrega — assinatura e fotos</Botao>
           : <Botao key="fiscal0" pequeno variante="primario" icone={mdiSendOutline} title="Pede o valor e o CPF ou CNPJ da nota" onClick={()=>setModalFiscalOS(os)}>Enviar ao Fiscal — valor e CPF/CNPJ</Botao>);
       }
       // Aguardando CQ → sem ação do SAC, Qualidade que audita
@@ -1329,7 +1345,7 @@ OK = ACN   |   Cancelar = DETECH`;
       // Faturada - Aguardando Entrega → SAC entrega o veículo
       if (os.status === 'Faturada - Aguardando Entrega') {
         btns.push(
-          <Botao key="entrega2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede só o nome de quem recebeu o veículo" onClick={()=>liberarEntregaVeicular(os)}>Entrega — nome de quem recebeu</Botao>
+          <Botao key="entrega2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} title="Pede o nome de quem recebeu o veículo, as fotos e a assinatura" onClick={()=>liberarEntregaVeicular(os)}>Entrega — assinatura e fotos</Botao>
         );
       }
       // Reprovado veicular → reavaliar
@@ -3203,8 +3219,21 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <label className="acn-label">Nome de quem recebeu o veículo *</label>
                 <input className="acn-input" autoFocus
                   placeholder="Nome completo do receptor"
-                  value={nomeRecebeuVeic} onChange={e=>setNomeRecebeuVeic(e.target.value)}
-                  onKeyDown={e=>e.key==='Enter'&&confirmarEntregaVeicular()} />
+                  value={saidaForm.nome} onChange={e=>setSaidaForm(f=>({...f,nome:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Fotos do veículo na entrega</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e=>setFotosSaidaFiles(Array.from(e.target.files||[]))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Assinatura de quem recebeu *</label>
+                {saidaForm.sig ? (
+                  <div className="acn-sac-assinatura">
+                    <img src={saidaForm.sig} alt="Assinatura" />
+                    <Botao pequeno variante="discreto" onClick={()=>setSaidaForm(f=>({...f,sig:null}))}>Limpar</Botao>
+                  </div>
+                ) : <SignCanvas onSave={(d)=>setSaidaForm(f=>({...f,sig:d}))} />}
               </div>
             </div>
             <div className="acn-modal-rodape acn-sac-rodape">

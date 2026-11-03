@@ -514,7 +514,9 @@ Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado 
 
 # Apêndice: pontos de melhoria já mapeados
 
-A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**) lista o que pode ficar mais claro na tela. Os que mais afetam quem opera hoje:
+A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**, hoje na pasta de planos concluídos) listou o que podia ficar mais claro na tela, e tudo o que era decisão do SAC já foi resolvido:
 
-- As **janelas de entrega** são três e a do veículo não colhe assinatura (os botões já dizem o que cada janela pede; unificar é decisão do SAC).
-- A OS de **veículo sem cobrança** ainda aparece nas etapas de verificação e aprovação, que, pela regra, ela não deveria ter (**a confirmar** com a Produção).
+- A **entrega do veículo** colhe assinatura e fotos, como a do Laboratório.
+- A OS de **veículo sem cobrança** pula a verificação e a aprovação e vai direto a **Aguardando Início**.
+
+Se você achar algo confuso na tela, avise a TI: o plano é o lugar onde isso entra.
