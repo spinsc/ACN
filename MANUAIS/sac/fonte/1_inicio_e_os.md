@@ -130,7 +130,7 @@ O quadro tem **quatro colunas**. Cada OS fica na coluna da etapa em que está:
 | **NO FISCAL / AGUARDANDO ENTREGA** | Aguardando Envio Fiscal, Aguardando Emissão NF, Faturada - Aguardando Entrega |
 | **CONCLUÍDO** | Concluído, Entregue |
 
-O número no canto de cada coluna é a quantidade de cartões. Você pode **arrastar o cartão** de uma coluna para outra: veja *Mover a OS entre as etapas*. Uma dica acima do quadro lembra que, **no celular e no tablet, o arrastar não funciona**: use o menu **⋯ > Mover para…** do cartão.
+O número no canto de cada coluna é a quantidade de cartões. Você pode **arrastar o cartão** de uma coluna para outra: veja *Mover a OS entre as etapas*. **Aprovado** e **Provisionada** aparecem em **azul** (andamento): verde fica só para o que deu certo e não pede nada de você. Uma dica acima do quadro lembra que, **no celular e no tablet, o arrastar não funciona**: use o menu **⋯ > Mover para…** do cartão.
 
 Duas faixas podem aparecer acima do quadro: **"N OS reprovadas ficam fora do quadro"** e **"N OS canceladas ficam fora do quadro e da lista"**. O botão **Ver na lista** leva até elas.
 
@@ -138,9 +138,10 @@ Duas faixas podem aparecer acima do quadro: **"N OS reprovadas ficam fora do qua
 
 ![A lista de OS](img/11-lista.jpg)
 
-Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, ficha e lote), **Tipo**, **Atendimento** (Presencial ou Remota), **Equipamento**, **Cliente**, **Abertura**, **Prazo do orçamento**, **Valor**, **Tempo do orçamento**, **Tempo da execução**, **Status** e **Ações**.
+Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, ficha e lote), **Tipo**, **Atendimento** (Presencial ou Remota), **Equipamento**, **Cliente**, **Abertura**, **Prazo do orçamento**, **Valor**, **Status** e **Ações**. Os tempos (**Tempo do orçamento** e **Tempo da execução**) ficam escondidos: o botão **Mais colunas**, acima da lista, mostra os dois, e **Menos colunas** volta ao normal.
 
 - A linha fica **rosada** quando a OS está **Reprovada** ou **parada**.
+- A lista **lê todas as OS**, mesmo quando passam de mil. Se o banco recusar algo, o aviso diz o motivo em português (número de OS repetido, falta de permissão, sem conexão) em vez de uma sigla técnica.
 - **KPI Exec.** só aparece na OS remota: compara as **horas cobradas na cotação** com as **horas reais** apontadas pela Produção. **▲** quer dizer que você cobrou mais horas do que a Produção levou; **▼**, menos.
 - Os botões da coluna **Ações** são os mesmos do cartão do quadro.
 

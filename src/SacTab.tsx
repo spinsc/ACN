@@ -20,9 +20,13 @@ import { podeConcluirPeloSac, estaComOLaboratorio, quemTemQueAgir, diasNaEtapa, 
   movimentosDaOS, movimentosParaAColuna, porQueNaoVaiParaAColuna, movimentoPedeDados, patchDoMovimento, recadoDoMovimento, demandaDeExecucaoDaOsDoCrm, quemExecutaValido } from './SacFluxo';
 import { EscolherMovimentoModal, DadosDoMovimentoModal } from './MoverOsModal';
 import RegistrarAtendimentoModal from './RegistrarAtendimentoModal';
+import PassagemEmLoteModal from './PassagemEmLoteModal';
+import { passagensEmLote, patchDaPassagem, faltaNaNovaOS } from './SacFluxo';
 import { podeRegistrarAtendimentoRealizado, motivoQueNaoRegistraAtendimento, patchDoRegistroDoAtendimento, recadoDoRegistro } from './SacFluxo';
 import { PRAZO_CHAMADO_NFC_DIAS, diasDoChamado, chamadoEsquecido, formularioDoChamadoNfc, textoDoFechamentoDoChamado, osSemCobranca, STATUS_AGUARDANDO_NOTA, statusInicialDaOS, podeGerarOsDaGarantia, formularioDaOsDeGarantia, faltaFichaDaGarantia, rotuloDaFicha, cotacaoSemSentido, ROTULOS_COBRANCA } from './SacFluxo';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { lerPaginado } from './LerPaginado';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
@@ -47,7 +51,7 @@ const STATUS_COR: Record<string, string> = {
   'Aberta':                        '#3b82f6',
   'Orçamento Pronto':              '#7c3aed',
   'Orç. Enviado':                  '#f59e0b',
-  'Aprovado':                      '#22c55e',
+  'Aprovado':                      '#0ea5e9',   // M5 (03/11/2026): era verde (#22c55e), como se a OS estivesse pronta; ainda falta a execução
   'Reprovado':                     '#ef4444',
   'Em Execução':                   '#8b5cf6',
   'Concluído':                     '#0d9488',
@@ -57,7 +61,7 @@ const STATUS_COR: Record<string, string> = {
   'Aguardando Aprovação Cliente':  '#f59e0b',
   'Em Provisionamento':            '#7c3aed',
   'Aguardando Aceite SAC':         '#f59e0b',
-  'Provisionada':                  '#16a34a',
+  'Provisionada':                  '#0ea5e9',   // M5 (03/11/2026): idem; a data está marcada, mas o serviço não começou
   'Aguardando Início':             '#f59e0b',
   'Verificação e Orçamento':       '#8b5cf6',
   'Aguardando CQ':                 '#8b5cf6',
@@ -70,9 +74,9 @@ const STATUS_COR: Record<string, string> = {
 // Etapa 12d3 (01/10/2026): na lista de OS a cor do status vem da FAMÍLIA do guia de interface (a mesma de todas as telas), não mais do hexadecimal acima — que segue valendo só para
 // as opções do filtro e para o PDF da OS. Regra: pedindo ação ou resposta de alguém = atenção; em andamento no laboratório/produção = marca; já tratado = ok; recusado = erro.
 const FAMILIA_STATUS_SAC: Record<string, string> = {
-  'Diagnóstico': 'info', 'Aberta': 'info', 'Orçamento Pronto': 'marca', 'Orç. Enviado': 'atencao', 'Aprovado': 'ok', 'Reprovado': 'erro',
+  'Diagnóstico': 'info', 'Aberta': 'info', 'Orçamento Pronto': 'marca', 'Orç. Enviado': 'atencao', 'Aprovado': 'info', 'Reprovado': 'erro',   // M5 (03/11/2026, escolha do usuário): Aprovado e Provisionada deixam de ser verdes (verde = terminou); viram azul de andamento
   'Em Execução': 'marca', 'Concluído': 'ok', 'Entregue': 'ok',
-  'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'ok',
+  'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'info',
   'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Aguardando CQ': 'atencao',
   'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok', 'Cancelada': 'neutro',
 };
@@ -292,6 +296,9 @@ function SacTabCompleto({ currentUser }) {
   const [filtroTipo, setFiltroTipo]         = useState('');
   // A1 (03/11/2026): a legenda de etapas é consulta de vez em quando; começa fechada e a escolha de cada pessoa fica lembrada neste computador
   const [legendaAberta, setLegendaAberta] = useState(() => { try { return localStorage.getItem('acn-sac-legenda') === 'aberta'; } catch { return false; } });
+  // M10 (03/11/2026): a lista tinha 12 colunas e rolava para o lado em tela menor; as duas de tempo (orçamento e execução) ficam atrás de "Mais colunas" (a escolha de cada pessoa fica lembrada neste computador)
+  const [colunasDeTempo, setColunasDeTempo] = useState(() => { try { return localStorage.getItem('acn-sac-colunas-tempo') === 'abertas'; } catch { return false; } });
+  const alternarColunasDeTempo = () => { const v = !colunasDeTempo; setColunasDeTempo(v); try { localStorage.setItem('acn-sac-colunas-tempo', v ? 'abertas' : 'fechadas'); } catch { /* sem armazenamento: vale só nesta sessão */ } };
   const alternarLegenda = () => { const v = !legendaAberta; setLegendaAberta(v); try { localStorage.setItem('acn-sac-legenda', v ? 'aberta' : 'fechada'); } catch { /* sem armazenamento: vale só nesta sessão */ } };
   // A7 (03/11/2026): a lista se atualiza sozinha a cada 60 s e há o botão Atualizar; a tela mostra a hora da última leitura
   const [ultimaLeitura, setUltimaLeitura] = useState<Date | null>(null);
@@ -310,6 +317,11 @@ function SacTabCompleto({ currentUser }) {
   // Registrar atendimento já realizado (30/10/2026): as OS que a janela oferece, quais vêm marcadas e quantas do lote ficaram de fora
   const [registroAtend, setRegistroAtend]     = useState<{ candidatas: any[]; marcadas: string[]; naoEntram: number } | null>(null);
   const [registroSalvando, setRegistroSalvando] = useState(false);
+  // M4 (03/11/2026): passagens em lote — as OS do lote e a passagem que já vem escolhida
+  const [passagemLote, setPassagemLote]       = useState<{ oss: any[]; inicial?: string } | null>(null);
+  const [passagemSalvando, setPassagemSalvando] = useState(false);
+  // M1 (03/11/2026): a Nova OS mostra o essencial; acessórios, fotos, faturamento, valores e vínculo com o CRM ficam em "Mais dados", recolhido para todo mundo (escolha do usuário). Abre sozinho quando a OS já vem com algum desses dados (cópia, CRM, garantia).
+  const [maisDados, setMaisDados] = useState(false);
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
@@ -447,7 +459,7 @@ function SacTabCompleto({ currentUser }) {
     // a edição da categoria fechava e perdia o que foi digitado, e desativar/ativar falhava em silêncio. Agora avisa o erro e mantém o que foi digitado
     // (o mesmo aviso "Erro: …" que adicionar equipamento e adicionar categoria já mostravam).
     const { error } = await supabase.from('sac_tipos_servico').insert([{ nome: novoTipoServico.trim() }]);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     setNovoTipoServico('');
     fetchTiposServico();
   };
@@ -459,7 +471,7 @@ function SacTabCompleto({ currentUser }) {
     if (t.ativo && ehTipoDoSistema(t)) { mostrarAviso('"Garantia" é um tipo do sistema: sem ele a Nova OS deixa de abrir a OS de garantia. Ele não pode ser desativado.', 'atencao'); return; }
     if (t.ativo && !await confirmar(`Desativar o tipo de serviço "${t.nome}"?\n\nEle deixa de aparecer na Nova OS. As OS que já existem não mudam.`)) return;
     const { error } = await supabase.from('sac_tipos_servico').update({ ativo: !t.ativo }).eq('id', t.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     fetchTiposServico();
   };
 
@@ -471,7 +483,7 @@ function SacTabCompleto({ currentUser }) {
     setFichas(f => ({ ...f, carregando: true, erro: '' }));
     supabase.from('garantia_atendimentos').select('*').eq('situacao', 'aberto').order('criado_em', { ascending: false }).then(({ data, error }: any) => {
       if (!vivo) return;
-      if (error) { setFichas({ lista: [], erro: error.message, carregando: false, lida: true }); return; }
+      if (error) { setFichas({ lista: [], erro: explicarErroDoBanco(error), carregando: false, lida: true }); return; }
       setFichas({ lista: (data || []).filter((g: any) => podeGerarOsDaGarantia(g, currentUser).ok), erro: '', carregando: false, lida: true });
     });
     return () => { vivo = false; };
@@ -505,13 +517,18 @@ function SacTabCompleto({ currentUser }) {
   const lerOrdens = async (silencioso: boolean) => {
     if (!silencioso) setLoading(true);
     setAtualizando(true);
-    const { data, error } = await supabase.from('sac_ordens_servico').select('*').order('data_abertura', { ascending: false });
-    if (error) mostrarAviso('Não foi possível atualizar a lista de OS agora' + (silencioso ? '; a tela mostra a última leitura' : '') + ': ' + error.message, 'erro');
+    // B2 (03/11/2026): o banco corta em 1.000 linhas por leitura; sem ler em blocos, ao passar de mil as OS mais antigas sumiriam da lista sem aviso. O `id` é o desempate da ordem.
+    let data: any[] | null = null; let error: any = null;
+    try { data = await lerPaginado(() => supabase.from('sac_ordens_servico').select('*').order('data_abertura', { ascending: false }).order('id')); } catch (e) { error = e; }
+    if (error) mostrarAviso('Não foi possível atualizar a lista de OS agora' + (silencioso ? '; a tela mostra a última leitura' : '') + ': ' + explicarErroDoBanco(error), 'erro');
     else { setOrdens(data || []); setUltimaLeitura(new Date()); }
     setAtualizando(false);
     if (!silencioso) setLoading(false);
   };
   const fetchOrdens = () => lerOrdens(false);
+  useEffect(() => {
+    if (modalNova) setMaisDados(!!(form.crm_oportunidade_id || form.valor_total || form.valor_mao_de_obra || form.cnpj_faturamento || form.razao_social_faturamento || form.endereco_faturamento || form.acessorios?.length));
+  }, [modalNova]);
   useEffect(() => {
     const t = setInterval(() => { if (!document.hidden && abaAtiva === 'os') lerOrdens(true); }, 60000);
     return () => clearInterval(t);
@@ -670,7 +687,7 @@ function SacTabCompleto({ currentUser }) {
         .insert([{ ...payloadBase, numero_os: numero }])
         .select('id').single();
       if (!error) { osData = data; break; }
-      if (error.code !== '23505') { alert('Erro: ' + error.message + parcial()); setSalvando(false); fetchOrdens(); return; }
+      if (error.code !== '23505') { alert('Erro: ' + explicarErroDoBanco(error) + parcial()); setSalvando(false); fetchOrdens(); return; }
     }
 
     if (!osData) { alert('Não foi possível gerar número único. Tente novamente.' + parcial()); setSalvando(false); fetchOrdens(); return; }
@@ -716,7 +733,7 @@ function SacTabCompleto({ currentUser }) {
           usuario: currentUser?.nome, hora: agora,
         }],
       }]);
-      if (errLab) falhasDemanda.push(`a demanda para o Laboratório não foi criada (${errLab.message})`);
+      if (errLab) falhasDemanda.push(`a demanda para o Laboratório não foi criada (${explicarErroDoBanco(errLab)})`);
     }
 
     // Se acompanhamento_engenharia: criar demanda para Engenharia
@@ -733,7 +750,7 @@ function SacTabCompleto({ currentUser }) {
         sac_fase: 'acompanhamento',
         logs_demanda: [{ texto: 'OS aberta com acompanhamento de engenharia solicitado.', usuario: currentUser?.nome, hora: agora }],
       }]);
-      if (errEng) falhasDemanda.push(`a demanda para a Engenharia não foi criada (${errEng.message})`);
+      if (errEng) falhasDemanda.push(`a demanda para a Engenharia não foi criada (${explicarErroDoBanco(errEng)})`);
     }
     if (falhasDemanda.length) alert(`A OS ${numero} foi aberta, mas ${falhasDemanda.join(' e ')}. Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
@@ -767,7 +784,7 @@ function SacTabCompleto({ currentUser }) {
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', modalOrc.id);
-    if (error) { alert('Erro ao enviar o orçamento: ' + error.message); return; }
+    if (error) { alert('Erro ao enviar o orçamento: ' + explicarErroDoBanco(error)); return; }
     notificarEvento('sac_orcamento_enviado', `*Orçamento enviado — ${modalOrc.numero_os}*\nCliente: ${modalOrc.cliente_nome}\nValor: R$ ${orcForm.valor}\nPor: ${currentUser?.nome}`);
     setModalOrc(null); setOrcForm({ valor:'', condicoes:'' }); fetchOrdens();
   };
@@ -791,7 +808,7 @@ function SacTabCompleto({ currentUser }) {
       data_prevista_pos_aprovacao: aprovForm.data_entrega || null,
       atualizado_em: agora,
     }).eq('id', modalAprov.id);
-    if (error) { alert('Erro ao registrar a aprovação: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a aprovação: ' + explicarErroDoBanco(error)); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalAprov.id, changeType: 'UPDATE',
       oldRow: { status: modalAprov.status }, newRow: { status: 'Aprovado' }, user: currentUser });
 
@@ -811,7 +828,7 @@ function SacTabCompleto({ currentUser }) {
         usuario: currentUser?.nome, hora: agora,
       }],
     }]);
-    if (errDem) alert(`A OS ${modalAprov.numero_os} foi aprovada, mas a demanda de execução para o Laboratório não foi criada (${errDem.message}). Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
+    if (errDem) alert(`A OS ${modalAprov.numero_os} foi aprovada, mas a demanda de execução para o Laboratório não foi criada (${explicarErroDoBanco(errDem)}). Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
     notificarEvento('sac_os_aprovada', `*OS ${modalAprov.numero_os} APROVADA*\nCliente: ${modalAprov.cliente_nome}\nAprovador: ${aprovForm.nome}\nPor: ${currentUser?.nome}`);
     setModalAprov(null); setAprovForm({ nome:'', sig:null, data_entrega:'' }); fetchOrdens();
@@ -829,7 +846,7 @@ function SacTabCompleto({ currentUser }) {
       nome_retirada_reprovacao: reprForm.nome_retirada || null,
       atualizado_em: agora,
     }).eq('id', modalRepr.id);
-    if (error) { alert('Erro ao registrar a reprovação: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a reprovação: ' + explicarErroDoBanco(error)); return; }
     notificarEvento('sac_os_reprovada', `*OS ${modalRepr.numero_os} REPROVADA*\nCliente: ${modalRepr.cliente_nome}\nMotivo: ${reprForm.motivo}`);
     setModalRepr(null); setReprForm({ motivo:'', data_retirada:'', nome_retirada:'' }); fetchOrdens();
   };
@@ -857,7 +874,7 @@ function SacTabCompleto({ currentUser }) {
       fotos_saida: urlsFotos,
       atualizado_em: agora,
     }).eq('id', modalSaida.id);
-    if (error) { alert('Erro ao registrar a entrega: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a entrega: ' + explicarErroDoBanco(error)); return; }
     notificarEvento('sac_os_entregue', `*OS ${modalSaida.numero_os} ENTREGUE*\nCliente: ${modalSaida.cliente_nome}\nRetirado por: ${saidaForm.nome}`);
     setModalSaida(null); setSaidaForm({ nome:'', sig:null }); setFotosSaidaFiles([]); fetchOrdens();
   };
@@ -874,7 +891,7 @@ function SacTabCompleto({ currentUser }) {
       horas_cobradas_cotacao: hc,
       atualizado_em: agora,
     }).eq('id', osId);
-    if (error) { alert('Erro ao salvar os itens da cotação: ' + error.message); return false; }
+    if (error) { alert('Erro ao salvar os itens da cotação: ' + explicarErroDoBanco(error)); return false; }
     fetchOrdens();
     return true;
   };
@@ -890,7 +907,7 @@ function SacTabCompleto({ currentUser }) {
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao enviar a cotação: ' + error.message); return; }
+    if (error) { alert('Erro ao enviar a cotação: ' + explicarErroDoBanco(error)); return; }
     notificarEvento('sac_cotacao_enviada', `*Cotação enviada — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
     fetchOrdens();
   };
@@ -912,7 +929,7 @@ function SacTabCompleto({ currentUser }) {
       aprovador_nome: aprovCotacaoNome.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao registrar a aprovação: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a aprovação: ' + explicarErroDoBanco(error)); return; }
     const msg2 = `✅ *Cotação APROVADA — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
 Aprovado por: ${aprovCotacaoNome.trim()}
@@ -933,7 +950,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       motivo_reprovacao: motivo,
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao registrar a recusa: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a recusa: ' + explicarErroDoBanco(error)); return; }
     fetchOrdens();
   };
 
@@ -944,7 +961,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       status: os.tipo_avaliacao === 'Remota' ? 'Aguardando Início' : 'Provisionada',
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao registrar o aceite: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar o aceite: ' + explicarErroDoBanco(error)); return; }
     notificarEvento('sac_aceite_data', `*SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
     setModalAceiteSAC(null);
     fetchOrdens();
@@ -960,7 +977,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       periodo_provisionamento: null,
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao devolver a OS para a Produção: ' + error.message); return; }
+    if (error) { alert('Erro ao devolver a OS para a Produção: ' + explicarErroDoBanco(error)); return; }
     setModalAceiteSAC(null);
     fetchOrdens();
   };
@@ -977,7 +994,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       data_aprovacao: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao registrar a aprovação: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a aprovação: ' + explicarErroDoBanco(error)); return; }
     fetchOrdens();
   };
 
@@ -998,7 +1015,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       itens_revisados: null,
       atualizado_em: agora,
     }).eq('id', modalOrcProd.id);
-    if (error) { alert('Erro ao salvar o orçamento: ' + error.message); return; }
+    if (error) { alert('Erro ao salvar o orçamento: ' + explicarErroDoBanco(error)); return; }
     setModalOrcProd(null); setOrcProdItens([]);
     fetchOrdens();
   };
@@ -1017,7 +1034,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       data_envio_fiscal: agora,
       atualizado_em: agora,
     }).eq('id', os.id).eq('status', 'Aguardando Envio Fiscal').select('id');
-    if (error) { alert('Erro ao enviar para o Fiscal: ' + error.message); return; }
+    if (error) { alert('Erro ao enviar para o Fiscal: ' + explicarErroDoBanco(error)); return; }
     if (!gravadas?.length) { alert('A OS já não está esperando o envio ao Fiscal (outra pessoa pode ter enviado). A lista foi atualizada.'); setModalEnviarFiscal(null); setFiscalItens([]); fetchOrdens(); return; }
     notificarEvento('sac_enviado_fiscal', `*Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
     setModalEnviarFiscal(null); setFiscalItens([]);
@@ -1039,7 +1056,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       nome_retirada_saida: nomeRecebeuVeic.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
-    if (error) { alert('Erro ao registrar a entrega do veículo: ' + error.message); return; }
+    if (error) { alert('Erro ao registrar a entrega do veículo: ' + explicarErroDoBanco(error)); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: { status: os.status }, newRow: { status: 'Entregue' }, user: currentUser });
     notificarEvento('sac_os_entregue', `*Veículo entregue — ${os.numero_os}*
@@ -1075,7 +1092,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
       atualizado_em: new Date().toISOString(),
     }).eq('id', os.id);
     setAnexosSendoUpload(false);
-    if (error) { alert('Erro ao anexar os arquivos: ' + error.message); return false; }
+    if (error) { alert('Erro ao anexar os arquivos: ' + explicarErroDoBanco(error)); return false; }
     fetchOrdens();
     return true;
   };
@@ -1084,7 +1101,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
   const salvarEquipamento = async () => {
     if (!novoEquip.trim()) return;
     const { error } = await supabase.from('sac_equipamentos').insert([{ nome: novoEquip.trim() }]);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     await fetchEquipamentos();
     setForm(f => ({ ...f, equipamento_nome: novoEquip.trim() }));
     setNovoEquip(''); setModalNovoEquip(false);
@@ -1103,7 +1120,7 @@ OK = ACN   |   Cancelar = DETECH`;
     else escolhida = await confirmar(pergunta) ? 'ACN' : 'DETECH';
     const { error } = await supabase.from('sac_ordens_servico')
       .update({ empresa: escolhida, atualizado_em: new Date().toISOString() }).eq('id', os.id);
-    if (error) { alert('Erro ao salvar a empresa: ' + error.message); return; }
+    if (error) { alert('Erro ao salvar a empresa: ' + explicarErroDoBanco(error)); return; }
     setOrdens(prev => prev.map((x: any) => x.id === os.id ? { ...x, empresa: escolhida } : x));
   };
 
@@ -1164,6 +1181,11 @@ OK = ACN   |   Cancelar = DETECH`;
         {item.oss.some((x: any) => podeRegistrarAtendimentoRealizado(x)) && (
           <Botao pequeno icone={mdiCheckCircleOutline} title="O serviço deste lote já foi feito fora da fábrica: registra a data, quem fez e o que foi feito, e as OS vão para Concluído"
             onClick={() => abrirRegistroDeAtendimento(item.oss.find((x: any) => podeRegistrarAtendimentoRealizado(x)), true)}>Registrar atendimento já realizado</Botao>
+        )}
+        {/* M4 (03/11/2026): a mesma passagem (seguir sem cotação, iniciar a execução, voltar, cancelar…) para as OS marcadas do lote, em vez de uma por uma */}
+        {passagensEmLote(item.oss).length > 0 && (
+          <Botao pequeno icone={mdiArrowRight} title="Aplica o mesmo passo a várias OS deste lote de uma vez (seguir sem cotação, iniciar a execução, voltar uma etapa, cancelar…)"
+            onClick={() => abrirPassagemEmLote(item.oss[0])}>Passar as OS do lote…</Botao>
         )}
         {aberto && (
           <div className="acn-kb-lote-lista">
@@ -1314,7 +1336,7 @@ OK = ACN   |   Cancelar = DETECH`;
       if (os.status === 'Reprovado') {
         btns.push(
           <Botao key="reaval" pequeno icone={mdiRefresh}
-            onClick={async ()=>{ if(await confirmar(`Reabrir ${os.numero_os}?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + error.message); return; } fetchOrdens(); } }}>
+            onClick={async ()=>{ if(await confirmar(`Reabrir ${os.numero_os}?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + explicarErroDoBanco(error)); return; } fetchOrdens(); } }}>
             Reavaliar
           </Botao>
         );
@@ -1341,7 +1363,7 @@ OK = ACN   |   Cancelar = DETECH`;
       if (os.status === 'Reprovado')
         btns.push(
           <Botao key="reaval" pequeno icone={mdiRefresh}
-            onClick={async ()=>{ if(await confirmar(`Reabrir OS ${os.numero_os} para novo orçamento?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + error.message); return; } fetchOrdens(); } }}>
+            onClick={async ()=>{ if(await confirmar(`Reabrir OS ${os.numero_os} para novo orçamento?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + explicarErroDoBanco(error)); return; } fetchOrdens(); } }}>
             Reavaliar
           </Botao>
         );
@@ -1384,6 +1406,8 @@ OK = ACN   |   Cancelar = DETECH`;
       // S4 (29/10/2026): o fim da OS desistida, duplicada ou criada errada; some do quadro e da lista, com o motivo guardado
       { grupo: 'Encerrar a OS', perigo: true, rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
       // Mover a OS entre as etapas (29/10/2026): os passos que o SAC pode fazer agora (avançar onde é ele quem age, voltar uma etapa); o mesmo que arrastar o cartão no quadro, e serve no celular
+      // M4 (03/11/2026): a OS que faz parte de um lote pode passar junto com as irmãs
+      { grupo: 'Mover a OS', rotulo: 'Passar as OS do lote…', titulo: 'Aplica o mesmo passo a várias OS deste lote de uma vez (seguir sem cotação, iniciar a execução, voltar uma etapa, cancelar…)', icone: mdiArrowRight, oculto: !os.lote_id || ordens.filter((x: any) => x.lote_id === os.lote_id).length < 2 || !passagensEmLote(ordens.filter((x: any) => x.lote_id === os.lote_id)).length, onClick: () => abrirPassagemEmLote(os) },
       ...movimentosDaOS(os).filter((m: any) => m.tipo !== 'cancelar').map((m: any) => ({
         grupo: 'Mover a OS', rotulo: m.menu || (m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`), titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : m.processo === 'registrar_realizado' ? mdiCheckCircleOutline : mdiArrowRight, onClick: () => executarMovimento(os, m),
       })),
@@ -1399,7 +1423,7 @@ OK = ACN   |   Cancelar = DETECH`;
     const { data, error } = await supabase.from('sac_ordens_servico')
       .update({ status: 'Concluído', data_finalizacao_execucao: agora, atualizado_em: agora })
       .eq('id', os.id).eq('status', 'Em Execução').select('id');
-    if (error) { alert('Não foi possível concluir a OS: ' + error.message); return; }
+    if (error) { alert('Não foi possível concluir a OS: ' + explicarErroDoBanco(error)); return; }
     if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Em Execução' }, newRow: { status: 'Concluído', data_finalizacao_execucao: agora }, user: currentUser });
     notificarEvento('sac_os_concluida', `*OS ${os.numero_os} concluída pelo SAC*\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}`);
@@ -1413,7 +1437,7 @@ OK = ACN   |   Cancelar = DETECH`;
     const naoPode = motivoQueNaoCancela(os);
     if (naoPode) { alert(naoPode); return; }
     const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
-    if (erroDem) { alert(`Não foi possível conferir as demandas da ${os.numero_os} (${erroDem.message}). A OS NÃO foi cancelada: tente de novo.`); return; }
+    if (erroDem) { alert(`Não foi possível conferir as demandas da ${os.numero_os} (${explicarErroDoBanco(erroDem)}). A OS NÃO foi cancelada: tente de novo.`); return; }
     const abertas = demandasAbertasDaOS(dem || []);
     const motivo = await pedirTexto(`Por que a ${os.numero_os} será cancelada? (desistência do cliente, OS duplicada, aberta por engano...)\n\nO motivo fica na OS e no histórico.`);
     if (motivo === null) return;
@@ -1423,13 +1447,13 @@ OK = ACN   |   Cancelar = DETECH`;
     const agora = new Date().toISOString();
     const campos = camposDoCancelamento(motivo, currentUser, agora);
     const { data, error } = await supabase.from('sac_ordens_servico').update(campos).eq('id', os.id).eq('status', os.status).select('id');
-    if (error) { alert('Não foi possível cancelar a OS: ' + error.message); return; }
+    if (error) { alert('Não foi possível cancelar a OS: ' + explicarErroDoBanco(error)); return; }
     if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada: confira e tente de novo.`); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: campos, user: currentUser });
     const falhas: string[] = [];
     for (const d of abertas) {
       const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoCancelamento(os, motivo, currentUser, agora)] }).eq('id', d.id);
-      if (erroRecado) falhas.push(`${d.setor_destino}: ${erroRecado.message}`);
+      if (erroRecado) falhas.push(`${d.setor_destino}: ${explicarErroDoBanco(erroRecado)}`);
     }
     if (falhas.length) mostrarAviso(`A ${os.numero_os} foi cancelada, mas não foi possível deixar o recado em ${falhas.length} demanda(s): ${falhas.join('; ')}. Avise o setor para encerrar a demanda.`, 'erro');
     notificarEvento('sac_os_cancelada', `*OS ${os.numero_os} CANCELADA*\nCliente: ${os.cliente_nome}\nMotivo: ${String(motivo).trim()}\nPor: ${currentUser?.nome}` + (setores.length ? `\nEncerrar a demanda: ${setores.join(', ')}` : ''));
@@ -1443,7 +1467,7 @@ OK = ACN   |   Cancelar = DETECH`;
     if (!await confirmar(`Reabrir a ${os.numero_os} para uma nova avaliação?`)) return;
     const para = os.is_manutencao_veicular ? (os.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento') : 'Diagnóstico';
     const { data, error } = await supabase.from('sac_ordens_servico').update({ status: para, aprovado: null, motivo_reprovacao: null, atualizado_em: new Date().toISOString() }).eq('id', os.id).eq('status', 'Reprovado').select('id');
-    if (error) { alert('Não foi possível reabrir a OS: ' + error.message); return; }
+    if (error) { alert('Não foi possível reabrir a OS: ' + explicarErroDoBanco(error)); return; }
     if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Reprovado' }, newRow: { status: para }, user: currentUser });
     fetchOrdens();
@@ -1500,7 +1524,7 @@ OK = ACN   |   Cancelar = DETECH`;
       for (const os of escolhidas) {
         const patch = patchDoRegistroDoAtendimento(os, dados, currentUser, agora);
         const { data, error } = await supabase.from('sac_ordens_servico').update(patch).eq('id', os.id).eq('status', os.status).select('id');
-        if (error) { falhas.push(`${os.numero_os}: ${error.message}`); continue; }
+        if (error) { falhas.push(`${os.numero_os}: ${explicarErroDoBanco(error)}`); continue; }
         if (!data || data.length === 0) { falhas.push(`${os.numero_os}: já mudou de etapa (outra pessoa mexeu nela)`); continue; }
         feitas.push(os);
         logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: { ...patch, motivo_da_mudanca: 'Atendimento já realizado fora da fábrica' }, user: currentUser });
@@ -1534,6 +1558,32 @@ OK = ACN   |   Cancelar = DETECH`;
   };
   // Grava os passos da janela de dados. A gravação só pega se a OS ainda está na etapa que a pessoa viu; a demanda aberta do setor recebe um recado (não é fechada por mim); abrir o diagnóstico e
   // seguir como vendida (Laboratório) criam a demanda que a OS precisa para andar. A leitura das demandas que falhar avisa em vermelho (a OS já foi movida).
+  // O que acontece com as demandas do setor depois que a OS foi movida: abrir o diagnóstico e seguir como vendida (Laboratório) criam a demanda que a OS precisa para andar; nos outros passos a demanda
+  // aberta recebe um recado. Devolve o que não deu certo (a OS já foi movida). Serve ao passo de uma OS e às passagens em lote (M4).
+  const efeitosDoMovimento = async (os: any, mov: any, dados: any, agora: string): Promise<string[]> => {
+    const falhas: string[] = [];
+    const defeito = os.defeito_reclamado || (Array.isArray(os.equipamentos_lista) ? os.equipamentos_lista[0]?.defeito : '') || '';
+    let novaDemanda: any = null;
+    if (mov.processo === 'abrir_diagnostico') {
+      novaDemanda = { setor_destino: 'Laboratorio', descricao: `[SAC-DIAG] ${os.numero_os} — ${os.equipamento_nome || '—'} | ${String(defeito).trim() || 'Ver OS'}`, numero_opl: os.numero_os, status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, data_abertura: agora, sac_os_id: os.id, sac_fase: 'diagnostico',
+        logs_demanda: [{ texto: 'OS aberta para diagnóstico e elaboração de orçamento (movida pelo SAC).', usuario: currentUser?.nome, hora: agora }] };
+    } else if (mov.processo === 'seguir_vendida' && quemExecutaValido(dados?.quem_executa) === 'laboratorio') {
+      novaDemanda = demandaDeExecucaoDaOsDoCrm({ numero: os.numero_os, equipamento: os.equipamento_nome, defeito, usuario: currentUser, agora, osId: os.id });
+    }
+    if (novaDemanda) {
+      const { error: erroNova } = await supabase.from('demandas_setoriais').insert([novaDemanda]);
+      if (erroNova) falhas.push(`a demanda para o Laboratório não foi criada (${explicarErroDoBanco(erroNova)})`);
+    } else {
+      // a OS foi movida por fora da demanda aberta do setor: ela recebe o recado (e o setor decide se a encerra)
+      const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+      if (erroDem) falhas.push(`não consegui ler as demandas da OS para deixar o recado (${explicarErroDoBanco(erroDem)})`);
+      else for (const d of demandasAbertasDaOS(dem || [])) {
+        const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoMovimento(os, mov, dados, currentUser, agora)] }).eq('id', d.id);
+        if (erroRecado) falhas.push(`o recado na demanda de ${d.setor_destino} (${explicarErroDoBanco(erroRecado)})`);
+      }
+    }
+    return falhas;
+  };
   const gravarMovimento = async (os: any, mov: any, dados: any) => {
     if (movSalvando) return;
     setMovSalvando(true);
@@ -1541,35 +1591,66 @@ OK = ACN   |   Cancelar = DETECH`;
       const agora = new Date().toISOString();
       const patch = { ...patchDoMovimento(os, mov, dados, agora), atualizado_em: agora };
       const { data, error } = await supabase.from('sac_ordens_servico').update(patch).eq('id', os.id).eq('status', os.status).select('id');
-      if (error) { alert('Não foi possível mover a OS: ' + error.message); return; }
+      if (error) { alert('Não foi possível mover a OS: ' + explicarErroDoBanco(error)); return; }
       if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada: confira e tente de novo.`); setMovDados(null); fetchOrdens(); return; }
       logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: { ...patch, motivo_da_mudanca: String(dados?.motivo || '').trim() || undefined }, user: currentUser });
       setMovDados(null);
-      const falhas: string[] = [];
-      const defeito = os.defeito_reclamado || (Array.isArray(os.equipamentos_lista) ? os.equipamentos_lista[0]?.defeito : '') || '';
-      let novaDemanda: any = null;
-      if (mov.processo === 'abrir_diagnostico') {
-        novaDemanda = { setor_destino: 'Laboratorio', descricao: `[SAC-DIAG] ${os.numero_os} — ${os.equipamento_nome || '—'} | ${String(defeito).trim() || 'Ver OS'}`, numero_opl: os.numero_os, status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, data_abertura: agora, sac_os_id: os.id, sac_fase: 'diagnostico',
-          logs_demanda: [{ texto: 'OS aberta para diagnóstico e elaboração de orçamento (movida pelo SAC).', usuario: currentUser?.nome, hora: agora }] };
-      } else if (mov.processo === 'seguir_vendida' && quemExecutaValido(dados?.quem_executa) === 'laboratorio') {
-        novaDemanda = demandaDeExecucaoDaOsDoCrm({ numero: os.numero_os, equipamento: os.equipamento_nome, defeito, usuario: currentUser, agora, osId: os.id });
-      }
-      if (novaDemanda) {
-        const { error: erroNova } = await supabase.from('demandas_setoriais').insert([novaDemanda]);
-        if (erroNova) falhas.push(`a demanda para o Laboratório não foi criada (${erroNova.message})`);
-      } else {
-        // a OS foi movida por fora da demanda aberta do setor: ela recebe o recado (e o setor decide se a encerra)
-        const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
-        if (erroDem) falhas.push(`não consegui ler as demandas da OS para deixar o recado (${erroDem.message})`);
-        else for (const d of demandasAbertasDaOS(dem || [])) {
-          const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoMovimento(os, mov, dados, currentUser, agora)] }).eq('id', d.id);
-          if (erroRecado) falhas.push(`o recado na demanda de ${d.setor_destino} (${erroRecado.message})`);
-        }
-      }
+      const falhas = await efeitosDoMovimento(os, mov, dados, agora);
       if (falhas.length) mostrarAviso(`A ${os.numero_os} foi movida para "${mov.para}", mas não foi possível concluir tudo: ${falhas.join('; ')}. Avise o setor.`, 'erro');
       notificarEvento('sac_os_movida', `*OS ${os.numero_os} movida pelo SAC*\n${os.status} → ${mov.para}\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}` + (String(dados?.motivo || '').trim() ? `\nMotivo: ${String(dados.motivo).trim()}` : ''));
       fetchOrdens();
     } finally { setMovSalvando(false); }
+  };
+
+  // ── PASSAGENS EM LOTE (M4, pedido do usuário em 03/11/2026; regras em SacFluxo.ts, `passagensEmLote`) ──────────────────────────────────────────────────────────────────────
+  // O SAC escolhe uma passagem, marca as OS do lote e informa os dados uma vez. Cada OS é gravada sozinha e só pega se ainda está na etapa que a pessoa viu (duas pessoas não passam a mesma OS); o que falhar é dito
+  // pelo número e as outras seguem. As demandas abertas dos setores recebem o recado de sempre (não são fechadas por mim). No cancelamento a leitura das demandas vem ANTES: se falhar, aquela OS não é cancelada.
+  const abrirPassagemEmLote = (os: any, passagemInicial?: string) => {
+    const irmas = os.lote_id ? ordens.filter((x: any) => x.lote_id === os.lote_id) : [os];
+    if (!passagensEmLote(irmas).length) { mostrarAviso('Nenhuma OS deste lote pode fazer uma passagem em lote agora: o que está com a Produção, a Qualidade ou o Fiscal se move pelo setor.', 'atencao'); return; }
+    setPassagemLote({ oss: irmas, inicial: passagemInicial });
+  };
+  const gravarPassagemEmLote = async (passagem: any, dados: any, escolhidas: any[]) => {
+    if (passagemSalvando) return;
+    const n = escolhidas.length;
+    const cancelando = passagem.processo === 'cancelar';
+    if (!await confirmar(`${cancelando ? 'CANCELAR' : passagem.rotulo} ${n > 1 ? `em ${n} OS` : `na ${escolhidas[0].os.numero_os}`}?\n\n${escolhidas.map((i: any) => i.os.numero_os).join(', ')}` + (String(dados?.motivo || '').trim() ? `\n\nMotivo: ${String(dados.motivo).trim()}` : '') + (cancelando ? '\n\nElas saem do quadro e da lista; a demanda aberta de cada uma recebe um recado e o setor a encerra.' : ''))) return;
+    setPassagemSalvando(true);
+    try {
+      const agora = new Date().toISOString();
+      const feitas: any[] = []; const falhas: string[] = []; const semEfeito: string[] = [];
+      for (const { os, movimento } of escolhidas) {
+        let abertas: any[] = [];
+        if (cancelando) {
+          const { data: dem, error: erroDem } = await supabase.from('demandas_setoriais').select('id,setor_destino,status,logs_demanda').eq('sac_os_id', os.id);
+          if (erroDem) { falhas.push(`${os.numero_os}: não consegui conferir as demandas (${explicarErroDoBanco(erroDem)}); NÃO foi cancelada`); continue; }
+          abertas = demandasAbertasDaOS(dem || []);
+        }
+        const patch = patchDaPassagem(os, movimento, dados, currentUser, agora);
+        const { data, error } = await supabase.from('sac_ordens_servico').update(patch).eq('id', os.id).eq('status', os.status).select('id');
+        if (error) { falhas.push(`${os.numero_os}: ${explicarErroDoBanco(error)}`); continue; }
+        if (!data || data.length === 0) { falhas.push(`${os.numero_os}: já mudou de etapa (outra pessoa mexeu nela)`); continue; }
+        feitas.push(os);
+        logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status }, newRow: { ...patch, motivo_da_mudanca: String(dados?.motivo || '').trim() || `Passagem em lote: ${passagem.rotulo}` }, user: currentUser });
+        if (cancelando) {
+          for (const d of abertas) {
+            const { error: erroRecado } = await supabase.from('demandas_setoriais').update({ logs_demanda: [...(Array.isArray(d.logs_demanda) ? d.logs_demanda : []), recadoDoCancelamento(os, dados.motivo, currentUser, agora)] }).eq('id', d.id);
+            if (erroRecado) semEfeito.push(`${os.numero_os} (demanda de ${d.setor_destino})`);
+          }
+        } else if (passagem.processo !== 'seguir_sem_cotacao') {
+          const f = await efeitosDoMovimento(os, movimento, dados, agora);
+          if (f.length) semEfeito.push(`${os.numero_os} (${f.join('; ')})`);
+        }
+      }
+      if (feitas.length) {
+        notificarEvento(cancelando ? 'sac_os_cancelada' : 'sac_os_movida', `*${cancelando ? 'OS CANCELADAS' : 'OS movidas'} pelo SAC em lote* (${feitas.length})\n${feitas.map((o: any) => o.numero_os).join(', ')}\nCliente: ${feitas[0].cliente_nome}\n${passagem.rotulo}` + (String(dados?.motivo || '').trim() ? `\nMotivo: ${String(dados.motivo).trim()}` : '') + `\nPor: ${currentUser?.nome}`);
+        mostrarAviso(`${passagem.rotulo}: ${feitas.length} OS${''} feita${feitas.length > 1 ? 's' : ''} (${feitas.map((o: any) => o.numero_os).join(', ')}).`, 'ok');
+      }
+      if (falhas.length) mostrarAviso(`Não foi possível passar: ${falhas.join('; ')}. As outras foram feitas; confira a lista e tente de novo nas que faltam.`, 'erro');
+      if (semEfeito.length) mostrarAviso(`As OS foram passadas, mas o recado ou a demanda do setor não ficou em: ${semEfeito.join('; ')}. Avise o setor.`, 'erro');
+      setPassagemLote(null);
+      fetchOrdens();
+    } finally { setPassagemSalvando(false); }
   };
 
   // ── COPIAR OS (pedido do usuário em 23/10/2026): várias OS iguais, cada uma com o seu número ──────────────────────────────────────────────────────────────────────────────
@@ -1623,7 +1704,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     if (!String(motivo).trim()) { mostrarAviso('Escreva o motivo: ele fica no histórico da OS.', 'atencao'); return; }
     const agora = new Date().toISOString();
     const { data, error } = await supabase.from('sac_ordens_servico').update({ cobranca: 'garantia', atualizado_em: agora }).eq('id', os.id).eq('status', 'Concluído').select('id');
-    if (error) { alert('Erro ao liberar a OS sem nota: ' + error.message); return; }
+    if (error) { alert('Erro ao liberar a OS sem nota: ' + explicarErroDoBanco(error)); return; }
     if (!data?.length) { alert('A OS já não está "Concluído". A lista foi atualizada.'); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { cobranca: os.cobranca ?? null }, newRow: { cobranca: 'garantia', motivo_sem_nota: String(motivo).trim() }, user: currentUser });
     fetchOrdens();
@@ -1635,7 +1716,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     if (!await confirmar(`A ${os.numero_os} é garantia (sem cobrança): não tem cotação a enviar ao cliente.\n\nSeguir direto para o atendimento (Produção marca a data)?`)) return;
     const agora = new Date().toISOString();
     const { error } = await supabase.from('sac_ordens_servico').update({ status: 'Em Provisionamento', cobranca: 'garantia', tipo_avaliacao: 'Presencial', atualizado_em: agora }).eq('id', os.id).eq('status', 'Em Cotação');
-    if (error) { alert('Erro ao seguir sem cotação: ' + error.message); return; }
+    if (error) { alert('Erro ao seguir sem cotação: ' + explicarErroDoBanco(error)); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: os.status, cobranca: os.cobranca ?? null, tipo_avaliacao: os.tipo_avaliacao ?? null }, newRow: { status: 'Em Provisionamento', cobranca: 'garantia', tipo_avaliacao: 'Presencial' }, user: currentUser });
     fetchOrdens();
   };
@@ -1647,7 +1728,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     const { error } = await supabase.from('sac_ordens_servico')
       .update({ responsavel_nome: editRespOSNome.trim() })
       .eq('id', modalEditRespOS.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalEditRespOS.id, changeType: 'UPDATE',
       oldRow: { responsavel_nome: modalEditRespOS.responsavel_nome }, newRow: { responsavel_nome: editRespOSNome.trim() }, user: currentUser });
     setModalEditRespOS(null);
@@ -1664,7 +1745,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       valor_mao_de_obra: numeroOuVazio(financeiroForm.valor_mao_de_obra),
     };
     const { error } = await supabase.from('sac_ordens_servico').update(payload).eq('id', modalFinanceiro.id);
-    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    if (error) { alert('Erro ao salvar: ' + explicarErroDoBanco(error)); return; }
     // Etapa 7.29 (pedido do usuário em 02/10/2026): valor e data de faturamento também entram no histórico de alterações, como o responsável — antes mudavam sem deixar rastro.
     // O histórico só grava o que realmente mudou (e nada se nada mudou); a data do banco vem como DATA (o corte em 10 letras evita acusar mudança só por vir com hora).
     const dinheiro = (v: any) => v == null ? '—' : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -1904,7 +1985,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
   const salvarEquipamentoCad = async () => {
     if (!novoEquipCad.trim()) return;
     const { error } = await supabase.from('sac_equipamentos').insert([{ nome: novoEquipCad.trim() }]);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     setNovoEquipCad('');
     fetchEquipamentos();
   };
@@ -1912,14 +1993,14 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
   const toggleEquipamento = async (e) => {
     if (e.ativo && !await confirmar(`Desativar o equipamento "${e.nome}"?\n\nEle deixa de aparecer na Nova OS. As OS que já existem não mudam.`)) return;
     const { error } = await supabase.from('sac_equipamentos').update({ ativo: !e.ativo }).eq('id', e.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     fetchEquipamentos();
   };
 
   const salvarCategoria = async () => {
     if (!novaCat.nome.trim()) return;
     const { error } = await supabase.from('sac_categorias').insert([{ nome: novaCat.nome.trim(), tem_despesas: novaCat.tem_despesas }]);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     setNovaCat({ nome:'', tem_despesas:false });
     fetchCategorias();
   };
@@ -1927,7 +2008,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
   const salvarEdicaoCategoria = async () => {
     if (!editCat?.nome?.trim()) return;
     const { error } = await supabase.from('sac_categorias').update({ nome: editCat.nome.trim(), tem_despesas: editCat.tem_despesas }).eq('id', editCat.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     setEditCat(null);
     fetchCategorias();
   };
@@ -1935,7 +2016,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
   const toggleCategoria = async (c) => {
     if (c.ativo && !await confirmar(`Desativar a categoria "${c.nome}"?\n\nEla deixa de aparecer na Nova OS. As OS que já existem não mudam.` + (isVeicular(c.nome) ? '\n\nAtenção: o sistema reconhece a OS de veículo pelo nome desta categoria. Sem ela, a OS nova de veículo deixa de seguir o caminho do veículo.' : ''))) return;
     const { error } = await supabase.from('sac_categorias').update({ ativo: !c.ativo }).eq('id', c.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
     fetchCategorias();
   };
 
@@ -1966,7 +2047,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     // Etapa 7.18 (01/10/2026): antes o resultado da gravação era ignorado — "Salvar Notas" dizia "Notas salvas!" mesmo com a gravação recusada, e
     // "Atender" / "Concluir" falhavam em silêncio (a pessoa achava que tinha gravado). Agora o erro aparece e a função devolve se gravou.
     const { error } = await supabase.from('chamados_suporte').update(payload).eq('id', id);
-    if (error) { alert('Erro ao gravar o chamado: ' + error.message); return false; }
+    if (error) { alert('Erro ao gravar o chamado: ' + explicarErroDoBanco(error)); return false; }
     carregarChamadosNfc();
     if (modalNfc?.id === id) setModalNfc(prev => ({ ...prev, status: novoStatus, ...payload }));
     return true;
@@ -2296,6 +2377,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             { id: 'kanban', rotulo: 'Kanban', icone: mdiViewColumnOutline },
           ]} />
           {ultimaLeitura && <span className="acn-fraco" data-teste="ultima-leitura" title="A lista se atualiza sozinha a cada minuto">Atualizado às {ultimaLeitura.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+          {visaoOS === 'lista' && <Botao pequeno variante="discreto" icone={colunasDeTempo ? mdiChevronUp : mdiChevronDown} aria-expanded={colunasDeTempo} title="Mostra ou esconde as colunas Tempo do orçamento e Tempo da execução" onClick={alternarColunasDeTempo}>{colunasDeTempo ? 'Menos colunas' : 'Mais colunas'}</Botao>}
           <Botao pequeno variante="discreto" icone={mdiRefresh} disabled={atualizando} title="Ler as OS de novo agora" onClick={() => lerOrdens(true)}>Atualizar</Botao>
           <Botao variante="primario" icone={mdiPlus} // Etapa 7.24 (01/10/2026): só as fotos eram zeradas ao abrir; o documento escolhido numa abertura CANCELADA ficava na memória (o contador mostrava "1 arquivo(s)" com o campo vazio) e ia junto da OS seguinte
             onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setArquivosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setCriarEmLote(false);setModalNova(true);}}>
@@ -2470,7 +2552,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               <thead><tr>
                 <th>Nº OS</th><th>Tipo</th><th>Atendimento</th><th>Equipamento</th><th>Cliente</th>
                 <th>Abertura</th><th>Prazo do orçamento</th><th className="acn-dir">Valor</th>
-                <th>Tempo do orçamento</th><th>Tempo da execução</th><th>Status</th><th>Ações</th>
+                {colunasDeTempo && <><th>Tempo do orçamento</th><th>Tempo da execução</th></>}<th>Status</th><th>Ações</th>
               </tr></thead>
               <tbody>
                 {ordensFiltradas.map(o => {
@@ -2514,10 +2596,10 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                       const total = v > 0 ? v : (itensTotal > 0 ? itensTotal : null);
                       return fmtVal(total);
                     })()}</td>
-                    <td className="acn-num">
+                    {colunasDeTempo && <td className="acn-num">
                       <span className={o.kpi_orcamento_horas ? 'acn-txt-info' : 'acn-fraco'}>{o.kpi_orcamento_horas ? `${Number(o.kpi_orcamento_horas).toFixed(1)}h` : '—'}</span>
-                    </td>
-                    <td className="acn-num">
+                    </td>}
+                    {colunasDeTempo && <td className="acn-num">
                       <span className={o.kpi_execucao_horas ? 'acn-forte' : 'acn-fraco'}>{o.kpi_execucao_horas ? `${Number(o.kpi_execucao_horas).toFixed(1)}h` : '—'}</span>
                       {difHoras && (
                         <span className={'acn-sac-horas ' + (cobrouMais ? 'acn-txt-ok' : 'acn-txt-erro')}
@@ -2525,7 +2607,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                           <Icone path={mdiTimerOutline} size={12} /><Icone path={cobrouMais ? mdiMenuUp : mdiMenuDown} size={16} />
                         </span>
                       )}
-                    </td>
+                    </td>}
                     <td>
                       <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
                       <QuemAgeDaOS os={o} /><BarraDaOS os={o} />
@@ -2543,6 +2625,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
         </div>}
       </div>
 
+      {passagemLote && <PassagemEmLoteModal oss={passagemLote.oss} passagemInicial={passagemLote.inicial} salvando={passagemSalvando} onConfirmar={gravarPassagemEmLote} onClose={() => setPassagemLote(null)} />}
       {registroAtend && <RegistrarAtendimentoModal candidatas={registroAtend.candidatas} marcadasInicio={registroAtend.marcadas} naoEntram={registroAtend.naoEntram} salvando={registroSalvando}
         onConfirmar={registrarAtendimentos} onClose={() => setRegistroAtend(null)} />}
 
@@ -2803,6 +2886,63 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               </div>
             )}
 
+            {/* Manutenção Veicular — campos específicos */}
+            {form.is_veiculo && (
+              <div className="acn-quadro tom-info">
+                <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCarOutline} size={14} /> Manutenção Veicular</span></div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="acn-label">Tipo de Avaliação *</label>
+                    {form.tipo_servico === 'Garantia' && (form.cobranca || 'garantia') === 'garantia' ? (
+                      <div className="acn-ajuda" data-teste="sem-avaliacao-na-garantia">Garantia sem cobrança não tem cotação: a Produção marca a data de atendimento do veículo.</div>
+                    ) : (<>
+                    <div className="acn-sac-avaliacao">
+                      {['Presencial','Remota'].map(v=>(
+                        <label key={v} className={'acn-sac-opcao' + (form.tipo_avaliacao===v ? ' on' : '')}>
+                          <input type="radio" name="tipo_avaliacao" value={v}
+                            checked={form.tipo_avaliacao===v}
+                            onChange={()=>setForm(f=>({...f,tipo_avaliacao:v as any}))} />
+                          <Icone path={v==='Presencial'?mdiWrenchOutline:mdiAccessPoint} size={15} /> {v}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="acn-ajuda">
+                      {form.tipo_avaliacao==='Presencial'
+                        ? '→ A Produção marca a data do atendimento; o SAC confirma a data com o cliente (Aceite SAC)'
+                        : '→ SAC insere itens e envia cotação ao cliente para aprovação'}
+                    </div>
+                    </>)}
+                  </div>
+                  <div className="form-group">
+                    <label className="acn-check">
+                      <input type="checkbox" checked={form.acompanhamento_engenharia}
+                        onChange={e=>setForm(f=>({...f,acompanhamento_engenharia:e.target.checked}))} />
+                      <span className="acn-sac-icone-texto"><Icone path={mdiCogOutline} size={15} /> Acompanhamento de Engenharia</span>
+                    </label>
+                    <div className="acn-ajuda">Cria demanda adicional para a Engenharia acompanhar.</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Info */}
+            {!form.is_veiculo && form.tipo_servico !== 'Garantia' && (
+              <Faixa tom="info">A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.</Faixa>
+            )}
+            {!form.is_veiculo && form.tipo_servico === 'Garantia' && (
+              <Faixa tom="ok">Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.</Faixa>
+            )}
+
+            {/* M1 (03/11/2026): o que quase toda OS não usa fica recolhido; o veículo e os avisos da OS seguem à vista */}
+            <details className="acn-mais-dados" open={maisDados} onToggle={e => setMaisDados((e.currentTarget as HTMLDetailsElement).open)} data-teste="mais-dados">
+              <summary className="acn-mais-dados-cab">
+                <span>Mais dados (acessórios, fotos, faturamento, valores e vínculo com o CRM)</span>
+                {(() => {
+                  const p = [form.acessorios?.length ? 'acessórios' : '', (fotosEntradaFiles.length || arquivosEntradaFiles.length) ? 'arquivos' : '', (form.cnpj_faturamento || form.razao_social_faturamento || form.endereco_faturamento) ? 'faturamento' : '', (form.valor_total || form.valor_mao_de_obra) ? 'valores' : '', form.crm_oportunidade_id ? 'CRM' : ''].filter(Boolean);
+                  return p.length ? <span className="acn-fraco" data-teste="mais-dados-resumo">Preenchido: {p.join(', ')}</span> : null;
+                })()}
+              </summary>
+              <div className="acn-mais-dados-corpo">
             {/* Acessórios */}
             <div className="acn-quadro">
               <div className="acn-quadro-titulo">Checklist de Acessórios</div>
@@ -2848,45 +2988,6 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               </div>
             </div>
 
-            {/* Manutenção Veicular — campos específicos */}
-            {form.is_veiculo && (
-              <div className="acn-quadro tom-info">
-                <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCarOutline} size={14} /> Manutenção Veicular</span></div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="acn-label">Tipo de Avaliação *</label>
-                    {form.tipo_servico === 'Garantia' && (form.cobranca || 'garantia') === 'garantia' ? (
-                      <div className="acn-ajuda" data-teste="sem-avaliacao-na-garantia">Garantia sem cobrança não tem cotação: a Produção marca a data de atendimento do veículo.</div>
-                    ) : (<>
-                    <div className="acn-sac-avaliacao">
-                      {['Presencial','Remota'].map(v=>(
-                        <label key={v} className={'acn-sac-opcao' + (form.tipo_avaliacao===v ? ' on' : '')}>
-                          <input type="radio" name="tipo_avaliacao" value={v}
-                            checked={form.tipo_avaliacao===v}
-                            onChange={()=>setForm(f=>({...f,tipo_avaliacao:v as any}))} />
-                          <Icone path={v==='Presencial'?mdiWrenchOutline:mdiAccessPoint} size={15} /> {v}
-                        </label>
-                      ))}
-                    </div>
-                    <div className="acn-ajuda">
-                      {form.tipo_avaliacao==='Presencial'
-                        ? '→ A Produção marca a data do atendimento; o SAC confirma a data com o cliente (Aceite SAC)'
-                        : '→ SAC insere itens e envia cotação ao cliente para aprovação'}
-                    </div>
-                    </>)}
-                  </div>
-                  <div className="form-group">
-                    <label className="acn-check">
-                      <input type="checkbox" checked={form.acompanhamento_engenharia}
-                        onChange={e=>setForm(f=>({...f,acompanhamento_engenharia:e.target.checked}))} />
-                      <span className="acn-sac-icone-texto"><Icone path={mdiCogOutline} size={15} /> Acompanhamento de Engenharia</span>
-                    </label>
-                    <div className="acn-ajuda">Cria demanda adicional para a Engenharia acompanhar.</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Dados de Faturamento (OS sem cobrança não tem nota) */}
             {!(form.tipo_servico === 'Garantia' && (form.cobranca || 'garantia') === 'garantia') && <div className="acn-quadro">
               <div className="acn-quadro-titulo">Dados de Faturamento (Fiscal / NF)</div>
@@ -2915,14 +3016,6 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     value={form.valor_mao_de_obra||''} onChange={e=>setForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
               </div>
             </div>
-
-            {/* Info */}
-            {!form.is_veiculo && form.tipo_servico !== 'Garantia' && (
-              <Faixa tom="info">A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.</Faixa>
-            )}
-            {!form.is_veiculo && form.tipo_servico === 'Garantia' && (
-              <Faixa tom="ok">Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.</Faixa>
-            )}
 
             {/* ── Vínculo CRM (opcional) ── */}
             <div className="acn-quadro">
@@ -2970,11 +3063,14 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               )}
             </div>
 
+              </div>
+            </details>
             </div>
 
             <div className="acn-modal-rodape acn-sac-rodape">
               <Botao variante="primario" onClick={criarOS} disabled={salvando}>{salvando?'Salvando...':'ABRIR OS'}</Botao>
               <Botao onClick={()=>setModalNova(false)}>Cancelar</Botao>
+              {faltaNaNovaOS(form, equipLista).length > 0 && <span className="acn-txt-erro acn-sac-falta" data-teste="falta-nova-os">Falta: {faltaNaNovaOS(form, equipLista).join(' · ')}</span>}
             </div>
           </div>
         </div>

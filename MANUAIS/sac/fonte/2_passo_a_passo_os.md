@@ -27,6 +27,8 @@
    ![Bloco Dados do cliente](img/34d-nova-os-cliente.jpg)
 7. **Prazos.** O **Prazo para orçamento** é opcional e aparece no cartão e na lista. Na garantia, no lugar dele aparece a **Data prevista de entrega**.
    ![Bloco Prazos](img/34e-nova-os-prazos.jpg)
+**Mais dados.** Daqui para baixo a janela mostra só um bloco recolhido, **"Mais dados (acessórios, fotos, faturamento, valores e vínculo com o CRM)"**. Clique nele para abrir os passos 8 a 12. Se você já preencheu algum, o bloco diz **"Preenchido: …"** mesmo recolhido; e ele abre sozinho quando a OS já vem com esses dados (cópia, CRM, garantia).
+   ![Mais dados recolhido](img/34f0-nova-os-mais-dados-recolhido.jpg)
 8. **Checklist de acessórios.** Digite cada acessório que veio junto (carregador, cabo, manual) e clique **+ Add** (ou tecle Enter). Cada acessório entra com a caixa **marcada** (veio junto); **desmarque** se ele não veio. O **×** tira o acessório da lista (o sistema pede confirmação).
    ![Checklist de acessórios](img/34f-nova-os-acessorios.jpg)
 9. **Fotos e arquivos de entrada.** Fotos do equipamento como chegou e documentos (PDF, Word). Se algum arquivo não subir, **a OS não abre** e o sistema diz qual arquivo falhou: corrija ou tire o arquivo da lista.
@@ -37,6 +39,9 @@
     ![Valores financeiros](img/34i-nova-os-valores.jpg)
 12. **Vínculo comercial/CRM** (opcional): digite pelo menos 2 letras do título ou do órgão e escolha a oportunidade do CRM. É só um **vínculo**: a OS fica ligada à oportunidade, sem copiar nada. **Remover** desfaz.
     ![Vínculo com o CRM](img/34j-nova-os-vinculo-crm.jpg)
+
+> **Dica:** se o **ABRIR OS** não funciona, olhe ao lado dele: a frase vermelha **"Falta: …"** diz o que ainda falta (a ficha de garantia, o nome do cliente, o equipamento, o defeito reclamado de cada equipamento).
+> ![Falta, ao lado do botão Abrir OS](img/34m-nova-os-rodape-falta.jpg)
 13. Clique **ABRIR OS** (no rodapé). **Cancelar** fecha a janela sem gravar nada.
 
 > **Atenção:** três coisas travam o botão: o **nome do cliente**, o **tipo de equipamento** e o **defeito reclamado** de cada equipamento (e, na garantia, a **ficha**). Se faltar algo, a tela avisa o que é e nada é gravado.
@@ -508,9 +513,25 @@ Quando você abre **várias OS de uma vez** (caixa de lote na Nova OS), o quadro
 - O cartão mostra **"Lote · N OS"**, o cliente, os **números das OS** e **quantas estão em cada etapa** (por exemplo, "4× Em Cotação").
 - **Abrir o lote** mostra cada OS, com o selo da etapa, **quem age**, a barra de progresso e **os mesmos botões** da OS solta.
 - **Registrar atendimento já realizado** no cartão do lote registra **várias de uma vez**.
-- Para as outras passagens (aprovar, enviar ao Fiscal, entregar), é preciso **abrir o lote e fazer OS por OS**.
+- Para **passar várias OS do lote de uma vez**, use **Passar as OS do lote…** (veja abaixo). As passagens que têm janela própria (aprovar, enviar ao Fiscal, entregar) seguem **OS por OS**: abra o lote e faça em cada uma.
 
 ![Lote aberto, com os botões de cada OS](img/09b-lote-aberto-botoes.jpg)
+
+### Passar as OS do lote
+
+**Quando usar:** as OS do lote estão na mesma etapa e precisam dar o mesmo passo (por exemplo, quatro garantias em cotação que seguem sem cotação).
+
+1. No cartão do lote, clique em **Passar as OS do lote…** (ou, no menu ⋯ de uma OS do lote, **Passar as OS do lote…**, no grupo *Mover a OS*).
+2. Em **O que fazer com as OS**, escolha a passagem. A lista traz **só os passos que alguma OS do lote pode dar**, com quantas OS cada um alcança.
+3. Preencha o que o passo pede (quando pede). **Cancelar OS** pede **um motivo só**, e a janela avisa em vermelho; **Seguir sem cotação** não pede nada.
+4. Em **OS que passarão**, desmarque as que não devem ir. Só aparecem as OS que **podem** dar aquele passo.
+5. Clique no botão de baixo (**"Seguir sem cotação em 4 OS"**, **"Cancelar 4 OS"**…).
+
+![Janela Passar as OS do lote](img/29b-passar-as-os-do-lote.jpg)
+
+As passagens disponíveis são: **Seguir sem cotação**, **Abrir o diagnóstico**, **Seguir como vendida**, **Informar o orçamento**, **Iniciar a execução**, **Concluir a execução** (Laboratório), **Voltar uma etapa**, **Desfazer o registro do atendimento** e **Cancelar OS**.
+
+> **Atenção:** cada OS **só passa se ainda estiver na etapa em que a janela a viu**. Se alguém mexeu em uma delas no meio tempo, essa não é gravada e o aviso final diz quantas passaram e quantas ficaram. No **Seguir como vendida**, o campo de valor da venda, se preenchido, vale para **todas as marcadas**; deixado em branco, cada OS mantém o valor dela. A demanda aberta do Laboratório recebe um recado, como na passagem de uma OS só.
 
 ---
 

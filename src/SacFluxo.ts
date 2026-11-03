@@ -588,6 +588,68 @@ export function patchDoMovimento(os: any, movimento: Movimento, dados: any, agor
 export const recadoDoMovimento = (os: any, movimento: Movimento, dados: any, usuario: any, agora: string) =>
   ({ texto: `OS ${os?.numero_os || ''} movida pelo SAC de "${os?.status}" para "${movimento.para}"${String(dados?.motivo || '').trim() ? `. Motivo: ${String(dados.motivo).trim()}` : ''}${String(dados?.observacao || '').trim() ? `. ${String(dados.observacao).trim()}` : ''}. Confira esta demanda.`, usuario: usuario?.nome, hora: agora });
 
+// ── NOVA OS: o que falta para abrir (PLANO_SAC_MELHORIAS_UX.md, M1, 03/11/2026) ─────────────────────────────────────────────────────────────────────
+/** O que ainda falta na Nova OS, na mesma ordem em que o botão "ABRIR OS" confere (vazio = pode abrir). Aparece perto do botão para a pessoa não descobrir só depois de clicar. */
+export function faltaNaNovaOS(form: any, equipLista: any[]): string[] {
+  const falta: string[] = [];
+  const ficha = faltaFichaDaGarantia({ tipo_servico: form?.tipo_servico, garantia_id: form?.garantia_id });
+  if (ficha) falta.push('a ficha de garantia (aba Garantia)');
+  if (!String(form?.cliente_nome || '').trim()) falta.push('o nome do cliente');
+  if (!String(form?.equipamento_nome || '').trim()) falta.push('o equipamento');
+  const lista = equipLista || [];
+  const semDefeito = lista.map((e, i) => (String(e?.defeito || '').trim() ? 0 : i + 1)).filter(Boolean);
+  if (semDefeito.length) falta.push(lista.length > 1 ? `o defeito reclamado (equipamento ${semDefeito.join(', ')})` : 'o defeito reclamado');
+  return falta;
+}
+
+// ── PASSAGENS EM LOTE (PLANO_SAC_MELHORIAS_UX.md, M4, pedido do usuário em 03/11/2026) ─────────────────────────────────────────────────────────────
+// O caso: as 7 viaturas da Defesa Civil exigiam 7 confirmações de "Seguir sem cotação". Agora o SAC marca as OS de um lote e aplica A MESMA passagem a todas, no desenho do registro de atendimento em lote.
+// Escolha do usuário (03/11/2026): entram "Seguir sem cotação", os passos que não têm janela própria (os de CAMPOS_DO_MOVIMENTO: abrir o diagnóstico, seguir como vendida, informar o orçamento, iniciar e
+// concluir a execução, voltar uma etapa, desfazer o registro) e "Cancelar a OS". Os passos que têm janela própria (orçamento, aprovação, Fiscal, entrega) NÃO entram: pedem assinatura, fotos ou dados
+// de cada OS. Cada OS segue a regra de sempre (`movimentosDaOS`): só entra na passagem a OS que pode fazer aquele passo agora, e a gravação de cada uma confere a etapa de antes.
+export const PROCESSOS_EM_LOTE = ['seguir_sem_cotacao', 'abrir_diagnostico', 'seguir_vendida', 'informar_orcamento', 'iniciar_execucao', 'concluir_lab', 'voltar', 'desfazer_registro', 'cancelar'];
+
+export type PassagemEmLote = { id: string; processo: string; para: string; rotulo: string; ajuda: string; tipo: TipoMovimento; itens: { os: any; movimento: Movimento }[] };
+
+/** As passagens que valem para pelo menos uma OS do grupo, na ordem de PROCESSOS_EM_LOTE; cada uma traz as OS que podem fazê-la (a mesma passagem com destinos diferentes, como "voltar", vira passagens separadas). */
+export function passagensEmLote(oss: any[]): PassagemEmLote[] {
+  const por = new Map<string, PassagemEmLote>();
+  for (const os of oss || []) {
+    for (const m of movimentosDaOS(os)) {
+      if (!PROCESSOS_EM_LOTE.includes(m.processo)) continue;
+      const p = por.get(m.id) || { id: m.id, processo: m.processo, para: m.para, rotulo: m.rotulo, ajuda: m.ajuda, tipo: m.tipo, itens: [] };
+      p.itens.push({ os, movimento: m });
+      por.set(m.id, p);
+    }
+  }
+  return [...por.values()].sort((a, b) => PROCESSOS_EM_LOTE.indexOf(a.processo) - PROCESSOS_EM_LOTE.indexOf(b.processo) || a.para.localeCompare(b.para));
+}
+
+const CAMPOS_DO_CANCELAMENTO_EM_LOTE: CampoDoMovimento[] = [{ chave: 'motivo', rotulo: 'Por que as OS serão canceladas', tipo: 'area', obrigatorio: true, ajuda: 'Um motivo só, que vale para todas as marcadas: fica em cada OS e no histórico.' }];
+
+/** Os dados que a passagem pede (valem para todas as OS marcadas). "Seguir sem cotação" só pede a confirmação. */
+export function camposDaPassagem(processo: string): CampoDoMovimento[] {
+  if (processo === 'cancelar') return CAMPOS_DO_CANCELAMENTO_EM_LOTE;
+  if (processo === 'seguir_sem_cotacao') return [];
+  const campos = CAMPOS_DO_MOVIMENTO[processo] || [];
+  // o valor da venda em lote só vale se a pessoa informar: em branco, cada OS fica com o valor que já tem
+  return processo === 'seguir_vendida' ? campos.map(c => c.chave === 'valor_total' ? { ...c, ajuda: 'Vale para todas as marcadas. Deixe em branco para cada OS manter o valor que já tem.' } : c) : campos;
+}
+
+/** O que falta nos dados da passagem; vazio = pode gravar. */
+export function validarDadosDaPassagem(processo: string, dados: any): string[] {
+  if (processo === 'cancelar') return String(dados?.motivo || '').trim() ? [] : ['Por que as OS serão canceladas: obrigatório'];
+  if (processo === 'seguir_sem_cotacao') return [];
+  return validarDadosDoMovimento(processo, dados);
+}
+
+/** O que a passagem grava na OS (já com `atualizado_em`). "Seguir sem cotação" é o de sempre da OS sem cobrança: segue para o provisionamento (a Produção marca a data). */
+export function patchDaPassagem(os: any, movimento: Movimento, dados: any, usuario: any, agora: string): Record<string, any> {
+  if (movimento.processo === 'cancelar') return camposDoCancelamento(dados?.motivo, usuario, agora);
+  if (movimento.processo === 'seguir_sem_cotacao') return { status: 'Em Provisionamento', cobranca: 'garantia', tipo_avaliacao: 'Presencial', atualizado_em: agora };
+  return { ...patchDoMovimento(os, movimento, dados, agora), atualizado_em: agora };
+}
+
 // ── Chamados NFC (PLANO_SAC_MELHORIAS_UX.md, A6 e M8, 03/11/2026) ─────────────────────────────────────────────────────────────────────────────────
 /** Decidido com o usuário em 03/11/2026: chamado de cliente aberto (ou em atendimento) há 3 dias corridos ou mais vira alerta vermelho. */
 export const PRAZO_CHAMADO_NFC_DIAS = 3;

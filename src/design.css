@@ -7034,3 +7034,12 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
 .acn-man-barra-titulo { font-size: 14px; color: var(--acn-ink); }
 .acn-man-barra-acoes { display: inline-flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 .acn-man-quadro { flex: 1; min-height: 0; width: 100%; border: 1px solid var(--acn-line); border-radius: var(--acn-r4); background: #fff; }
+
+/* Nova OS do SAC (M1, 03/11/2026): "Mais dados" recolhido e o que falta para abrir, perto do botão */
+.acn-mais-dados { border: 1px solid var(--acn-line, #e2e8f0); border-radius: 8px; padding: 0 12px; }
+.acn-mais-dados > summary { cursor: pointer; list-style: none; padding: 10px 0; display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.acn-mais-dados > summary::-webkit-details-marker { display: none; }
+.acn-mais-dados > summary > span:first-child::before { content: '▸'; color: var(--acn-muted); margin-right: 6px; }
+.acn-mais-dados[open] > summary > span:first-child::before { content: '▾'; }
+.acn-mais-dados-corpo { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
+.acn-sac-falta { margin-right: auto; align-self: center; font-size: 12px; }

@@ -1,6 +1,6 @@
 # Plano: melhorias de uso, UX e UI do setor SAC
 
-**Situação (03/11/2026): EM ANDAMENTO — as Ondas 1 (A3, A4, A5 só os rótulos, B1, B4, M3, M11), 2 (A1, A2, A7, M2, M9) e 3 (A6, M6, M7, M8) estão construídas; faltam as ondas 2b e 4.** Nasceu como análise e virou plano: cada código (A1, M3...) é uma fatia; o usuário diz quais fazer e em que ordem. Marque aqui cada achado como ✅ (com a data) quando for construído. Só o "Registrar atendimento já realizado" foi feito, antes da análise, e não está na lista. O manual do setor (`MANUAIS/sac`, aba **Manuais** do sistema) descreve a tela como ela é hoje: ao construir um achado, atualize o texto do manual e rode `node MANUAIS/gerar_manuais.cjs`.
+**Situação (03/11/2026): EM ANDAMENTO — as Ondas 1 (A3, A4, A5 só os rótulos, B1, B4, M3, M11), 2 (A1, A2, A7, M2, M9), 3 (A6, M6, M7, M8) e 4 (M4, M1, M5, M10, B2, B3) estão construídas; falta só a onda 2b (A8, conferir com a Produção).** Nasceu como análise e virou plano: cada código (A1, M3...) é uma fatia; o usuário diz quais fazer e em que ordem. Marque aqui cada achado como ✅ (com a data) quando for construído. Só o "Registrar atendimento já realizado" foi feito, antes da análise, e não está na lista. O manual do setor (`MANUAIS/sac`, aba **Manuais** do sistema) descreve a tela como ela é hoje: ao construir um achado, atualize o texto do manual e rode `node MANUAIS/gerar_manuais.cjs`.
 
 **Data:** 30/10/2026 · **Pedido:** "faça uma análise se tem como melhorar o uso, o UX e a UI do SAC, para os operadores entenderem melhor como operar".
 **Base:** leitura da tela inteira (Ordens de Serviço, Chamados NFC, Garantia, Cadastros), das regras de cada etapa e do passo a passo de 79 fotos tiradas com dados inventados.
@@ -43,16 +43,16 @@
 
 | Cód. | Onde | Hoje | Sugestão |
 |---|---|---|---|
-| **M1** | Nova OS | Um formulário único de 13 blocos. Só 3 coisas são obrigatórias (cliente, tipo de equipamento, defeito reclamado), mas acessórios, fotos, faturamento, valores e vínculo com o CRM ocupam a mesma rolagem | Mostrar o essencial e recolher "Mais dados (acessórios, fotos, faturamento, valores, CRM)"; mostrar "Falta: …" perto do botão **Abrir OS** |
+| **M1** ✅ 03/11/2026 | Nova OS | Um formulário único de 13 blocos. Só 3 coisas são obrigatórias (cliente, tipo de equipamento, defeito reclamado), mas acessórios, fotos, faturamento, valores e vínculo com o CRM ocupam a mesma rolagem | Mostrar o essencial e recolher "Mais dados (acessórios, fotos, faturamento, valores, CRM)"; mostrar "Falta: …" perto do botão **Abrir OS** |
 | **M2** ✅ 03/11/2026 | Menu ⋯ da OS | Até **12 itens** misturados: Resp., Financeiro, Compras, Anexar, PDF, Copiar, Cancelar OS, Entregar sem nota, Mover para…, Voltar para…, Registrar atendimento já realizado | Separar em grupos com linha (Dados da OS / Mover a OS / Encerrar), os destrutivos ao fim e em vermelho |
 | **M3** ✅ 03/11/2026 | Rótulos | "Resp.", "Acomp.", "Atend.", "Orç.", "KPI Orç.", "KPI Exec.", "Qtd" | Por extenso onde couber (Responsável, Acompanhamento, Atendimento); "KPI" não diz o que mede: "Tempo do orçamento" / "Tempo da execução" |
-| **M4** | Lote de OS | O cartão do lote só tem "Registrar atendimento já realizado". Para as outras passagens é preciso abrir o lote e repetir OS por OS (as 7 viaturas da Defesa Civil = 7 confirmações de "Seguir sem cotação") | Passagens em lote: marcar as OS do lote e aplicar a mesma passagem, no mesmo desenho do registro em lote |
-| **M5** | Cores das etapas | "Aprovado" (Laboratório) e "Provisionada" aparecem **verdes**, como se estivessem prontas, mas ainda falta execução | Verde só no que terminou; "Aprovado" e "Provisionada" em tom de andamento |
+| **M4** ✅ 03/11/2026 | Lote de OS | O cartão do lote só tem "Registrar atendimento já realizado". Para as outras passagens é preciso abrir o lote e repetir OS por OS (as 7 viaturas da Defesa Civil = 7 confirmações de "Seguir sem cotação") | Passagens em lote: marcar as OS do lote e aplicar a mesma passagem, no mesmo desenho do registro em lote |
+| **M5** ✅ 03/11/2026 | Cores das etapas | "Aprovado" (Laboratório) e "Provisionada" aparecem **verdes**, como se estivessem prontas, mas ainda falta execução | Verde só no que terminou; "Aprovado" e "Provisionada" em tom de andamento |
 | **M6** ✅ 03/11/2026 | Garantia, ficha | Janela com **11 seções empilhadas**; não diz qual é o próximo passo. Nomes parecidos: "Peças pedidas ao Compras" × "Peças em garantia (envio e retorno)" | Faixa no topo: "Próximo passo: registrar a avaliação técnica" (o sistema já sabe a etapa); seções concluídas recolhidas; renomear para "Compra de peça (reposição)" e "Peça defeituosa (envio ao fornecedor e retorno)" |
 | **M7** ✅ 03/11/2026 | Garantia, lista | Sem coluna "o que falta" e sem ordenar pelos parados | Coluna "Próximo passo" e ordem por dias parado |
 | **M8** ✅ 03/11/2026 | Chamados NFC | Botão "Carregar" (é atualizar); sem caminho do chamado para a OS ou a Garantia, embora o chassi, a placa e o modelo já estejam no chamado | "Atualizar"; botão "Abrir OS deste chamado" levando os dados à Nova OS |
 | **M9** ✅ 03/11/2026 | Filtro "Tipo de serviço" | Lista fixa de 4 nomes (Orçamento, Conserto, Troca, Garantia), mas o cadastro aceita outros | Montar o filtro pelo cadastro |
-| **M10** | Lista de OS | 12 colunas, com rolagem lateral em tela menor | Esconder as colunas de tempo atrás de "Mais colunas" |
+| **M10** ✅ 03/11/2026 | Lista de OS | 12 colunas, com rolagem lateral em tela menor | Esconder as colunas de tempo atrás de "Mais colunas" |
 | **M11** ✅ 03/11/2026 | Barra de progresso do veículo **presencial** | Depois que o SAC aprova o orçamento, a OS vai a "Aguardando Início", e a barra a desenha como "Provisionada" (as duas etapas valem a mesma casa). A barra **volta uma casa** | A pessoa acha que a OS retrocedeu. Quem lê "etapa 3 de 12" e depois "etapa 3 de 12" de novo não entende o que mudou | Dar a "Aguardando Início" a casa própria (depois de "Aguardando Aprovação Cliente") no caminho presencial |
 
 ### Baixa — acabamento e risco futuro
@@ -60,8 +60,8 @@
 | Cód. | Onde | Hoje | Sugestão |
 |---|---|---|---|
 | **B1** ✅ 03/11/2026 | Cadastros vazios | Mensagem de programador: *"Rode o SQL sac_tipos_servico.sql no Supabase."* | "Nenhum tipo cadastrado. Avise a TI." |
-| **B2** | Carga da lista | Lê todas as OS de uma vez, sem paginar; o banco corta em 1.000 por leitura. Hoje são centenas, mas ao passar de mil as mais antigas **somem sem aviso** | Usar a leitura paginada que o sistema já tem (`LerPaginado`) |
-| **B3** | Erros do banco | Alguns avisos terminam em "Erro: " + texto técnico do banco (às vezes em inglês) | Traduzir os mais comuns (número repetido, sem permissão, sem conexão) |
+| **B2** ✅ 03/11/2026 | Carga da lista | Lê todas as OS de uma vez, sem paginar; o banco corta em 1.000 por leitura. Hoje são centenas, mas ao passar de mil as mais antigas **somem sem aviso** | Usar a leitura paginada que o sistema já tem (`LerPaginado`) |
+| **B3** ✅ 03/11/2026 | Erros do banco | Alguns avisos terminam em "Erro: " + texto técnico do banco (às vezes em inglês) | Traduzir os mais comuns (número repetido, sem permissão, sem conexão) |
 | **B4** ✅ 03/11/2026 | Quadro no celular/tablet | Arrastar o cartão não funciona com o dedo; o menu "Mover para…" funciona, mas ninguém avisa | Frase fixa sob o quadro: "No celular, use ⋯ > Mover para…" |
 
 ---
@@ -74,14 +74,11 @@
 | **2 — encontrar e agir** ✅ feita em 03/11/2026 | A1, A2, A7, M2, M9 | O operador chega no quadro mais rápido e age a partir do painel |
 | **2b — conferir com a Produção** | A8 | Primeiro confirmar o que a Produção faz com a OS veicular sem cobrança; só então decidir se muda |
 | **3 — Garantia e NFC** ✅ feita em 03/11/2026 | M6, M7, M8, A6 | Guia o "próximo passo" |
-| **4 — lote e Nova OS** | M4, M1, M5, M10, B2, B3 | Mexe em mais lugares; vale fazer depois de ver o uso das ondas anteriores |
+| **4 — lote e Nova OS** ✅ feita em 03/11/2026 | M4, M1, M5, M10, B2, B3 | Mexe em mais lugares; vale fazer depois de ver o uso das ondas anteriores |
 
 ## Decisões que são suas (não vou supor)
 
 1. **A5:** a entrega do **veículo** deve colher assinatura e fotos como a do Laboratório? (Hoje pede só o nome de quem recebeu.)
-2. **A6:** a partir de quantos dias um chamado NFC aberto vira alerta vermelho? (Na OS é 7; na peça da Garantia, 5.)
-3. **M5:** "Aprovado" e "Provisionada" deixam de ser verdes? (Muda a cor de um selo que o SAC já conhece.)
-4. **Nova OS (M1):** o quadro de valores (comissão) e o de faturamento ficam recolhidos para todo mundo, ou só quando a OS é sem cobrança?
 
 ## Fora desta análise
 
@@ -115,3 +112,15 @@ Dados reais das OS-0044 a 0049 (Defesa Civil de Taió): **não foram mexidos**. 
 - **M7:** a lista da Garantia tem a ordem **Mais parados primeiro** (padrão) ou **Mais recentes**, e a coluna "Etapa" virou **"Etapa e próximo passo"**, com "Próximo: …" embaixo da etapa.
 - **M6:** a ficha aberta mostra a faixa **"Próximo passo: …"** com o botão "Ir para a seção" (abre a seção recolhida e rola até ela); **avaliação registrada, fornecedor liberado e quem executa definido ficam recolhidos** (só essas três: as demais seções seguem abertas); as seções de peças foram renomeadas para **"Compra de peça (reposição)"** e **"Peça defeituosa (envio ao fornecedor e retorno)"**. O "próximo passo" é uma regra pura (`proximoPassoDaGarantia`, em `GarantiaModelo.ts`) que usa as mesmas travas que a ficha já usa; a regra do chamado está em `SacFluxo.ts` (`chamadoEsquecido`, `formularioDoChamadoNfc`, `textoDoFechamentoDoChamado`).
 - **Teste:** `npx vite build` verde; navegador com gravações bloqueadas (3 chamados e 3 fichas simulados: selo vermelho só no de 5 dias, Concluir sem nota = 0 gravações, com nota = a gravação certa com o texto emendado, Abrir OS abre a Nova OS com chassi, defeito, cliente e telefone, lista da Garantia na ordem dos parados e depois dos recentes, ficha com a faixa, seções recolhidas e o clique no título reabrindo). Manual ajustado e as fotos 40, 41 e 50 a 70 refeitas.
+
+## Onda 4 — o que foi feito (03/11/2026)
+
+- **Decisões do usuário:** M5 — Aprovado e Provisionada saem do verde e ganham o tom de **andamento** (azul); M1 — acessórios, fotos, faturamento, valores e vínculo com o CRM ficam **recolhidos para todo mundo**; M4 — o lote passa em bloco **Seguir sem cotação**, **os passos sem janela própria** e **Cancelar OS**.
+- **M4:** o cartão do lote e o menu ⋯ da OS de lote têm **Passar as OS do lote…** (janela `PassagemEmLoteModal.tsx`): escolhe a passagem, preenche o que ela pede (cancelar = um motivo só, com faixa vermelha), desmarca as OS que não devem ir e confirma. Só entram as OS que **podem** dar o passo. Cada OS é gravada conferindo a etapa de antes (`.eq('status', …).select('id')`); a demanda aberta do setor recebe o recado e **não é fechada**, como na passagem de uma OS só. Regras puras em `SacFluxo.ts` (`PROCESSOS_EM_LOTE`, `passagensEmLote`, `camposDaPassagem`, `validarDadosDaPassagem`, `patchDaPassagem`); em `SacTab.tsx`, os efeitos de um passo (histórico, recado à demanda, abertura da demanda) saíram de `gravarMovimento` para `efeitosDoMovimento`, usado também pelo lote. No "Seguir como vendida" em lote, o valor da venda preenchido vale para todas as marcadas; em branco, cada OS mantém o seu. Os passos com janela própria (aprovar, enviar ao Fiscal, entregar) seguem OS por OS.
+- **M1:** a Nova OS mostra o essencial (classificação, equipamento, cliente, prazos, veículo e avisos) e o bloco **"Mais dados"** recolhido; diz "Preenchido: …" quando há algo dentro e abre sozinho quando a OS já vem preenchida (cópia, CRM, garantia). Ao lado do **ABRIR OS** aparece em vermelho **"Falta: …"** (`faltaNaNovaOS`, em `SacFluxo.ts`, na mesma ordem em que o botão confere).
+- **M5:** `STATUS_COR` e `FAMILIA_STATUS_SAC` de Aprovado e Provisionada passam a azul/`info`.
+- **M10:** a lista mostra 10 colunas; **Mais colunas** / **Menos colunas** (só na lista) liga e desliga Tempo do orçamento e Tempo da execução.
+- **B2:** `lerOrdens` usa `lerPaginado` (blocos de 1.000, desempate por `id`): passando de mil OS, nenhuma some.
+- **B3:** `ErroDoBanco.ts` (`explicarErroDoBanco`) traduz número de OS repetido, falta de permissão, sessão vencida, sem conexão, demora, campo obrigatório, vínculo inexistente, valor ou texto inválido e registro não encontrado; os 48 avisos da `SacTab.tsx` que mostravam o texto cru do banco passam por ele. Erro desconhecido sai com o texto original e "(se repetir, avise a TI)".
+- **Teste:** `npx vite build` verde; navegador com gravações bloqueadas (lote de 4 OS: janela com as passagens certas, 4 gravações cada uma conferindo `status=eq.Em Cotação`, cancelar sem motivo = 0 gravações, com motivo o patch de cancelamento, recado na demanda; a OS sem lote não tem o item no menu; o passo de uma OS só continua igual — Iniciar a execução grava só se ainda estava Aprovado e deixa o recado; Mais dados recolhido, resumo "Preenchido", abertura automática, "Falta: …" mudando a cada campo; cores azuis; Mais colunas liga e desliga; leitura paginada pedindo o bloco seguinte; mensagens de erro traduzidas; 0 gravações indevidas). Manual ajustado e as fotos 01 a 35 refeitas, novas 29b, 34f0 e 34m.
+- **Ainda em aberto:** a onda 2b (A8, conferir com a Produção o que acontece com o veículo sem cobrança) e a decisão A5 (assinatura e fotos na entrega do veículo).
