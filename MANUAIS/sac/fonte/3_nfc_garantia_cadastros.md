@@ -505,7 +505,7 @@ Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado 
 - **"A OS já mudou de etapa (outra pessoa mexeu nela)":** o sistema atualizou a lista. Confira a etapa nova antes de refazer.
 - **Arquivo que não sobe:** o nome tem **caractere especial**, o arquivo é **grande demais**, a **conexão caiu** ou falta **permissão**. A mensagem diz qual é o caso. Renomeie o arquivo sem acento e símbolos e tente de novo.
 - **Faltou a demanda do Laboratório ou da Engenharia** (aviso depois de abrir ou aprovar a OS): a OS **existe**, mas o setor só enxerga o trabalho pela **demanda**. **Avise o PCP ou a TI.**
-- **A tela mostra algo estranho depois de eu mexer em outra aba:** clique de novo no filtro ou recarregue a página. A lista de OS **não atualiza sozinha**.
+- **A tela mostra algo estranho depois de eu mexer em outra aba:** clique em **Atualizar** (ao lado do título). A lista de OS se atualiza sozinha a cada minuto, e a hora da última leitura aparece ao lado do botão.
 
 ---
 

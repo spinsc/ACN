@@ -83,8 +83,8 @@ A tela tem sete partes, nesta ordem:
 
 1. **Agenda do SAC.** Compromissos do setor. Filtros **Hoje, Semana, Mês, Todos**; **Meus** ou **Todos**; **Ver concluídos**. O botão **+ Nova** abre o *Novo Compromisso*: título, descrição (use **@Nome** para avisar alguém), data e hora e os participantes.
 2. **As quatro abas** (Ordens de Serviço, Chamados NFC, Garantia, Cadastros).
-3. **O título "SAC — Ordens de Serviço (N)"** com o número de OS que passam pelos filtros, o seletor **Lista | Kanban** e o botão verde **Nova OS**.
-4. **A legenda de fluxo.** Três linhas com as etapas de cada caminho (Laboratório, Veículo presencial, Veículo remota). Serve de consulta: mostra por quais etapas a OS passa.
+3. **O título "SAC — Ordens de Serviço (N)"** com o número de OS que passam pelos filtros, o seletor **Lista | Kanban**, a hora da última leitura (**"Atualizado às 10:38"**), o botão **Atualizar** e o botão verde **Nova OS**. A lista se atualiza **sozinha a cada minuto** (e o **Atualizar** lê na hora, sem piscar a tela); se a leitura falhar, a tela **mantém a lista que já tinha** e avisa.
+4. **"Como a OS caminha".** Um botão que **começa fechado**; ao abrir, mostra três linhas com as etapas de cada caminho (Laboratório, Veículo presencial, Veículo remota). Serve de consulta: mostra por quais etapas a OS passa. Cada pessoa vê a legenda aberta ou fechada como deixou da última vez, neste computador.
 5. **O painel "O que está com cada setor hoje".**
 6. **Os filtros.**
 7. **O quadro (Kanban) ou a lista.**
@@ -97,7 +97,7 @@ A tela tem sete partes, nesta ordem:
 
 - Os botões **SAC, Laboratório, Produção, Qualidade, Fiscal, Cliente** mostram quantas OS aguardam cada um e quantas já estão paradas (por exemplo, *SAC (12 · 3 paradas)*). **Clique num deles** para filtrar o quadro e a lista só com as OS daquele setor. **Todos** limpa.
 - A **faixa vermelha** aparece quando há OS esperando o SAC há 7 dias ou mais. Diz qual é a mais parada. O botão **Ver na lista** abre a lista já filtrada por SAC e por "paradas".
-- A **tabela** mostra as **6 OS mais paradas que são do SAC**, com a etapa, **o que fazer** e **há quantos dias** a OS está na etapa. Para ver todas, use o botão **SAC** do painel.
+- A **tabela** mostra as **3 OS mais paradas que são do SAC**, com a etapa, **o que fazer** e **há quantos dias** a OS está na etapa. **Clique numa linha** para abrir o **resumo completo** da OS. Para ver todas, use **Ver todas na lista** (ou o botão **SAC** do painel).
 
 > **Dica:** comece o dia pela faixa vermelha. Ela lista justamente o que está esperando por você.
 
@@ -109,7 +109,7 @@ A tela tem sete partes, nesta ordem:
 |---|---|
 | **Buscar OS / cliente / equip.** | Procura pelo número da OS, nome do cliente ou equipamento. Não diferencia acento nem maiúscula |
 | **Todos os status** | Mostra só uma etapa (por exemplo, "Orç. Enviado") |
-| **Todos os tipos** | Orçamento, Conserto, Troca ou Garantia |
+| **Todos os tipos** | Os tipos de serviço **do cadastro** (aba Cadastros), mais os que ainda aparecem em OS antigas |
 | **Presencial / Remota** | **Veiculares** (todas as OS de veículo), **Presencial** ou **Remota** |
 | **Todas as empresas** | ACN, DETECH ou **Sem empresa** (OS antigas) |
 | **Parada há…** | OS paradas há 7, 15 ou 30 dias ou mais |

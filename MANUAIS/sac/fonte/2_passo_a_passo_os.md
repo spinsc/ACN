@@ -316,7 +316,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ## Menu ⋯ (Mais ações da OS)
 
-O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido.
+O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido. Os itens vêm em **três grupos**, com o título de cada um: **Dados da OS** (Responsável, Financeiro, Compras, Anexar, PDF, Copiar OS), **Mover a OS** (os passos de cada etapa, inclusive *Registrar atendimento já realizado*) e **Encerrar a OS** (Entregar sem nota e, por último e em vermelho, **Cancelar OS**).
 
 ![Menu Mais ações da OS](img/08-menu-mais-acoes.jpg)
 

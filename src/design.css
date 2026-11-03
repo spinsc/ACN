@@ -310,6 +310,12 @@ html body .acn-tela-cab h1 { margin: 0; font-size: 20px !important; line-height:
 .acn-menu-item.perigo, .acn-menu-item.perigo svg { color: var(--acn-bad); }
 .acn-menu-item.perigo:hover { background: var(--acn-bad-soft); }
 .acn-menu-item:disabled { opacity: .45; cursor: not-allowed; }
+.acn-menu-grupo { padding: 6px 10px 3px; font: 600 11px var(--acn-font); letter-spacing: .05em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-menu-grupo.sep { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--acn-line); }
+/* linha de tabela que abre o resumo ao clicar (painel do SAC, A2, 03/11/2026) */
+.acn-linha-clicavel { cursor: pointer; }
+.acn-linha-clicavel:hover td { background: var(--acn-neutral-soft); }
+.acn-linha-clicavel:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: -2px; }
 
 .acn-faixa { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 0 0 10px; border-radius: var(--acn-r3); border: 1px solid; font-size: 13px; }
 .acn-faixa > svg { flex-shrink: 0; }

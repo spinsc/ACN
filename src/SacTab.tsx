@@ -290,6 +290,12 @@ function SacTabCompleto({ currentUser }) {
   const [visaoOS, setVisaoOS] = useState<'lista' | 'kanban'>(() => { try { return localStorage.getItem('acn-sac-visao-v2') === 'lista' ? 'lista' : 'kanban'; } catch { return 'kanban'; } });
   const trocarVisaoOS = (v: string) => { setVisaoOS(v as any); try { localStorage.setItem('acn-sac-visao-v2', v); } catch { /* sem armazenamento: vale só nesta sessão */ } };
   const [filtroTipo, setFiltroTipo]         = useState('');
+  // A1 (03/11/2026): a legenda de etapas é consulta de vez em quando; começa fechada e a escolha de cada pessoa fica lembrada neste computador
+  const [legendaAberta, setLegendaAberta] = useState(() => { try { return localStorage.getItem('acn-sac-legenda') === 'aberta'; } catch { return false; } });
+  const alternarLegenda = () => { const v = !legendaAberta; setLegendaAberta(v); try { localStorage.setItem('acn-sac-legenda', v ? 'aberta' : 'fechada'); } catch { /* sem armazenamento: vale só nesta sessão */ } };
+  // A7 (03/11/2026): a lista se atualiza sozinha a cada 60 s e há o botão Atualizar; a tela mostra a hora da última leitura
+  const [ultimaLeitura, setUltimaLeitura] = useState<Date | null>(null);
+  const [atualizando, setAtualizando] = useState(false);
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [filtroEmpresa, setFiltroEmpresa]     = useState('');
   // S4 (29/10/2026): quem tem que agir (SAC, Laboratório, Produção…) e "parada há N dias ou mais" (a OS na mesma etapa há N dias)
@@ -495,12 +501,21 @@ function SacTabCompleto({ currentUser }) {
     window.dispatchEvent(new CustomEvent('acn:abrir-registro'));
   };
 
-  const fetchOrdens = async () => {
-    setLoading(true);
-    const { data } = await supabase.from('sac_ordens_servico').select('*').order('data_abertura', { ascending: false });
-    setOrdens(data || []);
-    setLoading(false);
+  // A7: `silencioso` = a leitura automática ou o botão Atualizar: não pisca "Carregando..." no quadro e, se a leitura falhar, a tela mantém a lista que já tinha (antes uma falha esvaziava a lista sem avisar)
+  const lerOrdens = async (silencioso: boolean) => {
+    if (!silencioso) setLoading(true);
+    setAtualizando(true);
+    const { data, error } = await supabase.from('sac_ordens_servico').select('*').order('data_abertura', { ascending: false });
+    if (error) mostrarAviso('Não foi possível atualizar a lista de OS agora' + (silencioso ? '; a tela mostra a última leitura' : '') + ': ' + error.message, 'erro');
+    else { setOrdens(data || []); setUltimaLeitura(new Date()); }
+    setAtualizando(false);
+    if (!silencioso) setLoading(false);
   };
+  const fetchOrdens = () => lerOrdens(false);
+  useEffect(() => {
+    const t = setInterval(() => { if (!document.hidden && abaAtiva === 'os') lerOrdens(true); }, 60000);
+    return () => clearInterval(t);
+  }, [abaAtiva]);
 
   // Deep-link vindo do painel de Menções ("OS X" clicável) — abre o
   // acompanhamento da OS em vez de só cair na aba SAC genérica. Cobre os
@@ -1353,24 +1368,26 @@ OK = ACN   |   Cancelar = DETECH`;
     }
 
     // Menu ⋯ com o que toda OS tem. Alterar responsável: disponível enquanto a OS não estiver encerrada
+    // M2 (03/11/2026): o menu tinha até 12 itens misturados; agora três grupos (Dados da OS, Mover a OS, Encerrar a OS), o cancelamento por último e em vermelho. A ordem dentro de cada grupo é a de antes.
+    const GRUPOS_DO_MENU = ['Dados da OS', 'Mover a OS', 'Encerrar a OS'];
     btns.push(<MenuAcoes key="mais" rotulo="Mais ações da OS" itens={[
-      { rotulo: 'Responsável', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
+      { grupo: 'Dados da OS', rotulo: 'Responsável', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
         onClick: ()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); } },
-      { rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
+      { grupo: 'Dados da OS', rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
         onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??''});setModalFinanceiro(os);} },
-      { rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
-      { rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
-      { rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
+      { grupo: 'Dados da OS', rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
+      { grupo: 'Dados da OS', rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
+      { grupo: 'Dados da OS', rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
       // S2: a OS cobrada concluída pode sair SEM nota só com um motivo (cortesia): vira "sem cobrança" e segue para a entrega. É a saída de exceção; o caminho normal é "Enviar ao Fiscal"
-      { rotulo: 'Entregar sem nota (cortesia)', titulo: 'A OS concluída não será faturada: pede o motivo, passa a valer como sem cobrança e segue para a entrega', icone: mdiCloseCircleOutline, oculto: !(os.status === 'Concluído' && !osSemCobranca(os)), onClick: ()=>entregarSemNota(os) },
-      { rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
+      { grupo: 'Encerrar a OS', rotulo: 'Entregar sem nota (cortesia)', titulo: 'A OS concluída não será faturada: pede o motivo, passa a valer como sem cobrança e segue para a entrega', icone: mdiCloseCircleOutline, oculto: !(os.status === 'Concluído' && !osSemCobranca(os)), onClick: ()=>entregarSemNota(os) },
+      { grupo: 'Dados da OS', rotulo: 'Copiar OS', titulo: 'Abrir a Nova OS já preenchida com os dados desta OS, para criar várias iguais (cada uma com o seu número)', icone: mdiContentCopy, onClick: ()=>copiarOS(os) },
       // S4 (29/10/2026): o fim da OS desistida, duplicada ou criada errada; some do quadro e da lista, com o motivo guardado
-      { rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
+      { grupo: 'Encerrar a OS', perigo: true, rotulo: 'Cancelar OS', titulo: 'Cancela a OS (pede o motivo, que fica no histórico); a demanda aberta do setor recebe um recado e o setor é avisado', icone: mdiCloseCircleOutline, oculto: !podeCancelarOS(os), onClick: ()=>cancelarOS(os) },
       // Mover a OS entre as etapas (29/10/2026): os passos que o SAC pode fazer agora (avançar onde é ele quem age, voltar uma etapa); o mesmo que arrastar o cartão no quadro, e serve no celular
       ...movimentosDaOS(os).filter((m: any) => m.tipo !== 'cancelar').map((m: any) => ({
-        rotulo: m.menu || (m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`), titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : m.processo === 'registrar_realizado' ? mdiCheckCircleOutline : mdiArrowRight, onClick: () => executarMovimento(os, m),
+        grupo: 'Mover a OS', rotulo: m.menu || (m.tipo === 'voltar' ? m.rotulo : `Mover para ${m.para}`), titulo: `${m.rotulo}. ${m.ajuda}`, icone: m.tipo === 'voltar' ? mdiRefresh : m.processo === 'registrar_realizado' ? mdiCheckCircleOutline : mdiArrowRight, onClick: () => executarMovimento(os, m),
       })),
-    ]} />);
+    ].sort((a: any, b: any) => GRUPOS_DO_MENU.indexOf(a.grupo) - GRUPOS_DO_MENU.indexOf(b.grupo))} />);
     return btns;
   };
 
@@ -2256,6 +2273,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             { id: 'lista', rotulo: 'Lista', icone: mdiFormatListBulleted },
             { id: 'kanban', rotulo: 'Kanban', icone: mdiViewColumnOutline },
           ]} />
+          {ultimaLeitura && <span className="acn-fraco" data-teste="ultima-leitura" title="A lista se atualiza sozinha a cada minuto">Atualizado às {ultimaLeitura.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+          <Botao pequeno variante="discreto" icone={mdiRefresh} disabled={atualizando} title="Ler as OS de novo agora" onClick={() => lerOrdens(true)}>Atualizar</Botao>
           <Botao variante="primario" icone={mdiPlus} // Etapa 7.24 (01/10/2026): só as fotos eram zeradas ao abrir; o documento escolhido numa abertura CANCELADA ficava na memória (o contador mostrava "1 arquivo(s)" com o campo vazio) e ia junto da OS seguinte
             onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setArquivosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setCriarEmLote(false);setModalNova(true);}}>
             Nova OS
@@ -2266,6 +2285,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
         {/* Legenda de fluxo */}
         {/* S5 (29/10/2026): as legendas leem os mesmos caminhos da barra de cada OS (SacFluxo.ts, CAMINHOS_DA_OS): Laboratório e veículo; a OS sem cobrança pula o orçamento e o Fiscal */}
         <div className="sec-body acn-sac-legenda">
+          <Botao pequeno variante="discreto" icone={legendaAberta ? mdiChevronUp : mdiChevronDown} aria-expanded={legendaAberta} onClick={alternarLegenda}>Como a OS caminha</Botao>
+          {legendaAberta && <>
           {LEGENDAS_DE_FLUXO.map(l => (
             <div key={l.rotulo} className="acn-sac-legenda-linha" aria-label={'Fluxo ' + l.rotulo}>
               <span className="acn-fraco acn-sac-legenda-rotulo">{l.rotulo}:</span>
@@ -2278,6 +2299,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             </div>
           ))}
           <span className="acn-fraco acn-sac-legenda-nota">A OS sem cobrança (garantia ou cortesia) pula o orçamento e o Fiscal.</span>
+          </>}
         </div>
 
         {/* S4 (29/10/2026): o que está com cada setor hoje. O SAC vê o que é dele e há quantos dias está lá; clicar no setor filtra a lista e o quadro */}
@@ -2299,8 +2321,9 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                   <table className="acn-tabela acn-densa" aria-label="OS que estão com o SAC">
                     <thead><tr><th>OS</th><th>Cliente</th><th>Etapa</th><th>O que fazer</th><th className="acn-dir">Na etapa há</th></tr></thead>
                     <tbody>
-                      {r.doSac.slice(0, 6).map(x => (
-                        <tr key={x.os.id} className={osParada(x.os) ? 'acn-linha-alerta' : undefined}>
+                      {r.doSac.slice(0, 3).map(x => (
+                        <tr key={x.os.id} className={'acn-linha-clicavel' + (osParada(x.os) ? ' acn-linha-alerta' : '')} tabIndex={0} title="Clique para ver o resumo completo da OS"
+                          onClick={() => setResumoOS(x.os)} onKeyDown={e => { if (e.key === 'Enter') setResumoOS(x.os); }}>
                           <td className="acn-forte">{x.os.numero_os}</td>
                           <td>{x.os.cliente_nome || '—'}</td>
                           <td><Selo familia={FAMILIA_STATUS_SAC[x.os.status] || 'neutro'}>{x.os.status}</Selo></td>
@@ -2310,7 +2333,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                       ))}
                     </tbody>
                   </table>
-                  {r.doSac.length > 6 && <div className="acn-fraco">Mostrando as 6 mais paradas de {r.doSac.length}; use o filtro "SAC" para ver todas.</div>}
+                  {r.doSac.length > 3 && <div className="acn-fraco">Mostrando as 3 mais paradas de {r.doSac.length}. <Botao pequeno variante="discreto" onClick={() => { setFiltroQuem('SAC'); trocarVisaoOS('lista'); }}>Ver todas na lista</Botao></div>}
                 </div>
               )}
             </div>
@@ -2327,7 +2350,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
           </select>
           <select className="acn-input" aria-label="Tipo de serviço" value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
             <option value="">Todos os tipos</option>
-            {['Orçamento','Conserto','Troca','Garantia'].map(t=><option key={t}>{t}</option>)}
+            {/* M9 (03/11/2026): os tipos vêm do cadastro (mais os que ainda existem em OS antigas), não de uma lista fixa de quatro nomes */}
+            {[...new Set([...tiposServico.map((x: any) => x.nome), ...ordens.map((o: any) => o.tipo_servico)].filter(Boolean))].sort((a: any, b: any) => String(a).localeCompare(String(b), 'pt-BR')).map((x: any) => <option key={x}>{x}</option>)}
           </select>
           <select className="acn-input" aria-label="Presencial ou remota" value={filtroAvaliacao} onChange={e=>setFiltroAvaliacao(e.target.value)}>
             <option value="">Presencial / Remota</option>
