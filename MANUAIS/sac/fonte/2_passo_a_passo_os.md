@@ -299,6 +299,8 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Entrega do veículo:** a janela mostra no alto o cliente, o modelo e a placa, e tem o mesmo conteúdo: a **assinatura é obrigatória** e as **fotos são opcionais**, como no Laboratório. Se o cliente ainda não assinou, o sistema avisa e não registra a entrega.
 
+![Janela Entrega de Veículo](img/20b-entrega-do-veiculo.jpg)
+
 **O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome, a assinatura e as fotos (no Laboratório e no veículo). Avisa por WhatsApp ("OS entregue" ou "Veículo entregue"). A entrega do veículo só é gravada se a OS ainda estiver esperando a entrega: se outra pessoa já entregou, o sistema avisa e atualiza a lista. A OS entregue **continua na lista e no quadro**, em **Concluído**.
 
 > **Atenção:** se a assinatura ou uma foto **não subir**, a entrega **não é registrada** e o que você digitou fica na janela para tentar de novo.

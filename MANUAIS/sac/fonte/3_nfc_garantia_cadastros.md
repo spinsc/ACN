@@ -514,7 +514,7 @@ Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado 
 
 # Apêndice: pontos de melhoria já mapeados
 
-A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**) listou o que podia ficar mais claro na tela, e tudo o que era decisão do SAC já foi resolvido:
+A análise do setor (arquivo **PLANO_SAC_MELHORIAS_UX.md**, hoje na pasta de planos concluídos) listou o que podia ficar mais claro na tela, e tudo o que era decisão do SAC já foi resolvido:
 
 - A **entrega do veículo** colhe assinatura e fotos, como a do Laboratório.
 - A OS de **veículo sem cobrança** pula a verificação e a aprovação e vai direto a **Aguardando Início**.
