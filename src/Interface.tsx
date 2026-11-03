@@ -98,7 +98,8 @@ export function Botao({ variante = 'secundario', pequeno, icone, children, class
 }
 
 // ── Menu ⋯ com as ações que não são o próximo passo ───────────────────────────
-export type ItemMenu = { rotulo: React.ReactNode; icone?: string; onClick: () => void; perigo?: boolean; titulo?: string; oculto?: boolean; desativado?: boolean };
+// `grupo` (SAC M2, 03/11/2026): itens seguidos com o mesmo grupo ficam sob um título pequeno e uma linha separa um grupo do outro; menu sem `grupo` fica exatamente como era.
+export type ItemMenu = { rotulo: React.ReactNode; icone?: string; onClick: () => void; perigo?: boolean; titulo?: string; oculto?: boolean; desativado?: boolean; grupo?: string };
 
 export function MenuAcoes({ itens, rotulo = 'Mais ações', pequeno = true }: { itens: ItemMenu[]; rotulo?: string; pequeno?: boolean }) {
   const [aberto, setAberto] = useState(false);
@@ -152,12 +153,15 @@ export function MenuAcoes({ itens, rotulo = 'Mais ações', pequeno = true }: { 
           style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
           onClick={e => e.stopPropagation()}>
           {visiveis.map((it, i) => (
-            <button key={i} type="button" role="menuitem" title={it.titulo} disabled={it.desativado}
-              className={'acn-menu-item' + (it.perigo ? ' perigo' : '')}
-              onClick={() => { setAberto(false); it.onClick(); }}>
-              {it.icone ? <Icone path={it.icone} size={16} /> : <span style={{ width: 16 }} />}
-              <span>{it.rotulo}</span>
-            </button>
+            <React.Fragment key={i}>
+              {it.grupo && it.grupo !== visiveis[i - 1]?.grupo && <div className={'acn-menu-grupo' + (i > 0 ? ' sep' : '')} role="presentation">{it.grupo}</div>}
+              <button type="button" role="menuitem" title={it.titulo} disabled={it.desativado}
+                className={'acn-menu-item' + (it.perigo ? ' perigo' : '')}
+                onClick={() => { setAberto(false); it.onClick(); }}>
+                {it.icone ? <Icone path={it.icone} size={16} /> : <span style={{ width: 16 }} />}
+                <span>{it.rotulo}</span>
+              </button>
+            </React.Fragment>
           ))}
         </div>,
         document.body)}

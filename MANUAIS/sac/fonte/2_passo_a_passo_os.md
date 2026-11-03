@@ -14,7 +14,7 @@
    - **Tipo de serviço\*:** Orçamento, Conserto, Troca ou Garantia (a lista vem da aba Cadastros).
    - **Categoria (tipo projeto):** o grupo do serviço (por exemplo, Manutenção Veicular, Serviço Externo, Laboratório).
    - **Tipo de equipamento\*:** o aparelho (Barra sinalizadora, Central de comando, Rádio portátil...). Se não existe, use **+ novo**: ele pede o nome e cadastra na hora.
-   - **Qtd:** quantos equipamentos iguais (de 1 a 20).
+   - **Quantidade:** quantos equipamentos iguais (de 1 a 20).
    ![Bloco Classificação](img/34a-nova-os-classificacao.jpg)
 3. **Se for manutenção em veículo**, marque a caixa **OS de Veículo / Manutenção Veicular**. Aparecem a **Manutenção Veicular** e a escolha do **Tipo de avaliação**: veja [OS de veículo](#os-de-veículo) abaixo.
 4. **Dados do equipamento.** Para cada equipamento:
@@ -27,6 +27,8 @@
    ![Bloco Dados do cliente](img/34d-nova-os-cliente.jpg)
 7. **Prazos.** O **Prazo para orçamento** é opcional e aparece no cartão e na lista. Na garantia, no lugar dele aparece a **Data prevista de entrega**.
    ![Bloco Prazos](img/34e-nova-os-prazos.jpg)
+**Mais dados.** Daqui para baixo a janela mostra só um bloco recolhido, **"Mais dados (acessórios, fotos, faturamento, valores e vínculo com o CRM)"**. Clique nele para abrir os passos 8 a 12. Se você já preencheu algum, o bloco diz **"Preenchido: …"** mesmo recolhido; e ele abre sozinho quando a OS já vem com esses dados (cópia, CRM, garantia).
+   ![Mais dados recolhido](img/34f0-nova-os-mais-dados-recolhido.jpg)
 8. **Checklist de acessórios.** Digite cada acessório que veio junto (carregador, cabo, manual) e clique **+ Add** (ou tecle Enter). Cada acessório entra com a caixa **marcada** (veio junto); **desmarque** se ele não veio. O **×** tira o acessório da lista (o sistema pede confirmação).
    ![Checklist de acessórios](img/34f-nova-os-acessorios.jpg)
 9. **Fotos e arquivos de entrada.** Fotos do equipamento como chegou e documentos (PDF, Word). Se algum arquivo não subir, **a OS não abre** e o sistema diz qual arquivo falhou: corrija ou tire o arquivo da lista.
@@ -37,6 +39,9 @@
     ![Valores financeiros](img/34i-nova-os-valores.jpg)
 12. **Vínculo comercial/CRM** (opcional): digite pelo menos 2 letras do título ou do órgão e escolha a oportunidade do CRM. É só um **vínculo**: a OS fica ligada à oportunidade, sem copiar nada. **Remover** desfaz.
     ![Vínculo com o CRM](img/34j-nova-os-vinculo-crm.jpg)
+
+> **Dica:** se o **ABRIR OS** não funciona, olhe ao lado dele: a frase vermelha **"Falta: …"** diz o que ainda falta (a ficha de garantia, o nome do cliente, o equipamento, o defeito reclamado de cada equipamento).
+> ![Falta, ao lado do botão Abrir OS](img/34m-nova-os-rodape-falta.jpg)
 13. Clique **ABRIR OS** (no rodapé). **Cancelar** fecha a janela sem gravar nada.
 
 > **Atenção:** três coisas travam o botão: o **nome do cliente**, o **tipo de equipamento** e o **defeito reclamado** de cada equipamento (e, na garantia, a **ficha**). Se faltar algo, a tela avisa o que é e nada é gravado.
@@ -45,7 +50,7 @@ Na janela, uma faixa avisa para onde a OS vai: na OS do Laboratório, *"será en
 
 ### Vários equipamentos de uma vez (lote)
 
-Aumente a **Qtd**. A janela mostra **um bloco por equipamento** (Equipamento 1 de 3, 2 de 3...). Marque a caixa **"Criar uma OS para cada equipamento (lote)"**: o sistema cria **uma OS para cada um, cada uma com o seu número**, e o quadro mostra o lote **num cartão só**.
+Aumente a **Quantidade**. A janela mostra **um bloco por equipamento** (Equipamento 1 de 3, 2 de 3...). Marque a caixa **"Criar uma OS para cada equipamento (lote)"**: o sistema cria **uma OS para cada um, cada uma com o seu número**, e o quadro mostra o lote **num cartão só**.
 
 ![Vários equipamentos e a opção de lote](img/34k-nova-os-varios-equipamentos-lote.jpg)
 
@@ -91,7 +96,7 @@ Na **garantia sem cobrança** o bloco não deixa escolher: diz que *"Garantia se
 | **Remota** | O preço sai **antes** de o veículo chegar. Você monta a **cotação** (itens e valores) e o cliente aprova. Depois a Produção marca a data | O defeito já é conhecido e dá para orçar sem ver o carro |
 | **Presencial** | O **veículo vem primeiro**: a Produção marca a data, o veículo chega, a Produção examina e **insere os materiais** do orçamento. Aí o cliente aprova | O defeito só se descobre com o veículo na oficina |
 
-> **Atenção:** a ajuda que aparece abaixo de "Presencial" na tela diz *"SAC define data de entrega do veículo (Provisionamento)"*. **Está desatualizada**: quem marca a data é a **Produção**; o SAC só dá o **aceite**. Este é um dos pontos de melhoria listados na análise.
+> **Dica:** a ajuda que aparece abaixo de "Presencial" na tela diz o que acontece de fato: *"A Produção marca a data do atendimento; o SAC confirma a data com o cliente (Aceite SAC)"*.
 
 **Acompanhamento de Engenharia** (caixa à direita): marque quando a Engenharia precisa acompanhar o serviço. Cria uma demanda a mais para ela.
 
@@ -204,7 +209,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Passo a passo:**
 
-1. **Ver Orç.** abre o orçamento só para leitura. **Editar** deixa trocar itens e valores. Ao salvar, o total é recalculado e uma eventual **revisão pendente** é resolvida.
+1. **Ver orçamento** abre o orçamento só para leitura. **Editar** deixa trocar itens e valores. Ao salvar, o total é recalculado e uma eventual **revisão pendente** é resolvida.
 2. Quando o cliente decidir, clique **Aprovado** (o sistema pede confirmação) ou **Recusado**.
 
 **O que acontece:** **Aprovado** grava a aprovação e leva a OS para **Aguardando Início**: a Produção atribui o técnico e inicia. **Recusado** leva a OS para **Reprovado**.
@@ -250,7 +255,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Passo a passo:**
 
-1. Clique **Enviar ao Fiscal** (botão verde).
+1. Clique **Enviar ao Fiscal — valor e CPF/CNPJ** (botão verde).
 2. Confira o **Valor total da OS (R$)\***: vem do orçamento aprovado quando existe. É o valor da nota. **Tem de ser maior que zero.**
 3. Digite o **CPF ou CNPJ para a nota\*** (**11 dígitos** para CPF, **14** para CNPJ). Pode ser o do cliente ou de outro, se a nota sai em outro nome.
 4. (Opcional) **Razão social ou nome na nota** e **Endereço de faturamento**.
@@ -268,7 +273,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Passo a passo:**
 
-1. Clique **Enviar para Fiscal** (botão verde).
+1. Clique **Enviar ao Fiscal — informar seriais** (botão verde).
 2. A janela lista os itens instalados (descrição e quantidade). Digite o **Nº de série** de cada item.
 3. Clique **Enviar para Fiscal**.
 
@@ -284,7 +289,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **Entrega de OS do Laboratório:**
 
-1. Clique **Entrega**.
+1. Clique **Entrega — assinatura e fotos**.
 2. Digite o **Nome de quem retirou\***.
 3. (Opcional) **Fotos de saída**: escolha as imagens do equipamento entregue.
 4. Peça a **assinatura de retirada\*** e desenhe no quadro; clique **Confirmar assinatura**.
@@ -292,7 +297,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ![Janela Entrega (Laboratório)](img/20-entrega.jpg)
 
-**Entrega do veículo:** a janela é mais simples e pede só o **nome de quem recebeu o veículo\***. Não pede assinatura nem fotos.
+**Entrega do veículo:** o botão é **Entrega — nome de quem recebeu** e a janela é mais simples: pede só o **nome de quem recebeu o veículo\***. Não pede assinatura nem fotos.
 
 **O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome e, no Laboratório, a assinatura e as fotos. Avisa por WhatsApp ("OS entregue"). A OS entregue **continua na lista e no quadro**, em **Concluído**.
 
@@ -316,13 +321,13 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ## Menu ⋯ (Mais ações da OS)
 
-O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido.
+O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido. Os itens vêm em **três grupos**, com o título de cada um: **Dados da OS** (Responsável, Financeiro, Compras, Anexar, PDF, Copiar OS), **Mover a OS** (os passos de cada etapa, inclusive *Registrar atendimento já realizado*) e **Encerrar a OS** (Entregar sem nota e, por último e em vermelho, **Cancelar OS**).
 
 ![Menu Mais ações da OS](img/08-menu-mais-acoes.jpg)
 
 | Item | O que faz | Quando aparece |
 |---|---|---|
-| **Resp.** | Troca o **responsável da OS** (escolha o novo na lista e **Salvar**) | Enquanto a OS não está Entregue nem Cancelada |
+| **Responsável** | Troca o **responsável da OS** (escolha o novo na lista e **Salvar**) | Enquanto a OS não está Entregue nem Cancelada |
 | **Financeiro** | **Valor total** e **Mão de obra** (a comissão lê). Mostra a **data de faturamento**, que vem da nota do Fiscal e **não se digita** | Sempre |
 | **Compras** | Lista as compras ligadas à OS e permite **Solicitar compra** ao Compras (fica ligada à OS) | Sempre |
 | **Anexar** | Envia arquivos (imagens, PDFs, Word, Excel) para a OS | Sempre |
@@ -344,14 +349,14 @@ O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só apa
 
 ![Anexar arquivos](img/25-anexar-arquivos.jpg)
 
-- **Resp.:** o novo responsável fica gravado no histórico de alterações.
+- **Responsável:** o novo responsável fica gravado no histórico de alterações.
 - **Financeiro:** só um campo **em branco** vira vazio; um valor **0** que já estava gravado continua 0. Valor e mão de obra mudados ficam no histórico, com o valor de antes.
 - **Compras:** mostra "Compras desta OS (N)" com o andamento de cada uma. **Solicitar compra** abre a solicitação **ligada à OS**; no Compras ela aparece com o selo **"Demanda de OS (SAC)"**.
 - **Anexar:** escolha os arquivos e clique **Enviar arquivos**. Se algum não subir, **nenhum é anexado** e a escolha fica para você tentar de novo.
 
 ### Acompanhamento
 
-O botão **Acomp.** (sempre à vista no cartão) abre a janela **Acompanhamentos** da OS: o caderno do atendimento. Escreva o andamento, uma decisão ou uma pendência no campo **Novo acompanhamento** (use **@Nome** para avisar alguém) e clique **Registrar**. Cada registro mostra quem escreveu e quando.
+O botão **Acompanhamento** (sempre à vista no cartão) abre a janela **Acompanhamentos** da OS: o caderno do atendimento. Escreva o andamento, uma decisão ou uma pendência no campo **Novo acompanhamento** (use **@Nome** para avisar alguém) e clique **Registrar**. Cada registro mostra quem escreveu e quando.
 
 ![Janela de acompanhamentos](img/21-acompanhamento.jpg)
 
@@ -508,9 +513,25 @@ Quando você abre **várias OS de uma vez** (caixa de lote na Nova OS), o quadro
 - O cartão mostra **"Lote · N OS"**, o cliente, os **números das OS** e **quantas estão em cada etapa** (por exemplo, "4× Em Cotação").
 - **Abrir o lote** mostra cada OS, com o selo da etapa, **quem age**, a barra de progresso e **os mesmos botões** da OS solta.
 - **Registrar atendimento já realizado** no cartão do lote registra **várias de uma vez**.
-- Para as outras passagens (aprovar, enviar ao Fiscal, entregar), é preciso **abrir o lote e fazer OS por OS**.
+- Para **passar várias OS do lote de uma vez**, use **Passar as OS do lote…** (veja abaixo). As passagens que têm janela própria (aprovar, enviar ao Fiscal, entregar) seguem **OS por OS**: abra o lote e faça em cada uma.
 
 ![Lote aberto, com os botões de cada OS](img/09b-lote-aberto-botoes.jpg)
+
+### Passar as OS do lote
+
+**Quando usar:** as OS do lote estão na mesma etapa e precisam dar o mesmo passo (por exemplo, quatro garantias em cotação que seguem sem cotação).
+
+1. No cartão do lote, clique em **Passar as OS do lote…** (ou, no menu ⋯ de uma OS do lote, **Passar as OS do lote…**, no grupo *Mover a OS*).
+2. Em **O que fazer com as OS**, escolha a passagem. A lista traz **só os passos que alguma OS do lote pode dar**, com quantas OS cada um alcança.
+3. Preencha o que o passo pede (quando pede). **Cancelar OS** pede **um motivo só**, e a janela avisa em vermelho; **Seguir sem cotação** não pede nada.
+4. Em **OS que passarão**, desmarque as que não devem ir. Só aparecem as OS que **podem** dar aquele passo.
+5. Clique no botão de baixo (**"Seguir sem cotação em 4 OS"**, **"Cancelar 4 OS"**…).
+
+![Janela Passar as OS do lote](img/29b-passar-as-os-do-lote.jpg)
+
+As passagens disponíveis são: **Seguir sem cotação**, **Abrir o diagnóstico**, **Seguir como vendida**, **Informar o orçamento**, **Iniciar a execução**, **Concluir a execução** (Laboratório), **Voltar uma etapa**, **Desfazer o registro do atendimento** e **Cancelar OS**.
+
+> **Atenção:** cada OS **só passa se ainda estiver na etapa em que a janela a viu**. Se alguém mexeu em uma delas no meio tempo, essa não é gravada e o aviso final diz quantas passaram e quantas ficaram. No **Seguir como vendida**, o campo de valor da venda, se preenchido, vale para **todas as marcadas**; deixado em branco, cada OS mantém o valor dela. A demanda aberta do Laboratório recebe um recado, como na passagem de uma OS só.
 
 ---
 

@@ -310,6 +310,12 @@ html body .acn-tela-cab h1 { margin: 0; font-size: 20px !important; line-height:
 .acn-menu-item.perigo, .acn-menu-item.perigo svg { color: var(--acn-bad); }
 .acn-menu-item.perigo:hover { background: var(--acn-bad-soft); }
 .acn-menu-item:disabled { opacity: .45; cursor: not-allowed; }
+.acn-menu-grupo { padding: 6px 10px 3px; font: 600 11px var(--acn-font); letter-spacing: .05em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-menu-grupo.sep { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--acn-line); }
+/* linha de tabela que abre o resumo ao clicar (painel do SAC, A2, 03/11/2026) */
+.acn-linha-clicavel { cursor: pointer; }
+.acn-linha-clicavel:hover td { background: var(--acn-neutral-soft); }
+.acn-linha-clicavel:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: -2px; }
 
 .acn-faixa { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 0 0 10px; border-radius: var(--acn-r3); border: 1px solid; font-size: 13px; }
 .acn-faixa > svg { flex-shrink: 0; }
@@ -5973,6 +5979,12 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-gar-secoes { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .acn-gar-secao { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); font-size: 13px; }
 .acn-gar-secao-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+/* seção da ficha de garantia que se recolhe quando a etapa está cumprida (M6, 03/11/2026) */
+.acn-gar-secao-det > summary { cursor: pointer; list-style: none; }
+.acn-gar-secao-det > summary::-webkit-details-marker { display: none; }
+.acn-gar-secao-det > summary::before { content: '▸'; color: var(--acn-muted); margin-right: 6px; }
+.acn-gar-secao-det[open] > summary::before { content: '▾'; }
+.acn-gar-secao-corpo { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 /* OS de execução geradas pela ficha (S1 do PLANO_SAC_FLUXO.md, 27/10/2026) */
 .acn-gar-lista-os { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .acn-gar-pedido { font-size: 13px; }
@@ -7022,3 +7034,12 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
 .acn-man-barra-titulo { font-size: 14px; color: var(--acn-ink); }
 .acn-man-barra-acoes { display: inline-flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 .acn-man-quadro { flex: 1; min-height: 0; width: 100%; border: 1px solid var(--acn-line); border-radius: var(--acn-r4); background: #fff; }
+
+/* Nova OS do SAC (M1, 03/11/2026): "Mais dados" recolhido e o que falta para abrir, perto do botão */
+.acn-mais-dados { border: 1px solid var(--acn-line, #e2e8f0); border-radius: 8px; padding: 0 12px; }
+.acn-mais-dados > summary { cursor: pointer; list-style: none; padding: 10px 0; display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.acn-mais-dados > summary::-webkit-details-marker { display: none; }
+.acn-mais-dados > summary > span:first-child::before { content: '▸'; color: var(--acn-muted); margin-right: 6px; }
+.acn-mais-dados[open] > summary > span:first-child::before { content: '▾'; }
+.acn-mais-dados-corpo { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
+.acn-sac-falta { margin-right: auto; align-self: center; font-size: 12px; }

@@ -22,6 +22,7 @@ import { confirmar, pedirTexto } from './Feedback';
 import { ParticipantesPicker, novosParticipantes, notificarParticipantes } from './Participantes';
 import Icone from './Icone';
 import { carregarPendencias } from './OpPendencias';
+import { osSemCobranca } from './SacFluxo';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
 import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
   mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
@@ -660,13 +661,15 @@ function PainelSacVeicular({ currentUser }) {
   const confirmarChegada = umaVez('chegada', async () => {
     const os = modalConfirmarChegada;
     const agora = new Date().toISOString();
-    const novoStatus = 'Verificação e Orçamento';
-    const { error: erroCheg } = await supabase.from('sac_ordens_servico').update({
+    // Decidido com o usuário em 03/11/2026 (A8 do PLANO_SAC_MELHORIAS_UX): o veículo SEM cobrança (garantia ou cortesia) não tem orçamento nem aprovação do cliente; ao chegar vai direto a "Aguardando Início". Antes toda OS passava por "Verificação e Orçamento" e pedia a aprovação do SAC.
+    const novoStatus = osSemCobranca(os) ? 'Aguardando Início' : 'Verificação e Orçamento';
+    const { data: chegou, error: erroCheg } = await supabase.from('sac_ordens_servico').update({
       status: novoStatus,
       data_chegada_veiculo: agora,
       atualizado_em: agora,
-    }).eq('id', os.id);
+    }).eq('id', os.id).eq('status', os.status).select('id');
     if (erroCheg) { alert(`Não foi possível confirmar a chegada da OS ${os.numero_os}: ${erroCheg.message}`); return; }   // 7.55
+    if (!chegou?.length) { alert(`Não foi possível confirmar a chegada da OS ${os.numero_os}: ela mudou de etapa enquanto a janela estava aberta. Atualize a tela.`); setModalConfirmarChegada(null); load(); return; }
     notificarEvento('sac_veiculo_chegou', `Veiculo chegou — ${os.numero_os} — ${os.cliente_nome} — Status: ${novoStatus}`);
     setModalConfirmarChegada(null); load();
   });
@@ -726,7 +729,8 @@ function PainelSacVeicular({ currentUser }) {
       : null;
     const novoTotal = concluirManuForm.itens_usados.reduce((s:number,i:any)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
     const totalAprovado = Number(os.valor_orcamento) || 0;
-    const bateu = Math.abs(novoTotal - totalAprovado) < 0.01;
+    // OS sem cobrança não tem orçamento aprovado para comparar (A8, 03/11/2026): sem isto a OS de garantia, com materiais lançados, ficava presa em "revisão pendente"
+    const bateu = osSemCobranca(os) || Math.abs(novoTotal - totalAprovado) < 0.01;
 
     if (!bateu) {
       const { error: erroRev } = await supabase.from('sac_ordens_servico').update({
@@ -1051,7 +1055,7 @@ function PainelSacVeicular({ currentUser }) {
                 </Faixa>
               )}
               <Faixa tom="ok">
-                Próximo status: <strong>Verificação e Orçamento</strong>
+                Próximo status: <strong>{osSemCobranca(modalConfirmarChegada) ? 'Aguardando Início' : 'Verificação e Orçamento'}</strong>{osSemCobranca(modalConfirmarChegada) && ' (OS sem cobrança: não tem orçamento nem aprovação do cliente)'}
               </Faixa>
             </div>
             <div className="acn-modal-rodape acn-sac-rodape">

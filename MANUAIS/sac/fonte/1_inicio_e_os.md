@@ -83,8 +83,8 @@ A tela tem sete partes, nesta ordem:
 
 1. **Agenda do SAC.** Compromissos do setor. Filtros **Hoje, Semana, Mês, Todos**; **Meus** ou **Todos**; **Ver concluídos**. O botão **+ Nova** abre o *Novo Compromisso*: título, descrição (use **@Nome** para avisar alguém), data e hora e os participantes.
 2. **As quatro abas** (Ordens de Serviço, Chamados NFC, Garantia, Cadastros).
-3. **O título "SAC — Ordens de Serviço (N)"** com o número de OS que passam pelos filtros, o seletor **Lista | Kanban** e o botão verde **Nova OS**.
-4. **A legenda de fluxo.** Três linhas com as etapas de cada caminho (Laboratório, Veículo presencial, Veículo remota). Serve de consulta: mostra por quais etapas a OS passa.
+3. **O título "SAC — Ordens de Serviço (N)"** com o número de OS que passam pelos filtros, o seletor **Lista | Kanban**, a hora da última leitura (**"Atualizado às 10:38"**), o botão **Atualizar** e o botão verde **Nova OS**. A lista se atualiza **sozinha a cada minuto** (e o **Atualizar** lê na hora, sem piscar a tela); se a leitura falhar, a tela **mantém a lista que já tinha** e avisa.
+4. **"Como a OS caminha".** Um botão que **começa fechado**; ao abrir, mostra três linhas com as etapas de cada caminho (Laboratório, Veículo presencial, Veículo remota). Serve de consulta: mostra por quais etapas a OS passa. Cada pessoa vê a legenda aberta ou fechada como deixou da última vez, neste computador.
 5. **O painel "O que está com cada setor hoje".**
 6. **Os filtros.**
 7. **O quadro (Kanban) ou a lista.**
@@ -97,7 +97,7 @@ A tela tem sete partes, nesta ordem:
 
 - Os botões **SAC, Laboratório, Produção, Qualidade, Fiscal, Cliente** mostram quantas OS aguardam cada um e quantas já estão paradas (por exemplo, *SAC (12 · 3 paradas)*). **Clique num deles** para filtrar o quadro e a lista só com as OS daquele setor. **Todos** limpa.
 - A **faixa vermelha** aparece quando há OS esperando o SAC há 7 dias ou mais. Diz qual é a mais parada. O botão **Ver na lista** abre a lista já filtrada por SAC e por "paradas".
-- A **tabela** mostra as **6 OS mais paradas que são do SAC**, com a etapa, **o que fazer** e **há quantos dias** a OS está na etapa. Para ver todas, use o botão **SAC** do painel.
+- A **tabela** mostra as **3 OS mais paradas que são do SAC**, com a etapa, **o que fazer** e **há quantos dias** a OS está na etapa. **Clique numa linha** para abrir o **resumo completo** da OS. Para ver todas, use **Ver todas na lista** (ou o botão **SAC** do painel).
 
 > **Dica:** comece o dia pela faixa vermelha. Ela lista justamente o que está esperando por você.
 
@@ -109,7 +109,7 @@ A tela tem sete partes, nesta ordem:
 |---|---|
 | **Buscar OS / cliente / equip.** | Procura pelo número da OS, nome do cliente ou equipamento. Não diferencia acento nem maiúscula |
 | **Todos os status** | Mostra só uma etapa (por exemplo, "Orç. Enviado") |
-| **Todos os tipos** | Orçamento, Conserto, Troca ou Garantia |
+| **Todos os tipos** | Os tipos de serviço **do cadastro** (aba Cadastros), mais os que ainda aparecem em OS antigas |
 | **Presencial / Remota** | **Veiculares** (todas as OS de veículo), **Presencial** ou **Remota** |
 | **Todas as empresas** | ACN, DETECH ou **Sem empresa** (OS antigas) |
 | **Parada há…** | OS paradas há 7, 15 ou 30 dias ou mais |
@@ -130,7 +130,7 @@ O quadro tem **quatro colunas**. Cada OS fica na coluna da etapa em que está:
 | **NO FISCAL / AGUARDANDO ENTREGA** | Aguardando Envio Fiscal, Aguardando Emissão NF, Faturada - Aguardando Entrega |
 | **CONCLUÍDO** | Concluído, Entregue |
 
-O número no canto de cada coluna é a quantidade de cartões. Você pode **arrastar o cartão** de uma coluna para outra: veja *Mover a OS entre as etapas*.
+O número no canto de cada coluna é a quantidade de cartões. Você pode **arrastar o cartão** de uma coluna para outra: veja *Mover a OS entre as etapas*. **Aprovado** e **Provisionada** aparecem em **azul** (andamento): verde fica só para o que deu certo e não pede nada de você. Uma dica acima do quadro lembra que, **no celular e no tablet, o arrastar não funciona**: use o menu **⋯ > Mover para…** do cartão.
 
 Duas faixas podem aparecer acima do quadro: **"N OS reprovadas ficam fora do quadro"** e **"N OS canceladas ficam fora do quadro e da lista"**. O botão **Ver na lista** leva até elas.
 
@@ -138,9 +138,10 @@ Duas faixas podem aparecer acima do quadro: **"N OS reprovadas ficam fora do qua
 
 ![A lista de OS](img/11-lista.jpg)
 
-Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, ficha e lote), **Tipo**, **Atend.** (Presencial ou Remota), **Equipamento**, **Cliente**, **Abertura**, **Prazo Orç.**, **Valor**, **KPI Orç.**, **KPI Exec.**, **Status** e **Ações**.
+Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, ficha e lote), **Tipo**, **Atendimento** (Presencial ou Remota), **Equipamento**, **Cliente**, **Abertura**, **Prazo do orçamento**, **Valor**, **Status** e **Ações**. Os tempos (**Tempo do orçamento** e **Tempo da execução**) ficam escondidos: o botão **Mais colunas**, acima da lista, mostra os dois, e **Menos colunas** volta ao normal.
 
 - A linha fica **rosada** quando a OS está **Reprovada** ou **parada**.
+- A lista **lê todas as OS**, mesmo quando passam de mil. Se o banco recusar algo, o aviso diz o motivo em português (número de OS repetido, falta de permissão, sem conexão) em vez de uma sigla técnica.
 - **KPI Exec.** só aparece na OS remota: compara as **horas cobradas na cotação** com as **horas reais** apontadas pela Produção. **▲** quer dizer que você cobrou mais horas do que a Produção levou; **▼**, menos.
 - Os botões da coluna **Ações** são os mesmos do cartão do quadro.
 
@@ -161,8 +162,8 @@ Mostra as mesmas OS em linhas. As colunas são: **Nº OS** (com empresa, PV, fic
 | **Aguarda: SAC** | Quem tem que agir agora |
 | **há 3 dias nesta etapa** | Tempo na etapa. Vira **"parada há 9 dias"**, em vermelho, a partir de 7 dias |
 | **Barra com "etapa 2 de 9"** | Quanto da viagem a OS já fez, pelo caminho dela. As partes **verdes** estão feitas, a **azul** é a atual |
-| **Abertura, Prazo orç., R$** | Datas e valor |
-| **Acomp.** | Acompanhamento da OS (anotações do setor) |
+| **Abertura, prazo do orçamento, R$** | Datas e valor |
+| **Acompanhamento** | Acompanhamento da OS (anotações do setor) |
 | **Botão verde** (por exemplo, **Enviar**) | O passo que a OS espera de **você** nesta etapa |
 | **⋯** | Menu com as outras ações |
 
@@ -235,15 +236,13 @@ Na avaliação **presencial** o veículo vem primeiro e o orçamento sai da **ve
 | **Em Execução, Aguardando CQ** | Produção, Qualidade | Executam e conferem |
 | **Aguardando Envio Fiscal** e depois | **SAC**, Fiscal | Igual ao caminho 3 |
 
-> **Atenção:** a barra de progresso do cartão, neste caminho, **volta uma casa** quando você aprova o orçamento (a etapa "Aguardando Início" é desenhada como "Provisionada"). A OS não voltou: é só o desenho da barra.
-
 ### Caminho 5: veículo, sem cobrança (garantia ou cortesia)
 
 FLUXO: Em Provisionamento > Aguardando Aceite SAC > Provisionada > Em Execução > Aguardando CQ > Concluído > Entregue
 
 A OS **nasce em "Em Provisionamento"**, sem cotação. A Produção marca a data, o SAC dá o **aceite**, o veículo é atendido e, depois da Qualidade, a OS vai direto a **Concluído**; o SAC faz a **Entrega** do veículo. **Não vai ao Fiscal.**
 
-> **Atenção:** pelo que a tela da Produção faz hoje (conferido no código, **ainda não visto acontecendo**), o veículo desta OS pode passar por **"Verificação e Orçamento"** e por **"Aguardando Aprovação Cliente"** (onde aparecem os botões **Aprovado** e **Recusado** do SAC) antes de iniciar. Se isso acontecer, clique **Aprovado**. Nessas etapas e na do aceite, a **barra de progresso some**, porque elas não fazem parte do caminho da OS sem cobrança. A diferença entre este caminho e o que a Produção faz está registrada como ponto de melhoria (**a confirmar** com a Produção).
+> **Dica:** quando a Produção marca **Chegou**, a OS sem cobrança vai **direto a "Aguardando Início"**: não passa por "Verificação e Orçamento" nem por "Aguardando Aprovação Cliente", então o SAC **não tem Aprovado nem Recusado para clicar**. Ao concluir, a Produção lança os materiais usados como sempre, mas não há orçamento para comparar, e a OS segue para a Qualidade sem pedir revisão de valor. (Regra de 03/11/2026; as OS que já estavam em "Verificação e Orçamento" ou "Aguardando Aprovação Cliente" seguem como estavam.)
 
 ### Caminho 6: OS lançada pelo card do CRM
 
