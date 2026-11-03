@@ -2798,8 +2798,11 @@ html body .acn-opl { position: relative; display: flex; flex-direction: column; 
 .acn-opl-compras { gap: 6px; }
 .acn-opl-compra { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border: 1px solid var(--acn-line); border-radius: 6px; background: var(--acn-surface); cursor: pointer; text-align: left; font: inherit; }
 .acn-opl-compra:hover { border-color: var(--acn-brand); }
-.acn-opl-compra-nome { font-weight: 700; color: var(--acn-info); min-width: 0; overflow-wrap: anywhere; }
-.acn-opl-compra-meta { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 12px; font-weight: 600; }
+/* 03/11/2026: o nome longo da compra vazava do cartão (a regra genérica de botão do index.css impõe nowrap): o nome ocupa a linha e quebra; valor, previsão e situação descem para a linha de baixo quando não cabem */
+.acn-opl-compra { flex-wrap: wrap; }
+html body .acn-opl-compra:not(#acn) { white-space: normal; max-width: 100%; }
+.acn-opl-compra-nome { flex: 1 1 260px; font-weight: 700; color: var(--acn-info); min-width: 0; overflow-wrap: anywhere; }
+.acn-opl-compra-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; flex: 0 1 auto; font-size: 12px; font-weight: 600; }
 .acn-opl-link { border: 0; background: none; padding: 0; color: var(--acn-info); font-weight: 700; font-size: 13px; text-decoration: underline; cursor: pointer; text-align: left; }
 html body select.acn-opl-sel { padding: 3px 6px; font-weight: 700; }
 html body select.acn-opl-sel.pendente { border: 1.5px dashed var(--acn-warn); background: var(--acn-warn-soft); }
