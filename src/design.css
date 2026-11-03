@@ -7046,3 +7046,41 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
 .acn-mais-dados[open] > summary > span:first-child::before { content: '▾'; }
 .acn-mais-dados-corpo { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
 .acn-sac-falta { margin-right: auto; align-self: center; font-size: 12px; }
+
+/* ── Vendas do Telecom (03/11/2026): o quadro e a lista do operador de vendas do setor privado (VendasTelecomTab.tsx) ── */
+.acn-vtel-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.acn-vtel-busca { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 200px; max-width: 360px; color: var(--acn-muted); }
+.acn-vtel-busca .acn-input { width: 100%; box-sizing: border-box; }
+.acn-vtel-vazio { padding: 14px; margin: 0 0 12px; text-align: center; font-size: 13px; color: var(--acn-muted); background: var(--acn-surface-2); border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); }
+.acn-vtel-quadro { display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 6px; }
+.acn-vtel-col { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: flex; flex-direction: column; min-width: 0; }
+.acn-vtel-col-cab { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-ink); border-bottom: 1px solid var(--acn-line); }
+.acn-vtel-col-cab em { font-style: normal; font-weight: 600; color: var(--acn-muted); }
+.acn-vtel-col-corpo { padding: 8px; display: flex; flex-direction: column; gap: 8px; max-height: 72vh; overflow-y: auto; }
+.acn-vtel-col-vazia { padding: 10px; text-align: center; font-size: 12px; color: var(--acn-muted); }
+.acn-vtel-card { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; cursor: pointer; }
+.acn-vtel-card:hover { border-color: var(--acn-ink); }
+.acn-vtel-card-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.acn-vtel-card-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-vtel-card-assunto { color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-vtel-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; color: var(--acn-muted); }
+.acn-vtel-card-prox { font-size: 12px; color: var(--acn-muted); }
+.acn-vtel-card-prox.atrasado, td.acn-vtel-atrasado { color: var(--acn-bad); font-weight: 600; }
+.acn-vtel-tabela-caixa { overflow-x: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-vtel-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+.acn-vtel-tabela th { text-align: left; padding: 8px 10px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--acn-muted); border-bottom: 1px solid var(--acn-line); white-space: nowrap; }
+.acn-vtel-tabela td { padding: 8px 10px; border-bottom: 1px solid var(--acn-line); color: var(--acn-ink); vertical-align: top; }
+.acn-vtel-tabela tbody tr { cursor: pointer; }
+.acn-vtel-tabela tbody tr:hover { background: var(--acn-surface-2); }
+.modal-box.acn-vtel-janela { max-width: 760px; width: 94vw; }
+.modal-box.acn-vtel-janela-estreita { max-width: 460px; width: 94vw; }
+.acn-vtel-linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.acn-vtel-linha3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.acn-vtel-historico { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+.acn-vtel-hist-linha { padding: 6px 8px; font-size: 13px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.acn-vtel-hist-linha.etapa { background: var(--acn-surface-2); color: var(--acn-muted); }
+.acn-vtel-hist-quem { font-size: 11px; color: var(--acn-muted); margin-bottom: 2px; }
+@media (max-width: 640px) { .acn-vtel-linha2, .acn-vtel-linha3 { grid-template-columns: 1fr; } }
+.acn-vtel-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.acn-vtel-resumo { margin: 0; font-size: 13px; color: var(--acn-muted); }
+.acn-vtel-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

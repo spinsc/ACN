@@ -2,17 +2,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // TelecomTab — a tela do setor Telecom (22/10/2026)
 //
-// Antes era só a tela de demandas e análises técnicas dos setores (SetorDemandaTab). Passou a ter duas abas:
+// Antes era só a tela de demandas e análises técnicas dos setores (SetorDemandaTab). Passou a ter três abas:
+//   • "Vendas" (03/11/2026): o comercial enxuto do operador de vendas do Telecom para o setor privado, nos mesmos cards do CRM (VendasTelecomTab.tsx);
 //   • "Separação e envio": a fila das OPs de RÁDIO em envio, que o Telecom separa, serializa e embala, abrindo o frete para a Logística — o mesmo processo do
 //     Almoxarifado, sem estoque por enquanto (AlmoxarifadoTab com setor="Telecom"; quem é de quem vem de SeparacaoEnvio.ts);
 //   • "Análises e demandas": tudo o que o Telecom já tinha, sem mudar nada.
 // A tela abre na aba que tem trabalho esperando: com OP para separar, na separação; sem nenhuma, nas análises e demandas, como sempre foi.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { Abas } from './Interface';
 import SetorDemandaTab from './SetorDemandaTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
+import VendasTelecomTab from './VendasTelecomTab';
 import { estaNaFilaDe, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 
 export default function TelecomTab({ currentUser }) {
@@ -20,6 +22,8 @@ export default function TelecomTab({ currentUser }) {
   // quantas OPs esperam o Telecom (null = ainda não sei, ou a leitura falhou: a aba fica sem número em vez de dizer "0" que não é verdade)
   const [esperando, setEsperando] = useState<number | null>(null);
   const [abriuSozinho, setAbriuSozinho] = useState(false);
+  // 03/11/2026: quem já clicou numa aba não é levado para a separação quando a contagem chega (a contagem demora menos de um segundo, e o clique em "Vendas" ali dentro era desfeito)
+  const escolheuAba = useRef(false);
 
   useEffect(() => {
     let vivo = true;
@@ -35,19 +39,22 @@ export default function TelecomTab({ currentUser }) {
 
   // na primeira contagem, se há OP esperando, a tela já abre na separação (só uma vez: depois quem manda é a pessoa)
   useEffect(() => {
-    if (esperando != null && !abriuSozinho) { setAbriuSozinho(true); if (esperando > 0) setAba('separacao'); }
+    if (esperando != null && !abriuSozinho) { setAbriuSozinho(true); if (esperando > 0 && !escolheuAba.current) setAba('separacao'); }
   }, [esperando, abriuSozinho]);
 
   return (
     <div>
-      <Abas className="acn-set-abas" ativa={aba} onChange={setAba}
+      <Abas className="acn-set-abas" ativa={aba} onChange={id => { escolheuAba.current = true; setAba(id); }}
         itens={[
+          { id: 'vendas', rotulo: 'Vendas', titulo: 'Contatos e propostas para o setor privado (shoppings, condomínios, empresas): os mesmos cards do CRM' },
           { id: 'separacao', rotulo: 'Separação e envio', contagem: esperando != null ? esperando : undefined, titulo: 'OPs de rádio em envio: o Telecom separa, põe o serial, embala e abre o frete' },
           { id: 'demandas', rotulo: 'Análises e demandas' },
         ]} />
-      {aba === 'separacao'
-        ? <AlmoxarifadoTab currentUser={currentUser} setor={SETOR_TELECOM} />
-        : <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />}
+      {aba === 'vendas'
+        ? <VendasTelecomTab currentUser={currentUser} />
+        : aba === 'separacao'
+          ? <AlmoxarifadoTab currentUser={currentUser} setor={SETOR_TELECOM} />
+          : <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />}
     </div>
   );
 }
