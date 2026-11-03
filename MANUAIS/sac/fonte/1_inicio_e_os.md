@@ -242,7 +242,7 @@ FLUXO: Em Provisionamento > Aguardando Aceite SAC > Provisionada > Em Execução
 
 A OS **nasce em "Em Provisionamento"**, sem cotação. A Produção marca a data, o SAC dá o **aceite**, o veículo é atendido e, depois da Qualidade, a OS vai direto a **Concluído**; o SAC faz a **Entrega** do veículo. **Não vai ao Fiscal.**
 
-> **Atenção:** pelo que a tela da Produção faz hoje (conferido no código, **ainda não visto acontecendo**), o veículo desta OS pode passar por **"Verificação e Orçamento"** e por **"Aguardando Aprovação Cliente"** (onde aparecem os botões **Aprovado** e **Recusado** do SAC) antes de iniciar. Se isso acontecer, clique **Aprovado**. Nessas etapas e na do aceite, a **barra de progresso some**, porque elas não fazem parte do caminho da OS sem cobrança. A diferença entre este caminho e o que a Produção faz está registrada como ponto de melhoria (**a confirmar** com a Produção).
+> **Dica:** quando a Produção marca **Chegou**, a OS sem cobrança vai **direto a "Aguardando Início"**: não passa por "Verificação e Orçamento" nem por "Aguardando Aprovação Cliente", então o SAC **não tem Aprovado nem Recusado para clicar**. Ao concluir, a Produção lança os materiais usados como sempre, mas não há orçamento para comparar, e a OS segue para a Qualidade sem pedir revisão de valor. (Regra de 03/11/2026; as OS que já estavam em "Verificação e Orçamento" ou "Aguardando Aprovação Cliente" seguem como estavam.)
 
 ### Caminho 6: OS lançada pelo card do CRM
 
