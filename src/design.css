@@ -1368,7 +1368,9 @@ html body .acn-input.acn-alm-produto-fixo { background: var(--acn-surface-2); co
 .acn-alm-seriais { max-height: 220px; overflow-y: auto; padding: 6px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: grid; gap: 4px; }
 .acn-alm-serial-linha { display: grid; grid-template-columns: 24px 1.4fr 1fr auto; gap: 5px; align-items: center; }
 .acn-alm-secao { padding-bottom: 3px; border-bottom: 2px solid var(--acn-brand); color: var(--acn-brand-ink); }
-.acn-alm-grade5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+/* 03/11/2026: uma linha por volume — peso e três medidas, e a coluna estreita do botão de tirar o volume */
+.acn-alm-grade5 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; gap: 8px; }
+.acn-alm-volumes-rodape { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
 .acn-alm-grade-cep { display: grid; grid-template-columns: minmax(112px, 1fr) 2fr minmax(64px, 1fr); gap: 8px; }
 .acn-alm-cep-info { grid-column: 1 / -1; font-size: 12px; }
 .acn-alm-lote-tabela { max-height: 160px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }

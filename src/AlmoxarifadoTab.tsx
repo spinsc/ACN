@@ -25,13 +25,14 @@ import AvisoPendenciaSanada from './AvisoPendenciaSanada';
 import { modeloDeSeriais, modelosDasOps, linhasDeSerial, jaSerializadoPorProduto } from './SerialDosItens';
 import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proximoNumeroDeRemessa, resumoDeRemessas, mesclarSeriais, tirarSeriais, statusDepoisDaUltimaRemessa, contarFretesQueNaoSairam, descricaoDaRemessa } from './Remessas';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
+import { caixaVazia, caixasDoForm, formComTotais, validarCaixas, descricaoDasCaixas } from './VolumesDaEmbalagem';
 import { normalizarBusca } from './SearchUtils';
 import { diaBR, Faixa, Botao, Chips, Selo } from './Interface';
 import Icone from './Icone';
 import {
   mdiToolboxOutline, mdiPackageVariantClosed, mdiArrowULeftTop, mdiEyeOutline, mdiLinkVariant, mdiTrayArrowDown,
   mdiCloseCircleOutline, mdiAlertOutline, mdiChevronUp, mdiChevronDown, mdiTruckOutline, mdiClose, mdiNumeric,
-  mdiContentSaveOutline, mdiCheckCircleOutline, mdiSendOutline,
+  mdiContentSaveOutline, mdiCheckCircleOutline, mdiSendOutline, mdiPlus, mdiDeleteOutline,
 } from '@mdi/js';
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
@@ -356,6 +357,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         : ehVendaEnvioOp(opl) && jaTemRemessa ? Array.from({ length: saldo }, () => ({ produto: '', serial: '' })) : linhasSeriaisIniciais(opl),
       unidades: ehVendaEnvioOp(opl) ? String(saldo) : '',   // o padrão é mandar tudo o que falta: quem envia de uma vez só não muda nada
       seriais: opl.seriais_equipamentos || '',
+      caixas: [caixaVazia()],   // 03/11/2026: um volume por linha (peso e medidas de cada um); o total, a contagem e as medidas do maior saem daqui (VolumesDaEmbalagem.ts)
       peso_total: '', volumes: '1',
       altura: '', largura: '', comprimento: '',
       destino_cidade: opl.destino_cidade || '',
@@ -395,6 +397,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
       peso_total: num(f.peso_total), volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
       altura: num(f.altura), largura: num(f.largura), comprimento: num(f.comprimento),
+      caixas: caixasDoForm(f),   // cada volume com o seu peso e as suas medidas (o total e as medidas do maior seguem nas colunas de cima)
       observacoes: f.observacoes || null,
     };
     const { data: partes, error: erroParte } = await supabase.rpc('oples_gravar_parte_envio', { p_id: opl.id, p_setor: setor, p_parte: parte });
@@ -454,7 +457,9 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     const volumeCm3 = (p) => (Number(p.altura) || 0) * (Number(p.largura) || 0) * (Number(p.comprimento) || 0);
     const maior = [...caixas].sort((a, b) => volumeCm3(b.p) - volumeCm3(a.p))[0].p;
     const fmtN = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-    const descCaixas = caixas.map(c => `Caixa ${c.s}: ${fmtN(c.p.altura)} × ${fmtN(c.p.largura)} × ${fmtN(c.p.comprimento)} cm, ${fmtN(c.p.peso_total)} kg, ${c.p.volumes || 1} volume(s)`).join(' · ');
+    const descCaixas = caixas.map(c => (Array.isArray(c.p.caixas) && c.p.caixas.length > 1
+      ? `Caixas ${c.s} (${c.p.caixas.length} volumes): ${descricaoDasCaixas(c.p.caixas)}`   // 03/11/2026: cada volume com as suas medidas
+      : `Caixa ${c.s}: ${fmtN(c.p.altura)} × ${fmtN(c.p.largura)} × ${fmtN(c.p.comprimento)} cm, ${fmtN(c.p.peso_total)} kg, ${c.p.volumes || 1} volume(s)`)).join(' · ');
     const obsFrete = [descCaixas, ...caixas.map(c => c.p.observacoes && `${c.s}: ${c.p.observacoes}`)].filter(Boolean).join(' · ');
     const statusDepois = freteComCliente ? statusDeLiberacaoComercial(opl) : 'Aguardando Cotacao Frete';
     const gravouOp = await setAlmox(opl, 'Kit OK', statusDepois, obsEmb, extraOp);
@@ -518,7 +523,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   };
 
   const confirmarEmbalagem = async () => {
-    const f = embForm;
+    const f = formComTotais(embForm);   // peso total, volumes e as medidas do maior volume saem das linhas de volume
     const vendaEnvio = ehVendaEnvioOp(modalEmbalagem);
     const itensSeriais = vendaEnvio
       ? (f.itens || []).map(x => ({ produto: String(x.produto || '').trim(), serial: String(x.serial || '').trim() })).filter(x => x.serial)
@@ -549,14 +554,10 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         return;
       }
     } else if (serialObrig && !seriaisDaEmbalagem(f))  { alert(conferencia.length ? 'Informe o número de série de pelo menos um item da lista de separação (coluna Serial) ou em "Outros números de série".' : 'Informe os números de série dos equipamentos.'); return; }
-    if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
-    // Medidas obrigatórias (pedido do usuário em 15/10/2026): o frete nasce desta janela e a transportadora cota pelas medidas;
-    // uma embalagem foi gravada só com o peso e o frete seguiu para cotação sem as três medidas.
-    // (conta local: o `num` desta função só é declarado mais abaixo e usá-lo aqui daria erro de execução)
-    const medidaValida = (v: any) => Number(String(v ?? '').replace(',', '.')) > 0;
-    if (!(medidaValida(f.altura) && medidaValida(f.largura) && medidaValida(f.comprimento))) {
-      mostrarAviso('Informe as três medidas da embalagem (altura, largura e comprimento, em cm): é com elas que a Logística cota o frete.', 'atencao'); return;
-    }
+    // Peso e medidas obrigatórios (pedido do usuário em 15/10/2026): o frete nasce desta janela e a transportadora cota pelas medidas; uma embalagem foi gravada só com o peso
+    // e o frete seguiu para cotação sem as três medidas. Desde 03/11/2026 vale para CADA volume (uma linha por volume).
+    const faltaVolume = validarCaixas(caixasDoForm(embForm));
+    if (faltaVolume) { mostrarAviso(faltaVolume, 'atencao'); return; }
     const erroConf = validarConferencia(conferencia);
     // texto montado na hora, sempre uma pendência de preenchimento: tom explícito (29/09/2026)
     if (erroConf) { mostrarAviso(erroConf, 'atencao'); return; }
@@ -664,7 +665,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         peso_total: num(f.peso_total), volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
         medida_altura: num(f.altura), medida_largura: num(f.largura), medida_comprimento: num(f.comprimento),
         destino_cep: formatarCep(f.destino_cep), destino_cidade: f.destino_cidade.trim(), destino_uf: f.destino_uf,
-        frete_responsavel: f.frete_responsavel, observacoes: f.observacoes || null,
+        frete_responsavel: f.frete_responsavel, observacoes: [f.observacoes, descricaoDasCaixas(caixasDoForm(f))].filter(Boolean).join(' · ') || null,
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
       }]).select('id');
       if (erroRem || !remNova?.[0]?.id) {
@@ -728,7 +729,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       // varredura de UX: com 'opl' aqui, a entrega do frete não acontecia
       // pra ninguém — nem o recado no acompanhamento, nem o avanço de status.
       vinculo_tipo: 'op_os', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}` + (comRemessa ? ` · remessa ${numeroRemessa}` : ''),
-      observacoes: f.observacoes || null,
+      observacoes: [f.observacoes, descricaoDasCaixas(caixasDoForm(f))].filter(Boolean).join(' · ') || null,   // com mais de um volume, cada um vai descrito para a transportadora cotar
       criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
     }]).select('id');
     if (remessaId && freteCriado?.[0]?.id) {
@@ -1633,32 +1634,40 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                   ? 'Embalagem (vai para a cotação de frete)'
                   : 'Embalagem'}
               </div>
-              <div className="acn-alm-grade5">
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-peso">Peso total (kg) *</label>
-                  <input id="alm-peso" className="acn-input" value={embForm.peso_total||''}
-                    onChange={e=>setEmbForm(f=>({...f, peso_total:e.target.value}))} placeholder="Ex: 12,5" />
-                </div>
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-vol">Volumes</label>
-                  <input id="alm-vol" className="acn-input" type="number" min={1} value={embForm.volumes||'1'}
-                    onChange={e=>setEmbForm(f=>({...f, volumes:e.target.value}))} />
-                </div>
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-alt">Altura (cm) *</label>
-                  <input id="alm-alt" className="acn-input" value={embForm.altura||''}
-                    onChange={e=>setEmbForm(f=>({...f, altura:e.target.value}))} />
-                </div>
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-larg">Largura (cm) *</label>
-                  <input id="alm-larg" className="acn-input" value={embForm.largura||''}
-                    onChange={e=>setEmbForm(f=>({...f, largura:e.target.value}))} />
-                </div>
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-comp">Comprimento (cm) *</label>
-                  <input id="alm-comp" className="acn-input" value={embForm.comprimento||''}
-                    onChange={e=>setEmbForm(f=>({...f, comprimento:e.target.value}))} />
-                </div>
+              {/* 03/11/2026: uma linha por volume. O total, a contagem e as medidas do maior volume saem daqui (VolumesDaEmbalagem.ts) */}
+              {caixasDoForm(embForm).map((c, i, lista) => {
+                const muda = (k, v) => setEmbForm(f => ({ ...f, caixas: caixasDoForm(f).map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+                const rot = lista.length > 1 ? ` do volume ${i + 1}` : '';
+                return (
+                  <div key={i} className="acn-alm-grade5">
+                    <div className="form-group">
+                      <label className="acn-label" htmlFor={`alm-peso-${i}`}>{`Peso${rot} (kg) *`}</label>
+                      <input id={`alm-peso-${i}`} className="acn-input" value={c.peso || ''} onChange={e => muda('peso', e.target.value)} placeholder="Ex: 12,5" />
+                    </div>
+                    <div className="form-group">
+                      <label className="acn-label" htmlFor={`alm-alt-${i}`}>Altura (cm) *</label>
+                      <input id={`alm-alt-${i}`} className="acn-input" value={c.altura || ''} onChange={e => muda('altura', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="acn-label" htmlFor={`alm-larg-${i}`}>Largura (cm) *</label>
+                      <input id={`alm-larg-${i}`} className="acn-input" value={c.largura || ''} onChange={e => muda('largura', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="acn-label" htmlFor={`alm-comp-${i}`}>Comprimento (cm) *</label>
+                      <input id={`alm-comp-${i}`} className="acn-input" value={c.comprimento || ''} onChange={e => muda('comprimento', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      {lista.length > 1 && <Botao variante="discreto" pequeno icone={mdiDeleteOutline} aria-label={`Tirar o volume ${i + 1}`} title={`Tirar o volume ${i + 1}`}
+                        onClick={() => setEmbForm(f => ({ ...f, caixas: caixasDoForm(f).filter((_, j) => j !== i) }))} />}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="acn-alm-volumes-rodape">
+                <Botao pequeno icone={mdiPlus} onClick={() => setEmbForm(f => ({ ...f, caixas: [...caixasDoForm(f), caixaVazia()] }))}>Adicionar volume</Botao>
+                <span className="acn-ajuda">
+                  {(() => { const t = formComTotais(embForm); return `${t.volumes} volume(s)${t.peso_total ? ' · ' + t.peso_total.replace('.', ',') + ' kg no total' : ''}`; })()}
+                </span>
               </div>
 
               <div className="acn-quadro-titulo acn-alm-secao">
