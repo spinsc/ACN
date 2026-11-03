@@ -36,6 +36,7 @@ import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
+import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import Icone from './Icone';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
@@ -303,7 +304,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [vendas, setVendas]         = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
-  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'>('kanban');
+  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'|'demandas'>('kanban');
   // Celular: kanban mostra uma etapa por vez e o card muda de etapa por "Mover para…" (sem arrastar)
   const celular = useCelular();
   const toque = useToque(); // celular ou tablet: sem arrastar
@@ -623,6 +624,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   useEffect(() => {
     const tentarAbrir = () => {
       const pend = (window as any).__acnDeepLink;
+      // 03/11/2026: demanda avulsa que tem o Comercial como destino (Menções): só abre a aba Demandas; o painel dela lê o recado (não o apago aqui) ao montar e abre a demanda
+      if (pend?.contexto === 'demanda_avulsa') { setSecaoCrm('funil'); setAbaInterna('demandas'); return; }
       if (!pend || pend.contexto !== 'crm') return;
       (window as any).__acnDeepLink = null;
       supabase.from('crm_oportunidades').select('*').eq('id', pend.contextoId).maybeSingle()
@@ -3169,6 +3172,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 classe: devolvidasComercial ? 'acn-aba-alerta' : undefined,
                 titulo: devolvidasComercial ? `${devolvidasComercial} OP${devolvidasComercial !== 1 ? 's' : ''} devolvida${devolvidasComercial !== 1 ? 's' : ''} ao Comercial: corrija o que foi apontado e reenvie` : undefined },
               ...(podeVerFaturamentos ? [{ id:'faturamentos', rotulo:'Faturamentos', icone: mdiCashMultiple }] : []),
+              { id:'demandas',  rotulo:'Demandas', icone: mdiClipboardTextOutline },
               { id:'contatos',  rotulo:'Contatos', icone: mdiCardAccountDetailsOutline },
             ]}
           />
@@ -3206,8 +3210,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         </Faixa>
       )}
 
-      {/* ── Filtros ── */}
-      <div className="acn-kmeta acn-crm-filtros">
+      {/* ── Filtros (são do quadro de vendas: na aba Demandas não valem) ── */}
+      {abaInterna !== 'demandas' && <div className="acn-kmeta acn-crm-filtros">
         <input className="acn-input acn-crm-busca" placeholder="Título, órgão ou edital" aria-label="Buscar por título, órgão ou edital"
           value={busca} onChange={e => setBusca(e.target.value)} />
         {/* Filtro por responsável */}
@@ -3257,7 +3261,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           );
         })()}
         {filtTemp && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltTemp('')}>{filtTemp}</Botao>}
-      </div>
+      </div>}
 
       {/* ── Conteúdo ── */}
       {abaInterna === 'kanban' && (
@@ -3304,6 +3308,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         <div className="acn-crm-rel-pane">{renderRelatorio()}</div>
       )}
       {abaInterna === 'faturamentos' && renderFaturamentos()}
+      {/* 03/11/2026: o Comercial recebia demandas de outros setores mas não tinha onde vê-las (a menção levava a uma aba que não existe) */}
+      {abaInterna === 'demandas' && <DemandaAvulsaPanel currentUser={currentUser} setor="Comercial" />}
       {abaInterna === 'opls' && (() => {
         // A família de cor de cada status da OP (Engenharia, PCP, produção, liberação, entrega...). O que não está aqui fica cinza.
         const FAMILIA_STATUS_OPL: Record<string,string> = {

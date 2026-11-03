@@ -311,7 +311,8 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
       }
     }
-    if (m.aba_destino && onNavigate) onNavigate(m.aba_destino);
+    // 03/11/2026: a demanda avulsa gravava o setor ('comercial') como aba, mas a tela do Comercial é a aba 'crm': 'comercial' levava a uma tela vazia
+    if (m.aba_destino && onNavigate) onNavigate(m.aba_destino === 'comercial' ? 'crm' : m.aba_destino);
   };
 
   // 12e47 (09/10/2026): só a aparência — a gaveta usa as classes acn-gav-* (comuns às Análises) e acn-men-*
