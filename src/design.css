@@ -7048,6 +7048,10 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
 .acn-sac-falta { margin-right: auto; align-self: center; font-size: 12px; }
 
 /* ── Vendas do Telecom (03/11/2026): o quadro e a lista do operador de vendas do setor privado (VendasTelecomTab.tsx) ── */
+/* 04/11/2026: "O que o cliente precisa" é uma lista de itens (quantidade + descrição), uma linha por item */
+.acn-vtel-itens { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.acn-vtel-item { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.acn-vtel-item .acn-input { width: 100%; box-sizing: border-box; }
 .acn-vtel-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
 .acn-vtel-busca { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 200px; max-width: 360px; color: var(--acn-muted); }
 .acn-vtel-busca .acn-input { width: 100%; box-sizing: border-box; }

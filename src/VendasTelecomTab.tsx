@@ -17,16 +17,88 @@ import NovaOpOsModal from './NovaOpOsModal';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { Botao, Chips, Faixa, Selo, MenuAcoes, hojeISO, diaBR } from './Interface';
 import Icone from './Icone';
-import { combinaBusca } from './SearchUtils';
+import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { conferirContatoDoCard, mensagemContatoDoCard } from './ContatoObrigatorio';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
-import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline, mdiCurrencyUsd } from '@mdi/js';
+import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline, mdiCurrencyUsd, mdiTrashCanOutline } from '@mdi/js';
 import {
   COLUNAS_VENDAS, TEMPERATURAS, FORM_VAZIO, formDoCard, erroDoCard, camposDoCard, payloadDoCardNovo, colunaDoTipo, ehEncerrado, movimentosDoTipo,
   pvDe, erroDoEnvioDaProposta, contatoAtrasado, textoDoHistorico, PADROES_DA_OP_TELECOM, EMPRESAS_DA_VENDA, erroDoPedidoFechado,
-  FOCOS, passaNoFoco, cardParado, diasSemMovimento, resumoDasPerdas,
+  FOCOS, passaNoFoco, cardParado, diasSemMovimento, resumoDasPerdas, itensDoTexto, textoDosItens,
 } from './VendasTelecom';
+
+/** Campo de descrição do item com busca no Cadastro de itens (pedido do usuário em 04/11/2026): digitar livre continua valendo; ao digitar 2 letras ou mais aparecem os itens do cadastro (código ou nome, sem acento) e escolher um preenche a descrição com o nome dele. Só texto: o card guarda o mesmo texto de sempre. */
+function BuscaItemDoCadastro({ valor, rotulo, onTexto, onEscolher, onEnter }: { valor: string; rotulo: string; onTexto: (v: string) => void; onEscolher: (item: any) => void; onEnter: () => void }) {
+  const [sugestoes, setSugestoes] = useState<any[]>([]);
+  const [aberto, setAberto] = useState(false);
+  const [falhou, setFalhou] = useState(false);
+  const timer = useRef<any>(null);
+  const seq = useRef(0);
+  const caixa = useRef<any>(null);
+  useEffect(() => {
+    const fora = (e: MouseEvent) => { if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false); };
+    document.addEventListener('mousedown', fora);
+    return () => { document.removeEventListener('mousedown', fora); clearTimeout(timer.current); };
+  }, []);
+  const buscar = async (q: string) => {
+    const minha = ++seq.current;
+    if (q.trim().length < 2) { setSugestoes([]); setAberto(false); setFalhou(false); return; }
+    const { data, error } = await buscarPorPalavras(supabase.from('cadastro_itens').select('id,codigo,nome,unidade'), ['nome_norm', 'codigo_norm'], q).order('nome').limit(8);
+    if (minha !== seq.current) return;   // chegou uma resposta de uma digitação mais antiga
+    // leitura recusada não vira "nenhum item": a pessoa continua podendo digitar livre e é avisada
+    setFalhou(!!error);
+    setSugestoes(error ? [] : (data || []));
+    setAberto(true);
+  };
+  const digitou = (v: string) => { onTexto(v); clearTimeout(timer.current); timer.current = setTimeout(() => buscar(v), 300); };
+  return (
+    <div ref={caixa} className="acn-dmi-busca">
+      <input className="acn-input" value={valor} placeholder="Digite ou busque no cadastro de itens" aria-label={rotulo} autoComplete="off"
+        onChange={e => digitou(e.target.value)}
+        onFocus={() => (sugestoes.length || falhou) && setAberto(true)}
+        onKeyDown={e => { if (e.key === 'Escape') setAberto(false); if (e.key === 'Enter') { e.preventDefault(); setAberto(false); onEnter(); } }} />
+      {aberto && (sugestoes.length > 0 || falhou) && (
+        <div className="acn-dmi-sugestoes" data-teste="vtel-sugestoes">
+          {falhou && <div className="acn-dmi-sug">Não foi possível buscar no cadastro agora; pode digitar o item à mão.</div>}
+          {sugestoes.map(s => (
+            <div key={s.id} className="acn-dmi-sug" onMouseDown={() => { clearTimeout(timer.current); seq.current++; setAberto(false); setSugestoes([]); onEscolher(s); }}>
+              <span className="acn-dmi-tipo item">ITEM</span>
+              {s.codigo && <span className="acn-dmi-cod">{s.codigo}</span>}
+              <span className="acn-dmi-nome">{s.nome}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "O que o cliente precisa": uma linha por item (quantidade e descrição), em vez de uma caixa de texto. Guarda o mesmo texto de antes (VendasTelecom.ts, itensDoTexto). */
+function ItensDoCliente({ valor, onChange }: { valor: string; onChange: (texto: string) => void }) {
+  const [linhas, setLinhas] = useState(() => { const l = itensDoTexto(valor); return l.length ? l : [{ qtd: '', descricao: '' }]; });
+  const [foco, setFoco] = useState<number | null>(null);
+  const refs = useRef<any[]>([]);
+  useEffect(() => { if (foco != null) { refs.current[foco]?.focus(); setFoco(null); } }, [foco, linhas.length]);
+  const mudar = (novas: any[]) => { setLinhas(novas); onChange(textoDosItens(novas)); };
+  const trocar = (i: number, campo: string, v: string) => mudar(linhas.map((l, j) => j === i ? { ...l, [campo]: campo === 'qtd' ? v.replace(/\D/g, '').slice(0, 5) : v } : l));
+  const acrescentar = () => { mudar([...linhas, { qtd: '', descricao: '' }]); setFoco(linhas.length); };
+  const tirar = (i: number) => mudar(linhas.length > 1 ? linhas.filter((_, j) => j !== i) : [{ qtd: '', descricao: '' }]);
+  return (
+    <div className="acn-vtel-itens" role="group" aria-labelledby="vt-obj-rot">
+      <div className="acn-label" id="vt-obj-rot">O que o cliente precisa (itens de telecom)</div>
+      {linhas.map((l, i) => (
+        <div key={i} className="acn-vtel-item">
+          <input ref={el => { refs.current[i] = el; }} className="acn-input" inputMode="numeric" value={l.qtd} placeholder="Qtd" aria-label={`Quantidade do item ${i + 1}`} onChange={e => trocar(i, 'qtd', e.target.value)} />
+          <BuscaItemDoCadastro valor={l.descricao} rotulo={`Descrição do item ${i + 1}`} onTexto={v => trocar(i, 'descricao', v)} onEnter={() => { if (l.descricao.trim()) acrescentar(); }}
+            onEscolher={it => mudar(linhas.map((x, j) => j === i ? { ...x, descricao: it.nome, qtd: x.qtd || '1' } : x))} />
+          <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} title="Tirar este item" aria-label={`Tirar o item ${i + 1}`} onClick={() => tirar(i)} />
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={acrescentar}>Adicionar item</Botao></div>
+    </div>
+  );
+}
 
 const reais = (v: any) => v == null || v === '' ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const agoraISO = () => new Date().toISOString();
@@ -354,8 +426,7 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
             <div className="form-group"><label className="acn-label" htmlFor="vt-titulo">Assunto *</label>
               <input id="vt-titulo" className="acn-input" value={form.titulo} placeholder="Ex.: rádios para a equipe de segurança" onChange={e => set('titulo', e.target.value)} /></div>
           </div>
-          <div className="form-group"><label className="acn-label" htmlFor="vt-obj">O que o cliente precisa (itens de telecom)</label>
-            <textarea id="vt-obj" className="acn-input" rows={2} value={form.objeto_principal} onChange={e => set('objeto_principal', e.target.value)} /></div>
+          <ItensDoCliente key={card?.id || 'novo'} valor={form.objeto_principal} onChange={t => set('objeto_principal', t)} />
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Contato do cliente (nome e telefone ou e-mail)</div>
             <div className="acn-vtel-linha3">
