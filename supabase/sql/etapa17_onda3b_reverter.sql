@@ -1,0 +1,17 @@
+-- Volta atrás da onda 3b (04/11/2026): devolve às 16 tabelas do Comercial a regra "quem entrou" (etapa17_logado). A função tem_alguma_aba fica (a onda 3a ainda a usa).
+drop policy if exists etapa17_abas on public.crm_anexos; create policy etapa17_logado on public.crm_anexos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_checklist_itens; create policy etapa17_logado on public.crm_checklist_itens for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_checklist_progresso; create policy etapa17_logado on public.crm_checklist_progresso for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_clientes; create policy etapa17_logado on public.crm_clientes for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_contatos; create policy etapa17_logado on public.crm_contatos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_historico_contatos; create policy etapa17_logado on public.crm_historico_contatos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_interacoes; create policy etapa17_logado on public.crm_interacoes for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.crm_whatsapp_msgs; create policy etapa17_logado on public.crm_whatsapp_msgs for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_aditivos; create policy etapa17_logado on public.licitacao_aditivos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_anexos; create policy etapa17_logado on public.licitacao_anexos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_contrato_itens; create policy etapa17_logado on public.licitacao_contrato_itens for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_enderecos; create policy etapa17_logado on public.licitacao_enderecos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_formacao_parceiro; create policy etapa17_logado on public.licitacao_formacao_parceiro for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_parceiros; create policy etapa17_logado on public.licitacao_parceiros for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacao_contatos; create policy etapa17_logado on public.licitacao_contatos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.agenda_compromissos; create policy etapa17_logado on public.agenda_compromissos for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
