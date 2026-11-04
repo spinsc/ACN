@@ -1859,6 +1859,8 @@ html body .acn-fp-ir-mmcaixa input { flex: 1; min-width: 0; padding: 5px 8px; bo
 .acn-vg-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .acn-vg-card-rota { font-size: 12px; color: var(--acn-muted); }
 .acn-vg-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12px; color: var(--acn-text); }
+/* 04/11/2026: o selo "Falta para sair: …" é longo (lista tudo o que falta) e vazava do cartão; quebra a linha dentro do cartão */
+html body .acn-vg-card-meta .acn-selo:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; padding: 4px 8px; line-height: 1.3; border-radius: 12px; }
 .acn-vg-card-valor { margin-left: auto; font-weight: 800; color: var(--acn-ink); }
 .acn-vg-jan { width: min(980px, 96vw); max-height: 94vh; }
 .acn-vg-corpo { display: flex; flex-direction: column; gap: 12px; }
@@ -7179,3 +7181,29 @@ html body .acn-vg-vinc-abrir { border: 0; background: transparent; padding: 0; f
 .acn-vg-frota .acn-tabela th { text-align: left; }
 .acn-vg-frota .acn-tabela th.dir { text-align: right; }
 .acn-vg-frota .acn-quadro-titulo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* ── Viagens, melhorias 2 (04/11/2026): agenda (quem está onde), comprovantes ── */
+.acn-vg-ag { display: flex; flex-direction: column; gap: 6px; overflow-x: auto; }
+.acn-vg-ag-cab, .acn-vg-ag-linha { display: grid; align-items: stretch; column-gap: 0; min-width: 640px; }
+.acn-vg-ag-dia { display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--acn-muted); text-transform: uppercase; padding: 2px 0; }
+.acn-vg-ag-dia em { font-style: normal; font-weight: 700; color: var(--acn-ink); font-size: 12px; }
+.acn-vg-ag-dia.fds, .acn-vg-ag-cel.fds { background: var(--acn-surface-2); }
+.acn-vg-ag-dia.hoje em { color: var(--acn-brand-ink); text-decoration: underline; }
+.acn-vg-ag-cel { border-left: 1px solid var(--acn-line); min-height: 30px; }
+.acn-vg-ag-cel.hoje { background: color-mix(in srgb, var(--acn-brand) 10%, transparent); }
+.acn-vg-ag-linha { border-top: 1px solid var(--acn-line); padding: 2px 0; row-gap: 2px; }
+.acn-vg-ag-conflito { background: var(--acn-bad-soft); }
+.acn-vg-ag-rot { display: flex; flex-direction: column; justify-content: center; font-size: 13px; padding-right: 8px; min-width: 0; }
+.acn-vg-ag-rot strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acn-vg-ag-rot .acn-ajuda, .acn-vg-ag-rot .acn-txt-erro { font-size: 11px; }
+html body button.acn-vg-barra-ag { z-index: 1; align-self: center; margin: 1px 2px; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; font: 600 12px var(--acn-font); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: #fff; background: var(--acn-brand); }
+html body button.acn-vg-barra-ag.st-aberta { background: #64748b; }
+html body button.acn-vg-barra-ag.st-em_aprovacao { background: #b7791f; }
+html body button.acn-vg-barra-ag.st-provisionamento { background: #2b6cb0; }
+html body button.acn-vg-barra-ag.st-andamento { background: var(--acn-brand); }
+html body button.acn-vg-barra-ag.corta-esq { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
+html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+.acn-vg-ag-periodo { margin: 0 6px; }
+.acn-vg-comprov { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 150px; }
+.acn-vg-comprov-item { display: inline-flex; align-items: center; gap: 2px; max-width: 220px; font-size: 12px; }
+.acn-vg-comprov-item a { display: inline-flex; align-items: center; gap: 3px; color: var(--acn-brand-ink); text-decoration: underline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

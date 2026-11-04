@@ -26,11 +26,14 @@ import { abrirVinculo } from './VinculoPicker';
 import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
 import { abrirFicha } from './ViagemFicha';
+import { anexarComprovante, tirarComprovante } from './ViagemComprovantes';
 import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
 import RelatorioDeCustos from './ViagemRelatorioTela';
+import AgendaDasViagens from './ViagemAgendaTela';
+import { dadosDaCopia } from './ViagemCopia';
 import {
   COLUNAS_VIAGEM, statusDaViagem, colunaDaViagem, rotuloDoStatus, movimentosDaViagem, movimentoParaAColuna, faltaParaMover, patchDoMovimento, entradaDoMovimento, entradaDeAlteracao,
-  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento,
+  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento, saidaPertoComFalta,
 } from './ViagemFluxo';
 import type { Movimento } from './ViagemFluxo';
 import {
@@ -326,6 +329,23 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     set('contrato_anexos', res.lista);
     if (res.erro) mostrarAviso(res.erro);
   };
+  // comprovantes da prestação de contas (04/11/2026): sobem e a lista é gravada na hora, como o contrato
+  const [subindoComprovante, setSubindoComprovante] = useState(false);
+  const aoAnexarComprovante = async (item: string, e: any) => {
+    const arquivos = Array.from(e.target.files || []) as File[];
+    e.target.value = '';
+    if (!arquivos.length || !v.id) return;
+    setSubindoComprovante(true);
+    const res = await anexarComprovante(v, item, arquivos, currentUser);
+    setSubindoComprovante(false);
+    set('comprovantes', res.lista);
+    if (res.erro) mostrarAviso(res.erro);
+  };
+  const aoTirarComprovante = async (i: number) => {
+    const res = await tirarComprovante(v, i, currentUser);
+    set('comprovantes', res.lista);
+    if (res.erro) mostrarAviso(res.erro);
+  };
   const aoTirarContrato = async (i: number) => {
     const res = await tirarContrato(v, i, currentUser);
     set('contrato_anexos', res.lista);
@@ -369,7 +389,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
           </div>
           </fieldset>
 
-          {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} />}
+          {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} aoAnexarComprovante={aoAnexarComprovante} aoTirarComprovante={aoTirarComprovante} subindoComprovante={subindoComprovante} />}
 
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
@@ -568,7 +588,8 @@ function recadoDaSaida(v: any, hoje: string): { texto: string; atraso: boolean }
 }
 const motivoDaRecusa = (v: any) => [...(v.historico || [])].reverse().find((h: any) => h.para === 'nao_aprovada')?.motivo || null;
 
-function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
+function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover, aoDuplicar }: any) {
+  const alertaSaida = saidaPertoComFalta(v, hoje);   // 04/11/2026: sai em até 2 dias e ainda falta parte
   const passos: Movimento[] = movimentosDaViagem(v, currentUser);
   const proximo = passos.find(m => m.sentido === 'avanca');
   const recado = recadoDaSaida(v, hoje);
@@ -585,6 +606,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
         <span onClick={e => e.stopPropagation()}>
           <MenuAcoes itens={[
             { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => aoAbrir(v) },
+            ...(permissoesDaViagem(currentUser).base ? [{ rotulo: 'Duplicar a viagem', icone: mdiContentCopy, onClick: () => aoDuplicar(v) }] : []),
             ...(temProvisionamento(v) ? [{ rotulo: 'Ficha da equipe (imprimir)', icone: mdiFileDocumentOutline, onClick: () => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); } }] : []),
             ...passos.map(m => ({ rotulo: m.rotulo, onClick: () => aoMover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
           ]} />
@@ -597,6 +619,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
         {v.km_total != null && <span>{fmtKm(v.km_total)}</span>}
         {v.vinculo && <span>{v.vinculo}</span>}
       </div>
+      {alertaSaida && <div className="acn-vg-card-meta"><Selo familia="erro" ponto={false} title={'A equipe só sai com isso preenchido: ' + alertaSaida.falta.join(', ')}>Falta para sair: {alertaSaida.falta.map((f: string) => f.split(' (')[0]).join(', ')}</Selo></div>}
       {(recado || parado >= 3) && (
         <div className="acn-vg-card-meta">
           {recado && <Selo familia={recado.atraso ? 'erro' : 'neutro'} ponto={false}>{recado.texto}</Selo>}
@@ -669,6 +692,8 @@ export default function ViagensTab({ currentUser }: any) {
   const contagemSaida = (id: string) => lista.filter(v => combinaBusca(textoParaBusca(v), busca) && (id === 'todas' ? true : id === 'sem_data' ? !v.data_saida : id === 'atrasadas' ? saidaAtrasada(v, hoje)
     : (() => { const d = diasParaSair(v, hoje); return d !== null && d >= 0 && d <= 7 && !['andamento', 'finalizada', 'nao_aprovada'].includes(statusDaViagem(v)); })())).length;
 
+  // duplicar (04/11/2026): abre uma Nova viagem já com o roteiro e os custos da escolhida; nada é gravado até a pessoa salvar
+  const duplicar = (v: any) => { setEditando({ ...viagemVazia(), ...dadosDaCopia(v) }); mostrarAviso('Cópia aberta: confira a data de saída e salve para criar a viagem.', 'info'); };
   const mover = async (v: any, m: Movimento) => {
     if (emAcao.current) return;
     emAcao.current = true;
@@ -694,18 +719,18 @@ export default function ViagensTab({ currentUser }: any) {
         ) : undefined} />
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as viagens ({erro}).</Faixa>}
       <div className="acn-vg-barra">
-        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }, { id: 'custos', rotulo: 'Custos' }]} />
-        {visao !== 'custos' && <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />}
-        {visao !== 'custos' && <label className="acn-vg-pesquisa">
+        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }, { id: 'agenda', rotulo: 'Agenda' }, { id: 'custos', rotulo: 'Custos' }]} />
+        {!['custos', 'agenda'].includes(visao) && <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />}
+        {!['custos', 'agenda'].includes(visao) && <label className="acn-vg-pesquisa">
           <Icone path={mdiMagnify} size={16} />
           <input className="acn-input" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar título, cidade, OP/PV ou quem criou" aria-label="Buscar viagem" />
         </label>}
       </div>
       {carregando && !lista.length && <div className="acn-ajuda">Carregando viagens…</div>}
-      {visao !== 'custos' && !carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
-      {visao !== 'custos' && !carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
+      {!['custos', 'agenda'].includes(visao) && !carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
+      {!['custos', 'agenda'].includes(visao) && !carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
 
-      {visao === 'custos' ? <RelatorioDeCustos viagens={lista} aoAbrir={setEditando} /> : visao === 'quadro' ? (
+      {visao === 'custos' ? <RelatorioDeCustos viagens={lista} aoAbrir={setEditando} /> : visao === 'agenda' ? <AgendaDasViagens viagens={lista} aoAbrir={setEditando} /> : visao === 'quadro' ? (
         <div className="acn-vg-quadro">
           {COLUNAS_VIAGEM.map(col => {
             const cartoes = visiveis.filter(v => statusDaViagem(v) === col.id);
@@ -715,7 +740,7 @@ export default function ViagensTab({ currentUser }: any) {
                 <header className="acn-vg-col-cab" title={col.ajuda}><span>{col.rotulo}</span><em>{cartoes.length}</em></header>
                 <div className="acn-vg-col-corpo">
                   {cartoes.length === 0 ? <div className="acn-vg-col-vazia">Nenhuma</div>
-                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} />)}
+                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} aoDuplicar={duplicar} />)}
                 </div>
               </section>
             );
@@ -744,6 +769,7 @@ export default function ViagensTab({ currentUser }: any) {
                     <td onClick={e => e.stopPropagation()}>
                       <MenuAcoes itens={[
                         { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => setEditando(v) },
+                        ...(permissoesDaViagem(currentUser).base ? [{ rotulo: 'Duplicar a viagem', icone: mdiContentCopy, onClick: () => duplicar(v) }] : []),
                         ...movimentosDaViagem(v, currentUser).map(m => ({ rotulo: m.rotulo, onClick: () => mover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
                       ]} />
                     </td>

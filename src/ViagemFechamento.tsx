@@ -10,6 +10,10 @@ import React from 'react';
 import { CampoNumero } from './ViagemCampos';
 import { Parte } from './ViagemProvisionamento';
 import { fmtReais, fmtKm } from './ViagemCalculo';
+import Icone from './Icone';
+import { Botao, Faixa } from './Interface';
+import { comprovantesDoItem, itensSemComprovante } from './ViagemComprovantes';
+import { mdiPaperclip, mdiClose } from '@mdi/js';
 
 const ITENS = [
   { chave: 'combustivel', rotulo: 'Combustível', orcado: (r: any) => r.combustivel },
@@ -36,10 +40,12 @@ export function compararComOOrcado(v: any, r: any) {
 
 const dif = (d: number | null) => (d === null ? '—' : <span className={d > 0.004 ? 'acn-txt-erro' : undefined}>{d > 0.004 ? '+' : ''}{fmtReais(d)}</span>);
 
-export function BlocoFechamento({ v, set, pode, r }: any) {
+export function BlocoFechamento({ v, set, pode, r, aoAnexarComprovante, aoTirarComprovante, subindoComprovante }: any) {
   const real = v.custo_real || {};
   const setReal = (chave: string, valor: any) => set('custo_real', { ...real, [chave]: valor });
   const c = compararComOOrcado(v, r);
+  const semComprovante = itensSemComprovante(v);
+  const rotuloDe = (k: string) => ITENS.find(i => i.chave === k)?.rotulo || k;
   return (
     <>
       <Parte titulo="VOLTA DA EQUIPE" quem="Adaptação" pode={pode.adaptacao}>
@@ -60,14 +66,27 @@ export function BlocoFechamento({ v, set, pode, r }: any) {
             <input className="acn-input" aria-label="Observações da prestação de contas" placeholder="Ex.: pedágio pago em dinheiro, nota do hotel em anexo" value={real.observacao || ''} onChange={e => setReal('observacao', e.target.value)} /></div>
         </div>
         <table className="acn-tabela acn-vg-comparacao">
-          <thead><tr><th>Item</th><th className="dir">Orçado</th><th className="dir">Real</th><th className="dir">Diferença</th></tr></thead>
+          <thead><tr><th>Item</th><th className="dir">Orçado</th><th className="dir">Real</th><th className="dir">Diferença</th><th>Comprovantes</th></tr></thead>
           <tbody>
             {c.linhas.map(l => (
-              <tr key={l.chave}><td>{l.rotulo}</td><td className="dir acn-num">{fmtReais(l.orcado)}</td><td className="dir acn-num">{l.real === null ? '—' : fmtReais(l.real)}</td><td className="dir acn-num">{l.real === null ? '—' : dif(l.real - l.orcado)}</td></tr>
+              <tr key={l.chave}><td>{l.rotulo}</td><td className="dir acn-num">{fmtReais(l.orcado)}</td><td className="dir acn-num">{l.real === null ? '—' : fmtReais(l.real)}</td><td className="dir acn-num">{l.real === null ? '—' : dif(l.real - l.orcado)}</td>
+                <td className="acn-vg-comprov">
+                  {comprovantesDoItem(v, l.chave).map((cp: any) => {
+                    const indice = (v.comprovantes || []).indexOf(cp);
+                    return (
+                      <span key={cp.path || indice} className="acn-vg-comprov-item">
+                        <a href={cp.url} target="_blank" rel="noreferrer" title={cp.nome}><Icone path={mdiPaperclip} size={13} /> {cp.nome}</a>
+                        {pode.financeiro && <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Tirar o comprovante ${cp.nome}`} title="Tirar o comprovante" onClick={() => aoTirarComprovante(indice)} />}
+                      </span>
+                    );
+                  })}
+                  {pode.financeiro && v.id && <label className="acn-vg-anexar"><input type="file" multiple aria-label={`Anexar comprovante de ${l.rotulo}`} disabled={subindoComprovante} onChange={e => aoAnexarComprovante(l.chave, e)} /><span className="acn-b acn-b-secundario acn-b-p"><Icone path={mdiPaperclip} size={14} />{subindoComprovante ? 'Enviando…' : 'Anexar'}</span></label>}
+                </td></tr>
             ))}
-            <tr className="total"><td><strong>Total</strong></td><td className="dir acn-num"><strong>{fmtReais(c.totalOrcado)}</strong></td><td className="dir acn-num"><strong>{c.lancou ? fmtReais(c.totalReal) : '—'}</strong></td><td className="dir acn-num"><strong>{dif(c.diferenca)}</strong></td></tr>
+            <tr className="total"><td><strong>Total</strong></td><td className="dir acn-num"><strong>{fmtReais(c.totalOrcado)}</strong></td><td className="dir acn-num"><strong>{c.lancou ? fmtReais(c.totalReal) : '—'}</strong></td><td className="dir acn-num"><strong>{dif(c.diferenca)}</strong></td><td /></tr>
           </tbody>
         </table>
+        {semComprovante.length > 0 && <Faixa tom="erro">Falta comprovante de: {semComprovante.map(rotuloDe).join(', ')}. Anexe a nota ou o recibo na linha de cada item.</Faixa>}
         <div className="acn-ajuda">O desgaste do veículo ({fmtReais(r.desgaste)}) é custo calculado, não sai dinheiro: fica fora desta comparação.
           {c.verba !== null && c.contraVerba !== null && <> Verba liberada: {fmtReais(c.verba)} — {c.contraVerba >= 0 ? `sobra ${fmtReais(c.contraVerba)}` : <span className="acn-txt-erro">faltou {fmtReais(-c.contraVerba)}</span>}.</>}</div>
       </Parte>

@@ -216,3 +216,16 @@ export function saidaAtrasada(v: any, hoje: string): boolean {
 export function textoParaBusca(v: any): string {
   return [v?.titulo, v?.vinculo, v?.criado_por_nome, v?.origem?.texto, ...(v?.paradas || []).map((p: any) => p?.texto)].filter(Boolean).join(' ');
 }
+
+/**
+ * A viagem em Provisionamento que sai em até 2 dias (ou que já passou da data) e ainda não tem tudo para a equipe sair (04/11/2026, pedido do usuário). O cartão mostra o selo
+ * vermelho e o banco avisa, de segunda a sexta às 8h, o setor que falta (Adaptação e Financeiro). Devolve nulo quando não há o que alertar.
+ */
+export const DIAS_DO_ALERTA_DE_SAIDA = 2;
+export function saidaPertoComFalta(v: any, hoje: string): { dias: number; falta: string[] } | null {
+  if (statusDaViagem(v) !== 'provisionamento') return null;
+  const dias = diasParaSair(v, hoje);
+  if (dias === null || dias > DIAS_DO_ALERTA_DE_SAIDA) return null;
+  const falta = faltaParaMover(v, 'andamento');
+  return falta.length ? { dias, falta } : null;
+}
