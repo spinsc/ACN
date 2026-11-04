@@ -13,12 +13,13 @@ import { lerPaginado } from './LerPaginado';
 import { logChange } from './AuditSystem';
 import { mostrarAviso, confirmar } from './Feedback';
 import NovaOpOsModal from './NovaOpOsModal';
+import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { Botao, Chips, Faixa, Selo, MenuAcoes, hojeISO, diaBR } from './Interface';
 import Icone from './Icone';
 import { combinaBusca } from './SearchUtils';
 import { conferirContatoDoCard, mensagemContatoDoCard } from './ContatoObrigatorio';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
-import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline } from '@mdi/js';
+import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline, mdiCurrencyUsd } from '@mdi/js';
 import {
   COLUNAS_VENDAS, TEMPERATURAS, FORM_VAZIO, formDoCard, erroDoCard, camposDoCard, payloadDoCardNovo, colunaDoTipo, ehEncerrado, movimentosDoTipo,
   pvDe, erroDoEnvioDaProposta, contatoAtrasado, textoDoHistorico, PADROES_DA_OP_TELECOM, EMPRESAS_DA_VENDA, erroDoPedidoFechado,
@@ -40,6 +41,8 @@ export default function VendasTelecomTab({ currentUser }) {
   const [fechar, setFechar] = useState<any>(null);      // card que vai a Pedido fechado
   const [novaOp, setNovaOp] = useState<any>(null);      // card para o qual se lança a OP (a janela Nova OP já preenchida)
   const [opsPorCard, setOpsPorCard] = useState<Record<string, string[]>>({});
+  const [cotar, setCotar] = useState<any>(null);      // card cuja cotação (Formação de Preços) está aberta
+  const [cotacoesPorCard, setCotacoesPorCard] = useState<Record<string, number>>({});   // quantas formações cada card já tem (leitura que falha: sem selo, nunca "zero" afirmado)
   const [opsLidas, setOpsLidas] = useState(false);       // false = não deu para ler as OPs dos cards: não se afirma que "não tem OP"
   const hoje = hojeISO();
 
@@ -70,6 +73,15 @@ export default function VendasTelecomTab({ currentUser }) {
       }
       if (lidas) setOpsPorCard(porCard);
       setOpsLidas(lidas);
+      // as formações de preço de cada card (o elo é `cotacoes_precos.crm_oportunidade_id`; cada versão é uma linha)
+      const cots: Record<string, number> = {};
+      let cotsLidas = true;
+      for (let i = 0; i < ids.length && cotsLidas; i += 100) {
+        const { data: fp, error: errFp } = await supabase.from('cotacoes_precos').select('id,crm_oportunidade_id').in('crm_oportunidade_id', ids.slice(i, i + 100));
+        if (errFp) { cotsLidas = false; break; }
+        (fp || []).forEach((x: any) => { cots[x.crm_oportunidade_id] = (cots[x.crm_oportunidade_id] || 0) + 1; });
+      }
+      if (cotsLidas) setCotacoesPorCard(cots);
     } catch (e) {
       // a lista que já estava na tela fica; a faixa diz o motivo (leitura recusada nunca vira "nenhum contato")
       setErro(e?.message || 'erro desconhecido');
@@ -130,6 +142,7 @@ export default function VendasTelecomTab({ currentUser }) {
     const mov = movimentosDoTipo(tipoDe(c));
     return [
       { rotulo: 'Abrir e anotar', onClick: () => setJanela({ card: c }) },
+      { rotulo: (cotacoesPorCard[c.id] || 0) ? 'Cotação (Formação de Preços)' : 'Fazer a cotação', icone: mdiCurrencyUsd, onClick: () => setCotar(c), oculto: !mov.includes('cotar') },
       { rotulo: 'Enviar proposta', icone: mdiSendOutline, onClick: () => comecarEnvio(c), oculto: !mov.includes('enviar_proposta') },
       { rotulo: 'Pedido fechado', icone: mdiCheckCircleOutline, onClick: () => setFechar(c), oculto: !mov.includes('pedido_fechado') },
       { rotulo: (opsPorCard[c.id] || []).length ? 'Lançar outra OP' : 'Lançar OP', icone: mdiClipboardTextOutline, onClick: () => lancarOp(c), oculto: !mov.includes('lancar_op') },
@@ -155,6 +168,7 @@ export default function VendasTelecomTab({ currentUser }) {
           {c.nome_contato && <span>{c.nome_contato}</span>}
           {c.valor_registrado != null && <strong>{reais(c.valor_registrado)}</strong>}
           {c.numero_pv && <Selo familia="neutro" ponto={false}>PV {c.numero_pv}</Selo>}
+          {(cotacoesPorCard[c.id] || 0) > 0 && !ehEncerrado(tipo) && <Selo familia="info" ponto={false} title="Este contato já tem formação de preços: clique para abrir a cotação" onClick={e => { e.stopPropagation(); setCotar(c); }}>Cotação{cotacoesPorCard[c.id] > 1 ? ` (${cotacoesPorCard[c.id]} versões)` : ''}</Selo>}
           {(opsPorCard[c.id] || []).map(o => <Selo key={o} familia="ok" ponto={false} title="OP lançada a partir deste contato">OP {o}</Selo>)}
           {String(tipo) === 'ganho' && opsLidas && !(opsPorCard[c.id] || []).length && <Selo familia="erro" ponto={false} title="O pedido está fechado, mas nenhuma OP foi lançada ainda: use Lançar OP no menu">Sem OP</Selo>}
           {c.temperatura && <Selo familia={c.temperatura === 'quente' ? 'erro' : c.temperatura === 'morno' ? 'atencao' : 'info'} ponto={false}>{TEMPERATURAS.find(t => t.id === c.temperatura)?.rotulo || c.temperatura}</Selo>}
@@ -241,6 +255,9 @@ export default function VendasTelecomTab({ currentUser }) {
       {enviar && (
         <JanelaEnvioDaProposta card={enviar} currentUser={currentUser} umaVez={umaVez} estagioEnviadoId={estagioDoTipo('enviado')?.id} nomeEtapa={estagioDoTipo('enviado')?.nome}
           onFechar={() => setEnviar(null)} onGravado={async () => { setEnviar(null); await carregar(true); }} />
+      )}
+      {cotar && (
+        <JanelaDaCotacao card={cotar} currentUser={currentUser} onFechar={() => { setCotar(null); carregar(true); }} />
       )}
       {fechar && (
         <JanelaPedidoFechado card={fechar} currentUser={currentUser} umaVez={umaVez} estagioGanho={estagioDoTipo('ganho')}
@@ -440,6 +457,22 @@ function JanelaEnvioDaProposta({ card, currentUser, umaVez, estagioEnviadoId, no
           <Botao onClick={onFechar} disabled={salvando}>Cancelar</Botao>
           <Botao variante="primario" icone={mdiCheck} onClick={confirmar} disabled={salvando}>{salvando ? 'Gravando…' : 'Confirmar envio'}</Botao>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Cotação: a mesma Formação de Preços do card do CRM, embutida e ligada ao card (a conta de preço é a oficial do sistema; markup, custo e DIFAL são da formação) ──
+// Só fecha pelo botão: o clique fora da janela perderia uma formação ainda não salva. O catálogo é o inteiro (não há marca de "item de telecom" nos itens).
+function JanelaDaCotacao({ card, currentUser, onFechar }) {
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box acn-modal-cadastro acn-vtel-janela-larga" role="dialog" aria-label="Cotação" data-teste="vtel-cotacao">
+        <div className="acn-modal-cab"><span className="modal-title"><Icone path={mdiCurrencyUsd} size={16} /> Cotação — {card.orgao}</span></div>
+        <div className="acn-modal-corpo">
+          <FormacaoPrecosTab key={card.id} currentUser={currentUser} vinculo={{ tipo: 'crm', id: card.id }} rotulo={card.titulo || ''} embutido />
+        </div>
+        <div className="acn-modal-rodape"><Botao onClick={onFechar}>Fechar</Botao></div>
       </div>
     </div>
   );

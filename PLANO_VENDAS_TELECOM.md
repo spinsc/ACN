@@ -18,12 +18,14 @@
 - **Pedido fechado e faturado ficam no CRM** (o card ganho abre a OP pela janela "Vencido"; o faturado exige as OPs faturadas): o operador só vê o card e tem o atalho "Abrir no CRM".
 - Teste de navegador com gravações bloqueadas (`scratchpad/fstest/teste_vendas_telecom.cjs`): 33 verificações, todas OK (cinco colunas e contagens, resumo e alerta vermelho, lista, busca, contato novo com as validações e o corpo gravado, andamento, "Gravar" sem mexer na etapa, envio de proposta com PV/guarda/agenda/histórico, perda, desistência e reativar, "Abrir no CRM" sem a aba, e só as tabelas esperadas receberam gravação). Fotos conferidas no computador e no celular (400 px, sem rolagem lateral da página).
 
-### Fatia 2 — fechamento e OP: parte 1 ✅ (03/11/2026), cotação ⬜
+### Fatia 2 — fechamento e OP ✅ (03/11/2026) e cotação ✅ (04/11/2026)
 - **Correção da Fatia 1:** o valor estimado ia para `valor_acn` (a parte da ACN em venda com parceiro/Detech); o do CRM é `valor_registrado` (aparece no card, soma no funil e vai para a OP). Corrigido antes de existir qualquer card marcado (0 no banco); `VendasTelecom.ts` e a tela leem e gravam `valor_registrado`.
 - **Pedido fechado** (menu do card em Proposta enviada): escolhe a empresa que fatura (ACN ou Detech; vem do card), leva o card a Empenhado com `empresa_vencedora`, só se ele ainda está na etapa de antes, e anota no histórico. Exige o PV (a OP é numerada por ele; o PV nasce no "Enviar proposta").
 - **Lançar OP:** logo depois de fechar, abre a `NovaOpOsModal` com o card, o PV, a empresa e os itens da formação, e com **tipo Rádio e fluxo envio de material** já escolhidos (prop nova `padroes`, que vale por cima dos dados do card e não muda nada para quem não a passa). Fechar a janela sem salvar deixa o card em Pedido fechado com o selo vermelho **"Sem OP"** e o menu oferece "Lançar OP" (pergunta antes se já houver OP). O passo 2 da Nova OP (anexar documentos) aparece normalmente. OP criada aparece como selo "OP A1234.2611" no card.
 - Teste de navegador (gravações bloqueadas): 42 verificações OK, incluindo o corpo gravado, a guarda da etapa, a janela Nova OP aberta com Radio, envio de material, PV 7777, Detech e "D7777.2611".
-- **Falta:** do card, abrir a **Formação de Preços** já ligada ao card, restrita aos itens de telecom (o operador cota sem passar pelo CRM).
+- **Cotação pela Formação de Preços (04/11/2026):** do card (Lead, Proposta enviada e Pedido fechado) o menu abre **"Fazer a cotação"** (ou "Cotação (Formação de Preços)" quando já existe), numa janela grande com a `FormacaoPrecosTab` embutida e ligada ao card (`vinculo = {tipo:'crm', id}`, a mesma ligação `cotacoes_precos.crm_oportunidade_id` que o CRM usa); o card mostra o selo **"Cotação (N versões)"**, que também abre a janela. A janela **só fecha pelo botão Fechar** (clicar fora não fecha, para não perder formação não salva) e ao fechar o quadro é relido.
+- **Limite a saber:** a ideia era restringir aos itens de telecom, mas o Cadastro de itens **não tem marca de telecom** (nenhum dos 4.429 itens ativos tem setor de separação nem categoria de telecom); por isso o catálogo é o inteiro. Para limitar é preciso antes marcar os itens (decisão do usuário).
+- Teste de navegador (gravações bloqueadas): 48 verificações OK, incluindo o selo com 2 versões, o texto do menu com e sem formação, a janela aberta com a Formação embutida, clicar fora sem fechar e Fechar sem gravar nada. Fotografia conferida.
 
 ### Fatia 3 — acompanhamento do operador ⬜
 - "Retornos de hoje" e cards parados há muitos dias (mesmo critério do CRM, `dias_lead_esquecido`), motivo de perda em relatório, @menção no andamento (o CRM usa `salvarMencoes`).
@@ -34,4 +36,3 @@
 - O **`CrmTab.tsx` não foi tocado** (ainda não migrado para o design system: fatias 12e40/12e41 do plano de UX). A aba nova nasceu no padrão novo.
 - Faturamento da venda: o card nasce com `faturamento_empresa = 'ACN'` e `tipo_negocio = 'Venda'` (como o CRM); **a empresa de verdade é escolhida em "Pedido fechado"** (ACN ou Detech).
 - A janela Nova OP mostra o quadro "Fotos do carro" mesmo para rádio em envio (comportamento que já existia no modal; não mexi).
-- A Fatia 2 parte 1 só vai ao ar com a autorização do usuário.

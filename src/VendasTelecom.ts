@@ -32,12 +32,12 @@ export const colunaDoTipo = (tipo: any): ColunaVendas =>
 export const ehEncerrado = (tipo: any) => ['perdido', 'desistencia'].includes(String(tipo || ''));
 
 /** O que o operador pode fazer com um card, pela etapa dele. Pedido fechado (Fatia 2, 03/11/2026): o operador fecha e lança a OP; o faturamento segue no CRM e no Fiscal. */
-export type Movimento = 'enviar_proposta' | 'pedido_fechado' | 'lancar_op' | 'perda' | 'desistencia' | 'reativar';
+export type Movimento = 'cotar' | 'enviar_proposta' | 'pedido_fechado' | 'lancar_op' | 'perda' | 'desistencia' | 'reativar';
 export function movimentosDoTipo(tipo: any): Movimento[] {
   const t = String(tipo || '');
-  if (t === 'estimativa' || t === 'lead') return ['enviar_proposta', 'perda', 'desistencia'];
-  if (t === 'enviado' || t === 'aguardando_empenho') return ['pedido_fechado', 'perda', 'desistencia'];
-  if (t === 'ganho') return ['lancar_op'];
+  if (t === 'estimativa' || t === 'lead') return ['cotar', 'enviar_proposta', 'perda', 'desistencia'];
+  if (t === 'enviado' || t === 'aguardando_empenho') return ['cotar', 'pedido_fechado', 'perda', 'desistencia'];
+  if (t === 'ganho') return ['cotar', 'lancar_op'];
   if (t === 'desistencia') return ['reativar'];
   return [];
 }
