@@ -28,6 +28,8 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { lerPaginado } from './LerPaginado';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
+import { erroDeTelefone, telefoneParaMostrar } from './Telefone';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline } from '@mdi/js';
@@ -2150,7 +2152,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                           </span>
                           {c.contato_telefone && (
                             <a className="acn-nfc-tel" href={`tel:${c.contato_telefone}`}>
-                              <Icone path={mdiPhoneOutline} size={13} /> {c.contato_telefone}
+                              <Icone path={mdiPhoneOutline} size={13} /> {telefoneParaMostrar(c.contato_telefone)}
                             </a>
                           )}
                           <Selo familia={familia}>{c.status}</Selo>
@@ -2206,7 +2208,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <div className="acn-modal-corpo acn-form-cheio">
                   <div>
                     <strong>{modalNfc.nome_solicitante}</strong>
-                    {modalNfc.contato_telefone && ` · ${modalNfc.contato_telefone}`}
+                    {modalNfc.contato_telefone && ` · ${telefoneParaMostrar(modalNfc.contato_telefone)}`}
                     {modalNfc.orgao_cliente && ` · ${modalNfc.orgao_cliente}`}
                   </div>
                   {modalNfc.descricao_defeito && (
@@ -2852,7 +2854,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <div className="form-group acn-sac-dobro"><label className="acn-label">Endereço</label>
                   <input className="acn-input" value={form.endereco} onChange={e=>setForm(f=>({...f,endereco:e.target.value}))} /></div>
                 <div className="form-group"><label className="acn-label">Telefone</label>
-                  <input className="acn-input" value={form.telefone} onChange={e=>setForm(f=>({...f,telefone:e.target.value}))} /></div>
+                  <CampoTelefone valor={form.telefone} onChange={v=>setForm(f=>({...f,telefone:v}))} /></div>
                 <div className="form-group"><label className="acn-label">E-mail</label>
                   <input type="email" className="acn-input" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} /></div>
               </div>

@@ -18,6 +18,7 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
 import { conferirContatoDeLicitacao, licitacaoTemContato, mensagemContatoDaLicitacao, mensagemLicitacaoSemContato, lerContatosDaLicitacao, STATUS_QUE_NAO_PEDEM_CONTATO } from './ContatoObrigatorio';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
 import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO, SelectMultiplo } from './Interface';
@@ -479,7 +480,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
         </div>
         {(form.telefones||[]).map((tel: any, i: number) => (
           <div key={i} className="acn-lic-tel-linha">
-            <input value={tel.numero} onChange={e=>setTel(i,'numero',e.target.value)}
+            <CampoTelefone valor={tel.numero} onChange={v=>setTel(i,'numero',v)} semAviso
               className="acn-input acn-lic-tel-num" placeholder="(11) 99999-9999" />
             <select value={tel.tipo} onChange={e=>setTel(i,'tipo',e.target.value)} className="acn-input acn-lic-tel-tipo">
               <option>Celular</option><option>Fixo</option><option>WhatsApp</option>
@@ -2412,6 +2413,14 @@ function ModalNovaInput({ label, field, value, onChange, type='text', required=f
       </div>
     );
   }
+  if (type === 'tel') {
+    return (
+      <div>
+        <label className="acn-label">{label}{required?' *':''}</label>
+        <CampoTelefone valor={value||''} onChange={v=>onChange(field,v)} className={classe} />
+      </div>
+    );
+  }
   return (
     <div>
       <label className="acn-label">{label}{required?' *':''}</label>
@@ -2545,7 +2554,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             <div className="acn-ajuda">Obrigatório: o nome e o telefone ou o e-mail. Fica em "Contatos do processo", onde dá para cadastrar mais.</div>
             <ModalNovaInput label="Nome do contato" field="nome" value={contato.nome} onChange={setC} required />
             <div className="acn-grade-2">
-              <ModalNovaInput label="Telefone" field="telefone" value={contato.telefone} onChange={setC} />
+              <ModalNovaInput label="Telefone" field="telefone" value={contato.telefone} onChange={setC} type="tel" />
               <ModalNovaInput label="E-mail" field="email" value={contato.email} onChange={setC} />
             </div>
           </div>

@@ -7,6 +7,8 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
+import { digitosSemPais, telefoneComFormatoValido, erroDeTelefone } from './Telefone';
 import { Faixa, Botao, Selo, Abas, CabecalhoTela } from './Interface';
 import Icone from './Icone';
 import { mdiTimerSand, mdiLinkVariant, mdiFormatListBulleted, mdiChartBar, mdiPlus, mdiRefresh, mdiFolderOutline, mdiCashMultiple,
@@ -333,8 +335,9 @@ ${cotacao.criado_por || 'ACN'}`
   };
 
   const enviarWhatsApp = () => {
-    const num = whatsapp.replace(/\D/g, '');
+    const num = digitosSemPais(whatsapp);
     if (!num) { alert('Informe o telefone WhatsApp.'); return; }
+    if (!telefoneComFormatoValido(num)) { alert(erroDeTelefone(whatsapp, 'telefone WhatsApp')); return; }
     const msg = encodeURIComponent(
       `Olá! Segue nossa proposta comercial.\n\n📋 Nº ${cotacao.numero_cotacao || ''}\n💰 Valor: ${Number(totalLiq).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}\n⏳ Validade: ${validade} dias\n\nQualquer dúvida, estamos à disposição!`
     );
@@ -412,8 +415,7 @@ ${cotacao.criado_por || 'ACN'}`
           <div className="acn-quadro tom-ok">
             <div className="acn-quadro-titulo"><Icone path={mdiWhatsapp} size={14} /> Enviar por WhatsApp</div>
             <div className="acn-cot-envio">
-              <input className="acn-input" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)}
-                placeholder="11999998888" type="tel" />
+              <CampoTelefone valor={whatsapp} onChange={setWhatsapp} placeholder="(11) 99999-8888" semAviso />
               <Botao variante="primario" onClick={enviarWhatsApp}>
                 Enviar
               </Botao>

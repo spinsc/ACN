@@ -9,6 +9,7 @@
 //   • número GAR-0001/2026 (sequencial por ano; quem dá o número é o banco, na função `garantia_abrir`, sem pular e sem repetir).
 // Atendimento não se apaga: edita enquanto aberto, cancela com motivo e reabre. O encerramento é da G6.
 // ─────────────────────────────────────────────────────────────────────────────
+import { telefoneComFormatoValido } from './Telefone';
 
 export const ORIGENS_GARANTIA: Record<string, string> = { op: 'OP', os: 'OS do SAC', nf: 'Nota fiscal da venda' };
 export const SITUACOES_GARANTIA: Record<string, string> = { aberto: 'Aberto', encerrado: 'Encerrado', cancelado: 'Cancelado' };
@@ -50,6 +51,8 @@ export function validarGarantia(c: any, hoje: string): string[] {
   const vazio = (v: any) => !String(v ?? '').trim();
   if (vazio(c.cliente_nome)) erros.push('o nome do cliente');
   if (vazio(c.cliente_contato)) erros.push('o contato do cliente (telefone ou e-mail)');
+  // 04/11/2026: contato só com números é telefone e precisa ser completo (DDD + número); com "@" ou letras vale como e-mail e não é conferido aqui
+  else if (!/[@a-zA-Z]/.test(String(c.cliente_contato)) && !telefoneComFormatoValido(c.cliente_contato)) erros.push('o telefone do cliente completo, com DDD (por exemplo (51) 98644-0747), ou um e-mail');
   if (vazio(c.veiculo_nome) || vazio(c.veiculo_id)) erros.push('o veículo (escolha no catálogo)');
   const placa = normalizarPlaca(c.placa), chassi = normalizarChassi(c.chassi);
   if (!placa && !chassi) erros.push('a placa ou o chassi');

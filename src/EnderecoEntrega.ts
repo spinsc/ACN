@@ -8,6 +8,7 @@
 // Fica num arquivo só para a criação da OP, a edição, a OP criada sozinha (OpObrigatorios), a embalagem e a cotação não dizerem coisas diferentes.
 // ─────────────────────────────────────────────────────────────────────────────
 import { fluxoEfetivo } from './FluxoEntrega';
+import { telefoneComFormatoValido } from './Telefone';
 
 /** Os campos do endereço além de CEP, cidade e UF, na ordem em que aparecem nas telas. */
 export const CAMPOS_ENDERECO: { campo: string; rotulo: string }[] = [
@@ -37,7 +38,8 @@ export function enderecoQueFalta(o: any): string[] {
     if (!limpo(o?.[c.campo])) faltam.push(c.rotulo);
   }
   // telefone com pelo menos DDD + número; texto solto como "depois passo" não serve para a transportadora ligar
-  if (limpo(o?.destino_telefone) && digitos(o?.destino_telefone).length < 8) faltam.push('telefone de quem recebe (com DDD)');
+  // 04/11/2026: o telefone precisa ser completo (DDD + número, ex.: (51) 98644-0747), não só 8 dígitos
+  if (limpo(o?.destino_telefone) && !telefoneComFormatoValido(o?.destino_telefone)) faltam.push('telefone de quem recebe (com DDD)');
   return [...new Set(faltam)];
 }
 

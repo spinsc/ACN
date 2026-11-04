@@ -327,7 +327,7 @@
       </div>
       <div class="campo">
         <label>Telefone / WhatsApp *</label>
-        <input id="f-tel" type="tel" placeholder="(48) 99999-9999" />
+        <input id="f-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="(48) 99999-9999" oninput="this.value = mascaraTelefone(this.value)" />
       </div>
       <div class="campo">
         <label>Descreva o problema / solicitação *</label>
@@ -350,6 +350,26 @@
     'Authorization': 'Bearer ' + SUPA_KEY,
     'Content-Type': 'application/json'
   };
+
+  // 04/11/2026 (pedido do usuário): todo telefone do sistema com máscara de telefone. (48) 99999-9999 (celular) ou (48) 3000-0000 (fixo); aceita colar com +55.
+  function mascaraTelefone(v) {
+    let d = String(v || '').replace(/\D/g, '').replace(/^0+/, '');
+    if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+    d = d.slice(0, 11);
+    if (!d) return '';
+    if (d.length <= 2) return '(' + d;
+    if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+    if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+    return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+  }
+  function telefoneCompleto(v) {
+    const d = String(v || '').replace(/\D/g, '');
+    if (d.length !== 10 && d.length !== 11) return false;
+    if (Number(d.slice(0, 2)) < 11) return false;
+    if (d.length === 11 && d[2] !== '9') return false;
+    if (d.length === 10 && (d[2] === '0' || d[2] === '1')) return false;
+    return true;
+  }
 
   async function supa(path) {
     const r = await fetch(SUPA_URL + '/rest/v1/' + path, { headers: HDR });
@@ -533,12 +553,16 @@
 
   async function enviarChamado() {
     const nome = document.getElementById('f-nome').value.trim();
-    const tel  = document.getElementById('f-tel').value.trim();
+    const tel  = mascaraTelefone(document.getElementById('f-tel').value);
     const desc = document.getElementById('f-desc').value.trim();
     const msg  = document.getElementById('msg-form');
 
     if (!nome || !tel || !desc) {
       msg.innerHTML = '<div class="msg-err">⚠️ Preencha todos os campos obrigatórios.</div>';
+      return;
+    }
+    if (!telefoneCompleto(tel)) {
+      msg.innerHTML = '<div class="msg-err">⚠️ Informe o telefone completo, com DDD. Exemplo: (48) 99999-9999.</div>';
       return;
     }
 

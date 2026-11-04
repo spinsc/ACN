@@ -19,6 +19,7 @@ import { confirmar } from './Feedback';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { carregarVeiculos, textoVeiculo } from './Veiculos';
 import { CampoCep } from './CampoCep';
+import { CampoTelefone } from './CampoTelefone';
 import { SeletorEscopo, useTamanhoDoLote } from './EscopoDaEdicao';
 import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote } from './EdicaoDeLote';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
@@ -61,7 +62,7 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Veículo / envio', campo: 'destino_bairro', rotulo: 'Bairro do destino', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_complemento', rotulo: 'Complemento do destino', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_destinatario', rotulo: 'Quem recebe', tipo: 'texto' },
-  { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'telefone' },
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Recebimento do veículo', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
@@ -113,6 +114,7 @@ const mostrar = (c: Campo, v: any) => {
 function Entrada({ c, valor, onChange, onVeiculo, onCep, currentUser }: { c: Campo; valor: string; onChange: (v: string) => void; onVeiculo?: (p: { veiculo_id: string; modelo?: string }) => void; onCep?: (r: any) => void; currentUser?: any }) {
   const est = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' as const };
   if (c.tipo === 'cep') return <CampoCep valor={valor} onChange={onChange} estilo={est} rotulo={c.rotulo} onResultado={onCep} />;
+  if (c.tipo === 'telefone') return <CampoTelefone valor={valor} onChange={onChange} style={est} />;
   if (c.tipo === 'veiculo') {
     return <VeiculoDaOp veiculoId={valor} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
   }
@@ -383,7 +385,7 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Veículo / envio', campo: 'destino_bairro', rotulo: 'Bairro', tipo: 'texto', soFrete: true },
   { grupo: 'Veículo / envio', campo: 'destino_complemento', rotulo: 'Complemento', tipo: 'texto', soFrete: true, dica: 'se não houver: sem complemento' },
   { grupo: 'Veículo / envio', campo: 'destino_destinatario', rotulo: 'Quem recebe', tipo: 'texto', soFrete: true },
-  { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'texto', soFrete: true },
+  { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'telefone', soFrete: true },
   // CIF/FOB não é texto livre: o Almoxarifado compara com 'FOB' na hora de
   // embalar para decidir se abre cotação de frete. Qualquer outra grafia faz
   // a OP cair no caminho do CIF calada (ver AlmoxarifadoTab.tsx).
@@ -447,6 +449,7 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
   const txt = valor == null ? '' : String(valor);
 
   if (c.tipo === 'cep') return <CampoCep valor={txt} onChange={onChange} estilo={est} rotulo={c.rotulo} onResultado={onCep || undefined} />;
+  if (c.tipo === 'telefone') return <CampoTelefone valor={txt} onChange={onChange} style={est} />;
 
   if (c.tipo === 'veiculo') {
     return <VeiculoDaOp veiculoId={txt} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;

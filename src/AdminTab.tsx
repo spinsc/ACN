@@ -9,6 +9,8 @@ import { criadoEmLabel, paraCampoDataHora } from './AvisoSistemaWidget';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
 import { CentrosCustoManager } from './CentroCustoFicha';
 import { confirmar } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
+import { erroDeTelefone, whatsappParaGravar } from './Telefone';
 import PainelFeriados from './FeriadosAdmin';
 import { PainelFipeSync } from './Veiculos';
 import { PainelFichasVeiculos } from './VeiculoCadastro';
@@ -230,13 +232,16 @@ function PainelUsuarios() {
 
   const salvarEdicao = async () => {
     if (!editForm.nome || !editForm.email) { alert('Nome e e-mail são obrigatórios!'); return; }
+    // 04/11/2026: o WhatsApp preenchido precisa ser completo (DDD + número); grava só dígitos com o 55 na frente, como o envio de mensagem espera
+    const recusaWhats = erroDeTelefone(editForm.whatsapp, 'WhatsApp');
+    if (recusaWhats) { alert(recusaWhats); return; }
     // a senha vai primeiro: se a senha do Admin não conferir, nada do cadastro é gravado pela metade
     if (editForm.novaSenha.length >= 4 && !(await definirSenhaPeloAdmin(modalEditar.id, editForm.novaSenha))) return;
     const updates = {
       nome: editForm.nome.toUpperCase(),
       email: editForm.email,
       perfil: editForm.perfil,
-      whatsapp: editForm.whatsapp.replace(/\D/g,'') || null,
+      whatsapp: whatsappParaGravar(editForm.whatsapp) || null,
       abas_permitidas: editForm.abas_permitidas,
       pode_autorizar_rh: editForm.pode_autorizar_rh,
       pode_enviar_avisos: editForm.pode_enviar_avisos,
@@ -304,6 +309,8 @@ function PainelUsuarios() {
   const salvar = async () => {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
     if (form.senha.length < 4) { alert('A senha precisa ter no mínimo 4 caracteres.'); return; }
+    const recusaWhats = erroDeTelefone(form.whatsapp, 'WhatsApp');   // 04/11/2026: WhatsApp preenchido precisa ser completo
+    if (recusaWhats) { alert(recusaWhats); return; }
     if (!senhaAdmin) { alert('Informe a sua senha (de Admin) para criar o usuário com senha.'); return; }
     // confere a senha do Admin ANTES de criar, para não deixar um usuário criado sem senha por causa de um erro de digitação
     const eu = JSON.parse(localStorage.getItem('user') || '{}');
@@ -312,7 +319,7 @@ function PainelUsuarios() {
     if (adminConfere !== true) { alert('Sua senha de Admin não confere.'); return; }
     // a senha nunca vai para a tabela de usuários (16d: a coluna deixou de existir): o usuário nasce sem senha e ela é definida pela função do servidor, que guarda só o resumo
     const { senha: _senhaDigitada, ...dadosDoUsuario } = form;
-    const { data: novo, error } = await supabase.from('auth_usuarios').insert([{ ...dadosDoUsuario, ativo: true }]).select('id').single();
+    const { data: novo, error } = await supabase.from('auth_usuarios').insert([{ ...dadosDoUsuario, whatsapp: whatsappParaGravar(form.whatsapp) || null, ativo: true }]).select('id').single();
     if (error) { alert('Erro: ' + error.message); return; }
     if (!(await definirSenhaPeloAdmin(novo.id, form.senha))) alert('O usuário foi criado, mas ficou SEM senha definida. Abra "Editar" nele e defina a senha.');
     setSenhaAdmin('');
@@ -359,11 +366,11 @@ function PainelUsuarios() {
                   onChange={e=>setEditForm(f=>({...f,email:e.target.value}))} />
               </div>
               <div>
-                <label className="acn-label">📱 WhatsApp (DDI+DDD+nº)</label>
-                <input className="acn-input" style={{width:'100%'}}
-                  placeholder="5511987654321"
-                  value={editForm.whatsapp}
-                  onChange={e=>setEditForm(f=>({...f,whatsapp:e.target.value.replace(/\D/g,'')}))} />
+                <label className="acn-label">📱 WhatsApp (DDD + número)</label>
+                <CampoTelefone whatsapp style={{width:'100%'}}
+                  placeholder="(11) 98765-4321"
+                  valor={editForm.whatsapp}
+                  onChange={v=>setEditForm(f=>({...f,whatsapp:v}))} />
               </div>
               <div>
                 <label className="acn-label">Perfil</label>
@@ -590,10 +597,10 @@ function PainelUsuarios() {
                   ⚡ Aplicar permissões do perfil
                 </button>
               </div>
-              <div className="form-group"><label className="acn-label">WhatsApp (55DDD+número)</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.whatsapp}
-                  placeholder="Ex: 5511987654321"
-                  onChange={e=>setForm({...form,whatsapp:e.target.value.replace(/\D/g,'')})} />
+              <div className="form-group"><label className="acn-label">WhatsApp (DDD + número)</label>
+                <CampoTelefone whatsapp style={{width:'100%'}} valor={form.whatsapp}
+                  placeholder="Ex: (11) 98765-4321"
+                  onChange={v=>setForm({...form,whatsapp:v})} />
               </div>
             </div>
             {/* Seleção de abas */}

@@ -20,6 +20,7 @@ import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia, textoDosSeriais, seriaisOutrosDaOp } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
 import { pendenciasSanadas, lerVistos, chaveDoUsuario, resumoDaFalta } from './PendenciasSanadas';
 import AvisoPendenciaSanada from './AvisoPendenciaSanada';
 import { modeloDeSeriais, modelosDasOps, linhasDeSerial, jaSerializadoPorProduto } from './SerialDosItens';
@@ -1823,8 +1824,10 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                 const campo = (id: string, chave: string, rotulo: string, extra: any = {}) => (
                   <div className="form-group">
                     <label className="acn-label" htmlFor={id}>{rotulo}{obrig ? ' *' : ''}</label>
-                    <input id={id} className="acn-input" value={embForm[chave] || ''} {...extra}
-                      onChange={e => setEmbForm(f => ({ ...f, [chave]: e.target.value }))} />
+                    {chave === 'destino_telefone'
+                      ? <CampoTelefone id={id} valor={embForm[chave] || ''} onChange={v => setEmbForm(f => ({ ...f, [chave]: v }))} />
+                      : <input id={id} className="acn-input" value={embForm[chave] || ''} {...extra}
+                          onChange={e => setEmbForm(f => ({ ...f, [chave]: e.target.value }))} />}
                   </div>
                 );
                 return (

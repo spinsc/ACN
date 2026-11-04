@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { bloqueioForaDaGarantia, podeVerGarantia, COBERTURAS_GARANTIA } from './GarantiaModelo';
 import { lerValorDigitado } from './LerValor';
+import { telefoneComFormatoValido } from './Telefone';
 
 export type Cobranca = 'garantia' | 'cobrada';
 export const ROTULOS_COBRANCA: Record<Cobranca, string> = { garantia: 'Sem cobrança (garantia ou cortesia)', cobrada: 'Cobrada do cliente' };
@@ -595,6 +596,8 @@ export function faltaNaNovaOS(form: any, equipLista: any[]): string[] {
   const ficha = faltaFichaDaGarantia({ tipo_servico: form?.tipo_servico, garantia_id: form?.garantia_id });
   if (ficha) falta.push('a ficha de garantia (aba Garantia)');
   if (!String(form?.cliente_nome || '').trim()) falta.push('o nome do cliente');
+  // 04/11/2026: telefone do cliente é opcional, mas preenchido precisa ser completo (DDD + número)
+  if (String(form?.telefone || '').trim() && !telefoneComFormatoValido(form.telefone)) falta.push('o telefone completo, com DDD (ou apague o que está incompleto)');
   if (!String(form?.equipamento_nome || '').trim()) falta.push('o equipamento');
   const lista = equipLista || [];
   const semDefeito = lista.map((e, i) => (String(e?.defeito || '').trim() ? 0 : i + 1)).filter(Boolean);

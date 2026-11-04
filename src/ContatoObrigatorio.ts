@@ -5,9 +5,11 @@
 // ninguém deve ser obrigado a preencher dado de cliente só para encerrar um registro perdido.
 // Módulo sem tela, para testar a regra sem navegador.
 
-const soDigitos = (v: any) => String(v ?? '').replace(/\D/g, '');
-/** Telefone de verdade: ao menos 8 dígitos (com ou sem DDD, pontuação e espaços). */
-export const telefoneValido = (v: any): boolean => soDigitos(v).length >= 8;
+import { telefoneComFormatoValido } from './Telefone';
+
+/** Telefone de verdade: DDD + número completo (10 ou 11 dígitos, com ou sem +55, pontuação e espaços). Regra de 04/11/2026 (pedido do usuário: todo telefone com formato de telefone);
+ *  antes bastavam 8 dígitos, e números sem DDD passavam. Os cards e licitações antigos com telefone incompleto pedem o número completo na próxima edição. */
+export const telefoneValido = (v: any): boolean => telefoneComFormatoValido(v);
 /** E-mail de verdade: algo@dominio.ext, sem espaços. */
 export const emailValido = (v: any): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v ?? '').trim());
 
@@ -21,7 +23,10 @@ function conferir(nome: any, telefones: any[], email: any): ConferenciaContato {
   const temEmail = emailValido(email);
   if (!temTelefone && !temEmail) {
     const algoPreenchido = telefones.some(t => String(t ?? '').trim()) || String(email ?? '').trim();
-    falta.push(algoPreenchido ? 'um telefone (com pelo menos 8 dígitos) ou um e-mail válido' : 'o telefone ou o e-mail');
+    falta.push(algoPreenchido ? 'um telefone completo (com DDD, por exemplo (51) 98644-0747) ou um e-mail válido' : 'o telefone ou o e-mail');
+  } else if (telefones.some(t => String(t ?? '').trim() && !telefoneValido(t))) {
+    // 04/11/2026: com e-mail válido o contato já valia, mas um telefone preenchido pela metade não pode ser gravado assim
+    falta.push('o telefone completo, com DDD (ou apague o que está incompleto)');
   }
   return { ok: falta.length === 0, falta };
 }

@@ -12,6 +12,7 @@ import { supabase } from './supabaseClient';
 import { lerPaginado } from './LerPaginado';
 import { logChange } from './AuditSystem';
 import { mostrarAviso, confirmar } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
 import NovaOpOsModal from './NovaOpOsModal';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { Botao, Chips, Faixa, Selo, MenuAcoes, hojeISO, diaBR } from './Interface';
@@ -432,7 +433,7 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
               <div className="form-group"><label className="acn-label" htmlFor="vt-nome">Nome{encerrado ? '' : ' *'}</label>
                 <input id="vt-nome" className="acn-input" value={form.nome_contato} onChange={e => set('nome_contato', e.target.value)} /></div>
               <div className="form-group"><label className="acn-label" htmlFor="vt-tel">Telefone</label>
-                <input id="vt-tel" className="acn-input" value={form.contato} onChange={e => set('contato', e.target.value)} /></div>
+                <CampoTelefone id="vt-tel" valor={form.contato} onChange={v => set('contato', v)} /></div>
               <div className="form-group"><label className="acn-label" htmlFor="vt-mail">E-mail</label>
                 <input id="vt-mail" className="acn-input" type="email" value={form.contato_email} onChange={e => set('contato_email', e.target.value)} /></div>
             </div>

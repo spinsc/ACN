@@ -4,6 +4,8 @@ import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
+import { erroDeTelefone } from './Telefone';
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './ComissaoDocumento';
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
@@ -202,7 +204,9 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     <label className="acn-label">{txt}</label>
   );
   const inp = (k, placeholder='', type='text') => (
-    <input className="acn-input" type={type} value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={placeholder} />
+    type === 'tel'
+      ? <CampoTelefone valor={form[k]} onChange={v=>set(k,v)} placeholder={placeholder} />   // 04/11/2026: telefone com máscara (51) 98644-0747
+      : <input className="acn-input" type={type} value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={placeholder} />
   );
   // Etapa 12c2 (01/10/2026): a fileira de botões coloridos virou o `Chips` do design system (mesmas opções, mesmo valor gravado).
   const toggle = (options, key) => (
@@ -216,6 +220,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     // R17 (13/10/2026): o CEP, quando informado e mexido, precisa ser válido (a conferência da embalagem); o que já estava gravado e não mudou não trava o salvamento
     const recusaCep = await conferirCepAntesDeSalvar(form.cep, 'CEP', func?.cep);
     if (recusaCep) { alert(recusaCep); return; }
+    const recusaTel = erroDeTelefone(form.emergencia_telefone, 'telefone do contato de emergência');   // 04/11/2026: telefone preenchido precisa ser completo
+    if (recusaTel) { alert(recusaTel); return; }
     setSalvando(true);
     const payload = {
       nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(), cnpj: form.cnpj.trim()||null,
