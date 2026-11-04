@@ -7130,3 +7130,5 @@ html body .acn-b.acn-vg-passo:not(#acn) { white-space: normal; overflow-wrap: an
 html body .acn-b.acn-vg-passo:not(#acn) { min-height: 28px; padding-block: 4px; line-height: 1.25; overflow: visible; }
 /* com os botões de passar de etapa o rodapé da janela de viagem passa de uma linha: tem de quebrar em vez de cortar */
 .acn-vg-jan .acn-modal-rodape { flex-wrap: wrap; }
+/* janela da viagem em tamanho médio (pedido do usuário em 04/11/2026): a regra genérica do cadastro a deixava em 500 px e a .acn-vg-jan de cima nunca valia */
+html body .modal-box.acn-modal-cadastro.acn-vg-jan { width: min(780px, 95vw); max-width: 780px; }
