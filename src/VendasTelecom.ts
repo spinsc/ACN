@@ -49,6 +49,29 @@ export const TEMPERATURAS = [
   { id: 'quente', rotulo: 'Quente' },
 ];
 
+// 04/11/2026 (pedido do usuário): "O que o cliente precisa" deixou de ser uma caixa de texto e virou uma lista de itens (quantidade + descrição). A coluna do card
+// continua sendo o mesmo texto (`objeto_principal`, um item por linha, "10x rádio portátil"): a busca, o CRM e o que já foi gravado seguem lendo igual,
+// e o texto antigo, escrito à mão, abre na lista com uma linha por item.
+export type ItemDoCliente = { qtd: string; descricao: string };
+
+/** Do texto gravado para a lista: uma linha vira um item; "10x rádio" separa a quantidade (a linha sem quantidade fica só com a descrição). */
+export function itensDoTexto(texto: any): ItemDoCliente[] {
+  return String(texto ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(\d+)\s*[xX×]\s*(.+)$/);
+    return m ? { qtd: m[1], descricao: m[2].trim() } : { qtd: '', descricao: l };
+  });
+}
+
+/** Da lista para o texto do card: linha sem descrição some; a quantidade só entra se for um número inteiro maior que zero. */
+export function textoDosItens(itens: ItemDoCliente[]): string {
+  return (itens || []).map(i => {
+    const d = String(i?.descricao ?? '').replace(/\s+/g, ' ').trim();
+    if (!d) return '';
+    const q = parseInt(String(i?.qtd ?? '').replace(/\D/g, ''), 10);
+    return q > 0 ? `${q}x ${d}` : d;
+  }).filter(Boolean).join('\n');
+}
+
 export const FORM_VAZIO = { orgao: '', titulo: '', objeto_principal: '', nome_contato: '', contato: '', contato_email: '', valor: '', temperatura: '', prox_contato: '', hora_prox_contato: '' };
 
 export const formDoCard = (c: any) => ({

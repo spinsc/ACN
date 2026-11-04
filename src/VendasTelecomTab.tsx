@@ -20,12 +20,39 @@ import { combinaBusca } from './SearchUtils';
 import { conferirContatoDoCard, mensagemContatoDoCard } from './ContatoObrigatorio';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
-import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline, mdiCurrencyUsd } from '@mdi/js';
+import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline, mdiCurrencyUsd, mdiTrashCanOutline } from '@mdi/js';
 import {
   COLUNAS_VENDAS, TEMPERATURAS, FORM_VAZIO, formDoCard, erroDoCard, camposDoCard, payloadDoCardNovo, colunaDoTipo, ehEncerrado, movimentosDoTipo,
   pvDe, erroDoEnvioDaProposta, contatoAtrasado, textoDoHistorico, PADROES_DA_OP_TELECOM, EMPRESAS_DA_VENDA, erroDoPedidoFechado,
-  FOCOS, passaNoFoco, cardParado, diasSemMovimento, resumoDasPerdas,
+  FOCOS, passaNoFoco, cardParado, diasSemMovimento, resumoDasPerdas, itensDoTexto, textoDosItens,
 } from './VendasTelecom';
+
+/** "O que o cliente precisa": uma linha por item (quantidade e descrição), em vez de uma caixa de texto. Guarda o mesmo texto de antes (VendasTelecom.ts, itensDoTexto). */
+function ItensDoCliente({ valor, onChange }: { valor: string; onChange: (texto: string) => void }) {
+  const [linhas, setLinhas] = useState(() => { const l = itensDoTexto(valor); return l.length ? l : [{ qtd: '', descricao: '' }]; });
+  const [foco, setFoco] = useState<number | null>(null);
+  const refs = useRef<any[]>([]);
+  useEffect(() => { if (foco != null) { refs.current[foco]?.focus(); setFoco(null); } }, [foco, linhas.length]);
+  const mudar = (novas: any[]) => { setLinhas(novas); onChange(textoDosItens(novas)); };
+  const trocar = (i: number, campo: string, v: string) => mudar(linhas.map((l, j) => j === i ? { ...l, [campo]: campo === 'qtd' ? v.replace(/\D/g, '').slice(0, 5) : v } : l));
+  const acrescentar = () => { mudar([...linhas, { qtd: '', descricao: '' }]); setFoco(linhas.length); };
+  const tirar = (i: number) => mudar(linhas.length > 1 ? linhas.filter((_, j) => j !== i) : [{ qtd: '', descricao: '' }]);
+  return (
+    <div className="acn-vtel-itens" role="group" aria-labelledby="vt-obj-rot">
+      <div className="acn-label" id="vt-obj-rot">O que o cliente precisa (itens de telecom)</div>
+      {linhas.map((l, i) => (
+        <div key={i} className="acn-vtel-item">
+          <input ref={el => { refs.current[i] = el; }} className="acn-input" inputMode="numeric" value={l.qtd} placeholder="Qtd" aria-label={`Quantidade do item ${i + 1}`} onChange={e => trocar(i, 'qtd', e.target.value)} />
+          <input className="acn-input" value={l.descricao} placeholder="Ex.: rádio portátil digital com carregador" aria-label={`Descrição do item ${i + 1}`}
+            onChange={e => trocar(i, 'descricao', e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (l.descricao.trim()) acrescentar(); } }} />
+          <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} title="Tirar este item" aria-label={`Tirar o item ${i + 1}`} onClick={() => tirar(i)} />
+        </div>
+      ))}
+      <div><Botao pequeno icone={mdiPlus} onClick={acrescentar}>Adicionar item</Botao></div>
+    </div>
+  );
+}
 
 const reais = (v: any) => v == null || v === '' ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const agoraISO = () => new Date().toISOString();
@@ -353,8 +380,7 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
             <div className="form-group"><label className="acn-label" htmlFor="vt-titulo">Assunto *</label>
               <input id="vt-titulo" className="acn-input" value={form.titulo} placeholder="Ex.: rádios para a equipe de segurança" onChange={e => set('titulo', e.target.value)} /></div>
           </div>
-          <div className="form-group"><label className="acn-label" htmlFor="vt-obj">O que o cliente precisa (itens de telecom)</label>
-            <textarea id="vt-obj" className="acn-input" rows={2} value={form.objeto_principal} onChange={e => set('objeto_principal', e.target.value)} /></div>
+          <ItensDoCliente key={card?.id || 'novo'} valor={form.objeto_principal} onChange={t => set('objeto_principal', t)} />
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">Contato do cliente (nome e telefone ou e-mail)</div>
             <div className="acn-vtel-linha3">
