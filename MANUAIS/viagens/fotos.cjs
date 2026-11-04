@@ -32,11 +32,15 @@ const V = {
   fin: { ...base, id: 'v-fin', titulo: 'Instalação — Câmara Municipal de Exemplo/PR', status: 'finalizada', data_saida: emDias(-18), equipe, frota_id: 'f1', veiculo_nome: 'Strada branca', veiculo_placa: 'ABC1D23', km_saida: 43800, km_volta: 44820, verba_total: 2600, paradas: [pCWB], rota: rota([{ de: 'Itatiba', para: 'Curitiba', km: 410, horas: 5.5 }, { de: 'Curitiba', para: 'Itatiba', km: 410, horas: 5.5 }]), km_total: 820, total_orcamento: 2400, custo_real: { combustivel: 610, pedagios: 168, hospedagem: 880, alimentacao: 420, outros: 90, observacao: 'Estacionamento do hotel.' }, comprovantes: [{ item: 'hospedagem', nome: 'nota-hotel.pdf', url: 'http://x/n.pdf', path: 'viagens/v/comprovantes/hospedagem/1-n.pdf' }, { item: 'combustivel', nome: 'cupons-posto.jpg', url: 'http://x/c.jpg', path: 'viagens/v/comprovantes/combustivel/1-c.jpg' }], historico: hist(['andamento', 'finalizada', 'A equipe voltou.', 'Fábio Reis', 12]) },
   fin2: { ...base, id: 'v-fin2', titulo: 'Treinamento — Guarda de Demonstração/RS', status: 'finalizada', data_saida: emDias(-40), equipe, frota_id: 'f2', veiculo_nome: 'Van branca', km_saida: 9200, km_volta: 10400, custo_real: { combustivel: 980, pedagios: 120, hospedagem: 1500, alimentacao: 600, outros: 0, observacao: '' } },
   fin3: { ...base, id: 'v-fin3', titulo: 'Retirada de equipamentos — Prefeitura de Exemplo/SC', status: 'finalizada', data_saida: emDias(-30), equipe, frota_id: 'f1', veiculo_nome: 'Strada branca', km_saida: 42500, km_volta: 43800, status_desde: new Date(Date.now() - 9 * 86400000).toISOString() },
-  prov3: { ...base, id: 'v-prov3', titulo: 'Instalação de câmeras — Prefeitura de Exemplo/MG', status: 'provisionamento', data_saida: emDias(3), frota_id: 'f2', veiculo_nome: 'Van branca', veiculo_placa: 'XYZ9K88', km_saida: 10400, verba_total: 3800, servico_descricao: 'Instalar 14 câmeras de monitoramento.', status_desde: new Date(Date.now() - 86400000).toISOString() },
+  prov3: { ...base, id: 'v-prov3', titulo: 'Instalação de câmeras — Prefeitura de Exemplo/MG', status: 'provisionamento', data_saida: emDias(2), frota_id: 'f2', veiculo_nome: 'Van branca', veiculo_placa: 'XYZ9K88', km_saida: 10400, verba_total: 3800, servico_descricao: 'Instalar 14 câmeras de monitoramento.', status_desde: new Date(Date.now() - 86400000).toISOString() },
   prov4: { ...base, id: 'v-prov4', titulo: 'Treinamento de operadores — Defesa Civil de Demonstração/SC', status: 'provisionamento', data_saida: emDias(14), verba_total: 2500, verba_liberada_em: new Date(Date.now() - 3 * 86400000).toISOString(), verba_liberada_por: 'Joana Prado', verba_liberada_valor: 2000 },
   nao: { ...base, id: 'v-nao', titulo: 'Visita técnica — Município de Demonstração/MG', status: 'nao_aprovada', data_saida: emDias(25), historico: hist(['em_aprovacao', 'nao_aprovada', 'Sem verba neste mês; refazer em dezembro.', 'Ricardo Gomes', 3]) },
 };
 const viagens = Object.values(V);
+const reservas = [
+  { id: 'r1', frota_id: 'f2', data_inicio: emDias(2), data_fim: emDias(3), motivo: 'Buscar material', observacao: 'Buscar as câmeras no fornecedor, em Campinas', responsavel_nome: 'Roberto Dias', demanda_id: null, demanda_titulo: null, status: 'ativa', criado_por_nome: 'Roberto Dias' },
+  { id: 'r2', frota_id: 'f1', data_inicio: emDias(10), data_fim: emDias(10), motivo: 'Levar material', observacao: '', responsavel_nome: 'Alice Moura', demanda_id: 'd1', demanda_titulo: 'Entrega de peças ao cliente', status: 'ativa', criado_por_nome: 'Alice Moura' },
+];
 const frota = [
   { id: 'f1', apelido: 'Strada branca', modelo: 'Fiat Strada Endurance', placa: 'ABC1D23', km_atual: 45000, ativo: true },
   { id: 'f2', apelido: 'Van branca', modelo: 'Renault Master', placa: 'XYZ9K88', km_atual: 10400, ativo: true },
@@ -52,9 +56,10 @@ const simular = (url) => {
   if (/\/rest\/v1\/viagens\?/.test(url)) return { body: viagens };
   if (/\/rest\/v1\/frota_veiculos/.test(url)) return { body: frota };
   if (/\/rest\/v1\/frota_manutencoes/.test(url)) return { body: manut };
+  if (/\/rest\/v1\/frota_reservas/.test(url)) return { body: reservas };
   return null;
 };
-const escritaSimulada = (url) => (/\/rest\/v1\/(viagens|frota_manutencoes|frota_veiculos)/.test(url) ? { body: [{ id: 'x1' }] } : /storage/.test(url) ? { body: { Key: 'x' } } : null);
+const escritaSimulada = (url) => (/\/rest\/v1\/(viagens|frota_manutencoes|frota_veiculos|frota_reservas)/.test(url) ? { body: [{ id: 'x1' }] } : /storage/.test(url) ? { body: { Key: 'x' } } : null);
 
 const esconderFlutuantes = (page) => page.evaluate(() => {
   document.querySelectorAll('body *').forEach(e => { const c = getComputedStyle(e); if (c.position === 'fixed' && e.offsetWidth > 0 && e.offsetWidth < 90 && e.offsetHeight < 90 && !e.closest('.modal-overlay')) e.style.display = 'none'; });
@@ -267,6 +272,43 @@ const visao = async (page, nome) => { await clicaTexto(page, 'button, [role=tab]
       await espera(2500);
       await clicaTexto(page, '.acn-aba', 'Pendências'); await espera(1500);
       await salvar(page, '31-financeiro-pendencias');
+    }
+    if (quer('reservas')) {
+      // o selo do cartão da viagem travada pela reserva
+      await page.setViewport({ width: 1500, height: 950, deviceScaleFactor: 1.25 });
+      await page.evaluate(() => { const c = [...document.querySelectorAll('.acn-vg-kcard')].find(k => k.innerText.includes('Instalação de câmeras')); c?.setAttribute('data-foto-alvo', '1'); });
+      await salvar(page, '35-viagem-travada-pela-reserva', { el: '[data-foto-alvo="1"]' });
+      await page.evaluate(() => document.querySelectorAll('[data-foto-alvo]').forEach(e => e.removeAttribute('data-foto-alvo')));
+      // a janela de reservar, em cima de uma viagem (aviso vermelho)
+      await visao(page, 'Agenda');
+      await clicaTexto(page, 'button', '^Reservar veículo$'); await espera(1200);
+      await page.setViewport({ width: 1500, height: 1000, deviceScaleFactor: 1 }); await espera(400);
+      await page.evaluate((d) => {
+        const poe = (sel, v) => { const i = document.querySelector(sel); const p = i.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(p, 'value').set.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); };
+        poe('[aria-label="Veículo da reserva"]', 'f2'); poe('[aria-label="Primeiro dia de uso"]', d); poe('[aria-label="Último dia de uso"]', d);
+        poe('[aria-label="Motivo do uso"]', 'Visita ou reunião externa'); poe('[aria-label="Responsável pelo veículo"]', 'Roberto Dias'); poe('[aria-label="Observação da reserva"]', 'Visita ao fornecedor de câmeras');
+      }, emDias(2));
+      await espera(700);
+      await salvar(page, '33-reservar-veiculo', { el: '.modal-box', ultimo: true });
+      await fecha(page);
+      await page.setViewport({ width: 1500, height: 950, deviceScaleFactor: 1.25 });
+      await visao(page, 'Quadro');
+      // o veículo na Nova Demanda (só o quadro do formulário aparece na foto)
+      await page.evaluate(() => [...document.querySelectorAll('.sidebar-item')].find(e => /^Demandas gerais$/i.test(e.querySelector('.sidebar-rotulo')?.textContent.trim() || ''))?.click());
+      await espera(3000);
+      await clicaTexto(page, 'button', 'Nova Demanda'); await espera(1500);
+      await page.setViewport({ width: 1500, height: 1500, deviceScaleFactor: 1 }); await espera(500);
+      await page.evaluate((d) => {
+        const c = document.querySelector('.acn-vg-veiculo-nova input[type=checkbox]'); c?.click();
+      }, emDias(2));
+      await espera(1200);
+      await page.evaluate((d) => {
+        const poe = (sel, v) => { const i = document.querySelector(sel); const p = i.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(p, 'value').set.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); };
+        poe('[aria-label="Veículo da reserva"]', 'f1'); poe('[aria-label="Primeiro dia de uso"]', d); poe('[aria-label="Último dia de uso"]', d);
+        poe('[aria-label="Motivo do uso"]', 'Levar material'); poe('[aria-label="Responsável pelo veículo"]', 'Alice Moura'); poe('[aria-label="Observação da reserva"]', 'Levar as peças ao cliente, em Jundiaí');
+      }, emDias(12));
+      await espera(700);
+      await salvar(page, '34-uso-interno-na-nova-demanda', { el: '.acn-vg-veiculo-nova' });
     }
     console.log('erros:', JSON.stringify(r.consoleErros.filter(e => !/403|406|ERR_FAILED/.test(e)).slice(0, 4)));
   } finally { await browser.close(); }

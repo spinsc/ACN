@@ -14,6 +14,7 @@ import { logChange } from './AuditSystem';
 import { Botao, Selo, Faixa, Chips, SelectMultiplo, hojeISO } from './Interface';
 import { TIPOS_DE_MANUTENCAO, situacaoDaRevisao, erroDaManutencao, linhaDaManutencao, historicoDeKm } from './FrotaManutencao';
 import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
+import { frasesDeReserva } from './ViagemReservas';
 import Icone from './Icone';
 import { useColaboradores } from './ColaboradorSelect';
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
@@ -48,10 +49,10 @@ export function Parte({ titulo, quem, pode, children }: any) {
   );
 }
 
-export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras, aoLiberarVerba, liberandoVerba }: any) {
+export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras, reservas, erroReservas, aoLiberarVerba, liberandoVerba }: any) {
   const { list: colaboradores } = useColaboradores();
   // conflito (04/11/2026): a mesma pessoa ou o mesmo carro em duas viagens que se sobrepõem; é aviso em vermelho, não trava
-  const frasesDeConflito = frasesDosConflitos(conflitosDaViagem(v, outras || [], hojeISO()));
+  const frasesDeConflito = [...frasesDosConflitos(conflitosDaViagem(v, outras || [], hojeISO())), ...frasesDeReserva(v, reservas || [], hojeISO())];   // 04/11/2026: o veículo reservado para uso interno também é conflito
   const equipeIds = (v.equipe || []).map((m: any) => String(m.id));
   const opcoes = colaboradores.map((c: any) => ({ valor: String(c.id), rotulo: c.nome }));
   // quem já está na equipe e saiu da lista de colaboradores (desligado depois) continua aparecendo
@@ -100,7 +101,7 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
             <div className="acn-ajuda">Confira as datas antes de a equipe sair. O sistema só avisa: quem decide é a Adaptação.</div>
           </Faixa>
         )}
-        {erroOutras && <div className="acn-ajuda">Não foi possível conferir as outras viagens ({erroOutras}); o aviso de conflito não vale agora.</div>}
+        {(erroOutras || erroReservas) && <div className="acn-ajuda">Não foi possível conferir {erroOutras ? 'as outras viagens' : 'as reservas do veículo'} ({erroOutras || erroReservas}); o aviso de conflito não vale agora.</div>}
       </Parte>
 
       <Parte titulo="SERVIÇO E CONTRATO" quem="Comercial" pode={pode.comercial}>

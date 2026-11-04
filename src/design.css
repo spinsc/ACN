@@ -7203,6 +7203,8 @@ html body button.acn-vg-barra-ag.st-aberta { background: #64748b; }
 html body button.acn-vg-barra-ag.st-em_aprovacao { background: #b7791f; }
 html body button.acn-vg-barra-ag.st-provisionamento { background: #2b6cb0; }
 html body button.acn-vg-barra-ag.st-andamento { background: var(--acn-brand); }
+/* a reserva do veículo para uso interno (04/11/2026): cinza hachurado, para a Agenda mostrar que o carro está ocupado SEM ser viagem */
+html body button.acn-vg-barra-ag.reserva { background: repeating-linear-gradient(135deg, #64748b 0 8px, #475569 8px 16px); color: #fff; }
 html body button.acn-vg-barra-ag.corta-esq { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
 html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
 .acn-vg-ag-periodo { margin: 0 6px; }

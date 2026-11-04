@@ -56,6 +56,7 @@ Voltar uma viagem de coluna, recusar ou reabrir **sempre pede um motivo**, que f
 | **Verba** | O dinheiro que o Financeiro libera para a equipe levar |
 | **Custo real** | O que a viagem custou de fato, lançado depois pelo Financeiro |
 | **Frota** | O cadastro dos veículos da empresa usados em viagem |
+| **Uso interno** | O veículo ocupado um dia ou mais **fora de viagem** (buscar ou levar material, visita, reparo). Aparece na Agenda e trava a saída de uma viagem que caia em cima |
 | **Comprovante** | A nota ou o recibo de um item do custo real |
 
 # A tela de Viagens

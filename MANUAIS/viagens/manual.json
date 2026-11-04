@@ -8,6 +8,10 @@
   "mudancas": [
     {
       "data": "2026-11-04",
+      "texto": "Reserva do veículo para uso interno: o carro ocupado fora de viagem (buscar ou levar material, visita, reparo) aparece na Agenda como barra cinza hachurada e conta no aviso de conflito. Botão Reservar veículo na Agenda e quadro Veículo da frota nas demandas gerais (também na Nova Demanda). Uma reserva do mesmo veículo nos dias da viagem trava o botão \"A equipe saiu\" até trocar o carro ou a data. Três fotos novas (33, 34 e 35) e a Agenda refeita."
+    },
+    {
+      "data": "2026-11-04",
       "texto": "O Financeiro agora libera a verba: botão Liberar verba na parte do Financeiro (guarda quem, quando e quanto; vale só enquanto o valor for o mesmo) e a equipe só sai com a verba liberada. Nova aba Pendências no Financeiro, com a fila de verba a liberar, custo real a lançar e comprovantes a anexar (vermelho quando a saída é em até 2 dias ou o custo real está atrasado há 7 dias). Duas fotos novas (31 e 32)."
     },
     {

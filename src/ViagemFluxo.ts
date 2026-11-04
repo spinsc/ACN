@@ -114,7 +114,8 @@ function faltaDoRoteiro(v: any): string[] {
  *  • Andamento ("a equipe saiu"): a Adaptação definiu a equipe, o veículo da frota e o km de saída, e o Financeiro lançou E LIBEROU a verba total (decidido com o usuário em 04/11/2026; a liberação em si, também de 04/11, está em ViagemVerba.ts;
  *    hotel, pedágio, descrição do serviço e contrato NÃO travam a saída).
  */
-export function faltaParaMover(v: any, para: StatusViagem): string[] {
+// `travasExtras` (04/11/2026): o que mais impede a saída e que a regra pura não enxerga sozinha, hoje a reserva do veículo para uso interno (travaPorReserva, ViagemReservas.ts, que NÃO é importada aqui para não haver volta de importação).
+export function faltaParaMover(v: any, para: StatusViagem, travasExtras: string[] = []): string[] {
   if (para === 'em_aprovacao' || para === 'provisionamento') return faltaDoRoteiro(v);
   if (para === 'andamento') {
     const falta: string[] = [];
@@ -123,6 +124,7 @@ export function faltaParaMover(v: any, para: StatusViagem): string[] {
     if (v?.km_saida === null || v?.km_saida === undefined || v?.km_saida === '' || !(Number(v.km_saida) >= 0)) falta.push('o km de saída (Adaptação)');
     const faltaVerba = faltaDaVerba(v);   // 04/11/2026: a verba precisa estar LIBERADA pelo Financeiro (ViagemVerba.ts), não só preenchida
     if (faltaVerba) falta.push(faltaVerba);
+    falta.push(...travasExtras);
     return falta;
   }
   // a volta (04/11/2026, fatia 3): a Adaptação informa o km de volta, que é o que atualiza o km do veículo da frota; o custo real (Financeiro) NÃO trava, porque a prestação de contas costuma chegar depois
@@ -224,10 +226,10 @@ export function textoParaBusca(v: any): string {
  * vermelho e o banco avisa, de segunda a sexta às 8h, o setor que falta (Adaptação e Financeiro). Devolve nulo quando não há o que alertar.
  */
 export const DIAS_DO_ALERTA_DE_SAIDA = 2;
-export function saidaPertoComFalta(v: any, hoje: string): { dias: number; falta: string[] } | null {
+export function saidaPertoComFalta(v: any, hoje: string, travasExtras: string[] = []): { dias: number; falta: string[] } | null {
   if (statusDaViagem(v) !== 'provisionamento') return null;
   const dias = diasParaSair(v, hoje);
   if (dias === null || dias > DIAS_DO_ALERTA_DE_SAIDA) return null;
-  const falta = faltaParaMover(v, 'andamento');
+  const falta = faltaParaMover(v, 'andamento', travasExtras);
   return falta.length ? { dias, falta } : null;
 }

@@ -22,6 +22,8 @@ Cada setor edita **só a sua parte** em Provisionamento. O **Admin e os gerentes
 | **Serviço e contrato** | Comercial | CRM, Licitações ou Comercial |
 | **Verba, pedágio e hotel** (inclui o botão **Liberar verba**) e **Custo real × orçado** | Financeiro | Financeiro |
 | **Fila Pendências** (Financeiro > Pendências) | Quem tem a aba Financeiro | Financeiro |
+| **Reservar o veículo para uso interno** (Agenda e demanda geral) | Quem tem a aba Viagens e quem abre ou usa uma demanda geral | Viagens, ou a tela da demanda |
+| **Mudar ou cancelar uma reserva** | Quem fez a reserva, quem tem a aba Viagens e a direção | Viagens |
 | **Aprovar, recusar, voltar uma viagem aprovada, reabrir uma finalizada** | Direção | Admin e gerentes (e a equipe do Comercial e das Licitações, que vale como gerente do setor) |
 | **Apagar** | Admin, gerentes e quem criou a viagem | — |
 
@@ -32,7 +34,7 @@ Quem abre a viagem sem ter a aba Viagens vê uma faixa explicando que pode preen
 | Passo | Só segue se… |
 |---|---|
 | **Enviar para aprovação** | Tem título, data de saída, ponto de saída, pelo menos uma parada e a rota calculada **e atualizada** |
-| **A equipe saiu** | Tem equipe, veículo da frota, km de saída e a **verba total liberada** pelo Financeiro (e igual ao valor liberado) |
+| **A equipe saiu** | Tem equipe, veículo da frota, km de saída, a **verba total liberada** pelo Financeiro (e igual ao valor liberado) e **nenhuma reserva de uso interno** do mesmo veículo nos dias da viagem |
 | **A equipe voltou** | O km de volta está preenchido e é maior que o de saída |
 | **Voltar, recusar ou reabrir** | Você escreveu o motivo |
 | **Qualquer passo** | A viagem ainda está na coluna que você viu (se outra pessoa mexeu antes, o sistema avisa e não grava) |
@@ -46,6 +48,10 @@ O que **não** trava: hotel, pedágio, descrição do serviço, contrato, o cust
 **Aparece "Verba ainda não liberada" ou "A verba mudou depois de liberada".** O Financeiro precisa clicar em **Liberar verba** (depois de salvar o valor). Se o valor mudou depois da liberação, ela perdeu a validade e é preciso liberar de novo. Para viagens que já estavam em Andamento ou Finalizadas antes desta regra, a verba conta como liberada.
 
 **Não sei quais viagens esperam o Financeiro.** Abra **Financeiro > Pendências**: a lista reúne verba a liberar, custo real a lançar e comprovantes a anexar, com o prazo de cada uma.
+
+**O botão "A equipe saiu" diz "liberar o veículo, que está reservado para uso interno".** O carro da viagem está reservado fora de viagem nos mesmos dias. Veja a **Agenda** (barra cinza hachurada): troque o veículo da viagem, mude a data ou peça a quem fez a reserva para mudá-la ou cancelá-la.
+
+**Reservei o veículo por engano.** Abra a reserva (barra da Agenda ou quadro da demanda) e clique em **Cancelar a reserva**, com o motivo.
 
 **Aparece "O roteiro mudou depois do último cálculo".** Você mexeu na saída, nas paradas, na ordem ou em "ida e volta" depois de calcular a rota. Clique em **Calcular rota** de novo; o km, o tempo e os custos passam a valer.
 

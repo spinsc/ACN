@@ -178,6 +178,32 @@ Além do selo, o sistema **avisa na caixa de Menções**, de segunda a sexta às
 
 > **Dica:** a conta é a mesma da trava de saída: o que o selo lista é exatamente o que impede o botão **A equipe saiu**.
 
+## Reservar o veículo para uso interno
+
+**Quando usar:** o carro da frota vai ficar ocupado um dia ou mais **sem ser viagem** (buscar material na rua, levar material a algum lugar, visita, reparo). A reserva faz o carro aparecer como ocupado na Agenda, para a Adaptação ver o choque com as viagens e remanejar (outro carro ou outra data).
+
+**Quem faz:** quem tem a aba **Viagens** (pela Agenda) e **quem abre uma demanda geral** (na própria demanda).
+
+![Janela Reservar veículo, com o aviso de conflito em vermelho](img/33-reservar-veiculo.jpg)
+
+1. Na **Agenda**, clique em **Reservar veículo**.
+2. Escolha o **veículo**, o **primeiro** e o **último dia** de uso (os dois dias valem) e o **motivo** da lista: **Buscar material**, **Levar material**, **Visita ou reunião externa**, **Reparo ou revisão do veículo** ou **Outro**.
+3. Diga **quem vai estar com o veículo** (vem preenchido com o seu nome): é com essa pessoa que se fala para remanejar.
+4. Use a **observação** para contar o detalhe (em **Outro** ela é obrigatória).
+5. Clique em **Reservar veículo**.
+
+Se o carro já estiver em uma viagem (ou em outra reserva) nesses dias, a janela mostra uma **faixa vermelha** dizendo qual. A reserva **pode ser gravada mesmo assim**: o sistema pergunta antes e avisa que a **viagem fica travada na saída** até a Adaptação trocar o veículo ou a data.
+
+> **Atenção:** uma reserva ativa do mesmo veículo nos dias da viagem **impede o botão "A equipe saiu"**. O cartão da viagem mostra o selo vermelho "Falta para sair: liberar o veículo, que está reservado para uso interno…" (quando falta 2 dias ou menos) e a janela da viagem lista o mesmo no aviso de conflito.
+
+![Cartão da viagem travada pela reserva](img/35-viagem-travada-pela-reserva.jpg)
+
+**Pela demanda geral.** Ao criar uma **Nova Demanda**, marque **"Esta demanda vai usar um veículo da frota"** e preencha os mesmos campos: a reserva nasce ligada à demanda (a barra da Agenda mostra o título dela). Depois de criada, a demanda tem o quadro **Veículo da frota**, onde se reserva, muda ou cancela. Se a demanda for **cancelada**, a reserva é cancelada sozinha.
+
+![Veículo da frota no formulário da Nova Demanda](img/34-uso-interno-na-nova-demanda.jpg)
+
+**Mudar ou cancelar.** Na Agenda (ou no quadro da demanda), clique na barra ou na linha da reserva. Quem fez a reserva, quem tem a aba Viagens e a direção podem **salvar mudanças** ou **cancelar a reserva** (o motivo é obrigatório). Nada se apaga: a reserva cancelada fica guardada com quem cancelou, quando e por quê.
+
 ## Aviso de conflito de datas
 
 ![Faixa vermelha: o veículo e a pessoa já estão em outra viagem](img/20-aviso-de-conflito.jpg)

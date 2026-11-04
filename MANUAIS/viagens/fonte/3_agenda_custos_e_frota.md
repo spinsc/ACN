@@ -15,9 +15,11 @@ No alto da tela, clique em **Agenda**. Ela mostra **14 dias** (começando numa s
 
 Cada viagem é uma **barra** nos dias que ocupa. A cor da barra mostra a coluna em que a viagem está (por exemplo, verde para Andamento). Clicar numa barra **abre a viagem**.
 
+O veículo reservado para **uso interno** (fora de viagem) aparece como uma barra **cinza hachurada** na linha do carro, com o motivo ("Uso interno · Buscar material"). Clicar nela abre a reserva. O botão **Reservar veículo**, ao lado dos botões de semana, cria uma reserva nova (veja "Reservar o veículo para uso interno", no passo a passo).
+
 - **Entram** as viagens de Aberta até Andamento, com data de saída. Finalizada e Não aprovada ficam de fora.
 - Os dias de **fim de semana** têm fundo cinza e o dia de **hoje** vem sublinhado.
-- **Conflito:** duas barras da mesma linha que se sobrepõem ficam **uma embaixo da outra**, a linha ganha a palavra **conflito** em vermelho e uma faixa vermelha no alto lista quem aparece em duas viagens ao mesmo tempo.
+- **Conflito:** duas barras da mesma linha que se sobrepõem ficam **uma embaixo da outra**, a linha ganha a palavra **conflito** em vermelho e uma faixa vermelha no alto lista quem aparece em duas viagens (ou numa viagem e num uso interno) ao mesmo tempo.
 - A linha **"Sem veículo definido"** reúne as viagens que ainda não têm carro da frota. Ela nunca marca conflito (não se sabe de qual carro se trata).
 - Os botões **Semana anterior**, **Esta semana** e **Próxima semana** mudam o período.
 

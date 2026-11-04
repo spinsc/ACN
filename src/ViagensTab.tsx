@@ -29,6 +29,7 @@ import { montarRoteiro } from './ViagemRoteiro';
 import { abrirFicha } from './ViagemFicha';
 import { anexarComprovante, tirarComprovante } from './ViagemComprovantes';
 import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
+import { lerReservas, travaPorReserva } from './ViagemReservas';
 import RelatorioDeCustos from './ViagemRelatorioTela';
 import AgendaDasViagens from './ViagemAgendaTela';
 import { dadosDaCopia } from './ViagemCopia';
@@ -200,8 +201,11 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
   // as outras viagens que ainda ocupam equipe e carro, para avisar de conflito de datas (04/11/2026); leitura que falha vira aviso, nunca "sem conflito" calado
   const [outras, setOutras] = useState<any[]>([]);
   const [erroOutras, setErroOutras] = useState('');
+  const [reservas, setReservas] = useState<any[]>([]);   // o carro reservado para uso interno (04/11/2026), para o aviso de conflito aparecer ao escolher o veículo
+  const [erroReservas, setErroReservas] = useState('');
   useEffect(() => {
     if (!temProvisionamento(inicial || {})) return;
+    lerReservas(hojeISO()).then(r => { setReservas(r.lista); setErroReservas(r.erro); });
     supabase.from('viagens').select('*').in('status', ['aberta', 'em_aprovacao', 'provisionamento', 'aprovada', 'andamento']).then(({ data, error }: any) => { setErroOutras(error ? error.message : ''); setOutras(error ? [] : (data || [])); });
   }, []);
   const set = (campo: string, valor: any) => setV((x: any) => ({ ...x, [campo]: valor }));
@@ -241,7 +245,14 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     if (pode.base && !String(v.titulo || '').trim()) { mostrarAviso('Dê um título à viagem.', 'atencao'); return; }
     if (!v.id && !pode.base) { mostrarAviso('Você não tem permissão para criar viagens.', 'atencao'); return; }
     if (mov) {
-      const falta = faltaParaMover(v, mov.para);
+      // a saída confere AGORA as reservas do veículo (04/11/2026): a que acabou de ser feita por outra pessoa também vale, e leitura recusada não vira "sem reserva"
+      let travas: string[] = [];
+      if (mov.para === 'andamento') {
+        const rr = await lerReservas(hojeISO());
+        if (rr.erro) { mostrarAviso(`Não foi possível conferir as reservas do veículo (${rr.erro}); a viagem não saiu.`); return; }
+        travas = travaPorReserva(v, rr.lista, hojeISO());
+      }
+      const falta = faltaParaMover(v, mov.para, travas);
       if (falta.length) { mostrarAviso(`Não foi possível mandar para "${rotuloDoStatus(mov.para)}": falta ${falta.join(', ')}.`); return; }
     }
     let motivo: string | null = null;
@@ -407,7 +418,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
 
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
-              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} aoLiberarVerba={aoLiberarVerba} liberandoVerba={liberandoVerba} />
+              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} reservas={reservas} erroReservas={erroReservas} aoLiberarVerba={aoLiberarVerba} liberandoVerba={liberandoVerba} />
           )}
 
           <fieldset className="acn-vg-fs" disabled={!pode.base}>
@@ -571,7 +582,13 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
 // ── passar a viagem de coluna (pelo quadro, pelo menu ou arrastando) ──────────
 /** Passa a viagem para outra coluna: confere o que falta, pede o motivo quando a passagem pede e só grava se ela ainda está na coluna que a pessoa viu. */
 async function moverViagem(v: any, m: Movimento, currentUser: any): Promise<boolean> {
-  const falta = faltaParaMover(v, m.para);
+  let travas: string[] = [];
+  if (m.para === 'andamento') {   // reserva do veículo para uso interno trava a saída (04/11/2026); a leitura é feita agora, não a da tela
+    const rr = await lerReservas(hojeISO());
+    if (rr.erro) { mostrarAviso(`Não foi possível conferir as reservas do veículo (${rr.erro}); "${v.titulo}" não saiu.`); return false; }
+    travas = travaPorReserva(v, rr.lista, hojeISO());
+  }
+  const falta = faltaParaMover(v, m.para, travas);
   if (falta.length) { mostrarAviso(`Não foi possível mandar "${v.titulo}" para "${rotuloDoStatus(m.para)}": falta ${falta.join(', ')}. Abra a viagem para completar.`); return false; }
   let motivo: string | null = null;
   if (m.pedeMotivo) {
@@ -602,8 +619,8 @@ function recadoDaSaida(v: any, hoje: string): { texto: string; atraso: boolean }
 }
 const motivoDaRecusa = (v: any) => [...(v.historico || [])].reverse().find((h: any) => h.para === 'nao_aprovada')?.motivo || null;
 
-function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover, aoDuplicar }: any) {
-  const alertaSaida = saidaPertoComFalta(v, hoje);   // 04/11/2026: sai em até 2 dias e ainda falta parte
+function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover, aoDuplicar, reservas }: any) {
+  const alertaSaida = saidaPertoComFalta(v, hoje, travaPorReserva(v, reservas || [], hoje));   // 04/11/2026: sai em até 2 dias e ainda falta parte
   const passos: Movimento[] = movimentosDaViagem(v, currentUser);
   const proximo = passos.find(m => m.sentido === 'avanca');
   const recado = recadoDaSaida(v, hoje);
@@ -670,6 +687,8 @@ export default function ViagensTab({ currentUser }: any) {
   const [editando, setEditando] = useState<any | null>(null);
   const [frotaAberta, setFrotaAberta] = useState(false);   // o cadastro de frota (fatia 2, 04/11/2026)
   const [soltarEm, setSoltarEm] = useState<string | null>(null);   // a coluna sobre a qual o cartão está sendo arrastado
+  const [reservasDoCarro, setReservasDoCarro] = useState<any[]>([]);   // reservas de veículo para uso interno (04/11/2026): entram no selo "Falta para sair" e na Agenda
+  const [erroReservasDoCarro, setErroReservasDoCarro] = useState('');
   const hoje = hojeISO();
   const emAcao = React.useRef(false);
 
@@ -680,6 +699,8 @@ export default function ViagensTab({ currentUser }: any) {
     setErro(''); setLista(data || []); setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+  const carregarReservas = useCallback(async () => { const r = await lerReservas(hojeISO()); setReservasDoCarro(r.lista); setErroReservasDoCarro(r.erro); }, []);
+  useEffect(() => { carregarReservas(); }, [carregarReservas]);
 
   // Menções (o aviso de que a viagem espera aprovação), o card do CRM e a licitação abrem a viagem por aqui (04/11/2026): o recado fica em window.__acnDeepLink e o evento cobre a tela já aberta
   useEffect(() => {
@@ -744,7 +765,7 @@ export default function ViagensTab({ currentUser }: any) {
       {!['custos', 'agenda'].includes(visao) && !carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
       {!['custos', 'agenda'].includes(visao) && !carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
 
-      {visao === 'custos' ? <RelatorioDeCustos viagens={lista} aoAbrir={setEditando} /> : visao === 'agenda' ? <AgendaDasViagens viagens={lista} aoAbrir={setEditando} /> : visao === 'quadro' ? (
+      {visao === 'custos' ? <RelatorioDeCustos viagens={lista} aoAbrir={setEditando} /> : visao === 'agenda' ? <AgendaDasViagens viagens={lista} aoAbrir={setEditando} reservas={reservasDoCarro} erroReservas={erroReservasDoCarro} aoMudarReservas={carregarReservas} currentUser={currentUser} /> : visao === 'quadro' ? (
         <div className="acn-vg-quadro">
           {COLUNAS_VIAGEM.map(col => {
             const cartoes = visiveis.filter(v => statusDaViagem(v) === col.id);
@@ -754,7 +775,7 @@ export default function ViagensTab({ currentUser }: any) {
                 <header className="acn-vg-col-cab" title={col.ajuda}><span>{col.rotulo}</span><em>{cartoes.length}</em></header>
                 <div className="acn-vg-col-corpo">
                   {cartoes.length === 0 ? <div className="acn-vg-col-vazia">Nenhuma</div>
-                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} aoDuplicar={duplicar} />)}
+                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} aoDuplicar={duplicar} reservas={reservasDoCarro} />)}
                 </div>
               </section>
             );

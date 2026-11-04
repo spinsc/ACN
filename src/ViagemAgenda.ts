@@ -6,11 +6,15 @@
 //   • Entram as viagens que ainda ocupam equipe e carro: de Aberta até Andamento, com data de saída. Finalizada e Não aprovada ficam de fora.
 //   • Duas barras da mesma linha que se sobrepõem são conflito: ficam em "faixas" separadas (uma embaixo da outra) e a linha é marcada.
 //   • Viagem sem veículo da frota aparece na linha "Sem veículo definido" (que nunca marca conflito: não se sabe de qual carro se trata).
+//   • A RESERVA do veículo para uso interno (ViagemReservas.ts, 04/11/2026) é uma barra a mais na linha do carro, de outra cor; reserva sobre viagem (ou sobre outra reserva) é conflito como
+//     duas viagens. Reserva não entra nas linhas de pessoa (é o carro que fica ocupado).
 // ─────────────────────────────────────────────────────────────────────────────
 import { periodoDaViagem, seSobrepoem } from './ViagemConflitos';
 import { statusDaViagem } from './ViagemFluxo';
+import { reservaAtiva, periodoDaReserva } from './ViagemReservas';
 
-export type Barra = { viagem: any; de: number; ate: number; faixa: number; deOntem: boolean; paraDepois: boolean };
+// `viagem` OU `reserva`: a barra é de uma viagem ou de uma reserva do veículo
+export type Barra = { viagem?: any; reserva?: any; de: number; ate: number; faixa: number; deOntem: boolean; paraDepois: boolean };
 export type LinhaDaAgenda = { chave: string; rotulo: string; sub?: string; barras: Barra[]; faixas: number; conflito: boolean };
 
 const OCUPAM = ['aberta', 'em_aprovacao', 'provisionamento', 'andamento'];
@@ -44,7 +48,7 @@ function empilhar(barras: Omit<Barra, 'faixa'>[]): { barras: Barra[]; faixas: nu
   return { barras: saida, faixas: Math.max(1, fimDaFaixa.length), conflito };
 }
 
-export function montarAgenda(viagens: any[], frota: any[], inicio: string, dias: number, hoje: string) {
+export function montarAgenda(viagens: any[], frota: any[], inicio: string, dias: number, hoje: string, reservas: any[] = []) {
   const fim = somarDias(inicio, dias - 1);
   const janela = { de: inicio, ate: fim };
   const visiveis = (viagens || []).filter(v => OCUPAM.includes(statusDaViagem(v))).map(v => ({ v, per: periodoDaViagem(v, hoje) })).filter((x: any) => x.per && seSobrepoem(x.per, janela));
@@ -52,10 +56,18 @@ export function montarAgenda(viagens: any[], frota: any[], inicio: string, dias:
     const de = Math.max(0, diferenca(inicio, x.per.de)), ate = Math.min(dias - 1, diferenca(inicio, x.per.ate));
     return { viagem: x.v, de, ate, deOntem: x.per.de < inicio, paraDepois: x.per.ate > fim };
   };
+  const reservasVisiveis = (reservas || []).filter(reservaAtiva).map(r => ({ r, per: periodoDaReserva(r) })).filter(x => x.per.de && x.per.ate && seSobrepoem(x.per, janela));
+  const barraDaReserva = (x: any): Omit<Barra, 'faixa'> => {
+    const de = Math.max(0, diferenca(inicio, x.per.de)), ate = Math.min(dias - 1, diferenca(inicio, x.per.ate));
+    return { reserva: x.r, de, ate, deOntem: x.per.de < inicio, paraDepois: x.per.ate > fim };
+  };
 
   const veiculos: LinhaDaAgenda[] = [];
-  for (const f of (frota || []).filter(f => f.ativo || visiveis.some((x: any) => String(x.v.frota_id) === String(f.id)))) {
-    const e = empilhar(visiveis.filter((x: any) => String(x.v.frota_id) === String(f.id)).map(barraDe));
+  for (const f of (frota || []).filter(f => f.ativo || visiveis.some((x: any) => String(x.v.frota_id) === String(f.id)) || reservasVisiveis.some(x => String(x.r.frota_id) === String(f.id)))) {
+    const e = empilhar([
+      ...visiveis.filter((x: any) => String(x.v.frota_id) === String(f.id)).map(barraDe),
+      ...reservasVisiveis.filter(x => String(x.r.frota_id) === String(f.id)).map(barraDaReserva),
+    ]);
     veiculos.push({ chave: 'v' + f.id, rotulo: f.apelido, sub: f.placa, ...e });
   }
   const semVeiculo = visiveis.filter((x: any) => !x.v.frota_id).map(barraDe);
@@ -68,5 +80,5 @@ export function montarAgenda(viagens: any[], frota: any[], inicio: string, dias:
     return { chave: 'p' + id, rotulo: nome, ...e };
   });
 
-  return { dias: diasDaAgenda(inicio, dias), veiculos, pessoas, total: visiveis.length };
+  return { dias: diasDaAgenda(inicio, dias), veiculos, pessoas, total: visiveis.length, totalReservas: reservasVisiveis.length };
 }
