@@ -133,7 +133,7 @@ export function erroDoPedidoFechado({ numero_pv, empresa }: any): string {
 }
 
 // ── Acompanhamento do operador (Fatia 3, 04/11/2026) ──
-// O CRM não tem um prazo de "lead esquecido"; o de 7 dias é o mesmo que o sistema já usa para a OS parada do SAC. A confirmar com o usuário.
+// O CRM não tem um prazo de "lead esquecido"; o de 7 dias é o mesmo que o sistema já usa para a OS parada do SAC. Confirmado pelo usuário em 04/11/2026.
 export const PRAZO_CARD_PARADO_DIAS = 7;
 const TIPOS_EM_ABERTO = ['estimativa', 'lead', 'enviado', 'aguardando_empenho'];
 export const estaEmAberto = (tipo: any) => TIPOS_EM_ABERTO.includes(String(tipo || ''));
