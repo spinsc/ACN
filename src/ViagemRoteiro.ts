@@ -6,7 +6,8 @@
 //
 // Regras (a confirmar com o usuário):
 //   • Anda-se até o limite de horas de direção por dia; ao completar o limite o dia acaba, no meio do trecho ou na própria parada, e o dia seguinte recomeça no horário de saída.
-//   • "Dias lá" de uma parada são dias INTEIROS de trabalho, a partir do dia seguinte ao da chegada; no fim do último, dorme-se lá e a saída é na manhã seguinte.
+//   • "Dias no local" de uma parada (regra mudada em 04/11/2026, pedido do usuário): o DIA DA CHEGADA CONTA como o dia 1 e a equipe sai no mesmo dia do último. "3 dias" = chega e
+//     trabalha no dia 1, dorme, trabalha no dia 2, dorme, trabalha no dia 3 e parte no fim dele (duas noites). Antes eram dias inteiros a partir do dia seguinte à chegada, com saída na manhã seguinte.
 //   • O tempo é só o de direção que a rota informa: sem almoço, abastecimento nem descanso. Os dias de calendário são corridos (sábado e domingo contam).
 //   • A quantidade de dias daqui é a que o orçamento usa (ViagemCalculo.ts): noites = dias − 1. Antes (22/10/2026) o orçamento somava "dias de estrada" e "dias lá" separados e
 //     contava um dia a menos quando a viagem de ida e a de volta cabiam em meio dia cada (3 h + 1 dia lá + 3 h dava 2 dias; agora dá 3, como realmente é).
@@ -66,11 +67,12 @@ export function montarRoteiro(v: any): Roteiro | null {
   const novoDia = () => { const d: DiaDoRoteiro = { n: dias.length + 1, data: v?.data_saida ? somarDias(String(v.data_saida), dias.length) : null, eventos: [], km: 0, minutosDirecao: 0 }; dias.push(d); return d; };
   let atual = novoDia();
   let usado = 0;   // minutos de direção já feitos hoje
+  let aposTrabalho = false;   // o dia em que a equipe sai de uma parada no fim do trabalho: a hora do relógio das chegadas seguintes não é conhecida (04/11/2026)
 
   const virarODia = (pernoite: string, e1: EventoDoRoteiro | null) => {
     atual.eventos.push({ tipo: 'pernoite', hora: null, texto: pernoite });
     if (dias.length >= LIMITE_DE_DIAS) { truncado = true; return false; }
-    atual = novoDia(); usado = 0;
+    atual = novoDia(); usado = 0; aposTrabalho = false;
     if (e1) atual.eventos.push(e1);
     return true;
   };
@@ -98,19 +100,19 @@ export function montarRoteiro(v: any): Roteiro | null {
 
     const ultima = i === pernas.length - 1;
     if (ultima) {
-      atual.eventos.push({ tipo: 'fim', hora: horaDoDia(saida + usado), texto: idaEVolta ? `Chegada de volta em ${para(p)} — fim da viagem` : `Chegada em ${para(p)} — fim da viagem` });
+      atual.eventos.push({ tipo: 'fim', hora: aposTrabalho ? null : horaDoDia(saida + usado), texto: idaEVolta ? `Chegada de volta em ${para(p)} — fim da viagem` : `Chegada em ${para(p)} — fim da viagem` });
       break;
     }
-    atual.eventos.push({ tipo: 'chegada', hora: horaDoDia(saida + usado), texto: `Chegada em ${para(p)}` });
+    atual.eventos.push({ tipo: 'chegada', hora: aposTrabalho ? null : horaDoDia(saida + usado), texto: `Chegada em ${para(p)}` });
 
     const diasLa = casa ? Math.max(0, Math.floor(num(paradas[i]?.dias))) : 0;
     const saidaDali = { tipo: 'saida' as const, hora: horaDoDia(saida), texto: `Saída de ${para(p)}` };
     if (diasLa > 0) {
-      for (let k = 1; k <= diasLa && !truncado; k++) {
-        const trabalho: EventoDoRoteiro = { tipo: 'trabalho', hora: null, texto: `Dia inteiro de trabalho em ${para(p)}${diasLa > 1 ? ` (${k} de ${diasLa})` : ''}` };
-        virarODia(`Pernoite em ${para(p)}`, trabalho);
-      }
-      if (!truncado) virarODia(`Pernoite em ${para(p)}`, saidaDali);
+      // o dia da chegada é o dia 1; os outros dias vêm depois de uma noite no local; a saída é no fim do último, sem pernoite a mais (regra de 04/11/2026)
+      const trabalho = (k: number): EventoDoRoteiro => ({ tipo: 'trabalho', hora: null, texto: `Dia de trabalho em ${para(p)}${diasLa > 1 ? ` (${k} de ${diasLa})` : ''}` });
+      atual.eventos.push(trabalho(1));
+      for (let k = 2; k <= diasLa && !truncado; k++) virarODia(`Pernoite em ${para(p)}`, trabalho(k));
+      if (!truncado) { atual.eventos.push({ tipo: 'saida', hora: null, texto: `Saída de ${para(p)} no fim do dia de trabalho` }); aposTrabalho = true; }
     } else if (usado >= limite) {
       virarODia(`Pernoite em ${para(p)}`, saidaDali);
     }

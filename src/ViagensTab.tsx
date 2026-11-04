@@ -11,26 +11,29 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
-import { confirmar } from './Feedback';
+import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { logChange } from './AuditSystem';
 import { lerValorDigitado } from './LerValor';
 import { ehAdminOuGerente } from './utils/permissoes';
-import { CabecalhoTela, Botao, Selo, Faixa, Chips } from './Interface';
+import { CabecalhoTela, Botao, Selo, Faixa, Chips, MenuAcoes, hojeISO } from './Interface';
+import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
 import { buscarEndereco, buscarVariosEnderecos, linhasDeEnderecos, calcularRota, nomeCurto, assinaturaDoRoteiro } from './ViagemRota';
 import { CUSTOS_PADRAO, calcularViagem, fmtKm, fmtHoras, fmtReais, textoDoOrcamento, textoDoRoteiro, dataComDiaDaSemana } from './ViagemCalculo';
 import { montarRoteiro } from './ViagemRoteiro';
 import {
+  COLUNAS_VIAGEM, statusDaViagem, colunaDaViagem, rotuloDoStatus, movimentosDaViagem, movimentoParaAColuna, faltaParaMover, patchDoMovimento, entradaDoMovimento, entradaDeAlteracao,
+  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca,
+} from './ViagemFluxo';
+import type { Movimento } from './ViagemFluxo';
+import {
   mdiPlus, mdiClose, mdiArrowUp, mdiArrowDown, mdiMagnify, mdiContentSaveOutline, mdiContentCopy, mdiPrinterOutline,
-  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh,
+  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew,
 } from '@mdi/js';
 
-const STATUS_VIAGEM: Record<string, [string, string]> = {
-  rascunho: ['Rascunho', 'neutro'], orcada: ['Orçada', 'info'], aprovada: ['Aprovada', 'ok'], realizada: ['Realizada', 'ok'], cancelada: ['Cancelada', 'erro'],
-};
 const novoId = () => Math.random().toString(36).slice(2, 8);
 const diaBR = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—');
-const viagemVazia = () => ({ titulo: '', status: 'rascunho', data_saida: '', pessoas: 1, vinculo: '', origem: null, paradas: [], ida_e_volta: true, otimizar_ordem: true, rota: null, custos: { ...CUSTOS_PADRAO } });
+const viagemVazia = () => ({ titulo: '', status: 'aberta', data_saida: '', pessoas: 1, vinculo: '', origem: null, paradas: [], ida_e_volta: true, otimizar_ordem: true, rota: null, custos: { ...CUSTOS_PADRAO } });
 
 // ── peças pequenas ───────────────────────────────────────────────────────────
 
@@ -202,6 +205,8 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
   const roteiro = useMemo(() => montarRoteiro(v), [v]);
   const assinaturaAtual = assinaturaDoRoteiro(v.origem, v.paradas, v.ida_e_volta, v.otimizar_ordem);
   const rotaVelha = !!v.rota && v.rota.assinatura !== assinaturaAtual;
+  const coluna = colunaDaViagem(inicial || v);   // a etapa que está gravada (a pessoa não a troca no formulário: ela passa pelos botões do rodapé)
+  const passos = movimentosDaViagem(inicial || v, currentUser);
   const podeApagar = !!v.id && (ehAdminOuGerente(currentUser) || String(v.criado_por_nome || '') === String(currentUser?.nome || currentUser?.email || ''));
 
   const mover = (i: number, d: number) => setV((x: any) => {
@@ -225,23 +230,49 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
     finally { setCalculando(false); }
   };
 
-  const salvar = async () => {
+  /** Grava a viagem. Com `mov`, grava junto a passagem de coluna (um só passo: ou tudo ou nada), com a conferência do que falta e o motivo quando a passagem pede. */
+  const salvar = async (mov?: Movimento) => {
     if (salvando) return;
-    if (!String(v.titulo || '').trim()) { alert('Dê um título à viagem.'); return; }
-    if (rotaVelha && !await confirmar('O roteiro mudou depois do último cálculo: o km, o tempo e os custos gravados são os da rota ANTIGA.\n\nSalvar mesmo assim? (Para atualizar, cancele e use "Calcular rota".)')) return;
+    if (!String(v.titulo || '').trim()) { mostrarAviso('Dê um título à viagem.', 'atencao'); return; }
+    if (mov) {
+      const falta = faltaParaMover(v, mov.para);
+      if (falta.length) { mostrarAviso(`Não foi possível mandar para "${rotuloDoStatus(mov.para)}": falta ${falta.join(', ')}.`); return; }
+    }
+    let motivo: string | null = null;
+    if (mov?.pedeMotivo) {
+      const t = await pedirTexto(`${mov.rotulo}: qual o motivo? (obrigatório)`);
+      if (t === null) return;
+      if (!t.trim()) { mostrarAviso('Não foi possível passar a viagem: o motivo é obrigatório.'); return; }
+      motivo = t.trim();
+    }
+    if (!mov && rotaVelha && !await confirmar('O roteiro mudou depois do último cálculo: o km, o tempo e os custos gravados são os da rota ANTIGA.\n\nSalvar mesmo assim? (Para atualizar, cancele e use "Calcular rota".)')) return;
     setSalvando(true);
     const agora = new Date().toISOString();
     const por = currentUser?.nome || currentUser?.email || null;
-    const linha = {
-      titulo: String(v.titulo).trim(), status: v.status, data_saida: v.data_saida || null, pessoas: Math.max(1, Math.floor(Number(v.pessoas) || 1)),
+    const linha: any = {
+      titulo: String(v.titulo).trim(), data_saida: v.data_saida || null, pessoas: Math.max(1, Math.floor(Number(v.pessoas) || 1)),
       vinculo: String(v.vinculo || '').trim() || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
       rota: v.rota, custos: v.custos, km_total: r.temRota ? r.km : null, horas_viagem: r.temRota ? r.horasDirecao : null, total_custo: r.custoTotal, total_orcamento: r.orcamento,
     };
+    // o histórico: a criação, a passagem de coluna e, se a viagem já saiu de Aberta, o rastro de que o roteiro ou o valor mudou
+    let historico: any[] = Array.isArray(inicial?.historico) ? [...inicial.historico] : [];
+    if (!v.id) historico.push({ em: agora, por, de: '', para: 'aberta', nota: 'Viagem criada.' });
+    if (mov) {
+      const p = patchDoMovimento(v.id ? inicial : { ...v, status: 'aberta' }, mov, por, motivo, agora);
+      Object.assign(linha, { status: p.status, status_desde: p.status_desde });
+      historico.push(p.historico[p.historico.length - 1]);
+    } else if (v.id && statusDaViagem(inicial) !== 'aberta') {
+      const mudouRoteiro = JSON.stringify([inicial.origem, inicial.paradas, inicial.ida_e_volta]) !== JSON.stringify([v.origem, v.paradas, v.ida_e_volta]);
+      const mudouValor = Math.round(Number(inicial.total_orcamento || 0) * 100) !== Math.round(Number(r.orcamento || 0) * 100);
+      if (mudouRoteiro || mudouValor) historico.push(entradaDeAlteracao(inicial, inicial.total_orcamento, r.orcamento, por, agora));
+    }
+    linha.historico = historico;
+    // a gravação de quem passa de coluna só vale se a viagem ainda está na coluna que a pessoa viu (duas pessoas não passam a mesma viagem)
     const { data, error } = v.id
-      ? await supabase.from('viagens').update({ ...linha, atualizado_em: agora, atualizado_por_nome: por }).eq('id', v.id).select('id').maybeSingle()
-      : await supabase.from('viagens').insert([{ ...linha, criado_por_nome: por, atualizado_por_nome: por }]).select('id').single();
+      ? await (mov ? supabase.from('viagens').update({ ...linha, atualizado_em: agora, atualizado_por_nome: por }).eq('id', v.id).eq('status', inicial.status) : supabase.from('viagens').update({ ...linha, atualizado_em: agora, atualizado_por_nome: por }).eq('id', v.id)).select('id').maybeSingle()
+      : await supabase.from('viagens').insert([{ ...linha, status: linha.status || 'aberta', status_desde: linha.status_desde || agora, criado_por_nome: por, atualizado_por_nome: por }]).select('id').single();
     setSalvando(false);
-    if (error || !data) { alert('Não foi possível salvar a viagem: ' + (error?.message || 'o banco não confirmou a gravação')); return; }
+    if (error || !data) { mostrarAviso('Não foi possível salvar a viagem: ' + (error?.message || (mov ? 'ela já mudou de coluna: feche e abra de novo' : 'o banco não confirmou a gravação'))); return; }
     logChange({ module: 'viagens', entityType: 'viagens', entityId: data.id, changeType: v.id ? 'UPDATE' : 'INSERT', oldRow: v.id ? inicial : null, newRow: { ...linha }, user: currentUser });
     aoSalvar();
   };
@@ -288,8 +319,8 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
               <div className="acn-vg-campo acn-vg-largo"><label className="acn-label">Ligada a (OP, PV, licitação…)</label>
                 <input className="acn-input" aria-label="Ligada a" placeholder="Opcional: número da OP, do PV ou da licitação" value={v.vinculo || ''} onChange={e => set('vinculo', e.target.value)} /></div>
             </div>
-            <div className="acn-vg-campo"><label className="acn-label">Situação</label>
-              <Chips ativo={v.status} onChange={(id: string) => set('status', id)} rotulo="Situação da viagem" itens={Object.entries(STATUS_VIAGEM).map(([id, [rotulo]]) => ({ id, rotulo }))} /></div>
+            <div className="acn-vg-campo"><label className="acn-label">Etapa</label>
+              <div className="acn-vg-etapa"><Selo familia={coluna.familia} ponto={false} title={coluna.ajuda}>{coluna.rotulo}</Selo><span className="acn-ajuda">{coluna.ajuda} Para mudar de etapa use os botões no rodapé.</span></div></div>
           </div>
 
           <div className="acn-quadro">
@@ -306,7 +337,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
                 <div key={p.id} className="acn-vg-parada">
                   <span className="acn-vg-n">{i + 1}</span>
                   <span className="acn-vg-parada-nome" title={p.texto}>{nomeCurto(p.texto)}</span>
-                  <div className="acn-vg-parada-dias"><CampoNumero rotulo="" valor={p.dias || 0} inteiro sufixo="dia(s) lá" onChange={(n: number) => mudarParada(p.id, 'dias', Math.max(0, n))} /></div>
+                  <div className="acn-vg-parada-dias"><CampoNumero rotulo="" valor={p.dias || 0} inteiro sufixo="dia(s) no local" onChange={(n: number) => mudarParada(p.id, 'dias', Math.max(0, n))} /></div>
                   <Botao variante="discreto" pequeno icone={mdiArrowUp} aria-label={`Subir a parada ${i + 1}`} title="Subir" disabled={i === 0} onClick={() => mover(i, -1)} />
                   <Botao variante="discreto" pequeno icone={mdiArrowDown} aria-label={`Descer a parada ${i + 1}`} title="Descer" disabled={i === v.paradas.length - 1} onClick={() => mover(i, 1)} />
                   <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Tirar a parada ${i + 1}`} title="Tirar" onClick={() => set('paradas', v.paradas.filter((x: any) => x.id !== p.id))} />
@@ -314,7 +345,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
               ))}
               <BuscaDeEndereco rotulo="Buscar uma parada" placeholder="Cidade ou endereço da parada, ex.: Campinas, SP" onEscolher={(p: any) => set('paradas', [...v.paradas, { ...p, dias: 0 }])} />
               <ColarEnderecos onAdicionar={(lista: any[]) => setV((x: any) => ({ ...x, paradas: [...x.paradas, ...lista] }))} />
-              <div className="acn-ajuda">"Dias lá" são dias inteiros de trabalho no destino, a partir do dia seguinte à chegada; o roteiro dorme lá e sai na manhã seguinte.</div>
+              <div className="acn-ajuda">"Dias no local" contam o dia da chegada como o dia 1: com 3 dias a equipe chega e trabalha no dia 1, dorme lá duas noites e sai no fim do dia 3.</div>
             </div>
 
             <div className="acn-vg-opcoes">
@@ -411,9 +442,28 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
               <Botao pequeno icone={mdiPrinterOutline} onClick={() => abrirImpressao(v, r)}>Imprimir</Botao>
             </div>
           </div>
+
+          {(v.historico || []).length > 0 && (
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">HISTÓRICO DA VIAGEM</div>
+              <ul className="acn-vg-hist">
+                {[...v.historico].reverse().map((h: any, i: number) => (
+                  <li key={i}>
+                    <span className="acn-num acn-vg-hist-quando">{new Date(h.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    <span>{h.por || 'sistema'}</span>
+                    <span>{h.nota ? h.nota : `${h.de ? rotuloDoStatus(h.de) + ' → ' : ''}${rotuloDoStatus(h.para)}`}{h.motivo ? ` — ${h.motivo}` : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <div className="acn-modal-rodape">
-          <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar viagem'}</Botao>
+          <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvando} onClick={() => salvar()}>{salvando ? 'Salvando…' : 'Salvar viagem'}</Botao>
+          {passos.map(m => (
+            <Botao key={m.para} variante={m.perigo ? 'perigo-sec' : m.sentido === 'avanca' ? 'secundario' : 'discreto'} icone={m.sentido === 'avanca' ? mdiArrowRight : undefined} disabled={salvando}
+              title={'Grava a viagem e a passa para ' + rotuloDoStatus(m.para)} onClick={() => salvar(m)}>{m.rotulo}</Botao>
+          ))}
           <Botao onClick={aoFechar} disabled={salvando}>Fechar</Botao>
           {podeApagar && <Botao variante="perigo-sec" icone={mdiTrashCanOutline} className="acn-vg-apagar" disabled={salvando} onClick={apagar}>Apagar</Botao>}
         </div>
@@ -423,51 +473,198 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
   );
 }
 
-// ── a lista ──────────────────────────────────────────────────────────────────
+// ── passar a viagem de coluna (pelo quadro, pelo menu ou arrastando) ──────────
+/** Passa a viagem para outra coluna: confere o que falta, pede o motivo quando a passagem pede e só grava se ela ainda está na coluna que a pessoa viu. */
+async function moverViagem(v: any, m: Movimento, currentUser: any): Promise<boolean> {
+  const falta = faltaParaMover(v, m.para);
+  if (falta.length) { mostrarAviso(`Não foi possível mandar "${v.titulo}" para "${rotuloDoStatus(m.para)}": falta ${falta.join(', ')}. Abra a viagem para completar.`); return false; }
+  let motivo: string | null = null;
+  if (m.pedeMotivo) {
+    const t = await pedirTexto(`${m.rotulo} — "${v.titulo}": qual o motivo? (obrigatório)`);
+    if (t === null) return false;
+    if (!t.trim()) { mostrarAviso('Não foi possível passar a viagem: o motivo é obrigatório.'); return false; }
+    motivo = t.trim();
+  }
+  const agora = new Date().toISOString();
+  const por = currentUser?.nome || currentUser?.email || null;
+  const p = patchDoMovimento(v, m, por, motivo, agora);
+  const { data, error } = await supabase.from('viagens').update({ ...p, atualizado_em: agora, atualizado_por_nome: por }).eq('id', v.id).eq('status', v.status).select('id');
+  if (error || !data?.length) { mostrarAviso('Não foi possível passar a viagem: ' + (error?.message || 'ela já mudou de coluna; atualize a tela')); return false; }
+  logChange({ module: 'viagens', entityType: 'viagens', entityId: v.id, changeType: 'UPDATE', oldRow: { status: v.status }, newRow: { status: p.status, motivo }, user: currentUser });
+  mostrarAviso(`"${v.titulo}" agora está em ${rotuloDoStatus(m.para)}.`, 'ok');
+  return true;
+}
+
+const resumoRoteiro = (v: any) => [v.origem?.texto, ...(v.paradas || []).map((p: any) => p.texto)].filter(Boolean).map(nomeCurto).join(' → ') + (v.ida_e_volta && v.origem ? ' → volta' : '');
+/** O recado do dia da saída: atrasada (vermelho), hoje, amanhã ou em N dias. Viagem que já saiu não leva recado. */
+function recadoDaSaida(v: any, hoje: string): { texto: string; atraso: boolean } | null {
+  const st = statusDaViagem(v);
+  if (st === 'andamento' || st === 'finalizada' || st === 'nao_aprovada') return null;
+  const d = diasParaSair(v, hoje);
+  if (d === null) return null;
+  if (saidaAtrasada(v, hoje)) return { texto: `Saída atrasada há ${-d} dia(s)`, atraso: true };
+  return { texto: d === 0 ? 'Sai hoje' : d === 1 ? 'Sai amanhã' : `Sai em ${d} dias`, atraso: false };
+}
+const motivoDaRecusa = (v: any) => [...(v.historico || [])].reverse().find((h: any) => h.para === 'nao_aprovada')?.motivo || null;
+
+function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
+  const passos: Movimento[] = movimentosDaViagem(v, currentUser);
+  const proximo = passos.find(m => m.sentido === 'avanca');
+  const recado = recadoDaSaida(v, hoje);
+  const r = v.rota ? calcularViagem(v) : null;
+  const st = statusDaViagem(v);
+  const parado = !['finalizada', 'nao_aprovada'].includes(st) ? diasNaColuna(v) : 0;
+  const recusa = st === 'nao_aprovada' ? motivoDaRecusa(v) : null;
+  return (
+    <div className="acn-vg-kcard" data-viagem={v.id} draggable={passos.length > 0}
+      onDragStart={e => { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; }}
+      onClick={() => aoAbrir(v)}>
+      <div className="acn-vg-card-cab">
+        <strong>{v.titulo}</strong>
+        <span onClick={e => e.stopPropagation()}>
+          <MenuAcoes itens={[
+            { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => aoAbrir(v) },
+            ...passos.map(m => ({ rotulo: m.rotulo, onClick: () => aoMover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
+          ]} />
+        </span>
+      </div>
+      <div className="acn-vg-card-rota">{resumoRoteiro(v) || 'Roteiro ainda não montado'}</div>
+      <div className="acn-vg-card-meta">
+        <span>{diaBR(v.data_saida)}</span>
+        {r && r.dias > 0 && <span>{r.dias} dia(s)</span>}
+        {v.km_total != null && <span>{fmtKm(v.km_total)}</span>}
+        {v.vinculo && <span>{v.vinculo}</span>}
+      </div>
+      {(recado || parado >= 3) && (
+        <div className="acn-vg-card-meta">
+          {recado && <Selo familia={recado.atraso ? 'erro' : 'neutro'} ponto={false}>{recado.texto}</Selo>}
+          {parado >= 3 && <span className="acn-vg-parada-ha" title="Dias na etapa atual">há {parado} dias nesta etapa</span>}
+        </div>
+      )}
+      {recusa && <div className="acn-vg-card-recusa">Motivo: {recusa}</div>}
+      <div className="acn-vg-card-pe">
+        <span className="acn-vg-card-valor acn-num">{v.total_orcamento != null && Number(v.total_orcamento) > 0 ? fmtReais(v.total_orcamento) : 'sem valor'}</span>
+        {proximo && <span onClick={e => e.stopPropagation()}><Botao pequeno className="acn-vg-passo" icone={mdiArrowRight} onClick={() => aoMover(v, proximo)}>{proximo.rotulo}</Botao></span>}
+      </div>
+    </div>
+  );
+}
+
+// ── a tela: quadro, lista e busca ────────────────────────────────────────────
+const FILTROS_DE_SAIDA = [
+  { id: 'todas', rotulo: 'Todas as datas' }, { id: 'atrasadas', rotulo: 'Saída atrasada' }, { id: 'semana', rotulo: 'Saem em 7 dias' }, { id: 'sem_data', rotulo: 'Sem data' },
+];
+
 export default function ViagensTab({ currentUser }: any) {
   const [lista, setLista] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-  const [filtro, setFiltro] = useState('todas');
+  const [visao, setVisao] = useState('quadro');
+  const [busca, setBusca] = useState('');
+  const [saida, setSaida] = useState('todas');
   const [editando, setEditando] = useState<any | null>(null);
+  const [soltarEm, setSoltarEm] = useState<string | null>(null);   // a coluna sobre a qual o cartão está sendo arrastado
+  const hoje = hojeISO();
+  const emAcao = React.useRef(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
-    const { data, error } = await supabase.from('viagens').select('*').order('data_saida', { ascending: false, nullsFirst: true }).order('criado_em', { ascending: false });
+    const { data, error } = await supabase.from('viagens').select('*').order('data_saida', { ascending: true, nullsFirst: false }).order('criado_em', { ascending: false });
     if (error) { setErro(error.message); setCarregando(false); return; }   // a lista que já estava na tela fica; a faixa diz o motivo
     setErro(''); setLista(data || []); setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const visiveis = lista.filter(v => filtro === 'todas' || v.status === filtro);
-  const resumoRoteiro = (v: any) => [v.origem?.texto, ...(v.paradas || []).map((p: any) => p.texto)].filter(Boolean).map(nomeCurto).join(' → ') + (v.ida_e_volta && v.origem ? ' → volta' : '');
+  const passaNaSaida = (v: any) => {
+    if (saida === 'todas') return true;
+    if (saida === 'sem_data') return !v.data_saida;
+    if (saida === 'atrasadas') return saidaAtrasada(v, hoje);
+    const d = diasParaSair(v, hoje);
+    return d !== null && d >= 0 && d <= 7 && !['andamento', 'finalizada', 'nao_aprovada'].includes(statusDaViagem(v));
+  };
+  const visiveis = useMemo(() => lista.filter(v => combinaBusca(textoParaBusca(v), busca) && passaNaSaida(v)), [lista, busca, saida, hoje]);
+  const contagemSaida = (id: string) => lista.filter(v => combinaBusca(textoParaBusca(v), busca) && (id === 'todas' ? true : id === 'sem_data' ? !v.data_saida : id === 'atrasadas' ? saidaAtrasada(v, hoje)
+    : (() => { const d = diasParaSair(v, hoje); return d !== null && d >= 0 && d <= 7 && !['andamento', 'finalizada', 'nao_aprovada'].includes(statusDaViagem(v)); })())).length;
+
+  const mover = async (v: any, m: Movimento) => {
+    if (emAcao.current) return;
+    emAcao.current = true;
+    try { if (await moverViagem(v, m, currentUser)) await carregar(); } finally { emAcao.current = false; }
+  };
+  const soltar = (e: React.DragEvent, colunaId: string) => {
+    e.preventDefault(); setSoltarEm(null);
+    const v = lista.find(x => x.id === e.dataTransfer.getData('text/plain'));
+    if (!v) return;
+    const { movimento, porque } = movimentoParaAColuna(v, colunaId, currentUser);
+    if (movimento) mover(v, movimento);
+    else if (porque) mostrarAviso(porque, 'atencao');
+  };
 
   return (
     <div className="acn-vg">
-      <CabecalhoTela titulo="Viagens" subtitulo="Roteiro, km, tempo, hospedagem, pedágios e orçamento de cada viagem"
+      <CabecalhoTela titulo="Viagens" subtitulo="Do roteiro e orçamento à volta da equipe: cada viagem anda pelo quadro"
         acoes={<Botao variante="primario" icone={mdiPlus} onClick={() => setEditando(viagemVazia())}>Nova viagem</Botao>} />
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as viagens ({erro}).</Faixa>}
-      <Chips ativo={filtro} onChange={setFiltro} rotulo="Filtrar por situação"
-        itens={[{ id: 'todas', rotulo: `Todas (${lista.length})` }, ...Object.entries(STATUS_VIAGEM).map(([id, [rotulo]]) => ({ id, rotulo: `${rotulo} (${lista.filter(v => v.status === id).length})` }))]} />
-      {carregando && !lista.length && <div className="acn-ajuda">Carregando viagens…</div>}
-      {!carregando && !erro && !visiveis.length && <div className="acn-ajuda">{lista.length ? 'Nenhuma viagem nesta situação.' : 'Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.'}</div>}
-      <div className="acn-vg-lista">
-        {visiveis.map(v => (
-          <button key={v.id} type="button" className="acn-vg-card" onClick={() => setEditando(v)}>
-            <div className="acn-vg-card-cab">
-              <strong>{v.titulo}</strong>
-              <Selo familia={STATUS_VIAGEM[v.status]?.[1] || 'neutro'} ponto={false}>{STATUS_VIAGEM[v.status]?.[0] || v.status}</Selo>
-            </div>
-            <div className="acn-vg-card-rota">{resumoRoteiro(v) || 'Roteiro ainda não montado'}</div>
-            <div className="acn-vg-card-meta">
-              <span>{diaBR(v.data_saida)}</span>
-              {v.km_total != null && <span>{fmtKm(v.km_total)} · {fmtHoras(v.horas_viagem)}</span>}
-              {v.vinculo && <span>{v.vinculo}</span>}
-              <span className="acn-vg-card-valor acn-num">{v.total_orcamento != null && Number(v.total_orcamento) > 0 ? fmtReais(v.total_orcamento) : 'sem valor'}</span>
-            </div>
-          </button>
-        ))}
+      <div className="acn-vg-barra">
+        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }]} />
+        <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />
+        <label className="acn-vg-pesquisa">
+          <Icone path={mdiMagnify} size={16} />
+          <input className="acn-input" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar título, cidade, OP/PV ou quem criou" aria-label="Buscar viagem" />
+        </label>
       </div>
+      {carregando && !lista.length && <div className="acn-ajuda">Carregando viagens…</div>}
+      {!carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
+      {!carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
+
+      {visao === 'quadro' ? (
+        <div className="acn-vg-quadro">
+          {COLUNAS_VIAGEM.map(col => {
+            const cartoes = visiveis.filter(v => statusDaViagem(v) === col.id);
+            return (
+              <section key={col.id} className={'acn-vg-col' + (soltarEm === col.id ? ' acn-vg-col-alvo' : '')} data-coluna={col.id}
+                onDragOver={e => { e.preventDefault(); if (soltarEm !== col.id) setSoltarEm(col.id); }} onDragLeave={() => setSoltarEm(null)} onDrop={e => soltar(e, col.id)}>
+                <header className="acn-vg-col-cab" title={col.ajuda}><span>{col.rotulo}</span><em>{cartoes.length}</em></header>
+                <div className="acn-vg-col-corpo">
+                  {cartoes.length === 0 ? <div className="acn-vg-col-vazia">Nenhuma</div>
+                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} />)}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="acn-vg-tabela-caixa">
+          <table className="acn-tabela">
+            <thead><tr><th>Viagem</th><th>Etapa</th><th>Saída</th><th>Roteiro</th><th className="dir">Dias</th><th className="dir">Distância</th><th className="dir">Orçamento</th><th>Ligada a</th><th /></tr></thead>
+            <tbody>
+              {visiveis.map(v => {
+                const col = colunaDaViagem(v);
+                const recado = recadoDaSaida(v, hoje);
+                const r = v.rota ? calcularViagem(v) : null;
+                return (
+                  <tr key={v.id} className="acn-vg-linha-tab" onClick={() => setEditando(v)}>
+                    <td><strong>{v.titulo}</strong></td>
+                    <td><Selo familia={col.familia} ponto={false}>{col.rotulo}</Selo></td>
+                    <td className={recado?.atraso ? 'acn-vg-atrasado' : ''}>{diaBR(v.data_saida)}{recado ? <div className="acn-ajuda">{recado.texto}</div> : null}</td>
+                    <td className="acn-vg-card-rota">{resumoRoteiro(v) || '—'}</td>
+                    <td className="dir acn-num">{r && r.dias > 0 ? r.dias : '—'}</td>
+                    <td className="dir acn-num">{v.km_total != null ? fmtKm(v.km_total) : '—'}</td>
+                    <td className="dir acn-num">{v.total_orcamento != null && Number(v.total_orcamento) > 0 ? fmtReais(v.total_orcamento) : '—'}</td>
+                    <td>{v.vinculo || '—'}</td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <MenuAcoes itens={[
+                        { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => setEditando(v) },
+                        ...movimentosDaViagem(v, currentUser).map(m => ({ rotulo: m.rotulo, onClick: () => mover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
+                      ]} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {editando && <EditorDeViagem key={editando.id || 'nova'} inicial={editando} currentUser={currentUser} aoFechar={() => setEditando(null)} aoSalvar={() => { setEditando(null); carregar(); }} />}
     </div>
   );
