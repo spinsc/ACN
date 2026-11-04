@@ -206,7 +206,7 @@ export function DossieOp({ op, dossieCarregado = null }) {
                 {origem.oportunidade && <Campo rot="Oportunidade (CRM)">{origem.oportunidade.titulo}</Campo>}
                 {origem.oportunidade && <Campo rot="Pedido de venda">{origem.oportunidade.numero_pv || '—'}</Campo>}
                 {origem.oportunidade && <Campo rot="Vendedor">{origem.oportunidade.responsavel_nome}</Campo>}
-                {origem.licitacao && <Campo rot="Licitação">{origem.licitacao.numero_processo}</Campo>}
+                {origem.licitacao && <Campo rot="Licitação">{origem.licitacao.numero}</Campo>}
                 {origem.licitacao && <Campo rot="Órgão">{origem.licitacao.orgao}</Campo>}
                 {origem.pedido && <Campo rot="Empenho / pedido">{origem.pedido.documento || '—'}</Campo>}
                 {origem.pedido && <Campo rot="Qtd. do empenho">{origem.pedido.quantidade}</Campo>}
@@ -367,7 +367,7 @@ async function gerarPdfDossie(d, setGerando) {
     tabela(['Item', 'Informação'], [
       ['Oportunidade (CRM)', origem.oportunidade?.titulo || '—'],
       ['Pedido de venda', origem.oportunidade?.numero_pv || '—'],
-      ['Licitação', origem.licitacao ? `${origem.licitacao.numero_processo || ''} — ${origem.licitacao.orgao || ''}` : '—'],
+      ['Licitação', origem.licitacao ? `${origem.licitacao.numero || ''} —${origem.licitacao.orgao || ''}` : '—'],
       ['Empenho / pedido', origem.pedido ? `${origem.pedido.documento || 's/ documento'} — ${origem.pedido.quantidade} un. em ${fmtD(origem.pedido.data_pedido)}` : '—'],
       ['Formação de preços', origem.formacoes.length
         ? origem.formacoes.map(f => `${f.nome || 'sem nome'} v${f.versao || 1}${f.vencedora ? ' (oficial)' : ''}`).join('; ') : '—'],

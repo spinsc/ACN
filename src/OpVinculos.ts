@@ -96,7 +96,9 @@ export async function origemDaOp(op: any) {
 
   const [licitacoes, vinculosFormacao] = await Promise.all([
     licitacaoId
-      ? tentar(supabase.from('licitacoes_basico').select('id,numero_processo,orgao,objeto,status,operador,analista_nome')
+      // 04/11/2026: a visão básica (a tabela cheia fica vazia sem a aba Licitações/CRM, onda 3c) tem
+      // `numero` e `objeto_principal`; `numero_processo` e `objeto` não existem e a consulta falhava calada
+      ? tentar(supabase.from('licitacoes_basico').select('id,numero,nome_projeto,orgao,objeto_principal,status,operador,analista_nome')
           .eq('id', licitacaoId).maybeSingle())
       : Promise.resolve([]),
     // a formação de preços se liga ao PROCESSO (card do CRM ou licitação), não à OP
