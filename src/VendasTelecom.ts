@@ -12,6 +12,7 @@
 import { conferirContatoDoCard } from './ContatoObrigatorio';
 import { lerValorDigitado } from './LerValor';
 import { TIPO_RADIO } from './SeparacaoEnvio';
+import { diaISO } from './Interface';
 
 export const SETOR_VENDA_TELECOM = 'telecom';
 
@@ -129,4 +130,61 @@ export function erroDoPedidoFechado({ numero_pv, empresa }: any): string {
   if (!/^[0-9]{4}$/.test(String(numero_pv || '').trim())) return 'Este contato ainda não tem o PV. Envie a proposta primeiro: é nela que o PV é atribuído.';
   if (!EMPRESAS_DA_VENDA.some(e => e.id === empresa)) return 'Escolha a empresa que vai faturar: ACN ou Detech.';
   return '';
+}
+
+// ── Acompanhamento do operador (Fatia 3, 04/11/2026) ──
+// O CRM não tem um prazo de "lead esquecido"; o de 7 dias é o mesmo que o sistema já usa para a OS parada do SAC. A confirmar com o usuário.
+export const PRAZO_CARD_PARADO_DIAS = 7;
+const TIPOS_EM_ABERTO = ['estimativa', 'lead', 'enviado', 'aguardando_empenho'];
+export const estaEmAberto = (tipo: any) => TIPOS_EM_ABERTO.includes(String(tipo || ''));
+
+const emDias = (dia: string) => { const [a, m, d] = dia.split('-').map(Number); return Math.round(Date.UTC(a, m - 1, d) / 86400000); };
+const diaDaData = (v: any): string => { const d = new Date(v); return isNaN(d.getTime()) ? '' : diaISO(d); };
+
+/** Há quantos dias o card não é mexido (última gravação do card; a anotação do andamento também a renova). null = sem data para contar. */
+export function diasSemMovimento(card: any, hoje: string): number | null {
+  const dia = diaDaData(card?.atualizado_em || card?.criado_em); if (!dia) return null;
+  return Math.max(0, emDias(hoje) - emDias(dia));
+}
+
+/** Card parado: em aberto, sem movimento há 7 dias ou mais e SEM retorno combinado daqui para a frente (quem marcou o próximo contato não esqueceu o cliente). */
+export function cardParado(card: any, hoje: string, tipo: any): boolean {
+  if (!estaEmAberto(tipo)) return false;
+  const d = String(card?.prox_contato || '').slice(0, 10);
+  if (d && d >= hoje) return false;
+  const dias = diasSemMovimento(card, hoje);
+  return dias != null && dias >= PRAZO_CARD_PARADO_DIAS;
+}
+
+/** Retorno de hoje: card em aberto com o próximo contato marcado para o dia de hoje. */
+export const retornoDeHoje = (card: any, hoje: string, tipo: any) => estaEmAberto(tipo) && String(card?.prox_contato || '').slice(0, 10) === hoje;
+
+export const FOCOS = [
+  { id: 'todos', rotulo: 'Todos' },
+  { id: 'hoje', rotulo: 'Retornos de hoje' },
+  { id: 'atrasados', rotulo: 'Contato atrasado' },
+  { id: 'parados', rotulo: `Parados há ${PRAZO_CARD_PARADO_DIAS}+ dias` },
+];
+
+export function passaNoFoco(foco: string, card: any, hoje: string, tipo: any): boolean {
+  if (foco === 'hoje') return retornoDeHoje(card, hoje, tipo);
+  if (foco === 'atrasados') return contatoAtrasado(card, hoje, tipo);
+  if (foco === 'parados') return cardParado(card, hoje, tipo);
+  return true;
+}
+
+/** O motivo que o operador escreveu ao perder ou ao o cliente desistir (o card guarda em colunas diferentes). */
+export const motivoDoEncerramento = (card: any, tipo: any) => String((String(tipo) === 'desistencia' ? card?.motivo_desistencia : card?.motivo_perda) ?? '').trim();
+
+/** Relatório de perdas: as linhas do período (pelo dia em que o card foi encerrado), o valor que se deixou de vender e o total por motivo (mesmo texto, sem diferença de caixa). `dias` 0 = sem limite. */
+export function resumoDasPerdas(cards: any[], tipoDe: (c: any) => any, hoje: string, dias: number) {
+  const corte = dias > 0 ? emDias(hoje) - dias : null;
+  const linhas = cards.filter(c => ehEncerrado(tipoDe(c))).filter(c => {
+    if (corte == null) return true;
+    const d = diaDaData(c.atualizado_em || c.criado_em); return !!d && emDias(d) >= corte;
+  }).map(c => ({ card: c, tipo: tipoDe(c), motivo: motivoDoEncerramento(c, tipoDe(c)) || 'Sem motivo informado', quando: diaDaData(c.atualizado_em || c.criado_em), valor: Number(c.valor_registrado) || 0 }))
+    .sort((a, b) => b.quando.localeCompare(a.quando));
+  const grupos = new Map<string, { motivo: string; qtd: number; valor: number }>();
+  linhas.forEach(l => { const k = l.motivo.toLowerCase(); const g = grupos.get(k) || { motivo: l.motivo, qtd: 0, valor: 0 }; g.qtd++; g.valor += l.valor; grupos.set(k, g); });
+  return { linhas, total: linhas.length, valor: linhas.reduce((s, l) => s + l.valor, 0), porMotivo: [...grupos.values()].sort((a, b) => b.qtd - a.qtd || b.valor - a.valor) };
 }

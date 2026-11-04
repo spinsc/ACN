@@ -7086,3 +7086,8 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
 .acn-vtel-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 html body .modal-box.acn-modal-cadastro.acn-vtel-janela-larga { width: min(1680px, 98vw); max-width: 1680px; max-height: 96vh; }
 .modal-box.acn-vtel-janela-larga .acn-modal-corpo { overflow: auto; }
+.acn-vtel-perdas { display: flex; flex-direction: column; gap: 12px; }
+.acn-vtel-motivos { display: flex; flex-wrap: wrap; gap: 8px; }
+.acn-vtel-motivo { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--acn-line); border-radius: 8px; background: var(--acn-surface); font-size: 13px; }
+.acn-vtel-motivo strong { font-size: 18px; color: var(--acn-bad); }
+.acn-vtel-motivo em { font-style: normal; color: var(--acn-muted); }

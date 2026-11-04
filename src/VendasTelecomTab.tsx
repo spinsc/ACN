@@ -5,7 +5,7 @@
 // Comercial enxuto para o operador de vendas do Telecom (setor privado: shoppings, condomínios etc.). Trabalha nos MESMOS cards do CRM, marcados com
 // `setor_venda = 'telecom'` (regras em VendasTelecom.ts); o Comercial vê os mesmos cards no CRM. O operador: lança o contato, anota o andamento,
 // envia a proposta (com o PV, como no CRM), registra perda ou desistência, FECHA O PEDIDO (empresa que fatura) e LANÇA A OP pela janela Nova OP já preenchida
-// (rádio em envio de material, que cai na Separação e envio do Telecom; Fatia 2, 03/11/2026). O faturamento segue no Fiscal; a cotação pela Formação de Preços é o próximo passo.
+// (rádio em envio de material, que cai na Separação e envio do Telecom; Fatia 2, 03/11/2026). O faturamento segue no Fiscal; a cotação é a Formação de Preços aberta do card (04/11/2026) e o acompanhamento (retornos de hoje, parados, perdas e @menção no andamento) é a Fatia 3 (04/11/2026).
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
@@ -19,10 +19,12 @@ import Icone from './Icone';
 import { combinaBusca } from './SearchUtils';
 import { conferirContatoDoCard, mensagemContatoDoCard } from './ContatoObrigatorio';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { mdiPlus, mdiMagnify, mdiSendOutline, mdiOpenInNew, mdiCheck, mdiRefresh, mdiUndoVariant, mdiCloseCircleOutline, mdiAccountOffOutline, mdiCheckCircleOutline, mdiClipboardTextOutline, mdiCurrencyUsd } from '@mdi/js';
 import {
   COLUNAS_VENDAS, TEMPERATURAS, FORM_VAZIO, formDoCard, erroDoCard, camposDoCard, payloadDoCardNovo, colunaDoTipo, ehEncerrado, movimentosDoTipo,
   pvDe, erroDoEnvioDaProposta, contatoAtrasado, textoDoHistorico, PADROES_DA_OP_TELECOM, EMPRESAS_DA_VENDA, erroDoPedidoFechado,
+  FOCOS, passaNoFoco, cardParado, diasSemMovimento, resumoDasPerdas,
 } from './VendasTelecom';
 
 const reais = (v: any) => v == null || v === '' ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -35,6 +37,8 @@ export default function VendasTelecomTab({ currentUser }) {
   const [carregando, setCarregando] = useState(true);
   const [visao, setVisao] = useState('quadro');
   const [busca, setBusca] = useState('');
+  const [foco, setFoco] = useState('todos');          // Fatia 3: todos, retornos de hoje, contato atrasado ou parados
+  const [periodoPerdas, setPeriodoPerdas] = useState('90');
   const [janela, setJanela] = useState<any>(null);      // { card } — card null = contato novo
   const [enviar, setEnviar] = useState<any>(null);      // card que vai receber a proposta
   const [encerrar, setEncerrar] = useState<any>(null);  // { card, tipo: 'perda' | 'desistencia' }
@@ -102,10 +106,13 @@ export default function VendasTelecomTab({ currentUser }) {
   const estagioPorId = useMemo(() => new Map(estagios.map(e => [e.id, e])), [estagios]);
   const tipoDe = (c: any) => estagioPorId.get(c.estagio_id)?.tipo;
   const estagioDoTipo = (tipo: string) => estagios.find(e => e.tipo === tipo);
-  const visiveis = useMemo(() => cards.filter(c => combinaBusca([c.titulo, c.orgao, c.nome_contato, c.objeto_principal, c.numero_pv], busca)), [cards, busca]);
+  const buscados = useMemo(() => cards.filter(c => combinaBusca([c.titulo, c.orgao, c.nome_contato, c.objeto_principal, c.numero_pv], busca)), [cards, busca]);
+  const visiveis = useMemo(() => buscados.filter(c => passaNoFoco(foco, c, hoje, tipoDe(c))), [buscados, foco, hoje, estagios]);
   const doTipoColuna = (col: any) => visiveis.filter(c => col.tipos.includes(String(tipoDe(c) || '')) || (col.id === 'lead' && !estagioPorId.has(c.estagio_id)));
   const emAndamento = cards.filter(c => ['estimativa', 'lead', 'enviado', 'aguardando_empenho'].includes(String(tipoDe(c) || ''))).length;
   const atrasados = cards.filter(c => contatoAtrasado(c, hoje, tipoDe(c))).length;
+  const contagemDoFoco = (id: string) => cards.filter(c => passaNoFoco(id, c, hoje, tipoDe(c))).length;
+  const perdas = useMemo(() => resumoDasPerdas(buscados, tipoDe, hoje, Number(periodoPerdas)), [buscados, periodoPerdas, hoje, estagios]);
 
   const podeCrm = (currentUser?.abas_permitidas || []).includes('crm');
   const abrirNoCrm = (c: any) => {
@@ -156,6 +163,7 @@ export default function VendasTelecomTab({ currentUser }) {
   const Cartao = ({ c }) => {
     const tipo = tipoDe(c);
     const atrasado = contatoAtrasado(c, hoje, tipo);
+    const parado = cardParado(c, hoje, tipo);
     return (
       <div className="acn-vtel-card" data-teste="vtel-card" onClick={() => setJanela({ card: c })} role="button" tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter') setJanela({ card: c }); }}>
@@ -171,6 +179,7 @@ export default function VendasTelecomTab({ currentUser }) {
           {(cotacoesPorCard[c.id] || 0) > 0 && !ehEncerrado(tipo) && <Selo familia="info" ponto={false} title="Este contato já tem formação de preços: clique para abrir a cotação" onClick={e => { e.stopPropagation(); setCotar(c); }}>Cotação{cotacoesPorCard[c.id] > 1 ? ` (${cotacoesPorCard[c.id]} versões)` : ''}</Selo>}
           {(opsPorCard[c.id] || []).map(o => <Selo key={o} familia="ok" ponto={false} title="OP lançada a partir deste contato">OP {o}</Selo>)}
           {String(tipo) === 'ganho' && opsLidas && !(opsPorCard[c.id] || []).length && <Selo familia="erro" ponto={false} title="O pedido está fechado, mas nenhuma OP foi lançada ainda: use Lançar OP no menu">Sem OP</Selo>}
+          {parado && <Selo familia="erro" ponto={false} title="Ninguém mexeu neste contato e não há retorno marcado: ligue para o cliente ou registre a perda">Parado há {diasSemMovimento(c, hoje)} dias</Selo>}
           {c.temperatura && <Selo familia={c.temperatura === 'quente' ? 'erro' : c.temperatura === 'morno' ? 'atencao' : 'info'} ponto={false}>{TEMPERATURAS.find(t => t.id === c.temperatura)?.rotulo || c.temperatura}</Selo>}
           {String(tipo) === 'desistencia' && <Selo familia="neutro" ponto={false}>Desistiu</Selo>}
         </div>
@@ -186,7 +195,7 @@ export default function VendasTelecomTab({ currentUser }) {
   return (
     <div className="acn-vtel" data-teste="vendas-telecom">
       <div className="acn-vtel-topo">
-        <p className="acn-vtel-resumo">{carregando ? 'Carregando…' : `${emAndamento} contato(s) em andamento${atrasados ? ` · ${atrasados} com o contato atrasado` : ''}`}</p>
+        <p className="acn-vtel-resumo">{carregando ? 'Carregando…' : `${emAndamento} contato(s) em andamento${atrasados ? ` · ${atrasados} com o contato atrasado` : ''}${contagemDoFoco('parados') ? ` · ${contagemDoFoco('parados')} parado(s)` : ''}`}</p>
         <div className="acn-vtel-acoes">
           <Botao icone={mdiRefresh} onClick={() => carregar()} title="Ler de novo do banco">Atualizar</Botao>
           <Botao variante="primario" icone={mdiPlus} onClick={() => setJanela({ card: null })}>Novo contato</Botao>
@@ -196,7 +205,8 @@ export default function VendasTelecomTab({ currentUser }) {
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={() => carregar()}>Tentar de novo</Botao>}>Não consegui ler os contatos ({erro}). {cards.length ? 'A lista abaixo é a da última leitura.' : ''}</Faixa>}
 
       <div className="acn-vtel-barra">
-        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }]} />
+        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }, { id: 'perdas', rotulo: 'Perdas' }]} />
+        {visao !== 'perdas' && <Chips ativo={foco} onChange={setFoco} rotulo="Acompanhar" itens={FOCOS.map(f => ({ id: f.id, rotulo: f.id === 'todos' ? f.rotulo : `${f.rotulo} (${contagemDoFoco(f.id)})` }))} />}
         <label className="acn-vtel-busca">
           <Icone path={mdiMagnify} size={16} />
           <input className="acn-input" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente, assunto ou contato" aria-label="Buscar contato" />
@@ -207,7 +217,9 @@ export default function VendasTelecomTab({ currentUser }) {
         <div className="acn-vtel-vazio">Nenhum contato ainda. Use <strong>Novo contato</strong> para lançar o primeiro cliente do setor privado.</div>
       )}
 
-      {visao === 'quadro' ? (
+      {visao === 'perdas' ? (
+        <RelatorioDePerdas resumo={perdas} periodo={periodoPerdas} onPeriodo={setPeriodoPerdas} onAbrir={c => setJanela({ card: c })} />
+      ) : visao === 'quadro' ? (
         <div className="acn-vtel-quadro">
           {COLUNAS_VENDAS.map(col => {
             const lista = doTipoColuna(col);
@@ -241,7 +253,7 @@ export default function VendasTelecomTab({ currentUser }) {
                   </tr>
                 );
               })}
-              {!visiveis.length && <tr><td colSpan={8} className="acn-vtel-col-vazia">Nenhum contato{busca ? ' com essa busca' : ''}.</td></tr>}
+              {!visiveis.length && <tr><td colSpan={8} className="acn-vtel-col-vazia">Nenhum contato{busca ? ' com essa busca' : ''}{foco !== 'todos' ? ' neste filtro' : ''}.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -321,6 +333,12 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
       oportunidade_id: card.id, tipo: 'observacao', texto, usuario_nome: currentUser?.nome || currentUser?.email || 'Usuário', criado_em: agoraISO(),
     });
     if (error) { mostrarAviso('Não foi possível gravar a anotação: ' + error.message + '. O texto continua na caixa.', 'erro'); return; }
+    await salvarMencoes({
+      texto, mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || 'Sistema', contexto: 'crm', contextoId: String(card.id),
+      contextoDescricao: `Vendas do Telecom: ${card.orgao || card.titulo || '—'}`, campo: 'andamento_crm', abaDestino: 'crm',
+    });
+    // a anotação conta como movimento do contato: ele deixa de aparecer como parado
+    await supabase.from('crm_oportunidades').update({ atualizado_em: agoraISO() }).eq('id', card.id);
     setNota(''); await lerHistorico();
   });
 
@@ -362,7 +380,7 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
           {card && (
             <div className="acn-quadro" data-teste="vtel-andamento">
               <div className="acn-quadro-titulo">Andamento</div>
-              <textarea className="acn-input" rows={2} value={nota} placeholder="Anote a conversa, o que o cliente pediu, o que ficou combinado…" aria-label="Nova anotação" onChange={e => setNota(e.target.value)} />
+              <MencaoTextarea rows={2} value={nota} placeholder="Anote a conversa, o que o cliente pediu, o que ficou combinado… Use @ para chamar alguém." onChange={setNota} />
               <Botao pequeno icone={mdiCheck} disabled={!nota.trim()} onClick={anotar}>Salvar anotação</Botao>
               {erroHistorico && <Faixa tom="erro">Não consegui ler o andamento ({erroHistorico}).</Faixa>}
               <div className="acn-vtel-historico">
@@ -382,6 +400,41 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
           <Botao variante="primario" icone={mdiCheck} onClick={gravar} disabled={salvando}>{salvando ? 'Gravando…' : card ? 'Gravar' : 'Lançar contato'}</Botao>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Relatório de perdas: por que os contatos foram perdidos ou desistiram, no período escolhido ──
+function RelatorioDePerdas({ resumo, periodo, onPeriodo, onAbrir }) {
+  return (
+    <div className="acn-vtel-perdas" data-teste="vtel-perdas">
+      <div className="acn-vtel-barra">
+        <Chips ativo={periodo} onChange={onPeriodo} rotulo="Período" itens={[{ id: '30', rotulo: 'Últimos 30 dias' }, { id: '90', rotulo: 'Últimos 90 dias' }, { id: '0', rotulo: 'Tudo' }]} />
+        <span className="acn-vtel-resumo">{resumo.total} contato(s) encerrado(s){resumo.valor ? ` · ${reais(resumo.valor)} deixaram de ser vendidos` : ''}</span>
+      </div>
+      {!resumo.total ? <div className="acn-vtel-vazio">Nenhuma perda ou desistência neste período.</div> : (
+        <>
+          <div className="acn-vtel-motivos">
+            {resumo.porMotivo.map(m => (
+              <div key={m.motivo} className="acn-vtel-motivo"><strong>{m.qtd}</strong><span>{m.motivo}</span>{m.valor ? <em>{reais(m.valor)}</em> : null}</div>
+            ))}
+          </div>
+          <div className="acn-vtel-tabela-caixa">
+            <table className="acn-vtel-tabela">
+              <thead><tr><th>Quando</th><th>Cliente</th><th>Assunto</th><th>Situação</th><th>Motivo</th><th>Valor</th><th>Responsável</th></tr></thead>
+              <tbody>
+                {resumo.linhas.map(l => (
+                  <tr key={l.card.id} onClick={() => onAbrir(l.card)}>
+                    <td>{l.quando ? diaBR(l.quando) : '—'}</td><td><strong>{l.card.orgao || '—'}</strong></td><td>{l.card.titulo}</td>
+                    <td><Selo familia={String(l.tipo) === 'desistencia' ? 'neutro' : 'erro'} ponto={false}>{String(l.tipo) === 'desistencia' ? 'Desistiu' : 'Perdido'}</Selo></td>
+                    <td>{l.motivo}</td><td>{reais(l.card.valor_registrado) || '—'}</td><td>{l.card.responsavel_nome || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

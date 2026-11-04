@@ -27,8 +27,12 @@
 - **Limite a saber:** a ideia era restringir aos itens de telecom, mas o Cadastro de itens **não tem marca de telecom** (nenhum dos 4.429 itens ativos tem setor de separação nem categoria de telecom); por isso o catálogo é o inteiro. Para limitar é preciso antes marcar os itens (decisão do usuário).
 - Teste de navegador (gravações bloqueadas): 48 verificações OK, incluindo o selo com 2 versões, o texto do menu com e sem formação, a janela aberta com a Formação embutida, clicar fora sem fechar e Fechar sem gravar nada. Fotografia conferida.
 
-### Fatia 3 — acompanhamento do operador ⬜
-- "Retornos de hoje" e cards parados há muitos dias (mesmo critério do CRM, `dias_lead_esquecido`), motivo de perda em relatório, @menção no andamento (o CRM usa `salvarMencoes`).
+### Fatia 3 — acompanhamento do operador ✅ (04/11/2026)
+- **Barra "Acompanhar"** (quadro e lista): Todos, **Retornos de hoje**, **Contato atrasado** e **Parados há 7+ dias**, cada um com a contagem; o resumo do topo diz "N parado(s)". O card parado leva o selo vermelho "Parado há N dias".
+- **Card parado** = em aberto (Lead ou Proposta enviada), sem movimento há 7 dias ou mais (`atualizado_em`) **e sem retorno marcado de hoje em diante** (quem marcou o próximo contato não esqueceu o cliente). **A confirmar com o usuário:** o CRM **não tem** um prazo de "lead esquecido" (a ideia de usar `dias_lead_esquecido` não existe no código nem na configuração); usei os 7 dias da OS parada do SAC.
+- **Perdas** (terceira forma de ver): relatório de perdidos e desistidos no período (30 dias, 90 dias ou tudo, pelo dia em que o card foi encerrado), com o **total por motivo** (mesmo texto, sem diferença de caixa), o **valor que se deixou de vender** e a lista com cliente, assunto, motivo, valor e responsável; clicar na linha abre o contato. Sem motivo escrito aparece "Sem motivo informado".
+- **@menção no andamento:** a caixa do andamento é a de menções (`MencaoTextarea`); ao salvar, `salvarMencoes` avisa a pessoa na caixa de Menções, com o mesmo contexto do CRM (o clique abre o card na aba CRM, para quem a tem). A anotação **renova o `atualizado_em` do card** (conta como movimento; é uma gravação a mais no card do Telecom, a que o operador já faz ao anotar).
+- Teste de navegador (gravações bloqueadas): 59 verificações OK, incluindo as contagens da barra, cada filtro, o selo, o relatório nos três períodos, o total por motivo, o valor perdido e a gravação extra da anotação (só `atualizado_em`). Fotos conferidas.
 
 ## O que ficou de fora / a saber
 - **Quem é o operador:** ainda **não existe usuário** com esse papel. Hoje têm a aba Telecom a Thallita (Gerente Comercial), o Max e os administradores. O operador novo precisa ser cadastrado no Admin com a aba **Telecom** (e **CRM**, se for abrir o card por lá).
