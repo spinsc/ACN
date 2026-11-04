@@ -25,6 +25,9 @@ import { VinculosDaViagem, textoDosVinculos } from './ViagemVinculos';
 import { abrirVinculo } from './VinculoPicker';
 import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
+import { abrirFicha } from './ViagemFicha';
+import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
+import RelatorioDeCustos from './ViagemRelatorioTela';
 import {
   COLUNAS_VIAGEM, statusDaViagem, colunaDaViagem, rotuloDoStatus, movimentosDaViagem, movimentoParaAColuna, faltaParaMover, patchDoMovimento, entradaDoMovimento, entradaDeAlteracao,
   diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento,
@@ -32,7 +35,7 @@ import {
 import type { Movimento } from './ViagemFluxo';
 import {
   mdiPlus, mdiClose, mdiArrowUp, mdiArrowDown, mdiMagnify, mdiContentSaveOutline, mdiContentCopy, mdiPrinterOutline,
-  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline,
+  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline, mdiFileDocumentOutline,
 } from '@mdi/js';
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
@@ -190,6 +193,13 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
   const [subindoContrato, setSubindoContrato] = useState(false);
   const [semente, setSemente] = useState<any>(null);   // manda o destino que a OP indica para a busca de parada
   useEffect(() => { lerFrota().then(r => { setFrota(r.lista); setErroFrota(r.erro); }); }, []);
+  // as outras viagens que ainda ocupam equipe e carro, para avisar de conflito de datas (04/11/2026); leitura que falha vira aviso, nunca "sem conflito" calado
+  const [outras, setOutras] = useState<any[]>([]);
+  const [erroOutras, setErroOutras] = useState('');
+  useEffect(() => {
+    if (!temProvisionamento(inicial || {})) return;
+    supabase.from('viagens').select('*').in('status', ['aberta', 'em_aprovacao', 'provisionamento', 'aprovada', 'andamento']).then(({ data, error }: any) => { setErroOutras(error ? error.message : ''); setOutras(error ? [] : (data || [])); });
+  }, []);
   const set = (campo: string, valor: any) => setV((x: any) => ({ ...x, [campo]: valor }));
   const setCusto = (campo: string, valor: any) => setV((x: any) => ({ ...x, custos: { ...x.custos, [campo]: valor } }));
   const r = useMemo(() => calcularViagem(v), [v]);
@@ -236,6 +246,10 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
       if (t === null) return;
       if (!t.trim()) { mostrarAviso('Não foi possível passar a viagem: o motivo é obrigatório.'); return; }
       motivo = t.trim();
+    }
+    if (mov?.para === 'andamento') {
+      const frases = frasesDosConflitos(conflitosDaViagem(v, outras, hojeISO()));
+      if (frases.length && !await confirmar(['Conflito de datas:', '', ...frases, '', 'Iniciar a viagem mesmo assim?'].join(String.fromCharCode(10)))) return;
     }
     if (!mov && pode.base && rotaVelha && !await confirmar('O roteiro mudou depois do último cálculo: o km, o tempo e os custos gravados são os da rota ANTIGA.\n\nSalvar mesmo assim? (Para atualizar, cancele e use "Calcular rota".)')) return;
     setSalvando(true);
@@ -359,7 +373,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
 
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
-              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} />
+              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} />
           )}
 
           <fieldset className="acn-vg-fs" disabled={!pode.base}>
@@ -486,6 +500,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
             <div className="acn-vg-acoes">
               <Botao pequeno icone={mdiContentCopy} onClick={copiar}>Copiar texto</Botao>
               <Botao pequeno icone={mdiPrinterOutline} onClick={() => abrirImpressao(v, r)}>Imprimir</Botao>
+              {temProvisionamento(inicial || v) && <Botao pequeno icone={mdiFileDocumentOutline} title="Uma folha para a equipe levar: roteiro, veículo, hotel, contrato e verba" onClick={() => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); }}>Ficha da equipe</Botao>}
             </div>
           </div>
 
@@ -570,6 +585,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
         <span onClick={e => e.stopPropagation()}>
           <MenuAcoes itens={[
             { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => aoAbrir(v) },
+            ...(temProvisionamento(v) ? [{ rotulo: 'Ficha da equipe (imprimir)', icone: mdiFileDocumentOutline, onClick: () => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); } }] : []),
             ...passos.map(m => ({ rotulo: m.rotulo, onClick: () => aoMover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
           ]} />
         </span>
@@ -678,18 +694,18 @@ export default function ViagensTab({ currentUser }: any) {
         ) : undefined} />
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as viagens ({erro}).</Faixa>}
       <div className="acn-vg-barra">
-        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }]} />
-        <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />
-        <label className="acn-vg-pesquisa">
+        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }, { id: 'custos', rotulo: 'Custos' }]} />
+        {visao !== 'custos' && <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />}
+        {visao !== 'custos' && <label className="acn-vg-pesquisa">
           <Icone path={mdiMagnify} size={16} />
           <input className="acn-input" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar título, cidade, OP/PV ou quem criou" aria-label="Buscar viagem" />
-        </label>
+        </label>}
       </div>
       {carregando && !lista.length && <div className="acn-ajuda">Carregando viagens…</div>}
-      {!carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
-      {!carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
+      {visao !== 'custos' && !carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
+      {visao !== 'custos' && !carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
 
-      {visao === 'quadro' ? (
+      {visao === 'custos' ? <RelatorioDeCustos viagens={lista} aoAbrir={setEditando} /> : visao === 'quadro' ? (
         <div className="acn-vg-quadro">
           {COLUNAS_VIAGEM.map(col => {
             const cartoes = visiveis.filter(v => statusDaViagem(v) === col.id);

@@ -37,5 +37,20 @@
       }
     ],
     "caminho": "manuais/sac/index.html"
+  },
+  {
+    "id": "viagens",
+    "setor": "Viagens",
+    "titulo": "Manual das Viagens",
+    "descricao": "Como a viagem da equipe anda pelo quadro, do roteiro e orçamento à volta: quem aprova, o que cada setor preenche em Provisionamento, o aviso de conflito, a ficha da equipe, o custo real × orçado, a frota e a manutenção dos veículos.",
+    "ordem": 2,
+    "atualizadoEm": "2026-11-04",
+    "mudancas": [
+      {
+        "data": "2026-11-04",
+        "texto": "Primeira versão: o quadro de seis colunas, o que cada setor preenche em Provisionamento (Adaptação, Comercial e Financeiro), o aviso na caixa de Menções de cada setor quando a viagem é aprovada (e a viagem abre por ali mesmo para quem não tem a aba Viagens), o aviso de conflito de veículo e de equipe, a ficha impressa da equipe, o fechamento com custo real × orçado, a aba Custos, a frota com histórico de km e manutenção, e o aviso quando a OP ligada à viagem volta ou é cancelada."
+      }
+    ],
+    "caminho": "manuais/viagens/index.html"
   }
 ]

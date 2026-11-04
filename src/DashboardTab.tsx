@@ -25,6 +25,7 @@ import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import ViagensTab from './ViagensTab';
+import ViagemPorMencao from './ViagemPorMencao';
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
@@ -1797,6 +1798,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <ContatoAlertWidget currentUser={currentUser} />
       <ContatoComercialAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} onNavigate={setActiveTab} />
+      {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte) */}
+      <ViagemPorMencao currentUser={currentUser} />
 
       {/* ── OPL aberto via busca global (modal flutuante) ── */}
       {globalOplAberto && (

@@ -11,14 +11,16 @@ import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { mostrarAviso, confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
-import { Botao, Selo, Faixa, Chips, SelectMultiplo } from './Interface';
+import { Botao, Selo, Faixa, Chips, SelectMultiplo, hojeISO } from './Interface';
+import { TIPOS_DE_MANUTENCAO, situacaoDaRevisao, erroDaManutencao, linhaDaManutencao, historicoDeKm } from './FrotaManutencao';
+import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
 import Icone from './Icone';
 import { useColaboradores } from './ColaboradorSelect';
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { CampoNumero } from './ViagemCampos';
 import { fmtReais } from './ViagemCalculo';
-import { mdiPlus, mdiClose, mdiPaperclip, mdiContentSaveOutline, mdiPencilOutline, mdiCarOutline } from '@mdi/js';
+import { mdiPlus, mdiClose, mdiPaperclip, mdiContentSaveOutline, mdiPencilOutline, mdiCarOutline, mdiHistory } from '@mdi/js';
 
 const BUCKET = 'acn-media';
 const LIMITE_ANEXO = 20 * 1024 * 1024;   // contrato escaneado cabe; vídeo não
@@ -45,8 +47,10 @@ export function Parte({ titulo, quem, pode, children }: any) {
   );
 }
 
-export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato }: any) {
+export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras }: any) {
   const { list: colaboradores } = useColaboradores();
+  // conflito (04/11/2026): a mesma pessoa ou o mesmo carro em duas viagens que se sobrepõem; é aviso em vermelho, não trava
+  const frasesDeConflito = frasesDosConflitos(conflitosDaViagem(v, outras || [], hojeISO()));
   const equipeIds = (v.equipe || []).map((m: any) => String(m.id));
   const opcoes = colaboradores.map((c: any) => ({ valor: String(c.id), rotulo: c.nome }));
   // quem já está na equipe e saiu da lista de colaboradores (desligado depois) continua aparecendo
@@ -85,6 +89,14 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
             <input className="acn-input" aria-label="Placa do veículo" readOnly value={v.veiculo_placa ? placaParaMostrar(v.veiculo_placa) : ''} placeholder="vem do veículo escolhido" /></div>
           <CampoNumero key={'km' + (v.frota_id || '')} rotulo="Km do carro na saída *" valor={v.km_saida} vazioNulo sufixo="km" ajuda="O km que o painel marca na hora de sair." onChange={(n: number | null) => set('km_saida', n)} />
         </div>
+        {frasesDeConflito.length > 0 && (
+          <Faixa tom="erro">
+            <strong>Conflito de datas.</strong>
+            {frasesDeConflito.map((f, i) => <div key={i}>{f}</div>)}
+            <div className="acn-ajuda">Confira as datas antes de a equipe sair. O sistema só avisa: quem decide é a Adaptação.</div>
+          </Faixa>
+        )}
+        {erroOutras && <div className="acn-ajuda">Não foi possível conferir as outras viagens ({erroOutras}); o aviso de conflito não vale agora.</div>}
       </Parte>
 
       <Parte titulo="SERVIÇO E CONTRATO" quem="Comercial" pode={pode.comercial}>
@@ -200,10 +212,24 @@ export function FrotaModal({ currentUser, aoFechar, aoMudar }: any) {
   const [form, setForm] = useState<any>({ ...FORM_FROTA });
   const [salvando, setSalvando] = useState(false);
   const set = (k: string, val: any) => setForm((f: any) => ({ ...f, [k]: val }));
+  // manutenção e histórico de km (04/11/2026): lidos junto da lista; a leitura que falha não vira "sem manutenção", vira aviso
+  const [manutencoes, setManutencoes] = useState<any[]>([]);
+  const [viagensFrota, setViagensFrota] = useState<any[]>([]);
+  const [erroHistorico, setErroHistorico] = useState('');
+  const [detalhe, setDetalhe] = useState<string | null>(null);
+  const hoje = hojeISO();
 
   const carregar = async () => {
     const r = await lerFrota();
     setErro(r.erro); if (!r.erro) setLista(r.lista); setCarregando(false);
+    const [m, vg] = await Promise.all([
+      supabase.from('frota_manutencoes').select('*').order('data', { ascending: false }).order('criado_em', { ascending: false }),
+      supabase.from('viagens').select('id,titulo,status,data_saida,frota_id,km_saida,km_volta').not('frota_id', 'is', null),
+    ]);
+    const falha = m.error || vg.error;
+    setErroHistorico(falha ? falha.message : '');
+    if (!m.error) setManutencoes(m.data || []);
+    if (!vg.error) setViagensFrota(vg.data || []);
   };
   useEffect(() => { carregar(); }, []);
 
@@ -263,24 +289,132 @@ export function FrotaModal({ currentUser, aoFechar, aoMudar }: any) {
             {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler a frota ({erro}).</Faixa>}
             {carregando && <div className="acn-ajuda">Carregando…</div>}
             {!carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhum veículo cadastrado ainda.</div>}
+            {erroHistorico && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as manutenções e o histórico de km ({erroHistorico}). O aviso de revisão não vale agora.</Faixa>}
             <table className="acn-tabela">
               <tbody>
-                {lista.map(f => (
-                  <tr key={f.id}>
-                    <td><strong>{f.apelido}</strong>{f.modelo ? <div className="acn-ajuda">{f.modelo}</div> : null}</td>
-                    <td className="acn-num">{placaParaMostrar(f.placa)}</td>
-                    <td className="dir acn-num">{f.km_atual != null ? `${Number(f.km_atual).toLocaleString('pt-BR')} km` : '—'}</td>
-                    <td>{f.ativo ? <Selo familia="ok" ponto={false}>Em uso</Selo> : <Selo familia="neutro" ponto={false}>Inativo</Selo>}</td>
-                    <td className="dir"><Botao variante="discreto" pequeno icone={mdiPencilOutline} aria-label={`Editar ${f.apelido}`} title="Editar" onClick={() => setForm({ ...f })} /></td>
-                  </tr>
-                ))}
+                {lista.map(f => {
+                  const rev = erroHistorico ? null : situacaoDaRevisao(f, manutencoes.filter((m: any) => m.frota_id === f.id), hoje);
+                  return (
+                    <tr key={f.id}>
+                      <td><strong>{f.apelido}</strong>{f.modelo ? <div className="acn-ajuda">{f.modelo}</div> : null}</td>
+                      <td className="acn-num">{placaParaMostrar(f.placa)}</td>
+                      <td className="dir acn-num">{f.km_atual != null ? `${Number(f.km_atual).toLocaleString('pt-BR')} km` : '—'}</td>
+                      <td>{f.ativo ? <Selo familia="ok" ponto={false}>Em uso</Selo> : <Selo familia="neutro" ponto={false}>Inativo</Selo>}</td>
+                      <td className="acn-vg-revisao">{rev && (rev.estado === 'vencida' || rev.estado === 'perto')
+                        ? <Selo familia={rev.estado === 'vencida' ? 'erro' : 'atencao'} ponto={false} title={rev.texto}>{rev.estado === 'vencida' ? 'Revisão vencida' : 'Revisão perto'}</Selo>
+                        : rev ? <span className="acn-ajuda">{rev.texto}</span> : null}</td>
+                      <td className="dir">
+                        <Botao variante="discreto" pequeno icone={mdiHistory} aria-label={`Histórico de ${f.apelido}`} title="Histórico de km e manutenção" onClick={() => setDetalhe(detalhe === f.id ? null : f.id)} />
+                        <Botao variante="discreto" pequeno icone={mdiPencilOutline} aria-label={`Editar ${f.apelido}`} title="Editar" onClick={() => setForm({ ...f })} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {detalhe && lista.find(f => f.id === detalhe) && (
+            <HistoricoDoVeiculo veiculo={lista.find(f => f.id === detalhe)} manutencoes={manutencoes.filter((m: any) => m.frota_id === detalhe)} viagens={viagensFrota} currentUser={currentUser}
+              aoMudar={carregar} aoFechar={() => setDetalhe(null)} />
+          )}
         </div>
         <div className="acn-modal-rodape"><Botao onClick={aoFechar}>Fechar</Botao></div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+// ── histórico de km e manutenção de um veículo (04/11/2026) ───────────────────
+const FORM_MANUT = { data: '', tipo: 'Revisão', descricao: '', km: null, custo: null, proxima_km: null, proxima_data: '' };
+
+function HistoricoDoVeiculo({ veiculo, manutencoes, viagens, currentUser, aoMudar, aoFechar }: any) {
+  const hoje = hojeISO();
+  const [form, setForm] = useState<any>({ ...FORM_MANUT, data: hoje, km: veiculo.km_atual ?? null });
+  const [salvando, setSalvando] = useState(false);
+  const set = (k: string, val: any) => setForm((f: any) => ({ ...f, [k]: val }));
+  const h = historicoDeKm(viagens, veiculo.id);
+  const rev = situacaoDaRevisao(veiculo, manutencoes, hoje);
+  const gastoTotal = manutencoes.reduce((s: number, m: any) => s + (Number(m.custo) || 0), 0);
+
+  const registrar = async () => {
+    if (salvando) return;
+    const erro = erroDaManutencao({ ...form, frota_id: veiculo.id }, hoje);
+    if (erro) { mostrarAviso(erro, 'atencao'); return; }
+    setSalvando(true);
+    const linha = linhaDaManutencao({ ...form, frota_id: veiculo.id }, currentUser?.nome || currentUser?.email || null);
+    const { data, error } = await supabase.from('frota_manutencoes').insert([linha]).select('id');
+    setSalvando(false);
+    if (error || !data?.length) { mostrarAviso('Não foi possível registrar a manutenção: ' + (error?.message || 'o banco não confirmou a gravação')); return; }
+    logChange({ module: 'viagens', entityType: 'frota_manutencoes', entityId: data[0].id, changeType: 'INSERT', oldRow: null, newRow: linha, user: currentUser });
+    mostrarAviso('Manutenção registrada.', 'ok');
+    setForm({ ...FORM_MANUT, data: hoje, km: veiculo.km_atual ?? null });
+    aoMudar?.();
+  };
+
+  const apagar = async (m: any) => {
+    if (!await confirmar(`Apagar o registro "${m.tipo}" de ${new Date(m.data + 'T12:00:00').toLocaleDateString('pt-BR')}?\n\nUse só para um registro lançado por engano.`)) return;
+    const { data, error } = await supabase.from('frota_manutencoes').delete().eq('id', m.id).select('id');
+    if (error || !data?.length) { mostrarAviso('Não foi possível apagar o registro: ' + (error?.message || 'o banco não confirmou')); return; }
+    logChange({ module: 'viagens', entityType: 'frota_manutencoes', entityId: m.id, changeType: 'DELETE', oldRow: m, newRow: null, user: currentUser });
+    aoMudar?.();
+  };
+
+  return (
+    <div className="acn-quadro" data-historico-veiculo={veiculo.id}>
+      <div className="acn-quadro-titulo">HISTÓRICO · {veiculo.apelido} {placaParaMostrar(veiculo.placa)}
+        <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar o histórico" title="Fechar o histórico" onClick={aoFechar} /></div>
+      {(rev.estado === 'vencida' || rev.estado === 'perto')
+        ? <Faixa tom="erro">{rev.texto}.</Faixa>
+        : <div className="acn-ajuda">{rev.texto}.</div>}
+
+      <div className="acn-vg-subtitulo">Km rodado em viagens {h.viagens.length > 0 && <span className="acn-num">· {h.totalRodado.toLocaleString('pt-BR')} km em {h.viagens.length} viagem(ns)</span>}</div>
+      {!h.viagens.length && <div className="acn-ajuda">Nenhuma viagem finalizada com este veículo ainda.</div>}
+      {h.viagens.length > 0 && (
+        <table className="acn-tabela">
+          <thead><tr><th>Viagem</th><th>Saída</th><th className="dir">Km saída</th><th className="dir">Km volta</th><th className="dir">Rodado</th></tr></thead>
+          <tbody>{h.viagens.map(x => (
+            <tr key={x.id}><td>{x.titulo}</td><td>{x.data ? new Date(x.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+              <td className="dir acn-num">{x.saida != null ? x.saida.toLocaleString('pt-BR') : '—'}</td><td className="dir acn-num">{x.volta != null ? x.volta.toLocaleString('pt-BR') : '—'}</td>
+              <td className="dir acn-num">{x.rodado != null ? `${x.rodado.toLocaleString('pt-BR')} km` : '—'}</td></tr>
+          ))}</tbody>
+        </table>
+      )}
+
+      <div className="acn-vg-subtitulo">Manutenções {manutencoes.length > 0 && <span className="acn-num">· {fmtReais(gastoTotal)} gastos em {manutencoes.length} registro(s)</span>}</div>
+      {!manutencoes.length && <div className="acn-ajuda">Nenhuma manutenção registrada.</div>}
+      {manutencoes.length > 0 && (
+        <table className="acn-tabela">
+          <thead><tr><th>Data</th><th>Tipo</th><th className="dir">Km</th><th className="dir">Custo</th><th>Próxima</th><th /></tr></thead>
+          <tbody>{manutencoes.map((m: any) => (
+            <tr key={m.id}>
+              <td>{new Date(m.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+              <td>{m.tipo}{m.descricao ? <div className="acn-ajuda">{m.descricao}</div> : null}</td>
+              <td className="dir acn-num">{m.km != null ? Number(m.km).toLocaleString('pt-BR') : '—'}</td>
+              <td className="dir acn-num">{m.custo != null ? fmtReais(Number(m.custo)) : '—'}</td>
+              <td className="acn-num">{[m.proxima_km != null ? `${Number(m.proxima_km).toLocaleString('pt-BR')} km` : '', m.proxima_data ? new Date(m.proxima_data + 'T12:00:00').toLocaleDateString('pt-BR') : ''].filter(Boolean).join(' ou ') || '—'}</td>
+              <td className="dir"><Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Apagar o registro ${m.tipo}`} title="Apagar o registro (lançado por engano)" onClick={() => apagar(m)} /></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
+
+      <div className="acn-vg-subtitulo">Registrar manutenção</div>
+      <div className="acn-vg-grade">
+        <div className="acn-vg-campo"><label className="acn-label">Data *</label>
+          <input type="date" className="acn-input" aria-label="Data da manutenção" max={hoje} value={form.data} onChange={e => set('data', e.target.value)} /></div>
+        <div className="acn-vg-campo"><label className="acn-label">Tipo *</label>
+          <select className="acn-input" aria-label="Tipo da manutenção" value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+            {TIPOS_DE_MANUTENCAO.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+        <CampoNumero key={'mk' + veiculo.id} rotulo="Km do painel" valor={form.km} vazioNulo sufixo="km" onChange={(n: number | null) => set('km', n)} />
+        <CampoNumero key={'mc' + veiculo.id} rotulo="Custo" valor={form.custo} vazioNulo sufixo="R$" onChange={(n: number | null) => set('custo', n)} />
+        <CampoNumero key={'mp' + veiculo.id} rotulo="Próxima revisão em" valor={form.proxima_km} vazioNulo sufixo="km" ajuda="Opcional: a tela avisa quando o veículo chegar perto." onChange={(n: number | null) => set('proxima_km', n)} />
+        <div className="acn-vg-campo"><label className="acn-label">Ou na data</label>
+          <input type="date" className="acn-input" aria-label="Data da próxima revisão" value={form.proxima_data} onChange={e => set('proxima_data', e.target.value)} /></div>
+        <div className="acn-vg-campo acn-vg-largo"><label className="acn-label">O que foi feito</label>
+          <input className="acn-input" aria-label="O que foi feito na manutenção" placeholder="Ex.: óleo e filtros, pastilha dianteira" value={form.descricao} onChange={e => set('descricao', e.target.value)} /></div>
+      </div>
+      <div className="acn-vg-acoes"><Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvando} onClick={registrar}>{salvando ? 'Salvando…' : 'Registrar manutenção'}</Botao></div>
+    </div>
   );
 }

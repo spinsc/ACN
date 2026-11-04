@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { Botao, Chips, Tag } from './Interface';
 import Icone from './Icone';
+import { permissoesDaViagem } from './ViagemFluxo';
 import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,7 +315,9 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       }
     }
     // 03/11/2026: a demanda avulsa gravava o setor ('comercial') como aba, mas a tela do Comercial é a aba 'crm': 'comercial' levava a uma tela vazia
-    if (m.aba_destino && onNavigate) onNavigate(m.aba_destino === 'comercial' ? 'crm' : m.aba_destino);
+    // 04/11/2026: a viagem de quem não tem a aba Viagens abre por cima (ViagemPorMencao); trocar de aba levaria a uma tela que a pessoa não tem
+    const viagemSemAba = m.contexto === 'viagem' && !permissoesDaViagem(currentUser).base;
+    if (m.aba_destino && onNavigate && !viagemSemAba) onNavigate(m.aba_destino === 'comercial' ? 'crm' : m.aba_destino);
   };
 
   // 12e47 (09/10/2026): só a aparência — a gaveta usa as classes acn-gav-* (comuns às Análises) e acn-men-*

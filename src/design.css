@@ -7166,3 +7166,16 @@ html body .acn-vg-vinc-abrir { border: 0; background: transparent; padding: 0; f
 @media (max-width: 640px) {
   .acn-vg-jan .acn-modal-rodape { padding-right: 76px; justify-content: flex-start; }
 }
+
+/* ── Viagens, melhorias (04/11/2026): relatório de custos, histórico da frota e subtítulos ── */
+.acn-vg-relatorio { display: flex; flex-direction: column; gap: 12px; }
+.acn-vg-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.acn-vg-kpi { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-radius, 8px); background: var(--acn-surface); }
+.acn-vg-kpi > span { font-size: 12px; color: var(--acn-muted); }
+.acn-vg-kpi strong { font-size: 18px; color: var(--acn-ink); }
+.acn-vg-duas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; align-items: start; }
+.acn-vg-subtitulo { margin: 12px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-vg-revisao { max-width: 190px; }
+.acn-vg-frota .acn-tabela th { text-align: left; }
+.acn-vg-frota .acn-tabela th.dir { text-align: right; }
+.acn-vg-frota .acn-quadro-titulo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

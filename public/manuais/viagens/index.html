@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manual das Viagens</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap">
+<style>
+:root{
+  --bg:#f6f7f4; --painel:#ffffff; --fg:#1d2a22; --suave:#56645b; --linha:#dfe4dc;
+  --verde:#1f7a43; --verde-forte:#145a30; --verde-claro:#e3f1e8;
+  --dica-bg:#e8f2fb; --dica-bd:#2f6fa8; --atencao-bg:#fdeceb; --atencao-bd:#c0352b; --nota-bg:#fbf4df; --nota-bd:#b0841a;
+  --codigo:#eef1ec; --sombra:0 1px 2px rgba(20,40,28,.08),0 6px 20px rgba(20,40,28,.06);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101612; --painel:#17201a; --fg:#e6eee8; --suave:#9fb0a5; --linha:#2a372e;
+  --verde:#5cc283; --verde-forte:#8fdcab; --verde-claro:#183a26;
+  --dica-bg:#12273a; --dica-bd:#5aa0dc; --atencao-bg:#3a1714; --atencao-bd:#ef6a5e; --nota-bg:#33290e; --nota-bd:#d9b04a;
+  --codigo:#1f2b23; --sombra:0 1px 2px rgba(0,0,0,.4);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101612; --painel:#17201a; --fg:#e6eee8; --suave:#9fb0a5; --linha:#2a372e;
+  --verde:#5cc283; --verde-forte:#8fdcab; --verde-claro:#183a26;
+  --dica-bg:#12273a; --dica-bd:#5aa0dc; --atencao-bg:#3a1714; --atencao-bd:#ef6a5e; --nota-bg:#33290e; --nota-bd:#d9b04a;
+  --codigo:#1f2b23; --sombra:0 1px 2px rgba(0,0,0,.4);
+  color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{background:var(--bg);color:var(--fg);font:17px/1.65 "Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;margin:0;
+  padding-block:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.pagina{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;max-width:1180px;margin:0 auto;padding-block:24px 64px}
+@media(min-width:960px){.pagina{grid-template-columns:270px minmax(0,1fr);gap:48px}}
+nav.sum{min-width:0}
+@media(min-width:960px){nav.sum{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;padding-right:8px}}
+nav.sum h2{font:700 13px/1.2 "Bricolage Grotesque","Segoe UI",sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--suave);margin:0 0 10px}
+nav.sum ul{list-style:none;margin:0;padding:0}
+nav.sum li.parte-sum{margin:0 0 8px}
+nav.sum li.parte-sum>a{display:block;font-weight:700;color:var(--fg);padding:6px 0;text-decoration:none}
+nav.sum li.parte-sum>a span{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--verde)}
+nav.sum li.parte-sum>ul{border-left:2px solid var(--linha);margin-left:2px}
+nav.sum li li a{display:block;font-size:14.5px;line-height:1.35;color:var(--suave);text-decoration:none;padding:3px 0 3px 12px}
+nav.sum li li a:hover,nav.sum a.atual{color:var(--verde)}
+nav.sum a.atual{font-weight:700}
+@media(max-width:959px){
+  nav.sum details>summary{cursor:pointer;font-weight:700;padding:10px 14px;background:var(--painel);border:1px solid var(--linha);border-radius:10px}
+  nav.sum .conteudo{padding:12px 4px 0}
+}
+@media(min-width:960px){nav.sum details>summary{display:none}}
+main{min-width:0}
+.capa{padding:28px 0 8px}
+.capa .selo{display:inline-block;font:700 12px/1 "Bricolage Grotesque",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--verde-forte);background:var(--verde-claro);padding:6px 10px;border-radius:999px}
+.capa h1.titulo{font:800 clamp(34px,6vw,54px)/1.05 "Bricolage Grotesque","Segoe UI",sans-serif;margin:14px 0 10px;text-wrap:balance;letter-spacing:-.02em}
+.capa p{color:var(--suave);max-width:60ch;margin:0}
+.embutido .imprimir{display:none}
+.tema{float:right;margin-left:8px;background:var(--painel);color:var(--fg);border:1px solid var(--linha);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+h1,h2,h3,h4{font-family:"Bricolage Grotesque","Segoe UI",sans-serif;line-height:1.2;text-wrap:balance}
+main h1{font-size:clamp(28px,4.4vw,40px);font-weight:800;margin:72px 0 18px;padding-top:28px;border-top:3px solid var(--verde);letter-spacing:-.015em}
+main h1 .parte{display:block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--verde);font-weight:700;margin-bottom:6px}
+main h2{font-size:clamp(23px,3.2vw,29px);font-weight:700;margin:52px 0 12px}
+main h3{font-size:20px;font-weight:700;margin:34px 0 8px;color:var(--verde-forte)}
+main h4{font-size:17px;margin:24px 0 6px}
+p{margin:0 0 14px;max-width:72ch}
+a{color:var(--verde);text-underline-offset:2px}
+code{background:var(--codigo);padding:1px 6px;border-radius:5px;font-size:.92em}
+hr{border:0;border-top:1px solid var(--linha);margin:36px 0}
+figure{margin:18px 0 22px;max-width:100%}
+figure img,li>img,p>img{display:block;max-width:100%;height:auto;border:1px solid var(--linha);border-radius:10px;box-shadow:var(--sombra);background:#fff;cursor:zoom-in}
+li>img{margin:10px 0 6px}
+figcaption{font-size:14px;color:var(--suave);margin-top:6px}
+ol.passos,ul.lista{margin:0 0 16px;padding:0;max-width:78ch}
+ul.lista{list-style:none}
+ul.lista>li{position:relative;padding-left:22px;margin:6px 0}
+ul.lista>li::before{content:"";position:absolute;left:4px;top:.7em;width:7px;height:7px;border-radius:50%;background:var(--verde)}
+ol.passos{list-style:none;counter-reset:p}
+ol.passos>li{counter-increment:p;position:relative;padding:2px 0 10px 46px;margin:0}
+ol.passos>li::before{content:counter(p);position:absolute;left:0;top:1px;width:32px;height:32px;border-radius:50%;background:var(--verde);color:#fff;font:700 15px/32px "Bricolage Grotesque",sans-serif;text-align:center}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) ol.passos>li::before{color:#0c1a11}}
+:root[data-theme="dark"] ol.passos>li::before{color:#0c1a11}
+ol.passos ul.lista{margin:6px 0 4px}
+ol.fluxo{list-style:none;counter-reset:f;display:flex;flex-wrap:wrap;gap:8px 0;margin:14px 0 20px;padding:0}
+ol.fluxo li{counter-increment:f;display:flex;align-items:center;background:var(--painel);border:1px solid var(--linha);border-radius:8px;padding:6px 11px;font-size:14.5px;line-height:1.3;box-shadow:var(--sombra);min-width:0}
+ol.fluxo li:not(:last-child)::after{content:"→";color:var(--verde);font-weight:700;margin:0 0 0 11px;position:absolute;transform:translateX(calc(100% + 0px));display:none}
+ol.fluxo li{margin-right:22px;position:relative}
+ol.fluxo li:not(:last-child)::before{content:"›";position:absolute;right:-17px;top:50%;transform:translateY(-52%);color:var(--verde);font-weight:800;font-size:22px}
+.caixa{margin:16px 0 20px;padding:12px 16px 12px 16px;border-left:5px solid var(--nota-bd);background:var(--nota-bg);border-radius:0 10px 10px 0;max-width:78ch}
+.caixa.dica{border-color:var(--dica-bd);background:var(--dica-bg)}
+.caixa.atencao{border-color:var(--atencao-bd);background:var(--atencao-bg)}
+.caixa strong:first-child{display:inline-block;margin-right:2px}
+.tabela{overflow-x:auto;margin:14px 0 22px;border:1px solid var(--linha);border-radius:10px;background:var(--painel)}
+table{border-collapse:collapse;width:100%;font-size:15.5px;line-height:1.45}
+th{text-align:left;background:var(--verde-claro);color:var(--verde-forte);font:700 13px/1.2 "Bricolage Grotesque",sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:10px 14px;white-space:nowrap}
+td{padding:10px 14px;border-top:1px solid var(--linha);vertical-align:top;min-width:120px}
+tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--verde-claro) 28%,transparent)}
+.zoom{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;padding:16px;z-index:50;cursor:zoom-out}
+.zoom.on{display:flex}
+.zoom img{max-width:100%;max-height:100%;border-radius:8px;background:#fff}
+@media print{
+  :root{--bg:#fff;--painel:#fff;--fg:#111;--suave:#444;--linha:#cfd5cc;--verde:#1f7a43;--verde-forte:#145a30;--verde-claro:#e3f1e8;--sombra:none}
+  body{font-size:11.5pt;padding:0}
+  .pagina{display:block;padding:0}
+  nav.sum,.tema{display:none}
+  main h1{break-before:page;margin-top:0}
+  main h2,main h3{break-after:avoid}
+  figure,li,.caixa,tr{break-inside:avoid}
+  img{max-height:20cm;box-shadow:none!important}
+  .capa{break-after:page;padding-top:30%}
+}
+@media(max-width:600px){body{font-size:16.5px}ol.passos>li{padding-left:42px}td{min-width:96px}}
+</style></head><body>
+<div class="pagina">
+<nav class="sum"><details open><summary>Sumário</summary><div class="conteudo"><h2>Sumário</h2><ul><li class="parte-sum"><a href="#antes-de-começar"><span>Parte 1</span>Antes de começar</a><ul><li><a href="#para-quem-é-este-manual">Para quem é este manual</a></li><li><a href="#a-viagem-em-uma-página">A viagem em uma página</a></li></ul></li><li class="parte-sum"><a href="#passo-a-passo"><span>Parte 2</span>Passo a passo</a><ul><li><a href="#montar-a-viagem-e-enviar-para-aprovação">Montar a viagem e enviar para aprovação</a></li><li><a href="#aprovar-ou-recusar">Aprovar ou recusar</a></li><li><a href="#preencher-a-sua-parte-em-provisionamento">Preencher a sua parte em Provisionamento</a></li><li><a href="#imprimir-a-ficha-da-equipe">Imprimir a ficha da equipe</a></li><li><a href="#a-equipe-saiu-e-voltou">A equipe saiu e voltou</a></li><li><a href="#quando-a-op-da-viagem-volta-ou-é-cancelada">Quando a OP da viagem volta ou é cancelada</a></li></ul></li><li class="parte-sum"><a href="#custos-e-frota"><span>Parte 3</span>Custos e frota</a><ul><li><a href="#o-relatório-de-custos">O relatório de custos</a></li><li><a href="#a-frota">A frota</a></li></ul></li><li class="parte-sum"><a href="#historico-do-manual"><span>Fim</span>Histórico deste manual</a></li></ul></div></details></nav>
+<main>
+<header class="capa">
+  <button class="tema" type="button">Claro / escuro</button>
+  <button class="tema imprimir" type="button">Imprimir / salvar em PDF</button>
+  <span class="selo">ACN Sinal Verde · Viagens</span>
+  <h1 class="titulo">Manual das Viagens</h1>
+  <p>Como a viagem da equipe anda pelo quadro, do roteiro e orçamento à volta: quem aprova, o que cada setor preenche em Provisionamento, o aviso de conflito, a ficha da equipe, o custo real × orçado, a frota e a manutenção dos veículos. Atualizado em 04/11/2026.</p>
+</header><h1 id="antes-de-começar"><span class="parte">Parte 1</span>Antes de começar</h1>
+<h2 id="para-quem-é-este-manual">Para quem é este manual</h2>
+<p>Este manual é para quem monta, aprova ou prepara <strong>viagens de equipe</strong>: levar a equipe da fábrica até o cliente para instalar, ajustar ou treinar. Cada setor tem uma parte pequena e bem definida. O sistema mostra a viagem num <strong>quadro</strong>, e ela anda de coluna em coluna até a equipe voltar e o custo real ser conferido.</p>
+<aside class="caixa dica"><strong>Dica:</strong> os botões aparecem em <strong>negrito</strong>. O símbolo <strong>⋯</strong> é o menu de três pontinhos de cada cartão: as ações menos usadas ficam nele.</aside>
+<h2 id="a-viagem-em-uma-página">A viagem em uma página</h2>
+<ol class="fluxo"><li>Aberta</li><li>Em aprovação</li><li>Provisionamento</li><li>Andamento</li><li>Finalizada</li></ol>
+<div class="tabela"><table><thead><tr><th>Coluna</th><th>O que significa</th><th>Quem age</th></tr></thead><tbody><tr><td data-rotulo="Coluna"><strong>Aberta</strong></td><td data-rotulo="O que significa">O roteiro e o orçamento estão sendo montados</td><td data-rotulo="Quem age">Quem tem a aba Viagens</td></tr><tr><td data-rotulo="Coluna"><strong>Em aprovação</strong></td><td data-rotulo="O que significa">Espera a direção aprovar ou recusar</td><td data-rotulo="Quem age">Direção (Admin e gerentes)</td></tr><tr><td data-rotulo="Coluna"><strong>Provisionamento</strong></td><td data-rotulo="O que significa">Aprovada: cada setor preenche a sua parte</td><td data-rotulo="Quem age">Adaptação, Comercial e Financeiro</td></tr><tr><td data-rotulo="Coluna"><strong>Andamento</strong></td><td data-rotulo="O que significa">A equipe saiu e está viajando</td><td data-rotulo="Quem age">Adaptação (quando volta)</td></tr><tr><td data-rotulo="Coluna"><strong>Finalizada</strong></td><td data-rotulo="O que significa">A equipe voltou e a viagem foi encerrada</td><td data-rotulo="Quem age">Financeiro lança o custo real</td></tr><tr><td data-rotulo="Coluna"><strong>Não aprovada</strong></td><td data-rotulo="O que significa">A direção recusou (pede um motivo); pode ser reaberta</td><td data-rotulo="Quem age">Quem montou</td></tr></tbody></table></div>
+<p>Voltar uma viagem de coluna, recusar ou reabrir <strong>sempre pede um motivo</strong>, que fica no histórico da viagem.</p>
+<h3 id="de-onde-a-viagem-vem">De onde a viagem vem</h3>
+<ul class="lista"><li><strong>Pela aba Viagens</strong>, no botão <strong>Nova viagem</strong>: você monta o roteiro, calcula a rota e envia para aprovação.</li><li><strong>Sozinha, pela OP de Adaptação externa</strong>: quando o Almoxarifado fecha o kit dessa OP, o sistema cria a viagem já em <strong>Em aprovação</strong>, com o destino da OP anotado. Uma viagem por lote e destino: as OPs do mesmo lote que vão ao mesmo lugar entram na mesma viagem.</li></ul>
+<aside class="caixa atencao"><strong>Atenção:</strong> a OP de Adaptação externa <strong>só aparece na fila da Adaptação depois que a viagem é aprovada</strong>. Enquanto a viagem estiver Aberta, Em aprovação ou Não aprovada, a Produção vê a faixa &quot;N OP(s) esperam a aprovação da viagem&quot;.</aside>
+<h1 id="passo-a-passo"><span class="parte">Parte 2</span>Passo a passo</h1>
+<h2 id="montar-a-viagem-e-enviar-para-aprovação">Montar a viagem e enviar para aprovação</h2>
+<p><strong>Quando usar:</strong> uma equipe vai sair da fábrica. <strong>Quem faz:</strong> quem tem a aba Viagens.</p>
+<ol class="passos"><li>Clique em <strong>Nova viagem</strong> e preencha o título, a data e o horário de saída e o número de pessoas.</li><li>Em <strong>Ligada a</strong>, escolha a OP, o PV ou a licitação a que a viagem pertence (pode ligar mais de uma coisa). Clicar numa ligação abre o registro.</li><li>Em <strong>Roteiro</strong>, busque o ponto de saída e as paradas e diga quantos dias a equipe fica em cada uma. O <strong>dia da chegada conta como o dia 1</strong>: com 3 dias a equipe chega, trabalha, dorme duas noites e sai no fim do dia 3.</li><li>Clique em <strong>Calcular rota</strong>. O sistema mostra o km, o tempo e o roteiro dia a dia.</li><li>Confira os <strong>Custos</strong> e o <strong>Orçamento</strong> e clique em <strong>Salvar viagem</strong>.</li><li>Clique em <strong>Enviar para aprovação</strong>.</li></ol>
+<p><strong>O que acontece:</strong> a viagem passa para <strong>Em aprovação</strong> e fica no histórico. Para ir à aprovação ela precisa de título, data de saída, ponto de saída, uma parada e a rota calculada e atualizada.</p>
+<aside class="caixa atencao"><strong>Atenção:</strong> se você mudar o roteiro depois de calcular a rota, o sistema avisa que o km e os custos são os da rota antiga. Calcule de novo antes de enviar.</aside>
+<h2 id="aprovar-ou-recusar">Aprovar ou recusar</h2>
+<p><strong>Quem faz:</strong> a direção (Admin e gerentes; a equipe do Comercial e das Licitações vale como gerente do setor).</p>
+<ol class="passos"><li>Abra a viagem em <strong>Em aprovação</strong> (pelo aviso na caixa de <strong>Menções</strong> ou pelo quadro).</li><li>Confira o roteiro e o orçamento.</li><li>Clique em <strong>Aprovar (vai para Provisionamento)</strong> ou em <strong>Não aprovar</strong> e escreva o motivo.</li></ol>
+<p><strong>Vai para:</strong> Provisionamento, ou Não aprovada.</p>
+<h2 id="preencher-a-sua-parte-em-provisionamento">Preencher a sua parte em Provisionamento</h2>
+<p>Quando a viagem é aprovada, o sistema <strong>avisa na caixa de Menções</strong> cada setor com o que falta. Quem não tem a aba Viagens abre a viagem <strong>direto pelo aviso</strong>, por cima de qualquer tela, e preenche só a parte do seu setor; o resto fica só para leitura.</p>
+<div class="tabela"><table><thead><tr><th>Setor</th><th>O que preenche</th></tr></thead><tbody><tr><td data-rotulo="Setor"><strong>Adaptação</strong></td><td data-rotulo="O que preenche">Equipe que vai, veículo da frota (a placa vem do veículo), km do carro na saída</td></tr><tr><td data-rotulo="Setor"><strong>Comercial</strong></td><td data-rotulo="O que preenche">Descrição do serviço, observações do contrato e os arquivos do contrato</td></tr><tr><td data-rotulo="Setor"><strong>Financeiro</strong></td><td data-rotulo="O que preenche">Verba total, pedágio (reembolso ou convênio) e os dados do hotel</td></tr></tbody></table></div>
+<p>O aviso do Comercial vai ao vendedor ou responsável comercial da OP que gerou a viagem (ou a quem criou a viagem). Cada pessoa grava <strong>só o grupo que pode editar</strong>, e cada setor deixa uma linha no histórico: quem salva a parte de um não apaga o que o outro preencheu.</p>
+<aside class="caixa atencao"><strong>Atenção:</strong> a viagem <strong>só pode sair para Andamento</strong> com a equipe, o veículo, o km de saída e a verba total preenchidos. Hotel, pedágio, serviço e contrato <strong>não travam</strong> a saída.</aside>
+<h3 id="aviso-de-conflito-de-datas">Aviso de conflito de datas</h3>
+<p>Ao escolher a equipe e o veículo, o sistema confere as <strong>outras viagens</strong> que ainda ocupam gente e carro (de Aberta até Andamento). Se a mesma pessoa ou o mesmo veículo estiver em outra viagem com datas que se sobrepõem, aparece uma faixa vermelha dizendo qual viagem e quais dias. Ao clicar em <strong>A equipe saiu</strong>, o sistema pergunta de novo.</p>
+<aside class="caixa dica"><strong>Dica:</strong> o aviso <strong>não trava</strong>. Às vezes a equipe volta de manhã e sai à tarde; quem decide é a Adaptação. A viagem em Andamento continua ocupando equipe e carro até ser finalizada.</aside>
+<h2 id="imprimir-a-ficha-da-equipe">Imprimir a ficha da equipe</h2>
+<p><strong>Quando usar:</strong> antes de a equipe sair.</p>
+<p>Com a viagem em Provisionamento ou depois, clique em <strong>Ficha da equipe</strong> (na janela da viagem, ao lado de Imprimir, ou no menu <strong>⋯</strong> do cartão). Sai uma folha com o roteiro dia a dia, o veículo e o km de saída, a equipe, o serviço e o contrato, o hotel e a verba. Ela <strong>não leva o orçamento nem a margem</strong>. No pé, há espaços para anotar o km na volta, os gastos e as ocorrências, e para assinar.</p>
+<h2 id="a-equipe-saiu-e-voltou">A equipe saiu e voltou</h2>
+<ol class="passos"><li><strong>Saída:</strong> clique em <strong>A equipe saiu (iniciar a viagem)</strong>. A viagem vai para <strong>Andamento</strong>.</li><li><strong>Volta:</strong> a Adaptação informa o <strong>Km do carro na volta</strong> (obrigatório, e maior que o da saída) e clica em <strong>A equipe voltou (finalizar)</strong>.</li><li>O Financeiro lança o <strong>custo real</strong> em <strong>CUSTO REAL × ORÇADO</strong>: combustível, pedágios, hospedagem, alimentação, outros e observações. O custo real <strong>não trava</strong> a finalização, porque a prestação de contas costuma chegar depois.</li></ol>
+<p><strong>O que acontece:</strong> o km de volta vira o <strong>km atual do veículo</strong> na frota (só se for maior que o que o cadastro já tem). A tabela mostra cada item orçado × real, a diferença em vermelho quando passou do orçado, e a sobra ou falta contra a verba liberada. O desgaste do veículo é custo calculado e fica fora da comparação.</p>
+<h2 id="quando-a-op-da-viagem-volta-ou-é-cancelada">Quando a OP da viagem volta ou é cancelada</h2>
+<p>Se uma OP ligada à viagem for <strong>cancelada</strong> ou <strong>devolvida</strong> (ao PCP ou ao Comercial), a viagem ganha uma nota no histórico e quem aprova recebe um aviso na caixa de Menções para conferir se a viagem ainda faz sentido. O sistema <strong>não muda a viagem sozinho</strong>.</p>
+<h1 id="custos-e-frota"><span class="parte">Parte 3</span>Custos e frota</h1>
+<h2 id="o-relatório-de-custos">O relatório de custos</h2>
+<p>No alto da tela de Viagens, ao lado de <strong>Quadro</strong> e <strong>Lista</strong>, fica a visão <strong>Custos</strong>. Ela compara o que o Financeiro lançou como custo real com o orçado.</p>
+<ul class="lista"><li><strong>Período:</strong> este ano, últimos 90 dias ou tudo, pela data de saída da viagem.</li><li><strong>Só entram</strong> viagens com o custo real lançado.</li><li><strong>Faixa vermelha:</strong> viagens finalizadas <strong>sem</strong> custo real lançado. É prestação de contas que ainda falta; clicar no nome abre a viagem.</li><li><strong>Viagens que passaram do orçado:</strong> com a diferença em reais e em porcentagem.</li><li><strong>Por mês</strong> e <strong>por veículo:</strong> quantas viagens, o orçado, o gasto, o km rodado e o custo por km.</li></ul>
+<aside class="caixa dica"><strong>Dica:</strong> o desgaste do veículo não entra na comparação: ele é custo calculado, não sai dinheiro.</aside>
+<h2 id="a-frota">A frota</h2>
+<p>O botão <strong>Frota</strong>, no alto da tela, abre o cadastro dos veículos de viagem (só quem tem a aba Viagens).</p>
+<ul class="lista"><li><strong>Cadastrar:</strong> nome (por exemplo, &quot;Strada branca&quot;), modelo, placa no formato ABC-1234 ou ABC-1D23 e o km atual. Duas placas iguais não entram.</li><li><strong>Em uso:</strong> o veículo desativado deixa de aparecer na escolha das viagens, mas o histórico fica.</li><li>O km atual <strong>se atualiza sozinho</strong> quando uma viagem com aquele veículo é finalizada.</li></ul>
+<h3 id="histórico-e-manutenção-do-veículo">Histórico e manutenção do veículo</h3>
+<p>O botão de histórico (relógio) em cada veículo abre:</p>
+<ul class="lista"><li><strong>Km rodado em viagens:</strong> as viagens finalizadas, com km de saída, de volta e rodado, e o total.</li><li><strong>Manutenções:</strong> data, tipo (revisão, óleo, pneus, freios, elétrica, funilaria, outro), km do painel, custo e a <strong>próxima revisão</strong> por km, por data ou pelos dois.</li><li><strong>Registrar manutenção:</strong> preencha a data, o tipo e, se quiser, a próxima revisão. A data não pode ser no futuro; para agendar, use a próxima revisão. O botão de apagar serve para registro lançado por engano.</li></ul>
+<h3 id="aviso-de-revisão">Aviso de revisão</h3>
+<p>Na lista da frota o veículo ganha um selo quando a revisão está perto ou vencida:</p>
+<ul class="lista"><li><strong>Revisão vencida</strong> (vermelho): o km atual passou do km combinado, ou a data passou.</li><li><strong>Revisão perto</strong> (amarelo): faltam 1.000 km ou menos, ou 15 dias ou menos.</li></ul>
+<aside class="caixa atencao"><strong>Atenção:</strong> o aviso vale pela <strong>última manutenção que definiu uma próxima revisão</strong>. Veículo sem revisão marcada não dá alerta.</aside><h1 id="historico-do-manual"><span class="parte">Fim</span>Histórico deste manual</h1><ul class="lista"><li><strong>04/11/2026</strong> — Primeira versão: o quadro de seis colunas, o que cada setor preenche em Provisionamento (Adaptação, Comercial e Financeiro), o aviso na caixa de Menções de cada setor quando a viagem é aprovada (e a viagem abre por ali mesmo para quem não tem a aba Viagens), o aviso de conflito de veículo e de equipe, a ficha impressa da equipe, o fechamento com custo real × orçado, a aba Custos, a frota com histórico de km e manutenção, e o aviso quando a OP ligada à viagem volta ou é cancelada.</li></ul></main>
+</div>
+<script>
+(function(){
+  try{
+    var z=document.createElement('div');z.className='zoom';z.innerHTML='<img alt="">';document.body.appendChild(z);
+    document.addEventListener('click',function(e){
+      var t=e.target;
+      if(t.tagName==='IMG'&&t.closest('main')){z.firstChild.src=t.src;z.classList.add('on');}
+      else if(z.classList.contains('on')){z.classList.remove('on');}
+    });
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')z.classList.remove('on');});
+    var links=[].slice.call(document.querySelectorAll('nav.sum a'));
+    var alvo=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+    function marca(){
+      var atual=-1;
+      for(var i=0;i<alvo.length;i++){if(alvo[i]&&alvo[i].getBoundingClientRect().top<120)atual=i;}
+      links.forEach(function(a,i){a.classList.toggle('atual',i===atual);});
+    }
+    window.addEventListener('scroll',marca,{passive:true});marca();
+    var b=document.querySelector('.tema');
+    if(b)b.addEventListener('click',function(){
+      var r=document.documentElement;
+      var escuro=r.getAttribute('data-theme')==='dark'||(!r.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);
+      r.setAttribute('data-theme',escuro?'light':'dark');
+    });
+  
+  var im=document.querySelector('.imprimir');if(im)im.addEventListener('click',function(){window.print();});
+  if(window.top!==window.self)document.documentElement.classList.add('embutido');}catch(e){}
+})();
+</script>
+</body></html>
