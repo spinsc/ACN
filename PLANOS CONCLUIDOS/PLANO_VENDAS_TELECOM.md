@@ -1,4 +1,4 @@
-# Vendas do Telecom — comercial enxuto para o setor privado (pedido do usuário em 03/11/2026)
+# Vendas do Telecom — comercial enxuto para o setor privado (pedido do usuário em 03/11/2026) — **CONCLUÍDO em 04/11/2026** (fatias 1, 2 e 3 publicadas; só consulta ou ajuste)
 
 **O pedido:** uma contratação nova, para **vender ao setor privado** (shoppings, condomínios, empresas; **cliente final por enquanto**, sem representações), **só com itens de telecom**. O usuário pediu uma aba **dentro do Telecom**, "como um comercial/CRM mais enxuto", com **um operador** que abre as vendas.
 
