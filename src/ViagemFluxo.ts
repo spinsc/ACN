@@ -95,19 +95,68 @@ export function movimentoParaAColuna(v: any, destino: string, usuario: any): { m
   return { porque: `Daqui ("${aqui}") a viagem não vai direto para "${nome}". Use: ${todos.map(x => x.rotulo).join('; ')}.` };
 }
 
-/** O que falta para a viagem poder seguir. Vazio = pode. Para ir à aprovação a viagem precisa estar completa, com a rota calculada e atualizada. */
-export function faltaParaMover(v: any, para: StatusViagem): string[] {
+/** O roteiro completo e calculado: o que a viagem precisa para ir à aprovação e para ser aprovada (a viagem que a OP gera nasce sem rota, e quem aprova precisa ver o orçamento). */
+function faltaDoRoteiro(v: any): string[] {
   const falta: string[] = [];
-  if (para === 'em_aprovacao') {
-    if (!String(v?.titulo || '').trim()) falta.push('o título');
-    if (!v?.data_saida) falta.push('a data de saída');
-    if (!v?.origem) falta.push('o ponto de saída');
-    if (!(v?.paradas || []).length) falta.push('ao menos uma parada');
-    if ((v?.origem && (v?.paradas || []).length) && !v?.rota) falta.push('calcular a rota');
-    else if (v?.rota && v.rota.assinatura !== assinaturaDoRoteiro(v.origem, v.paradas, v.ida_e_volta, v.otimizar_ordem)) falta.push('recalcular a rota (o roteiro mudou depois do último cálculo)');
-  }
+  if (!String(v?.titulo || '').trim()) falta.push('o título');
+  if (!v?.data_saida) falta.push('a data de saída');
+  if (!v?.origem) falta.push('o ponto de saída');
+  if (!(v?.paradas || []).length) falta.push('ao menos uma parada');
+  if ((v?.origem && (v?.paradas || []).length) && !v?.rota) falta.push('calcular a rota');
+  else if (v?.rota && v.rota.assinatura !== assinaturaDoRoteiro(v.origem, v.paradas, v.ida_e_volta, v.otimizar_ordem)) falta.push('recalcular a rota (o roteiro mudou depois do último cálculo)');
   return falta;
 }
+
+/**
+ * O que falta para a viagem poder seguir. Vazio = pode.
+ *  • Em aprovação e Provisionamento: roteiro completo com a rota calculada e atualizada (quem aprova precisa ver o orçamento).
+ *  • Andamento ("a equipe saiu"): a Adaptação definiu a equipe, o veículo da frota e o km de saída, e o Financeiro lançou a verba total (decidido com o usuário em 04/11/2026;
+ *    hotel, pedágio, descrição do serviço e contrato NÃO travam a saída).
+ */
+export function faltaParaMover(v: any, para: StatusViagem): string[] {
+  if (para === 'em_aprovacao' || para === 'provisionamento') return faltaDoRoteiro(v);
+  if (para === 'andamento') {
+    const falta: string[] = [];
+    if (!(Array.isArray(v?.equipe) && v.equipe.length)) falta.push('a equipe (Adaptação)');
+    if (!v?.frota_id) falta.push('o veículo da frota (Adaptação)');
+    if (v?.km_saida === null || v?.km_saida === undefined || v?.km_saida === '' || !(Number(v.km_saida) >= 0)) falta.push('o km de saída (Adaptação)');
+    if (!(Number(v?.verba_total) > 0)) falta.push('a verba total (Financeiro)');
+    return falta;
+  }
+  return [];
+}
+
+// ── quem preenche o quê (decidido com o usuário em 04/11/2026: cada setor "nutre" a sua parte em Provisionamento) ──
+export type PermissoesDaViagem = { base: boolean; adaptacao: boolean; comercial: boolean; financeiro: boolean };
+
+/** Admin ou lista de abas vazia = todas as abas (a mesma regra do menu). */
+export function temAbaDe(usuario: any, ...ids: string[]): boolean {
+  if (usuario?.perfil === 'Admin') return true;
+  const abas = usuario?.abas_permitidas;
+  if (!Array.isArray(abas) || abas.length === 0) return true;
+  return ids.some(i => abas.includes(i));
+}
+
+/**
+ * base = roteiro, custos e dados da viagem (a aba Viagens); adaptacao = equipe, veículo e km (a aba Adaptação); comercial = serviço e contrato (CRM, Licitações ou Comercial);
+ * financeiro = verba, pedágio e hotel (a aba Financeiro). A direção (Admin, gerentes e a equipe do Comercial/CRM e Licitações como gerente do setor) preenche tudo.
+ */
+export function permissoesDaViagem(usuario: any): PermissoesDaViagem {
+  const direcao = temPoderDeGerente(usuario);
+  return {
+    base: direcao || temAbaDe(usuario, 'viagens'),
+    adaptacao: direcao || temAbaDe(usuario, 'producao'),
+    comercial: direcao || temAbaDe(usuario, 'crm', 'licitacoes', 'comercial'),
+    financeiro: direcao || temAbaDe(usuario, 'financeiro'),
+  };
+}
+
+/** A parte "Provisionamento" da viagem (equipe, veículo, serviço, contrato, verba, pedágio e hotel) aparece quando a viagem já foi aprovada. */
+export const temProvisionamento = (v: any) => ['provisionamento', 'andamento', 'finalizada'].includes(statusDaViagem(v));
+
+/** A viagem que a OP gerou ainda não foi aprovada: a OP não aparece na fila da Adaptação até a viagem chegar a Provisionamento. */
+export const viagemSeguraAOp = (v: any) => ['aberta', 'em_aprovacao', 'nao_aprovada'].includes(statusDaViagem(v));
+
 
 export type EntradaDoHistorico = { em: string; por: string | null; de: string; para: string; motivo?: string | null; nota?: string | null };
 

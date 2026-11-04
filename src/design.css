@@ -7132,3 +7132,20 @@ html body .acn-b.acn-vg-passo:not(#acn) { min-height: 28px; padding-block: 4px; 
 .acn-vg-jan .acn-modal-rodape { flex-wrap: wrap; }
 /* janela da viagem em tamanho médio (pedido do usuário em 04/11/2026): a regra genérica do cadastro a deixava em 500 px e a .acn-vg-jan de cima nunca valia */
 html body .modal-box.acn-modal-cadastro.acn-vg-jan { width: min(780px, 95vw); max-width: 780px; }
+
+/* ── Viagens, fatia 2 (04/11/2026): provisionamento por setor, contrato e frota ── */
+/* o fieldset só serve para desligar os campos de quem não pode mexer naquela parte: sem borda, sem margem e sem a largura mínima que o navegador impõe */
+.acn-vg-fs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.acn-vg-fs:disabled { opacity: .72; }
+.acn-vg-quem { margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--acn-muted); }
+.acn-vg-anexos { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.acn-vg-anexos li { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.acn-vg-anexos a { display: inline-flex; align-items: center; gap: 4px; color: var(--acn-brand-ink); text-decoration: underline; word-break: break-all; }
+.acn-vg-anexar { display: inline-block; cursor: pointer; }
+.acn-vg-anexar input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.acn-vg-anexar:focus-within span { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
+html body .modal-box.acn-modal-cadastro.acn-vg-frota { width: min(640px, 95vw); max-width: 640px; }
+/* os campos de texto, as caixas de descrição e as listas da viagem ocupam a coluna inteira (o navegador os deixava com a largura padrão, de uns 160 px) */
+.acn-vg-campo > input.acn-input, .acn-vg-campo > textarea.acn-input, .acn-vg-campo > select.acn-input { width: 100%; box-sizing: border-box; }
+.acn-vg-campo > textarea.acn-input { resize: vertical; min-height: 64px; }
+.acn-vg-fs > * + * { margin-top: 10px; }

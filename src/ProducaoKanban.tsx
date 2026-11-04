@@ -19,6 +19,7 @@ import { temSerralheria } from './FluxoEntrega';
 import { OrigemVendaBadge } from './OrigemVenda';
 import { LinkOpl } from './AcnTabShared';
 import { Botao, Selo, Tag, hojeISO, diaISO } from './Interface';
+import { statusDaViagem, rotuloDoStatus } from './ViagemFluxo';
 import { mdiSwapVertical, mdiMessageTextOutline, mdiAccountGroupOutline, mdiPlay, mdiCheck, mdiTrayArrowDown, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 
 const maisDias = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return diaISO(d); };
@@ -101,6 +102,7 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
           <OrigemVendaBadge origem={o.origem_venda} />
           {o.prioridade_dia != null && <Tag title="Prioridade no dia">{o.prioridade_dia}º</Tag>}
           {temSerralheria(o) && <Tag title="Passa pela serralheria">Serralheria</Tag>}
+          {o._viagem && <Botao pequeno variante="secundario" title="Abrir a viagem desta OP (equipe, veículo e km)" onClick={() => onAction('viagem', o)}>Viagem · {rotuloDoStatus(statusDaViagem(o._viagem))}</Botao>}
         </div>
 
         <div>

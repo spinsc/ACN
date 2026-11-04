@@ -13,22 +13,23 @@ import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { logChange } from './AuditSystem';
-import { lerValorDigitado } from './LerValor';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { CabecalhoTela, Botao, Selo, Faixa, Chips, MenuAcoes, hojeISO } from './Interface';
 import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
 import { buscarEndereco, buscarVariosEnderecos, linhasDeEnderecos, calcularRota, nomeCurto, assinaturaDoRoteiro } from './ViagemRota';
 import { CUSTOS_PADRAO, calcularViagem, fmtKm, fmtHoras, fmtReais, textoDoOrcamento, textoDoRoteiro, dataComDiaDaSemana } from './ViagemCalculo';
+import { CampoNumero } from './ViagemCampos';
+import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
 import {
   COLUNAS_VIAGEM, statusDaViagem, colunaDaViagem, rotuloDoStatus, movimentosDaViagem, movimentoParaAColuna, faltaParaMover, patchDoMovimento, entradaDoMovimento, entradaDeAlteracao,
-  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca,
+  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento,
 } from './ViagemFluxo';
 import type { Movimento } from './ViagemFluxo';
 import {
   mdiPlus, mdiClose, mdiArrowUp, mdiArrowDown, mdiMagnify, mdiContentSaveOutline, mdiContentCopy, mdiPrinterOutline,
-  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew,
+  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline,
 } from '@mdi/js';
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
@@ -37,52 +38,30 @@ const viagemVazia = () => ({ titulo: '', status: 'aberta', data_saida: '', pesso
 
 // ── peças pequenas ───────────────────────────────────────────────────────────
 
-/** Campo de número: aceita "1.500,50" e "12,5" (LerValor.ts); texto que não é número fica marcado e NÃO muda o valor. `vazioNulo`: campo em branco vira nulo (ex.: noites automáticas). */
-function CampoNumero({ rotulo, valor, onChange, sufixo, ajuda, vazioNulo = false, inteiro = false, placeholder }: any) {
-  const [texto, setTexto] = useState(valor === null || valor === undefined ? '' : String(valor).replace('.', ','));
-  const [ruim, setRuim] = useState(false);
-  const mudar = (t: string) => {
-    setTexto(t);
-    const r = lerValorDigitado(t);
-    if (r.vazio) { setRuim(false); onChange(vazioNulo ? null : 0); return; }
-    if (r.invalido) { setRuim(true); return; }
-    setRuim(false);
-    onChange(inteiro ? Math.floor(r.valor) : r.valor);
-  };
-  return (
-    <div className="acn-vg-campo">
-      {rotulo && <label className="acn-label">{rotulo}</label>}
-      <div className="acn-vg-campo-in">
-        <input className="acn-input" inputMode="decimal" aria-label={rotulo} aria-invalid={ruim || undefined} placeholder={placeholder} value={texto} onChange={e => mudar(e.target.value)} />
-        {sufixo && <span className="acn-vg-suf">{sufixo}</span>}
-      </div>
-      {ruim && <div className="acn-vg-erro">Não parece um número.</div>}
-      {ajuda && <div className="acn-ajuda">{ajuda}</div>}
-    </div>
-  );
-}
-
 /** Procura um endereço ou cidade e deixa escolher entre os candidatos. */
-function BuscaDeEndereco({ rotulo, placeholder, onEscolher }: any) {
+function BuscaDeEndereco({ rotulo, placeholder, onEscolher, semente }: any) {
   const [q, setQ] = useState('');
   const [lista, setLista] = useState<any[] | null>(null);
   const [erro, setErro] = useState('');
   const [buscando, setBuscando] = useState(false);
-  const buscar = async () => {
+  const buscar = async (texto?: any) => {
     if (buscando) return;
+    const consulta = typeof texto === 'string' ? texto : q;
     setBuscando(true); setErro(''); setLista(null);
     try {
-      const r = await buscarEndereco(q);
+      const r = await buscarEndereco(consulta);
       if (!r.length) setErro('Nada encontrado. Tente a cidade e o estado, por exemplo "Sorocaba, SP".');
       setLista(r);
     } catch (e: any) { setErro('Não foi possível buscar: ' + (e?.message || e)); }
     finally { setBuscando(false); }
   };
+  // o destino que a OP indica: o botão da faixa manda o texto para cá e a busca já roda (04/11/2026)
+  useEffect(() => { if (semente?.texto) { setQ(semente.texto); buscar(semente.texto); } }, [semente?.n]);
   return (
     <div className="acn-vg-busca">
       <div className="acn-vg-busca-linha">
         <input className="acn-input" aria-label={rotulo} placeholder={placeholder} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') buscar(); }} />
-        <Botao pequeno variante="secundario" icone={mdiMagnify} disabled={buscando || q.trim().length < 3} onClick={buscar}>{buscando ? 'Buscando…' : 'Buscar'}</Botao>
+        <Botao pequeno variante="secundario" icone={mdiMagnify} disabled={buscando || q.trim().length < 3} onClick={() => buscar()}>{buscando ? 'Buscando…' : 'Buscar'}</Botao>
       </div>
       {erro && <div className="acn-vg-erro">{erro}</div>}
       {lista && lista.length > 0 && (
@@ -194,11 +173,18 @@ function abrirImpressao(v: any, r: any) {
 }
 
 // ── o editor ─────────────────────────────────────────────────────────────────
-function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
+export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
   const [v, setV] = useState(() => ({ ...viagemVazia(), ...inicial, custos: { ...CUSTOS_PADRAO, ...(inicial?.custos || {}) }, paradas: inicial?.paradas || [], data_saida: inicial?.data_saida || '', vinculo: inicial?.vinculo || '' }));
   const [salvando, setSalvando] = useState(false);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState('');
+  // fatia 2 (04/11/2026): quem pode mexer em cada parte, a frota e o contrato
+  const pode = permissoesDaViagem(currentUser);
+  const [frota, setFrota] = useState<any[]>([]);
+  const [erroFrota, setErroFrota] = useState('');
+  const [subindoContrato, setSubindoContrato] = useState(false);
+  const [semente, setSemente] = useState<any>(null);   // manda o destino que a OP indica para a busca de parada
+  useEffect(() => { lerFrota().then(r => { setFrota(r.lista); setErroFrota(r.erro); }); }, []);
   const set = (campo: string, valor: any) => setV((x: any) => ({ ...x, [campo]: valor }));
   const setCusto = (campo: string, valor: any) => setV((x: any) => ({ ...x, custos: { ...x.custos, [campo]: valor } }));
   const r = useMemo(() => calcularViagem(v), [v]);
@@ -233,7 +219,8 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
   /** Grava a viagem. Com `mov`, grava junto a passagem de coluna (um só passo: ou tudo ou nada), com a conferência do que falta e o motivo quando a passagem pede. */
   const salvar = async (mov?: Movimento) => {
     if (salvando) return;
-    if (!String(v.titulo || '').trim()) { mostrarAviso('Dê um título à viagem.', 'atencao'); return; }
+    if (pode.base && !String(v.titulo || '').trim()) { mostrarAviso('Dê um título à viagem.', 'atencao'); return; }
+    if (!v.id && !pode.base) { mostrarAviso('Você não tem permissão para criar viagens.', 'atencao'); return; }
     if (mov) {
       const falta = faltaParaMover(v, mov.para);
       if (falta.length) { mostrarAviso(`Não foi possível mandar para "${rotuloDoStatus(mov.para)}": falta ${falta.join(', ')}.`); return; }
@@ -245,15 +232,17 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
       if (!t.trim()) { mostrarAviso('Não foi possível passar a viagem: o motivo é obrigatório.'); return; }
       motivo = t.trim();
     }
-    if (!mov && rotaVelha && !await confirmar('O roteiro mudou depois do último cálculo: o km, o tempo e os custos gravados são os da rota ANTIGA.\n\nSalvar mesmo assim? (Para atualizar, cancele e use "Calcular rota".)')) return;
+    if (!mov && pode.base && rotaVelha && !await confirmar('O roteiro mudou depois do último cálculo: o km, o tempo e os custos gravados são os da rota ANTIGA.\n\nSalvar mesmo assim? (Para atualizar, cancele e use "Calcular rota".)')) return;
     setSalvando(true);
     const agora = new Date().toISOString();
     const por = currentUser?.nome || currentUser?.email || null;
-    const linha: any = {
+    // cada pessoa grava só o grupo que pode editar (a parte da Adaptação, do Comercial e do Financeiro vai separada), para não passar por cima do que outro setor preencheu
+    const linhaBase: any = {
       titulo: String(v.titulo).trim(), data_saida: v.data_saida || null, pessoas: Math.max(1, Math.floor(Number(v.pessoas) || 1)),
       vinculo: String(v.vinculo || '').trim() || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
       rota: v.rota, custos: v.custos, km_total: r.temRota ? r.km : null, horas_viagem: r.temRota ? r.horasDirecao : null, total_custo: r.custoTotal, total_orcamento: r.orcamento,
     };
+    const linha: any = { ...(pode.base ? linhaBase : {}), ...camposDoGrupo(v, pode) };
     // o histórico: a criação, a passagem de coluna e, se a viagem já saiu de Aberta, o rastro de que o roteiro ou o valor mudou
     let historico: any[] = Array.isArray(inicial?.historico) ? [...inicial.historico] : [];
     if (!v.id) historico.push({ em: agora, por, de: '', para: 'aberta', nota: 'Viagem criada.' });
@@ -261,12 +250,23 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
       const p = patchDoMovimento(v.id ? inicial : { ...v, status: 'aberta' }, mov, por, motivo, agora);
       Object.assign(linha, { status: p.status, status_desde: p.status_desde });
       historico.push(p.historico[p.historico.length - 1]);
-    } else if (v.id && statusDaViagem(inicial) !== 'aberta') {
+    } else if (pode.base && v.id && statusDaViagem(inicial) !== 'aberta') {
       const mudouRoteiro = JSON.stringify([inicial.origem, inicial.paradas, inicial.ida_e_volta]) !== JSON.stringify([v.origem, v.paradas, v.ida_e_volta]);
       const mudouValor = Math.round(Number(inicial.total_orcamento || 0) * 100) !== Math.round(Number(r.orcamento || 0) * 100);
       if (mudouRoteiro || mudouValor) historico.push(entradaDeAlteracao(inicial, inicial.total_orcamento, r.orcamento, por, agora));
     }
-    linha.historico = historico;
+    // cada setor que preenche a sua parte deixa o rastro no histórico (quem, quando e quais campos)
+    if (v.id && !mov) {
+      const mudou = (campos: string[]) => campos.some(k => JSON.stringify(inicial?.[k] ?? null) !== JSON.stringify(v[k] ?? null));
+      const notas: string[] = [];
+      if (pode.adaptacao && mudou(['equipe', 'frota_id', 'km_saida'])) notas.push('Adaptação atualizou a equipe, o veículo ou o km de saída.');
+      if (pode.comercial && mudou(['servico_descricao', 'contrato_obs'])) notas.push('Comercial atualizou o serviço ou o contrato.');
+      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel'])) notas.push('Financeiro atualizou a verba, o pedágio ou o hotel.');
+      const st = statusDaViagem(inicial);
+      for (const nota of notas) historico.push({ em: agora, por, de: st, para: st, nota });
+    }
+    // só regrava o histórico quando há entrada nova: quem salva a parte de um setor não pode apagar o que outro setor acabou de registrar
+    if (historico.length !== (Array.isArray(inicial?.historico) ? inicial.historico.length : 0)) linha.historico = historico;
     // a gravação de quem passa de coluna só vale se a viagem ainda está na coluna que a pessoa viu (duas pessoas não passam a mesma viagem)
     const { data, error } = v.id
       ? await (mov ? supabase.from('viagens').update({ ...linha, atualizado_em: agora, atualizado_por_nome: por }).eq('id', v.id).eq('status', inicial.status) : supabase.from('viagens').update({ ...linha, atualizado_em: agora, atualizado_por_nome: por }).eq('id', v.id)).select('id').maybeSingle()
@@ -295,6 +295,23 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
     catch { alert('Não foi possível copiar automaticamente. Use "Imprimir" ou selecione o texto na tela.'); }
   };
 
+  // o contrato sobe e a lista é gravada na hora (só essa coluna): o arquivo não se perde se a janela fechar sem salvar
+  const aoAnexarContrato = async (e: any) => {
+    const arquivos = Array.from(e.target.files || []) as File[];
+    e.target.value = '';
+    if (!arquivos.length || !v.id) return;
+    setSubindoContrato(true);
+    const res = await anexarContrato(v, arquivos, currentUser);
+    setSubindoContrato(false);
+    set('contrato_anexos', res.lista);
+    if (res.erro) mostrarAviso(res.erro);
+  };
+  const aoTirarContrato = async (i: number) => {
+    const res = await tirarContrato(v, i, currentUser);
+    set('contrato_anexos', res.lista);
+    if (res.erro) mostrarAviso(res.erro);
+  };
+  const nadaParaSalvar = !pode.base && !pode.adaptacao && !pode.comercial && !pode.financeiro;
   const c = v.custos;
   return createPortal(
     <div className="modal-overlay acn-vg-ov">
@@ -305,6 +322,8 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
         </div>
         <div className="acn-modal-corpo acn-vg-corpo">
 
+          {!pode.base && <Faixa tom="info">Você não tem a aba Viagens: pode preencher só a parte do seu setor, mais abaixo. O roteiro e os custos ficam só para leitura.</Faixa>}
+          <fieldset className="acn-vg-fs" disabled={!pode.base}>
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">DADOS DA VIAGEM</div>
             <div className="acn-vg-grade">
@@ -322,9 +341,19 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
             <div className="acn-vg-campo"><label className="acn-label">Etapa</label>
               <div className="acn-vg-etapa"><Selo familia={coluna.familia} ponto={false} title={coluna.ajuda}>{coluna.rotulo}</Selo><span className="acn-ajuda">{coluna.ajuda} Para mudar de etapa use os botões no rodapé.</span></div></div>
           </div>
+          </fieldset>
 
+          {temProvisionamento(inicial || v) && (
+            <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
+              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} />
+          )}
+
+          <fieldset className="acn-vg-fs" disabled={!pode.base}>
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">ROTEIRO</div>
+            {v.sugestao_destino && !v.paradas.length && (
+              <Faixa tom="info">A OP indica o destino: «{v.sugestao_destino}». {pode.base && <Botao pequeno variante="secundario" icone={mdiMagnify} onClick={() => setSemente({ texto: v.sugestao_destino, n: Date.now() })}>Procurar no mapa</Botao>}</Faixa>
+            )}
             <div className="acn-vg-campo"><label className="acn-label">Saída (origem) *</label>
               {v.origem
                 ? <div className="acn-vg-ponto"><Icone path={mdiMapMarker} size={15} /> <span title={v.origem.texto}>{nomeCurto(v.origem.texto)}</span>
@@ -343,7 +372,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
                   <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Tirar a parada ${i + 1}`} title="Tirar" onClick={() => set('paradas', v.paradas.filter((x: any) => x.id !== p.id))} />
                 </div>
               ))}
-              <BuscaDeEndereco rotulo="Buscar uma parada" placeholder="Cidade ou endereço da parada, ex.: Campinas, SP" onEscolher={(p: any) => set('paradas', [...v.paradas, { ...p, dias: 0 }])} />
+              <BuscaDeEndereco rotulo="Buscar uma parada" placeholder="Cidade ou endereço da parada, ex.: Campinas, SP" semente={semente} onEscolher={(p: any) => set('paradas', [...v.paradas, { ...p, dias: 0 }])} />
               <ColarEnderecos onAdicionar={(lista: any[]) => setV((x: any) => ({ ...x, paradas: [...x.paradas, ...lista] }))} />
               <div className="acn-ajuda">"Dias no local" contam o dia da chegada como o dia 1: com 3 dias a equipe chega e trabalha no dia 1, dorme lá duas noites e sai no fim do dia 3.</div>
             </div>
@@ -370,6 +399,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
               </table>
             )}
           </div>
+          </fieldset>
 
           {roteiro && (
             <div className="acn-quadro">
@@ -401,6 +431,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
             </div>
           )}
 
+          <fieldset className="acn-vg-fs" disabled={!pode.base}>
           <div className="acn-quadro">
             <div className="acn-quadro-titulo">CUSTOS</div>
             <div className="acn-vg-grade">
@@ -418,6 +449,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
             <ListaDeLinhas titulo="Pedágios" linhas={c.pedagios} placeholder="Ex.: Rodovia dos Bandeirantes (ida e volta)" ajuda="Lançados à mão: as fontes gratuitas de mapa não informam pedágio." onChange={(l: any[]) => setCusto('pedagios', l)} />
             <ListaDeLinhas titulo="Outros custos" linhas={c.outros} placeholder="Ex.: estacionamento, balsa, aluguel de carro" onChange={(l: any[]) => setCusto('outros', l)} />
           </div>
+          </fieldset>
 
           <div className="acn-quadro tom-info acn-vg-resumo">
             <div className="acn-quadro-titulo">ORÇAMENTO</div>
@@ -459,7 +491,7 @@ function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
           )}
         </div>
         <div className="acn-modal-rodape">
-          <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvando} onClick={() => salvar()}>{salvando ? 'Salvando…' : 'Salvar viagem'}</Botao>
+          <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvando || nadaParaSalvar} onClick={() => salvar()}>{salvando ? 'Salvando…' : 'Salvar viagem'}</Botao>
           {passos.map(m => (
             <Botao key={m.para} variante={m.perigo ? 'perigo-sec' : m.sentido === 'avanca' ? 'secundario' : 'discreto'} icone={m.sentido === 'avanca' ? mdiArrowRight : undefined} disabled={salvando}
               title={'Grava a viagem e a passa para ' + rotuloDoStatus(m.para)} onClick={() => salvar(m)}>{m.rotulo}</Botao>
@@ -541,6 +573,12 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
           {parado >= 3 && <span className="acn-vg-parada-ha" title="Dias na etapa atual">há {parado} dias nesta etapa</span>}
         </div>
       )}
+      {(v.veiculo_nome || (Array.isArray(v.equipe) && v.equipe.length > 0)) && (
+        <div className="acn-vg-card-meta">
+          {v.veiculo_nome && <span title="Veículo da frota"><Icone path={mdiCarOutline} size={13} /> {v.veiculo_nome}{v.veiculo_placa ? ' · ' + v.veiculo_placa : ''}</span>}
+          {Array.isArray(v.equipe) && v.equipe.length > 0 && <span title={v.equipe.map((m: any) => m.nome).join(', ')}>{v.equipe.length} na equipe</span>}
+        </div>
+      )}
       {recusa && <div className="acn-vg-card-recusa">Motivo: {recusa}</div>}
       <div className="acn-vg-card-pe">
         <span className="acn-vg-card-valor acn-num">{v.total_orcamento != null && Number(v.total_orcamento) > 0 ? fmtReais(v.total_orcamento) : 'sem valor'}</span>
@@ -563,6 +601,7 @@ export default function ViagensTab({ currentUser }: any) {
   const [busca, setBusca] = useState('');
   const [saida, setSaida] = useState('todas');
   const [editando, setEditando] = useState<any | null>(null);
+  const [frotaAberta, setFrotaAberta] = useState(false);   // o cadastro de frota (fatia 2, 04/11/2026)
   const [soltarEm, setSoltarEm] = useState<string | null>(null);   // a coluna sobre a qual o cartão está sendo arrastado
   const hoje = hojeISO();
   const emAcao = React.useRef(false);
@@ -603,7 +642,12 @@ export default function ViagensTab({ currentUser }: any) {
   return (
     <div className="acn-vg">
       <CabecalhoTela titulo="Viagens" subtitulo="Do roteiro e orçamento à volta da equipe: cada viagem anda pelo quadro"
-        acoes={<Botao variante="primario" icone={mdiPlus} onClick={() => setEditando(viagemVazia())}>Nova viagem</Botao>} />
+        acoes={permissoesDaViagem(currentUser).base ? (
+          <>
+            <Botao icone={mdiCarOutline} onClick={() => setFrotaAberta(true)}>Frota</Botao>
+            <Botao variante="primario" icone={mdiPlus} onClick={() => setEditando(viagemVazia())}>Nova viagem</Botao>
+          </>
+        ) : undefined} />
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as viagens ({erro}).</Faixa>}
       <div className="acn-vg-barra">
         <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }]} />
@@ -665,6 +709,7 @@ export default function ViagensTab({ currentUser }: any) {
           </table>
         </div>
       )}
+      {frotaAberta && <FrotaModal currentUser={currentUser} aoFechar={() => setFrotaAberta(false)} aoMudar={() => {}} />}
       {editando && <EditorDeViagem key={editando.id || 'nova'} inicial={editando} currentUser={currentUser} aoFechar={() => setEditando(null)} aoSalvar={() => { setEditando(null); carregar(); }} />}
     </div>
   );
