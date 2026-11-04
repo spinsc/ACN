@@ -8,7 +8,7 @@
 // Limites desta primeira versão (a confirmar com o usuário): a rota vem de serviços gratuitos de mapa (sem pedágio), então o pedágio é lançado à mão; a data da viagem e a
 // ligação com OP/PV/licitação são só informativas (texto).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -20,6 +20,9 @@ import Icone from './Icone';
 import { buscarEndereco, buscarVariosEnderecos, linhasDeEnderecos, calcularRota, nomeCurto, assinaturaDoRoteiro } from './ViagemRota';
 import { CUSTOS_PADRAO, calcularViagem, fmtKm, fmtHoras, fmtReais, textoDoOrcamento, textoDoRoteiro, dataComDiaDaSemana } from './ViagemCalculo';
 import { CampoNumero } from './ViagemCampos';
+import { BlocoFechamento } from './ViagemFechamento';
+import { VinculosDaViagem, textoDosVinculos } from './ViagemVinculos';
+import { abrirVinculo } from './VinculoPicker';
 import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
 import {
@@ -34,7 +37,7 @@ import {
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
 const diaBR = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—');
-const viagemVazia = () => ({ titulo: '', status: 'aberta', data_saida: '', pessoas: 1, vinculo: '', origem: null, paradas: [], ida_e_volta: true, otimizar_ordem: true, rota: null, custos: { ...CUSTOS_PADRAO } });
+const viagemVazia = () => ({ titulo: '', status: 'aberta', data_saida: '', pessoas: 1, vinculo: '', vinculos: [], origem: null, paradas: [], ida_e_volta: true, otimizar_ordem: true, rota: null, custos: { ...CUSTOS_PADRAO } });
 
 // ── peças pequenas ───────────────────────────────────────────────────────────
 
@@ -174,7 +177,9 @@ function abrirImpressao(v: any, r: any) {
 
 // ── o editor ─────────────────────────────────────────────────────────────────
 export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
-  const [v, setV] = useState(() => ({ ...viagemVazia(), ...inicial, custos: { ...CUSTOS_PADRAO, ...(inicial?.custos || {}) }, paradas: inicial?.paradas || [], data_saida: inicial?.data_saida || '', vinculo: inicial?.vinculo || '' }));
+  const [v, setV] = useState(() => ({ ...viagemVazia(), ...inicial, custos: { ...CUSTOS_PADRAO, ...(inicial?.custos || {}) }, paradas: inicial?.paradas || [], data_saida: inicial?.data_saida || '', vinculo: inicial?.vinculo || '', vinculos: Array.isArray(inicial?.vinculos) ? inicial.vinculos : [] }));
+  const fotoInicial = useRef('');   // o que a janela mostrava ao abrir: serve para avisar de alterações não salvas antes de sair para outro registro
+  if (!fotoInicial.current) fotoInicial.current = JSON.stringify(v);
   const [salvando, setSalvando] = useState(false);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState('');
@@ -239,7 +244,8 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     // cada pessoa grava só o grupo que pode editar (a parte da Adaptação, do Comercial e do Financeiro vai separada), para não passar por cima do que outro setor preencheu
     const linhaBase: any = {
       titulo: String(v.titulo).trim(), data_saida: v.data_saida || null, pessoas: Math.max(1, Math.floor(Number(v.pessoas) || 1)),
-      vinculo: String(v.vinculo || '').trim() || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
+      // o texto curto sai da lista de ligações; viagem antiga, só com o texto escrito à mão, mantém o texto
+      vinculos: v.vinculos || [], vinculo: ((v.vinculos || []).length ? textoDosVinculos(v.vinculos) : String(v.vinculo || '').trim()) || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
       rota: v.rota, custos: v.custos, km_total: r.temRota ? r.km : null, horas_viagem: r.temRota ? r.horasDirecao : null, total_custo: r.custoTotal, total_orcamento: r.orcamento,
     };
     const linha: any = { ...(pode.base ? linhaBase : {}), ...camposDoGrupo(v, pode) };
@@ -259,9 +265,9 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     if (v.id && !mov) {
       const mudou = (campos: string[]) => campos.some(k => JSON.stringify(inicial?.[k] ?? null) !== JSON.stringify(v[k] ?? null));
       const notas: string[] = [];
-      if (pode.adaptacao && mudou(['equipe', 'frota_id', 'km_saida'])) notas.push('Adaptação atualizou a equipe, o veículo ou o km de saída.');
+      if (pode.adaptacao && mudou(['equipe', 'frota_id', 'km_saida', 'km_volta'])) notas.push('Adaptação atualizou a equipe, o veículo ou o km.');
       if (pode.comercial && mudou(['servico_descricao', 'contrato_obs'])) notas.push('Comercial atualizou o serviço ou o contrato.');
-      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel'])) notas.push('Financeiro atualizou a verba, o pedágio ou o hotel.');
+      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel', 'custo_real'])) notas.push('Financeiro atualizou a verba, o pedágio, o hotel ou o custo real.');
       const st = statusDaViagem(inicial);
       for (const nota of notas) historico.push({ em: agora, por, de: st, para: st, nota });
     }
@@ -311,6 +317,12 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     set('contrato_anexos', res.lista);
     if (res.erro) mostrarAviso(res.erro);
   };
+  // abrir a OP, o card ou a licitação ligados: a janela da viagem sai da frente (senão ela cobre a tela que abriria), avisando se há algo não salvo
+  const abrirLigacao = async (x: any) => {
+    if (JSON.stringify(v) !== fotoInicial.current && !await confirmar('Há alterações não salvas nesta viagem. Abrir o registro mesmo assim? O que não foi salvo se perde.')) return;
+    await abrirVinculo(x);
+    aoFechar();
+  };
   const nadaParaSalvar = !pode.base && !pode.adaptacao && !pode.comercial && !pode.financeiro;
   const c = v.custos;
   return createPortal(
@@ -335,13 +347,15 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
                 <input type="time" className="acn-input" aria-label="Horário de saída de cada dia" value={v.custos.hora_saida || '08:00'} onChange={e => setCusto('hora_saida', e.target.value || '08:00')} />
                 <div className="acn-ajuda">Vale para todos os dias do roteiro.</div></div>
               <CampoNumero rotulo="Pessoas" valor={v.pessoas} inteiro onChange={(n: number) => set('pessoas', Math.max(1, n || 1))} />
-              <div className="acn-vg-campo acn-vg-largo"><label className="acn-label">Ligada a (OP, PV, licitação…)</label>
-                <input className="acn-input" aria-label="Ligada a" placeholder="Opcional: número da OP, do PV ou da licitação" value={v.vinculo || ''} onChange={e => set('vinculo', e.target.value)} /></div>
             </div>
+            <div className="acn-vg-campo"><label className="acn-label">Ligada a (OP, PV, licitação)</label>
+              <VinculosDaViagem v={v} set={set} pode={pode} aoAbrir={abrirLigacao} /></div>
             <div className="acn-vg-campo"><label className="acn-label">Etapa</label>
               <div className="acn-vg-etapa"><Selo familia={coluna.familia} ponto={false} title={coluna.ajuda}>{coluna.rotulo}</Selo><span className="acn-ajuda">{coluna.ajuda} Para mudar de etapa use os botões no rodapé.</span></div></div>
           </div>
           </fieldset>
+
+          {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} />}
 
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
@@ -575,7 +589,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
       )}
       {(v.veiculo_nome || (Array.isArray(v.equipe) && v.equipe.length > 0)) && (
         <div className="acn-vg-card-meta">
-          {v.veiculo_nome && <span title="Veículo da frota"><Icone path={mdiCarOutline} size={13} /> {v.veiculo_nome}{v.veiculo_placa ? ' · ' + v.veiculo_placa : ''}</span>}
+          {v.veiculo_nome && <span className="acn-vg-chip" title="Veículo da frota"><Icone path={mdiCarOutline} size={13} /> {v.veiculo_nome}{v.veiculo_placa ? ' · ' + v.veiculo_placa : ''}</span>}
           {Array.isArray(v.equipe) && v.equipe.length > 0 && <span title={v.equipe.map((m: any) => m.nome).join(', ')}>{v.equipe.length} na equipe</span>}
         </div>
       )}
@@ -613,6 +627,20 @@ export default function ViagensTab({ currentUser }: any) {
     setErro(''); setLista(data || []); setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Menções (o aviso de que a viagem espera aprovação), o card do CRM e a licitação abrem a viagem por aqui (04/11/2026): o recado fica em window.__acnDeepLink e o evento cobre a tela já aberta
+  useEffect(() => {
+    const abrir = async () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'viagem') return;
+      (window as any).__acnDeepLink = null;
+      const { data, error } = await supabase.from('viagens').select('*').eq('id', pend.contextoId).maybeSingle();
+      if (data) setEditando(data); else mostrarAviso('Não foi possível abrir a viagem: ' + (error?.message || 'ela não foi encontrada (pode ter sido apagada).'));
+    };
+    abrir();
+    window.addEventListener('acn:abrir-registro', abrir);
+    return () => window.removeEventListener('acn:abrir-registro', abrir);
+  }, []);
 
   const passaNaSaida = (v: any) => {
     if (saida === 'todas') return true;
@@ -680,7 +708,7 @@ export default function ViagensTab({ currentUser }: any) {
       ) : (
         <div className="acn-vg-tabela-caixa">
           <table className="acn-tabela">
-            <thead><tr><th>Viagem</th><th>Etapa</th><th>Saída</th><th>Roteiro</th><th className="dir">Dias</th><th className="dir">Distância</th><th className="dir">Orçamento</th><th>Ligada a</th><th /></tr></thead>
+            <thead><tr><th>Viagem</th><th>Etapa</th><th>Saída</th><th>Roteiro</th><th>Veículo</th><th className="dir">Dias</th><th className="dir">Distância</th><th className="dir">Orçamento</th><th>Ligada a</th><th /></tr></thead>
             <tbody>
               {visiveis.map(v => {
                 const col = colunaDaViagem(v);
@@ -692,6 +720,7 @@ export default function ViagensTab({ currentUser }: any) {
                     <td><Selo familia={col.familia} ponto={false}>{col.rotulo}</Selo></td>
                     <td className={recado?.atraso ? 'acn-vg-atrasado' : ''}>{diaBR(v.data_saida)}{recado ? <div className="acn-ajuda">{recado.texto}</div> : null}</td>
                     <td className="acn-vg-card-rota">{resumoRoteiro(v) || '—'}</td>
+                    <td>{v.veiculo_nome ? <>{v.veiculo_nome}{v.veiculo_placa ? <div className="acn-ajuda">{v.veiculo_placa}</div> : null}</> : '—'}</td>
                     <td className="dir acn-num">{r && r.dias > 0 ? r.dias : '—'}</td>
                     <td className="dir acn-num">{v.km_total != null ? fmtKm(v.km_total) : '—'}</td>
                     <td className="dir acn-num">{v.total_orcamento != null && Number(v.total_orcamento) > 0 ? fmtReais(v.total_orcamento) : '—'}</td>

@@ -36,7 +36,7 @@ export async function lerFrota(): Promise<{ lista: any[]; erro: string }> {
 }
 
 // ── a parte de cada setor ────────────────────────────────────────────────────
-function Parte({ titulo, quem, pode, children }: any) {
+export function Parte({ titulo, quem, pode, children }: any) {
   return (
     <div className="acn-quadro">
       <div className="acn-quadro-titulo">{titulo} <span className="acn-vg-quem">{quem}{pode ? '' : ' · só leitura para você'}</span></div>
@@ -134,14 +134,27 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
 /** As colunas de cada grupo: quem salva grava só o grupo que pode editar, para não passar por cima do que outro setor preencheu. */
 export function camposDoGrupo(v: any, pode: any) {
   const c: any = {};
-  if (pode.adaptacao) Object.assign(c, { equipe: v.equipe || [], frota_id: v.frota_id || null, veiculo_nome: v.veiculo_nome || null, veiculo_placa: v.veiculo_placa || null, km_saida: v.km_saida === '' ? null : (v.km_saida ?? null) });
+  if (pode.adaptacao) Object.assign(c, { equipe: v.equipe || [], frota_id: v.frota_id || null, veiculo_nome: v.veiculo_nome || null, veiculo_placa: v.veiculo_placa || null, km_saida: v.km_saida === '' ? null : (v.km_saida ?? null), km_volta: v.km_volta === '' ? null : (v.km_volta ?? null) });
   if (pode.comercial) Object.assign(c, { servico_descricao: String(v.servico_descricao || '').trim() || null, contrato_obs: String(v.contrato_obs || '').trim() || null });
   if (pode.financeiro) {
     const h = v.hotel || {};
     const temHotel = ['nome', 'endereco', 'telefone', 'observacao'].some(k => String(h[k] || '').trim());
-    Object.assign(c, { verba_total: v.verba_total ?? null, pedagio_modo: v.pedagio_modo || null, hotel: temHotel ? { nome: h.nome || '', endereco: h.endereco || '', telefone: h.telefone || '', observacao: h.observacao || '' } : null });
+    Object.assign(c, { verba_total: v.verba_total ?? null, pedagio_modo: v.pedagio_modo || null, custo_real: custoRealParaGravar(v.custo_real), hotel: temHotel ? { nome: h.nome || '', endereco: h.endereco || '', telefone: h.telefone || '', observacao: h.observacao || '' } : null });
   }
   return c;
+}
+
+/** O custo real só é gravado se algum item foi lançado (tudo em branco = nulo, a viagem ainda não prestou contas). */
+function custoRealParaGravar(c: any) {
+  if (!c) return null;
+  const itens = ['combustivel', 'pedagios', 'hospedagem', 'alimentacao', 'outros'];
+  const lancou = itens.some(k => c[k] !== null && c[k] !== undefined && c[k] !== '');
+  const obs = String(c.observacao || '').trim();
+  if (!lancou && !obs) return null;
+  const r: any = {};
+  for (const k of itens) r[k] = c[k] === '' || c[k] === undefined ? null : c[k];
+  r.observacao = obs;
+  return r;
 }
 
 /** Sobe os arquivos do contrato e grava a lista JÁ (só a coluna do contrato): o arquivo não se perde se a pessoa fechar a janela sem salvar. */

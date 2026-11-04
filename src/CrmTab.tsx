@@ -69,6 +69,7 @@ import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, te
 import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { centroDisponivel } from './CentroCustoShared';
+import { ViagensLigadas } from './ViagemVinculos';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -4649,6 +4650,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
               {/* Formulário (scrollável) */}
               <div className="acn-crm-ab-corpo">
+
+                {/* 04/11/2026: as viagens ligadas a este card (a ligação nasce na tela de Viagens) */}
+                <ViagensLigadas tipo="pv" id={modalAbrir.id} />
 
                 {modalAbrir.funil === 'licitacao' && (
                   <div className="acn-crm-ab-campo">

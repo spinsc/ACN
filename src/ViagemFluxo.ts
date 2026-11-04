@@ -123,6 +123,14 @@ export function faltaParaMover(v: any, para: StatusViagem): string[] {
     if (!(Number(v?.verba_total) > 0)) falta.push('a verba total (Financeiro)');
     return falta;
   }
+  // a volta (04/11/2026, fatia 3): a Adaptação informa o km de volta, que é o que atualiza o km do veículo da frota; o custo real (Financeiro) NÃO trava, porque a prestação de contas costuma chegar depois
+  if (para === 'finalizada') {
+    const falta: string[] = [];
+    const volta = v?.km_volta, saida = v?.km_saida;
+    if (volta === null || volta === undefined || volta === '' || !(Number(volta) >= 0)) falta.push('o km de volta (Adaptação)');
+    else if (saida !== null && saida !== undefined && saida !== '' && Number(volta) < Number(saida)) falta.push('um km de volta maior que o de saída (' + Number(saida).toLocaleString('pt-BR') + ' km)');
+    return falta;
+  }
   return [];
 }
 

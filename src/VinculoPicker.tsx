@@ -23,6 +23,7 @@ const TIPOS = [
   { id: 'compra', label: 'Compra' },
   { id: 'ofi',    label: 'OFI' },
   { id: 'formacao', label: 'Formação de preço' },
+  { id: 'licitacao', label: 'Licitação' },   // 04/11/2026: a viagem se liga a uma licitação (só a tela de Viagens oferece este tipo)
 ];
 
 // Pedido do usuário em 16/10/2026: a demanda avulsa também se vincula a uma formação de preço. Só a janela de vínculos da demanda avulsa mostra esse tipo
@@ -30,13 +31,13 @@ const TIPOS = [
 export const TIPOS_PADRAO = ['op', 'os', 'pv', 'compra', 'ofi'];
 export const TIPOS_DEMANDA_AVULSA = [...TIPOS_PADRAO, 'formacao'];
 
-export const TIPO_LABEL: Record<string, string> = { op: 'OP', os: 'OS', pv: 'PV', compra: 'Compra', ofi: 'OFI', formacao: 'Formação de preço' };
+export const TIPO_LABEL: Record<string, string> = { op: 'OP', os: 'OS', pv: 'PV', compra: 'Compra', ofi: 'OFI', formacao: 'Formação de preço', licitacao: 'Licitação' };
 
 // contexto do deep-link (acn:abrir-registro) e aba de destino por tipo —
 // reaproveita os listeners que já existem em ProducaoTab/SacTab/CrmTab/
 // ComprasTab, nenhum listener novo fora do que o plano previu.
-const TIPO_CONTEXTO: Record<string, string> = { op: 'op', os: 'sac', pv: 'crm', compra: 'compra', ofi: 'ofi', formacao: 'formacao' };
-const TIPO_ABA: Record<string, string | null> = { op: 'producao', os: 'sac', pv: 'crm', compra: 'compras', ofi: null, formacao: 'formacao_precos' };
+const TIPO_CONTEXTO: Record<string, string> = { op: 'op', os: 'sac', pv: 'crm', compra: 'compra', ofi: 'ofi', formacao: 'formacao', licitacao: 'licitacao' };
+const TIPO_ABA: Record<string, string | null> = { op: 'producao', os: 'sac', pv: 'crm', compra: 'compras', ofi: null, formacao: 'formacao_precos', licitacao: 'licitacoes' };
 const SETOR_DESTINO_ABA: Record<string, string> = { Chicotes: 'chicotes', Serralheria: 'serralheria', Laboratorio: 'laboratorio' };
 
 // Dispara o deep-link já estabelecido no app pra abrir o registro vinculado —
@@ -100,6 +101,16 @@ async function buscarPorTipo(tipo: string, q: string): Promise<{ id: string; des
         .or(`numero_pv.ilike.${like},titulo.ilike.${like}`)
         .order('criado_em', { ascending: false }).limit(8);
       return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero_pv || r.titulo || '—'} — ${r.cliente_final || ''}`.replace(/ — $/, '') }));
+    }
+    if (tipo === 'licitacao') {
+      // a visão básica (e não a tabela cheia): ela traz só o que serve para achar o processo
+      const limpo = q.replace(/[,()*%\\]/g, ' ').trim();
+      if (limpo.length < 2) return [];
+      const lk = `%${limpo}%`;
+      const { data } = await supabase.from('licitacoes_basico').select('id,numero,nome_projeto,orgao')
+        .or(`numero.ilike.${lk},nome_projeto.ilike.${lk},orgao.ilike.${lk}`)
+        .order('criado_em', { ascending: false }).limit(8);
+      return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero || 'sem nº'} — ${r.nome_projeto || r.orgao || ''}`.replace(/ — $/, '') }));
     }
     if (tipo === 'compra') {
       const { data } = await supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material')

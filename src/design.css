@@ -7149,3 +7149,20 @@ html body .modal-box.acn-modal-cadastro.acn-vg-frota { width: min(640px, 95vw); 
 .acn-vg-campo > input.acn-input, .acn-vg-campo > textarea.acn-input, .acn-vg-campo > select.acn-input { width: 100%; box-sizing: border-box; }
 .acn-vg-campo > textarea.acn-input { resize: vertical; min-height: 64px; }
 .acn-vg-fs > * + * { margin-top: 10px; }
+
+/* ── Viagens, fatia 3 (04/11/2026): ligações, fechamento e comparação com o orçado ── */
+.acn-vg-vincs { display: flex; flex-direction: column; gap: 6px; }
+.acn-vg-vinc-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.acn-vg-vinc { display: flex; align-items: center; gap: 8px; min-width: 0; }
+html body .acn-vg-vinc-abrir { border: 0; background: transparent; padding: 0; font: 600 13px var(--acn-font); color: var(--acn-brand-ink); text-decoration: underline; text-align: left; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.acn-vg-valor { padding: 7px 0; font-weight: 700; color: var(--acn-ink); }
+.acn-vg-comparacao { margin-top: 10px; }
+.acn-vg-ligadas { padding: 4px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 6px 0; font-size: 12px; color: var(--acn-muted); }
+.acn-vg-ligadas-rot { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.acn-vg-comparacao { width: 100%; }
+/* revisão de uso (04/11/2026): o ícone do veículo fica ao lado do nome no cartão; a dica genérica do seletor de ligações ("Nenhum vínculo…") contradiz a lista de cima; no celular o rodapé da janela não passa por baixo dos botões flutuantes */
+.acn-vg-chip { display: inline-flex; align-items: center; gap: 4px; }
+.acn-vg-vincs .acn-vcp > .acn-ajuda { display: none; }
+@media (max-width: 640px) {
+  .acn-vg-jan .acn-modal-rodape { padding-right: 76px; justify-content: flex-start; }
+}
