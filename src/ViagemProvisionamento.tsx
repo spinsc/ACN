@@ -20,7 +20,8 @@ import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { CampoNumero } from './ViagemCampos';
 import { fmtReais } from './ViagemCalculo';
-import { mdiPlus, mdiClose, mdiPaperclip, mdiContentSaveOutline, mdiPencilOutline, mdiCarOutline, mdiHistory } from '@mdi/js';
+import { situacaoDaVerba, textoDaVerba } from './ViagemVerba';
+import { mdiPlus, mdiClose, mdiPaperclip, mdiContentSaveOutline, mdiPencilOutline, mdiCarOutline, mdiHistory, mdiCashCheck } from '@mdi/js';
 
 const BUCKET = 'acn-media';
 const LIMITE_ANEXO = 20 * 1024 * 1024;   // contrato escaneado cabe; vídeo não
@@ -47,7 +48,7 @@ export function Parte({ titulo, quem, pode, children }: any) {
   );
 }
 
-export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras }: any) {
+export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras, aoLiberarVerba, liberandoVerba }: any) {
   const { list: colaboradores } = useColaboradores();
   // conflito (04/11/2026): a mesma pessoa ou o mesmo carro em duas viagens que se sobrepõem; é aviso em vermelho, não trava
   const frasesDeConflito = frasesDosConflitos(conflitosDaViagem(v, outras || [], hojeISO()));
@@ -67,6 +68,9 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
   const hotel = v.hotel || {};
   const setHotel = (campo: string, valor: string) => set('hotel', { ...hotel, [campo]: valor });
   const verba = Number(v.verba_total) || 0;
+  const situacaoVerba = situacaoDaVerba(v);
+  const noProvisionamento = ['provisionamento', 'aprovada'].includes(String(v.status));   // só nela a verba se libera
+  const diaDaLiberacao = v.verba_liberada_em ? new Date(v.verba_liberada_em).toLocaleDateString('pt-BR') : '';
   const pessoasOrc = Math.max(1, Math.floor(Number(v.pessoas) || 1));
 
   return (
@@ -126,6 +130,19 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
           <div className="acn-vg-campo"><label className="acn-label">Pedágio</label>
             <Chips ativo={v.pedagio_modo || ''} onChange={(id: string) => set('pedagio_modo', id || null)} rotulo="Pedágio" itens={[{ id: 'reembolso', rotulo: 'Reembolso' }, { id: 'convenio', rotulo: 'Convênio' }]} />
             <div className="acn-ajuda">{v.pedagio_modo === 'reembolso' ? 'A equipe paga e depois pede o reembolso.' : v.pedagio_modo === 'convenio' ? 'Passa pelo convênio (tag), sem pagar na cancela.' : 'Ainda não definido.'}</div></div>
+        </div>
+        {/* 04/11/2026: o Financeiro LIBERA a verba (ViagemVerba.ts); a equipe só sai com ela liberada */}
+        <div className="acn-vg-verba-estado">
+          {situacaoVerba === 'liberada' && <Selo familia="ok" ponto={false}>{textoDaVerba(v)}{diaDaLiberacao ? ' em ' + diaDaLiberacao : ''}</Selo>}
+          {situacaoVerba === 'mudou' && !noProvisionamento && <Selo familia="atencao" ponto={false}>{textoDaVerba(v)}</Selo>}
+          {noProvisionamento && (situacaoVerba === 'a_liberar' || situacaoVerba === 'mudou') && (
+            <>
+              <Selo familia="erro" ponto={false}>{situacaoVerba === 'mudou' ? 'A verba mudou depois de liberada' : 'Verba ainda não liberada'}</Selo>
+              {v.id && <Botao pequeno variante="primario" icone={mdiCashCheck} disabled={liberandoVerba} onClick={aoLiberarVerba}>{liberandoVerba ? 'Liberando…' : 'Liberar verba'}</Botao>}
+              <span className="acn-ajuda">{textoDaVerba(v)}. Salve a viagem com o valor certo antes de liberar.</span>
+            </>
+          )}
+          {noProvisionamento && situacaoVerba === 'sem_verba' && <span className="acn-ajuda">Informe a verba total, salve a viagem e libere: a equipe só sai com a verba liberada.</span>}
         </div>
         <div className="acn-vg-grade">
           <div className="acn-vg-campo"><label className="acn-label">Hotel</label>

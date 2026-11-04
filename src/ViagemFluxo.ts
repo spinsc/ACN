@@ -17,6 +17,7 @@
 
 import { temPoderDeGerente } from './utils/permissoes';
 import { assinaturaDoRoteiro } from './ViagemRota';
+import { faltaDaVerba } from './ViagemVerba';
 
 export type StatusViagem = 'aberta' | 'em_aprovacao' | 'provisionamento' | 'andamento' | 'finalizada' | 'nao_aprovada';
 export type FamiliaSelo = 'ok' | 'atencao' | 'erro' | 'info' | 'neutro' | 'marca';
@@ -110,7 +111,7 @@ function faltaDoRoteiro(v: any): string[] {
 /**
  * O que falta para a viagem poder seguir. Vazio = pode.
  *  • Em aprovação e Provisionamento: roteiro completo com a rota calculada e atualizada (quem aprova precisa ver o orçamento).
- *  • Andamento ("a equipe saiu"): a Adaptação definiu a equipe, o veículo da frota e o km de saída, e o Financeiro lançou a verba total (decidido com o usuário em 04/11/2026;
+ *  • Andamento ("a equipe saiu"): a Adaptação definiu a equipe, o veículo da frota e o km de saída, e o Financeiro lançou E LIBEROU a verba total (decidido com o usuário em 04/11/2026; a liberação em si, também de 04/11, está em ViagemVerba.ts;
  *    hotel, pedágio, descrição do serviço e contrato NÃO travam a saída).
  */
 export function faltaParaMover(v: any, para: StatusViagem): string[] {
@@ -120,7 +121,8 @@ export function faltaParaMover(v: any, para: StatusViagem): string[] {
     if (!(Array.isArray(v?.equipe) && v.equipe.length)) falta.push('a equipe (Adaptação)');
     if (!v?.frota_id) falta.push('o veículo da frota (Adaptação)');
     if (v?.km_saida === null || v?.km_saida === undefined || v?.km_saida === '' || !(Number(v.km_saida) >= 0)) falta.push('o km de saída (Adaptação)');
-    if (!(Number(v?.verba_total) > 0)) falta.push('a verba total (Financeiro)');
+    const faltaVerba = faltaDaVerba(v);   // 04/11/2026: a verba precisa estar LIBERADA pelo Financeiro (ViagemVerba.ts), não só preenchida
+    if (faltaVerba) falta.push(faltaVerba);
     return falta;
   }
   // a volta (04/11/2026, fatia 3): a Adaptação informa o km de volta, que é o que atualiza o km do veículo da frota; o custo real (Financeiro) NÃO trava, porque a prestação de contas costuma chegar depois

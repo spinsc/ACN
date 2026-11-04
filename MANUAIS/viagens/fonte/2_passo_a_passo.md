@@ -141,19 +141,40 @@ Cada pessoa grava **só o grupo que pode editar**, e cada setor deixa uma linha 
 
 ![Verba, pedágio e hotel](img/18-parte-financeiro.jpg)
 
-- **Verba total\*:** o dinheiro liberado para a equipe levar.
+- **Verba total\*:** o dinheiro que a equipe vai levar. Digite o valor e **salve a viagem**.
+- **Liberar verba:** com o valor salvo, clique em **Liberar verba** e confirme. O sistema guarda **quem liberou, quando e quanto**. A equipe só sai com a verba liberada.
 - **Pedágio:** **Reembolso** (a equipe paga e depois pede o reembolso) ou **Convênio** (passa pela tag, sem pagar na cancela).
 - **Hotel:** nome, telefone, endereço e reserva/observações.
 
-> **Atenção:** a viagem **só pode sair para Andamento** com a **equipe, o veículo, o km de saída e a verba total** preenchidos. Hotel, pedágio, serviço e contrato **não travam** a saída.
+![Verba lançada e ainda não liberada: o botão Liberar verba](img/32-liberar-verba.jpg)
+
+A parte mostra sempre o estado da verba: **"Verba liberada por Fulano em dd/mm"** (verde) ou **"Verba ainda não liberada"** (vermelho, com o botão). Se o Financeiro **mudar o valor depois de liberar**, a liberação **deixa de valer sozinha**: o aviso passa a dizer **"A verba mudou depois de liberada"** e é preciso liberar de novo. Se houver alteração ainda não salva na viagem, o botão pede que você salve antes (a liberação vale o valor que está gravado).
+
+> **Atenção:** a viagem **só pode sair para Andamento** com a **equipe, o veículo, o km de saída e a verba total liberada**. Hotel, pedágio, serviço e contrato **não travam** a saída.
+
+> **Dica:** o Financeiro não precisa procurar as viagens: elas aparecem sozinhas na aba **Pendências** do Financeiro (veja abaixo).
+
+## A fila do Financeiro: aba Pendências
+
+![Aba Pendências do Financeiro](img/31-financeiro-pendencias.jpg)
+
+Em **Financeiro > Pendências** fica a lista do que espera o Financeiro nas viagens. A aba mostra o número de itens (em vermelho quando há urgente). A fila **só lista**: clique na linha, ou em **Abrir**, e a janela da viagem abre para você resolver ali mesmo.
+
+| Grupo | O que é | Fica vermelho quando |
+|---|---|---|
+| **Verba a liberar** | Viagem em Provisionamento sem verba, com a verba lançada e não liberada, ou com a verba mudada depois de liberar | A equipe sai em 2 dias ou menos (ou a data já passou) |
+| **Custo real a lançar** | Viagem finalizada sem nenhum valor no custo real | Está finalizada há 7 dias ou mais |
+| **Comprovantes a anexar** | Viagem finalizada com custo lançado e algum item sem comprovante | Nunca: é lembrete (âmbar) e não trava nada |
+
+Quando o item é resolvido e você fecha a janela, a lista se atualiza. Aprovações de compras, de frete e de cotações **continuam onde estavam** (Compras e Logística); a fila do Financeiro é só das viagens.
 
 ## Aviso de saída próxima
 
-Quando a viagem está em Provisionamento, falta **2 dias ou menos** para a saída (ou a data já passou) e ainda falta alguma parte, o cartão ganha o selo vermelho **"Falta para sair: …"**, dizendo o que falta (equipe, veículo da frota, km de saída ou verba total). Na janela da viagem, as partes que faltam aparecem vazias (equipe, veículo, km de saída, verba):
+Quando a viagem está em Provisionamento, falta **2 dias ou menos** para a saída (ou a data já passou) e ainda falta alguma parte, o cartão ganha o selo vermelho **"Falta para sair: …"**, dizendo o que falta (equipe, veículo da frota, km de saída ou a liberação da verba). Na janela da viagem, as partes que faltam aparecem vazias (equipe, veículo, km de saída, verba liberada):
 
 ![Viagem que sai amanhã com as partes ainda vazias](img/19-provisionamento-faltando.jpg)
 
-Além do selo, o sistema **avisa na caixa de Menções**, de segunda a sexta às 8h: a **Adaptação** (se falta a parte dela) e o **Financeiro** (se falta a verba). O aviso vai **uma vez só por viagem** e some sozinho quando a viagem sai de Provisionamento.
+Além do selo, o sistema **avisa na caixa de Menções**, de segunda a sexta às 8h: a **Adaptação** (se falta a parte dela) e o **Financeiro** (se falta a verba ou a liberação dela). O aviso vai **uma vez só por viagem** e some sozinho quando a viagem sai de Provisionamento.
 
 > **Dica:** a conta é a mesma da trava de saída: o que o selo lista é exatamente o que impede o botão **A equipe saiu**.
 

@@ -18,6 +18,7 @@ import { CabecalhoTela, Botao, Selo, Faixa, Chips, MenuAcoes, hojeISO } from './
 import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
 import { buscarEndereco, buscarVariosEnderecos, linhasDeEnderecos, calcularRota, nomeCurto, assinaturaDoRoteiro } from './ViagemRota';
+import { liberarVerba } from './ViagemVerba';
 import { CUSTOS_PADRAO, calcularViagem, fmtKm, fmtHoras, fmtReais, textoDoOrcamento, textoDoRoteiro, dataComDiaDaSemana } from './ViagemCalculo';
 import { CampoNumero } from './ViagemCampos';
 import { BlocoFechamento } from './ViagemFechamento';
@@ -346,6 +347,19 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     set('comprovantes', res.lista);
     if (res.erro) mostrarAviso(res.erro);
   };
+  // 04/11/2026: o Financeiro libera a verba. Vale a verba GRAVADA (`inicial`): com alteração não salva na janela, pede para salvar antes (a janela fecha ao liberar, para o histórico não ficar velho)
+  const [liberandoVerba, setLiberandoVerba] = useState(false);
+  const aoLiberarVerba = async () => {
+    if (liberandoVerba) return;
+    if (JSON.stringify(v) !== fotoInicial.current) { mostrarAviso('Salve as alterações da viagem antes de liberar a verba (a liberação vale o valor que está gravado).', 'atencao'); return; }
+    if (!await confirmar(`Liberar a verba de ${fmtReais(Number(inicial.verba_total))} para a viagem "${v.titulo}"?`)) return;
+    setLiberandoVerba(true);
+    const res = await liberarVerba(inicial, currentUser);
+    setLiberandoVerba(false);
+    if (res.erro) { mostrarAviso(res.erro); return; }
+    mostrarAviso('Verba liberada.', 'ok');
+    aoSalvar();
+  };
   const aoTirarContrato = async (i: number) => {
     const res = await tirarContrato(v, i, currentUser);
     set('contrato_anexos', res.lista);
@@ -393,7 +407,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
 
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
-              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} />
+              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} aoLiberarVerba={aoLiberarVerba} liberandoVerba={liberandoVerba} />
           )}
 
           <fieldset className="acn-vg-fs" disabled={!pode.base}>

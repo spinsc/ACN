@@ -8,7 +8,7 @@ Os avisos das Viagens chegam na caixa de **Menções** (o ícone @ no alto do si
 |---|---|---|---|
 | A viagem nasce da OP de Adaptação externa (em Em aprovação) | Admin e os gerentes ativos | A viagem espera aprovação | Quando a viagem sai de Em aprovação |
 | A viagem é aprovada (chega a Provisionamento) | Cada setor com a sua parte: Adaptação e Financeiro (quem tem a aba), Comercial (vendedor ou responsável comercial da OP, ou quem criou a viagem) | Falta a parte do seu setor | Quando a viagem sai de Provisionamento |
-| Saída em 2 dias ou menos com parte faltando (segunda a sexta, 8h) | Adaptação (equipe, veículo, km) e Financeiro (verba) | O que falta para a equipe sair; **uma vez só** por viagem | Quando a viagem sai de Provisionamento |
+| Saída em 2 dias ou menos com parte faltando (segunda a sexta, 8h) | Adaptação (equipe, veículo, km) e Financeiro (verba ou liberação da verba) | O que falta para a equipe sair; **uma vez só** por viagem | Quando a viagem sai de Provisionamento |
 | Uma OP ligada à viagem é cancelada ou devolvida | Quem aprova | Confira se a viagem ainda faz sentido (a viagem também ganha uma nota no histórico) | Fica na caixa até você tratar o aviso |
 
 ## Quem pode o quê
@@ -20,7 +20,8 @@ Cada setor edita **só a sua parte** em Provisionamento. O **Admin e os gerentes
 | **Dados da viagem, Roteiro, Custos** (a base) | Quem tem a aba Viagens | Viagens |
 | **Equipe e veículo** e **Volta da equipe** (km de volta) | Adaptação | Adaptação (Produção) |
 | **Serviço e contrato** | Comercial | CRM, Licitações ou Comercial |
-| **Verba, pedágio e hotel** e **Custo real × orçado** | Financeiro | Financeiro |
+| **Verba, pedágio e hotel** (inclui o botão **Liberar verba**) e **Custo real × orçado** | Financeiro | Financeiro |
+| **Fila Pendências** (Financeiro > Pendências) | Quem tem a aba Financeiro | Financeiro |
 | **Aprovar, recusar, voltar uma viagem aprovada, reabrir uma finalizada** | Direção | Admin e gerentes (e a equipe do Comercial e das Licitações, que vale como gerente do setor) |
 | **Apagar** | Admin, gerentes e quem criou a viagem | — |
 
@@ -31,7 +32,7 @@ Quem abre a viagem sem ter a aba Viagens vê uma faixa explicando que pode preen
 | Passo | Só segue se… |
 |---|---|
 | **Enviar para aprovação** | Tem título, data de saída, ponto de saída, pelo menos uma parada e a rota calculada **e atualizada** |
-| **A equipe saiu** | Tem equipe, veículo da frota, km de saída e verba total |
+| **A equipe saiu** | Tem equipe, veículo da frota, km de saída e a **verba total liberada** pelo Financeiro (e igual ao valor liberado) |
 | **A equipe voltou** | O km de volta está preenchido e é maior que o de saída |
 | **Voltar, recusar ou reabrir** | Você escreveu o motivo |
 | **Qualquer passo** | A viagem ainda está na coluna que você viu (se outra pessoa mexeu antes, o sistema avisa e não grava) |
@@ -40,7 +41,11 @@ O que **não** trava: hotel, pedágio, descrição do serviço, contrato, o cust
 
 ## Dúvidas comuns
 
-**O botão "A equipe saiu" não deixa clicar (ou diz que falta algo).** Abra a viagem: a lista diz exatamente o que falta (equipe, veículo da frota, km de saída ou verba total). Cada item é parte de um setor: a Adaptação preenche os três primeiros e o Financeiro, a verba.
+**O botão "A equipe saiu" não deixa clicar (ou diz que falta algo).** Abra a viagem: a lista diz exatamente o que falta (equipe, veículo da frota, km de saída ou a liberação da verba). Cada item é parte de um setor: a Adaptação preenche os três primeiros e o Financeiro, a verba e a liberação.
+
+**Aparece "Verba ainda não liberada" ou "A verba mudou depois de liberada".** O Financeiro precisa clicar em **Liberar verba** (depois de salvar o valor). Se o valor mudou depois da liberação, ela perdeu a validade e é preciso liberar de novo. Para viagens que já estavam em Andamento ou Finalizadas antes desta regra, a verba conta como liberada.
+
+**Não sei quais viagens esperam o Financeiro.** Abra **Financeiro > Pendências**: a lista reúne verba a liberar, custo real a lançar e comprovantes a anexar, com o prazo de cada uma.
 
 **Aparece "O roteiro mudou depois do último cálculo".** Você mexeu na saída, nas paradas, na ordem ou em "ida e volta" depois de calcular a rota. Clique em **Calcular rota** de novo; o km, o tempo e os custos passam a valer.
 

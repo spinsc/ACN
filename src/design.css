@@ -277,6 +277,8 @@ html body .acn-tela-cab h1 { margin: 0; font-size: 20px !important; line-height:
 .acn-aba:hover { color: var(--acn-ink); }
 .acn-aba.ativa { color: var(--acn-ink); border-bottom-color: var(--acn-brand); }
 .acn-aba em, .acn-chips em { font-style: normal; font-size: 11px; font-variant-numeric: tabular-nums; background: var(--acn-neutral-soft); color: var(--acn-neutral); border-radius: 999px; padding: 1px 6px; }
+/* 04/11/2026: contagem em vermelho quando a aba tem algo urgente (Pendências do Financeiro) */
+html body .acn-aba.alerta em:not(#acn), html body .acn-aba.ativa.alerta em:not(#acn) { background: var(--acn-bad-soft); color: var(--acn-bad); font-weight: 600; }
 .acn-aba.ativa em { background: var(--acn-brand-soft); color: var(--acn-brand-ink); }
 /* R3 (13/10/2026): a aba que carrega um aviso (OPs devolvidas ao Comercial) pinta o número com a cor de atenção, ativa ou não */
 .acn-aba.acn-aba-alerta em, .acn-aba.acn-aba-alerta.ativa em { background: var(--acn-warn-soft); color: var(--acn-warn); font-weight: 700; }
@@ -7207,3 +7209,12 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-vg-comprov { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 150px; }
 .acn-vg-comprov-item { display: inline-flex; align-items: center; gap: 2px; max-width: 220px; font-size: 12px; }
 .acn-vg-comprov-item a { display: inline-flex; align-items: center; gap: 3px; color: var(--acn-brand-ink); text-decoration: underline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 04/11/2026: a linha do estado da verba (liberada ou a liberar) na parte do Financeiro */
+.acn-vg-verba-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
+/* 04/11/2026: as três tabelas da fila de Pendências do Financeiro com as mesmas colunas (senão cada uma se ajusta ao seu texto) */
+.acn-fin-pend .acn-tabela { table-layout: fixed; width: 100%; }
+.acn-fin-pend .acn-tabela th:nth-child(1) { width: 32%; }
+.acn-fin-pend .acn-tabela th:nth-child(2) { width: 38%; }
+.acn-fin-pend .acn-tabela th:nth-child(3) { width: 18%; }
+.acn-fin-pend .acn-tabela th:nth-child(4) { width: 12%; }
