@@ -13,6 +13,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
+import { itensConjunto } from './ConfigEstrutura';
 import ModalSolicitarDesenvolvimento from './SolicitarDesenvolvimento';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { aplicarDiferencaNaBom, avisoDoQueNaoFoiTirado } from './CalculoDaEstrutura';
@@ -79,6 +80,9 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
   const [marcas, setMarcas] = useState<Record<number, boolean>>({});
   const [gravandoMarca, setGravandoMarca] = useState(false);
   useEffect(() => { setMarcas({}); }, [ref?.id]);
+  // O Conjunto Elétrico é o gatilho da estrutura, não uma peça que a usa: não tem a caixa "Sem estrutura" (04/11/2026, OP A1749.2611 estava com ele marcado). Se a leitura falhar a caixa continua aparecendo e a marca no conjunto é ignorada pelo cálculo de qualquer jeito.
+  const [idsConjunto, setIdsConjunto] = useState<string[]>([]);
+  useEffect(() => { itensConjunto().then(l => setIdsConjunto(l.map((c: any) => String(c.id)))).catch(() => setIdsConjunto([])); }, []);
   const refComMarcas = { ...ref, itens_vendidos: (ref?.itens_vendidos || []).map((v: any, i: number) => (i in marcas ? { ...v, sem_estrutura: marcas[i] ? true : undefined } : v)) };
   const alternarSemEstrutura = async (i: number, valor: boolean) => {
     if (gravandoMarca) return;
@@ -201,7 +205,7 @@ export default function ModalConfigurarOp({ ops, base = null, currentUser, onClo
                 {refComMarcas.itens_vendidos.map((v: any, i: number) => (
                   <div key={i} className="acn-vendido-linha">
                     <span className="acn-kb-cresce">{Number(v.quantidade).toLocaleString('pt-BR')}× {v.nome}{v.descricao ? <span className="acn-ajuda"> — {v.descricao}</span> : null}</span>
-                    {v.item_id && (
+                    {v.item_id && !idsConjunto.includes(String(v.item_id)) && (
                       <label className="acn-vendido-semestr" title="Marque quando esta linha NÃO usa a estrutura de instalação do carro (ex.: Interled2 fixado com ventosa). Ela continua na venda e na BOM com o mesmo código, mas não recebe material de instalação.">
                         <input type="checkbox" checked={!!v.sem_estrutura} disabled={gravandoMarca} aria-label={`Sem estrutura: ${v.nome}`}
                           onChange={e => alternarSemEstrutura(i, e.target.checked)} /> Sem estrutura

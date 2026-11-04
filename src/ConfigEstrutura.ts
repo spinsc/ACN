@@ -533,9 +533,19 @@ export async function itensAtivosDoCatalogo(colunas: string): Promise<any[]> {
  *  `eh_conjunto_instalacao`: é o mesmo conceito, e renomear coluna não vale o
  *  risco para um nome que ninguém vê. */
 export async function itensConjunto() {
-  const { data } = await supabase.from('cadastro_itens')
+  const { data, error } = await supabase.from('cadastro_itens')
     .select('id,codigo,nome').eq('eh_conjunto_instalacao', true).eq('ativo', true);
+  // 04/11/2026 (OP A1749.2611): leitura recusada valia como "não existe conjunto" e a venda aparecia sem Conjunto Elétrico sem nenhum aviso. Agora o erro sobe e quem chama mostra a falha.
+  if (error) throw new Error('não foi possível conferir qual é o Conjunto Elétrico (' + error.message + ')');
   return data || [];
+}
+
+/** O item é um dos Conjuntos Elétricos? Usado para a marca "Sem estrutura" nunca valer para ele (04/11/2026): o conjunto é o gatilho da estrutura, não uma peça que a usa. */
+export const linhaEhOConjunto = (linha: any, idsConjunto: string[]) => !!linha?.item_id && (idsConjunto || []).map(String).includes(String(linha.item_id));
+
+/** As linhas da venda que a estrutura considera: sem as marcadas "Sem estrutura", MAS o Conjunto Elétrico fica sempre (a marca nele é ignorada: A1749.2611 tinha o conjunto marcado e a gravação da OP achava que a venda não o levava). */
+export function linhasParaEstrutura(vendidos: any[], idsConjunto: string[]) {
+  return (vendidos || []).filter((v: any) => !v?.sem_estrutura || linhaEhOConjunto(v, idsConjunto));
 }
 
 /**

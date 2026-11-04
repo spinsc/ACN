@@ -13,7 +13,7 @@
 import { supabase } from './supabaseClient';
 import {
   perguntasDaVenda, respostasAutomaticas, materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
-  itensConjunto, vendaTemConjunto, completarItensPeloNome, itensInclusos, podarRespostas, regrasDoVeiculo, avaliarRegras, valorSalvo,
+  itensConjunto, vendaTemConjunto, linhasParaEstrutura, completarItensPeloNome, itensInclusos, podarRespostas, regrasDoVeiculo, avaliarRegras, valorSalvo,
 } from './ConfigEstrutura';
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
@@ -35,7 +35,7 @@ export async function lerBaseDaEstrutura(opl: any) {
   // o amplificador que vem incluso com a barra G2 conta como vendido (28/10/2026): o material de instalação dele, as perguntas e as regras valem mesmo sem ele estar na venda
   // 29/10/2026 (pedido do usuário, Pulse): a linha marcada "Sem estrutura" (Interled2 com ventosa, mesmo código 225) não usa a estrutura do carro: sai da conta de material, de
   // quantidade e do aviso "nunca adaptados". Continua na venda e na BOM; só a estrutura a ignora.
-  const comEstrutura = vendidos0.filter((v: any) => !v?.sem_estrutura);
+  const comEstrutura = linhasParaEstrutura(vendidos0, conj.map((c: any) => c.id));   // o Conjunto Elétrico ignora a marca (04/11/2026)
   const vendidos = [...comEstrutura, ...(await itensInclusos(comEstrutura))];
   const idsVendidos = vendidos.map((v: any) => v.item_id).filter(Boolean);
 

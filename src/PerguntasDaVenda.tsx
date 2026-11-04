@@ -17,7 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   perguntasDaVenda, donaDaPergunta, perguntasPendentes, respostasAutomaticas,
-  itensConjunto, vendaTemConjunto, completarItensPeloNome, itensInclusos,
+  itensConjunto, vendaTemConjunto, linhasParaEstrutura, completarItensPeloNome, itensInclusos,
   materiaisDoVeiculo, montarMaterial,
   ehQuantidade, valorDeQuantidade, respostaDeQuantidade, camposDaResposta,
   regrasDoVeiculo, avaliarRegras, podarRespostas,
@@ -41,9 +41,11 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
 
   useEffect(() => {
     (async () => {
-      if (!ids.length) { setPerguntas([]); setTemConjunto(false); return; }
+      if (!(itensVendidos || []).some(v => v?.item_id)) { setPerguntas([]); setTemConjunto(false); return; }   // conta a venda inteira: só o conjunto marcado "Sem estrutura" também é venda com conjunto
       setCarregando(true);
-      const conj = await itensConjunto();
+      let conj;
+      try { conj = await itensConjunto(); setFalhaLeitura(''); }
+      catch (e) { console.warn('Perguntas da venda: falha ao ler o Conjunto Elétrico', e); setPerguntas([]); setTemConjunto(false); setFalhaLeitura(e?.message || 'falha ao ler'); setCarregando(false); return; }
       const tem = vendaTemConjunto(itensVendidos, conj.map(c => c.id));
       setTemConjunto(tem);
       if (!tem) { setPerguntas([]); setCarregando(false); return; }
@@ -84,8 +86,8 @@ export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteM
           .reduce((s, un) => s + perguntasPendentes(perguntas, respostasDe(un)).length, 0) : 0);
   useEffect(() => { onPendentes?.(pendentesAgora); }, [pendentesAgora]);
 
-  if (!ids.length || carregando) return null;
-  if (!temConjunto) return null;          // sem conjunto, não há o que perguntar
+  if (!(itensVendidos || []).some(v => v?.item_id) || carregando) return null;
+  if (!temConjunto && !falhaLeitura) return null;          // sem conjunto, não há o que perguntar (leitura que falhou NÃO vale como "sem conjunto": mostra a falha, 04/11/2026)
   if (falhaLeitura) {
     return (
       <div className="acn-pdv">
@@ -213,7 +215,8 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     // linha sem o vínculo com o cadastro é procurada pelo nome (OP A1741.2610, 27/10/2026)
     const vendidos0 = await completarItensPeloNome(opl?.itens_vendidos || []);
     // linha marcada "Sem estrutura" (ex.: Interled2 com ventosa) não conta para o material da estrutura, mas continua na lista sugerida da BOM (mais abaixo)
-    const comEstrutura = vendidos0.filter(v => !v?.sem_estrutura);
+    const conj = await itensConjunto();
+    const comEstrutura = linhasParaEstrutura(vendidos0, conj.map(c => c.id));   // o Conjunto Elétrico ignora a marca (04/11/2026, OP A1749.2611)
     // o amplificador que vem incluso com a barra G2 conta como vendido (28/10/2026)
     const inclusos = await itensInclusos(comEstrutura);
     const vendidos = [...comEstrutura, ...inclusos];
@@ -221,7 +224,6 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }): P
     const ids = vendidos.map(v => v.item_id).filter(Boolean);
     if (!opl?.veiculo_id || !ids.length) return;
 
-    const conj = await itensConjunto();
     if (!vendaTemConjunto(vendidos, conj.map(c => c.id))) return;   // o interruptor
 
     const semConjunto = ids.filter(id => !conj.some(c => c.id === id));
