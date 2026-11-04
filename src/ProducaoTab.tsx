@@ -23,6 +23,8 @@ import { ParticipantesPicker, novosParticipantes, notificarParticipantes } from 
 import Icone from './Icone';
 import { carregarPendencias } from './OpPendencias';
 import { osSemCobranca } from './SacFluxo';
+import { EditorDeViagem } from './ViagensTab';
+import { statusDaViagem, rotuloDoStatus, viagemSeguraAOp } from './ViagemFluxo';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
 import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
   mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
@@ -102,6 +104,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
   const menu = [
     { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => onAction('ver', o) },
     { rotulo: 'Acompanhamento', icone: mdiMessageTextOutline, onClick: () => onAction('acomp', o) },
+    { rotulo: 'Viagem desta OP', icone: mdiCarWrench, onClick: () => onAction('viagem', o), oculto: !o._viagem },
     { rotulo: qtdAnexos ? `Anexos (${qtdAnexos})` : 'Anexos', icone: mdiPaperclip, onClick: () => setAnexosAberto(true) },
     { rotulo: 'Iniciar em dupla ou equipe', icone: mdiAccountGroupOutline, onClick: () => onAction('iniciar_opcoes', o), oculto: !aguardando },
     { rotulo: 'Pausar', icone: mdiPause, onClick: () => onAction('pausar', o), oculto: !((emProd || emRetrab) && !o.pausado) },
@@ -136,6 +139,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
             {/* Andamento da serralheria — visível em qualquer fila, porque numa
                 adaptação ela é etapa e quem acompanha precisa ver ali mesmo. */}
             {temSerralheria(o) && <span className="acn-eng-selo-linha"><Tag title={motivoSerralheria(o)}>Serralheria · {rotuloStatus(serralheriaAtual)}</Tag></span>}
+            {o._viagem && <span className="acn-eng-selo-linha"><Botao pequeno variante="secundario" title="Abrir a viagem desta OP (equipe, veículo e km)" onClick={() => onAction('viagem', o)}>Viagem · {rotuloDoStatus(statusDaViagem(o._viagem))}</Botao></span>}
           </div>
         </td>
         <td className="acn-prod-veic">
@@ -2216,6 +2220,8 @@ export default function ProducaoTab({ currentUser }) {
   const [aplicandoIniciarLote, setAplicandoIniciarLote] = useState(false);
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
+  const [modalViagem, setModalViagem]     = useState<any>(null);   // a viagem da OP de Adaptação externa (fatia 2 das Viagens, 04/11/2026)
+  const [esperandoViagem, setEsperandoViagem] = useState<any[]>([]);   // OPs que o PCP já liberou mas cuja viagem ainda não foi aprovada
   const [modalAcomp,  setModalAcomp]      = useState<any>(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalIniciar, setModalIniciar] = useState(null);
@@ -2279,7 +2285,25 @@ export default function ProducaoTab({ currentUser }) {
       .order('data_entrada', { ascending: false });
     if (error) { setErroLeitura(error.message); if (!silent) setLoading(false); return; }
     setErroLeitura('');
-    setOpls(data || []);
+    let lista = data || [];
+    // Viagens, fatia 2 (decidido com o usuário em 04/11/2026): a OP de Adaptação externa tem uma viagem, gerada quando o Almoxarifado fecha o kit; o cartão só chega à
+    // Adaptação depois que a viagem é aprovada (Provisionamento). OP sem viagem ligada, ou viagem que não deu para ler, segue como sempre foi: a leitura que falha
+    // nunca esconde trabalho.
+    const externas = lista.filter((o: any) => o.fluxo_entrega === 'adaptacao_externa');
+    let espera: any[] = [];
+    if (externas.length) {
+      const { data: viagens, error: erroViagens } = await supabase.from('viagens').select('*').overlaps('op_ids', externas.map((o: any) => o.id));
+      if (!erroViagens && viagens?.length) {
+        lista = lista.map((o: any) => {
+          const v = viagens.find((x: any) => (x.op_ids || []).includes(o.id));
+          return v ? { ...o, _viagem: v } : o;
+        });
+        espera = lista.filter((o: any) => o.status_geral === 'Aguardando Inicio Producao' && o._viagem && viagemSeguraAOp(o._viagem));
+        lista = lista.filter((o: any) => !espera.includes(o));
+      }
+    }
+    setEsperandoViagem(espera);
+    setOpls(lista);
     if (!silent) setLoading(false);
   };
 
@@ -2573,6 +2597,7 @@ export default function ProducaoTab({ currentUser }) {
     if (tipo === 'retomar')            retomarOpl(supabase, opl).then(fetchAll);
     if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
     if (tipo === 'ver')                setModalVerOpl(opl);
+    if (tipo === 'viagem' && opl._viagem) setModalViagem(opl._viagem);
     if (tipo === 'acomp')              setModalAcomp(opl);
     if (tipo === 'iniciar_retrabalho') iniciarRetrabalho(opl);
     if (tipo === 'concluir_retrabalho') concluirRetrabalho(opl);
@@ -2748,6 +2773,11 @@ export default function ProducaoTab({ currentUser }) {
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
           Não foi possível ler as OPs da Produção ({erroLeitura}). Isso não quer dizer que não haja OP na fila{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+        </Faixa>
+      )}
+      {esperandoViagem.length > 0 && (
+        <Faixa tom="info">
+          {esperandoViagem.length === 1 ? '1 OP de Adaptação externa espera' : esperandoViagem.length + ' OPs de Adaptação externa esperam'} a aprovação da viagem para chegar{esperandoViagem.length === 1 ? '' : 'em'} aqui: {esperandoViagem.map((o: any) => o.opl).join(', ')}.
         </Faixa>
       )}
       {/* ALERTA RETRABALHO */}
@@ -3068,6 +3098,9 @@ export default function ProducaoTab({ currentUser }) {
         <EquipeDaOpModal opl={modalGerenciarEquipe} currentUser={currentUser}
           aoFechar={()=>setModalGerenciarEquipe(null)} />
       )}
+
+      {/* A viagem da OP de Adaptação externa: a Adaptação preenche a equipe, o veículo e o km */}
+      {modalViagem && <EditorDeViagem key={modalViagem.id} inicial={modalViagem} currentUser={currentUser} aoFechar={() => setModalViagem(null)} aoSalvar={() => { setModalViagem(null); fetchAll(true); }} />}
 
       {/* MODAL VER OPL */}
       {modalVerOpl && <OplDetalheModal opl={modalVerOpl} onClose={()=>setModalVerOpl(null)} currentUser={currentUser} />}

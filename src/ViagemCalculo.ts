@@ -5,8 +5,8 @@
 // vem de ViagemRota.ts; aqui só se transforma em dinheiro.
 //
 // Decisões desta primeira versão (a confirmar com o usuário):
-//   • DIAS = os dias do roteiro dia a dia (ViagemRoteiro.ts, desde 23/10/2026): anda-se até o limite de horas de direção por dia e os "dias lá" de cada parada são dias inteiros de trabalho a
-//     partir do dia seguinte à chegada. Uma viagem que cabe no dia, sem dia no local, é 1 dia e não tem pernoite. Sem o desenho do roteiro (rota velha), vale a conta antiga:
+//   • DIAS = os dias do roteiro dia a dia (ViagemRoteiro.ts, desde 23/10/2026): anda-se até o limite de horas de direção por dia e os "dias no local" de cada parada contam o dia da
+//     chegada como o dia 1 (regra de 04/11/2026), com saída no fim do último. Uma viagem que cabe no dia, sem dia no local, é 1 dia e não tem pernoite. Sem o desenho do roteiro (rota velha), vale a conta antiga:
 //     dias de estrada (horas ÷ horas por dia, para cima) + dias lá.
 //   • HOSPEDAGEM "se necessário": noites sugeridas = dias − 1. A pessoa pode trocar o número de noites; vazio = automático.
 //   • PEDÁGIO é lançado à mão (linhas). Decidido com o usuário em 23/10/2026: nenhum serviço que exija cadastro ou chave entra no sistema, então não há cálculo automático de pedágio.

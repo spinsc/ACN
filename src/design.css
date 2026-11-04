@@ -1904,6 +1904,34 @@ html body .acn-vg-cand:hover, html body .acn-vg-cand:focus-visible { background:
 .acn-vg-ev-trabalho { font-weight: 600; }
 .acn-vg-ev-fim { font-weight: 700; }
 html body .acn-vg-apagar { margin-left: auto; }
+/* Viagens em quadro (04/11/2026): seis colunas, cartões arrastáveis, lista em tabela e busca */
+.acn-vg-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.acn-vg-pesquisa { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 220px; max-width: 380px; color: var(--acn-muted); }
+.acn-vg-pesquisa .acn-input { width: 100%; box-sizing: border-box; }
+.acn-vg-quadro { display: grid; grid-template-columns: repeat(6, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 6px; }
+.acn-vg-col { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: flex; flex-direction: column; min-width: 0; }
+.acn-vg-col-alvo { border-color: var(--acn-brand); box-shadow: 0 0 0 2px var(--acn-brand-soft); }
+.acn-vg-col-cab { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-ink); border-bottom: 1px solid var(--acn-line); }
+.acn-vg-col-cab em { font-style: normal; font-weight: 600; color: var(--acn-muted); }
+.acn-vg-col-corpo { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 64px; max-height: 72vh; overflow-y: auto; }
+.acn-vg-col-vazia { padding: 10px; text-align: center; font-size: 12px; color: var(--acn-muted); }
+.acn-vg-kcard { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; cursor: pointer; }
+.acn-vg-kcard:hover { border-color: var(--acn-ink); }
+.acn-vg-kcard[draggable="true"] { cursor: grab; }
+.acn-vg-kcard .acn-vg-card-cab strong { font-size: 13px; overflow-wrap: anywhere; }
+.acn-vg-card-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.acn-vg-card-recusa { color: var(--acn-bad); font-size: 12px; overflow-wrap: anywhere; }
+.acn-vg-parada-ha { color: var(--acn-muted); }
+.acn-vg-etapa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-vg-hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--acn-ink); }
+.acn-vg-hist li { display: grid; grid-template-columns: 120px 140px minmax(0, 1fr); gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-vg-hist-quando { color: var(--acn-muted); }
+.acn-vg-tabela-caixa { overflow-x: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-vg-linha-tab { cursor: pointer; }
+.acn-vg-linha-tab:hover { background: var(--acn-surface-2); }
+.acn-vg-atrasado { color: var(--acn-bad); font-weight: 600; }
+@media (max-width: 640px) { .acn-vg-hist li { grid-template-columns: 1fr; } }
+
 @media (max-width: 640px) {
   .acn-vg-largo { grid-column: span 1; }
   .acn-vg-parada { flex-wrap: wrap; }
@@ -7095,3 +7123,29 @@ html body .modal-box.acn-modal-cadastro.acn-vtel-janela-larga { width: min(1680p
 .acn-vtel-motivo { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--acn-line); border-radius: 8px; background: var(--acn-surface); font-size: 13px; }
 .acn-vtel-motivo strong { font-size: 18px; color: var(--acn-bad); }
 .acn-vtel-motivo em { font-style: normal; color: var(--acn-muted); }
+
+/* o texto do botão de passar de coluna é longo e tem de quebrar dentro do cartão (a regra genérica de botão impõe nowrap; o :not(#acn) empata o peso — CLAUDE.md) */
+html body .acn-b.acn-vg-passo:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; text-align: left; height: auto; }
+.acn-vg-card-pe > span { max-width: 100%; }
+html body .acn-b.acn-vg-passo:not(#acn) { min-height: 28px; padding-block: 4px; line-height: 1.25; overflow: visible; }
+/* com os botões de passar de etapa o rodapé da janela de viagem passa de uma linha: tem de quebrar em vez de cortar */
+.acn-vg-jan .acn-modal-rodape { flex-wrap: wrap; }
+/* janela da viagem em tamanho médio (pedido do usuário em 04/11/2026): a regra genérica do cadastro a deixava em 500 px e a .acn-vg-jan de cima nunca valia */
+html body .modal-box.acn-modal-cadastro.acn-vg-jan { width: min(780px, 95vw); max-width: 780px; }
+
+/* ── Viagens, fatia 2 (04/11/2026): provisionamento por setor, contrato e frota ── */
+/* o fieldset só serve para desligar os campos de quem não pode mexer naquela parte: sem borda, sem margem e sem a largura mínima que o navegador impõe */
+.acn-vg-fs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.acn-vg-fs:disabled { opacity: .72; }
+.acn-vg-quem { margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--acn-muted); }
+.acn-vg-anexos { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.acn-vg-anexos li { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.acn-vg-anexos a { display: inline-flex; align-items: center; gap: 4px; color: var(--acn-brand-ink); text-decoration: underline; word-break: break-all; }
+.acn-vg-anexar { display: inline-block; cursor: pointer; }
+.acn-vg-anexar input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.acn-vg-anexar:focus-within span { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
+html body .modal-box.acn-modal-cadastro.acn-vg-frota { width: min(640px, 95vw); max-width: 640px; }
+/* os campos de texto, as caixas de descrição e as listas da viagem ocupam a coluna inteira (o navegador os deixava com a largura padrão, de uns 160 px) */
+.acn-vg-campo > input.acn-input, .acn-vg-campo > textarea.acn-input, .acn-vg-campo > select.acn-input { width: 100%; box-sizing: border-box; }
+.acn-vg-campo > textarea.acn-input { resize: vertical; min-height: 64px; }
+.acn-vg-fs > * + * { margin-top: 10px; }
