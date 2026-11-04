@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { conferirContatoDoCard } from './ContatoObrigatorio';
 import { lerValorDigitado } from './LerValor';
+import { TIPO_RADIO } from './SeparacaoEnvio';
 
 export const SETOR_VENDA_TELECOM = 'telecom';
 
@@ -30,12 +31,13 @@ export const colunaDoTipo = (tipo: any): ColunaVendas =>
 
 export const ehEncerrado = (tipo: any) => ['perdido', 'desistencia'].includes(String(tipo || ''));
 
-/** O que o operador pode fazer com um card, pela etapa dele. Pedido fechado e faturado são do Comercial (a OP nasce do card no CRM). */
-export type Movimento = 'enviar_proposta' | 'perda' | 'desistencia' | 'reativar';
+/** O que o operador pode fazer com um card, pela etapa dele. Pedido fechado (Fatia 2, 03/11/2026): o operador fecha e lança a OP; o faturamento segue no CRM e no Fiscal. */
+export type Movimento = 'enviar_proposta' | 'pedido_fechado' | 'lancar_op' | 'perda' | 'desistencia' | 'reativar';
 export function movimentosDoTipo(tipo: any): Movimento[] {
   const t = String(tipo || '');
   if (t === 'estimativa' || t === 'lead') return ['enviar_proposta', 'perda', 'desistencia'];
-  if (t === 'enviado' || t === 'aguardando_empenho') return ['perda', 'desistencia'];
+  if (t === 'enviado' || t === 'aguardando_empenho') return ['pedido_fechado', 'perda', 'desistencia'];
+  if (t === 'ganho') return ['lancar_op'];
   if (t === 'desistencia') return ['reativar'];
   return [];
 }
@@ -51,7 +53,7 @@ export const FORM_VAZIO = { orgao: '', titulo: '', objeto_principal: '', nome_co
 export const formDoCard = (c: any) => ({
   orgao: c?.orgao || '', titulo: c?.titulo || '', objeto_principal: c?.objeto_principal || '',
   nome_contato: c?.nome_contato || '', contato: c?.contato || '', contato_email: c?.contato_email || '',
-  valor: c?.valor_acn != null ? String(c.valor_acn).replace('.', ',') : '', temperatura: c?.temperatura || '',
+  valor: c?.valor_registrado != null ? String(c.valor_registrado).replace('.', ',') : '', temperatura: c?.temperatura || '',
   prox_contato: c?.prox_contato || '', hora_prox_contato: c?.hora_prox_contato ? String(c.hora_prox_contato).slice(0, 5) : '',
 });
 
@@ -72,13 +74,14 @@ export function erroDoCard(f: any, { encerrado = false } = {}): string {
 
 const limpo = (v: any) => { const t = String(v ?? '').trim(); return t === '' ? null : t; };
 
+// 03/11/2026: o valor estimado vai em `valor_registrado` (a coluna que o CRM mostra, soma no funil e leva para a OP); `valor_acn` é só a parte da ACN em venda com parceiro ou Detech. A primeira versão da aba gravava em `valor_acn` (corrigido antes de existir qualquer card).
 /** As colunas do card que a tela edita (a etapa e a marca ficam de fora: mudam só pelas ações próprias). */
 export function camposDoCard(f: any) {
   const v = lerValorDigitado(f?.valor);
   return {
     orgao: limpo(f.orgao), titulo: limpo(f.titulo), objeto_principal: limpo(f.objeto_principal),
     nome_contato: limpo(f.nome_contato), contato: limpo(f.contato), contato_email: limpo(f.contato_email),
-    valor_acn: v.valor != null ? v.valor : null, temperatura: limpo(f.temperatura),
+    valor_registrado: v.valor != null ? v.valor : null, temperatura: limpo(f.temperatura),
     prox_contato: limpo(f.prox_contato), hora_prox_contato: limpo(f.hora_prox_contato),
   };
 }
@@ -114,4 +117,16 @@ export function textoDoHistorico(h: any): string {
   const texto = String(h?.texto || h?.conteudo || '').trim();
   if (h?.tipo === 'status_change') return `Etapa: ${h?.estagio_novo || '—'}${texto ? ' — ' + texto : ''}`;
   return texto || '—';
+}
+
+/** O que a OP do Telecom já vem com: rádio em envio de material, que é o que o Telecom separa, serializa e embala (SeparacaoEnvio.ts). Decidido com o usuário em 03/11/2026. */
+export const PADROES_DA_OP_TELECOM = { tipo: 'OP', tipo_projeto: TIPO_RADIO, fluxo_entrega: 'envio_material' };
+
+export const EMPRESAS_DA_VENDA = [{ id: 'ACN', rotulo: 'ACN' }, { id: 'DETECH', rotulo: 'Detech' }];
+
+/** Fechar o pedido exige o PV (a OP é numerada por ele) e a empresa que fatura; devolve o que falta, em português ("" = pode fechar). */
+export function erroDoPedidoFechado({ numero_pv, empresa }: any): string {
+  if (!/^[0-9]{4}$/.test(String(numero_pv || '').trim())) return 'Este contato ainda não tem o PV. Envie a proposta primeiro: é nela que o PV é atribuído.';
+  if (!EMPRESAS_DA_VENDA.some(e => e.id === empresa)) return 'Escolha a empresa que vai faturar: ACN ou Detech.';
+  return '';
 }

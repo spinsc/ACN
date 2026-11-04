@@ -199,6 +199,8 @@ interface Props {
   onSaved?:          (record: any, tipo: 'op' | 'os') => void;
   currentUser:       any;
   crmCard?:          any; // card CRM para pré-preenchimento e vínculo
+  // 03/11/2026 (aba Vendas do Telecom): o que a OP já vem escolhida (ex.: tipo Rádio e fluxo de envio de material). Vale por cima dos dados do card e abaixo do prefill de licitação; sem isto o modal abre como sempre.
+  padroes?:          any;
 }
 
 // A leitura do valor digitado (7.x, 14/10/2026) mora em LerValor.ts desde 15/10/2026, para a tela de demandas usar a mesma regra; continua exportada daqui.
@@ -218,7 +220,7 @@ async function gerarNumeroOS(): Promise<string> {
   return `OS-${String(max + 1).padStart(4, '0')}/${ano}`;
 }
 
-export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, crmCard }: Props) {
+export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, crmCard, padroes }: Props) {
   const [form, setForm]       = useState({ ...VAZIO });
   // Venda para Envio já define a rota (envio de material): o campo Fluxo de
   // Entrega some e tudo que depende do fluxo usa este valor.
@@ -361,6 +363,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         ...(crmCard.destino_cep ? { destino_cep: crmCard.destino_cep } : {}),
         ...(crmCard.prazo_entrega_comercial ? { prazo_entrega: String(crmCard.prazo_entrega_comercial).slice(0, 10) } : {}),
         ...(crmCard.ctrl_prazo_garantia ? { prazo_garantia: crmCard.ctrl_prazo_garantia } : {}),
+        ...(padroes || {}),
         ...(pre || {}),
       }));
       if (Number(crmCard.quantidade) > 1) setF('quantidade', Number(crmCard.quantidade));
