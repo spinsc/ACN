@@ -668,8 +668,8 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
       const idsDe = (o: string) => [...new Set(items.map((i: any) => i.analise_solicitacoes).filter((s: any) => s?.origem === o && s?.origem_id).map((s: any) => s.origem_id))];
       const lic = idsDe('licitacao'), crm = idsDe('crm');
       const [rl, rc] = await Promise.all([
-        lic.length ? supabase.from('licitacoes').select('id,data_disputa').in('id', lic) : Promise.resolve({ data: [] }),
-        crm.length ? supabase.from('crm_oportunidades').select('id,data_sessao,hora_sessao').in('id', crm) : Promise.resolve({ data: [] }),
+        lic.length ? supabase.from('licitacoes_basico').select('id,data_disputa').in('id', lic) : Promise.resolve({ data: [] }),
+        crm.length ? supabase.from('crm_oportunidades_basico').select('id,data_sessao,hora_sessao').in('id', crm) : Promise.resolve({ data: [] }),
       ]);
       const mapa: Record<string, any> = {};
       (rl.data || []).forEach((l: any) => { if (l.data_disputa) mapa[l.id] = { quando: new Date(l.data_disputa), texto: new Date(l.data_disputa).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }; });

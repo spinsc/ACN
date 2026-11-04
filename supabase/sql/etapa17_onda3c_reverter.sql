@@ -1,0 +1,3 @@
+-- Volta atrás da onda 3c (04/11/2026): devolve aos cards a regra "quem entrou" (etapa17_logado). As visões e o gatilho com o poder do dono ficam (não atrapalham; as telas ainda leem pelas visões).
+drop policy if exists etapa17_abas on public.crm_oportunidades; create policy etapa17_logado on public.crm_oportunidades for all to authenticated using (public.esta_logado()) with check (public.esta_logado());
+drop policy if exists etapa17_abas on public.licitacoes; create policy etapa17_logado on public.licitacoes for all to authenticated using (public.esta_logado()) with check (public.esta_logado());

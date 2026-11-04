@@ -120,7 +120,7 @@ export function pvDoNumero(numero: string): string | null {
 export async function buscarCardsPorPv(pvs: string[]): Promise<{ porPv: Record<string, any[]>; erro?: string }> {
   const lista = [...new Set(pvs.filter(Boolean))];
   if (!lista.length) return { porPv: {} };
-  const { data, error } = await supabase.from('crm_oportunidades').select('id,titulo,orgao,numero_pv').in('numero_pv', lista);
+  const { data, error } = await supabase.from('crm_oportunidades_basico').select('id,titulo,orgao,numero_pv').in('numero_pv', lista);
   if (error) return { porPv: {}, erro: error.message };
   const porPv: Record<string, any[]> = {};
   for (const c of (data || [])) (porPv[String(c.numero_pv)] = porPv[String(c.numero_pv)] || []).push(c);

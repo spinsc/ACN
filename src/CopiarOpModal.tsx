@@ -39,7 +39,7 @@ export default function CopiarOpModal({ origem, currentUser, onClose, onCriadas 
   useEffect(() => {
     if (!origem?.crm_oportunidade_id) { setCardOrigem(null); return; }
     let vivo = true;
-    supabase.from('crm_oportunidades').select('id,titulo,orgao,numero_pv').eq('id', origem.crm_oportunidade_id).maybeSingle()
+    supabase.from('crm_oportunidades_basico').select('id,titulo,orgao,numero_pv').eq('id', origem.crm_oportunidade_id).maybeSingle()
       .then(({ data }) => { if (vivo) setCardOrigem(data || null); });
     return () => { vivo = false; };
   }, [origem?.crm_oportunidade_id]);

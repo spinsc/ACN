@@ -256,7 +256,7 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
     if (!isGerente || !verTodos) qComp = qComp.or(filtroDonoOuParticipante('usuario_email', currentUser?.email));
     if (setorFiltro !== 'todos') qComp = qComp.eq('setor', setorFiltro);
 
-    let qCrm = supabase.from('crm_oportunidades')
+    let qCrm = supabase.from('crm_oportunidades_basico')
       .select('id,titulo,nome_contato,prox_contato,hora_prox_contato,responsavel_nome')
       .eq('funil', 'venda_direta')
       .not('prox_contato', 'is', null)

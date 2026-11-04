@@ -82,7 +82,7 @@ export default function ContatoComercialAlertWidget({ currentUser }) {
     const nomesRelevantes = [...new Set([currentUser.nome, ...nomesEquipe])];
 
     const { data } = await supabase
-      .from('crm_oportunidades')
+      .from('crm_oportunidades_basico')
       .select('id, titulo, responsavel_nome, prox_contato, hora_prox_contato, nome_contato, contato, numero_pv')
       .in('prox_contato', [hoje, amanha])
       .in('responsavel_nome', nomesRelevantes);

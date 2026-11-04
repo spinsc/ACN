@@ -989,8 +989,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const idsDe = (o: string) => [...new Set(pend.map((i: any) => i.analise_solicitacoes).filter((x: any) => x?.origem === o && x?.origem_id).map((x: any) => x.origem_id))];
     const lic = idsDe('licitacao'), crm = idsDe('crm');
     const [rl, rc] = await Promise.all([
-      lic.length ? supabase.from('licitacoes').select('id,data_disputa').in('id', lic) : Promise.resolve({ data: [], error: null }),
-      crm.length ? supabase.from('crm_oportunidades').select('id,data_sessao').in('id', crm) : Promise.resolve({ data: [], error: null }),
+      lic.length ? supabase.from('licitacoes_basico').select('id,data_disputa').in('id', lic) : Promise.resolve({ data: [], error: null }),
+      crm.length ? supabase.from('crm_oportunidades_basico').select('id,data_sessao').in('id', crm) : Promise.resolve({ data: [], error: null }),
     ]);
     if (rl.error || rc.error) { setErroTelecom((rl.error || rc.error).message); return; }
     const quando: Record<string, number> = {};
@@ -1232,7 +1232,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     // O termo digitado também precisa ir normalizado, senão "É"/"e" nunca
     // bateriam com o que foi salvo em minúsculo sem acento na coluna gerada.
     const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
-      buscarPorPalavras(supabase.from('crm_oportunidades')
+      buscarPorPalavras(supabase.from('crm_oportunidades_basico')
         .select('id,titulo,numero_edital,orgao,responsavel_nome,funil'),
         ['titulo_norm', 'numero_edital_norm', 'orgao_norm', 'responsavel_nome_norm'], termo).limit(6),
       buscarPorPalavras(supabase.from('oples')
@@ -1243,7 +1243,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       buscarPorPalavras(supabase.from('sac_ordens_servico')
         .select('id,numero_os,cliente_nome,veiculo_modelo,equipamento_nome,status'),
         ['numero_os_norm', 'cliente_nome_norm', 'veiculo_modelo_norm', 'equipamento_nome_norm'], termo).limit(6),
-      buscarPorPalavras(supabase.from('licitacoes')
+      buscarPorPalavras(supabase.from('licitacoes_basico')
         .select('id,numero,nome_projeto,orgao,status'),
         ['numero_norm', 'nome_projeto_norm', 'orgao_norm'], termo).limit(6),
       buscarPorPalavras(supabase.from('cadastro_itens')

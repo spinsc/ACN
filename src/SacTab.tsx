@@ -3053,7 +3053,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                       setCrmBusca(q);
                       if (q.length < 2) { setCrmSugestoes([]); return; }
                       setCrmBuscando(true);
-                      const { data } = await supabase.from('crm_oportunidades')
+                      const { data } = await supabase.from('crm_oportunidades_basico')
                         .select('id,titulo,orgao,funil')
                         .or(`titulo.ilike.%${q}%,orgao.ilike.%${q}%`)
                         .order('atualizado_em', { ascending: false })

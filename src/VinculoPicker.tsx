@@ -96,7 +96,7 @@ async function buscarPorTipo(tipo: string, q: string): Promise<{ id: string; des
       return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero_os || '—'} — ${r.cliente_nome || r.equipamento_nome || ''}`.replace(/ — $/, '') }));
     }
     if (tipo === 'pv') {
-      const { data } = await supabase.from('crm_oportunidades').select('id,numero_pv,titulo,cliente_final')
+      const { data } = await supabase.from('crm_oportunidades_basico').select('id,numero_pv,titulo,cliente_final')
         .or(`numero_pv.ilike.${like},titulo.ilike.${like}`)
         .order('criado_em', { ascending: false }).limit(8);
       return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero_pv || r.titulo || '—'} — ${r.cliente_final || ''}`.replace(/ — $/, '') }));

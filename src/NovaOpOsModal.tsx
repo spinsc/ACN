@@ -382,7 +382,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (!isOpen || semPv || crmCard || pv.length !== 4) { setPvAchados(null); setPvCard(null); setPvErro(null); return; }
     let vivo = true;
     setPvErro(null); setPvAchados(null);
-    supabase.from('crm_oportunidades').select('id,titulo,numero_pv,responsavel_nome,orgao,cliente_id,funil')
+    supabase.from('crm_oportunidades_basico').select('id,titulo,numero_pv,responsavel_nome,orgao,cliente_id,funil')
       .eq('numero_pv', pv).limit(5)
       .then(({ data, error }) => {
         if (!vivo) return;

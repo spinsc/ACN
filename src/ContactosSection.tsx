@@ -113,7 +113,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     const [r1, r2, r3, r4, r5] = await Promise.all([
       lerTudo(() => supabase.from('crm_contatos').select('*').order('nome').order('id')),
       lerTudo(() => supabase.from('crm_interacoes').select('*').order('data_interacao', { ascending: false }).order('id')),
-      lerTudo(() => supabase.from('crm_oportunidades').select('id, titulo, funil, cliente_id').order('titulo').order('id')),   // 7.x: sem o cliente_id o quadro "Oportunidades" do contato nunca aparecia
+      lerTudo(() => supabase.from('crm_oportunidades_basico').select('id, titulo, funil, cliente_id').order('titulo').order('id')),   // 7.x: sem o cliente_id o quadro "Oportunidades" do contato nunca aparecia
       lerTudo(() => supabase.from('clientes').select('id, nome').order('nome').order('id')),
       lerTudo(() => supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }).order('id')),
     ]);

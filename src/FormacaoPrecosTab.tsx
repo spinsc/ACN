@@ -2154,11 +2154,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     const licIds = [...new Set((vinc || []).filter((v:any) => v.tipo === 'licitacao').map((v:any) => v.processo_id))];
     const map: Record<string, string> = {};
     if (crmIds.length) {
-      const { data } = await supabase.from('crm_oportunidades').select('id,titulo').in('id', crmIds);
+      const { data } = await supabase.from('crm_oportunidades_basico').select('id,titulo').in('id', crmIds);
       (data || []).forEach((o: any) => { map['crm:' + o.id] = o.titulo || 'Oportunidade CRM'; });
     }
     if (licIds.length) {
-      const { data } = await supabase.from('licitacoes').select('id,numero,nome_projeto').in('id', licIds);
+      const { data } = await supabase.from('licitacoes_basico').select('id,numero,nome_projeto').in('id', licIds);
       (data || []).forEach((l: any) => { map['lic:' + l.id] = `${l.numero || ''} ${l.nome_projeto || ''}`.trim(); });
     }
     setVinculoLabels(map);

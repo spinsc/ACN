@@ -129,7 +129,7 @@ export default function ContatoAlertWidget({ currentUser }) {
 
     // Busca contatos agendados para hoje e em 2 dias para este usuário
     const { data } = await supabase
-      .from('crm_oportunidades')
+      .from('crm_oportunidades_basico')
       .select('id, titulo, orgao, responsavel_nome, prox_contato, hora_prox_contato, nome_contato, contato')
       .in('prox_contato', [hoje, em2d])
       .eq('responsavel_nome', nomeUser);

@@ -82,7 +82,7 @@ async function tentar<D>(p: PromiseLike<{ data: D | null; error: any }>): Promis
 export async function origemDaOp(op: any) {
   const [crm, pedidos] = await Promise.all([
     op?.crm_oportunidade_id
-      ? tentar(supabase.from('crm_oportunidades')
+      ? tentar(supabase.from('crm_oportunidades_basico')
           .select('id,titulo,numero_pv,responsavel_nome,orgao,valor_registrado,estagio_id,licitacao_processo_id')
           .eq('id', op.crm_oportunidade_id).maybeSingle())
       : Promise.resolve([]),
@@ -96,7 +96,7 @@ export async function origemDaOp(op: any) {
 
   const [licitacoes, vinculosFormacao] = await Promise.all([
     licitacaoId
-      ? tentar(supabase.from('licitacoes').select('id,numero_processo,orgao,objeto,status,operador,analista_nome')
+      ? tentar(supabase.from('licitacoes_basico').select('id,numero_processo,orgao,objeto,status,operador,analista_nome')
           .eq('id', licitacaoId).maybeSingle())
       : Promise.resolve([]),
     // a formação de preços se liga ao PROCESSO (card do CRM ou licitação), não à OP
@@ -322,7 +322,7 @@ export async function buscarOps(termo: string) {
     .ilike('opl', `%${t}%`).order('opl').limit(30));
   if (porNumero.length) return porNumero;
   // não achou por número: tenta como Pedido de Venda (card do CRM)
-  const cards = await tentar(supabase.from('crm_oportunidades').select('id').eq('numero_pv', t.replace(/\D/g, '')));
+  const cards = await tentar(supabase.from('crm_oportunidades_basico').select('id').eq('numero_pv', t.replace(/\D/g, '')));
   if (!cards.length) return [];
   return tentar(supabase.from('oples')
     .select('id,opl,cliente_nome,modelo,status_geral,data_entrada')

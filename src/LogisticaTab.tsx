@@ -283,7 +283,7 @@ function LicitacaoAutocompleteFrete({ value, onSelect }: any) {
     if (!texto || texto.length < 2) { setRes([]); setAberto(false); return; }
     timerRef.current = setTimeout(async () => {
       setBuscando(true);
-      const { data } = await supabase.from('licitacoes')
+      const { data } = await supabase.from('licitacoes_basico')
         .select('id, numero, nome_projeto, orgao')
         .or(`numero.ilike.%${texto}%,nome_projeto.ilike.%${texto}%`)
         .limit(8);

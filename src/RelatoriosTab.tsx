@@ -984,8 +984,8 @@ function RelMarkupVendedor() {
       });
 
       const [{ data: crmData }, { data: licData }] = await Promise.all([
-        processosCrm.length ? supabase.from('crm_oportunidades').select('id, responsavel_nome').in('id', processosCrm) : Promise.resolve({ data: [] }),
-        processosLic.length ? supabase.from('licitacoes').select('id, operador, analista_nome').in('id', processosLic) : Promise.resolve({ data: [] }),
+        processosCrm.length ? supabase.from('crm_oportunidades_basico').select('id, responsavel_nome').in('id', processosCrm) : Promise.resolve({ data: [] }),
+        processosLic.length ? supabase.from('licitacoes_basico').select('id, operador, analista_nome').in('id', processosLic) : Promise.resolve({ data: [] }),
       ]);
       const nomeCrm = {}; (crmData || []).forEach((o) => { nomeCrm[o.id] = o.responsavel_nome || null; });
       const nomeLic = {}; (licData || []).forEach((l) => { nomeLic[l.id] = l.operador || l.analista_nome || null; });
@@ -1143,7 +1143,7 @@ function RelComissoes() {
       const idsCrm = [...new Set((resOps.data || []).map((x: any) => x.crm_oportunidade_id).filter(Boolean))];
       const tiposCrm: Record<string, string> = {};
       if (idsCrm.length) {
-        const { data: cards } = await supabase.from('crm_oportunidades').select('id,tipo_negocio').in('id', idsCrm);
+        const { data: cards } = await supabase.from('crm_oportunidades_basico').select('id,tipo_negocio').in('id', idsCrm);
         (cards || []).forEach((c: any) => { if (c.tipo_negocio) tiposCrm[c.id] = c.tipo_negocio; });
       }
       setTipoPorOp(Object.fromEntries((resOps.data || []).map((x: any) => [x.id, tiposCrm[x.crm_oportunidade_id] || null])));
