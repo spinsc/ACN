@@ -25,6 +25,7 @@ import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import ViagensTab from './ViagensTab';
+import ViagemPorMencao from './ViagemPorMencao';
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
@@ -1728,7 +1729,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             ) : (
               <>
                 {/* Título da tela para as abas que ainda não têm cabeçalho próprio */}
-                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc'].includes(activeTab) && (() => {
+                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens'].includes(activeTab) && (() => {   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}
@@ -1797,6 +1798,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <ContatoAlertWidget currentUser={currentUser} />
       <ContatoComercialAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} onNavigate={setActiveTab} />
+      {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte) */}
+      <ViagemPorMencao currentUser={currentUser} />
 
       {/* ── OPL aberto via busca global (modal flutuante) ── */}
       {globalOplAberto && (

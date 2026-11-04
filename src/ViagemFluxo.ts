@@ -17,6 +17,7 @@
 
 import { temPoderDeGerente } from './utils/permissoes';
 import { assinaturaDoRoteiro } from './ViagemRota';
+import { faltaDaVerba } from './ViagemVerba';
 
 export type StatusViagem = 'aberta' | 'em_aprovacao' | 'provisionamento' | 'andamento' | 'finalizada' | 'nao_aprovada';
 export type FamiliaSelo = 'ok' | 'atencao' | 'erro' | 'info' | 'neutro' | 'marca';
@@ -110,17 +111,28 @@ function faltaDoRoteiro(v: any): string[] {
 /**
  * O que falta para a viagem poder seguir. Vazio = pode.
  *  • Em aprovação e Provisionamento: roteiro completo com a rota calculada e atualizada (quem aprova precisa ver o orçamento).
- *  • Andamento ("a equipe saiu"): a Adaptação definiu a equipe, o veículo da frota e o km de saída, e o Financeiro lançou a verba total (decidido com o usuário em 04/11/2026;
+ *  • Andamento ("a equipe saiu"): a Adaptação definiu a equipe, o veículo da frota e o km de saída, e o Financeiro lançou E LIBEROU a verba total (decidido com o usuário em 04/11/2026; a liberação em si, também de 04/11, está em ViagemVerba.ts;
  *    hotel, pedágio, descrição do serviço e contrato NÃO travam a saída).
  */
-export function faltaParaMover(v: any, para: StatusViagem): string[] {
+// `travasExtras` (04/11/2026): o que mais impede a saída e que a regra pura não enxerga sozinha, hoje a reserva do veículo para uso interno (travaPorReserva, ViagemReservas.ts, que NÃO é importada aqui para não haver volta de importação).
+export function faltaParaMover(v: any, para: StatusViagem, travasExtras: string[] = []): string[] {
   if (para === 'em_aprovacao' || para === 'provisionamento') return faltaDoRoteiro(v);
   if (para === 'andamento') {
     const falta: string[] = [];
     if (!(Array.isArray(v?.equipe) && v.equipe.length)) falta.push('a equipe (Adaptação)');
     if (!v?.frota_id) falta.push('o veículo da frota (Adaptação)');
     if (v?.km_saida === null || v?.km_saida === undefined || v?.km_saida === '' || !(Number(v.km_saida) >= 0)) falta.push('o km de saída (Adaptação)');
-    if (!(Number(v?.verba_total) > 0)) falta.push('a verba total (Financeiro)');
+    const faltaVerba = faltaDaVerba(v);   // 04/11/2026: a verba precisa estar LIBERADA pelo Financeiro (ViagemVerba.ts), não só preenchida
+    if (faltaVerba) falta.push(faltaVerba);
+    falta.push(...travasExtras);
+    return falta;
+  }
+  // a volta (04/11/2026, fatia 3): a Adaptação informa o km de volta, que é o que atualiza o km do veículo da frota; o custo real (Financeiro) NÃO trava, porque a prestação de contas costuma chegar depois
+  if (para === 'finalizada') {
+    const falta: string[] = [];
+    const volta = v?.km_volta, saida = v?.km_saida;
+    if (volta === null || volta === undefined || volta === '' || !(Number(volta) >= 0)) falta.push('o km de volta (Adaptação)');
+    else if (saida !== null && saida !== undefined && saida !== '' && Number(volta) < Number(saida)) falta.push('um km de volta maior que o de saída (' + Number(saida).toLocaleString('pt-BR') + ' km)');
     return falta;
   }
   return [];
@@ -207,4 +219,17 @@ export function saidaAtrasada(v: any, hoje: string): boolean {
 /** O que a busca enxerga numa viagem: título, vínculo, quem criou e todas as cidades do roteiro. */
 export function textoParaBusca(v: any): string {
   return [v?.titulo, v?.vinculo, v?.criado_por_nome, v?.origem?.texto, ...(v?.paradas || []).map((p: any) => p?.texto)].filter(Boolean).join(' ');
+}
+
+/**
+ * A viagem em Provisionamento que sai em até 2 dias (ou que já passou da data) e ainda não tem tudo para a equipe sair (04/11/2026, pedido do usuário). O cartão mostra o selo
+ * vermelho e o banco avisa, de segunda a sexta às 8h, o setor que falta (Adaptação e Financeiro). Devolve nulo quando não há o que alertar.
+ */
+export const DIAS_DO_ALERTA_DE_SAIDA = 2;
+export function saidaPertoComFalta(v: any, hoje: string, travasExtras: string[] = []): { dias: number; falta: string[] } | null {
+  if (statusDaViagem(v) !== 'provisionamento') return null;
+  const dias = diasParaSair(v, hoje);
+  if (dias === null || dias > DIAS_DO_ALERTA_DE_SAIDA) return null;
+  const falta = faltaParaMover(v, 'andamento', travasExtras);
+  return falta.length ? { dias, falta } : null;
 }

@@ -27,6 +27,7 @@ import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import NovaOpOsModal from './NovaOpOsModal';
+import { ViagensLigadas } from './ViagemVinculos';
 import { mdiClipboardTextOutline, mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
   mdiChevronDown, mdiChevronRight, mdiPencilOutline, mdiEmailOutline, mdiCellphone, mdiPhoneOutline, mdiPaperclip, mdiAccountOutline, mdiClockOutline,
   mdiContentSaveOutline, mdiAlertOutline, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline, mdiFormatStrikethrough, mdiPalette, mdiFormatColorHighlight,
@@ -1831,6 +1832,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModal} />
             </div>
           </div>
+
+          {/* 04/11/2026: as viagens ligadas a esta licitação (a ligação nasce na tela de Viagens) */}
+          <ViagensLigadas tipo="licitacao" id={licit.id} />
 
           {/* Marcadores */}
           <div className="acn-lic-marcadores">

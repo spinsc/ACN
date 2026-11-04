@@ -13,6 +13,9 @@ import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from '.
 import { CamposSolicitacaoCompra, solicitacaoCompraVazia, validarSolicitacaoCompra, enviarSolicitacaoCompra } from './SolicitacaoCompra';
 import { useCentroObrigatorio } from './CentroCustoUso';
 import { ParticipantesPicker, notificarParticipantes } from './Participantes';
+import VeiculoDaDemanda from './VeiculoDaDemanda';
+import VeiculoNaNovaDemanda, { veiculoVazio, erroDoVeiculoDaDemanda } from './VeiculoNaNovaDemanda';
+import { gravarReserva } from './ViagemReservas';
 import { MembrosResumo, MembrosDaDemanda, GrupoDaDemanda, DescricoesDosArquivos, DescricaoDoAnexo, chaveArquivo } from './DemandaExtras';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
@@ -956,6 +959,9 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               onMudou={async () => { await reload(); onRefresh(); }} />
           )}
 
+          {/* ── Veículo da frota (04/11/2026): a demanda que prende o carro reserva ele aqui; aparece na Agenda das Viagens ── */}
+          {!editando && <VeiculoDaDemanda demanda={d} currentUser={currentUser} podeMexer={!ENCERRADA(d.status)} />}
+
           {/* ── Vínculos (várias OPs, lote, outros processos) — a formação de preço tem o bloco próprio, logo acima ── */}
           {!editando && <VinculosView vinculos={vinculos.filter(v => v.tipo !== 'formacao')} />}
 
@@ -1239,6 +1245,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 }) {
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
   const [pintura, setPintura] = useState({ pintura: false, pintura_tipo: '' });
+  const [veiculo, setVeiculo] = useState<any>(() => veiculoVazio(currentUser));   // 04/11/2026: a demanda que prende o carro da frota reserva o veículo já na criação
   const [setorAlvo, setSetorAlvo] = useState(setor || setoresDestino?.[0] || '');
   // 08/10/2026 (pedidos do usuário): (1) vários setores = demanda composta, com uma PARTE por setor; (2) colaboradores envolvidos, como no Trello; (3) descrição de cada anexo.
   const [setoresAlvo, setSetoresAlvo] = useState<string[]>([setor || setoresDestino?.[0] || '']);
@@ -1312,6 +1319,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       return;
     }
     if (!form.titulo.trim()) { alert('Informe o título!'); return; }
+    { const erroVeiculo = erroDoVeiculoDaDemanda(veiculo); if (erroVeiculo) { alert('Veículo da frota: ' + erroVeiculo); return; } }
     if (qtdEtapas > 1) {
       for (let i = 0; i < etapas.length; i++) {
         if (!etapas[i].responsavel_nome.trim()) { alert(`Informe o responsável da Etapa ${i+1}!`); return; }
@@ -1371,6 +1379,11 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     if (!criadas.length) { setSalvando(false); alert('Não foi possível criar a demanda: ' + falhasSetor.join('; ')); return; }
     if (falhasSetor.length) alert('Estas partes NÃO foram criadas: ' + falhasSetor.join('; ') + '. As demais foram criadas.');
     const nova = criadas[0];
+    // a reserva do veículo nasce ligada à demanda criada (na composta, à primeira parte); se não gravar, a demanda fica criada e a pessoa é avisada para reservar pelo quadro da demanda
+    if (veiculo.usar) {
+      const rv = await gravarReserva({ ...veiculo, demanda_id: nova.id, demanda_titulo: form.titulo.trim() }, currentUser);
+      if (rv.erro) alert('A demanda foi criada, mas a reserva do veículo NÃO foi gravada: ' + rv.erro + '\nAbra a demanda e reserve pelo quadro "Veículo da frota".');
+    }
     if (anexos.length) {
       const falhas: string[] = [];
       for (const f of anexos) {
@@ -1493,6 +1506,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           {/* Colaboradores envolvidos (como os membros de um card do Trello): aparecem na demanda, são avisados e a veem em "Minhas solicitações" */}
           <ParticipantesPicker value={membros} onChange={setMembros} donoEmail={currentUser?.email}
             rotulo="Colaboradores envolvidos (opcional — são avisados e veem a demanda)" />
+
+          {/* Veículo da frota (04/11/2026): a demanda que prende o carro reserva ele aqui */}
+          {setorAlvo !== 'Compras' && <VeiculoNaNovaDemanda valor={veiculo} onChange={setVeiculo} />}
 
           {/* Vínculo opcional a um processo já em andamento */}
           <div>

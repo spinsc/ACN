@@ -15,18 +15,30 @@ import FinanceiroKanban from './FinanceiroKanban';
 import { hojeISO, diaBR, Abas, Botao, Faixa, Selo } from './Interface';
 import Icone from './Icone';
 import CustoPorOpTab from './CentroCustoRelatorios';
+import PendenciasDoFinanceiro from './PendenciasFinanceiroTela';
+import { lerPendenciasDoFinanceiro, EVENTO_PENDENCIAS } from './PendenciasFinanceiro';
 import ModalFechamentoMes from './CentroCustoFechamentoTela';
 import { lerFechamentos, fechamentoVigente, nomeDoMes } from './CentroCustoFechamento';
 import { baixarPlanilha } from './ExportarPlanilha';
 import { mdiFileExcelOutline, mdiLockOutline, mdiTagOutline, mdiBankOutline, mdiFormatListChecks, mdiReceiptTextOutline,
   mdiCashMultiple, mdiRefresh, mdiChartBar, mdiFolderOutline, mdiFileDocumentOutline, mdiCartOutline, mdiPencilOutline,
-  mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline } from '@mdi/js';
+  mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline, mdiClipboardCheckOutline } from '@mdi/js';
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP.
 // Etapa 12e9 (05/10/2026): o seletor escuro escrito à mão virou as abas do guia (`Abas`); os nomes e a ordem são os de antes.
+// 04/11/2026: a aba "Pendências" (viagens que esperam o Financeiro) vem primeiro e mostra a contagem; fica em vermelho quando algo é urgente. A tela inicial continua sendo a de centros de custo.
 function AbasFinanceiro({ aba, setAba }: any) {
+  const [pend, setPend] = useState<any>(null);
+  useEffect(() => {
+    let vivo = true;
+    const ouvir = (e: any) => setPend(e.detail);
+    window.addEventListener(EVENTO_PENDENCIAS, ouvir);
+    lerPendenciasDoFinanceiro(hojeISO()).then(r => { if (vivo && !r.erro) setPend({ total: r.lista.length, urgentes: r.lista.filter((p: any) => p.urgente).length }); });
+    return () => { vivo = false; window.removeEventListener(EVENTO_PENDENCIAS, ouvir); };
+  }, []);
   return (
     <Abas ativa={aba} onChange={setAba} itens={[
+      { id: 'pendencias', rotulo: 'Pendências', icone: mdiClipboardCheckOutline, contagem: pend?.total || null, classe: pend?.urgentes ? 'alerta' : '' },
       { id: 'centros', rotulo: 'Centros de custo', icone: mdiTagOutline },
       { id: 'conciliacao', rotulo: 'Conciliação bancária', icone: mdiBankOutline },
       { id: 'kanban', rotulo: 'Tarefas', icone: mdiFormatListChecks },
@@ -542,6 +554,15 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const maxBarVal = listacentros.length > 0 ? Math.max(...listacentros.map(c => c.total)) : 1;
 
   const anos = Array.from({ length: 5 }, (_, i) => String(now.getFullYear() - i));
+
+  if (abaFin === 'pendencias') {
+    return (
+      <div className="acn-fin">
+        <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
+        <PendenciasDoFinanceiro currentUser={currentUser} />
+      </div>
+    );
+  }
 
   if (abaFin === 'conciliacao') {
     return (

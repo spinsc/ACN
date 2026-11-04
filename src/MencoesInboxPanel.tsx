@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { Botao, Chips, Tag } from './Interface';
 import Icone from './Icone';
+import { permissoesDaViagem } from './ViagemFluxo';
 import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ const ABA_LABEL: Record<string, string> = {
   compras:     'Compras',
   financeiro:  'Financeiro',
   admin:       'Admin',
+  viagens:     'Viagens',
 };
 
 const CONTEXTO_LABEL: Record<string, string> = {
@@ -45,6 +47,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
   frete_aprovacao:  'Aprovação de Frete',
   frete_entrega:    'Frete sem entrega confirmada',
   garantia:         'Garantia',
+  viagem:           'Viagem (aprovação)',
 };
 
 // Contextos sem "aprovação pendente" real — nesses a menção É o pedido de
@@ -53,7 +56,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
 // hora). Não faz sentido oferecer uma caixa de resposta de texto aqui.
 // 'garantia' (G5, 20/10/2026): é só aviso de andamento do atendimento; a conversa fica na ficha, então não há caixa de resposta aqui.
 // 'frete_entrega' (29/10/2026): aviso da rotina do banco ao vendedor da OP (frete em trânsito sem entrega confirmada); a resposta é cobrar a Logística ou o cliente, fora do sistema.
-const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra', 'garantia', 'frete_entrega']);
+const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra', 'garantia', 'frete_entrega', 'viagem']);   // 'viagem' (04/11/2026): aviso do banco de que a viagem gerada pela OP espera aprovação; resolve sozinho quando ela sai de Em aprovação
 
 // Responder uma menção — grava a resposta EXATAMENTE no mesmo lugar que a
 // tela de origem gravaria (então ela aparece lá também, não só aqui), e em
@@ -312,7 +315,9 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       }
     }
     // 03/11/2026: a demanda avulsa gravava o setor ('comercial') como aba, mas a tela do Comercial é a aba 'crm': 'comercial' levava a uma tela vazia
-    if (m.aba_destino && onNavigate) onNavigate(m.aba_destino === 'comercial' ? 'crm' : m.aba_destino);
+    // 04/11/2026: a viagem de quem não tem a aba Viagens abre por cima (ViagemPorMencao); trocar de aba levaria a uma tela que a pessoa não tem
+    const viagemSemAba = m.contexto === 'viagem' && !permissoesDaViagem(currentUser).base;
+    if (m.aba_destino && onNavigate && !viagemSemAba) onNavigate(m.aba_destino === 'comercial' ? 'crm' : m.aba_destino);
   };
 
   // 12e47 (09/10/2026): só a aparência — a gaveta usa as classes acn-gav-* (comuns às Análises) e acn-men-*

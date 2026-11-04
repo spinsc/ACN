@@ -8,7 +8,7 @@
 // Limites desta primeira versão (a confirmar com o usuário): a rota vem de serviços gratuitos de mapa (sem pedágio), então o pedágio é lançado à mão; a data da viagem e a
 // ligação com OP/PV/licitação são só informativas (texto).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -18,23 +18,34 @@ import { CabecalhoTela, Botao, Selo, Faixa, Chips, MenuAcoes, hojeISO } from './
 import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
 import { buscarEndereco, buscarVariosEnderecos, linhasDeEnderecos, calcularRota, nomeCurto, assinaturaDoRoteiro } from './ViagemRota';
+import { liberarVerba } from './ViagemVerba';
 import { CUSTOS_PADRAO, calcularViagem, fmtKm, fmtHoras, fmtReais, textoDoOrcamento, textoDoRoteiro, dataComDiaDaSemana } from './ViagemCalculo';
 import { CampoNumero } from './ViagemCampos';
+import { BlocoFechamento } from './ViagemFechamento';
+import { VinculosDaViagem, textoDosVinculos } from './ViagemVinculos';
+import { abrirVinculo } from './VinculoPicker';
 import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
+import { abrirFicha } from './ViagemFicha';
+import { anexarComprovante, tirarComprovante } from './ViagemComprovantes';
+import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
+import { lerReservas, travaPorReserva } from './ViagemReservas';
+import RelatorioDeCustos from './ViagemRelatorioTela';
+import AgendaDasViagens from './ViagemAgendaTela';
+import { dadosDaCopia } from './ViagemCopia';
 import {
   COLUNAS_VIAGEM, statusDaViagem, colunaDaViagem, rotuloDoStatus, movimentosDaViagem, movimentoParaAColuna, faltaParaMover, patchDoMovimento, entradaDoMovimento, entradaDeAlteracao,
-  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento,
+  diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento, saidaPertoComFalta,
 } from './ViagemFluxo';
 import type { Movimento } from './ViagemFluxo';
 import {
   mdiPlus, mdiClose, mdiArrowUp, mdiArrowDown, mdiMagnify, mdiContentSaveOutline, mdiContentCopy, mdiPrinterOutline,
-  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline,
+  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline, mdiFileDocumentOutline,
 } from '@mdi/js';
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
 const diaBR = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—');
-const viagemVazia = () => ({ titulo: '', status: 'aberta', data_saida: '', pessoas: 1, vinculo: '', origem: null, paradas: [], ida_e_volta: true, otimizar_ordem: true, rota: null, custos: { ...CUSTOS_PADRAO } });
+const viagemVazia = () => ({ titulo: '', status: 'aberta', data_saida: '', pessoas: 1, vinculo: '', vinculos: [], origem: null, paradas: [], ida_e_volta: true, otimizar_ordem: true, rota: null, custos: { ...CUSTOS_PADRAO } });
 
 // ── peças pequenas ───────────────────────────────────────────────────────────
 
@@ -174,7 +185,9 @@ function abrirImpressao(v: any, r: any) {
 
 // ── o editor ─────────────────────────────────────────────────────────────────
 export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any) {
-  const [v, setV] = useState(() => ({ ...viagemVazia(), ...inicial, custos: { ...CUSTOS_PADRAO, ...(inicial?.custos || {}) }, paradas: inicial?.paradas || [], data_saida: inicial?.data_saida || '', vinculo: inicial?.vinculo || '' }));
+  const [v, setV] = useState(() => ({ ...viagemVazia(), ...inicial, custos: { ...CUSTOS_PADRAO, ...(inicial?.custos || {}) }, paradas: inicial?.paradas || [], data_saida: inicial?.data_saida || '', vinculo: inicial?.vinculo || '', vinculos: Array.isArray(inicial?.vinculos) ? inicial.vinculos : [] }));
+  const fotoInicial = useRef('');   // o que a janela mostrava ao abrir: serve para avisar de alterações não salvas antes de sair para outro registro
+  if (!fotoInicial.current) fotoInicial.current = JSON.stringify(v);
   const [salvando, setSalvando] = useState(false);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState('');
@@ -185,6 +198,16 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
   const [subindoContrato, setSubindoContrato] = useState(false);
   const [semente, setSemente] = useState<any>(null);   // manda o destino que a OP indica para a busca de parada
   useEffect(() => { lerFrota().then(r => { setFrota(r.lista); setErroFrota(r.erro); }); }, []);
+  // as outras viagens que ainda ocupam equipe e carro, para avisar de conflito de datas (04/11/2026); leitura que falha vira aviso, nunca "sem conflito" calado
+  const [outras, setOutras] = useState<any[]>([]);
+  const [erroOutras, setErroOutras] = useState('');
+  const [reservas, setReservas] = useState<any[]>([]);   // o carro reservado para uso interno (04/11/2026), para o aviso de conflito aparecer ao escolher o veículo
+  const [erroReservas, setErroReservas] = useState('');
+  useEffect(() => {
+    if (!temProvisionamento(inicial || {})) return;
+    lerReservas(hojeISO()).then(r => { setReservas(r.lista); setErroReservas(r.erro); });
+    supabase.from('viagens').select('*').in('status', ['aberta', 'em_aprovacao', 'provisionamento', 'aprovada', 'andamento']).then(({ data, error }: any) => { setErroOutras(error ? error.message : ''); setOutras(error ? [] : (data || [])); });
+  }, []);
   const set = (campo: string, valor: any) => setV((x: any) => ({ ...x, [campo]: valor }));
   const setCusto = (campo: string, valor: any) => setV((x: any) => ({ ...x, custos: { ...x.custos, [campo]: valor } }));
   const r = useMemo(() => calcularViagem(v), [v]);
@@ -222,7 +245,14 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     if (pode.base && !String(v.titulo || '').trim()) { mostrarAviso('Dê um título à viagem.', 'atencao'); return; }
     if (!v.id && !pode.base) { mostrarAviso('Você não tem permissão para criar viagens.', 'atencao'); return; }
     if (mov) {
-      const falta = faltaParaMover(v, mov.para);
+      // a saída confere AGORA as reservas do veículo (04/11/2026): a que acabou de ser feita por outra pessoa também vale, e leitura recusada não vira "sem reserva"
+      let travas: string[] = [];
+      if (mov.para === 'andamento') {
+        const rr = await lerReservas(hojeISO());
+        if (rr.erro) { mostrarAviso(`Não foi possível conferir as reservas do veículo (${rr.erro}); a viagem não saiu.`); return; }
+        travas = travaPorReserva(v, rr.lista, hojeISO());
+      }
+      const falta = faltaParaMover(v, mov.para, travas);
       if (falta.length) { mostrarAviso(`Não foi possível mandar para "${rotuloDoStatus(mov.para)}": falta ${falta.join(', ')}.`); return; }
     }
     let motivo: string | null = null;
@@ -232,6 +262,10 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
       if (!t.trim()) { mostrarAviso('Não foi possível passar a viagem: o motivo é obrigatório.'); return; }
       motivo = t.trim();
     }
+    if (mov?.para === 'andamento') {
+      const frases = frasesDosConflitos(conflitosDaViagem(v, outras, hojeISO()));
+      if (frases.length && !await confirmar(['Conflito de datas:', '', ...frases, '', 'Iniciar a viagem mesmo assim?'].join(String.fromCharCode(10)))) return;
+    }
     if (!mov && pode.base && rotaVelha && !await confirmar('O roteiro mudou depois do último cálculo: o km, o tempo e os custos gravados são os da rota ANTIGA.\n\nSalvar mesmo assim? (Para atualizar, cancele e use "Calcular rota".)')) return;
     setSalvando(true);
     const agora = new Date().toISOString();
@@ -239,7 +273,8 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     // cada pessoa grava só o grupo que pode editar (a parte da Adaptação, do Comercial e do Financeiro vai separada), para não passar por cima do que outro setor preencheu
     const linhaBase: any = {
       titulo: String(v.titulo).trim(), data_saida: v.data_saida || null, pessoas: Math.max(1, Math.floor(Number(v.pessoas) || 1)),
-      vinculo: String(v.vinculo || '').trim() || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
+      // o texto curto sai da lista de ligações; viagem antiga, só com o texto escrito à mão, mantém o texto
+      vinculos: v.vinculos || [], vinculo: ((v.vinculos || []).length ? textoDosVinculos(v.vinculos) : String(v.vinculo || '').trim()) || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
       rota: v.rota, custos: v.custos, km_total: r.temRota ? r.km : null, horas_viagem: r.temRota ? r.horasDirecao : null, total_custo: r.custoTotal, total_orcamento: r.orcamento,
     };
     const linha: any = { ...(pode.base ? linhaBase : {}), ...camposDoGrupo(v, pode) };
@@ -259,9 +294,9 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     if (v.id && !mov) {
       const mudou = (campos: string[]) => campos.some(k => JSON.stringify(inicial?.[k] ?? null) !== JSON.stringify(v[k] ?? null));
       const notas: string[] = [];
-      if (pode.adaptacao && mudou(['equipe', 'frota_id', 'km_saida'])) notas.push('Adaptação atualizou a equipe, o veículo ou o km de saída.');
+      if (pode.adaptacao && mudou(['equipe', 'frota_id', 'km_saida', 'km_volta'])) notas.push('Adaptação atualizou a equipe, o veículo ou o km.');
       if (pode.comercial && mudou(['servico_descricao', 'contrato_obs'])) notas.push('Comercial atualizou o serviço ou o contrato.');
-      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel'])) notas.push('Financeiro atualizou a verba, o pedágio ou o hotel.');
+      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel', 'custo_real'])) notas.push('Financeiro atualizou a verba, o pedágio, o hotel ou o custo real.');
       const st = statusDaViagem(inicial);
       for (const nota of notas) historico.push({ em: agora, por, de: st, para: st, nota });
     }
@@ -306,10 +341,46 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     set('contrato_anexos', res.lista);
     if (res.erro) mostrarAviso(res.erro);
   };
+  // comprovantes da prestação de contas (04/11/2026): sobem e a lista é gravada na hora, como o contrato
+  const [subindoComprovante, setSubindoComprovante] = useState(false);
+  const aoAnexarComprovante = async (item: string, e: any) => {
+    const arquivos = Array.from(e.target.files || []) as File[];
+    e.target.value = '';
+    if (!arquivos.length || !v.id) return;
+    setSubindoComprovante(true);
+    const res = await anexarComprovante(v, item, arquivos, currentUser);
+    setSubindoComprovante(false);
+    set('comprovantes', res.lista);
+    if (res.erro) mostrarAviso(res.erro);
+  };
+  const aoTirarComprovante = async (i: number) => {
+    const res = await tirarComprovante(v, i, currentUser);
+    set('comprovantes', res.lista);
+    if (res.erro) mostrarAviso(res.erro);
+  };
+  // 04/11/2026: o Financeiro libera a verba. Vale a verba GRAVADA (`inicial`): com alteração não salva na janela, pede para salvar antes (a janela fecha ao liberar, para o histórico não ficar velho)
+  const [liberandoVerba, setLiberandoVerba] = useState(false);
+  const aoLiberarVerba = async () => {
+    if (liberandoVerba) return;
+    if (JSON.stringify(v) !== fotoInicial.current) { mostrarAviso('Salve as alterações da viagem antes de liberar a verba (a liberação vale o valor que está gravado).', 'atencao'); return; }
+    if (!await confirmar(`Liberar a verba de ${fmtReais(Number(inicial.verba_total))} para a viagem "${v.titulo}"?`)) return;
+    setLiberandoVerba(true);
+    const res = await liberarVerba(inicial, currentUser);
+    setLiberandoVerba(false);
+    if (res.erro) { mostrarAviso(res.erro); return; }
+    mostrarAviso('Verba liberada.', 'ok');
+    aoSalvar();
+  };
   const aoTirarContrato = async (i: number) => {
     const res = await tirarContrato(v, i, currentUser);
     set('contrato_anexos', res.lista);
     if (res.erro) mostrarAviso(res.erro);
+  };
+  // abrir a OP, o card ou a licitação ligados: a janela da viagem sai da frente (senão ela cobre a tela que abriria), avisando se há algo não salvo
+  const abrirLigacao = async (x: any) => {
+    if (JSON.stringify(v) !== fotoInicial.current && !await confirmar('Há alterações não salvas nesta viagem. Abrir o registro mesmo assim? O que não foi salvo se perde.')) return;
+    await abrirVinculo(x);
+    aoFechar();
   };
   const nadaParaSalvar = !pode.base && !pode.adaptacao && !pode.comercial && !pode.financeiro;
   const c = v.custos;
@@ -335,17 +406,19 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
                 <input type="time" className="acn-input" aria-label="Horário de saída de cada dia" value={v.custos.hora_saida || '08:00'} onChange={e => setCusto('hora_saida', e.target.value || '08:00')} />
                 <div className="acn-ajuda">Vale para todos os dias do roteiro.</div></div>
               <CampoNumero rotulo="Pessoas" valor={v.pessoas} inteiro onChange={(n: number) => set('pessoas', Math.max(1, n || 1))} />
-              <div className="acn-vg-campo acn-vg-largo"><label className="acn-label">Ligada a (OP, PV, licitação…)</label>
-                <input className="acn-input" aria-label="Ligada a" placeholder="Opcional: número da OP, do PV ou da licitação" value={v.vinculo || ''} onChange={e => set('vinculo', e.target.value)} /></div>
             </div>
+            <div className="acn-vg-campo"><label className="acn-label">Ligada a (OP, PV, licitação)</label>
+              <VinculosDaViagem v={v} set={set} pode={pode} aoAbrir={abrirLigacao} /></div>
             <div className="acn-vg-campo"><label className="acn-label">Etapa</label>
               <div className="acn-vg-etapa"><Selo familia={coluna.familia} ponto={false} title={coluna.ajuda}>{coluna.rotulo}</Selo><span className="acn-ajuda">{coluna.ajuda} Para mudar de etapa use os botões no rodapé.</span></div></div>
           </div>
           </fieldset>
 
+          {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} aoAnexarComprovante={aoAnexarComprovante} aoTirarComprovante={aoTirarComprovante} subindoComprovante={subindoComprovante} />}
+
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
-              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} />
+              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} reservas={reservas} erroReservas={erroReservas} aoLiberarVerba={aoLiberarVerba} liberandoVerba={liberandoVerba} />
           )}
 
           <fieldset className="acn-vg-fs" disabled={!pode.base}>
@@ -472,6 +545,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
             <div className="acn-vg-acoes">
               <Botao pequeno icone={mdiContentCopy} onClick={copiar}>Copiar texto</Botao>
               <Botao pequeno icone={mdiPrinterOutline} onClick={() => abrirImpressao(v, r)}>Imprimir</Botao>
+              {temProvisionamento(inicial || v) && <Botao pequeno icone={mdiFileDocumentOutline} title="Uma folha para a equipe levar: roteiro, veículo, hotel, contrato e verba" onClick={() => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); }}>Ficha da equipe</Botao>}
             </div>
           </div>
 
@@ -508,7 +582,13 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
 // ── passar a viagem de coluna (pelo quadro, pelo menu ou arrastando) ──────────
 /** Passa a viagem para outra coluna: confere o que falta, pede o motivo quando a passagem pede e só grava se ela ainda está na coluna que a pessoa viu. */
 async function moverViagem(v: any, m: Movimento, currentUser: any): Promise<boolean> {
-  const falta = faltaParaMover(v, m.para);
+  let travas: string[] = [];
+  if (m.para === 'andamento') {   // reserva do veículo para uso interno trava a saída (04/11/2026); a leitura é feita agora, não a da tela
+    const rr = await lerReservas(hojeISO());
+    if (rr.erro) { mostrarAviso(`Não foi possível conferir as reservas do veículo (${rr.erro}); "${v.titulo}" não saiu.`); return false; }
+    travas = travaPorReserva(v, rr.lista, hojeISO());
+  }
+  const falta = faltaParaMover(v, m.para, travas);
   if (falta.length) { mostrarAviso(`Não foi possível mandar "${v.titulo}" para "${rotuloDoStatus(m.para)}": falta ${falta.join(', ')}. Abra a viagem para completar.`); return false; }
   let motivo: string | null = null;
   if (m.pedeMotivo) {
@@ -539,7 +619,8 @@ function recadoDaSaida(v: any, hoje: string): { texto: string; atraso: boolean }
 }
 const motivoDaRecusa = (v: any) => [...(v.historico || [])].reverse().find((h: any) => h.para === 'nao_aprovada')?.motivo || null;
 
-function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
+function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover, aoDuplicar, reservas }: any) {
+  const alertaSaida = saidaPertoComFalta(v, hoje, travaPorReserva(v, reservas || [], hoje));   // 04/11/2026: sai em até 2 dias e ainda falta parte
   const passos: Movimento[] = movimentosDaViagem(v, currentUser);
   const proximo = passos.find(m => m.sentido === 'avanca');
   const recado = recadoDaSaida(v, hoje);
@@ -556,6 +637,8 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
         <span onClick={e => e.stopPropagation()}>
           <MenuAcoes itens={[
             { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => aoAbrir(v) },
+            ...(permissoesDaViagem(currentUser).base ? [{ rotulo: 'Duplicar a viagem', icone: mdiContentCopy, onClick: () => aoDuplicar(v) }] : []),
+            ...(temProvisionamento(v) ? [{ rotulo: 'Ficha da equipe (imprimir)', icone: mdiFileDocumentOutline, onClick: () => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); } }] : []),
             ...passos.map(m => ({ rotulo: m.rotulo, onClick: () => aoMover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
           ]} />
         </span>
@@ -567,6 +650,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
         {v.km_total != null && <span>{fmtKm(v.km_total)}</span>}
         {v.vinculo && <span>{v.vinculo}</span>}
       </div>
+      {alertaSaida && <div className="acn-vg-card-meta"><Selo familia="erro" ponto={false} title={'A equipe só sai com isso preenchido: ' + alertaSaida.falta.join(', ')}>Falta para sair: {alertaSaida.falta.map((f: string) => f.split(' (')[0]).join(', ')}</Selo></div>}
       {(recado || parado >= 3) && (
         <div className="acn-vg-card-meta">
           {recado && <Selo familia={recado.atraso ? 'erro' : 'neutro'} ponto={false}>{recado.texto}</Selo>}
@@ -575,7 +659,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover }: any) {
       )}
       {(v.veiculo_nome || (Array.isArray(v.equipe) && v.equipe.length > 0)) && (
         <div className="acn-vg-card-meta">
-          {v.veiculo_nome && <span title="Veículo da frota"><Icone path={mdiCarOutline} size={13} /> {v.veiculo_nome}{v.veiculo_placa ? ' · ' + v.veiculo_placa : ''}</span>}
+          {v.veiculo_nome && <span className="acn-vg-chip" title="Veículo da frota"><Icone path={mdiCarOutline} size={13} /> {v.veiculo_nome}{v.veiculo_placa ? ' · ' + v.veiculo_placa : ''}</span>}
           {Array.isArray(v.equipe) && v.equipe.length > 0 && <span title={v.equipe.map((m: any) => m.nome).join(', ')}>{v.equipe.length} na equipe</span>}
         </div>
       )}
@@ -603,6 +687,8 @@ export default function ViagensTab({ currentUser }: any) {
   const [editando, setEditando] = useState<any | null>(null);
   const [frotaAberta, setFrotaAberta] = useState(false);   // o cadastro de frota (fatia 2, 04/11/2026)
   const [soltarEm, setSoltarEm] = useState<string | null>(null);   // a coluna sobre a qual o cartão está sendo arrastado
+  const [reservasDoCarro, setReservasDoCarro] = useState<any[]>([]);   // reservas de veículo para uso interno (04/11/2026): entram no selo "Falta para sair" e na Agenda
+  const [erroReservasDoCarro, setErroReservasDoCarro] = useState('');
   const hoje = hojeISO();
   const emAcao = React.useRef(false);
 
@@ -613,6 +699,22 @@ export default function ViagensTab({ currentUser }: any) {
     setErro(''); setLista(data || []); setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+  const carregarReservas = useCallback(async () => { const r = await lerReservas(hojeISO()); setReservasDoCarro(r.lista); setErroReservasDoCarro(r.erro); }, []);
+  useEffect(() => { carregarReservas(); }, [carregarReservas]);
+
+  // Menções (o aviso de que a viagem espera aprovação), o card do CRM e a licitação abrem a viagem por aqui (04/11/2026): o recado fica em window.__acnDeepLink e o evento cobre a tela já aberta
+  useEffect(() => {
+    const abrir = async () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'viagem') return;
+      (window as any).__acnDeepLink = null;
+      const { data, error } = await supabase.from('viagens').select('*').eq('id', pend.contextoId).maybeSingle();
+      if (data) setEditando(data); else mostrarAviso('Não foi possível abrir a viagem: ' + (error?.message || 'ela não foi encontrada (pode ter sido apagada).'));
+    };
+    abrir();
+    window.addEventListener('acn:abrir-registro', abrir);
+    return () => window.removeEventListener('acn:abrir-registro', abrir);
+  }, []);
 
   const passaNaSaida = (v: any) => {
     if (saida === 'todas') return true;
@@ -625,6 +727,8 @@ export default function ViagensTab({ currentUser }: any) {
   const contagemSaida = (id: string) => lista.filter(v => combinaBusca(textoParaBusca(v), busca) && (id === 'todas' ? true : id === 'sem_data' ? !v.data_saida : id === 'atrasadas' ? saidaAtrasada(v, hoje)
     : (() => { const d = diasParaSair(v, hoje); return d !== null && d >= 0 && d <= 7 && !['andamento', 'finalizada', 'nao_aprovada'].includes(statusDaViagem(v)); })())).length;
 
+  // duplicar (04/11/2026): abre uma Nova viagem já com o roteiro e os custos da escolhida; nada é gravado até a pessoa salvar
+  const duplicar = (v: any) => { setEditando({ ...viagemVazia(), ...dadosDaCopia(v) }); mostrarAviso('Cópia aberta: confira a data de saída e salve para criar a viagem.', 'info'); };
   const mover = async (v: any, m: Movimento) => {
     if (emAcao.current) return;
     emAcao.current = true;
@@ -650,18 +754,18 @@ export default function ViagensTab({ currentUser }: any) {
         ) : undefined} />
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as viagens ({erro}).</Faixa>}
       <div className="acn-vg-barra">
-        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }]} />
-        <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />
-        <label className="acn-vg-pesquisa">
+        <Chips ativo={visao} onChange={setVisao} rotulo="Forma de ver" itens={[{ id: 'quadro', rotulo: 'Quadro' }, { id: 'lista', rotulo: 'Lista' }, { id: 'agenda', rotulo: 'Agenda' }, { id: 'custos', rotulo: 'Custos' }]} />
+        {!['custos', 'agenda'].includes(visao) && <Chips ativo={saida} onChange={setSaida} rotulo="Data de saída" itens={FILTROS_DE_SAIDA.map(f => ({ id: f.id, rotulo: `${f.rotulo} (${contagemSaida(f.id)})` }))} />}
+        {!['custos', 'agenda'].includes(visao) && <label className="acn-vg-pesquisa">
           <Icone path={mdiMagnify} size={16} />
           <input className="acn-input" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar título, cidade, OP/PV ou quem criou" aria-label="Buscar viagem" />
-        </label>
+        </label>}
       </div>
       {carregando && !lista.length && <div className="acn-ajuda">Carregando viagens…</div>}
-      {!carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
-      {!carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
+      {!['custos', 'agenda'].includes(visao) && !carregando && !erro && !lista.length && <div className="acn-ajuda">Nenhuma viagem ainda. Use "Nova viagem" para montar o roteiro e o orçamento.</div>}
+      {!['custos', 'agenda'].includes(visao) && !carregando && !erro && lista.length > 0 && !visiveis.length && <div className="acn-ajuda">Nenhuma viagem com essa busca ou filtro.</div>}
 
-      {visao === 'quadro' ? (
+      {visao === 'custos' ? <RelatorioDeCustos viagens={lista} aoAbrir={setEditando} /> : visao === 'agenda' ? <AgendaDasViagens viagens={lista} aoAbrir={setEditando} reservas={reservasDoCarro} erroReservas={erroReservasDoCarro} aoMudarReservas={carregarReservas} currentUser={currentUser} /> : visao === 'quadro' ? (
         <div className="acn-vg-quadro">
           {COLUNAS_VIAGEM.map(col => {
             const cartoes = visiveis.filter(v => statusDaViagem(v) === col.id);
@@ -671,7 +775,7 @@ export default function ViagensTab({ currentUser }: any) {
                 <header className="acn-vg-col-cab" title={col.ajuda}><span>{col.rotulo}</span><em>{cartoes.length}</em></header>
                 <div className="acn-vg-col-corpo">
                   {cartoes.length === 0 ? <div className="acn-vg-col-vazia">Nenhuma</div>
-                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} />)}
+                    : cartoes.map(v => <CartaoDaViagem key={v.id} v={v} hoje={hoje} currentUser={currentUser} aoAbrir={setEditando} aoMover={mover} aoDuplicar={duplicar} reservas={reservasDoCarro} />)}
                 </div>
               </section>
             );
@@ -680,7 +784,7 @@ export default function ViagensTab({ currentUser }: any) {
       ) : (
         <div className="acn-vg-tabela-caixa">
           <table className="acn-tabela">
-            <thead><tr><th>Viagem</th><th>Etapa</th><th>Saída</th><th>Roteiro</th><th className="dir">Dias</th><th className="dir">Distância</th><th className="dir">Orçamento</th><th>Ligada a</th><th /></tr></thead>
+            <thead><tr><th>Viagem</th><th>Etapa</th><th>Saída</th><th>Roteiro</th><th>Veículo</th><th className="dir">Dias</th><th className="dir">Distância</th><th className="dir">Orçamento</th><th>Ligada a</th><th /></tr></thead>
             <tbody>
               {visiveis.map(v => {
                 const col = colunaDaViagem(v);
@@ -692,6 +796,7 @@ export default function ViagensTab({ currentUser }: any) {
                     <td><Selo familia={col.familia} ponto={false}>{col.rotulo}</Selo></td>
                     <td className={recado?.atraso ? 'acn-vg-atrasado' : ''}>{diaBR(v.data_saida)}{recado ? <div className="acn-ajuda">{recado.texto}</div> : null}</td>
                     <td className="acn-vg-card-rota">{resumoRoteiro(v) || '—'}</td>
+                    <td>{v.veiculo_nome ? <>{v.veiculo_nome}{v.veiculo_placa ? <div className="acn-ajuda">{v.veiculo_placa}</div> : null}</> : '—'}</td>
                     <td className="dir acn-num">{r && r.dias > 0 ? r.dias : '—'}</td>
                     <td className="dir acn-num">{v.km_total != null ? fmtKm(v.km_total) : '—'}</td>
                     <td className="dir acn-num">{v.total_orcamento != null && Number(v.total_orcamento) > 0 ? fmtReais(v.total_orcamento) : '—'}</td>
@@ -699,6 +804,7 @@ export default function ViagensTab({ currentUser }: any) {
                     <td onClick={e => e.stopPropagation()}>
                       <MenuAcoes itens={[
                         { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => setEditando(v) },
+                        ...(permissoesDaViagem(currentUser).base ? [{ rotulo: 'Duplicar a viagem', icone: mdiContentCopy, onClick: () => duplicar(v) }] : []),
                         ...movimentosDaViagem(v, currentUser).map(m => ({ rotulo: m.rotulo, onClick: () => mover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
                       ]} />
                     </td>
