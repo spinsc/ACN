@@ -11,6 +11,7 @@ import { lerPaginado } from './LerPaginado';
 import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
 import { Botao, Chips, Faixa, Selo, hojeISO, diaBR } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { SecoesGarantia } from './GarantiaEtapas';
@@ -146,7 +147,7 @@ function JanelaGarantia({ modo, inicial, currentUser, onFechar, onGravou }: any)
             <div><label className="acn-label">Cliente *</label>
               <input className="acn-input" aria-label="Cliente" value={c.cliente_nome} onChange={e => mudar('cliente_nome', e.target.value)} /></div>
             <div><label className="acn-label">Contato do cliente (telefone ou e-mail) *</label>
-              <input className="acn-input" aria-label="Contato do cliente" value={c.cliente_contato} onChange={e => mudar('cliente_contato', e.target.value)} /></div>
+              <CampoTelefone aceitaEmail aria-label="Contato do cliente" placeholder="(51) 98644-0747 ou e-mail" valor={c.cliente_contato} onChange={v => mudar('cliente_contato', v)} /></div>
           </div>
 
           <div><label className="acn-label">Veículo (catálogo) *</label>

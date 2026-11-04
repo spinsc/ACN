@@ -60,6 +60,8 @@ import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { CampoTelefone } from './CampoTelefone';
+import { digitosSemPais, telefoneParaGravar } from './Telefone';
 import { OndeEstaCelula } from './OndeEstaAgora';
 import ResumoLoteOpl from './ResumoLoteOpl';
 import { podeFaturarAntes, liberarFaturamentoAntecipado } from './FaturamentoAntecipado';
@@ -3961,8 +3963,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 <div className="acn-grade-2">
                   <div>
                     <label className="acn-label">Telefone</label>
-                    <input className="acn-input" placeholder="(99) 99999-9999"
-                      value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                    <CampoTelefone valor={formOp.contato||''} placeholder="(99) 99999-9999"
+                      onChange={v => setFormOp(f => ({...f, contato: v}))} />
                   </div>
                   <div>
                     <label className="acn-label">E-mail</label>
@@ -4786,10 +4788,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   <div className="acn-crm-ab-grade2">
                     <div className="acn-crm-ab-campo" style={campoDestaque('contato')}>
                       <div className="acn-label">Telefone</div>
-                      <input className="acn-input" placeholder="(99) 99999-9999"
-                        value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                      <CampoTelefone valor={formOp.contato||''} placeholder="(99) 99999-9999"
+                        onChange={v => setFormOp(f => ({...f, contato: v}))} />
                       {formOp.contato && (
-                        <a className="acn-crm-ab-zap" href={`https://wa.me/55${(formOp.contato||'').replace(/\D/g,'')}`} target="_blank" rel="noreferrer">
+                        <a className="acn-crm-ab-zap" href={`https://wa.me/55${digitosSemPais(formOp.contato)}`} target="_blank" rel="noreferrer">
                           💬 WhatsApp
                         </a>
                       )}

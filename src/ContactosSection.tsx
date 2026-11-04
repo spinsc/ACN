@@ -10,6 +10,8 @@ import { combinaBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
 import { confirmar, mostrarAviso } from './Feedback';
 import { Botao, Faixa } from './Interface';
+import { CampoTelefone } from './CampoTelefone';
+import { erroDeTelefone, telefoneParaGravar } from './Telefone';
 import { perfilComPoderes } from './utils/permissoes';
 import { lerPaginado } from './LerPaginado';
 
@@ -182,6 +184,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const salvarContato = async () => {
     if (salvandoRef.current) return;
     if (!formC.nome?.trim()) { mostrarAviso('Informe o nome do contato.', 'atencao'); return; }   // 7.x: antes o botão não fazia nada e não dizia por quê
+    // 04/11/2026 (pedido do usuário): telefone e WhatsApp preenchidos precisam ser completos (DDD + número)
+    const recusaTel = erroDeTelefone(formC.telefone, 'telefone') || erroDeTelefone(formC.whatsapp, 'WhatsApp');
+    if (recusaTel) { mostrarAviso(recusaTel, 'atencao'); return; }
     salvandoRef.current = true; setSalvando(true);
     const p = {
       nome:          formC.nome.trim(),
@@ -190,7 +195,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
       cliente_id:    limpar(formC.cliente_id),
       whatsapp:      limpar(formC.whatsapp),
       email:         limpar(formC.email),
-      telefone:      limpar(formC.telefone),
+      telefone:      limpar(telefoneParaGravar(formC.telefone)),
       linkedin:      limpar(formC.linkedin),
       observacoes:   limpar(formC.observacoes),
       foco_id:       limpar(formC.foco_id),
@@ -708,9 +713,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
               {/* WhatsApp */}
               <div>
-                <div className="acn-ctt-rot">WhatsApp (55DDD+número)</div>
-                <input value={formC.whatsapp||''} placeholder="5511987654321"
-                  onChange={e => setFormC(f => ({...f, whatsapp:e.target.value.replace(/\D/g,'')}))}
+                <div className="acn-ctt-rot">WhatsApp (DDD + número)</div>
+                <CampoTelefone whatsapp valor={formC.whatsapp||''} placeholder="(11) 98765-4321"
+                  onChange={v => setFormC(f => ({...f, whatsapp:v}))}
                   className="acn-ctt-campo"
                 />
               </div>
@@ -727,8 +732,8 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               {/* Telefone */}
               <div>
                 <div className="acn-ctt-rot">Telefone fixo</div>
-                <input value={formC.telefone||''} placeholder="(11) 3000-0000"
-                  onChange={e => setFormC(f => ({...f, telefone:e.target.value}))}
+                <CampoTelefone valor={formC.telefone||''} placeholder="(11) 3000-0000"
+                  onChange={v => setFormC(f => ({...f, telefone:v}))}
                   className="acn-ctt-campo"
                 />
               </div>

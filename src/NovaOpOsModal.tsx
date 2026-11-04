@@ -18,6 +18,7 @@ import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA,
 import { ItensVendidosEditor, itensQueParecemTotalDoLote } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
 import { hojeISO, Botao } from './Interface';
+import { CampoTelefone } from './CampoTelefone';
 import { lerValorDigitado } from './LerValor';
 import { quemExecutaValido, statusInicialDaOsDoCrm, numeroPvParaOS, demandaDeExecucaoDaOsDoCrm, ROTULOS_QUEM_EXECUTA } from './SacFluxo';
 import { notificarEvento } from './whatsappHelper';
@@ -1093,7 +1094,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     </div>
                     <div>
                       <div className="acn-nop-rot">Telefone de quem recebe *</div>
-                      <input className="acn-input acn-nop-w" inputMode="tel" placeholder="(00) 00000-0000" value={form.destino_telefone} onChange={e => setF('destino_telefone', e.target.value)} />
+                      <CampoTelefone className="acn-input acn-nop-w" valor={form.destino_telefone} onChange={v => setF('destino_telefone', v)} />
                     </div>
                   </div>
                 </div>

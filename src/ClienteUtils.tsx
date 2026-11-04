@@ -2,6 +2,8 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Botao, Chips, Selo, Faixa } from './Interface';
+import { CampoTelefone } from './CampoTelefone';
+import { erroDeTelefone, telefoneParaGravar } from './Telefone';
 import Icone from './Icone';
 import { mdiMagnify, mdiPlus, mdiAccountOutline, mdiDomain, mdiCheck, mdiAlertOutline, mdiFileDocumentOutline, mdiCellphone, mdiMapMarkerOutline, mdiEmailOutline, mdiContentSaveOutline, mdiRefresh } from '@mdi/js';
 
@@ -77,6 +79,8 @@ export function ClienteCriarRapidoModal({ nomeInicial = '', tipoInicial = 'PF', 
 
   const salvar = async () => {
     if (!nome.trim()) { alert('Nome obrigatório!'); return; }
+    const recusaTel = erroDeTelefone(telefone);   // 04/11/2026: telefone preenchido precisa ser completo
+    if (recusaTel) { alert(recusaTel); return; }
     setSalvando(true);
     const payload: any = {
       nome: nome.trim().toUpperCase(),
@@ -84,7 +88,7 @@ export function ClienteCriarRapidoModal({ nomeInicial = '', tipoInicial = 'PF', 
       documento: documento.trim() || null,
       empresa:   empresa.trim() || null,
       empresa_id: tipo === 'PF' ? (empresaId || null) : null,
-      telefones: telefone.trim() ? [{ numero: telefone.trim(), tipo: 'Principal' }] : [],
+      telefones: telefone.trim() ? [{ numero: telefoneParaGravar(telefone), tipo: 'Principal' }] : [],
       emails:    email.trim()    ? [{ email:  email.trim(),    tipo: 'Principal' }] : [],
       criado_em: new Date().toISOString(),
       atualizado_em: new Date().toISOString(),
@@ -132,7 +136,7 @@ export function ClienteCriarRapidoModal({ nomeInicial = '', tipoInicial = 'PF', 
             {/* Telefone */}
             <div>
               <div className="acn-label">Telefone / WhatsApp</div>
-              <input className="acn-input" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000" />
+              <CampoTelefone valor={telefone} onChange={setTelefone} placeholder="(11) 99999-0000" />
             </div>
 
             {/* Email */}

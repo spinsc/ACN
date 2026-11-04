@@ -77,7 +77,7 @@
     <label class="field-label">Seu nome *</label>
     <input class="field-input" id="inp-nome" placeholder="Ex: João Silva"/>
     <label class="field-label">Telefone / WhatsApp *</label>
-    <input class="field-input" id="inp-tel" type="tel" placeholder="(48) 99999-9999"/>
+    <input class="field-input" id="inp-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="(48) 99999-9999" oninput="this.value = mascaraTelefone(this.value)"/>
     <label class="field-label">Descreva o problema *</label>
     <textarea class="field-input" id="inp-desc" placeholder="Ex: Sinalizador dianteiro esquerdo não liga..."></textarea>
     <button class="btn-submit" id="btn-enviar-chamado">📤 Enviar Chamado</button>
@@ -138,6 +138,25 @@ function garantiaAtiva(dataFim) {
   return new Date(dataFim + 'T23:59:59') >= new Date();
 }
 
+// 04/11/2026 (pedido do usuário): todo telefone do sistema com máscara de telefone. (48) 99999-9999 (celular) ou (48) 3000-0000 (fixo); aceita colar com +55.
+function mascaraTelefone(v) {
+  let d = String(v || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+  d = d.slice(0, 11);
+  if (!d) return '';
+  if (d.length <= 2) return '(' + d;
+  if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+  if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+  return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+}
+function telefoneCompleto(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  if (d.length !== 10 && d.length !== 11) return false;
+  if (Number(d.slice(0, 2)) < 11) return false;
+  if (d.length === 11 && d[2] !== '9') return false;
+  if (d.length === 10 && (d[2] === '0' || d[2] === '1')) return false;
+  return true;
+}
 function abrirModal(id)  { document.getElementById(id).classList.add('open'); }
 function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
 
@@ -281,9 +300,10 @@ document.getElementById('inp-pin').addEventListener('keydown', e => {
 // ── Chamado ───────────────────────────────────────────────────────────────────
 async function enviarChamado() {
   const nome = document.getElementById('inp-nome').value.trim();
-  const tel  = document.getElementById('inp-tel').value.trim();
+  const tel  = mascaraTelefone(document.getElementById('inp-tel').value);
   const desc = document.getElementById('inp-desc').value.trim();
   if (!nome || !tel || !desc) { alert('Preencha todos os campos obrigatórios.'); return; }
+  if (!telefoneCompleto(tel)) { alert('Informe o telefone completo, com DDD. Exemplo: (48) 99999-9999.'); return; }
   const btn = document.getElementById('btn-enviar-chamado');
   btn.disabled = true;
   btn.textContent = 'Enviando...';

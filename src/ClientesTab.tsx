@@ -11,6 +11,8 @@ import Icone from './Icone';
 import { mdiAccountGroupOutline, mdiAccountOutline, mdiDomain, mdiEyeOutline, mdiLinkVariant, mdiMapMarkerOutline } from '@mdi/js';
 import { temPoderDeGerente, podeDeletarRegistro } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
+import { CampoTelefone } from './CampoTelefone';
+import { erroDeTelefone, telefoneParaGravar } from './Telefone';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 
 // Etapa 12e7 (04/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, Chips, Faixa, a janela do
@@ -36,9 +38,9 @@ function TelefoneList({ list, setList, readonly }) {
     <div>
       {list.map((t, i) => (
         <div key={i} className="acn-cli-linha">
-          <input className="acn-input acn-cli-in2" placeholder="Telefone / WhatsApp"
-            value={t.numero} disabled={readonly}
-            onChange={e => setList(l => l.map((x, j) => j===i ? {...x, numero:e.target.value} : x))} />
+          <CampoTelefone className="acn-input acn-cli-in2" placeholder="Telefone / WhatsApp" semAviso
+            valor={t.numero} disabled={readonly}
+            onChange={v => setList(l => l.map((x, j) => j===i ? {...x, numero:v} : x))} />
           <select className="acn-input acn-cli-in1" value={t.tipo} disabled={readonly}
             onChange={e => setList(l => l.map((x, j) => j===i ? {...x, tipo:e.target.value} : x))}>
             {['Principal','Celular','WhatsApp','Fixo','Comercial','Outro'].map(o => <option key={o}>{o}</option>)}
@@ -122,6 +124,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
     // R17 (13/10/2026): o CEP, quando informado e mexido, precisa ser válido (a conferência da embalagem); continua opcional
     const recusaCep = await conferirCepAntesDeSalvar(f.cep, 'CEP', initial?.cep);
     if (recusaCep) { alert(recusaCep); return; }
+    // 04/11/2026 (pedido do usuário): todo telefone preenchido precisa ser completo (DDD + número) e vai gravado no padrão (51) 98644-0747
+    const recusaTel = telefones.map(t => erroDeTelefone(t.numero)).find(Boolean);
+    if (recusaTel) { alert(recusaTel); return; }
     setSalvando(true);
     const payload = {
       nome:          f.nome.trim().toUpperCase(),
@@ -131,7 +136,7 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
       cargo_contato: f.cargo_contato || null,
       empresa:       f.empresa || null,
       empresa_id:    f.tipo === 'PF' ? (f.empresa_id || null) : null,
-      telefones:     telefones.filter(t => t.numero.trim()),
+      telefones:     telefones.filter(t => t.numero.trim()).map(t => ({ ...t, numero: telefoneParaGravar(t.numero) })),
       emails:        emails.filter(e => e.email.trim()),
       endereco:      f.endereco || null,
       numero:        f.numero   || null,

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React from 'react';
 import { Botao, Selo } from './Interface';
+import { CampoTelefone } from './CampoTelefone';
 import { FLUXOS, UFS } from './FluxoEntrega';
 import { exigeEnderecoCompleto } from './EnderecoEntrega';
 import { CampoCep } from './CampoCep';
@@ -69,7 +70,7 @@ export function FluxoDoGrupo({ g, letra, onChange, quem: quemPassado, opcoes }: 
               <label className="acn-lot-rot">Bairro *<input className="acn-input" value={destino.destino_bairro} onChange={e => setD({ destino_bairro: e.target.value })} /></label>
               <label className="acn-lot-rot">Complemento *<input className="acn-input" placeholder="Se não houver: sem complemento" value={destino.destino_complemento} onChange={e => setD({ destino_complemento: e.target.value })} /></label>
               <label className="acn-lot-rot">Quem recebe *<input className="acn-input" value={destino.destino_destinatario} onChange={e => setD({ destino_destinatario: e.target.value })} /></label>
-              <label className="acn-lot-rot">Telefone de quem recebe *<input className="acn-input" inputMode="tel" placeholder="(00) 00000-0000" value={destino.destino_telefone} onChange={e => setD({ destino_telefone: e.target.value })} /></label>
+              <label className="acn-lot-rot">Telefone de quem recebe *<CampoTelefone valor={destino.destino_telefone} onChange={v => setD({ destino_telefone: v })} /></label>
             </div>
           )}
         </div>
