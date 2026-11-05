@@ -48,6 +48,10 @@
     "mudancas": [
       {
         "data": "2026-11-05",
+        "texto": "Financeiro nas Viagens: o que o Financeiro já preencheu (verba total, pedágio, hotel e custo real) fica travado, com o botão Editar que pede o motivo e deixa no histórico quem corrigiu, o valor de antes e o de agora; o campo vazio nunca trava, e só o Financeiro e a direção destravam. A fila Pendências do Financeiro agora mostra, em cada linha, o resumo da viagem (saída, destino, equipe, veículo, valores e ligações). Ainda sem foto nova desta parte."
+      },
+      {
+        "data": "2026-11-05",
         "texto": "Viagens e OS: a OS de atendimento externo (categoria Serviço Externo) gera a viagem sozinha quando é aprovada, e a janela da viagem ganhou o quadro OS DE ATENDIMENTO (imprimir a OS para o técnico levar, gerar a OS desta viagem no SAC já preenchida e abrir a OS). A viagem também se liga a outra OS pelo seletor de ligações. O chassi que a OP ou a OS não tem sai em branco na folha, e a ficha da equipe traz a lista de veículos a atender. Ainda sem foto nova desta parte."
       },
       {

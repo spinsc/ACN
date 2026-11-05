@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Botao, Faixa, Selo, hojeISO } from './Interface';
 import { EditorDeViagem } from './ViagensTab';
-import { lerPendenciasDoFinanceiro, avisarContagem, ROTULO_DO_TIPO } from './PendenciasFinanceiro';
+import { lerPendenciasDoFinanceiro, avisarContagem, ROTULO_DO_TIPO, resumoDaViagem } from './PendenciasFinanceiro';
 import { mdiRefresh, mdiOpenInNew } from '@mdi/js';
 
 const TIPOS = ['verba', 'custo_real', 'comprovante'];
@@ -56,7 +56,13 @@ export default function PendenciasDoFinanceiro({ currentUser }: any) {
               <thead><tr><th>Viagem</th><th>O que fazer</th><th>Prazo</th><th /></tr></thead>
               <tbody>{itens.map(p => (
                 <tr key={p.chave} className="acn-vg-linha-tab" onClick={() => setAberta(p.viagem)}>
-                  <td><strong>{p.viagem.titulo}</strong>{p.viagem.veiculo_nome ? <div className="acn-ajuda">{p.viagem.veiculo_nome}</div> : null}</td>
+                  <td>
+                    <strong>{p.viagem.titulo}</strong>
+                    {/* 05/11/2026: o Financeiro vê a viagem aqui mesmo (quando sai, destino, equipe, carro, valores, ligações); preencher continua na janela, só a parte dele */}
+                    <dl className="acn-fin-pend-resumo" data-teste="pendencia-resumo">
+                      {resumoDaViagem(p.viagem).map(l => <div key={l.rotulo}><dt>{l.rotulo}</dt><dd>{l.texto}</dd></div>)}
+                    </dl>
+                  </td>
                   <td>{p.o_que}</td>
                   <td><Selo familia={p.urgente ? 'erro' : tipo === 'comprovante' ? 'atencao' : 'neutro'} ponto={false}>{p.prazo}</Selo></td>
                   <td className="dir"><Botao pequeno variante="discreto" icone={mdiOpenInNew} aria-label={`Abrir ${p.viagem.titulo}`} onClick={(e) => { e.stopPropagation(); setAberta(p.viagem); }}>Abrir</Botao></td>

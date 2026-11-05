@@ -154,11 +154,25 @@ A parte mostra sempre o estado da verba: **"Verba liberada por Fulano em dd/mm"*
 
 > **Dica:** o Financeiro não precisa procurar as viagens: elas aparecem sozinhas na aba **Pendências** do Financeiro (veja abaixo).
 
+### Campo já preenchido fica travado
+
+O que o Financeiro **já gravou** (verba total, pedágio, dados do hotel e, na viagem finalizada, o custo real) aparece **travado**, com o selo **"Preenchido e travado"**, para ninguém mexer sem querer. O que ainda está **vazio nunca trava**: dá para preencher à vontade até salvar a primeira vez.
+
+Quando precisar corrigir:
+
+1. Clique em **Editar**, ao lado do selo (um por grupo: verba, pedágio, hotel e custo real).
+2. Escreva o **motivo** (é obrigatório; sem motivo o campo continua travado).
+3. Corrija e clique em **Salvar viagem**.
+
+**O que acontece:** a viagem registra no **histórico** quem corrigiu, o que era **antes**, o que ficou **agora** e o **motivo**. Só **o Financeiro e a direção** veem o botão Editar; quem tem outra parte da viagem vê o campo travado e o aviso **"Só o Financeiro ou a direção corrige."** Destravar um grupo não destrava os outros.
+
+> **Atenção:** a liberação da verba continua valendo a regra de antes: se o valor mudar depois de liberado, é preciso **liberar de novo**.
+
 ## A fila do Financeiro: aba Pendências
 
 ![Aba Pendências do Financeiro](img/31-financeiro-pendencias.jpg)
 
-Em **Financeiro > Pendências** fica a lista do que espera o Financeiro nas viagens. A aba mostra o número de itens (em vermelho quando há urgente). A fila **só lista**: clique na linha, ou em **Abrir**, e a janela da viagem abre para você resolver ali mesmo.
+Em **Financeiro > Pendências** fica a lista do que espera o Financeiro nas viagens. A aba mostra o número de itens (em vermelho quando há urgente). Cada linha já traz o **resumo da viagem**: quando sai, o destino, a equipe, o veículo, os valores (orçado e verba) e a OS, OP ou PV a que está ligada. A fila **só lista**: clique na linha, ou em **Abrir**, e a janela da viagem abre para você resolver ali mesmo (o Financeiro só preenche os campos da parte dele).
 
 | Grupo | O que é | Fica vermelho quando |
 |---|---|---|

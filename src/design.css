@@ -7216,9 +7216,9 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-vg-verba-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
 /* 04/11/2026: as três tabelas da fila de Pendências do Financeiro com as mesmas colunas (senão cada uma se ajusta ao seu texto) */
 .acn-fin-pend .acn-tabela { table-layout: fixed; width: 100%; }
-.acn-fin-pend .acn-tabela th:nth-child(1) { width: 32%; }
-.acn-fin-pend .acn-tabela th:nth-child(2) { width: 38%; }
-.acn-fin-pend .acn-tabela th:nth-child(3) { width: 18%; }
+.acn-fin-pend .acn-tabela th:nth-child(1) { width: 44%; }
+.acn-fin-pend .acn-tabela th:nth-child(2) { width: 28%; }
+.acn-fin-pend .acn-tabela th:nth-child(3) { width: 16%; }
 .acn-fin-pend .acn-tabela th:nth-child(4) { width: 12%; }
 
 /* 05/11/2026: busca geral do Compras (pedido do usuário) */
@@ -7232,3 +7232,23 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-rhrel-bloco { display: flex; flex-direction: column; gap: 6px; }
 .acn-rhrel-acoes { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .acn-rhrel-espaco { flex: 1 1 auto; }
+
+/* Viagens (05/11/2026): campo do Financeiro já gravado fica travado (ViagemTrava.tsx) e a fila de Pendências mostra o resumo da viagem */
+.acn-vg-trava { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; }
+.acn-fin-pend-resumo { margin: 6px 0 0; display: grid; gap: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-fin-pend-resumo > div { display: flex; gap: 6px; min-width: 0; }
+.acn-fin-pend-resumo dt { font-weight: 700; flex: 0 0 auto; }
+.acn-fin-pend-resumo dt::after { content: ":"; }
+.acn-fin-pend-resumo dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* Demandas gerais do Financeiro: pedido de pagamento a terceiro (PagamentoDeTerceiro.tsx, 05/11/2026) e a fila de botões que as peças novas usam */
+.acn-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.acn-pgt { display: flex; flex-direction: column; gap: 8px; }
+.acn-pgt-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.acn-pgt-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: start; }
+.acn-pgt-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.acn-pgt-largo { grid-column: 1 / -1; }
+.acn-pgt-lista { margin: 0; display: grid; gap: 4px; }
+.acn-pgt-lista > div { display: flex; gap: 8px; min-width: 0; }
+.acn-pgt-lista dt { flex: 0 0 150px; font-weight: 700; color: var(--acn-muted); }
+.acn-pgt-lista dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }

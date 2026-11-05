@@ -22,7 +22,9 @@ import { mdiClipboardTextOutline, mdiPlus, mdiContentSaveOutline, mdiHistory } f
 // saem — o criador já é registrado (currentUser), igual em todo o resto do
 // sistema unificado; Tipo de Solicitação já não era gravado há tempos
 // (sempre null no insert antigo).
-const SETORES_DESTINO = ['Comercial','Serralheria','Chicotes','Laboratorio','Telecom','Compras','Almoxarifado','Engenharia','Producao','PCP'];
+// 05/11/2026 (pedido do usuário): o Financeiro passa a receber demandas gerais, para pedir o pagamento de terceiros (valores e custos de terceiros, ligáveis a uma OS) — ver PagamentoDeTerceiro.tsx.
+// A demanda cai na aba "Demandas" do Financeiro.
+const SETORES_DESTINO = ['Comercial','Serralheria','Chicotes','Laboratorio','Telecom','Compras','Almoxarifado','Engenharia','Producao','PCP','Financeiro'];
 
 export default function AjustesProjetoTab({ currentUser }) {
   const [ajustes, setAjustes] = useState([]);

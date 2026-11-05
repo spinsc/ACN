@@ -26,6 +26,7 @@ import { VinculosDaViagem, textoDosVinculos } from './ViagemVinculos';
 import { abrirVinculo } from './VinculoPicker';
 import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
+import { GRUPOS_TRAVAVEIS, notasDasEdicoes, colunasDosGrupos } from './ViagemTrava';
 import { OsDaViagem, lerOsDaViagem, imprimirFichaDaViagem, ligacoesAutomaticasDasOs, juntarLigacoesAutomaticas, dadosParaGerarOs, abrirNovaOsNoSac } from './ViagemOs';
 import { anexarComprovante, tirarComprovante } from './ViagemComprovantes';
 import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
@@ -208,6 +209,17 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     lerReservas(hojeISO()).then(r => { setReservas(r.lista); setErroReservas(r.erro); });
     supabase.from('viagens').select('*').in('status', ['aberta', 'em_aprovacao', 'provisionamento', 'aprovada', 'andamento']).then(({ data, error }: any) => { setErroOutras(error ? error.message : ''); setOutras(error ? [] : (data || [])); });
   }, []);
+  // 05/11/2026: o campo do Financeiro já gravado fica travado; "Editar" destrava só aquele grupo, com o motivo (ViagemTrava.tsx). Nada é gravado ao destravar: o rastro vai no histórico ao salvar
+  const [destravados, setDestravados] = useState<Set<string>>(new Set());
+  const [motivosEdicao, setMotivosEdicao] = useState<Record<string, string>>({});
+  const aoDestravar = async (grupo: string) => {
+    const motivo = await pedirTexto(`Por que corrigir ${GRUPOS_TRAVAVEIS[grupo].rotulo}? O motivo é obrigatório e fica no histórico da viagem, junto do valor de antes.`);
+    if (motivo === null) return;
+    if (!motivo.trim()) { mostrarAviso('Não foi possível destravar: o motivo é obrigatório.'); return; }
+    setDestravados(s => new Set([...s, grupo]));
+    setMotivosEdicao(m => ({ ...m, [grupo]: motivo.trim() }));
+  };
+  const trava = { salvo: inicial, destravados, pode: !!pode.financeiro, aoDestravar };
   // as OS da viagem (05/11/2026): as que nasceram dela e as ligadas à mão; leitura recusada vira aviso, nunca "sem OS"
   const [osLida, setOsLida] = useState<any[]>([]);
   const [erroOs, setErroOs] = useState('');
@@ -313,9 +325,16 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
       const notas: string[] = [];
       if (pode.adaptacao && mudou(['equipe', 'frota_id', 'km_saida', 'km_volta'])) notas.push('Adaptação atualizou a equipe, o veículo ou o km.');
       if (pode.comercial && mudou(['servico_descricao', 'contrato_obs'])) notas.push('Comercial atualizou o serviço ou o contrato.');
-      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel', 'custo_real'])) notas.push('Financeiro atualizou a verba, o pedágio, o hotel ou o custo real.');
+      // o que foi destravado tem nota própria (com o motivo e o valor de antes); a nota genérica fica para o que se preencheu pela primeira vez
+      const comNotaPropria = colunasDosGrupos(destravados);
+      if (pode.financeiro && mudou(['verba_total', 'pedagio_modo', 'hotel', 'custo_real'].filter(k => !comNotaPropria.includes(k)))) notas.push('Financeiro atualizou a verba, o pedágio, o hotel ou o custo real.');
       const st = statusDaViagem(inicial);
       for (const nota of notas) historico.push({ em: agora, por, de: st, para: st, nota });
+    }
+    // 05/11/2026: a correção de um campo do Financeiro já preenchido deixa quem, o motivo e o valor de antes no histórico (vale também quando a gravação passa a viagem de coluna)
+    if (v.id && destravados.size) {
+      const st2 = statusDaViagem(inicial);
+      for (const nota of notasDasEdicoes(destravados, motivosEdicao, inicial, v, por)) historico.push({ em: agora, por, de: st2, para: st2, nota });
     }
     // só regrava o histórico quando há entrada nova: quem salva a parte de um setor não pode apagar o que outro setor acabou de registrar
     if (historico.length !== (Array.isArray(inicial?.historico) ? inicial.historico.length : 0)) linha.historico = historico;
@@ -442,11 +461,11 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
 
           {v.id && <OsDaViagem v={v} currentUser={currentUser} podeGerar={!nadaParaSalvar} aoGerar={gerarOs} aoAbrir={abrirLigacao} osLida={osLida} erroLeitura={erroOs} carregando={carregandoOs} />}
 
-          {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} aoAnexarComprovante={aoAnexarComprovante} aoTirarComprovante={aoTirarComprovante} subindoComprovante={subindoComprovante} />}
+          {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} aoAnexarComprovante={aoAnexarComprovante} aoTirarComprovante={aoTirarComprovante} subindoComprovante={subindoComprovante} trava={trava} />}
 
           {temProvisionamento(inicial || v) && (
             <BlocoProvisionamento v={v} set={set} pode={pode} frota={frota} erroFrota={erroFrota} orcamento={r.orcamento}
-              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} reservas={reservas} erroReservas={erroReservas} aoLiberarVerba={aoLiberarVerba} liberandoVerba={liberandoVerba} />
+              aoAnexarContrato={aoAnexarContrato} aoTirarContrato={aoTirarContrato} subindoContrato={subindoContrato} outras={outras} erroOutras={erroOutras} reservas={reservas} erroReservas={erroReservas} aoLiberarVerba={aoLiberarVerba} liberandoVerba={liberandoVerba} trava={trava} />
           )}
 
           <fieldset className="acn-vg-fs" disabled={!pode.base}>

@@ -1,0 +1,3 @@
+-- Volta atrás de demandas_pagamento_terceiro.sql (05/11/2026). A coluna só é apagada se nenhuma demanda tiver pedido de pagamento
+-- (confira antes: select count(*) from demandas_avulsas where pagamento_terceiro is not null). Nunca apagar com demanda preenchida sem o OK do usuário.
+-- alter table public.demandas_avulsas drop column pagamento_terceiro;   -- só depois de conferir a contagem acima
