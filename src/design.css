@@ -7224,3 +7224,11 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 /* 05/11/2026: busca geral do Compras (pedido do usuário) */
 .acn-cmp-busca-geral { display: flex; align-items: center; gap: 6px; flex: 1 1 220px; min-width: 180px; max-width: 360px; }
 .acn-cmp-busca-geral .acn-input { height: 32px; flex: 1 1 auto; }
+
+/* 05/11/2026: relatórios personalizados do RH (pedido do usuário) */
+.acn-rhrel { display: flex; flex-direction: column; gap: 12px; }
+.acn-rhrel-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; align-items: end; }
+.acn-rhrel-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.acn-rhrel-bloco { display: flex; flex-direction: column; gap: 6px; }
+.acn-rhrel-acoes { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.acn-rhrel-espaco { flex: 1 1 auto; }

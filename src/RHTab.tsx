@@ -13,6 +13,7 @@ import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { hojeISO, diaISO, Botao, Selo, Chips, ChipsMultiplos, Faixa } from './Interface';
 import { lerDepartamentos, anexarDepartamentos, departamentosTexto, salvarVinculosDaPessoa } from './RhDepartamentos';
 import { ModalDepartamentos } from './DepartamentosRH';
+import RelatorioPersonalizadoRH from './RelatorioPersonalizadoRH';
 import { resetColaboradoresCache } from './ColaboradorSelect';
 import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
 import { CampoCep } from './CampoCep';
@@ -2444,6 +2445,8 @@ export default function RHTab({ currentUser }) {
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <RelatorioTecnicos funcionarios={funcionarios} />
           <RelatorioUniformes funcionarios={funcionarios} />
+          {/* 05/11/2026 (pedido do usuário): relatórios que a pessoa monta — aniversários, admissões, funções — com filtros, colunas, grupos, impressão e planilha */}
+          <RelatorioPersonalizadoRH funcionarios={funcionarios} desligados={desligados} departamentos={departamentos} />
           <ComissoesRH funcionarios={comDesligados} currentUser={currentUser} />
           <ListaAutorizacoes
             funcionarios={comDesligados}
