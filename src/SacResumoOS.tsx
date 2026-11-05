@@ -5,6 +5,7 @@ import Icone from './Icone';
 import { mdiClose, mdiMessageTextOutline } from '@mdi/js';
 import { QuadroComprasLigadas } from './ComprasLigadas';
 import { progressoDaOS } from './SacFluxo';
+import { ViagensLigadas } from './ViagemVinculos';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESUMO COMPLETO DA OS — pedido do usuário em 08/10/2026
@@ -149,6 +150,9 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
               <ul className="acn-srs-lista nu">{materiais.map((m: any, i: number) => <li key={i}>{typeof m === 'string' ? m : [m.descricao || m.nome, m.quantidade != null && '× ' + m.quantidade].filter(Boolean).join(' ')}</li>)}</ul>
             </Grupo>
           )}
+
+          {/* 05/11/2026: a viagem ligada à OS (a que nasceu dela, a que gerou a OS ou a ligada à mão); a faixa some se não há nenhuma */}
+          <ViagensLigadas tipo="os" id={os.id} />
 
           {/* 26/10/2026: o SAC pede compra a partir da OS e vê aqui o andamento (a compra fica ligada à OS pelo vínculo; ver ComprasLigadas.tsx) */}
           <QuadroComprasLigadas vinculoTipo="os" vinculoId={os.id} descricao={`${os.numero_os || ''} — ${os.cliente_nome || os.equipamento_nome || ''}`.replace(/ — $/, '')}

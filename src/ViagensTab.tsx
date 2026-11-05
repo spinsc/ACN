@@ -26,7 +26,7 @@ import { VinculosDaViagem, textoDosVinculos } from './ViagemVinculos';
 import { abrirVinculo } from './VinculoPicker';
 import { BlocoProvisionamento, FrotaModal, lerFrota, camposDoGrupo, anexarContrato, tirarContrato } from './ViagemProvisionamento';
 import { montarRoteiro } from './ViagemRoteiro';
-import { abrirFicha } from './ViagemFicha';
+import { OsDaViagem, lerOsDaViagem, imprimirFichaDaViagem, ligacoesAutomaticasDasOs, juntarLigacoesAutomaticas, dadosParaGerarOs, abrirNovaOsNoSac } from './ViagemOs';
 import { anexarComprovante, tirarComprovante } from './ViagemComprovantes';
 import { conflitosDaViagem, frasesDosConflitos } from './ViagemConflitos';
 import { lerReservas, travaPorReserva } from './ViagemReservas';
@@ -208,6 +208,16 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     lerReservas(hojeISO()).then(r => { setReservas(r.lista); setErroReservas(r.erro); });
     supabase.from('viagens').select('*').in('status', ['aberta', 'em_aprovacao', 'provisionamento', 'aprovada', 'andamento']).then(({ data, error }: any) => { setErroOutras(error ? error.message : ''); setOutras(error ? [] : (data || [])); });
   }, []);
+  // as OS da viagem (05/11/2026): as que nasceram dela e as ligadas à mão; leitura recusada vira aviso, nunca "sem OS"
+  const [osLida, setOsLida] = useState<any[]>([]);
+  const [erroOs, setErroOs] = useState('');
+  const [carregandoOs, setCarregandoOs] = useState(!!inicial?.id);
+  useEffect(() => {
+    if (!inicial?.id) return;
+    let vivo = true;
+    lerOsDaViagem(inicial).then(r => { if (vivo) { setOsLida(r.lista); setErroOs(r.erro); setCarregandoOs(false); } });
+    return () => { vivo = false; };
+  }, []);
   const set = (campo: string, valor: any) => setV((x: any) => ({ ...x, [campo]: valor }));
   const setCusto = (campo: string, valor: any) => setV((x: any) => ({ ...x, custos: { ...x.custos, [campo]: valor } }));
   const r = useMemo(() => calcularViagem(v), [v]);
@@ -270,11 +280,18 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     setSalvando(true);
     const agora = new Date().toISOString();
     const por = currentUser?.nome || currentUser?.email || null;
+    // 05/11/2026: as ligações automáticas das OS (o banco as acrescenta quando a OS entra na viagem) vêm sempre da leitura de agora, para uma janela aberta há tempo não apagá-las
+    let vinculosParaGravar = v.vinculos || [];
+    if (pode.base && v.id) {
+      const au = await ligacoesAutomaticasDasOs(v.id);
+      if (au.erro) { setSalvando(false); mostrarAviso('Não foi possível salvar a viagem: não deu para conferir as OS ligadas (' + au.erro + ').'); return; }
+      vinculosParaGravar = juntarLigacoesAutomaticas(vinculosParaGravar, au.lista);
+    }
     // cada pessoa grava só o grupo que pode editar (a parte da Adaptação, do Comercial e do Financeiro vai separada), para não passar por cima do que outro setor preencheu
     const linhaBase: any = {
       titulo: String(v.titulo).trim(), data_saida: v.data_saida || null, pessoas: Math.max(1, Math.floor(Number(v.pessoas) || 1)),
       // o texto curto sai da lista de ligações; viagem antiga, só com o texto escrito à mão, mantém o texto
-      vinculos: v.vinculos || [], vinculo: ((v.vinculos || []).length ? textoDosVinculos(v.vinculos) : String(v.vinculo || '').trim()) || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
+      vinculos: vinculosParaGravar, vinculo: (vinculosParaGravar.length ? textoDosVinculos(vinculosParaGravar) : String(v.vinculo || '').trim()) || null, origem: v.origem, paradas: v.paradas, ida_e_volta: !!v.ida_e_volta, otimizar_ordem: !!v.otimizar_ordem,
       rota: v.rota, custos: v.custos, km_total: r.temRota ? r.km : null, horas_viagem: r.temRota ? r.horasDirecao : null, total_custo: r.custoTotal, total_orcamento: r.orcamento,
     };
     const linha: any = { ...(pode.base ? linhaBase : {}), ...camposDoGrupo(v, pode) };
@@ -383,6 +400,15 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
     aoFechar();
   };
   const nadaParaSalvar = !pode.base && !pode.adaptacao && !pode.comercial && !pode.financeiro;
+  // 05/11/2026: gera a OS desta viagem no SAC (a Nova OS abre preenchida e ligada à viagem). A viagem precisa estar salva: a OS leva o id dela
+  const gerarOs = async () => {
+    if (!v.id) { mostrarAviso('Salve a viagem antes de gerar a OS.', 'atencao'); return; }
+    if (JSON.stringify(v) !== fotoInicial.current && !await confirmar('Há alterações não salvas nesta viagem. Gerar a OS mesmo assim? O que não foi salvo se perde.')) return;
+    const r = await dadosParaGerarOs(v);
+    if (r.erro) { mostrarAviso('Não foi possível gerar a OS: ' + r.erro + '.'); return; }
+    if (!abrirNovaOsNoSac(r.dados)) { mostrarAviso('Não foi possível gerar a OS: o navegador não deixou levar os dados ao SAC.'); return; }
+    aoFechar();
+  };
   const c = v.custos;
   return createPortal(
     <div className="modal-overlay acn-vg-ov">
@@ -407,12 +433,14 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
                 <div className="acn-ajuda">Vale para todos os dias do roteiro.</div></div>
               <CampoNumero rotulo="Pessoas" valor={v.pessoas} inteiro onChange={(n: number) => set('pessoas', Math.max(1, n || 1))} />
             </div>
-            <div className="acn-vg-campo"><label className="acn-label">Ligada a (OP, PV, licitação)</label>
+            <div className="acn-vg-campo"><label className="acn-label">Ligada a (OP, OS, PV, licitação)</label>
               <VinculosDaViagem v={v} set={set} pode={pode} aoAbrir={abrirLigacao} /></div>
             <div className="acn-vg-campo"><label className="acn-label">Etapa</label>
               <div className="acn-vg-etapa"><Selo familia={coluna.familia} ponto={false} title={coluna.ajuda}>{coluna.rotulo}</Selo><span className="acn-ajuda">{coluna.ajuda} Para mudar de etapa use os botões no rodapé.</span></div></div>
           </div>
           </fieldset>
+
+          {v.id && <OsDaViagem v={v} currentUser={currentUser} podeGerar={!nadaParaSalvar} aoGerar={gerarOs} aoAbrir={abrirLigacao} osLida={osLida} erroLeitura={erroOs} carregando={carregandoOs} />}
 
           {['andamento', 'finalizada'].includes(statusDaViagem(inicial || v)) && <BlocoFechamento v={v} set={set} pode={pode} r={r} aoAnexarComprovante={aoAnexarComprovante} aoTirarComprovante={aoTirarComprovante} subindoComprovante={subindoComprovante} />}
 
@@ -545,7 +573,7 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar }: any
             <div className="acn-vg-acoes">
               <Botao pequeno icone={mdiContentCopy} onClick={copiar}>Copiar texto</Botao>
               <Botao pequeno icone={mdiPrinterOutline} onClick={() => abrirImpressao(v, r)}>Imprimir</Botao>
-              {temProvisionamento(inicial || v) && <Botao pequeno icone={mdiFileDocumentOutline} title="Uma folha para a equipe levar: roteiro, veículo, hotel, contrato e verba" onClick={() => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); }}>Ficha da equipe</Botao>}
+              {temProvisionamento(inicial || v) && <Botao pequeno icone={mdiFileDocumentOutline} title="Uma folha para a equipe levar: roteiro, veículo, hotel, contrato e verba" onClick={async () => { const aviso = await imprimirFichaDaViagem(v); if (aviso) mostrarAviso(aviso, 'atencao'); }}>Ficha da equipe</Botao>}
             </div>
           </div>
 
@@ -638,7 +666,7 @@ function CartaoDaViagem({ v, hoje, currentUser, aoAbrir, aoMover, aoDuplicar, re
           <MenuAcoes itens={[
             { rotulo: 'Abrir a viagem', icone: mdiOpenInNew, onClick: () => aoAbrir(v) },
             ...(permissoesDaViagem(currentUser).base ? [{ rotulo: 'Duplicar a viagem', icone: mdiContentCopy, onClick: () => aoDuplicar(v) }] : []),
-            ...(temProvisionamento(v) ? [{ rotulo: 'Ficha da equipe (imprimir)', icone: mdiFileDocumentOutline, onClick: () => { if (!abrirFicha(v)) mostrarAviso('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.', 'atencao'); } }] : []),
+            ...(temProvisionamento(v) ? [{ rotulo: 'Ficha da equipe (imprimir)', icone: mdiFileDocumentOutline, onClick: async () => { const aviso = await imprimirFichaDaViagem(v); if (aviso) mostrarAviso(aviso, 'atencao'); } }] : []),
             ...passos.map(m => ({ rotulo: m.rotulo, onClick: () => aoMover(v, m), perigo: m.perigo, grupo: 'Passar para' })),
           ]} />
         </span>

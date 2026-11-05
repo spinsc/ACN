@@ -212,6 +212,24 @@ Ao escolher a equipe e o veículo, o sistema confere as **outras viagens** que a
 
 > **Dica:** o aviso **não trava**. Às vezes a equipe volta de manhã e sai à tarde; quem decide é a Adaptação. A viagem em Andamento continua ocupando equipe e carro até ser finalizada. A [Agenda](#a-agenda) mostra o mesmo conflito antes de você escolher.
 
+## A OS que o técnico leva (OS de atendimento)
+
+**Quando usar:** em toda viagem que vai atender um cliente. O técnico leva a OS **impressa**, preenche e o cliente assina.
+
+**Quem faz:** quem preenche alguma parte da viagem (Viagens, Adaptação, Comercial ou Financeiro) e tem também a aba SAC.
+
+Na janela da viagem (depois de salva) fica o quadro **OS DE ATENDIMENTO**, com as OS ligadas à viagem:
+
+- **Imprimir**: abre a folha da OS em A4, com o campo de assinatura do cliente no pé. O **chassi que a OP ou a OS ainda não tem sai como uma linha em branco**, para o técnico escrever à mão.
+- **Gerar OS desta viagem**: abre a **Nova OS do SAC já preenchida** (categoria de serviço externo, cliente da OP, endereço do destino, e um veículo por OP da viagem, com o chassi em branco se faltar). Você confere, ajusta e abre a OS pelo caminho de sempre; ela nasce **ligada à viagem** e **não cria demanda no Laboratório**, porque o atendimento é feito pelo técnico no cliente.
+- **Clicar no número da OS** abre a OS no SAC.
+
+Se a viagem **nasceu de uma OS**, essa é a OS dela: não precisa gerar outra. Para ligar a viagem a **outra OS que já existe**, use **Ligada a**, escolha o tipo **OS** e busque; essa fica marcada "ligada à mão".
+
+> **Atenção:** a viagem sem nenhuma OS mostra um aviso amarelo no quadro: o técnico não teria o que o cliente assine. O aviso **não trava** nada.
+
+> **Dica:** no cartão da OS, no SAC, a faixa **Viagem ligada** abre a viagem (para quem tem a aba Viagens).
+
 ## Imprimir a ficha da equipe
 
 **Quando usar:** antes de a equipe sair.
@@ -225,6 +243,7 @@ Com a viagem em Provisionamento ou depois, clique em **Ficha da equipe**: na jan
 - a saída, o percurso, a equipe, o veículo e o km de saída;
 - a verba liberada e o pedágio;
 - o roteiro dia a dia e os trechos;
+- os **veículos a atender**, das OS e das OPs da viagem (OS/OP, cliente, veículo, placa e chassi): **placa e chassi que o cadastro não tem saem como linha em branco** para o técnico preencher;
 - **no pé**, espaços para escrever à mão o km na volta, a data e hora da chegada, os gastos, as ocorrências, e as linhas de **assinatura** (responsável pela equipe e conferência da Adaptação).
 
 A ficha **não leva o orçamento nem a margem**.
