@@ -120,4 +120,6 @@ A Lista mostra as mesmas viagens em linhas, com as mesmas ações no menu **⋯*
 - **Duplicando outra viagem**, quando a mesma rota sai de novo.
 - **Sozinha, pela OP de Adaptação externa**: quando o Almoxarifado fecha o kit dessa OP, o sistema cria a viagem já em **Em aprovação**, com o destino da OP anotado e a OP ligada. Uma viagem por lote e destino: as OPs do mesmo lote que vão ao mesmo lugar entram na mesma viagem.
 
+- **Sozinha, pela OS de atendimento externo** (a categoria do SAC "Serviço Externo"): quando a OS é **aprovada**, o sistema cria a viagem em **Em aprovação**, com o endereço do cliente anotado como destino e a OS ligada. As OS do mesmo lote entram na mesma viagem. A criação da viagem **nunca trava** a OS. Quem aprova recebe o aviso na caixa de Menções, como na viagem da OP.
+
 > **Atenção:** a OP de Adaptação externa **só aparece na fila da Adaptação depois que a viagem é aprovada**. Enquanto a viagem estiver Aberta, Em aprovação ou Não aprovada, a Produção vê a faixa "N OP(s) esperam a aprovação da viagem".
