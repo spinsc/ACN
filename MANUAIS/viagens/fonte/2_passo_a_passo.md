@@ -154,17 +154,17 @@ A parte mostra sempre o estado da verba: **"Verba liberada por Fulano em dd/mm"*
 
 > **Dica:** o Financeiro não precisa procurar as viagens: elas aparecem sozinhas na aba **Pendências** do Financeiro (veja abaixo).
 
-### Campo já preenchido fica travado
+### O Financeiro altera o que é dele, com o motivo
 
-O que o Financeiro **já gravou** (verba total, pedágio, dados do hotel e, na viagem finalizada, o custo real) aparece **travado**, com o selo **"Preenchido e travado"**, para ninguém mexer sem querer. O que ainda está **vazio nunca trava**: dá para preencher à vontade até salvar a primeira vez.
+O Financeiro **altera livremente o que compete a ele**: verba total, pedágio, dados do hotel e, na viagem finalizada, o custo real. O que é de **outro setor** (roteiro, equipe, veículo, km, serviço e contrato) fica **só para leitura** quando a viagem é aberta pelas **Pendências do Financeiro**.
 
-Quando precisar corrigir:
+Quando o campo **já estava preenchido** e você **muda ou apaga** o valor:
 
-1. Clique em **Editar**, ao lado do selo (um por grupo: verba, pedágio, hotel e custo real).
-2. Escreva o **motivo** (é obrigatório; sem motivo o campo continua travado).
-3. Corrija e clique em **Salvar viagem**.
+1. Faça a correção e clique em **Salvar viagem**.
+2. O sistema abre uma janela perguntando o **motivo** (é obrigatório; se você cancelar a janela, **nada é gravado**).
+3. Escreva o motivo e confirme.
 
-**O que acontece:** a viagem registra no **histórico** quem corrigiu, o que era **antes**, o que ficou **agora** e o **motivo**. Só **o Financeiro e a direção** veem o botão Editar; quem tem outra parte da viagem vê o campo travado e o aviso **"Só o Financeiro ou a direção corrige."** Destravar um grupo não destrava os outros.
+**O que acontece:** a viagem registra no **histórico** quem corrigiu, o que era **antes**, o que ficou **agora** e o **motivo**. Campo que ainda estava **vazio** não pede motivo: preencher pela primeira vez é livre, mesmo que o grupo já tenha outros valores (por exemplo, lançar a alimentação depois do combustível, ou o telefone do hotel depois do nome).
 
 > **Atenção:** a liberação da verba continua valendo a regra de antes: se o valor mudar depois de liberado, é preciso **liberar de novo**.
 
@@ -172,7 +172,7 @@ Quando precisar corrigir:
 
 ![Aba Pendências do Financeiro](img/31-financeiro-pendencias.jpg)
 
-Em **Financeiro > Pendências** fica a lista do que espera o Financeiro nas viagens. A aba mostra o número de itens (em vermelho quando há urgente). Cada linha já traz o **resumo da viagem**: quando sai, o destino, a equipe, o veículo, os valores (orçado e verba) e a OS, OP ou PV a que está ligada. A fila **só lista**: clique na linha, ou em **Abrir**, e a janela da viagem abre para você resolver ali mesmo (o Financeiro só preenche os campos da parte dele).
+Em **Financeiro > Pendências** fica a lista do que espera o Financeiro nas viagens. A aba mostra o número de itens (em vermelho quando há urgente). Cada linha já traz o **resumo da viagem**: quando sai, o destino, a equipe, o veículo, os valores (orçado e verba) e a OS, OP ou PV a que está ligada. A fila **só lista**: clique na linha, ou em **Abrir**, e a janela da viagem abre para você resolver ali mesmo. Aberta por aqui, a viagem **só deixa alterar a parte do Financeiro**; o resto fica para leitura.
 
 | Grupo | O que é | Fica vermelho quando |
 |---|---|---|

@@ -22,7 +22,6 @@ import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { CampoNumero } from './ViagemCampos';
 import { fmtReais } from './ViagemCalculo';
 import { situacaoDaVerba, textoDaVerba } from './ViagemVerba';
-import { GrupoComTrava } from './ViagemTrava';
 import { mdiPlus, mdiClose, mdiPaperclip, mdiContentSaveOutline, mdiPencilOutline, mdiCarOutline, mdiHistory, mdiCashCheck } from '@mdi/js';
 
 const BUCKET = 'acn-media';
@@ -50,7 +49,7 @@ export function Parte({ titulo, quem, pode, children }: any) {
   );
 }
 
-export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras, reservas, erroReservas, aoLiberarVerba, liberandoVerba, trava }: any) {
+export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento, aoAnexarContrato, aoTirarContrato, subindoContrato, outras, erroOutras, reservas, erroReservas, aoLiberarVerba, liberandoVerba }: any) {
   const { list: colaboradores } = useColaboradores();
   // conflito (04/11/2026): a mesma pessoa ou o mesmo carro em duas viagens que se sobrepõem; é aviso em vermelho, não trava
   const frasesDeConflito = [...frasesDosConflitos(conflitosDaViagem(v, outras || [], hojeISO())), ...frasesDeReserva(v, reservas || [], hojeISO())];   // 04/11/2026: o veículo reservado para uso interno também é conflito
@@ -127,20 +126,11 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
       </Parte>
 
       <Parte titulo="VERBA, PEDÁGIO E HOTEL" quem="Financeiro" pode={pode.financeiro}>
-        {/* 05/11/2026: o que o Financeiro já preencheu e gravou fica travado; "Editar" pede o motivo e deixa o valor de antes no histórico (ViagemTrava.tsx) */}
         <div className="acn-vg-grade">
-          <div>
-            <GrupoComTrava grupo="verba" trava={trava}>
-              <CampoNumero rotulo="Verba total necessária *" valor={v.verba_total} vazioNulo sufixo="R$" ajuda={orcamento > 0 ? `O orçamento da viagem calcula ${fmtReais(orcamento)}.` : 'Todo o dinheiro que a viagem vai precisar.'} onChange={(n: number | null) => set('verba_total', n)} />
-            </GrupoComTrava>
-          </div>
-          <div>
-            <GrupoComTrava grupo="pedagio" trava={trava}>
-              <div className="acn-vg-campo"><label className="acn-label">Pedágio</label>
-                <Chips ativo={v.pedagio_modo || ''} onChange={(id: string) => set('pedagio_modo', id || null)} rotulo="Pedágio" itens={[{ id: 'reembolso', rotulo: 'Reembolso' }, { id: 'convenio', rotulo: 'Convênio' }]} />
-                <div className="acn-ajuda">{v.pedagio_modo === 'reembolso' ? 'A equipe paga e depois pede o reembolso.' : v.pedagio_modo === 'convenio' ? 'Passa pelo convênio (tag), sem pagar na cancela.' : 'Ainda não definido.'}</div></div>
-            </GrupoComTrava>
-          </div>
+          <CampoNumero rotulo="Verba total necessária *" valor={v.verba_total} vazioNulo sufixo="R$" ajuda={orcamento > 0 ? `O orçamento da viagem calcula ${fmtReais(orcamento)}.` : 'Todo o dinheiro que a viagem vai precisar.'} onChange={(n: number | null) => set('verba_total', n)} />
+          <div className="acn-vg-campo"><label className="acn-label">Pedágio</label>
+            <Chips ativo={v.pedagio_modo || ''} onChange={(id: string) => set('pedagio_modo', id || null)} rotulo="Pedágio" itens={[{ id: 'reembolso', rotulo: 'Reembolso' }, { id: 'convenio', rotulo: 'Convênio' }]} />
+            <div className="acn-ajuda">{v.pedagio_modo === 'reembolso' ? 'A equipe paga e depois pede o reembolso.' : v.pedagio_modo === 'convenio' ? 'Passa pelo convênio (tag), sem pagar na cancela.' : 'Ainda não definido.'}</div></div>
         </div>
         {/* 04/11/2026: o Financeiro LIBERA a verba (ViagemVerba.ts); a equipe só sai com ela liberada */}
         <div className="acn-vg-verba-estado">
@@ -155,7 +145,6 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
           )}
           {noProvisionamento && situacaoVerba === 'sem_verba' && <span className="acn-ajuda">Informe a verba total, salve a viagem e libere: a equipe só sai com a verba liberada.</span>}
         </div>
-        <GrupoComTrava grupo="hotel" trava={trava}>
         <div className="acn-vg-grade">
           <div className="acn-vg-campo"><label className="acn-label">Hotel</label>
             <input className="acn-input" aria-label="Nome do hotel" placeholder="Nome do hotel" value={hotel.nome || ''} onChange={e => setHotel('nome', e.target.value)} /></div>
@@ -166,7 +155,6 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
           <div className="acn-vg-campo acn-vg-largo"><label className="acn-label">Reserva e observações</label>
             <input className="acn-input" aria-label="Reserva e observações do hotel" placeholder="Número da reserva, café incluso, datas…" value={hotel.observacao || ''} onChange={e => setHotel('observacao', e.target.value)} /></div>
         </div>
-        </GrupoComTrava>
       </Parte>
     </>
   );

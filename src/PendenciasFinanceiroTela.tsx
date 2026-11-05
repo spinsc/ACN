@@ -73,7 +73,8 @@ export default function PendenciasDoFinanceiro({ currentUser }: any) {
         );
       })}
 
-      {aberta && <EditorDeViagem key={aberta.id} inicial={aberta} currentUser={currentUser} aoFechar={fechar} aoSalvar={fechar} />}
+      {/* 05/11/2026: aberta por aqui, a viagem edita só a parte do Financeiro; o que é de outro setor fica só para leitura */}
+      {aberta && <EditorDeViagem key={aberta.id} inicial={aberta} currentUser={currentUser} comoSetor="financeiro" aoFechar={fechar} aoSalvar={fechar} />}
     </div>
   );
 }

@@ -13,7 +13,6 @@ import { fmtReais, fmtKm } from './ViagemCalculo';
 import Icone from './Icone';
 import { Botao, Faixa } from './Interface';
 import { comprovantesDoItem, itensSemComprovante } from './ViagemComprovantes';
-import { GrupoComTrava } from './ViagemTrava';
 import { mdiPaperclip, mdiClose } from '@mdi/js';
 
 const ITENS = [
@@ -41,7 +40,7 @@ export function compararComOOrcado(v: any, r: any) {
 
 const dif = (d: number | null) => (d === null ? '—' : <span className={d > 0.004 ? 'acn-txt-erro' : undefined}>{d > 0.004 ? '+' : ''}{fmtReais(d)}</span>);
 
-export function BlocoFechamento({ v, set, pode, r, aoAnexarComprovante, aoTirarComprovante, subindoComprovante, trava }: any) {
+export function BlocoFechamento({ v, set, pode, r, aoAnexarComprovante, aoTirarComprovante, subindoComprovante }: any) {
   const real = v.custo_real || {};
   const setReal = (chave: string, valor: any) => set('custo_real', { ...real, [chave]: valor });
   const c = compararComOOrcado(v, r);
@@ -59,7 +58,6 @@ export function BlocoFechamento({ v, set, pode, r, aoAnexarComprovante, aoTirarC
       </Parte>
 
       <Parte titulo="CUSTO REAL × ORÇADO" quem="Financeiro" pode={pode.financeiro}>
-        <GrupoComTrava grupo="custo_real" trava={trava}>
         <div className="acn-vg-grade">
           {ITENS.map(i => (
             <CampoNumero key={i.chave} rotulo={i.rotulo} valor={real[i.chave]} vazioNulo sufixo="R$" onChange={(n: number | null) => setReal(i.chave, n)} />
@@ -67,7 +65,6 @@ export function BlocoFechamento({ v, set, pode, r, aoAnexarComprovante, aoTirarC
           <div className="acn-vg-campo acn-vg-largo"><label className="acn-label">Observações da prestação de contas</label>
             <input className="acn-input" aria-label="Observações da prestação de contas" placeholder="Ex.: pedágio pago em dinheiro, nota do hotel em anexo" value={real.observacao || ''} onChange={e => setReal('observacao', e.target.value)} /></div>
         </div>
-        </GrupoComTrava>
         <table className="acn-tabela acn-vg-comparacao">
           <thead><tr><th>Item</th><th className="dir">Orçado</th><th className="dir">Real</th><th className="dir">Diferença</th><th>Comprovantes</th></tr></thead>
           <tbody>

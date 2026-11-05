@@ -8,7 +8,7 @@
   "mudancas": [
     {
       "data": "2026-11-05",
-      "texto": "Financeiro nas Viagens: o que o Financeiro já preencheu (verba total, pedágio, hotel e custo real) fica travado, com o botão Editar que pede o motivo e deixa no histórico quem corrigiu, o valor de antes e o de agora; o campo vazio nunca trava, e só o Financeiro e a direção destravam. A fila Pendências do Financeiro agora mostra, em cada linha, o resumo da viagem (saída, destino, equipe, veículo, valores e ligações). Ainda sem foto nova desta parte."
+      "texto": "Financeiro nas Viagens: o Financeiro altera livremente o que é dele (verba total, pedágio, hotel e custo real) e, ao salvar uma correção (mudar ou apagar um valor que já estava lançado), o sistema pede o motivo e deixa no histórico quem corrigiu, o valor de antes, o de agora e o motivo; preencher o que estava vazio, mesmo acrescentando um item ao custo real ou ao hotel, não pede motivo. Aberta pelas Pendências do Financeiro, a viagem só deixa alterar a parte do Financeiro: o que é de outro setor fica só para leitura. A fila Pendências agora mostra, em cada linha, o resumo da viagem (saída, destino, equipe, veículo, valores e ligações). Ainda sem foto nova desta parte."
     },
     {
       "data": "2026-11-05",
