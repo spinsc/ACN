@@ -25,6 +25,7 @@ import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { lerValorDigitado } from './LerValor';
+import { quantidadeDoPedidoDaOp } from './PedidoDaOp';
 import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
 import { SelectBusca, MenuAcoes, Botao } from './Interface';
@@ -581,7 +582,9 @@ export async function reservarParaOp({ oplId, currentUser }: any) {
   // pedido, com o tempo ainda a favor. Este é o caso que o usuário descreveu —
   // 20 chicotes em estoque e uma OP com lote de 30 carros: o sistema vê que
   // faltam 10 e pede sozinho, sem esperar o kiting descobrir.
-  const { abertos: pedidos, falhas: falhasPedidos } = await pedirOQueFaltou({ itemIds: novas.map(l => l.item_id), op, currentUser });
+  // 05/11/2026 (pedido do usuário): o pedido "falta para a OP" nasce com no máximo o que ESTA OP leva do item (a quantidade que ela acabou de reservar).
+  const necessidades = new Map<string, number>(novas.map(l => [String(l.item_id), num(l.quantidade)] as [string, number]));
+  const { abertos: pedidos, falhas: falhasPedidos } = await pedirOQueFaltou({ itemIds: novas.map(l => l.item_id), op, currentUser, necessidades });
   return { reservou: novas.length, itens: novas.length, pedidos, falhasPedidos };
 }
 
@@ -618,7 +621,7 @@ export async function quantidadeJaPedidaParaOps(item: any) {
  * Um pedido só, somando tudo, obrigaria o setor a terminar os 40 antes de
  * liberar os 10 de que a OP precisa.
  */
-async function pedirOQueFaltou({ itemIds, op, currentUser }: any) {
+async function pedirOQueFaltou({ itemIds, op, currentUser, necessidades }: any) {
   const abertos: any[] = [], falhas: string[] = [];
   if (!itemIds?.length) return { abertos, falhas };
   const { data: linhas, error: erroView } = await supabase.from('vw_estoque_disponivel')
@@ -652,11 +655,14 @@ async function pedirOQueFaltou({ itemIds, op, currentUser }: any) {
     if (n.faltaOp > 0 && op) {
       const ja = await quantidadeJaPedidaParaOps(item);
       if (ja.erro) falhas.push(`${item.nome} (para a OP): ${ja.erro}. Nada foi pedido, para não pedir em dobro`);
-      else if (n.faltaOp - ja.total > 0) {
-        const quantidadeOp = n.faltaOp - ja.total;
+      else {
+        // Regra de 05/11/2026 (ver PedidoDaOp.ts): o pedido da OP é só o que ela leva do item, não a falta do estoque inteiro (a OP A1749 pedia 22, 32 e 36 para precisar de 1).
+        const quantidadeOp = quantidadeDoPedidoDaOp({ faltaTotal: n.faltaOp, jaPedido: ja.total, necessidadeDaOp: necessidades?.get?.(String(linha.item_id)) });
+        if (quantidadeOp > 0) {
         const r = await garantirRequisicaoReposicao({ ...comum, quantidade: quantidadeOp, op, jaPedido: ja.total });
         if (r?.criada) abertos.push({ nome: item.nome, quantidade: quantidadeOp, para: 'OP', ...r });
         else if (r?.erro) falhas.push(`${item.nome} (para a OP): ${r.erro}`);
+        }
       }
     }
     // 2) o que a prateleira precisa para voltar ao ideal — sem OP amarrada
