@@ -13,7 +13,7 @@
 //      "com pendência".
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
-import { confirmarRemocao, mostrarAviso } from './Feedback';
+import { confirmar, confirmarRemocao, mostrarAviso } from './Feedback';
 import { lerMarcasDeSerial, gravarMarcaDeSerial } from './SerialDosItens';
 import { imprimirListaDeSeparacao } from './ListaDeSeparacao';
 import { supabase } from './supabaseClient';
@@ -24,7 +24,7 @@ import { normalizarBusca } from './SearchUtils';
 import { completarItensPeloNome, itensInclusos } from './ConfigEstrutura';
 import { agruparEmArvore, temFilhos } from './BomEmArvore';
 import Icone from './Icone';
-import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline } from '@mdi/js';
+import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline, mdiDeleteSweepOutline } from '@mdi/js';
 
 const num = (v: any) => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -351,7 +351,9 @@ export function CopiarBomDeOutraOp({ oplAtual, onCopiar }: any) {
   );
 }
 
-export function BomEditor({ linhas, onChange, vendidos = [], currentUser }: { linhas: any[]; onChange: (v: any[]) => void; vendidos?: any[]; currentUser?: any }) {
+// `permiteLimpar` (05/11/2026, pedido do usuário): o PCP, na janela Configurar OP, ganha o botão "Limpar a BOM" para recomeçar a lista do zero (a estrutura do carro e "Sugerir pelo que foi vendido" montam de novo).
+// Só liga onde foi pedido (a janela do PCP); a liberação da BOM pela Engenharia segue como estava.
+export function BomEditor({ linhas, onChange, vendidos = [], currentUser, permiteLimpar = false }: { linhas: any[]; onChange: (v: any[]) => void; vendidos?: any[]; currentUser?: any; permiteLimpar?: boolean }) {
   const [sugerindo, setSugerindo] = useState(false);
   const lista = linhas.length ? linhas : [linhaBomVazia()];
   // "Serial" por linha (27/10/2026): quem monta a BOM diz se o item recebe número de série e isso é gravado no próprio item do Cadastro (vale para todas as OPs) — é a marca que monta a lista de seriais do Almoxarifado
@@ -405,14 +407,34 @@ export function BomEditor({ linhas, onChange, vendidos = [], currentUser }: { li
     if (fora.length) alert(`A BOM foi sugerida, mas estes itens vendidos não estão no cadastro (nem com o mesmo nome) e ficaram de fora: ${fora.join(', ')}. Busque-os à mão.`);
   };
   const naoCad = bomPreenchida(lista).filter(l => l.nao_cadastrado).length;
+  const qtdPreenchidas = bomPreenchida(lista).length;
+  // Limpar a lista inteira desta janela. Pergunta antes (são várias linhas, algumas podem ter sido digitadas à mão) e deixa claro que o que está
+  // gravado na OP só muda quando a pessoa salvar: fechar a janela depois de limpar não perde a BOM que já existia.
+  const limpar = async () => {
+    if (!qtdPreenchidas) return;
+    if (!await confirmar(`Limpar a BOM? ${qtdPreenchidas === 1 ? 'A única linha sai' : `As ${qtdPreenchidas} linhas saem`} da lista desta janela. O que já está gravado na OP só muda quando você salvar a configuração. Depois dá para montar de novo pelo material da estrutura do carro ou por "Sugerir pelo que foi vendido".`)) return;
+    onChange([]);
+    mostrarAviso('BOM limpa. Monte a lista de novo pela estrutura do carro, por "Sugerir pelo que foi vendido" ou buscando os itens.', 'ok');
+  };
+  const mostrarLimpar = permiteLimpar && qtdPreenchidas > 0;
   return (
     <div className="acn-quadro tom-ok acn-opit-quadro">
       <div className="acn-opit-cab">
         <span className="acn-opit-tit ok"><Icone path={mdiToolboxOutline} size={15} />BOM — material para executar (por unidade) *</span>
-        {vendidos.length > 0 && (
-          <Botao pequeno className="acn-opit-fim" icone={mdiAutoFix} onClick={sugerir} disabled={sugerindo}>
-            {sugerindo ? 'Montando...' : 'Sugerir pelo que foi vendido'}
-          </Botao>
+        {(vendidos.length > 0 || mostrarLimpar) && (
+          <div className="acn-opit-acoes">
+            {mostrarLimpar && (
+              <Botao pequeno icone={mdiDeleteSweepOutline} onClick={limpar} disabled={sugerindo} data-teste="bom-limpar"
+                title="Tira todas as linhas da lista desta janela para recomeçar a BOM do zero (só grava quando você salvar)">
+                Limpar a BOM
+              </Botao>
+            )}
+            {vendidos.length > 0 && (
+              <Botao pequeno icone={mdiAutoFix} onClick={sugerir} disabled={sugerindo}>
+                {sugerindo ? 'Montando...' : 'Sugerir pelo que foi vendido'}
+              </Botao>
+            )}
+          </div>
         )}
       </div>
       <div className="acn-opit-linhas">

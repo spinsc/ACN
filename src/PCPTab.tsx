@@ -86,6 +86,18 @@ export default function PCPTab({ currentUser }) {
   const [resumoLote, setResumoLote] = useState<any>(null);   // { base, irmaos }: cartão de resumo do lote como uma coisa só (08/10/2026)
   const [obsDevolver, setObsDevolver] = useState('');
   const [busca, setBusca] = useState('');
+  // Busca pelo carro (05/11/2026, pedido do usuário): além do que a OP tem escrito (modelo, equipamento/veículo), a busca acha o NOME do veículo do catálogo ligado a ela
+  // ("Ford Ranger Limited"). Lê só os veículos das OPs que estão na tela; se a leitura falhar, a busca segue pelo que a OP tem escrito.
+  const [catalogoDasOps, setCatalogoDasOps] = useState<Map<any, string>>(new Map());
+  const catalogoLido = useRef<Set<any>>(new Set());
+  const lerCatalogoDasOps = async (lista: any[]) => {
+    const faltam = [...new Set((lista || []).map(o => o.veiculo_id).filter(Boolean))].filter(id => !catalogoLido.current.has(id));
+    if (!faltam.length) return;
+    faltam.forEach(id => catalogoLido.current.add(id));   // marca já: duas atualizações seguidas da tela não leem o mesmo veículo duas vezes
+    const { data, error } = await supabase.from('veiculos').select('id,marca,modelo,nome_exibicao').in('id', faltam);
+    if (error || !data) { faltam.forEach(id => catalogoLido.current.delete(id)); return; }   // fica para a próxima atualização; a busca não depende disto para funcionar
+    setCatalogoDasOps(m => { const n = new Map(m); data.forEach((v: any) => n.set(v.id, [v.marca, v.nome_exibicao, v.modelo].filter(Boolean).join(' '))); return n; });
+  };
   // Filtro da triagem (pedido do usuário em 21/10/2026): o que falta configurar, o que já foi liberado para o kiting e o que está pronto para ir à produção
   const [filtroTriagem, setFiltroTriagem] = useState('todas');
   // Vínculo pronto pra abrir a Nova Demanda Avulsa já ligada àquela OP — ver
@@ -143,7 +155,7 @@ export default function PCPTab({ currentUser }) {
     ]);
     const falhas = [oplsRes, faltaRes, serralheriaRes, solicRes].map(r => r.error).filter(Boolean);
     setErroLeitura(falhas.length ? falhas[0].message : '');
-    if (!oplsRes.error) setOpls(oplsRes.data || []);
+    if (!oplsRes.error) { setOpls(oplsRes.data || []); lerCatalogoDasOps(oplsRes.data || []); }
     if (!faltaRes.error) setOplsFalta(faltaRes.data || []);
     carregarPendenciasAbertas();
     if (!serralheriaRes.error) setOplsSerralheria(serralheriaRes.data || []);
@@ -616,7 +628,7 @@ export default function PCPTab({ currentUser }) {
     kiting: (o) => o.status_geral === 'Aguardando Almox',
     producao: (o) => podeLiberar(o),
   };
-  const baseTriagem = filtrarOpls(opls, busca);
+  const baseTriagem = filtrarOpls(opls, busca, { catalogo: catalogoDasOps });
   const passaFiltroTriagem = (o: any) => filtroTriagem === 'todas' || !!FILTROS_TRIAGEM[filtroTriagem]?.(o);
   const listaTriagem = baseTriagem.filter(passaFiltroTriagem);
   const nTriagem = (id: string) => baseTriagem.filter(FILTROS_TRIAGEM[id]).length;
@@ -670,7 +682,7 @@ export default function PCPTab({ currentUser }) {
       <div className="sec-card" id="pcp-bloco-triagem">
         <div className="sec-hdr"><span>Triagem de OPs — PCP ({listaTriagem.length})
           {!loading && opls.length > 0 && <PilulaAcao acao={nTriagemAgir} textoAcao="pedem ação" textoAcomp="nada a liberar agora" />}</span></div>
-        <BuscaOplInput busca={busca} setBusca={setBusca} />
+        <BuscaOplInput busca={busca} setBusca={setBusca} placeholder="Buscar por OP, chassi, cliente, projeto ou carro (nome ou modelo)..." />
         {!loading && opls.length > 0 && (
           <div className="acn-filtros" data-filtros-triagem>
             <Chips rotulo="Filtrar a triagem" ativo={filtroTriagem} onChange={setFiltroTriagem} itens={[
