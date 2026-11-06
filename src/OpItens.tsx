@@ -9,8 +9,9 @@
 //      Cadastro de Itens (kit abre nos itens); item fora do cadastro é aceito,
 //      mas fica marcado "não cadastrado". Sugerida a partir do vendido.
 //   3. Separado (oples.kit_conferencia) — Almoxarifado, no kiting: a quantidade
-//      separada de cada linha da BOM. Diferença exige observação e o kit sai
-//      "com pendência".
+//      separada de cada ITEM da BOM (os itens iguais vêm juntos, com a quantidade
+//      somada, desde 06/11/2026 — ver ItensAgrupados.ts). Diferença exige
+//      observação e o kit sai "com pendência".
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { confirmar, confirmarRemocao, mostrarAviso } from './Feedback';
@@ -23,6 +24,7 @@ import { ehEnvioDeMaterial, ehVendaComposta, setorDaLinha, setorPadraoDaVenda, p
 import { normalizarBusca } from './SearchUtils';
 import { completarItensPeloNome, itensInclusos } from './ConfigEstrutura';
 import { agruparEmArvore, temFilhos } from './BomEmArvore';
+import { conferenciaPorItem, listaPorItem } from './ItensAgrupados';
 import Icone from './Icone';
 import { mdiPackageVariantClosed, mdiArrowDown, mdiClipboardTextOutline, mdiClose, mdiToolboxOutline, mdiAutoFix, mdiPrinterOutline, mdiDeleteSweepOutline } from '@mdi/js';
 
@@ -489,19 +491,14 @@ export function BomEditor({ linhas, onChange, vendidos = [], currentUser, permit
  *
  * `completo` é para o kiting em lote, onde não há conferência linha a linha e a
  * BOM inteira é registrada como separada de uma vez.
+ *
+ * UMA LINHA POR ITEM (pedido do usuário em 06/11/2026): a BOM calculada tem o mesmo
+ * material em várias linhas, uma por item que ele instala; para quem separa na
+ * prateleira isso não faz diferença. Os itens iguais vêm juntos, com a quantidade
+ * somada (ItensAgrupados.ts), e a conferência gravada antes da mudança, linha a
+ * linha, é lida e somada por item.
  */
-export const conferenciaInicial = (opl: any, { completo = false }: any = {}) => {
-  const anteriores = opl?.kit_conferencia?.linhas || [];
-  return (opl?.bom_itens || []).map((b: any, i: number) => {
-    const ant = anteriores[i]?.nome === b.nome ? anteriores[i] : null;
-    return {
-      ...b, planejado: num(b.quantidade),
-      separado: ant ? num(ant.separado) : (completo ? num(b.quantidade) : 0),
-      obs: ant?.obs || '',
-      seriais: ant?.seriais || '',
-    };
-  });
-};
+export const conferenciaInicial = (opl: any, { completo = false }: any = {}) => conferenciaPorItem(opl, { completo });
 export const divergencias = (linhas: any[]) => (linhas || []).filter(l => num(l.separado) !== num(l.planejado));
 /** Texto curto das diferenças (vai para a observação do kit) */
 export const resumoDivergencias = (linhas: any[]) => divergencias(linhas)
@@ -537,6 +534,9 @@ export const registroConferencia = (linhas: any[], currentUser: any, emLote = fa
     item_id: l.item_id, codigo: l.codigo, nome: l.nome, unidade: l.unidade, planejado: num(l.planejado), separado: num(l.separado), obs: String(l.obs || '').trim(),
     ...(listaDeSeriais(l.seriais).length ? { seriais: listaDeSeriais(l.seriais).join(', ') } : {}),
   })),
+  // 06/11/2026: `agrupado` diz que o registro tem UMA linha por item (e não uma por linha da BOM, como tinha até então); quem lê o registro antigo soma por item. Só vai a marca
+  // quando a lista é mesmo por item, para ela nunca prometer o que não é.
+  ...(listaPorItem(linhas) ? { agrupado: true } : {}),
   divergente: divergencias(linhas).length > 0,
   conferido_por: currentUser?.nome || null,
   conferido_em: new Date().toISOString(),
@@ -634,7 +634,7 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
                     sem saldo: precisa de {fmtQ(st.aTirar)} e tem {fmtQ(st.saldo)} {st.unidade || l.unidade}
                   </div>}
                 </td>
-                <td className="dir sem-quebra">{fmtQ(l.planejado)} {l.unidade}</td>
+                <td className="dir sem-quebra" title={l.ocorrencias > 1 ? `Soma de ${l.ocorrencias} linhas da BOM${l.instala?.length ? ` — instala: ${l.instala.join(', ')}` : ''}` : undefined}>{fmtQ(l.planejado)} {l.unidade}</td>
                 <td className="dir" data-rot="Separado">
                   <input type="number" min="0" step="any" value={l.separado} aria-label={`Separado de ${l.nome}`}
                     className={'acn-input acn-opit-sep' + (difere ? ' difere' : '')}
@@ -675,6 +675,7 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
           ? 'Ainda não há estoque neste setor: marcar só registra o que foi separado, nada dá baixa.'
           : 'Marcar e desmarcar não mexem no estoque. A baixa acontece quando você salva a separação.'}
       </div>
+      {linhas.some(l => l.ocorrencias > 1) && <div className="acn-ajuda" data-aviso="itens-juntos">O que aparece mais de uma vez na BOM vem junto, numa linha só, com a quantidade somada (passe o mouse na quantidade para ver de onde veio).</div>}
       {comSerial && <div className="acn-ajuda">O número de série vai na linha do próprio item (nem todo item tem). Item com mais de uma unidade: um serial por unidade, separados por vírgula; dá para colar uma coluna do Excel.</div>}
     </div>
   );
@@ -684,7 +685,10 @@ export function ConferenciaKit({ linhas, onChange, saldos = {}, semEstoque = fal
 export function QuadroItensOp({ opl }: { opl: any }) {
   const vendidos = opl?.itens_vendidos || [];
   const bom = opl?.bom_itens || [];
-  const conf = opl?.kit_conferencia?.linhas || [];
+  // 06/11/2026: "BOM × separado" é POR ITEM, como a separação do Almoxarifado (os itens iguais da BOM somados); a conferência antiga, linha a linha, também vem somada por item.
+  // Sem conferência gravada o "separado" é um traço, não zero: ninguém olhou ainda.
+  const temConf = !!opl?.kit_conferencia?.linhas?.length;
+  const itensDaBom = conferenciaInicial(opl);
   // Telecom, T2 (22/10/2026): numa venda de envio de material com linha do Telecom, cada linha diz quem a separa (sem ruído nas OPs que são todas do Almoxarifado)
   const mostraSetor = ehEnvioDeMaterial(opl) && (ehVendaComposta(opl) || setorPadraoDaVenda(opl) === SETOR_TELECOM || vendidos.some((v: any) => v?.setor === SETOR_TELECOM));
   if (!vendidos.length && !bom.length) return null;
@@ -709,16 +713,15 @@ export function QuadroItensOp({ opl }: { opl: any }) {
           <table className="acn-opit-leitura">
             <thead><tr><th>Item</th><th className="dir">BOM</th><th className="dir">Separado</th></tr></thead>
             <tbody>
-              {bom.map((b: any, i: number) => {
-                const c = conf[i] && conf[i].nome === b.nome ? conf[i] : null;
-                const difere = c && num(c.separado) !== num(b.quantidade);
+              {itensDaBom.map((b: any) => {
+                const difere = temConf && num(b.separado) !== num(b.planejado);
                 return (
-                  <tr key={i} className={difere ? 'difere' : undefined}>
+                  <tr key={b.chave} className={difere ? 'difere' : undefined}>
                     <td>{b.nome}{b.codigo && <span className="acn-opit-peq">{b.codigo}</span>}
-                      {c?.obs && <div className="acn-opit-peq bloco dif">{c.obs}</div>}
-                      {c?.seriais && <div className="acn-opit-peq bloco">Serial: {c.seriais}</div>}</td>
-                    <td className="dir sem-quebra">{fmtQ(b.quantidade)} {b.unidade}</td>
-                    <td className={'dir' + (difere ? ' dif' : '')}>{c ? fmtQ(c.separado) : '—'}</td>
+                      {temConf && b.obs && <div className="acn-opit-peq bloco dif">{b.obs}</div>}
+                      {temConf && b.seriais && <div className="acn-opit-peq bloco">Serial: {b.seriais}</div>}</td>
+                    <td className="dir sem-quebra" title={b.ocorrencias > 1 ? `Soma de ${b.ocorrencias} linhas da BOM${b.instala?.length ? ` — instala: ${b.instala.join(', ')}` : ''}` : undefined}>{fmtQ(b.planejado)} {b.unidade}</td>
+                    <td className={'dir' + (difere ? ' dif' : '')}>{temConf ? fmtQ(b.separado) : '—'}</td>
                   </tr>
                 );
               })}
