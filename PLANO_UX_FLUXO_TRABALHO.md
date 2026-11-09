@@ -5766,7 +5766,7 @@ Registro feito em 08/10/2026 (a regra do projeto é o plano andar junto do códi
 - **O custo por OP não tem despesa avulsa** (a despesa não tem OP); só compras.
 - **O mês em andamento** é comparado inteiro contra o mês fechado do ano anterior/mês anterior — por isso o aviso na tela de que ele ainda pode receber lançamentos.
 - **O Financeiro (visual antigo) só ganhou a aba nova e o botão**; a migração do resto dele fica **depois da 15e**.
-- **Achado fora do escopo — logo quebrado:** o commit **"trash" de hoje (18:41)** apagou `public/logo.svg`, mas `DashboardTab.tsx` (o logo do topo), `CotacoesTab.tsx` e `ProducaoTab.tsx` (as impressões) **ainda apontam para ele**: o logo do topo aparece como texto "ACN Sinal Verde". **Não mexi** (é mudança do usuário); basta restaurar o arquivo ou apontar para `logo.png`.
+- **Achado fora do escopo — logo quebrado:** o commit **"trash" de hoje (18:41)** apagou `public/logo.svg`, mas `DashboardTab.tsx` (o logo do topo), `CotacoesTab.tsx` e `ProducaoTab.tsx` (as impressões) **ainda apontam para ele**: o logo do topo aparece como texto "ACN Sinal Verde". **Não mexi** (é mudança do usuário); basta restaurar o arquivo ou apontar para `logo.png`. **Resolvido em 09/11/2026, a pedido do usuário:** o arquivo foi restaurado, idêntico ao de antes da remoção (`git restore --source=b63a184^ -- public/logo.svg`), sem mudar nenhuma das três telas; o logo volta ao cabeçalho (no celular ele fica escondido de propósito, regra `@media (max-width: 700px)` do cabeçalho enxuto) e às impressões de Cotações e da Produção.
 - **Observação:** o "Total Gasto" **antigo** do Financeiro soma também as compras **descartadas** (o painel não); hoje as 9 descartadas não têm valor, então **não há diferença**.
 
 ##### ✅ 15e-2 — Fechamento do mês
