@@ -137,10 +137,18 @@ html body .modal-box.acn-modal-cadastro.acn-ini-gerenciar { width: min(1180px, 9
 .acn-ini-soltar:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
 .acn-ini-previa { aspect-ratio: 8 / 3; border-radius: var(--acn-r3); overflow: hidden; border: 1px solid var(--acn-line); background: var(--acn-neutral-soft); }
 .acn-ini-previa img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.acn-ini-campos { display: grid; gap: 12px; margin-top: 12px; }
-.acn-ini-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* Cada campo ocupa a coluna inteira em que está (relato do usuário em 09/11/2026, com a janela em ~1000 px): sem uma coluna definida, a coluna interna do campo crescia até a
+   largura natural do controle (o seletor "Ao clicar na imagem" com 189 px e o campo "Quem posta" com 167 px numa coluna de 156 px) e o campo passava da própria coluna,
+   cobrindo a borda do vizinho. `minmax(0, 1fr)` na coluna e `width: 100%; min-width: 0` no controle deixam o controle caber na coluna, em qualquer largura da janela. */
+.acn-ini-campos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+/* Dois campos na mesma linha ficam alinhados por BAIXO: o rótulo de um pode quebrar em duas linhas ("Quem posta (aparece embaixo)") e o do outro não, e sem isto a grade esticava as
+   linhas internas e o controle do rótulo curto descia com um vão. O seletor nativo, que nasce 8,5 px mais alto que os campos de texto, ganha a altura deles (no celular o piso de
+   38 px do responsivo.css vale para os dois). */
+.acn-ini-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
 @media (max-width: 560px) { .acn-ini-duas { grid-template-columns: minmax(0, 1fr); } }
-.acn-ini-campo { display: grid; gap: 4px; min-width: 0; }
+.acn-ini-campo { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 4px; min-width: 0; }
+.acn-ini-campo > :is(input, select, textarea) { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-ini-campo > select { height: 32px; }
 .acn-ini-mt { margin-top: 8px; }
 .acn-ini-mb { margin-bottom: 8px; }
 .acn-ini-espaco { height: 10px; }
