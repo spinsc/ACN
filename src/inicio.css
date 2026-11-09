@@ -1,0 +1,145 @@
+/* Tela Início (09/11/2026). Só as cores e medidas do design system (--acn-*), então o modo escuro vem junto. Prefixo acn-ini-. */
+
+.acn-ini { display: grid; gap: 16px; }
+.acn-ini-grade { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.acn-ini-col { display: grid; gap: 16px; min-width: 0; }
+.acn-ini-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1180px) { .acn-ini-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 980px) { .acn-ini-grade { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .acn-ini-tres { grid-template-columns: minmax(0, 1fr); } }
+
+.acn-ini-card { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r4); box-shadow: var(--acn-shadow-1); min-width: 0; }
+.acn-ini-card-cab { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--acn-line-soft); font-weight: 600; color: var(--acn-ink); }
+.acn-ini-card-cab .cresce { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--acn-muted); }
+.acn-ini-card-corpo { padding: 14px 16px; }
+.acn-ini-fraco { color: var(--acn-muted); }
+.acn-ini-forte { color: var(--acn-ink); font-weight: 600; }
+.acn-ini-pequeno { font-size: 12px; }
+
+/* cabeçalho da tela: o tempo de agora e o atalho do Dashboard geral */
+.acn-ini-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--acn-line); border-radius: 99px; background: var(--acn-surface); color: var(--acn-ink); font-weight: 500; }
+.acn-ini-chip svg { color: var(--acn-warn); }
+
+/* carrossel */
+.acn-ini-carrossel-card { border-radius: var(--acn-r4); overflow: hidden; border: 1px solid var(--acn-line); background: var(--acn-surface); box-shadow: var(--acn-shadow-1); }
+.acn-ini-carrossel { position: relative; background: var(--acn-brand-ink); outline: none; }
+.acn-ini-carrossel:focus-visible { box-shadow: inset var(--acn-focus); }
+.acn-ini-janela { position: relative; aspect-ratio: 8 / 3; overflow: hidden; }
+.acn-ini-faixa { display: flex; height: 100%; transition: transform .55s ease; }
+@media (prefers-reduced-motion: reduce) { .acn-ini-faixa { transition: none; } }
+.acn-ini-slide { flex: 0 0 100%; min-width: 0; height: 100%; position: relative; }
+.acn-ini-slide img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; }
+.acn-ini-slide-link { all: unset; display: block; width: 100%; height: 100%; cursor: pointer; }
+.acn-ini-slide-link:focus-visible { outline: 3px solid var(--acn-focus); outline-offset: -3px; }
+.acn-ini-sem-imagem { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; color: #fff; font-size: 24px; font-weight: 600; }
+/* Setas (pedido do usuário em 09/11/2026): só aparecem com o mouse em cima da imagem (ou quando o foco do TECLADO está no carrossel ou nelas); fora disso a imagem fica limpa.
+   Escondidas por transparência, e não por display, para continuarem alcançáveis pelo teclado e pelo leitor de tela. No celular elas viram as áreas de toque dos cantos (ver o bloco de toque abaixo). */
+.acn-ini-seta { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: rgba(255, 255, 255, .92); color: #17212b; box-shadow: var(--acn-shadow-2); opacity: 0; transition: opacity .2s ease, background .15s ease; }
+.acn-ini-carrossel:hover .acn-ini-seta, .acn-ini-carrossel:focus-visible .acn-ini-seta, .acn-ini-seta:focus-visible { opacity: 1; }
+.acn-ini-seta:hover { background: #fff; }
+.acn-ini-seta:focus-visible { outline: 3px solid var(--acn-brand); outline-offset: 2px; }
+.acn-ini-seta.e { left: 14px; } .acn-ini-seta.d { right: 14px; }
+.acn-ini-base { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; pointer-events: none; }
+.acn-ini-pontos { display: flex; gap: 7px; pointer-events: auto; }
+.acn-ini-ponto { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 99px; background: rgba(255, 255, 255, .55); cursor: pointer; transition: width .25s ease; box-shadow: 0 0 0 1px rgba(23, 33, 43, .25); }
+.acn-ini-ponto[aria-current="true"] { width: 26px; background: #fff; }
+.acn-ini-ponto:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.acn-ini-contador { position: absolute; right: 12px; bottom: 8px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 99px; padding: 3px 10px 3px 7px; font: 500 12px var(--acn-font); color: #fff; background: rgba(23, 33, 43, .6); cursor: pointer; pointer-events: auto; }
+.acn-ini-contador:hover { background: rgba(23, 33, 43, .8); }
+.acn-ini-tela-cheia { position: absolute; right: 12px; top: 12px; width: 34px; height: 34px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(23, 33, 43, .55); opacity: 0; transition: opacity .2s ease; }
+.acn-ini-carrossel:hover .acn-ini-tela-cheia, .acn-ini-carrossel:focus-visible .acn-ini-tela-cheia, .acn-ini-tela-cheia:focus-visible { opacity: 1; }
+/* Celular e tablet (09/11/2026): a regra de toque do sistema (responsivo.css) dá no mínimo 36 px de altura a todo botão e esticava os pontos em cápsulas altas e o contador em pílula grossa.
+   Aqui o desenho volta ao pequeno e a área de toque do ponto fica por fora, invisível. */
+html body .acn-ini-ponto:not(#acn), html body .acn-ini-contador:not(#acn), html body .acn-ini-tela-cheia:not(#acn) { min-height: 0; }
+.acn-ini-ponto { position: relative; }
+.acn-ini-ponto::after { content: ""; position: absolute; inset: -14px -3px; }
+/* Sem mouse (celular e tablet; pedido do usuário em 09/11/2026): NENHUMA seta na imagem. Tocar no canto esquerdo da imagem volta e no canto direito avança: as duas setas viram áreas de toque
+   invisíveis (um quarto da largura cada, na altura toda; os pontos e o contador ficam por cima delas), e o meio da imagem continua abrindo o link do slide. O botão de tela cheia, que só aparecia
+   com o mouse em cima, sai. A condição de toque é a mesma do responsivo.css. `touch-action: manipulation` evita o zoom de toque duplo ao tocar duas vezes seguidas no mesmo canto. */
+@media (hover: none) and (pointer: coarse) {
+  .acn-ini-carrossel { touch-action: manipulation; }
+  html body .acn-ini-seta:not(#acn) { top: 0; bottom: 0; width: 25%; height: auto; min-height: 0; transform: none; border-radius: 0; background: transparent; box-shadow: none; opacity: 0; transition: none; -webkit-tap-highlight-color: transparent; }
+  .acn-ini-seta.e { left: 0; } .acn-ini-seta.d { right: 0; }
+  .acn-ini-tela-cheia { display: none; }
+}
+.acn-ini-carrossel:fullscreen { background: #000; display: grid; align-items: center; }
+.acn-ini-carrossel:fullscreen .acn-ini-janela { aspect-ratio: auto; height: 100vh; }
+.acn-ini-carrossel:fullscreen .acn-ini-slide img { object-fit: contain; }
+.acn-ini-rodape { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--acn-line-soft); color: var(--acn-muted); font-size: 13px; min-height: 52px; }
+.acn-ini-rodape .texto { min-width: 0; overflow-wrap: anywhere; }
+.acn-ini-rodape .cresce { margin-left: auto; }
+.acn-ini-vazio { display: grid; place-items: center; gap: 10px; text-align: center; padding: 48px 24px; background: linear-gradient(135deg, var(--acn-brand-soft), var(--acn-surface)); min-height: 220px; }
+.acn-ini-vazio strong { font-size: 18px; color: var(--acn-ink); }
+.acn-ini-vazio p { margin: 0; color: var(--acn-muted); max-width: 52ch; }
+
+/* listas dos cartões */
+.acn-ini-lista { display: grid; }
+.acn-ini-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--acn-line-soft); min-width: 0; }
+.acn-ini-item:first-child { border-top: 0; padding-top: 0; }
+.acn-ini-item:last-child { padding-bottom: 0; }
+.acn-ini-item .texto { min-width: 0; flex: 1; }
+.acn-ini-item .texto > * { overflow-wrap: anywhere; }
+.acn-ini-item .direita { margin-left: auto; flex: none; text-align: right; }
+.acn-ini-linha-botao { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 0; border-top: 1px solid var(--acn-line-soft); cursor: pointer; color: var(--acn-text); }
+.acn-ini-linha-botao:first-child { border-top: 0; padding-top: 0; }
+.acn-ini-linha-botao:last-child { padding-bottom: 0; }
+.acn-ini-linha-botao:hover .acn-ini-forte { color: var(--acn-brand); }
+.acn-ini-linha-botao:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; border-radius: var(--acn-r2); }
+.acn-ini-linha-botao .numero { margin-left: auto; font-size: 22px; font-weight: 600; color: var(--acn-ink); font-variant-numeric: tabular-nums; }
+.acn-ini-linha-botao .numero.zero { color: var(--acn-muted); font-weight: 500; }
+.acn-ini-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.acn-ini-avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; font-weight: 600; font-size: 12px; background: var(--acn-brand-soft); color: var(--acn-brand-ink); }
+.acn-ini-avatar.hoje { background: var(--acn-brand); color: #fff; }
+.acn-ini-dia { width: 38px; flex: none; text-align: center; border: 1px solid var(--acn-line); border-radius: var(--acn-r3); overflow: hidden; line-height: 1.1; background: var(--acn-surface); }
+.acn-ini-dia span { display: block; background: var(--acn-brand-soft); color: var(--acn-brand-ink); font-size: 9px; font-weight: 600; letter-spacing: .06em; padding: 2px 0; }
+.acn-ini-dia b { display: block; color: var(--acn-ink); font-size: 15px; padding: 3px 0; }
+
+/* previsão do tempo */
+.acn-ini-clima-topo { display: flex; align-items: center; gap: 14px; }
+.acn-ini-clima-topo .grande { color: var(--acn-warn); flex: none; }
+.acn-ini-clima-topo .temp { font-size: 40px; font-weight: 600; color: var(--acn-ink); line-height: 1; }
+.acn-ini-clima-topo .texto { font-size: 13px; line-height: 1.5; color: var(--acn-muted); min-width: 0; }
+.acn-ini-dias { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--acn-line-soft); text-align: center; }
+.acn-ini-dias > div { display: grid; gap: 2px; justify-items: center; font-size: 12px; color: var(--acn-muted); }
+.acn-ini-dias b { color: var(--acn-ink); text-transform: capitalize; }
+.acn-ini-clima-icone { display: block; }
+.acn-ini-clima-icone.sol, .acn-ini-clima-icone.sol_nuvem, .acn-ini-clima-icone.tempestade { color: var(--acn-warn); }
+.acn-ini-clima-icone.nuvem, .acn-ini-clima-icone.neblina { color: var(--acn-neutral); }
+.acn-ini-clima-icone.chuva, .acn-ini-clima-icone.neve { color: var(--acn-info); }
+
+/* atalhos */
+/* as telhas se ajustam à largura do cartão: no mínimo 124 px cada, para o rótulo quebrar entre as palavras e não no meio delas (testado em 09/11/2026: três colunas fixas cortavam "Nova demanda") */
+.acn-ini-atalhos { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+/* a regra genérica de botão do index.css impõe nowrap com peso maior; este seletor empata o peso (mesmo recurso do link de vínculo do Compras, 26/10/2026) */
+html body .acn-ini-atalho:not(#acn), html body .acn-ini-linha-botao:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+.acn-ini-atalho { all: unset; box-sizing: border-box; display: grid; gap: 6px; justify-items: start; align-content: start; padding: 10px; min-height: 64px; border: 1px solid var(--acn-line); border-radius: var(--acn-r4); background: var(--acn-surface-2); color: var(--acn-ink); font-weight: 500; cursor: pointer; overflow-wrap: anywhere; }
+.acn-ini-atalho svg { color: var(--acn-brand); }
+.acn-ini-atalho:hover { border-color: var(--acn-brand); background: var(--acn-brand-soft); }
+.acn-ini-atalho:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
+
+/* janela de quem posta */
+html body .modal-box.acn-modal-cadastro.acn-ini-gerenciar { width: min(1180px, 96vw); max-height: 94vh; }
+.acn-ini-ger-cols { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0; margin: -16px -18px; min-height: 0; }
+.acn-ini-ger-cols > div { padding: 16px 18px; min-width: 0; }
+.acn-ini-ger-cols > div + div { border-left: 1px solid var(--acn-line); background: var(--acn-surface-2); }
+@media (max-width: 900px) { .acn-ini-ger-cols { grid-template-columns: minmax(0, 1fr); } .acn-ini-ger-cols > div + div { border-left: 0; border-top: 1px solid var(--acn-line); } }
+.acn-ini-linha-slide { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r4); padding: 8px; background: var(--acn-surface); margin-bottom: 8px; }
+.acn-ini-linha-slide.apagada { opacity: .6; }
+.acn-ini-linha-slide.editando { border-color: var(--acn-brand); box-shadow: var(--acn-focus); }
+.acn-ini-mini { width: 116px; aspect-ratio: 8 / 3; border-radius: var(--acn-r2); overflow: hidden; flex: none; background: var(--acn-neutral-soft); display: grid; place-items: center; color: var(--acn-muted); }
+.acn-ini-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acn-ini-linha-slide .texto { min-width: 0; flex: 1 1 160px; overflow-wrap: anywhere; }
+.acn-ini-linha-slide .acoes { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.acn-ini-soltar { border: 2px dashed var(--acn-line); border-radius: var(--acn-r4); background: var(--acn-surface); min-height: 110px; display: grid; place-items: center; text-align: center; padding: 12px; color: var(--acn-muted); cursor: pointer; }
+.acn-ini-soltar.sobre, .acn-ini-soltar:hover { border-color: var(--acn-brand); background: var(--acn-brand-soft); }
+.acn-ini-soltar:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
+.acn-ini-previa { aspect-ratio: 8 / 3; border-radius: var(--acn-r3); overflow: hidden; border: 1px solid var(--acn-line); background: var(--acn-neutral-soft); }
+.acn-ini-previa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acn-ini-campos { display: grid; gap: 12px; margin-top: 12px; }
+.acn-ini-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .acn-ini-duas { grid-template-columns: minmax(0, 1fr); } }
+.acn-ini-campo { display: grid; gap: 4px; min-width: 0; }
+.acn-ini-mt { margin-top: 8px; }
+.acn-ini-mb { margin-bottom: 8px; }
+.acn-ini-espaco { height: 10px; }
+.acn-ini-previa.cheia { width: 100%; }

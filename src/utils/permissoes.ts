@@ -192,6 +192,15 @@ export function podeMexerNoAviso(usuarioAtual: any, aviso: any): boolean {
   return podePublicarAviso(usuarioAtual) && (ehDev(usuarioAtual) || ehAutorDoAviso(usuarioAtual, aviso));
 }
 
+// ── Tela Início (09/11/2026, pedido do RH) ─────────────────────────────────────────────────────────────────────────────
+// Regra do usuário em 09/11/2026 (confirmada depois de ele ter pensado em "só o perfil RH e o Admin" e voltado atrás): VER a tela Início é de todo usuário do sistema;
+// EDITAR (postar slides do carrossel, mudar a ordem, tirar do ar, apagar e lançar as datas da empresa) é só do Admin e de quem recebeu a permissão no cadastro
+// (Admin → Usuários → caixa "Pode postar na tela Início", coluna auth_usuarios.pode_postar_inicio). Perfil RH sozinho NÃO basta: o RH pede ao Admin a caixa.
+// O banco confere de novo: a função pode_postar_inicio() das regras das tabelas e do bucket tem exatamente esta mesma conta (perfil Admin ou a marca, usuário ativo).
+export function podePostarNoInicio(usuarioAtual: any): boolean {
+  return usuarioAtual?.perfil === 'Admin' || usuarioAtual?.pode_postar_inicio === true;
+}
+
 // ── Parecer da análise entre setores (07/10/2026, pedido do usuário) ───────────────────────────────────────────────────
 // Depois de concluído, o parecer de um setor (analise_setores.notas) pode ser editado SÓ por quem fez a análise (analise_setores.analisado_por): nem Admin nem
 // Gerente — foi o que o usuário pediu, para o parecer continuar sendo a palavra de quem o assinou. A comparação é pelo nome (ou e-mail), sem diferenciar maiúscula,
