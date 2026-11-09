@@ -138,11 +138,25 @@ export async function apagarData(id: string): Promise<{ erro?: string }> {
 
 // ── aniversariantes e novidades ──────────────────────────────────────────────────────────────────────────
 
-/** Aniversariantes dos próximos dias (a função do banco devolve só nome, departamento, dia e mês — nunca o ano nem a idade). */
-export async function lerAniversariantes(dias = 7): Promise<{ lista: any[]; erro?: string }> {
-  const { data, error } = await supabase.rpc('inicio_aniversariantes', { p_dias: dias });
+/**
+ * TODOS os aniversariantes do mês de hoje, em ordem de dia (pedido do usuário em 09/11/2026: "deve aparecer todos os aniversariantes do mês"; a primeira versão mostrava só os
+ * próximos 7 dias). A função do banco devolve só nome, departamento, dia, mês e `em_dias` (negativo = já fez aniversário neste mês) — nunca o ano nem a idade.
+ */
+export async function lerAniversariantesDoMes(): Promise<{ lista: any[]; erro?: string }> {
+  const { data, error } = await supabase.rpc('inicio_aniversariantes_do_mes');
   if (error) return { lista: [], erro: explicarErroDoBanco(error) };
   return { lista: data || [] };
+}
+
+/** Quantas pessoas ativas há e quantas têm a data de nascimento cadastrada (só dois números, nenhum nome): é o que explica ao RH por que o cartão está vazio. */
+export async function lerCoberturaDosAniversarios(): Promise<{ cobertura?: { ativos: number; com_nascimento: number }; erro?: string }> {
+  const { data, error } = await supabase.rpc('inicio_aniversariantes_cobertura');
+  if (error) return { erro: explicarErroDoBanco(error) };
+  const linha = Array.isArray(data) ? data[0] : data;
+  // vazio ou nulo não é zero (o aviso diria "ninguém tem a data" sem ter lido isso)
+  const numero = (v: any) => (v === null || v === undefined || String(v).trim() === '' ? NaN : Number(v));
+  if (!linha || !Number.isFinite(numero(linha.ativos)) || !Number.isFinite(numero(linha.com_nascimento))) return { erro: 'a resposta veio incompleta' };
+  return { cobertura: { ativos: numero(linha.ativos), com_nascimento: numero(linha.com_nascimento) } };
 }
 
 /** As notas de atualização do sistema ainda no ar (as mesmas do botão Avisos): título, resumo e dia. */

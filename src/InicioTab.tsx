@@ -12,9 +12,9 @@ import { mostrarAviso } from './Feedback';
 import { podePostarNoInicio } from './utils/permissoes';
 import {
   SEGUNDOS_POR_SLIDE, slidesDoCarrossel, textoDoPeriodo, proximasDatas, rotuloDoAniversario, iniciais, nomeProprio, primeiroNome, saudacao, dataPorExtenso, semanaIso,
-  diaDoMes, mesCurto, CIDADE_DO_CLIMA,
+  diaDoMes, mesCurto, nomeDoMes, avisoDaCoberturaDosAniversarios, CIDADE_DO_CLIMA,
 } from './InicioModelo';
-import { lerSlides, enderecosDasImagens, lerDatas, lerAniversariantes, lerNovidades } from './InicioDados';
+import { lerSlides, enderecosDasImagens, lerDatas, lerAniversariantesDoMes, lerCoberturaDosAniversarios, lerNovidades } from './InicioDados';
 import { lerClima } from './InicioClima';
 import InicioGerenciar from './InicioGerenciar';
 import './inicio.css';
@@ -127,6 +127,7 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
   const [enderecos, setEnderecos] = useState<Record<string, string>>({});
   const [datas, setDatas] = useState<any>({ lista: [], erro: '' });
   const [aniv, setAniv] = useState<any>({ lista: [], erro: '', carregando: true });
+  const [cobertura, setCobertura] = useState<any>(null);   // quantas pessoas ativas têm a data de nascimento (só quem edita a lê: o aviso é para o RH)
   const [novidades, setNovidades] = useState<any>({ lista: [], erro: '', carregando: true });
   const [clima, setClima] = useState<any>({ carregando: true });
   const [gerenciando, setGerenciando] = useState(false);
@@ -141,11 +142,13 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
     if (e.erro) setSlides((s: any) => ({ ...s, erro: 'Não foi possível abrir as imagens do carrossel (' + e.erro + ').' }));
   }, []);
   const carregarOutros = useCallback(async () => {
-    const [d, a, n] = await Promise.all([lerDatas(diaISO(new Date())), lerAniversariantes(7), lerNovidades(4)]);
+    // o número de pessoas sem a data de nascimento só interessa a quem edita (o RH): os outros nem fazem a leitura
+    const [d, a, n, c] = await Promise.all([lerDatas(diaISO(new Date())), lerAniversariantesDoMes(), lerNovidades(4), podePostar ? lerCoberturaDosAniversarios() : Promise.resolve(null)]);
     setDatas({ lista: d.lista, erro: d.erro || '' });
     setAniv({ lista: a.lista, erro: a.erro || '', carregando: false });
     setNovidades({ lista: n.lista, erro: n.erro || '', carregando: false });
-  }, []);
+    setCobertura(c && !c.erro ? c.cobertura : null);   // sem número que se possa usar, sem aviso (nunca inventa)
+  }, [podePostar]);
   const carregarClima = useCallback(async (forcar = false) => {
     if (forcar) setClima((c: any) => ({ ...c, carregando: true }));
     const r = await lerClima({ forcar });
@@ -280,20 +283,22 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
           </div>
 
           <div className="acn-ini-card">
-            <div className="acn-ini-card-cab">Aniversariantes da semana{aniv.lista.length > 0 && <Selo familia="marca" ponto={false}>{aniv.lista.length}</Selo>}</div>
+            {/* o MÊS inteiro, em ordem de dia (pedido do usuário em 09/11/2026: "deve aparecer todos os aniversariantes do mês"; antes eram só os próximos 7 dias, até 6 nomes). Quem já fez aniversário no mês aparece com o dia, mais apagado */}
+            <div className="acn-ini-card-cab">Aniversariantes de {nomeDoMes(hoje)}{aniv.lista.length > 0 && <Selo familia="marca" ponto={false}>{aniv.lista.length}</Selo>}</div>
             <div className="acn-ini-card-corpo">
               {aniv.erro && <Faixa tom="erro">Não foi possível ler os aniversariantes: {aniv.erro}</Faixa>}
-              {!aniv.erro && !aniv.carregando && !aniv.lista.length && <div className="acn-ini-fraco">Nenhum aniversário nos próximos 7 dias.</div>}
+              {!aniv.erro && !aniv.carregando && !aniv.lista.length && <div className="acn-ini-fraco">Ninguém faz aniversário em {nomeDoMes(hoje)} no cadastro do RH.</div>}
               <div className="acn-ini-lista">
-                {aniv.lista.slice(0, 6).map((a: any, k: number) => (
-                  <div key={k} className="acn-ini-item">
+                {aniv.lista.map((a: any, k: number) => (
+                  <div key={k} className={`acn-ini-item${a.em_dias < 0 ? ' passado' : ''}`}>
                     <span className={`acn-ini-avatar${a.em_dias === 0 ? ' hoje' : ''}`}>{iniciais(nomeProprio(a.nome))}</span>
                     <div className="texto"><div className="acn-ini-forte">{nomeProprio(a.nome)}</div>{a.departamento && <div className="acn-ini-fraco acn-ini-pequeno">{a.departamento}</div>}</div>
                     <span className="direita">{a.em_dias === 0 ? <Selo familia="ok" ponto={false}>hoje</Selo> : <span className="acn-ini-fraco">{rotuloDoAniversario(a.em_dias, hoje)}</span>}</span>
                   </div>
                 ))}
               </div>
-              {aniv.lista.length > 6 && <div className="acn-ini-fraco acn-ini-pequeno acn-ini-mt">e mais {aniv.lista.length - 6} nesta semana.</div>}
+              {/* só para quem edita (o RH): o cartão só mostra quem tem a data de nascimento no cadastro (de manhã em 09/11/2026 só 1 das 41 pessoas ativas a tinha); sem o aviso, quem não aparece parece defeito do cartão */}
+              {podePostar && !aniv.erro && avisoDaCoberturaDosAniversarios(cobertura) && <div className="acn-ini-mt"><Faixa tom="atencao">{avisoDaCoberturaDosAniversarios(cobertura)}</Faixa></div>}
             </div>
           </div>
 

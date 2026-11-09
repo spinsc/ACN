@@ -194,12 +194,32 @@ export function proximasDatas(hoje: string, datasDaEmpresa: any[], { limite = 5,
     .slice(0, limite);
 }
 
-/** "hoje", "amanhã" ou "qui, 12/11" para o aniversário daqui a `emDias` dias. */
+/**
+ * "hoje", "amanhã", "ontem" ou "qui, 12/11" para o aniversário daqui a `emDias` dias. `emDias` negativo é quem já fez aniversário neste mês: o cartão mostra o mês
+ * inteiro (pedido do usuário em 09/11/2026), então a lista também traz os que já passaram.
+ */
 export function rotuloDoAniversario(emDias: number, hoje: string): string {
   if (emDias === 0) return 'hoje';
   if (emDias === 1) return 'amanhã';
+  if (emDias === -1) return 'ontem';
   const dia = somarDias(hoje, emDias);
   return `${diaCurto(dia)}, ${ddmm(dia)}`;
+}
+/** "novembro" a partir de uma data AAAA-MM-DD (o título do cartão dos aniversariantes do mês). */
+export const nomeDoMes = (iso: string): string => MESES[+String(iso).slice(5, 7) - 1] || '';
+/**
+ * O aviso que só quem edita a tela Início vê no cartão dos aniversariantes: quantas pessoas ativas ainda não têm a data de nascimento no cadastro do RH (e por isso
+ * não aparecem). A data é do cadastro do RH: de manhã em 09/11/2026 só 1 das 41 pessoas ativas a tinha (à tarde o RH preencheu e ficaram 40 das 42). Sem o aviso, quem
+ * não aparece no cartão parece defeito dele, em vez de "falta o dado no cadastro".
+ * Vazio quando todas têm a data ou quando a leitura não trouxe número que se possa usar (nunca inventa).
+ */
+export function avisoDaCoberturaDosAniversarios(cobertura: any): string {
+  // vazio, nulo ou texto que não é número NÃO vale como zero: o aviso diria que ninguém tem a data sem ninguém ter lido isso
+  const numero = (v: any) => (v === null || v === undefined || String(v).trim() === '' ? NaN : Number(v));
+  const ativos = numero(cobertura?.ativos), com = numero(cobertura?.com_nascimento);
+  if (!Number.isFinite(ativos) || !Number.isFinite(com) || ativos <= 0 || com < 0 || com >= ativos) return '';
+  const faltam = ativos - com;
+  return `${faltam === 1 ? 'Falta a data' : 'Faltam as datas'} de nascimento de ${faltam} das ${ativos} pessoas ativas no cadastro do RH: quem não tem a data não aparece aqui.`;
 }
 export function iniciais(nome: any): string {
   const p = String(nome || '').trim().split(/\s+/).filter(Boolean);
