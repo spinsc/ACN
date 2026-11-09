@@ -7049,6 +7049,34 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
   html body .acn-ht-b1154:not(#acn) { padding-right: 8px; padding-left: 8px; }
 }
 /* @@ht-fim */
+/* @@hx-ini */
+/* ══ Horas extras (HorasExtras.tsx, 12e73 — 09/11/2026) ═══════════════════════════════════════════════════════════════════════════════════════════
+   O painel de pedidos e as duas janelas (pedir/registrar e aprovar/recusar) tinham 41 estilos soltos dentro do componente; aqui está o desenho, com os mesmos valores que a pessoa
+   já via (medidos antes de migrar, em claro, escuro e celular com toque). Nenhum valor muda no escuro nem no celular: as cores vêm das variáveis do tema, e a janela de celular
+   já é decidida pelas regras com !important do responsivo.css e do DashboardTab (largura e altura da caixa, tela cheia), que valiam por cima do estilo solto e continuam valendo por cima da classe.
+   Nome da classe = o que a peça é (sobre = fundo da janela, caixa = a janela, trio = data e duas horas, linha = um pedido do painel, td-… = célula da tabela). */
+html body .acn-hx-sobre:not(#acn) { z-index: 2600; }
+html body .acn-hx-caixa:not(#acn) { max-width: 480px; width: 95vw; }
+html body .acn-hx-caixa-dec:not(#acn) { max-width: 460px; width: 95vw; }
+html body .acn-hx-grade:not(#acn) { display: grid; gap: 10px; }
+html body .acn-hx-trio:not(#acn) { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+html body .acn-hx-campo:not(#acn) { width: 100%; }
+html body .acn-hx-area:not(#acn) { width: 100%; resize: vertical; }
+html body .acn-hx-botoes:not(#acn) { display: flex; gap: 8px; justify-content: flex-end; }
+html body .acn-hx-t12:not(#acn) { font-size: 12px; }
+html body .acn-hx-t13:not(#acn) { font-size: 13px; }
+html body .acn-hx-mt2:not(#acn) { margin-top: 2px; }
+html body .acn-hx-pilha:not(#acn) { display: grid; gap: 8px; }
+html body .acn-hx-linha:not(#acn) { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: 8px; background: var(--acn-surface); }
+html body .acn-hx-corpo:not(#acn) { flex: 1 1 260px; min-width: 0; }
+html body .acn-hx-motivo:not(#acn) { font-size: 12px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-hx-acoes:not(#acn) { display: flex; gap: 6px; }
+html body .acn-hx-quebra:not(#acn) { flex-wrap: wrap; }
+html body .acn-hx-rolagem:not(#acn) { overflow-x: auto; padding: 0; }
+html body .acn-hx-nowrap:not(#acn) { white-space: nowrap; }
+html body .acn-hx-td-motivo:not(#acn) { min-width: 200px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-hx-td-resposta:not(#acn) { min-width: 160px; }
+/* @@hx-fim */
 
 /* ── Manuais (30/10/2026): lista de cartões e leitor do manual. Só aparência ── */
 .acn-man-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
