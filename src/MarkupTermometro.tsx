@@ -287,8 +287,10 @@ export function Termometro({ pct, size = 14, bandaCfg }: { pct: number | null | 
 }
 
 // ── Badge pequeno pro card individual (Kanban CRM / LicitCard) ──
-export function MarkupBadge({ pct, min, max, discreto = false, bandaCfg }:
-  { pct: number | null | undefined; min?: number; max?: number; discreto?: boolean; bandaCfg?: BandaMarkupConfig }) {
+// 12e74b (10/11/2026): a versão grande do selo (a que vinha sem `discreto`) foi apagada, com a autorização do usuário: nenhuma tela a usava (o CRM e as Licitações só usam a discreta), ela não guardava
+// regra nenhuma (as cores e os nomes das faixas vêm de `corMarkup`, a mesma conta da discreta) e era o único estilo solto do arquivo que dependia do `TonsVisuais`.
+export function MarkupBadge({ pct, min, max, bandaCfg }:
+  { pct: number | null | undefined; min?: number; max?: number; bandaCfg?: BandaMarkupConfig }) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return null;
   const banda = corMarkup(pct, bandaCfg);
   // A faixa min–max só aparece quando os itens NÃO têm todos o mesmo markup:
@@ -299,25 +301,11 @@ export function MarkupBadge({ pct, min, max, discreto = false, bandaCfg }:
   const titulo = `Markup da cotação: ${banda.label}. Ponderado pelo custo — cada item pesa o quanto custa.`
     + (temDispersao ? `\nItens de ${faixaTxt} — vale olhar item a item.` : '');
 
-  if (discreto) return (
+  return (
     <span title={titulo} className="acn-num acn-mk-selo-d" style={{ color: banda.cor }}>
       <Termometro pct={pct} size={13} bandaCfg={bandaCfg} />
       {pct.toFixed(1)}%
       {temDispersao && <span className="acn-mk-faixa-d">({faixaTxt})</span>}
-    </span>
-  );
-  // 12e74 (09/11/2026): o selo grande FICA com o estilo solto, de propósito. O sistema só reconhece "selo" (e o repinta nos tons do guia, no claro e no escuro) pelo estilo
-  // escrito no próprio elemento — fundo, letra pequena e canto arredondado: `TonsVisuais.ts`; passando para classe, o selo mudaria de cor na tela.
-  // Sai daqui junto com o `TonsVisuais`, na Etapa 13, quando o selo virar o `Selo` do guia.
-  return (
-    <span title={titulo} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      fontSize: 9, fontWeight: 700, padding: '1px 5px 1px 3px', borderRadius: 3,
-      background: banda.bg, color: banda.cor, border: `1px solid ${banda.borda}`,
-    }}>
-      <Termometro pct={pct} size={13} bandaCfg={bandaCfg} />
-      {pct.toFixed(1)}%
-      {temDispersao && <span className="acn-mk-faixa">({faixaTxt})</span>}
     </span>
   );
 }

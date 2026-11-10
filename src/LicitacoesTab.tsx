@@ -2636,7 +2636,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
         </div>
       </div>
       <div className="acn-licit-acoes">
-        <MarkupBadge pct={markup?.pct} min={markup?.min} max={markup?.max} discreto />
+        <MarkupBadge pct={markup?.pct} min={markup?.min} max={markup?.max} />
         <Botao pequeno variante="secundario" icone={mdiUpdate} onClick={e => { e.stopPropagation(); onClick(); }}>Atualizar</Botao>
       </div>
     </div>

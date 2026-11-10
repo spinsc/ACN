@@ -2524,7 +2524,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
-                max={markupPorOp[op.id].max} discreto
+                max={markupPorOp[op.id].max}
                 bandaCfg={op.tipo_negocio ? bandasMarkup[op.tipo_negocio] : undefined} />
             )}
             {op.responsavel_nome && (
