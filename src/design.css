@@ -1117,6 +1117,9 @@ html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw)
 .acn-ms-val { font-size: 13px; color: var(--acn-ink); }
 .acn-ms-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
 .acn-ms-itens { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+/* 10/11/2026: a janela "Ver" mostra tudo o que foi preenchido; a lista de andamentos pode ser longa, então rola dentro da janela. */
+.acn-ms-rolagem { max-height: 220px; overflow-y: auto; padding-right: 6px; }
+.acn-ms-secao { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--acn-line); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
 /* ── Kanban do SAC (05/10/2026): 3 colunas lado a lado; no celular uma embaixo da outra. Só aparência ── */
 .acn-kb { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; }
 .acn-kb-col { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: flex; flex-direction: column; min-width: 0; }
