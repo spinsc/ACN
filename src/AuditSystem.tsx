@@ -47,7 +47,31 @@ const fmtValor = (v) => {
 let contadorCanal = 0;
 const idCanal = () => `${Date.now().toString(36)}${(++contadorCanal).toString(36)}`;
 
-export async function logChange({ module, entityType, entityId, changeType, oldRow, newRow, user, formatters, metadata }) {
+// Tipo da chamada de logChange (decisão de 09/11/2026). Sem ele o TypeScript deduz a forma pela
+// própria desestruturação e trata os 9 campos como OBRIGATÓRIOS: os arquivos .ts que ele confere
+// (os que não têm @ts-nocheck) tinham de mandar `formatters` e `metadata` sem precisar deles, e o
+// `npm run typecheck` falhava com 8 erros. Aqui só é obrigatório o que a função exige para gravar:
+// de onde vem a mudança (module, entityType, entityId), o tipo dela e quem a fez — sem `user` a
+// função NÃO grava nada, então esquecer dele não pode passar calado. oldRow e newRow são opcionais
+// porque CREATE só traz o novo e DELETE só o antigo. `changeType` fica string de propósito: algumas
+// chamadas mandam 'INSERT', que a função não conhece e trata como UPDATE (uma linha por campo);
+// apertar o tipo agora mudaria o que essas telas gravam no histórico, e esta correção não é isso.
+// `field` é aceito porque algumas chamadas das Viagens o mandam, mas a função NÃO o usa: o campo
+// de cada linha sai da comparação entre oldRow e newRow.
+export type MudancaParaAuditar = {
+  module: string;
+  entityType: string;
+  entityId: any;
+  changeType: string; // 'CREATE' | 'UPDATE' | 'DELETE'
+  oldRow?: any;
+  newRow?: any;
+  user: any;
+  formatters?: Record<string, (valorCru: any) => string>;
+  metadata?: any;
+  field?: string;
+};
+
+export async function logChange({ module, entityType, entityId, changeType, oldRow, newRow, user, formatters, metadata }: MudancaParaAuditar) {
   if (!entityId || !user) return;
   const userNome = user.nome || user.email || 'Sistema';
   const base = { user_id: user.id || null, user_nome: userNome, module, entity_type: entityType, entity_id: String(entityId) };
