@@ -3398,6 +3398,10 @@ html body .acn-b.acn-cta-banner-x { color: #fff; }
 .acn-cta-banner-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); }
 .acn-cta-banner-quando { font-size: 12px; font-weight: 700; color: var(--acn-cta-cor); }
 .acn-cta-banner-det { font-size: 12px; color: var(--acn-muted); }
+/* 10/11/2026: o contato do aviso é clicável e abre o card no CRM (a dica "Abrir o card" aparece sempre, para quem usa o toque) */
+.acn-cta-banner-link { cursor: pointer; border-radius: var(--acn-r2, 6px); padding: 6px 8px; margin-left: -8px; margin-right: -8px; }
+.acn-cta-banner-link:hover, .acn-cta-banner-link:focus-visible { background: var(--acn-surface); outline: 2px solid var(--acn-cta-cor); outline-offset: -2px; }
+.acn-cta-banner-abrir { font-size: 12px; font-weight: 700; color: var(--acn-cta-cor); }
 
 /* Anexos do card do CRM e da OP (12e49, 09/10/2026): janela de documentos e imagens e os botões compactos. Só aparência.
    A cor de cada tipo de arquivo mora aqui: [data-anx-crm] e [data-anx-opl] definem --acn-anx-cor (antes eram mapas de hexadecimais no código). */

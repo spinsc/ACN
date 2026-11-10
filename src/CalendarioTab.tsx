@@ -55,6 +55,11 @@ function getWeekDays(ref: Date) {
   return Array.from({ length: 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
 }
 
+// 10/11/2026 (pedido do usuário): o calendário diz quem criou cada compromisso — quem recebe um compromisso criado por outra pessoa não tinha como saber de quem veio.
+const nomeDoCriador = (c: any, usuario: any) =>
+  (c.usuario_email && usuario?.email && c.usuario_email === usuario.email) ? 'você' : (c.usuario_nome || c.usuario_email || '—');
+const dicaDoEvento = (ev: any, usuario: any) => ev.tipo === 'compromisso' ? ev.titulo + ' — criado por ' + nomeDoCriador(ev.raw, usuario) : ev.titulo;
+
 const fmtDiaLongo = (d: Date) => d.toLocaleDateString('pt-BR', {
   weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
 });
@@ -165,9 +170,9 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 )}
                 <div className="acn-ajuda">
                   {ev.tipo === 'compromisso'
-                    ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 {ev.raw.usuario_nome || ev.raw.usuario_email}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
+                    ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 <strong>Criado por {nomeDoCriador(ev.raw, currentUser)}</strong>{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
                     : ev.tipo === 'crm'
-                      ? <>📇 Contato CRM · 👤 {ev.raw.responsavel_nome || '—'} {ev.raw.nome_contato ? `· ${ev.raw.nome_contato}` : ''}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
+                      ? <>📇 Contato CRM · 👤 Responsável: {ev.raw.responsavel_nome || '—'}{ev.raw.nome_contato ? `· ${ev.raw.nome_contato}` : ''}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
                       : ev.detalhe}
                 </div>
               </div>
@@ -313,6 +318,9 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
         hora: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
         horaOrdem: d.getHours() * 60 + d.getMinutes(),
         familia: SETOR_FAMILIA[c.setor] || SETOR_FAMILIA.geral, raw: c,
+        // na grade, o compromisso de OUTRA pessoa leva o primeiro nome de quem criou (o seu próprio não precisa); o texto inteiro vai na dica
+        criador: nomeDoCriador(c, currentUser) === 'você' ? '' : String(nomeDoCriador(c, currentUser)).split(' ')[0],
+        dica: dicaDoEvento({ tipo: 'compromisso', titulo: c.titulo, raw: c }, currentUser),
       });
     });
     contatosCrm.forEach(o => {
@@ -456,8 +464,8 @@ function MesGrid({ dias, cursor, eventosPorDia, onDiaClick }: any) {
               className={'acn-cal-dia' + (isHoje ? ' hoje' : '') + (foraDoMes ? ' fora' : '')}>
               <div className="acn-cal-num">{d.getDate()}</div>
               {eventos.slice(0, 3).map((ev: any) => (
-                <div key={ev.tipo + ev.id} className={'acn-cal-ev' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia}>
-                  {ev.hora ? `${ev.hora} ` : ''}{ev.titulo}
+                <div key={ev.tipo + ev.id} className={'acn-cal-ev' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia} title={ev.dica || ev.titulo}>
+                  {ev.hora ? `${ev.hora} ` : ''}{ev.titulo}{ev.criador ? ` · ${ev.criador}` : ''}
                 </div>
               ))}
               {eventos.length > 3 && (
@@ -504,7 +512,7 @@ function SemanaGrid({ dias, eventosPorDia, onSlotClick }: any) {
           return (
             <div key={i} onClick={() => onSlotClick(d, '09:00')} className="acn-cal-sem-celula">
               {eventos.map((ev: any) => (
-                <div key={ev.tipo + ev.id} className="acn-cal-ev" data-acn-familia={ev.familia}>{ev.titulo}</div>
+                <div key={ev.tipo + ev.id} className="acn-cal-ev" data-acn-familia={ev.familia} title={ev.dica || ev.titulo}>{ev.titulo}{ev.criador ? ` · ${ev.criador}` : ''}</div>
               ))}
             </div>
           );
@@ -532,8 +540,8 @@ function SemanaGrid({ dias, eventosPorDia, onSlotClick }: any) {
                 if (top < 0 || top > HORAS_GRID.length * ROW_H) return null;
                 return (
                   <div key={ev.tipo + ev.id} onClick={(e) => { e.stopPropagation(); onSlotClick(d, ev.hora); }}
-                    className={'acn-cal-evsem' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia} style={{ top }}>
-                    {ev.hora} {ev.titulo}
+                    className={'acn-cal-evsem' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia} style={{ top }} title={ev.dica || ev.titulo}>
+                    {ev.hora} {ev.titulo}{ev.criador ? ` · ${ev.criador}` : ''}
                   </div>
                 );
               })}
