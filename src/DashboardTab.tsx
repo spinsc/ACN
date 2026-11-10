@@ -6,6 +6,7 @@ import EngenhariaTab from './EngenhariaTab';
 import AjustesProjetoTab from './AjustesProjetoTab';
 import MinhasSolicitacoesTab from './MinhasSolicitacoesTab';
 import ManuaisTab from './ManuaisTab';
+import InicioTab from './InicioTab';
 import PCPTab from './PCPTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
 import ProducaoTab from './ProducaoTab';
@@ -97,6 +98,7 @@ const SIDEBAR_GROUPS = [
   {
     section: 'Dashboard',
     items: [
+      { id: 'inicio', label: 'Início' },   // 09/11/2026 (pedido do RH, decidido com o usuário): a tela em que o sistema abre — carrossel de imagens, tempo, aniversariantes; o Dashboard geral continua logo abaixo
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'calendario', label: 'Calendário' },
       { id: 'ajustes',    label: 'Demandas gerais' },
@@ -697,7 +699,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       // `pode_aprovar_compra` entra aqui (30/09/2026) para quem já estava logado: a sessão guardada antes não
       // tem a marca, e sem ela ninguém aprovava compra. A leitura corrige a sessão na próxima abertura.
       // R7 (13/10/2026): `ver_valores` e `pode_deletar_anexos` entram pelo mesmo motivo — a sessão guardada antes do login novo não os tem
-      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra,eh_dev,ver_valores,pode_deletar_anexos')
+      // Início (09/11/2026): `pode_postar_inicio` também — a tela Início mostra os botões de editar a quem tem a marca (o login não a traz; o banco confere de novo em toda gravação)
+      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra,eh_dev,ver_valores,pode_deletar_anexos,pode_postar_inicio')
       .eq('id', currentUserProp.id)
       .single()
       .then(({ data }) => {
@@ -709,7 +712,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       });
   }, [currentUserProp?.id]);
 
-  const [activeTab, setActiveTab]       = useState('dashboard');
+  const [activeTab, setActiveTab]       = useState('inicio');   // 09/11/2026: o sistema abre na tela Início (antes abria no Dashboard geral, que segue no menu)
   const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);
   const [pendingOpenCrmId, setPendingOpenCrmId]     = useState<string|null>(null);
 
@@ -1106,6 +1109,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     }
     if (currentUser?.perfil === 'Admin') return true;
     if (id === 'dashboard') return true;
+    // Início (09/11/2026) é a tela de abertura de todos: só traz comunicados e atalhos, e cada atalho já confere a aba de destino
+    if (id === 'inicio') return true;
     // Painel de TV e so leitura e serve a producao inteira (gerente e tecnicos),
     // entao fica visivel a todos, independente das abas liberadas.
     if (id === 'painel_tv') return true;
@@ -1120,6 +1125,14 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'inicio': {
+        // os números do cartão "Para você hoje" são os mesmos dos botões do cabeçalho (menções, avisos, análises); "avisos" repete a conta do botão Avisos
+        const qtdAvisos = currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0);
+        return <InicioTab currentUser={currentUser} podeAbrir={isVisible} irPara={(id: string) => setActiveTab(id)}
+          contagens={{ mencoes: mencoesCount, analises: analiseAlertCount, avisos: qtdAvisos, comprasEsperando: aprovaCompra ? comprasEsperando : null }}
+          abrir={{ mencoes: () => setShowMencoesPanel(true), analises: () => setShowAnalisePanel(true), avisos: () => (usaAlertasCompras ? setShowAlertasCompras(true) : setShowAvisosOp(true)) }}
+          abasParaLink={SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => i.id !== 'inicio' && isVisible(i.id))} />;
+      }
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <TelecomTab currentUser={currentUser} />;
@@ -1402,7 +1415,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             <Icone path={sidebarOpen ? mdiClose : mdiMenu} size={22} />
             {!sidebarOpen && totalAvisosMenu > 0 && <span className="acn-hamburger-aviso">{totalAvisosMenu > 9 ? '9+' : totalAvisosMenu}</span>}
           </button>
-          {/* Pedido do usuário em 02/10/2026: clicar no logo leva à tela inicial (Dashboard; sem acesso a ele, a primeira tela liberada no menu da pessoa) */}
+          {/* Pedido do usuário em 02/10/2026: clicar no logo leva à tela inicial (Dashboard; sem acesso a ele, a primeira tela liberada no menu da pessoa). Desde 09/11/2026 a tela inicial é o Início (utils/telaInicial.ts) */}
           <button type="button" className="acn-logo-botao" title="Ir para a tela inicial" aria-label="Ir para a tela inicial"
             onClick={() => { setActiveTab(telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)); setSidebarOpen(false); }}>
             <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.svg'} alt="ACN Sinal Verde" />
@@ -1729,7 +1742,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             ) : (
               <>
                 {/* Título da tela para as abas que ainda não têm cabeçalho próprio */}
-                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens'].includes(activeTab) && (() => {   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
+                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio'].includes(activeTab) && (() => {   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}

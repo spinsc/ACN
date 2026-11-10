@@ -1392,21 +1392,26 @@ export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: an
 }
 
 // ─── Busca padrão de OPLs ─────────────────────────────────────────────────────
-// Filtro comum: OPL, chassi, cliente, tipo_projeto
-export function filtrarOpls(opls: any[], busca: string): any[] {
+// Filtro comum: OPL, chassi, cliente, tipo_projeto.
+// `porCarro` (05/11/2026, pedido do usuário para a triagem do PCP): passando o segundo argumento, a busca também acha pelo NOME ou MODELO do carro: o modelo e o "equipamento / veículo" escritos na
+// OP e o veículo do catálogo ligado a ela (`catalogo`: id do veículo → "marca nome modelo"). Fica ligado só onde foi pedido; as outras telas seguem buscando como antes.
+export function filtrarOpls(opls: any[], busca: string, porCarro?: { catalogo?: Map<any, string> }): any[] {
   if (!busca) return opls;
-  return opls.filter(o => combinaBusca([o.opl, o.chassi, o.cliente_nome, o.tipo_projeto], busca));
+  return opls.filter(o => combinaBusca([
+    o.opl, o.chassi, o.cliente_nome, o.tipo_projeto,
+    ...(porCarro ? [o.modelo, o.veiculo, o.veiculo_id ? porCarro.catalogo?.get(o.veiculo_id) : null] : []),
+  ], busca));
 }
 
 // ─── Input de busca padrão ────────────────────────────────────────────────────
-export function BuscaOplInput({ busca, setBusca }: { busca: string; setBusca: (v: string) => void }) {
+export function BuscaOplInput({ busca, setBusca, placeholder = 'Buscar por OP, chassi, cliente ou projeto...' }: { busca: string; setBusca: (v: string) => void; placeholder?: string }) {
   return (
     <div className="acn-ats-busca">
       <span className="acn-ats-busca-ic">🔍</span>
       <input
         value={busca}
         onChange={e => setBusca(e.target.value)}
-        placeholder="Buscar por OP, chassi, cliente ou projeto..."
+        placeholder={placeholder}
         className="acn-ats-busca-campo"
       />
       {busca && (

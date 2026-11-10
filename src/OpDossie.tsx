@@ -15,7 +15,7 @@
 import React, { useState, useEffect } from 'react';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { carregarDossie, buscarOps } from './OpVinculos';
-import { QuadroItensOp } from './OpItens';
+import { QuadroItensOp, conferenciaInicial } from './OpItens';
 import { RespostasDaOp } from './RespostasDaOp';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
@@ -379,12 +379,11 @@ async function gerarPdfDossie(d, setGerando) {
       if (vendidos.length) tabela(['Vendido ao cliente', 'Qt', 'Descrição'],
         vendidos.map(i => [i.nome || '—', String(i.quantidade ?? '—'), i.descricao || '']));
       if (bom.length) {
+        // 06/11/2026: por ITEM, como a separação do Almoxarifado (os itens iguais da BOM somados; a conferência antiga, linha a linha, vem somada por item)
+        const itensDaBom = conferenciaInicial(o);
         const comSerial = conf.some(x => String(x?.seriais || '').trim());   // o serial de cada item (separação do Almoxarifado, 23/10/2026) só ganha coluna quando existe
         tabela(['BOM (material da OP)', 'Qt', 'Separado', ...(comSerial ? ['Serial(is)'] : []), 'Observação'],
-          bom.map((b, i) => {
-            const c = conf.find(x => x.nome === b.nome) || conf[i];
-            return [b.nome || '—', String(b.quantidade ?? '—'), c ? String(c.separado ?? '—') : '—', ...(comSerial ? [c?.seriais || ''] : []), c?.obs || ''];
-          }));
+          itensDaBom.map(b => [b.nome || '—', String(b.planejado ?? '—'), conf.length ? String(b.separado ?? '—') : '—', ...(comSerial ? [b.seriais || ''] : []), conf.length ? (b.obs || '') : '']));
       }
     }
 

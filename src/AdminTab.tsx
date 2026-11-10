@@ -165,7 +165,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true, gestor_id: null });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
   // Etapa 16c (10/10/2026): definir a senha de OUTRA pessoa exige a senha de quem está definindo (um Admin) — conferida no servidor, que guarda só o resumo da nova.
   const [senhaAdmin, setSenhaAdmin] = useState('');
@@ -207,7 +207,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -250,6 +250,8 @@ function PainelUsuarios() {
       // a caixa "Pode excluir anexos em Licitações" existia na tela, mas não era carregada nem gravada:
       // abria sempre desmarcada e marcar não tinha efeito (achado em 29/09/2026)
       pode_deletar_anexos: !!editForm.pode_deletar_anexos,
+      // Tela Início (09/11/2026): quem pode postar slides do carrossel, datas da empresa e imagens (o Admin sempre pode; o banco confere pela função pode_postar_inicio)
+      pode_postar_inicio: !!editForm.pode_postar_inicio,
       permissoes_crm: editForm.permissoes_crm,
       permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
@@ -287,6 +289,7 @@ function PainelUsuarios() {
         eh_dev: u.eh_dev || false,
         ver_valores: u.ver_valores !== false,                      // R7 (13/10/2026): como o login monta (vazio vale "vê")
         pode_deletar_anexos: u.pode_deletar_anexos === true,
+        pode_postar_inicio: u.pode_postar_inicio === true,
         ultimo_login_anterior: null,
       }));
     } catch (e: any) { alert('Erro: ' + e.message); return; }
@@ -544,6 +547,19 @@ function PainelUsuarios() {
                     style={{accentColor:'#0891b2'}} />
                   <span>🗑️ Pode excluir anexos em Licitações</span>
                 </label>
+              </div>
+              {/* Tela Início — quem posta no carrossel (pedido do RH, 09/11/2026): só essa caixa foi construída aqui; a tela do Admin não foi migrada (combinado com o usuário) */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.pode_postar_inicio||false}
+                    onChange={e=>setEditForm(f=>({...f,pode_postar_inicio:e.target.checked}))}
+                    style={{accentColor:'#0e7068'}} />
+                  <span>🖼️ Pode postar na tela Início (slides do carrossel e datas da empresa)</span>
+                </label>
+                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
+                  Todo usuário do sistema vê a tela Início. Só o Admin e quem tiver esta caixa marcada editam.
+                </div>
               </div>
               {/* Visualização de valores financeiros */}
               <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>

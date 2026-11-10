@@ -34,7 +34,7 @@ import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
-import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
+import { useMarkupDaTela, FaixaDoMarkup, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import Icone from './Icone';
@@ -416,11 +416,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
   const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
-  // { pct ponderado pelo custo, min, max } por processo — ver MarkupTermometro
-  const [markupPorOp, setMarkupPorOp]       = useState<Record<string, any>>({});
-  // Cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados
-  // em Admin → Faixas de Markup — ver MarkupTermometro.carregarBandasMarkupPorTipo
-  const [bandasMarkup, setBandasMarkup]     = useState<Record<string, any>>({});
+  // { pct ponderado pelo custo, min, max } por processo e os cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados em Admin → Faixas de Markup.
+  // 12e74 (09/11/2026): o gancho do termômetro guarda os dois, mantém a última leitura boa quando uma falha e diz o erro (faixa vermelha) — ver MarkupTermometro
+  const { markup: markupPorOp, bandas: bandasMarkup, erro: erroMarkup, recarregar: recarregarMarkup } = useMarkupDaTela('crm', totalDaFormacao, true);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
   // ── andamento ──
@@ -555,7 +553,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
     const { data: oplsDosCards, error: errOplsCards } = await supabase
       .from('oples').select('id,opl,status_geral,tipo_projeto,fluxo_entrega,itens_vendidos,envio_partes,crm_oportunidade_id,frete_responsavel,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
-    if (errOplsCards) { carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
+    if (errOplsCards) { recarregarMarkup(); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
     const porCard: Record<string, string[]> = {};
     (oplsDosCards || []).forEach((o: any) => {
       const k = String(o.crm_oportunidade_id);
@@ -579,8 +577,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       setOplsInfoPorCard(info);
     }).catch(e => console.error('Selo "onde está" dos cards:', e));
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
-    carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp);
-    carregarBandasMarkupPorTipo().then(setBandasMarkup);
+    recarregarMarkup();
     if (!silent) setLoading(false);
   }, []);
 
@@ -2527,7 +2524,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
-                max={markupPorOp[op.id].max} discreto
+                max={markupPorOp[op.id].max}
                 bandaCfg={op.tipo_negocio ? bandasMarkup[op.tipo_negocio] : undefined} />
             )}
             {op.responsavel_nome && (
@@ -3185,6 +3182,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       {erroCarga && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>Não foi possível ler o quadro do CRM ({erroCarga}). Isso não quer dizer que não haja oportunidade{ops.length ? '; o que aparece é da última leitura que deu certo' : ''}.</Faixa>
       )}
+      <FaixaDoMarkup erro={erroMarkup} temSelos={Object.keys(markupPorOp).length > 0} onTentar={recarregarMarkup} />
 
       {/* ── Seção Contatos ── */}
       {secaoCrm === 'contatos' && (

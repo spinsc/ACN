@@ -7053,6 +7053,66 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
   html body .acn-ht-b1154:not(#acn) { padding-right: 8px; padding-left: 8px; }
 }
 /* @@ht-fim */
+/* @@hx-ini */
+/* ══ Horas extras (HorasExtras.tsx, 12e73 — 09/11/2026) ═══════════════════════════════════════════════════════════════════════════════════════════
+   O painel de pedidos e as duas janelas (pedir/registrar e aprovar/recusar) tinham 41 estilos soltos dentro do componente; aqui está o desenho, com os mesmos valores que a pessoa
+   já via (medidos antes de migrar, em claro, escuro e celular com toque). Nenhum valor muda no escuro nem no celular: as cores vêm das variáveis do tema, e a janela de celular
+   já é decidida pelas regras com !important do responsivo.css e do DashboardTab (largura e altura da caixa, tela cheia), que valiam por cima do estilo solto e continuam valendo por cima da classe.
+   Nome da classe = o que a peça é (sobre = fundo da janela, caixa = a janela, trio = data e duas horas, linha = um pedido do painel, td-… = célula da tabela). */
+html body .acn-hx-sobre:not(#acn) { z-index: 2600; }
+html body .acn-hx-caixa:not(#acn) { max-width: 480px; width: 95vw; }
+html body .acn-hx-caixa-dec:not(#acn) { max-width: 460px; width: 95vw; }
+html body .acn-hx-grade:not(#acn) { display: grid; gap: 10px; }
+html body .acn-hx-trio:not(#acn) { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+html body .acn-hx-campo:not(#acn) { width: 100%; }
+html body .acn-hx-area:not(#acn) { width: 100%; resize: vertical; }
+html body .acn-hx-botoes:not(#acn) { display: flex; gap: 8px; justify-content: flex-end; }
+html body .acn-hx-t12:not(#acn) { font-size: 12px; }
+html body .acn-hx-t13:not(#acn) { font-size: 13px; }
+html body .acn-hx-mt2:not(#acn) { margin-top: 2px; }
+html body .acn-hx-pilha:not(#acn) { display: grid; gap: 8px; }
+html body .acn-hx-linha:not(#acn) { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: 8px; background: var(--acn-surface); }
+html body .acn-hx-corpo:not(#acn) { flex: 1 1 260px; min-width: 0; }
+html body .acn-hx-motivo:not(#acn) { font-size: 12px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-hx-acoes:not(#acn) { display: flex; gap: 6px; }
+html body .acn-hx-quebra:not(#acn) { flex-wrap: wrap; }
+html body .acn-hx-rolagem:not(#acn) { overflow-x: auto; padding: 0; }
+html body .acn-hx-nowrap:not(#acn) { white-space: nowrap; }
+html body .acn-hx-td-motivo:not(#acn) { min-width: 200px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-hx-td-resposta:not(#acn) { min-width: 160px; }
+/* @@hx-fim */
+/* @@mk-ini */
+/* ══ Termômetro de markup (MarkupTermometro.tsx, 12e74 — 09/11/2026; 12e74b — 10/11/2026) ═════════════════════════════════════════════════════════════════════════════
+   O desenho do termômetro, do selo e da barra "Markup da carteira" estava em 14 estilos soltos dentro do componente; aqui estão os mesmos valores que a pessoa já via (medidos antes de migrar, em
+   claro, escuro e celular com toque). Ficam soltos no componente só os 3 estilos que vêm do DADO: a cor do selo, a cor de cada amostra da legenda e a largura e a cor de cada pedaço da barra.
+   A versão grande do selo (a que vinha sem `discreto`) ficou com o estilo solto na 12e74, porque o sistema (`TonsVisuais.ts`) só reconhece "selo", e o repinta nos tons do guia, pelo estilo escrito
+   no próprio elemento; foi apagada na 12e74b (10/11/2026), com a autorização do usuário, porque nenhuma tela a usava.
+   TAMANHO DE LETRA = O QUE A PESSOA VÊ, NÃO O QUE O CÓDIGO ESCREVIA: o sistema reescreve em tempo de execução a letra pequena que vem no estilo solto (regras `[style*="font-size: …"]` do
+   design.css e do responsivo.css): a de 9 px saía com 12 px, a de 8,5 px com 11 px (e 12 px no celular de toque). Tirando o estilo do elemento, essas regras deixam de pegar, e a letra encolheria;
+   por isso as classes já trazem o tamanho medido (12 px e 11 px), e a legenda tem a sua regra do celular. O Painel TV, única exceção dessas regras, não usa o termômetro.
+   TEMA ESCURO: as regras de escuro do sistema (no `DashboardTab`) casam a cor escrita no `style` e deixam de pegar quando ela vai para uma classe; por isso as cores de texto e a borda da barra
+   ganham aqui a regra própria de escuro, com o valor medido na versão de antes (texto #94a3b8 e borda do trilho #334155). Trocar tudo por variável do tema é trabalho da Etapa 13.
+   Nome da classe = o que a peça é (termo = o desenho do termômetro; selo-d = o selo (o "-d" é de "discreto", o nome de quando havia o selo grande); faixa-d = o "40% a 120%" dentro do selo; barra = a barra da carteira; trilho = a faixa colorida;
+   legenda = a lista de cores). */
+html body .acn-mk-termo:not(#acn) { flex-shrink: 0; display: block; }
+html body .acn-mk-selo-d:not(#acn) { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 500; }
+html body .acn-mk-faixa-d:not(#acn) { font-size: 12px; opacity: .75; font-weight: 400; }
+html body .acn-mk-barra:not(#acn) { margin-top: 10px; }
+html body .acn-mk-barra-tit:not(#acn) { font-size: 12px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+html body .acn-mk-barra-n:not(#acn) { font-weight: 600; color: #94a3b8; }
+html body .acn-mk-trilho:not(#acn) { display: flex; height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid #e2e8f0; }
+html body .acn-mk-legenda:not(#acn) { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 5px; }
+html body .acn-mk-leg-item:not(#acn) { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #475569; }
+html body .acn-mk-amostra:not(#acn) { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+html body .acn-mk-leg-n:not(#acn) { color: #1e293b; }
+/* tema escuro: o texto da barra e o item da legenda ficam em #94a3b8 e o contorno do trilho em #334155, como o sistema já mostrava */
+html body.dark .acn-mk-barra-tit:not(#acn), html body.dark .acn-mk-leg-item:not(#acn), html body.dark .acn-mk-leg-n:not(#acn) { color: #94a3b8; }
+html body.dark .acn-mk-trilho:not(#acn) { border-color: #334155; }
+/* celular e tablet de toque (a mesma condição do responsivo.css): ali a letra da legenda saía com 12 px, não 11 px */
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  html body .acn-mk-leg-item:not(#acn) { font-size: 12px; }
+}
+/* @@mk-fim */
 
 /* ── Manuais (30/10/2026): lista de cartões e leitor do manual. Só aparência ── */
 .acn-man-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
