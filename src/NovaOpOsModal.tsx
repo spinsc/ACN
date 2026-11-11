@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
@@ -731,7 +732,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       }
       onClose();
     } catch (e: any) {
-      setErro(e.message || 'Erro ao salvar.');
+      setErro(explicarErroDoBanco(e) || 'Erro ao salvar.');
     } finally {
       setSalvando(false);
     }

@@ -2626,6 +2626,9 @@ html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-op { width: min(540p
 
 /* ── CRM · 12e37 (07/10/2026): a aba "OPs em aberto" — filtros, tabela, linhas de lote, barra de seleção e janela de confirmar a entrega ── */
 .acn-crm-opls { padding: 8px 4px; }
+/* OPs excluídas (11/11/2026): quadro à parte abaixo da lista, em vermelho para ninguém tomar por OP em andamento */
+.acn-crm-excluidas { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--acn-bad); }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-excluida > td { background: var(--acn-bad-soft) !important; }
 .acn-crm-opl-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 html body select.acn-input.acn-crm-opl-sel { width: auto; height: 30px; font-size: 12px; font-weight: 700; }
 html body select.acn-input.acn-crm-opl-sel.ativo { background: var(--acn-brand); border-color: var(--acn-brand); color: #fff; }
