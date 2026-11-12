@@ -98,10 +98,10 @@ Vencimento de contas e de nota (Financeiro), validade de ata e prazo de garantia
 ## 7. Dúvidas em aberto (a decidir com o usuário)
 Respondidas em 12/11/2026 e já passadas para a seção 2: o campo de recebimento do veículo é a previsão; um aviso por item; limite de 15 dias; o setor vê tudo da sua área.
 
-Ainda em aberto (sigo com a suposição, **a confirmar**):
-1. **Horário** do alerta: 8h de Brasília, dias úteis, igual às outras rotinas.
-2. **Prazo sem responsável** (demanda sem `responsavel_email`): vai para o setor de destino e, se não houver, para quem abriu.
-3. **Setor que age de cada fonte** (coluna "Quem vê" da seção 4): conferir a tabela com o usuário antes de ligar a rotina (C5).
+**Fechadas em 12/11/2026, com o usuário:**
+1. **Horário** do alerta: 8h de Brasília, dias úteis, igual às outras rotinas. ✅ mantido.
+2. **Prazo sem responsável** (demanda sem responsável): vai para o **setor de destino** da demanda e, se o setor não tiver perfil no sistema (Serralheria, por exemplo), para quem abriu. ✅ Antes só avisava quem abriu; passou a valer na mesma data (função `cal_perfis_do_setor`, migração `calendario_demanda_sem_responsavel_vai_ao_setor`; Compras, Comercial e Gerente Comercial, Engenharia, Almoxarifado, Produção (Gerente Produção), Fiscal, RH e Licitações). Em 12/11/2026 só 2 das 19 demandas em aberto com prazo estavam sem responsável (as duas do Comercial); as outras não mudaram.
+3. **Setor que age de cada fonte** (coluna "Quem vê" da seção 4): ✅ o usuário aprovou como está; se alguém reclamar de aviso demais ou de menos, ajusta-se por fonte.
 
 ## 8. Etapas
 
