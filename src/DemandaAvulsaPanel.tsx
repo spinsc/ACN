@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
@@ -1760,7 +1761,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
     if (!silent) setLoading(false);
   }, [setor]);
 
-  useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
+  useEffect(() => { fetch(); const t = intervaloVisivel(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
 
   // Deep-link vindo do painel de Menções ("Demanda Avulsa X" clicável): abre o
   // detalhe da demanda direto, em vez de só cair na aba Engenharia genérica.

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
@@ -54,7 +55,7 @@ function OfiQueueSection({ setor, cor, currentUser }) {
     setOfis(data || []);
   };
 
-  useEffect(() => { fetchOfis(); const t = setInterval(fetchOfis, 30000); return () => clearInterval(t); }, [setor]);
+  useEffect(() => { fetchOfis(); const t = intervaloVisivel(fetchOfis, 30000); return () => clearInterval(t); }, [setor]);
 
   // Deep-link — ver VinculoPicker.tsx's abrirVinculo(). Guardado por
   // setor_destino porque cada setor monta sua própria instância deste
@@ -388,7 +389,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
 
   useEffect(() => {
     fetchDemandas();
-    const t = setInterval(()=>fetchDemandas(true), 30000);
+    const t = intervaloVisivel(()=>fetchDemandas(true), 30000);
     return () => clearInterval(t);
   }, [filtro, setor]);
   useEffect(() => { const t = setInterval(()=>setTick(p=>p+1), 1000); return ()=>clearInterval(t); }, []);

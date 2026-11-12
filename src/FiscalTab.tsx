@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, mostrarAviso } from './Feedback';
 import { lerRemessasAtivasDe } from './Remessas';
 import React, { useState, useEffect } from 'react';
@@ -69,7 +70,7 @@ export default function FiscalTab({ currentUser }) {
   const [lotesDesmarcados, setLotesDesmarcados] = useState(() => new Set());   // unidades que o Fiscal tirou da nota
   const [lotesAbertos, setLotesAbertos] = useState({});
 
-  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = intervaloVisivel(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);

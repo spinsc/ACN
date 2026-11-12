@@ -10,6 +10,7 @@
 // A tela abre na aba que tem trabalho esperando: com OP para separar, na separação; sem nenhuma, nas análises e demandas, como sempre foi.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { Abas } from './Interface';
 import SetorDemandaTab from './SetorDemandaTab';
@@ -33,7 +34,7 @@ export default function TelecomTab({ currentUser }) {
       setEsperando((data || []).filter(o => estaNaFilaDe(o, SETOR_TELECOM)).length);
     };
     contar();
-    const t = setInterval(contar, 60000);
+    const t = intervaloVisivel(contar, 60000);
     return () => { vivo = false; clearInterval(t); };
   }, []);
 

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
@@ -126,7 +127,7 @@ export default function PCPTab({ currentUser }) {
   const [solicitacoesAlmox, setSolicitacoesAlmox] = useState([]);
   const [liberandoSolic, setLiberandoSolic] = useState(null);
 
-  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = intervaloVisivel(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   // Etapa 7.52 (06/10/2026): leitura que falha não pode parecer "nenhuma OP em triagem" nem "nada em falta" (e a atualização de
   // 30 s que falha não pode esvaziar a tela): cada bloco só troca o que já tinha quando a leitura dele deu certo.

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { ehAdminOuGerente, podeEditarParecerDaAnalise } from './utils/permissoes';
@@ -693,7 +694,7 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
   // O intervalo continua como rede de segurança se a conexão cair.
   useEffect(() => {
     load();
-    const t = setInterval(()=>load(true), 60000);
+    const t = intervaloVisivel(()=>load(true), 180000); // 12/11/2026: era 60 s; o tempo real já atualiza na hora
     const ch = supabase.channel(`analise-widget-${setor}-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event:'*', schema:'public', table:'analise_setores' }, () => load(true))
       .on('postgres_changes', { event:'*', schema:'public', table:'analise_solicitacoes' }, () => load(true))

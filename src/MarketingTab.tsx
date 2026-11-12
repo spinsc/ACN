@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import React, { useState, useEffect } from 'react';
 import { LinkOpl, VeiculoOuEnvio } from './AcnTabShared';
 import { aguardaLiberacaoComercial } from './FluxoEntrega';
@@ -231,7 +232,7 @@ export default function MarketingTab({ currentUser }) {
   // Etapa 7.37 (04/10/2026): o que a tela não conseguiu ler (mensagem do banco, por lista; vazio = leu).
   const [falhas, setFalhas] = useState({ opls: '', interv: '', pedidos: '' });
 
-  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true), 60000); return () => clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = intervaloVisivel(()=>fetchAll(true), 60000); return () => clearInterval(t); }, []);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);

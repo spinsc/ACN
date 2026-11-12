@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { EquipeDaOpModal, inserirResponsaveisSemRepetir } from './EquipeDaOp';
@@ -617,7 +618,7 @@ function PainelSacVeicular({ currentUser }) {
     setOrdens(data || []);
     if (!silent) setLoading(false);
   };
-  useEffect(() => { load(); const t = setInterval(()=>load(true), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { load(); const t = intervaloVisivel(()=>load(true), 30000); return () => clearInterval(t); }, []);
   const fetchEquipesManu = async () => {
     const { data, error } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
     if (error) { setErroEquipesManu(error.message); return; }
@@ -2263,7 +2264,7 @@ export default function ProducaoTab({ currentUser }) {
   useEffect(() => {
     fetchAll();
     fetchEquipes();
-    const t = setInterval(()=>fetchAll(true), 30000);
+    const t = intervaloVisivel(()=>fetchAll(true), 30000);
     return () => clearInterval(t);
   }, []);
 

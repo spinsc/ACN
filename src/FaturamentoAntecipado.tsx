@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
@@ -66,7 +67,7 @@ export function FiscalAntecipadas({ currentUser }: any) {
       .order('fat_antecipado_em', { ascending: true });
     setLista(data || []);
   };
-  useEffect(() => { carregar(); const t = setInterval(carregar, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { carregar(); const t = intervaloVisivel(carregar, 30000); return () => clearInterval(t); }, []);
 
   const semNota = lista.filter(o => !o.data_emissao_nf);
   const alternar = (id: string) => setMarcadas(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });

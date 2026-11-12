@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { hojeISO, diaISO, Botao } from './Interface';
 import Icone from './Icone';
@@ -105,7 +106,7 @@ export default function ContatoComercialAlertWidget({ currentUser }) {
   useEffect(() => {
     if (!currentUser?.id) return;
     verificar();
-    timerRef.current = setInterval(verificar, 60_000);
+    timerRef.current = intervaloVisivel(verificar, 300_000); // 12/11/2026: era 1 min; o aviso é por dia, não precisa de minuto
     return () => clearInterval(timerRef.current);
   }, [verificar]);
 

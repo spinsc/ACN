@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
@@ -220,7 +221,7 @@ export default function EngenhariaTab({ currentUser }) {
     window.addEventListener('engenharia:abrir-estruturas', handler);
     return () => window.removeEventListener('engenharia:abrir-estruturas', handler);
   }, []);
-  useEffect(() => { fetchAll(); fetchOsAcomp(); lerPedidosAbertos(); const t = setInterval(()=>{ fetchAll(true); fetchOsAcomp(); lerPedidosAbertos(); }, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); fetchOsAcomp(); lerPedidosAbertos(); const t = intervaloVisivel(()=>{ fetchAll(true); fetchOsAcomp(); lerPedidosAbertos(); }, 30000); return () => clearInterval(t); }, []);
 
   // Etapa 7.51 (06/10/2026): leitura que falha não pode parecer "nenhuma OP aguardando Engenharia" (e a atualização de 30 s que
   // falha não pode esvaziar a lista que já estava na tela).

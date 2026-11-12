@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
@@ -1130,7 +1131,7 @@ export default function ComprasTab({ currentUser }) {
     loadCentros();
     loadAlcadas();
     loadDepartamentos();
-    const t = setInterval(()=>load(true), 30000);
+    const t = intervaloVisivel(()=>load(true), 30000);
     return () => clearInterval(t);
     // `podeAprovarCompra` na lista (30/09/2026): o painel "Esperando a sua aprovação" só carrega para quem
     // aprova, e a marca chega DEPOIS da tela abrir (a sessão é atualizada do banco). Sem isto, o intervalo de

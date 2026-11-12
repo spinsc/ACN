@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -265,7 +266,7 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
   useEffect(() => {
     carregar();
     // Polling a cada 30s para detectar novos alertas
-    timerRef.current = setInterval(carregar, 30000);
+    timerRef.current = intervaloVisivel(carregar, 30000);
     return () => clearInterval(timerRef.current);
   }, [carregar]);
 

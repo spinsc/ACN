@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
@@ -2371,7 +2372,7 @@ export default function RHTab({ currentUser }) {
     if (!silent) setLoading(false);
   }, []);
 
-  useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 60000); return () => clearInterval(t); }, [fetch]);
+  useEffect(() => { fetch(); const t = intervaloVisivel(()=>fetch(true), 60000); return () => clearInterval(t); }, [fetch]);
 
   // Horas, autorizações e comissões antigas apontam para gente que já saiu: para mostrar o nome (e o percentual)
   // delas, essas telas recebem os desligados junto. As listas de trabalho usam só `funcionarios` (ativo).

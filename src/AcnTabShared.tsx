@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
 import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline } from '@mdi/js';
@@ -1476,7 +1477,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
 
   useEffect(() => {
     fetchDemandas();
-    const t = setInterval(fetchDemandas, 30000);
+    const t = intervaloVisivel(fetchDemandas, 30000);
     return () => clearInterval(t);
   }, [setor]);
 

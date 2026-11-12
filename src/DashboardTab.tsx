@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
@@ -741,7 +742,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   useEffect(() => {
     const atualizar = () => contarAnalisesPendentesPorSetor().then(setAnalisesPorSetor).catch(() => {});
     atualizar();
-    const iv = setInterval(atualizar, 60000);
+    const iv = intervaloVisivel(atualizar, 180000); // 12/11/2026: era 60 s; o tempo real já atualiza na hora
     const ch = supabase.channel('menu-analises-pendentes')
       .on('postgres_changes', { event:'*', schema:'public', table:'analise_setores' }, atualizar)
       .on('postgres_changes', { event:'*', schema:'public', table:'analise_solicitacoes' }, atualizar)
@@ -756,7 +757,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (!aprovaCompra) { setComprasEsperando(0); return; }
     const atualizar = () => contarEsperandoAprovacao().then(n => { if (n != null) setComprasEsperando(n); }).catch(() => {});
     atualizar();
-    const iv = setInterval(atualizar, 60000);
+    const iv = intervaloVisivel(atualizar, 180000); // 12/11/2026: era 60 s; o tempo real já atualiza na hora
     const ch = supabase.channel('menu-compras-aprovacao')
       .on('postgres_changes', { event:'*', schema:'public', table:'pcp_pedidos_compra' }, atualizar)
       .on('postgres_changes', { event:'*', schema:'public', table:'pcp_aprovacoes' }, atualizar)
@@ -820,7 +821,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       try { setAnaliseAlertCount(await contarAnalisesDoUsuario(currentUser)); } catch(_) {}
     };
     fetchAnalise();
-    const iv = setInterval(fetchAnalise, 60000);
+    const iv = intervaloVisivel(fetchAnalise, 180000); // 12/11/2026: era 60 s
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.perfil, currentUser?.recebe_alerta_analise]);
@@ -849,7 +850,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       } catch { /* mencoes table may not exist yet */ }
     };
     fetchMencoes();
-    const iv = setInterval(fetchMencoes, 30000);
+    const iv = intervaloVisivel(fetchMencoes, 90000); // 12/11/2026: era 30 s (selo de Menções; 3 consultas por batida)
     return () => clearInterval(iv);
   }, [currentUser?.id]);
 
@@ -865,7 +866,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   useEffect(() => {
     if (!usaAlertasCompras) return;
     recarregarAlertasCompras();
-    const iv = setInterval(recarregarAlertasCompras, 120000);
+    const iv = intervaloVisivel(recarregarAlertasCompras, 120000);
     const foco = () => recarregarAlertasCompras();
     window.addEventListener('focus', foco);
     return () => { clearInterval(iv); window.removeEventListener('focus', foco); };
