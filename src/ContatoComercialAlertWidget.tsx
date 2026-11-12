@@ -35,7 +35,9 @@ function dismiss(id: string, tipo: string) {
 
 // ─── BANNER (1 dia antes / no dia) ─────────────────────────────────────────────
 // 12e48 (09/10/2026): o tom (vermelho = hoje, âmbar = amanhã) e o "empilhar acima do de hoje" viraram classes (antes eram cor e posição passadas em estilo)
-function BannerComercial({ contatos, titulo, icone, tom, onClose, acima }) {
+// 10/2026 (pedido do usuário, 10/11/2026): cada contato do aviso abre o card no CRM. Quem recebe o aviso por ser gestor do vendedor
+// não tinha como saber onde o compromisso estava nem os detalhes; o clique leva ao card (o aviso mostra de quem é, no "Vendedor").
+function BannerComercial({ contatos, titulo, icone, tom, onClose, acima, onAbrir }) {
   return (
     <div className={'acn-cta-banner comercial ' + tom + (acima ? ' acima' : '')}>
       <div className="acn-cta-banner-cab">
@@ -44,7 +46,10 @@ function BannerComercial({ contatos, titulo, icone, tom, onClose, acima }) {
       </div>
       <div className="acn-cta-banner-corpo">
         {contatos.map(c => (
-          <div key={c.id} className="acn-cta-banner-item">
+          <div key={c.id} className="acn-cta-banner-item acn-cta-banner-link" role="button" tabIndex={0}
+            title="Abrir este card no CRM" aria-label={'Abrir o card ' + c.titulo + ' no CRM'}
+            onClick={() => onAbrir(c)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(c); } }}>
             <div className="acn-cta-banner-nome">{c.titulo}</div>
             <div className="acn-cta-banner-quando">
               <Icone path={mdiCalendarOutline} size={12} /> {c.prox_contato}
@@ -52,6 +57,7 @@ function BannerComercial({ contatos, titulo, icone, tom, onClose, acima }) {
             </div>
             {c.responsavel_nome && <div className="acn-cta-banner-det"><Icone path={mdiAccountOutline} size={12} /> Vendedor: {c.responsavel_nome}</div>}
             {c.nome_contato && <div className="acn-cta-banner-det">Contato: {c.nome_contato}{c.contato ? ` · ${c.contato}` : ''}</div>}
+            <div className="acn-cta-banner-abrir">Abrir o card no CRM ›</div>
           </div>
         ))}
       </div>
@@ -115,13 +121,22 @@ export default function ContatoComercialAlertWidget({ currentUser }) {
     setAlertasAmanha([]);
   };
 
+  // Abre o card no CRM pela navegação que já existe (`acn:ir-para-aba` confere se a pessoa tem a aba CRM e, ao trocar, manda o
+  // `analise:abrir-origem` que abre o card). O contato aberto sai do aviso (já foi visto); o aviso some quando o último sai.
+  const abrirNoCrm = (c: any, tipo: 'hoje' | 'amanha') => {
+    dismiss(c.id, tipo);
+    if (tipo === 'hoje') setAlertasHoje(l => l.filter(x => x.id !== c.id));
+    else setAlertasAmanha(l => l.filter(x => x.id !== c.id));
+    window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'crm', depois: { nome: 'analise:abrir-origem', detalhe: { origem: 'crm', origemId: c.id } } } }));
+  };
+
   return (
     <>
       {showHoje && alertasHoje.length > 0 && (
-        <BannerComercial contatos={alertasHoje} titulo="Contato comercial HOJE" icone={mdiPhoneOutline} tom="erro" onClose={fecharHoje} />
+        <BannerComercial contatos={alertasHoje} titulo="Contato comercial HOJE" icone={mdiPhoneOutline} tom="erro" onClose={fecharHoje} onAbrir={c => abrirNoCrm(c, 'hoje')} />
       )}
       {showAmanha && alertasAmanha.length > 0 && (
-        <BannerComercial contatos={alertasAmanha} titulo="Contato comercial amanhã" icone={mdiCalendarOutline} tom="atencao" onClose={fecharAmanha} acima={showHoje && alertasHoje.length > 0} />
+        <BannerComercial contatos={alertasAmanha} titulo="Contato comercial amanhã" icone={mdiCalendarOutline} tom="atencao" onClose={fecharAmanha} onAbrir={c => abrirNoCrm(c, 'amanha')} acima={showHoje && alertasHoje.length > 0} />
       )}
     </>
   );

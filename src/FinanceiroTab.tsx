@@ -22,7 +22,8 @@ import { lerFechamentos, fechamentoVigente, nomeDoMes } from './CentroCustoFecha
 import { baixarPlanilha } from './ExportarPlanilha';
 import { mdiFileExcelOutline, mdiLockOutline, mdiTagOutline, mdiBankOutline, mdiFormatListChecks, mdiReceiptTextOutline,
   mdiCashMultiple, mdiRefresh, mdiChartBar, mdiFolderOutline, mdiFileDocumentOutline, mdiCartOutline, mdiPencilOutline,
-  mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline, mdiClipboardCheckOutline } from '@mdi/js';
+  mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline, mdiClipboardCheckOutline, mdiClipboardTextOutline } from '@mdi/js';
+import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP.
 // Etapa 12e9 (05/10/2026): o seletor escuro escrito à mão virou as abas do guia (`Abas`); os nomes e a ordem são os de antes.
@@ -43,6 +44,7 @@ function AbasFinanceiro({ aba, setAba }: any) {
       { id: 'conciliacao', rotulo: 'Conciliação bancária', icone: mdiBankOutline },
       { id: 'kanban', rotulo: 'Tarefas', icone: mdiFormatListChecks },
       { id: 'custoop', rotulo: 'Custo por OP', icone: mdiReceiptTextOutline },
+      { id: 'demandas', rotulo: 'Demandas', icone: mdiClipboardTextOutline },   // 05/11/2026: demandas gerais do Financeiro (pedido de pagamento a terceiro, ligável a uma OS)
     ]} />
   );
 }
@@ -578,6 +580,15 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       <div className="acn-fin">
         <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
         <FinanceiroKanban currentUser={currentUser} />
+      </div>
+    );
+  }
+
+  if (abaFin === 'demandas') {
+    return (
+      <div className="acn-fin">
+        <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
+        <DemandaAvulsaPanel currentUser={currentUser} setor="Financeiro" />
       </div>
     );
   }

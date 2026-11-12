@@ -4,8 +4,16 @@
   "titulo": "Manual das Viagens",
   "descricao": "Passo a passo completo das Viagens, com fotos: o quadro, como montar o roteiro e o orçamento, a aprovação, o que cada setor preenche em Provisionamento (com a liberação da verba pelo Financeiro e a fila de Pendências), o aviso de saída próxima e de conflito, a ficha da equipe, a volta, o custo real com comprovantes, a Agenda, o relatório de Custos e a Frota com manutenção.",
   "ordem": 2,
-  "atualizadoEm": "2026-11-04",
+  "atualizadoEm": "2026-11-05",
   "mudancas": [
+    {
+      "data": "2026-11-05",
+      "texto": "Financeiro nas Viagens: o Financeiro altera livremente o que é dele (verba total, pedágio, hotel e custo real) e, ao salvar uma correção (mudar ou apagar um valor que já estava lançado), o sistema pede o motivo e deixa no histórico quem corrigiu, o valor de antes, o de agora e o motivo; preencher o que estava vazio, mesmo acrescentando um item ao custo real ou ao hotel, não pede motivo. Aberta pelas Pendências do Financeiro, a viagem só deixa alterar a parte do Financeiro: o que é de outro setor fica só para leitura. A fila Pendências agora mostra, em cada linha, o resumo da viagem (saída, destino, equipe, veículo, valores e ligações). Ainda sem foto nova desta parte."
+    },
+    {
+      "data": "2026-11-05",
+      "texto": "Viagens e OS: a OS de atendimento externo (categoria Serviço Externo) gera a viagem sozinha quando é aprovada, e a janela da viagem ganhou o quadro OS DE ATENDIMENTO (imprimir a OS para o técnico levar, gerar a OS desta viagem no SAC já preenchida e abrir a OS). A viagem também se liga a outra OS pelo seletor de ligações. O chassi que a OP ou a OS não tem sai em branco na folha, e a ficha da equipe traz a lista de veículos a atender. Ainda sem foto nova desta parte."
+    },
     {
       "data": "2026-11-04",
       "texto": "Reserva do veículo para uso interno: o carro ocupado fora de viagem (buscar ou levar material, visita, reparo) aparece na Agenda como barra cinza hachurada e conta no aviso de conflito. Botão Reservar veículo na Agenda e quadro Veículo da frota nas demandas gerais (também na Nova Demanda). Uma reserva do mesmo veículo nos dias da viagem trava o botão \"A equipe saiu\" até trocar o carro ou a data. Três fotos novas (33, 34 e 35) e a Agenda refeita."

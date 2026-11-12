@@ -174,8 +174,9 @@ function CompromissoCard({ item, onConcluir, onExcluir, podeEditar, usuario }) {
           )}
           <div className="acn-agw-card-meta">
             📅 {fmtDH(item.data_hora)}
-            {item.usuario_nome && (
-              <span className="acn-agw-meta-item">👤 {item.usuario_nome}</span>
+            {/* 10/11/2026 (pedido do usuário): "Criado por" escrito, para quem recebe o compromisso saber de quem veio (antes só um 👤 solto) */}
+            {(item.usuario_nome || item.usuario_email) && (
+              <span className="acn-agw-meta-item acn-agw-criador">👤 Criado por {item.usuario_email && usuario?.email && item.usuario_email === usuario.email ? 'você' : (item.usuario_nome || item.usuario_email)}</span>
             )}
             {participantesDe(item).length > 0 && (
               <span className="acn-agw-meta-item"><ListaParticipantes item={item} usuario={usuario} /></span>

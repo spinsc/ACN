@@ -47,6 +47,10 @@ O que **não** trava: hotel, pedágio, descrição do serviço, contrato, o cust
 
 **Aparece "Verba ainda não liberada" ou "A verba mudou depois de liberada".** O Financeiro precisa clicar em **Liberar verba** (depois de salvar o valor). Se o valor mudou depois da liberação, ela perdeu a validade e é preciso liberar de novo. Para viagens que já estavam em Andamento ou Finalizadas antes desta regra, a verba conta como liberada.
 
+**Preciso corrigir um valor que o Financeiro já lançou (verba, pedágio, hotel ou custo real).** Corrija e salve a viagem: como o campo já estava preenchido, o sistema pede o **motivo** (obrigatório) e o histórico da viagem guarda o valor de antes, o novo e o motivo. Cancelar a janela do motivo cancela o salvamento. Mudar ou apagar um valor já lançado pede o motivo; preencher um campo que estava vazio (inclusive acrescentar um item ao custo real ou ao hotel) não pede.
+
+**Abri a viagem pelas Pendências e não consigo mexer no roteiro, na equipe ou no contrato.** É de propósito: aberta pelo Financeiro, a viagem só deixa alterar a parte do Financeiro. Quem tem a aba Viagens altera o resto por lá.
+
 **Não sei quais viagens esperam o Financeiro.** Abra **Financeiro > Pendências**: a lista reúne verba a liberar, custo real a lançar e comprovantes a anexar, com o prazo de cada uma.
 
 **O botão "A equipe saiu" diz "liberar o veículo, que está reservado para uso interno".** O carro da viagem está reservado fora de viagem nos mesmos dias. Veja a **Agenda** (barra cinza hachurada): troque o veículo da viagem, mude a data ou peça a quem fez a reserva para mudá-la ou cancelá-la.

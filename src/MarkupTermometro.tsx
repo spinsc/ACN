@@ -11,7 +11,11 @@
 // componentes de apresentação abaixo só leem (badge não faz fetch próprio,
 // ao contrário de AnaliseStatusBadge, pra evitar N+1 queries por card).
 // ─────────────────────────────────────────────────────────────────────────────
+import { useCallback, useRef, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { explicarErroDoBanco } from './ErroDoBanco';
+import { lerPaginado } from './LerPaginado';
+import { Botao, Faixa } from './Interface';
 
 // Mesmo corte de 65% usado como markup mínimo em FormacaoPrecosTab.tsx
 // (MARKUP_MINIMO_CUSTO_PCT) — repetido aqui porque não é exportado de lá.
@@ -81,20 +85,28 @@ export function idFaixaMarkup(pct: number | null | undefined, cfg?: BandaMarkupC
 // (configuracoes_sistema, chaves markup_regua_<tipo>_ativa/min/bom). Tipo sem
 // configuração cai no padrão (65/80, régua ativa) — mesmo comportamento de
 // sempre, até o Rafael mexer em algum tipo.
-export async function carregarBandasMarkupPorTipo(): Promise<Record<string, BandaMarkupConfig>> {
-  const chaves = Object.values(SLUG_TIPO_NEGOCIO).flatMap(s => [`markup_regua_${s}_ativa`, `markup_regua_${s}_min`, `markup_regua_${s}_bom`]);
-  const { data } = await supabase.from('configuracoes_sistema').select('chave,valor').in('chave', chaves);
-  const mapa: Record<string, string> = Object.fromEntries((data || []).map((r: any) => [r.chave, r.valor]));
-  const resultado: Record<string, BandaMarkupConfig> = {};
-  for (const [tipo, slug] of Object.entries(SLUG_TIPO_NEGOCIO)) {
-    const ativaStr = mapa[`markup_regua_${slug}_ativa`];
-    resultado[tipo] = {
-      ativa: ativaStr === undefined ? true : ativaStr !== 'false',
-      min: Number(mapa[`markup_regua_${slug}_min`]) || BANDA_MARKUP_PADRAO.min,
-      bom: Number(mapa[`markup_regua_${slug}_bom`]) || BANDA_MARKUP_PADRAO.bom,
-    };
+// 12e74 (7.x, 09/11/2026): a leitura que falhava devolvia o padrão 65/80 como se fosse a régua de cada tipo — o tipo que o Admin deixou "sem régua fixa" (ou com o corte dele, como a
+// Pós-vendas, 100/150) passava a mostrar alerta vermelho e o corte errado, sem aviso nenhum. Agora a função diz que não conseguiu (`erro`), e quem chama mantém a régua que já tinha.
+export type ResultadoDasBandas = { bandas: Record<string, BandaMarkupConfig>; erro: string };
+export async function carregarBandasMarkupPorTipo(): Promise<ResultadoDasBandas> {
+  try {
+    const chaves = Object.values(SLUG_TIPO_NEGOCIO).flatMap(s => [`markup_regua_${s}_ativa`, `markup_regua_${s}_min`, `markup_regua_${s}_bom`]);
+    const { data, error } = await supabase.from('configuracoes_sistema').select('chave,valor').in('chave', chaves);
+    if (error) return { bandas: {}, erro: explicarErroDoBanco(error) };
+    const mapa: Record<string, string> = Object.fromEntries((data || []).map((r: any) => [r.chave, r.valor]));
+    const resultado: Record<string, BandaMarkupConfig> = {};
+    for (const [tipo, slug] of Object.entries(SLUG_TIPO_NEGOCIO)) {
+      const ativaStr = mapa[`markup_regua_${slug}_ativa`];
+      resultado[tipo] = {
+        ativa: ativaStr === undefined ? true : ativaStr !== 'false',
+        min: Number(mapa[`markup_regua_${slug}_min`]) || BANDA_MARKUP_PADRAO.min,
+        bom: Number(mapa[`markup_regua_${slug}_bom`]) || BANDA_MARKUP_PADRAO.bom,
+      };
+    }
+    return { bandas: resultado, erro: '' };
+  } catch (e) {
+    return { bandas: {}, erro: explicarErroDoBanco(e) };
   }
-  return resultado;
 }
 
 // Média de markup_pct dos itens em modo CUSTO de uma cotação (itens em modo
@@ -163,38 +175,89 @@ export function cotacaoAlvo(cotacoes: any[]): any | null {
 // `total` (opcional): valor total do preço formado (total de vendas) da formação-alvo do processo, calculado por quem chama (a conta da formação mora na tela de Formação de Preços); o kanban do Comercial soma por coluna.
 export type MarkupProcesso = { pct: number; min: number; max: number; total?: number | null };
 
-export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao', totalDe?: (cotacao: any) => number | null): Promise<Record<string, MarkupProcesso>> {
-  const { data: vinc } = await supabase
-    .from('cotacoes_precos_vinculos')
-    .select('cotacao_id, processo_id')
-    .eq('tipo', tipo);
-  if (!vinc || !vinc.length) return {};
+// 12e74 (7.x, 09/11/2026): três defeitos que passavam em silêncio.
+//  1) Nenhuma das três leituras olhava o erro: se uma falhava, o mapa saía vazio e TODO cartão aparecia "Sem cotação" (o selo sumia e o filtro por faixa dava lista errada), sem aviso.
+//     Agora a função diz que não conseguiu (`erro`) e quem chama mantém o mapa que já tinha na tela.
+//  2) As cotações eram lidas numa consulta só, com a lista de códigos no endereço. O endereço tem limite (cerca de 8 mil caracteres, uns 215 códigos) e o CRM já usava 109 em 09/11/2026,
+//     com um a mais a cada formação ligada: passado o limite a leitura falharia inteira. Agora vai em blocos de 80 códigos.
+//  3) Os vínculos eram lidos sem paginar (o banco corta a consulta em 1.000 linhas; hoje são 109 do CRM e 47 das Licitações): agora vão de 1.000 em 1.000, na ordem do código.
+export type ResultadoDoMarkup = { mapa: Record<string, MarkupProcesso>; erro: string };
+const COTACOES_POR_LEITURA = 80;
 
-  const cotacaoIds = [...new Set(vinc.map((v: any) => v.cotacao_id))];
-  const { data: cotacoes } = await supabase
-    .from('cotacoes_precos')
-    .select('id, itens, vencedora, versao, parametros_globais')
-    .in('id', cotacaoIds);
-  const cotacaoPorId: Record<string, any> = {};
-  (cotacoes || []).forEach((c: any) => { cotacaoPorId[c.id] = c; });
+export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao', totalDe?: (cotacao: any) => number | null): Promise<ResultadoDoMarkup> {
+  try {
+    const vinc = await lerPaginado(() => supabase
+      .from('cotacoes_precos_vinculos')
+      .select('cotacao_id, processo_id')
+      .eq('tipo', tipo)
+      .order('id'));
+    if (!vinc.length) return { mapa: {}, erro: '' };
 
-  const cotacoesPorProcesso: Record<string, any[]> = {};
-  vinc.forEach((v: any) => {
-    const c = cotacaoPorId[v.cotacao_id];
-    if (!c) return;
-    (cotacoesPorProcesso[v.processo_id] ||= []).push(c);
-  });
+    const cotacaoIds = [...new Set(vinc.map((v: any) => v.cotacao_id))];
+    const blocos: any[][] = [];
+    for (let i = 0; i < cotacaoIds.length; i += COTACOES_POR_LEITURA) blocos.push(cotacaoIds.slice(i, i + COTACOES_POR_LEITURA));
+    const respostas = await Promise.all(blocos.map(ids => supabase
+      .from('cotacoes_precos')
+      .select('id, itens, vencedora, versao, parametros_globais')
+      .in('id', ids)));
+    const falhou = respostas.find(r => r.error);
+    if (falhou) return { mapa: {}, erro: explicarErroDoBanco(falhou.error) };
+    const cotacaoPorId: Record<string, any> = {};
+    respostas.forEach(r => (r.data || []).forEach((c: any) => { cotacaoPorId[c.id] = c; }));
 
-  const resultado: Record<string, MarkupProcesso> = {};
-  Object.entries(cotacoesPorProcesso).forEach(([processoId, cots]) => {
-    const alvo = cotacaoAlvo(cots);
-    if (!alvo) return;
-    const pct = markupPonderadoItens(alvo.itens);
-    if (pct === null) return;
-    const faixa = faixaMarkupItens(alvo.itens);
-    resultado[processoId] = { pct, min: faixa?.min ?? pct, max: faixa?.max ?? pct, ...(totalDe ? { total: totalDe(alvo) } : {}) };
-  });
-  return resultado;
+    const cotacoesPorProcesso: Record<string, any[]> = {};
+    vinc.forEach((v: any) => {
+      const c = cotacaoPorId[v.cotacao_id];
+      if (!c) return;
+      (cotacoesPorProcesso[v.processo_id] ||= []).push(c);
+    });
+
+    const resultado: Record<string, MarkupProcesso> = {};
+    Object.entries(cotacoesPorProcesso).forEach(([processoId, cots]) => {
+      const alvo = cotacaoAlvo(cots);
+      if (!alvo) return;
+      const pct = markupPonderadoItens(alvo.itens);
+      if (pct === null) return;
+      const faixa = faixaMarkupItens(alvo.itens);
+      resultado[processoId] = { pct, min: faixa?.min ?? pct, max: faixa?.max ?? pct, ...(totalDe ? { total: totalDe(alvo) } : {}) };
+    });
+    return { mapa: resultado, erro: '' };
+  } catch (e) {
+    return { mapa: {}, erro: explicarErroDoBanco(e) };
+  }
+}
+
+// Estado do termômetro de uma tela (CRM, Licitações): o mapa processo → markup e, no CRM, a régua de cada tipo de negócio. Cada tela tinha o seu par de useState e um `.then(set…)` solto,
+// sem tratar erro (7.x de 09/11/2026, ver acima); agora é um gancho só:
+//  • leitura que falha NÃO apaga o que já estava na tela — o `erro` sobe para a faixa vermelha (FaixaDoMarkup) e o mapa e a régua da última leitura boa ficam;
+//  • vale sempre a leitura MAIS NOVA: uma resposta antiga e lenta, que chega depois da nova, é descartada (a tela recarrega várias vezes e as respostas não chegam na ordem em que saíram).
+export function useMarkupDaTela(tipo: 'crm' | 'licitacao', totalDe?: (cotacao: any) => number | null, comBandas = false) {
+  const [markup, setMarkup] = useState<Record<string, MarkupProcesso>>({});
+  const [bandas, setBandas] = useState<Record<string, BandaMarkupConfig>>({});
+  const [erro, setErro] = useState('');
+  const ultimaLeitura = useRef(0);
+  const recarregar = useCallback(async () => {
+    const minha = ++ultimaLeitura.current;
+    const [m, b] = await Promise.all([
+      carregarMarkupPorProcesso(tipo, totalDe),
+      comBandas ? carregarBandasMarkupPorTipo() : Promise.resolve<ResultadoDasBandas>({ bandas: {}, erro: '' }),
+    ]);
+    if (minha !== ultimaLeitura.current) return;
+    if (!m.erro) setMarkup(m.mapa);
+    if (comBandas && !b.erro) setBandas(b.bandas);
+    setErro(m.erro || b.erro);
+  }, [tipo, totalDe, comBandas]);
+  return { markup, bandas, erro, recarregar };
+}
+
+// A faixa vermelha da leitura que falhou (alerta é vermelho, regra do usuário de 27/10/2026). Não aparece quando não há erro. `temSelos` = a tela ainda tem o mapa da última leitura boa.
+export function FaixaDoMarkup({ erro, temSelos, onTentar }: { erro: string; temSelos: boolean; onTentar: () => void }) {
+  if (!erro) return null;
+  return (
+    <Faixa tom="erro" acao={<Botao pequeno onClick={onTentar}>Tentar de novo</Botao>}>
+      Não foi possível ler os dados do termômetro de markup ({erro}). Os selos de markup e o filtro por faixa podem estar incompletos{temSelos ? '; o que aparece é da última leitura que deu certo' : ''}.
+    </Faixa>
+  );
 }
 
 // ── Ícone SVG de termômetro — tubo + bulbo, preenchido até a % e colorido
@@ -211,7 +274,7 @@ export function Termometro({ pct, size = 14, bandaCfg }: { pct: number | null | 
   const yFill = tuboBase - alturaFill;
   const escala = size / H;
   return (
-    <svg width={W * escala} height={H * escala} viewBox={`0 0 ${W} ${H}`} style={{ flexShrink: 0, display: 'block' }}>
+    <svg width={W * escala} height={H * escala} viewBox={`0 0 ${W} ${H}`} className="acn-mk-termo">
       {/* tubo e bulbo vazios (fundo) */}
       <rect x={4.5} y={tuboTopo} width={5} height={19} rx={2.5} fill="#e2e8f0" stroke={banda.borda} strokeWidth={0.6} />
       <circle cx={7} cy={24} r={5.5} fill="#e2e8f0" stroke={banda.borda} strokeWidth={0.6} />
@@ -224,8 +287,10 @@ export function Termometro({ pct, size = 14, bandaCfg }: { pct: number | null | 
 }
 
 // ── Badge pequeno pro card individual (Kanban CRM / LicitCard) ──
-export function MarkupBadge({ pct, min, max, discreto = false, bandaCfg }:
-  { pct: number | null | undefined; min?: number; max?: number; discreto?: boolean; bandaCfg?: BandaMarkupConfig }) {
+// 12e74b (10/11/2026): a versão grande do selo (a que vinha sem `discreto`) foi apagada, com a autorização do usuário: nenhuma tela a usava (o CRM e as Licitações só usam a discreta), ela não guardava
+// regra nenhuma (as cores e os nomes das faixas vêm de `corMarkup`, a mesma conta da discreta) e era o único estilo solto do arquivo que dependia do `TonsVisuais`.
+export function MarkupBadge({ pct, min, max, bandaCfg }:
+  { pct: number | null | undefined; min?: number; max?: number; bandaCfg?: BandaMarkupConfig }) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return null;
   const banda = corMarkup(pct, bandaCfg);
   // A faixa min–max só aparece quando os itens NÃO têm todos o mesmo markup:
@@ -236,23 +301,11 @@ export function MarkupBadge({ pct, min, max, discreto = false, bandaCfg }:
   const titulo = `Markup da cotação: ${banda.label}. Ponderado pelo custo — cada item pesa o quanto custa.`
     + (temDispersao ? `\nItens de ${faixaTxt} — vale olhar item a item.` : '');
 
-  if (discreto) return (
-    <span title={titulo} className="acn-num"
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 500, color: banda.cor }}>
-      <Termometro pct={pct} size={13} bandaCfg={bandaCfg} />
-      {pct.toFixed(1)}%
-      {temDispersao && <span style={{ fontSize: 9, opacity: .75, fontWeight: 400 }}>({faixaTxt})</span>}
-    </span>
-  );
   return (
-    <span title={titulo} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      fontSize: 9, fontWeight: 700, padding: '1px 5px 1px 3px', borderRadius: 3,
-      background: banda.bg, color: banda.cor, border: `1px solid ${banda.borda}`,
-    }}>
+    <span title={titulo} className="acn-num acn-mk-selo-d" style={{ color: banda.cor }}>
       <Termometro pct={pct} size={13} bandaCfg={bandaCfg} />
       {pct.toFixed(1)}%
-      {temDispersao && <span style={{ opacity: .75, fontWeight: 400 }}>({faixaTxt})</span>}
+      {temDispersao && <span className="acn-mk-faixa-d">({faixaTxt})</span>}
     </span>
   );
 }
@@ -270,21 +323,21 @@ export function MarkupBarraDistribuicao({ valores }: { valores: (number | null |
   const total = validos.length;
 
   return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 9, fontWeight: 800, color: '#1e293b', marginBottom: 4 }}>
-        🌡️ MARKUP DA CARTEIRA <span style={{ fontWeight:600, color:'#94a3b8' }}>({total} com cotação)</span>
+    <div className="acn-mk-barra">
+      <div className="acn-mk-barra-tit">
+        🌡️ MARKUP DA CARTEIRA <span className="acn-mk-barra-n">({total} com cotação)</span>
       </div>
-      <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+      <div className="acn-mk-trilho">
         {contagem.map(({ banda, qtd }) => (
           <div key={banda.id} title={`${banda.label}: ${qtd}`}
             style={{ width: `${(qtd / total) * 100}%`, background: banda.cor }} />
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 5 }}>
+      <div className="acn-mk-legenda">
         {contagem.map(({ banda, qtd }) => (
-          <div key={banda.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, color: '#475569' }}>
-            <span style={{ width: 8, height: 8, borderRadius: 2, background: banda.cor, display: 'inline-block' }} />
-            {banda.label}: <strong style={{ color: '#1e293b' }}>{qtd}</strong> ({((qtd / total) * 100).toFixed(0)}%)
+          <div key={banda.id} className="acn-mk-leg-item">
+            <span className="acn-mk-amostra" style={{ background: banda.cor }} />
+            {banda.label}: <strong className="acn-mk-leg-n">{qtd}</strong> ({((qtd / total) * 100).toFixed(0)}%)
           </div>
         ))}
       </div>

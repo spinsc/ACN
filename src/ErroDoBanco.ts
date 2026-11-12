@@ -10,6 +10,8 @@ export function explicarErroDoBanco(erro: any): string {
 
   if (codigo === '23505' || /duplicate key|already exists/i.test(tudo)) {
     if (/numero_os/i.test(tudo)) return 'Já existe uma OS com esse número. Confira o número e tente de novo.';
+    // 11/11/2026: o número de uma OP excluída fica reservado (decidido com o usuário); a conferência da tela não enxerga a excluída, então quem avisa é o banco
+    if (/oples_opl_key/i.test(tudo)) return 'Esse número de OP já está em uso, talvez por uma OP excluída (o número de uma OP excluída não pode ser usado de novo). Use outro número.';
     return 'Já existe um registro com esse mesmo número ou valor. Confira e use outro.';
   }
   if (codigo === '42501' || /row-level security|permission denied|not allowed/i.test(tudo)) return 'Você não tem permissão para fazer isso. Se acha que deveria ter, avise a TI.';

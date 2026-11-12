@@ -123,6 +123,8 @@ export default function EngenhariaTab({ currentUser }) {
   useEffect(() => {
     const tentarAbrir = () => {
       const pend = (window as any).__acnDeepLink;
+      // 12/11/2026: menção na área livre de uma demanda do Desenvolvimento — só garante a sub-aba; quem abre a demanda e limpa o pedido é a própria sub-aba
+      if (pend?.contexto === 'desenvolvimento') { setAbaEng('desenvolvimento'); return; }
       if (!pend || pend.contexto !== 'hora_extra') return;
       (window as any).__acnDeepLink = null;
       setHorasAbaInicial('extras');

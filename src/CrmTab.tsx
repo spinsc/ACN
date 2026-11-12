@@ -34,7 +34,7 @@ import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
-import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
+import { useMarkupDaTela, FaixaDoMarkup, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import Icone from './Icone';
@@ -53,6 +53,8 @@ import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from 
 import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { podeExcluirCardComercial, bloqueiosDeExclusao } from './ExclusaoDeCard';
+import { lerOpsExcluidas } from './ExclusaoDeOp';
+import { QuadroOpsExcluidas } from './OpsExcluidas';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { camposQueFaltam, listaEmTexto } from './OpObrigatorios';
@@ -416,11 +418,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
   const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
-  // { pct ponderado pelo custo, min, max } por processo — ver MarkupTermometro
-  const [markupPorOp, setMarkupPorOp]       = useState<Record<string, any>>({});
-  // Cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados
-  // em Admin → Faixas de Markup — ver MarkupTermometro.carregarBandasMarkupPorTipo
-  const [bandasMarkup, setBandasMarkup]     = useState<Record<string, any>>({});
+  // { pct ponderado pelo custo, min, max } por processo e os cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados em Admin → Faixas de Markup.
+  // 12e74 (09/11/2026): o gancho do termômetro guarda os dois, mantém a última leitura boa quando uma falha e diz o erro (faixa vermelha) — ver MarkupTermometro
+  const { markup: markupPorOp, bandas: bandasMarkup, erro: erroMarkup, recarregar: recarregarMarkup } = useMarkupDaTela('crm', totalDaFormacao, true);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
   // ── andamento ──
@@ -487,6 +487,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // 7.62 (07/10/2026): leitura que falha não pode parecer "tela vazia" — cada uma guarda o motivo e a tela mostra uma faixa com "Tentar de novo"
   const [erroCarga, setErroCarga]           = useState('');   // o quadro (estágios, oportunidades, checklist, vendas)
   const [erroOpls, setErroOpls]             = useState('');   // a lista "OPs em aberto"
+  // OPs excluídas por Admin/gerente (11/11/2026): só aparecem aqui, marcadas, em quadro à parte abaixo da lista (a função do banco confere a aba CRM/Comercial)
+  const [oplsExcluidas, setOplsExcluidas]    = useState<any[]>([]);
+  const [erroExcluidas, setErroExcluidas]    = useState('');
   const [erroAbrir, setErroAbrir]           = useState('');   // andamento/documentos do card aberto
   const [erroNota, setErroNota]             = useState('');   // a nota livre do card aberto — sem lê-la, salvar apagaria a que existe
   const [erroAndamentoModal, setErroAndamentoModal] = useState('');   // a janela "Atualizar andamento"
@@ -555,7 +558,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
     const { data: oplsDosCards, error: errOplsCards } = await supabase
       .from('oples').select('id,opl,status_geral,tipo_projeto,fluxo_entrega,itens_vendidos,envio_partes,crm_oportunidade_id,frete_responsavel,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
-    if (errOplsCards) { carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp); carregarBandasMarkupPorTipo().then(setBandasMarkup); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
+    if (errOplsCards) { recarregarMarkup(); if (!silent) setLoading(false); return; }   // mantém o selo de OP que já estava nos cards
     const porCard: Record<string, string[]> = {};
     (oplsDosCards || []).forEach((o: any) => {
       const k = String(o.crm_oportunidade_id);
@@ -579,8 +582,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       setOplsInfoPorCard(info);
     }).catch(e => console.error('Selo "onde está" dos cards:', e));
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
-    carregarMarkupPorProcesso('crm', totalDaFormacao).then(setMarkupPorOp);
-    carregarBandasMarkupPorTipo().then(setBandasMarkup);
+    recarregarMarkup();
     if (!silent) setLoading(false);
   }, []);
 
@@ -1530,6 +1532,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // 7.62: a leitura que falhava virava "Nenhuma OP em aberto" — e sumia com a lista que já estava na tela
     if (errLista) { setErroOpls(errLista.message); setOplsLoading(false); return; }
     setErroOpls('');
+    lerOpsExcluidas().then(r => { setOplsExcluidas(r.lista); setErroExcluidas(r.erro || ''); });   // a leitura das excluídas falhar não esconde a lista de abertas
     const lista = data || [];
     setOplsEmAberto(lista);
     setDevolvidasComercial(lista.filter((o: any) => o.status_geral === 'Devolvida Comercial').length);
@@ -1569,6 +1572,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   useEffect(() => {
     if (abaInterna === 'opls') fetchOplsEmAberto();
+  }, [abaInterna]);
+  // uma OP excluída pela janela da OP (Mais ações) some da lista na hora
+  useEffect(() => {
+    const aoExcluir = () => { if (abaInterna === 'opls') fetchOplsEmAberto(); };
+    window.addEventListener('acn:op-excluida', aoExcluir);
+    return () => window.removeEventListener('acn:op-excluida', aoExcluir);
   }, [abaInterna]);
 
   // R3: o contador de devolvidas precisa existir antes de abrir a aba "OPs em aberto" (e depois de uma OP automática nascer devolvida)
@@ -2527,7 +2536,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           <span className="dir-auto acn-crm-dir">
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
-                max={markupPorOp[op.id].max} discreto
+                max={markupPorOp[op.id].max}
                 bandaCfg={op.tipo_negocio ? bandasMarkup[op.tipo_negocio] : undefined} />
             )}
             {op.responsavel_nome && (
@@ -3185,6 +3194,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       {erroCarga && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>Não foi possível ler o quadro do CRM ({erroCarga}). Isso não quer dizer que não haja oportunidade{ops.length ? '; o que aparece é da última leitura que deu certo' : ''}.</Faixa>
       )}
+      <FaixaDoMarkup erro={erroMarkup} temSelos={Object.keys(markupPorOp).length > 0} onTentar={recarregarMarkup} />
 
       {/* ── Seção Contatos ── */}
       {secaoCrm === 'contatos' && (
@@ -3828,6 +3838,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 </table>
               </div>
             )}
+
+            {(() => {
+              const exc = oplsExcluidas.filter((o: any) => (oplsFiltro === 'crm' ? !!o.crm_oportunidade_id : oplsFiltro === 'sem_crm' ? !o.crm_oportunidade_id : true)
+                && (!filtResp || o.responsavel_comercial === filtResp) && combinaBusca([o.opl, o.cliente_nome, o.modelo], busca));
+              return <QuadroOpsExcluidas lista={exc} erro={erroExcluidas} onTentarDeNovo={fetchOplsEmAberto} />;
+            })()}
 
             {resumoLoteBase && (() => {
               const irmaosDoLote = (resumoLoteCompleto && resumoLoteCompleto.length) ? resumoLoteCompleto : oplsEmAberto.filter((o: any) => (o.opl || '').replace(/\/\d+$/, '') === resumoLoteBase);

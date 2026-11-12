@@ -22,8 +22,10 @@ import { MembrosResumo, MembrosDaDemanda, GrupoDaDemanda, DescricoesDosArquivos,
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
 // informação a mais. Compras abre o apontamento de centro de custo. Para
 // acrescentar campo de outro setor, inclua aqui e trate no formulário/detalhe.
-const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean; valorItens?: boolean; pintura?: boolean }> = {
+const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean; valorItens?: boolean; pintura?: boolean; pagamento?: boolean }> = {
   Compras: { centroCusto: true, valorItens: true },
+  // Financeiro (05/11/2026): a demanda é um pedido de pagamento a terceiro (favorecido, valor, vencimento), ligável a uma OS pelos vínculos — ver PagamentoDeTerceiro.tsx
+  Financeiro: { pagamento: true },
   // Serralheria: a peça pode precisar de pintura, que é serviço de terceiro —
   // ver PinturaSerralheria.tsx (o pedido ao Compras nasce ao concluir a peça).
   Serralheria: { pintura: true },
@@ -37,6 +39,7 @@ const camposDoSetor = (setor: string) => CAMPOS_POR_SETOR[String(setor || '').tr
 const abaDoSetor = (setor: string) => normalizarBusca(String(setor || '').trim()) || undefined;
 import { VinculoPicker, abrirVinculo, TIPO_LABEL, TIPOS_PADRAO } from './VinculoPicker';
 import { FormacaoDaDemanda } from './FormacaoDaDemanda';
+import { PagamentoNaNovaDemanda, PagamentoDaDemanda, pagamentoVazio, erroDoPagamento, pagamentoParaGravar, resumoDoPagamento } from './PagamentoDeTerceiro';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -959,6 +962,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               onMudou={async () => { await reload(); onRefresh(); }} />
           )}
 
+          {/* ── Pagamento a terceiro (05/11/2026): só a demanda do Financeiro; corrige na hora, com o rastro no Histórico ── */}
+          {!editando && camposSetor.pagamento && (
+            <PagamentoDaDemanda demanda={d} currentUser={currentUser} podeMexer={!ENCERRADA(d.status)} onMudou={async () => { await reload(); onRefresh(); }} />
+          )}
+
           {/* ── Veículo da frota (04/11/2026): a demanda que prende o carro reserva ele aqui; aparece na Agenda das Viagens ── */}
           {!editando && <VeiculoDaDemanda demanda={d} currentUser={currentUser} podeMexer={!ENCERRADA(d.status)} />}
 
@@ -1245,6 +1253,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
 }) {
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
   const [pintura, setPintura] = useState({ pintura: false, pintura_tipo: '' });
+  const [pagamento, setPagamento] = useState<any>(() => pagamentoVazio());   // 05/11/2026: pedido de pagamento a terceiro, só para a demanda do Financeiro
   const [veiculo, setVeiculo] = useState<any>(() => veiculoVazio(currentUser));   // 04/11/2026: a demanda que prende o carro da frota reserva o veículo já na criação
   const [setorAlvo, setSetorAlvo] = useState(setor || setoresDestino?.[0] || '');
   // 08/10/2026 (pedidos do usuário): (1) vários setores = demanda composta, com uma PARTE por setor; (2) colaboradores envolvidos, como no Trello; (3) descrição de cada anexo.
@@ -1274,6 +1283,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [centroCustoId, setCentroCustoId] = useState<string | null>(null);
   const [centros, setCentros] = useState<any[]>([]);
   const campos = camposDoSetor(setorAlvo);
+  // 05/11/2026: na demanda para vários setores o formulário olhava só o primeiro marcado (`setorAlvo`); com Comercial + Financeiro o quadro do pagamento não aparecia e a parte do Financeiro
+  // seria gravada com o pedido vazio. O pagamento vale para QUALQUER setor marcado que o peça, e é validado uma vez só.
+  const pedePagamento = setoresAlvo.some((s: string) => camposDoSetor(s).pagamento);
   useEffect(() => { if (campos.centroCusto && !centros.length) fetchCentrosCusto().then(setCentros); }, [campos.centroCusto]);
   const nomeCentro = (id: string | null) => {
     const c = centros.find((x: any) => x.id === id);
@@ -1320,6 +1332,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     }
     if (!form.titulo.trim()) { alert('Informe o título!'); return; }
     { const erroVeiculo = erroDoVeiculoDaDemanda(veiculo); if (erroVeiculo) { alert('Veículo da frota: ' + erroVeiculo); return; } }
+    if (pedePagamento) { const erroPagamento = erroDoPagamento(pagamento); if (erroPagamento) { alert('Pagamento a terceiro: ' + erroPagamento + '.'); return; } }
     if (qtdEtapas > 1) {
       for (let i = 0; i < etapas.length; i++) {
         if (!etapas[i].responsavel_nome.trim()) { alert(`Informe o responsável da Etapa ${i+1}!`); return; }
@@ -1371,6 +1384,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
         centro_custo_id: cs.centroCusto ? centroCustoId : null, centro_custo: cs.centroCusto ? nomeCentro(centroCustoId) : null,
         pintura: cs.pintura ? !!pintura.pintura : false,
         pintura_tipo: cs.pintura && pintura.pintura ? (pintura.pintura_tipo || '').trim() || null : null,
+        ...(cs.pagamento ? { pagamento_terceiro: pagamentoParaGravar(pagamento) } : {}),   // a coluna só vai na demanda do Financeiro
       };
       if (composta) { parte.etapas = []; parte.responsavel_nome = null; parte.responsavel_email = null; parte.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null; }
       const { data: n, error: erroParte } = await supabase.from('demandas_avulsas').insert([parte]).select('id,setor').single();
@@ -1506,6 +1520,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           {/* Colaboradores envolvidos (como os membros de um card do Trello): aparecem na demanda, são avisados e a veem em "Minhas solicitações" */}
           <ParticipantesPicker value={membros} onChange={setMembros} donoEmail={currentUser?.email}
             rotulo="Colaboradores envolvidos (opcional — são avisados e veem a demanda)" />
+
+          {/* Pagamento a terceiro (05/11/2026): a demanda do Financeiro leva o favorecido, o valor e o vencimento; a OS se liga nos vínculos abaixo */}
+          {pedePagamento && <PagamentoNaNovaDemanda valor={pagamento} onChange={setPagamento} />}
 
           {/* Veículo da frota (04/11/2026): a demanda que prende o carro reserva ele aqui */}
           {setorAlvo !== 'Compras' && <VeiculoNaNovaDemanda valor={veiculo} onChange={setVeiculo} />}
@@ -1662,6 +1679,7 @@ function DemandaCard({ d, onClick, grupo, agora }: any) {
           </div>
           <div className="acn-dav-card-9">{d.titulo}</div>
           {d.descricao && <div className="acn-dav-card-10">{d.descricao}</div>}
+          {d.pagamento_terceiro && <div className="acn-dav-card-10" data-teste="cartao-pagamento">💰 {resumoDoPagamento(d.pagamento_terceiro)}</div>}
 
           {/* Barra de progresso (multi-etapa) */}
           {temEtapas && (

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
-import { Faixa, Botao, Chips } from './Interface';
+import { Faixa, Botao, Chips, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiCalendarMonthOutline, mdiAccountGroupOutline, mdiAccountOutline } from '@mdi/js';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -27,9 +27,36 @@ const SETORES = [
   { id: 'sac',         label: 'SAC',         familia: 'erro' },
 ];
 const SETOR_FAMILIA: Record<string, string> = SETORES.reduce((a, s) => ({ ...a, [s.id]: s.familia }), {} as any);
-const FAMILIA_CRM = 'atencao';
 // 07/10/2026: o calendário também mostra as tarefas (Financeiro, Engenharia) e os agendamentos de manutenção em que a pessoa é dona ou participante — leitura só (editam nas suas telas).
-const FAMILIA_FIN = 'neutro', FAMILIA_ENG_TAREFA = 'ok', FAMILIA_AGEND = 'atencao';
+// 12/11/2026 (pedido do usuário, PLANOS CONCLUIDOS/PLANO_CALENDARIO.md): TODA data do sistema chega aqui pela função do banco `calendario_eventos` (prazos de demanda, retorno de cliente,
+// limites de licitação, chegada de carro, entrega de compra e de OP...), a mesma que a rotina de alertas lê, para a tela e o aviso não discordarem.
+// Cor por fonte (as já existentes mantêm a cor que tinham) e o setor do filtro em que cada fonte aparece; a data que vence hoje ou já passou fica vermelha.
+const FAMILIA_POR_FONTE: Record<string, string> = {
+  crm_retorno: 'atencao', telecom_retorno: 'atencao', crm_limite: 'atencao', tarefa_financeiro: 'neutro', tarefa_engenharia: 'ok', desenvolvimento_etapa: 'info', agendamento: 'atencao',
+  licitacao: 'marca', demanda_avulsa: 'info', demanda_etapa: 'info', frete_previsto: 'neutro', viagem_saida: 'neutro', frota_reserva: 'neutro', sac_prazo: 'info', sac_chegada_veiculo: 'atencao', op_chegada_veiculo: 'atencao', op_entrega: 'neutro', vistoria_retorno: 'atencao', compra_entrega: 'atencao',
+};
+const SETOR_POR_FONTE: Record<string, string> = {
+  crm_retorno: 'comercial', telecom_retorno: 'comercial', crm_limite: 'comercial', op_entrega: 'comercial', licitacao: 'licitacoes', tarefa_engenharia: 'engenharia', desenvolvimento_etapa: 'engenharia', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
+};   // as demais (demanda, compra, chegada de carro, vistoria, financeiro, manutenção) entram em "Geral"
+// aba do sistema para onde o botão "Abrir" leva (a mesma troca de aba das Menções; só troca se a pessoa tem a aba)
+const ABA_POR_FONTE: Record<string, string> = {
+  crm_retorno: 'crm', telecom_retorno: 'telecom', crm_limite: 'crm', op_entrega: 'crm', licitacao: 'licitacoes', demanda_avulsa: 'ajustes', demanda_etapa: 'ajustes', frete_previsto: 'logistica', viagem_saida: 'viagens', frota_reserva: 'viagens', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
+  op_chegada_veiculo: 'almoxarifado', vistoria_retorno: 'vistorias', compra_entrega: 'compras', tarefa_financeiro: 'financeiro', tarefa_engenharia: 'engenharia', desenvolvimento_etapa: 'engenharia', agendamento: 'producao',
+};
+const ROTULO_FONTE: Record<string, string> = {
+  crm_retorno: 'Contato com cliente', telecom_retorno: 'Contato com cliente (Telecom)', crm_limite: 'Prazo do CRM', licitacao: 'Licitação', demanda_avulsa: 'Prazo de demanda', demanda_etapa: 'Prazo de etapa de demanda', frete_previsto: 'Entrega prevista do frete', viagem_saida: 'Saída de viagem', frota_reserva: 'Veículo reservado', sac_prazo: 'Prazo da OS', sac_chegada_veiculo: 'Chegada do veículo (OS)',
+  op_chegada_veiculo: 'Chegada do veículo', op_entrega: 'Entrega ao cliente', vistoria_retorno: 'Retorno da vistoria', compra_entrega: 'Recebimento de material',
+  tarefa_financeiro: 'Tarefa do Financeiro', tarefa_engenharia: 'Tarefa da Engenharia', desenvolvimento_etapa: 'Etapa do Desenvolvimento', agendamento: 'Manutenção agendada', compromisso: 'Compromisso',
+};
+
+// Vence hoje / atrasado (só para o que é prazo e ainda não foi resolvido): o mesmo critério da rotina de alertas
+const diasEntre = (de: string, ate: string) => Math.round((Date.UTC(+ate.slice(0, 4), +ate.slice(5, 7) - 1, +ate.slice(8, 10)) - Date.UTC(+de.slice(0, 4), +de.slice(5, 7) - 1, +de.slice(8, 10))) / 86400000);
+function situacaoDoPrazo(dia: string, hoje: string, alerta: boolean, concluido: boolean): { tipo: 'hoje' | 'atrasado'; dias: number; rotulo: string } | null {
+  if (!alerta || concluido) return null;
+  if (dia === hoje) return { tipo: 'hoje', dias: 0, rotulo: 'Vence hoje' };
+  if (dia < hoje) { const n = diasEntre(dia, hoje); return { tipo: 'atrasado', dias: n, rotulo: 'Atrasado há ' + n + (n === 1 ? ' dia' : ' dias') }; }
+  return null;
+}
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -54,6 +81,11 @@ function getWeekDays(ref: Date) {
   const start = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - ref.getDay());
   return Array.from({ length: 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
 }
+
+// 10/11/2026 (pedido do usuário): o calendário diz quem criou cada compromisso — quem recebe um compromisso criado por outra pessoa não tinha como saber de quem veio.
+const nomeDoCriador = (c: any, usuario: any) =>
+  (c.usuario_email && usuario?.email && c.usuario_email === usuario.email) ? 'você' : (c.usuario_nome || c.usuario_email || '—');
+const dicaDoEvento = (ev: any, usuario: any) => ev.tipo === 'compromisso' ? ev.titulo + ' — criado por ' + nomeDoCriador(ev.raw, usuario) : ev.titulo;
 
 const fmtDiaLongo = (d: Date) => d.toLocaleDateString('pt-BR', {
   weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
@@ -165,12 +197,16 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 )}
                 <div className="acn-ajuda">
                   {ev.tipo === 'compromisso'
-                    ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 {ev.raw.usuario_nome || ev.raw.usuario_email}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
-                    : ev.tipo === 'crm'
-                      ? <>📇 Contato CRM · 👤 {ev.raw.responsavel_nome || '—'} {ev.raw.nome_contato ? `· ${ev.raw.nome_contato}` : ''}{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
-                      : ev.detalhe}
+                    ? <>🏷️ {SETORES.find(s => s.id === ev.raw.setor)?.label || ev.raw.setor} · 👤 <strong>Criado por {nomeDoCriador(ev.raw, currentUser)}</strong>{participantesDe(ev.raw).length > 0 && <> · <ListaParticipantes item={ev.raw} usuario={currentUser} /></>}</>
+                    : <>🗓️ {ROTULO_FONTE[ev.tipo] || ev.tipo}{ev.detalhe ? ' · ' + ev.detalhe : ''}{ev.responsavel ? ' · 👤 ' + ev.responsavel : ''}</>}
                 </div>
+                {ev.situacao && <div><Selo familia="erro" title={ev.situacao.rotulo}>{ev.situacao.rotulo}</Selo></div>}
               </div>
+              {ev.tipo !== 'compromisso' && ABA_POR_FONTE[ev.tipo] && (
+                <div className="acn-acoes-linha">
+                  <Botao pequeno onClick={() => window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: ABA_POR_FONTE[ev.tipo] } }))} title="Abrir a tela de origem desta data">Abrir</Botao>
+                </div>
+              )}
               {ev.tipo === 'compromisso' && (ehDonoDoItem(ev.raw, currentUser) || ehAdminOuGerente(currentUser)) && (
                 <div className="acn-acoes-linha">
                   <Botao pequeno onClick={() => iniciarEdicao(ev)} title="Editar">✎</Botao>
@@ -223,16 +259,12 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
   const [cursor, setCursor]       = useState(new Date());
   const [setorFiltro, setSetorFiltro] = useState('todos');
   const [verTodos, setVerTodos]   = useState(false);
-  const [compromissos, setCompromissos] = useState<any[]>([]);
-  const [contatosCrm, setContatosCrm]   = useState<any[]>([]);
-  const [tarefasFin, setTarefasFin]       = useState<any[]>([]);
-  const [tarefasEng, setTarefasEng]       = useState<any[]>([]);
-  const [agendManut, setAgendManut]       = useState<any[]>([]);
+  const [linhas, setLinhas] = useState<any[]>([]);   // as datas do período, vindas da função do banco `calendario_eventos` (12/11/2026)
   const [loading, setLoading]     = useState(true);
   const [diaAberto, setDiaAberto] = useState<{ data: Date; hora?: string } | null>(null);
 
-  // O que a tela não conseguiu ler (Etapa 7.39, 04/10/2026): mensagem do banco por lista; vazio = leu.
-  const [falhas, setFalhas] = useState({ comp: '', crm: '', fin: '', eng: '', agm: '' });
+  // O que a tela não conseguiu ler (Etapa 7.39, 04/10/2026): mensagem do banco; vazio = leu.
+  const [falha, setFalha] = useState('');
 
   // Compromissos de todos: só gerentes; os demais veem só os próprios.
   // Regra do usuário em 04/10/2026 (Etapa 7.39): Admin e qualquer perfil "Gerente …". A lista antiga tinha só 'Admin',
@@ -246,109 +278,50 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const inicioISO = new Date(rangeInicio.getFullYear(), rangeInicio.getMonth(), rangeInicio.getDate(), 0, 0, 0).toISOString();
-    const fimISO     = new Date(rangeFim.getFullYear(), rangeFim.getMonth(), rangeFim.getDate(), 23, 59, 59).toISOString();
-
-    let qComp = supabase.from('agenda_compromissos').select('*')
-      .gte('data_hora', inicioISO).lte('data_hora', fimISO)
-      .order('data_hora', { ascending: true });
-    // meus = os que criei OU em que fui adicionado como participante (07/10/2026)
-    if (!isGerente || !verTodos) qComp = qComp.or(filtroDonoOuParticipante('usuario_email', currentUser?.email));
-    if (setorFiltro !== 'todos') qComp = qComp.eq('setor', setorFiltro);
-
-    let qCrm = supabase.from('crm_oportunidades_basico')
-      .select('id,titulo,nome_contato,prox_contato,hora_prox_contato,responsavel_nome')
-      .eq('funil', 'venda_direta')
-      .not('prox_contato', 'is', null)
-      .gte('prox_contato', isoDate(rangeInicio)).lte('prox_contato', isoDate(rangeFim))
-      .order('prox_contato', { ascending: true });
-    // meus = os que sou responsável OU em que fui adicionado como participante (07/10/2026); o nome vai entre aspas para vírgula/ponto no nome não quebrar o filtro
-    const comoParticipante = 'participantes.cs.' + JSON.stringify([{ email: currentUser?.email }]);
-    const meuNomeFiltro = '"' + String(currentUser?.nome || '').replace(/"/g, '') + '"';
-    if (!isGerente || !verTodos) qCrm = qCrm.or('responsavel_nome.eq.' + meuNomeFiltro + ',' + comoParticipante);
-    // Contatos de CRM só entram na visão "Todos os setores" ou "Comercial"
-    const incluirCrm = setorFiltro === 'todos' || setorFiltro === 'comercial';
-
-    // tarefas do Financeiro (vencimento), tarefas da Engenharia (início, ou criação se ainda não começou) e agendamentos de manutenção (data do agendamento) — só na visão "Todos os setores"
-    // (Engenharia também no filtro Engenharia); as concluídas não entram
-    const todos = setorFiltro === 'todos';
-    let qFin = supabase.from('financeiro_tarefas').select('id,titulo,data_vencimento,etapa,responsavel_nome,criado_por,participantes')
-      .not('data_vencimento', 'is', null).gte('data_vencimento', isoDate(rangeInicio)).lte('data_vencimento', isoDate(rangeFim)).neq('etapa', 'Concluído');
-    if (!isGerente || !verTodos) qFin = qFin.or('responsavel_nome.eq.' + meuNomeFiltro + ',' + comoParticipante);
-    let qEng = supabase.from('engenharia_horas_tarefas').select('id,titulo,status,responsavel_nome,criado_por,criado_em,data_inicio,numero_opl,participantes')
-      .neq('status', 'concluida').gte('criado_em', new Date(rangeInicio.getFullYear(), rangeInicio.getMonth() - 2, 1).toISOString());
-    if (!isGerente || !verTodos) qEng = qEng.or('responsavel_nome.eq.' + meuNomeFiltro + ',' + comoParticipante);
-    let qAgm = supabase.from('agendamentos_manutencao').select('id,numero_opl,cliente_nome,modelo,data_agendamento,periodo,agendado_por,participantes')
-      .gte('data_agendamento', isoDate(rangeInicio)).lte('data_agendamento', isoDate(rangeFim));
-    if (!isGerente || !verTodos) qAgm = qAgm.or('agendado_por.eq.' + meuNomeFiltro + ',' + comoParticipante);
-    const vazio = { data: [], error: null };
-    const [rComp, rCrm, rFin, rEng, rAgm] = await Promise.all([
-      qComp.limit(500), incluirCrm ? qCrm.limit(500) : Promise.resolve({ data: [] }),
-      todos ? qFin.limit(500) : Promise.resolve(vazio), (todos || setorFiltro === 'engenharia') ? qEng.limit(500) : Promise.resolve(vazio), todos ? qAgm.limit(500) : Promise.resolve(vazio),
-    ]);
-    // Leitura que falha não pode virar "calendário vazio" (Etapa 7.39): antes o erro era ignorado e o mês aparecia sem nenhum
-    // evento, sem aviso. Os eventos dependem do período mostrado, então os da leitura que falhou saem da grade (não ficam os
-    // de outro mês) e uma faixa vermelha diz o que não foi lido.
-    setCompromissos(rComp.error ? [] : (rComp.data || []));
-    setContatosCrm(rCrm.error ? [] : (rCrm.data || []));
-    setTarefasFin(rFin.error ? [] : (rFin.data || []));
-    // tarefa da Engenharia cai no dia do início (ou da criação, se ainda não começou); só entra o que cai no período mostrado
-    const diaTarefaEng = (x: any) => isoDate(new Date(x.data_inicio || x.criado_em));
-    setTarefasEng(rEng.error ? [] : (rEng.data || []).filter((x: any) => diaTarefaEng(x) >= isoDate(rangeInicio) && diaTarefaEng(x) <= isoDate(rangeFim)));
-    setAgendManut(rAgm.error ? [] : (rAgm.data || []));
-    setFalhas({ comp: rComp.error?.message || '', crm: rCrm.error?.message || '', fin: rFin.error?.message || '', eng: rEng.error?.message || '', agm: rAgm.error?.message || '' });
+    // 12/11/2026: uma leitura só. A função do banco devolve as datas de TODAS as fontes (compromissos, retorno de cliente, limites de licitação, prazos de demanda e de OS,
+    // chegada de carro, entrega de compra e de OP, tarefas, manutenção) já limitadas ao que esta pessoa pode ver (responsável, participante ou do perfil que age);
+    // Admin e gerentes veem tudo quando ligam "Todos os usuários". Leitura que falha nunca vira "calendário vazio": a faixa vermelha diz o motivo.
+    // "Ver como" (12/11/2026): o admin que vê o sistema como outra pessoa segue com a sessão do banco dele, então o calendário vinha o do admin para todo mundo; o banco só obedece o e-mail da pessoa vista se quem chama é Admin de verdade
+    // Desde a mesma data o banco sabe quem o Admin está vendo (VerComo.ts), então a tela não precisa mais dizer o e-mail da pessoa vista.
+    const { data, error } = await supabase.rpc('calendario_eventos', { p_inicio: isoDate(rangeInicio), p_fim: isoDate(rangeFim), p_todos: !!(isGerente && verTodos) });
+    setLinhas(error ? [] : (data || []));
+    setFalha(error ? (error.message || 'erro desconhecido') : '');
     setLoading(false);
-  }, [rangeInicio.getTime(), rangeFim.getTime(), setorFiltro, verTodos, isGerente, currentUser?.email, currentUser?.nome]);
+  }, [rangeInicio.getTime(), rangeFim.getTime(), verTodos, isGerente, currentUser?.email]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
   // ── Monta mapa dia → eventos unificados ──────────────────────────────────
   const eventosPorDia = useMemo(() => {
     const map: Record<string, any[]> = {};
-    compromissos.forEach(c => {
-      const d = new Date(c.data_hora);
-      const key = isoDate(d);
-      (map[key] ||= []).push({
-        tipo: 'compromisso', id: c.id, titulo: c.titulo,
-        hora: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
-        horaOrdem: d.getHours() * 60 + d.getMinutes(),
-        familia: SETOR_FAMILIA[c.setor] || SETOR_FAMILIA.geral, raw: c,
-      });
-    });
-    contatosCrm.forEach(o => {
-      const key = o.prox_contato;
-      (map[key] ||= []).push({
-        tipo: 'crm', id: o.id, titulo: o.titulo,
-        hora: o.hora_prox_contato ? String(o.hora_prox_contato).slice(0, 5) : null,
-        horaOrdem: o.hora_prox_contato ? (parseInt(o.hora_prox_contato.slice(0,2)) * 60 + parseInt(o.hora_prox_contato.slice(3,5))) : -1,
-        familia: FAMILIA_CRM, raw: o,
-      });
-    });
-    tarefasFin.forEach(x => {
-      (map[x.data_vencimento] ||= []).push({
-        tipo: 'tarefa_financeiro', id: x.id, titulo: x.titulo, hora: null, horaOrdem: -1, familia: FAMILIA_FIN, raw: x,
-        detalhe: <>💲 Tarefa do Financeiro · vence neste dia · 👤 {x.responsavel_nome || '—'}{participantesDe(x).length > 0 && <> · <ListaParticipantes item={x} usuario={currentUser} /></>}</>,
-      });
-    });
-    tarefasEng.forEach(x => {
-      const d = new Date(x.data_inicio || x.criado_em);
-      (map[isoDate(d)] ||= []).push({
-        tipo: 'tarefa_engenharia', id: x.id, titulo: x.titulo, hora: x.data_inicio ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : null,
-        horaOrdem: x.data_inicio ? d.getHours() * 60 + d.getMinutes() : -1, familia: FAMILIA_ENG_TAREFA, raw: x,
-        detalhe: <>🛠️ Tarefa da Engenharia · {x.data_inicio ? 'iniciada neste dia' : 'criada neste dia'}{x.numero_opl ? ` · OP ${x.numero_opl}` : ''} · 👤 {x.responsavel_nome || '—'}{participantesDe(x).length > 0 && <> · <ListaParticipantes item={x} usuario={currentUser} /></>}</>,
-      });
-    });
-    agendManut.forEach(x => {
-      (map[String(x.data_agendamento).slice(0, 10)] ||= []).push({
-        tipo: 'agendamento', id: x.id, titulo: 'Manutenção — OP ' + (x.numero_opl || '—') + (x.cliente_nome ? ' · ' + x.cliente_nome : ''), hora: null, horaOrdem: -1, familia: FAMILIA_AGEND, raw: x,
-        detalhe: <>🔧 Agendamento de manutenção · {x.periodo || ''}{x.modelo ? ' · ' + x.modelo : ''} · 👤 {x.agendado_por || '—'}{participantesDe(x).length > 0 && <> · <ListaParticipantes item={x} usuario={currentUser} /></>}</>,
-      });
+    const hoje = hojeStr();
+    linhas.forEach((r: any) => {
+      const tipo = r.fonte;
+      const setorDoEvento = tipo === 'compromisso' ? (r.extra?.setor || 'geral') : (SETOR_POR_FONTE[tipo] || 'geral');
+      if (setorFiltro !== 'todos' && setorDoEvento !== setorFiltro) return;
+      const hora = r.hora ? String(r.hora).slice(0, 5) : null;
+      const sit = situacaoDoPrazo(r.dia, hoje, !!r.alerta, !!r.concluido);
+      const raw = tipo === 'compromisso' ? { ...(r.extra || {}), concluido: !!r.concluido } : r;
+      const ev: any = {
+        tipo, id: r.ref_id, titulo: r.titulo, hora,
+        horaOrdem: hora ? parseInt(hora.slice(0, 2)) * 60 + parseInt(hora.slice(3, 5)) : -1,
+        familia: sit ? 'erro' : (tipo === 'compromisso' ? (SETOR_FAMILIA[raw.setor] || SETOR_FAMILIA.geral) : (FAMILIA_POR_FONTE[tipo] || 'neutro')),
+        raw, detalhe: r.detalhe, responsavel: r.responsavel, situacao: sit,
+      };
+      if (tipo === 'compromisso') {
+        // na grade, o compromisso de OUTRA pessoa leva o primeiro nome de quem criou (o seu próprio não precisa); o texto inteiro vai na dica
+        ev.criador = nomeDoCriador(raw, currentUser) === 'você' ? '' : String(nomeDoCriador(raw, currentUser)).split(' ')[0];
+        ev.dica = dicaDoEvento({ tipo: 'compromisso', titulo: raw.titulo, raw }, currentUser);
+      } else {
+        ev.dica = r.titulo + (sit ? ' — ' + sit.rotulo : '') + (r.detalhe ? ' — ' + r.detalhe : '');
+      }
+      (map[r.dia] ||= []).push(ev);
     });
     Object.values(map).forEach(list => list.sort((a, b) => a.horaOrdem - b.horaOrdem));
     return map;
-  }, [compromissos, contatosCrm, tarefasFin, tarefasEng, agendManut, currentUser?.email]);
+  }, [linhas, setorFiltro, currentUser?.email]);
 
-  const totalEventos = compromissos.length + contatosCrm.length + tarefasFin.length + tarefasEng.length + agendManut.length;
+  const totalEventos = Object.values(eventosPorDia).reduce((n: number, l: any) => n + l.length, 0);
 
   // ── Navegação ─────────────────────────────────────────────────────────────
   const irHoje = () => setCursor(new Date());
@@ -380,9 +353,9 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
       </div>
 
       <div className="sec-body">
-        {(falhas.comp || falhas.crm || falhas.fin || falhas.eng || falhas.agm) && (
-          <Faixa tom="erro">
-            Não foi possível ler {[falhas.comp && `os compromissos (${falhas.comp})`, falhas.crm && `os contatos do CRM (${falhas.crm})`, falhas.fin && `as tarefas do Financeiro (${falhas.fin})`, falhas.eng && `as tarefas da Engenharia (${falhas.eng})`, falhas.agm && `os agendamentos de manutenção (${falhas.agm})`].filter(Boolean).join('; ')}. O calendário abaixo pode estar incompleto.
+        {falha && (
+          <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
+            Não foi possível ler as datas do calendário ({falha}). O calendário abaixo está incompleto.
           </Faixa>
         )}
         {/* Filtro de setor */}
@@ -423,7 +396,7 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
           data={diaAberto.data}
           horaInicial={diaAberto.hora}
           eventos={eventosPorDia[isoDate(diaAberto.data)] || []}
-          leituraFalhou={!!(falhas.comp || falhas.crm)}
+          leituraFalhou={!!falha}
           currentUser={currentUser}
           onClose={() => setDiaAberto(null)}
           onChanged={() => { carregar(); }}
@@ -456,8 +429,8 @@ function MesGrid({ dias, cursor, eventosPorDia, onDiaClick }: any) {
               className={'acn-cal-dia' + (isHoje ? ' hoje' : '') + (foraDoMes ? ' fora' : '')}>
               <div className="acn-cal-num">{d.getDate()}</div>
               {eventos.slice(0, 3).map((ev: any) => (
-                <div key={ev.tipo + ev.id} className={'acn-cal-ev' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia}>
-                  {ev.hora ? `${ev.hora} ` : ''}{ev.titulo}
+                <div key={ev.tipo + ev.id} className={'acn-cal-ev' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia} title={ev.dica || ev.titulo}>
+                  {ev.hora ? `${ev.hora} ` : ''}{ev.titulo}{ev.criador ? ` · ${ev.criador}` : ''}
                 </div>
               ))}
               {eventos.length > 3 && (
@@ -504,7 +477,7 @@ function SemanaGrid({ dias, eventosPorDia, onSlotClick }: any) {
           return (
             <div key={i} onClick={() => onSlotClick(d, '09:00')} className="acn-cal-sem-celula">
               {eventos.map((ev: any) => (
-                <div key={ev.tipo + ev.id} className="acn-cal-ev" data-acn-familia={ev.familia}>{ev.titulo}</div>
+                <div key={ev.tipo + ev.id} className="acn-cal-ev" data-acn-familia={ev.familia} title={ev.dica || ev.titulo}>{ev.titulo}{ev.criador ? ` · ${ev.criador}` : ''}</div>
               ))}
             </div>
           );
@@ -532,8 +505,8 @@ function SemanaGrid({ dias, eventosPorDia, onSlotClick }: any) {
                 if (top < 0 || top > HORAS_GRID.length * ROW_H) return null;
                 return (
                   <div key={ev.tipo + ev.id} onClick={(e) => { e.stopPropagation(); onSlotClick(d, ev.hora); }}
-                    className={'acn-cal-evsem' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia} style={{ top }}>
-                    {ev.hora} {ev.titulo}
+                    className={'acn-cal-evsem' + (ev.raw?.concluido ? ' feito' : '')} data-acn-familia={ev.familia} style={{ top }} title={ev.dica || ev.titulo}>
+                    {ev.hora} {ev.titulo}{ev.criador ? ` · ${ev.criador}` : ''}
                   </div>
                 );
               })}

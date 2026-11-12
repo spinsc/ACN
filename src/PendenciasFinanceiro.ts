@@ -14,6 +14,8 @@ import { supabase } from './supabaseClient';
 import { diasParaSair, diasNaColuna, statusDaViagem, DIAS_DO_ALERTA_DE_SAIDA } from './ViagemFluxo';
 import { situacaoDaVerba, textoDaVerba } from './ViagemVerba';
 import { itensSemComprovante } from './ViagemComprovantes';
+import { dataComDiaDaSemana, fmtReais } from './ViagemCalculo';
+import { nomeCurto } from './ViagemRota';
 
 export const PRAZO_CUSTO_REAL_DIAS = 7;
 export type TipoDePendencia = 'verba' | 'custo_real' | 'comprovante';
@@ -53,6 +55,25 @@ export function pendenciasDasViagens(viagens: any[], hoje: string, agora = new D
   }
   const peso: Record<TipoDePendencia, number> = { verba: 0, custo_real: 1, comprovante: 2 };
   return l.sort((a, b) => Number(b.urgente) - Number(a.urgente) || peso[a.tipo] - peso[b.tipo] || a.ordem - b.ordem);
+}
+
+/** Em poucas linhas, o que o Financeiro precisa ver da viagem sem abri-la (pedido do usuário em 05/11/2026): quando sai, para onde, quem vai, em que carro, quanto foi orçado e quanto de verba,
+ *  e a que OP, OS ou PV a viagem está ligada. Pura: só lê a viagem. Linha sem informação não aparece. */
+export function resumoDaViagem(v: any): { rotulo: string; texto: string }[] {
+  const linhas: { rotulo: string; texto: string }[] = [];
+  if (v?.data_saida) linhas.push({ rotulo: 'Saída', texto: dataComDiaDaSemana(v.data_saida) + (v?.custos?.hora_saida ? ` às ${v.custos.hora_saida}` : '') });
+  const destinos = (Array.isArray(v?.paradas) ? v.paradas : []).map((p: any) => nomeCurto(p?.texto || '')).filter(Boolean);
+  if (destinos.length) linhas.push({ rotulo: 'Destino', texto: destinos.join(' → ') });
+  else if (v?.sugestao_destino) linhas.push({ rotulo: 'Destino indicado', texto: String(v.sugestao_destino) });
+  const equipe = (Array.isArray(v?.equipe) ? v.equipe : []).map((m: any) => m?.nome).filter(Boolean);
+  linhas.push({ rotulo: 'Equipe', texto: equipe.length ? equipe.join(', ') : 'ainda não definida' });
+  if (v?.veiculo_nome) linhas.push({ rotulo: 'Veículo', texto: v.veiculo_nome + (v.veiculo_placa ? ' · ' + v.veiculo_placa : '') });
+  const orc = Number(v?.total_orcamento) || 0, verba = Number(v?.verba_total);
+  const dinheiro = [orc > 0 ? `orçado ${fmtReais(orc)}` : '', Number.isFinite(verba) && v?.verba_total != null && v.verba_total !== '' ? `verba ${fmtReais(verba)}` : 'verba ainda não definida'].filter(Boolean).join(' · ');
+  linhas.push({ rotulo: 'Valores', texto: dinheiro });
+  const ligacoes = (Array.isArray(v?.vinculos) ? v.vinculos : []).map((x: any) => String(x?.descricao || '').split(' — ')[0].trim()).filter(Boolean).join(', ') || String(v?.vinculo || '');
+  if (ligacoes) linhas.push({ rotulo: 'Ligada a', texto: ligacoes });
+  return linhas;
 }
 
 /** Lê as viagens que podem ter pendência do Financeiro. Leitura recusada devolve o erro (nunca "fila vazia" calada). */

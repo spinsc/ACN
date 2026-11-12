@@ -38,6 +38,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
   crm:              'CRM',
   demanda:          'Demanda',
   demanda_avulsa:   'Demanda Avulsa',
+  desenvolvimento:  'Desenvolvimento (Engenharia)',
   sac:              'SAC',
   compra:           'Compra',
   centro_custo:     'Centro de custo',
@@ -48,6 +49,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
   frete_entrega:    'Frete sem entrega confirmada',
   garantia:         'Garantia',
   viagem:           'Viagem (aprovação)',
+  calendario:       'Data do calendário',
 };
 
 // Contextos sem "aprovação pendente" real — nesses a menção É o pedido de
@@ -56,7 +58,8 @@ const CONTEXTO_LABEL: Record<string, string> = {
 // hora). Não faz sentido oferecer uma caixa de resposta de texto aqui.
 // 'garantia' (G5, 20/10/2026): é só aviso de andamento do atendimento; a conversa fica na ficha, então não há caixa de resposta aqui.
 // 'frete_entrega' (29/10/2026): aviso da rotina do banco ao vendedor da OP (frete em trânsito sem entrega confirmada); a resposta é cobrar a Logística ou o cliente, fora do sistema.
-const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra', 'garantia', 'frete_entrega', 'viagem']);   // 'viagem' (04/11/2026): aviso do banco de que a viagem gerada pela OP espera aprovação; resolve sozinho quando ela sai de Em aprovação
+// 'calendario' (12/11/2026): aviso da rotina do banco (`calendario_avisar`) de que uma data do sistema vence hoje ou está atrasada; um aviso por item, que se renova a cada dia útil e some sozinho quando o item é resolvido; a resposta é fazer o que a data pede, na tela de origem.
+const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra', 'garantia', 'frete_entrega', 'viagem', 'calendario']);   // 'viagem' (04/11/2026): aviso do banco de que a viagem gerada pela OP espera aprovação; resolve sozinho quando ela sai de Em aprovação
 
 // Responder uma menção — grava a resposta EXATAMENTE no mesmo lugar que a
 // tela de origem gravaria (então ela aparece lá também, não só aqui), e em
@@ -97,6 +100,16 @@ async function responderMencao(m: any, texto: string, currentUser: any): Promise
     const atual = os?.observacoes || '';
     const { error } = await supabase.from('sac_ordens_servico')
       .update({ observacoes: atual ? `${atual}\n${linha}` : linha }).eq('id', contextoId);
+    if (error) return false;
+  } else if (m.contexto === 'desenvolvimento') {
+    // 12/11/2026: a resposta entra no fim da área livre da demanda, com data e nome (como na observação da compra e da OS do SAC)
+    const { data: d, error: erroLer } = await supabase.from('engenharia_desenvolvimento')
+      .select('area_livre').eq('id', contextoId).maybeSingle();
+    if (erroLer || !d) return false;
+    const linha = `[${new Date().toLocaleString('pt-BR')} — ${nome}]: ${texto.trim()}`;
+    const atual = d.area_livre || '';
+    const { error } = await supabase.from('engenharia_desenvolvimento')
+      .update({ area_livre: atual ? `${atual}\n${linha}` : linha, atualizado_em: agora }).eq('id', contextoId);
     if (error) return false;
   } else if (m.contexto === 'demanda_avulsa') {
     const { data: d } = await supabase.from('demandas_avulsas')

@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -28,6 +28,7 @@ import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente } from './utils/permissoes';
 import CopiarOpModal from './CopiarOpModal';
 import TrocarFluxoModal from './TrocarFluxoModal';
+import { excluirOpComMotivo, podeExcluirOp } from './ExclusaoDeOp';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
@@ -790,6 +791,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [copiando, setCopiando] = useState(false);
   // Trocar o fluxo da unidade (fluxo misto, M3, 27/10/2026): uma unidade de lote passa de adaptação para envio, ou o contrário, até o Almoxarifado fechar o kit
   const [trocandoFluxo, setTrocandoFluxo] = useState(false);
+  // Excluir a OP (11/11/2026): só Admin e gerentes, com motivo; a OP some das telas e fica guardada, marcada (ExclusaoDeOp.ts). A função confere o que impede, mostra o que será desligado, pede o motivo e confirma.
+  const excluirEstaOp = async () => { if (await excluirOpComMotivo(opl, usuario)) onClose(); };
   const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
@@ -1009,6 +1012,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
               // só a unidade de um lote (o fluxo misto nasce no lote) e quem tem poder de gerente; a janela confere a etapa e explica quando não dá
               { rotulo: 'Trocar o fluxo desta unidade', icone: mdiSwapHorizontal, onClick: () => setTrocandoFluxo(true), oculto: !(temPoderDeGerente(usuario) && qtdLote > 1 && ehUnidadeDeLote(opl?.opl)) },
+              // só Admin e gerentes de verdade (a equipe do Comercial, que vale como gerente do setor, não exclui); o banco confere o perfil de novo
+              { rotulo: 'Excluir OP', icone: mdiDeleteOutline, onClick: excluirEstaOp, perigo: true, oculto: !podeExcluirOp(usuario) },
             ]} />
             <button type="button" className="acn-opl-x" onClick={fecharEMarcarLido} aria-label="Fechar" title="Fechar"><Icone path={mdiClose} size={20} /></button>
           </div>
@@ -1255,7 +1260,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               <header className="acn-opl-card-cab"><span>📅 Prazos</span></header>
               <div className="acn-opl-card-corpo acn-opl-prazos">
                 {prazo('Data de entrada', opl.data_entrada, 'data_entrada')}
-                {prazo('Recebimento do veículo', opl.data_chegada_veiculo, 'data_chegada_veiculo')}
+                {prazo('Previsão de chegada do veículo', opl.data_chegada_veiculo, 'data_chegada_veiculo')}
                 {prazo('Aceite do cliente', opl.data_aceite_cliente, 'data_aceite_cliente')}
                 {prazo('Prazo entrega produção', opl.prazo_entrega_producao, 'prazo_entrega_producao')}
                 {prazo('Prazo entrega comercial', opl.prazo_entrega_comercial, 'prazo_entrega_comercial')}
@@ -1392,21 +1397,26 @@ export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: an
 }
 
 // ─── Busca padrão de OPLs ─────────────────────────────────────────────────────
-// Filtro comum: OPL, chassi, cliente, tipo_projeto
-export function filtrarOpls(opls: any[], busca: string): any[] {
+// Filtro comum: OPL, chassi, cliente, tipo_projeto.
+// `porCarro` (05/11/2026, pedido do usuário para a triagem do PCP): passando o segundo argumento, a busca também acha pelo NOME ou MODELO do carro: o modelo e o "equipamento / veículo" escritos na
+// OP e o veículo do catálogo ligado a ela (`catalogo`: id do veículo → "marca nome modelo"). Fica ligado só onde foi pedido; as outras telas seguem buscando como antes.
+export function filtrarOpls(opls: any[], busca: string, porCarro?: { catalogo?: Map<any, string> }): any[] {
   if (!busca) return opls;
-  return opls.filter(o => combinaBusca([o.opl, o.chassi, o.cliente_nome, o.tipo_projeto], busca));
+  return opls.filter(o => combinaBusca([
+    o.opl, o.chassi, o.cliente_nome, o.tipo_projeto,
+    ...(porCarro ? [o.modelo, o.veiculo, o.veiculo_id ? porCarro.catalogo?.get(o.veiculo_id) : null] : []),
+  ], busca));
 }
 
 // ─── Input de busca padrão ────────────────────────────────────────────────────
-export function BuscaOplInput({ busca, setBusca }: { busca: string; setBusca: (v: string) => void }) {
+export function BuscaOplInput({ busca, setBusca, placeholder = 'Buscar por OP, chassi, cliente ou projeto...' }: { busca: string; setBusca: (v: string) => void; placeholder?: string }) {
   return (
     <div className="acn-ats-busca">
       <span className="acn-ats-busca-ic">🔍</span>
       <input
         value={busca}
         onChange={e => setBusca(e.target.value)}
-        placeholder="Buscar por OP, chassi, cliente ou projeto..."
+        placeholder={placeholder}
         className="acn-ats-busca-campo"
       />
       {busca && (

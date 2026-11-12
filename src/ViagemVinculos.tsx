@@ -14,7 +14,7 @@ import Icone from './Icone';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import { mdiClose, mdiLinkVariant, mdiMapMarkerPath } from '@mdi/js';
 
-export const TIPOS_DA_VIAGEM = ['op', 'pv', 'licitacao'];
+export const TIPOS_DA_VIAGEM = ['op', 'os', 'pv', 'licitacao'];   // 05/11/2026: a viagem também se liga a uma OS do SAC
 
 /** O texto curto que o quadro e a busca usam ("A1710.2610, PV 4321"): o começo de cada descrição, antes do " — ". */
 export const textoDosVinculos = (lista: any[]) => (Array.isArray(lista) ? lista : []).map((x: any) => String(x?.descricao || '').split(' — ')[0].trim()).filter(Boolean).join(', ');
@@ -29,7 +29,7 @@ export function VinculosDaViagem({ v, set, pode, aoAbrir }: any) {
   const tirar = (x: any) => set('vinculos', lista.filter((y: any) => !(y.tipo === x.tipo && String(y.id) === String(x.id))));
   return (
     <div className="acn-vg-vincs">
-      {lista.length === 0 && !v.vinculo && <div className="acn-ajuda">Nenhuma ligação. Ligue a viagem à OP, ao PV ou à licitação para achar tudo de um lugar só.</div>}
+      {lista.length === 0 && !v.vinculo && <div className="acn-ajuda">Nenhuma ligação. Ligue a viagem à OP, à OS, ao PV ou à licitação para achar tudo de um lugar só.</div>}
       {lista.length === 0 && !!v.vinculo && <div className="acn-ajuda">Referência escrita antes das ligações existirem: «{v.vinculo}». Busque abaixo para ligar de verdade.</div>}
       {lista.length > 0 && (
         <ul className="acn-vg-vinc-lista">
@@ -37,8 +37,8 @@ export function VinculosDaViagem({ v, set, pode, aoAbrir }: any) {
             <li key={x.tipo + ':' + x.id} className="acn-vg-vinc">
               <span className="acn-vcp-tipo"><Icone path={mdiLinkVariant} size={14} />{TIPO_LABEL[x.tipo] || x.tipo}</span>
               <button type="button" className="acn-vg-vinc-abrir" title="Abrir o registro" onClick={() => aoAbrir(x)}>{x.descricao}</button>
-              {x.tipo === 'op' && dasOps.has(String(x.id))
-                ? <span className="acn-ajuda" title="A viagem foi gerada por esta OP">gerou a viagem</span>
+              {(x.tipo === 'op' && dasOps.has(String(x.id))) || (x.tipo === 'os' && x.auto)
+                ? <span className="acn-ajuda" title={x.tipo === 'os' ? 'Esta OS nasceu desta viagem ou a gerou' : 'A viagem foi gerada por esta OP'}>{x.tipo === 'os' ? 'OS da viagem' : 'gerou a viagem'}</span>
                 : pode.base && <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Tirar a ligação ${x.descricao}`} title="Tirar a ligação" onClick={() => tirar(x)} />}
             </li>
           ))}

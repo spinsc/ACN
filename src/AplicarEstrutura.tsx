@@ -22,6 +22,7 @@ import {
 } from './CalculoDaEstrutura';
 import { RespostasEmLote } from './RespostasEmLote';
 import { Botao } from './Interface';
+import { TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import Icone from './Icone';
 import { mdiCheck, mdiAlertOutline } from '@mdi/js';
 
@@ -108,6 +109,15 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaRe
     );
   }
   if (e.semVeiculo) {
+    // 04/11/2026 (OP A1749.2611): a Venda para Envio nunca tem veículo, então mandar "escolher o veículo na OP" não faz sentido e parecia que o sistema não achava o conjunto.
+    if (opl?.tipo_projeto === TIPO_VENDA_ENVIO) {
+      return (
+        <Caixa tom="neutro">
+          <b>Venda para envio: a estrutura de instalação não se aplica.</b> A OP não tem veículo, e o material de instalação depende do carro.
+          O Conjunto Elétrico está na venda e foi reconhecido; a BOM segue preenchida à mão.
+        </Caixa>
+      );
+    }
     return (
       <Caixa tom="atencao">
         Esta venda leva Conjunto Elétrico, mas a OP <b>não tem veículo do catálogo</b>.

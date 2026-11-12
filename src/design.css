@@ -1117,6 +1117,9 @@ html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw)
 .acn-ms-val { font-size: 13px; color: var(--acn-ink); }
 .acn-ms-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
 .acn-ms-itens { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+/* 10/11/2026: a janela "Ver" mostra tudo o que foi preenchido; a lista de andamentos pode ser longa, então rola dentro da janela. */
+.acn-ms-rolagem { max-height: 220px; overflow-y: auto; padding-right: 6px; }
+.acn-ms-secao { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--acn-line); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
 /* ── Kanban do SAC (05/10/2026): 3 colunas lado a lado; no celular uma embaixo da outra. Só aparência ── */
 .acn-kb { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; }
 .acn-kb-col { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: flex; flex-direction: column; min-width: 0; }
@@ -2623,6 +2626,9 @@ html body .modal-box.acn-modal-cadastro.acn-crm-jan.acn-crm-op { width: min(540p
 
 /* ── CRM · 12e37 (07/10/2026): a aba "OPs em aberto" — filtros, tabela, linhas de lote, barra de seleção e janela de confirmar a entrega ── */
 .acn-crm-opls { padding: 8px 4px; }
+/* OPs excluídas (11/11/2026): quadro à parte abaixo da lista, em vermelho para ninguém tomar por OP em andamento */
+.acn-crm-excluidas { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--acn-bad); }
+html body .acn-main table.acn-tabela tr.acn-crm-opl-excluida > td { background: var(--acn-bad-soft) !important; }
 .acn-crm-opl-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 html body select.acn-input.acn-crm-opl-sel { width: auto; height: 30px; font-size: 12px; font-weight: 700; }
 html body select.acn-input.acn-crm-opl-sel.ativo { background: var(--acn-brand); border-color: var(--acn-brand); color: #fff; }
@@ -2745,14 +2751,6 @@ html body .acn-input.acn-fp-pf-busca { flex: 1 1 260px; min-width: 220px; max-wi
 /* ── Comercial · total de preços formados no cabeçalho da coluna (07/10/2026) ── */
 .acn-crm-col-valor { margin-left: 2px; font-size: 11px; font-weight: 700; color: var(--acn-ok); white-space: nowrap; }
 body.dark .acn-crm-col-valor { color: #8fd3a5; }
-
-/* ── CQ · seriais dos itens instalados (07/10/2026) ── */
-.acn-cq-seriais { max-height: 300px; overflow-y: auto; gap: 10px; }
-.acn-cq-serial { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--acn-line); }
-.acn-cq-serial:last-child { border-bottom: 0; padding-bottom: 0; }
-.acn-cq-serial-cab { display: flex; align-items: center; gap: 10px; }
-.acn-cq-serial-cab > span:first-child { flex: 1; min-width: 0; }
-.acn-cq-semserial { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-muted); cursor: pointer; white-space: nowrap; }
 
 /* ── Participantes de compromissos, tarefas e agendamentos (07/10/2026) ── */
 .acn-participantes { display: flex; flex-direction: column; gap: 4px; }
@@ -3398,6 +3396,10 @@ html body .acn-b.acn-cta-banner-x { color: #fff; }
 .acn-cta-banner-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); }
 .acn-cta-banner-quando { font-size: 12px; font-weight: 700; color: var(--acn-cta-cor); }
 .acn-cta-banner-det { font-size: 12px; color: var(--acn-muted); }
+/* 10/11/2026: o contato do aviso é clicável e abre o card no CRM (a dica "Abrir o card" aparece sempre, para quem usa o toque) */
+.acn-cta-banner-link { cursor: pointer; border-radius: var(--acn-r2, 6px); padding: 6px 8px; margin-left: -8px; margin-right: -8px; }
+.acn-cta-banner-link:hover, .acn-cta-banner-link:focus-visible { background: var(--acn-surface); outline: 2px solid var(--acn-cta-cor); outline-offset: -2px; }
+.acn-cta-banner-abrir { font-size: 12px; font-weight: 700; color: var(--acn-cta-cor); }
 
 /* Anexos do card do CRM e da OP (12e49, 09/10/2026): janela de documentos e imagens e os botões compactos. Só aparência.
    A cor de cada tipo de arquivo mora aqui: [data-anx-crm] e [data-anx-opl] definem --acn-anx-cor (antes eram mapas de hexadecimais no código). */
@@ -7049,6 +7051,66 @@ html body.dark .acn-ht-b1154-3:not(#acn):not(#acn) { background-color: rgb(51, 6
   html body .acn-ht-b1154:not(#acn) { padding-right: 8px; padding-left: 8px; }
 }
 /* @@ht-fim */
+/* @@hx-ini */
+/* ══ Horas extras (HorasExtras.tsx, 12e73 — 09/11/2026) ═══════════════════════════════════════════════════════════════════════════════════════════
+   O painel de pedidos e as duas janelas (pedir/registrar e aprovar/recusar) tinham 41 estilos soltos dentro do componente; aqui está o desenho, com os mesmos valores que a pessoa
+   já via (medidos antes de migrar, em claro, escuro e celular com toque). Nenhum valor muda no escuro nem no celular: as cores vêm das variáveis do tema, e a janela de celular
+   já é decidida pelas regras com !important do responsivo.css e do DashboardTab (largura e altura da caixa, tela cheia), que valiam por cima do estilo solto e continuam valendo por cima da classe.
+   Nome da classe = o que a peça é (sobre = fundo da janela, caixa = a janela, trio = data e duas horas, linha = um pedido do painel, td-… = célula da tabela). */
+html body .acn-hx-sobre:not(#acn) { z-index: 2600; }
+html body .acn-hx-caixa:not(#acn) { max-width: 480px; width: 95vw; }
+html body .acn-hx-caixa-dec:not(#acn) { max-width: 460px; width: 95vw; }
+html body .acn-hx-grade:not(#acn) { display: grid; gap: 10px; }
+html body .acn-hx-trio:not(#acn) { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+html body .acn-hx-campo:not(#acn) { width: 100%; }
+html body .acn-hx-area:not(#acn) { width: 100%; resize: vertical; }
+html body .acn-hx-botoes:not(#acn) { display: flex; gap: 8px; justify-content: flex-end; }
+html body .acn-hx-t12:not(#acn) { font-size: 12px; }
+html body .acn-hx-t13:not(#acn) { font-size: 13px; }
+html body .acn-hx-mt2:not(#acn) { margin-top: 2px; }
+html body .acn-hx-pilha:not(#acn) { display: grid; gap: 8px; }
+html body .acn-hx-linha:not(#acn) { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: 8px; background: var(--acn-surface); }
+html body .acn-hx-corpo:not(#acn) { flex: 1 1 260px; min-width: 0; }
+html body .acn-hx-motivo:not(#acn) { font-size: 12px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-hx-acoes:not(#acn) { display: flex; gap: 6px; }
+html body .acn-hx-quebra:not(#acn) { flex-wrap: wrap; }
+html body .acn-hx-rolagem:not(#acn) { overflow-x: auto; padding: 0; }
+html body .acn-hx-nowrap:not(#acn) { white-space: nowrap; }
+html body .acn-hx-td-motivo:not(#acn) { min-width: 200px; white-space: pre-wrap; overflow-wrap: anywhere; }
+html body .acn-hx-td-resposta:not(#acn) { min-width: 160px; }
+/* @@hx-fim */
+/* @@mk-ini */
+/* ══ Termômetro de markup (MarkupTermometro.tsx, 12e74 — 09/11/2026; 12e74b — 10/11/2026) ═════════════════════════════════════════════════════════════════════════════
+   O desenho do termômetro, do selo e da barra "Markup da carteira" estava em 14 estilos soltos dentro do componente; aqui estão os mesmos valores que a pessoa já via (medidos antes de migrar, em
+   claro, escuro e celular com toque). Ficam soltos no componente só os 3 estilos que vêm do DADO: a cor do selo, a cor de cada amostra da legenda e a largura e a cor de cada pedaço da barra.
+   A versão grande do selo (a que vinha sem `discreto`) ficou com o estilo solto na 12e74, porque o sistema (`TonsVisuais.ts`) só reconhece "selo", e o repinta nos tons do guia, pelo estilo escrito
+   no próprio elemento; foi apagada na 12e74b (10/11/2026), com a autorização do usuário, porque nenhuma tela a usava.
+   TAMANHO DE LETRA = O QUE A PESSOA VÊ, NÃO O QUE O CÓDIGO ESCREVIA: o sistema reescreve em tempo de execução a letra pequena que vem no estilo solto (regras `[style*="font-size: …"]` do
+   design.css e do responsivo.css): a de 9 px saía com 12 px, a de 8,5 px com 11 px (e 12 px no celular de toque). Tirando o estilo do elemento, essas regras deixam de pegar, e a letra encolheria;
+   por isso as classes já trazem o tamanho medido (12 px e 11 px), e a legenda tem a sua regra do celular. O Painel TV, única exceção dessas regras, não usa o termômetro.
+   TEMA ESCURO: as regras de escuro do sistema (no `DashboardTab`) casam a cor escrita no `style` e deixam de pegar quando ela vai para uma classe; por isso as cores de texto e a borda da barra
+   ganham aqui a regra própria de escuro, com o valor medido na versão de antes (texto #94a3b8 e borda do trilho #334155). Trocar tudo por variável do tema é trabalho da Etapa 13.
+   Nome da classe = o que a peça é (termo = o desenho do termômetro; selo-d = o selo (o "-d" é de "discreto", o nome de quando havia o selo grande); faixa-d = o "40% a 120%" dentro do selo; barra = a barra da carteira; trilho = a faixa colorida;
+   legenda = a lista de cores). */
+html body .acn-mk-termo:not(#acn) { flex-shrink: 0; display: block; }
+html body .acn-mk-selo-d:not(#acn) { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 500; }
+html body .acn-mk-faixa-d:not(#acn) { font-size: 12px; opacity: .75; font-weight: 400; }
+html body .acn-mk-barra:not(#acn) { margin-top: 10px; }
+html body .acn-mk-barra-tit:not(#acn) { font-size: 12px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+html body .acn-mk-barra-n:not(#acn) { font-weight: 600; color: #94a3b8; }
+html body .acn-mk-trilho:not(#acn) { display: flex; height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid #e2e8f0; }
+html body .acn-mk-legenda:not(#acn) { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 5px; }
+html body .acn-mk-leg-item:not(#acn) { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #475569; }
+html body .acn-mk-amostra:not(#acn) { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+html body .acn-mk-leg-n:not(#acn) { color: #1e293b; }
+/* tema escuro: o texto da barra e o item da legenda ficam em #94a3b8 e o contorno do trilho em #334155, como o sistema já mostrava */
+html body.dark .acn-mk-barra-tit:not(#acn), html body.dark .acn-mk-leg-item:not(#acn), html body.dark .acn-mk-leg-n:not(#acn) { color: #94a3b8; }
+html body.dark .acn-mk-trilho:not(#acn) { border-color: #334155; }
+/* celular e tablet de toque (a mesma condição do responsivo.css): ali a letra da legenda saía com 12 px, não 11 px */
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+  html body .acn-mk-leg-item:not(#acn) { font-size: 12px; }
+}
+/* @@mk-fim */
 
 /* ── Manuais (30/10/2026): lista de cartões e leitor do manual. Só aparência ── */
 .acn-man-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
@@ -7216,7 +7278,38 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-vg-verba-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
 /* 04/11/2026: as três tabelas da fila de Pendências do Financeiro com as mesmas colunas (senão cada uma se ajusta ao seu texto) */
 .acn-fin-pend .acn-tabela { table-layout: fixed; width: 100%; }
-.acn-fin-pend .acn-tabela th:nth-child(1) { width: 32%; }
-.acn-fin-pend .acn-tabela th:nth-child(2) { width: 38%; }
-.acn-fin-pend .acn-tabela th:nth-child(3) { width: 18%; }
+.acn-fin-pend .acn-tabela th:nth-child(1) { width: 44%; }
+.acn-fin-pend .acn-tabela th:nth-child(2) { width: 28%; }
+.acn-fin-pend .acn-tabela th:nth-child(3) { width: 16%; }
 .acn-fin-pend .acn-tabela th:nth-child(4) { width: 12%; }
+
+/* 05/11/2026: busca geral do Compras (pedido do usuário) */
+.acn-cmp-busca-geral { display: flex; align-items: center; gap: 6px; flex: 1 1 220px; min-width: 180px; max-width: 360px; }
+.acn-cmp-busca-geral .acn-input { height: 32px; flex: 1 1 auto; }
+
+/* 05/11/2026: relatórios personalizados do RH (pedido do usuário) */
+.acn-rhrel { display: flex; flex-direction: column; gap: 12px; }
+.acn-rhrel-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; align-items: end; }
+.acn-rhrel-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.acn-rhrel-bloco { display: flex; flex-direction: column; gap: 6px; }
+.acn-rhrel-acoes { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.acn-rhrel-espaco { flex: 1 1 auto; }
+
+/* Viagens (05/11/2026): a fila de Pendências do Financeiro mostra o resumo da viagem */
+.acn-fin-pend-resumo { margin: 6px 0 0; display: grid; gap: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-fin-pend-resumo > div { display: flex; gap: 6px; min-width: 0; }
+.acn-fin-pend-resumo dt { font-weight: 700; flex: 0 0 auto; }
+.acn-fin-pend-resumo dt::after { content: ":"; }
+.acn-fin-pend-resumo dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* Demandas gerais do Financeiro: pedido de pagamento a terceiro (PagamentoDeTerceiro.tsx, 05/11/2026) e a fila de botões que as peças novas usam */
+.acn-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.acn-pgt { display: flex; flex-direction: column; gap: 8px; }
+.acn-pgt-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.acn-pgt-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: start; }
+.acn-pgt-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.acn-pgt-largo { grid-column: 1 / -1; }
+.acn-pgt-lista { margin: 0; display: grid; gap: 4px; }
+.acn-pgt-lista > div { display: flex; gap: 8px; min-width: 0; }
+.acn-pgt-lista dt { flex: 0 0 150px; font-weight: 700; color: var(--acn-muted); }
+.acn-pgt-lista dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }

@@ -19,6 +19,7 @@ import { combinaBusca } from './SearchUtils';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import Linkify from './Linkify';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Icone from './Icone';
 import { confirmar } from './Feedback';
 import { Botao, Chips, Faixa, Selo, Tag } from './Interface';
@@ -158,7 +159,9 @@ function AnexosDev({ demanda, onAtualizado }: any) {
 }
 
 // ─── Área livre (texto/links/anotações, com botão salvar) ────────────────────
-function AreaLivreDev({ demanda, onAtualizado }: any) {
+// 12/11/2026 (pedido do usuário): dá para marcar pessoas com @Nome na área livre; ao salvar, quem foi marcado recebe o aviso na caixa de
+// Menções e o clique leva à demanda (contexto 'desenvolvimento'; a aba lê o `__acnDeepLink` e rola até o cartão).
+function AreaLivreDev({ demanda, onAtualizado, currentUser }: any) {
   const [texto, setTexto] = useState(demanda.area_livre || '');
   const [salvando, setSalvando] = useState(false);
   const alterado = texto !== (demanda.area_livre || '');
@@ -170,14 +173,18 @@ function AreaLivreDev({ demanda, onAtualizado }: any) {
     setSalvando(false);
     // o texto continua na caixa quando a gravação falha: não pode parecer que salvou
     if (error) { alert(`Não foi possível salvar a área livre: ${error.message}`); return; }
+    // a área livre já está salva; o aviso de quem foi marcado vem depois (a falha dele só vai ao console, como nas outras telas)
+    await salvarMencoes({ texto, mencionanteId: String(currentUser?.id || ''), mencionanteNome: currentUser?.nome || currentUser?.email || 'Usuário',
+      contexto: 'desenvolvimento', contextoId: String(demanda.id), contextoDescricao: 'Desenvolvimento: ' + (demanda.titulo || demanda.numero_opl || 'demanda'),
+      campo: 'area_livre', abaDestino: 'engenharia' });
     onAtualizado();
   };
 
   return (
     <div className="acn-dev-livre">
-      <textarea className="acn-input" rows={3} aria-label="Área livre"
-        placeholder="Área livre — anotações, links, referências..."
-        value={texto} onChange={e => setTexto(e.target.value)} />
+      <MencaoTextarea rows={3} ariaLabel="Área livre"
+        placeholder="Área livre — anotações, links, referências... use @Nome para marcar alguém"
+        value={texto} onChange={setTexto} />
       {alterado && (
         <div>
           <Botao variante="primario" pequeno icone={mdiContentSaveOutline} disabled={salvando} onClick={salvar}>
@@ -332,7 +339,7 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
           </div>
           <div className="acn-pdp-bloco">
             <div className="acn-pdp-rotulo">Área Livre</div>
-            <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} />
+            <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} currentUser={currentUser} />
           </div>
         </div>
       </div>
@@ -436,7 +443,7 @@ function DemandaComEtapas({ demanda, onAtualizado, currentUser }: any) {
 
         <div className="acn-pdp-bloco">
           <div className="acn-pdp-rotulo">Área Livre</div>
-          <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} />
+          <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} currentUser={currentUser} />
         </div>
 
         <HistoricoDaDemanda demanda={demanda} />
@@ -589,6 +596,29 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
 
   useEffect(() => { carregar(); }, []);
 
+  // 12/11/2026: o aviso de quem foi marcado na área livre (caixa de Menções) abre a demanda. Como nas outras abas, o pedido vem pelo global
+  // `__acnDeepLink` (a aba pode montar depois do clique) e pelo evento `acn:abrir-registro`; os filtros saem do caminho para o cartão aparecer
+  // e, com a lista lida, a tela rola até ele.
+  const [focoId, setFocoId] = useState<string | null>(null);
+  useEffect(() => {
+    const pegar = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'desenvolvimento' || !pend.contextoId) return;
+      (window as any).__acnDeepLink = null;
+      setFiltro('todas'); setBusca(''); setAlerta('todos');
+      setFocoId(String(pend.contextoId));
+    };
+    pegar();
+    window.addEventListener('acn:abrir-registro', pegar);
+    return () => window.removeEventListener('acn:abrir-registro', pegar);
+  }, []);
+  useEffect(() => {
+    if (!focoId || demandas === null) return;
+    const el = document.getElementById('dev-demanda-' + focoId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFocoId(null);
+  }, [focoId, demandas]);
+
   const lista = demandas || [];
   const casaBusca = (d: any) => combinaBusca([d.titulo, d.descricao, d.numero_opl, d.cliente_nome, d.veiculo_nome], busca);
   const baseBusca = lista.filter(casaBusca);
@@ -650,7 +680,9 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
         </div>
       ) : (
         filtradas.map(d => (
-          <DemandaDevCard key={d.id} demanda={d} onAtualizado={carregar} currentUser={currentUser} />
+          <div key={d.id} id={'dev-demanda-' + d.id}>
+            <DemandaDevCard demanda={d} onAtualizado={carregar} currentUser={currentUser} />
+          </div>
         ))
       )}
 

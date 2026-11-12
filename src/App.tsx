@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import LoginTab from './LoginTab';
 import DashboardTab from './DashboardTab';
 import { limparSessao, temSessao, EXIGIR_CRACHA } from './SessaoBanco';
+import { estaVendoComo, iniciarVerComo, encerrarVerComo } from './VerComo';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -17,7 +18,18 @@ export default function App() {
           localStorage.removeItem('user');
           try { sessionStorage.setItem('acn_aviso_login', 'Por segurança, entre de novo.'); } catch { /* sem aviso, só a tela de entrada */ }
         } else {
-          setUser(userData);
+          // "Ver como" (12/11/2026): o registro do banco vence em 12 h e o crachá pode ter sido renovado; religa ANTES de mostrar a tela,
+          // para as primeiras leituras já virem como a pessoa vista. Fora do "Ver como", um Admin limpa qualquer registro que tenha ficado para trás.
+          if (estaVendoComo()) {
+            iniciarVerComo(userData.email).then(r => {
+              // o banco não religou: volta para a sessão do Admin em vez de mostrar a pessoa vista só na tela (só se a sessão original ainda existe; no modo de desenvolvimento esta função roda duas vezes)
+              if (!r.ok) { try { const orig = localStorage.getItem('admin_sessao_original'); if (orig) { localStorage.setItem('user', orig); localStorage.removeItem('admin_sessao_original'); } } catch {} }
+              setUser(JSON.parse(localStorage.getItem('user') || storedUser));
+            });
+          } else {
+            if (userData.perfil === 'Admin') encerrarVerComo();
+            setUser(userData);
+          }
         }
       } catch (err) {
         console.error('Erro ao recuperar usuario:', err);
@@ -28,6 +40,7 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
+    encerrarVerComo();   // 12/11/2026: sai do "Ver como" no banco junto (antes de o crachá ser apagado)
     localStorage.removeItem('user');
     limparSessao();   // 17a: o crachá do banco sai junto
     // Se o admin estava "vendo como" outro usuário (AdminTab.tsx), sair

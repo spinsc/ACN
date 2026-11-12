@@ -12,6 +12,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { combinaBusca } from './SearchUtils';
+import { pedidoCombinaComBusca, ordenarPedidos, ordensDisponiveis } from './ComprasBuscaOrdem';
 import { situacaoDaDivisao, renumerarVencedoras, dividirPedido, listaAlteradaDepoisDeCotar } from './DivisaoDoPedido';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -995,6 +996,9 @@ export default function ComprasTab({ currentUser }) {
   const { naoLidoSet: pedidosNaoLidos } = useUnreadMap('pcp_pedidos_compra', pedidos.map((p: any) => p.id), currentUser);
   const [loading, setLoading]   = useState(false);
   const [filtro, setFiltro]     = useState('');
+  // 05/11/2026 (pedido do usuário): busca geral em qualquer informação do card e escolha da ordem das colunas e da tabela (ComprasBuscaOrdem.ts)
+  const [buscaGeral, setBuscaGeral] = useState('');
+  const [ordem, setOrdem] = useState('padrao');
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   const [modalObs, setModalObs] = useState<any>(null);
   const [obsTexto, setObsTexto] = useState('');
@@ -2165,9 +2169,15 @@ export default function ComprasTab({ currentUser }) {
   // andamento sempre no topo — só quando a visão é "Todos os status"; um
   // filtro de status específico (ex: só "Recebido") continua mostrando
   // exatamente o que foi filtrado, sem o agrupamento.
+  // A busca e a ordem valem para o quadro e para a tabela; os totais do topo seguem contando tudo o que foi lido (o aviso "N de M" diz quando a lista está filtrada)
+  const buscando = buscaGeral.trim() !== '';
+  const pedidosVista = (() => {
+    const achados = buscando ? pedidos.filter((p: any) => pedidoCombinaComBusca(p, buscaGeral, canVerValor, departamentosConfig)) : pedidos;
+    return ordem === 'padrao' ? achados : ordenarPedidos(achados, ordem as any);
+  })();
   const agruparPorStatus  = filtro === '';
-  const pedidosAtivos     = agruparPorStatus ? pedidos.filter((p:any) => !['Recebido', DESCARTADA].includes(p.status_compra)) : pedidos;
-  const pedidosConcluidos = agruparPorStatus ? pedidos.filter((p:any) => ['Recebido', DESCARTADA].includes(p.status_compra)) : [];
+  const pedidosAtivos     = agruparPorStatus ? pedidosVista.filter((p:any) => !['Recebido', DESCARTADA].includes(p.status_compra)) : pedidos;
+  const pedidosConcluidos = agruparPorStatus ? pedidosVista.filter((p:any) => ['Recebido', DESCARTADA].includes(p.status_compra)) : [];
 
   const renderPedidoRow = (p: any) => {
     const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
@@ -2386,6 +2396,14 @@ export default function ComprasTab({ currentUser }) {
           <Botao pequeno icone={mdiCartOutline} variante={qtdColetas > 0 ? 'primario' : 'secundario'} onClick={()=>setModalColetas(true)}>Coletas{qtdColetas > 0 ? ` (${qtdColetas})` : ''}</Botao>
         </div>
         <div className="acn-cmp-filtros">
+          <div className="acn-cmp-busca-geral">
+            <Icone path={mdiMagnify} size={14} />
+            <input className="acn-input" type="search" value={buscaGeral} onChange={e => setBuscaGeral(e.target.value)} aria-label="Buscar nas requisições" data-teste="cmp-busca-geral"
+              placeholder="Buscar em qualquer informação…" title="Procura no número, OP, OC, descrição, itens, fornecedor, solicitante, comprador, centro de custo, departamento, datas e observações" />
+          </div>
+          <select className="acn-input acn-cmp-filtro-status" value={ordem} onChange={e => setOrdem(e.target.value)} aria-label="Ordenar por" data-teste="cmp-ordem">
+            {ordensDisponiveis(canVerValor).map(o => <option key={o.id} value={o.id}>{o.rotulo}</option>)}
+          </select>
           <Chips rotulo="Visão" ativo={visao} onChange={(v) => setVisao(v as any)}
             itens={[{ id:'tabela', rotulo:'Tabela', icone: mdiTableLarge }, { id:'kanban', rotulo:'Kanban', icone: mdiViewColumnOutline }]} />
           <select className="acn-input acn-cmp-filtro-status" value={filtro} onChange={e=>setFiltro(e.target.value)} aria-label="Status">
@@ -2429,18 +2447,18 @@ export default function ComprasTab({ currentUser }) {
 
       {!loading && pedidos.length > 0 && visao === 'kanban' && (() => {
         const colunas = STATUS_COMPRAS.filter(st => !filtro || st === filtro);
-        const etapas = colunas.map(st => ({ id: st, titulo: st, cor: COR_STATUS_COMPRA[st], total: pedidos.filter((p:any) => p.status_compra === st).length }));
+        const etapas = colunas.map(st => ({ id: st, titulo: st, cor: COR_STATUS_COMPRA[st], total: pedidosVista.filter((p:any) => p.status_compra === st).length }));
         const ativa = etapas.find(e => e.id === etapaCel) ? etapaCel : etapaInicial(etapas);
         // Recebido é histórico e só cresce: a coluna mostra os 10 mais recentes
         // e o resto fica no botão "ver todos" — senão ela vira um arquivo morto
         // de centenas de cards ao lado das etapas que exigem ação.
-        const recebidosOrdenados = pedidos
+        const recebidosOrdenados = pedidosVista
           .filter((p:any) => p.status_compra === RECEBIDO)
-          .sort((a:any, b:any) => String(b.data_conclusao || b.ultima_movimentacao_em || b.data_criacao || '')
+          .sort(ordem !== 'padrao' ? () => 0 : (a:any, b:any) => String(b.data_conclusao || b.ultima_movimentacao_em || b.data_criacao || '')
             .localeCompare(String(a.data_conclusao || a.ultima_movimentacao_em || a.data_criacao || '')));
         const itensDaColuna = (st:string) => st === RECEBIDO
           ? recebidosOrdenados.slice(0, RECEBIDOS_NO_QUADRO)
-          : pedidos.filter((p:any) => p.status_compra === st);
+          : pedidosVista.filter((p:any) => p.status_compra === st);
         return (<>
         {celular && <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />}
         <div className="acn-cmp-quadro">
@@ -2517,9 +2535,12 @@ export default function ComprasTab({ currentUser }) {
         </>);
       })()}
 
+      {buscando && !loading && pedidos.length > 0 && (
+        <div className="acn-ajuda" data-teste="cmp-busca-resumo">{pedidosVista.length} de {pedidos.length} requisição(ões) para "{buscaGeral.trim()}". <Botao pequeno variante="discreto" onClick={() => setBuscaGeral('')}>Limpar busca</Botao></div>
+      )}
       {loading ? <div className="acn-empty">Carregando...</div>
         : pedidos.length===0 ? <div className="acn-empty">Nenhuma requisição encontrada. {queryError ? '' : '(tabela vazia ou sem permissão)'}</div>
-        : visao === 'kanban' ? null : (
+        : visao === 'kanban' ? null : pedidosVista.length === 0 ? <div className="acn-empty">Nada encontrado para "{buscaGeral.trim()}".</div> : (
         <div className="acn-rolagem">
           <table className="acn-tabela acn-densa">
             <thead>

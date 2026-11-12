@@ -16,8 +16,11 @@ const comQuebra = (t: any) => esc(t).replace(/\n/g, '<br>');
 const linha = (rotulo: string, valor: string) => (valor ? `<tr><th>${rotulo}</th><td>${valor}</td></tr>` : '');
 
 /** O HTML da ficha. Pura (sem janela), para o teste conferir o que sai na folha. */
-export function htmlDaFicha(v: any): string {
+export function htmlDaFicha(v: any, veiculos: any[] = []): string {
   const r = calcularViagem(v);
+  // 05/11/2026 (pedido do usuário): os veículos a atender, das OS e das OPs da viagem; chassi e placa que o cadastro não tem saem como linha em branco, para o técnico escrever à mão
+  const emBranco = '<span style="display:inline-block;min-width:120px;height:16px;border-bottom:1px solid #111"></span>';
+  const linhasVeiculos = (Array.isArray(veiculos) ? veiculos : []).map((x: any) => `<tr><td>${esc(x.origem)}</td><td>${esc(x.cliente)}</td><td>${esc(x.veiculo) || '—'}</td><td>${x.placa ? esc(placa(x.placa)) : emBranco}</td><td>${x.chassi ? esc(x.chassi) : emBranco}</td></tr>`).join('');
   const roteiro = montarRoteiro(v);
   const equipe = (Array.isArray(v?.equipe) ? v.equipe : []).map((m: any) => esc(m.nome)).join(', ');
   const hotel = v?.hotel || {};
@@ -42,6 +45,7 @@ export function htmlDaFicha(v: any): string {
     <div class="sub">Ficha da equipe · etapa: ${esc(rotuloDoStatus(statusDaViagem(v)))}${ligacoes ? ' · ligada a ' + ligacoes : ''}</div>
     <h2>A viagem</h2>
     <table>${linha('Saída', saida)}${linha('Percurso', r.temRota ? `${fmtKm(r.km)} · ${r.dias} dia(s) · ${r.noites} noite(s)` : '')}${linha('Equipe', equipe)}${linha('Veículo', v?.veiculo_nome ? esc(v.veiculo_nome) + (v.veiculo_placa ? ' · ' + esc(placa(v.veiculo_placa)) : '') : '')}${linha('Km na saída', kmSaida)}</table>
+    ${linhasVeiculos ? `<h2>Veículos a atender</h2><table><thead><tr><th>OS / OP</th><th>Cliente</th><th>Veículo</th><th>Placa</th><th>Chassi</th></tr></thead><tbody>${linhasVeiculos}</tbody></table>` : ''}
     ${v?.servico_descricao || v?.contrato_obs || anexos ? `<h2>Serviço e contrato</h2><table>${linha('O que vai ser feito', comQuebra(v.servico_descricao))}${linha('Contrato', comQuebra(v.contrato_obs))}${linha('Arquivos do contrato', anexos ? anexos + ' (estão na viagem, no sistema)' : '')}</table>` : ''}
     ${temHotel ? `<h2>Hotel</h2><table>${linha('Hotel', esc(hotel.nome))}${linha('Endereço', esc(hotel.endereco))}${linha('Telefone', esc(hotel.telefone))}${linha('Reserva e observações', esc(hotel.observacao))}</table>` : ''}
     <h2>Verba e pedágio</h2>
@@ -58,9 +62,9 @@ export function htmlDaFicha(v: any): string {
 }
 
 /** Abre a janela de impressão da ficha. Devolve falso se o navegador bloqueou a janela. */
-export function abrirFicha(v: any): boolean {
+export function abrirFicha(v: any, veiculos: any[] = []): boolean {
   const w = window.open('', '_blank', 'width=860,height=720');
   if (!w) return false;
-  w.document.write(htmlDaFicha(v)); w.document.close();
+  w.document.write(htmlDaFicha(v, veiculos)); w.document.close();
   return true;
 }

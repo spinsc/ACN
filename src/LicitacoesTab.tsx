@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio, registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ModalSolicitarAnalise, AnaliseStatusPanel } from './AnaliseWidget';
-import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup } from './MarkupTermometro';
+import { useMarkupDaTela, FaixaDoMarkup, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup } from './MarkupTermometro';
 import AgendaWidget from './AgendaWidget';
 import { UnreadBadge } from './useUnread';
 import { salvarMencoes } from './MencaoTextarea';
@@ -2636,7 +2636,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
         </div>
       </div>
       <div className="acn-licit-acoes">
-        <MarkupBadge pct={markup?.pct} min={markup?.min} max={markup?.max} discreto />
+        <MarkupBadge pct={markup?.pct} min={markup?.min} max={markup?.max} />
         <Botao pequeno variante="secundario" icone={mdiUpdate} onClick={e => { e.stopPropagation(); onClick(); }}>Atualizar</Botao>
       </div>
     </div>
@@ -2851,8 +2851,9 @@ function PipelineCardsLicitacoes({ licitacoes, total = null }: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
-  // { pct ponderado pelo custo, min, max } por licitação — ver MarkupTermometro
-  const [markupPorLicit, setMarkupPorLicit] = useState<Record<string, any>>({});
+  // { pct ponderado pelo custo, min, max } por licitação — ver MarkupTermometro.
+  // 12e74 (09/11/2026): o gancho do termômetro mantém a última leitura boa quando uma falha e diz o erro (faixa vermelha)
+  const { markup: markupPorLicit, erro: erroMarkup, recarregar: recarregarMarkup } = useMarkupDaTela('licitacao');
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
   const [filtroTipo, setFiltroTipo] = useState<string>('Direta');
@@ -2960,7 +2961,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     setErroLista('');
     setLicitacoes(data || []);
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
-    carregarMarkupPorProcesso('licitacao').then(setMarkupPorLicit);
+    recarregarMarkup();
     setLoading(false);
   }, []);
 
@@ -3202,6 +3203,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       {erroLista && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={fetchLicit}>Tentar de novo</Botao>}>Não foi possível ler as licitações ({erroLista}). Isso não quer dizer que não haja licitação{licitacoes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>
       )}
+      <FaixaDoMarkup erro={erroMarkup} temSelos={Object.keys(markupPorLicit).length > 0} onTentar={recarregarMarkup} />
 
       {/* LISTA ou RELATÓRIO */}
       {vistaRelatorio ? (
