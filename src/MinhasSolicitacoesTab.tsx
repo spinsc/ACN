@@ -18,7 +18,12 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Icone from './Icone';
 import { Botao, Chips, Selo, Faixa, diaBR } from './Interface';
-import { abrirVinculo } from './VinculoPicker';
+import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+// 10/11/2026 (pedido do usuário): o "Ver" mostra TUDO o que a pessoa preencheu ao pedir, usando as mesmas peças das telas dos setores
+import { ItensDemandaView, vinculosDaDemanda, enderecoDoLink } from './DemandaItens';
+import { membrosDe } from './DemandaExtras';
+import { TIPOS_DE_CUSTO, FORMAS_DE_PAGAMENTO } from './PagamentoDeTerceiro';
+import { lerReservasDaDemanda } from './ViagemReservas';
 import { imprimirOrdemDoSolicitante, temOrdemParaImprimir, tituloDaOrdem } from './OrdemDoSolicitante';
 import { combinaBusca } from './SearchUtils';
 import { mdiClipboardListOutline, mdiCartOutline, mdiClipboardTextOutline, mdiMagnify, mdiRefresh, mdiOpenInNew, mdiPrinterOutline } from '@mdi/js';
@@ -71,16 +76,16 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
     const meu = (x: any) => String(x?.criado_por || '').trim().toLowerCase() === email;
     const [c, da, ds, an] = await Promise.all([
       supabase.from('pcp_pedidos_compra')
-        .select('id,numero_pedido,descricao_material,quantidade,status_compra,comprador_nome,fornecedor,valor_compra,prazo_entrega,data_prevista_recebimento,data_criacao,ultima_movimentacao_em,vinculo_tipo,vinculo_descricao,opl,numero_oc,centro_custo,motivo_descarte,reprocessos,observacoes_compra,itens,criado_por')
+        .select('id,numero_pedido,descricao_material,quantidade,status_compra,comprador_nome,fornecedor,valor_compra,prazo_entrega,data_prevista_recebimento,data_criacao,ultima_movimentacao_em,vinculo_tipo,vinculo_descricao,opl,numero_oc,centro_custo,motivo_descarte,reprocessos,observacoes_compra,itens,criado_por,criado_por_nome,criado_por_setor,link_url,observacoes,data_recebimento_real,forma_recebimento,coletado_em')
         .ilike('criado_por', padrao).order('data_criacao', { ascending: false }).limit(LIMITE),
       supabase.from('demandas_avulsas')
-        .select('id,titulo,descricao,setor,status,prioridade,prazo,criado_em,atualizado_em,responsavel_nome,vinculo_descricao,itens,informacoes,motivo_cancelamento,criado_por')
+        .select('id,titulo,descricao,setor,status,prioridade,prazo,criado_em,atualizado_em,responsavel_nome,vinculo_tipo,vinculo_id,vinculo_descricao,vinculos,itens,informacoes,motivo_cancelamento,cancelada_em,cancelada_por,criado_por,criado_por_nome,observacoes,centro_custo,pintura,pintura_tipo,membros,pagamento_terceiro,etapas,data_inicio,data_fim')
         .ilike('criado_por', padrao).order('criado_em', { ascending: false }).limit(LIMITE),
       supabase.from('demandas_setoriais')
-        .select('id,numero_demanda,setor_destino,setor_origem,descricao,status,prioridade,data_abertura,data_conclusao,updated_at,responsavel_nome,numero_opl,tipo_solicitacao,quantidade,logs_demanda,criado_por')
+        .select('id,numero_demanda,setor_destino,setor_origem,descricao,status,prioridade,data_abertura,data_inicio,data_conclusao,updated_at,responsavel_nome,numero_opl,opl,chassi,tipo_solicitacao,quantidade,unidade,logs_demanda,criado_por,criado_por_nome,observacoes_execucao,centro_custo,anexos,valor_compra,data_prevista_recebimento,sac_os_id')
         .ilike('criado_por', padrao).order('data_abertura', { ascending: false }).limit(LIMITE),
       supabase.from('analise_solicitacoes')
-        .select('id,origem,origem_titulo,origem_numero,status,criado_por,criado_em,cancelada_em,motivo_cancelamento,analise_setores(setor,status,analisado_em)')
+        .select('id,origem,origem_titulo,origem_numero,status,criado_por,criado_em,cancelada_em,cancelada_por,motivo_cancelamento,analise_setores(setor,status,analisado_em,analisado_por)')
         .in('criado_por', [nome, email].filter(Boolean)).order('criado_em', { ascending: false }).limit(LIMITE),
     ]);
     const falhas: string[] = [];
@@ -217,27 +222,103 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
 }
 
 // ── Detalhe (só leitura) ──────────────────────────────────────────────────────
+// 10/11/2026 (pedido do usuário): o "Ver" mostra TUDO o que a pessoa preencheu ao pedir (compra: itens com valor, fornecedor e link, data desejada, prioridade,
+// centro de custo, vínculo, observações, anexos...; demanda: itens, vínculos, envolvidos, pagamento, veículo, arquivos...). Só o que ficou em branco fica de fora.
+// Dinheiro (valor de item, valor da compra, valor a pagar) segue a marca "ver valores" da pessoa, porque o comprador ou o setor pode ter preenchido depois.
 function Campo({ rot, children }: any) {
   if (children == null || children === '' || children === false) return null;
   return <div className="acn-ms-campo"><span className="acn-ms-rot">{rot}</span><div className="acn-ms-val">{children}</div></div>;
 }
+const Secao = ({ children }: any) => <div className="acn-ms-secao">{children}</div>;
+// texto corrido (quebra de linha preservada); vazio não vira campo
+const txt = (t: any) => (String(t ?? '').trim() ? <div className="acn-ms-texto">{String(t).trim()}</div> : null);
+const reais = (v: any) => (v != null && v !== '' && Number.isFinite(Number(v)) ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : null);
+const diaDe = (v: any) => (v ? diaBR(v) : null);
+const rotuloDe = (lista: any[], id: string) => lista.find(x => x.id === id)?.rotulo || id || '';
+const TIPOS_SOLICITACAO: Record<string, string> = { compra: 'Compra', falta_op: 'Falta para a OP', reposicao_estoque: 'Reposição de estoque', liberacao_parcial_bom: 'Liberação parcial da BOM' };
 
-function ListaItens({ itens }: any) {
-  const lista = (Array.isArray(itens) ? itens : []).filter((x: any) => String(x?.nome || '').trim());
+function Linhas({ pares }: any) {
+  const lista = pares.filter(([, v]: any) => v != null && v !== '' && v !== false);
   if (!lista.length) return null;
+  return <ul className="acn-ms-itens">{lista.map(([k, v]: any, i: number) => <li key={i}><strong>{k}:</strong> {v}</li>)}</ul>;
+}
+
+function ListaDeArquivos({ arquivos }: any) {
   return (
     <ul className="acn-ms-itens">
-      {lista.map((x: any, k: number) => <li key={k}><strong>{x.quantidade || 1}×</strong> {x.nome}{x.descricao ? <span className="acn-fraco"> ({x.descricao})</span> : null}</li>)}
+      {arquivos.map((a: any, k: number) => {
+        const href = enderecoDoLink(a.url);
+        return (
+          <li key={a.id || k}>
+            {href ? <a href={href} target="_blank" rel="noreferrer">📎 {a.nome || a.url}</a> : <>📎 {a.nome || a.url}</>}
+            {a.descricao ? <span className="acn-fraco"> — {a.descricao}</span> : null}
+            {a.criado_em ? <span className="acn-fraco"> · {dh(a.criado_em)}</span> : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
+// a compra guarda o título, o motivo e as linhas dos itens num texto só, e a prioridade dentro das observações: separa de volta (mesma conta do QuadroDaSolicitacao do Compras)
+function dadosDaCompra(b: any) {
+  const itens = (Array.isArray(b.itens) ? b.itens : []).filter((i: any) => String(i?.nome || '').trim());
+  const obs = String(b.observacoes_compra || '');
+  const prioridade = (/(?:^|\n)Prioridade:\s*(Alta|Média|Baixa)/.exec(obs) || [])[1] || '';
+  const observacoes = obs.split('\n').filter(l => !/^Prioridade:/.test(l)).join('\n').trim();
+  const geradas = new Set(itens.map((i: any) => `${i.quantidade || 1}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}`));
+  const texto = String(b.descricao_material || '').split('\n').filter(l => !geradas.has(l)).join('\n').trim();
+  // depois da cotação escolhida o fornecedor da compra passa a ser o vencedor; antes disso é o que a pessoa sugeriu
+  const fornecedorEhSugestao = ['Pendente', 'Em Andamento'].includes(b.status_compra);
+  return { itens, prioridade, observacoes, texto, fornecedorEhSugestao };
+}
+
 function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
   const b = item.bruto;
-  const reais = (v: any) => v != null && v !== '' ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : null;
-  const andamentos = (item.tipo === 'demanda'
-    ? (item.origemTabela === 'avulsa' ? b.informacoes : b.logs_demanda) : []) || [];
-  const ultimos = [...andamentos].slice(-5).reverse();
+  const avulsa = item.tipo === 'demanda' && item.origemTabela === 'avulsa';
+  const setorial = item.tipo === 'demanda' && item.origemTabela === 'setorial';
+  const [extras, setExtras] = useState<any>({ pronto: false, anexos: [], reservas: [], frota: {}, erros: [] });
+
+  // o que mora em outras tabelas: anexos da compra, arquivos da demanda e o veículo da frota reservado para ela. Leitura que falha avisa; nunca vira "nenhum anexo".
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const erros: string[] = []; let anexos: any[] = []; let reservas: any[] = []; const frota: any = {};
+      if (item.tipo === 'compra') {
+        const { data, error } = await supabase.from('pcp_pedidos_compra_anexos').select('id,nome,url,criado_em').eq('pedido_id', b.id).order('criado_em');
+        if (error) erros.push('os anexos (' + error.message + ')'); else anexos = data || [];
+      } else if (avulsa) {
+        const [an, rs] = await Promise.all([
+          supabase.from('demanda_avulsa_anexos').select('id,nome,url,descricao,criado_em').eq('demanda_id', b.id).order('criado_em'),
+          lerReservasDaDemanda(b.id),
+        ]);
+        if (an.error) erros.push('os arquivos (' + an.error.message + ')'); else anexos = an.data || [];
+        if (rs.erro) erros.push('o veículo da frota (' + rs.erro + ')'); else reservas = rs.lista;
+        const ids = [...new Set(reservas.map((r: any) => r.frota_id).filter(Boolean))];
+        if (ids.length) {
+          const { data, error } = await supabase.from('frota_veiculos').select('id,apelido,modelo,placa').in('id', ids);
+          if (error) erros.push('o nome do veículo (' + error.message + ')'); else (data || []).forEach((v: any) => { frota[v.id] = v; });
+        }
+      }
+      if (vivo) setExtras({ pronto: true, anexos, reservas, frota, erros });
+    })();
+    return () => { vivo = false; };
+  }, [item.chave]);
+
+  const c = item.tipo === 'compra' ? dadosDaCompra(b) : null;
+  // anexos: a compra e a demanda avulsa vêm das tabelas; a demanda dos setores guarda os arquivos numa lista na própria linha
+  const arquivos = setorial
+    ? (Array.isArray(b.anexos) ? b.anexos : []).map((x: any) => (typeof x === 'string' ? { nome: x, url: x } : x)).filter((x: any) => x && (x.url || x.nome))
+    : extras.anexos;
+  // andamentos: todos, do mais novo para o mais antigo
+  const andamentos = (avulsa ? b.informacoes : setorial ? b.logs_demanda : null) || [];
+  const todosAndamentos = [...andamentos].reverse();
+  const vinculos = avulsa ? vinculosDaDemanda(b) : [];
+  const etapas = avulsa && Array.isArray(b.etapas) ? b.etapas : [];
+  const envolvidos = avulsa ? membrosDe(b) : [];
+  const pg = avulsa && b.pagamento_terceiro?.favorecido ? b.pagamento_terceiro : null;
+  const carro = (r: any) => { const v = extras.frota[r.frota_id]; return v ? [v.apelido, v.modelo, v.placa].filter(Boolean).join(' · ') : 'Veículo da frota'; };
+
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box acn-modal-cadastro acn-sac-jan">
@@ -249,53 +330,107 @@ function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
             <Selo familia={item.familia}>{item.situacao || '—'}</Selo>
             <span className="acn-fraco">Aberta em {dh(item.criadoEm)}</span>
           </div>
+          {extras.erros.map((e: string, i: number) => <Faixa key={i} tom="erro">Não foi possível ler {e}. Pode haver informações que não aparecem aqui.</Faixa>)}
 
-          {item.tipo === 'compra' && (<>
-            <Campo rot="O que foi pedido"><div className="acn-ms-texto">{b.descricao_material}</div></Campo>
-            <Campo rot="Itens"><ListaItens itens={b.itens} /></Campo>
-            <Campo rot="Vinculada a">{b.vinculo_descricao || b.opl}</Campo>
+          {c && (<>
+            <Campo rot="O que foi pedido">{txt(c.texto)}</Campo>
+            {c.itens.length > 0 && <ItensDemandaView itens={c.itens} mostrarValor={verValores} />}
+            {c.itens.length === 0 && <Campo rot="Quantidade">{b.quantidade}</Campo>}
+            <Campo rot="Prioridade">{c.prioridade}</Campo>
+            <Campo rot="Data desejada">{diaDe(b.prazo_entrega)}</Campo>
             <Campo rot="Centro de custo">{b.centro_custo}</Campo>
-            <Campo rot="Comprador">{b.comprador_nome}</Campo>
-            <Campo rot="Fornecedor">{b.fornecedor}</Campo>
+            <Campo rot="Vinculada a">{b.vinculo_tipo ? `${TIPO_LABEL[b.vinculo_tipo] || b.vinculo_tipo}${b.vinculo_descricao ? ': ' + b.vinculo_descricao : ''}` : (b.vinculo_descricao || (b.opl ? 'OP ' + b.opl : ''))}</Campo>
+            <Campo rot="Comprador indicado">{b.comprador_nome}</Campo>
+            <Campo rot={c.fornecedorEhSugestao ? 'Fornecedor sugerido' : 'Fornecedor da compra'}>{b.fornecedor}</Campo>
+            <Campo rot="Link">{b.link_url ? (enderecoDoLink(b.link_url) ? <a href={enderecoDoLink(b.link_url)!} target="_blank" rel="noreferrer">{b.link_url}</a> : b.link_url) : null}</Campo>
+            <Campo rot="Observações">{txt(c.observacoes)}</Campo>
+            <Campo rot="Observações da compra">{txt(b.observacoes)}</Campo>
+            {extras.anexos.length > 0 && <Campo rot="Anexos"><ListaDeArquivos arquivos={extras.anexos} /></Campo>}
+            <Campo rot="Solicitado por">{[b.criado_por_nome || b.criado_por, b.criado_por_setor].filter(Boolean).join(' · ')}</Campo>
+            {/* o título só entra quando há algo do andamento para mostrar (compra recém-pedida não tem nada disso) */}
+            {(b.numero_oc || (verValores && b.valor_compra != null && b.valor_compra !== '') || b.data_prevista_recebimento || b.forma_recebimento === 'coleta' || b.data_recebimento_real || b.reprocessos || String(b.motivo_descarte || '').trim()) && <Secao>Andamento da compra</Secao>}
+            <Campo rot="Ordem de compra">{b.numero_oc}</Campo>
             {verValores && <Campo rot="Valor da compra">{reais(b.valor_compra)}</Campo>}
-            <Campo rot="Previsão de recebimento">{b.data_prevista_recebimento ? diaBR(b.data_prevista_recebimento) : null}</Campo>
-            <Campo rot="Prazo pedido">{b.prazo_entrega ? diaBR(b.prazo_entrega) : null}</Campo>
+            <Campo rot="Previsão de recebimento">{diaDe(b.data_prevista_recebimento)}</Campo>
+            <Campo rot="Forma de recebimento">{b.forma_recebimento === 'coleta' ? 'Coleta pelo Compras' + (b.coletado_em ? ' (coletado em ' + diaBR(b.coletado_em) + ')' : '') : null}</Campo>
+            <Campo rot="Recebida em">{diaDe(b.data_recebimento_real)}</Campo>
             <Campo rot="Voltou para refazer">{b.reprocessos ? `${b.reprocessos} vez(es)` : null}</Campo>
-            <Campo rot="Motivo do descarte">{b.motivo_descarte}</Campo>
-            <Campo rot="Observações"><div className="acn-ms-texto">{b.observacoes_compra}</div></Campo>
+            <Campo rot="Motivo do descarte">{txt(b.motivo_descarte)}</Campo>
           </>)}
 
-          {item.tipo === 'demanda' && (<>
+          {avulsa && (<>
             <Campo rot="Para o setor">{item.para}</Campo>
             <Campo rot="Prioridade">{b.prioridade}</Campo>
-            <Campo rot="Descrição"><div className="acn-ms-texto">{String(b.descricao || '').replace(/^\[AJUSTE\]\s*/, '')}</div></Campo>
-            <Campo rot="Itens"><ListaItens itens={b.itens} /></Campo>
-            <Campo rot="OP">{b.numero_opl}</Campo>
-            <Campo rot="Vinculada a">{b.vinculo_descricao}</Campo>
+            <Campo rot="Descrição">{txt(b.descricao)}</Campo>
+            {Array.isArray(b.itens) && b.itens.some((i: any) => String(i?.nome || '').trim()) && <ItensDemandaView itens={b.itens.filter((i: any) => String(i?.nome || '').trim())} mostrarValor={verValores} />}
+            {vinculos.length > 0 && <Campo rot="Vinculada a"><ul className="acn-ms-itens">{vinculos.map((v: any, k: number) => <li key={k}>{TIPO_LABEL[v.tipo] || v.tipo}{v.descricao ? ': ' + v.descricao : ''}</li>)}</ul></Campo>}
+            <Campo rot="Centro de custo">{b.centro_custo}</Campo>
+            <Campo rot="Pintura">{b.pintura ? 'Sim' + (b.pintura_tipo ? ' — ' + b.pintura_tipo : '') : null}</Campo>
+            {pg && <Campo rot="Pagamento a terceiro"><Linhas pares={[
+              ['Favorecido', pg.favorecido], ['CPF ou CNPJ', pg.documento], ['Tipo de custo', rotuloDe(TIPOS_DE_CUSTO, pg.tipo)],
+              ['Valor a pagar', verValores ? reais(pg.valor) : null], ['Vencimento', diaDe(pg.vencimento)], ['Forma de pagamento', rotuloDe(FORMAS_DE_PAGAMENTO, pg.forma)],
+              ['Dados para pagar', pg.dados_pagamento], ['Observação', pg.observacao],
+            ]} /></Campo>}
+            {extras.reservas.length > 0 && <Campo rot="Veículo da frota"><ul className="acn-ms-itens">{extras.reservas.map((r: any) => (
+              <li key={r.id}>{carro(r)} · {diaBR(r.data_inicio)} a {diaBR(r.data_fim)} · {r.motivo}{r.responsavel_nome ? ' · com ' + r.responsavel_nome : ''}{r.observacao ? ' — ' + r.observacao : ''}{r.status === 'cancelada' ? <span className="acn-fraco"> (cancelada{r.motivo_cancelamento ? ': ' + r.motivo_cancelamento : ''})</span> : null}</li>
+            ))}</ul></Campo>}
+            {envolvidos.length > 0 && <Campo rot="Envolvidos">{envolvidos.map(m => m.nome).join(', ')}</Campo>}
             <Campo rot="Responsável">{b.responsavel_nome}</Campo>
             <Campo rot="Prazo">{b.prazo ? dh(b.prazo) : null}</Campo>
-            <Campo rot="Concluída em">{b.data_conclusao ? dh(b.data_conclusao) : null}</Campo>
-            <Campo rot="Motivo do cancelamento">{b.motivo_cancelamento}</Campo>
-            {ultimos.length > 0 && (
-              <Campo rot="Últimos andamentos">
-                <ul className="acn-ms-itens">
-                  {ultimos.map((a: any, k: number) => <li key={k}><span className="acn-fraco">{dh(a.data || a.hora)} · {a.usuario || ''}</span> {a.texto}</li>)}
-                </ul>
-              </Campo>
-            )}
+            <Campo rot="Observações">{txt(b.observacoes)}</Campo>
+            {etapas.length > 0 && <Campo rot="Etapas"><ul className="acn-ms-itens">{etapas.map((e: any, k: number) => (
+              <li key={k}><strong>Etapa {e.num || k + 1}</strong>{e.setor ? ' · ' + e.setor : ''}{e.obs_criacao ? ' — ' + e.obs_criacao : ''}
+                <span className="acn-fraco"> {[e.responsavel_nome, e.prazo ? 'prazo ' + dh(e.prazo) : '', e.status].filter(Boolean).join(' · ')}</span></li>
+            ))}</ul></Campo>}
+            {arquivos.length > 0 && <Campo rot="Arquivos"><ListaDeArquivos arquivos={arquivos} /></Campo>}
+            <Campo rot="Início da execução">{b.data_inicio ? dh(b.data_inicio) : null}</Campo>
+            <Campo rot="Concluída em">{b.data_fim ? dh(b.data_fim) : null}</Campo>
+            <Campo rot="Cancelada">{b.cancelada_em ? dh(b.cancelada_em) + (b.cancelada_por ? ' por ' + b.cancelada_por : '') : null}</Campo>
+            <Campo rot="Motivo do cancelamento">{txt(b.motivo_cancelamento)}</Campo>
           </>)}
+
+          {setorial && (<>
+            <Campo rot="Tipo de solicitação">{b.tipo_solicitacao ? (TIPOS_SOLICITACAO[b.tipo_solicitacao] || b.tipo_solicitacao) : null}</Campo>
+            <Campo rot="Para o setor">{item.para}</Campo>
+            <Campo rot="Pedida por">{b.setor_origem}</Campo>
+            <Campo rot="Prioridade">{b.prioridade}</Campo>
+            <Campo rot="Descrição">{txt(String(b.descricao || '').replace(/^\[AJUSTE\]\s*/, ''))}</Campo>
+            <Campo rot="Quantidade">{b.quantidade != null && b.quantidade !== '' ? `${Number(b.quantidade).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${b.unidade || ''}`.trim() : null}</Campo>
+            <Campo rot="OP">{b.numero_opl || b.opl}</Campo>
+            <Campo rot="Chassi">{b.chassi}</Campo>
+            <Campo rot="OS do SAC">{b.sac_os_id ? 'Ligada a uma OS do SAC' : null}</Campo>
+            <Campo rot="Centro de custo">{b.centro_custo}</Campo>
+            {verValores && <Campo rot="Valor da compra">{reais(b.valor_compra)}</Campo>}
+            <Campo rot="Previsão de recebimento">{diaDe(b.data_prevista_recebimento)}</Campo>
+            <Campo rot="Responsável">{b.responsavel_nome}</Campo>
+            <Campo rot="Observações da execução">{txt(b.observacoes_execucao)}</Campo>
+            {arquivos.length > 0 && <Campo rot="Arquivos"><ListaDeArquivos arquivos={arquivos} /></Campo>}
+            <Campo rot="Início da execução">{b.data_inicio ? dh(b.data_inicio) : null}</Campo>
+            <Campo rot="Concluída em">{b.data_conclusao ? dh(b.data_conclusao) : null}</Campo>
+          </>)}
+
+          {item.tipo === 'demanda' && todosAndamentos.length > 0 && (
+            <Campo rot={`Andamentos (${todosAndamentos.length})`}>
+              <ul className="acn-ms-itens acn-ms-rolagem">
+                {todosAndamentos.map((a: any, k: number) => <li key={k}><span className="acn-fraco">{dh(a.data || a.hora)} · {a.usuario || ''}</span> {a.texto}</li>)}
+              </ul>
+            </Campo>
+          )}
 
           {item.tipo === 'analise' && (<>
             <Campo rot="Origem">{item.resumo}{item.numero ? ' ' + item.numero : ''}</Campo>
             <Campo rot="Setores pedidos">
               <ul className="acn-ms-itens">
                 {(b.analise_setores || []).map((s: any, k: number) => (
-                  <li key={k}>{s.setor}: {s.status === 'analisado' ? <strong className="acn-txt-ok">analisado</strong> : s.status === 'cancelado' ? 'cancelado' : 'pendente'}{s.analisado_em ? <span className="acn-fraco"> · {dh(s.analisado_em)}</span> : null}</li>
+                  <li key={k}>{s.setor}: {s.status === 'analisado' ? <strong className="acn-txt-ok">analisado</strong> : s.status === 'cancelado' ? 'cancelado' : 'pendente'}{s.analisado_em ? <span className="acn-fraco"> · {dh(s.analisado_em)}{s.analisado_por ? ' · ' + s.analisado_por : ''}</span> : null}</li>
                 ))}
               </ul>
             </Campo>
-            <Campo rot="Motivo do cancelamento">{b.motivo_cancelamento}</Campo>
+            <Campo rot="Cancelada">{b.cancelada_em ? dh(b.cancelada_em) + (b.cancelada_por ? ' por ' + b.cancelada_por : '') : null}</Campo>
+            <Campo rot="Motivo do cancelamento">{txt(b.motivo_cancelamento)}</Campo>
           </>)}
+
+          {!extras.pronto && (item.tipo === 'compra' || avulsa) && <div className="acn-ajuda">Carregando anexos…</div>}
         </div>
         <div className="acn-modal-rodape acn-sac-rodape">
           {item.tipo === 'compra' && (

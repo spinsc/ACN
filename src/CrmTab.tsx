@@ -53,6 +53,8 @@ import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from 
 import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { podeExcluirCardComercial, bloqueiosDeExclusao } from './ExclusaoDeCard';
+import { lerOpsExcluidas } from './ExclusaoDeOp';
+import { QuadroOpsExcluidas } from './OpsExcluidas';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { camposQueFaltam, listaEmTexto } from './OpObrigatorios';
@@ -485,6 +487,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // 7.62 (07/10/2026): leitura que falha não pode parecer "tela vazia" — cada uma guarda o motivo e a tela mostra uma faixa com "Tentar de novo"
   const [erroCarga, setErroCarga]           = useState('');   // o quadro (estágios, oportunidades, checklist, vendas)
   const [erroOpls, setErroOpls]             = useState('');   // a lista "OPs em aberto"
+  // OPs excluídas por Admin/gerente (11/11/2026): só aparecem aqui, marcadas, em quadro à parte abaixo da lista (a função do banco confere a aba CRM/Comercial)
+  const [oplsExcluidas, setOplsExcluidas]    = useState<any[]>([]);
+  const [erroExcluidas, setErroExcluidas]    = useState('');
   const [erroAbrir, setErroAbrir]           = useState('');   // andamento/documentos do card aberto
   const [erroNota, setErroNota]             = useState('');   // a nota livre do card aberto — sem lê-la, salvar apagaria a que existe
   const [erroAndamentoModal, setErroAndamentoModal] = useState('');   // a janela "Atualizar andamento"
@@ -1527,6 +1532,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // 7.62: a leitura que falhava virava "Nenhuma OP em aberto" — e sumia com a lista que já estava na tela
     if (errLista) { setErroOpls(errLista.message); setOplsLoading(false); return; }
     setErroOpls('');
+    lerOpsExcluidas().then(r => { setOplsExcluidas(r.lista); setErroExcluidas(r.erro || ''); });   // a leitura das excluídas falhar não esconde a lista de abertas
     const lista = data || [];
     setOplsEmAberto(lista);
     setDevolvidasComercial(lista.filter((o: any) => o.status_geral === 'Devolvida Comercial').length);
@@ -1566,6 +1572,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   useEffect(() => {
     if (abaInterna === 'opls') fetchOplsEmAberto();
+  }, [abaInterna]);
+  // uma OP excluída pela janela da OP (Mais ações) some da lista na hora
+  useEffect(() => {
+    const aoExcluir = () => { if (abaInterna === 'opls') fetchOplsEmAberto(); };
+    window.addEventListener('acn:op-excluida', aoExcluir);
+    return () => window.removeEventListener('acn:op-excluida', aoExcluir);
   }, [abaInterna]);
 
   // R3: o contador de devolvidas precisa existir antes de abrir a aba "OPs em aberto" (e depois de uma OP automática nascer devolvida)
@@ -3826,6 +3838,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 </table>
               </div>
             )}
+
+            {(() => {
+              const exc = oplsExcluidas.filter((o: any) => (oplsFiltro === 'crm' ? !!o.crm_oportunidade_id : oplsFiltro === 'sem_crm' ? !o.crm_oportunidade_id : true)
+                && (!filtResp || o.responsavel_comercial === filtResp) && combinaBusca([o.opl, o.cliente_nome, o.modelo], busca));
+              return <QuadroOpsExcluidas lista={exc} erro={erroExcluidas} onTentarDeNovo={fetchOplsEmAberto} />;
+            })()}
 
             {resumoLoteBase && (() => {
               const irmaosDoLote = (resumoLoteCompleto && resumoLoteCompleto.length) ? resumoLoteCompleto : oplsEmAberto.filter((o: any) => (o.opl || '').replace(/\/\d+$/, '') === resumoLoteBase);

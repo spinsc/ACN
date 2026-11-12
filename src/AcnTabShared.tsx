@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -28,6 +28,7 @@ import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente } from './utils/permissoes';
 import CopiarOpModal from './CopiarOpModal';
 import TrocarFluxoModal from './TrocarFluxoModal';
+import { excluirOpComMotivo, podeExcluirOp } from './ExclusaoDeOp';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
@@ -790,6 +791,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [copiando, setCopiando] = useState(false);
   // Trocar o fluxo da unidade (fluxo misto, M3, 27/10/2026): uma unidade de lote passa de adaptação para envio, ou o contrário, até o Almoxarifado fechar o kit
   const [trocandoFluxo, setTrocandoFluxo] = useState(false);
+  // Excluir a OP (11/11/2026): só Admin e gerentes, com motivo; a OP some das telas e fica guardada, marcada (ExclusaoDeOp.ts). A função confere o que impede, mostra o que será desligado, pede o motivo e confirma.
+  const excluirEstaOp = async () => { if (await excluirOpComMotivo(opl, usuario)) onClose(); };
   const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
@@ -1009,6 +1012,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
               // só a unidade de um lote (o fluxo misto nasce no lote) e quem tem poder de gerente; a janela confere a etapa e explica quando não dá
               { rotulo: 'Trocar o fluxo desta unidade', icone: mdiSwapHorizontal, onClick: () => setTrocandoFluxo(true), oculto: !(temPoderDeGerente(usuario) && qtdLote > 1 && ehUnidadeDeLote(opl?.opl)) },
+              // só Admin e gerentes de verdade (a equipe do Comercial, que vale como gerente do setor, não exclui); o banco confere o perfil de novo
+              { rotulo: 'Excluir OP', icone: mdiDeleteOutline, onClick: excluirEstaOp, perigo: true, oculto: !podeExcluirOp(usuario) },
             ]} />
             <button type="button" className="acn-opl-x" onClick={fecharEMarcarLido} aria-label="Fechar" title="Fechar"><Icone path={mdiClose} size={20} /></button>
           </div>

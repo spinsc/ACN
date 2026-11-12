@@ -1,10 +1,14 @@
 /* Tela Início (09/11/2026). Só as cores e medidas do design system (--acn-*), então o modo escuro vem junto. Prefixo acn-ini-. */
 
 .acn-ini { display: grid; gap: 16px; }
-.acn-ini-grade { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-.acn-ini-col { display: grid; gap: 16px; min-width: 0; }
+/* 11/11/2026 (pedido do usuário: "a tela sempre harmonizada e alinhada"): as duas colunas têm a MESMA altura e o último cartão de cada uma cresce até o fim,
+   então a base da fileira de cartões da esquerda e a do último cartão da direita ficam na mesma linha, qualquer que seja o tamanho do conteúdo (mais ou menos aniversariantes, por exemplo). */
+.acn-ini-grade { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.acn-ini-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.acn-ini-col > :last-child { flex: 1 1 auto; }
 .acn-ini-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-@media (max-width: 1180px) { .acn-ini-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* em duas colunas o terceiro cartão ocuparia sozinho metade da linha de baixo; ocupa a linha inteira para a fileira não ficar torta */
+@media (max-width: 1180px) { .acn-ini-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } .acn-ini-tres > :last-child:nth-child(odd) { grid-column: 1 / -1; } }
 @media (max-width: 980px) { .acn-ini-grade { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .acn-ini-tres { grid-template-columns: minmax(0, 1fr); } }
 

@@ -14,7 +14,7 @@ import {
   SEGUNDOS_POR_SLIDE, slidesDoCarrossel, textoDoPeriodo, proximasDatas, rotuloDoAniversario, iniciais, nomeProprio, primeiroNome, saudacao, dataPorExtenso, semanaIso,
   diaDoMes, mesCurto, nomeDoMes, avisoDaCoberturaDosAniversarios, CIDADE_DO_CLIMA,
 } from './InicioModelo';
-import { lerSlides, enderecosDasImagens, lerDatas, lerAniversariantesDoMes, lerCoberturaDosAniversarios, lerNovidades } from './InicioDados';
+import { lerSlides, enderecosDasImagens, lerDatas, lerAniversariantesDoMes, lerCoberturaDosAniversarios } from './InicioDados';
 import { lerClima } from './InicioClima';
 import InicioGerenciar from './InicioGerenciar';
 import './inicio.css';
@@ -128,7 +128,6 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
   const [datas, setDatas] = useState<any>({ lista: [], erro: '' });
   const [aniv, setAniv] = useState<any>({ lista: [], erro: '', carregando: true });
   const [cobertura, setCobertura] = useState<any>(null);   // quantas pessoas ativas têm a data de nascimento (só quem edita a lê: o aviso é para o RH)
-  const [novidades, setNovidades] = useState<any>({ lista: [], erro: '', carregando: true });
   const [clima, setClima] = useState<any>({ carregando: true });
   const [gerenciando, setGerenciando] = useState(false);
 
@@ -143,10 +142,9 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
   }, []);
   const carregarOutros = useCallback(async () => {
     // o número de pessoas sem a data de nascimento só interessa a quem edita (o RH): os outros nem fazem a leitura
-    const [d, a, n, c] = await Promise.all([lerDatas(diaISO(new Date())), lerAniversariantesDoMes(), lerNovidades(4), podePostar ? lerCoberturaDosAniversarios() : Promise.resolve(null)]);
+    const [d, a, c] = await Promise.all([lerDatas(diaISO(new Date())), lerAniversariantesDoMes(), podePostar ? lerCoberturaDosAniversarios() : Promise.resolve(null)]);
     setDatas({ lista: d.lista, erro: d.erro || '' });
     setAniv({ lista: a.lista, erro: a.erro || '', carregando: false });
-    setNovidades({ lista: n.lista, erro: n.erro || '', carregando: false });
     setCobertura(c && !c.erro ? c.cobertura : null);   // sem número que se possa usar, sem aviso (nunca inventa)
   }, [podePostar]);
   const carregarClima = useCallback(async (forcar = false) => {
@@ -237,16 +235,16 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
               </div></div>
             </div>
 
+            {/* 11/11/2026 (pedido do usuário): o cartão "Novidades do sistema" saiu e o "Próximos dias" ocupa o lugar dele, no meio da fileira; as novidades continuam nos Avisos do cabeçalho */}
             <div className="acn-ini-card">
-              <div className="acn-ini-card-cab">Novidades do sistema</div>
+              <div className="acn-ini-card-cab">Próximos dias</div>
               <div className="acn-ini-card-corpo">
-                {novidades.erro && <Faixa tom="erro">Não foi possível ler as novidades: {novidades.erro}</Faixa>}
-                {!novidades.erro && !novidades.carregando && !novidades.lista.length && <div className="acn-ini-fraco">Nenhuma novidade nos últimos dias.</div>}
+                {datas.erro && <Faixa tom="erro">Não foi possível ler as datas da empresa: {datas.erro} Os feriados continuam valendo.</Faixa>}
                 <div className="acn-ini-lista">
-                  {novidades.lista.map((av: any) => (
-                    <div key={av.id} className="acn-ini-item">
-                      <div className="texto"><div className="acn-ini-forte acn-ini-clamp">{av.titulo}</div><div className="acn-ini-fraco acn-ini-pequeno acn-ini-clamp">{String(av.mensagem || '').replace(/\s+/g, ' ')}</div></div>
-                      <span className="direita acn-ini-fraco acn-ini-pequeno">{diaBR(av.criado_em).slice(0, 5)}</span>
+                  {proximos.map((p, k) => (
+                    <div key={k} className="acn-ini-item">
+                      <div className="acn-ini-dia"><span>{mesCurto(p.data)}</span><b>{diaDoMes(p.data)}</b></div>
+                      <div className="texto"><div className="acn-ini-forte">{p.titulo}</div><div className="acn-ini-fraco acn-ini-pequeno">{p.detalhe}</div></div>
                     </div>
                   ))}
                 </div>
@@ -299,21 +297,6 @@ export default function InicioTab({ currentUser, podeAbrir, irPara, contagens = 
               </div>
               {/* só para quem edita (o RH): o cartão só mostra quem tem a data de nascimento no cadastro (de manhã em 09/11/2026 só 1 das 41 pessoas ativas a tinha); sem o aviso, quem não aparece parece defeito do cartão */}
               {podePostar && !aniv.erro && avisoDaCoberturaDosAniversarios(cobertura) && <div className="acn-ini-mt"><Faixa tom="atencao">{avisoDaCoberturaDosAniversarios(cobertura)}</Faixa></div>}
-            </div>
-          </div>
-
-          <div className="acn-ini-card">
-            <div className="acn-ini-card-cab">Próximos dias</div>
-            <div className="acn-ini-card-corpo">
-              {datas.erro && <Faixa tom="erro">Não foi possível ler as datas da empresa: {datas.erro} Os feriados continuam valendo.</Faixa>}
-              <div className="acn-ini-lista">
-                {proximos.map((p, k) => (
-                  <div key={k} className="acn-ini-item">
-                    <div className="acn-ini-dia"><span>{mesCurto(p.data)}</span><b>{diaDoMes(p.data)}</b></div>
-                    <div className="texto"><div className="acn-ini-forte">{p.titulo}</div><div className="acn-ini-fraco acn-ini-pequeno">{p.detalhe}</div></div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>
