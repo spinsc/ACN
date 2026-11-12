@@ -4,8 +4,9 @@
   "titulo": "Manual do SAC",
   "descricao": "Passo a passo das quatro abas do SAC (Ordens de Serviço, Chamados NFC, Garantia e Cadastros): o que cada botão faz, o que o sistema grava e para onde a OS vai.",
   "ordem": 1,
-  "atualizadoEm": "2026-11-03",
+  "atualizadoEm": "2026-11-12",
   "mudancas": [
+    { "data": "2026-11-12", "texto": "Previsão de chegada do veículo: a Nova OS de veículo que vem à fábrica ganha o campo no bloco Prazos (não aceita dia passado), o menu ⋯ ganha \"Previsão de chegada\" para informar ou mudar o dia enquanto o carro não chegou, o resumo da OS mostra a previsão antes da chegada real, e o Calendário avisa quem abriu a OS, o responsável, a Produção e o Almoxarifado até a Produção confirmar a chegada. A foto 34e (bloco Prazos) ainda é a de antes do campo." },
     { "data": "2026-11-03", "texto": "Entrega do veículo (A5): a janela passa a colher, como a do Laboratório, o nome de quem recebeu, as fotos (opcionais) e a assinatura (obrigatória); o botão agora se chama Entrega — assinatura e fotos nos dois casos, e a entrega do veículo só é gravada se a OS ainda estiver esperando a entrega. O apêndice de pontos de melhoria ficou sem itens abertos. Foto nova da janela Entrega de Veículo (20b)." },
     { "data": "2026-11-03", "texto": "Veículo sem cobrança na Produção (A8): ao marcar Chegou, a OS de garantia ou cortesia vai direto a Aguardando Início, sem Verificação e Orçamento e sem a aprovação do cliente; ao concluir, não há revisão de orçamento. O aviso de \"a confirmar\" do caminho 5 saiu." },
     { "data": "2026-11-03", "texto": "Acabamento (Onda 4): novo \"Passar as OS do lote…\" passa várias OS do lote de uma vez (seguir sem cotação, os passos sem janela própria e cancelar com um motivo só, cada OS conferida pela etapa em que está); a Nova OS esconde acessórios, fotos, faturamento, valores e vínculo com o CRM em \"Mais dados\" e mostra \"Falta: …\" ao lado do ABRIR OS; Aprovado e Provisionada passam a azul (andamento); as colunas de tempo da lista ficam atrás de \"Mais colunas\"; a lista lê mais de mil OS e os erros do banco aparecem em português. Fotos 01 a 35 refeitas, novas 29b, 34f0 e 34m." },

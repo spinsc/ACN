@@ -1260,7 +1260,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               <header className="acn-opl-card-cab"><span>📅 Prazos</span></header>
               <div className="acn-opl-card-corpo acn-opl-prazos">
                 {prazo('Data de entrada', opl.data_entrada, 'data_entrada')}
-                {prazo('Recebimento do veículo', opl.data_chegada_veiculo, 'data_chegada_veiculo')}
+                {prazo('Previsão de chegada do veículo', opl.data_chegada_veiculo, 'data_chegada_veiculo')}
                 {prazo('Aceite do cliente', opl.data_aceite_cliente, 'data_aceite_cliente')}
                 {prazo('Prazo entrega produção', opl.prazo_entrega_producao, 'prazo_entrega_producao')}
                 {prazo('Prazo entrega comercial', opl.prazo_entrega_comercial, 'prazo_entrega_comercial')}

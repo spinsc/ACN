@@ -64,7 +64,7 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Veículo / envio', campo: 'destino_destinatario', rotulo: 'Quem recebe', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'telefone' },
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
-  { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Recebimento do veículo', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Previsão de chegada do veículo', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_comercial', rotulo: 'Prazo entrega comercial', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_producao', rotulo: 'Prazo entrega produção', tipo: 'data' },
@@ -398,7 +398,7 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
 
   // ── Datas e prazos ──
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
-  { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Recebimento do veículo', tipo: 'data', soVeiculo: true },
+  { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Previsão de chegada do veículo', tipo: 'data', soVeiculo: true },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_comercial', rotulo: 'Prazo entrega comercial', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_producao', rotulo: 'Prazo entrega produção', tipo: 'data' },

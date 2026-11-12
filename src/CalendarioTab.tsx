@@ -33,18 +33,18 @@ const SETOR_FAMILIA: Record<string, string> = SETORES.reduce((a, s) => ({ ...a, 
 // Cor por fonte (as já existentes mantêm a cor que tinham) e o setor do filtro em que cada fonte aparece; a data que vence hoje ou já passou fica vermelha.
 const FAMILIA_POR_FONTE: Record<string, string> = {
   crm_retorno: 'atencao', telecom_retorno: 'atencao', crm_limite: 'atencao', tarefa_financeiro: 'neutro', tarefa_engenharia: 'ok', agendamento: 'atencao',
-  licitacao: 'marca', demanda_avulsa: 'info', demanda_etapa: 'info', frete_previsto: 'neutro', viagem_saida: 'neutro', frota_reserva: 'neutro', sac_prazo: 'info', op_chegada_veiculo: 'atencao', op_entrega: 'neutro', vistoria_retorno: 'atencao', compra_entrega: 'atencao',
+  licitacao: 'marca', demanda_avulsa: 'info', demanda_etapa: 'info', frete_previsto: 'neutro', viagem_saida: 'neutro', frota_reserva: 'neutro', sac_prazo: 'info', sac_chegada_veiculo: 'atencao', op_chegada_veiculo: 'atencao', op_entrega: 'neutro', vistoria_retorno: 'atencao', compra_entrega: 'atencao',
 };
 const SETOR_POR_FONTE: Record<string, string> = {
-  crm_retorno: 'comercial', telecom_retorno: 'comercial', crm_limite: 'comercial', op_entrega: 'comercial', licitacao: 'licitacoes', tarefa_engenharia: 'engenharia', sac_prazo: 'sac',
+  crm_retorno: 'comercial', telecom_retorno: 'comercial', crm_limite: 'comercial', op_entrega: 'comercial', licitacao: 'licitacoes', tarefa_engenharia: 'engenharia', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
 };   // as demais (demanda, compra, chegada de carro, vistoria, financeiro, manutenção) entram em "Geral"
 // aba do sistema para onde o botão "Abrir" leva (a mesma troca de aba das Menções; só troca se a pessoa tem a aba)
 const ABA_POR_FONTE: Record<string, string> = {
-  crm_retorno: 'crm', telecom_retorno: 'telecom', crm_limite: 'crm', op_entrega: 'crm', licitacao: 'licitacoes', demanda_avulsa: 'ajustes', demanda_etapa: 'ajustes', frete_previsto: 'logistica', viagem_saida: 'viagens', frota_reserva: 'viagens', sac_prazo: 'sac',
+  crm_retorno: 'crm', telecom_retorno: 'telecom', crm_limite: 'crm', op_entrega: 'crm', licitacao: 'licitacoes', demanda_avulsa: 'ajustes', demanda_etapa: 'ajustes', frete_previsto: 'logistica', viagem_saida: 'viagens', frota_reserva: 'viagens', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
   op_chegada_veiculo: 'almoxarifado', vistoria_retorno: 'vistorias', compra_entrega: 'compras', tarefa_financeiro: 'financeiro', tarefa_engenharia: 'engenharia', agendamento: 'producao',
 };
 const ROTULO_FONTE: Record<string, string> = {
-  crm_retorno: 'Contato com cliente', telecom_retorno: 'Contato com cliente (Telecom)', crm_limite: 'Prazo do CRM', licitacao: 'Licitação', demanda_avulsa: 'Prazo de demanda', demanda_etapa: 'Prazo de etapa de demanda', frete_previsto: 'Entrega prevista do frete', viagem_saida: 'Saída de viagem', frota_reserva: 'Veículo reservado', sac_prazo: 'Prazo da OS',
+  crm_retorno: 'Contato com cliente', telecom_retorno: 'Contato com cliente (Telecom)', crm_limite: 'Prazo do CRM', licitacao: 'Licitação', demanda_avulsa: 'Prazo de demanda', demanda_etapa: 'Prazo de etapa de demanda', frete_previsto: 'Entrega prevista do frete', viagem_saida: 'Saída de viagem', frota_reserva: 'Veículo reservado', sac_prazo: 'Prazo da OS', sac_chegada_veiculo: 'Chegada do veículo (OS)',
   op_chegada_veiculo: 'Chegada do veículo', op_entrega: 'Entrega ao cliente', vistoria_retorno: 'Retorno da vistoria', compra_entrega: 'Recebimento de material',
   tarefa_financeiro: 'Tarefa do Financeiro', tarefa_engenharia: 'Tarefa da Engenharia', agendamento: 'Manutenção agendada', compromisso: 'Compromisso',
 };

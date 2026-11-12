@@ -1305,7 +1305,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               </div>
 
               <div className="acn-nop-bl">
-                <div className="acn-nop-rot">Data de Recebimento do Veículo</div>
+                <div className="acn-nop-rot">Previsão de chegada do veículo</div>
                 <input type="date" className="acn-input acn-nop-w"
                   value={form.data_chegada_veiculo} onChange={e => setF('data_chegada_veiculo', e.target.value)} />
               </div>

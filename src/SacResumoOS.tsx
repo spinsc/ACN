@@ -101,7 +101,7 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
           ]} />
 
           <Grupo titulo="Andamento" linhas={[
-            ['Abertura', diaHora(os.data_abertura)], ['Chegada do veículo', diaHora(os.data_chegada_veiculo)], ['Início do diagnóstico', diaHora(os.data_inicio_diagnostico)],
+            ['Abertura', diaHora(os.data_abertura)], ['Previsão de chegada do veículo', dia(os.previsao_chegada_veiculo)], ['Chegada do veículo', diaHora(os.data_chegada_veiculo)], ['Início do diagnóstico', diaHora(os.data_inicio_diagnostico)],
             ['Orçamento finalizado', diaHora(os.data_finalizacao_orcamento)], ['Prazo do orçamento', dia(os.prazo_orcamento)], ['Orçamento enviado ao cliente', diaHora(os.data_envio_orcamento)],
             ['Aprovação', os.aprovado === true ? [sim(os.aprovado), os.aprovador_nome && 'por ' + os.aprovador_nome, os.data_aprovacao && diaHora(os.data_aprovacao)].filter(Boolean).join(' · ') : os.aprovado === false ? 'Reprovado' : ''],
             ['Motivo da reprovação', os.motivo_reprovacao], ['Retirada após reprovação', [os.nome_retirada_reprovacao, dia(os.data_retirada_reprovacao)].filter(Boolean).join(' · ')],

@@ -292,7 +292,7 @@ revoke all on function public.calendario_avisar() from public, anon, authenticat
 -- ── Mais fontes (migrações `calendario_eventos_mais_fontes` e `calendario_alvos_demanda_etapa`, 12/11/2026) ──
 -- A base acima virou `calendario_eventos_base_1`; a `calendario_eventos_base` atual = base_1 + `calendario_eventos_mais` (quem chama não muda).
 -- Em `calendario_alvos` o CASE da aba ganhou `when 'demanda_etapa' then 'ajustes'`. Chicotes e serralheria ficaram de fora: as tabelas de pedido com data prevista estão VAZIAS
--- (o trabalho deles vem pelas demandas de setor, que não têm data prevista em aberto); a chegada do carro da OS do SAC também: a coluna é a data REAL, não a previsão.
+-- (o trabalho deles vem pelas demandas de setor, que não têm data prevista em aberto); a chegada do carro da OS do SAC entrou em 12/11/2026 (migração `calendario_sac_chegada_veiculo`: coluna nova `sac_ordens_servico.previsao_chegada_veiculo` e o ramo `sac_chegada_veiculo` ao fim de `calendario_eventos_mais`, com alerta para quem abriu a OS, o responsável e os perfis Almoxarifado e Gerente Produção; some quando `data_chegada_veiculo` é preenchida; `calendario_alvos` leva o aviso à aba SAC). O corpo completo continua só na migração aplicada.
 -- alter function public.calendario_eventos_base(date, date) rename to calendario_eventos_base_1;
 -- create or replace function public.calendario_eventos_mais(p_inicio date, p_fim date) returns table (...mesmas colunas) ... :
 --   demanda_etapa  — etapas[].prazo de demanda avulsa em aberto (etapa não concluída nem cancelada); alerta
