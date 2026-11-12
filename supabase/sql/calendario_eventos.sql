@@ -288,3 +288,15 @@ revoke all on function public.calendario_avisar() from public, anon, authenticat
 -- para desligar:             select cron.unschedule('calendario-avisar');
 -- para desfazer tudo:        drop function public.calendario_avisar(); drop function public.calendario_alvos(date); drop function public.calendario_eventos(date, date, boolean);
 --                            drop function public.calendario_eventos_base(date, date); drop function public.cal_participantes(jsonb, text); drop function public.cal_nome(text);
+
+-- ── Mais fontes (migrações `calendario_eventos_mais_fontes` e `calendario_alvos_demanda_etapa`, 12/11/2026) ──
+-- A base acima virou `calendario_eventos_base_1`; a `calendario_eventos_base` atual = base_1 + `calendario_eventos_mais` (quem chama não muda).
+-- Em `calendario_alvos` o CASE da aba ganhou `when 'demanda_etapa' then 'ajustes'`. Chicotes e serralheria ficaram de fora: as tabelas de pedido com data prevista estão VAZIAS
+-- (o trabalho deles vem pelas demandas de setor, que não têm data prevista em aberto); a chegada do carro da OS do SAC também: a coluna é a data REAL, não a previsão.
+-- alter function public.calendario_eventos_base(date, date) rename to calendario_eventos_base_1;
+-- create or replace function public.calendario_eventos_mais(p_inicio date, p_fim date) returns table (...mesmas colunas) ... :
+--   demanda_etapa  — etapas[].prazo de demanda avulsa em aberto (etapa não concluída nem cancelada); alerta
+--   frete_previsto — pcp_fretes outbound em Cotação ou Em Trânsito, com data_prevista; SEM alerta (já existe o aviso de frete sem entrega)
+--   viagem_saida   — viagens aberta/em_aprovacao/provisionamento/aprovada com data_saida; SEM alerta (já existe o aviso de saída próxima)
+--   frota_reserva  — um evento por dia de reserva ativa da frota; SEM alerta
+-- (o corpo completo está na migração aplicada; este arquivo guarda a descrição)
