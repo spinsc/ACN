@@ -25,7 +25,7 @@
    ![Observações gerais](img/34c-nova-os-observacoes.jpg)
 6. **Dados do cliente.** Digite o **Nome do cliente\*** e escolha na lista (a lupa): o sistema preenche empresa/órgão, CPF/CNPJ, endereço, telefone e e-mail do cadastro de clientes. Cliente novo? Digite tudo; ele fica guardado para a próxima vez.
    ![Bloco Dados do cliente](img/34d-nova-os-cliente.jpg)
-7. **Prazos.** O **Prazo para orçamento** é opcional e aparece no cartão e na lista. Na garantia, no lugar dele aparece a **Data prevista de entrega**.
+7. **Prazos.** O **Prazo para orçamento** é opcional e aparece no cartão e na lista. Na garantia, no lugar dele aparece a **Data prevista de entrega**. Na OS de **veículo que vem à fábrica** (não na avaliação remota) aparece também a **Previsão de chegada do veículo**: o dia em que o carro deve chegar. Ela não pode ser de um dia que já passou; deixe em branco se o veículo já está aqui. O **Calendário** mostra a data para quem abriu a OS, para o responsável e para a Produção e o Almoxarifado, e avisa na caixa de Menções no dia e nos dias seguintes enquanto a Produção não confirmar a chegada (o botão *Chegou*).
    ![Bloco Prazos](img/34e-nova-os-prazos.jpg)
 **Mais dados.** Daqui para baixo a janela mostra só um bloco recolhido, **"Mais dados (acessórios, fotos, faturamento, valores e vínculo com o CRM)"**. Clique nele para abrir os passos 8 a 12. Se você já preencheu algum, o bloco diz **"Preenchido: …"** mesmo recolhido; e ele abre sozinho quando a OS já vem com esses dados (cópia, CRM, garantia).
    ![Mais dados recolhido](img/34f0-nova-os-mais-dados-recolhido.jpg)
@@ -323,13 +323,14 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ## Menu ⋯ (Mais ações da OS)
 
-O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido. Os itens vêm em **três grupos**, com o título de cada um: **Dados da OS** (Responsável, Financeiro, Compras, Anexar, PDF, Copiar OS), **Mover a OS** (os passos de cada etapa, inclusive *Registrar atendimento já realizado*) e **Encerrar a OS** (Entregar sem nota e, por último e em vermelho, **Cancelar OS**).
+O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido. Os itens vêm em **três grupos**, com o título de cada um: **Dados da OS** (Responsável, Previsão de chegada, Financeiro, Compras, Anexar, PDF, Copiar OS), **Mover a OS** (os passos de cada etapa, inclusive *Registrar atendimento já realizado*) e **Encerrar a OS** (Entregar sem nota e, por último e em vermelho, **Cancelar OS**).
 
 ![Menu Mais ações da OS](img/08-menu-mais-acoes.jpg)
 
 | Item | O que faz | Quando aparece |
 |---|---|---|
 | **Responsável** | Troca o **responsável da OS** (escolha o novo na lista e **Salvar**) | Enquanto a OS não está Entregue nem Cancelada |
+| **Previsão de chegada** | Informa ou muda o **dia previsto para o veículo chegar** à fábrica (em branco tira a previsão; não aceita dia que já passou) | OS de veículo que vem à fábrica, enquanto o veículo não chegou |
 | **Financeiro** | **Valor total** e **Mão de obra** (a comissão lê). Mostra a **data de faturamento**, que vem da nota do Fiscal e **não se digita** | Sempre |
 | **Compras** | Lista as compras ligadas à OS e permite **Solicitar compra** ao Compras (fica ligada à OS) | Sempre |
 | **Anexar** | Envia arquivos (imagens, PDFs, Word, Excel) para a OS | Sempre |

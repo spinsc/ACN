@@ -1,4 +1,4 @@
--- Calendário integrado (pedido do usuário em 12/11/2026; PLANO_CALENDARIO.md).
+-- Calendário integrado (pedido do usuário em 12/11/2026; PLANOS CONCLUIDOS/PLANO_CALENDARIO.md).
 -- Uma lista única das datas do sistema, lida pelo Calendário (tela) e pela rotina de alertas, para os dois nunca discordarem.
 -- A data continua morando onde nasce (prazo da demanda, chegada na OP, entrega da compra...): nada é copiado para agenda_compromissos.
 -- Só LEITURA das tabelas de origem; nenhuma linha de dado é alterada.
@@ -288,3 +288,15 @@ revoke all on function public.calendario_avisar() from public, anon, authenticat
 -- para desligar:             select cron.unschedule('calendario-avisar');
 -- para desfazer tudo:        drop function public.calendario_avisar(); drop function public.calendario_alvos(date); drop function public.calendario_eventos(date, date, boolean);
 --                            drop function public.calendario_eventos_base(date, date); drop function public.cal_participantes(jsonb, text); drop function public.cal_nome(text);
+
+-- ── Mais fontes (migrações `calendario_eventos_mais_fontes` e `calendario_alvos_demanda_etapa`, 12/11/2026) ──
+-- A base acima virou `calendario_eventos_base_1`; a `calendario_eventos_base` atual = base_1 + `calendario_eventos_mais` (quem chama não muda).
+-- Em `calendario_alvos` o CASE da aba ganhou `when 'demanda_etapa' then 'ajustes'`. Chicotes e serralheria ficaram de fora: as tabelas de pedido com data prevista estão VAZIAS
+-- (o trabalho deles vem pelas demandas de setor, que não têm data prevista em aberto); a chegada do carro da OS do SAC entrou em 12/11/2026 (migração `calendario_sac_chegada_veiculo`: coluna nova `sac_ordens_servico.previsao_chegada_veiculo` e o ramo `sac_chegada_veiculo` ao fim de `calendario_eventos_mais`, com alerta para quem abriu a OS, o responsável e os perfis Almoxarifado e Gerente Produção; some quando `data_chegada_veiculo` é preenchida; `calendario_alvos` leva o aviso à aba SAC). O corpo completo continua só na migração aplicada. Em 12/11/2026 (migração `calendario_desenvolvimento_e_ver_como`): `calendario_eventos` ganhou o 4º parâmetro `p_como` (só vale para Admin; é o e-mail da pessoa vista no "Ver como"), o ramo `desenvolvimento_etapa` (datas previstas das etapas de `engenharia_desenvolvimento`, perfil Engenharia, com alerta) entrou em `calendario_eventos_mais` e `calendario_alvos` leva o aviso à aba Engenharia. Também em 12/11/2026 (migração `calendario_demanda_sem_responsavel_vai_ao_setor`): a função `cal_perfis_do_setor(setor)` e o ramo 'demanda_avulsa' de `calendario_eventos_base_1` passaram a avisar o setor de destino quando a demanda não tem responsável (só sem perfil do setor é que cai em quem abriu).
+-- alter function public.calendario_eventos_base(date, date) rename to calendario_eventos_base_1;
+-- create or replace function public.calendario_eventos_mais(p_inicio date, p_fim date) returns table (...mesmas colunas) ... :
+--   demanda_etapa  — etapas[].prazo de demanda avulsa em aberto (etapa não concluída nem cancelada); alerta
+--   frete_previsto — pcp_fretes outbound em Cotação ou Em Trânsito, com data_prevista; SEM alerta (já existe o aviso de frete sem entrega)
+--   viagem_saida   — viagens aberta/em_aprovacao/provisionamento/aprovada com data_saida; SEM alerta (já existe o aviso de saída próxima)
+--   frota_reserva  — um evento por dia de reserva ativa da frota; SEM alerta
+-- (o corpo completo está na migração aplicada; este arquivo guarda a descrição)

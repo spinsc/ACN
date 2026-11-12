@@ -110,7 +110,7 @@ export function planejarTroca({ op, irmas = [], novoFluxo, destino, moNova = nul
     const registra = (campo: string, rotulo: string, texto: string | null) => { if (texto) perde.push({ campo, rotulo, texto }); };
     registra('chassi', 'Chassi', limpo(op?.chassi) ? `chassi ${limpo(op.chassi)}` : null);
     registra('placa', 'Placa', limpo(op?.placa) ? `placa ${limpo(op.placa)}` : null);
-    registra('data_chegada_veiculo', 'Chegada do veículo', limpo(op?.data_chegada_veiculo) ? `chegada do veículo em ${String(op.data_chegada_veiculo).slice(0, 10).split('-').reverse().join('/')}` : null);
+    registra('data_chegada_veiculo', 'Chegada do veículo', limpo(op?.data_chegada_veiculo) ? `previsão de chegada do veículo em ${String(op.data_chegada_veiculo).slice(0, 10).split('-').reverse().join('/')}` : null);
     registra('fotos_veiculo', 'Fotos de entrada', fotos > 0 ? `${fotos} foto(s) de entrada do veículo` : null);
     registra('valor_mao_de_obra', 'Mão de obra', num(op?.valor_mao_de_obra) > 0 ? `mão de obra de ${moeda(op.valor_mao_de_obra)}` : null);
     registra('valor_mao_de_obra_serralheria', 'Mão de obra da serralheria', num(op?.valor_mao_de_obra_serralheria) > 0 ? `mão de obra da serralheria de ${moeda(op.valor_mao_de_obra_serralheria)}` : null);

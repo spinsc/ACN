@@ -39,7 +39,7 @@ import SacResumoOS from './SacResumoOS';
 import { ModalComprasDaOS } from './ComprasLigadas';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { mdiContentCopy, mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
-  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline, mdiCartOutline } from '@mdi/js';
+  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline, mdiCartOutline, mdiCalendarClock } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -188,7 +188,7 @@ const FORM_VAZIO = {
   defeito_reclamado:'', observacoes:'',
   cliente_nome:'', empresa_orgao:'', endereco:'', cpf_cnpj:'', telefone:'', email:'',
   _cliente_id: null as string|null, _cliente_obj: null as any,
-  prazo_orcamento:'', data_prevista_entrega:'',
+  prazo_orcamento:'', data_prevista_entrega:'', previsao_chegada_veiculo:'',
   acessorios: [] as {descricao:string; presente:boolean}[],
   despesa_deslocamento:'', despesa_hospedagem:'', despesa_alimentacao:'',
   // Manutenção Veicular
@@ -386,6 +386,9 @@ function SacTabCompleto({ currentUser }) {
   // Editar responsável da OS
   const [modalEditRespOS, setModalEditRespOS] = useState<any>(null);
   const [editRespOSNome, setEditRespOSNome]   = useState('');
+  // 12/11/2026: previsão de chegada do veículo, mudada depois da OS aberta (o Calendário avisa o setor por ela)
+  const [modalPrevisao, setModalPrevisao] = useState<any>(null);
+  const [previsaoNova, setPrevisaoNova] = useState('');
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
@@ -618,6 +621,9 @@ function SacTabCompleto({ currentUser }) {
     const agora = new Date().toISOString();
     const isGarantia = form.tipo_servico === 'Garantia';
     const ehVeicular = form.is_veiculo || isVeicular(form.tipo_projeto);
+    // 12/11/2026: a previsão de chegada só vale para o veículo que vem à fábrica (não na avaliação remota) e não pode ser de um dia que já passou; quem já está com o veículo deixa em branco
+    const previsaoChegada = ehVeicular && form.tipo_avaliacao !== 'Remota' ? (form.previsao_chegada_veiculo || null) : null;
+    if (previsaoChegada && previsaoChegada < hojeISO()) { setSalvando(false); alert('A previsão de chegada do veículo não pode ser de um dia que já passou. Corrija a data ou deixe em branco se o veículo já está aqui.'); return; }
     // cobrada ou sem cobrança: a OS de garantia diz na abertura (a ficha sugere); toda outra OS é cobrada
     const cobranca: 'garantia' | 'cobrada' = isGarantia ? (form.cobranca === 'cobrada' ? 'cobrada' : 'garantia') : 'cobrada';
     const semCobrar = cobranca === 'garantia';
@@ -672,6 +678,7 @@ function SacTabCompleto({ currentUser }) {
       email: form.email || null,
       prazo_orcamento: !isGarantia ? (form.prazo_orcamento || null) : null,
       data_prevista_entrega: isGarantia ? (form.data_prevista_entrega || null) : null,
+      previsao_chegada_veiculo: previsaoChegada,
       // S1 (27/10/2026): sem cobrança nunca nasce em cotação (a garantia veicular nasce em "Em Provisionamento"; a do Laboratório, "Aprovado")
       status: statusInicialDaOS({ ehVeicular, tipoAvaliacao: form.tipo_avaliacao, cobranca }),
       cobranca,
@@ -1440,6 +1447,9 @@ OK = ACN   |   Cancelar = DETECH`;
     btns.push(<MenuAcoes key="mais" rotulo="Mais ações da OS" itens={[
       { grupo: 'Dados da OS', rotulo: 'Responsável', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
         onClick: ()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); } },
+      { grupo: 'Dados da OS', rotulo: 'Previsão de chegada', titulo: 'Informar ou mudar o dia em que o veículo deve chegar à fábrica (aparece no Calendário)', icone: mdiCalendarClock,
+        oculto: !(os.is_manutencao_veicular && os.tipo_avaliacao !== 'Remota' && !os.data_chegada_veiculo) || ['Entregue','Cancelada'].includes(os.status),
+        onClick: ()=>{ setPrevisaoNova(String(os.previsao_chegada_veiculo || '').slice(0,10)); setModalPrevisao(os); } },
       { grupo: 'Dados da OS', rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
         onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??''});setModalFinanceiro(os);} },
       { grupo: 'Dados da OS', rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
@@ -1777,6 +1787,22 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalEditRespOS.id, changeType: 'UPDATE',
       oldRow: { responsavel_nome: modalEditRespOS.responsavel_nome }, newRow: { responsavel_nome: editRespOSNome.trim() }, user: currentUser });
     setModalEditRespOS(null);
+    fetchOrdens();
+  };
+
+  // ── PREVISÃO DE CHEGADA DO VEÍCULO (12/11/2026) ───────────────────────────
+  // Muda o dia previsto depois da OS aberta. Só vale enquanto o veículo não chegou (a chegada real é gravada pela Produção); em branco tira a previsão. A gravação confere a linha devolvida.
+  const salvarPrevisaoChegada = async () => {
+    if (!modalPrevisao) return;
+    if (previsaoNova && previsaoNova < hojeISO()) { alert('A previsão de chegada não pode ser de um dia que já passou.'); return; }
+    const { data, error } = await supabase.from('sac_ordens_servico')
+      .update({ previsao_chegada_veiculo: previsaoNova || null, atualizado_em: new Date().toISOString() })
+      .eq('id', modalPrevisao.id).is('data_chegada_veiculo', null).select('id');
+    if (error) { alert('Erro: ' + explicarErroDoBanco(error)); return; }
+    if (!data || data.length === 0) { alert('Não foi possível salvar: o veículo desta OS já chegou ou a OS mudou. A lista será atualizada.'); setModalPrevisao(null); fetchOrdens(); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalPrevisao.id, changeType: 'UPDATE',
+      oldRow: { previsao_chegada_veiculo: modalPrevisao.previsao_chegada_veiculo || null }, newRow: { previsao_chegada_veiculo: previsaoNova || null }, user: currentUser });
+    setModalPrevisao(null);
     fetchOrdens();
   };
 
@@ -2679,6 +2705,12 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     <input type="date" className="acn-input" value={form.data_prevista_entrega}
                       onChange={e=>setForm(f=>({...f,data_prevista_entrega:e.target.value}))} /></div>
                 )}
+                {(form.is_veiculo || isVeicular(form.tipo_projeto)) && form.tipo_avaliacao !== 'Remota' && (
+                  <div className="form-group"><label className="acn-label">Previsão de chegada do veículo</label>
+                    <input type="date" className="acn-input" min={hojeISO()} value={form.previsao_chegada_veiculo}
+                      title="Dia em que o veículo deve chegar à fábrica: o Calendário avisa a Produção e o SAC por ela. Deixe em branco se o veículo já está aqui."
+                      onChange={e=>setForm(f=>({...f,previsao_chegada_veiculo:e.target.value}))} /></div>
+                )}
               </div>
             </div>
 
@@ -3520,6 +3552,30 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             <div className="acn-modal-rodape acn-sac-rodape">
               <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarRespOS}>SALVAR</Botao>
               <Botao onClick={()=>setModalEditRespOS(null)}>Cancelar</Botao>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL PREVISÃO DE CHEGADA DO VEÍCULO ════════ */}
+      {modalPrevisao && (
+        <div className="modal-overlay">
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCalendarClock} size={18} /> Previsão de chegada — {modalPrevisao.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Atual: <strong>{modalPrevisao.previsao_chegada_veiculo ? fmtDt(modalPrevisao.previsao_chegada_veiculo) : 'sem previsão'}</strong>. O Calendário avisa a Produção e o SAC no dia e, se o veículo não chegar, nos dias seguintes.
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Dia previsto para a chegada</label>
+                <input type="date" className="acn-input" min={hojeISO()} value={previsaoNova} onChange={e=>setPrevisaoNova(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarPrevisaoChegada}>SALVAR</Botao>
+              <Botao onClick={()=>setModalPrevisao(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
