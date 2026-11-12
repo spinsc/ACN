@@ -1113,6 +1113,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (id === 'minhas_solicitacoes') return true;
     // Manuais (30/10/2026): o manual só explica a tela, não traz dado de ninguém; é de todos, como "Minhas solicitações".
     if (id === 'manuais') return true;
+    // Calendário (pedido do usuário em 12/11/2026): é de todos, também de usuário novo, sem depender de marcar a aba no Admin.
+    // As tabelas que ele lê (agenda e tarefas do Financeiro) passaram a valer para quem entrou, senão o calendário abriria vazio.
+    if (id === 'calendario') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
