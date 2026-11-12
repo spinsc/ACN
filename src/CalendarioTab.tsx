@@ -282,9 +282,8 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
     // chegada de carro, entrega de compra e de OP, tarefas, manutenção) já limitadas ao que esta pessoa pode ver (responsável, participante ou do perfil que age);
     // Admin e gerentes veem tudo quando ligam "Todos os usuários". Leitura que falha nunca vira "calendário vazio": a faixa vermelha diz o motivo.
     // "Ver como" (12/11/2026): o admin que vê o sistema como outra pessoa segue com a sessão do banco dele, então o calendário vinha o do admin para todo mundo; o banco só obedece o e-mail da pessoa vista se quem chama é Admin de verdade
-    let comoEmail: string | null = null;
-    try { if (localStorage.getItem('admin_sessao_original')) comoEmail = currentUser?.email || null; } catch {}
-    const { data, error } = await supabase.rpc('calendario_eventos', { p_inicio: isoDate(rangeInicio), p_fim: isoDate(rangeFim), p_todos: !!(isGerente && verTodos), p_como: comoEmail });
+    // Desde a mesma data o banco sabe quem o Admin está vendo (VerComo.ts), então a tela não precisa mais dizer o e-mail da pessoa vista.
+    const { data, error } = await supabase.rpc('calendario_eventos', { p_inicio: isoDate(rangeInicio), p_fim: isoDate(rangeFim), p_todos: !!(isGerente && verTodos) });
     setLinhas(error ? [] : (data || []));
     setFalha(error ? (error.message || 'erro desconhecido') : '');
     setLoading(false);

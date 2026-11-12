@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import EngenhariaTab from './EngenhariaTab';
@@ -683,7 +684,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [sessaoOriginalAdmin] = useState<string | null>(() => {
     try { return localStorage.getItem('admin_sessao_original'); } catch { return null; }
   });
-  const voltarParaAdmin = () => {
+  const voltarParaAdmin = async () => {
+    // 12/11/2026: desliga o "Ver como" no banco ANTES de voltar (senão o banco seguiria tratando o Admin como a pessoa vista até o registro vencer, em 12 h).
+    // Se não der para desligar, a tela de abertura tenta de novo (App.tsx) e o registro vence sozinho.
+    await encerrarVerComo();
     try {
       const orig = localStorage.getItem('admin_sessao_original');
       if (!orig) return;

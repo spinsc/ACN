@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { iniciarVerComo } from './VerComo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect } from 'react';
@@ -273,6 +274,10 @@ function PainelUsuarios() {
   const verComoUsuario = async (u: any) => {
     if (!u.ativo) { alert('Este usuário está inativo — reative antes de testar com a sessão dele.'); return; }
     if (!await confirmar(`Acessar o sistema como "${u.nome}" (${u.perfil})?\n\nVocê pode voltar a qualquer momento pelo botão "Voltar ao Admin" que vai aparecer no topo da tela.`)) return;
+    // 12/11/2026: o banco também passa a obedecer a pessoa vista (antes só a tela trocava e o banco seguia com a permissão do Admin).
+    // Se o banco não aceitar, não troca nada: ver "como" só na tela daria uma imagem falsa do que a pessoa enxerga.
+    const ligou = await iniciarVerComo(u.email);
+    if (!ligou.ok) { alert('Não foi possível ligar o "Ver como" no banco: ' + (ligou.erro || 'sem resposta') + '\n\nNada foi trocado.'); return; }
     try {
       const atual = localStorage.getItem('user');
       if (atual) localStorage.setItem('admin_sessao_original', atual);
