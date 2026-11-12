@@ -32,21 +32,21 @@ const SETOR_FAMILIA: Record<string, string> = SETORES.reduce((a, s) => ({ ...a, 
 // limites de licitação, chegada de carro, entrega de compra e de OP...), a mesma que a rotina de alertas lê, para a tela e o aviso não discordarem.
 // Cor por fonte (as já existentes mantêm a cor que tinham) e o setor do filtro em que cada fonte aparece; a data que vence hoje ou já passou fica vermelha.
 const FAMILIA_POR_FONTE: Record<string, string> = {
-  crm_retorno: 'atencao', telecom_retorno: 'atencao', crm_limite: 'atencao', tarefa_financeiro: 'neutro', tarefa_engenharia: 'ok', agendamento: 'atencao',
+  crm_retorno: 'atencao', telecom_retorno: 'atencao', crm_limite: 'atencao', tarefa_financeiro: 'neutro', tarefa_engenharia: 'ok', desenvolvimento_etapa: 'info', agendamento: 'atencao',
   licitacao: 'marca', demanda_avulsa: 'info', demanda_etapa: 'info', frete_previsto: 'neutro', viagem_saida: 'neutro', frota_reserva: 'neutro', sac_prazo: 'info', sac_chegada_veiculo: 'atencao', op_chegada_veiculo: 'atencao', op_entrega: 'neutro', vistoria_retorno: 'atencao', compra_entrega: 'atencao',
 };
 const SETOR_POR_FONTE: Record<string, string> = {
-  crm_retorno: 'comercial', telecom_retorno: 'comercial', crm_limite: 'comercial', op_entrega: 'comercial', licitacao: 'licitacoes', tarefa_engenharia: 'engenharia', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
+  crm_retorno: 'comercial', telecom_retorno: 'comercial', crm_limite: 'comercial', op_entrega: 'comercial', licitacao: 'licitacoes', tarefa_engenharia: 'engenharia', desenvolvimento_etapa: 'engenharia', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
 };   // as demais (demanda, compra, chegada de carro, vistoria, financeiro, manutenção) entram em "Geral"
 // aba do sistema para onde o botão "Abrir" leva (a mesma troca de aba das Menções; só troca se a pessoa tem a aba)
 const ABA_POR_FONTE: Record<string, string> = {
   crm_retorno: 'crm', telecom_retorno: 'telecom', crm_limite: 'crm', op_entrega: 'crm', licitacao: 'licitacoes', demanda_avulsa: 'ajustes', demanda_etapa: 'ajustes', frete_previsto: 'logistica', viagem_saida: 'viagens', frota_reserva: 'viagens', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
-  op_chegada_veiculo: 'almoxarifado', vistoria_retorno: 'vistorias', compra_entrega: 'compras', tarefa_financeiro: 'financeiro', tarefa_engenharia: 'engenharia', agendamento: 'producao',
+  op_chegada_veiculo: 'almoxarifado', vistoria_retorno: 'vistorias', compra_entrega: 'compras', tarefa_financeiro: 'financeiro', tarefa_engenharia: 'engenharia', desenvolvimento_etapa: 'engenharia', agendamento: 'producao',
 };
 const ROTULO_FONTE: Record<string, string> = {
   crm_retorno: 'Contato com cliente', telecom_retorno: 'Contato com cliente (Telecom)', crm_limite: 'Prazo do CRM', licitacao: 'Licitação', demanda_avulsa: 'Prazo de demanda', demanda_etapa: 'Prazo de etapa de demanda', frete_previsto: 'Entrega prevista do frete', viagem_saida: 'Saída de viagem', frota_reserva: 'Veículo reservado', sac_prazo: 'Prazo da OS', sac_chegada_veiculo: 'Chegada do veículo (OS)',
   op_chegada_veiculo: 'Chegada do veículo', op_entrega: 'Entrega ao cliente', vistoria_retorno: 'Retorno da vistoria', compra_entrega: 'Recebimento de material',
-  tarefa_financeiro: 'Tarefa do Financeiro', tarefa_engenharia: 'Tarefa da Engenharia', agendamento: 'Manutenção agendada', compromisso: 'Compromisso',
+  tarefa_financeiro: 'Tarefa do Financeiro', tarefa_engenharia: 'Tarefa da Engenharia', desenvolvimento_etapa: 'Etapa do Desenvolvimento', agendamento: 'Manutenção agendada', compromisso: 'Compromisso',
 };
 
 // Vence hoje / atrasado (só para o que é prazo e ainda não foi resolvido): o mesmo critério da rotina de alertas
@@ -281,7 +281,10 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
     // 12/11/2026: uma leitura só. A função do banco devolve as datas de TODAS as fontes (compromissos, retorno de cliente, limites de licitação, prazos de demanda e de OS,
     // chegada de carro, entrega de compra e de OP, tarefas, manutenção) já limitadas ao que esta pessoa pode ver (responsável, participante ou do perfil que age);
     // Admin e gerentes veem tudo quando ligam "Todos os usuários". Leitura que falha nunca vira "calendário vazio": a faixa vermelha diz o motivo.
-    const { data, error } = await supabase.rpc('calendario_eventos', { p_inicio: isoDate(rangeInicio), p_fim: isoDate(rangeFim), p_todos: !!(isGerente && verTodos) });
+    // "Ver como" (12/11/2026): o admin que vê o sistema como outra pessoa segue com a sessão do banco dele, então o calendário vinha o do admin para todo mundo; o banco só obedece o e-mail da pessoa vista se quem chama é Admin de verdade
+    let comoEmail: string | null = null;
+    try { if (localStorage.getItem('admin_sessao_original')) comoEmail = currentUser?.email || null; } catch {}
+    const { data, error } = await supabase.rpc('calendario_eventos', { p_inicio: isoDate(rangeInicio), p_fim: isoDate(rangeFim), p_todos: !!(isGerente && verTodos), p_como: comoEmail });
     setLinhas(error ? [] : (data || []));
     setFalha(error ? (error.message || 'erro desconhecido') : '');
     setLoading(false);
