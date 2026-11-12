@@ -1,4 +1,4 @@
--- Calendário integrado (pedido do usuário em 12/11/2026; PLANO_CALENDARIO.md).
+-- Calendário integrado (pedido do usuário em 12/11/2026; PLANOS CONCLUIDOS/PLANO_CALENDARIO.md).
 -- Uma lista única das datas do sistema, lida pelo Calendário (tela) e pela rotina de alertas, para os dois nunca discordarem.
 -- A data continua morando onde nasce (prazo da demanda, chegada na OP, entrega da compra...): nada é copiado para agenda_compromissos.
 -- Só LEITURA das tabelas de origem; nenhuma linha de dado é alterada.

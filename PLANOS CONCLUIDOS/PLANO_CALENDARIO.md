@@ -1,5 +1,7 @@
 # PLANO — Calendário integrado: toda data do sistema aparece para os envolvidos e gera alerta
 
+> **PLANO CONCLUÍDO — 12/11/2026.** As etapas C0 a C5 estão em produção, a rotina de avisos está ligada (`calendario-avisar`, dias úteis às 8h; o primeiro disparo automático é em 13/11/2026) e as três suposições da seção 7 foram fechadas com o usuário. Só consulta ou ajuste: fonte nova de data = um ramo novo na função base (ver o CLAUDE.md).
+
 > Criado em 12/11/2026, a partir do pedido do usuário: *"Tudo no sistema que envolver data, deve aparecer no calendário dos envolvidos aquela demanda, tarefa ou ação e gerar alertas do calendário. Prazos de demandas avulsas, contato com cliente, recebimento de carros, recebimento de material e etc."*
 > Este arquivo é o ponto de partida de qualquer sessão que retome o assunto. O que foi construído está no quadro da seção 9.
 

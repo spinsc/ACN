@@ -28,7 +28,7 @@ const SETORES = [
 ];
 const SETOR_FAMILIA: Record<string, string> = SETORES.reduce((a, s) => ({ ...a, [s.id]: s.familia }), {} as any);
 // 07/10/2026: o calendário também mostra as tarefas (Financeiro, Engenharia) e os agendamentos de manutenção em que a pessoa é dona ou participante — leitura só (editam nas suas telas).
-// 12/11/2026 (pedido do usuário, PLANO_CALENDARIO.md): TODA data do sistema chega aqui pela função do banco `calendario_eventos` (prazos de demanda, retorno de cliente,
+// 12/11/2026 (pedido do usuário, PLANOS CONCLUIDOS/PLANO_CALENDARIO.md): TODA data do sistema chega aqui pela função do banco `calendario_eventos` (prazos de demanda, retorno de cliente,
 // limites de licitação, chegada de carro, entrega de compra e de OP...), a mesma que a rotina de alertas lê, para a tela e o aviso não discordarem.
 // Cor por fonte (as já existentes mantêm a cor que tinham) e o setor do filtro em que cada fonte aparece; a data que vence hoje ou já passou fica vermelha.
 const FAMILIA_POR_FONTE: Record<string, string> = {
