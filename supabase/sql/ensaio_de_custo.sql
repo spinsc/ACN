@@ -67,18 +67,23 @@ begin
       ('lista de OPs', $q$select * from public.oples where status_geral = any(array['Em Espera PCP','Aguardando Almox','Aguardando Inicio Producao','Em Producao','Faturado']) order by data_entrada desc limit 1000$q$, 120),
       ('chat (selo)', $q$select id, sala_id, texto, criado_em from public.chat_mensagens order by criado_em desc limit 500$q$, 80),
       ('análises por setor', $q$select * from public.analise_setores limit 1000$q$, 60),
-      ('cards do CRM', $q$select * from public.crm_oportunidades_basico limit 1000$q$, 120),
+      ('cards do CRM (visão básica)', $q$select * from public.crm_oportunidades_basico limit 1000$q$, 40),   -- 13/11/2026: era 261 ms (função de acesso por linha na visão); hoje ~8 ms
+      ('PCP: OPs com select *', $q$select * from public.oples where status_geral = any(array['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP','Retrabalho']) order by data_entrada desc$q$, 80),
+      ('Produção: OPs com select *', $q$select * from public.oples where status_geral = any(array['Aguardando Inicio Producao','Em Producao','Retrabalho','Em Retrabalho']) order by data_entrada desc$q$, 80),
+      ('Fiscal: OPs com select *', $q$select * from public.oples where status_geral = any(array['Aguarda Emissao NF','Faturado e Disponivel para Entrega']) order by data_liberacao_comercial$q$, 250),
       ('pedidos de compra', $q$select * from public.pcp_pedidos_compra order by data_criacao desc limit 1000$q$, 120),
       ('busca de itens', $q$select id, codigo, nome from public.cadastro_itens where (nome_norm ilike '%cabo%' or codigo_norm ilike '%cabo%') and ativo = true limit 50$q$, 80),
       ('demandas do setor', $q$select * from public.demandas_setoriais where setor_destino = 'PCP' order by data_abertura desc limit 500$q$, 80)
     ) as v(nome, sql, limite)
   loop
     begin
-      execute r.sql into x;
+      execute 'select length(coalesce(json_agg(q), ''[]'')::text) from (' || r.sql || ') q' into x;   -- esquenta (catálogo e plano)
     exception when others then null; end;
     begin
+      -- 13/11/2026: mede montando o JSON como o PostgREST faz (json_agg). Com count(*) o banco nem calcula as colunas da resposta, e uma visão com função de acesso por linha
+      -- (crm_oportunidades_basico, 261 ms por chamada) passava no ensaio sem falha.
       t0 := clock_timestamp();
-      execute 'select count(*) from (' || r.sql || ') q' into x;
+      execute 'select length(coalesce(json_agg(q), ''[]'')::text) from (' || r.sql || ') q' into x;
       ms := extract(epoch from clock_timestamp() - t0) * 1000;
       relatorio := relatorio || format(E'tela "%s": %s ms (limite %s) %s\n', r.nome, round(ms), r.limite, case when ms > r.limite then '<< FALHA' else 'ok' end);
       if ms > r.limite then falhas := falhas + 1; end if;
