@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { nomeDoPedido } from './NomeDoPedido';
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
@@ -201,8 +202,8 @@ function ModalComprasCentro({ centro, compras, todasDespesas, onClose, currentUs
                   ) : (
                     <tr key={p.id}>
                       <td className="acn-forte">{p.numero_pedido || '—'}</td>
-                      <td title={p.descricao_material || ''}>
-                        <div className="acn-fin-2linhas">{p.descricao_material || '—'}</div>
+                      <td title={nomeDoPedido(p)}>
+                        <div className="acn-fin-2linhas">{nomeDoPedido(p) || '—'}</div>
                       </td>
                       <td className="acn-fraco">{p.fornecedor || '—'}</td>
                       <td><Selo familia={FAMILIA_COMPRA[p.status_compra] || 'neutro'} ponto={false}>{p.status_compra || '—'}</Selo></td>

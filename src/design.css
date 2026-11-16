@@ -7315,3 +7315,7 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-pgt-lista > div { display: flex; gap: 8px; min-width: 0; }
 .acn-pgt-lista dt { flex: 0 0 150px; font-weight: 700; color: var(--acn-muted); }
 .acn-pgt-lista dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* BOX do carro na Adaptação (16/11/2026): seletor e histórico dos BOX por onde o carro passou */
+.acn-box-seletor { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); }
+.acn-box-lista { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }

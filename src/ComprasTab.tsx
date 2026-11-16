@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { nomeDoPedido } from './NomeDoPedido';
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
@@ -647,7 +648,7 @@ function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
           <span className="modal-title acn-prod-ic"><Icone path={mdiLinkVariant} size={16} /> Vínculo e link — {pedido.numero_pedido}</span>
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
-          <div className="acn-ajuda"><DescricaoCompacta texto={pedido.descricao_material} /></div>
+          <div className="acn-ajuda"><DescricaoCompacta texto={nomeDoPedido(pedido)} /></div>
           <div className="form-group">
             <label className="acn-label">Vincular a um PV, OP, OS, outra compra ou OFI</label>
             <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
@@ -703,7 +704,7 @@ function ModalRecebidos({ lista, canVerValor, onAbrir, onClose }) {
                       {p.numero_oc && <div className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</div>}
                       <SeloOrigemCompra p={p} />
                     </td>
-                    <td className="acn-cmp-desc"><DescricaoCompacta texto={p.descricao_material} linhas={1} /></td>
+                    <td className="acn-cmp-desc"><DescricaoCompacta texto={nomeDoPedido(p)} linhas={1} /></td>
                     <td>{p.fornecedor || '—'}</td>
                     <td className="acn-num">{dataBr(p.data_conclusao)}</td>
                     {canVerValor && <td className="acn-dir acn-num acn-txt-ok">{moedaBr(p.valor_compra)}</td>}
@@ -950,7 +951,7 @@ function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbri
             <div className="acn-ajuda">aguardando {esperaTexto(p._desde)}</div>
           </div>
           <div className="acn-cmp-aprov-desc">
-            <DescricaoCompacta texto={p.descricao_material} />
+            <DescricaoCompacta texto={nomeDoPedido(p)} />
             <div className="acn-ajuda">
               Pedido por {p.criado_por_nome || '—'}{p.opl ? ` · OP ${p.opl}` : ''}
             </div>
@@ -1511,7 +1512,7 @@ export default function ComprasTab({ currentUser }) {
       if (erroAp) { console.warn('Falha ao ler quem aprova:', erroAp); return false; }
       if (!aprovadores.length) return false;
       let todos = true;
-      const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${pedido.descricao_material}`;
+      const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${nomeDoPedido(pedido)}`;
       for (const ap of aprovadores) {
         const { error: erroMen } = await supabase.from('mencoes').insert({
           mencionado_id: String(ap.id), mencionado_nome: ap.nome,
@@ -1527,7 +1528,7 @@ export default function ComprasTab({ currentUser }) {
       if (emails.length) {
         const html = `<h3>Nova cotação para avaliar</h3>
           <p><strong>Departamento: ${departamento.nome}</strong></p>
-          <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${pedido.descricao_material}</p>
+          <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${nomeDoPedido(pedido)}</p>
           <p>Acesse o sistema (aba Compras) para acompanhar, aprovar ou rejeitar.</p>`;
         await supabase.functions.invoke('send-email', {
           body: { to: emails, subject: `Nova cotação — Pedido ${pedido.numero_pedido}`, html },
@@ -1634,7 +1635,7 @@ export default function ComprasTab({ currentUser }) {
       if (!aprovadores.length) return false;
       let todos = true;
       const valorFmt = fmt(pedido.valor_compra);
-      const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${pedido.descricao_material} — ${valorFmt}`;
+      const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${nomeDoPedido(pedido)} — ${valorFmt}`;
       for (const ap of aprovadores) {
         const { error: erroMen } = await supabase.from('mencoes').insert({
           mencionado_id: String(ap.id), mencionado_nome: ap.nome,
@@ -1735,7 +1736,7 @@ export default function ComprasTab({ currentUser }) {
     await registrarHistorico(pedidoId, { tipo: 'avanco', de: pedidoAtual?.status_compra || 'Em Andamento', para: 'Aguardando Aprovação',
       motivo: `Vencedora: ${extraUpdates.fornecedor || '—'} (${fmt(extraUpdates.valor_compra)})` }, currentUser);
     if (pedidoAtual) await mencionarSolicitante(pedidoAtual,
-      `Sua requisição ${pedidoAtual.numero_pedido} (${String(pedidoAtual.descricao_material || '').slice(0, 80)}) está aguardando aprovação — vencedora: ${extraUpdates.fornecedor || '—'}, ${fmt(extraUpdates.valor_compra)}.`,
+      `Sua requisição ${pedidoAtual.numero_pedido} (${nomeDoPedido(pedidoAtual).slice(0, 80)}) está aguardando aprovação — vencedora: ${extraUpdates.fornecedor || '—'}, ${fmt(extraUpdates.valor_compra)}.`,
       currentUser, 'aguardando_aprovacao');
     if (niveis.length > 0) {
       const { error: erroNiveis } = await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
@@ -2215,7 +2216,7 @@ export default function ComprasTab({ currentUser }) {
           <VinculoLinkCompra p={p} />
         </td>
         <td className="acn-cmp-desc">
-          <DescricaoCompacta texto={p.descricao_material} />
+          <DescricaoCompacta texto={nomeDoPedido(p)} />
         </td>
         <td>{p.quantidade}</td>
         <td>{p.fornecedor||'—'}</td>
@@ -2485,7 +2486,7 @@ export default function ComprasTab({ currentUser }) {
                       <strong>{p.numero_pedido}</strong>
                       {p.numero_oc && <span className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</span>}
                     </div>
-                    <div className="acn-cmp-card-desc"><DescricaoCompacta texto={p.descricao_material} /></div>
+                    <div className="acn-cmp-card-desc"><DescricaoCompacta texto={nomeDoPedido(p)} /></div>
                     <div className="acn-ajuda">
                       Qtd {p.quantidade || 1}{p.fornecedor ? ` · ${p.fornecedor}` : ''}{p.opl ? ` · OP ${p.opl}` : ''}
                     </div>
