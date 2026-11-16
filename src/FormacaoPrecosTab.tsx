@@ -506,7 +506,7 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
     setPreco('');
   };
   return (
-    <div title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
+    <div className="acn-fp-span2" title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
       <div className="acn-fp-ir-rot2 com-ic"><Icone path={mdiRefresh} size={12} /> Preço unit. desejado</div>
       <div className="acn-fp-mr-linha">
         <input className="acn-input acn-fp-ir-campo acn-fp-num"
@@ -1060,7 +1060,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
             </div>
-            <div>
+            {/* 16/11/2026 (usuário): os botões CUSTO/TABELA (sem quebra de linha) passavam da própria coluna e cobriam o "Preço unit. desejado"; cada um ocupa duas colunas da grade */}
+            <div className="acn-fp-span2">
               <div className="acn-fp-ir-rot2">Tipo Cálculo</div>
               <Chips className="acn-fp-ir-tc" ativo={item.tipo_calculo || 'CUSTO'} onChange={t => onSet('tipo_calculo', t)}
                 itens={[{ id: 'CUSTO', rotulo: 'CUSTO' }, { id: 'TABELA', rotulo: 'TABELA' }]} />
