@@ -7319,3 +7319,17 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 /* BOX do carro na Adaptação (16/11/2026): seletor e histórico dos BOX por onde o carro passou */
 .acn-box-seletor { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); }
 .acn-box-lista { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+
+/* Cadastro de fornecedores do Compras (16/11/2026): grade que quebra sozinha e não deixa o campo passar da própria coluna (ver CLAUDE.md, campo em grade) */
+.acn-forn-box { width: min(760px, 96vw); }
+.acn-forn-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.acn-forn-campo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; min-width: 0; }
+.acn-forn-campo .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-forn-largo { grid-column: 1 / -1; }
+.acn-forn-ajuda { margin: 4px 0 8px; }
+.acn-forn-inativo td { opacity: .6; }
+.acn-forn-cats { max-width: 240px; }
+.acn-forn-acoes { white-space: nowrap; }
+.acn-cmp-forn-linha { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acn-cmp-forn-linha > :first-child { flex: 1 1 200px; min-width: 0; }
+.acn-cmp-forn-aviso { margin-top: 4px; }

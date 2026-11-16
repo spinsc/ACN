@@ -18,7 +18,9 @@ import { pedidoCombinaComBusca, ordenarPedidos, ordensDisponiveis } from './Comp
 import { situacaoDaDivisao, renumerarVencedoras, dividirPedido, listaAlteradaDepoisDeCotar } from './DivisaoDoPedido';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
-import { Botao, MenuAcoes, Selo, Faixa, Chips } from './Interface';
+import { Botao, MenuAcoes, Selo, Faixa, Chips, Abas, SelectBusca } from './Interface';
+import { FornecedoresCompras, ModalFornecedor } from './FornecedoresCompras';
+import { lerFornecedores } from './ComprasFornecedores';
 import Icone from './Icone';
 import { mdiClose, mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight, mdiCartOutline, mdiTableLarge, mdiViewColumnOutline,
   mdiCogOutline, mdiFactory, mdiAccountOutline, mdiClipboardTextOutline, mdiMagnify, mdiLinkVariant, mdiForumOutline, mdiCommentTextOutline,
@@ -33,7 +35,7 @@ import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ET
   podeAprovarCompra, carregarAprovadoresCompra, lerAprovadoresCompra, QuadroDaSolicitacao, ehColeta, aguardandoColeta, mencionarPerfis } from './ComprasFluxo';
 
 const VAZIO_COTACAO = {
-  fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
+  fornecedor_nome: '', fornecedor_id: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
   frete_tipo: 'gratis', frete_valor: '', servicos: [] as { descricao: string; valor: string }[], desconto_valor: '', outras_taxas: '',
 };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
@@ -69,7 +71,9 @@ function novoFormCotacao(p: any) {
 }
 
 function cotacaoValida(f: any) {
+  // 16/11/2026 (pedido do usuário): o fornecedor da cotação tem de ser um fornecedor CADASTRADO; só a cotação antiga, que já tinha o nome digitado (`legado`), pode manter o nome
   if (!f.fornecedor_nome?.trim()) return false;
+  if (!f.fornecedor_id && !f.legado) return false;
   if (f.itens_cot) {
     const marcados = f.itens_cot.filter((i: any) => i.marcado);
     return marcados.length > 0 && marcados.every((i: any) => parseValorBr(i.valor_unitario) && qtdDoCampo(i.quantidade) > 0);
@@ -103,7 +107,7 @@ function formDaCotacao(c: any, qtdPedido: any, pedido?: any) {
     : undefined;
   return {
     itens_cot,
-    fornecedor_nome: c.fornecedor_nome || '', valor_unitario: valorBrTexto(unit), quantidade: String(qtd),
+    fornecedor_nome: c.fornecedor_nome || '', fornecedor_id: c.fornecedor_id || '', legado: !c.fornecedor_id, valor_unitario: valorBrTexto(unit), quantidade: String(qtd),
     condicao_pagamento: c.condicao_pagamento || '', prazo_entrega: c.prazo_entrega || '',
     frete_tipo: c.frete_tipo || 'gratis', frete_valor: valorBrTexto(c.frete_valor),
     servicos: Array.isArray(c.servicos) ? c.servicos.map((s: any) => ({ descricao: s.descricao || '', valor: valorBrTexto(s.valor) })) : [],
@@ -115,6 +119,7 @@ function payloadDaCotacao(f: any) {
   const t = totalComposicao(f);
   return {
     fornecedor_nome: f.fornecedor_nome.trim(),
+    fornecedor_id: f.fornecedor_id || null,
     valor_unitario: f.itens_cot ? null : parseValorBr(f.valor_unitario),
     quantidade: f.itens_cot ? null : Number(String(f.quantidade).replace(',', '.')) || null,
     itens: f.itens_cot
@@ -134,16 +139,28 @@ function payloadDaCotacao(f: any) {
 
 const moedaBr = (v: any) => new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v) || 0);
 
-function ComposicaoCotacao({ form, setForm }: any) {
+function ComposicaoCotacao({ form, setForm, fornecedores = [], onCadastrarFornecedor }: any) {
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  // só os ativos aparecem para escolher; o da cotação aberta aparece mesmo se foi desativado depois (senão o campo ficaria vazio)
+  const opcoesForn = fornecedores.filter((x: any) => x.ativo || x.id === form.fornecedor_id).map((x: any) => ({ valor: x.id, rotulo: x.nome, busca: [x.nome, x.razao_social, x.cnpj_cpf, x.cidade] }));
+  const escolherForn = (id: string) => {
+    const x = fornecedores.find((y: any) => y.id === id);
+    setForm((f: any) => ({ ...f, fornecedor_id: id || '', fornecedor_nome: x ? x.nome : (f.legado ? f.fornecedor_nome : ''),
+      condicao_pagamento: f.condicao_pagamento || x?.condicao_pagamento || '' }));
+  };
   const t = totalComposicao(form);
   const servicos = form.servicos || [];
   return (
     <div className="acn-cmp-comp">
       <div className="acn-cmp-comp-g3">
         <div>
-          <label className="acn-label">Fornecedor *</label>
-          <input className="acn-input" value={form.fornecedor_nome} onChange={e=>set('fornecedor_nome', e.target.value)} />
+          <label className="acn-label">Fornecedor cadastrado *</label>
+          <div className="acn-cmp-forn-linha">
+            <SelectBusca opcoes={opcoesForn} valor={form.fornecedor_id || null} onChange={escolherForn} placeholder="Escolha o fornecedor…" vazio={form.legado && form.fornecedor_nome ? `${form.fornecedor_nome} (sem cadastro)` : '— escolha —'} />
+            {onCadastrarFornecedor && <Botao pequeno icone={mdiPlus} onClick={onCadastrarFornecedor}>Cadastrar fornecedor</Botao>}
+          </div>
+          {form.legado && form.fornecedor_nome && !form.fornecedor_id && <div className="acn-ajuda acn-cmp-forn-aviso">Cotação feita antes do cadastro, com o nome digitado. Pode manter ou escolher um fornecedor cadastrado.</div>}
+          {!form.legado && fornecedores.length === 0 && <div className="acn-ajuda acn-cmp-forn-aviso">Ainda não há fornecedor cadastrado. Cadastre antes de lançar a cotação.</div>}
         </div>
         {!form.itens_cot && (<>
         <div>
@@ -1085,6 +1102,13 @@ export default function ComprasTab({ currentUser }) {
   const [modalVinculo, setModalVinculo]         = useState<any>(null);
   const [modalRecebidos, setModalRecebidos]     = useState<any[]|null>(null);
   const [modalColetas, setModalColetas]         = useState(false);
+  // Fornecedores cadastrados (16/11/2026): a cotação só aceita fornecedor da lista; o cadastro é a aba "Fornecedores" e o atalho "Cadastrar fornecedor" da cotação
+  const [secao, setSecao] = useState<'pedidos'|'fornecedores'>('pedidos');
+  const [fornecedores, setFornecedores] = useState<any[]>([]);
+  const [erroFornecedores, setErroFornecedores] = useState('');
+  const [cadastroDaCotacao, setCadastroDaCotacao] = useState<null | 'nova' | 'edicao'>(null);
+  const carregarFornecedores = async () => { const r = await lerFornecedores(); setFornecedores(r.lista); setErroFornecedores(r.erro || ''); };
+  useEffect(() => { carregarFornecedores(); }, []);
   const [qtdColetas, setQtdColetas]               = useState(0);
   // Tabela x Kanban (por status) — lembra a escolha neste navegador
   const [visao, setVisaoState] = useState<'tabela'|'kanban'>(() => {
@@ -1445,8 +1469,8 @@ export default function ComprasTab({ currentUser }) {
     if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de lançar cotação.'); return; }   // 7.57: a contagem de cotações decide a aprovação do departamento
     if (!cotacaoValida(novaCotacao)) {
       alert(novaCotacao.itens_cot
-        ? 'Informe o fornecedor, marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
-        : 'Informe o fornecedor, o valor unitário e a quantidade.'); return;
+        ? 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes), marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
+        : 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes) e informe o valor unitário e a quantidade.'); return;
     }
     if (novoAnexoCotacao && novoAnexoCotacao.size > 10 * 1024 * 1024) {
       alert(`Anexo muito grande (${(novoAnexoCotacao.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
@@ -1585,8 +1609,8 @@ export default function ComprasTab({ currentUser }) {
   const salvarEdicaoCotacao = (c: any) => umaVez('editar-cotacao-' + c.id, async () => {
     if (!cotacaoValida(editCotacaoForm)) {
       alert(editCotacaoForm.itens_cot
-        ? 'Informe o fornecedor, marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
-        : 'Informe o fornecedor, o valor unitário e a quantidade.'); return;
+        ? 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes), marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
+        : 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes) e informe o valor unitário e a quantidade.'); return;
     }
     const comoVencedora = vencedoras.find((v: any) => v.cotacao_id === c.id);
     if (comoVencedora && editCotacaoForm.itens_cot) {
@@ -2387,8 +2411,21 @@ export default function ComprasTab({ currentUser }) {
     );
   };
 
+  const abasDoCompras = (
+    <Abas ativa={secao} onChange={(id) => setSecao(id as any)} itens={[{ id: 'pedidos', rotulo: 'Requisições' }, { id: 'fornecedores', rotulo: 'Fornecedores', contagem: fornecedores.filter((x: any) => x.ativo).length }]} />
+  );
+  if (secao === 'fornecedores') {
+    return (
+      <div className="acn-cmp">
+        {abasDoCompras}
+        <FornecedoresCompras fornecedores={fornecedores} erro={erroFornecedores} onMudou={carregarFornecedores} currentUser={currentUser} />
+      </div>
+    );
+  }
+
   return (
     <div className="acn-cmp">
+      {abasDoCompras}
 
       {/* CABEÇALHO */}
       <div className="acn-cmp-cab">
@@ -2925,7 +2962,7 @@ export default function ComprasTab({ currentUser }) {
                     <div key={c.id} className={'acn-cmp-cot' + (vencedoraId===c.id || vencedoras.some((v:any)=>v.cotacao_id===c.id) ? ' venc' : '')}>
                       {emEdicao ? (
                         <div className="acn-cmp-cot-edicao">
-                          <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} />
+                          <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} fornecedores={fornecedores} onCadastrarFornecedor={() => setCadastroDaCotacao('edicao')} />
                           <div className="acn-cmp-cot-acoes">
                             <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvandoEdicaoCotacao}
                               onClick={()=>salvarEdicaoCotacao(c)}>
@@ -2999,7 +3036,7 @@ export default function ComprasTab({ currentUser }) {
                 {modalCotacoes?.quantidade > 1 && (
                   <div className="acn-ajuda">Quantidade do pedido: {modalCotacoes.quantidade}</div>
                 )}
-                <ComposicaoCotacao form={novaCotacao} setForm={setNovaCotacao} />
+                <ComposicaoCotacao form={novaCotacao} setForm={setNovaCotacao} fornecedores={fornecedores} onCadastrarFornecedor={() => setCadastroDaCotacao('nova')} />
                 <div className="form-group">
                   <label className="acn-label">Anexo (PDF, imagem, planilha…)</label>
                   <input type="file" className="acn-cmp-arquivo"
@@ -3134,6 +3171,16 @@ export default function ComprasTab({ currentUser }) {
       {modalVinculo && (
         <ModalVinculoCompra pedido={modalVinculo} onClose={()=>setModalVinculo(null)}
           onSalvo={()=>{ setModalVinculo(null); load(true); }} />
+      )}
+
+      {cadastroDaCotacao && (
+        <ModalFornecedor existentes={fornecedores} currentUser={currentUser} onClose={() => setCadastroDaCotacao(null)}
+          aoSalvar={async (novo: any) => {
+            await carregarFornecedores();
+            const aplicar = (f: any) => ({ ...f, fornecedor_id: novo.id, fornecedor_nome: novo.nome, legado: false, condicao_pagamento: f.condicao_pagamento || novo.condicao_pagamento || '' });
+            if (cadastroDaCotacao === 'nova') setNovaCotacao(aplicar); else setEditCotacaoForm(aplicar);
+            setCadastroDaCotacao(null);
+          }} />
       )}
 
       {modalAcomp && (
