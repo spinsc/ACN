@@ -622,10 +622,12 @@ export default function PCPTab({ currentUser }) {
   // bloco que só acompanha abre recolhido; se passar a pedir ação, o className muda e ele abre sozinho
   const classeBloco = (temAcao) => 'sec-card' + (temAcao ? '' : ' sec-collapsed');
 
-  // Os três recortes da triagem. "Faltam configurar" = BOM ainda não liberada (o botão CONFIGURAR é o próximo passo); "Liberados no kiting" = o PCP já liberou e o Almoxarifado está separando o material
+  // Os quatro recortes da triagem. "Faltam configurar" = BOM ainda não liberada (o botão CONFIGURAR é o próximo passo); "Liberados no kiting" = o PCP já liberou e o Almoxarifado está separando o material
   // ('Aguardando Almox'); "Prontos para a produção" = o Almoxarifado concluiu (kit 100% ou com pendência aceita) e o botão "Liberar produção" já está aberto para o PCP (podeLiberar; envio não vai à produção).
   const FILTROS_TRIAGEM: Record<string, (o: any) => boolean> = {
     faltam: (o) => o.status_bom !== 'BOM Liberado',
+    // Pedido do usuário em 16/11/2026: o recorte do meio do caminho — a BOM já foi configurada e liberada, mas o kiting ainda não: a linha oferece REVER BOM ou LIBERAR KITING.
+    configuradas: (o) => o.status_geral === 'Em Espera PCP' && o.status_bom === 'BOM Liberado',
     kiting: (o) => o.status_geral === 'Aguardando Almox',
     producao: (o) => podeLiberar(o),
   };
@@ -689,6 +691,7 @@ export default function PCPTab({ currentUser }) {
             <Chips rotulo="Filtrar a triagem" ativo={filtroTriagem} onChange={setFiltroTriagem} itens={[
               { id: 'todas', rotulo: 'Todas', contagem: baseTriagem.length },
               { id: 'faltam', rotulo: 'Faltam configurar', contagem: nTriagem('faltam'), titulo: 'OPs cuja BOM ainda não foi liberada: o próximo passo é CONFIGURAR' },
+              { id: 'configuradas', rotulo: 'Configuradas', contagem: nTriagem('configuradas'), titulo: 'A BOM já está configurada e liberada, mas o kiting ainda não: dá para REVER BOM ou LIBERAR KITING' },
               { id: 'kiting', rotulo: 'Liberadas no kiting', contagem: nTriagem('kiting'), titulo: 'O PCP já liberou o kiting e o Almoxarifado está separando o material' },
               { id: 'producao', rotulo: 'Prontas para a produção', contagem: nTriagem('producao'), titulo: 'O Almoxarifado concluiu o kit (100% ou com pendência aceita): dá para liberar a produção' },
             ]} />
