@@ -834,21 +834,27 @@ export default function PCPTab({ currentUser }) {
                               {qtdProntoEmbalagem > 0 && <Selo familia="ok" ponto={false}>{qtdProntoEmbalagem} prontas p/ Embalagem</Selo>}
                               {qtdOutros > 0 && <Selo familia="erro" ponto={false}>{qtdOutros} devolvida/retrabalho</Selo>}
                             </div>
+                            {/* 16/11/2026 (pedido do usuário): "Ver N unidades" sai da coluna das Ações, que fica só com os botões de decisão, e fica sob os selos, que tinham espaço de sobra */}
+                            <div className="acn-pcp-lote-ver">
+                              <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                                {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
+                              </Botao>
+                            </div>
                           </td>
                           <td>{fmtDt(rep.data_prevista_entrega)}</td>
                           <td className="acn-eng-celula-acoes">
                             <div className="acn-acoes-linha quebra">
                               {qtdEspera > 0 && (
                                 <Botao variante="secundario" pequeno icone={mdiClipboardTextOutline} disabled={processandoLote}
-                                  title="Estrutura do veículo, perguntas do carro e BOM das unidades que ainda estão na triagem"
+                                  title="Em lote: estrutura do veículo, perguntas do carro e BOM das unidades que ainda estão na triagem"
                                   onClick={()=>setModalConfig({ ops: item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), base })}>
-                                  {/* 16/11/2026: igual à linha avulsa (REVER BOM × CONFIGURAR): com a BOM de todas as unidades na triagem já liberada, o botão é "rever" */}
-                                  {irmaos.filter(x => x.status_geral === 'Em Espera PCP').every(x => x.status_bom === 'BOM Liberado') ? 'REVER EM LOTE' : 'CONFIGURAR EM LOTE'} ({qtdEspera})
+                                  {/* 16/11/2026: igual à linha avulsa (REVER BOM × CONFIGURAR): com a BOM de todas as unidades na triagem já liberada, o botão é "rever"; textos curtos a pedido do usuário, para ganhar espaço (o "em lote" fica no balão) */}
+                                  {irmaos.filter(x => x.status_geral === 'Em Espera PCP').every(x => x.status_bom === 'BOM Liberado') ? 'REVER' : 'CONFIGURAR'} ({qtdEspera})
                                 </Botao>
                               )}
                               {qtdEspera > 0 && (
-                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} onClick={()=>abrirKiting(item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), item)}>
-                                  KITING EM LOTE ({qtdEspera})
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} title="Libera o kiting de todas as unidades que ainda estão na triagem" onClick={()=>abrirKiting(item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), item)}>
+                                  KITING ({qtdEspera})
                                 </Botao>
                               )}
                               {qtdProntoProducao > 0 && (
@@ -864,9 +870,6 @@ export default function PCPTab({ currentUser }) {
                               <MenuAcoes rotulo="Mais ações do lote" itens={[
                                 { rotulo: 'Resumo do lote', icone: mdiClipboardTextOutline, titulo: 'Resumo do lote como uma coisa só: etapas, valores e itens vendidos', onClick: () => setResumoLote({ base, irmaos }) },
                               ]} />
-                              <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
-                                {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
-                              </Botao>
                             </div>
                           </td>
                         </tr>
