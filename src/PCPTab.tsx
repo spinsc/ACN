@@ -858,13 +858,13 @@ export default function PCPTab({ currentUser }) {
                                 </Botao>
                               )}
                               {qtdProntoProducao > 0 && (
-                                <Botao variante="primario" pequeno icone={mdiFactory} disabled={processandoLote} onClick={()=>liberarProducaoLote(item)}>
-                                  PRODUÇÃO EM LOTE ({qtdProntoProducao})
+                                <Botao variante="primario" pequeno icone={mdiFactory} disabled={processandoLote} title="Libera a produção de todas as unidades do lote que estão prontas" onClick={()=>liberarProducaoLote(item)}>
+                                  PRODUÇÃO ({qtdProntoProducao})
                                 </Botao>
                               )}
                               {qtdProntoEmbalagem > 0 && (
-                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} onClick={()=>liberarEmbalagemLote(item)}>
-                                  EMBALAGEM EM LOTE ({qtdProntoEmbalagem})
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} title="Libera a embalagem de todas as unidades do lote que estão prontas" onClick={()=>liberarEmbalagemLote(item)}>
+                                  EMBALAGEM ({qtdProntoEmbalagem})
                                 </Botao>
                               )}
                               <MenuAcoes rotulo="Mais ações do lote" itens={[
