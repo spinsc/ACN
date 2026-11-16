@@ -825,7 +825,8 @@ export default function PCPTab({ currentUser }) {
                           <td>—</td>
                           <td><span className="acn-txt-info">{irmaos.length}</span></td>
                           <td className="acn-eng-tipo">{rep.tipo_projeto}</td>
-                          <td colSpan={3}>
+                          {/* 16/11/2026: a tabela tem 11 colunas (BOM, Kit, Pendência e Status entre o Tipo e a Previsão); com colSpan 3 faltava a célula do Status e a Previsão e as Ações escorregavam uma coluna para a esquerda */}
+                          <td colSpan={4}>
                             <div className="acn-selos">
                               {qtdEspera > 0 && <Selo familia="atencao" ponto={false}>{qtdEspera} aguard. BOM/kiting</Selo>}
                               {qtdAguardAlmox > 0 && <Selo familia="info" ponto={false}>{qtdAguardAlmox} no Almox</Selo>}
@@ -860,9 +861,9 @@ export default function PCPTab({ currentUser }) {
                                   EMBALAGEM EM LOTE ({qtdProntoEmbalagem})
                                 </Botao>
                               )}
-                              <Botao pequeno icone={mdiClipboardTextOutline} title="Resumo do lote como uma coisa só: etapas, valores e itens vendidos" onClick={()=>setResumoLote({ base, irmaos })}>
-                                Resumo
-                              </Botao>
+                              <MenuAcoes rotulo="Mais ações do lote" itens={[
+                                { rotulo: 'Resumo do lote', icone: mdiClipboardTextOutline, titulo: 'Resumo do lote como uma coisa só: etapas, valores e itens vendidos', onClick: () => setResumoLote({ base, irmaos }) },
+                              ]} />
                               <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
                                 {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
                               </Botao>
