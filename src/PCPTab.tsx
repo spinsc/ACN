@@ -841,7 +841,8 @@ export default function PCPTab({ currentUser }) {
                                 <Botao variante="secundario" pequeno icone={mdiClipboardTextOutline} disabled={processandoLote}
                                   title="Estrutura do veículo, perguntas do carro e BOM das unidades que ainda estão na triagem"
                                   onClick={()=>setModalConfig({ ops: item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), base })}>
-                                  CONFIGURAR EM LOTE ({qtdEspera})
+                                  {/* 16/11/2026: igual à linha avulsa (REVER BOM × CONFIGURAR): com a BOM de todas as unidades na triagem já liberada, o botão é "rever" */}
+                                  {irmaos.filter(x => x.status_geral === 'Em Espera PCP').every(x => x.status_bom === 'BOM Liberado') ? 'REVER EM LOTE' : 'CONFIGURAR EM LOTE'} ({qtdEspera})
                                 </Botao>
                               )}
                               {qtdEspera > 0 && (
