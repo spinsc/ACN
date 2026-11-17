@@ -35,6 +35,7 @@ import Linkify from './Linkify';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { AvisoSaldoCentro } from './CentroCustoUso';
 import { FormacoesDoPedidoDeCompra } from './FormacaoOrdensCompra';
+import { entregasPlanejadas, erroDasDatas, reabrirEntregasDoPedido } from './ComprasEntregas';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload, mdiClose } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
@@ -269,6 +270,11 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
       alert('Não foi possível voltar a etapa: ' + error.message + (idsCanceladas.length ? (restaurou ? '\n\nAs aprovações pendentes foram mantidas.' : '\n\nATENÇÃO: as aprovações pendentes foram canceladas e não foi possível desfazer. Confira a mesa de cotações.') : ''));
       return;
     }
+    // 17/11/2026 (entrega por fornecedor): o pedido recebido que volta a "Comprado" tem as entregas de cada fornecedor reabertas
+    if (destino === 'Comprado' && de === 'Recebido') {
+      const reaberta = await reabrirEntregasDoPedido(pedido.id);
+      if (reaberta.erro) alert('O pedido voltou para "Comprado", mas a entrega de cada fornecedor NÃO foi reaberta (' + reaberta.erro + '). Avise quem cuida do sistema.');
+    }
     await registrarHistorico(pedido.id, { tipo: 'retorno', de, para: destino, motivo: motivo.trim(), dados: { ...dados, refazer: refazer.trim(), reprocesso: upd.reprocessos } }, currentUser);
     await mencionarSolicitante(pedido, `A requisição ${pedido.numero_pedido} voltou de "${de}" para "${destino}" (reprocesso nº ${upd.reprocessos}). Motivo: ${motivo.trim()}. Será refeito: ${refazer.trim()}`, currentUser, 'reprocesso');
     setSalvando(false);
@@ -428,7 +434,11 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
 // Por item quando o pedido tem a lista estruturada: um total só seria ambíguo
 // numa compra de vários materiais, e a OC lista item a item.
 export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
-  const [prazo, setPrazo] = useState(pedido.data_prevista_recebimento ? String(pedido.data_prevista_recebimento).slice(0, 10) : '');
+  // 17/11/2026 (entrega por fornecedor): uma data para CADA fornecedor vencedor (pedido de um fornecedor só = uma data, como sempre); a primeira data de cada um vem do pedido (compra refeita)
+  const planejadas = React.useMemo(() => entregasPlanejadas(pedido), [pedido?.id, pedido?.vencedoras, pedido?.vencedora_id, pedido?.fornecedor]);
+  const prazoDoPedido = pedido.data_prevista_recebimento ? String(pedido.data_prevista_recebimento).slice(0, 10) : '';
+  const [datas, setDatas] = useState<string[]>(() => planejadas.map(() => prazoDoPedido));
+  const varias = planejadas.length > 1;
   // 20/10/2026: o fornecedor envia (como sempre) ou o Compras coleta; a data é o prazo de entrega ou o dia da coleta
   const [forma, setForma] = useState<'envio' | 'coleta'>(pedido.forma_recebimento === 'coleta' ? 'coleta' : 'envio');
   const [salvando, setSalvando] = useState(false);
@@ -448,14 +458,18 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
   const mudou = Math.abs(totalComprado - totalPedido) > 0.0001;
 
   const salvar = umaVez(async () => {
-    if (!prazo) { alert(forma === 'coleta' ? 'Informe o dia da coleta.' : 'Informe o prazo de entrega combinado com o fornecedor.'); return; }
+    const porFornecedor = planejadas.map((e, n) => ({ cotacao_id: e.cotacao_id, fornecedor: e.fornecedor, itens: e.itens, data_prevista: datas[n] || '' }));
+    const faltaData = erroDasDatas(porFornecedor, forma === 'coleta');
+    if (faltaData) { alert(faltaData); return; }
+    // o pedido guarda a data mais distante (quando fica completo); cada fornecedor guarda a sua em compras_entregas
+    const prazo = porFornecedor.map(d => d.data_prevista).sort().slice(-1)[0];
     if (totalComprado <= 0) { alert('Informe a quantidade comprada.'); return; }
     setSalvando(true);
     // devolve a lista com o comprado por item, para a OC sair certa
     const itensComprados = itensBase.length
       ? itensBase.map((i: any, n: number) => ({ ...i, quantidade_comprada: num(qtds[n]) }))
       : null;
-    const ok = await onConfirmar(pedido, prazo, totalComprado, itensComprados, forma);
+    const ok = await onConfirmar(pedido, prazo, totalComprado, itensComprados, forma, porFornecedor);
     setSalvando(false);
     if (ok !== false) onClose?.();
   });
@@ -463,7 +477,7 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
   return (
     <Janela titulo="Confirmar compra" subtitulo="Gera a Ordem de Compra e envia para o acompanhamento de recebimento." onClose={onClose}>
       <ResumoPedido p={pedido} />
-      <div className="acn-flx-forn">Fornecedor: <strong>{pedido.fornecedor || '—'}</strong></div>
+      {!varias && <div className="acn-flx-forn">Fornecedor: <strong>{pedido.fornecedor || '—'}</strong></div>}
 
       <Rotulo>Quantidade comprada *</Rotulo>
       <div className="acn-ajuda">
@@ -501,10 +515,27 @@ export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
         <Botao pequeno variante={forma === 'envio' ? 'primario' : 'secundario'} aria-pressed={forma === 'envio'} onClick={() => setForma('envio')}>O fornecedor envia</Botao>
         <Botao pequeno variante={forma === 'coleta' ? 'primario' : 'secundario'} aria-pressed={forma === 'coleta'} onClick={() => setForma('coleta')}>Coleta pelo Compras</Botao>
       </div>
-      <Rotulo>{forma === 'coleta' ? 'Dia da coleta *' : 'Prazo de entrega do pedido *'}</Rotulo>
-      <input type="date" className="acn-input" aria-label={forma === 'coleta' ? 'Dia da coleta' : 'Prazo de entrega do pedido'} value={prazo} onChange={e => setPrazo(e.target.value)} />
+      {!varias ? (
+        <>
+          <Rotulo>{forma === 'coleta' ? 'Dia da coleta *' : 'Prazo de entrega do pedido *'}</Rotulo>
+          <input type="date" className="acn-input" aria-label={forma === 'coleta' ? 'Dia da coleta' : 'Prazo de entrega do pedido'} value={datas[0] || ''} onChange={e => setDatas([e.target.value])} />
+        </>
+      ) : (
+        <>
+          <Rotulo>{forma === 'coleta' ? 'Dia da coleta de cada fornecedor *' : 'Data de entrega de cada fornecedor *'}</Rotulo>
+          {planejadas.map((e, n) => (
+            <div key={e.cotacao_id || n} className="acn-flx-entrega" data-entrega-fornecedor={e.fornecedor}>
+              <div className="acn-flx-entrega-forn"><strong>{e.fornecedor}</strong></div>
+              {e.nomesDosItens.length > 0 && <div className="acn-ajuda acn-flx-entrega-itens">{e.nomesDosItens.join(' · ')}</div>}
+              <input type="date" className="acn-input" aria-label={`${forma === 'coleta' ? 'Dia da coleta de' : 'Data de entrega de'} ${e.fornecedor}`}
+                value={datas[n] || ''} onChange={ev => setDatas(v => v.map((x, j) => j === n ? ev.target.value : x))} />
+            </div>
+          ))}
+        </>
+      )}
       <div className="acn-ajuda">{forma === 'coleta'
         ? 'O Compras busca a mercadoria neste dia (a compra aparece na lista de Coletas). Se a coleta não for registrada até a data, Compras e Almoxarifado recebem um alerta. Depois de coletada, a compra segue para a conferência do recebimento na Logística.'
+        : varias ? 'Se o recebimento de um fornecedor não for registrado até a data dele, Compras e Almoxarifado recebem um alerta.'
         : 'Se o recebimento não for registrado até esta data, Compras e Almoxarifado recebem um alerta.'}</div>
       <Rodape>
         <Botao variante="secundario" onClick={onClose} disabled={salvando}>Cancelar</Botao>

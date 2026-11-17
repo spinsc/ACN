@@ -10,6 +10,7 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { creditarCompraRecebida, fmtQtd, avisosDaReposicao } from './Estoque';
+import { registrarRecebimentoNasEntregas } from './ComprasEntregas';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline, mdiPencilOutline } from '@mdi/js';
@@ -1601,6 +1602,9 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
     }
     const { error: errPedido } = await supabase.from('pcp_pedidos_compra').update(updatePedido).eq('id', pedido.id);
     if (errPedido) { alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra: ' + errPedido.message); setSalvando(false); return; }
+    // 17/11/2026 (entrega por fornecedor, etapa E1): receber o pedido marca a entrega de cada fornecedor (recebida ou com divergência)
+    const entregasMarcadas = await registrarRecebimentoNasEntregas(pedido.id, { confere: form.confere, numero_nf: form.numero_nf.trim(), data_recebimento_real: form.data_recebimento_real, observacoes: form.observacoes.trim() || null, user: currentUser });
+    if (entregasMarcadas.erro) alert('Recebimento registrado, mas a entrega de cada fornecedor NÃO foi marcada como recebida (' + entregasMarcadas.erro + '). Avise o Compras.');
 
     if (form.confere) {
       // Mesmo gate de fechamento/liberação de pagamento já usado no fluxo antigo
@@ -2026,6 +2030,11 @@ export default function LogisticaTab({ currentUser }) {
           .eq('pedido_id', form.pedido_compra_id);
         if (errCompra || errFat) {
           alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra/faturamento: ' + (errCompra?.message || errFat?.message) + '. Verifique manualmente.');
+        }
+        // 17/11/2026 (entrega por fornecedor, etapa E1): este caminho também fecha a compra, então a entrega de cada fornecedor vai junto
+        if (!errCompra) {
+          const marcadas = await registrarRecebimentoNasEntregas(form.pedido_compra_id, { confere: true, numero_nf: String(form.nf_referencia || '').trim(), data_recebimento_real: form.data, observacoes: form.observacoes || null, user: currentUser });
+          if (marcadas.erro) alert('Recebimento registrado, mas a entrega de cada fornecedor NÃO foi marcada como recebida (' + marcadas.erro + '). Avise o Compras.');
         }
         // Reposição de estoque recebida por este caminho também tem de entrar no saldo. Antes só a janela "Receber"
         // creditava; aqui a compra fechava e o estoque ficava parado (achado com o pedido PC-FU6DS9, 29/09/2026).

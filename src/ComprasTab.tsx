@@ -28,6 +28,8 @@ import { mdiClose, mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiR
   mdiChevronUp, mdiChevronDown, mdiPlus, mdiContentSaveOutline, mdiOfficeBuildingOutline, mdiCalendarOutline, mdiBullseyeArrow,
   mdiTrashCanOutline, mdiPaperclip, mdiTrophyOutline, mdiClockOutline, mdiCheckCircleOutline, mdiCameraOutline } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
+import { entregasDoPedido, lerEntregas, gravarEntregas, salvarDatasDasEntregas, dataMaisProxima, temEntrega } from './ComprasEntregas';
+import { PrevisaoDoPedido, QuadroDeEntregas, ModalPrazoDeEntrega } from './ComprasEntregasView';
 import { listarEsperandoAprovacao, rotuloDaAlcada } from './AprovacaoCompras';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
@@ -365,7 +367,26 @@ const CSS_ITENS = `
   table.itens td { padding:6px 8px; border-bottom:1px solid #e2e8f0; font-size:11px; vertical-align:top; }
   table.itens tr:nth-child(even) td { background:#f8fafc; }`;
 
+// 17/11/2026 (entrega por fornecedor): o papel diz a data de CADA fornecedor quando o pedido tem mais de um
+function datasParaImpressao(p: any, linhas: any[], fmtDt: (d: string) => string) {
+  const e = entregasDoPedido(p, linhas);
+  if (e.length < 2) return fmtDt(p.data_prevista_recebimento);
+  return e.map((x: any) => `${esc(x.fornecedor)}: ${fmtDt(x.data_prevista)}`).join('<br>');
+}
+function imprimirComEntregas(p: any, montar: (linhas: any[]) => string) {
+  const janela = window.open('', '_blank', 'width=800,height=600');   // abre já, no clique: depois da espera o navegador bloquearia o popup
+  const ler = temEntrega(p) ? lerEntregas([p.id]) : Promise.resolve({ linhas: [], erro: null });
+  ler.then(r => {
+    if (r.erro) { janela?.close(); alert('Não foi possível ler a data de cada fornecedor (' + r.erro + '). Nada foi impresso; tente de novo.'); return; }
+    if (janela) { janela.document.write(montar(r.linhas)); janela.document.close(); }
+  });
+}
+
 function imprimirSolicitacao(p: any) {
+  imprimirComEntregas(p, linhas => htmlDaSolicitacao(p, linhas));
+}
+
+function htmlDaSolicitacao(p: any, linhas: any[]) {
   const fmt = (v: any) => v
     ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
   // data_prevista_recebimento é timestamptz: colar 'T00:00:00' num valor que já
@@ -394,7 +415,7 @@ function imprimirSolicitacao(p: any) {
         ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade_comprada ?? p.quantidade) || '—'}${p.quantidade_comprada != null && Number(p.quantidade_comprada) !== Number(p.quantidade) ? ` <span style="color:#94a3b8">(pedido ${esc(p.quantidade)})</span>` : ''}</td></tr>`}
         <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
-        <tr><td><b>${ehColeta(p) ? 'Coleta pelo comprador em' : 'Previsão de Recebimento'}</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
+        <tr><td><b>${ehColeta(p) ? 'Coleta pelo comprador em' : 'Previsão de Recebimento'}</b></td><td>${datasParaImpressao(p, linhas, fmtDt)}</td></tr>
         <tr><td><b>Status</b></td><td><span class="badge">${esc(p.status_compra) || '—'}</span></td></tr>
         <tr><td><b>Data da Solicitação</b></td><td>${p.data_criacao ? new Date(p.data_criacao).toLocaleDateString('pt-BR') : '—'}</td></tr>
         ${p.observacoes_compra ? `<tr><td><b>Observações</b></td><td style="white-space:pre-wrap">${esc(p.observacoes_compra)}</td></tr>` : ''}
@@ -403,12 +424,15 @@ function imprimirSolicitacao(p: any) {
       <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
       <script>window.onload=()=>window.print();</script>
     </body></html>`;
-  const w = window.open('', '_blank', 'width=800,height=600');
-  if (w) { w.document.write(html); w.document.close(); }
+  return html;
 }
 
 export function imprimirOrdemCompra(p: any) {
   if (!p.numero_oc) return;
+  imprimirComEntregas(p, linhas => htmlDaOrdemDeCompra(p, linhas));
+}
+
+function htmlDaOrdemDeCompra(p: any, linhas: any[]) {
   const fmt = (v: any) => v
     ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
   // data_prevista_recebimento é timestamptz: colar 'T00:00:00' num valor que já
@@ -438,15 +462,14 @@ export function imprimirOrdemCompra(p: any) {
         <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
         <tr><td><b>Centro de Custo</b></td><td>${esc(p.centro_custo) || '—'}</td></tr>
-        <tr><td><b>${ehColeta(p) ? 'Coleta pelo comprador em' : 'Previsão de Recebimento'}</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
+        <tr><td><b>${ehColeta(p) ? 'Coleta pelo comprador em' : 'Previsão de Recebimento'}</b></td><td>${datasParaImpressao(p, linhas, fmtDt)}</td></tr>
         <tr><td><b>Justificativa da Vencedora</b></td><td>${esc(p.justificativa_vencedora) || '—'}</td></tr>
       </table>
       ${blocoItensImpressao(p, fmt)}
       <div class="footer">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
       <script>window.onload=()=>window.print();</script>
     </body></html>`;
-  const w = window.open('', '_blank', 'width=800,height=600');
-  if (w) { w.document.write(html); w.document.close(); }
+  return html;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -749,16 +772,24 @@ function ModalColetas({ onRegistrar, onMudarDia, onAbrir, onClose }: any) {
   const [tentativa, setTentativa] = useState(0);
   const [ocupado, setOcupado] = useState(false);
   const [dias_, setDias] = useState<Record<string, string>>({});
+  const [linhasEntregas, setLinhasEntregas] = useState<any[]>([]);   // 17/11/2026: cada fornecedor com o seu dia de coleta (a coleta em si continua sendo registrada para o pedido todo)
   const hoje = new Date().toLocaleDateString('sv-SE');
   useEffect(() => {
     supabase.from('pcp_pedidos_compra')
-      .select('id,numero_pedido,numero_oc,descricao_material,itens,fornecedor,quantidade,quantidade_comprada,data_prevista_recebimento,opl,status_compra,forma_recebimento,coletado_em,comprador_nome')
+      .select('id,numero_pedido,numero_oc,descricao_material,itens,fornecedor,quantidade,quantidade_comprada,data_prevista_recebimento,opl,status_compra,forma_recebimento,coletado_em,comprador_nome,vencedoras,vencedora_id,tem_divergencia,numero_nf,data_recebimento_real,quantidade_recebida,alerta_entrega_mencionado_em')
       .eq('status_compra', 'Comprado').eq('forma_recebimento', 'coleta').is('coletado_em', null).order('data_prevista_recebimento', { ascending: true, nullsFirst: false })
-      .then(({ data, error }) => { if (error) { setErro(error.message); setLista(prev => prev ?? []); } else { setErro(''); setLista(data || []); } });
+      .then(async ({ data, error }) => {
+        if (error) { setErro(error.message); setLista(prev => prev ?? []); return; }
+        const r = await lerEntregas((data || []).map((p: any) => p.id));
+        setErro(r.erro ? `as datas de cada fornecedor: ${r.erro}` : '');
+        if (!r.erro) setLinhasEntregas(r.linhas);
+        setLista(data || []);
+      });
   }, [tentativa]);
   const grupos: { dia: string; itens: any[] }[] = [];
   (lista || []).forEach((p: any) => {
-    const dia = String(p.data_prevista_recebimento || '').slice(0, 10) || 'sem-dia';
+    // o pedido entra no dia da PRIMEIRA coleta que ainda falta; as datas dos outros fornecedores aparecem na própria linha
+    const dia = dataMaisProxima(entregasDoPedido(p, linhasEntregas)) || String(p.data_prevista_recebimento || '').slice(0, 10) || 'sem-dia';
     const g = grupos.find(x => x.dia === dia);
     if (g) g.itens.push(p); else grupos.push({ dia, itens: [p] });
   });
@@ -797,9 +828,11 @@ function ModalColetas({ onRegistrar, onMudarDia, onAbrir, onClose }: any) {
                   {g.dia <= hoje && g.itens.length > 1 && <Botao pequeno disabled={ocupado} onClick={() => registrarTodas(g)}>Todas coletadas hoje</Botao>}
                 </div>
                 {g.itens.map((p: any) => (
-                  <div key={p.id} className="acn-cmp-res-cot">
+                  <div key={p.id} className="acn-cmp-res-cot acn-cmp-col-linha">
                     <span className="acn-forte">{p.numero_pedido}{p.numero_oc ? ` · ${p.numero_oc}` : ''}</span>
-                    <span>{p.fornecedor || 'Fornecedor não informado'}</span>
+                    {entregasDoPedido(p, linhasEntregas).length > 1
+                      ? <PrevisaoDoPedido pedido={p} linhas={linhasEntregas} comAno />
+                      : <span>{p.fornecedor || 'Fornecedor não informado'}</span>}
                     <span className="acn-ajuda">{resumoItens(p)}</span>
                     <input type="date" className="acn-input" aria-label={`Dia em que ${p.numero_pedido} foi coletada`} max={hoje} value={dias_[p.id] ?? hoje}
                       onChange={e => setDias(d => ({ ...d, [p.id]: e.target.value }))} />
@@ -822,6 +855,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
   const [cotacoes, setCotacoes] = useState<any[] | null>(null);
   const [aprovacoes, setAprovacoes] = useState<any[]>([]);
   const [acomp, setAcomp] = useState<any[]>([]);
+  const [linhasEntregas, setLinhasEntregas] = useState<any[]>([]);   // 17/11/2026: a data e o recebimento de cada fornecedor
   // Etapa 7.58 (06/10/2026): leitura que falha não pode parecer "Nenhuma cotação lançada" nem sumir com as aprovações e o acompanhamento.
   const [errosLeitura, setErrosLeitura] = useState<string[]>([]);
   const [tentativa, setTentativa] = useState(0);
@@ -834,10 +868,12 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
       .then(({ data, error }) => { if (error) falhou('as aprovações', error); else setAprovacoes(data || []); });
     supabase.from('op_acompanhamentos').select('*').eq('referencia_id', String(p.id)).order('criado_em', { ascending: false }).limit(20)
       .then(({ data, error }) => { if (error) falhou('o acompanhamento', error); else setAcomp(data || []); });
+    lerEntregas([p.id]).then(r => { if (r.erro) falhou('a entrega de cada fornecedor', { message: r.erro }); else setLinhasEntregas(r.linhas); });
   }, [p.id, tentativa]);
   const moeda = (v: any) => v != null && v !== '' ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v)) : '—';
   const data = (d: any) => d ? new Date(String(d).length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString('pt-BR') : '—';
   const dep = (departamentos || []).find((d: any) => d.id === p.departamento_id);
+  const entregasResumo = entregasDoPedido(p, linhasEntregas);
   const Linha = ({ k, v }) => (v === null || v === undefined || v === '' ? null : (
     <div className="acn-ficha-linha acn-cmp-ficha">
       <span>{k}</span><span>{v}</span>
@@ -860,6 +896,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
         </div>
         <div className="acn-modal-corpo">
           <QuadroDaSolicitacao p={p} canVerValor={canVerValor} currentUser={currentUser} mostrarSolicitante={false} podeEditarAnexos={podeEditarSolicitacao(p, currentUser)} />
+          {entregasResumo.length > 1 && <QuadroDeEntregas pedido={p} linhas={linhasEntregas} coleta={ehColeta(p)} />}
           <div>
             <Linha k="Tipo" v={origemDaRequisicao(p).label} />
             <Linha k="Quantidade" v={p.quantidade} />
@@ -868,7 +905,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
             {canVerValor && <Linha k="Valor da compra" v={p.valor_compra ? moeda(p.valor_compra) : null} />}
             <Linha k="Departamento" v={dep?.nome} />
             <Linha k="Como chega" v={ehColeta(p) ? 'Coleta pelo Compras' : null} />
-            <Linha k={ehColeta(p) ? 'Coleta marcada para' : 'Prev. recebimento'} v={p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null} />
+            <Linha k={ehColeta(p) ? 'Coleta marcada para' : 'Prev. recebimento'} v={entregasResumo.length > 1 ? null : (p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null)} />
             <Linha k="Coletado em" v={p.coletado_em ? `${data(p.coletado_em)}${p.coletado_por_nome ? ` por ${p.coletado_por_nome}` : ''}` : null} />
             <Linha k="Prazo prometido" v={p.prazo_prometido_entrega ? `${data(p.prazo_prometido_entrega)} (${p.prazo_prometido_destino === 'cliente' ? 'cliente' : 'produção'})` : null} />
             <Linha k="NF" v={p.numero_nf} />
@@ -997,6 +1034,9 @@ function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbri
 
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
+  // 17/11/2026 (entrega por fornecedor): as datas de cada fornecedor dos pedidos já comprados (tabela compras_entregas); sem linhas o pedido vale como uma entrega só
+  const [entregasLinhas, setEntregasLinhas] = useState<any[]>([]);
+  const [erroEntregas, setErroEntregas] = useState('');
   // Etapa 7.57: um clique duplo em salvar/aprovar/rejeitar/excluir gravava duas vezes (duas linhas de aprovação, duas cotações
   // iguais, dois avisos aos aprovadores) — uma ação por tipo (e por registro).
   const emAcao = useRef(new Set());
@@ -1076,21 +1116,24 @@ export default function ComprasTab({ currentUser }) {
   // Prazo Prometido de Entrega (Fase 1)
   const [modalPrazoProm, setModalPrazoProm]     = useState<any>(null);
   // Comprador ajusta o prazo de entrega (prev. recebimento) depois da compra
-  const [modalPrazoEntrega, setModalPrazoEntrega] = useState<any>(null);   // { p, data, motivo }
-  const salvarPrazoEntrega = umaVez('prazo-entrega', async () => {
-    const { p, data, motivo } = modalPrazoEntrega;
-    if (!data) { alert('Informe a nova data de entrega.'); return; }
-    const antes = p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0, 10) : null;
-    const { error } = await supabase.from('pcp_pedidos_compra').update({ data_prevista_recebimento: data }).eq('id', p.id);
-    if (error) { alert('Não foi possível salvar o prazo: ' + error.message); return; }
-    logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: p.id, changeType: 'UPDATE',
-      oldRow: { data_prevista_recebimento: antes }, newRow: { data_prevista_recebimento: data }, user: currentUser });
+  const [modalPrazoEntrega, setModalPrazoEntrega] = useState<any>(null);   // { p }
+  // 17/11/2026 (entrega por fornecedor): a janela mostra uma data por fornecedor com entrega aberta; só as que mudaram são gravadas, cada uma com a data de antes no histórico.
+  const salvarPrazoEntrega = async (novas: Record<string, string>, motivo: string, todas: any[]): Promise<boolean> => {
+    const p = modalPrazoEntrega?.p;
+    if (!p) return false;
+    const r = await salvarDatasDasEntregas(p, todas, novas, currentUser);
+    if (r.erro) { alert('Não foi possível salvar o prazo: ' + r.erro); load(true); return false; }
+    if (!r.mudancas.length) return true;
+    const varias = todas.length > 1;
     const br = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: p.id, changeType: 'UPDATE',
+      oldRow: Object.fromEntries(r.mudancas.map(m => [varias ? `Entrega ${m.fornecedor}` : 'data_prevista_recebimento', m.de])),
+      newRow: Object.fromEntries(r.mudancas.map(m => [varias ? `Entrega ${m.fornecedor}` : 'data_prevista_recebimento', m.para])), user: currentUser });
     await registrarHistorico(p.id, { tipo: 'edicao', motivo: motivo?.trim() || null,
-      dados: { campos: [{ campo: 'Prazo de entrega', de: br(antes), para: br(data) }] } }, currentUser);
-    setModalPrazoEntrega(null);
+      dados: { campos: r.mudancas.map(m => ({ campo: varias ? `Prazo de entrega — ${m.fornecedor}` : 'Prazo de entrega', de: br(m.de), para: br(m.para) })) } }, currentUser);
     load();
-  });
+    return true;
+  };
   const [prazoPromData, setPrazoPromData]       = useState('');
   const [prazoPromDestino, setPrazoPromDestino] = useState<'producao'|'cliente'>('producao');
   const [salvandoPrazoProm, setSalvandoPrazoProm] = useState(false);
@@ -1320,6 +1363,15 @@ export default function ComprasTab({ currentUser }) {
     // pedida (troca de filtro, recarregar) segue vazia, porque a lista antiga seria de outro filtro.
     if (error) { setQueryError(error.message); if (!silent) { setLoading(false); setPedidos([]); } return; }
     setPedidos(data || []);
+    // As entregas dos comprados: a releitura silenciosa (30 s) refaz só os "Comprado" (os recebidos não mudam sozinhos). Leitura recusada mantém as de antes e AVISA:
+    // sem elas o pedido de vários fornecedores cairia, calado, numa data só.
+    const idsEntregas = (data || []).filter((p: any) => temEntrega(p) && (!silent || p.status_compra === 'Comprado')).map((p: any) => p.id);
+    lerEntregas(idsEntregas).then(r => {
+      if (r.erro) { setErroEntregas(r.erro); return; }
+      setErroEntregas('');
+      const ids = new Set(idsEntregas.map(String));
+      setEntregasLinhas(prev => [...prev.filter((l: any) => !ids.has(String(l.pedido_id))), ...r.linhas]);
+    });
     if (silent) {
       // Refresh silencioso (polling a cada 30s): não sobrescrever edições em
       // andamento (ex: campos abertos na Mesa de Cotações) — só adiciona
@@ -1840,7 +1892,7 @@ export default function ComprasTab({ currentUser }) {
   // (status_compra='Comprado'), gera número de OC (trigger) e cria a demanda de
   // acompanhamento — antes disso, o pedido fica em 'Aprovado' esperando essa
   // confirmação, mesmo que quem aprovou também tenha alçada pra isso.
-  const confirmarCompra = async (pedido: any, prazo?: string, qtdComprada?: number, itensComprados?: any[] | null, forma: 'envio' | 'coleta' = 'envio') => {
+  const confirmarCompra = async (pedido: any, prazo?: string, qtdComprada?: number, itensComprados?: any[] | null, forma: 'envio' | 'coleta' = 'envio', datasPorFornecedor?: any[]) => {
     const upd: any = { status_compra: 'Comprado' };
     if (prazo) upd.data_prevista_recebimento = prazo;
     // 20/10/2026: o fornecedor envia ou o Compras coleta; na coleta a data é o dia da coleta e ela ainda não foi feita
@@ -1853,14 +1905,22 @@ export default function ComprasTab({ currentUser }) {
     if (itensComprados) upd.itens = itensComprados;
     const { error } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', pedido.id);
     if (error) { alert('Erro ao confirmar compra: ' + error.message); return false; }
+    // 17/11/2026 (entrega por fornecedor): a data de CADA fornecedor vai para compras_entregas; o pedido guarda a mais distante (já em `upd`).
+    // Se esta gravação falhar a compra já está feita e o pedido segue valendo como entrega com a data do pedido: a pessoa ajusta cada data em "Alterar prazo".
+    let erroEntregas = '';
+    if (datasPorFornecedor?.length) { const r = await gravarEntregas(pedido.id, datasPorFornecedor, currentUser); erroEntregas = r.erro || ''; }
     logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: pedido.id, changeType: 'UPDATE',
       oldRow: { status_compra: 'Aprovado', quantidade_comprada: pedido.quantidade_comprada }, newRow: upd, user: currentUser });
+    const dBr = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
+    const textoPrazo = datasPorFornecedor && datasPorFornecedor.length > 1
+      ? `${forma === 'coleta' ? 'Coleta pelo Compras marcada para' : 'Entregas:'} ${datasPorFornecedor.map((d: any) => `${d.fornecedor} ${dBr(d.data_prevista)}`).join(' · ')}`
+      : prazo ? `${forma === 'coleta' ? 'Coleta pelo Compras marcada para' : 'Prazo de entrega:'} ${dBr(prazo)}` : '';
     const difQtd = qtdComprada != null && Number(pedido.quantidade) !== qtdComprada
       ? `Pedido de ${pedido.quantidade}, comprado ${qtdComprada}.` : '';
     await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aprovado', para: 'Comprado',
-      motivo: [difQtd, prazo ? `${forma === 'coleta' ? 'Coleta pelo Compras marcada para' : 'Prazo de entrega:'} ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : '']
-        .filter(Boolean).join(' ') || null }, currentUser);
+      motivo: [difQtd, textoPrazo].filter(Boolean).join(' ') || null }, currentUser);
     const erroDemanda = await criarDemandaComprasFinalizada(pedido.id);
+    if (erroEntregas) alert('A compra foi confirmada, mas a data de cada fornecedor NÃO foi gravada (' + erroEntregas + '). O pedido ficou com a data mais distante para todos; ajuste cada fornecedor em "Alterar prazo de entrega".');
     if (erroDemanda) alert('A compra foi confirmada, mas a demanda de acompanhamento em "Compras — Demandas" NÃO foi criada: ' + erroDemanda + '\n\nAvise o Compras para abrir à mão.');   // 7.57
     await notificarCriadorPedido(pedido, `Compra confirmada — pedido ${pedido.numero_pedido}.`);
     setFiltro('');
@@ -2294,11 +2354,11 @@ export default function ComprasTab({ currentUser }) {
             />
           ) : (
             <div className="acn-cmp-chiplinha">
-              {fmtData(p.data_prevista_recebimento)}
+              {temEntrega(p) ? <PrevisaoDoPedido pedido={p} linhas={entregasLinhas} comAno /> : fmtData(p.data_prevista_recebimento)}
               {ehColeta(p) && <Selo familia={p.coletado_em ? 'ok' : 'info'} ponto={false} title={p.coletado_em ? 'Mercadoria já coletada' : 'O Compras coleta no dia marcado'}>{p.coletado_em ? 'Coletado' : 'Coleta'}</Selo>}
               {podeGerirCompras(currentUser) && !['Pendente', DESCARTADA].includes(p.status_compra) && (
                 <Botao pequeno variante="discreto" icone={mdiPencilOutline}
-                  onClick={()=>setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0,10) : '', motivo: '' })}
+                  onClick={()=>setModalPrazoEntrega({ p })}
                   title="Alterar o prazo de entrega" aria-label="Alterar o prazo de entrega" />
               )}
             </div>
@@ -2478,6 +2538,11 @@ export default function ComprasTab({ currentUser }) {
           Não foi possível ler: {erroConfig.join('; ')}. Isso não quer dizer que não haja — e <strong>sem as alçadas e os aprovadores lidos, a aprovação de compras fica travada</strong>.
         </Faixa>
       )}
+      {erroEntregas && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
+          Não foi possível ler a data de cada fornecedor ({erroEntregas}). Até ler, o pedido com mais de um fornecedor pode aparecer só com a data mais distante.
+        </Faixa>
+      )}
       {queryError && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
           Erro ao carregar dados: <strong>{queryError}</strong>. Isso não quer dizer que não haja requisição{pedidos.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
@@ -2545,7 +2610,7 @@ export default function ComprasTab({ currentUser }) {
                     <div className="acn-cmp-card-rodape">
                       <span className="acn-ajuda">
                         {canVerValor && p.valor_compra ? <strong className="acn-txt-ok acn-cmp-card-valor">{fmt(p.valor_compra)}</strong> : null}
-                        {p.data_prevista_recebimento ? fmtData(p.data_prevista_recebimento) : null}
+                        {temEntrega(p) ? <PrevisaoDoPedido pedido={p} linhas={entregasLinhas} comAno /> : (p.data_prevista_recebimento ? fmtData(p.data_prevista_recebimento) : null)}
                         {ehColeta(p) && <> <Selo familia={p.coletado_em ? 'ok' : 'info'} ponto={false}>{p.coletado_em ? 'Coletado' : 'Coleta'}</Selo></>}
                       </span>
                       <div className="acn-acoes-linha quebra">
@@ -2790,33 +2855,10 @@ export default function ComprasTab({ currentUser }) {
         </div>
       )}
 
-      {/* MODAL PRAZO PROMETIDO DE ENTREGA */}
+      {/* MODAL PRAZO DE ENTREGA — uma data por fornecedor (17/11/2026) */}
       {modalPrazoEntrega && (
-        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalPrazoEntrega(null);}}>
-          <div className="modal-box acn-modal-cadastro acn-cmp-j420" role="dialog" aria-label="Prazo de entrega">
-            <div className="acn-modal-cab">
-              <span className="modal-title acn-prod-ic"><Icone path={mdiCalendarOutline} size={16} /> Prazo de entrega — {modalPrazoEntrega.p.numero_pedido}</span>
-            </div>
-            <div className="acn-modal-corpo acn-form-cheio">
-              <div className="acn-ajuda">{modalPrazoEntrega.p.descricao_material}</div>
-              <div className="form-group">
-                <label className="acn-label">Nova data de entrega *</label>
-                <input type="date" className="acn-input" aria-label="Nova data de entrega"
-                  value={modalPrazoEntrega.data} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,data:e.target.value}))} />
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Motivo (opcional)</label>
-                <input className="acn-input" placeholder="Ex.: fornecedor adiou o envio"
-                  value={modalPrazoEntrega.motivo} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,motivo:e.target.value}))} />
-              </div>
-              <div className="acn-ajuda">A alteração fica no histórico do pedido, com a data anterior.</div>
-            </div>
-            <div className="acn-modal-rodape acn-sac-rodape">
-              <Botao variante="primario" icone={mdiCheck} onClick={salvarPrazoEntrega}>Salvar prazo</Botao>
-              <Botao onClick={()=>setModalPrazoEntrega(null)}>Cancelar</Botao>
-            </div>
-          </div>
-        </div>
+        <ModalPrazoDeEntrega pedido={modalPrazoEntrega.p} linhas={entregasLinhas} coleta={ehColeta(modalPrazoEntrega.p)}
+          onSalvar={salvarPrazoEntrega} onClose={() => setModalPrazoEntrega(null)} />
       )}
 
       {modalPrazoProm && (
@@ -3160,7 +3202,7 @@ export default function ComprasTab({ currentUser }) {
       )}
       {modalColetas && (
         <ModalColetas onRegistrar={registrarColeta} onClose={() => setModalColetas(false)}
-          onMudarDia={(p: any) => { setModalColetas(false); setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0, 10) : '', motivo: '' }); }}
+          onMudarDia={(p: any) => { setModalColetas(false); setModalPrazoEntrega({ p }); }}
           onAbrir={(p: any) => { setModalColetas(false); setModalResumo(p); }} />
       )}
       {modalRecebidos && (
