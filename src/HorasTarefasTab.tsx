@@ -5,6 +5,7 @@
 // horas e tarefas por período.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -1034,7 +1035,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
 
   useEffect(() => {
     carregar();
-    const t = setInterval(() => carregar(true), 60000);
+    const t = intervaloVisivel(() => carregar(true), 60000);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {

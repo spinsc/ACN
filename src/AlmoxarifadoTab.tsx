@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
@@ -126,7 +127,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   const [modalReposicao, setModalReposicao] = useState(false);
   const [minhasSolicitacoes, setMinhasSolicitacoes] = useState([]);
 
-  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = intervaloVisivel(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
   useEffect(() => { if (!doTelecom) fetchSolicitacoes(); }, []);   // reposição de estoque é do Almoxarifado
 
   // Etapa 7.50: leitura que falha não pode parecer "nenhuma OP aguardando" nem "nenhuma solicitação ainda"

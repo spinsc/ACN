@@ -21,6 +21,7 @@
 //     Comprado com prazo de entrega vencido e sem recebimento → Compras e
 //     Almoxarifado dão a posição (e recebem uma menção).
 // ─────────────────────────────────────────────────────────────────────────────
+import { nomeDoPedido } from './NomeDoPedido';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
@@ -179,7 +180,7 @@ function ResumoPedido({ p }: any) {
         <Selo familia="neutro">{p.status_compra}</Selo>
         {p.reprocessos > 0 && <Selo familia="atencao" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
       </div>
-      <div className="acn-flx-resumo-desc">{p.descricao_material}</div>
+      <div className="acn-flx-resumo-desc">{nomeDoPedido(p)}</div>
       <div className="acn-fraco">Qtd {p.quantidade || 1}{p.criado_por_nome ? ` · solicitado por ${p.criado_por_nome}` : ''}</div>
     </div>
   );
@@ -814,7 +815,7 @@ export async function dispararMencoesEntrega(alertas: any[], user: any) {
       .eq('id', a.pedido.id).is('alerta_entrega_mencionado_em', null).select('id');
     if (!data?.length) continue;
     await mencionarPerfis(['Compras', 'Almoxarifado'], a.pedido,
-      `${a.coleta ? 'Coleta atrasada' : 'Entrega atrasada'}: a requisição ${a.pedido.numero_pedido}${a.pedido.numero_oc ? ` (${a.pedido.numero_oc})` : ''} — ${a.pedido.descricao_material || ''} — tinha ${a.coleta ? 'coleta marcada' : 'entrega prevista'} para ${fmtData(a.pedido.data_prevista_recebimento)} e ${a.coleta ? 'a coleta ainda não foi registrada' : 'ainda não foi recebida'}. Registre a posição em Avisos.`,
+      `${a.coleta ? 'Coleta atrasada' : 'Entrega atrasada'}: a requisição ${a.pedido.numero_pedido}${a.pedido.numero_oc ? ` (${a.pedido.numero_oc})` : ''} — ${nomeDoPedido(a.pedido)} — tinha ${a.coleta ? 'coleta marcada' : 'entrega prevista'} para ${fmtData(a.pedido.data_prevista_recebimento)} e ${a.coleta ? 'a coleta ainda não foi registrada' : 'ainda não foi recebida'}. Registre a posição em Avisos.`,
       { id: '', nome: 'Sistema' }, 'entrega_atrasada');
   }
 }
@@ -855,7 +856,7 @@ function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: a
         <Selo familia={entrega ? 'erro' : 'atencao'}>{entrega ? `${alerta.coleta ? 'Coleta atrasada' : 'Entrega atrasada'} · ${alerta.dias} d` : `${p.status_compra} · parada há ${horasTexto(alerta.horas)} úteis`}</Selo>
         {p.reprocessos > 0 && <Selo familia="neutro" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
       </div>
-      <div className="acn-flx-alerta-desc">{String(p.descricao_material || '').slice(0, 180)}</div>
+      <div className="acn-flx-alerta-desc">{nomeDoPedido(p).slice(0, 180)}</div>
       <div className="acn-ajuda">
         {p.criado_por_nome ? `Solicitado por ${p.criado_por_nome}` : ''}{p.comprador_nome ? ` · Comprador: ${p.comprador_nome}` : ''}
         {entrega ? ` · ${alerta.coleta ? 'Coleta marcada para' : 'Prazo:'} ${fmtData(p.data_prevista_recebimento)}${p.fornecedor ? ` · ${p.fornecedor}` : ''}` : ''}
@@ -971,12 +972,11 @@ export async function criarRequisicaoCompra({
 }: any) {
   const agora = new Date().toISOString();
   const lista = (itens || []).filter((i: any) => String(i?.nome || '').trim());
-  const linhas = lista.map((i: any) => `${i.quantidade || 1}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}`).join('\n');
-  const qtd = lista.reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0);
+    const qtd = lista.reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0);
 
   const { data, error } = await supabase.from('pcp_pedidos_compra').insert([{
     numero_pedido: `PC-${Date.now().toString(36).toUpperCase().slice(-6)}`,
-    descricao_material: [String(titulo || '').trim(), String(descricao || '').trim(), linhas].filter(Boolean).join('\n'),
+    descricao_material: [String(titulo || '').trim(), String(descricao || '').trim()].filter(Boolean).join('\n'),
     quantidade: Math.max(1, Math.round(qtd) || 1),
     status_compra: 'Pendente',
     itens: lista,

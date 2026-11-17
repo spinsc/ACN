@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoCompacto } from './AcnTabShared';
@@ -72,7 +73,7 @@ export default function QualidadeTab({ currentUser }) {
   // Etapa 7.35 (02/10/2026): leitura que falha avisa em vez de parecer "Nenhuma OP aguardando auditoria"
   const [erroLeitura, setErroLeitura] = useState('');
 
-  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = intervaloVisivel(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);

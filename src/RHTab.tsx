@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
@@ -10,9 +11,11 @@ import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './ComissaoDocumento';
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
-import { hojeISO, diaISO, Botao, Selo, Chips, ChipsMultiplos, Faixa } from './Interface';
+import { hojeISO, diaISO, Botao, Selo, Chips, ChipsMultiplos, SelectMultiplo, Faixa } from './Interface';
 import { lerDepartamentos, anexarDepartamentos, departamentosTexto, salvarVinculosDaPessoa } from './RhDepartamentos';
 import { ModalDepartamentos } from './DepartamentosRH';
+import { lerCargos, anexarCargos, salvarCargosDaPessoa, textoDosCargos } from './RhCargos';
+import { ModalCargos } from './CargosRH';
 import RelatorioPersonalizadoRH from './RelatorioPersonalizadoRH';
 import { resetColaboradoresCache } from './ColaboradorSelect';
 import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
@@ -171,11 +174,11 @@ const CAMPOS_EXTRAS_FUNC = ['sexo', 'empresa', 'nome_completo', 'atividades_exer
 
 // R17 (13/10/2026): a consulta de CEP própria do RH (só o ViaCEP) saiu; o cadastro usa o CampoCep de todo o sistema (ViaCEP e BrasilAPI, Cep.ts)
 
-function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos = [], erroDepartamentos = '' }) {
+function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos = [], erroDepartamentos = '', cargos = [], erroCargos = '' }) {
   const { campoDestaque, marcarComoLido } = useFieldHighlight('rh_funcionarios', func?.id, currentUser);
   const fecharModal = () => { marcarComoLido(); onClose(); };
   const vazio = {
-    nome:'', email:'', cpf:'', cnpj:'', cargo:'', dep_ids: [] as string[], data_admissao:'', data_nascimento:'',
+    nome:'', email:'', cpf:'', cnpj:'', cargo:'', cargo_ids: [] as string[], dep_ids: [] as string[], data_admissao:'', data_nascimento:'',
     tipo_colaborador:'Funcionário',
     salario:'', valor_servicos:'', cargo_confianca: false,
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento', pct_tipo: {} as Record<string, string>,
@@ -184,7 +187,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
   };
   const [form, setForm] = useState(func ? {
     nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
-    cargo: func.cargo||'', dep_ids: (func.departamento_ids || []) as string[],
+    cargo: func.cargo||'', cargo_ids: (func.cargo_ids || []) as string[], dep_ids: (func.departamento_ids || []) as string[],
     data_admissao: func.data_admissao||'',
     data_nascimento: func.data_nascimento ? String(func.data_nascimento).slice(0, 10) : '',
     tipo_colaborador: func.tipo_colaborador||'Funcionário',
@@ -226,7 +229,9 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     setSalvando(true);
     const payload = {
       nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(), cnpj: form.cnpj.trim()||null,
-      cargo: form.cargo.trim(),   // 14/10/2026: o texto antigo "departamento" não é mais gravado (fica no banco como histórico); os departamentos vão para rh_funcionario_departamentos
+      // 16/11/2026: o texto do cargo é refeito a partir da lista de cargos escolhidos (salvarCargosDaPessoa, logo abaixo); se a lista de cargos não chegou, o texto que já existe é mantido
+      // quem ainda não tem cargo escolhido na lista e continua sem escolher também mantém o texto antigo (mexer no telefone de alguém não pode apagar o cargo dele)
+      cargo: erroCargos || !cargos.length || (!form.cargo_ids.length && !(func?.cargo_ids || []).length) ? (func?.cargo || '') : textoDosCargos(cargos.filter((c: any) => form.cargo_ids.includes(c.id)).map((c: any) => c.nome)),   // 14/10/2026: o texto antigo "departamento" não é mais gravado (fica no banco como histórico); os departamentos vão para rh_funcionario_departamentos
       data_admissao: form.data_admissao || null,
       data_nascimento: form.data_nascimento || null,
       tipo_colaborador: form.tipo_colaborador,
@@ -262,6 +267,11 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     if (!erroDepartamentos && departamentos.length) {
       const erroDep = await salvarVinculosDaPessoa(funcId, form.dep_ids);
       if (erroDep) { alert('O colaborador foi salvo, mas os departamentos não: ' + erroDep + '.\n\nAbra o cadastro dele de novo e marque os departamentos.'); }
+    }
+    // os cargos (um ou mais), pela mesma regra: só quando a lista chegou
+    if (!erroCargos && cargos.length && (form.cargo_ids.length || (func?.cargo_ids || []).length)) {
+      const erroCar = await salvarCargosDaPessoa(funcId, form.cargo_ids, cargos);
+      if (erroCar) { alert('O colaborador foi salvo, mas os cargos não: ' + erroCar + '.\n\nAbra o cadastro dele de novo e escolha os cargos.'); }
     }
     resetColaboradoresCache();
     setSalvando(false); onSaved(); fecharModal();
@@ -301,7 +311,15 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
               {lbl('Data de nascimento')}
               <input type="date" className="acn-input" value={form.data_nascimento} min="1900-01-01" max={hojeISO()} onChange={e=>set('data_nascimento',e.target.value)} />
             </div>
-            <div style={campoDestaque('cargo')}>{lbl('Cargo / Função')}{inp('cargo')}</div>
+            <div style={campoDestaque('cargo')}>
+              {lbl('Cargos (escolha um ou mais)')}
+              {erroCargos
+                ? <Faixa tom="erro">Não foi possível carregar os cargos ({erroCargos}). O cargo que a pessoa já tem não será mexido.</Faixa>
+                : <SelectMultiplo rotulo="Cargos" placeholder={cargos.length ? 'Escolha os cargos…' : 'Cadastre os cargos no botão "Cargos" do RH'} valores={form.cargo_ids} onChange={ids => set('cargo_ids', ids)}
+                    opcoes={cargos.map((c: any) => ({ valor: c.id, rotulo: c.nome }))} />}
+              {/* o texto que a pessoa tinha antes da lista de cargos: aparece até ela ser salva com cargos escolhidos */}
+              {!erroCargos && !form.cargo_ids.length && func?.cargo && <div className="acn-fraco">Cargo anterior (texto livre): {func.cargo}. Escolha o cargo na lista para substituí-lo.</div>}
+            </div>
             <div style={campoDestaque('sexo')}>
               {lbl('Sexo')}
               {/* separa MASCULINO e FEMININO no relatório de uniformes; vazio = não informado */}
@@ -317,11 +335,11 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
               </select>
             </div>
             <div>
-              {lbl('Departamentos (marque um ou mais)')}
+              {lbl('Departamentos (escolha um ou mais)')}
               {erroDepartamentos
                 ? <Faixa tom="erro">Não foi possível carregar os departamentos ({erroDepartamentos}). Os que a pessoa já tem não serão mexidos.</Faixa>
-                : <ChipsMultiplos rotulo="Departamentos" ativos={form.dep_ids} onChange={ids => set('dep_ids', ids)}
-                    itens={departamentos.map((d: any) => ({ id: d.id, rotulo: d.nome }))} />}
+                : <SelectMultiplo rotulo="Departamentos" placeholder="Escolha os departamentos…" valores={form.dep_ids} onChange={ids => set('dep_ids', ids)}
+                    opcoes={departamentos.map((d: any) => ({ valor: d.id, rotulo: d.nome }))} />}
             </div>
             {!isFuncionario && (
               <div style={campoDestaque('empresa_prestador')}>{lbl('Empresa do prestador')}{inp('empresa_prestador', 'Razão social ou nome da empresa')}</div>
@@ -2344,6 +2362,9 @@ export default function RHTab({ currentUser }) {
   const [departamentos, setDepartamentos] = useState<any[]>([]);
   const [erroDeptos, setErroDeptos]       = useState('');
   const [modalDeptos, setModalDeptos]     = useState(false);
+  const [cargos, setCargos]               = useState<any[]>([]);
+  const [erroCargos, setErroCargos]       = useState('');
+  const [modalCargos, setModalCargos]     = useState(false);
 
   const [modalFunc, setModalFunc]         = useState<'new'|any|null>(null);
   const [modalLanc, setModalLanc]         = useState(false);
@@ -2354,24 +2375,28 @@ export default function RHTab({ currentUser }) {
 
   const fetch = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
-    const [fRes, lRes, aRes, dRes, depRes] = await Promise.all([
+    const [fRes, lRes, aRes, dRes, depRes, carRes] = await Promise.all([
       supabase.from('rh_funcionarios').select('*').eq('ativo', true).order('nome'),
       supabase.from('rh_lancamentos').select('*').order('data', { ascending: false }),
       supabase.from('rh_autorizacoes').select('*').order('data', { ascending: false }),
       supabase.from('rh_funcionarios').select('*').eq('status_presenca', 'Desligado')
         .order('data_desligamento', { ascending: false, nullsFirst: false }).order('nome'),
       lerDepartamentos(),
+      lerCargos(),
     ]);
     // 14/10/2026: cada pessoa recebe os departamentos dela; se a leitura dos departamentos falhar, a lista de pessoas continua e a ficha avisa
+    // 16/11/2026: o mesmo com os cargos
     setDepartamentos(depRes.departamentos); setErroDeptos(depRes.erro || '');
-    setFuncionarios(anexarDepartamentos(fRes.data || [], depRes.departamentos, depRes.vinculos));
-    setDesligados(anexarDepartamentos(dRes.data || [], depRes.departamentos, depRes.vinculos));
+    setCargos(carRes.cargos); setErroCargos(carRes.erro || '');
+    const comVinculos = (lista: any[]) => anexarCargos(anexarDepartamentos(lista, depRes.departamentos, depRes.vinculos), carRes.cargos, carRes.vinculos);
+    setFuncionarios(comVinculos(fRes.data || []));
+    setDesligados(comVinculos(dRes.data || []));
     setLancamentos(lRes.data || []);
     setAutorizacoes(aRes.data || []);
     if (!silent) setLoading(false);
   }, []);
 
-  useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 60000); return () => clearInterval(t); }, [fetch]);
+  useEffect(() => { fetch(); const t = intervaloVisivel(()=>fetch(true), 60000); return () => clearInterval(t); }, [fetch]);
 
   // Horas, autorizações e comissões antigas apontam para gente que já saiu: para mostrar o nome (e o percentual)
   // delas, essas telas recebem os desligados junto. As listas de trabalho usam só `funcionarios` (ativo).
@@ -2410,6 +2435,7 @@ export default function RHTab({ currentUser }) {
             <>
               <Botao variante="primario" icone={mdiPlus} onClick={()=>setModalFunc('new')}>Colaborador</Botao>
               <Botao icone={mdiAccountGroupOutline} onClick={()=>setModalDeptos(true)}>Departamentos</Botao>
+              <Botao icone={mdiAccountWrenchOutline} onClick={()=>setModalCargos(true)}>Cargos</Botao>
               <Botao icone={mdiClipboardTextOutline} onClick={()=>setModalLanc(true)}>Lançar Horas</Botao>
               {podeAutorizar && (
                 <Botao icone={mdiPrinterOutline} onClick={()=>setModalAut(true)}>Autorização</Botao>
@@ -2465,7 +2491,13 @@ export default function RHTab({ currentUser }) {
           currentUser={currentUser}
           departamentos={departamentos}
           erroDepartamentos={erroDeptos}
+          cargos={cargos}
+          erroCargos={erroCargos}
         />
+      )}
+      {modalCargos && (
+        <ModalCargos cargos={cargos} erroCargos={erroCargos} funcionarios={comDesligados} currentUser={currentUser}
+          onClose={()=>setModalCargos(false)} onMudou={()=>fetch(true)} />
       )}
       {modalDeptos && (
         <ModalDepartamentos departamentos={departamentos} funcionarios={comDesligados} currentUser={currentUser}

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
@@ -126,7 +127,7 @@ export default function PCPTab({ currentUser }) {
   const [solicitacoesAlmox, setSolicitacoesAlmox] = useState([]);
   const [liberandoSolic, setLiberandoSolic] = useState(null);
 
-  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = intervaloVisivel(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   // Etapa 7.52 (06/10/2026): leitura que falha não pode parecer "nenhuma OP em triagem" nem "nada em falta" (e a atualização de
   // 30 s que falha não pode esvaziar a tela): cada bloco só troca o que já tinha quando a leitura dele deu certo.
@@ -621,10 +622,12 @@ export default function PCPTab({ currentUser }) {
   // bloco que só acompanha abre recolhido; se passar a pedir ação, o className muda e ele abre sozinho
   const classeBloco = (temAcao) => 'sec-card' + (temAcao ? '' : ' sec-collapsed');
 
-  // Os três recortes da triagem. "Faltam configurar" = BOM ainda não liberada (o botão CONFIGURAR é o próximo passo); "Liberados no kiting" = o PCP já liberou e o Almoxarifado está separando o material
+  // Os quatro recortes da triagem. "Faltam configurar" = BOM ainda não liberada (o botão CONFIGURAR é o próximo passo); "Liberados no kiting" = o PCP já liberou e o Almoxarifado está separando o material
   // ('Aguardando Almox'); "Prontos para a produção" = o Almoxarifado concluiu (kit 100% ou com pendência aceita) e o botão "Liberar produção" já está aberto para o PCP (podeLiberar; envio não vai à produção).
   const FILTROS_TRIAGEM: Record<string, (o: any) => boolean> = {
     faltam: (o) => o.status_bom !== 'BOM Liberado',
+    // Pedido do usuário em 16/11/2026: o recorte do meio do caminho — a BOM já foi configurada e liberada, mas o kiting ainda não: a linha oferece REVER BOM ou LIBERAR KITING.
+    configuradas: (o) => o.status_geral === 'Em Espera PCP' && o.status_bom === 'BOM Liberado',
     kiting: (o) => o.status_geral === 'Aguardando Almox',
     producao: (o) => podeLiberar(o),
   };
@@ -688,6 +691,7 @@ export default function PCPTab({ currentUser }) {
             <Chips rotulo="Filtrar a triagem" ativo={filtroTriagem} onChange={setFiltroTriagem} itens={[
               { id: 'todas', rotulo: 'Todas', contagem: baseTriagem.length },
               { id: 'faltam', rotulo: 'Faltam configurar', contagem: nTriagem('faltam'), titulo: 'OPs cuja BOM ainda não foi liberada: o próximo passo é CONFIGURAR' },
+              { id: 'configuradas', rotulo: 'Configuradas', contagem: nTriagem('configuradas'), titulo: 'A BOM já está configurada e liberada, mas o kiting ainda não: dá para REVER BOM ou LIBERAR KITING' },
               { id: 'kiting', rotulo: 'Liberadas no kiting', contagem: nTriagem('kiting'), titulo: 'O PCP já liberou o kiting e o Almoxarifado está separando o material' },
               { id: 'producao', rotulo: 'Prontas para a produção', contagem: nTriagem('producao'), titulo: 'O Almoxarifado concluiu o kit (100% ou com pendência aceita): dá para liberar a produção' },
             ]} />
@@ -821,7 +825,8 @@ export default function PCPTab({ currentUser }) {
                           <td>—</td>
                           <td><span className="acn-txt-info">{irmaos.length}</span></td>
                           <td className="acn-eng-tipo">{rep.tipo_projeto}</td>
-                          <td colSpan={3}>
+                          {/* 16/11/2026: a tabela tem 11 colunas (BOM, Kit, Pendência e Status entre o Tipo e a Previsão); com colSpan 3 faltava a célula do Status e a Previsão e as Ações escorregavam uma coluna para a esquerda */}
+                          <td colSpan={4}>
                             <div className="acn-selos">
                               {qtdEspera > 0 && <Selo familia="atencao" ponto={false}>{qtdEspera} aguard. BOM/kiting</Selo>}
                               {qtdAguardAlmox > 0 && <Selo familia="info" ponto={false}>{qtdAguardAlmox} no Almox</Selo>}
@@ -829,38 +834,42 @@ export default function PCPTab({ currentUser }) {
                               {qtdProntoEmbalagem > 0 && <Selo familia="ok" ponto={false}>{qtdProntoEmbalagem} prontas p/ Embalagem</Selo>}
                               {qtdOutros > 0 && <Selo familia="erro" ponto={false}>{qtdOutros} devolvida/retrabalho</Selo>}
                             </div>
+                            {/* 16/11/2026 (pedido do usuário): "Ver N unidades" sai da coluna das Ações, que fica só com os botões de decisão, e fica sob os selos, que tinham espaço de sobra */}
+                            <div className="acn-pcp-lote-ver">
+                              <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                                {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
+                              </Botao>
+                            </div>
                           </td>
                           <td>{fmtDt(rep.data_prevista_entrega)}</td>
                           <td className="acn-eng-celula-acoes">
                             <div className="acn-acoes-linha quebra">
                               {qtdEspera > 0 && (
                                 <Botao variante="secundario" pequeno icone={mdiClipboardTextOutline} disabled={processandoLote}
-                                  title="Estrutura do veículo, perguntas do carro e BOM das unidades que ainda estão na triagem"
+                                  title="Em lote: estrutura do veículo, perguntas do carro e BOM das unidades que ainda estão na triagem"
                                   onClick={()=>setModalConfig({ ops: item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), base })}>
-                                  CONFIGURAR EM LOTE ({qtdEspera})
+                                  {/* 16/11/2026: igual à linha avulsa (REVER BOM × CONFIGURAR): com a BOM de todas as unidades na triagem já liberada, o botão é "rever"; textos curtos a pedido do usuário, para ganhar espaço (o "em lote" fica no balão) */}
+                                  {irmaos.filter(x => x.status_geral === 'Em Espera PCP').every(x => x.status_bom === 'BOM Liberado') ? 'REVER' : 'CONFIGURAR'} ({qtdEspera})
                                 </Botao>
                               )}
                               {qtdEspera > 0 && (
-                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} onClick={()=>abrirKiting(item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), item)}>
-                                  KITING EM LOTE ({qtdEspera})
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} title="Libera o kiting de todas as unidades que ainda estão na triagem" onClick={()=>abrirKiting(item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), item)}>
+                                  KITING ({qtdEspera})
                                 </Botao>
                               )}
                               {qtdProntoProducao > 0 && (
-                                <Botao variante="primario" pequeno icone={mdiFactory} disabled={processandoLote} onClick={()=>liberarProducaoLote(item)}>
-                                  PRODUÇÃO EM LOTE ({qtdProntoProducao})
+                                <Botao variante="primario" pequeno icone={mdiFactory} disabled={processandoLote} title="Libera a produção de todas as unidades do lote que estão prontas" onClick={()=>liberarProducaoLote(item)}>
+                                  PRODUÇÃO ({qtdProntoProducao})
                                 </Botao>
                               )}
                               {qtdProntoEmbalagem > 0 && (
-                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} onClick={()=>liberarEmbalagemLote(item)}>
-                                  EMBALAGEM EM LOTE ({qtdProntoEmbalagem})
+                                <Botao variante="primario" pequeno icone={mdiPackageVariantClosed} disabled={processandoLote} title="Libera a embalagem de todas as unidades do lote que estão prontas" onClick={()=>liberarEmbalagemLote(item)}>
+                                  EMBALAGEM ({qtdProntoEmbalagem})
                                 </Botao>
                               )}
-                              <Botao pequeno icone={mdiClipboardTextOutline} title="Resumo do lote como uma coisa só: etapas, valores e itens vendidos" onClick={()=>setResumoLote({ base, irmaos })}>
-                                Resumo
-                              </Botao>
-                              <Botao variante="discreto" pequeno icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
-                                {expandido ? 'Ocultar unidades' : `Ver ${irmaos.length} unidades`}
-                              </Botao>
+                              <MenuAcoes rotulo="Mais ações do lote" itens={[
+                                { rotulo: 'Resumo do lote', icone: mdiClipboardTextOutline, titulo: 'Resumo do lote como uma coisa só: etapas, valores e itens vendidos', onClick: () => setResumoLote({ base, irmaos }) },
+                              ]} />
                             </div>
                           </td>
                         </tr>

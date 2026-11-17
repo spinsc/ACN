@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
@@ -469,12 +470,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     if (!await confirmar('Gerar o pedido de compra desta demanda? Cotações, aprovação e o valor gasto passam a ser feitos no pedido, em Compras.')) return;
     setSalvando(true);
     const agora = new Date().toISOString();
-    const listaItens = itens.map((i: any) => `${i.quantidade}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}${i.valor_unitario != null && i.valor_unitario !== '' ? ` — R$ ${Number(i.valor_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un` : ''}`).join('\n');
     const v0 = vinculosDaDemanda(d)[0];
     const { data: novo, error } = await supabase.from('pcp_pedidos_compra').insert([{
       numero_pedido: `PC-DA-${Date.now().toString().slice(-7)}`,
       opl: v0?.tipo === 'op' ? String(v0.descricao || '').split(' — ')[0] : null,
-      descricao_material: [d.titulo, listaItens].filter(Boolean).join('\n'),
+      descricao_material: [d.titulo].filter(Boolean).join('\n'),   // 16/11/2026: o nome do pedido não leva os itens (ver NomeDoPedido.ts); a lista segue em `itens`
       quantidade: itens.length === 1 ? Number(itens[0].quantidade) || 1 : 1,
       itens: itensPreenchidos(itens),   // a lista de material vai junto, como em toda solicitação de compra (05/10/2026)
       status_compra: 'Pendente',
@@ -1760,7 +1760,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
     if (!silent) setLoading(false);
   }, [setor]);
 
-  useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
+  useEffect(() => { fetch(); const t = intervaloVisivel(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
 
   // Deep-link vindo do painel de Menções ("Demanda Avulsa X" clicável): abre o
   // detalhe da demanda direto, em vez de só cair na aba Engenharia genérica.

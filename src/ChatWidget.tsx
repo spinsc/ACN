@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { intervaloVisivel } from './IntervaloVisivel';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
@@ -381,7 +382,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   // Polling badge a cada 5s
   useEffect(() => {
     if (!currentUser) return;
-    const t = setInterval(verificarNovas, 5000);
+    const t = intervaloVisivel(verificarNovas, 30000); // 12/11/2026: era 5 s; o aviso de mensagem nova chega ao vivo pelo canal (broadcast), isto é só rede de segurança
     return () => clearInterval(t);
   }, [currentUser?.id, verificarNovas]);
 
@@ -389,7 +390,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   useEffect(() => {
     if (!salaAtiva || !aberto) return;
     const salaId = salaAtiva.id;
-    const t = setInterval(async () => {
+    const t = intervaloVisivel(async () => {
       const { data, error } = await supabase.from('chat_mensagens')
         .select('*').eq('sala_id', salaId).order('criado_em');
       if (error || !data) return;
@@ -404,7 +405,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
         atualizarContadorEPreview();
         return data;
       });
-    }, 2000);
+    }, 6000); // 12/11/2026: era 2 s; a mensagem nova da sala aberta já entra pelo canal ao vivo
     return () => clearInterval(t);
   }, [salaAtiva?.id, aberto]);
 

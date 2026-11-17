@@ -1,8 +1,10 @@
 // @ts-nocheck
+import { nomeDoPedido } from './NomeDoPedido';
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -15,6 +17,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
+import { ResumoDosBoxes } from './BoxesDaOp';
 import Linkify from './Linkify';
 import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { combinaBusca } from './SearchUtils';
@@ -791,6 +794,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [copiando, setCopiando] = useState(false);
   // Trocar o fluxo da unidade (fluxo misto, M3, 27/10/2026): uma unidade de lote passa de adaptação para envio, ou o contrário, até o Almoxarifado fechar o kit
   const [trocandoFluxo, setTrocandoFluxo] = useState(false);
+  // 16/11/2026 (pedido do usuário): as atualizações do andamento (com @menção, como a "Nova atualização" das Licitações) abrem de qualquer tela onde a OP é aberta, não só da fila da Produção
+  const [atualizando, setAtualizando] = useState(false);
   // Excluir a OP (11/11/2026): só Admin e gerentes, com motivo; a OP some das telas e fica guardada, marcada (ExclusaoDeOp.ts). A função confere o que impede, mostra o que será desligado, pede o motivo e confirma.
   const excluirEstaOp = async () => { if (await excluirOpComMotivo(opl, usuario)) onClose(); };
   const [verDossie, setVerDossie] = useState(false);
@@ -967,6 +972,17 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       )}
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} verValores={podeVerValores(usuario)} />}
       {copiando && <CopiarOpModal origem={opl} currentUser={usuario} onClose={() => setCopiando(false)} />}
+      {atualizando && (
+        <OplAcompModal
+          referenciaId={opl.opl}
+          outrasChaves={[{ tipo: 'opl', id: String(opl.id) }]}
+          referenciaDesc={`OP ${opl.opl}${opl.cliente_nome ? ' — ' + opl.cliente_nome : ''}`}
+          referenciaType="op"
+          setor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')}
+          currentUser={usuario}
+          onClose={() => { setAtualizando(false); recarregarLogs(); }}
+        />
+      )}
       {trocandoFluxo && <TrocarFluxoModal op={opl} currentUser={usuario} onClose={() => setTrocandoFluxo(false)} onTrocada={() => { recarregarOpl(); recarregarLogs(); }} />}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
@@ -1003,6 +1019,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <Botao variante="primario" icone={mdiBookOpenPageVariantOutline} onClick={() => setVerDossie(true)}
               title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF">Dossiê</Botao>
             <MenuAcoes rotulo="Mais ações da OP" itens={[
+              { rotulo: 'Atualizações do andamento', icone: mdiMessageTextOutline, onClick: () => setAtualizando(true), titulo: 'Registrar uma observação ou atualização sobre a OP, marcar pessoas com @ e ler as anteriores' },
               { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
               { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },
               { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
@@ -1129,7 +1146,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 <div className="acn-opl-card-corpo acn-opl-compras">
                   {comprasVinculadas.map(c => (
                     <button key={c.id} type="button" className="acn-opl-compra" onClick={() => abrirVinculo({ tipo: 'compra', id: c.id, descricao: c.numero_pedido })}>
-                      <span className="acn-opl-compra-nome">🔗 {c.numero_pedido} — {c.descricao_material}</span>
+                      <span className="acn-opl-compra-nome">🔗 {c.numero_pedido} — {nomeDoPedido(c)}</span>
                       <span className="acn-opl-compra-meta">
                         {currentUser?.ver_valores !== false && c.valor_compra != null && <span className="acn-txt-ok">{fmtR$(c.valor_compra)}</span>}
                         {(() => {
@@ -1317,6 +1334,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 </div>
                 {/* Quem trabalhou na adaptação e na serralheria (30/09/2026): é o apontamento em que a comissão dos técnicos se apoia; pode ser corrigido daqui até o Fiscal faturar (ver EquipeDaOp.tsx). */}
                 <div className="acn-opl-bloco"><div className="acn-opl-rot">🛠 Quem trabalhou na OP</div><EquipeDaOpResumo opl={opl} currentUser={usuario} /></div>
+                {/* BOX da Adaptação (16/11/2026): onde o carro está e por onde já passou; some quando a OP nunca teve BOX informado */}
+                {Array.isArray(opl.boxes_historico) && opl.boxes_historico.length > 0 && <div className="acn-opl-bloco"><ResumoDosBoxes opl={opl} /></div>}
               </div>
             </section>
 
@@ -1476,7 +1495,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
 
   useEffect(() => {
     fetchDemandas();
-    const t = setInterval(fetchDemandas, 30000);
+    const t = intervaloVisivel(fetchDemandas, 30000);
     return () => clearInterval(t);
   }, [setor]);
 

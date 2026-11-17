@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { EquipeDaOpModal, inserirResponsaveisSemRepetir } from './EquipeDaOp';
@@ -18,6 +19,8 @@ import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { ModalBoxDaOp, SeletorDeBoxes } from './BoxesDaOp';
+import { boxesDaOp, textoDosBoxes, erroDosBoxes, ocupacaoDosBoxes, planejarTrocaDeBox } from './ProducaoBoxes';
 import { confirmar, pedirTexto } from './Feedback';
 import { ParticipantesPicker, novosParticipantes, notificarParticipantes } from './Participantes';
 import Icone from './Icone';
@@ -29,7 +32,7 @@ import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloS
 import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
   mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
   mdiMessageTextOutline, mdiPause, mdiCheck, mdiChevronDown, mdiChevronUp, mdiTrayArrowDown, mdiHammerWrench, mdiClose,
-  mdiAccountGroupOutline, mdiCheckAll, mdiAccount, mdiPaperclip,
+  mdiAccountGroupOutline, mdiMapMarkerOutline, mdiCheckAll, mdiAccount, mdiPaperclip,
   mdiRefresh, mdiCar, mdiCalendarOutline, mdiClipboardListOutline, mdiSendOutline, mdiContentSaveOutline, mdiAlertOutline,
   mdiTrashCanOutline, mdiPlus, mdiTimerOutline, mdiCommentTextOutline, mdiWrench, mdiWeatherSunny, mdiWeatherSunsetDown,
   mdiBellOutline, mdiChevronLeft, mdiChevronRight, mdiFormatListBulleted, mdiPrinterOutline, mdiCrownOutline, mdiCheckboxMarkedOutline,
@@ -93,7 +96,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
     : o.responsavel_producao || null;
 
   const acaoPrincipal =
-    aguardando ? <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>onAction('iniciar',o)} title="Inicia agora com você como responsável">Iniciar</Botao>
+    aguardando ? <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>onAction('iniciar',o)} title="Informe a equipe (ou o técnico) e o BOX em que o carro está">Iniciar</Botao>
     : retrabalho ? <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>onAction('iniciar_retrabalho',o)}>Iniciar retrabalho</Botao>
     : (emProd || emRetrab) && o.pausado ? <Botao pequeno variante="secundario" icone={mdiPlay} onClick={()=>onAction('retomar',o)}>Retomar</Botao>
     : emProd ? <Botao pequeno variante="secundario" icone={mdiCheck} onClick={()=>onAction('checklist',o)}>Concluir</Botao>
@@ -106,7 +109,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
     { rotulo: 'Acompanhamento', icone: mdiMessageTextOutline, onClick: () => onAction('acomp', o) },
     { rotulo: 'Viagem desta OP', icone: mdiCarWrench, onClick: () => onAction('viagem', o), oculto: !o._viagem },
     { rotulo: qtdAnexos ? `Anexos (${qtdAnexos})` : 'Anexos', icone: mdiPaperclip, onClick: () => setAnexosAberto(true) },
-    { rotulo: 'Iniciar em dupla ou equipe', icone: mdiAccountGroupOutline, onClick: () => onAction('iniciar_opcoes', o), oculto: !aguardando },
+    { rotulo: 'BOX do carro', icone: mdiMapMarkerOutline, onClick: () => onAction('box', o), oculto: !(emProd || emRetrab), titulo: 'Informar ou trocar o BOX em que o carro está; os BOX anteriores ficam guardados' },
     { rotulo: 'Pausar', icone: mdiPause, onClick: () => onAction('pausar', o), oculto: !((emProd || emRetrab) && !o.pausado) },
     { rotulo: 'Concluir', icone: mdiCheck, onClick: () => onAction('checklist', o), oculto: !(emProd && o.pausado) },
     { rotulo: 'Concluir → CQ', icone: mdiCheck, onClick: () => onAction('concluir_retrabalho', o), oculto: !(emRetrab && o.pausado) },
@@ -156,7 +159,13 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
                 {new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR')}{atraso > 0 ? ` · ${atraso} d` : ''}
               </span>}
         </td>
-        <td className="acn-prod-resp">{responsavel || <span className="acn-fraco">Sem responsável</span>}</td>
+        <td className="acn-prod-resp">
+          {responsavel || <span className="acn-fraco">Sem responsável</span>}
+          {/* BOX do carro (16/11/2026): informado ao iniciar; uma OP em produção sem BOX (início em lote ou antiga) aparece em âmbar para alguém informar */}
+          {(emProd || emRetrab) && (boxesDaOp(o).length
+            ? <div><small className="acn-forte" title="BOX em que o carro está">{textoDosBoxes(boxesDaOp(o))}</small></div>
+            : <div><small className="acn-txt-atencao">Sem BOX informado</small></div>)}
+        </td>
         <td>
           <div className="acn-duas acn-prod-duas-ini">
             <Selo status={o.status_geral} />
@@ -617,7 +626,7 @@ function PainelSacVeicular({ currentUser }) {
     setOrdens(data || []);
     if (!silent) setLoading(false);
   };
-  useEffect(() => { load(); const t = setInterval(()=>load(true), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { load(); const t = intervaloVisivel(()=>load(true), 30000); return () => clearInterval(t); }, []);
   const fetchEquipesManu = async () => {
     const { data, error } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
     if (error) { setErroEquipesManu(error.message); return; }
@@ -2225,6 +2234,9 @@ export default function ProducaoTab({ currentUser }) {
   const [modalAcomp,  setModalAcomp]      = useState<any>(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalIniciar, setModalIniciar] = useState(null);
+  // 16/11/2026 (pedido do usuário): ao iniciar o trabalho informa-se a equipe E o BOX do carro; o BOX também se troca depois (modalBox)
+  const [boxesIniciar, setBoxesIniciar] = useState<string[]>([]);
+  const [modalBox, setModalBox] = useState<any>(null);
   const [respNome, setRespNome] = useState('');
   const [respId, setRespId] = useState<string|null>(null);
   // Dupla / Equipe
@@ -2252,7 +2264,9 @@ export default function ProducaoTab({ currentUser }) {
       const pend = (window as any).__acnDeepLink;
       if (!pend || pend.contexto !== 'op') return;
       (window as any).__acnDeepLink = null;
-      supabase.from('oples').select('*').eq('id', pend.contextoId).maybeSingle()
+      // 16/11/2026: a menção feita numa atualização da OP guarda o NÚMERO da OP (A1749.2611), não o id; por isso o campo de busca depende de qual dos dois chegou
+      const ehId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(pend.contextoId));
+      supabase.from('oples').select('*').eq(ehId ? 'id' : 'opl', pend.contextoId).limit(1).maybeSingle()
         .then(({ data }) => { if (data) setModalVerOpl(data); });
     };
     tentarAbrir();
@@ -2263,7 +2277,7 @@ export default function ProducaoTab({ currentUser }) {
   useEffect(() => {
     fetchAll();
     fetchEquipes();
-    const t = setInterval(()=>fetchAll(true), 30000);
+    const t = intervaloVisivel(()=>fetchAll(true), 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -2317,8 +2331,11 @@ export default function ProducaoTab({ currentUser }) {
   const iniciarProducao = umaVez('iniciar-modal', async () => {
     const opl = modalIniciar;
     const agora = new Date().toISOString();
+    const erroBox = erroDosBoxes(boxesIniciar);
+    if (erroBox) { alert(erroBox); return; }
     let upd: any = { status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: modoExecucao,
-      pausado: false, data_pausa: null, tempo_pausado_horas: 0 };
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
+      ...(planejarTrocaDeBox(opl, boxesIniciar, currentUser?.nome || null, agora) || {}) };   // BOX informado ao iniciar (null = os mesmos BOX que a OP já tinha)
     let logResp = '';
 
     if (modoExecucao === 'individual') {
@@ -2342,15 +2359,16 @@ export default function ProducaoTab({ currentUser }) {
     }
 
     // 7.54: se a OP não gravar, a janela fica aberta com o que foi escolhido (antes fechava como se tivesse iniciado)
-    if (!await aplicarInicio(opl, upd, logResp, agora)) return;
+    if (!await aplicarInicio(opl, upd, logResp, agora, textoDosBoxes(boxesIniciar))) return;
     setModalIniciar(null); setRespNome(''); setRespId(null); setRespNome2(''); setRespId2(null);
-    setModoExecucao('individual'); setEquipeSel(null);
+    setModoExecucao('individual'); setEquipeSel(null); setBoxesIniciar([]);
   });
 
   // Grava o início da produção. Existe separado porque duas portas levam aqui:
   // o botão INICIAR (1 clique, individual) e o modal de dupla/equipe. Uma
   // função só evita que as duas portas gravem coisas diferentes.
-  const aplicarInicio = async (opl: any, upd: any, logResp: string, agora: string) => {
+  const aplicarInicio = async (opl: any, upd: any, logResp: string, agora: string, textoBox = '') => {
+    const sufixoBox = textoBox ? ` BOX: ${textoBox}.` : '';
     const { error: erroIni } = await supabase.from('oples').update(upd).eq('id', opl.id);
     // 7.54: gravação recusada seguia como se a produção tivesse começado (sem responsável semeado, sem recado e sem aviso)
     if (erroIni) { alert(`Não foi possível iniciar a produção da OP ${opl.opl}: ${erroIni.message}`); return false; }
@@ -2374,36 +2392,18 @@ export default function ProducaoTab({ currentUser }) {
     }
     const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
-      evento: `Inicio da producao. Responsavel: ${logResp}`,
+      evento: `Inicio da producao. Responsavel: ${logResp}.${sufixoBox}`,
       status_anterior: opl.status_geral, status_novo: 'Em Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     if (erroLog) alert('A produção foi iniciada, mas o histórico de movimentação não foi gravado: ' + erroLog.message);
-    await registrarAndamento(opl, `Produção iniciada. Responsável: ${logResp}.`);
+    await registrarAndamento(opl, `Produção iniciada. Responsável: ${logResp}.${sufixoBox}`);
     fetchAll();
     return true;
   };
 
-  // INICIAR em 1 clique: assume execução individual com quem clicou. Era um
-  // modal com 3 modos + seleção de técnico para toda OP, e o resultado prático
-  // disso foi 82 das 89 OPs da fila sem responsável nenhum — o caminho caro
-  // não estava sendo percorrido. Quem trabalha em dupla ou equipe usa o botão
-  // 👥 ao lado, e trocar depois continua possível por ✏️ RESP. / 👥 EQUIPE.
-  const iniciarRapido = (opl: any) => umaVez('iniciar-' + opl.id, async () => {
-    const agora = new Date().toISOString();
-    const resp = currentUser?.nome || 'Não informado';
-    // tecnico_producao_id aponta para `colaboradores`, NÃO para o usuário
-    // logado — é o mesmo id que o ColaboradorSelect do modal grava. Quem tem
-    // login mas não é colaborador cadastrado fica sem id, e é isso mesmo: o
-    // nome, que é o que a tela mostra, continua gravado.
-    const colab = colaboradoresList.find((c: any) => c.nome === currentUser?.nome);
-    await aplicarInicio(opl, {
-      status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: 'individual',
-      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
-      responsavel_producao: resp, tecnico_producao_id: colab?.id || null,
-      tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null,
-    }, resp, agora);
-  })();
+  // INICIAR (16/11/2026, pedido do usuário): quem inicia o trabalho informa a equipe (ou o técnico) E o BOX em que o carro está; por isso o botão abre a janela de início.
+  // Até 15/11/2026 ele iniciava em 1 clique com quem clicou como responsável (a janela inteira era pulada em 82 das 89 OPs); agora o BOX é obrigatório e o responsável já vem preenchido com quem clicou.
 
   // Inicia produção de todas as selecionadas de uma vez, sem definir
   // responsável ainda (fica "Em Producao" sem técnico) — o usuário atribui
@@ -2587,10 +2587,10 @@ export default function ProducaoTab({ currentUser }) {
   });
 
   const handleAction = (tipo, opl) => {
-    if (tipo === 'iniciar')            iniciarRapido(opl);
-    if (tipo === 'iniciar_opcoes')     {
+    if (tipo === 'box')                setModalBox(opl);
+    if (tipo === 'iniciar' || tipo === 'iniciar_opcoes') {
       setModalIniciar(opl); setRespNome(currentUser?.nome || '');
-      setModoExecucao('individual'); setRespNome2(''); setRespId2(null); setEquipeSel(null);
+      setModoExecucao('individual'); setRespNome2(''); setRespId2(null); setEquipeSel(null); setBoxesIniciar(boxesDaOp(opl));
     }
     if (tipo === 'checklist')          liberarChecklist(opl);
     if (tipo === 'pausar')             pausarOpl(supabase, opl).then(fetchAll);
@@ -3012,14 +3012,22 @@ export default function ProducaoTab({ currentUser }) {
                   )}
                 </div>
               )}
+              {/* BOX do carro (16/11/2026): obrigatório ao iniciar; mais de um se o veículo é grande */}
+              <div className="form-group">
+                <label className="acn-label">BOX em que o carro está</label>
+                <SeletorDeBoxes valores={boxesIniciar} onChange={setBoxesIniciar} ocupacao={ocupacaoDosBoxes(opls, modalIniciar.id)} />
+              </div>
             </div>
             <div className="acn-modal-rodape">
-              <Botao variante="secundario" onClick={()=>setModalIniciar(null)}>Cancelar</Botao>
+              <Botao variante="secundario" onClick={()=>{ setModalIniciar(null); setBoxesIniciar([]); }}>Cancelar</Botao>
               <Botao variante="primario" icone={mdiPlay} onClick={iniciarProducao}>Iniciar produção</Botao>
             </div>
           </div>
         </div>
       )}
+
+      {/* MODAL BOX DO CARRO */}
+      {modalBox && <ModalBoxDaOp opl={modalBox} opls={opls} currentUser={currentUser} onClose={()=>setModalBox(null)} onSaved={()=>fetchAll(true)} />}
 
       {/* MODAL EDITAR RESPONSÁVEL */}
       {modalEditResp && (

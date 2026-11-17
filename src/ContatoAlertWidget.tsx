@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
 import { hojeISO, diaISO, Botao } from './Interface';
 import Icone from './Icone';
@@ -161,7 +162,7 @@ export default function ContatoAlertWidget({ currentUser }) {
   useEffect(() => {
     if (!currentUser?.nome) return;
     verificar(); // verifica imediatamente
-    timerRef.current = setInterval(verificar, 60_000); // repete a cada 1 min
+    timerRef.current = intervaloVisivel(verificar, 60_000); // repete a cada 1 min
     return () => clearInterval(timerRef.current);
   }, [verificar]);
 

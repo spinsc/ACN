@@ -10,6 +10,11 @@
 // aplica na OP). Por isso a linha mostra, ao vivo, se a estrutura do veículo × item já existe, e entregar sem ela pede confirmação — não trava: pode haver
 // peça avulsa que não entra em estrutura nenhuma.
 //
+// Cronômetro por ITEM (pedido do usuário em 16/11/2026): o tempo não é mais da tarefa por completo, e sim de cada item solicitado. Cada item tem o seu relógio, em hora útil (segunda a sexta,
+// 8:00 às 17:48), com pausa e retomada, e para sozinho às 17:48 — a mesma regra da demanda avulsa (HorarioDemanda.ts, PausaDaDemanda.tsx). O tempo do pedido é a SOMA dos itens.
+// Iniciar abre o relógio; entregar ou cancelar o fecha; reabrir mantém o tempo de antes e deixa o item pausado (a pessoa retoma). Item que já estava em andamento antes do relógio existir fica
+// sem tempo até alguém escolher "Iniciar o tempo": nenhum tempo é inventado.
+//
 // Quando todos os itens estão entregues ou cancelados o pedido vira "concluído" (`concluida = true`): é isso que fecha a pendência do lado do setor
 // (OpPendencias.tsx), e o PCP então a libera para a produção. Reabrir um item reabre o pedido.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,6 +27,8 @@ import { notificarEvento } from './whatsappHelper';
 import { confirmar, pedirTexto } from './Feedback';
 import { Botao, Faixa, Selo } from './Interface';
 import { mdiEyeOutline, mdiPuzzleOutline } from '@mdi/js';
+import { abrirTrecho, fecharTrecho, situacaoDoRelogio, type ItemComRelogio } from './HorarioDemanda';
+import { useAgora, confirmarAbertura, descricaoDoRelogio, tempoEmTexto, tempoDasEtapas } from './PausaDaDemanda';
 
 const SITUACAO: Record<string, { rotulo: string; familia: string }> = {
   pendente: { rotulo: 'Pendente', familia: 'atencao' },
@@ -38,6 +45,7 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
   const [emAcao, setEmAcao] = useState<string | null>(null);   // id do item em gravação (desliga os botões dele)
   const trava = useRef(false);                                 // clique duplo em "Entregar"/"Cancelar" gravava duas vezes (cuidado da 7.51/7.52)
   const [opAberta, setOpAberta] = useState<any>(null);
+  const agora = useAgora();
 
   const carregar = async () => {
     const { data, error } = await supabase.from('engenharia_desenvolvimento_itens').select('*')
@@ -97,8 +105,10 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
     trava.current = true;
     setEmAcao(item.id);
     try {
-      const { error } = await supabase.from('engenharia_desenvolvimento_itens').update({ ...patch, atualizado_em: new Date().toISOString() }).eq('id', item.id);
+      // 16/11/2026: o relógio é lista de trechos; duas pessoas mexendo no mesmo item ao mesmo tempo perderiam trechos. Só grava se o item ainda é o que a tela leu.
+      const { data: gravadas, error } = await supabase.from('engenharia_desenvolvimento_itens').update({ ...patch, atualizado_em: new Date().toISOString() }).eq('id', item.id).eq('atualizado_em', item.atualizado_em).select('id');
       if (error) { alert(`Não foi possível atualizar o item: ${error.message}`); return; }
+      if (!(gravadas || []).length) { alert('Não foi possível atualizar o item: outra pessoa mexeu nele ao mesmo tempo. A tela foi atualizada; confira e tente de novo.'); await carregar(); return; }
       logChange({ module: 'engenharia', entityType: 'engenharia_desenvolvimento_itens', entityId: item.id, changeType: 'UPDATE',
         oldRow: { situacao: item.situacao }, newRow: patch, user: currentUser });
       // o pedido fecha pela lista ATUAL do banco (outra pessoa pode ter mexido em outro item ao mesmo tempo), não pela que está na tela
@@ -111,27 +121,43 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
     }
   };
 
-  const iniciar = (i: any) => atualizarItem(i, { situacao: 'em_andamento' });
+  const instante = () => new Date();
+  // iniciar: abre o relógio do item (a pergunta avisa se é fora do expediente, e depois das 22:00 não deixa)
+  const iniciar = async (i: any) => {
+    const t = instante();
+    if (!await confirmarAbertura(`Iniciar o desenvolvimento de "${i.descricao}"? O tempo deste item passa a contar.`, 'iniciar o item', t)) return;
+    atualizarItem(i, { situacao: 'em_andamento', data_inicio: i.data_inicio || t.toISOString(), data_fim: null, trechos: abrirTrecho(i, t, currentUser?.nome) });
+  };
+  const pausar = (i: any) => atualizarItem(i, { trechos: fecharTrecho(i, instante()) });
+  const retomar = async (i: any) => {
+    const t = instante();
+    if (!await confirmarAbertura(`Retomar "${i.descricao}"? O tempo deste item volta a contar.`, 'retomar o item', t)) return;
+    atualizarItem(i, { data_inicio: i.data_inicio || t.toISOString(), data_fim: null, trechos: abrirTrecho(i, t, currentUser?.nome) });
+  };
   const entregar = async (i: any) => {
     if (i.item_vendido_id && estrutura && estrutura.get(String(i.item_vendido_id)) === false) {
       if (!await confirmar(`A estrutura de "${i.item_vendido_nome}" no ${demanda.veiculo_nome || 'veículo'} ainda não foi cadastrada.\n\nSem ela, a próxima OP igual vai precisar de desenvolvimento de novo. Entregar mesmo assim?`)) return;
     }
-    atualizarItem(i, { situacao: 'entregue', entregue_em: new Date().toISOString(), entregue_por_nome: currentUser?.nome || null });
+    const t = instante();
+    atualizarItem(i, { situacao: 'entregue', entregue_em: t.toISOString(), entregue_por_nome: currentUser?.nome || null, data_fim: t.toISOString(), ...(i.data_inicio ? { trechos: fecharTrecho(i, t) } : {}) });
   };
   const cancelar = async (i: any) => {
     const motivo = await pedirTexto('Motivo do cancelamento deste item (fica registrado):');
     if (!motivo || !String(motivo).trim()) return;
-    atualizarItem(i, { situacao: 'cancelado', observacoes: String(motivo).trim() });
+    const t = instante();
+    atualizarItem(i, { situacao: 'cancelado', observacoes: String(motivo).trim(), data_fim: t.toISOString(), ...(i.data_inicio ? { trechos: fecharTrecho(i, t) } : {}) });
   };
   const reabrir = async (i: any) => {
     if (!await confirmar(`Reabrir o item "${i.descricao}"? O pedido volta a segurar a OP até ser entregue de novo.`)) return;
-    atualizarItem(i, { situacao: 'em_andamento', entregue_em: null, entregue_por_nome: null });
+    // o tempo de antes fica; o item volta pausado e quem for trabalhar nele retoma
+    atualizarItem(i, { situacao: 'em_andamento', entregue_em: null, entregue_por_nome: null, data_fim: null });
   };
   const abrirEstrutura = (i: any) => window.dispatchEvent(new CustomEvent('engenharia:abrir-estruturas', { detail: { item_id: i.item_vendido_id, veiculo_id: demanda.veiculo_id } }));
 
   const total = (itens || []).length;
   const entregues = (itens || []).filter(i => i.situacao === 'entregue').length;
   const cancelados = (itens || []).filter(i => i.situacao === 'cancelado').length;
+  const tempoTotal = tempoDasEtapas((itens || []).filter(i => i.data_inicio) as ItemComRelogio[], agora);
 
   return (
     <div className="acn-pdp">
@@ -151,7 +177,7 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
       {itens && total > 0 && (
         <table className="acn-tabela acn-densa">
           <thead><tr>
-            <th>Tipo</th><th>O que desenvolver</th><th>Item vendido de origem</th><th>Estrutura no veículo</th><th>Situação</th><th>Ações</th>
+            <th>Tipo</th><th>O que desenvolver</th><th>Item vendido de origem</th><th>Estrutura no veículo</th><th>Situação</th><th>Tempo do item</th><th>Ações</th>
           </tr></thead>
           <tbody>
             {itens.map(i => {
@@ -176,9 +202,17 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
                     )}
                   </td>
                   <td><Selo familia={sit.familia} ponto={false}>{sit.rotulo}</Selo></td>
+                  <td className="acn-pdp-tempo">
+                    {i.data_inicio ? (<>
+                      <strong>{tempoEmTexto(i, agora).uteis}</strong>{tempoEmTexto(i, agora).extras && <span className="acn-ajuda"> + {tempoEmTexto(i, agora).extras} de hora extra</span>}
+                      {i.situacao === 'em_andamento' && <div className="acn-ajuda">{descricaoDoRelogio(i, agora).texto}</div>}
+                    </>) : <span className="acn-fraco">{i.situacao === 'em_andamento' ? 'sem tempo contado' : '—'}</span>}
+                  </td>
                   <td>
                     <div className="acn-acoes-linha quebra">
                       {i.situacao === 'pendente' && <Botao variante="primario" pequeno disabled={emAcao === i.id} onClick={() => iniciar(i)}>Iniciar</Botao>}
+                      {i.situacao === 'em_andamento' && situacaoDoRelogio(i, agora) === 'rodando' && <Botao variante="secundario" pequeno disabled={emAcao === i.id} onClick={() => pausar(i)}>Pausar</Botao>}
+                      {i.situacao === 'em_andamento' && situacaoDoRelogio(i, agora) !== 'rodando' && <Botao variante="secundario" pequeno disabled={emAcao === i.id} onClick={() => retomar(i)}>{i.data_inicio ? 'Retomar' : 'Iniciar o tempo'}</Botao>}
                       {i.situacao === 'em_andamento' && <Botao variante="primario" pequeno disabled={emAcao === i.id} onClick={() => entregar(i)}>Entregar</Botao>}
                       {(i.situacao === 'pendente' || i.situacao === 'em_andamento') && <Botao variante="discreto" pequeno disabled={emAcao === i.id} onClick={() => cancelar(i)}>Cancelar</Botao>}
                       {fechado(i) && <Botao variante="discreto" pequeno disabled={emAcao === i.id} onClick={() => reabrir(i)}>Reabrir</Botao>}
@@ -191,7 +225,7 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
         </table>
       )}
       {itens && total > 0 && (
-        <div className="acn-ajuda">{entregues} de {total} item(ns) entregue(s){cancelados ? ` · ${cancelados} cancelado(s)` : ''}</div>
+        <div className="acn-ajuda">{entregues} de {total} item(ns) entregue(s){cancelados ? ` · ${cancelados} cancelado(s)` : ''}{tempoTotal.totalMs > 0 ? ` · tempo do pedido (soma dos itens): ${tempoTotal.uteis}${tempoTotal.extras ? ` + ${tempoTotal.extras} de hora extra` : ''}` : ''}</div>
       )}
       {opAberta && <OplDetalheModal opl={opAberta} onClose={() => setOpAberta(null)} currentUser={currentUser} />}
     </div>

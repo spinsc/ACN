@@ -506,7 +506,7 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
     setPreco('');
   };
   return (
-    <div title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
+    <div className="acn-fp-span2" title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
       <div className="acn-fp-ir-rot2 com-ic"><Icone path={mdiRefresh} size={12} /> Preço unit. desejado</div>
       <div className="acn-fp-mr-linha">
         <input className="acn-input acn-fp-ir-campo acn-fp-num"
@@ -949,9 +949,9 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           embaixo, tudo na mesma linha de base ── */}
       <div className="acn-fp-ir-cab">
         {/* 22/10/2026 (pedido do usuário, refeito no mesmo dia porque a primeira versão não seguiu a lista): a linha do produto tem DUAS linhas. Em cima, exatamente:
-            produto – custo – markup – DIFAL – valor unitário – valor total. Embaixo: marca e modelo. O restante, inclusive a quantidade por unidade e o markup reverso, fica em
-            "Custo/impostos", cujo botão fica ao lado de marca e modelo (linha de baixo). Custo e DIFAL só aparecem para quem vê custo: o vendedor não vê — e, como ele não tem "Custo/impostos", a quantidade dele
-            fica na linha de baixo, ao lado do modelo, para não sumir. */}
+            produto – custo – markup – DIFAL – valor unitário – valor total. Embaixo: marca e modelo. O restante, inclusive o markup reverso, fica em
+            "Custo/impostos", cujo botão fica ao lado de marca e modelo (linha de baixo). Custo e DIFAL só aparecem para quem vê custo: o vendedor não vê.
+            Desde 16/11/2026 a quantidade por unidade (Qt/un.) também fica na linha de cima, logo depois do produto. */}
         <div className="acn-fp-ir-l1">
           <div className="acn-fp-ir-prod">
             <div className="acn-fp-ir-rot">Produto / Descrição</div>
@@ -962,6 +962,9 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               onExpand={linhas => onExpand(linhas)}
             />
           </div>
+          {/* 16/11/2026 (pedido do usuário): a quantidade por unidade sobe para a linha principal, ao lado do produto — antes ficava escondida em "Custo/impostos".
+              Vale para todos, inclusive o vendedor (que antes a via na linha de baixo). */}
+          {campoQt}
           {temDetalhe && (
             <div className="acn-fp-ir-cu">
               <div className="acn-fp-ir-rot" title="Custo unitário do produto, na moeda escolhida em Custo/impostos (sem IPI e ST)">
@@ -1017,7 +1020,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <input aria-label="Modelo" placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
             </div>
           </div>
-          {!temDetalhe && campoQt}
           <div className="acn-fp-ir-acoes">
             {temDetalhe && (
               <Botao variante="discreto" pequeno icone={aberto ? mdiChevronUp : mdiChevronDown}
@@ -1036,7 +1038,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 
           {secao(mdiCashMultiple, 'Precificação')}
           <div className="acn-fp-ir-grade">
-            {campoQt}
             <div>
               <div className="acn-fp-ir-rot2">Moeda</div>
               <select className="acn-input acn-fp-ir-campo"
@@ -1059,7 +1060,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
                 min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
             </div>
-            <div>
+            {/* 16/11/2026 (usuário): os botões CUSTO/TABELA (sem quebra de linha) passavam da própria coluna e cobriam o "Preço unit. desejado"; cada um ocupa duas colunas da grade */}
+            <div className="acn-fp-span2">
               <div className="acn-fp-ir-rot2">Tipo Cálculo</div>
               <Chips className="acn-fp-ir-tc" ativo={item.tipo_calculo || 'CUSTO'} onChange={t => onSet('tipo_calculo', t)}
                 itens={[{ id: 'CUSTO', rotulo: 'CUSTO' }, { id: 'TABELA', rotulo: 'TABELA' }]} />

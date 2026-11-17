@@ -1,5 +1,7 @@
 // @ts-nocheck
+import { nomeDoPedido } from './NomeDoPedido';
 import { supabase } from './supabaseClient';
+import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
@@ -16,7 +18,9 @@ import { pedidoCombinaComBusca, ordenarPedidos, ordensDisponiveis } from './Comp
 import { situacaoDaDivisao, renumerarVencedoras, dividirPedido, listaAlteradaDepoisDeCotar } from './DivisaoDoPedido';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
-import { Botao, MenuAcoes, Selo, Faixa, Chips } from './Interface';
+import { Botao, MenuAcoes, Selo, Faixa, Chips, Abas, SelectBusca } from './Interface';
+import { FornecedoresCompras, ModalFornecedor } from './FornecedoresCompras';
+import { lerFornecedores } from './ComprasFornecedores';
 import Icone from './Icone';
 import { mdiClose, mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight, mdiCartOutline, mdiTableLarge, mdiViewColumnOutline,
   mdiCogOutline, mdiFactory, mdiAccountOutline, mdiClipboardTextOutline, mdiMagnify, mdiLinkVariant, mdiForumOutline, mdiCommentTextOutline,
@@ -31,7 +35,7 @@ import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ET
   podeAprovarCompra, carregarAprovadoresCompra, lerAprovadoresCompra, QuadroDaSolicitacao, ehColeta, aguardandoColeta, mencionarPerfis } from './ComprasFluxo';
 
 const VAZIO_COTACAO = {
-  fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
+  fornecedor_nome: '', fornecedor_id: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
   frete_tipo: 'gratis', frete_valor: '', servicos: [] as { descricao: string; valor: string }[], desconto_valor: '', outras_taxas: '',
 };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
@@ -67,7 +71,9 @@ function novoFormCotacao(p: any) {
 }
 
 function cotacaoValida(f: any) {
+  // 16/11/2026 (pedido do usuário): o fornecedor da cotação tem de ser um fornecedor CADASTRADO; só a cotação antiga, que já tinha o nome digitado (`legado`), pode manter o nome
   if (!f.fornecedor_nome?.trim()) return false;
+  if (!f.fornecedor_id && !f.legado) return false;
   if (f.itens_cot) {
     const marcados = f.itens_cot.filter((i: any) => i.marcado);
     return marcados.length > 0 && marcados.every((i: any) => parseValorBr(i.valor_unitario) && qtdDoCampo(i.quantidade) > 0);
@@ -101,7 +107,7 @@ function formDaCotacao(c: any, qtdPedido: any, pedido?: any) {
     : undefined;
   return {
     itens_cot,
-    fornecedor_nome: c.fornecedor_nome || '', valor_unitario: valorBrTexto(unit), quantidade: String(qtd),
+    fornecedor_nome: c.fornecedor_nome || '', fornecedor_id: c.fornecedor_id || '', legado: !c.fornecedor_id, valor_unitario: valorBrTexto(unit), quantidade: String(qtd),
     condicao_pagamento: c.condicao_pagamento || '', prazo_entrega: c.prazo_entrega || '',
     frete_tipo: c.frete_tipo || 'gratis', frete_valor: valorBrTexto(c.frete_valor),
     servicos: Array.isArray(c.servicos) ? c.servicos.map((s: any) => ({ descricao: s.descricao || '', valor: valorBrTexto(s.valor) })) : [],
@@ -113,6 +119,7 @@ function payloadDaCotacao(f: any) {
   const t = totalComposicao(f);
   return {
     fornecedor_nome: f.fornecedor_nome.trim(),
+    fornecedor_id: f.fornecedor_id || null,
     valor_unitario: f.itens_cot ? null : parseValorBr(f.valor_unitario),
     quantidade: f.itens_cot ? null : Number(String(f.quantidade).replace(',', '.')) || null,
     itens: f.itens_cot
@@ -132,16 +139,28 @@ function payloadDaCotacao(f: any) {
 
 const moedaBr = (v: any) => new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v) || 0);
 
-function ComposicaoCotacao({ form, setForm }: any) {
+function ComposicaoCotacao({ form, setForm, fornecedores = [], onCadastrarFornecedor }: any) {
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  // só os ativos aparecem para escolher; o da cotação aberta aparece mesmo se foi desativado depois (senão o campo ficaria vazio)
+  const opcoesForn = fornecedores.filter((x: any) => x.ativo || x.id === form.fornecedor_id).map((x: any) => ({ valor: x.id, rotulo: x.nome, busca: [x.nome, x.razao_social, x.cnpj_cpf, x.cidade] }));
+  const escolherForn = (id: string) => {
+    const x = fornecedores.find((y: any) => y.id === id);
+    setForm((f: any) => ({ ...f, fornecedor_id: id || '', fornecedor_nome: x ? x.nome : (f.legado ? f.fornecedor_nome : ''),
+      condicao_pagamento: f.condicao_pagamento || x?.condicao_pagamento || '' }));
+  };
   const t = totalComposicao(form);
   const servicos = form.servicos || [];
   return (
     <div className="acn-cmp-comp">
       <div className="acn-cmp-comp-g3">
         <div>
-          <label className="acn-label">Fornecedor *</label>
-          <input className="acn-input" value={form.fornecedor_nome} onChange={e=>set('fornecedor_nome', e.target.value)} />
+          <label className="acn-label">Fornecedor cadastrado *</label>
+          <div className="acn-cmp-forn-linha">
+            <SelectBusca opcoes={opcoesForn} valor={form.fornecedor_id || null} onChange={escolherForn} placeholder="Escolha o fornecedor…" vazio={form.legado && form.fornecedor_nome ? `${form.fornecedor_nome} (sem cadastro)` : '— escolha —'} />
+            {onCadastrarFornecedor && <Botao pequeno icone={mdiPlus} onClick={onCadastrarFornecedor}>Cadastrar fornecedor</Botao>}
+          </div>
+          {form.legado && form.fornecedor_nome && !form.fornecedor_id && <div className="acn-ajuda acn-cmp-forn-aviso">Cotação feita antes do cadastro, com o nome digitado. Pode manter ou escolher um fornecedor cadastrado.</div>}
+          {!form.legado && fornecedores.length === 0 && <div className="acn-ajuda acn-cmp-forn-aviso">Ainda não há fornecedor cadastrado. Cadastre antes de lançar a cotação.</div>}
         </div>
         {!form.itens_cot && (<>
         <div>
@@ -646,7 +665,7 @@ function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
           <span className="modal-title acn-prod-ic"><Icone path={mdiLinkVariant} size={16} /> Vínculo e link — {pedido.numero_pedido}</span>
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
-          <div className="acn-ajuda"><DescricaoCompacta texto={pedido.descricao_material} /></div>
+          <div className="acn-ajuda"><DescricaoCompacta texto={nomeDoPedido(pedido)} /></div>
           <div className="form-group">
             <label className="acn-label">Vincular a um PV, OP, OS, outra compra ou OFI</label>
             <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
@@ -702,7 +721,7 @@ function ModalRecebidos({ lista, canVerValor, onAbrir, onClose }) {
                       {p.numero_oc && <div className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</div>}
                       <SeloOrigemCompra p={p} />
                     </td>
-                    <td className="acn-cmp-desc"><DescricaoCompacta texto={p.descricao_material} linhas={1} /></td>
+                    <td className="acn-cmp-desc"><DescricaoCompacta texto={nomeDoPedido(p)} linhas={1} /></td>
                     <td>{p.fornecedor || '—'}</td>
                     <td className="acn-num">{dataBr(p.data_conclusao)}</td>
                     {canVerValor && <td className="acn-dir acn-num acn-txt-ok">{moedaBr(p.valor_compra)}</td>}
@@ -949,7 +968,7 @@ function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbri
             <div className="acn-ajuda">aguardando {esperaTexto(p._desde)}</div>
           </div>
           <div className="acn-cmp-aprov-desc">
-            <DescricaoCompacta texto={p.descricao_material} />
+            <DescricaoCompacta texto={nomeDoPedido(p)} />
             <div className="acn-ajuda">
               Pedido por {p.criado_por_nome || '—'}{p.opl ? ` · OP ${p.opl}` : ''}
             </div>
@@ -1083,6 +1102,13 @@ export default function ComprasTab({ currentUser }) {
   const [modalVinculo, setModalVinculo]         = useState<any>(null);
   const [modalRecebidos, setModalRecebidos]     = useState<any[]|null>(null);
   const [modalColetas, setModalColetas]         = useState(false);
+  // Fornecedores cadastrados (16/11/2026): a cotação só aceita fornecedor da lista; o cadastro é a aba "Fornecedores" e o atalho "Cadastrar fornecedor" da cotação
+  const [secao, setSecao] = useState<'pedidos'|'fornecedores'>('pedidos');
+  const [fornecedores, setFornecedores] = useState<any[]>([]);
+  const [erroFornecedores, setErroFornecedores] = useState('');
+  const [cadastroDaCotacao, setCadastroDaCotacao] = useState<null | 'nova' | 'edicao'>(null);
+  const carregarFornecedores = async () => { const r = await lerFornecedores(); setFornecedores(r.lista); setErroFornecedores(r.erro || ''); };
+  useEffect(() => { carregarFornecedores(); }, []);
   const [qtdColetas, setQtdColetas]               = useState(0);
   // Tabela x Kanban (por status) — lembra a escolha neste navegador
   const [visao, setVisaoState] = useState<'tabela'|'kanban'>(() => {
@@ -1130,7 +1156,7 @@ export default function ComprasTab({ currentUser }) {
     loadCentros();
     loadAlcadas();
     loadDepartamentos();
-    const t = setInterval(()=>load(true), 30000);
+    const t = intervaloVisivel(()=>load(true), 30000);
     return () => clearInterval(t);
     // `podeAprovarCompra` na lista (30/09/2026): o painel "Esperando a sua aprovação" só carrega para quem
     // aprova, e a marca chega DEPOIS da tela abrir (a sessão é atualizada do banco). Sem isto, o intervalo de
@@ -1443,8 +1469,8 @@ export default function ComprasTab({ currentUser }) {
     if (erroMesa) { alert('A mesa não conseguiu ler ' + erroMesa + '. Feche e abra a mesa de novo antes de lançar cotação.'); return; }   // 7.57: a contagem de cotações decide a aprovação do departamento
     if (!cotacaoValida(novaCotacao)) {
       alert(novaCotacao.itens_cot
-        ? 'Informe o fornecedor, marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
-        : 'Informe o fornecedor, o valor unitário e a quantidade.'); return;
+        ? 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes), marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
+        : 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes) e informe o valor unitário e a quantidade.'); return;
     }
     if (novoAnexoCotacao && novoAnexoCotacao.size > 10 * 1024 * 1024) {
       alert(`Anexo muito grande (${(novoAnexoCotacao.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
@@ -1510,7 +1536,7 @@ export default function ComprasTab({ currentUser }) {
       if (erroAp) { console.warn('Falha ao ler quem aprova:', erroAp); return false; }
       if (!aprovadores.length) return false;
       let todos = true;
-      const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${pedido.descricao_material}`;
+      const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${nomeDoPedido(pedido)}`;
       for (const ap of aprovadores) {
         const { error: erroMen } = await supabase.from('mencoes').insert({
           mencionado_id: String(ap.id), mencionado_nome: ap.nome,
@@ -1526,7 +1552,7 @@ export default function ComprasTab({ currentUser }) {
       if (emails.length) {
         const html = `<h3>Nova cotação para avaliar</h3>
           <p><strong>Departamento: ${departamento.nome}</strong></p>
-          <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${pedido.descricao_material}</p>
+          <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${nomeDoPedido(pedido)}</p>
           <p>Acesse o sistema (aba Compras) para acompanhar, aprovar ou rejeitar.</p>`;
         await supabase.functions.invoke('send-email', {
           body: { to: emails, subject: `Nova cotação — Pedido ${pedido.numero_pedido}`, html },
@@ -1583,8 +1609,8 @@ export default function ComprasTab({ currentUser }) {
   const salvarEdicaoCotacao = (c: any) => umaVez('editar-cotacao-' + c.id, async () => {
     if (!cotacaoValida(editCotacaoForm)) {
       alert(editCotacaoForm.itens_cot
-        ? 'Informe o fornecedor, marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
-        : 'Informe o fornecedor, o valor unitário e a quantidade.'); return;
+        ? 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes), marque pelo menos um item e preencha quantidade e valor unitário de cada item marcado.'
+        : 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes) e informe o valor unitário e a quantidade.'); return;
     }
     const comoVencedora = vencedoras.find((v: any) => v.cotacao_id === c.id);
     if (comoVencedora && editCotacaoForm.itens_cot) {
@@ -1633,7 +1659,7 @@ export default function ComprasTab({ currentUser }) {
       if (!aprovadores.length) return false;
       let todos = true;
       const valorFmt = fmt(pedido.valor_compra);
-      const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${pedido.descricao_material} — ${valorFmt}`;
+      const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${nomeDoPedido(pedido)} — ${valorFmt}`;
       for (const ap of aprovadores) {
         const { error: erroMen } = await supabase.from('mencoes').insert({
           mencionado_id: String(ap.id), mencionado_nome: ap.nome,
@@ -1734,7 +1760,7 @@ export default function ComprasTab({ currentUser }) {
     await registrarHistorico(pedidoId, { tipo: 'avanco', de: pedidoAtual?.status_compra || 'Em Andamento', para: 'Aguardando Aprovação',
       motivo: `Vencedora: ${extraUpdates.fornecedor || '—'} (${fmt(extraUpdates.valor_compra)})` }, currentUser);
     if (pedidoAtual) await mencionarSolicitante(pedidoAtual,
-      `Sua requisição ${pedidoAtual.numero_pedido} (${String(pedidoAtual.descricao_material || '').slice(0, 80)}) está aguardando aprovação — vencedora: ${extraUpdates.fornecedor || '—'}, ${fmt(extraUpdates.valor_compra)}.`,
+      `Sua requisição ${pedidoAtual.numero_pedido} (${nomeDoPedido(pedidoAtual).slice(0, 80)}) está aguardando aprovação — vencedora: ${extraUpdates.fornecedor || '—'}, ${fmt(extraUpdates.valor_compra)}.`,
       currentUser, 'aguardando_aprovacao');
     if (niveis.length > 0) {
       const { error: erroNiveis } = await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
@@ -2214,7 +2240,7 @@ export default function ComprasTab({ currentUser }) {
           <VinculoLinkCompra p={p} />
         </td>
         <td className="acn-cmp-desc">
-          <DescricaoCompacta texto={p.descricao_material} />
+          <DescricaoCompacta texto={nomeDoPedido(p)} />
         </td>
         <td>{p.quantidade}</td>
         <td>{p.fornecedor||'—'}</td>
@@ -2385,8 +2411,21 @@ export default function ComprasTab({ currentUser }) {
     );
   };
 
+  const abasDoCompras = (
+    <Abas ativa={secao} onChange={(id) => setSecao(id as any)} itens={[{ id: 'pedidos', rotulo: 'Requisições' }, { id: 'fornecedores', rotulo: 'Fornecedores', contagem: fornecedores.filter((x: any) => x.ativo).length }]} />
+  );
+  if (secao === 'fornecedores') {
+    return (
+      <div className="acn-cmp">
+        {abasDoCompras}
+        <FornecedoresCompras fornecedores={fornecedores} erro={erroFornecedores} onMudou={carregarFornecedores} currentUser={currentUser} />
+      </div>
+    );
+  }
+
   return (
     <div className="acn-cmp">
+      {abasDoCompras}
 
       {/* CABEÇALHO */}
       <div className="acn-cmp-cab">
@@ -2484,7 +2523,7 @@ export default function ComprasTab({ currentUser }) {
                       <strong>{p.numero_pedido}</strong>
                       {p.numero_oc && <span className="acn-cmp-oc acn-prod-ic"><Icone path={mdiClipboardTextOutline} size={11} /> {p.numero_oc}</span>}
                     </div>
-                    <div className="acn-cmp-card-desc"><DescricaoCompacta texto={p.descricao_material} /></div>
+                    <div className="acn-cmp-card-desc"><DescricaoCompacta texto={nomeDoPedido(p)} /></div>
                     <div className="acn-ajuda">
                       Qtd {p.quantidade || 1}{p.fornecedor ? ` · ${p.fornecedor}` : ''}{p.opl ? ` · OP ${p.opl}` : ''}
                     </div>
@@ -2923,7 +2962,7 @@ export default function ComprasTab({ currentUser }) {
                     <div key={c.id} className={'acn-cmp-cot' + (vencedoraId===c.id || vencedoras.some((v:any)=>v.cotacao_id===c.id) ? ' venc' : '')}>
                       {emEdicao ? (
                         <div className="acn-cmp-cot-edicao">
-                          <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} />
+                          <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} fornecedores={fornecedores} onCadastrarFornecedor={() => setCadastroDaCotacao('edicao')} />
                           <div className="acn-cmp-cot-acoes">
                             <Botao variante="primario" icone={mdiContentSaveOutline} disabled={salvandoEdicaoCotacao}
                               onClick={()=>salvarEdicaoCotacao(c)}>
@@ -2997,7 +3036,7 @@ export default function ComprasTab({ currentUser }) {
                 {modalCotacoes?.quantidade > 1 && (
                   <div className="acn-ajuda">Quantidade do pedido: {modalCotacoes.quantidade}</div>
                 )}
-                <ComposicaoCotacao form={novaCotacao} setForm={setNovaCotacao} />
+                <ComposicaoCotacao form={novaCotacao} setForm={setNovaCotacao} fornecedores={fornecedores} onCadastrarFornecedor={() => setCadastroDaCotacao('nova')} />
                 <div className="form-group">
                   <label className="acn-label">Anexo (PDF, imagem, planilha…)</label>
                   <input type="file" className="acn-cmp-arquivo"
@@ -3132,6 +3171,16 @@ export default function ComprasTab({ currentUser }) {
       {modalVinculo && (
         <ModalVinculoCompra pedido={modalVinculo} onClose={()=>setModalVinculo(null)}
           onSalvo={()=>{ setModalVinculo(null); load(true); }} />
+      )}
+
+      {cadastroDaCotacao && (
+        <ModalFornecedor existentes={fornecedores} currentUser={currentUser} onClose={() => setCadastroDaCotacao(null)}
+          aoSalvar={async (novo: any) => {
+            await carregarFornecedores();
+            const aplicar = (f: any) => ({ ...f, fornecedor_id: novo.id, fornecedor_nome: novo.nome, legado: false, condicao_pagamento: f.condicao_pagamento || novo.condicao_pagamento || '' });
+            if (cadastroDaCotacao === 'nova') setNovaCotacao(aplicar); else setEditCotacaoForm(aplicar);
+            setCadastroDaCotacao(null);
+          }} />
       )}
 
       {modalAcomp && (

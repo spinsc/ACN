@@ -15,6 +15,9 @@ import { calcularComissaoTecnicos, rotuloComissaoTecnicos, percentualDoVendedor,
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 import { lerDepartamentos, anexarDepartamentos, departamentosTexto, departamentoPrincipal } from './RhDepartamentos';
+import CustoMaoDeObraTela from './CustoMaoDeObraTela';
+import { temAbaDe } from './ViagemFluxo';
+import { podeVerValores } from './utils/permissoes';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -1788,6 +1791,8 @@ export default function RelatoriosTab({ currentUser }) {
     {id:'comissoes',  label:'Comissões'},
     {id:'markup',     label:'Markup Vendedor'},
     {id:'dossie',     label:'Dossiê da OP'},
+    // Custo da mão de obra (pedido do diretor em 13/11/2026): lê salário e valor dos serviços do RH, então só aparece para quem tem a aba RH e pode ver valores.
+    ...(temAbaDe(currentUser, 'rh') && podeVerValores(currentUser) ? [{id:'custohora', label:'Custo da mão de obra'}] : []),
   ];
 
   return (
@@ -1810,6 +1815,7 @@ export default function RelatoriosTab({ currentUser }) {
       {aba==='comissoes'   && <RelComissoes />}
       {aba==='markup'      && <RelMarkupVendedor />}
       {aba==='dossie'      && <RelDossieOp />}
+      {aba==='custohora'   && ABAS.some(a => a.id === 'custohora') && <CustoMaoDeObraTela />}
     </div>
   );
 }
