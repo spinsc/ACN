@@ -35,7 +35,7 @@ import Linkify from './Linkify';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { AvisoSaldoCentro } from './CentroCustoUso';
 import { FormacoesDoPedidoDeCompra } from './FormacaoOrdensCompra';
-import { entregasPlanejadas, erroDasDatas, reabrirEntregasDoPedido } from './ComprasEntregas';
+import { entregasPlanejadas, erroDasDatas, reabrirEntregasDoPedido, fornecedoresJaRecebidos } from './ComprasEntregas';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload, mdiClose } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
@@ -244,6 +244,12 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
     if (!refazer.trim()) { alert('Informe o que precisa ser refeito.'); return; }
     setSalvando(true);
     const de = pedido.status_compra;
+    // 17/11/2026 (entrega por fornecedor, E2): voltar a compra de um pedido em que um fornecedor JÁ foi recebido desfaria o que já entrou no estoque e na Logística
+    if (de === 'Comprado') {
+      const j = await fornecedoresJaRecebidos(pedido.id);
+      if (j.erro) { setSalvando(false); alert('Não foi possível conferir se algum fornecedor já foi recebido (' + j.erro + '). Nada foi alterado.'); return; }
+      if (j.recebidos.length) { setSalvando(false); alert('Não dá para voltar esta compra: ' + j.recebidos.join(', ') + ' já foi recebido (o material entrou).\n\nReceba os demais fornecedores; se algo estiver errado, trate pelo Compras sem voltar a etapa.'); return; }
+    }
     const dados: any = {
       vencedora_id: pedido.vencedora_id, fornecedor: pedido.fornecedor, valor_compra: pedido.valor_compra,
       numero_oc: pedido.numero_oc, data_prevista_recebimento: pedido.data_prevista_recebimento,
@@ -306,6 +312,12 @@ export function ModalDescartar({ pedido, currentUser, onClose, onFeito }: any) {
     if (!motivo.trim()) { alert('Informe o motivo do descarte.'); return; }
     setSalvando(true);
     const de = pedido.status_compra;
+    // 17/11/2026 (entrega por fornecedor, E2): pedido em que um fornecedor JÁ foi recebido não se descarta: o material entrou
+    if (de === 'Comprado') {
+      const j = await fornecedoresJaRecebidos(pedido.id);
+      if (j.erro) { setSalvando(false); alert('Não foi possível conferir se algum fornecedor já foi recebido (' + j.erro + '). Nada foi alterado.'); return; }
+      if (j.recebidos.length) { setSalvando(false); alert('Não dá para descartar este pedido: ' + j.recebidos.join(', ') + ' já foi recebido (o material entrou).\n\nReceba os demais fornecedores; o que sobrar, trate pelo Compras.'); return; }
+    }
     // 7.58: mesmo cuidado do "voltar etapa" — o cancelamento das aprovações era ignorado e vinha antes de o pedido ser descartado
     const { data: canceladas, error: erroCanc } = await supabase.from('pcp_aprovacoes').update({ status: 'cancelado', resposta: `Descartada: ${motivo.trim()}` })
       .eq('pedido_id', pedido.id).eq('status', 'pendente').select('id');

@@ -10,7 +10,8 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { creditarCompraRecebida, fmtQtd, avisosDaReposicao } from './Estoque';
-import { registrarRecebimentoNasEntregas } from './ComprasEntregas';
+import { nomeDoPedido } from './NomeDoPedido';
+import { lerEntregas, entregasDoPedido, abertasDoPedido, chaveDaEntrega, itensComPosicao, esperadoDaEntrega, receberEntrega, atualizarPedidoAposRecebimento, dataBr, dataCurta, diaDe } from './ComprasEntregas';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline, mdiPencilOutline } from '@mdi/js';
@@ -1506,7 +1507,10 @@ function FretesPanel({ currentUser }: any) {
 // ComprasTab; aqui a Logística preenche o que só se sabe ao receber (NF real,
 // data de chegada, quantidade recebida, divergência) — usa os campos
 // numero_nf/data_recebimento_real/quantidade_recebida/tem_divergencia que já
-// existiam em pcp_pedidos_compra mas nunca eram gravados por nenhuma tela. ──
+// existiam em pcp_pedidos_compra mas nunca eram gravados por nenhuma tela.
+// 17/11/2026 (entrega por fornecedor, etapa E2; decidido com o usuário): o pedido com mais de um fornecedor vencedor é recebido
+// UM FORNECEDOR POR VEZ — cada um com a sua NF, o seu dia e a sua quantidade — e só vira "Recebido" quando todos foram recebidos
+// (ComprasEntregas.ts: receberEntrega / atualizarPedidoAposRecebimento). Pedido de um fornecedor só: igual a antes. ──
 const VAZIO_RECEBIMENTO = {
   numero_nf: '', data_recebimento_real: hojeISO(),
   quantidade_recebida: '', confere: true, observacoes: '', seriais: '', volume: '',
@@ -1514,9 +1518,10 @@ const VAZIO_RECEBIMENTO = {
 
 // Janela de recebimento de um pedido de compra (NF, data, quantidade, seriais,
 // volume e conferência). Usada no painel "Aguardando Recebimento" daqui e ao
-// arrastar um card para "Concluído" no kanban de Compras — o mesmo registro
+// arrastar um card para "Recebido" no kanban de Compras — o mesmo registro
 // (manifesto + fechamento + liberação do faturamento) nos dois caminhos.
-export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClose, onFeito }: any) {
+// `entrega` (opcional): o fornecedor da linha clicada na Logística; sem ela, e com mais de um fornecedor a receber, a janela pergunta qual (arrastar do Compras).
+export function ModalReceberPedido({ pedido: pedidoRecebido, entrega: entregaInicial, currentUser, onClose, onFeito }: any) {
   // O pedido que chega aqui pode ser uma linha PARCIAL de uma lista: a tela "Aguardando Recebimento" lia só
   // algumas colunas, sem o vínculo com o item de estoque e sem a quantidade comprada. Resultado (pedido PC-FU6DS9,
   // 29/09/2026): a janela abria com a quantidade PEDIDA (9) em vez da COMPRADA (10) e, ao confirmar, o crédito no
@@ -1524,23 +1529,49 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
   // lê o pedido inteiro ao abrir e de novo ao confirmar, qualquer que seja quem a chamou.
   const [pedido, setPedido] = useState(pedidoRecebido);
   const tocouQtd = useRef(false);
+  // as entregas de cada fornecedor (compras_entregas): leitura recusada trava a confirmação, nunca vale como "sem entregas" (o pedido cairia como um fornecedor só)
+  const [linhas, setLinhas] = useState<any[]>([]);
+  const [erroEntregas, setErroEntregas] = useState('');
+  const [carregou, setCarregou] = useState(false);
+  const [chave, setChave] = useState<string | null>(entregaInicial ? chaveDaEntrega(entregaInicial) : null);
   // vem preenchido com o que o Compras COMPROU (caixa fechada, lote mínimo),
   // não com o que a requisição pediu — é o que se espera ver chegar. Pedido
   // antigo, sem quantidade_comprada, cai no pedido como antes (25/09/2026).
-  const esperado = pedido?.quantidade_comprada ?? pedido?.quantidade;
-  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO, quantidade_recebida: esperado != null ? String(esperado) : '' });
+  const esperadoDoPedido = pedido?.quantidade_comprada ?? pedido?.quantidade;
+  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO, quantidade_recebida: esperadoDoPedido != null ? String(esperadoDoPedido) : '' });
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     if (!pedidoRecebido?.id) return;
-    supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoRecebido.id).maybeSingle().then(({ data }) => {
-      if (!data) return;
-      setPedido(data);
-      // só troca o número se a pessoa ainda não digitou nada
-      const q = data.quantidade_comprada ?? data.quantidade;
-      if (!tocouQtd.current && q != null) setForm(f => ({ ...f, quantidade_recebida: String(q) }));
-    });
+    let vivo = true;
+    (async () => {
+      const [{ data }, ent] = await Promise.all([
+        supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoRecebido.id).maybeSingle(),
+        lerEntregas([pedidoRecebido.id]),
+      ]);
+      if (!vivo) return;
+      if (data) setPedido(data);
+      if (ent.erro) setErroEntregas(ent.erro); else setLinhas(ent.linhas);
+      setCarregou(true);
+    })();
+    return () => { vivo = false; };
   }, [pedidoRecebido?.id]);
+
+  const todas = entregasDoPedido(pedido, linhas);
+  const abertas = abertasDoPedido(todas);
+  const varias = carregou && todas.length > 1;
+  const escolhida = (chave && abertas.find((e: any) => chaveDaEntrega(e) === chave)) || (abertas.length === 1 ? abertas[0] : null);
+  const itensDela = varias && escolhida?.itens?.length ? itensComPosicao(pedido).filter((i: any) => escolhida.itens.includes(i.indice)) : [];
+  const jaRecebidas = varias ? todas.filter((e: any) => e.situacao === 'recebida') : [];
+  const outrasAbertas = varias && escolhida ? abertas.filter((e: any) => chaveDaEntrega(e) !== chaveDaEntrega(escolhida)) : [];
+  // com vários fornecedores, o esperado é o do fornecedor escolhido; com um só, o do pedido, como sempre foi
+  const esperado = varias ? (escolhida ? esperadoDaEntrega(pedido, escolhida) : null) : esperadoDoPedido;
+
+  // só troca o número se a pessoa ainda não digitou nada
+  useEffect(() => {
+    if (!carregou || tocouQtd.current) return;
+    setForm(f => ({ ...f, quantidade_recebida: esperado != null && esperado !== '' && !(varias && Number(esperado) <= 0) ? String(esperado) : '' }));
+  }, [carregou, pedido?.id, esperado, varias, escolhida ? chaveDaEntrega(escolhida) : '']);
 
   // Mesmo padrão de notificarCriadorPedido (ComprasTab.tsx) / notificarCriadorFrete
   // (FretesPanel acima) — avisa quem fez a compra que a divergência precisa ser resolvida.
@@ -1565,17 +1596,28 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
   const confirmarRecebimento = async () => {
     if (!form.numero_nf.trim()) { alert('Informe o número da NF.'); return; }
     if (!form.confere && !form.observacoes.trim()) { alert('Descreva a divergência.'); return; }
+    if (erroEntregas) { alert('Não foi possível ler o fornecedor de cada entrega (' + erroEntregas + '). Feche a janela e tente de novo.'); return; }
+    if (varias && !escolhida) { alert('Escolha o fornecedor que está sendo recebido.'); return; }
     setSalvando(true);
     const agora = new Date().toISOString();
+    const nomeDoFornecedor = varias && escolhida ? escolhida.fornecedor : (pedido.fornecedor || 'Fornecedor');
+    const quantidade = numOrNull(form.quantidade_recebida);
+
+    // lê as entregas de novo: outra pessoa pode ter recebido este fornecedor desde que a janela abriu (nada é gravado antes desta conferência)
+    const fresco = await lerEntregas([pedido.id]);
+    if (fresco.erro) { alert('Não foi possível conferir o fornecedor antes de gravar (' + fresco.erro + '). Nada foi salvo.'); setSalvando(false); return; }
+    const abertasAgora = abertasDoPedido(entregasDoPedido(pedido, fresco.linhas));
+    const alvo = varias ? abertasAgora.find((e: any) => escolhida && chaveDaEntrega(e) === chaveDaEntrega(escolhida)) : (abertasAgora[0] || null);
+    if (varias && !alvo) { alert(`O recebimento de ${nomeDoFornecedor} já foi registrado por outra pessoa. Atualize a tela. Nada foi salvo.`); setSalvando(false); return; }
 
     // Registra o recebimento como manifesto de Logística também — mesma tabela/
     // fluxo do "+ Novo Registro", garante que ele apareça no Histórico e possa
     // gerar o PDF de comprovante como qualquer outro manifesto.
     const { error: errManifesto } = await supabase.from('logistica_manifestos').insert([{
       tipo: 'Recebimento', data: form.data_recebimento_real,
-      remetente: pedido.fornecedor || 'Fornecedor', destinatario: 'ACN Sinal Verde',
-      tipo_mercadoria: 'Materiais', descricao: pedido.descricao_material || '',
-      quantidade: numOrNull(form.quantidade_recebida),
+      remetente: nomeDoFornecedor, destinatario: 'ACN Sinal Verde',
+      tipo_mercadoria: 'Materiais', descricao: (varias && itensDela.length ? itensDela.map((i: any) => i.nome).join(', ') : pedido.descricao_material) || '',
+      quantidade,
       nf_referencia: form.numero_nf.trim(),
       observacoes: form.observacoes.trim() || null,
       pedido_compra_id: pedido.id,
@@ -1586,44 +1628,37 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
     }]);
     if (errManifesto) { alert('Erro ao registrar manifesto: ' + errManifesto.message); setSalvando(false); return; }
 
-    const updatePedido: any = {
-      numero_nf: form.numero_nf.trim(),
-      data_recebimento_real: form.data_recebimento_real,
-      quantidade_recebida: numOrNull(form.quantidade_recebida),
-      tem_divergencia: !form.confere,
-      observacoes: form.observacoes.trim() || null,
-    };
-    if (form.confere) {
-      // 'Recebido' é o nome da última etapa desde 22/09/2026 (era 'Concluído').
-      // Este ponto tinha ficado para trás na renomeação, e o pedido recebido
-      // caía num status fora do quadro do Compras — corrigido em 24/09/2026.
-      updatePedido.status_compra = 'Recebido';
-      updatePedido.data_conclusao = hojeISO();
+    // 17/11/2026 (E2): marca o recebimento DESTE fornecedor; quem diz se o pedido está completo é o banco, relido logo depois
+    const res = await receberEntrega(pedido, alvo || { id: null, cotacao_id: pedido.vencedora_id || null, fornecedor: nomeDoFornecedor },
+      { confere: form.confere, numero_nf: form.numero_nf.trim(), data_recebimento_real: form.data_recebimento_real, quantidade_recebida: quantidade, observacoes: form.observacoes.trim() || null, user: currentUser });
+    if (res.erro) {
+      alert(`O comprovante (manifesto) foi salvo, mas o recebimento de ${nomeDoFornecedor} NÃO foi registrado no pedido: ${res.erro}. Não repita o recebimento; avise o Compras.`);
+      setSalvando(false); onFeito?.({ confere: false, fechou: false, erro: true }); return;
     }
-    const { error: errPedido } = await supabase.from('pcp_pedidos_compra').update(updatePedido).eq('id', pedido.id);
-    if (errPedido) { alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra: ' + errPedido.message); setSalvando(false); return; }
-    // 17/11/2026 (entrega por fornecedor, etapa E1): receber o pedido marca a entrega de cada fornecedor (recebida ou com divergência)
-    const entregasMarcadas = await registrarRecebimentoNasEntregas(pedido.id, { confere: form.confere, numero_nf: form.numero_nf.trim(), data_recebimento_real: form.data_recebimento_real, observacoes: form.observacoes.trim() || null, user: currentUser });
-    if (entregasMarcadas.erro) alert('Recebimento registrado, mas a entrega de cada fornecedor NÃO foi marcada como recebida (' + entregasMarcadas.erro + '). Avise o Compras.');
+    const atualizado = await atualizarPedidoAposRecebimento(pedido, res, form.observacoes.trim() || null);
+    if (atualizado.erro) { alert('Recebimento registrado, mas houve erro ao atualizar o pedido de compra: ' + atualizado.erro); setSalvando(false); return; }
 
-    if (form.confere) {
+    const doFornecedor = varias ? ` — ${nomeDoFornecedor}` : '';
+    if (res.fechouPedido) {
       // Mesmo gate de fechamento/liberação de pagamento já usado no fluxo antigo
-      // de "+ Novo Registro" (Fase 3) — sem divergência, libera o faturamento.
+      // de "+ Novo Registro" (Fase 3) — sem divergência, libera o faturamento (só quando TODOS os fornecedores foram recebidos).
       const { error: errFat } = await supabase.from('pcp_pedidos_faturamento').update({
         recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado',
       }).eq('pedido_id', pedido.id);
       if (errFat) console.warn('Falha ao atualizar faturamento:', errFat.message);
-      notificarEvento('logistica_recebe_pedido', `*Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}\nNF: ${form.numero_nf.trim()}`, 'Compras');
+      notificarEvento('logistica_recebe_pedido', `*Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}${doFornecedor}\nNF: ${varias ? (res.campos?.numero_nf || form.numero_nf.trim()) : form.numero_nf.trim()}${varias ? '\nTodos os fornecedores do pedido foram recebidos.' : ''}`, 'Compras');
+    } else if (form.confere) {
+      notificarEvento('logistica_recebe_pedido', `*Recebimento parcial* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}${doFornecedor}\nNF: ${form.numero_nf.trim()}\nAinda faltam: ${res.faltam.join(', ')}`, 'Compras');
     } else {
       await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras', numero_opl: pedido.opl || null,
-        descricao: `[DIVERGÊNCIA NO RECEBIMENTO] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — NF ${form.numero_nf.trim()}: ${form.observacoes.trim()}`,
+        descricao: `[DIVERGÊNCIA NO RECEBIMENTO] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${nomeDoFornecedor} — NF ${form.numero_nf.trim()}: ${form.observacoes.trim()}`,
         status: 'Pendente', tipo_solicitacao: 'divergencia_recebimento',
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, data_abertura: agora,
-        logs_demanda: [{ texto: `Divergência no recebimento: ${form.observacoes.trim()}`, usuario: currentUser?.nome, hora: agora }],
+        logs_demanda: [{ texto: `Divergência no recebimento${varias ? ` (${nomeDoFornecedor})` : ''}: ${form.observacoes.trim()}`, usuario: currentUser?.nome, hora: agora }],
       }]);
-      await notificarComprador(pedido, `⚠️ Divergência no recebimento do pedido ${pedido.numero_pedido}: ${form.observacoes.trim()}`);
-      notificarEvento('logistica_divergencia_recebimento', `*Divergência no recebimento* — Pedido ${pedido.numero_pedido}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
+      await notificarComprador(pedido, `⚠️ Divergência no recebimento do pedido ${pedido.numero_pedido}${doFornecedor}: ${form.observacoes.trim()}`);
+      notificarEvento('logistica_divergencia_recebimento', `*Divergência no recebimento* — Pedido ${pedido.numero_pedido}${doFornecedor}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
     }
 
     // Compra de reposição de estoque: o material entra no saldo pela quantidade
@@ -1634,8 +1669,10 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
       // lê o pedido de novo: o crédito depende do vínculo com o item, e uma linha parcial não o traz
       const { data: pedidoInteiro } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedido.id).maybeSingle();
       const doEstoque = String((pedidoInteiro || pedido)?.vinculo_tipo || '').startsWith('estoque');
+      // com vários fornecedores a nota do extrato compara com o que ESTE fornecedor devia entregar, não com o pedido todo
+      const paraCredito = varias && alvo ? { ...(pedidoInteiro || pedido), quantidade: esperadoDaEntrega(pedidoInteiro || pedido, alvo) } : (pedidoInteiro || pedido);
       const credito = await creditarCompraRecebida({
-        pedido: pedidoInteiro || pedido, quantidade: numOrNull(form.quantidade_recebida), currentUser,
+        pedido: paraCredito, quantidade, currentUser,
       });
       if (credito?.erro) {
         alert('Recebimento registrado, mas não foi possível creditar o estoque: ' + credito.erro);
@@ -1643,7 +1680,7 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
         // antes isto passava em silêncio: a compra ficava Recebida e o estoque, sem a entrada
         alert('Recebimento registrado, mas NADA entrou no estoque: ' + (credito.motivo || 'não foi possível identificar o item.') + ' Faça a entrada pela tela do Estoque.');
       } else if (credito?.ok) {
-        const novo = `Estoque atualizado: entraram ${fmtQtd(numOrNull(form.quantidade_recebida))}, saldo agora ${fmtQtd(credito.saldo_depois)}.`;
+        const novo = `Estoque atualizado: entraram ${fmtQtd(quantidade)}, saldo agora ${fmtQtd(credito.saldo_depois)}.`;
         const aindaFalta = credito.requisicao?.criada
           ? `\n\nO saldo continua no mínimo, então uma nova reposição de ${fmtQtd(credito.requisicao.quantidade)} foi pedida ao Compras (${credito.requisicao.numero_pedido}).`
           : '';
@@ -1654,20 +1691,46 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
     }
 
     setSalvando(false);
-    onFeito?.(form.confere);
+    onFeito?.({ confere: form.confere, fechou: res.fechouPedido, fornecedor: nomeDoFornecedor, varias, faltam: res.faltam });
   };
 
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
       <div className="modal-box acn-modal-larga acn-form-cheio">
-        <div className="modal-title">Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}</div>
+        <div className="modal-title">Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}{varias && escolhida ? ` · ${escolhida.fornecedor}` : ''}</div>
         <p className="acn-modal-sub">
-          {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}
+          {(varias ? nomeDoPedido(pedido) : pedido.descricao_material) || '—'} · Fornecedor: {varias && escolhida ? escolhida.fornecedor : (pedido.fornecedor || '—')} · Qtd pedida: {pedido.quantidade ?? '—'}
           {pedido.quantidade_comprada != null && Number(pedido.quantidade_comprada) !== Number(pedido.quantidade) && (
             <> · <strong className="acn-forte">comprada: {pedido.quantidade_comprada}</strong></>
           )}
         </p>
+        {erroEntregas && (
+          <Faixa tom="erro">Não foi possível ler o fornecedor de cada entrega ({erroEntregas}). Sem isso o recebimento não pode ser gravado: feche a janela e tente de novo.</Faixa>
+        )}
+        {!carregou && <div className="acn-ajuda">Carregando as entregas do pedido…</div>}
+        {/* 17/11/2026 (E2): vários fornecedores — cada um é recebido separado, com a sua NF, o seu dia e a sua quantidade */}
+        {varias && abertas.length > 1 && !entregaInicial && (
+          <div className="form-group">
+            <label className="acn-label">Qual fornecedor está sendo recebido? *</label>
+            <select className="acn-input" value={escolhida ? chaveDaEntrega(escolhida) : ''}
+              onChange={e => { tocouQtd.current = false; setChave(e.target.value || null); }}>
+              <option value="">Escolha o fornecedor…</option>
+              {abertas.map((e: any) => <option key={chaveDaEntrega(e)} value={chaveDaEntrega(e)}>{e.fornecedor} — prevista {dataBr(e.data_prevista)}{e.situacao === 'divergencia' ? ' (com divergência)' : ''}</option>)}
+            </select>
+          </div>
+        )}
+        {varias && escolhida && (
+          <div className="acn-quadro" data-recebimento-fornecedor={escolhida.fornecedor}>
+            <div className="acn-quadro-titulo">Recebimento de um fornecedor do pedido</div>
+            <div><strong>{escolhida.fornecedor}</strong> · entrega prevista em {dataBr(escolhida.data_prevista)}</div>
+            {itensDela.length > 0 && <div className="acn-ajuda">Itens dele: {itensDela.map((i: any) => i.nome).join(' · ')}</div>}
+            {jaRecebidas.length > 0 && <div className="acn-ajuda">Já recebidos: {jaRecebidas.map((e: any) => `${e.fornecedor}${e.data_recebimento_real ? ` (${dataBr(e.data_recebimento_real)})` : ''}`).join(' · ')}</div>}
+            {outrasAbertas.length > 0
+              ? <div className="acn-ajuda">Depois deste ainda faltam: {outrasAbertas.map((e: any) => `${e.fornecedor} (${dataBr(e.data_prevista)})`).join(' · ')}. O pedido só vira "Recebido" quando todos forem recebidos.</div>
+              : <div className="acn-ajuda">É o último fornecedor a receber: ao confirmar, o pedido vira "Recebido".</div>}
+          </div>
+        )}
         {/* reposição de estoque: a quantidade abaixo vira saldo na prateleira,
             então vale avisar antes de digitar (ver Estoque.tsx) */}
         {pedido.vinculo_tipo === 'estoque' && (
@@ -1720,14 +1783,16 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
               value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
               placeholder="Descreva a divergência (qtd errada, item trocado, avaria...)" />
             <Faixa tom="atencao">
-              Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.
+              {varias
+                ? 'Com divergência, a entrega deste fornecedor fica aberta, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.'
+                : 'Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.'}
             </Faixa>
           </div>
         )}
 
         <div className="acn-modal-acoes">
           <Botao className="cresce" variante={form.confere ? 'primario' : 'perigo'} icone={form.confere ? mdiCheck : mdiAlertOutline}
-            onClick={confirmarRecebimento} disabled={salvando}>
+            onClick={confirmarRecebimento} disabled={salvando || !carregou || !!erroEntregas || (varias && !escolhida)}>
             {salvando ? 'Salvando...' : form.confere ? 'Confirmar Recebimento' : 'Registrar Divergência'}
           </Botao>
           <Botao variante="secundario" onClick={() => onClose()} disabled={salvando}>Cancelar</Botao>
@@ -1739,8 +1804,11 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
 
 function PainelRecebimento({ currentUser }: any) {
   const [pedidos, setPedidos] = useState<any[]>([]);
+  // as entregas de cada fornecedor (compras_entregas): a lista tem UMA LINHA POR FORNECEDOR a receber (17/11/2026, E2)
+  const [linhasEntregas, setLinhasEntregas] = useState<any[]>([]);
+  const [erroEntregas, setErroEntregas] = useState('');
   const [loading, setLoading] = useState(false);
-  const [modalReceber, setModalReceber] = useState<any>(null);
+  const [modalReceber, setModalReceber] = useState<any>(null);   // { pedido, entrega }
   const [modalChegada, setModalChegada] = useState<any>(null);   // chegada de UM item da OC: o desenvolvimento da Engenharia que espera o item é liberado e avisado (28/10/2026)
   const [esperas, setEsperas] = useState<Map<string, any[]>>(new Map());
 
@@ -1748,13 +1816,15 @@ function PainelRecebimento({ currentUser }: any) {
     setLoading(true);
     const { data } = await supabase.from('pcp_pedidos_compra')
       // vinculo_* e quantidade_comprada TÊM de vir: sem eles a janela de recebimento não sabe que é reposição de
-      // estoque e não credita nada (pedido PC-FU6DS9, 29/09/2026)
-      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, quantidade_comprada, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome, vinculo_tipo, vinculo_id, vinculo_descricao, forma_recebimento, coletado_em, coletado_por_nome')
+      // estoque e não credita nada (pedido PC-FU6DS9, 29/09/2026). itens, vencedoras e as colunas do recebimento vêm para montar a entrega de cada fornecedor.
+      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, quantidade_comprada, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome, vinculo_tipo, vinculo_id, vinculo_descricao, forma_recebimento, coletado_em, coletado_por_nome, status_compra, itens, vencedoras, vencedora_id, tem_divergencia, numero_nf, data_recebimento_real, quantidade_recebida, alerta_entrega_mencionado_em')
       .eq('status_compra', 'Comprado')
       // coleta marcada e ainda não feita não é recebimento: o Compras busca a mercadoria e registra a coleta (20/10/2026)
       .or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null')
       .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
     setPedidos(data || []);
+    const ent = await lerEntregas((data || []).map((p: any) => p.id));
+    setErroEntregas(ent.erro || ''); setLinhasEntregas(ent.linhas);
     // leitura recusada aqui só tira o selo "Engenharia espera": a lista de recebimento segue igual
     const e = await lerDemandasQueEsperam();
     setEsperas(e.mapa);
@@ -1763,35 +1833,57 @@ function PainelRecebimento({ currentUser }: any) {
 
   useEffect(() => { fetchAll(); }, []);
 
-  const abrirReceber = (p: any) => setModalReceber(p);
+  const abrirReceber = (p: any, entrega: any) => setModalReceber({ pedido: p, entrega });
 
   // R7 (13/10/2026): na tela, o valor respeita a marca "ver valores" (desligada = ***)
   const fmt = (v: any) => v != null ? (podeVerValores(currentUser) ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '***') : '—';
   const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   // mercadoria coletada pelo Compras já está aqui: não está "atrasada", espera a conferência
-  const atrasado = (p: any) => !p.coletado_em && p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(hojeISO());
+  const atrasado = (p: any, e: any) => { const dia = diaDe(e?.data_prevista ?? p.data_prevista_recebimento); return !p.coletado_em && !!dia && dia < hojeISO(); };
+
+  // uma linha por fornecedor a receber (pedido de um fornecedor só = uma linha, como sempre foi). Pedido "Comprado" sem entrega aberta (estado de antes da E2) volta como linha do pedido.
+  const linhasDaLista = pedidos.flatMap((p: any) => {
+    const todas = entregasDoPedido(p, linhasEntregas);
+    const abertas = abertasDoPedido(todas);
+    const recebidas = todas.filter((e: any) => e.situacao === 'recebida');
+    if (!abertas.length) return [{ p, e: null, chave: String(p.id), varias: false, recebidas }];
+    return abertas.map((e: any) => ({ p, e, chave: `${p.id}:${chaveDaEntrega(e)}`, varias: todas.length > 1, recebidas }));
+  });
+  const nomesDosItens = (p: any, e: any) => (e?.itens?.length ? itensComPosicao(p).filter((i: any) => e.itens.includes(i.indice)) : []).map((i: any) => String(i.nome));
+  const valorDaEntrega = (p: any, e: any) => (p.vencedoras || []).find((v: any) => String(v.cotacao_id) === String(e?.cotacao_id))?.valor;
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr"><span>Pedidos Aguardando Recebimento ({pedidos.length})</span></div>
+      <div className="sec-hdr"><span>Pedidos Aguardando Recebimento ({pedidos.length}{linhasDaLista.length > pedidos.length ? ` · ${linhasDaLista.length} entregas de fornecedores` : ''})</span></div>
       <div className="sec-body acn-rolagem">
+        {erroEntregas && (
+          <Faixa tom="erro" acao={<Botao pequeno onClick={fetchAll}>Tentar de novo</Botao>}>
+            Não foi possível ler o fornecedor de cada entrega ({erroEntregas}). Sem isso o recebimento fica desligado, para não gravar o fornecedor errado.
+          </Faixa>
+        )}
         {loading ? <div className="acn-empty">Carregando...</div> : pedidos.length === 0 ? (
           <div className="acn-empty">Nenhum pedido comprado aguardando recebimento.</div>
         ) : (
           <table className="acn-tabela">
             <thead><tr><th>Pedido / OC</th><th>Material</th><th>Fornecedor</th><th>Qtd</th><th>Valor</th><th>Previsão</th><th>Ação</th></tr></thead>
             <tbody>
-              {pedidos.map(p => (
-                <tr key={p.id} className={atrasado(p) ? 'acn-linha-alerta' : undefined}>
-                  <td>{p.numero_pedido || '—'}{p.numero_oc ? <div className="acn-fraco">{p.numero_oc}</div> : null}</td>
-                  <td className="acn-texto-longo">{p.descricao_material || '—'}{(esperas.get(String(p.id)) || []).length > 0 && <div><Selo familia="atencao" ponto={false} title={(esperas.get(String(p.id)) || []).map((x: any) => `${x.demanda.titulo} — espera: ${x.item.nome}`).join(' | ')}>Engenharia espera item desta compra</Selo></div>}</td>
-                  <td>{p.fornecedor || '—'}</td>
-                  <td className="acn-num">{p.quantidade ?? '—'}</td>
-                  <td className="acn-num">{fmt(p.valor_compra)}</td>
-                  <td>{p.coletado_em ? <>Coletado em {fmtDt(p.coletado_em)}{p.coletado_por_nome ? <div className="acn-fraco">por {p.coletado_por_nome}</div> : null}</> : fmtDt(p.data_prevista_recebimento)}{p.coletado_em && <> <Selo familia="info" ponto={false}>coleta</Selo></>}{atrasado(p) && <> <Selo familia="erro" ponto={false}>atrasado</Selo></>}</td>
-                  <td><div className="acn-dev-acoes"><Botao pequeno variante="primario" icone={mdiTrayArrowDown} onClick={() => abrirReceber(p)}>Receber</Botao><Botao pequeno icone={mdiPackageDown} title="Marcar que chegaram unidades de um item, sem receber a OC inteira" onClick={() => setModalChegada(p)}>Chegada de itens</Botao></div></td>
+              {linhasDaLista.map(({ p, e, chave, varias, recebidas }: any) => {
+                const itensDele = varias ? nomesDosItens(p, e) : [];
+                const atr = atrasado(p, e);
+                return (
+                <tr key={chave} className={atr ? 'acn-linha-alerta' : undefined} data-recebimento-pedido={p.numero_pedido} data-recebimento-fornecedor={varias ? e.fornecedor : undefined}>
+                  <td>{p.numero_pedido || '—'}{p.numero_oc ? <div className="acn-fraco">{p.numero_oc}</div> : null}
+                    {varias && recebidas.length > 0 && <div className="acn-fraco">Já recebidos: {recebidas.map((r: any) => `${r.fornecedor}${r.data_recebimento_real ? ` (${dataCurta(r.data_recebimento_real)})` : ''}`).join(' · ')}</div>}
+                  </td>
+                  <td className="acn-texto-longo">{(varias ? nomeDoPedido(p) : p.descricao_material) || '—'}{itensDele.length > 0 && <div className="acn-fraco">{itensDele.join(' · ')}</div>}{(esperas.get(String(p.id)) || []).length > 0 && <div><Selo familia="atencao" ponto={false} title={(esperas.get(String(p.id)) || []).map((x: any) => `${x.demanda.titulo} — espera: ${x.item.nome}`).join(' | ')}>Engenharia espera item desta compra</Selo></div>}</td>
+                  <td>{varias ? e.fornecedor : (p.fornecedor || '—')}</td>
+                  <td className="acn-num">{varias ? (esperadoDaEntrega(p, e) || '—') : (p.quantidade ?? '—')}</td>
+                  <td className="acn-num">{fmt(varias ? valorDaEntrega(p, e) : p.valor_compra)}</td>
+                  <td>{p.coletado_em ? <>Coletado em {fmtDt(p.coletado_em)}{p.coletado_por_nome ? <div className="acn-fraco">por {p.coletado_por_nome}</div> : null}</> : fmtDt(e?.data_prevista ?? p.data_prevista_recebimento)}{p.coletado_em && <> <Selo familia="info" ponto={false}>coleta</Selo></>}{atr && <> <Selo familia="erro" ponto={false}>atrasado</Selo></>}{e?.situacao === 'divergencia' && <> <Selo familia="erro" ponto={false}>divergência</Selo></>}</td>
+                  <td><div className="acn-dev-acoes"><Botao pequeno variante="primario" icone={mdiTrayArrowDown} disabled={!!erroEntregas} title={varias ? `Receber a entrega de ${e.fornecedor}` : undefined} onClick={() => abrirReceber(p, e)}>Receber</Botao><Botao pequeno icone={mdiPackageDown} title="Marcar que chegaram unidades de um item, sem receber a OC inteira" onClick={() => setModalChegada(p)}>Chegada de itens</Botao></div></td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -1799,7 +1891,7 @@ function PainelRecebimento({ currentUser }: any) {
 
       {modalChegada && <ModalChegadaDeItens pedido={modalChegada} currentUser={currentUser} onClose={() => setModalChegada(null)} onSalvo={fetchAll} />}
       {modalReceber && (
-        <ModalReceberPedido pedido={modalReceber} currentUser={currentUser}
+        <ModalReceberPedido pedido={modalReceber.pedido} entrega={modalReceber.entrega} currentUser={currentUser}
           onClose={() => setModalReceber(null)}
           onFeito={() => { setModalReceber(null); fetchAll(); }} />
       )}
@@ -1991,6 +2083,23 @@ export default function LogisticaTab({ currentUser }) {
     if (!form.descricao || !form.remetente) { alert('Preencha remetente e descricao!'); return; }
     setUploading(true);
 
+    // 17/11/2026 (entrega por fornecedor, E2): recebimento ligado a um pedido de VÁRIOS fornecedores não se registra por aqui — cada fornecedor é recebido
+    // por vez, na aba "Aguardando Recebimento". A conferência vem ANTES de subir foto ou gravar o manifesto: se não puder seguir, nada é salvo.
+    let pedidoDoRecebimento: any = null, entregaDoRecebimento: any = null;
+    if (form.tipo === 'Recebimento' && form.pedido_compra_id && form.nf_conferida) {
+      const [{ data: pd, error: erroPd }, ent] = await Promise.all([
+        supabase.from('pcp_pedidos_compra').select('*').eq('id', form.pedido_compra_id).maybeSingle(),
+        lerEntregas([form.pedido_compra_id]),
+      ]);
+      if (erroPd || !pd || ent.erro) { alert('Não foi possível conferir os fornecedores do pedido (' + (erroPd?.message || ent.erro || 'pedido não encontrado') + '). Nada foi salvo; tente de novo.'); setUploading(false); return; }
+      const abertasDoRecebimento = abertasDoPedido(entregasDoPedido(pd, ent.linhas));
+      if (abertasDoRecebimento.length > 1) {
+        alert(`O pedido ${pd.numero_pedido} tem ${abertasDoRecebimento.length} fornecedores a receber (${abertasDoRecebimento.map((e: any) => e.fornecedor).join(', ')}). O recebimento é de um fornecedor por vez: faça-o na aba "Aguardando Recebimento", no botão Receber da linha de cada fornecedor.\n\nNada foi salvo.`);
+        setUploading(false); return;
+      }
+      pedidoDoRecebimento = pd; entregaDoRecebimento = abertasDoRecebimento[0] || null;
+    }
+
     // Upload fotos
     const fotosUrls = [];
     const falhasFotos: string[] = [];   // 16/10/2026: a foto que não subia era descartada em silêncio e o registro era salvo sem ela
@@ -2019,30 +2128,30 @@ export default function LogisticaTab({ currentUser }) {
       // faturamento se a NF do fornecedor foi conferida (gate real, Fase 3).
       // Sem conferência, o manifesto fica registrado mas a compra continua
       // 'Comprado' — divergência a resolver antes de fechar.
-      if (form.tipo === 'Recebimento' && form.pedido_compra_id && form.nf_conferida) {
+      if (pedidoDoRecebimento) {
         const agora = new Date().toISOString();
-        const { error: errCompra } = await supabase.from('pcp_pedidos_compra')
-          // 'Recebido' — ver a nota no modal de recebimento acima (24/09/2026)
-          .update({ status_compra: 'Recebido', data_conclusao: hojeISO() })
-          .eq('id', form.pedido_compra_id);
-        const { error: errFat } = await supabase.from('pcp_pedidos_faturamento')
-          .update({ recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado' })
-          .eq('pedido_id', form.pedido_compra_id);
-        if (errCompra || errFat) {
-          alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra/faturamento: ' + (errCompra?.message || errFat?.message) + '. Verifique manualmente.');
+        const informada = parseFloat(String(form.quantidade).replace(',', '.'));
+        // 17/11/2026 (E2): este caminho também passa pelo recebimento por fornecedor (a conferência acima garante que há UM fornecedor aberto, no máximo):
+        // o pedido só vira 'Recebido' e o faturamento só é liberado quando nenhum fornecedor ficou aberto. 'Recebido' — ver a nota no modal de recebimento (24/09/2026)
+        const res = await receberEntrega(pedidoDoRecebimento, entregaDoRecebimento || { id: null, cotacao_id: pedidoDoRecebimento.vencedora_id || null, fornecedor: pedidoDoRecebimento.fornecedor || 'Fornecedor' },
+          { confere: true, numero_nf: String(form.nf_referencia || '').trim(), data_recebimento_real: form.data, quantidade_recebida: informada > 0 ? informada : null, observacoes: form.observacoes || null, user: currentUser });
+        const atualizado = res.erro ? { erro: res.erro } : await atualizarPedidoAposRecebimento(pedidoDoRecebimento, res);
+        let errFat: any = null;
+        if (!atualizado.erro && res.fechouPedido) {
+          const r = await supabase.from('pcp_pedidos_faturamento')
+            .update({ recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado' })
+            .eq('pedido_id', pedidoDoRecebimento.id);
+          errFat = r.error;
         }
-        // 17/11/2026 (entrega por fornecedor, etapa E1): este caminho também fecha a compra, então a entrega de cada fornecedor vai junto
-        if (!errCompra) {
-          const marcadas = await registrarRecebimentoNasEntregas(form.pedido_compra_id, { confere: true, numero_nf: String(form.nf_referencia || '').trim(), data_recebimento_real: form.data, observacoes: form.observacoes || null, user: currentUser });
-          if (marcadas.erro) alert('Recebimento registrado, mas a entrega de cada fornecedor NÃO foi marcada como recebida (' + marcadas.erro + '). Avise o Compras.');
+        if (atualizado.erro || errFat) {
+          alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra/faturamento: ' + (atualizado.erro || errFat?.message) + '. Verifique manualmente.');
         }
         // Reposição de estoque recebida por este caminho também tem de entrar no saldo. Antes só a janela "Receber"
         // creditava; aqui a compra fechava e o estoque ficava parado (achado com o pedido PC-FU6DS9, 29/09/2026).
         // Entra a quantidade informada no registro; sem ela, a quantidade comprada.
-        if (!errCompra) {
-          const { data: pedidoInteiro } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', form.pedido_compra_id).maybeSingle();
+        if (!atualizado.erro) {
+          const { data: pedidoInteiro } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoDoRecebimento.id).maybeSingle();
           if (String(pedidoInteiro?.vinculo_tipo || '').startsWith('estoque')) {
-            const informada = parseFloat(String(form.quantidade).replace(',', '.'));
             const qtd = informada > 0 ? informada : (Number(pedidoInteiro.quantidade_comprada ?? pedidoInteiro.quantidade) || 0);
             const credito = await creditarCompraRecebida({ pedido: pedidoInteiro, quantidade: qtd, currentUser });
             if (credito?.erro) {
