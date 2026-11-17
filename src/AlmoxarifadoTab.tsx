@@ -142,7 +142,8 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   };
 
   // Quais OPs têm demanda de Serralheria/Chicotes/Compras pendurada — o kit
-  // 100% fica barrado enquanto o material não estiver aqui dentro.
+  // 100% fica barrado enquanto o material de Chicotes/Compras não estiver aqui dentro
+  // (a Serralheria não trava o kit desde 17/11/2026: ver travaKit100 em OpPendencias.tsx).
   const [pendPorOp, setPendPorOp] = useState(new Map());
   const pendenciasDe = (o) => pendPorOp.get(String(o?.id)) || [];
   const faltandoPara = (o) => travaKit100(pendenciasDe(o), o);

@@ -3,9 +3,10 @@
 // PENDÊNCIAS DE FABRICAÇÃO E COMPRA — o que segura a OP e como ela se libera
 //
 // Regra definida pelo usuário em 21/09/2026:
-//   • o Almoxarifado NÃO fecha "Kit 100%" com demanda de Serralheria, Chicotes
-//     ou Compras em aberto — nesse caso ele usa "Liberar com pendência", que
-//     continua funcionando como sempre;
+//   • o Almoxarifado NÃO fecha "Kit 100%" com demanda de Chicotes ou Compras
+//     em aberto — nesse caso ele usa "Liberar com pendência", que continua
+//     funcionando como sempre. A SERRALHERIA saiu dessa trava em 17/11/2026
+//     (pedido do usuário): ela só segura a conclusão da Produção;
 //   • com kit liberado com pendência, o PCP libera a produção normalmente;
 //   • a Produção NÃO conclui a sua etapa enquanto a pendência não fechar;
 //   • e uma pendência só fecha em TRÊS etapas:
@@ -304,10 +305,16 @@ const registroDaPendencia = (p, op) => {
   return reg;
 };
 
+/** A Serralheria NÃO trava o kit (pedido do usuário em 17/11/2026): a peça de serralheria é fabricada para a OP e chega à produção por conta
+ *  própria, então o Almoxarifado fecha o Kit 100% (e embala o envio) com a demanda dela ainda aberta. Ela segue sendo pendência da OP: o
+ *  checklist continua mostrando as três etapas e a Produção só conclui quando ela fechar (travaConclusaoProducao não foi mexida). */
+export const naoTravaOKit = (p) => norm(p?.setor) === 'serralheria';
+
 /** O Almoxarifado só fecha "Kit 100%" quando tem tudo em mãos: nenhuma demanda
- *  dos três setores pode estar em aberto nem esperando o recebimento. */
+ *  de Chicotes, Compras ou desenvolvimento do PCP pode estar em aberto nem esperando o recebimento. */
 export function travaKit100(pendenciasDaOp, op) {
   const faltando = (pendenciasDaOp || []).filter(p => {
+    if (naoTravaOKit(p)) return false;
     const reg = registroDaPendencia(p, op);
     return p.aberto || !reg.recebido;
   });

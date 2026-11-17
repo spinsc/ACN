@@ -215,8 +215,8 @@ a tela em branco e o teste engana.
   item a item). Cadastro de Itens é só sugestão de partida. DIFAL começa zerado.
 - **Numeração de OP:** `A` (ACN) ou `D` (Detech) + PV + ano + mês. Número repetido é
   bloqueado.
-- **Kit 100%** não fecha com demanda de Serralheria, Chicotes ou Compras em aberto —
-  o caminho nesse caso é "liberar com pendência". A **Produção não conclui** enquanto
+- **Kit 100%** não fecha com demanda de Chicotes ou Compras em aberto —
+  o caminho nesse caso é "liberar com pendência". **A Serralheria NÃO trava o kit** (pedido do usuário em 17/11/2026: `naoTravaOKit` / `travaKit100`, `OpPendencias.tsx`; vale também para embalar o envio e o kiting em lote): ela segue sendo pendência da OP, no checklist e na conclusão da Produção. A **Produção não conclui** enquanto
   a pendência não fechar, e cada pendência fecha em três etapas: setor conclui →
   Almoxarifado confirma o recebimento → PCP libera. **Exceção (decidida em 27/10/2026, OP D0793):** na pendência de **compra**, a OC com status "Recebido" já vale como recebida pelo Almoxarifado (quem confere e dá a entrada é ele): a etapa do meio vem cumprida sozinha (`compraJaRecebida`, em `OpPendencias.tsx`) e só falta o PCP liberar; Serralheria e Chicotes continuam pedindo o "Recebi".
 - **Fabricação interna é sugestão, não pedido:** ao liberar o kiting o PCP vê o que é
