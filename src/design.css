@@ -1723,6 +1723,10 @@ html body .acn-cmp-area-i { font-style: italic; }
 .acn-cmp-ficha { grid-template-columns: 150px 1fr; font-size: 13px; }
 .acn-cmp-res-cot { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-cmp-res-cot.venc { background: var(--acn-ok-soft); }
+/* Coletas (17/11/2026): a linha do pedido quebra em várias linhas quando falta largura (celular), em vez de espremer as colunas */
+.acn-cmp-col-linha { flex-wrap: wrap; row-gap: 6px; }
+.acn-cmp-col-linha > .acn-ajuda { flex: 1 1 14rem; min-width: 0; }
+.acn-cmp-col-linha > .acn-ent-lista { flex: 0 1 auto; min-width: 9rem; }
 .acn-cmp-res-apr { padding: 3px 6px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-cmp-res-ac { padding: 4px 6px; font-size: 13px; border-bottom: 1px solid var(--acn-line-soft); }
 
@@ -1745,6 +1749,21 @@ html body .modal-box.acn-modal-cadastro.acn-flx-jan { width: min(var(--acn-flx-l
 .acn-flx-item + .acn-flx-item { border-top: 1px solid var(--acn-line); }
 .acn-flx-item-nome { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .acn-flx-item-ped { white-space: nowrap; }
+/* 17/11/2026 (entrega por fornecedor): um bloco por fornecedor na janela de confirmar a compra; a previsão com uma data por fornecedor no cartão e no resumo do pedido */
+.acn-flx-entrega { display: grid; gap: 6px; margin-bottom: 10px; padding: 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-flx-entrega-forn { font-size: 13px; overflow-wrap: anywhere; }
+.acn-flx-entrega-itens { overflow-wrap: anywhere; }
+.acn-ent-lista { display: grid; gap: 2px; }
+.acn-ent-linha { display: flex; align-items: baseline; gap: 0 8px; font-size: 12px; }
+.acn-ent-forn { min-width: 0; overflow-wrap: anywhere; color: var(--acn-muted); }
+.acn-ent-dia { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.acn-ent-linha.atrasada .acn-ent-dia { color: var(--acn-bad); font-weight: 600; }
+.acn-ent-linha.recebida { opacity: .7; }
+.acn-ent-quadro-linha { display: grid; gap: 2px; padding: 8px 0; }
+.acn-ent-quadro-linha + .acn-ent-quadro-linha { border-top: 1px solid var(--acn-line); }
+.acn-ent-quadro-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.acn-ent-quadro-forn { min-width: 0; overflow-wrap: anywhere; }
+.acn-ent-quadro-itens { overflow-wrap: anywhere; }
 .acn-flx-corpo .acn-input.acn-flx-qtd { width: 90px; }
 .acn-flx-dif { margin: 4px 0; font-size: 12px; }
 .acn-flx-bloco { margin-top: 10px; }
