@@ -802,6 +802,18 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
     .order('data_hora', { ascending: false }).limit(50).then(({ data, error }) => { setErroLogs(error ? error.message : ''); if (!error) setLogs(data || []); setLoading(false); });
+  // 17/11/2026 (pedido do usuário): "Atualizações do andamento" saiu do menu "..." e virou um card acima do histórico, com a última anotação à vista.
+  // A janela é a mesma de antes (OplAcompModal); o card só lê quantas anotações há e a mais recente (mesmas chaves da janela: o número da OP e, de reserva, o id).
+  const [acomps, setAcomps] = useState<{ total: number; ultima: any; erro: string }>({ total: 0, ultima: null, erro: '' });
+  const recarregarAcomps = () => {
+    if (!opl?.opl) return Promise.resolve();
+    const chaveNumero = `and(referencia_tipo.eq.op,referencia_id.eq."${String(opl.opl).replace(/"/g, '')}")`;
+    const chaveId = `and(referencia_tipo.eq.opl,referencia_id.eq."${String(opl.id).replace(/"/g, '')}")`;
+    return supabase.from('op_acompanhamentos').select('id, texto, usuario_nome, setor, criado_em', { count: 'exact' })
+      .or(`${chaveNumero},${chaveId}`).order('criado_em', { ascending: false }).limit(1)
+      .then(({ data, count, error }) => setAcomps(error ? { total: 0, ultima: null, erro: error.message } : { total: count || 0, ultima: (data || [])[0] || null, erro: '' }));
+  };
+  useEffect(() => { recarregarAcomps(); }, [opl?.id, opl?.opl]);
   const abrirEdicaoLote = async () => {
     const lote = await lerUnidadesDoLote(opl.opl);
     if (lote.erro) { alert('Não foi possível ler as unidades do lote: ' + lote.erro); return; }
@@ -980,7 +992,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           referenciaType="op"
           setor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')}
           currentUser={usuario}
-          onClose={() => { setAtualizando(false); recarregarLogs(); }}
+          onClose={() => { setAtualizando(false); recarregarLogs(); recarregarAcomps(); }}
         />
       )}
       {trocandoFluxo && <TrocarFluxoModal op={opl} currentUser={usuario} onClose={() => setTrocandoFluxo(false)} onTrocada={() => { recarregarOpl(); recarregarLogs(); }} />}
@@ -1019,7 +1031,6 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <Botao variante="primario" icone={mdiBookOpenPageVariantOutline} onClick={() => setVerDossie(true)}
               title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF">Dossiê</Botao>
             <MenuAcoes rotulo="Mais ações da OP" itens={[
-              { rotulo: 'Atualizações do andamento', icone: mdiMessageTextOutline, onClick: () => setAtualizando(true), titulo: 'Registrar uma observação ou atualização sobre a OP, marcar pessoas com @ e ler as anteriores' },
               { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
               { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },
               { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
@@ -1197,6 +1208,29 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <section className="acn-opl-card">
               <header className="acn-opl-card-cab"><span>📎 Documentos anexados</span></header>
               <div className="acn-opl-card-corpo"><AnexosOPSection oplId={opl.id} /></div>
+            </section>
+
+            {/* ── Atualizações do andamento: observação sobre a OP, com @menção; a última à vista e a janela completa no botão ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab">
+                <span>💬 Atualizações do andamento{acomps.total ? ` (${acomps.total})` : ''}</span>
+                <Botao pequeno variante="secundario" icone={mdiMessageTextOutline} onClick={() => setAtualizando(true)}
+                  title="Registrar uma observação ou atualização sobre a OP, marcar pessoas com @ e ler as anteriores">
+                  {acomps.total ? 'Ver todas e registrar' : 'Registrar atualização'}
+                </Botao>
+              </header>
+              <div className="acn-opl-card-corpo">
+                {acomps.erro ? (
+                  <div className="acn-opl-aviso erro">Não foi possível ler as atualizações do andamento ({acomps.erro}). Isso não quer dizer que não existam.</div>
+                ) : !acomps.ultima ? (
+                  <div className="acn-ajuda acn-centro">Nenhuma atualização registrada. Use o botão acima para anotar o andamento e marcar pessoas com @.</div>
+                ) : (
+                  <div className="acn-opl-bloco">
+                    <div className="acn-opl-rot">Última · {fmtDtH(acomps.ultima.criado_em)}{acomps.ultima.usuario_nome ? ` · ${acomps.ultima.usuario_nome}` : ''}{acomps.ultima.setor ? ` (${acomps.ultima.setor})` : ''}</div>
+                    <div className="acn-opl-texto"><Linkify text={acomps.ultima.texto} /></div>
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* ── Histórico de movimentações: as 5 últimas à vista, o resto sob demanda ── */}
