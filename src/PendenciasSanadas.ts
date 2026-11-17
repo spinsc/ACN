@@ -93,7 +93,15 @@ export async function lerVistos(usuarioChave: string): Promise<{ erro: string | 
 export async function marcarVistos(usuarioChave: string, lista: PendenciaSanada[]): Promise<string | null> {
   if (!usuarioChave) return 'Não foi possível gravar: usuário sem identificação.';
   if (!lista.length) return null;
-  const linhas = lista.map(p => ({ usuario_chave: usuarioChave, pendencia_id: p.pendenciaId, opl_id: p.opId, visto_em: new Date().toISOString() }));
+  // 17/11/2026: a mesma pendência vale para várias OPs (um pedido de chicotes de 15 OPs aparece 15 vezes no aviso, uma por OP) e a chave do "Entendi" é
+  // (pessoa, pendência). Mandar as 15 linhas juntas faz o banco recusar ("ON CONFLICT DO UPDATE command cannot affect row a second time"), o "Entendi"
+  // nunca gravava e a janela não saía. Grava UMA linha por pendência; como `lerVistos` também lê por pendência, todas as OPs dela somem juntas.
+  const vistaEm = new Date().toISOString();
+  const porPendencia = new Map<string, any>();
+  for (const p of lista) {
+    if (!porPendencia.has(p.pendenciaId)) porPendencia.set(p.pendenciaId, { usuario_chave: usuarioChave, pendencia_id: p.pendenciaId, opl_id: p.opId, visto_em: vistaEm });
+  }
+  const linhas = [...porPendencia.values()];
   const { error } = await supabase.from('almox_avisos_pendencia_sanada_vistos').upsert(linhas, { onConflict: 'usuario_chave,pendencia_id' });
   return error ? `Não foi possível gravar o "Entendi": ${error.message}` : null;
 }
