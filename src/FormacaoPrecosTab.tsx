@@ -6,7 +6,7 @@ import { explicarErroDeEnvio } from './ErroDeArquivo';
 import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
          somarResultados, estruturaFormacao, custoComImpostos, precoUnitario } from './FormacaoCalculo';
-import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
+import { temPoderDeGerente, perfilComPoderes, ehAdminOuGerente } from './utils/permissoes';
 import { buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
@@ -14,6 +14,9 @@ import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { Faixa, Botao, Selo, Chips, Abas, Tag, SelectBusca } from './Interface';
 import { raizDaCotacao, ultimaVersaoDe } from './FormacaoFamilia';
 import { OrdensDeCompraDaFormacao } from './FormacaoOrdensCompra';
+import ExcluirFormacaoModal from './ExcluirFormacaoModal';
+import FormacoesExcluidas from './FormacoesExcluidas';
+import { podeExcluirFormacao, lerFamiliaDaFormacao } from './ExclusaoDeFormacao';
 import Icone from './Icone';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
@@ -361,7 +364,7 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
 }
 
 // ─── MODAL DE CARREGAR TEMPLATE ───────────────────────────────────────────────
-function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose, erro = '' }) {
+function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose, erro = '', podeExcluirLinha = (_m: any) => true }) {
   const [cat, setCat] = useState('');
   const lista = modelos.filter((m: any) => !cat || categoriaDe(m) === cat);
   return (
@@ -391,7 +394,8 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose, er
                     </div>
                   </div>
                   <Botao variante="primario" pequeno onClick={() => onCarregar(m)}>Carregar</Botao>
-                  <Botao variante="perigo-sec" pequeno icone={mdiClose} title="Excluir modelo" aria-label="Excluir modelo" onClick={() => onExcluir(m.id)} />
+                  {/* 17/11/2026: excluir deixou de apagar na hora; abre a janela que pede o motivo e deixa a formação guardada. Só aparece para quem pode (Admin, gerentes e quem criou). */}
+                  {podeExcluirLinha(m) && <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} title="Excluir formação (pede o motivo; fica guardada)" aria-label="Excluir formação" onClick={() => onExcluir(m)} />}
                 </div>
               ))}
             </div>
@@ -1172,6 +1176,15 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
   // Pedido do usuário em 07/10/2026: pesquisar por texto dentro dos preços formados (nome, empresa, OP, autor, categoria e os nomes dos itens).
   const [buscaPF, setBuscaPF]               = useState('');
   const [gerindoCat, setGerindoCat]     = useState(false);
+  // Excluir formação (17/11/2026): a janela que pede o motivo; a lista das excluídas é só de Admin e gerentes.
+  const [excluindo, setExcluindo]       = useState<any>(null);
+  const [verExcluidas, setVerExcluidas] = useState(false);
+  const [recarregarExcluidas, setRecarregarExcluidas] = useState(0);
+  const familiasDaLista = React.useMemo(() => {
+    const mp = new Map<string, any[]>();
+    cotacoes.forEach((c: any) => { const k = raizDaCotacao(c); mp.set(k, [...(mp.get(k) || []), c]); });
+    return mp;
+  }, [cotacoes]);
 
   // Etapa 7.59: leitura que falha não pode parecer "nenhuma formação" (e a lista que já estava na tela fica)
   const [erroLeitura, setErroLeitura] = useState('');
@@ -1398,8 +1411,12 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
         {temPoderDeGerente(currentUser) && (
           <Botao icone={mdiCogOutline} onClick={() => setGerindoCat(g => !g)}>Categorias</Botao>
         )}
+        {ehAdminOuGerente(currentUser) && (
+          <Botao icone={mdiTrashCanOutline} onClick={() => setVerExcluidas(v => !v)} title="As formações excluídas com motivo (só consulta)">Excluídas</Botao>
+        )}
       </div>
       {gerindoCat && <div className="acn-fp-pf-cats"><GerenciarCategorias onMudou={carregarCotacoes} /></div>}
+      {verExcluidas && ehAdminOuGerente(currentUser) && <FormacoesExcluidas recarregar={recarregarExcluidas} />}
       {erroLeitura && <Faixa tom="erro" acao={<Botao pequeno onClick={carregarCotacoes}>Tentar de novo</Botao>}>Não foi possível ler as formações ({erroLeitura}). Isso não quer dizer que não haja formação salva{cotacoes.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
       {carregando && <div className="acn-fp-vazio">Carregando...</div>}
       {!carregando && cotacoes.length === 0 && !erroLeitura && (
@@ -1417,7 +1434,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
           const items   = m.itens || [];
           const totVendas = estruturaFormacao(items, prms, calcItem).geral.totVendas;
           return (
-            <div key={m.id} className="acn-fp-card">
+            <div key={m.id} className="acn-fp-card" data-teste="formacao-card" data-formacao-id={m.id}>
               <div className="acn-fp-card-txt">
                 <div className="acn-fp-card-nome">{m.nome}</div>
                 <div className="acn-ajuda">
@@ -1438,6 +1455,9 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
                 {!isVendedor && onClonar && (
                   <Botao pequeno icone={mdiContentCopy} onClick={() => onClonar(m)}>Clonar</Botao>
                 )}
+                {podeExcluirFormacao(currentUser, familiasDaLista.get(raizDaCotacao(m)) || [m], m.id) && (
+                  <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} title="Excluir (pede o motivo; fica guardada)" aria-label={'Excluir ' + (m.nome || 'formação sem nome')} onClick={() => setExcluindo(m)} />
+                )}
                 <Botao variante="primario" pequeno icone={mdiEyeOutline} onClick={() => abrirCotacao(m)}>Abrir</Botao>
               </div>
             </div>
@@ -1446,6 +1466,11 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
           </React.Fragment>
         ))}
       </div>
+      {excluindo && (
+        <ExcluirFormacaoModal id={excluindo.id} raizId={excluindo.versao_raiz_id || null} nome={excluindo.nome} atualizadoEm={excluindo.atualizado_em || null} currentUser={currentUser}
+          onClose={() => setExcluindo(null)}
+          onExcluida={() => { carregarCotacoes(); setRecarregarExcluidas(n => n + 1); }} />
+      )}
     </div>
   );
 }
@@ -1860,6 +1885,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [modelos, setModelos]         = useState([]);
   const [modalSalvar, setModalSalvar]     = useState(false);
   const [modalCarregar, setModalCarregar] = useState(false);
+  const [excluindoFormacao, setExcluindoFormacao] = useState<any>(null);   // a formação (ou versão) que está na janela "Excluir formação" (17/11/2026)
   const [modalImportar, setModalImportar] = useState(false);
   const [vinculoLabels, setVinculoLabels] = useState<Record<string, string>>({});
   const [salvando, setSalvando]       = useState(false);
@@ -2835,15 +2861,48 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setModalCarregar(false);
   };
 
-  const excluirModelo = (id) => umaVez('excluir-' + id, async () => {
-    if (!await confirmar('Excluir este modelo?')) return;
-    const { error } = await supabase.from('cotacoes_precos').delete().eq('id', id);
-    if (error) { alert('Não foi possível excluir o modelo: ' + error.message); return; }   // 7.59: seguia como se tivesse excluído
+  // Excluir formação (pedido do usuário em 17/11/2026): deixou de apagar direto da lista de modelos. Abre a janela que pede o motivo, pergunta ao banco o que impede e
+  // o que sai junto, e a formação fica guardada (marcada como excluída), sem sumir de verdade. As regras estão em ExclusaoDeFormacao.ts e no banco.
+  const excluirModelo = (m) => setExcluindoFormacao(m);
+
+  // Quem pode excluir a formação aberta: Admin e gerentes sempre; quem criou, só se for autor de alguma versão dela (o banco confere de novo ao excluir).
+  const [podeExcluirAberta, setPodeExcluirAberta] = useState(false);
+  useEffect(() => {
+    if (!editandoId) { setPodeExcluirAberta(false); return; }
+    if (ehAdminOuGerente(currentUser)) { setPodeExcluirAberta(true); return; }
+    let vivo = true;
+    lerFamiliaDaFormacao(editandoId, versaoRaizId || editandoId).then((r: any) => { if (vivo) setPodeExcluirAberta(!r.erro && podeExcluirFormacao(currentUser, r.lista, editandoId)); });
+    return () => { vivo = false; };
+  }, [editandoId, versaoRaizId, currentUser?.nome, currentUser?.email, currentUser?.perfil]);
+
+  // Do botão "Excluir" do cabeçalho do editor: alteração não salva é descartada junto, então pergunta antes.
+  const pedirExclusaoDaAberta = async () => {
+    if (!editandoId) return;
+    if (temNaoSalvo && !await confirmar('Há alterações não salvas nesta formação. Excluir mesmo assim? (elas são descartadas junto)')) return;
+    setExcluindoFormacao({ id: editandoId, nome: nomeCotacao, versao_raiz_id: versaoRaizId, atualizado_em: travaAtualizadoEm });
+  };
+
+  // Depois de excluir: apaga o rascunho guardado no navegador das versões excluídas (não têm mais para onde voltar), relê as listas e, se a formação ABERTA saiu, o editor
+  // passa para outra formação do mesmo processo (a mais recente que sobrou) ou fica em branco. Nunca fica aberta uma formação que já não existe.
+  const aoExcluirFormacao = async ({ ids }: any) => {
+    const lista = (ids || []).map(String);
+    try { lista.forEach((i: string) => localStorage.removeItem(chaveRascunho(i))); } catch { /* sem armazenamento */ }
+    const abertaSaiu = !!editandoId && lista.includes(String(editandoId));
+    const restantes = vinculo ? formacoesVinculo.filter((x: any) => !lista.includes(String(x.id))) : [];
     carregarModelos();
-  })();
+    if (vinculo) await carregarFormacoesVinculo();
+    if (!abertaSaiu) return;
+    if (restantes.length) { carregarModelo(restantes[0]); setEditandoId(restantes[0].id); }
+    else limparEditor();
+  };
 
   const novaQuotacao = async () => {
     if (!await confirmar('Limpar cotação atual e iniciar nova?')) return;
+    limparEditor();
+  };
+
+  // Zera o editor (formação nova, em branco). Usado pelo "Nova Cotação" (depois da pergunta) e depois de excluir a formação aberta (a pessoa já decidiu na janela de exclusão).
+  const limparEditor = () => {
     setParams({ ...PARAMS_PADRAO });
     setUsarGlobais(true);
     setUsarMarkupGlobal(false);
@@ -3473,6 +3532,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   Histórico
                 </Botao>
               )}
+              {editandoId && podeExcluirAberta && (
+                <Botao variante="perigo-sec" icone={mdiTrashCanOutline} onClick={pedirExclusaoDaAberta}
+                  title="Excluir esta formação (pede o motivo; fica guardada, não é apagada)">
+                  Excluir formação
+                </Botao>
+              )}
               {statusCotacao === 'finalizada' && !vencedoraAtual && (
                 <Botao icone={mdiTrophyOutline} onClick={marcarVencedora}>
                   Marcar Vencedora
@@ -3812,8 +3877,14 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               erro={erroModelos}
               onCarregar={carregarModelo}
               onExcluir={excluirModelo}
+              podeExcluirLinha={(m: any) => podeExcluirFormacao(currentUser, modelos.filter((l: any) => raizDaCotacao(l) === raizDaCotacao(m)), m.id)}
               onClose={() => setModalCarregar(false)}
             />
+          )}
+          {excluindoFormacao && (
+            <ExcluirFormacaoModal id={excluindoFormacao.id} raizId={excluindoFormacao.versao_raiz_id || null} nome={excluindoFormacao.nome}
+              atualizadoEm={excluindoFormacao.atualizado_em || null} currentUser={currentUser}
+              onClose={() => setExcluindoFormacao(null)} onExcluida={aoExcluirFormacao} />
           )}
 
           {modalImportar && vinculo && (
