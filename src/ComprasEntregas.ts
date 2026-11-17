@@ -59,6 +59,8 @@ export type Entrega = {
   id: string | null; virtual: boolean; pedido_id: string; cotacao_id: string | null; fornecedor: string; itens: number[] | null;
   data_prevista: string | null; situacao: SituacaoDaEntrega; numero_nf: string | null; data_recebimento_real: string | null;
   quantidade_recebida: number | null; observacoes: string | null; recebida_em: string | null; recebida_por: string | null; alerta_mencionado_em: string | null;
+  /** Quando a posição desta entrega (o que aconteceu e a nova previsão) foi registrada em Avisos; silencia o alerta de atraso DESTE fornecedor por 24 horas úteis (E3). */
+  posicao_em: string | null;
 };
 
 const daLinha = (l: any): Entrega => ({
@@ -67,7 +69,7 @@ const daLinha = (l: any): Entrega => ({
   situacao: ['aguardando', 'divergencia', 'recebida'].includes(l.situacao) ? l.situacao : 'aguardando',
   numero_nf: l.numero_nf || null, data_recebimento_real: diaDe(l.data_recebimento_real),
   quantidade_recebida: l.quantidade_recebida == null ? null : Number(l.quantidade_recebida), observacoes: l.observacoes || null,
-  recebida_em: l.recebida_em || null, recebida_por: l.recebida_por || null, alerta_mencionado_em: l.alerta_mencionado_em || null,
+  recebida_em: l.recebida_em || null, recebida_por: l.recebida_por || null, alerta_mencionado_em: l.alerta_mencionado_em || null, posicao_em: l.posicao_em || null,
 });
 
 /** A entrega "de antes": o pedido sem linhas inteiro como uma entrega só. */
@@ -79,7 +81,7 @@ export function entregaVirtualDoPedido(pedido: any): Entrega {
     situacao: recebido ? 'recebida' : pedido?.tem_divergencia ? 'divergencia' : 'aguardando',
     numero_nf: pedido?.numero_nf || null, data_recebimento_real: diaDe(pedido?.data_recebimento_real),
     quantidade_recebida: pedido?.quantidade_recebida == null ? null : Number(pedido.quantidade_recebida), observacoes: null,
-    recebida_em: null, recebida_por: null, alerta_mencionado_em: pedido?.alerta_entrega_mencionado_em || null,
+    recebida_em: null, recebida_por: null, alerta_mencionado_em: pedido?.alerta_entrega_mencionado_em || null, posicao_em: null,
   };
 }
 
@@ -258,7 +260,7 @@ export async function receberEntrega(pedido: any, entrega: { id: string | null; 
         campos: { numero_nf: nf || null, data_recebimento_real: dia, quantidade_recebida: r.quantidade_recebida, tem_divergencia: !r.confere },
       };
     }
-    const novas = virtuais.map(e => ({ pedido_id: pedido.id, cotacao_id: e.cotacao_id, fornecedor: e.fornecedor, itens: e.itens, data_prevista: e.data_prevista, criado_por: r.user?.email || null }));
+    const novas = virtuais.map(e => ({ pedido_id: pedido.id, cotacao_id: e.cotacao_id, fornecedor: e.fornecedor, itens: e.itens, data_prevista: e.data_prevista, alerta_mencionado_em: e.alerta_mencionado_em, criado_por: r.user?.email || null }));
     if (novas.some(l => !l.data_prevista)) return falha('o pedido não tem data de entrega para todos os fornecedores; informe a data de cada um em "Alterar prazo de entrega" e receba de novo');
     const { data: criadas, error: erroCriar } = await supabase.from('compras_entregas').insert(novas).select('*');
     if (erroCriar) {
@@ -354,6 +356,7 @@ export async function salvarDatasDasEntregas(pedido: any, todas: Entrega[], nova
     const linhas = virtuais.map(e => ({
       pedido_id: pedido.id, cotacao_id: e.cotacao_id, fornecedor: e.fornecedor, itens: e.itens, situacao: e.situacao,
       data_prevista: diaDe(novas[chaveDaEntrega(e)]) || e.data_prevista, criado_por: user?.email || null,
+      alerta_mencionado_em: diaDe(novas[chaveDaEntrega(e)]) && diaDe(novas[chaveDaEntrega(e)]) !== e.data_prevista ? null : e.alerta_mencionado_em,
     }));
     if (linhas.some(l => !l.data_prevista)) return resultado('o pedido não tem data de entrega para todos os fornecedores; informe a data de cada um');
     const { error } = await supabase.from('compras_entregas').insert(linhas);
@@ -395,4 +398,58 @@ export function textoDaPrevisao(pedido: any, linhas: any[] = [], coleta = false)
   const abertas = abertasDoPedido(e);
   if (!abertas.length) return 'Tudo recebido';
   return `${coleta ? 'Coleta' : 'Chega'}: ${resumoDasEntregas(abertas)}`;
+}
+
+// ── Alerta de atraso por fornecedor (etapa E3, 17/11/2026) ───────────────────
+// Decidido com o usuário: cada fornecedor atrasa, avisa e recebe a sua posição separado.
+
+/**
+ * Marca, de forma atômica, que o aviso de atraso desta entrega vai ser enviado agora: devolve false se outra tela já o marcou (ninguém envia duas vezes).
+ * Entrega com linha marca a própria linha; a "virtual" (pedido sem linhas) marca o pedido, como sempre foi.
+ */
+export async function marcarAvisoDaEntrega(pedido: any, entrega: Entrega): Promise<boolean> {
+  const agora = new Date().toISOString();
+  if (entrega.id) {
+    const { data } = await supabase.from('compras_entregas').update({ alerta_mencionado_em: agora }).eq('id', entrega.id).is('alerta_mencionado_em', null).select('id');
+    return !!data?.length;
+  }
+  const { data } = await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: agora }).eq('id', pedido.id).is('alerta_entrega_mencionado_em', null).select('id');
+  return !!data?.length;
+}
+
+/**
+ * Registra a posição de UMA entrega atrasada (o texto já foi para o histórico do pedido): marca `posicao_em`, que silencia o alerta DESTE fornecedor por 24 horas úteis,
+ * e reabre o aviso dela em Menções (`alerta_mencionado_em` vazio: volta a avisar se continuar atrasada).
+ *  • entrega com linha: marca a linha (só se ainda não foi recebida);
+ *  • entrega virtual de pedido de vários fornecedores (sem linhas): as linhas de TODOS nascem agora, como na primeira correção de data (cada um com a data que mostrava e o aviso
+ *    que o pedido já tinha enviado), e só a escolhida leva a posição — a ação é da pessoa, nenhuma linha nasce sozinha;
+ *  • entrega virtual de um fornecedor só: não há o que marcar na entrega; o aviso do pedido é reaberto e a movimentação do pedido, que o histórico atualiza, silencia o alerta.
+ * `todas` são as entregas do pedido como o alerta as viu.
+ */
+export async function registrarPosicaoDaEntrega(pedido: any, entrega: Entrega, todas: Entrega[], user: any): Promise<{ erro: string | null }> {
+  const agora = new Date().toISOString();
+  if (entrega.id) {
+    const { data, error } = await supabase.from('compras_entregas').update({ posicao_em: agora, alerta_mencionado_em: null }).eq('id', entrega.id).neq('situacao', 'recebida').select('id');
+    if (error) return { erro: explicarErroDoBanco(error) };
+    if (!data?.length) return { erro: 'a entrega já foi recebida ou mudou; atualize a tela' };
+    return { erro: null };
+  }
+  const virtuais = (todas || []).filter(e => e.virtual);
+  if (virtuais.length > 1) {
+    const escolhida = (e: Entrega) => chaveDaEntrega(e) === chaveDaEntrega(entrega);
+    const linhas = virtuais.map(e => ({
+      pedido_id: pedido.id, cotacao_id: e.cotacao_id, fornecedor: e.fornecedor, itens: e.itens, situacao: e.situacao, data_prevista: e.data_prevista,
+      alerta_mencionado_em: escolhida(e) ? null : e.alerta_mencionado_em, posicao_em: escolhida(e) ? agora : null, criado_por: user?.email || null,
+    }));
+    if (linhas.some(l => !l.data_prevista)) return { erro: 'o pedido não tem data de entrega para todos os fornecedores' };
+    const { error } = await supabase.from('compras_entregas').insert(linhas);
+    if (!error) return { erro: null };
+    // outra pessoa pode ter criado as linhas no mesmo instante (índice único): vale o que já está no banco
+    const { data: dePois, error: erroDePois } = await supabase.from('compras_entregas').select('*').eq('pedido_id', pedido.id);
+    const alvo = (dePois || []).find((l: any) => String(l.cotacao_id || '') === String(entrega.cotacao_id || '') && String(l.fornecedor) === String(entrega.fornecedor));
+    if (erroDePois || !alvo) return { erro: explicarErroDoBanco(error) };
+    return registrarPosicaoDaEntrega(pedido, daLinha(alvo), [], user);
+  }
+  const { error } = await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: null }).eq('id', pedido.id);
+  return { erro: error ? explicarErroDoBanco(error) : null };
 }

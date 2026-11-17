@@ -35,7 +35,7 @@ import Linkify from './Linkify';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { AvisoSaldoCentro } from './CentroCustoUso';
 import { FormacoesDoPedidoDeCompra } from './FormacaoOrdensCompra';
-import { entregasPlanejadas, erroDasDatas, reabrirEntregasDoPedido, fornecedoresJaRecebidos } from './ComprasEntregas';
+import { entregasPlanejadas, erroDasDatas, reabrirEntregasDoPedido, fornecedoresJaRecebidos, entregasDoPedido, abertasDoPedido, lerEntregas, chaveDaEntrega, marcarAvisoDaEntrega, registrarPosicaoDaEntrega } from './ComprasEntregas';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload, mdiClose } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
@@ -802,7 +802,11 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
 // ── Alertas ──────────────────────────────────────────────────────────────────
 export const LIMITE_HORAS: Record<string, number> = { 'Pendente': 48, 'Em Andamento': 48, 'Aprovado': 24 };
 
-export function calcularAlertasCompras(pedidos: any[], agora = new Date()) {
+/**
+ * 17/11/2026 (entrega por fornecedor, E3): cada entrega ainda aberta e atrasada é UM alerta, com o seu fornecedor e a sua data. `linhasEntregas` são as linhas de
+ * `compras_entregas` dos pedidos "Comprado" (pedido sem linhas vale como entrega "virtual": ver `entregasDoPedido`).
+ */
+export function calcularAlertasCompras(pedidos: any[], agora = new Date(), linhasEntregas: any[] = []) {
   const alertas: any[] = [];
   const hojeISO = agora.toLocaleDateString('sv-SE'); // AAAA-MM-DD no fuso local
   for (const p of pedidos) {
@@ -811,15 +815,20 @@ export function calcularAlertasCompras(pedidos: any[], agora = new Date()) {
     if (LIMITE_HORAS[st] != null) {
       const h = horasUteis(ultima, agora);
       if (h >= LIMITE_HORAS[st]) alertas.push({ tipo: 'parado', pedido: p, horas: h, limite: LIMITE_HORAS[st] });
-    } else if (st === 'Comprado' && p.data_prevista_recebimento && !(ehColeta(p) && p.coletado_em)) {   // coleta já feita: a mercadoria está aqui, não há o que cobrar do fornecedor
-      const prazo = String(p.data_prevista_recebimento).slice(0, 10);
-      if (prazo < hojeISO) {
+    } else if (st === 'Comprado' && !(ehColeta(p) && p.coletado_em)) {   // coleta já feita: a mercadoria está aqui, não há o que cobrar do fornecedor
+      const todas = entregasDoPedido(p, linhasEntregas);
+      const varias = todas.length > 1;
+      // pedido de vários fornecedores que já usa a posição POR FORNECEDOR: vale a posição da própria entrega (nunca registrada = sem posição); senão, a movimentação do pedido, como sempre foi
+      const porEntrega = varias && todas.some(e => e.posicao_em);
+      for (const e of abertasDoPedido(todas)) {
+        const prazo = e.data_prevista;
+        if (!prazo || prazo >= hojeISO) continue;
         const fimPrazo = new Date(prazo + 'T17:45:00');
-        const ultimaDt = new Date(ultima);
+        const refDt = porEntrega ? (e.posicao_em ? new Date(e.posicao_em) : null) : new Date(ultima);
         // sem posição desde que o prazo venceu, ou última posição com mais de 24h úteis
-        if (ultimaDt < fimPrazo || horasUteis(ultimaDt, agora) >= 24) {
+        if (porEntrega && !refDt || refDt && (refDt < fimPrazo || horasUteis(refDt, agora) >= 24)) {
           const dias = Math.floor((new Date(hojeISO + 'T12:00:00').getTime() - new Date(prazo + 'T12:00:00').getTime()) / 86400000);
-          alertas.push({ tipo: 'entrega', pedido: p, dias, coleta: ehColeta(p) });
+          alertas.push({ tipo: 'entrega', pedido: p, entrega: e, todas, varias, dias, coleta: ehColeta(p) });
         }
       }
     }
@@ -840,7 +849,7 @@ export function alertasDoUsuario(alertas: any[], u: any) {
   });
 }
 
-const CAMPOS_ALERTA = 'id, numero_pedido, descricao_material, quantidade, fornecedor, forma_recebimento, coletado_em, status_compra, ultima_movimentacao_em, data_atualizacao, data_criacao, data_prevista_recebimento, criado_por, criado_por_nome, comprador_email, comprador_nome, reprocessos, alerta_entrega_mencionado_em, numero_oc';
+const CAMPOS_ALERTA = 'id, numero_pedido, descricao_material, quantidade, fornecedor, forma_recebimento, coletado_em, status_compra, ultima_movimentacao_em, data_atualizacao, data_criacao, data_prevista_recebimento, criado_por, criado_por_nome, comprador_email, comprador_nome, reprocessos, alerta_entrega_mencionado_em, numero_oc, vencedoras, vencedora_id, tem_divergencia';
 
 // Etapa 7.58: se a leitura falhar, LANÇA o erro (antes devolvia "nenhum alerta" e a janela de justificativa obrigatória deixava de aparecer);
 // quem chama mantém os alertas que já tinha na tela.
@@ -848,17 +857,34 @@ export async function carregarAlertasCompras() {
   const { data, error } = await supabase.from('pcp_pedidos_compra').select(CAMPOS_ALERTA)
     .in('status_compra', ['Pendente', 'Em Andamento', 'Aprovado', 'Comprado']);
   if (error) throw new Error(error.message);
-  return calcularAlertasCompras(data || []);
+  const pedidos = data || [];
+  // 17/11/2026 (E3): sem as entregas o pedido de vários fornecedores cairia numa data só; leitura recusada lança (a tela mantém os alertas que já tinha)
+  const entregas = await lerEntregas(pedidos.filter(p => p.status_compra === 'Comprado').map(p => p.id));
+  if (entregas.erro) throw new Error(entregas.erro);
+  return calcularAlertasCompras(pedidos, new Date(), entregas.linhas);
 }
 
-// Menção de entrega atrasada: uma por ocorrência (a marcação é feita antes, de forma atômica)
+// Menção de entrega atrasada: uma por ocorrência (a marcação é feita antes, de forma atômica).
+// 17/11/2026 (E3): a ocorrência é a ENTREGA de cada fornecedor (a marca fica na própria entrega). A entrega "virtual" de um pedido de vários fornecedores que ainda não tem
+// linhas divide a marca do pedido, então os fornecedores atrasados dele saem juntos numa menção só (a regra de antes, para não repetir o aviso que o pedido já mandou).
 export async function dispararMencoesEntrega(alertas: any[], user: any) {
-  for (const a of alertas.filter(x => x.tipo === 'entrega' && !x.pedido.alerta_entrega_mencionado_em)) {
-    const { data } = await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: new Date().toISOString() })
-      .eq('id', a.pedido.id).is('alerta_entrega_mencionado_em', null).select('id');
-    if (!data?.length) continue;
+  const grupos = new Map<string, any[]>();
+  for (const a of alertas.filter(x => x.tipo === 'entrega')) {
+    const e = a.entrega;
+    if (e ? e.alerta_mencionado_em : a.pedido.alerta_entrega_mencionado_em) continue;
+    const chave = !e || e.virtual ? 'pedido:' + a.pedido.id : 'entrega:' + e.id;
+    grupos.set(chave, [...(grupos.get(chave) || []), a]);
+  }
+  for (const lista of grupos.values()) {
+    const a = lista[0];
+    const marcou = a.entrega ? await marcarAvisoDaEntrega(a.pedido, a.entrega) : (await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: new Date().toISOString() })
+      .eq('id', a.pedido.id).is('alerta_entrega_mencionado_em', null).select('id')).data?.length > 0;
+    if (!marcou) continue;
+    const nomes = lista.map(x => x.entrega.fornecedor);
+    const quem = lista.length > 1 ? `os fornecedores ${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]} tinham` : a.varias ? `o fornecedor ${a.entrega.fornecedor} tinha` : 'tinha';
+    const dia = a.entrega?.data_prevista || a.pedido.data_prevista_recebimento;
     await mencionarPerfis(['Compras', 'Almoxarifado'], a.pedido,
-      `${a.coleta ? 'Coleta atrasada' : 'Entrega atrasada'}: a requisição ${a.pedido.numero_pedido}${a.pedido.numero_oc ? ` (${a.pedido.numero_oc})` : ''} — ${nomeDoPedido(a.pedido)} — tinha ${a.coleta ? 'coleta marcada' : 'entrega prevista'} para ${fmtData(a.pedido.data_prevista_recebimento)} e ${a.coleta ? 'a coleta ainda não foi registrada' : 'ainda não foi recebida'}. Registre a posição em Avisos.`,
+      `${a.coleta ? 'Coleta atrasada' : 'Entrega atrasada'}: a requisição ${a.pedido.numero_pedido}${a.pedido.numero_oc ? ` (${a.pedido.numero_oc})` : ''} — ${nomeDoPedido(a.pedido)} — ${quem} ${a.coleta ? 'coleta marcada' : 'entrega prevista'} para ${fmtData(dia)} e ${a.coleta ? 'a coleta ainda não foi registrada' : 'ainda não foi recebida'}. Registre a posição em Avisos.`,
       { id: '', nome: 'Sistema' }, 'entrega_atrasada');
   }
 }
@@ -867,11 +893,16 @@ export async function dispararMencoesEntrega(alertas: any[], user: any) {
 export async function registrarJustificativa(alerta: any, texto: string, user: any): Promise<boolean> {
   const p = alerta.pedido;
   if (alerta.tipo === 'entrega') {
-    const ok = await registrarHistorico(p.id, { tipo: 'posicao_entrega', de: p.status_compra, para: p.status_compra, motivo: texto, dados: { prazo: p.data_prevista_recebimento, dias_atraso: alerta.dias } }, user);
+    const e = alerta.entrega;
+    // 17/11/2026 (E3): a posição é de UM fornecedor: o histórico diz qual e só a entrega dele é silenciada (24 horas úteis)
+    const ok = await registrarHistorico(p.id, { tipo: 'posicao_entrega', de: p.status_compra, para: p.status_compra,
+      motivo: alerta.varias ? `${e.fornecedor}: ${texto}` : texto,
+      dados: { prazo: e?.data_prevista || p.data_prevista_recebimento, dias_atraso: alerta.dias, ...(alerta.varias ? { fornecedor: e.fornecedor, cotacao_id: e.cotacao_id } : {}) } }, user);
     if (!ok) return false;
     // próxima ocorrência volta a avisar se continuar atrasado
-    const { error } = await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: null }).eq('id', p.id);
-    if (error) console.warn('Falha ao reabrir o aviso de entrega:', error.message);
+    const r = e ? await registrarPosicaoDaEntrega(p, e, alerta.todas, user)
+      : { erro: (await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: null }).eq('id', p.id)).error?.message || null };
+    if (r.erro) alert(`A posição foi registrada no histórico, mas não foi possível silenciar o aviso desta entrega (${r.erro}). Ele pode aparecer de novo; confira se o aviso ficou na lista.`);
     return true;
   }
   return registrarHistorico(p.id, { tipo: 'parado', de: p.status_compra, para: p.status_compra, motivo: texto, dados: { horas_uteis_parado: Math.round(alerta.horas) } }, user);
@@ -897,12 +928,13 @@ function CartaoAlerta({ alerta, currentUser, onRespondido, compacto = false }: a
       <div className="acn-flx-alerta-topo">
         <strong className="acn-mono">{p.numero_pedido}</strong>
         <Selo familia={entrega ? 'erro' : 'atencao'}>{entrega ? `${alerta.coleta ? 'Coleta atrasada' : 'Entrega atrasada'} · ${alerta.dias} d` : `${p.status_compra} · parada há ${horasTexto(alerta.horas)} úteis`}</Selo>
+        {entrega && alerta.varias && <Selo familia="neutro" ponto={false}>{alerta.entrega.fornecedor}</Selo>}
         {p.reprocessos > 0 && <Selo familia="neutro" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
       </div>
       <div className="acn-flx-alerta-desc">{nomeDoPedido(p).slice(0, 180)}</div>
       <div className="acn-ajuda">
         {p.criado_por_nome ? `Solicitado por ${p.criado_por_nome}` : ''}{p.comprador_nome ? ` · Comprador: ${p.comprador_nome}` : ''}
-        {entrega ? ` · ${alerta.coleta ? 'Coleta marcada para' : 'Prazo:'} ${fmtData(p.data_prevista_recebimento)}${p.fornecedor ? ` · ${p.fornecedor}` : ''}` : ''}
+        {entrega ? ` · ${alerta.coleta ? 'Coleta marcada para' : 'Prazo:'} ${fmtData(alerta.entrega?.data_prevista || p.data_prevista_recebimento)}${!alerta.varias && p.fornecedor ? ` · ${p.fornecedor}` : ''}` : ''}
       </div>
       <textarea className="acn-input acn-flx-alerta-texto" rows={compacto ? 2 : 2}
         placeholder={entrega ? (alerta.coleta ? 'Posição: o que aconteceu com a coleta e qual o novo dia *' : 'Posição: o que aconteceu com a entrega e qual a nova previsão *') : p.status_compra === 'Aprovado' ? 'Por que a compra ainda não foi efetivada? *' : 'Por que está parada? *'}
@@ -953,7 +985,7 @@ export function AlertasComprasPanel({ currentUser, onClose, onCountChange, onAbr
           {parados.length > 0 && <div className="acn-label acn-flx-grupo">Paradas — motivo obrigatório</div>}
           {parados.map(a => <CartaoAlerta key={a.pedido.id + a.tipo} alerta={a} currentUser={currentUser} onRespondido={carregar} />)}
           {entregas.length > 0 && <div className="acn-label acn-flx-grupo">Entregas atrasadas — posição</div>}
-          {entregas.map(a => <CartaoAlerta key={a.pedido.id + a.tipo} alerta={a} currentUser={currentUser} onRespondido={carregar} />)}
+          {entregas.map(a => <CartaoAlerta key={a.pedido.id + a.tipo + (a.entrega ? chaveDaEntrega(a.entrega) : '')} alerta={a} currentUser={currentUser} onRespondido={carregar} />)}
         </div>
       </div>
     </div>
