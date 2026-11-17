@@ -5,6 +5,7 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { Botao, Chips, Tag } from './Interface';
 import Icone from './Icone';
 import { permissoesDaViagem } from './ViagemFluxo';
+import { alvoDoAvisoDoCalendario } from './CalendarioAviso';
 import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +31,14 @@ const ABA_LABEL: Record<string, string> = {
   financeiro:  'Financeiro',
   admin:       'Admin',
   viagens:     'Viagens',
+};
+
+// Só para o texto do botão que leva à tela de origem; fica fora do ABA_LABEL para não acrescentar opções ao filtro de setores.
+const ABA_LABEL_DO_BOTAO: Record<string, string> = {
+  ajustes:   'Demandas gerais',
+  vistorias: 'Vistorias de pátio',
+  calendario: 'Calendário',
+  telecom:   'Telecom',
 };
 
 const CONTEXTO_LABEL: Record<string, string> = {
@@ -315,14 +324,20 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   // que ele montar — o global é lido no mount pra cobrir esse caso.
   const abrirRegistro = (m: any) => {
     if (!m.lida) marcarLida(m);
-    if (m.contexto_id) {
+    // 17/11/2026 (bug da Renata): o aviso do calendário guarda uma chave composta no contexto_id; traduz para o registro de origem
+    // (CalendarioAviso.ts). Fonte que a tela de origem ainda não sabe abrir fica sem deep-link e só troca de aba, como antes.
+    const doCalendario = m.contexto === 'calendario';
+    const alvo = doCalendario ? alvoDoAvisoDoCalendario(m.contexto_id) : null;
+    const contexto = alvo ? alvo.contexto : m.contexto;
+    const contextoId = alvo ? alvo.id : m.contexto_id;
+    if (contextoId && (!doCalendario || alvo)) {
       // CRM/Licitação já têm um mecanismo de deep-link próprio e testado
       // (analise:abrir-origem, ouvido em DashboardTab.tsx — já troca a aba E
       // abre o card) — reaproveita em vez de duplicar.
-      if (m.contexto === 'crm' || m.contexto === 'licitacao') {
-        window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: m.contexto, origemId: m.contexto_id } }));
+      if (contexto === 'crm' || contexto === 'licitacao') {
+        window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: contexto, origemId: contextoId } }));
       } else {
-        const detail = { contexto: m.contexto, contextoId: m.contexto_id };
+        const detail = { contexto, contextoId };
         (window as any).__acnDeepLink = detail;
         window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
       }
@@ -408,7 +423,8 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
           )}
 
           {mencoes.map(m => {
-            const abaLabel = ABA_LABEL[m.aba_destino] || m.aba_destino || '—';
+            // 17/11/2026: os avisos do calendário apontam para telas que não estão no filtro de setores (Demandas gerais, Vistorias, Calendário, Telecom); o botão mostrava o código da aba ("vistorias →")
+            const abaLabel = ABA_LABEL[m.aba_destino] || ABA_LABEL_DO_BOTAO[m.aba_destino] || m.aba_destino || '—';
             const ctxLabel = CONTEXTO_LABEL[m.contexto] || m.contexto || '—';
             const isMarcando = marcando[m.id];
 
