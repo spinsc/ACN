@@ -5,7 +5,6 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { Botao, Chips, Tag } from './Interface';
 import Icone from './Icone';
 import { permissoesDaViagem } from './ViagemFluxo';
-import { alvoDoAvisoDoCalendario } from './CalendarioAviso';
 import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,14 +30,6 @@ const ABA_LABEL: Record<string, string> = {
   financeiro:  'Financeiro',
   admin:       'Admin',
   viagens:     'Viagens',
-};
-
-// Só para o texto do botão que leva à tela de origem; fica fora do ABA_LABEL para não acrescentar opções ao filtro de setores.
-const ABA_LABEL_DO_BOTAO: Record<string, string> = {
-  ajustes:   'Demandas gerais',
-  vistorias: 'Vistorias de pátio',
-  calendario: 'Calendário',
-  telecom:   'Telecom',
 };
 
 const CONTEXTO_LABEL: Record<string, string> = {
@@ -206,6 +197,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         .select('*')
         .or(orFilter)
         .neq('contexto', 'op_adaptacao')   // avisos automáticos de OP ficam no botão "Avisos"
+        .neq('contexto', 'calendario')     // 17/11/2026: aviso de data do calendário também é do botão "Avisos"; Menções é só de menções (pedido do usuário, bug da Renata)
         .order('criado_em', { ascending: false })
         .limit(100);
       if (filtro === 'pendentes') q = q.eq('resolvida', false);
@@ -235,6 +227,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       .select('id', { count: 'exact', head: true })
       .or(orFilter)
       .neq('contexto', 'op_adaptacao')
+      .neq('contexto', 'calendario')
       .eq('resolvida', false);
     setPendentesGlobal(count || 0);
     onCountChange?.(count || 0);
@@ -253,7 +246,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const marcarTodasLidas = async () => {
     // Respeita o filtro de setor ativo — "todas" aqui significa "todas as
     // visíveis nesta tela", não todas as menções do usuário em qualquer setor.
-    let q = supabase.from('mencoes').update({ lida: true }).eq('mencionado_id', currentUser?.id).eq('lida', false).neq('contexto', 'op_adaptacao');
+    let q = supabase.from('mencoes').update({ lida: true }).eq('mencionado_id', currentUser?.id).eq('lida', false).neq('contexto', 'op_adaptacao').neq('contexto', 'calendario');
     if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
     await q;
     await load();
@@ -290,7 +283,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       resolvida: true, resolvida_em: new Date().toISOString(),
       resolvida_por: currentUser?.nome || currentUser?.email || null,
       lida: true,
-    }).eq('mencionado_id', currentUser?.id).eq('resolvida', false).neq('contexto', 'op_adaptacao');
+    }).eq('mencionado_id', currentUser?.id).eq('resolvida', false).neq('contexto', 'op_adaptacao').neq('contexto', 'calendario');
     if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
     await q;
     await load();
@@ -324,20 +317,14 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   // que ele montar — o global é lido no mount pra cobrir esse caso.
   const abrirRegistro = (m: any) => {
     if (!m.lida) marcarLida(m);
-    // 17/11/2026 (bug da Renata): o aviso do calendário guarda uma chave composta no contexto_id; traduz para o registro de origem
-    // (CalendarioAviso.ts). Fonte que a tela de origem ainda não sabe abrir fica sem deep-link e só troca de aba, como antes.
-    const doCalendario = m.contexto === 'calendario';
-    const alvo = doCalendario ? alvoDoAvisoDoCalendario(m.contexto_id) : null;
-    const contexto = alvo ? alvo.contexto : m.contexto;
-    const contextoId = alvo ? alvo.id : m.contexto_id;
-    if (contextoId && (!doCalendario || alvo)) {
+    if (m.contexto_id) {
       // CRM/Licitação já têm um mecanismo de deep-link próprio e testado
       // (analise:abrir-origem, ouvido em DashboardTab.tsx — já troca a aba E
       // abre o card) — reaproveita em vez de duplicar.
-      if (contexto === 'crm' || contexto === 'licitacao') {
-        window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: contexto, origemId: contextoId } }));
+      if (m.contexto === 'crm' || m.contexto === 'licitacao') {
+        window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: m.contexto, origemId: m.contexto_id } }));
       } else {
-        const detail = { contexto, contextoId };
+        const detail = { contexto: m.contexto, contextoId: m.contexto_id };
         (window as any).__acnDeepLink = detail;
         window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
       }
@@ -423,8 +410,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
           )}
 
           {mencoes.map(m => {
-            // 17/11/2026: os avisos do calendário apontam para telas que não estão no filtro de setores (Demandas gerais, Vistorias, Calendário, Telecom); o botão mostrava o código da aba ("vistorias →")
-            const abaLabel = ABA_LABEL[m.aba_destino] || ABA_LABEL_DO_BOTAO[m.aba_destino] || m.aba_destino || '—';
+            const abaLabel = ABA_LABEL[m.aba_destino] || m.aba_destino || '—';
             const ctxLabel = CONTEXTO_LABEL[m.contexto] || m.contexto || '—';
             const isMarcando = marcando[m.id];
 

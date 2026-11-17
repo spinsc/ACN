@@ -896,7 +896,7 @@ export function AlertasComprasPanel({ currentUser, onClose, onCountChange, onAbr
             <div className="acn-flx-gaveta-tit">Avisos de Compras</div>
             <div className="acn-ajuda">{alertas === null ? 'Carregando…' : alertas.length ? `${alertas.length} requisição(ões) precisam de resposta` : 'Nada parado nem atrasado'}</div>
           </div>
-          {onAvisosOp && <Botao pequeno variante="secundario" onClick={onAvisosOp}>Avisos de OP{qtdAvisosOp ? ` (${qtdAvisosOp})` : ''}</Botao>}
+          {onAvisosOp && <Botao pequeno variante="secundario" onClick={onAvisosOp}>Datas e avisos de OP{qtdAvisosOp ? ` (${qtdAvisosOp})` : ''}</Botao>}   {/* 17/11/2026: o painel Avisos agora também traz as datas do calendário (saíram de Menções); Compras passa a chegar a ele por aqui */}
           {onAbrirCompras && <Botao pequeno variante="secundario" onClick={onAbrirCompras}>Abrir Compras</Botao>}
           <Botao pequeno variante="discreto" onClick={onClose} aria-label="Fechar">✕</Botao>
         </div>

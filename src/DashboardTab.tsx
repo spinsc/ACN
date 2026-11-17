@@ -39,7 +39,7 @@ import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
 import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
-import AvisosOpPanel, { contarAvisosOp } from './AvisosOpPanel';
+import AvisosOpPanel, { contarAvisosOp, contarAvisosCalendario } from './AvisosOpPanel';
 import { AlertasComprasPanel, JanelaParadasObrigatoria, carregarAlertasCompras, alertasDoUsuario, dispararMencoesEntrega, podeAprovarCompra } from './ComprasFluxo';
 import { contarEsperandoAprovacao } from './AprovacaoCompras';
 import Icone from './Icone';
@@ -769,6 +769,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [mencoesCount, setMencoesCount]         = useState(0);
   const [showMencoesPanel, setShowMencoesPanel] = useState(false);
   const [avisosOpCount, setAvisosOpCount]       = useState(0);
+  const [avisosCalCount, setAvisosCalCount]     = useState(0);   // 17/11/2026: datas do calendário a cuidar (saíram de Menções e vão para o painel Avisos)
   const [showAvisosOp, setShowAvisosOp]         = useState(false);
   // Compras (e Almoxarifado, nas entregas atrasadas): o botão Avisos mostra os alertas de compras
   const usaAlertasCompras = ['Compras', 'Almoxarifado'].includes(currentUser?.perfil);
@@ -844,9 +845,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           .select('id', { count: 'exact', head: true })
           .or(orFilter)
           .neq('contexto', 'op_adaptacao')   // avisos de OP têm botão próprio
+          .neq('contexto', 'calendario')     // 17/11/2026: as datas do calendário também são do botão Avisos; Menções é só de menções
           .eq('resolvida', false);
         setMencoesCount(count || 0);
-        setAvisosOpCount(await contarAvisosOp(currentUser));
+        const [nOp, nCal] = await Promise.all([contarAvisosOp(currentUser), contarAvisosCalendario(currentUser)]);
+        setAvisosOpCount(nOp);
+        setAvisosCalCount(nCal);
       } catch { /* mencoes table may not exist yet */ }
     };
     fetchMencoes();
@@ -1135,7 +1139,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     switch (activeTab) {
       case 'inicio': {
         // os números do cartão "Para você hoje" são os mesmos dos botões do cabeçalho (menções, avisos, análises); "avisos" repete a conta do botão Avisos
-        const qtdAvisos = currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0);
+        const qtdAvisos = (currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0)) + avisosCalCount;
         return <InicioTab currentUser={currentUser} podeAbrir={isVisible} irPara={(id: string) => setActiveTab(id)}
           contagens={{ mencoes: mencoesCount, analises: analiseAlertCount, avisos: qtdAvisos, comprasEsperando: aprovaCompra ? comprasEsperando : null }}
           abrir={{ mencoes: () => setShowMencoesPanel(true), analises: () => setShowAnalisePanel(true), avisos: () => (usaAlertasCompras ? setShowAlertasCompras(true) : setShowAvisosOp(true)) }}
@@ -1562,11 +1566,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             {/* Avisos automáticos de andamento das OPs */}
             {(() => {
               // Compras vê só os alertas de compras; Almoxarifado vê avisos de OP + entregas atrasadas
-              const qtd = currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0);
+              const qtd = (currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0)) + avisosCalCount;
               const abrir = () => usaAlertasCompras ? setShowAlertasCompras(true) : setShowAvisosOp(true);
-              const titulo = currentUser?.perfil === 'Compras'
-                ? (qtd ? `${qtd} alerta(s) de compras` : 'Avisos de compras')
-                : (qtd ? `${qtd} aviso(s)` : 'Avisos');
+              const titulo = qtd ? `${qtd} aviso(s)` : 'Avisos';
               return (
                 <div className={`acn-notif${qtd > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0} title={titulo}
                   onClick={abrir} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') abrir(); }}>
@@ -1847,18 +1849,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           onClose={() => { setShowAlertasCompras(false); recarregarAlertasCompras(); }}
           onCountChange={() => recarregarAlertasCompras()}
           onAbrirCompras={isVisible('compras') ? () => { setShowAlertasCompras(false); setActiveTab('compras'); } : undefined}
-          onAvisosOp={currentUser?.perfil !== 'Compras' ? () => { setShowAlertasCompras(false); setShowAvisosOp(true); } : undefined}
-          qtdAvisosOp={avisosOpCount} />
+          onAvisosOp={() => { setShowAlertasCompras(false); setShowAvisosOp(true); }}
+          qtdAvisosOp={(currentUser?.perfil !== 'Compras' ? avisosOpCount : 0) + avisosCalCount} />
       )}
       {/* Requisições paradas: Compras precisa informar o motivo antes de seguir */}
       {currentUser?.perfil === 'Compras' && !sessaoOriginalAdmin && (
         <JanelaParadasObrigatoria alertas={alertasCompras} currentUser={currentUser} onRespondido={recarregarAlertasCompras} />
       )}
 
-      {/* Painel de Avisos de OP */}
+      {/* Painel de Avisos: datas do calendário para cuidar + andamento das OPs */}
       {showAvisosOp && (
         <AvisosOpPanel currentUser={currentUser} onClose={() => setShowAvisosOp(false)}
-          onCountChange={n => setAvisosOpCount(n)} />
+          onCountChange={n => setAvisosOpCount(n)}
+          onCountChangeCalendario={n => setAvisosCalCount(n)}
+          onNavigate={(tab) => { setShowAvisosOp(false); setActiveTab(tab); }} />
       )}
 
       {/* Painel lateral de Menções */}
