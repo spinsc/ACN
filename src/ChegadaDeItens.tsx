@@ -13,13 +13,14 @@ import { logChange } from './AuditSystem';
 import { Botao, Faixa, Selo } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { lerValorDigitado } from './LerValor';
-import { itensDaOC, numeroDaOC, mesmoNome, marcarChegada, lerChegadasDe, lerDemandasQueEsperam } from './EsperaDeMaterial';
+import { itensDaOC, numeroDaOC, mesmoNome, marcarChegada, lerChegadasDe, lerDemandasQueEsperam, chegadaDoItem, entregaQueTrazOItem } from './EsperaDeMaterial';
+import { dataCurta, entregasDoPedido } from './ComprasEntregas';
 import { mdiPackageDown, mdiClose } from '@mdi/js';
 
 const qtd = (n: any) => (n == null ? '' : Number(n).toLocaleString('pt-BR'));
 
 export default function ModalChegadaDeItens({ pedido: pedidoRecebido, currentUser, onClose, onSalvo }: any) {
-  const [estado, setEstado] = useState<any>({ carregando: true, pedido: pedidoRecebido, itens: [], chegadas: [], esperas: [], erro: '' });
+  const [estado, setEstado] = useState<any>({ carregando: true, pedido: pedidoRecebido, itens: [], chegadas: [], entregas: [], esperas: [], erro: '' });
   const [digitado, setDigitado] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
@@ -29,13 +30,13 @@ export default function ModalChegadaDeItens({ pedido: pedidoRecebido, currentUse
     (async () => {
       const id = String(pedidoRecebido.id);
       // a lista da Logística traz só parte das colunas: a OC é lida inteira antes de marcar
-      const { data: pedido, error } = await supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,descricao_material,fornecedor,status_compra,quantidade,quantidade_comprada,itens').eq('id', id).maybeSingle();
+      const { data: pedido, error } = await supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,descricao_material,fornecedor,status_compra,quantidade,quantidade_comprada,itens,vencedoras,vencedora_id,tem_divergencia,data_prevista_recebimento').eq('id', id).maybeSingle();
       const c = await lerChegadasDe([id]);
       const e = await lerDemandasQueEsperam([id]);
       const erroLeitura = error?.message || c.erro || e.erro || (pedido ? '' : 'a compra não foi encontrada');
       if (!ativo) return;
       const itens = pedido ? itensDaOC(pedido) : [];
-      setEstado({ carregando: false, pedido: pedido || pedidoRecebido, itens, chegadas: c.chegadas, esperas: e.mapa.get(id) || [], erro: erroLeitura });
+      setEstado({ carregando: false, pedido: pedido || pedidoRecebido, itens, chegadas: c.chegadas, entregas: c.entregas, esperas: e.mapa.get(id) || [], erro: erroLeitura });
       setDigitado(Object.fromEntries(itens.map(it => { const ch = c.chegadas.find((x: any) => x.chave === it.chave && mesmoNome(x.nome, it.nome)); return [it.chave, ch ? String(ch.quantidade).replace('.', ',') : '']; })));
     })();
     return () => { ativo = false; };
@@ -46,6 +47,10 @@ export default function ModalChegadaDeItens({ pedido: pedidoRecebido, currentUse
   const invalido = estado.itens.some((it: any) => lido(it).invalido || (lido(it).valor ?? 0) < 0);
   const mudou = estado.itens.filter((it: any) => !lido(it).invalido && (lido(it).valor ?? 0) !== guardado(it));
   const recebida = estado.pedido?.status_compra === 'Recebido';
+  // E4 (17/11/2026): o item que o fornecedor já entregou (entrega recebida) conta como chegado: não se digita de novo
+  const pelaEntrega = (it: any) => chegadaDoItem(estado.pedido, [], it, estado.entregas).pelaEntrega;
+  const entregaDe = (it: any) => entregaQueTrazOItem(estado.pedido, estado.entregas, it);
+  const varias = entregasDoPedido(estado.pedido, estado.entregas).length > 1;
 
   const salvar = async () => {
     if (!mudou.length || invalido) return;
@@ -73,7 +78,7 @@ export default function ModalChegadaDeItens({ pedido: pedidoRecebido, currentUse
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro" role="dialog" aria-label="Chegada de itens da compra" data-teste="chegada-itens">
+      <div className={`modal-box acn-modal-cadastro${varias ? ' acn-chegada-jan' : ''}`} role="dialog" aria-label="Chegada de itens da compra" data-teste="chegada-itens">
         <div className="acn-modal-cab">
           <span className="modal-title"><Icone path={mdiPackageDown} size={16} /> Chegada de itens — {numeroDaOC(estado.pedido)}</span>
           <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" onClick={onClose} disabled={salvando} />
@@ -89,7 +94,7 @@ export default function ModalChegadaDeItens({ pedido: pedidoRecebido, currentUse
           {estado.carregando ? <div className="acn-empty">Carregando…</div> : (
             <div className="acn-rolagem">
               <table className="acn-tabela acn-densa">
-                <thead><tr><th>Item</th><th>Pedido</th><th>Chegou</th><th>Quem espera</th></tr></thead>
+                <thead><tr><th>Item</th><th>Pedido</th>{varias && <th>Entrega do fornecedor</th>}<th>Chegou</th><th>Quem espera</th></tr></thead>
                 <tbody>
                   {estado.itens.map((it: any) => {
                     const l = lido(it); const espera = esperaDe(it);
@@ -97,8 +102,10 @@ export default function ModalChegadaDeItens({ pedido: pedidoRecebido, currentUse
                       <tr key={it.chave}>
                         <td>{it.nome}</td>
                         <td className="acn-num">{qtd(it.quantidade) || '—'}</td>
+                        {varias && <td data-entrega-do-item>{(() => { const en = entregaDe(it); return en ? <>{en.fornecedor}<div className="acn-fraco">{en.situacao === 'recebida' ? `recebida ${dataCurta(en.data_recebimento_real || en.data_prevista)}` : `chega ${dataCurta(en.data_prevista)}`}</div></> : <span className="acn-fraco">—</span>; })()}</td>}
                         <td>
-                          <input className="acn-input acn-num acn-chegada-qtd" inputMode="decimal" aria-label={`Quantidade que chegou de ${it.nome}`} disabled={recebida || salvando}
+                          {pelaEntrega(it) && <div><Selo familia="ok" ponto={false}>Chegou (entrega de {pelaEntrega(it)})</Selo></div>}
+                          <input className="acn-input acn-num acn-chegada-qtd" inputMode="decimal" aria-label={`Quantidade que chegou de ${it.nome}`} disabled={recebida || salvando || !!pelaEntrega(it)}
                             value={digitado[it.chave] ?? ''} placeholder="0" onChange={e => setDigitado(s => ({ ...s, [it.chave]: e.target.value }))} />
                           {l.invalido && <div className="acn-txt-erro">Número inválido</div>}
                           {!l.invalido && it.quantidade && (l.valor ?? 0) > it.quantidade && <div className="acn-ajuda">Mais do que o pedido ({qtd(it.quantidade)}).</div>}

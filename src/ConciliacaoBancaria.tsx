@@ -18,6 +18,7 @@ import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { diaISO, Faixa, Botao, Selo } from './Interface';
+import { lerEntregasDosPedidos, entregasDoPedido } from './ComprasEntregas';
 import Icone from './Icone';
 import { mdiTrayArrowDown, mdiTagOutline } from '@mdi/js';
 
@@ -120,16 +121,18 @@ function lerCsv(texto: string) {
 
 // ── Candidatos do sistema para conciliar ─────────────────────────────────────
 async function carregarCandidatos() {
+  // E4 (17/11/2026): o pagamento de uma compra de vários fornecedores costuma sair POR FORNECEDOR; além do pedido inteiro, cada fornecedor vira um candidato com o valor e a data da entrega dele
   const [ops, fats, compras, despesas] = await Promise.all([
     supabase.from('oples').select('id,opl,cliente_nome,valor_total,numero_nf,numero_nf_servico,data_emissao_nf,data_nf,status_geral')
       .not('valor_total', 'is', null).or('numero_nf.not.is.null,status_geral.ilike.Faturado%'),
     supabase.from('pcp_pedidos_faturamento').select('id,numero_pedido,numero_oc,fornecedor,valor,data_pagamento,recebimento_confirmado_em,criado_em,nf_fornecedor_numero'),
-    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,fornecedor,valor_compra,data_prevista_recebimento,data_criacao,status_compra').not('valor_compra', 'is', null),
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,fornecedor,valor_compra,data_prevista_recebimento,data_criacao,status_compra,vencedoras,vencedora_id,tem_divergencia').not('valor_compra', 'is', null),
     supabase.from('centro_custo_despesas').select('id,descricao,valor,data'),
   ]);
   // Etapa 7.36 (04/10/2026): leitura que falha não pode virar "nada no sistema com este valor". Antes o erro era
   // ignorado e a lista de candidatos saía vazia, sem nenhum aviso; agora a tela diz o que não conseguiu ler.
-  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas]]
+  const entregasDasCompras = await lerEntregasDosPedidos(compras.data || []);
+  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas], ['as datas de cada fornecedor', { error: entregasDasCompras.erro ? { message: entregasDasCompras.erro } : null }]]
     .filter(([, r]: any) => r.error).map(([nome, r]: any) => `${nome} (${r.error.message})`);
   const lista = [
     ...(ops.data || []).map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: diaDoRegistro(o.data_emissao_nf || o.data_nf),
@@ -138,6 +141,16 @@ async function carregarCandidatos() {
       descricao: `Faturamento ${f.numero_oc || f.numero_pedido || ''} — ${f.fornecedor || ''}${f.nf_fornecedor_numero ? ` · NF ${f.nf_fornecedor_numero}` : ''}` })),
     ...(compras.data || []).map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: diaDoRegistro(p.data_prevista_recebimento || p.data_criacao),
       descricao: `Compra ${p.numero_oc || p.numero_pedido || ''} — ${p.fornecedor || ''} (${p.status_compra || ''})` })),
+    // um candidato por fornecedor dos pedidos com mais de um (id composto "pedido#cotação"; some quando o pedido inteiro já foi conciliado: ver `sugestoes`)
+    ...(compras.data || []).flatMap((p: any) => {
+      const entregas = entregasDoPedido(p, entregasDasCompras.linhas);
+      if (entregas.length < 2 || entregasDasCompras.erro) return [];
+      return entregas.map((e: any) => {
+        const venc = (p.vencedoras || []).find((v: any) => String(v.cotacao_id) === String(e.cotacao_id));
+        return { sentido: -1, tipo: 'compra', id: `${p.id}#${e.cotacao_id || e.fornecedor}`, grupo: String(p.id), valor: Number(venc?.valor), data: diaDoRegistro(e.data_prevista || p.data_criacao),
+          descricao: `Compra ${p.numero_oc || p.numero_pedido || ''} — ${e.fornecedor} (parte do pedido, ${p.status_compra || ''})` };
+      });
+    }),
     ...(despesas.data || []).map((d: any) => ({ sentido: -1, tipo: 'despesa', id: String(d.id), valor: Number(d.valor), data: diaDoRegistro(d.data),
       descricao: `Despesa — ${d.descricao || ''}` })),
   ].filter(c => Number.isFinite(c.valor) && c.valor > 0);
@@ -149,7 +162,7 @@ function sugestoes(l: any, candidatos: any[], jaUsados: Set<string>) {
   const alvo = Math.abs(Number(l.valor));
   const sentido = l.valor > 0 ? 1 : -1;
   return candidatos
-    .filter(c => c.sentido === sentido && !jaUsados.has(c.tipo + ':' + c.id))
+    .filter(c => c.sentido === sentido && !jaUsados.has(c.tipo + ':' + c.id) && !(c.grupo && jaUsados.has('compra:' + c.grupo)))
     .map(c => ({ ...c, difValor: Math.abs(c.valor - alvo), difDias: c.data ? diasEntre(c.data, l.data) : 999 }))
     .filter(c => c.difValor <= Math.max(0.05, alvo * 0.02))
     .sort((a, b) => a.difValor - b.difValor || a.difDias - b.difDias)

@@ -11,7 +11,7 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { creditarCompraRecebida, fmtQtd, avisosDaReposicao } from './Estoque';
 import { nomeDoPedido } from './NomeDoPedido';
-import { lerEntregas, entregasDoPedido, abertasDoPedido, chaveDaEntrega, itensComPosicao, esperadoDaEntrega, receberEntrega, atualizarPedidoAposRecebimento, dataBr, dataCurta, diaDe } from './ComprasEntregas';
+import { lerEntregas, entregasDoPedido, abertasDoPedido, chaveDaEntrega, itensComPosicao, esperadoDaEntrega, receberEntrega, atualizarPedidoAposRecebimento, dataBr, dataCurta, diaDe, lerEntregasDosPedidos, frasePorFornecedor } from './ComprasEntregas';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
 import Icone from './Icone';
 import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline, mdiPencilOutline } from '@mdi/js';
@@ -1903,6 +1903,7 @@ export default function LogisticaTab({ currentUser }) {
   const [abaLog, setAbaLog] = useState('historico');
   const [manifestos, setManifestos] = useState([]);
   const [pedidosCompra, setPedidosCompra] = useState([]);
+  const [entregasDosPedidos, setEntregasDosPedidos] = useState<{ linhas: any[]; erro: string | null }>({ linhas: [], erro: null });
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(FORM_VAZIO);
@@ -2065,10 +2066,11 @@ export default function LogisticaTab({ currentUser }) {
     setLoading(true);
     const [{ data: mData }, { data: pcData }] = await Promise.all([
       supabase.from('logistica_manifestos').select('*').order('data', { ascending: false }),
-      supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material, data_prevista_recebimento').eq('status_compra', 'Comprado').or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null').order('data_prevista_recebimento', { ascending: true }),
+      supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material, data_prevista_recebimento, status_compra, fornecedor, vencedoras, vencedora_id, tem_divergencia').eq('status_compra', 'Comprado').or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null').order('data_prevista_recebimento', { ascending: true }),
     ]);
     setManifestos(mData || []);
     setPedidosCompra(pcData || []);
+    setEntregasDosPedidos(await lerEntregasDosPedidos(pcData || []));   // E4: pedido de vários fornecedores mostra a data de cada um
     setLoading(false);
   };
 
@@ -2261,7 +2263,7 @@ export default function LogisticaTab({ currentUser }) {
                     {pedidosCompra.map(p => (
                       <option key={p.id} value={p.id}>
                         {p.numero_pedido ? `#${p.numero_pedido} — ` : ''}{p.descricao_material || '(sem descrição)'}
-                        {p.data_prevista_recebimento ? ` · Prev: ${new Date(p.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+                        {(() => { const e = entregasDoPedido(p, entregasDosPedidos.linhas); return e.length > 1 && !entregasDosPedidos.erro ? ` · Prev: ${frasePorFornecedor(e, hojeISO())}` : p.data_prevista_recebimento ? ` · Prev: ${new Date(p.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''; })()}
                       </option>
                     ))}
                   </select>

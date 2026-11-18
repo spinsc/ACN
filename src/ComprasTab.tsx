@@ -2258,8 +2258,8 @@ export default function ComprasTab({ currentUser }) {
   // A busca e a ordem valem para o quadro e para a tabela; os totais do topo seguem contando tudo o que foi lido (o aviso "N de M" diz quando a lista está filtrada)
   const buscando = buscaGeral.trim() !== '';
   const pedidosVista = (() => {
-    const achados = buscando ? pedidos.filter((p: any) => pedidoCombinaComBusca(p, buscaGeral, canVerValor, departamentosConfig)) : pedidos;
-    return ordem === 'padrao' ? achados : ordenarPedidos(achados, ordem as any);
+    const achados = buscando ? pedidos.filter((p: any) => pedidoCombinaComBusca(p, buscaGeral, canVerValor, departamentosConfig, entregasLinhas)) : pedidos;
+    return ordem === 'padrao' ? achados : ordenarPedidos(achados, ordem as any, entregasLinhas);
   })();
   const agruparPorStatus  = filtro === '';
   const pedidosAtivos     = agruparPorStatus ? pedidosVista.filter((p:any) => !['Recebido', DESCARTADA].includes(p.status_compra)) : pedidos;

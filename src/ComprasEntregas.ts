@@ -453,3 +453,42 @@ export async function registrarPosicaoDaEntrega(pedido: any, entrega: Entrega, t
   const { error } = await supabase.from('pcp_pedidos_compra').update({ alerta_entrega_mencionado_em: null }).eq('id', pedido.id);
   return { erro: error ? explicarErroDoBanco(error) : null };
 }
+
+// ── O resto do sistema lê por fornecedor (etapa E4, 17/11/2026) ──────────────
+// Decidido com o usuário: "alterar o sistema todo para que possamos ter dados reais de quando chega o que". As telas de fora do Compras (card da OP, pendências do
+// Almoxarifado, espera de material, CRM, Minhas Solicitações, relatório, conciliação) usam estes três ajudantes em vez de ler `data_prevista_recebimento`.
+
+/**
+ * Lê as linhas de entrega SÓ dos pedidos comprados com MAIS DE UM fornecedor vencedor: o pedido de um fornecedor só (a maioria) vale pela data do próprio pedido,
+ * que é mantida igual à da entrega (`sincronizarDataDoPedido`), e não precisa de consulta. Os pedidos passados devem trazer `vencedoras`, `itens`, `status_compra` e `fornecedor`.
+ * Leitura recusada devolve `erro` (nunca "sem entregas": o pedido cairia calado numa data só).
+ */
+export async function lerEntregasDosPedidos(pedidos: any[]): Promise<{ linhas: any[]; erro: string | null }> {
+  const ids = (pedidos || []).filter(p => temEntrega(p) && entregasPlanejadas(p).length > 1).map(p => p.id);
+  return ids.length ? lerEntregas(ids) : { linhas: [], erro: null };
+}
+
+export type ChegadaDoPedido = { entregas: Entrega[]; abertas: Entrega[]; atrasadas: Entrega[]; varias: boolean; proxima: string | null; distante: string | null };
+
+/** Como o material deste pedido está chegando: as entregas, as ainda abertas, as atrasadas hoje (`hoje` = AAAA-MM-DD) e a data da próxima e da última a chegar. */
+export function chegadaDoPedido(pedido: any, linhas: any[] = [], hoje: string): ChegadaDoPedido {
+  const entregas = entregasDoPedido(pedido, linhas);
+  const abertas = abertasDoPedido(entregas);
+  return { entregas, abertas, atrasadas: abertas.filter(e => estaAtrasada(e, hoje)), varias: entregas.length > 1, proxima: dataMaisProxima(entregas), distante: dataMaisDistante(entregas) };
+}
+
+/**
+ * As entregas que cobrem o item de posição `posicao` (0-based, a mesma numeração das vencedoras): as que têm a posição na lista de itens e, sem lista, o pedido inteiro.
+ * O item só "chegou" quando TODAS as entregas que o cobrem foram recebidas (dois fornecedores sem lista de itens, no formato antigo, não dizem de quem é o item: vale o mais cauteloso).
+ */
+export function entregasDoItem(entregas: Entrega[], posicao: number): Entrega[] {
+  return (entregas || []).filter(e => !e.itens?.length || e.itens.includes(posicao));
+}
+
+/** "A: 20/11 · B: recebida 18/11 · C: 05/11 (atrasada)": a frase das dicas e das listas para um pedido de vários fornecedores (vazia se o pedido tem uma entrega só). */
+export function frasePorFornecedor(entregas: Entrega[], hoje: string): string {
+  if (!entregas || entregas.length < 2) return '';
+  return entregas.map(e => e.situacao === 'recebida'
+    ? `${e.fornecedor}: recebida ${dataCurta(e.data_recebimento_real || e.data_prevista)}`
+    : `${e.fornecedor}: ${dataCurta(e.data_prevista)}${estaAtrasada(e, hoje) ? ' (atrasada)' : e.situacao === 'divergencia' ? ' (com divergência)' : ''}`).join(' · ');
+}
