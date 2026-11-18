@@ -40,6 +40,8 @@
   --acn-shadow-2: 0 4px 14px rgba(23, 33, 43, .08), 0 1px 3px rgba(23, 33, 43, .06);
   --acn-shadow-3: 0 18px 48px rgba(23, 33, 43, .18), 0 4px 12px rgba(23, 33, 43, .08);
   --acn-focus: 0 0 0 3px rgba(14, 112, 104, .28);
+  /* Folga no fim de toda tela (plano de ajustes de layout, L1, 18/11/2026): o 📌 dos avisos e o 💬 do chat flutuam no canto de baixo à direita e, juntos, passam até 126 px da borda (chat: 18 + 52 px; pino: 10 px acima dele + 46 px; no celular o pino fica 84 px acima da borda). Sem folga, a última linha de uma tabela não saía de baixo deles e a coluna "Ações" ficava impossível de clicar (auditoria de 16/11/2026: 49 grupos de achado em 25 telas). 140 px deixa 10 a 14 px de ar. É o fim do conteúdo, não da janela: a tela só rola um pouco mais. */
+  --acn-folga-flutuantes: 140px;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -47,7 +49,9 @@ html body { font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialia
 html body:not(.dark) { background: var(--acn-canvas); color: var(--acn-text); }
 html body:not(.dark) .acn-app { background: var(--acn-canvas); color: var(--acn-text); }
 html body:not(.dark) .acn-main:not(.acn-main-tv) { background: var(--acn-canvas); }
-html body .acn-main:not(.acn-main-tv) { padding: 14px 18px; }
+html body .acn-main:not(.acn-main-tv) { padding: 14px 18px var(--acn-folga-flutuantes); }
+/* impressão: a folga é para os botões flutuantes, que não saem no papel (celular e tablet de toque têm a própria regra no responsivo.css, que vem depois e manda) */
+@media print { html body .acn-main:not(.acn-main-tv) { padding-bottom: 14px !important; } }
 :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline: none; box-shadow: var(--acn-focus); }
 
 /* ── Escala de letras (estilo inline → escala nova) ─────────────────────────

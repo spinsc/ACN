@@ -25,8 +25,8 @@
      tela ficava escondido atrás dela e não dava para rolar até o último item. */
   html body .acn-coluna { height: 100dvh; min-height: 0; }
   html body .acn-main { min-height: 0; }
-  /* folga no fim para o último item não ficar embaixo dos botões flutuantes (chat e avisos) */
-  html body .acn-main:not(.acn-main-tv) { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
+  /* folga no fim para o último item não ficar embaixo dos botões flutuantes (chat e avisos); 18/11/2026: de 96 para 140 px (`--acn-folga-flutuantes`, design.css) — os dois botões somam ~130 px de altura e 96 px deixavam a coluna "Ações" da última linha embaixo deles; no computador a mesma folga passou a valer também */
+  html body .acn-main:not(.acn-main-tv) { padding-bottom: calc(var(--acn-folga-flutuantes) + env(safe-area-inset-bottom, 0px)) !important; }
 
   /* ── Cabeçalho ─────────────────────────────────────────────────────────── */
   html body .acn-header { padding: 0 8px; gap: 6px; height: 52px; }
