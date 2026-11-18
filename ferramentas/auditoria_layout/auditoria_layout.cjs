@@ -20,7 +20,10 @@ const P = PERFIS[perfil]; if (!P) { console.error('perfil?'); process.exit(1); }
 const SAIDA = path.join(__dirname, 'auditoria', perfil);
 const CACHE = path.join(__dirname, 'auditoria', 'cache_leituras');
 fs.mkdirSync(path.join(SAIDA, 'fotos'), { recursive: true }); fs.mkdirSync(CACHE, { recursive: true });
-const jsonl = path.join(SAIDA, 'achados.jsonl'); fs.writeFileSync(jsonl, '');
+const jsonl = path.join(SAIDA, 'achados.jsonl');
+// 18/11/2026: guarda a rodada anterior ao lado (achados_anterior.jsonl), para comparar antes e depois de uma fatia do plano de layout sem perder a medição de antes
+try { if (fs.existsSync(jsonl) && fs.statSync(jsonl).size > 0) fs.copyFileSync(jsonl, path.join(SAIDA, 'achados_anterior.jsonl')); } catch {}
+fs.writeFileSync(jsonl, '');
 const chave = (r) => crypto.createHash('md5').update(r.method() + ' ' + r.url() + ' ' + (r.headers()['accept'] || '') + ' ' + (r.headers()['range'] || '')).digest('hex');
 const slug = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 40);
 const LOG = (...a) => console.log(new Date().toLocaleTimeString('pt-BR'), ...a);

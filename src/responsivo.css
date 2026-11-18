@@ -182,8 +182,11 @@
   html body .acn-chat-raiz:has(> .acn-chat-painel) { inset: 0 !important; gap: 0 !important; }
   html body .acn-chat-raiz > .acn-chat-painel { width: 100% !important; height: 100% !important; border-radius: 0 !important; border: none !important; }
   html body .acn-chat-raiz:has(> .acn-chat-painel) > :not(.acn-chat-painel, style, .acn-chat-ov, [style*="inset: 0px"]) { display: none !important; }
-  /* Com uma janela aberta, pin de avisos e botão do chat saem da frente */
-  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, .acn-nfc-fundo, .acn-cp-fundo, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
+  /* Com uma janela aberta, pin de avisos e botão do chat saem da frente.
+     18/11/2026 (plano de layout, L2): entraram na lista as camadas de tela cheia que trocaram o estilo solto por classe sem entrar aqui — a janela "Nova Demanda Avulsa" (`acn-dav-nova-1`) e o painel da demanda (`acn-dav-det-1`),
+     a janela da OP (`acn-opl-overlay`), a do card do CRM (`acn-crm-ab-fundo`) e as gavetas (`acn-gav`, `acn-kb-lateral`, `acn-flx-gaveta`). Sem isto o 💬 ficava em cima do botão "+ Criar" da nova demanda (achado da auditoria de layout).
+     Camada de tela cheia NOVA com classe própria entra nesta lista. */
+  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, .acn-nfc-fundo, .acn-cp-fundo, .acn-dav-nova-1, .acn-dav-det-1, .acn-opl-overlay, .acn-crm-ab-fundo, .acn-gav, .acn-kb-lateral, .acn-flx-gaveta, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
     display: none !important;
   }
 

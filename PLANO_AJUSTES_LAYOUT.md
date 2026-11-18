@@ -1,7 +1,7 @@
 # Plano de ajustes de layout (celular, tablet e computador)
 
 **Origem:** pedido do usuário em 16/11/2026 — análise completa do frontend, mobile e desktop, para achar erro de layout, itens se sobrepondo e coisas do tipo, e um plano de ajustes.
-**Estado:** em andamento desde 18/11/2026. **L1 (folga no fim da tela) feita**; as outras fatias seguem a ordem da seção 3. Este arquivo é a fonte da verdade; as correções entram em fatias, uma por vez, cada uma com `npx vite build`, a auditoria rodada de novo na tela mexida e o plano atualizado no mesmo commit.
+**Estado:** em andamento desde 18/11/2026. **L1 (folga no fim da tela) e L2 (botões cortados) feitas**; as outras fatias seguem a ordem da seção 3. Este arquivo é a fonte da verdade; as correções entram em fatias, uma por vez, cada uma com `npx vite build`, a auditoria rodada de novo na tela mexida e o plano atualizado no mesmo commit.
 
 ## 1. Como foi medido
 
@@ -52,7 +52,7 @@ Pontos de 9×9 px do carrossel da tela Início e o contador "2 de 4"; setas ‹ 
 
 ## 3. Ordem de execução proposta (fatias)
 1. **L1 — folga no fim da tela** (P2): ✅ **feita em 18/11/2026** (ver a seção 6).
-2. **L2 — botões cortados** (P1.1 a P1.5): Engenharia, Almoxarifado, Telecom, RH, Formação de preços; **antes da migração visual dessas telas, conferir o quadro do `/ux-fluxo`** (Engenharia, Almoxarifado e Telecom já foram migradas; RH e Formação também) e, nos quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`), perguntar ao usuário antes de mexer.
+2. ✅ **L2 (feita em 18/11/2026, ver a seção 6) — botões cortados** (P1.1 a P1.5): Engenharia, Almoxarifado, Telecom, RH, Formação de preços; **antes da migração visual dessas telas, conferir o quadro do `/ux-fluxo`** (Engenharia, Almoxarifado e Telecom já foram migradas; RH e Formação também) e, nos quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`), perguntar ao usuário antes de mexer.
 3. **L3 — campos e selos que vazam** (P3.1 a P3.10): quase só CSS (`min-width: 0`, `max-width: 100%`, quebra de linha), uma regra genérica por padrão.
 4. **L4 — tablet** (P4, item c): estender os cartões de tabela até 1023 px e coluna de Ações fixa.
 5. **L5 — abas que rolam e alvos de toque** (P4 abas e P5).
@@ -75,3 +75,13 @@ Rodar o auditor na tela mexida (`node auditoria_layout.cjs <perfil> "^Tela$"`), 
 - **Correção do que o plano dizia na seção 2 (P2):** os "41 grupos de controle coberto + 8 de flutuante cobre conteúdo, em ~25 telas" misturavam duas coisas. **A maioria vinha da vista do TOPO da tela, onde um botão flutuante sempre cobre o que está embaixo dele e a pessoa resolve rolando — isso não é defeito.** O defeito real é o do fim da tela (última linha sem poder subir acima das bolinhas), e foi esse que a folga resolveu. Para o auditor não voltar a contar o que é inerente, ele agora **descarta o que o 📌/💬 cobrem na vista do topo quando a tela rola** (fica só o número `flutuanteNoTopo` no registro) e mantém o achado quando a tela NÃO rola.
 - **Ferramentas:** `ferramentas/auditoria_layout/` (a auditoria foi trazida do scratchpad: `auditoria_layout.cjs`, `auditoria_dom.js`, `consolidar.cjs`, `resumo.cjs`, `lib.cjs`, `cracha_teste.cjs`, `rodar_todos.sh`, `LEIA-ME.md`; `cracha_teste.cjs` lê o `supabaseClient.ts` pelo caminho relativo). **Armadilha achada:** rodar vários tamanhos no mesmo instante derrubava o login da conta de teste ("Email link is invalid or has expired", 5 dos 7 tamanhos falharam na primeira rodada); o `rodar_todos.sh` agora escalona as partidas em 20 s.
 - **O que ficou de fora (de propósito):** juntar o 📌 e o 💬 num botão só no celular (pergunta da seção 5): com a folga o problema que motivava a ideia sumiu; segue em aberto só se o usuário achar que os dois botões atrapalham. Teste de celular com toque: o `responsivo.css` foi exercitado pelos perfis `tablet`, `celular` e `celular-pequeno` (toque ligado).
+
+### Decisões do usuário (18/11/2026)
+- Tablet em pé e meia tela: **coluna Ações fixa à direita** (não cartões), vale para as tabelas largas de uma vez (fatia L4).
+- Os quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`): **só correções de CSS**, sem migrar a tela.
+
+### L2 — botões cortados (✅ 18/11/2026)
+- **Feito:** tabela do pedido de Desenvolvimento (Engenharia) e tabela do estoque (Almoxarifado) dentro de `<div className="acn-rolagem">` (o `.sec-card` corta o que passa da borda); cartão e seletor "Ordenar por" das Análises do Telecom, cartão de Preços Formados e seletor do KPI do RH passam a quebrar linha / limitar a largura (só CSS em `design.css`: `.acn-ana-*`, `.acn-fp-card*`, `.acn-select-mini`, `.acn-cab-filtros`).
+- **Achado novo e corrigido:** no celular o 💬 cobria o botão "+ Criar" da janela "Nova Demanda Avulsa", porque essa janela (e outras camadas de tela cheia: painel da demanda, janela da OP, card do CRM, gavetas) trocou o estilo solto por classe e saiu da regra do `responsivo.css` que esconde o pino e o chat com janela aberta. As classes entraram na lista; camada de tela cheia nova com classe própria deve entrar nela.
+- **Medido (auditor, 611 vistas, antes = após L1):** corte escondendo controle 18 → 0, área que rola para o lado 2 → 0, culpado da área 10 → 0, vazamento "alta" 155 → 148, controle coberto 0. Rolagem lateral "média" 170 → 173: são as tabelas que agora rolam dentro do cartão (esperado; o botão fica alcançável, e a coluna fixa da L4 o deixa sempre à vista).
+- Restam em "alta" os da L3 (caminho do cabeçalho a 960 px, selos de Engenharia › Estruturas, aviso das OPs, SAC lote, Marketing, Licitações › Nova licitação, datas De/Até, CRM FOB). `vite build` verde.
