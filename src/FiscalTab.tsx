@@ -448,7 +448,7 @@ export default function FiscalTab({ currentUser }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <button type="button" onClick={() => setLotesAbertos(p => ({ ...p, [base]: !aberto }))}
                 title={aberto ? 'Esconder as unidades' : 'Ver as unidades'}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: 0 }}>{aberto ? '▾' : '▸'}</button>
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: '0 12px' }}>{aberto ? '▾' : '▸'}</button>
               <strong className="acn-forte">🔗 {base}</strong>
               <Tag title="O lote é da produção; a nota é de uma venda só">Lote · {totalVenda || chegaram.length} unidades</Tag>
               {/* fluxo misto (M2): as unidades de envio chegam ao Fiscal em outro ritmo que as adaptadas; faturar só parte do lote é a saída deliberada, já prevista abaixo */}

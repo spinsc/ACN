@@ -77,6 +77,7 @@ import ContatoAlertWidget from './ContatoAlertWidget';
 import ContatoComercialAlertWidget from './ContatoComercialAlertWidget';
 import { OplDetalheModal } from './AcnTabShared';
 import { normalizarBusca, palavrasDaBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
+import { ligarColunaDeAcoesFixa } from './ColunaAcoesFixa';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -740,6 +741,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [waNotifCount, setWaNotifCount] = useState(0);
   // Pendências de análise técnica por setor — contador no menu das abas que
   // têm o quadro de análises (Engenharia, Produção). Tempo real + a cada 60s.
+  // L4 do plano de layout (19/11/2026): a coluna "Ações" das tabelas largas fica presa à direita (ver ColunaAcoesFixa.ts)
+  useEffect(() => ligarColunaDeAcoesFixa(), []);
   const [analisesPorSetor, setAnalisesPorSetor] = useState<Record<string, number>>({});
   useEffect(() => {
     const atualizar = () => contarAnalisesPendentesPorSetor().then(setAnalisesPorSetor).catch(() => {});

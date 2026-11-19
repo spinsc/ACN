@@ -32,8 +32,32 @@ type ItemAba = { id: string; rotulo: React.ReactNode; icone?: string; contagem?:
 
 // ── Abas sublinhadas ──────────────────────────────────────────────────────────
 export function Abas({ itens, ativa, onChange, className }: { itens: ItemAba[]; ativa: string; onChange: (id: string) => void; className?: string }) {
+  // L5 do plano de layout (19/11/2026): no celular a barra de abas rola para o lado e a aba da direita ficava escondida sem nenhuma pista.
+  // Agora a borda que tem mais abas além da vista esmaece (data-rola-esq/dir, design.css) e a aba ativa é trazida para a vista.
+  const ref = useRef<HTMLDivElement>(null);
+  const [rola, setRola] = useState({ esq: false, dir: false });
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const medir = () => {
+      const esq = el.scrollLeft > 4, dir = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      setRola(a => (a.esq === esq && a.dir === dir ? a : { esq, dir }));
+    };
+    medir();
+    el.addEventListener('scroll', medir, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null;
+    ro?.observe(el);
+    return () => { el.removeEventListener('scroll', medir); ro?.disconnect(); };
+  }, [itens.length]);
+  useEffect(() => {
+    const el = ref.current; const aba = el?.querySelector<HTMLElement>('[aria-selected=true]');
+    if (!el || !aba) return;
+    // só mexe na rolagem da própria barra (scrollIntoView arrastaria a página também)
+    const a = aba.offsetLeft, b = a + aba.offsetWidth;
+    if (a < el.scrollLeft + 24) el.scrollTo({ left: Math.max(0, a - 24), behavior: 'smooth' });
+    else if (b > el.scrollLeft + el.clientWidth - 24) el.scrollTo({ left: b - el.clientWidth + 24, behavior: 'smooth' });
+  }, [ativa]);
   return (
-    <div className={'acn-abas' + (className ? ' ' + className : '')} role="tablist">
+    <div ref={ref} className={'acn-abas' + (className ? ' ' + className : '')} role="tablist" data-rola-esq={rola.esq || undefined} data-rola-dir={rola.dir || undefined}>
       {itens.map(it => (
         <button key={it.id} type="button" role="tab" aria-selected={ativa === it.id} title={it.titulo}
           className={'acn-aba' + (ativa === it.id ? ' ativa' : '') + (it.classe ? ' ' + it.classe : '')} onClick={() => onChange(it.id)}>
