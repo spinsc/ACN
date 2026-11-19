@@ -97,7 +97,7 @@ html body .acn-ini-ponto:not(#acn), html body .acn-ini-contador:not(#acn), html 
 /* aniversariante do mês que já passou (o cartão mostra o mês inteiro, 09/11/2026): o nome fica mais apagado e a data segue à direita; o cinza é o do texto secundário, que já passa de 4,5:1 nos dois modos */
 .acn-ini-item.passado .acn-ini-forte { color: var(--acn-muted); font-weight: 500; }
 .acn-ini-dia { width: 38px; flex: none; text-align: center; border: 1px solid var(--acn-line); border-radius: var(--acn-r3); overflow: hidden; line-height: 1.1; background: var(--acn-surface); }
-.acn-ini-dia span { display: block; background: var(--acn-brand-soft); color: var(--acn-brand-ink); font-size: 9px; font-weight: 600; letter-spacing: .06em; padding: 2px 0; }
+.acn-ini-dia span { display: block; background: var(--acn-brand-soft); color: var(--acn-brand-ink); font-size: 11px; font-weight: 600; letter-spacing: .06em; padding: 2px 0; }
 .acn-ini-dia b { display: block; color: var(--acn-ink); font-size: 15px; padding: 3px 0; }
 
 /* previsão do tempo */
