@@ -25,18 +25,18 @@ export function CaixaDeEspera({ demanda, currentUser, onAtualizado }: any) {
   const estado = estadoGuardadoDaEspera(demanda);
   const [executar, ocupado] = useExecutar(demanda.id, onAtualizado);
   const [abrindo, setAbrindo] = useState(false);
-  const [vivo, setVivo] = useState<any>({ carregando: false, pedidos: [], chegadas: [], erro: '' });
+  const [vivo, setVivo] = useState<any>({ carregando: false, pedidos: [], chegadas: [], entregas: [], erro: '' });
   const chave = JSON.stringify(demanda.espera_material?.itens || []) + '|' + (demanda.espera_material?.chegou_em || '');
 
   useEffect(() => {
     let ativo = true;
-    if (estado === 'sem') { setVivo({ carregando: false, pedidos: [], chegadas: [], erro: '' }); return () => { ativo = false; }; }
+    if (estado === 'sem') { setVivo({ carregando: false, pedidos: [], chegadas: [], entregas: [], erro: '' }); return () => { ativo = false; }; }
     setVivo((v: any) => ({ ...v, carregando: true }));
     lerEsperaAgora(demanda.espera_material).then(r => { if (ativo) setVivo({ carregando: false, ...r }); });
     return () => { ativo = false; };
   }, [chave]);
 
-  const situacao = useMemo(() => situacaoDaEspera(demanda.espera_material, vivo.pedidos, vivo.chegadas), [chave, vivo]);
+  const situacao = useMemo(() => situacaoDaEspera(demanda.espera_material, vivo.pedidos, vivo.chegadas, vivo.entregas), [chave, vivo]);
   const gerente = ehGerenteDev(currentUser);
   const etapas = demanda.etapas || [];
   const proxima = etapas.find((e: any) => e.status !== 'concluida');
@@ -106,11 +106,11 @@ export function CaixaDeEspera({ demanda, currentUser, onAtualizado }: any) {
             {situacao.itens.map((i: any) => (
               <tr key={i.pedido_id + i.chave}>
                 <td>{i.nome}</td>
-                <td>{i.pedido ? numeroDaOC(i.pedido) : i.numero || '—'}<div className="acn-fraco">{i.pedido?.fornecedor || i.fornecedor || ''}{i.pedido ? ` · ${i.pedido.status_compra}` : ''}</div></td>
-                <td>{i.pedido ? dia(i.pedido.data_prevista_recebimento || i.pedido.prazo_entrega) : '—'}</td>
+                <td>{i.pedido ? numeroDaOC(i.pedido) : i.numero || '—'}<div className="acn-fraco">{i.entrega?.fornecedor || i.pedido?.fornecedor || i.fornecedor || ''}{i.pedido ? ` · ${i.pedido.status_compra}` : ''}</div></td>
+                <td>{i.pedido ? dia(i.entrega?.data_prevista || i.pedido.data_prevista_recebimento || i.pedido.prazo_entrega) : '—'}</td>
                 <td>
                   {vivo.carregando && !vivo.pedidos.length ? <span className="acn-fraco">Conferindo…</span>
-                    : i.estado === 'chegou' ? <Selo familia="ok" ponto={false}>{i.chegada.pelaOC ? 'Chegou (OC recebida)' : `Chegou ${qtd(i.chegada.quantidade)}${i.pedida ? ` de ${qtd(i.pedida)}` : ''}`}</Selo>
+                    : i.estado === 'chegou' ? <Selo familia="ok" ponto={false}>{i.chegada.pelaOC ? 'Chegou (OC recebida)' : i.chegada.pelaEntrega ? `Chegou (entrega de ${i.chegada.pelaEntrega})` : `Chegou ${qtd(i.chegada.quantidade)}${i.pedida ? ` de ${qtd(i.pedida)}` : ''}`}</Selo>
                     : i.estado === 'aguardando' ? <Selo familia="atencao" ponto={false}>Aguardando</Selo>
                     : <Selo familia="erro" ponto={false}>{i.estado === 'descartada' ? 'Compra descartada' : i.estado === 'sumiu' ? 'Compra não achada' : 'Item mudou'}</Selo>}
                   {i.estado === 'chegou' && !i.chegada.pelaOC && i.chegada.em && <div className="acn-fraco">{dataBR(i.chegada.em)}{i.chegada.por ? ` · ${i.chegada.por}` : ''}</div>}
@@ -137,7 +137,7 @@ function ModalItensEsperados({ demanda, currentUser, executar, onClose }: any) {
   const atual = demanda.espera_material;
   const [busca, setBusca] = useState('');
   const [buscaAplicada, setBuscaAplicada] = useState('');
-  const [estado, setEstado] = useState<any>({ carregando: true, lista: [], chegadas: [], erro: '' });
+  const [estado, setEstado] = useState<any>({ carregando: true, lista: [], chegadas: [], entregas: [], erro: '' });
   const [escolhidos, setEscolhidos] = useState<Record<string, any>>(() => Object.fromEntries((atual?.itens || []).map((i: any) => [`${i.pedido_id}|${i.chave}`, i])));
   const sol = solicitanteDaDemanda(demanda);
   const [avisar, setAvisar] = useState<any[]>(() => atual?.avisar?.length ? atual.avisar : [currentUser, sol].filter(p => p?.email).map(p => ({ email: p.email, nome: p.nome || p.email })).filter((p, i, a) => a.findIndex(x => String(x.email).toLowerCase() === String(p.email).toLowerCase()) === i));
@@ -149,8 +149,8 @@ function ModalItensEsperados({ demanda, currentUser, executar, onClose }: any) {
     setEstado((s: any) => ({ ...s, carregando: true }));
     (async () => {
       const r = await lerComprasParaEspera(demanda, buscaAplicada);
-      const c = r.erro ? { chegadas: [], erro: '' } : await lerChegadasDe(r.lista.map((p: any) => String(p.id)));
-      if (ativo) setEstado({ carregando: false, lista: r.lista, chegadas: c.chegadas, erro: r.erro || c.erro });
+      const c = r.erro ? { chegadas: [], entregas: [], erro: '' } : await lerChegadasDe(r.lista.map((p: any) => String(p.id)));
+      if (ativo) setEstado({ carregando: false, lista: r.lista, chegadas: c.chegadas, entregas: c.entregas, erro: r.erro || c.erro });
     })();
     return () => { ativo = false; };
   }, [buscaAplicada, demanda.id]);
@@ -168,7 +168,7 @@ function ModalItensEsperados({ demanda, currentUser, executar, onClose }: any) {
       // o que já chegou é lido de novo na hora de gravar: a demanda nasce liberada se tudo o que ela espera já está aqui
       const agora = await lerEsperaAgora({ itens: links });
       if (agora.erro) { setErro(`Não foi possível conferir o que já chegou (${agora.erro}). Nada foi gravado.`); return; }
-      const jaChegaram = situacaoDaEspera({ itens: links }, agora.pedidos, agora.chegadas).todos;
+      const jaChegaram = situacaoDaEspera({ itens: links }, agora.pedidos, agora.chegadas, agora.entregas).todos;
       const r = await executar((d: any, ag: string) => ligarItens(d, links, avisar, currentUser, jaChegaram, ag));
       if (r) { mostrarAviso(jaChegaram ? 'Todo o material escolhido já chegou: o desenvolvimento está liberado.' : 'A demanda agora espera o material. A Engenharia será avisada quando chegar.', jaChegaram ? 'ok' : 'info'); onClose(); }
     } finally { setSalvando(false); }
@@ -202,12 +202,12 @@ function ModalItensEsperados({ demanda, currentUser, executar, onClose }: any) {
                   {p.numero_oc && p.numero_pedido ? <span className="acn-fraco"> (pedido {p.numero_pedido})</span> : null}
                   <div className="acn-fraco">{p.descricao_material}</div></div>
                 {itensDaOC(p).map(it => {
-                  const k = `${p.id}|${it.chave}`; const c = chegadaDoItem(p, estado.chegadas, it);
+                  const k = `${p.id}|${it.chave}`; const c = chegadaDoItem(p, estado.chegadas, it, estado.entregas);
                   return (
                     <label key={k} className="acn-dev-compra-item">
                       <input type="checkbox" checked={!!escolhidos[k]} onChange={() => alternar(p, it)} />
                       <span>{it.nome}{it.quantidade ? <span className="acn-fraco"> · {qtd(it.quantidade)} un.</span> : null}</span>
-                      {c.chegou && <Selo familia="ok" ponto={false}>{c.pelaOC ? 'Chegou (OC recebida)' : `Chegou ${qtd(c.quantidade)}`}</Selo>}
+                      {c.chegou && <Selo familia="ok" ponto={false}>{c.pelaOC ? 'Chegou (OC recebida)' : c.pelaEntrega ? `Chegou (entrega de ${c.pelaEntrega})` : `Chegou ${qtd(c.quantidade)}`}</Selo>}
                     </label>
                   );
                 })}

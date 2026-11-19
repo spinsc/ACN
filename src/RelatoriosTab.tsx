@@ -18,6 +18,7 @@ import { lerDepartamentos, anexarDepartamentos, departamentosTexto, departamento
 import CustoMaoDeObraTela from './CustoMaoDeObraTela';
 import { temAbaDe } from './ViagemFluxo';
 import { podeVerValores } from './utils/permissoes';
+import { lerEntregasDosPedidos, entregasDoPedido, estaAtrasada, esperadoDaEntrega, itensComPosicao, chaveDaEntrega } from './ComprasEntregas';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -598,12 +599,42 @@ function RelRecebimentosEnvios() {
   const [ini, setIni] = useState(iniPeriodo);
   const [fim, setFim] = useState(hojeISO());
   const [recebimentos, setRecebimentos] = useState([]);
+  const [erroEntregas, setErroEntregas] = useState('');
   const [envios, setEnvios] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [aba, setAba] = useState('rec');
 
+  // E4 (17/11/2026): cada fornecedor de um pedido com mais de um entra no relatório com a SUA data e o SEU valor ("dados reais de quando chega o que"). O pedido de um fornecedor só
+  // continua sendo uma linha, como sempre; o pedido de vários traz uma linha por entrega cuja data cai no período (a data do pedido é só a mais distante).
+  const montarLinhasDeRecebimento = async (pedidos: any[], ini: string, fim: string) => {
+    const ent = await lerEntregasDosPedidos(pedidos);
+    const hoje = hojeISO();
+    const linhas: any[] = [];
+    for (const p of pedidos) {
+      const entregas = entregasDoPedido(p, ent.linhas);
+      if (entregas.length > 1 && !ent.erro) {
+        const itens = itensComPosicao(p);
+        for (const e of entregas) {
+          if (!e.data_prevista || e.data_prevista < ini || e.data_prevista > fim) continue;
+          const venc = (p.vencedoras || []).find((v: any) => String(v.cotacao_id) === String(e.cotacao_id));
+          linhas.push({ chave: p.id + '|' + chaveDaEntrega(e), pedido: p, fornecedor: e.fornecedor, data: e.data_prevista, valor: venc?.valor ?? null,
+            qtd: esperadoDaEntrega(p, e) || null, descricao: (e.itens?.length ? itens.filter((i: any) => e.itens.includes(i.indice)).map((i: any) => String(i.nome)).join(' · ') : '') || p.descricao_material,
+            situacao: e.situacao === 'recebida' ? 'Recebido' : e.situacao === 'divergencia' ? 'Divergência' : (p.status_compra || ''), atrasada: estaAtrasada(e, hoje) });
+        }
+      } else {
+        const dia = String(p.data_prevista_recebimento || '').slice(0, 10);
+        if (!dia || dia < ini || dia > fim) continue;
+        linhas.push({ chave: String(p.id), pedido: p, fornecedor: p.fornecedor, data: dia, valor: p.valor_compra, qtd: p.quantidade, descricao: p.descricao_material, situacao: p.status_compra || '',
+          atrasada: dia < hoje && p.status_compra !== 'Recebido' });
+      }
+    }
+    return { linhas: linhas.sort((a, b) => String(a.data).localeCompare(String(b.data)) || String(a.pedido.numero_pedido).localeCompare(String(b.pedido.numero_pedido))), erro: ent.erro };
+  };
+
   const buscar = async () => {
     setCarregando(true);
+    // além dos pedidos cuja data (a mais distante) cai no período, entram os que têm a data de alguma entrega de fornecedor dentro dele
+    const entPeriodo = await supabase.from('compras_entregas').select('pedido_id').gte('data_prevista', ini).lte('data_prevista', fim);
     const [recRes, envRes] = await Promise.all([
       supabase.from('pcp_pedidos_compra').select('*')
         .gte('data_prevista_recebimento', ini)
@@ -615,7 +646,20 @@ function RelRecebimentosEnvios() {
         .lte('data_entrada', fim+'T23:59:59')
         .order('data_entrega', { ascending: false }),
     ]);
-    setRecebimentos(recRes.data || []);
+    // a leitura que falha não pode virar "nenhum recebimento no período"
+    // os pedidos que entram só pela data de uma entrega de fornecedor são lidos por id, em blocos de 80
+    let pedidosDoPeriodo = recRes.data || []; let erroExtras = '';
+    if (!recRes.error && !entPeriodo.error) {
+      const jaLidos = new Set(pedidosDoPeriodo.map((p: any) => String(p.id)));
+      const faltam = [...new Set((entPeriodo.data || []).map((l: any) => String(l.pedido_id)))].filter(id => !jaLidos.has(id));
+      for (let i = 0; i < faltam.length && !erroExtras; i += 80) {
+        const { data: extras, error: erroLeitura } = await supabase.from('pcp_pedidos_compra').select('*').in('id', faltam.slice(i, i + 80));
+        if (erroLeitura) erroExtras = erroLeitura.message; else pedidosDoPeriodo = [...pedidosDoPeriodo, ...(extras || [])];
+      }
+    }
+    const montado = recRes.error ? { linhas: [], erro: null } : await montarLinhasDeRecebimento(pedidosDoPeriodo, ini, fim);
+    setErroEntregas(recRes.error ? `Não foi possível ler os pedidos (${recRes.error.message}).` : entPeriodo.error || erroExtras ? `Não foi possível ler as entregas por fornecedor (${entPeriodo.error?.message || erroExtras}); pedidos de vários fornecedores podem faltar.` : montado.erro ? `Não foi possível ler a data de cada fornecedor (${montado.erro}); os pedidos de vários fornecedores aparecem com a data mais distante.` : '');
+    setRecebimentos(montado.linhas);
     setEnvios(envRes.data || []);
     setCarregando(false);
   };
@@ -641,22 +685,20 @@ function RelRecebimentosEnvios() {
             <span>Recebimentos Previstos <Selo familia="info" ponto={false}>{recebimentos.length}</Selo></span>
           </div>
           <div className="sec-body acn-rolagem">
+            {erroEntregas && <Faixa tom="erro">{erroEntregas}</Faixa>}
             {carregando?<div className="acn-empty">Carregando...</div>:recebimentos.length===0?<div className="acn-empty">Nenhum recebimento no período.</div>:(
               <table className="acn-tabela"><thead><tr><th>Nº Pedido</th><th>Descrição</th><th>Fornecedor</th><th>Qtd</th><th>Prev. Recebimento</th><th>Valor</th><th>Status</th></tr></thead>
               <tbody>{recebimentos.map(r=>{
-                const hoje = new Date(); hoje.setHours(0,0,0,0);
-                const dt = r.data_prevista_recebimento ? new Date(r.data_prevista_recebimento.slice(0,10)+'T00:00:00') : null;
                 // 'Recebido' desde 22/09/2026 (era 'Concluído'): com o nome
                 // antigo, compra já recebida continuava saindo como atrasada
-                const atras = dt && dt < hoje && r.status_compra !== 'Recebido';
-                return <tr key={r.id} className={atras?'acn-linha-alerta':undefined}>
-                  <td><strong className="acn-forte">{r.numero_pedido||'—'}</strong></td>
-                  <td className="acn-texto-longo">{r.descricao_material||'—'}</td>
+                return <tr key={r.chave} className={r.atrasada?'acn-linha-alerta':undefined}>
+                  <td><strong className="acn-forte">{r.pedido.numero_pedido||'—'}</strong></td>
+                  <td className="acn-texto-longo">{r.descricao||'—'}</td>
                   <td>{r.fornecedor||'—'}</td>
-                  <td>{r.quantidade||'—'}</td>
-                  <td className={atras?'acn-txt-erro':undefined}>{fmtData(r.data_prevista_recebimento)}</td>
-                  <td>{fmtVal(r.valor_compra)}</td>
-                  <td><Selo familia={r.status_compra==='Recebido'?'ok':r.status_compra==='Em Andamento'?'info':'neutro'}>{r.status_compra||'—'}</Selo></td>
+                  <td>{r.qtd||'—'}</td>
+                  <td className={r.atrasada?'acn-txt-erro':undefined}>{fmtData(r.data)}</td>
+                  <td>{fmtVal(r.valor)}</td>
+                  <td><Selo familia={r.situacao==='Recebido'?'ok':r.situacao==='Divergência'?'atencao':r.situacao==='Em Andamento'?'info':'neutro'}>{r.situacao||'—'}</Selo></td>
                 </tr>;
               })}</tbody></table>
             )}

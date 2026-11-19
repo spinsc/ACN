@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 import { ehGerenteDev, estadoGuardadoDaEspera } from './DesenvolvimentoModelo';
+import { lerEntregas, entregasDoPedido, entregasDoItem } from './ComprasEntregas';
 
 export const MAX_ITENS_ESPERA = 20;
 export const MAX_AVISAR = 20;
@@ -34,40 +35,66 @@ export function itensDaOC(pedido: any): ItemDaOC[] {
 
 export const numeroDaOC = (p: any) => p?.numero_oc || p?.numero_pedido || '—';
 
-/** O item chegou? Chegada marcada pela Logística (mesma chave e mesmo nome, com quantidade) ou a OC inteira "Recebido". `chegadas` = linhas de `compras_chegadas_itens`. */
-export function chegadaDoItem(pedido: any, chegadas: any[], item: { chave: string; nome: string; quantidade?: number | null }) {
-  if (pedido?.status_compra === 'Recebido') return { chegou: true, quantidade: item.quantidade ?? null, pelaOC: true, em: pedido.data_recebimento_real || pedido.data_conclusao || null, por: null };
+/** A posição do item na OC (0-based, a mesma das vencedoras): a chave é 'i0', 'i1'…; chave de outro formato não tem posição. */
+const posicaoDaChave = (chave: any): number | null => { const m = /^i(\d+)$/.exec(String(chave ?? '')); return m ? Number(m[1]) : null; };
+
+/**
+ * O item chegou? Três maneiras, nesta ordem: a OC inteira "Recebido"; a chegada marcada pela Logística (mesma chave e mesmo nome, com quantidade); ou — desde a E4, 17/11/2026 —
+ * a entrega do FORNECEDOR que traz o item foi recebida (a OC de vários fornecedores só vira "Recebido" quando o último chega, mas o rack do primeiro fornecedor já está aqui).
+ * Só a entrega "recebida" vale: com divergência ela segue aberta, e a Logística marca a chegada à mão se o item veio. `chegadas` = linhas de `compras_chegadas_itens`; `linhasEntregas` = linhas de `compras_entregas`.
+ * A mesma conta está no banco (`engenharia_item_chegou`), que é quem libera e avisa.
+ */
+export function chegadaDoItem(pedido: any, chegadas: any[], item: { chave: string; nome: string; quantidade?: number | null }, linhasEntregas: any[] = []) {
+  if (pedido?.status_compra === 'Recebido') return { chegou: true, quantidade: item.quantidade ?? null, pelaOC: true, pelaEntrega: null, em: pedido.data_recebimento_real || pedido.data_conclusao || null, por: null };
   const c = (chegadas || []).find((x: any) => String(x.pedido_id) === String(pedido?.id) && x.chave === item.chave && mesmoNome(x.nome, item.nome) && Number(x.quantidade) > 0);
-  return c ? { chegou: true, quantidade: Number(c.quantidade), pelaOC: false, em: c.em || null, por: c.por || null } : { chegou: false, quantidade: 0, pelaOC: false, em: null, por: null };
+  if (c) return { chegou: true, quantidade: Number(c.quantidade), pelaOC: false, pelaEntrega: null, em: c.em || null, por: c.por || null };
+  const pos = posicaoDaChave(item.chave);
+  const dela = pos === null ? [] : entregasDoItem(entregasDoPedido(pedido, linhasEntregas), pos);
+  if (dela.length && dela.every(e => e.situacao === 'recebida')) {
+    const ultima = [...dela].sort((a, b) => String(a.recebida_em || a.data_recebimento_real || '').localeCompare(String(b.recebida_em || b.data_recebimento_real || ''))).pop();
+    return { chegou: true, quantidade: item.quantidade ?? null, pelaOC: false, pelaEntrega: dela.map(e => e.fornecedor).join(' e '), em: ultima?.recebida_em || ultima?.data_recebimento_real || null, por: ultima?.recebida_por || null };
+  }
+  return { chegou: false, quantidade: 0, pelaOC: false, pelaEntrega: null, em: null, por: null };
+}
+
+/** A entrega que traz o item (a data e o fornecedor dele): a única que o cobre, ou a mais distante se mais de uma o cobre (cauteloso). Sem entrega, vazio. */
+export function entregaQueTrazOItem(pedido: any, linhasEntregas: any[], item: { chave: string }) {
+  const pos = posicaoDaChave(item.chave);
+  if (pos === null) return null;
+  const dela = entregasDoItem(entregasDoPedido(pedido, linhasEntregas), pos).filter(e => e.data_prevista);
+  if (!dela.length) return null;
+  return [...dela].sort((a, b) => String(a.data_prevista).localeCompare(String(b.data_prevista))).pop();
 }
 
 /** A situação de cada item ligado, com o que está lido AGORA: 'chegou', 'aguardando', 'descartada' (a OC foi descartada: nunca vai chegar), 'mudou' (o item não é mais o mesmo na OC) ou 'sumiu' (a OC não foi achada). */
-export function situacaoDaEspera(espera: any, pedidos: any[], chegadas: any[]) {
+export function situacaoDaEspera(espera: any, pedidos: any[], chegadas: any[], linhasEntregas: any[] = []) {
   const itens = (espera?.itens || []).map((l: any) => {
     const pedido = (pedidos || []).find((p: any) => String(p.id) === String(l.pedido_id));
     if (!pedido) return { ...l, estado: 'sumiu', pedido: null };
     if (pedido.status_compra === 'Descartada') return { ...l, estado: 'descartada', pedido };
     const atual = itensDaOC(pedido).find(i => i.chave === l.chave);
     if (!atual || !mesmoNome(atual.nome, l.nome)) return { ...l, estado: 'mudou', pedido };
-    const c = chegadaDoItem(pedido, chegadas, atual);
-    return { ...l, estado: c.chegou ? 'chegou' : 'aguardando', pedido, pedida: atual.quantidade, chegada: c };
+    const c = chegadaDoItem(pedido, chegadas, atual, linhasEntregas);
+    const entrega = entregaQueTrazOItem(pedido, linhasEntregas, atual);
+    return { ...l, estado: c.chegou ? 'chegou' : 'aguardando', pedido, pedida: atual.quantidade, chegada: c, entrega };
   });
   const faltam = itens.filter((i: any) => i.estado !== 'chegou').length;
   return { itens, faltam, todos: itens.length > 0 && faltam === 0 };
 }
 
 // ── leituras (leitura recusada devolve `erro`, nunca "vazio") ─────────────────────────────────────────────────────────
-const COLUNAS_PEDIDO = 'id,numero_pedido,numero_oc,descricao_material,fornecedor,status_compra,quantidade,quantidade_comprada,itens,opl,vinculo_tipo,vinculo_id,data_prevista_recebimento,prazo_entrega,data_recebimento_real,data_conclusao,data_criacao';
+const COLUNAS_PEDIDO = 'id,numero_pedido,numero_oc,descricao_material,fornecedor,status_compra,quantidade,quantidade_comprada,itens,opl,vinculo_tipo,vinculo_id,data_prevista_recebimento,prazo_entrega,data_recebimento_real,data_conclusao,data_criacao,vencedoras,vencedora_id,tem_divergencia';
 
 export async function lerEsperaAgora(espera: any) {
   const ids = [...new Set((espera?.itens || []).map((i: any) => String(i.pedido_id)))];
-  if (!ids.length) return { pedidos: [], chegadas: [], erro: '' };
-  const [a, b] = await Promise.all([
+  if (!ids.length) return { pedidos: [], chegadas: [], entregas: [], erro: '' };
+  const [a, b, c] = await Promise.all([
     supabase.from('pcp_pedidos_compra').select(COLUNAS_PEDIDO).in('id', ids),
     supabase.from('compras_chegadas_itens').select('pedido_id,chave,nome,quantidade,em,por').in('pedido_id', ids),
+    lerEntregas(ids),
   ]);
-  const erro = a.error?.message || b.error?.message || '';
-  return { pedidos: a.data || [], chegadas: b.data || [], erro };
+  const erro = a.error?.message || b.error?.message || c.erro || '';
+  return { pedidos: a.data || [], chegadas: b.data || [], entregas: c.linhas, erro };
 }
 
 /** As compras que podem ser esperadas por esta demanda: as da OP dela (pelo vínculo e pelo número em texto) ou, na busca, qualquer uma pelo número ou material. Descartada não entra. */
@@ -96,10 +123,14 @@ export async function lerComprasParaEspera(demanda: any, busca = '') {
   return { lista: [...vistos.values()], erro: '' };
 }
 
+/** As chegadas marcadas pela Logística e, desde a E4, as entregas de cada fornecedor dos mesmos pedidos (o item também chega pela entrega recebida). */
 export async function lerChegadasDe(ids: string[]) {
-  if (!ids.length) return { chegadas: [], erro: '' };
-  const { data, error } = await supabase.from('compras_chegadas_itens').select('pedido_id,chave,nome,quantidade,em,por').in('pedido_id', ids);
-  return { chegadas: data || [], erro: error?.message || '' };
+  if (!ids.length) return { chegadas: [], entregas: [], erro: '' };
+  const [a, b] = await Promise.all([
+    supabase.from('compras_chegadas_itens').select('pedido_id,chave,nome,quantidade,em,por').in('pedido_id', ids),
+    lerEntregas(ids),
+  ]);
+  return { chegadas: a.data || [], entregas: b.linhas, erro: a.error?.message || b.erro || '' };
 }
 
 /** Quem espera cada OC: as demandas de Desenvolvimento ligadas a ela (a Logística mostra "a Engenharia espera este item"). Mapa pedido_id → demandas. */

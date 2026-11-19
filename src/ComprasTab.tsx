@@ -2258,8 +2258,8 @@ export default function ComprasTab({ currentUser }) {
   // A busca e a ordem valem para o quadro e para a tabela; os totais do topo seguem contando tudo o que foi lido (o aviso "N de M" diz quando a lista está filtrada)
   const buscando = buscaGeral.trim() !== '';
   const pedidosVista = (() => {
-    const achados = buscando ? pedidos.filter((p: any) => pedidoCombinaComBusca(p, buscaGeral, canVerValor, departamentosConfig)) : pedidos;
-    return ordem === 'padrao' ? achados : ordenarPedidos(achados, ordem as any);
+    const achados = buscando ? pedidos.filter((p: any) => pedidoCombinaComBusca(p, buscaGeral, canVerValor, departamentosConfig, entregasLinhas)) : pedidos;
+    return ordem === 'padrao' ? achados : ordenarPedidos(achados, ordem as any, entregasLinhas);
   })();
   const agruparPorStatus  = filtro === '';
   const pedidosAtivos     = agruparPorStatus ? pedidosVista.filter((p:any) => !['Recebido', DESCARTADA].includes(p.status_compra)) : pedidos;
@@ -3192,11 +3192,18 @@ export default function ComprasTab({ currentUser }) {
       {modalFluxo?.tipo === 'editar' && <ModalEditarSolicitacao pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)} onFeito={()=>{ setModalFluxo(null); load(); }} />}
       {modalFluxo?.tipo === 'receber' && (
         <ModalReceberPedido pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)}
-          onFeito={async (confere: boolean) => {
+          onFeito={async (r: any) => {
             const p = modalFluxo.pedido;
-            await registrarHistorico(p.id, confere
-              ? { tipo: 'avanco', de: 'Comprado', para: 'Recebido', motivo: 'Recebimento registrado e conferido.' }
-              : { tipo: 'posicao_entrega', de: 'Comprado', para: 'Comprado', motivo: 'Recebimento com divergência — a compra continua em Comprado até resolver.' }, currentUser);
+            // 17/11/2026 (entrega por fornecedor, E2): o recebimento é de UM fornecedor por vez; o pedido só vira "Recebido" quando o último chega.
+            // r = { confere, fechou, fornecedor, varias, faltam } (ou { erro } quando o recebimento não foi gravado no pedido: não há o que registrar no histórico)
+            if (!r?.erro) {
+              const de = r?.varias ? ` de ${r.fornecedor}` : '';
+              await registrarHistorico(p.id, r?.fechou
+                ? { tipo: 'avanco', de: 'Comprado', para: 'Recebido', motivo: r?.varias ? 'Recebimento do último fornecedor registrado e conferido: todos os fornecedores foram recebidos.' : 'Recebimento registrado e conferido.' }
+                : { tipo: 'posicao_entrega', de: 'Comprado', para: 'Comprado', motivo: r?.confere
+                  ? `Recebimento${de} registrado e conferido — ainda faltam: ${(r.faltam || []).join(', ')}. A compra continua em Comprado.`
+                  : `Recebimento${de} com divergência — a compra continua em Comprado até resolver.` }, currentUser);
+            }
             setModalFluxo(null); load();
           }} />
       )}

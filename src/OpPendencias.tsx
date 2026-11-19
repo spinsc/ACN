@@ -23,7 +23,8 @@ import { supabase } from './supabaseClient';
 import { vinculosDaOp } from './OpVinculos';
 import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
-import { Botao } from './Interface';
+import { Botao, hojeISO } from './Interface';
+import { lerEntregasDosPedidos, chegadaDoPedido, frasePorFornecedor } from './ComprasEntregas';
 import Icone from './Icone';
 import { mdiCheck, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline, mdiCheckCircleOutline } from '@mdi/js';
 
@@ -257,7 +258,7 @@ export async function indicePendencias() {
       .not('opl_id', 'is', null).in('setor_destino', SETORES_QUE_SEGURAM),
     supabase.from('demandas_avulsas').select('id,setor,titulo,status,vinculo_id,vinculos,data_fim,atualizado_em')
       .in('setor', SETORES_QUE_SEGURAM),
-    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,numero_oc,descricao_material,status_compra,data_prevista_recebimento,data_recebimento_real,data_conclusao')
+    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,numero_oc,descricao_material,status_compra,data_prevista_recebimento,data_recebimento_real,data_conclusao,fornecedor,vencedoras,vencedora_id,tem_divergencia')
       .not('vinculo_id', 'is', null),
     // 18c: só os pedidos do PCP seguram a OP (o desenvolvimento aberto pela própria Engenharia segue sendo apoio)
     supabase.from('engenharia_desenvolvimento').select('id,opl_id,opl_ids,titulo,concluida,origem').eq('origem', 'pcp'),
@@ -285,6 +286,11 @@ export async function indicePendencias() {
     }));
   });
 
+  // E4 (17/11/2026): pedido com mais de um fornecedor diz, por fornecedor, o que já chegou e quando chega o resto. A pendência continua sendo do PEDIDO
+  // (o kit só fecha com tudo em mãos); a data de previsão é a da última entrega que falta, e a frase por fornecedor vai na dica. Leitura recusada só tira a frase: a trava não depende dela.
+  const entregasDosPedidos = await lerEntregasDosPedidos((compras.data || []).filter(c => c.vinculo_tipo !== 'estoque'));
+  const hoje = hojeISO();
+
   (compras.data || []).forEach(c => {
     // Reposição de estoque tem no `vinculo_id` o id do ITEM, não de uma OP
     // (ver Estoque.tsx). Sem esta guarda ela entrava no índice pendurada num
@@ -295,7 +301,13 @@ export async function indicePendencias() {
       id: c.id, setor: 'Compras', titulo: c.descricao_material || c.numero_pedido || 'Pedido de compra',
       aberto: !ENCERRADOS.includes(String(c.status_compra || '')), statusBruto: c.status_compra,
       // previsão de chegada (mostrada na fila do Almoxarifado) e quando chegou (para o alerta de pendência sanada, 27/10/2026)
-      previsao: c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : null,
+      ...(() => {
+        const previsaoDoPedido = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : null;
+        const ch = chegadaDoPedido(c, entregasDosPedidos.linhas, hoje);
+        if (!ch.varias) return { previsao: previsaoDoPedido };
+        if (entregasDosPedidos.erro) return { previsao: previsaoDoPedido, detalhe: 'não foi possível ler a data de cada fornecedor agora' };
+        return { previsao: ch.distante || previsaoDoPedido, detalhe: frasePorFornecedor(ch.entregas, hoje) };
+      })(),
       concluidoEm: c.data_recebimento_real || c.data_conclusao || null, numero: c.numero_oc || c.numero_pedido || null,
     });
   });

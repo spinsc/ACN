@@ -70,7 +70,8 @@ const diaMes = (iso: any) => { const m = String(iso || '').match(/^\d{4}-(\d{2})
 export function resumoDaFalta(falta: any[]): { texto: string; title: string } {
   const lista = falta || [];
   const aCaminho = lista.filter(p => p.aberto);
-  const linha = (p: any) => `• ${p.setor}: ${resumoDoItem(p.titulo, 90)}${p.aberto ? (p.previsao ? ` — previsão ${diaMes(p.previsao)}` : ' — ainda não chegou') : ' — chegou, aguarda o "Recebi"'}`;
+  // E4 (17/11/2026): compra de vários fornecedores traz a frase por fornecedor ("A: 20/11 · B: recebida 18/11"); a previsão do selo é a da última entrega que falta
+  const linha = (p: any) => `• ${p.setor}: ${resumoDoItem(p.titulo, 90)}${p.aberto ? (p.detalhe ? ` — ${p.detalhe}` : p.previsao ? ` — previsão ${diaMes(p.previsao)}` : ' — ainda não chegou') : ' — chegou, aguarda o "Recebi"'}`;
   const primeiro = aCaminho[0] || lista[0];
   const previsao = primeiro && primeiro.aberto && primeiro.previsao ? ` (prev. ${diaMes(primeiro.previsao)})` : '';
   const mais = lista.length > 1 ? ` +${lista.length - 1}` : '';

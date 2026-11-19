@@ -2365,91 +2365,94 @@ export function PainelEstoque({ currentUser }: any) {
             </div>
           )
         ) : (
-          <table className="acn-est-pe-tab">
-            <thead>
-              <tr className="acn-est-tr-cab">
-                {['Código', 'Item', ...(pode && categorias.length ? ['Categoria'] : []), 'Saldo', 'Reservado', 'Disponível', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {grupos.length === 0 && (
-                <tr><td className="acn-est-pe-vazio-td" colSpan={10}>Nenhum item nesta categoria{busca.trim() ? ' com esse filtro' : ''}.</td></tr>
-              )}
-              {grupos.map(g => (<React.Fragment key={g.id || 'todos'}>
-              {g.nome && (
-                <tr>
-                  <td className="acn-est-pe-grupo" colSpan={10}>
-                    {g.nome} <span className="acn-est-pe-grupo-n">· {g.itens.length} {g.itens.length === 1 ? 'item' : 'itens'}
-                      {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length > 0
-                        && <b className="acn-est-pe-grupo-rep"> · {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length} precisando de reposição</b>}
-                    </span>
-                  </td>
+          /* 18/11/2026 (plano de layout, L2): o cartão do estoque (.sec-card) corta o que passa da borda; no tablet em pé a coluna dos botões "Contar" e "Conferir" sumia sem barra de rolagem */
+          <div className="acn-rolagem">
+            <table className="acn-est-pe-tab">
+              <thead>
+                <tr className="acn-est-tr-cab">
+                  {['Código', 'Item', ...(pode && categorias.length ? ['Categoria'] : []), 'Saldo', 'Reservado', 'Disponível', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
+                    <th key={h}>{h}</th>
+                  ))}
                 </tr>
-              )}
-              {g.itens.map(i => {
-                const s = situacaoEstoque(i);
-                return (
-                  <tr className="acn-est-tr" key={i.id}>
-                    <td className="acn-est-pe-cod">{i.codigo || '—'}</td>
-                    <td>
-                      {i.nome}
-                      {/* peça guardada em dois estados: a bruta espera o
-                          acabamento e não serve para a produção ainda */}
-                      {i.tem_inacabado && (
-                        <div className="acn-est-pe-inacab">
-                          🔧 {fmtQtd(i.estoque_inacabado)} sem acabamento
-                          {i.inacabado_minimo != null && ` (mín. ${fmtQtd(i.inacabado_minimo)})`}
-                          {num(i.inacabado_minimo) > 0 && num(i.estoque_inacabado) <= num(i.inacabado_minimo)
-                            && <b> · no mínimo</b>}
-                        </div>
-                      )}
-                    </td>
-                    {pode && categorias.length > 0 && (
-                      <td>
-                        <select className="acn-est-pe-cat-sel" value={i.categoria_estoque_id || ''} onChange={e => trocarCategoria(i, e.target.value)} aria-label={'Categoria de ' + i.nome}>
-                          <option value="">— sem categoria —</option>
-                          {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                        </select>
-                      </td>
-                    )}
-                    <td className="acn-est-td-forte">{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
-                    {/* saldo é o que está na prateleira; disponível é o que ainda
-                        não tem dono. A diferença é o que outra OP já levou no papel. */}
-                    <td className={'acn-est-pe-reserv' + (num(reservas.get(i.id)) > 0 ? ' tem' : '')}>
-                      {num(reservas.get(i.id)) > 0 ? fmtQtd(reservas.get(i.id)) : '—'}
-                    </td>
-                    <td className={'acn-est-pe-disp' + (num(i.estoque_atual) - num(reservas.get(i.id)) < 0 ? ' neg' : '')}>
-                      {fmtQtd(num(i.estoque_atual) - num(reservas.get(i.id)))}
-                    </td>
-                    <td className="acn-est-pe-td-dim">{i.estoque_minimo == null ? '—' : fmtQtd(i.estoque_minimo)}</td>
-                    <td className="acn-est-pe-td-dim">{i.estoque_ideal == null ? '—' : fmtQtd(i.estoque_ideal)}</td>
-                    <td>
-                      <span className={'acn-est-pe-sit ' + s.chave}>
-                        {s.texto}
+              </thead>
+              <tbody>
+                {grupos.length === 0 && (
+                  <tr><td className="acn-est-pe-vazio-td" colSpan={10}>Nenhum item nesta categoria{busca.trim() ? ' com esse filtro' : ''}.</td></tr>
+                )}
+                {grupos.map(g => (<React.Fragment key={g.id || 'todos'}>
+                {g.nome && (
+                  <tr>
+                    <td className="acn-est-pe-grupo" colSpan={10}>
+                      {g.nome} <span className="acn-est-pe-grupo-n">· {g.itens.length} {g.itens.length === 1 ? 'item' : 'itens'}
+                        {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length > 0
+                          && <b className="acn-est-pe-grupo-rep"> · {g.itens.filter(x => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(x).chave)).length} precisando de reposição</b>}
                       </span>
                     </td>
-                    <td className="acn-est-pe-td-dir">
-                      {pode && (
-                        <div className="acn-est-pe-acoes-linha">
-                          <Botao className="acn-est-b acn-est-pe-contar" onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}>
-                            Contar
-                          </Botao>
-                          <MenuAcoes itens={[
-                            { rotulo: 'Definir mínimo e ideal', icone: mdiPencilOutline, onClick: () => abrirLimites(i) },
-                            { rotulo: 'Tirar do controle de estoque', icone: mdiCloseCircleOutline, perigo: true,
-                              onClick: () => desabilitarControle(i) },
-                          ]} />
-                        </div>
-                      )}
-                    </td>
                   </tr>
-                );
-              })}
-              </React.Fragment>))}
-            </tbody>
-          </table>
+                )}
+                {g.itens.map(i => {
+                  const s = situacaoEstoque(i);
+                  return (
+                    <tr className="acn-est-tr" key={i.id}>
+                      <td className="acn-est-pe-cod">{i.codigo || '—'}</td>
+                      <td>
+                        {i.nome}
+                        {/* peça guardada em dois estados: a bruta espera o
+                            acabamento e não serve para a produção ainda */}
+                        {i.tem_inacabado && (
+                          <div className="acn-est-pe-inacab">
+                            🔧 {fmtQtd(i.estoque_inacabado)} sem acabamento
+                            {i.inacabado_minimo != null && ` (mín. ${fmtQtd(i.inacabado_minimo)})`}
+                            {num(i.inacabado_minimo) > 0 && num(i.estoque_inacabado) <= num(i.inacabado_minimo)
+                              && <b> · no mínimo</b>}
+                          </div>
+                        )}
+                      </td>
+                      {pode && categorias.length > 0 && (
+                        <td>
+                          <select className="acn-est-pe-cat-sel" value={i.categoria_estoque_id || ''} onChange={e => trocarCategoria(i, e.target.value)} aria-label={'Categoria de ' + i.nome}>
+                            <option value="">— sem categoria —</option>
+                            {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                          </select>
+                        </td>
+                      )}
+                      <td className="acn-est-td-forte">{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
+                      {/* saldo é o que está na prateleira; disponível é o que ainda
+                          não tem dono. A diferença é o que outra OP já levou no papel. */}
+                      <td className={'acn-est-pe-reserv' + (num(reservas.get(i.id)) > 0 ? ' tem' : '')}>
+                        {num(reservas.get(i.id)) > 0 ? fmtQtd(reservas.get(i.id)) : '—'}
+                      </td>
+                      <td className={'acn-est-pe-disp' + (num(i.estoque_atual) - num(reservas.get(i.id)) < 0 ? ' neg' : '')}>
+                        {fmtQtd(num(i.estoque_atual) - num(reservas.get(i.id)))}
+                      </td>
+                      <td className="acn-est-pe-td-dim">{i.estoque_minimo == null ? '—' : fmtQtd(i.estoque_minimo)}</td>
+                      <td className="acn-est-pe-td-dim">{i.estoque_ideal == null ? '—' : fmtQtd(i.estoque_ideal)}</td>
+                      <td>
+                        <span className={'acn-est-pe-sit ' + s.chave}>
+                          {s.texto}
+                        </span>
+                      </td>
+                      <td className="acn-est-pe-td-dir">
+                        {pode && (
+                          <div className="acn-est-pe-acoes-linha">
+                            <Botao className="acn-est-b acn-est-pe-contar" onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}>
+                              Contar
+                            </Botao>
+                            <MenuAcoes itens={[
+                              { rotulo: 'Definir mínimo e ideal', icone: mdiPencilOutline, onClick: () => abrirLimites(i) },
+                              { rotulo: 'Tirar do controle de estoque', icone: mdiCloseCircleOutline, perigo: true,
+                                onClick: () => desabilitarControle(i) },
+                            ]} />
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                </React.Fragment>))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* extrato recente: é o que dá confiança de que o saldo não muda sozinho */}

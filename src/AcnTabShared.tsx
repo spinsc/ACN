@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
+import { lerEntregasDosPedidos, temEntrega, chegadaDoPedido } from './ComprasEntregas';
+import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
@@ -668,6 +670,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
   const [erroCompras, setErroCompras] = useState('');
+  // E4 (17/11/2026): a data de cada fornecedor dos pedidos com mais de um (a leitura que falha avisa; nunca vale como "uma data só")
+  const [linhasEntregasCompras, setLinhasEntregasCompras] = useState<any[]>([]);
+  const [erroEntregasCompras, setErroEntregasCompras] = useState('');
   // 7.x (15/10/2026): releitura da OP e do histórico que falham aparecem; antes a tela ficava com a linha velha da lista ou com "Nenhum registro de movimentação"
   const [erroOpl, setErroOpl] = useState('');
   const [erroLogs, setErroLogs] = useState('');
@@ -710,12 +715,17 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     ].filter(Boolean).join(',');
     if (!filtros) { setComprasVinculadas([]); return; }
     // Pedido do usuário em 07/10/2026: o status da compra e a previsão de chegada da mercadoria aparecem dentro do card da OP (a previsão é a data_prevista_recebimento que o Compras preenche).
-    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra,data_prevista_recebimento')
+    // E4 (17/11/2026): a previsão é uma por fornecedor quando o pedido tem mais de um (vencedoras, fornecedor, vencedora_id e tem_divergencia montam as entregas)
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra,data_prevista_recebimento,fornecedor,vencedoras,vencedora_id,tem_divergencia')
       .or(filtros).order('data_criacao', { ascending: false })
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         // leitura que falha não pode parecer "sem compras vinculadas"
         setErroCompras(error ? error.message : '');
-        if (!error) setComprasVinculadas(data || []);
+        if (error) return;
+        const ent = await lerEntregasDosPedidos(data || []);
+        setErroEntregasCompras(ent.erro || '');
+        setLinhasEntregasCompras(ent.linhas);
+        setComprasVinculadas(data || []);
       });
   }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
 
@@ -1151,6 +1161,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
             {/* ── Compras ligadas a esta OP: material que vai chegar ── */}
             {erroCompras && <div className="acn-opl-aviso erro">Não foi possível ler as compras vinculadas ({erroCompras}). Isso não quer dizer que não existam.</div>}
+            {erroEntregasCompras && <div className="acn-opl-aviso erro">Não foi possível ler a data de cada fornecedor ({erroEntregasCompras}). Nas compras de vários fornecedores a data mostrada é a mais distante.</div>}
             {comprasVinculadas.length > 0 && (
               <section className="acn-opl-card">
                 <header className="acn-opl-card-cab"><span>🛒 Compras vinculadas ({comprasVinculadas.length})</span></header>
@@ -1164,6 +1175,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                           // Recebida ou descartada não tem mais "chegada" a esperar; nas demais, a previsão vira data (vermelha se já passou) ou "sem previsão"
                           const encerrada = c.status_compra === 'Recebido' || c.status_compra === 'Descartada';
                           if (encerrada) return null;
+                          // E4: compra com mais de um fornecedor mostra a data (e o que já chegou) de cada um; uma só, como sempre foi
+                          if (temEntrega(c) && !erroEntregasCompras && chegadaDoPedido(c, linhasEntregasCompras, hojeISO()).varias) {
+                            return <span className="acn-opl-compra-forn" title="Previsão de chegada de cada fornecedor"><span className="acn-fraco">Chega</span> <PrevisaoDoPedido pedido={c} linhas={linhasEntregasCompras} /></span>;
+                          }
                           const prev = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : '';
                           const atrasada = !!prev && prev < hojeISO();
                           return (

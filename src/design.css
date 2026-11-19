@@ -40,6 +40,8 @@
   --acn-shadow-2: 0 4px 14px rgba(23, 33, 43, .08), 0 1px 3px rgba(23, 33, 43, .06);
   --acn-shadow-3: 0 18px 48px rgba(23, 33, 43, .18), 0 4px 12px rgba(23, 33, 43, .08);
   --acn-focus: 0 0 0 3px rgba(14, 112, 104, .28);
+  /* Folga no fim de toda tela (plano de ajustes de layout, L1, 18/11/2026): o 📌 dos avisos e o 💬 do chat flutuam no canto de baixo à direita e, juntos, passam até 126 px da borda (chat: 18 + 52 px; pino: 10 px acima dele + 46 px; no celular o pino fica 84 px acima da borda). Sem folga, a última linha de uma tabela não saía de baixo deles e a coluna "Ações" ficava impossível de clicar (auditoria de 16/11/2026: 49 grupos de achado em 25 telas). 140 px deixa 10 a 14 px de ar. É o fim do conteúdo, não da janela: a tela só rola um pouco mais. */
+  --acn-folga-flutuantes: 140px;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -47,7 +49,9 @@ html body { font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialia
 html body:not(.dark) { background: var(--acn-canvas); color: var(--acn-text); }
 html body:not(.dark) .acn-app { background: var(--acn-canvas); color: var(--acn-text); }
 html body:not(.dark) .acn-main:not(.acn-main-tv) { background: var(--acn-canvas); }
-html body .acn-main:not(.acn-main-tv) { padding: 14px 18px; }
+html body .acn-main:not(.acn-main-tv) { padding: 14px 18px var(--acn-folga-flutuantes); }
+/* impressão: a folga é para os botões flutuantes, que não saem no papel (celular e tablet de toque têm a própria regra no responsivo.css, que vem depois e manda) */
+@media print { html body .acn-main:not(.acn-main-tv) { padding-bottom: 14px !important; } }
 :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline: none; box-shadow: var(--acn-focus); }
 
 /* ── Escala de letras (estilo inline → escala nova) ─────────────────────────
@@ -599,7 +603,7 @@ html body .acn-main table.acn-tabela.acn-densa:not(.acn-tab-cartoes) td { paddin
 .acn-aprov { margin-bottom: 12px; border-left: 3px solid var(--acn-warn) !important; }
 .acn-aprov-titulo-cab { display: inline-flex; align-items: center; gap: 6px; }
 .acn-aprov-janela { font-size: 12px; font-weight: 400; color: var(--acn-muted); }
-.acn-select-mini { width: auto !important; min-width: 0; padding: 2px 6px; font-size: 12px; }
+.acn-select-mini { width: auto !important; min-width: 0; max-width: 100%; padding: 2px 6px; font-size: 12px; }   /* max-width: 18/11/2026 (plano de layout, L2): o seletor com o nome mais comprido passava da borda do cartão do RH num celular pequeno */
 .acn-aprov-corpo { display: flex; flex-direction: column; gap: 8px; }
 .acn-aprov-grupo { padding: 8px 12px; background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 30%, transparent); border-radius: var(--acn-r3); }
 .acn-aprov-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -645,7 +649,7 @@ html body .acn-quadro input[type=file] { padding: 0 !important; min-height: 0 !i
 .acn-rh-topo > .acn-kpis { margin-bottom: 0; flex: 0 1 auto; }
 .acn-rh-acoes { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .acn-cab-titulo { display: inline-flex; align-items: center; gap: 6px; }
-.acn-cab-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.acn-cab-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 0; max-width: 100%; }
 html body .sec-body.acn-sem-recuo { padding: 0; }
 .acn-modal-estreita { max-width: 440px; }
 .acn-txt-ok { color: var(--acn-ok); font-weight: 600; }
@@ -800,6 +804,8 @@ html body .sec-body.acn-sac-legenda { display: flex; flex-direction: column; ali
 .acn-mover-opcoes { display: flex; flex-direction: column; gap: 8px; }
 /* Registrar atendimento já realizado (30/10/2026): a janela de uma OS ou de várias do mesmo lote, com a lista para marcar */
 html body .modal-box.acn-modal-cadastro.acn-registro-jan { width: min(640px, 95vw); }
+/* E4 (17/11/2026): "Chegada de itens" de um pedido com vários fornecedores tem uma coluna a mais (a entrega de cada um); a janela de 500 px espremia o nome dos itens */
+html body .modal-box.acn-modal-cadastro.acn-chegada-jan { width: min(760px, 95vw); max-width: 760px; }
 .acn-registro-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .acn-registro-lista { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; border: 1px solid var(--acn-line); border-radius: 8px; padding: 6px; }
 .acn-registro-os { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; flex-wrap: wrap; }
@@ -2025,12 +2031,13 @@ html body .acn-input.acn-fp-neg { background: var(--acn-bad-soft); }
 .acn-fp-pf-tit { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; color: var(--acn-ink); }
 .acn-fp-pf-cats { max-width: 420px; margin-bottom: 12px; }
 .acn-fp-pf-lista { display: flex; flex-direction: column; gap: 8px; }
-.acn-fp-card { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
-.acn-fp-card-txt { flex: 1; min-width: 0; }
+.acn-fp-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 14px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+/* 18/11/2026 (plano de layout, L2): num celular (390 px) o nome, o total e os quatro botões (≈260 px, que não encolhem) não cabiam numa linha e o botão "Abrir" passava 14 px da tela, fazendo a página rolar para o lado; agora o cartão quebra em linhas (a base de 200 px só entra em ação quando falta espaço) */
+.acn-fp-card-txt { flex: 1 1 200px; min-width: 0; }
 .acn-fp-card-nome { font-size: 14px; font-weight: 600; color: var(--acn-ink); }
 .acn-fp-card-tot { min-width: 100px; text-align: right; }
 .acn-fp-card-v { font-size: 14px; font-weight: 800; color: var(--acn-f); }
-.acn-fp-card-acoes { display: flex; flex-shrink: 0; gap: 6px; }
+.acn-fp-card-acoes { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: 6px; margin-left: auto; max-width: 100%; }
 .acn-fp-pf-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .acn-fp-pf-nome { font-size: 15px; font-weight: 700; color: var(--acn-ink); }
 .acn-fp-pf-max { margin-left: 8px; font-weight: 700; color: var(--acn-bad); }
@@ -3264,12 +3271,13 @@ html body .acn-ana-det > summary svg, html body .acn-ana-parecer svg { display: 
 .acn-ana-w-vazio { padding: 8px 0; font-size: 13px; color: var(--acn-muted); }
 .acn-ana-w-vazio.centro { text-align: center; }
 .acn-ana-w-lista { display: flex; flex-direction: column; gap: 8px; }
-.acn-ana-ordenar { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.acn-ana-ordenar .acn-input { min-height: 28px; padding: 3px 8px; font-size: 12px; width: auto; }
+/* 18/11/2026 (plano de layout, L2): em celular (319 px úteis) o seletor "Ordenar por" (texto de 40 letras) e o botão "Abrir" do item passavam da borda do widget (que corta, overflow: hidden) e ficavam inalcançáveis; agora quebram em linhas */
+.acn-ana-ordenar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+.acn-ana-ordenar .acn-input { min-height: 28px; padding: 3px 8px; font-size: 12px; width: auto; max-width: 100%; min-width: 0; }
 .acn-ana-item { overflow: hidden; border: 1px solid color-mix(in srgb, var(--acn-setor, var(--acn-text)) 20%, transparent); border-radius: var(--acn-r1); }
-.acn-ana-item-cab { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: color-mix(in srgb, var(--acn-setor, var(--acn-text)) 6%, transparent); }
-.acn-ana-item-esq { flex: 1; min-width: 0; cursor: pointer; }
-.acn-ana-item-dir { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px; }
+.acn-ana-item-cab { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 8px; padding: 8px 12px; background: color-mix(in srgb, var(--acn-setor, var(--acn-text)) 6%, transparent); }
+.acn-ana-item-esq { flex: 1 1 200px; min-width: 0; cursor: pointer; }
+.acn-ana-item-dir { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; flex-shrink: 0; max-width: 100%; margin-left: auto; }
 .acn-ana-tag { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 1px 6px; font-size: 11px; font-weight: 800; color: #fff; border-radius: 3px; }
 .acn-ana-tag.licit { background: #1e3a5f; }
 .acn-ana-tag.crm { background: #7c3aed; }

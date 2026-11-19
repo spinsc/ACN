@@ -8,6 +8,7 @@
 // cotação ficam fora do texto de busca dessa pessoa — e as ordens por valor nem aparecem para ela.
 // ─────────────────────────────────────────────────────────────────────────────
 import { combinaBusca } from './SearchUtils';
+import { entregasDoPedido, dataMaisProxima, dataBr } from './ComprasEntregas';
 
 export type OrdemDeCompras = 'padrao' | 'criacao_antiga' | 'movimentacao' | 'entrega_proxima' | 'prometido_proximo' | 'valor_maior' | 'valor_menor' | 'fornecedor' | 'numero';
 
@@ -31,7 +32,7 @@ const diaBR = (d: any) => { const m = String(d ?? '').match(/^(\d{4})-(\d{2})-(\
 
 /** Todo o texto do card em que a busca procura: as colunas simples do pedido (menos as de dinheiro, para quem não vê valores), o nome do departamento, as datas também no formato
  *  dia/mês/ano e o nome, a descrição e o fornecedor sugerido de cada item da lista. Colunas com lista ou objeto (cotações, vencedoras) ficam de fora. */
-export function textoDeBuscaDoPedido(p: any, podeVerValor: boolean, departamentos: any[] = []): string[] {
+export function textoDeBuscaDoPedido(p: any, podeVerValor: boolean, departamentos: any[] = [], linhasEntregas: any[] = []): string[] {
   const partes: string[] = [];
   for (const [k, v] of Object.entries(p || {})) {
     if (v == null || typeof v === 'object' || typeof v === 'boolean') continue;
@@ -46,11 +47,14 @@ export function textoDeBuscaDoPedido(p: any, podeVerValor: boolean, departamento
   for (const i of Array.isArray(p?.itens) ? p.itens : []) {
     for (const k of ['nome', 'descricao', 'fornecedor_sugerido', 'codigo']) if (i?.[k]) partes.push(String(i[k]));
   }
+  // E4 (17/11/2026): pedido de vários fornecedores acha-se pelo nome de cada um e pela data de cada um (a data do pedido é só a mais distante)
+  const entregas = entregasDoPedido(p, linhasEntregas);
+  if (entregas.length > 1) for (const e of entregas) { partes.push(e.fornecedor); if (e.data_prevista) { partes.push(e.data_prevista, dataBr(e.data_prevista)); } }
   return partes;
 }
 
-export const pedidoCombinaComBusca = (p: any, busca: string, podeVerValor: boolean, departamentos: any[] = []) =>
-  !String(busca || '').trim() || combinaBusca(textoDeBuscaDoPedido(p, podeVerValor, departamentos), busca);
+export const pedidoCombinaComBusca = (p: any, busca: string, podeVerValor: boolean, departamentos: any[] = [], linhasEntregas: any[] = []) =>
+  !String(busca || '').trim() || combinaBusca(textoDeBuscaDoPedido(p, podeVerValor, departamentos, linhasEntregas), busca);
 
 const ms = (d: any) => { const t = Date.parse(String(d ?? '')); return Number.isFinite(t) ? t : null; };
 const numero = (v: any) => { if (v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };   // Number(null) é 0: sem isto "sem valor" ganharia de "R$ 10" na ordem do menor valor
@@ -66,12 +70,13 @@ function comparar(a: number | string | null, b: number | string | null, crescent
 }
 
 /** Devolve uma lista nova na ordem escolhida. "Padrão" é a ordem de sempre (mais recente criado primeiro) e empata pelo número, para a ordem não pular entre leituras. */
-export function ordenarPedidos(lista: any[], ordem: OrdemDeCompras): any[] {
+export function ordenarPedidos(lista: any[], ordem: OrdemDeCompras, linhasEntregas: any[] = []): any[] {
   const criado = (p: any) => ms(p?.data_criacao);
   const chave: Record<OrdemDeCompras, (p: any) => number | string | null> = {
     padrao: criado, criacao_antiga: criado,
     movimentacao: p => ms(p?.ultima_movimentacao_em) ?? ms(p?.data_atualizacao) ?? criado(p),
-    entrega_proxima: p => ms(p?.data_prevista_recebimento),
+    // E4 (17/11/2026): a entrega mais próxima ainda a chegar (por fornecedor); pedido sem entrega aberta (recebido, ou ainda não comprado) cai na data do pedido
+    entrega_proxima: p => ms(dataMaisProxima(entregasDoPedido(p, linhasEntregas))) ?? ms(p?.data_prevista_recebimento),
     prometido_proximo: p => ms(p?.prazo_prometido_entrega),
     valor_maior: p => numero(p?.valor_compra), valor_menor: p => numero(p?.valor_compra),
     fornecedor: p => (String(p?.fornecedor || '').trim() || null),
