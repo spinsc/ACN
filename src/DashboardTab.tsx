@@ -33,6 +33,7 @@ import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
 import CalendarioTab from './CalendarioTab';
+import PontoTab from './PontoTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
 import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
@@ -51,7 +52,7 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
@@ -59,7 +60,7 @@ import { gruposParaRecolher } from './utils/menuLateral';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
-  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline,
+  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline, ponto: mdiClockCheckOutline,
   crm: mdiHandshakeOutline, licitacoes: mdiGavel, cotacoes: mdiFileDocumentOutline, clientes: mdiAccountGroupOutline, marketing: mdiBullhornOutline,
   engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
   producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
@@ -103,6 +104,7 @@ const SIDEBAR_GROUPS = [
       { id: 'inicio', label: 'Início' },   // 09/11/2026 (pedido do RH, decidido com o usuário): a tela em que o sistema abre — carrossel de imagens, tempo, aniversariantes; o Dashboard geral continua logo abaixo
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'calendario', label: 'Calendário' },
+      { id: 'ponto',      label: 'Ponto' },   // 19/11/2026 (pedido do usuário): o ponto dos CLT da Detech vindo da Secullum; cada um vê o seu, RH/Admin/gerentes veem a equipe (ver PontoTab.tsx)
       { id: 'ajustes',    label: 'Demandas gerais' },
       { id: 'minhas_solicitacoes', label: 'Minhas solicitações' },
       { id: 'manuais', label: 'Manuais' },   // 30/10/2026 (pedido do usuário): um manual por setor, o primeiro é o do SAC (ver ManuaisTab.tsx)
@@ -1126,6 +1128,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     // Calendário (pedido do usuário em 12/11/2026): é de todos, também de usuário novo, sem depender de marcar a aba no Admin.
     // As tabelas que ele lê (agenda e tarefas do Financeiro) passaram a valer para quem entrou, senão o calendário abriria vazio.
     if (id === 'calendario') return true;
+    // Ponto (19/11/2026): é de todos, porque cada pessoa vê o próprio; quem vê a equipe é decidido pelo banco (RH, Admin e gerentes), não pela aba marcada no Admin.
+    if (id === 'ponto') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -1142,6 +1146,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           abasParaLink={SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => i.id !== 'inicio' && isVisible(i.id))} />;
       }
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
+      case 'ponto':        return <PontoTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;

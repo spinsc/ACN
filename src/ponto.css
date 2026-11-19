@@ -1,0 +1,19 @@
+/* Tela Ponto (19/11/2026). Só as cores e medidas do design system (--acn-*), então o modo escuro vem junto. Prefixo acn-ponto-. */
+
+.acn-ponto { display: grid; gap: 12px; min-width: 0; }
+.acn-ponto > * { min-width: 0; }
+.acn-ponto-rolagem { overflow-x: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r4); background: var(--acn-surface); }
+html body .acn-main .acn-ponto table.acn-tabela td.num,
+html body .acn-main .acn-ponto table.acn-tabela th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.acn-ponto-dia { white-space: nowrap; }
+.acn-ponto-hoje { margin-left: 6px; padding: 1px 6px; border-radius: 99px; font-size: 10px; font-weight: 700; text-transform: uppercase; background: var(--acn-brand-soft, var(--acn-neutral-soft)); color: var(--acn-brand-ink, var(--acn-ink)); }
+.acn-ponto-negativo { color: var(--acn-bad); }
+.acn-ponto-rodape { margin: 0; font-size: 12px; color: var(--acn-muted); }
+.acn-ponto-topo { font-weight: 600; color: var(--acn-ink); }
+.acn-ponto-voltar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.acn-ponto-meses { overflow-x: auto; }
+.acn-ponto-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--acn-ink); cursor: pointer; text-align: left; text-decoration: underline; text-decoration-color: var(--acn-line); text-underline-offset: 3px; }
+.acn-ponto-link:hover { text-decoration-color: currentColor; }
+.acn-ponto-rodadas { font-size: 12px; color: var(--acn-muted); }
+.acn-ponto-rodadas summary { cursor: pointer; }
+.acn-ponto-rodadas ul { margin: 6px 0 0; padding-left: 18px; }
