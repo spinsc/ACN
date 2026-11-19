@@ -307,6 +307,8 @@ async function acaoSincronizar(origem: "rotina" | "botao", por: string, mesesPed
   let consultas = 0, restante: number | null = null, pessoas = 0;
   const erros: { rh_id: string; erro: string }[] = [];
   let semPar: string[] = [], soNaSecullum = 0, fatal = "";
+  let listaSoNaSecullum: { nome: string; cpf: string; admissao: any }[] = [];
+  const paresRhSecullum: { rh_id: string; nome: string }[] = [];
   try {
     const token = await entrarNaSecullum();
     const bancoId = await escolherBanco(token);
@@ -326,7 +328,10 @@ async function acaoSincronizar(origem: "rotina" | "botao", por: string, mesesPed
       const atual = porCpf.get(c);
       if (!atual || (atual.Demissao && !f.Demissao)) porCpf.set(c, f);
     }
-    soNaSecullum = doPonto.filter((f: any) => !f?.Demissao && !cpfsDoRh.has(soDigitos(f?.Cpf))).length;
+    const soNaLista = doPonto.filter((f: any) => !f?.Demissao && !cpfsDoRh.has(soDigitos(f?.Cpf)));
+    soNaSecullum = soNaLista.length;
+    // 19/11/2026: para o RH conferir o pareamento a olho, a rodada guarda quem só existe na Secullum (nome e CPF mascarado) e, de cada pessoa casada, o nome que a Secullum tem
+    listaSoNaSecullum = soNaLista.map((f: any) => ({ nome: String(f?.Nome || ''), cpf: mascararCpf(f?.Cpf), admissao: f?.Admissao ?? null }));
 
     const devem = rh.filter((p) => p.ativo && p.tipo_colaborador === "Funcionário" && ehDetech(p.empresa) && soDigitos(p.cpf).length === 11);
     const semPar_ = rh.filter((p) => p.ativo && p.tipo_colaborador === "Funcionário" && ehDetech(p.empresa) && !porCpf.has(soDigitos(p.cpf)));
@@ -335,6 +340,7 @@ async function acaoSincronizar(origem: "rotina" | "botao", por: string, mesesPed
     parada: for (const p of devem) {
       const f = porCpf.get(soDigitos(p.cpf));
       if (!f) continue;
+      paresRhSecullum.push({ rh_id: p.id, nome: String(f?.Nome || '') });
       let gravouAlgo = false;
       for (const per of periodos) {
         // quem saiu antes do período não tem o que calcular
@@ -370,7 +376,7 @@ async function acaoSincronizar(origem: "rotina" | "botao", por: string, mesesPed
   const ok = !fatal && erros.length === 0;
   await sb.from("ponto_rodadas").update({
     terminada_em: new Date().toISOString(), ok: !fatal, pessoas, consultas_calculo: consultas, restante_na_hora: restante, erro: fatal || null,
-    detalhes: { sem_par: semPar, so_na_secullum: soNaSecullum, erros, periodos: periodos.map((p) => p.mes) },
+    detalhes: { sem_par: semPar, so_na_secullum: soNaSecullum, so_na_secullum_lista: listaSoNaSecullum, pares: paresRhSecullum, erros, periodos: periodos.map((p) => p.mes) },
   }).eq("id", rodada.id);
   if (fatal) throw new ErroDeIntegracao(fatal, 502);
   return { rodada: rodada.id, ok, pessoas, consultas, restanteNaHora: restante, semPar: semPar.length, soNaSecullum, erros: erros.length };
