@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Auditoria de layout: saídas (fotos, achados e leituras guardadas do banco) não vão para o repositório
+ferramentas/auditoria_layout/auditoria/

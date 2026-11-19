@@ -3,9 +3,10 @@
 // PENDÊNCIAS DE FABRICAÇÃO E COMPRA — o que segura a OP e como ela se libera
 //
 // Regra definida pelo usuário em 21/09/2026:
-//   • o Almoxarifado NÃO fecha "Kit 100%" com demanda de Serralheria, Chicotes
-//     ou Compras em aberto — nesse caso ele usa "Liberar com pendência", que
-//     continua funcionando como sempre;
+//   • o Almoxarifado NÃO fecha "Kit 100%" com demanda de Chicotes ou Compras
+//     em aberto — nesse caso ele usa "Liberar com pendência", que continua
+//     funcionando como sempre. A SERRALHERIA saiu dessa trava em 17/11/2026
+//     (pedido do usuário): ela só segura a conclusão da Produção;
 //   • com kit liberado com pendência, o PCP libera a produção normalmente;
 //   • a Produção NÃO conclui a sua etapa enquanto a pendência não fechar;
 //   • e uma pendência só fecha em TRÊS etapas:
@@ -22,7 +23,8 @@ import { supabase } from './supabaseClient';
 import { vinculosDaOp } from './OpVinculos';
 import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
-import { Botao } from './Interface';
+import { Botao, hojeISO } from './Interface';
+import { lerEntregasDosPedidos, chegadaDoPedido, frasePorFornecedor } from './ComprasEntregas';
 import Icone from './Icone';
 import { mdiCheck, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline, mdiCheckCircleOutline } from '@mdi/js';
 
@@ -47,8 +49,14 @@ export const ehDesenvolvimentoDoPcp = (v) => v?.tipo === 'engenharia_desenvolvim
  *  e não pede mais o clique em "Recebi" (decidido com o usuário em 27/10/2026, caso da OP D0793). Fabricação (Serralheria, Chicotes) continua pedindo o "Recebi". */
 export const compraJaRecebida = (v) => (v?.setor === 'Compras' || v?.grupo === 'compra') && /^recebid/.test(norm(v?.statusBruto ?? v?.status));
 
+/** Aviso "[COMPRA RECEBIDA]" que o Compras abre ao confirmar a compra (ComprasTab, criarDemandaComprasFinalizada): é só o acompanhamento do pedido, que já é
+ *  uma pendência por conta própria (a compra). Como a demanda nasce "Pendente" e ninguém a fecha, ela segurava a conclusão da Produção para sempre — a OP D0793
+ *  ficou travada com a OC já recebida (19/11/2026, relato do usuário). Não conta como pendência; o pedido de compra continua contando. */
+const ehAvisoDeCompra = (v) => v?.grupo === 'demanda' && /^\s*\[COMPRA RECEBIDA\]/i.test(String(v?.titulo || ''));
+
 const seguraAOp = (v) => {
   if (foiCancelada(v)) return false;
+  if (ehAvisoDeCompra(v)) return false;
   if (v.tipo === 'engenharia_desenvolvimento') return v.origem === 'pcp';
   if (v.grupo === 'compra') return true;
   if (v.grupo !== 'demanda') return false;
@@ -250,7 +258,7 @@ export async function indicePendencias() {
       .not('opl_id', 'is', null).in('setor_destino', SETORES_QUE_SEGURAM),
     supabase.from('demandas_avulsas').select('id,setor,titulo,status,vinculo_id,vinculos,data_fim,atualizado_em')
       .in('setor', SETORES_QUE_SEGURAM),
-    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,numero_oc,descricao_material,status_compra,data_prevista_recebimento,data_recebimento_real,data_conclusao')
+    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,numero_oc,descricao_material,status_compra,data_prevista_recebimento,data_recebimento_real,data_conclusao,fornecedor,vencedoras,vencedora_id,tem_divergencia')
       .not('vinculo_id', 'is', null),
     // 18c: só os pedidos do PCP seguram a OP (o desenvolvimento aberto pela própria Engenharia segue sendo apoio)
     supabase.from('engenharia_desenvolvimento').select('id,opl_id,opl_ids,titulo,concluida,origem').eq('origem', 'pcp'),
@@ -278,6 +286,11 @@ export async function indicePendencias() {
     }));
   });
 
+  // E4 (17/11/2026): pedido com mais de um fornecedor diz, por fornecedor, o que já chegou e quando chega o resto. A pendência continua sendo do PEDIDO
+  // (o kit só fecha com tudo em mãos); a data de previsão é a da última entrega que falta, e a frase por fornecedor vai na dica. Leitura recusada só tira a frase: a trava não depende dela.
+  const entregasDosPedidos = await lerEntregasDosPedidos((compras.data || []).filter(c => c.vinculo_tipo !== 'estoque'));
+  const hoje = hojeISO();
+
   (compras.data || []).forEach(c => {
     // Reposição de estoque tem no `vinculo_id` o id do ITEM, não de uma OP
     // (ver Estoque.tsx). Sem esta guarda ela entrava no índice pendurada num
@@ -288,7 +301,13 @@ export async function indicePendencias() {
       id: c.id, setor: 'Compras', titulo: c.descricao_material || c.numero_pedido || 'Pedido de compra',
       aberto: !ENCERRADOS.includes(String(c.status_compra || '')), statusBruto: c.status_compra,
       // previsão de chegada (mostrada na fila do Almoxarifado) e quando chegou (para o alerta de pendência sanada, 27/10/2026)
-      previsao: c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : null,
+      ...(() => {
+        const previsaoDoPedido = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : null;
+        const ch = chegadaDoPedido(c, entregasDosPedidos.linhas, hoje);
+        if (!ch.varias) return { previsao: previsaoDoPedido };
+        if (entregasDosPedidos.erro) return { previsao: previsaoDoPedido, detalhe: 'não foi possível ler a data de cada fornecedor agora' };
+        return { previsao: ch.distante || previsaoDoPedido, detalhe: frasePorFornecedor(ch.entregas, hoje) };
+      })(),
       concluidoEm: c.data_recebimento_real || c.data_conclusao || null, numero: c.numero_oc || c.numero_pedido || null,
     });
   });
@@ -304,10 +323,16 @@ const registroDaPendencia = (p, op) => {
   return reg;
 };
 
+/** A Serralheria NÃO trava o kit (pedido do usuário em 17/11/2026): a peça de serralheria é fabricada para a OP e chega à produção por conta
+ *  própria, então o Almoxarifado fecha o Kit 100% (e embala o envio) com a demanda dela ainda aberta. Ela segue sendo pendência da OP: o
+ *  checklist continua mostrando as três etapas e a Produção só conclui quando ela fechar (travaConclusaoProducao não foi mexida). */
+export const naoTravaOKit = (p) => norm(p?.setor) === 'serralheria';
+
 /** O Almoxarifado só fecha "Kit 100%" quando tem tudo em mãos: nenhuma demanda
- *  dos três setores pode estar em aberto nem esperando o recebimento. */
+ *  de Chicotes, Compras ou desenvolvimento do PCP pode estar em aberto nem esperando o recebimento. */
 export function travaKit100(pendenciasDaOp, op) {
   const faltando = (pendenciasDaOp || []).filter(p => {
+    if (naoTravaOKit(p)) return false;
     const reg = registroDaPendencia(p, op);
     return p.aberto || !reg.recebido;
   });

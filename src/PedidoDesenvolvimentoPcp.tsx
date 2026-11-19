@@ -174,55 +174,58 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
       )}
       {itens === null && !erro && <div className="acn-ajuda">Carregando os itens…</div>}
       {itens && total === 0 && <div className="acn-ajuda">Este pedido não tem itens.</div>}
+      {/* 18/11/2026 (plano de layout, L2): o cartão do pedido (.sec-card) corta o que passa da borda; sem a rolagem, "Iniciar", "Entregar" e "Cancelar" (a última coluna) sumiam em janela estreita e no tablet, sem barra para alcançá-los */}
       {itens && total > 0 && (
-        <table className="acn-tabela acn-densa">
-          <thead><tr>
-            <th>Tipo</th><th>O que desenvolver</th><th>Item vendido de origem</th><th>Estrutura no veículo</th><th>Situação</th><th>Tempo do item</th><th>Ações</th>
-          </tr></thead>
-          <tbody>
-            {itens.map(i => {
-              const sit = SITUACAO[i.situacao] || { rotulo: i.situacao, familia: 'neutro' };
-              const sabe = i.item_vendido_id && estrutura && estrutura.has(String(i.item_vendido_id));
-              const tem = sabe && estrutura!.get(String(i.item_vendido_id));
-              return (
-                <tr key={i.id}>
-                  <td>{rotuloDoTipo(i.tipo)}</td>
-                  <td className="acn-pdp-desc">
-                    {i.descricao}
-                    {i.situacao === 'cancelado' && i.observacoes && <div className="acn-ajuda">Cancelado: {i.observacoes}</div>}
-                    {i.situacao === 'entregue' && i.entregue_por_nome && <div className="acn-ajuda">Entregue por {i.entregue_por_nome}</div>}
-                  </td>
-                  <td>{i.item_vendido_nome || '—'}</td>
-                  <td>
-                    {sabe
-                      ? (tem ? <Selo familia="ok" ponto={false}>cadastrada</Selo> : <Selo familia="erro" ponto={false}>sem estrutura</Selo>)
-                      : '—'}
-                    {i.item_vendido_id && demanda.veiculo_id && (
-                      <div><Botao variante="discreto" pequeno icone={mdiPuzzleOutline} onClick={() => abrirEstrutura(i)}>Cadastrar estrutura</Botao></div>
-                    )}
-                  </td>
-                  <td><Selo familia={sit.familia} ponto={false}>{sit.rotulo}</Selo></td>
-                  <td className="acn-pdp-tempo">
-                    {i.data_inicio ? (<>
-                      <strong>{tempoEmTexto(i, agora).uteis}</strong>{tempoEmTexto(i, agora).extras && <span className="acn-ajuda"> + {tempoEmTexto(i, agora).extras} de hora extra</span>}
-                      {i.situacao === 'em_andamento' && <div className="acn-ajuda">{descricaoDoRelogio(i, agora).texto}</div>}
-                    </>) : <span className="acn-fraco">{i.situacao === 'em_andamento' ? 'sem tempo contado' : '—'}</span>}
-                  </td>
-                  <td>
-                    <div className="acn-acoes-linha quebra">
-                      {i.situacao === 'pendente' && <Botao variante="primario" pequeno disabled={emAcao === i.id} onClick={() => iniciar(i)}>Iniciar</Botao>}
-                      {i.situacao === 'em_andamento' && situacaoDoRelogio(i, agora) === 'rodando' && <Botao variante="secundario" pequeno disabled={emAcao === i.id} onClick={() => pausar(i)}>Pausar</Botao>}
-                      {i.situacao === 'em_andamento' && situacaoDoRelogio(i, agora) !== 'rodando' && <Botao variante="secundario" pequeno disabled={emAcao === i.id} onClick={() => retomar(i)}>{i.data_inicio ? 'Retomar' : 'Iniciar o tempo'}</Botao>}
-                      {i.situacao === 'em_andamento' && <Botao variante="primario" pequeno disabled={emAcao === i.id} onClick={() => entregar(i)}>Entregar</Botao>}
-                      {(i.situacao === 'pendente' || i.situacao === 'em_andamento') && <Botao variante="discreto" pequeno disabled={emAcao === i.id} onClick={() => cancelar(i)}>Cancelar</Botao>}
-                      {fechado(i) && <Botao variante="discreto" pequeno disabled={emAcao === i.id} onClick={() => reabrir(i)}>Reabrir</Botao>}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="acn-rolagem">
+          <table className="acn-tabela acn-densa">
+            <thead><tr>
+              <th>Tipo</th><th>O que desenvolver</th><th>Item vendido de origem</th><th>Estrutura no veículo</th><th>Situação</th><th>Tempo do item</th><th>Ações</th>
+            </tr></thead>
+            <tbody>
+              {itens.map(i => {
+                const sit = SITUACAO[i.situacao] || { rotulo: i.situacao, familia: 'neutro' };
+                const sabe = i.item_vendido_id && estrutura && estrutura.has(String(i.item_vendido_id));
+                const tem = sabe && estrutura!.get(String(i.item_vendido_id));
+                return (
+                  <tr key={i.id}>
+                    <td>{rotuloDoTipo(i.tipo)}</td>
+                    <td className="acn-pdp-desc">
+                      {i.descricao}
+                      {i.situacao === 'cancelado' && i.observacoes && <div className="acn-ajuda">Cancelado: {i.observacoes}</div>}
+                      {i.situacao === 'entregue' && i.entregue_por_nome && <div className="acn-ajuda">Entregue por {i.entregue_por_nome}</div>}
+                    </td>
+                    <td>{i.item_vendido_nome || '—'}</td>
+                    <td>
+                      {sabe
+                        ? (tem ? <Selo familia="ok" ponto={false}>cadastrada</Selo> : <Selo familia="erro" ponto={false}>sem estrutura</Selo>)
+                        : '—'}
+                      {i.item_vendido_id && demanda.veiculo_id && (
+                        <div><Botao variante="discreto" pequeno icone={mdiPuzzleOutline} onClick={() => abrirEstrutura(i)}>Cadastrar estrutura</Botao></div>
+                      )}
+                    </td>
+                    <td><Selo familia={sit.familia} ponto={false}>{sit.rotulo}</Selo></td>
+                    <td className="acn-pdp-tempo">
+                      {i.data_inicio ? (<>
+                        <strong>{tempoEmTexto(i, agora).uteis}</strong>{tempoEmTexto(i, agora).extras && <span className="acn-ajuda"> + {tempoEmTexto(i, agora).extras} de hora extra</span>}
+                        {i.situacao === 'em_andamento' && <div className="acn-ajuda">{descricaoDoRelogio(i, agora).texto}</div>}
+                      </>) : <span className="acn-fraco">{i.situacao === 'em_andamento' ? 'sem tempo contado' : '—'}</span>}
+                    </td>
+                    <td>
+                      <div className="acn-acoes-linha quebra">
+                        {i.situacao === 'pendente' && <Botao variante="primario" pequeno disabled={emAcao === i.id} onClick={() => iniciar(i)}>Iniciar</Botao>}
+                        {i.situacao === 'em_andamento' && situacaoDoRelogio(i, agora) === 'rodando' && <Botao variante="secundario" pequeno disabled={emAcao === i.id} onClick={() => pausar(i)}>Pausar</Botao>}
+                        {i.situacao === 'em_andamento' && situacaoDoRelogio(i, agora) !== 'rodando' && <Botao variante="secundario" pequeno disabled={emAcao === i.id} onClick={() => retomar(i)}>{i.data_inicio ? 'Retomar' : 'Iniciar o tempo'}</Botao>}
+                        {i.situacao === 'em_andamento' && <Botao variante="primario" pequeno disabled={emAcao === i.id} onClick={() => entregar(i)}>Entregar</Botao>}
+                        {(i.situacao === 'pendente' || i.situacao === 'em_andamento') && <Botao variante="discreto" pequeno disabled={emAcao === i.id} onClick={() => cancelar(i)}>Cancelar</Botao>}
+                        {fechado(i) && <Botao variante="discreto" pequeno disabled={emAcao === i.id} onClick={() => reabrir(i)}>Reabrir</Botao>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
       {itens && total > 0 && (
         <div className="acn-ajuda">{entregues} de {total} item(ns) entregue(s){cancelados ? ` · ${cancelados} cancelado(s)` : ''}{tempoTotal.totalMs > 0 ? ` · tempo do pedido (soma dos itens): ${tempoTotal.uteis}${tempoTotal.extras ? ` + ${tempoTotal.extras} de hora extra` : ''}` : ''}</div>

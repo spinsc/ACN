@@ -36,6 +36,7 @@ import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { useMarkupDaTela, FaixaDoMarkup, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
+import { lerEntregasDosPedidos, chegadaDoPedido, frasePorFornecedor, dataCurta } from './ComprasEntregas';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import Icone from './Icone';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
@@ -418,6 +419,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
   const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
+  // E4 (17/11/2026): a data de cada fornecedor dos pedidos com mais de um (leitura que falha: o botão cai na data mais distante do pedido e avisa na dica)
+  const [entregasCompras, setEntregasCompras] = useState<{ linhas: any[]; erro: string | null }>({ linhas: [], erro: null });
   // { pct ponderado pelo custo, min, max } por processo e os cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados em Admin → Faixas de Markup.
   // 12e74 (09/11/2026): o gancho do termômetro guarda os dois, mantém a última leitura boa quando uma falha e diz o erro (faixa vermelha) — ver MarkupTermometro
   const { markup: markupPorOp, bandas: bandasMarkup, erro: erroMarkup, recarregar: recarregarMarkup } = useMarkupDaTela('crm', totalDaFormacao, true);
@@ -554,7 +557,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       .from('pcp_pedidos_compra')
       .select('*')
       .not('oportunidade_id','is',null);
-    if (!errPc) setPedidosCompra(pcData || []);
+    if (!errPc) {
+      setPedidosCompra(pcData || []);
+      setEntregasCompras(await lerEntregasDosPedidos(pcData || []));
+    }
     // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
     const { data: oplsDosCards, error: errOplsCards } = await supabase
       .from('oples').select('id,opl,status_geral,tipo_projeto,fluxo_entrega,itens_vendidos,envio_partes,crm_oportunidade_id,frete_responsavel,' + COLUNAS_MARCOS_OP).not('crm_oportunidade_id', 'is', null).order('opl');
@@ -2673,12 +2679,21 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
           const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
           const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
-          if (comprado) return (
-            <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
-              onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}>
-              Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-            </Botao></div>
-          );
+          if (comprado) {
+            // E4: compra com mais de um fornecedor mostra o intervalo (a próxima e a última entrega que falta) e, na dica, a data de cada um; vermelho se algum está atrasado
+            const ch = chegadaDoPedido(comprado, entregasCompras.linhas, hojeISO());
+            const porFornecedor = ch.varias && !entregasCompras.erro;
+            const rotuloData = porFornecedor
+              ? (!ch.abertas.length ? 'tudo recebido' : ch.proxima && ch.distante && ch.proxima !== ch.distante ? `${dataCurta(ch.proxima)} a ${dataCurta(ch.distante)}` : dataCurta(ch.distante || ch.proxima))
+              : (comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—');
+            return (
+              <div><Botao pequeno variante={porFornecedor && ch.atrasadas.length ? 'perigo-sec' : 'secundario'} icone={mdiPackageVariantClosed}
+                title={porFornecedor ? frasePorFornecedor(ch.entregas, hojeISO()) : ch.varias && entregasCompras.erro ? `Não foi possível ler a data de cada fornecedor (${entregasCompras.erro}); a data mostrada é a mais distante.` : undefined}
+                onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}>
+                Entrega prev.: {rotuloData}
+              </Botao></div>
+            );
+          }
           if (pendente) return (
             <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
               onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: pendente.id, descricao: pendente.numero_pedido }); }}>

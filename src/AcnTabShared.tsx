@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
+import { lerEntregasDosPedidos, temEntrega, chegadaDoPedido } from './ComprasEntregas';
+import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
@@ -668,6 +670,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
   const [erroCompras, setErroCompras] = useState('');
+  // E4 (17/11/2026): a data de cada fornecedor dos pedidos com mais de um (a leitura que falha avisa; nunca vale como "uma data só")
+  const [linhasEntregasCompras, setLinhasEntregasCompras] = useState<any[]>([]);
+  const [erroEntregasCompras, setErroEntregasCompras] = useState('');
   // 7.x (15/10/2026): releitura da OP e do histórico que falham aparecem; antes a tela ficava com a linha velha da lista ou com "Nenhum registro de movimentação"
   const [erroOpl, setErroOpl] = useState('');
   const [erroLogs, setErroLogs] = useState('');
@@ -710,12 +715,17 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     ].filter(Boolean).join(',');
     if (!filtros) { setComprasVinculadas([]); return; }
     // Pedido do usuário em 07/10/2026: o status da compra e a previsão de chegada da mercadoria aparecem dentro do card da OP (a previsão é a data_prevista_recebimento que o Compras preenche).
-    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra,data_prevista_recebimento')
+    // E4 (17/11/2026): a previsão é uma por fornecedor quando o pedido tem mais de um (vencedoras, fornecedor, vencedora_id e tem_divergencia montam as entregas)
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra,data_prevista_recebimento,fornecedor,vencedoras,vencedora_id,tem_divergencia')
       .or(filtros).order('data_criacao', { ascending: false })
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         // leitura que falha não pode parecer "sem compras vinculadas"
         setErroCompras(error ? error.message : '');
-        if (!error) setComprasVinculadas(data || []);
+        if (error) return;
+        const ent = await lerEntregasDosPedidos(data || []);
+        setErroEntregasCompras(ent.erro || '');
+        setLinhasEntregasCompras(ent.linhas);
+        setComprasVinculadas(data || []);
       });
   }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
 
@@ -802,6 +812,18 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
     .order('data_hora', { ascending: false }).limit(50).then(({ data, error }) => { setErroLogs(error ? error.message : ''); if (!error) setLogs(data || []); setLoading(false); });
+  // 17/11/2026 (pedido do usuário): "Atualizações do andamento" saiu do menu "..." e virou um card acima do histórico, com a última anotação à vista.
+  // A janela é a mesma de antes (OplAcompModal); o card só lê quantas anotações há e a mais recente (mesmas chaves da janela: o número da OP e, de reserva, o id).
+  const [acomps, setAcomps] = useState<{ total: number; ultima: any; erro: string }>({ total: 0, ultima: null, erro: '' });
+  const recarregarAcomps = () => {
+    if (!opl?.opl) return Promise.resolve();
+    const chaveNumero = `and(referencia_tipo.eq.op,referencia_id.eq."${String(opl.opl).replace(/"/g, '')}")`;
+    const chaveId = `and(referencia_tipo.eq.opl,referencia_id.eq."${String(opl.id).replace(/"/g, '')}")`;
+    return supabase.from('op_acompanhamentos').select('id, texto, usuario_nome, setor, criado_em', { count: 'exact' })
+      .or(`${chaveNumero},${chaveId}`).order('criado_em', { ascending: false }).limit(1)
+      .then(({ data, count, error }) => setAcomps(error ? { total: 0, ultima: null, erro: error.message } : { total: count || 0, ultima: (data || [])[0] || null, erro: '' }));
+  };
+  useEffect(() => { recarregarAcomps(); }, [opl?.id, opl?.opl]);
   const abrirEdicaoLote = async () => {
     const lote = await lerUnidadesDoLote(opl.opl);
     if (lote.erro) { alert('Não foi possível ler as unidades do lote: ' + lote.erro); return; }
@@ -980,7 +1002,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           referenciaType="op"
           setor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')}
           currentUser={usuario}
-          onClose={() => { setAtualizando(false); recarregarLogs(); }}
+          onClose={() => { setAtualizando(false); recarregarLogs(); recarregarAcomps(); }}
         />
       )}
       {trocandoFluxo && <TrocarFluxoModal op={opl} currentUser={usuario} onClose={() => setTrocandoFluxo(false)} onTrocada={() => { recarregarOpl(); recarregarLogs(); }} />}
@@ -1019,7 +1041,6 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <Botao variante="primario" icone={mdiBookOpenPageVariantOutline} onClick={() => setVerDossie(true)}
               title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF">Dossiê</Botao>
             <MenuAcoes rotulo="Mais ações da OP" itens={[
-              { rotulo: 'Atualizações do andamento', icone: mdiMessageTextOutline, onClick: () => setAtualizando(true), titulo: 'Registrar uma observação ou atualização sobre a OP, marcar pessoas com @ e ler as anteriores' },
               { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
               { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },
               { rotulo: `Abrir o lote (${qtdLote})`, icone: mdiLinkVariant, onClick: () => setAbrirLote(true), oculto: qtdLote <= 1 },
@@ -1140,6 +1161,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
             {/* ── Compras ligadas a esta OP: material que vai chegar ── */}
             {erroCompras && <div className="acn-opl-aviso erro">Não foi possível ler as compras vinculadas ({erroCompras}). Isso não quer dizer que não existam.</div>}
+            {erroEntregasCompras && <div className="acn-opl-aviso erro">Não foi possível ler a data de cada fornecedor ({erroEntregasCompras}). Nas compras de vários fornecedores a data mostrada é a mais distante.</div>}
             {comprasVinculadas.length > 0 && (
               <section className="acn-opl-card">
                 <header className="acn-opl-card-cab"><span>🛒 Compras vinculadas ({comprasVinculadas.length})</span></header>
@@ -1153,6 +1175,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                           // Recebida ou descartada não tem mais "chegada" a esperar; nas demais, a previsão vira data (vermelha se já passou) ou "sem previsão"
                           const encerrada = c.status_compra === 'Recebido' || c.status_compra === 'Descartada';
                           if (encerrada) return null;
+                          // E4: compra com mais de um fornecedor mostra a data (e o que já chegou) de cada um; uma só, como sempre foi
+                          if (temEntrega(c) && !erroEntregasCompras && chegadaDoPedido(c, linhasEntregasCompras, hojeISO()).varias) {
+                            return <span className="acn-opl-compra-forn" title="Previsão de chegada de cada fornecedor"><span className="acn-fraco">Chega</span> <PrevisaoDoPedido pedido={c} linhas={linhasEntregasCompras} /></span>;
+                          }
                           const prev = c.data_prevista_recebimento ? String(c.data_prevista_recebimento).slice(0, 10) : '';
                           const atrasada = !!prev && prev < hojeISO();
                           return (
@@ -1197,6 +1223,29 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <section className="acn-opl-card">
               <header className="acn-opl-card-cab"><span>📎 Documentos anexados</span></header>
               <div className="acn-opl-card-corpo"><AnexosOPSection oplId={opl.id} /></div>
+            </section>
+
+            {/* ── Atualizações do andamento: observação sobre a OP, com @menção; a última à vista e a janela completa no botão ── */}
+            <section className="acn-opl-card">
+              <header className="acn-opl-card-cab">
+                <span>💬 Atualizações do andamento{acomps.total ? ` (${acomps.total})` : ''}</span>
+                <Botao pequeno variante="secundario" icone={mdiMessageTextOutline} onClick={() => setAtualizando(true)}
+                  title="Registrar uma observação ou atualização sobre a OP, marcar pessoas com @ e ler as anteriores">
+                  {acomps.total ? 'Ver todas e registrar' : 'Registrar atualização'}
+                </Botao>
+              </header>
+              <div className="acn-opl-card-corpo">
+                {acomps.erro ? (
+                  <div className="acn-opl-aviso erro">Não foi possível ler as atualizações do andamento ({acomps.erro}). Isso não quer dizer que não existam.</div>
+                ) : !acomps.ultima ? (
+                  <div className="acn-ajuda acn-centro">Nenhuma atualização registrada. Use o botão acima para anotar o andamento e marcar pessoas com @.</div>
+                ) : (
+                  <div className="acn-opl-bloco">
+                    <div className="acn-opl-rot">Última · {fmtDtH(acomps.ultima.criado_em)}{acomps.ultima.usuario_nome ? ` · ${acomps.ultima.usuario_nome}` : ''}{acomps.ultima.setor ? ` (${acomps.ultima.setor})` : ''}</div>
+                    <div className="acn-opl-texto"><Linkify text={acomps.ultima.texto} /></div>
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* ── Histórico de movimentações: as 5 últimas à vista, o resto sob demanda ── */}

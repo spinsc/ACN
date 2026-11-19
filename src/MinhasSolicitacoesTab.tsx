@@ -18,6 +18,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Icone from './Icone';
 import { Botao, Chips, Selo, Faixa, diaBR } from './Interface';
+import { lerEntregas, entregasDoPedido, temEntrega } from './ComprasEntregas';
+import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 // 10/11/2026 (pedido do usuário): o "Ver" mostra TUDO o que a pessoa preencheu ao pedir, usando as mesmas peças das telas dos setores
 import { ItensDemandaView, vinculosDaDemanda, enderecoDoLink } from './DemandaItens';
@@ -76,7 +78,7 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
     const meu = (x: any) => String(x?.criado_por || '').trim().toLowerCase() === email;
     const [c, da, ds, an] = await Promise.all([
       supabase.from('pcp_pedidos_compra')
-        .select('id,numero_pedido,descricao_material,quantidade,status_compra,comprador_nome,fornecedor,valor_compra,prazo_entrega,data_prevista_recebimento,data_criacao,ultima_movimentacao_em,vinculo_tipo,vinculo_descricao,opl,numero_oc,centro_custo,motivo_descarte,reprocessos,observacoes_compra,itens,criado_por,criado_por_nome,criado_por_setor,link_url,observacoes,data_recebimento_real,forma_recebimento,coletado_em')
+        .select('id,numero_pedido,descricao_material,quantidade,status_compra,comprador_nome,fornecedor,valor_compra,prazo_entrega,data_prevista_recebimento,data_criacao,ultima_movimentacao_em,vinculo_tipo,vinculo_descricao,opl,numero_oc,centro_custo,motivo_descarte,reprocessos,observacoes_compra,itens,criado_por,criado_por_nome,criado_por_setor,link_url,observacoes,data_recebimento_real,forma_recebimento,coletado_em,vencedoras,vencedora_id,tem_divergencia')
         .ilike('criado_por', padrao).order('data_criacao', { ascending: false }).limit(LIMITE),
       supabase.from('demandas_avulsas')
         .select('id,titulo,descricao,setor,status,prioridade,prazo,criado_em,atualizado_em,responsavel_nome,vinculo_tipo,vinculo_id,vinculo_descricao,vinculos,itens,informacoes,motivo_cancelamento,cancelada_em,cancelada_por,criado_por,criado_por_nome,observacoes,centro_custo,pintura,pintura_tipo,membros,pagamento_terceiro,etapas,data_inicio,data_fim')
@@ -277,16 +279,22 @@ function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
   const b = item.bruto;
   const avulsa = item.tipo === 'demanda' && item.origemTabela === 'avulsa';
   const setorial = item.tipo === 'demanda' && item.origemTabela === 'setorial';
-  const [extras, setExtras] = useState<any>({ pronto: false, anexos: [], reservas: [], frota: {}, erros: [] });
+  const [extras, setExtras] = useState<any>({ pronto: false, anexos: [], reservas: [], frota: {}, erros: [], entregas: [], entregasLidas: false });
 
   // o que mora em outras tabelas: anexos da compra, arquivos da demanda e o veículo da frota reservado para ela. Leitura que falha avisa; nunca vira "nenhum anexo".
   useEffect(() => {
     let vivo = true;
     (async () => {
       const erros: string[] = []; let anexos: any[] = []; let reservas: any[] = []; const frota: any = {};
+      let entregas: any[] = []; let entregasLidas = false;
       if (item.tipo === 'compra') {
         const { data, error } = await supabase.from('pcp_pedidos_compra_anexos').select('id,nome,url,criado_em').eq('pedido_id', b.id).order('criado_em');
         if (error) erros.push('os anexos (' + error.message + ')'); else anexos = data || [];
+        // E4 (17/11/2026): a previsão é uma por fornecedor; leitura que falha avisa e a tela volta à data mais distante do pedido
+        if (temEntrega(b)) {
+          const en = await lerEntregas([b.id]);
+          if (en.erro) erros.push('a data de cada fornecedor (' + en.erro + ')'); else { entregas = en.linhas; entregasLidas = true; }
+        }
       } else if (avulsa) {
         const [an, rs] = await Promise.all([
           supabase.from('demanda_avulsa_anexos').select('id,nome,url,descricao,criado_em').eq('demanda_id', b.id).order('criado_em'),
@@ -300,7 +308,7 @@ function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
           if (error) erros.push('o nome do veículo (' + error.message + ')'); else (data || []).forEach((v: any) => { frota[v.id] = v; });
         }
       }
-      if (vivo) setExtras({ pronto: true, anexos, reservas, frota, erros });
+      if (vivo) setExtras({ pronto: true, anexos, reservas, frota, erros, entregas, entregasLidas });
     })();
     return () => { vivo = false; };
   }, [item.chave]);
@@ -351,7 +359,9 @@ function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
             {(b.numero_oc || (verValores && b.valor_compra != null && b.valor_compra !== '') || b.data_prevista_recebimento || b.forma_recebimento === 'coleta' || b.data_recebimento_real || b.reprocessos || String(b.motivo_descarte || '').trim()) && <Secao>Andamento da compra</Secao>}
             <Campo rot="Ordem de compra">{b.numero_oc}</Campo>
             {verValores && <Campo rot="Valor da compra">{reais(b.valor_compra)}</Campo>}
-            <Campo rot="Previsão de recebimento">{diaDe(b.data_prevista_recebimento)}</Campo>
+            {extras.entregasLidas && entregasDoPedido(b, extras.entregas).length > 1
+              ? <Campo rot="Previsão de recebimento"><PrevisaoDoPedido pedido={b} linhas={extras.entregas} comAno /></Campo>
+              : <Campo rot="Previsão de recebimento">{diaDe(b.data_prevista_recebimento)}</Campo>}
             <Campo rot="Forma de recebimento">{b.forma_recebimento === 'coleta' ? 'Coleta pelo Compras' + (b.coletado_em ? ' (coletado em ' + diaBR(b.coletado_em) + ')' : '') : null}</Campo>
             <Campo rot="Recebida em">{diaDe(b.data_recebimento_real)}</Campo>
             <Campo rot="Voltou para refazer">{b.reprocessos ? `${b.reprocessos} vez(es)` : null}</Campo>
