@@ -48,8 +48,14 @@ export const ehDesenvolvimentoDoPcp = (v) => v?.tipo === 'engenharia_desenvolvim
  *  e não pede mais o clique em "Recebi" (decidido com o usuário em 27/10/2026, caso da OP D0793). Fabricação (Serralheria, Chicotes) continua pedindo o "Recebi". */
 export const compraJaRecebida = (v) => (v?.setor === 'Compras' || v?.grupo === 'compra') && /^recebid/.test(norm(v?.statusBruto ?? v?.status));
 
+/** Aviso "[COMPRA RECEBIDA]" que o Compras abre ao confirmar a compra (ComprasTab, criarDemandaComprasFinalizada): é só o acompanhamento do pedido, que já é
+ *  uma pendência por conta própria (a compra). Como a demanda nasce "Pendente" e ninguém a fecha, ela segurava a conclusão da Produção para sempre — a OP D0793
+ *  ficou travada com a OC já recebida (19/11/2026, relato do usuário). Não conta como pendência; o pedido de compra continua contando. */
+const ehAvisoDeCompra = (v) => v?.grupo === 'demanda' && /^\s*\[COMPRA RECEBIDA\]/i.test(String(v?.titulo || ''));
+
 const seguraAOp = (v) => {
   if (foiCancelada(v)) return false;
+  if (ehAvisoDeCompra(v)) return false;
   if (v.tipo === 'engenharia_desenvolvimento') return v.origem === 'pcp';
   if (v.grupo === 'compra') return true;
   if (v.grupo !== 'demanda') return false;
