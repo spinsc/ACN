@@ -57,7 +57,6 @@ import {
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
-import { podeGerirPrestadoresDeTerceiros } from './utils/permissoes';
 import { gruposParaRecolher } from './utils/menuLateral';
 
 // Ícone de cada aba do menu lateral
@@ -1140,8 +1139,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (id === 'calendario') return true;
     // Ponto (19/11/2026): é de todos, porque cada pessoa vê o próprio; quem vê a equipe é decidido pelo banco (RH, Admin e gerentes), não pela aba marcada no Admin.
     if (id === 'ponto') return true;
-    // Serviços de terceiros (22/11/2026): na fatia T1 só tem os cadastros, então só aparece para quem cadastra prestadores (Admin, gerentes e Adaptação); da T2 em diante será de todos (todos pedem e todos veem).
-    if (id === 'terceiros') return podeGerirPrestadoresDeTerceiros(currentUser);
+    // Serviços de terceiros (22/11/2026): na T1 só quem cadastra prestadores via o item; desde a T2 é de todos (todos pedem e todos veem todos os serviços; quem pode mexer em cada um é regra do módulo,
+    // conferida de novo pelo banco: TerceirosFluxo.ts). Cadastrar prestador e tipo continua restrito dentro das abas (podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros).
+    if (id === 'terceiros') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);

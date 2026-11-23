@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -17,8 +17,10 @@ import { confirmar, pedirTexto } from './Feedback';
 import { hojeISO, diaISO, Faixa, Botao, Chips, Abas, Selo } from './Interface';
 import Icone from './Icone';
 import {
-  mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline,
+  mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
+// Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, aberta pelo botão da Serralheria (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
+const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -354,6 +356,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
   const [abaAtiva, setAbaAtiva]       = useState('demandas');
   const [tick, setTick]               = useState(0);
+  const [pedindoTerceiro, setPedindoTerceiro] = useState(false);   // janela "Solicitar serviço de terceiro" (só na Serralheria, T2 de Serviços de terceiros, 23/11/2026)
 
   // Modais demanda
   const [modalIniciar, setModalIniciar] = useState(null);
@@ -908,6 +911,8 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
         <div className="sec-hdr">
           <span>{setor} — Demandas</span>
           <div className="acn-set-hdr-controles">
+            {/* qualquer pessoa pede (decidido em 22/11/2026): peça de fora para cortar, dobrar, pintar… o quadro está em Serviços de terceiros */}
+            {setor === 'Serralheria' && <Botao pequeno variante="secundario" icone={mdiAccountWrenchOutline} onClick={() => setPedindoTerceiro(true)}>Solicitar serviço de terceiro</Botao>}
             <span className="acn-ajuda">
               {pendentes} pend. | {andamento} em and. {mediaT?`| média: ${fmtH(mediaT)}`:''}
             </span>
@@ -999,6 +1004,12 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
           <OplMovimentadas setor={setor} />
           <DemandaFooter setor={setor} />
         </>
+      )}
+
+      {pedindoTerceiro && (
+        <Suspense fallback={null}>
+          <SolicitarServicoDeTerceiro currentUser={currentUser} onClose={() => setPedindoTerceiro(false)} aoPedido={() => setPedindoTerceiro(false)} />
+        </Suspense>
       )}
 
       {/* ════════ MODAL INICIAR ════════ */}

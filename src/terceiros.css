@@ -3,9 +3,12 @@
 .acn-terc { display: grid; gap: 12px; min-width: 0; }
 .acn-terc > * { min-width: 0; }
 
-/* Janela de cadastro: mais larga que a padrão para os campos ficarem em duas colunas. O peso da regra empata com `.acn-modal-cadastro` (design.css),
-   senão a largura de 500 px da janela padrão vence e a de cadastro perde a grade. */
-html body .modal-box.acn-modal-cadastro.acn-terc-box { width: min(720px, 95vw); }
+/* Janelas. O peso da regra empata com `.acn-modal-cadastro` (design.css), senão a largura de 500 px da janela padrão vence e a janela perde a grade; max-width junto, como nas outras janelas largas.
+   O corpo da janela é uma coluna que rola: o que tem rolagem própria (a tabela dos carros) não pode encolher até sumir, então nada dentro dele encolhe. */
+html body .modal-box.acn-modal-cadastro.acn-terc-box { width: min(720px, 95vw); max-width: 720px; }
+html body .modal-box.acn-modal-cadastro.acn-terc-box-g { width: min(860px, 96vw); max-width: 860px; }
+html body .modal-box.acn-modal-cadastro.acn-terc-box-p { width: min(520px, 95vw); max-width: 520px; }
+.acn-terc-box .acn-modal-corpo > *, .acn-terc-box-g .acn-modal-corpo > *, .acn-terc-box-p .acn-modal-corpo > * { flex-shrink: 0; }
 
 /* Campo dentro de grade: a coluna do campo não cresce com o controle (CLAUDE.md, "campo dentro de uma grade de duas colunas pode passar da própria coluna"). */
 .acn-terc-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
@@ -17,8 +20,104 @@ html body .modal-box.acn-modal-cadastro.acn-terc-box { width: min(720px, 95vw); 
 .acn-terc-marca { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--acn-ink); cursor: pointer; }
 .acn-terc-marca input { margin-top: 2px; flex: none; }
 
-/* Listas */
+/* Listas dos cadastros (T1) */
 .acn-terc-inativo td { opacity: .6; }
 .acn-terc-acoes { white-space: nowrap; }
 .acn-terc-fazem { max-width: 260px; }
 .acn-terc-vazio { color: var(--acn-muted); }
+
+/* ═══ T2: filtros ═══ */
+.acn-terc-barra { display: grid; gap: 8px; min-width: 0; }
+.acn-terc-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.acn-terc-filtros select.acn-input { height: 32px; max-width: 220px; }
+.acn-terc-periodo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-muted); }
+.acn-terc-data { width: 142px; min-width: 0; height: 32px; box-sizing: border-box; }
+.acn-terc-janela { margin: 0; }
+
+/* ═══ T2: quadro (o modelo é o das Viagens: grade de colunas, cada uma com a sua rolagem) ═══ */
+.acn-terc-quadro { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 6px; }
+.acn-terc-quadro.c4 { grid-template-columns: repeat(4, minmax(250px, 1fr)); }
+.acn-terc-quadro.c1 { grid-template-columns: minmax(250px, 1fr); }
+.acn-terc-col { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: flex; flex-direction: column; min-width: 0; }
+.acn-terc-col.alvo { border-color: var(--acn-brand); box-shadow: 0 0 0 2px var(--acn-brand-soft); }
+.acn-terc-col-cab { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-ink); border-bottom: 1px solid var(--acn-line); }
+.acn-terc-col-cab em { font-style: normal; font-weight: 600; color: var(--acn-muted); }
+.acn-terc-col-corpo { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 64px; max-height: 72vh; overflow-y: auto; }
+.acn-terc-col-vazia { padding: 10px; text-align: center; font-size: 12px; color: var(--acn-muted); }
+
+.acn-terc-card { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; cursor: pointer; min-width: 0; }
+.acn-terc-card:hover { border-color: var(--acn-ink); }
+.acn-terc-card:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 1px; }
+.acn-terc-card.arrastavel { cursor: grab; }
+.acn-terc-grupo { border-left: 3px solid var(--acn-brand); }   /* o cartão que junta vários carros da mesma venda se distingue pela faixa na borda */
+.acn-terc-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.acn-terc-card-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.acn-terc-card-id strong { font-size: 13px; overflow-wrap: anywhere; color: var(--acn-ink); }
+.acn-terc-card-desc { margin: 0; color: var(--acn-text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.acn-terc-card-lig { display: flex; align-items: center; gap: 4px; color: var(--acn-muted); overflow-wrap: anywhere; }
+.acn-terc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--acn-text); }
+.acn-terc-card-meta > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.acn-terc-card-selos { display: flex; flex-wrap: wrap; gap: 4px; }
+/* o selo "Atrasado há 12 dias" ou "Choque de data" pode ser longo: quebra a linha dentro do cartão em vez de vazar (CLAUDE.md, texto longo dentro de componente) */
+html body .acn-terc-card-selos .acn-selo:not(#acn), html body .acn-terc-celula-selos .acn-selo:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; padding: 4px 8px; line-height: 1.3; border-radius: 12px; }
+.acn-terc-card-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--acn-muted); }
+.acn-terc-card-pe > span { max-width: 100%; overflow-wrap: anywhere; }
+.acn-terc-card-valor { margin-left: auto; font-weight: 800; color: var(--acn-ink); }
+.acn-terc-sem { color: var(--acn-warn); font-weight: 600; }   /* "Sem prestador": pendência, não erro */
+
+/* ═══ T2: lista ═══ */
+.acn-terc-lista-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 8px; }
+.acn-terc-ordem { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--acn-muted); }
+.acn-terc-linha { cursor: pointer; }
+.acn-terc-linha:hover td { background: var(--acn-surface-2); }
+.acn-terc-celula-desc { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acn-terc-celula-selos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+/* o número ("TS-00005"), a ligação e o dia não quebram no meio; a tabela já rola de lado dentro do .acn-rolagem, então não estoura a página */
+.acn-terc-linha .acn-num strong, .acn-terc-linha td.acn-terc-nowrap { white-space: nowrap; }
+.acn-terc-celula-pedido { min-width: 118px; }
+
+/* ═══ T2: janelas de agendar e de dar como realizado ═══ */
+.acn-terc-resumo { padding: 8px 10px; border-radius: var(--acn-r2); background: var(--acn-surface-2); border: 1px solid var(--acn-line); font-size: 13px; font-weight: 600; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-previa { margin: 0; font-size: 12px; font-weight: 600; color: var(--acn-ink); }
+
+/* ═══ T2: janela de pedir ═══ */
+.acn-terc-un-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.acn-terc-un-lista { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-terc-un-lista li { padding: 6px 10px; border-bottom: 1px solid var(--acn-line); }
+.acn-terc-un-lista li:last-child { border-bottom: 0; }
+.acn-terc-un-dup { color: var(--acn-bad); font-style: normal; }
+.acn-terc-pecas { display: grid; gap: 6px; }
+.acn-terc-peca { display: grid; grid-template-columns: minmax(0, 1fr) 84px auto; gap: 6px; align-items: center; }
+.acn-terc-peca .acn-input { width: 100%; min-width: 0; box-sizing: border-box; height: 32px; }
+.acn-terc-anexos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.acn-terc-anexos li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.acn-terc-anexo-nome { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--acn-ink); }
+a.acn-terc-anexo-nome { color: var(--acn-info); text-decoration: underline; }
+
+/* ═══ T2: janela do serviço e janela do grupo ═══ */
+.acn-terc-det-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.acn-terc-passos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.acn-terc-det-desc { margin: 0; font-size: 14px; line-height: 1.45; color: var(--acn-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+.acn-terc-det-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px 16px; }
+.acn-terc-det-item { display: grid; gap: 2px; min-width: 0; align-content: start; }
+.acn-terc-det-item.largo { grid-column: 1 / -1; }
+.acn-terc-det-rot { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-terc-det-val { min-width: 0; font-size: 13px; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-lig-texto { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; }
+.acn-terc-det-texto { white-space: pre-wrap; }
+.acn-terc-det-lista { margin: 0; padding-left: 18px; }
+.acn-terc-det-hist { display: grid; gap: 6px; }
+.acn-terc-historico { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--acn-ink); }
+.acn-terc-historico li { padding: 4px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-terc-hist-quando { display: inline-block; min-width: 118px; margin-right: 6px; color: var(--acn-muted); font-variant-numeric: tabular-nums; }
+.acn-terc-hist-detalhe { margin-top: 2px; color: var(--acn-text); overflow-wrap: anywhere; }
+.acn-terc-grupo-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.acn-terc-ajuste { display: grid; gap: 10px; padding: 12px; border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); }
+.acn-terc-ajuste-rodape { display: flex; justify-content: flex-end; }
+
+/* ═══ Celular e tablet em pé: as três colunas do quadro viram uma pilha (A definir, depois Agendado, depois Realizado), sem rolar para o lado ═══ */
+@media (max-width: 760px) {
+  .acn-terc-quadro, .acn-terc-quadro.c4, .acn-terc-quadro.c1 { grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
+  .acn-terc-col-corpo { max-height: none; }
+  .acn-terc-hist-quando { display: block; }
+}

@@ -229,6 +229,9 @@
   }
   html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes::before { display: none; }
   html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes div { flex-wrap: wrap !important; }
+  /* No cartão a coluna "Ações" deixa de ser presa à direita (L4, design.css): a célula virou uma linha do cartão e o `sticky` com a sombra da esquerda aparecia como uma faixa branca
+     com sombra no pé de todo cartão (achado em 23/11/2026, ao auditar os Serviços de terceiros no celular); fica só a cor de fundo que a L4 já dá, igual à do cartão */
+  html body table.acn-tab-cartoes > tbody > tr > td.acn-col-fixa { position: static; box-shadow: none; }
   html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira { border: none; box-shadow: none; background: transparent; padding: 0; }
   html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira > td::before { display: none; }
   html body table.acn-tab-cartoes > tbody > tr:hover > td { background: transparent !important; }

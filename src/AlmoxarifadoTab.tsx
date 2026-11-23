@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmarRemocao } from './Feedback';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { LinkLote } from './OpLote';
 import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERECO } from './EnderecoEntrega';
@@ -37,8 +37,10 @@ import Icone from './Icone';
 import {
   mdiToolboxOutline, mdiPackageVariantClosed, mdiArrowULeftTop, mdiEyeOutline, mdiLinkVariant, mdiTrayArrowDown,
   mdiCloseCircleOutline, mdiAlertOutline, mdiChevronUp, mdiChevronDown, mdiTruckOutline, mdiClose, mdiNumeric,
-  mdiContentSaveOutline, mdiCheckCircleOutline, mdiSendOutline, mdiPlus, mdiDeleteOutline,
+  mdiContentSaveOutline, mdiCheckCircleOutline, mdiSendOutline, mdiPlus, mdiDeleteOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
+// Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, aberta pelo botão do Almoxarifado (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
+const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -49,6 +51,7 @@ const semDado = (v) => !v || !String(v).trim();
 export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFADO }) {
   const doTelecom = setor === SETOR_TELECOM;
   const modulo = doTelecom ? 'telecom' : 'almoxarifado';   // módulo do histórico de alterações (AuditSystem)
+  const [pedindoTerceiro, setPedindoTerceiro] = useState(false);   // janela "Solicitar serviço de terceiro" (só no Almoxarifado, T2 de Serviços de terceiros, 23/11/2026)
   const [opls, setOpls] = useState([]);
   // vendas compostas em que este setor já embalou a sua parte e o outro ainda não (Telecom, T3, 22/10/2026)
   const [aguardandoOutro, setAguardandoOutro] = useState<any[]>([]);
@@ -1158,6 +1161,11 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
 
   return (
     <div>
+      {pedindoTerceiro && (
+        <Suspense fallback={null}>
+          <SolicitarServicoDeTerceiro currentUser={currentUser} onClose={() => setPedindoTerceiro(false)} aoPedido={() => setPedindoTerceiro(false)} />
+        </Suspense>
+      )}
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
           Não foi possível ler as OPs {doTelecom ? 'do Telecom' : 'do Almoxarifado'} ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
@@ -1194,7 +1202,11 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       )}
 
       <div className="sec-card">
-        <div className="sec-hdr"><span>{doTelecom ? 'Separação e envio — OPs de rádio aguardando o Telecom' : 'Kiting — OPs Aguardando Conferencia'} ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr">
+          <span>{doTelecom ? 'Separação e envio — OPs de rádio aguardando o Telecom' : 'Kiting — OPs Aguardando Conferencia'} ({filtrarOpls(opls, busca).length})</span>
+          {/* qualquer pessoa pede (decidido em 22/11/2026): película, pintura, lavagem… feitos por quem é de fora; o quadro está em Serviços de terceiros */}
+          {!doTelecom && <Botao pequeno variante="secundario" icone={mdiAccountWrenchOutline} onClick={() => setPedindoTerceiro(true)}>Solicitar serviço de terceiro</Botao>}
+        </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
