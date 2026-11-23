@@ -115,9 +115,79 @@ a.acn-terc-anexo-nome { color: var(--acn-info); text-decoration: underline; }
 .acn-terc-ajuste { display: grid; gap: 10px; padding: 12px; border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); }
 .acn-terc-ajuste-rodape { display: flex; justify-content: flex-end; }
 
-/* ═══ Celular e tablet em pé: as três colunas do quadro viram uma pilha (A definir, depois Agendado, depois Realizado), sem rolar para o lado ═══ */
+/* ═══ T3: agenda (semana por prestador ou tipo; mês em grade) ═══ */
+.acn-terc-agenda { display: grid; gap: 10px; min-width: 0; }
+.acn-terc-ag-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-width: 0; }
+.acn-terc-ag-nav, .acn-terc-ag-escolhas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.acn-terc-ag-periodo { margin: 0 6px; font-size: 14px; color: var(--acn-ink); }
+.acn-terc-ag-resumo { margin: 0; }
+.acn-terc-ag-legenda { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--acn-muted); }
+.acn-terc-legenda { display: inline-flex; align-items: center; gap: 6px; }
+.acn-terc-legenda::before { content: ''; width: 12px; height: 12px; flex: none; border-radius: 3px; border: 1px solid var(--acn-line); background: var(--acn-surface); box-sizing: border-box; }
+.acn-terc-legenda.sit-agendado::before { background: var(--acn-info-soft); border-color: var(--acn-info); }
+.acn-terc-legenda.sit-solicitado::before { border: 1px dashed var(--acn-muted); }
+.acn-terc-legenda.sit-realizado::before { background: var(--acn-ok-soft); border-color: var(--acn-ok); }
+.acn-terc-legenda.choque::before { background: var(--acn-bad-soft); border-color: var(--acn-bad); }
+
+.acn-terc-ag-semana { min-width: 880px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); overflow: hidden; }
+.acn-terc-ag-cab, .acn-terc-ag-linha { display: grid; grid-template-columns: 150px repeat(7, minmax(104px, 1fr)); min-width: 0; }
+.acn-terc-ag-cab { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-terc-ag-dia { display: flex; flex-direction: column; align-items: center; padding: 4px 0; font-size: 11px; text-transform: uppercase; color: var(--acn-muted); }
+.acn-terc-ag-dia em { font-style: normal; font-weight: 700; font-size: 12px; color: var(--acn-ink); }
+.acn-terc-ag-dia.hoje em { color: var(--acn-brand-ink); text-decoration: underline; }
+.acn-terc-ag-linha { border-top: 1px solid var(--acn-line); }
+.acn-terc-ag-cab + .acn-terc-ag-linha { border-top: 0; }
+.acn-terc-ag-rot { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 10px; min-width: 0; font-size: 13px; }
+.acn-terc-ag-rot strong { color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-ag-rot .acn-ajuda, .acn-terc-ag-rot .acn-txt-erro { font-size: 11px; }
+.acn-terc-ag-cel { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 44px; padding: 4px; border-left: 1px solid var(--acn-line); }
+.acn-terc-ag-dia.fds, .acn-terc-ag-cel.fds, .acn-terc-ag-mdia.fds { background: var(--acn-surface-2); }
+.acn-terc-ag-cel.hoje, .acn-terc-ag-mdia.hoje { background: color-mix(in srgb, var(--acn-brand) 10%, transparent); }
+.acn-terc-ag-cel.choque, .acn-terc-ag-mdia.choque { background: var(--acn-bad-soft); }   /* o dia em que o mesmo prestador tem duas visitas que batem */
+.acn-terc-ag-vazia { padding: 14px; text-align: center; font-size: 13px; color: var(--acn-muted); border-top: 1px solid var(--acn-line); }
+
+/* a visita: azul quando é compromisso, tracejada quando é só a data desejada do pedido, verde esmaecida quando já foi feita, vermelha no choque e no atraso */
+.acn-terc-visita { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 4px 6px; border: 1px solid var(--acn-info); border-left-width: 3px; border-radius: 6px; background: var(--acn-info-soft); color: var(--acn-ink); font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; cursor: pointer; }
+.acn-terc-visita:hover { border-color: var(--acn-ink); }
+.acn-terc-visita:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 1px; }
+.acn-terc-visita-topo { font-weight: 700; }
+.acn-terc-visita-topo em { margin-right: 4px; font-style: normal; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--acn-muted); }
+.acn-terc-visita-sub { color: var(--acn-text); }
+.acn-terc-visita-alerta { font-weight: 700; color: var(--acn-bad); }
+.acn-terc-visita.sit-solicitado { background: var(--acn-surface); border: 1px dashed var(--acn-muted); border-left-width: 3px; }
+.acn-terc-visita.sit-realizado { background: var(--acn-ok-soft); border-color: var(--acn-ok); opacity: .75; }
+.acn-terc-visita.hoje { border-color: var(--acn-brand); box-shadow: 0 0 0 1px var(--acn-brand); }
+.acn-terc-visita.choque, .acn-terc-visita.atrasada { background: var(--acn-bad-soft); border-color: var(--acn-bad); }
+
+.acn-terc-ag-mes { min-width: 760px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); overflow: hidden; }
+.acn-terc-ag-mes-cab, .acn-terc-ag-mes-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.acn-terc-ag-mes-cab { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-terc-ag-mes-cab span { padding: 6px 0; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+.acn-terc-ag-mdia { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 96px; padding: 4px; border-left: 1px solid var(--acn-line); border-top: 1px solid var(--acn-line); }
+.acn-terc-ag-mdia:nth-child(7n + 1) { border-left: 0; }
+.acn-terc-ag-mdia:nth-child(-n + 7) { border-top: 0; }
+.acn-terc-ag-mdia.outro { background: var(--acn-surface-2); }
+.acn-terc-ag-mdia-num { font-size: 11px; font-weight: 700; color: var(--acn-ink); }
+.acn-terc-ag-mdia.outro .acn-terc-ag-mdia-num { color: var(--acn-muted); font-weight: 600; }
+.acn-terc-ag-mdia.hoje .acn-terc-ag-mdia-num { color: var(--acn-brand-ink); text-decoration: underline; }
+html body .acn-terc-ag-mdia .acn-terc-ag-mais:not(#acn) { align-self: flex-start; }
+
+/* ═══ Celular e tablet em pé: as três colunas do quadro viram uma pilha (A definir, depois Agendado, depois Realizado), sem rolar para o lado; a agenda vira uma lista de dias, só os que têm visita ═══ */
 @media (max-width: 760px) {
   .acn-terc-quadro, .acn-terc-quadro.c4, .acn-terc-quadro.c1 { grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
   .acn-terc-col-corpo { max-height: none; }
   .acn-terc-hist-quando { display: block; }
+
+  .acn-terc-ag-semana, .acn-terc-ag-mes { min-width: 0; }
+  .acn-terc-ag-cab, .acn-terc-ag-mes-cab { display: none; }
+  .acn-terc-ag-linha { grid-template-columns: minmax(0, 1fr); }
+  .acn-terc-ag-rot { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+  .acn-terc-ag-cel { border-left: 0; }
+  .acn-terc-ag-cel.vazia, .acn-terc-ag-mdia.vazia { display: none; }
+  .acn-terc-ag-mes-grade { grid-template-columns: minmax(0, 1fr); }
+  .acn-terc-ag-mdia { min-height: 0; border-left: 0; border-top: 1px solid var(--acn-line); }
+  .acn-terc-ag-mdia:nth-child(-n + 7) { border-top: 1px solid var(--acn-line); }
+  .acn-terc-ag-mdia-num { display: none; }
+  .acn-terc-ag-cel::before, .acn-terc-ag-mdia::before { content: attr(data-rotulo); font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+  .acn-terc-ag-cel.hoje::before, .acn-terc-ag-mdia.hoje::before { color: var(--acn-brand-ink); }
 }

@@ -1,8 +1,9 @@
 // @ts-nocheck
 // Serviços de terceiros: película, plotagem, pintura, lavagem, funilaria, corte e dobra e os outros serviços feitos por quem é de fora (pedido do usuário em 22/11/2026;
 // PLANO_SERVICOS_TERCEIROS.md). Fatia T2: o pedido de serviço, o Quadro (A definir, Agendado, Realizado), a Lista e os filtros de pendência, junto dos dois cadastros da T1 (prestadores e tipos).
-// A agenda e o Calendário chegam na T3. Todo usuário entra aqui (todos pedem e todos veem todos os serviços); quem pode mexer em cada um é regra de TerceirosFluxo.ts, conferida de novo pelo banco.
-// Esta tela só orquestra: lê, filtra, abre as janelas e junta à lista o que o banco confirmou. As regras estão em TerceirosFluxo.ts e a leitura e a gravação em TerceirosServicos.ts.
+// Fatia T3 (23/11/2026): a Agenda (semana e mês, por prestador ou por tipo, com o choque em vermelho) e o aviso do Calendário que abre o serviço atrasado daqui.
+// Todo usuário entra aqui (todos pedem e todos veem todos os serviços); quem pode mexer em cada um é regra de TerceirosFluxo.ts, conferida de novo pelo banco.
+// Esta tela só orquestra: lê, filtra, abre as janelas e junta à lista o que o banco confirmou. As regras estão em TerceirosFluxo.ts (e, da Agenda, em TerceirosAgenda.ts) e a leitura e a gravação em TerceirosServicos.ts.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { mdiPlus, mdiRefresh } from '@mdi/js';
 import { CabecalhoTela, Abas, Botao, Faixa, hojeISO } from './Interface';
@@ -12,11 +13,12 @@ import { lerTipos, lerPrestadores } from './TerceirosModelo';
 import { podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros } from './utils/permissoes';
 import { PrestadoresDeTerceiros } from './TerceirosPrestadores';
 import { TiposDeTerceiros } from './TerceirosTipos';
-import { FILTROS_VAZIOS, choquesDeData, contarPendencias, passaNosFiltros, veValores, rotuloDoPeriodo } from './TerceirosFluxo';
+import { FILTROS_VAZIOS, cartoesDaColuna, choquesDeData, contarPendencias, passaNosFiltros, veValores, rotuloDoPeriodo } from './TerceirosFluxo';
 import { lerServicos, auditarServicos, cancelarServicos, voltarServicos, descreverNumeros, DIAS_DA_JANELA_DE_LEITURA } from './TerceirosServicos';
 import { BarraDeFiltros } from './TerceirosFiltros';
 import { QuadroDeTerceiros } from './TerceirosQuadro';
 import { ListaDeTerceiros } from './TerceirosLista';
+import { AgendaDeTerceiros } from './TerceirosAgendaTela';
 import { ModalAgendar, ModalRealizar, pedirMotivoValido } from './TerceirosAcoes';
 import { ModalSolicitar } from './TerceirosSolicitar';
 import { ModalDoServico, ModalDoGrupo } from './TerceirosServicoModal';
@@ -28,9 +30,11 @@ const SERVICOS_VAZIOS = { lista: [], erro: null, lido: false, escondidos: 0, des
 const CHAVE_DA_VISAO = 'acn_terceiros_visao';
 const UM_MINUTO = 60000;   // a regra do custo do banco: uma consulta por minuto por tela, no máximo (CLAUDE.md, "Custo do banco")
 
-/** A última visão que a pessoa usou (Quadro ou Lista); o módulo abre sempre no Quadro quando não há nada guardado. O armazenamento pode falhar: aí vale o Quadro. */
+const VISOES_DOS_SERVICOS = ['quadro', 'agenda', 'lista'];   // as três visões dos serviços (as outras abas são cadastros)
+
+/** A última visão que a pessoa usou (Quadro, Agenda ou Lista); o módulo abre sempre no Quadro quando não há nada guardado. O armazenamento pode falhar: aí vale o Quadro. */
 function visaoGuardada(): string {
-  try { return localStorage.getItem(CHAVE_DA_VISAO) === 'lista' ? 'lista' : 'quadro'; } catch { return 'quadro'; }
+  try { const v = localStorage.getItem(CHAVE_DA_VISAO) || ''; return VISOES_DOS_SERVICOS.includes(v) ? v : 'quadro'; } catch { return 'quadro'; }
 }
 function guardarVisao(v: string) {
   try { localStorage.setItem(CHAVE_DA_VISAO, v); } catch { /* sem armazenamento: na próxima vez abre no Quadro */ }
@@ -56,6 +60,8 @@ export default function TerceirosTab({ currentUser }) {
   const [grupo, setGrupo] = useState<any>(null);
   const [agendar, setAgendar] = useState<any>(null);
   const [realizar, setRealizar] = useState<any>(null);
+  const [pendente, setPendente] = useState<any>(null);   // o serviço que o aviso do Calendário quer abrir: { id, tentouTodos }
+  const [trocandoJanela, setTrocandoJanela] = useState(false);   // true enquanto a leitura de "todos os dias" (ou a volta aos últimos 120) não terminou
   const todosRef = useRef(false);
   const versaoLocal = useRef(0);   // sobe a cada gravação nossa: a leitura que começou antes dela não pode desfazê-la
   const montada = useRef(true);
@@ -75,7 +81,7 @@ export default function TerceirosTab({ currentUser }) {
     if (!montada.current) return;
     if (!r.erro && v !== versaoLocal.current) {
       // uma gravação nossa terminou enquanto a leitura corria: ela pode ter lido o serviço de antes dela. Lê de novo (uma vez) em vez de trocar o que a tela já mostra.
-      if (tentativas > 0) carregarServicos(todosOsDias, contar, tentativas - 1);
+      if (tentativas > 0) return carregarServicos(todosOsDias, contar, tentativas - 1);   // devolve a promessa: quem espera a leitura (o aviso do Calendário) só segue depois da segunda
       return;
     }
     setServicos((antes: any) => (r.erro
@@ -110,8 +116,11 @@ export default function TerceirosTab({ currentUser }) {
   const abertos = useMemo(() => servicos.lista.filter((s: any) => s.status === 'solicitado' || s.status === 'agendado').length, [servicos.lista]);
 
   const mudarFiltros = useCallback((parte: any) => setFiltros((f: any) => ({ ...f, ...parte })), []);
-  const mudarAba = (id: string) => { setAba(id); if (id === 'quadro' || id === 'lista') guardarVisao(id); };
-  const verTodos = (valor: boolean) => { todosRef.current = valor; setTodos(valor); carregarServicos(valor, true); };
+  const mudarAba = (id: string) => { setAba(id); if (VISOES_DOS_SERVICOS.includes(id)) guardarVisao(id); };
+  const verTodos = (valor: boolean) => {
+    todosRef.current = valor; setTodos(valor); setTrocandoJanela(true);
+    carregarServicos(valor, true).finally(() => { if (montada.current) setTrocandoJanela(false); });
+  };
   const reler = useCallback(() => carregarServicos(todosRef.current, true), [carregarServicos]);
 
   /** Junta à lista o que o banco confirmou (sem esperar a próxima leitura), registra no histórico geral e diz o que foi feito. */
@@ -158,9 +167,39 @@ export default function TerceirosTab({ currentUser }) {
   const detalhe = detalheId ? servicos.lista.find((s: any) => s.id === detalheId) : null;
   useEffect(() => { if (detalheId && servicos.lido && !detalhe) setDetalheId(null); }, [detalheId, detalhe, servicos.lido]);
 
+  // O aviso do Calendário (serviço atrasado) e o botão "Abrir" dele chegam por aqui (T3, 23/11/2026): o recado fica em window.__acnDeepLink e o evento cobre a tela já aberta, como nas Viagens.
+  // O id é o do primeiro serviço da visita: o serviço sozinho abre a janela dele, e o que está num cartão de grupo (vários carros da mesma venda) abre a janela do grupo.
+  useEffect(() => {
+    const pegar = (e?: any) => {
+      const pend = (window as any).__acnDeepLink || e?.detail;
+      if (!pend || pend.contexto !== 'terceiro_servico' || !pend.contextoId) return;
+      (window as any).__acnDeepLink = null;
+      setPendente({ id: String(pend.contextoId), tentouTodos: false });
+    };
+    pegar();
+    window.addEventListener('acn:abrir-registro', pegar);
+    return () => window.removeEventListener('acn:abrir-registro', pegar);
+  }, []);
+  useEffect(() => {
+    if (!pendente || !servicos.lido || trocandoJanela) return;
+    const s = servicos.lista.find((x: any) => x.id === pendente.id);
+    if (s) {
+      const cartao = cartoesDaColuna(servicos.lista, s.status).find((c: any) => (c.tipo === 'grupo' ? c.servicos.some((y: any) => y.id === s.id) : c.servico.id === s.id));
+      if (cartao?.tipo === 'grupo') abrirGrupo(cartao); else setDetalheId(s.id);
+      setPendente(null);
+      return;
+    }
+    // não está na lista: pode ser mais antigo que a janela de 120 dias, então lê uma vez com todos os dias antes de desistir (leitura recusada nunca vale como "não existe")
+    if (!todosRef.current && !pendente.tentouTodos && !servicos.erro) { setPendente({ ...pendente, tentouTodos: true }); verTodos(true); return; }
+    mostrarAviso(servicos.erro
+      ? 'Não foi possível abrir o serviço do aviso: a leitura dos serviços falhou. Atualize a tela e tente de novo.'
+      : 'Não encontrei o serviço deste aviso. Confira na Lista, em "Todos" (ele pode ter sido cancelado).', 'atencao');
+    setPendente(null);
+  }, [pendente, servicos.lido, servicos.lista, servicos.erro, trocandoJanela, abrirGrupo]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const lido = tipos.lido && prestadores.lido && servicos.lido;
   const semTipos = tipos.lido && tipos.lista.length === 0;
-  const mostraServicos = aba === 'quadro' || aba === 'lista';
+  const mostraServicos = VISOES_DOS_SERVICOS.includes(aba);
 
   return (
     <div className="acn-terc">
@@ -176,6 +215,7 @@ export default function TerceirosTab({ currentUser }) {
         abas={(
           <Abas ativa={aba} onChange={mudarAba} itens={[
             { id: 'quadro', rotulo: 'Quadro', contagem: servicos.lido ? abertos : null, titulo: 'Serviços em aberto: A definir e Agendado' },
+            { id: 'agenda', rotulo: 'Agenda', titulo: 'Quem está onde em cada dia: a semana e o mês, por prestador ou por tipo' },
             { id: 'lista', rotulo: 'Lista' },
             { id: 'prestadores', rotulo: 'Prestadores', contagem: prestadores.lido ? prestadores.lista.filter((p: any) => p.ativo).length : null },
             { id: 'tipos', rotulo: 'Tipos de serviço', contagem: tipos.lido ? tipos.lista.filter((t: any) => t.ativo).length : null },
@@ -220,15 +260,18 @@ export default function TerceirosTab({ currentUser }) {
           {servicos.lista.length === 0 && !servicos.erro && (
             <Faixa tom="info">Ainda não há serviços de terceiros pedidos. Use "Solicitar serviço" aqui no alto ou o botão da própria OP, da OS, da Engenharia, da Serralheria e do Almoxarifado.</Faixa>
           )}
-          {aba === 'quadro'
-            ? (
-              <QuadroDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje} currentUser={currentUser}
-                verValor={verValor} ver={filtros.ver} aoAbrir={abrirServico} aoAbrirGrupo={abrirGrupo} aoMover={mover} />
-            )
-            : (
-              <ListaDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje} currentUser={currentUser}
-                verValor={verValor} aoAbrir={abrirServico} aoMover={mover} />
-            )}
+          {aba === 'quadro' && (
+            <QuadroDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje} currentUser={currentUser}
+              verValor={verValor} ver={filtros.ver} aoAbrir={abrirServico} aoAbrirGrupo={abrirGrupo} aoMover={mover} />
+          )}
+          {aba === 'agenda' && (
+            <AgendaDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje}
+              verValor={verValor} ver={filtros.ver} aoAbrir={abrirServico} aoAbrirGrupo={abrirGrupo} />
+          )}
+          {aba === 'lista' && (
+            <ListaDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje} currentUser={currentUser}
+              verValor={verValor} aoAbrir={abrirServico} aoMover={mover} />
+          )}
         </>
       )}
 
