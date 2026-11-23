@@ -16,6 +16,8 @@ import { enderecoDoAnexo, tamanhoLegivel, descreverNumeros } from './TerceirosSe
 import { juntarPecas, textoDasPecas } from './TerceirosContrato';
 import { lerHistoricoDaOrdem, rotuloDaOrdem, familiaDaOrdem, ordemEstaAtiva, podeMexerNaOrdem, servicosDaOrdem, tirarDaOrdem, cancelarOrdem } from './TerceirosOrdens';
 import { ModalEnviarOrdem, ModalRetornoDaOrdem, ModalEditarOrdem, ModalIncluirNaOrdem } from './TerceirosOrdemPassos';
+import { CaixaDoPagamento } from './TerceirosPagamentoTela';
+import { CaixaDaSaida } from './TerceirosVistoriaTela';
 
 const ROTULO_NO_HISTORICO: Record<string, string> = {
   montada: 'Ordem montada', incluiu: 'Serviços incluídos', tirou: 'Serviços tirados', alterada: 'Ordem alterada', enviada: 'Peças enviadas', fechada: 'Ordem fechada', cancelada: 'Ordem cancelada',
@@ -33,8 +35,10 @@ function Item({ rotulo, children, largo = false }: { rotulo: string; children: a
 /**
  * `ordens` e `servicos` são as listas da tela (os serviços já com a situação da ordem anexada). `aoMudou(resposta, ordemDeAntes, servicosDeAntes, frase)` junta o que o banco confirmou;
  * `aoImprimir({ tipo, servicos, ordem })` abre a janela de impressão; `aoAbrirServico(s)` abre a janela do serviço (esta fica por baixo); `aoRecarregar` lê tudo de novo.
+ * T5 (23/11/2026): `aoPedirPagamento(servicos)` pede UM pagamento para a ordem (ao fechar, os serviços ficam realizados com o valor final de cada um); `aoRegistrarSaida`, `aoLigarSaida`
+ * e `aoDesligarSaida` cuidam da saída da Vistoria de pátio das peças.
  */
-export function ModalDaOrdem({ ordemId, ordens, servicos, mapaTipos, mapaPrestadores, prestadores, hoje, currentUser, verValor, onClose, aoAbrirServico, aoImprimir, aoMudou, aoRecarregar }) {
+export function ModalDaOrdem({ ordemId, ordens, servicos, mapaTipos, mapaPrestadores, prestadores, hoje, currentUser, verValor, onClose, aoAbrirServico, aoImprimir, aoMudou, aoRecarregar, aoPedirPagamento, aoRegistrarSaida, aoLigarSaida, aoDesligarSaida }) {
   const ordem = ordens.find((o: any) => o.id === ordemId) || null;
   const doBanco = useMemo(() => (ordem ? servicosDaOrdem(servicos, ordem.id) : []), [servicos, ordem?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const podeMexer = podeMexerNaOrdem(currentUser);
@@ -168,6 +172,22 @@ export function ModalDaOrdem({ ordemId, ordens, servicos, mapaTipos, mapaPrestad
             </Item>
 
             {pecas.length > 0 && <Item rotulo="Peças da ordem" largo><span className="acn-terc-det-texto">{textoDasPecas(pecas)}</span></Item>}
+
+            {/* T5: o pagamento só aparece depois que a ordem fecha (os serviços viram realizados) e a saída da vistoria só depois que a ordem sai da fase de assinatura, ou se já há uma ligada */}
+            {ordem.status !== 'cancelada' && doBanco.length > 0 && (
+              <>
+                {doBanco.some((s: any) => s.status === 'realizado') && (
+                  <Item rotulo="Pagamento ao prestador" largo>
+                    <CaixaDoPagamento servicos={doBanco} currentUser={currentUser} tipoDe={(s: any) => mapaTipos.get(s.tipo_id)} aoPedir={aoPedirPagamento} />
+                  </Item>
+                )}
+                {(!montada || doBanco.some((s: any) => s.vistoria_id)) && (
+                  <Item rotulo="Saída da vistoria de pátio" largo>
+                    <CaixaDaSaida servicos={doBanco} currentUser={currentUser} tipoDe={(s: any) => mapaTipos.get(s.tipo_id)} hoje={hoje} aoRegistrar={aoRegistrarSaida} aoLigar={aoLigarSaida} aoDesligar={aoDesligarSaida} />
+                  </Item>
+                )}
+              </>
+            )}
 
             {erro && <Faixa tom="erro">{erro}</Faixa>}
 

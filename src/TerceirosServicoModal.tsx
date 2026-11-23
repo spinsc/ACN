@@ -4,6 +4,7 @@
 //  • `ModalDoGrupo`: os carros de uma mesma venda que o quadro junta num cartão só, com marcar quais, passar os marcados de coluna e ajustar o mesmo dado em todos de uma vez.
 // Nada aqui grava por conta própria o que muda de coluna: agendar, realizar, voltar e cancelar sobem para a tela (`aoMover`), que abre a janela certa e confirma com o banco.
 // Quem grava de verdade é o banco, pelas funções `terceiros_*` (TerceirosServicos.ts); a tela só deixa de oferecer o que ele recusaria (regras em TerceirosFluxo.ts).
+// T5 (23/11/2026): as duas janelas ganharam a caixa do pagamento ao prestador (TerceirosPagamentoTela.tsx) e a da saída da vistoria de pátio (TerceirosVistoriaTela.tsx).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { mdiClose, mdiPencilOutline, mdiPaperclip, mdiTrashCanOutline, mdiOpenInNew, mdiPlus, mdiHistory, mdiLinkVariant, mdiPrinterOutline, mdiClipboardTextOutline } from '@mdi/js';
 import Icone from './Icone';
@@ -18,6 +19,8 @@ import {
 import { rotuloDaOrdem, podeMexerNaOrdem } from './TerceirosOrdens';
 import { itensDoMenu, movimentosEmComum, opcoesDePrestador, resumoDosServicos, extrasDoServico } from './TerceirosAcoes';
 import { SelosDoServico, diaCompleto, momentoBR, textoDoDia } from './TerceirosPecas';
+import { CaixaDoPagamento } from './TerceirosPagamentoTela';
+import { CaixaDaSaida } from './TerceirosVistoriaTela';
 import {
   atualizarServico, atualizarVarios, lerHistoricoDoServico, enviarAnexos, retirarArquivosSoltos, enderecoDoAnexo, tamanhoLegivel, PASTA_DOS_ANEXOS, LIMITE_DE_ANEXO,
 } from './TerceirosServicos';
@@ -25,6 +28,7 @@ import {
 const ROTULO_NO_HISTORICO: Record<string, string> = {
   solicitado: 'Pedido', alterado: 'Dados alterados', agendado: 'Agendado', reagendado: 'Reagendado', realizado: 'Realizado', voltou: 'Voltou para A definir', reaberto: 'Reaberto', cancelado: 'Cancelado',
   em_ordem: 'Entrou numa ordem de serviço', saiu_da_ordem: 'Saiu da ordem de serviço', ordem_enviada: 'Peças enviadas ao prestador',
+  pagamento_pedido: 'Pagamento pedido ao Financeiro', vistoria_ligada: 'Ligado a uma saída da vistoria', vistoria_desligada: 'Desligado da saída da vistoria',
 };
 const ROTULO_DO_LOCAL: Record<string, string> = { fabrica: 'Na fábrica', prestador: 'No prestador' };
 const MAXIMO_DE_ANEXOS_NO_SERVICO = 30;   // o limite do banco (terceiros_limpar_anexos)
@@ -53,8 +57,9 @@ function porQueSemPassos(s: any, tipo: any): string {
  * `aoMover(movimento, [servico])` e `aoMudou(linhasGravadas, linhasDeAntes, frase)` vêm da tela: a primeira abre a janela do passo; a segunda junta o que o banco confirmou à lista,
  * grava a auditoria e mostra a frase. `aoRecarregar` lê tudo de novo (quando o banco diz que alguém mexeu antes). `aoIrParaRegistro` fecha as janelas quando a pessoa vai para a OP ou a OS.
  * T4 (23/11/2026): `aoAbrirOrdem(id)` abre a ordem de serviço em que o serviço está, `aoImprimir(servicos)` abre a impressão do contrato e `aoMontarOrdem(servicos)` a janela de montar a ordem.
+ * T5 (23/11/2026): `aoPedirPagamento(servicos)` abre o pedido de pagamento ao Financeiro; `aoRegistrarSaida`, `aoLigarSaida` e `aoDesligarSaida` cuidam da saída da Vistoria de pátio (cada uma recebe os serviços).
  */
-export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoMover, aoMudou, aoRecarregar, aoIrParaRegistro, aoAbrirOrdem, aoImprimir, aoMontarOrdem }) {
+export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoMover, aoMudou, aoRecarregar, aoIrParaRegistro, aoAbrirOrdem, aoImprimir, aoMontarOrdem, aoPedirPagamento, aoRegistrarSaida, aoLigarSaida, aoDesligarSaida }) {
   const s = servico;
   const tipo = mapaTipos.get(s.tipo_id);
   const prestador = s.prestador_id ? mapaPrestadores.get(s.prestador_id) : null;
@@ -246,6 +251,17 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
                     {s.status === 'realizado' && diferencaDeValor(s) === null && s.valor_combinado == null && <div className="acn-fraco">Sem valor combinado para comparar.</div>}
                   </Item>
                 )}
+                {s.status === 'realizado' && (
+                  <Item rotulo="Pagamento ao prestador" largo>
+                    <CaixaDoPagamento servicos={[s]} currentUser={currentUser} tipoDe={() => tipo} aoPedir={aoPedirPagamento} />
+                  </Item>
+                )}
+                {/* a saída da vistoria só faz sentido depois de marcado (o serviço "A definir" ainda não tem prestador nem dia); quem já tem uma ligada a vê em qualquer situação, menos cancelado */}
+                {s.status !== 'cancelado' && (s.vistoria_id || s.status === 'agendado' || s.status === 'realizado') && (
+                  <Item rotulo="Saída da vistoria de pátio" largo>
+                    <CaixaDaSaida servicos={[s]} currentUser={currentUser} tipoDe={() => tipo} hoje={hoje} aoRegistrar={aoRegistrarSaida} aoLigar={aoLigarSaida} aoDesligar={aoDesligarSaida} />
+                  </Item>
+                )}
               </div>
 
               {s.status === 'cancelado' && s.cancelado_motivo && <Faixa tom="atencao">Motivo do cancelamento: {s.cancelado_motivo}</Faixa>}
@@ -381,7 +397,7 @@ const AJUSTE_VAZIO = { prestador_id: '', valor: '', onde: '', data_desejada: '',
  * Os carros de um cartão de grupo. `ids` são os do cartão no momento em que a janela abriu e `statusInicial` a coluna em que estavam: a janela mostra só os que AINDA estão nessa coluna
  * (um carro que saiu por um passo, pelo menu dele ou por outra pessoa, some da lista) e fecha sozinha quando não sobra nenhum.
  */
-export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoAbrir, aoMover, aoMudou, aoRecarregar, aoAbrirOrdem, aoImprimir, aoMontarOrdem }) {
+export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoAbrir, aoMover, aoMudou, aoRecarregar, aoAbrirOrdem, aoImprimir, aoMontarOrdem, aoPedirPagamento, aoRegistrarSaida, aoLigarSaida, aoDesligarSaida }) {
   const tipoDe = (s: any) => mapaTipos.get(s.tipo_id);
   const chaveDosIds = ids.join(',');
   const linhas = useMemo(
@@ -473,6 +489,15 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
           </div>
           {marcadas.length === 0 && <p className="acn-terc-dica">Marque os carros que quer mexer. Os passos e o ajuste valem só para os marcados.</p>}
           {marcadas.length > 0 && movs.length === 0 && !podeAjustar && <p className="acn-terc-dica">Para os carros marcados não há um passo em comum que você possa dar. Abra um por vez, ou marque menos carros.</p>}
+          {/* T5 (23/11/2026): o pagamento (só do que já foi realizado) e a saída da vistoria valem para os carros marcados; o pedido de pagamento é um só para a visita */}
+          {marcadas.length > 0 && (statusInicial === 'realizado' || statusInicial === 'agendado' || marcadas.some((s: any) => s.vistoria_id)) && (
+            <div className="acn-terc-faixas">
+              {marcadas.some((s: any) => s.status === 'realizado') && <span className="acn-terc-det-rot">Pagamento ao prestador</span>}
+              <CaixaDoPagamento servicos={marcadas} currentUser={currentUser} tipoDe={tipoDe} aoPedir={aoPedirPagamento} />
+              <span className="acn-terc-det-rot">Saída da vistoria de pátio</span>
+              <CaixaDaSaida servicos={marcadas} currentUser={currentUser} tipoDe={tipoDe} hoje={hoje} aoRegistrar={aoRegistrarSaida} aoLigar={aoLigarSaida} aoDesligar={aoDesligarSaida} />
+            </div>
+          )}
 
           {ajustando && (
             <div className="acn-terc-ajuste">

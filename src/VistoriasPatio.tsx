@@ -9,6 +9,7 @@ import { hojeISO, diaISO, Faixa, Botao, Selo } from './Interface';
 import { confirmar } from './Feedback';
 import Icone from './Icone';
 import { mdiCarSearchOutline, mdiMapMarkerPath, mdiHistory, mdiFilePdfBox } from '@mdi/js';
+import { ligarSaida } from './TerceirosVistoria';
 
 // Etapa 12e8 (05/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, a janela do sistema, o
 // quadro e as classes acn-tabela / acn-vis-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os campos, os
@@ -210,8 +211,27 @@ export default function VistoriasPatio({ currentUser }) {
   const salvandoRef = useRef(false);
   const retornandoRef = useRef(false);
   const fileRef = useRef(null);
+  // 23/11/2026 (Serviços de terceiros, T5): a saída que está sendo registrada a partir de um serviço de terceiros (ids e números dos serviços); ao salvar, a saída é ligada a eles.
+  const [terceiroLigado, setTerceiroLigado] = useState(null);
 
   useEffect(() => { fetchAll(); }, []);
+  // 23/11/2026 (Serviços de terceiros, T5): o botão "Registrar a saída" da janela do serviço chega aqui com a saída já preenchida (prestador como destino, documento da OP e previsão de retorno)
+  // em window.__acnDeepLink.vistoriaNova. Só abre o formulário e preenche: quem confere placa, responsável, fotos e assinaturas continua sendo quem registra. Não precisa da lista carregada.
+  useEffect(() => {
+    const pend = (window as any).__acnDeepLink;
+    if (!pend?.vistoriaNova) return;
+    (window as any).__acnDeepLink = null;
+    const n = pend.vistoriaNova;
+    setForm({
+      ...formVazio(currentUser),
+      tipo_servico: TIPOS_SERVICO.includes(n.tipo_servico) ? n.tipo_servico : 'Servico Externo (Terceiro)', destino: n.destino || '',
+      tipo_documento: n.tipo_documento || 'Sem Documento', numero_documento: n.numero_documento || '', veiculo_modelo: n.veiculo_modelo || '',
+      solicitante: n.solicitante || '', previsao_retorno: n.previsao_retorno || '', observacoes: n.observacoes || '',
+    });
+    setFotos([]); setSigEnvio(null); setSigRecebimento(null);
+    setTerceiroLigado({ ids: n.terceiros_ids || [], numeros: n.terceiros_numeros || '' });
+    setShowForm(true);
+  }, []);
 
   const abrirRetorno = (v) => { setModalRetorno(v); setRetornoForm({ km_retorno: '', obs_retorno: '', responsavel_recebimento: currentUser?.nome || '' }); setSigRet(null); };
   // 26/10/2026: a Logística (aba "Aguardando Recebimento") lista as saídas que ainda não voltaram e o botão "Registrar retorno" de lá chega aqui com o id da saída em
@@ -296,6 +316,12 @@ export default function VistoriasPatio({ currentUser }) {
       const { data: nova, error } = await supabase.from('vistorias_patio').insert([novoRow]).select('id').single();
       if (error) { alert('Erro ao salvar: ' + error.message); return; }
       if (nova?.id) logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: nova.id, changeType: 'CREATE', newRow: novoRow, user: currentUser });
+      // 23/11/2026 (Serviços de terceiros, T5): a saída nasceu de um serviço de terceiros, então fica ligada a ele. Se a ligação falhar a saída JÁ está registrada (nada é desfeito): a pessoa é avisada e liga depois, pelo serviço.
+      if (nova?.id && terceiroLigado?.ids?.length) {
+        const lig = await ligarSaida(terceiroLigado.ids, nova.id);
+        if (!lig.ok) alert('A saída foi registrada, mas não foi possível ligá-la ao serviço de terceiros ' + terceiroLigado.numeros + ' (' + lig.erro + '). Abra o serviço em Serviços de terceiros e use "Ligar a uma saída que já existe".');
+        setTerceiroLigado(null);
+      }
       setForm(formVazio(currentUser)); setFotos([]); setSigEnvio(null); setSigRecebimento(null);
       setShowForm(false); fetchAll();
     } finally { salvandoRef.current = false; setUploading(false); }
@@ -477,6 +503,9 @@ export default function VistoriasPatio({ currentUser }) {
 
         {showForm && (
           <div className="sec-body acn-form-cheio acn-vis-form acn-vis-campos">
+            {terceiroLigado && (
+              <Faixa tom="info">Esta saída será ligada ao serviço de terceiros {terceiroLigado.numeros}: o retorno que você registrar aqui aparece lá sozinho. Confira os dados, informe a placa e o responsável.</Faixa>
+            )}
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">Tipo de Servico</label>
@@ -566,7 +595,7 @@ export default function VistoriasPatio({ currentUser }) {
               <Botao variante="primario" onClick={salvar} disabled={uploading}>
                 {uploading ? 'Salvando...' : 'Registrar Saida'}
               </Botao>
-              <Botao onClick={()=>{setShowForm(false);setFotos([]);}}>Cancelar</Botao>
+              <Botao onClick={()=>{setShowForm(false);setFotos([]);setTerceiroLigado(null);}}>Cancelar</Botao>
             </div>
           </div>
         )}

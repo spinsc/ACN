@@ -2,13 +2,14 @@
 // Serviços de terceiros: a barra de filtros que vale no Quadro e na Lista (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026): os contadores de pendência (sem prestador, sem data,
 // atrasados e choque de data), a busca, o tipo, o prestador, quem pediu, o setor de quem pediu, o período do dia do serviço e o "ver" (ativos, cancelados ou todos).
 // As regras (quem passa em cada filtro e como se conta cada pendência) estão em TerceirosFluxo.ts.
+// T5 (23/11/2026): o contador "A pagar" só aparece para quem vê valores (`verValor`): dizer quantos serviços têm valor a pagar é dizer que há valor.
 import React, { useMemo } from 'react';
 import { mdiMagnify, mdiFilterVariantRemove } from '@mdi/js';
 import Icone from './Icone';
 import { Botao, Chips } from './Interface';
 import { CONTADORES_DE_TERCEIROS, FILTROS_VAZIOS, filtrosMexidos } from './TerceirosFluxo';
 
-export function BarraDeFiltros({ filtros, mudar, contagens, tipos, prestadores, servicos }) {
+export function BarraDeFiltros({ filtros, mudar, contagens, tipos, prestadores, servicos, verValor = false }) {
   // quem pediu e de que setor saem dos próprios serviços lidos (a tela só oferece o que existe)
   const pessoas = useMemo(() => {
     const m = new Map<string, string>();
@@ -21,7 +22,7 @@ export function BarraDeFiltros({ filtros, mudar, contagens, tipos, prestadores, 
   return (
     <div className="acn-terc-barra">
       <Chips rotulo="Pendências" ativo={filtros.contador} onChange={id => mudar({ contador: filtros.contador === id ? '' : id })}
-        itens={[{ id: '', rotulo: 'Tudo' }, ...CONTADORES_DE_TERCEIROS.map(c => ({ id: c.id, rotulo: c.rotulo, contagem: contagens[c.id], titulo: c.ajuda }))]} />
+        itens={[{ id: '', rotulo: 'Tudo' }, ...CONTADORES_DE_TERCEIROS.filter(c => !c.soValores || verValor).map(c => ({ id: c.id, rotulo: c.rotulo, contagem: contagens[c.id], titulo: c.ajuda }))]} />
       <div className="acn-terc-filtros">
         <div className="acn-cmp-busca-geral">
           <Icone path={mdiMagnify} size={14} />

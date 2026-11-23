@@ -26,6 +26,10 @@ import { ModalSolicitar } from './TerceirosSolicitar';
 import { ModalDoServico, ModalDoGrupo } from './TerceirosServicoModal';
 import { lerOrdens, anexarOrdens, auditarOrdem, ordemEstaAtiva } from './TerceirosOrdens';
 import { lerConfigDoContrato } from './TerceirosConfig';
+import { lerDemandasDePagamento, anexarPagamentos, demandaEstaEncerrada, fraseDoPagamentoPedido } from './TerceirosPagamento';
+import { lerSaidasPorId, anexarVistorias, saidaEstaEncerrada, desligarSaida, irParaRegistrarSaida, saidaPreenchida } from './TerceirosVistoria';
+import { ModalPedirPagamento } from './TerceirosPagamentoTela';
+import { ModalLigarSaida } from './TerceirosVistoriaTela';
 import { OrdensDeTerceiros } from './TerceirosOrdensTela';
 import { ModalDaOrdem } from './TerceirosOrdemModal';
 import { ModalMontarOrdem } from './TerceirosOrdemPassos';
@@ -41,6 +45,27 @@ const CHAVE_DA_VISAO = 'acn_terceiros_visao';
 const UM_MINUTO = 60000;   // a regra do custo do banco: uma consulta por minuto por tela, no máximo (CLAUDE.md, "Custo do banco")
 
 const VISOES_DOS_SERVICOS = ['quadro', 'agenda', 'lista'];   // as três visões dos serviços (as outras abas são cadastros)
+const LEITURA_VAZIA = { mapa: new Map<string, any>(), erro: null, lido: false };   // o que se sabe das demandas de pagamento e das saídas da vistoria ligadas aos serviços (T5)
+
+/**
+ * T5 (23/11/2026): o que ler de novo das demandas de pagamento e das saídas da vistoria. Na leitura completa (a primeira, "Atualizar", "Mostrar todos") são todas; na atualização de minuto em minuto
+ * só as que ainda podem mudar (a demanda ainda aberta, a saída que ainda não voltou) ou que a tela ainda não conhece: o pagamento concluído e a saída que voltou não mudam mais, e
+ * a regra do custo do banco (CLAUDE.md) é no máximo uma consulta por minuto por tela sem motivo escrito: este é o motivo.
+ */
+const idsParaLer = (ids: any[], conhecidos: Map<string, any>, encerrado: (v: any) => boolean, tudo: boolean): string[] => {
+  const unicos = [...new Set(ids.filter(Boolean))] as string[];
+  return tudo ? unicos : unicos.filter(id => !conhecidos.has(id) || !encerrado(conhecidos.get(id)));
+};
+/** Junta o que a leitura trouxe ao que a tela já sabia. Leitura recusada mantém o de antes e guarda o erro; o que foi pedido e não voltou (demanda apagada) sai do mapa. */
+const mesclarLeitura = (antes: any, lida: any, pedidos: string[], tudo: boolean) => {
+  if (lida.erro) return { mapa: antes.mapa, erro: lida.erro, lido: true };
+  const mapa = tudo ? new Map<string, any>() : new Map<string, any>(antes.mapa);
+  for (const id of pedidos) mapa.delete(id);
+  for (const [id, v] of lida.mapa) mapa.set(id, v);
+  return { mapa, erro: null, lido: true };
+};
+/** Nada a ler desta vez: a leitura completa zera o que se sabia; a de minuto em minuto só tira o erro de antes (o que está guardado já é o último estado de cada um). */
+const semNadaParaLer = (antes: any, tudo: boolean) => (tudo ? { mapa: new Map<string, any>(), erro: null, lido: true } : (antes.erro || !antes.lido ? { ...antes, erro: null, lido: true } : antes));
 
 /** A última visão que a pessoa usou (Quadro, Agenda ou Lista); o módulo abre sempre no Quadro quando não há nada guardado. O armazenamento pode falhar: aí vale o Quadro. */
 function visaoGuardada(): string {
@@ -77,12 +102,20 @@ export default function TerceirosTab({ currentUser }) {
   const [montando, setMontando] = useState<any[] | null>(null);   // os serviços escolhidos para a janela de montar a ordem
   const [imprimindo, setImprimindo] = useState<any>(null);   // { tipo: 'contrato' | 'ordem', servicos, ordem }
   const [trocandoJanela, setTrocandoJanela] = useState(false);   // true enquanto a leitura de "todos os dias" (ou a volta aos últimos 120) não terminou
+  const [demandas, setDemandas] = useState<any>(LEITURA_VAZIA);   // T5: id da demanda de pagamento → status (lido do Financeiro; o serviço só guarda o id)
+  const [saidas, setSaidas] = useState<any>(LEITURA_VAZIA);   // T5: id da saída da vistoria → a saída (lida da Vistoria; o serviço só guarda o id)
+  const [pagando, setPagando] = useState<any>(null);   // T5: os serviços do pedido de pagamento que a janela está montando
+  const [ligandoSaida, setLigandoSaida] = useState<any>(null);   // T5: os serviços que a janela "Ligar a uma saída" está ligando
   const todosRef = useRef(false);
   const ordensRef = useRef<any>(VAZIO);
+  const demandasRef = useRef<any>(LEITURA_VAZIA);
+  const saidasRef = useRef<any>(LEITURA_VAZIA);
   const versaoLocal = useRef(0);   // sobe a cada gravação nossa: a leitura que começou antes dela não pode desfazê-la
   const montada = useRef(true);
   todosRef.current = todos;
   ordensRef.current = ordens;
+  demandasRef.current = demandas;
+  saidasRef.current = saidas;
 
   // Releitura que falha NÃO esvazia a lista que já está na tela: mantém a de antes e mostra o aviso (a leitura recusada nunca vale como "não há nada").
   const carregarCadastros = useCallback(async () => {
@@ -105,6 +138,10 @@ export default function TerceirosTab({ currentUser }) {
     // a segunda consulta só roda quando há o que atualizar: algum serviço lido está numa ordem ou a tela já tinha uma ordem em andamento (que outra pessoa pode ter fechado ou cancelado).
     // Leitura que falha NÃO esvazia as ordens: mantém as de antes e avisa; o serviço de uma ordem desconhecida vale como preso a ela (mais seguro).
     let o: any = null;
+    // T5 (23/11/2026): o pagamento pedido ao Financeiro e a saída da vistoria de pátio ligada ao serviço são lidos de onde moram (a demanda e a Vistoria): o serviço guarda só o id.
+    // Leitura que falha NÃO apaga o que a tela já sabia: o serviço de uma demanda ou saída que não foi lida mostra "situação não lida", nunca "a pagar" nem "voltou".
+    let d: any = null, sa: any = null;
+    let idsDemandas: string[] = [], idsSaidas: string[] = [];
     if (!r.erro) {
       const idsDasOrdens = r.lista.map((s: any) => s.ordem_id).filter(Boolean);
       if (contar || idsDasOrdens.length > 0 || ordensRef.current.lista.some(ordemEstaAtiva)) {
@@ -115,12 +152,24 @@ export default function TerceirosTab({ currentUser }) {
           return;
         }
       }
+      idsDemandas = idsParaLer(r.lista.map((s: any) => s.pagamento_demanda_id), demandasRef.current.mapa, demandaEstaEncerrada, contar);
+      idsSaidas = idsParaLer(r.lista.map((s: any) => s.vistoria_id), saidasRef.current.mapa, saidaEstaEncerrada, contar);
+      if (idsDemandas.length) { d = await lerDemandasDePagamento(idsDemandas); if (!montada.current) return; }
+      if (idsSaidas.length) { sa = await lerSaidasPorId(idsSaidas); if (!montada.current) return; }
+      if ((d || sa) && v !== versaoLocal.current) {
+        if (tentativas > 0) return carregarServicos(todosOsDias, contar, tentativas - 1);
+        return;
+      }
     }
     setServicos((antes: any) => (r.erro
       ? { ...antes, erro: r.erro, lido: true }
       : { lista: r.lista, erro: null, lido: true, escondidos: r.escondidos === undefined ? antes.escondidos : r.escondidos, desde: r.desde }));
     if (o) setOrdens((antes: any) => (o.erro ? { ...antes, erro: o.erro, lido: true } : { lista: o.lista, erro: null, lido: true }));
     else if (!r.erro) setOrdens((antes: any) => (antes.lido ? antes : { ...antes, lido: true }));
+    if (!r.erro) {
+      setDemandas((antes: any) => (d ? mesclarLeitura(antes, d, idsDemandas, contar) : semNadaParaLer(antes, contar)));
+      setSaidas((antes: any) => (sa ? mesclarLeitura(antes, sa, idsSaidas, contar) : semNadaParaLer(antes, contar)));
+    }
   }, []);
 
   const carregarConfig = useCallback(async () => {
@@ -139,8 +188,12 @@ export default function TerceirosTab({ currentUser }) {
     return () => { montada.current = false; clearInterval(id); };
   }, [carregarCadastros, carregarConfig, carregarServicos]);
 
-  // os serviços que a tela mostra: os lidos, já com o número e a situação da ordem em que cada um está (campos derivados)
-  const lista = useMemo(() => anexarOrdens(servicos.lista, ordens.lista), [servicos.lista, ordens.lista]);
+  // os serviços que a tela mostra: os lidos, já com o número e a situação da ordem em que cada um está, a situação do pagamento pedido e a da saída da vistoria ligada (campos derivados, T4 e T5).
+  // Enquanto uma das leituras não aconteceu (`lido` falso) vale `null`: o serviço com pedido ou saída ligados mostra "situação não lida", nunca um palpite.
+  const lista = useMemo(
+    () => anexarVistorias(anexarPagamentos(anexarOrdens(servicos.lista, ordens.lista), demandas.lido ? demandas : null), saidas.lido ? saidas : null),
+    [servicos.lista, ordens.lista, demandas, saidas],
+  );
 
   const mapaTipos = useMemo(() => new Map(tipos.lista.map((t: any) => [t.id, t])), [tipos.lista]);
   const mapaPrestadores = useMemo(() => new Map(prestadores.lista.map((p: any) => [p.id, p])), [prestadores.lista]);
@@ -227,6 +280,43 @@ export default function TerceirosTab({ currentUser }) {
   const imprimirDaOrdem = useCallback((p: any) => setImprimindo(p), []);
   const abrirGrupo = useCallback((cartao: any) => setGrupo({ ids: cartao.servicos.map((s: any) => s.id), status: cartao.base.status }), []);
 
+  // ── T5 (23/11/2026): o pagamento ao prestador e a saída da vistoria de pátio ──
+  const tipoDoServico = useCallback((s: any) => mapaTipos.get(s.tipo_id), [mapaTipos]);
+  const pedirPagamentoDe = useCallback((escolhidos: any[]) => setPagando({ servicos: escolhidos }), []);
+  /** O banco abriu a demanda e ligou os serviços: a tela já sabe que ela está aberta (o Financeiro ainda não concluiu) e junta as linhas confirmadas, sem esperar a próxima leitura. */
+  const aoPediuPagamento = useCallback((p: any, antes: any[]) => {
+    setPagando(null);
+    setDemandas((a: any) => ({ mapa: new Map<string, any>(a.mapa).set(p.demanda_id, 'Pendente'), erro: a.erro, lido: true }));
+    gravou(p.servicos, antes, fraseDoPagamentoPedido(p, verValor));
+  }, [gravou, verValor]);
+  /** Leva à Vistoria já preenchida: lá, ao salvar a saída, ela é ligada aos serviços (a Vistoria é quem chama `ligarSaida`). */
+  const registrarSaidaDe = useCallback((escolhidos: any[]) => {
+    const prestador = mapaPrestadores.get(escolhidos[0].prestador_id) || null;
+    irParaRegistrarSaida(saidaPreenchida(escolhidos, prestador, tipoDoServico, currentUser));
+  }, [mapaPrestadores, tipoDoServico, currentUser]);
+  const ligarSaidaDe = useCallback((escolhidos: any[]) => setLigandoSaida({ servicos: escolhidos }), []);
+  /** Ligou: lê a saída escolhida antes de mostrar (senão o serviço apareceria um instante como "situação não lida") e junta as linhas confirmadas. */
+  const aoLigouSaida = useCallback(async (linhas: any[], antes: any[]) => {
+    setLigandoSaida(null);
+    const lida = await lerSaidasPorId([...new Set(linhas.map((l: any) => l.vistoria_id).filter(Boolean))] as string[]);
+    if (!montada.current) return;
+    if (!lida.erro) setSaidas((a: any) => ({ mapa: new Map<string, any>([...a.mapa, ...lida.mapa]), erro: a.erro, lido: true }));
+    gravou(linhas, antes, `${descreverNumeros(linhas)} ligad${linhas.length > 1 ? 'os' : 'o'} à saída da vistoria de pátio.${lida.erro ? ' Não foi possível ler a situação da saída agora: ela aparece na próxima atualização.' : ''}`);
+  }, [gravou]);
+  const desligarSaidaDe = useCallback(async (escolhidos: any[]) => {
+    const quem = descreverNumeros(escolhidos);
+    const motivo = await pedirMotivoValido(`Desligar ${quem} da saída da vistoria de pátio?\n\nA saída continua na Vistoria como está; só deixa de estar ligada ao serviço, e o histórico do serviço guarda o motivo. Escreva o motivo (pelo menos 5 letras):`);
+    if (motivo === null) return;
+    const r = await desligarSaida(escolhidos.map((s: any) => s.id), motivo);
+    if (!r.ok) { mostrarAviso(r.erro, 'erro'); if (r.reler) reler(); return; }
+    gravou(r.dados, escolhidos, `${quem} desligad${escolhidos.length > 1 ? 'os' : 'o'} da saída da vistoria de pátio.`);
+  }, [gravou, reler]);
+  // as quatro peças que as janelas do serviço, do grupo e da ordem recebem
+  const aoPagamentoESaida = { aoPedirPagamento: pedirPagamentoDe, aoRegistrarSaida: registrarSaidaDe, aoLigarSaida: ligarSaidaDe, aoDesligarSaida: desligarSaidaDe };
+  const erroDaLeituraAuxiliar = demandas.erro || saidas.erro
+    ? `${demandas.erro ? 'a situação dos pagamentos pedidos ao Financeiro' : ''}${demandas.erro && saidas.erro ? ' e ' : ''}${saidas.erro ? 'as saídas da vistoria de pátio' : ''} (${demandas.erro || saidas.erro})`
+    : '';
+
   const detalhe = detalheId ? lista.find((s: any) => s.id === detalheId) : null;
   useEffect(() => { if (detalheId && servicos.lido && !detalhe) setDetalheId(null); }, [detalheId, detalhe, servicos.lido]);
 
@@ -299,6 +389,11 @@ export default function TerceirosTab({ currentUser }) {
           Não foi possível ler {tipos.erro ? 'os tipos de serviço' : 'os prestadores'} ({tipos.erro || prestadores.erro}). Os nomes podem aparecer incompletos até a próxima leitura.
         </Faixa>
       )}
+      {erroDaLeituraAuxiliar && mostraServicos && (
+        <Faixa tom="erro" acao={<Botao pequeno variante="secundario" onClick={reler}>Tentar de novo</Botao>}>
+          Não foi possível conferir {erroDaLeituraAuxiliar}. Os serviços ligados a elas mostram "situação não lida" até a próxima leitura que der certo.
+        </Faixa>
+      )}
       {semTipos && mostraServicos && !tipos.erro && (
         <Faixa tom="atencao">Ainda não há tipos de serviço cadastrados, e sem eles ninguém consegue pedir. Quem cadastra os tipos é o Admin, na aba "Tipos de serviço".</Faixa>
       )}
@@ -307,7 +402,7 @@ export default function TerceirosTab({ currentUser }) {
 
       {lido && mostraServicos && (
         <>
-          <BarraDeFiltros filtros={filtros} mudar={mudarFiltros} contagens={contagens} tipos={tipos.lista} prestadores={prestadores.lista} servicos={servicos.lista} />
+          <BarraDeFiltros filtros={filtros} mudar={mudarFiltros} contagens={contagens} tipos={tipos.lista} prestadores={prestadores.lista} servicos={servicos.lista} verValor={verValor} />
           {!todos && servicos.desde && (servicos.escondidos > 0 || servicos.escondidos === null) && (
             <p className="acn-terc-janela acn-ajuda">
               Mostrando o que está em aberto e o que terminou nos últimos {DIAS_DA_JANELA_DE_LEITURA} dias.{' '}
@@ -365,17 +460,17 @@ export default function TerceirosTab({ currentUser }) {
       {ordemAbertaId && (
         <ModalDaOrdem ordemId={ordemAbertaId} ordens={ordens.lista} servicos={lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista} hoje={hoje}
           currentUser={currentUser} verValor={verValor} onClose={() => setOrdemAbertaId(null)} aoAbrirServico={abrirServico} aoImprimir={imprimirDaOrdem} aoRecarregar={reler}
-          aoMudou={(r: any, ordemAntes: any, antes: any[], frase: string) => gravouOrdem(r, ordemAntes, antes, frase)} />
+          aoMudou={(r: any, ordemAntes: any, antes: any[], frase: string) => gravouOrdem(r, ordemAntes, antes, frase)} {...aoPagamentoESaida} />
       )}
       {grupo && (
         <ModalDoGrupo ids={grupo.ids} statusInicial={grupo.status} servicos={lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista}
           choques={choques} hoje={hoje} currentUser={currentUser} verValor={verValor} onClose={() => setGrupo(null)} aoAbrir={abrirServico} aoMover={mover} aoMudou={gravou} aoRecarregar={reler}
-          aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMontarOrdem={comecarOrdem} />
+          aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMontarOrdem={comecarOrdem} {...aoPagamentoESaida} />
       )}
       {detalhe && (
         <ModalDoServico servico={detalhe} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista} choques={choques} hoje={hoje} currentUser={currentUser}
           verValor={verValor} onClose={() => setDetalheId(null)} aoMover={mover} aoMudou={gravou} aoRecarregar={reler} aoIrParaRegistro={() => { setDetalheId(null); setGrupo(null); }}
-          aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMontarOrdem={comecarOrdem} />
+          aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMontarOrdem={comecarOrdem} {...aoPagamentoESaida} />
       )}
       {agendar && (
         <ModalAgendar servicos={agendar.servicos} statusAtual={agendar.statusAtual} todos={lista} tipos={tipos.lista} prestadores={prestadores.lista} onClose={() => setAgendar(null)} aoRecarregar={reler}
@@ -384,6 +479,13 @@ export default function TerceirosTab({ currentUser }) {
       {realizar && (
         <ModalRealizar servicos={realizar.servicos} statusAtual={realizar.statusAtual} tipos={tipos.lista} prestadores={prestadores.lista} currentUser={currentUser} onClose={() => setRealizar(null)} aoRecarregar={reler}
           aoGravar={(linhas: any[], antes: any[]) => { setRealizar(null); gravou(linhas, antes, fraseDaConclusao(linhas)); }} />
+      )}
+      {pagando && (
+        <ModalPedirPagamento servicos={pagando.servicos} prestador={mapaPrestadores.get(pagando.servicos[0].prestador_id) || null} tipos={tipos.lista} currentUser={currentUser}
+          onClose={() => setPagando(null)} aoRecarregar={reler} aoGravar={aoPediuPagamento} />
+      )}
+      {ligandoSaida && (
+        <ModalLigarSaida servicos={ligandoSaida.servicos} tipos={tipos.lista} onClose={() => setLigandoSaida(null)} aoRecarregar={reler} aoGravar={aoLigouSaida} />
       )}
       {montando && (
         <ModalMontarOrdem servicos={montando} tipos={tipos.lista} prestadores={prestadores.lista} onClose={() => setMontando(null)} aoRecarregar={reler}

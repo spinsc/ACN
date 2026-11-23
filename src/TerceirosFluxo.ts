@@ -33,7 +33,25 @@ export type ServicoDeTerceiro = {
   ordem_id?: string | null;
   /** os três abaixo NÃO vêm do banco: `anexarOrdens` (TerceirosOrdens.ts) os põe a partir da lista de ordens lida. 'desconhecida' = a ordem não foi lida (trata-se como ativa, por segurança) */
   ordem_numero?: string | null; ordem_status?: SituacaoDaOrdem | 'desconhecida' | null; ordem_previsao_retorno?: string | null;
+  /** T5 (23/11/2026): o pedido de pagamento ao Financeiro (a demanda que nasceu do serviço) e a saída da vistoria de pátio ligada a ele; vêm do banco, junto das outras colunas do serviço */
+  pagamento_demanda_id?: string | null; pagamento_pedido_em?: string | null; pagamento_pedido_por?: string | null;
+  vistoria_id?: string | null; vistoria_ligada_em?: string | null; vistoria_ligada_por?: string | null;
+  /** os campos abaixo também NÃO vêm do banco: `anexarPagamentos` (TerceirosPagamento.ts) e `anexarVistorias` (TerceirosVistoria.ts) os põem a partir da demanda e da saída lidas.
+   *  'desconhecido' / 'desconhecida' = a leitura falhou: a tela não afirma nada (nem "a pagar", nem "no prestador") em cima do que não conseguiu ler */
+  pagamento_situacao?: SituacaoDoPagamento;
+  vistoria_status?: 'Saiu' | 'Retornou' | 'desconhecida' | null;
+  vistoria_saida?: string | null; vistoria_retorno?: string | null; vistoria_previsao?: string | null; vistoria_destino?: string | null;
 };
+
+/** `nenhum` = o pagamento não foi pedido (ou o pedido foi cancelado ou apagado no Financeiro: pode pedir de novo); `pedido` = a demanda está aberta no Financeiro; `pago` = o Financeiro a concluiu. */
+export type SituacaoDoPagamento = 'nenhum' | 'pedido' | 'pago' | 'desconhecido';
+export const situacaoDoPagamento = (s: Pick<ServicoDeTerceiro, 'pagamento_situacao'>): SituacaoDoPagamento => s.pagamento_situacao || 'nenhum';
+/**
+ * "A pagar": serviço realizado, com valor final maior que zero, cujo pagamento ainda não foi pedido. É a conta do contador do Quadro (só para quem vê valores) e do selo "A pagar".
+ * A situação 'desconhecido' (a leitura da demanda falhou) NÃO conta: a tela não pode chamar de "a pagar" o que talvez já esteja no Financeiro.
+ */
+export const estaAPagar = (s: Pick<ServicoDeTerceiro, 'status' | 'valor_final' | 'pagamento_situacao'>): boolean =>
+  s.status === 'realizado' && Number(s.valor_final) > 0 && situacaoDoPagamento(s) === 'nenhum';
 
 /**
  * O serviço está numa ordem que ainda não terminou (montada ou enviada)? Então ele anda COM a ordem: o banco recusa agendar, realizar, voltar, cancelar e alterar o serviço sozinho,
@@ -252,6 +270,9 @@ export function textoDaDiferenca(s: Pick<ServicoDeTerceiro, 'valor_combinado' | 
 // ═══ SELOS CALCULADOS (o que o cartão mostra além da coluna) ═══════════════════════════════════════════════════════════════════════════════════════
 export type SeloDoServico = { id: string; rotulo: string; familia: FamiliaDoSelo; title?: string };
 
+/** "2026-11-25" → "25/11" ("—" se não for data); a mesma conta de `diaCurto` (TerceirosPecas.tsx), repetida aqui porque aquele arquivo importa este. */
+const diaMes = (iso: unknown): string => { const m = /^\d{4}-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? `${m[2]}/${m[1]}` : '—'; };
+
 export const estaAtrasado = (s: Pick<ServicoDeTerceiro, 'status' | 'data_agendada'>, hoje: string): boolean => s.status === 'agendado' && !!s.data_agendada && s.data_agendada < hoje;
 export const diasDeAtraso = (s: Pick<ServicoDeTerceiro, 'status' | 'data_agendada'>, hoje: string): number => (estaAtrasado(s, hoje) ? diasEntreDatas(s.data_agendada as string, hoje) : 0);
 
@@ -268,9 +289,29 @@ export function selosDoServico(s: ServicoDeTerceiro, hoje: string, tipo: Pick<Ti
     else if (s.data_agendada === hoje) l.push({ id: 'hoje', rotulo: `Hoje · ${rotuloDoPeriodo(s.periodo).toLowerCase()}`, familia: 'marca', title: 'O serviço está marcado para hoje.' });
     const c = choques?.get(s.id);
     if (c?.length) l.push({ id: 'choque', rotulo: 'Choque de data', familia: 'erro', title: `O mesmo prestador já tem, neste dia e período: ${c.slice(0, 3).join('; ')}${c.length > 3 ? ` e mais ${c.length - 3}` : ''}.` });
-  } else if (s.status === 'realizado' && verValor) {
-    const d = diferencaDeValor(s);
-    if (d !== null && d > 0) l.push({ id: 'acima_do_combinado', rotulo: 'Acima do combinado', familia: 'atencao', title: textoDaDiferenca(s) });
+  } else if (s.status === 'realizado') {
+    if (verValor) {
+      const d = diferencaDeValor(s);
+      if (d !== null && d > 0) l.push({ id: 'acima_do_combinado', rotulo: 'Acima do combinado', familia: 'atencao', title: textoDaDiferenca(s) });
+    }
+    // T5 (23/11/2026): o pagamento. "Pedido" e "Pago" todos veem (não mostram valor); "A pagar" só para quem vê valores, a mesma regra do contador.
+    const pag = situacaoDoPagamento(s);
+    if (pag === 'pedido') l.push({ id: 'pagamento_pedido', rotulo: 'Pagamento pedido', familia: 'info', title: 'O pagamento foi pedido ao Financeiro e a demanda ainda não foi concluída.' });
+    else if (pag === 'pago') l.push({ id: 'pago', rotulo: 'Pago', familia: 'ok', title: 'O Financeiro concluiu o pedido de pagamento deste serviço.' });
+    // a leitura da demanda falhou: o selo diz o que se sabe (houve um pedido) e o que não se sabe (se ainda está aberto), como o da saída da vistoria; a faixa do topo da tela promete exatamente isto
+    else if (pag === 'desconhecido') l.push({ id: 'pagamento_desconhecido', rotulo: 'Pagamento pedido, situação não lida', familia: 'neutro', title: 'O pagamento foi pedido ao Financeiro, mas não foi possível ler a situação da demanda agora: a próxima leitura que der certo mostra se foi pago.' });
+    else if (verValor && estaAPagar(s)) l.push({ id: 'a_pagar', rotulo: 'A pagar', familia: 'atencao', title: 'O serviço foi feito e o pagamento ainda não foi pedido ao Financeiro.' });
+  }
+  // T5: a saída da vistoria de pátio ligada ao serviço (as peças ou o carro que foram ao prestador). Cancelado não mostra (o pedido morreu).
+  if (s.vistoria_id && s.status !== 'cancelado') {
+    if (s.vistoria_status === 'Saiu') {
+      const atrasada = !!s.vistoria_previsao && s.vistoria_previsao < hoje;
+      l.push({
+        id: 'vistoria_saiu', rotulo: `No prestador desde ${diaMes(s.vistoria_saida)}${atrasada ? ' · retorno atrasado' : ''}`, familia: atrasada ? 'erro' : 'info',
+        title: `A saída da vistoria de pátio está aberta${s.vistoria_destino ? ` (destino: ${s.vistoria_destino})` : ''}${s.vistoria_previsao ? `; retorno previsto para ${s.vistoria_previsao.split('-').reverse().join('/')}` : ''}.`,
+      });
+    } else if (s.vistoria_status === 'Retornou') l.push({ id: 'vistoria_voltou', rotulo: `Voltou em ${diaMes(s.vistoria_retorno)}`, familia: 'neutro', title: 'A saída da vistoria de pátio ligada a este serviço já teve o retorno registrado.' });
+    else l.push({ id: 'vistoria_ligada', rotulo: 'Saída da vistoria ligada', familia: 'neutro', title: 'Este serviço está ligado a uma saída da vistoria de pátio (não foi possível ler a situação dela agora).' });
   }
   // a ordem de serviço em lote (T4): o número sempre aparece; a ordem que espera a assinatura chama a atenção (sem a cópia assinada as peças não saem)
   if (s.ordem_id && s.ordem_status !== 'cancelada') {
@@ -408,13 +449,14 @@ export function totalCombinado(servicos: ServicoDeTerceiro[]): { total: number; 
 }
 
 // ═══ CONTADORES E FILTROS (valem no Quadro e na Lista) ═══════════════════════════════════════════════════════════════════════════════════════════
-// O contador "a pagar" do plano (4.4) só nasce na T5, junto do "Pedir pagamento": sem o pedido ligado ao serviço não há como saber o que já foi pago.
-export type ContadorDeTerceiros = '' | 'sem_prestador' | 'sem_data' | 'atrasados' | 'choque';
-export const CONTADORES_DE_TERCEIROS: { id: Exclude<ContadorDeTerceiros, ''>; rotulo: string; ajuda: string; familia: FamiliaDoSelo }[] = [
+// O contador "a pagar" nasceu na T5 (23/11/2026), junto do "Pedir pagamento": com o pedido ligado ao serviço dá para saber o que já foi pedido ao Financeiro. Só aparece para quem vê valores (`soValores`).
+export type ContadorDeTerceiros = '' | 'sem_prestador' | 'sem_data' | 'atrasados' | 'choque' | 'a_pagar';
+export const CONTADORES_DE_TERCEIROS: { id: Exclude<ContadorDeTerceiros, ''>; rotulo: string; ajuda: string; familia: FamiliaDoSelo; soValores?: boolean }[] = [
   { id: 'sem_prestador', rotulo: 'Sem prestador', familia: 'atencao', ajuda: 'Pedidos em "A definir" que ainda não têm prestador escolhido.' },
   { id: 'sem_data', rotulo: 'Sem data', familia: 'atencao', ajuda: 'Pedidos em "A definir": o dia ainda não foi marcado.' },
   { id: 'atrasados', rotulo: 'Atrasados', familia: 'erro', ajuda: 'Agendados cujo dia já passou e que não foram dados como realizados.' },
   { id: 'choque', rotulo: 'Choque de data', familia: 'erro', ajuda: 'Agendados em que o mesmo prestador tem outra visita no mesmo dia e período.' },
+  { id: 'a_pagar', rotulo: 'A pagar', familia: 'atencao', soValores: true, ajuda: 'Serviços realizados, com valor final maior que zero, cujo pagamento ainda não foi pedido ao Financeiro.' },
 ];
 
 export type FiltrosDeTerceiros = {
@@ -438,6 +480,7 @@ export function passaNoContador(s: ServicoDeTerceiro, contador: ContadorDeTercei
   if (contador === 'sem_prestador') return s.status === 'solicitado' && !s.prestador_id;
   if (contador === 'sem_data') return s.status === 'solicitado';
   if (contador === 'atrasados') return estaAtrasado(s, hoje);
+  if (contador === 'a_pagar') return estaAPagar(s);
   return s.status === 'agendado' && !!choques?.get(s.id)?.length;
 }
 
@@ -473,7 +516,7 @@ export function passaNosFiltros(s: ServicoDeTerceiro, f: FiltrosDeTerceiros, ctx
 
 /** Quantos serviços cada contador mostra, dentro dos outros filtros (o filtro do próprio contador não entra na conta). */
 export function contarPendencias(servicos: ServicoDeTerceiro[], f: FiltrosDeTerceiros, ctx: ContextoDosFiltros): Record<Exclude<ContadorDeTerceiros, ''>, number> {
-  const r = { sem_prestador: 0, sem_data: 0, atrasados: 0, choque: 0 };
+  const r = { sem_prestador: 0, sem_data: 0, atrasados: 0, choque: 0, a_pagar: 0 };
   for (const s of servicos) {
     if (!passaNosFiltros(s, { ...f, ver: 'ativos' }, { ...ctx, semContador: true })) continue;
     (Object.keys(r) as (keyof typeof r)[]).forEach(k => { if (passaNoContador(s, k, ctx.hoje, ctx.choques)) r[k]++; });

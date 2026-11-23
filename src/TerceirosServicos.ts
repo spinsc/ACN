@@ -23,7 +23,7 @@ export const DIAS_DA_JANELA_DE_LEITURA = 120;
 export const COLUNAS_DO_SERVICO =
   'id,numero,tipo_id,descricao,status,status_desde,solicitante_id,solicitante_nome,solicitante_perfil,ligacao_tipo,ligacao_id,ligacao_rotulo,venda_base,ordem_id,prestador_id,onde,'
   + 'valor_combinado,valor_final,data_desejada,data_agendada,periodo,data_realizada,conferido_por,conferido_em,pecas,anexos,observacao,cancelado_motivo,cancelado_em,cancelado_por,'
-  + 'criado_em,criado_por,atualizado_em,atualizado_por';
+  + 'criado_em,criado_por,atualizado_em,atualizado_por,pagamento_demanda_id,pagamento_pedido_em,pagamento_pedido_por,vistoria_id,vistoria_ligada_em,vistoria_ligada_por';
 
 /** `escondidos`: quantos serviços encerrados ficaram fora da janela (null = não deu para contar; undefined = não contou desta vez, a tela mantém o número de antes). */
 export type LeituraDeServicos = { lista: ServicoDeTerceiro[]; erro: string | null; escondidos: number | null | undefined; desde: string | null };

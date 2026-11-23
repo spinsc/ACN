@@ -203,3 +203,17 @@ html body .acn-terc-modelo-texto:not(#acn) { width: 100%; min-width: 0; box-sizi
   .acn-terc-ag-cel::before, .acn-terc-ag-mdia::before { content: attr(data-rotulo); font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
   .acn-terc-ag-cel.hoje::before, .acn-terc-ag-mdia.hoje::before { color: var(--acn-brand-ink); }
 }
+
+/* ═══ T5 (23/11/2026): a caixa do pagamento e a da saída da vistoria, nas janelas do serviço, do grupo e da ordem ═══ */
+.acn-terc-caixa { display: grid; gap: 6px; min-width: 0; }
+.acn-terc-caixa-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.acn-terc-caixa-linha > span { min-width: 0; overflow-wrap: anywhere; }
+/* o selo "No prestador desde 23/11 · retorno atrasado" pode ser longo: quebra dentro da janela em vez de vazar (CLAUDE.md, texto longo dentro de componente) */
+html body .acn-terc-caixa .acn-selo:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; padding: 4px 8px; line-height: 1.3; border-radius: 12px; }
+.acn-terc-caixa .acn-terc-dica { margin: 0; }
+.acn-terc-saidas { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-terc-saidas li { padding: 8px 10px; border-bottom: 1px solid var(--acn-line); }
+.acn-terc-saidas li:last-child { border-bottom: 0; }
+.acn-terc-saidas .acn-terc-marca > span { min-width: 0; overflow-wrap: anywhere; }
+/* a barra do grupo e a da ordem ganham uma segunda faixa, com o pagamento e a saída, sem espremer os botões de passo */
+.acn-terc-faixas { display: grid; gap: 10px; }
