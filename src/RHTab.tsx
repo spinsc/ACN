@@ -11,12 +11,15 @@ import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './ComissaoDocumento';
 import { calcularComissaoTecnicos, rotuloComissaoTecnicos } from './ComissaoCalculo';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
-import { hojeISO, diaISO, Botao, Selo, Chips, ChipsMultiplos, SelectMultiplo, Faixa } from './Interface';
+import { hojeISO, diaISO, Botao, Selo, Chips, ChipsMultiplos, SelectMultiplo, Faixa, Abas } from './Interface';
 import { lerDepartamentos, anexarDepartamentos, departamentosTexto, salvarVinculosDaPessoa } from './RhDepartamentos';
 import { ModalDepartamentos } from './DepartamentosRH';
 import { lerCargos, anexarCargos, salvarCargosDaPessoa, textoDosCargos } from './RhCargos';
 import { ModalCargos } from './CargosRH';
 import RelatorioPersonalizadoRH from './RelatorioPersonalizadoRH';
+import RelogioPonto from './RelogioPonto';
+import { cpfValido, deveBaterPonto } from './PontoRh';
+import { lerDiaDeTodos, situacaoDoDia } from './PontoSecullum';
 import { resetColaboradoresCache } from './ColaboradorSelect';
 import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
 import { CampoCep } from './CampoCep';
@@ -2350,6 +2353,112 @@ export function ComissoesTecnicosStandalone({ currentUser }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// VISÃO GERAL (20/11/2026, pedido do usuário): a primeira aba do RH. Responde, de relance, "quem está onde hoje", "o ponto de hoje está em dia?",
+// "quem faz aniversário" e "que cadastro está incompleto". Só mostra o que o RH já tem: nada aqui é dado novo, e cada cartão leva à aba que trata o assunto.
+// ─────────────────────────────────────────────────────────────────────────────
+/** O que falta na ficha de quem está ativo (o ponto precisa do CPF; o RH precisa do resto). Só campos que o RH já preenche na ficha. */
+function faltasDoCadastro(f: any): string[] {
+  const falta: string[] = [];
+  if (!cpfValido(f.cpf)) falta.push('CPF');
+  if (!f.data_nascimento) falta.push('Nascimento');
+  if (!f.data_admissao) falta.push('Admissão');
+  if (!String(f.email || '').trim()) falta.push('E-mail');
+  if (!departamentosTexto(f)) falta.push('Departamento');
+  if (!String(f.cargo || '').trim()) falta.push('Cargo');
+  return falta;
+}
+
+function PontoDeHojeNaVisaoGeral({ funcionarios, onIrPara }) {
+  const hoje = hojeISO();
+  const devem = funcionarios.filter(deveBaterPonto);
+  const [e, setE] = useState<any>({ carregando: true, erro: '', linhas: [] });
+  useEffect(() => {
+    let vivo = true;
+    lerDiaDeTodos(hoje).then(r => { if (vivo) setE({ carregando: false, erro: r.erro || '', linhas: r.dados }); });
+    return () => { vivo = false; };
+  }, [hoje]);
+  const sit = (p: any) => { const l = e.linhas.find((x: any) => x.rh_id === p.id); return l ? situacaoDoDia(l.valores, hoje, hoje).id : 'sem_dados'; };
+  const conta = (ids: string[]) => devem.filter(p => ids.includes(sit(p))).length;
+  return (
+    <div className="sec-card acn-rh-cartao">
+      <div className="acn-rh-cartao-cab">
+        <strong>Ponto de hoje</strong>
+        <Botao pequeno variante="discreto" onClick={() => onIrPara('ponto')}>Abrir o Relógio Ponto</Botao>
+      </div>
+      {!devem.length ? <p className="acn-rh-vazio">Nenhum CLT da Detech ativo no cadastro.</p>
+        : e.carregando ? <p className="acn-rh-vazio">Carregando…</p>
+        : e.erro ? <Faixa tom="erro">Não foi possível ler o ponto de hoje: {e.erro}</Faixa>
+        : (
+          <Indicadores compacto itens={[
+            { l: 'Trabalhando', v: conta(['trabalhando']), tom: 'info' },
+            { l: 'Já saíram', v: conta(['saiu', 'completo']), tom: 'ok' },
+            { l: 'Ainda não bateram', v: conta(['ainda_nao_bateu']), tom: conta(['ainda_nao_bateu']) ? 'atencao' : undefined },
+            { l: 'Outros', v: devem.length - conta(['trabalhando', 'saiu', 'completo', 'ainda_nao_bateu']) },
+          ]} />
+        )}
+    </div>
+  );
+}
+
+function VisaoGeralRH({ resumo, funcionarios, incompletos, onAbrirFicha, onIrPara }) {
+  const hoje = hojeISO();
+  const mes = hoje.slice(5, 7);
+  const aniversariantes = funcionarios.filter(f => String(f.data_nascimento || '').slice(5, 7) === mes)
+    .map(f => ({ f, dia: Number(String(f.data_nascimento).slice(8, 10)) })).sort((a, b) => a.dia - b.dia || String(a.f.nome).localeCompare(String(b.f.nome), 'pt-BR'));
+  const diaHoje = Number(hoje.slice(8, 10));
+  return (
+    <>
+      <Indicadores itens={[
+        { l: 'Ativos',     v: resumo.ativos,    tom: 'ok' },
+        { l: 'Viagem',     v: resumo.viagem,    tom: 'info' },
+        { l: 'Folga',      v: resumo.folga,     tom: 'info' },
+        { l: 'Férias',     v: resumo.ferias,    tom: 'marca' },
+        { l: 'Afastados',  v: resumo.afastados, tom: 'erro' },
+        { l: 'Cadastros incompletos', v: incompletos.length, tom: incompletos.length ? 'atencao' : 'ok' },
+      ]} />
+      <div className="acn-rh-grade2">
+        <PontoDeHojeNaVisaoGeral funcionarios={funcionarios} onIrPara={onIrPara} />
+        <div className="sec-card acn-rh-cartao">
+          <div className="acn-rh-cartao-cab">
+            <strong>Aniversariantes do mês</strong>
+            <Botao pequeno variante="discreto" onClick={() => onIrPara('relatorios')}>Relatórios</Botao>
+          </div>
+          {!aniversariantes.length ? <p className="acn-rh-vazio">Ninguém com a data de nascimento neste mês no cadastro.</p> : (
+            <ul className="acn-rh-lista">
+              {aniversariantes.map(({ f, dia }) => (
+                <li key={f.id} className={dia < diaHoje ? 'passou' : ''}>
+                  <span>{f.nome}</span>
+                  <span>{dia === diaHoje ? <Selo familia="marca">hoje</Selo> : `dia ${dia}`}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+      <div className="sec-card acn-rh-cartao">
+        <div className="acn-rh-cartao-cab"><strong>Cadastros a completar</strong><span className="acn-rh-vazio">CPF, nascimento, admissão, e-mail, departamento e cargo</span></div>
+        {!incompletos.length ? <Faixa tom="ok">Todas as fichas ativas estão completas.</Faixa> : (
+          <div className="acn-rolagem">
+            <table className="acn-tabela acn-compacta">
+              <thead><tr><th>Pessoa</th><th>O que falta</th><th></th></tr></thead>
+              <tbody>
+                {incompletos.map(({ f, falta }) => (
+                  <tr key={f.id}>
+                    <td>{f.nome}</td>
+                    <td className="acn-rh-selos">{falta.map(x => <Selo key={x} familia={x === 'CPF' ? 'erro' : 'atencao'} ponto={false}>{x}</Selo>)}</td>
+                    <td><Botao pequeno onClick={() => onAbrirFicha(f)}>Abrir ficha</Botao></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RHTab({ currentUser }) {
@@ -2369,6 +2478,12 @@ export default function RHTab({ currentUser }) {
   const [modalFunc, setModalFunc]         = useState<'new'|any|null>(null);
   const [modalLanc, setModalLanc]         = useState(false);
   const [modalAut, setModalAut]           = useState(false);
+  // 20/11/2026: o RH é um sistema de abas. Quem chega pelo botão da tela Ponto (window.__acnDeepLink.rhAba) cai direto na aba pedida.
+  const [aba, setAba] = useState(() => {
+    const pedida = (window as any).__acnDeepLink?.rhAba;
+    if (pedida) { (window as any).__acnDeepLink = null; return ['geral','colaboradores','ponto','comissoes','relatorios','autorizacoes'].includes(pedida) ? pedida : 'geral'; }
+    return 'geral';
+  });
 
   const isAdmin = true; // acesso já controlado pelo dashboard (abas_permitidas)
   const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;
@@ -2418,39 +2533,34 @@ export default function RHTab({ currentUser }) {
     ferias:    funcionarios.filter(f=>f.status_presenca==='Férias').length,
     afastados: funcionarios.filter(f=>f.status_presenca==='Afastado').length,
   };
+  const incompletos = funcionarios.map(f => ({ f, falta: faltasDoCadastro(f) })).filter(x => x.falta.length > 0);
+  const abrirFicha = (f: any) => setModalFunc(f);
+
+  // 20/11/2026 (pedido do usuário): o RH vira um sistema de ABAS, como o Comercial, em vez de uma coluna única com 12 quadros.
+  const itensAbas = [
+    { id: 'geral', rotulo: 'Visão geral', contagem: incompletos.length || null, titulo: 'Quem está onde hoje, o ponto de hoje, aniversariantes e cadastros a completar' },
+    { id: 'colaboradores', rotulo: 'Colaboradores', contagem: funcionarios.length, titulo: 'Fichas, situação de presença, departamentos, cargos e desligados' },
+    { id: 'ponto', rotulo: 'Relógio Ponto', titulo: 'O ponto da Secullum, o que tratar, horas extras, horas lançadas e vínculos' },
+    { id: 'comissoes', rotulo: 'Comissões', titulo: 'Comissão dos técnicos e o histórico dos fechamentos' },
+    { id: 'relatorios', rotulo: 'Relatórios', titulo: 'Relatórios de horas, uniformes e os que você monta' },
+    { id: 'autorizacoes', rotulo: 'Autorizações', titulo: 'Autorizações de saída e outras, para imprimir' },
+  ];
 
   return (
     <div>
-      {/* ── Header / KPI cards ── */}
-      <div className="acn-rh-topo">
-        <Indicadores compacto itens={[
-          { l: 'Ativos',     v: resumo.ativos,    tom: 'ok' },
-          { l: 'Viagem',     v: resumo.viagem,    tom: 'info' },
-          { l: 'Folga',      v: resumo.folga,     tom: 'info' },
-          { l: 'Férias',     v: resumo.ferias,    tom: 'marca' },
-          { l: 'Afastados',  v: resumo.afastados, tom: 'erro' },
-        ]} />
-        <div className="acn-rh-acoes">
-          {isAdmin && (
-            <>
-              <Botao variante="primario" icone={mdiPlus} onClick={()=>setModalFunc('new')}>Colaborador</Botao>
-              <Botao icone={mdiAccountGroupOutline} onClick={()=>setModalDeptos(true)}>Departamentos</Botao>
-              <Botao icone={mdiAccountWrenchOutline} onClick={()=>setModalCargos(true)}>Cargos</Botao>
-              <Botao icone={mdiClipboardTextOutline} onClick={()=>setModalLanc(true)}>Lançar Horas</Botao>
-              {podeAutorizar && (
-                <Botao icone={mdiPrinterOutline} onClick={()=>setModalAut(true)}>Autorização</Botao>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
+      <Abas itens={itensAbas} ativa={aba} onChange={setAba} />
+      <div className="acn-rh-aba">
       {loading ? (
         <div className="acn-empty">Carregando...</div>
-      ) : (
+      ) : aba === 'geral' ? (
+        <VisaoGeralRH resumo={resumo} funcionarios={funcionarios} incompletos={incompletos} onAbrirFicha={abrirFicha} onIrPara={setAba} />
+      ) : aba === 'colaboradores' ? (
         <>
-          {/* Resumo (KPIs de absenteísmo e horas) no topo, antes das listas */}
-          <KpiRH funcionarios={comDesligados} lancamentos={lancamentos} />
+          <div className="acn-rh-acoes acn-rh-acoes-aba">
+            <Botao variante="primario" icone={mdiPlus} onClick={()=>setModalFunc('new')}>Colaborador</Botao>
+            <Botao icone={mdiAccountGroupOutline} onClick={()=>setModalDeptos(true)}>Departamentos</Botao>
+            <Botao icone={mdiAccountWrenchOutline} onClick={()=>setModalCargos(true)}>Cargos</Botao>
+          </div>
           <PainelStatus
             funcionarios={funcionarios}
             onRefresh={fetch}
@@ -2467,13 +2577,41 @@ export default function RHTab({ currentUser }) {
           <PainelDesligados desligados={desligados}
             onCorrigir={(f)=>setModalDesligar({ func: f, corrigindo: true })}
             onReativar={reativar} />
-          <BancoHoras funcionarios={comDesligados} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
-          <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
+        </>
+      ) : aba === 'ponto' ? (
+        <RelogioPonto
+          funcionarios={funcionarios}
+          desligados={desligados}
+          currentUser={currentUser}
+          onAbrirFicha={abrirFicha}
+          onMudou={()=>fetch(true)}
+          onLancarHoras={()=>setModalLanc(true)}
+          horasLancadas={(
+            <>
+              <KpiRH funcionarios={comDesligados} lancamentos={lancamentos} />
+              <BancoHoras funcionarios={comDesligados} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
+            </>
+          )}
+        />
+      ) : aba === 'comissoes' ? (
+        <>
+          <ComissoesRH funcionarios={comDesligados} currentUser={currentUser} />
           <RelatorioTecnicos funcionarios={funcionarios} />
+        </>
+      ) : aba === 'relatorios' ? (
+        <>
+          <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <RelatorioUniformes funcionarios={funcionarios} />
           {/* 05/11/2026 (pedido do usuário): relatórios que a pessoa monta — aniversários, admissões, funções — com filtros, colunas, grupos, impressão e planilha */}
           <RelatorioPersonalizadoRH funcionarios={funcionarios} desligados={desligados} departamentos={departamentos} />
-          <ComissoesRH funcionarios={comDesligados} currentUser={currentUser} />
+        </>
+      ) : (
+        <>
+          {podeAutorizar && (
+            <div className="acn-rh-acoes acn-rh-acoes-aba">
+              <Botao variante="primario" icone={mdiPrinterOutline} onClick={()=>setModalAut(true)}>Nova autorização</Botao>
+            </div>
+          )}
           <ListaAutorizacoes
             funcionarios={comDesligados}
             autorizacoes={autorizacoes}
@@ -2481,6 +2619,7 @@ export default function RHTab({ currentUser }) {
           />
         </>
       )}
+      </div>
 
       {/* Modais */}
       {modalFunc && (

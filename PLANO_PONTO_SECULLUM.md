@@ -47,7 +47,11 @@ Fontes lidas: https://github.com/Secullum/PontoWebIntegracaoExternaExemplo (cód
 - **5 CLT da Detech sem par na Secullum** (CPF diferente ou cadastro que falta): a tela mostra os nomes a RH, Admin e gerentes.
 - **Horas extras:** o total soma as colunas de extra da Secullum (`COLUNAS_DE_EXTRA`), mas nenhum dos casos lidos tinha extra no mês; conferir com a Secullum no primeiro caso real.
 - **Os 2 de "Detech e ACN"** entram no ponto como Detech (o cadastro cita a Detech); confirmar com o RH se batem ponto.
-- **A tela não foi vista no navegador** (a conta de teste não pôde ser usada nesta sessão): foram testados o build, as regras (Node) e o banco por papel.
+- **A tela não foi vista no navegador** (a conta de teste não pôde ser usada nesta sessão; vale também para o Relógio Ponto do RH): foram testados o build, as regras (Node) e o banco por papel.
+
+## 4c. Relógio Ponto no RH (20/11/2026, pedido do usuário)
+
+A equipe saiu da tela Ponto (que ficou só com o "Meu ponto") e foi para uma aba nova do RH, **Relógio Ponto** (`RelogioPonto.tsx`), e o RH virou um sistema de abas (Visão geral, Colaboradores, Relógio Ponto, Comissões, Relatórios, Autorizações). Partes: Hoje, A tratar, Mês (grade), Horas extras, Horas lançadas e Vínculos. **Chave de ligação:** Secullum = CPF; usuário do sistema = marca manual (`usuario_id`), e-mail, nome inteiro, só se único. Regras em `PontoRh.ts` (9 grupos de teste em Node). **O sistema só mostra o ponto; tratar é na Secullum** e a ocorrência some na leitura seguinte. Ficou de fora: gravar na Secullum, aprovar/recusar hora extra dentro do sistema, férias/ASO/vencimento de documentos (controle que o RH ainda não tem), ligar as horas lançadas ao ponto.
 
 ## 5. O que falta do usuário para a P1 (resolvido em 19/11/2026)
 

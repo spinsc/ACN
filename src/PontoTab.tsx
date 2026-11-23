@@ -20,24 +20,25 @@ import './ponto.css';
 const nomeCurto = (n: any) => String(n || '(sem nome)');
 const textoDosPares = (pares) => pares.length ? pares.map(p => `${p.entrada || '—'} – ${p.saida || '…'}`).join(' · ') : '—';
 
-function Indicadores({ itens }) {
+// 20/11/2026: a cor do indicador é a família do design system (data-acn-familia), não um estilo escrito à mão; a aba RH › Relógio Ponto usa as mesmas peças
+export function Indicadores({ itens }) {
   return (
     <div className="acn-kpis">
       {itens.map(k => (
         <div key={k.l} className="acn-kpi" title={k.dica}>
-          <span className="rot"><i style={{ background: k.tom || 'var(--acn-neutral)' }} />{k.l}</span>
+          <span className="rot"><i data-acn-familia={k.tom || 'neutro'} />{k.l}</span>
           <span className="val acn-num">{k.v}</span>
         </div>
       ))}
     </div>
   );
 }
-const tom = { ok: 'var(--acn-ok)', erro: 'var(--acn-bad)', atencao: 'var(--acn-warn)', info: 'var(--acn-info)' };
+const tom = { ok: 'ok', erro: 'erro', atencao: 'atencao', info: 'info' };
 
-const Carregando = () => <div className="acn-empty">Carregando…</div>;
+export const Carregando = () => <div className="acn-empty">Carregando…</div>;
 
 // ── O mês de UMA pessoa: totais e dia a dia ──────────────────────────────────────────────────────────────────────────────────────────────
-function PontoDaPessoa({ rhId, mes, versao, ehMeu = false }) {
+export function PontoDaPessoa({ rhId, mes, versao, ehMeu = false }) {
   const hoje = hojeISO();
   const [estado, setEstado] = useState({ carregando: true, erro: '', totais: null, dias: [] });
   useEffect(() => {
@@ -63,10 +64,12 @@ function PontoDaPessoa({ rhId, mes, versao, ehMeu = false }) {
   const usaTerceiroPar = estado.dias.some(d => (paresDoDia(d.valores).length > 2));
   const colunasDePares = usaTerceiroPar ? 3 : 2;
   const falhas = estado.dias.filter(d => situacaoDoDia(d.valores, String(d.dia).slice(0, 10), hoje).familia === 'erro').length;
+  const trabalhados = estado.dias.filter(d => paresDoDia(d.valores).length > 0).length;
 
   return (
     <>
       <Indicadores itens={[
+        { l: 'Dias trabalhados', v: trabalhados, tom: tom.info, dica: 'Dias do mês com pelo menos uma batida' },
         { l: 'Horas normais', v: paraTexto(r.normais), tom: tom.ok },
         { l: 'Horas extras', v: paraTexto(r.extras), tom: extras.total ? tom.atencao : undefined, dica: extras.partes.map(p => `${p.rotulo}: ${paraTexto(p.min)}`).join('\n') || 'Sem hora extra no mês' },
         { l: 'Faltas', v: paraTexto(r.faltas), tom: r.faltas ? tom.erro : undefined },
@@ -256,7 +259,9 @@ export default function PontoTab({ currentUser }) {
   const [versao, setVersao] = useState(0);
 
   const carregar = useCallback(async () => {
-    const p = await lerPermissoes();
+    const p0 = await lerPermissoes();
+    // 20/11/2026: quem tem a aba RH cuida do ponto da equipe em RH › Relógio Ponto; aqui fica o "Meu ponto" (e a equipe, para o gerente que não é do RH)
+    const p = { ...p0, verTodos: p0.verTodos && !p0.ehRh };
     setPerm(p);
     setVisao(v => v || (p.verTodos ? 'hoje' : 'meu'));
     const [m, t] = await Promise.all([lerMesesComDados(), lerTotais(primeiroDiaDoMes(hoje))]);
@@ -268,10 +273,6 @@ export default function PontoTab({ currentUser }) {
       const ult = r.dados.find(x => x.terminada_em);
       const ids = ult?.detalhes?.sem_par || [];
       if (ids.length) { const n = await lerPessoas(ids); setSemPar(ids.map(id => nomeCurto(n.dados.get(id)?.nome))); } else setSemPar([]);
-    }
-    if (p.ehRh) {
-      const s = await lerPessoasSemUsuario();
-      if (s.dados.length) { const n = await lerPessoas(s.dados); setSemUsuario(s.dados.map(id => nomeCurto(n.dados.get(id)?.nome))); } else setSemUsuario([]);
     }
   }, [hoje]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -299,10 +300,11 @@ export default function PontoTab({ currentUser }) {
     <div className="acn-ponto">
       <CabecalhoTela
         titulo="Ponto"
-        subtitulo={ultima ? `Atualizado em ${quandoFoi(ultima)} · a Secullum é lida às 8h30 e às 20h30${perm.ehRh ? ' e quando você pede' : ''}` : 'Ponto dos funcionários da Detech, vindo da Secullum (só leitura)'}
+        subtitulo={ultima ? `Atualizado em ${quandoFoi(ultima)} · a Secullum é lida às 8h30 e às 20h30` : 'Ponto dos funcionários da Detech, vindo da Secullum (só leitura)'}
         acoes={perm.ehRh && (
-          <Botao variante="primario" icone={mdiRefresh} onClick={atualizar} disabled={atualizando} title="Lê a Secullum agora e atualiza o ponto de todos">
-            {atualizando ? 'Atualizando…' : 'Atualizar ponto agora'}
+          <Botao variante="primario" onClick={() => { window.__acnDeepLink = { rhAba: 'ponto' }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'rh' } })); }}
+            title="O ponto da equipe, as ocorrências a tratar, as horas extras e o botão de atualizar ficam na aba RH">
+            Abrir RH › Relógio Ponto
           </Botao>
         )}
         abas={<Chips ativo={visao} onChange={(v) => { setVisao(v); setAberta(null); }} itens={opcoes} rotulo="Parte do ponto" />}
@@ -315,9 +317,7 @@ export default function PontoTab({ currentUser }) {
       {perm.verTodos && semPar.length > 0 && (
         <Faixa tom="atencao">Não foram achadas na Secullum, pelo CPF, {semPar.length} pessoa(s) do RH (CLT da Detech): {semPar.join(', ')}. Confira o CPF no cadastro do RH ou na Secullum; enquanto isso elas ficam sem ponto aqui.</Faixa>
       )}
-      {perm.ehRh && semUsuario.length > 0 && visao === 'hoje' && (
-        <Faixa tom="info">O sistema não achou o usuário de {semUsuario.length} pessoa(s) com ponto ({semUsuario.join(', ')}): elas não conseguem abrir o "Meu ponto" até o nome ou o e-mail da ficha do RH ficarem iguais aos do usuário no Admin.</Faixa>
-      )}
+      {perm.ehRh && <Faixa tom="info">Esta é a sua folha de ponto. A equipe toda, as ocorrências a tratar, as horas extras e a conferência de quem está ligado a quem ficam em RH › Relógio Ponto.</Faixa>}
 
       {mostraMes && listaDeMeses.length > 1 && (
         <div className="acn-ponto-meses"><Chips ativo={mes} onChange={setMes} rotulo="Mês" itens={listaDeMeses.map(m => ({ id: m, rotulo: rotuloDoMes(m) }))} /></div>

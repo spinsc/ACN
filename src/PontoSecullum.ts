@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 import { explicarErroDoBanco } from './ErroDoBanco';
+import { lerPaginado } from './LerPaginado';
 
 // ── Horas ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** "08:48", "-02:51" ou "181:38" (a Secullum passa de 100 horas nos totais). Qualquer outra coisa (FOLGA, vazio) não é hora. */
@@ -228,4 +229,27 @@ export async function atualizarPontoAgora(): Promise<{ ok: boolean; mensagem: st
     ok: true,
     mensagem: `Ponto atualizado: ${data?.pessoas ?? 0} pessoa(s) lida(s) na Secullum${sem ? `; ${sem} deram erro e ficam como estavam` : ''}.`,
   };
+}
+
+// ── Para a aba RH › Relógio Ponto (20/11/2026) ───────────────────────────────────────────────────────────────────────────────────────────
+/** Os dias do mês de TODOS (em blocos de 1.000, porque 20 pessoas × 31 dias já se aproxima do corte do banco). */
+export async function lerDiasDoMesDeTodos(mes: string): Promise<Lido<any[]>> {
+  try {
+    const dados = await lerPaginado(() => supabase.from('ponto_dias').select('rh_id, dia, valores, atualizado_em').gte('dia', mes).lte('dia', ultimoDiaDoMes(mes)).order('rh_id').order('dia'));
+    return { erro: null, dados };
+  } catch (e) { return { erro: falha(e), dados: [] }; }
+}
+
+/** Os usuários ativos do sistema (id, nome e e-mail), para o RH escolher com quem ligar a ficha. */
+export async function lerUsuariosAtivos(): Promise<Lido<any[]>> {
+  const { data, error } = await supabase.from('auth_usuarios').select('id, nome, email').eq('ativo', true).order('nome');
+  return error ? { erro: falha(error), dados: [] } : { erro: null, dados: data || [] };
+}
+
+/** Liga (ou desliga, com `null`) a ficha do RH a um usuário do sistema: é a marca `rh_funcionarios.usuario_id`, a primeira coisa que o banco olha para abrir o "Meu ponto". Confere a linha devolvida. */
+export async function ligarUsuarioAFicha(rhId: string, usuarioId: string | null): Promise<{ ok: boolean; erro: string }> {
+  const { data, error } = await supabase.from('rh_funcionarios').update({ usuario_id: usuarioId }).eq('id', rhId).select('id');
+  if (error) return { ok: false, erro: falha(error) };
+  if (!data?.length) return { ok: false, erro: 'o banco não gravou a ligação (sem permissão ou a ficha não existe mais)' };
+  return { ok: true, erro: '' };
 }

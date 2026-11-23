@@ -7371,6 +7371,18 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-cmp-forn-linha > :first-child { flex: 1 1 200px; min-width: 0; }
 .acn-cmp-forn-aviso { margin-top: 4px; }
 
+/* RH em abas (20/11/2026): visão geral, cartões e cadastro a completar */
+.acn-rh-aba { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
+.acn-rh-aba > * { min-width: 0; }
+.acn-rh-acoes-aba { margin-left: 0; }
+.acn-rh-grade2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+.acn-rh-cartao { padding: 12px 14px; display: grid; gap: 10px; align-content: start; }
+.acn-rh-cartao-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.acn-rh-vazio { margin: 0; font-size: 12px; color: var(--acn-muted); }
+.acn-rh-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.acn-rh-lista li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 3px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-rh-lista li.passou { color: var(--acn-muted); }
+.acn-rh-selos { display: flex; gap: 4px; flex-wrap: wrap; }
 /* ── Plano de ajustes de layout, L3 (19/11/2026): caixas que passavam da própria borda. Uma regra por padrão; cada uma mede-se pelo auditor (ferramentas/auditoria_layout). ── */
 /* 3.1 Cabeçalho: com a janela em ~960 px o caminho "Seção › Tela" passava até 39 px da caixa (o selo não encolhia); agora a seção encolhe com reticências e a tela atual continua inteira */
 html body .acn-header .acn-aba-selo { min-width: 0; overflow: hidden; }
