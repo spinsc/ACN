@@ -4,14 +4,14 @@
 // (clicar no cartão do grupo abre a lista dos carros). Arrastar o cartão para outra coluna faz o mesmo que o menu "⋯": o passo que leva até lá, ou o porquê de não poder.
 // Quem confere de verdade é o banco; a tela só deixa de oferecer o passo que ele recusaria (regras em TerceirosFluxo.ts).
 import React, { useRef, useState } from 'react';
-import { mdiLinkVariant, mdiAccountWrenchOutline, mdiCalendarOutline, mdiOpenInNew } from '@mdi/js';
+import { mdiLinkVariant, mdiAccountWrenchOutline, mdiCalendarOutline, mdiClipboardTextOutline } from '@mdi/js';
 import Icone from './Icone';
 import { MenuAcoes, Tag } from './Interface';
 import { mostrarAviso } from './Feedback';
 import {
   COLUNAS_TERCEIROS, COLUNA_CANCELADO, cartoesDaColuna, movimentosDoServico, movimentoParaAColuna, selosDoServico, rotuloDaLigacao, diasNaColunaDoServico, reaisDoServico,
 } from './TerceirosFluxo';
-import { itensDoMenu, movimentosEmComum } from './TerceirosAcoes';
+import { itensDoMenu, movimentosEmComum, extrasDoServico } from './TerceirosAcoes';
 import { SelosDoServico, juntarSelos, textoDoDia } from './TerceirosPecas';
 
 const TEXTO_DA_COLUNA_VAZIA = {
@@ -29,7 +29,7 @@ function valorDoCartao(s: any) {
   return v == null ? null : { texto: reaisDoServico(v), titulo: s.status === 'realizado' ? 'Valor final cobrado' : 'Valor combinado' };
 }
 
-function CartaoDeServico({ s, tipo, prestador, selos, verValor, currentUser, aoAbrir, aoMover, aoComecarArraste, aoTerminarArraste }) {
+function CartaoDeServico({ s, tipo, prestador, selos, verValor, currentUser, aoAbrir, aoAbrirOrdem, aoImprimir, aoMover, aoComecarArraste, aoTerminarArraste }) {
   const movs = movimentosDoServico(s, tipo, currentUser);
   const valor = verValor ? valorDoCartao(s) : null;
   return (
@@ -41,7 +41,7 @@ function CartaoDeServico({ s, tipo, prestador, selos, verValor, currentUser, aoA
       onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) aoAbrir(s); }}>
       <div className="acn-terc-card-cab">
         <div className="acn-terc-card-id"><strong>{s.numero}</strong><Tag>{tipo?.nome || 'Tipo removido'}</Tag></div>
-        <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movs, m => aoMover(m, [s]), [{ rotulo: 'Abrir', icone: mdiOpenInNew, onClick: () => aoAbrir(s) }])} />
+        <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movs, m => aoMover(m, [s]), extrasDoServico([s], { aoAbrir: () => aoAbrir(s), aoAbrirOrdem, aoImprimir }))} />
       </div>
       <p className="acn-terc-card-desc">{s.descricao}</p>
       {s.ligacao_tipo && <div className="acn-terc-card-lig"><Icone path={mdiLinkVariant} size={13} />{rotuloDaLigacao(s)}</div>}
@@ -67,13 +67,16 @@ function somaDoGrupo(servicos: any[]) {
   return { total: Math.round(total * 100) / 100, semValor, final };
 }
 
-function CartaoDeGrupo({ cartao, tipo, prestador, selos, verValor, tipoDe, currentUser, aoAbrirGrupo, aoMover, aoComecarArraste, aoTerminarArraste }) {
+function CartaoDeGrupo({ cartao, tipo, prestador, selos, verValor, tipoDe, currentUser, aoAbrirGrupo, aoAbrirOrdem, aoImprimir, aoMover, aoComecarArraste, aoTerminarArraste }) {
   const { servicos, base } = cartao;
   const movs = movimentosEmComum(servicos, tipoDe, currentUser);
   const soma = verValor ? somaDoGrupo(servicos) : null;
   const mesmoPedido = servicos.every(s => s.solicitante_id === base.solicitante_id);
+  // T4: o cartão dos serviços de uma ORDEM de serviço em lote diz a ordem, não a venda (a ordem junta peças de vendas diferentes)
+  const daOrdem = !!base.ordem_id && base.ordem_status !== 'cancelada';
+  const ondeEsta = daOrdem ? `ordem ${base.ordem_numero || 'de serviço'}` : `venda ${base.venda_base}`;
   return (
-    <div className={'acn-terc-card acn-terc-grupo' + (movs.length ? ' arrastavel' : '')} data-grupo={cartao.chave} tabIndex={0} role="group" aria-label={`${servicos.length} serviços de ${tipo?.nome || ''}, venda ${base.venda_base}`}
+    <div className={'acn-terc-card acn-terc-grupo' + (movs.length ? ' arrastavel' : '')} data-grupo={cartao.chave} tabIndex={0} role="group" aria-label={`${servicos.length} serviços de ${tipo?.nome || ''}, ${ondeEsta}`}
       draggable={movs.length > 0}
       onDragStart={e => { e.dataTransfer.setData('text/plain', cartao.chave); e.dataTransfer.effectAllowed = 'move'; aoComecarArraste(servicos); }}
       onDragEnd={aoTerminarArraste}
@@ -81,10 +84,10 @@ function CartaoDeGrupo({ cartao, tipo, prestador, selos, verValor, tipoDe, curre
       onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) aoAbrirGrupo(cartao); }}>
       <div className="acn-terc-card-cab">
         <div className="acn-terc-card-id"><strong>{servicos.length} carros</strong><Tag>{tipo?.nome || 'Tipo removido'}</Tag></div>
-        <MenuAcoes rotulo={`Ações dos ${servicos.length} serviços`} itens={itensDoMenu(movs, m => aoMover(m, servicos), [{ rotulo: 'Abrir os carros do grupo', icone: mdiOpenInNew, onClick: () => aoAbrirGrupo(cartao) }])} />
+        <MenuAcoes rotulo={`Ações dos ${servicos.length} serviços`} itens={itensDoMenu(movs, m => aoMover(m, servicos), extrasDoServico(servicos, { aoAbrir: () => aoAbrirGrupo(cartao), aoAbrirOrdem, aoImprimir }))} />
       </div>
       <p className="acn-terc-card-desc">{base.descricao}</p>
-      <div className="acn-terc-card-lig"><Icone path={mdiLinkVariant} size={13} />Venda {base.venda_base}</div>
+      <div className="acn-terc-card-lig"><Icone path={daOrdem ? mdiClipboardTextOutline : mdiLinkVariant} size={13} />{daOrdem ? `Ordem ${base.ordem_numero || 'de serviço'}` : `Venda ${base.venda_base}`}</div>
       <div className="acn-terc-card-meta">
         <span className={prestador ? '' : 'acn-terc-sem'}><Icone path={mdiAccountWrenchOutline} size={13} />{prestador?.nome || 'Sem prestador'}</span>
         <span><Icone path={mdiCalendarOutline} size={13} />{textoDoDia(base)}</span>
@@ -104,7 +107,7 @@ function CartaoDeGrupo({ cartao, tipo, prestador, selos, verValor, tipoDe, curre
   );
 }
 
-export function QuadroDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques, hoje, currentUser, verValor, ver, aoAbrir, aoAbrirGrupo, aoMover }) {
+export function QuadroDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques, hoje, currentUser, verValor, ver, aoAbrir, aoAbrirGrupo, aoAbrirOrdem, aoImprimir, aoMover }) {
   const arrastando = useRef<any[] | null>(null);
   const [soltarEm, setSoltarEm] = useState<string | null>(null);
   const tipoDe = (s: any) => mapaTipos.get(s.tipo_id);
@@ -145,13 +148,13 @@ export function QuadroDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choque
                   const tipo = tipoDe(c.base);
                   return <CartaoDeGrupo key={c.chave} cartao={c} tipo={tipo} prestador={c.base.prestador_id ? mapaPrestadores.get(c.base.prestador_id) : null}
                     selos={juntarSelos(c.servicos.map(s => selosDoServico(s, hoje, tipoDe(s), choques, verValor)))} verValor={verValor} tipoDe={tipoDe} currentUser={currentUser}
-                    aoAbrirGrupo={aoAbrirGrupo} aoMover={aoMover} aoComecarArraste={comecar} aoTerminarArraste={terminar} />;
+                    aoAbrirGrupo={aoAbrirGrupo} aoAbrirOrdem={aoAbrirOrdem} aoImprimir={aoImprimir} aoMover={aoMover} aoComecarArraste={comecar} aoTerminarArraste={terminar} />;
                 }
                 const s = c.servico;
                 const tipo = tipoDe(s);
                 return <CartaoDeServico key={c.chave} s={s} tipo={tipo} prestador={s.prestador_id ? mapaPrestadores.get(s.prestador_id) : null}
                   selos={selosDoServico(s, hoje, tipo, choques, verValor)} verValor={verValor} currentUser={currentUser}
-                  aoAbrir={aoAbrir} aoMover={aoMover} aoComecarArraste={comecar} aoTerminarArraste={terminar} />;
+                  aoAbrir={aoAbrir} aoAbrirOrdem={aoAbrirOrdem} aoImprimir={aoImprimir} aoMover={aoMover} aoComecarArraste={comecar} aoTerminarArraste={terminar} />;
               })}
               {cartoes.length === 0 && <div className="acn-terc-col-vazia">{TEXTO_DA_COLUNA_VAZIA[col.id]}</div>}
             </div>

@@ -213,6 +213,11 @@ export function podeGerirPrestadoresDeTerceiros(usuarioAtual: any): boolean {
 export function podeEditarTiposDeTerceiros(usuarioAtual: any): boolean {
   return usuarioAtual?.perfil === 'Admin';
 }
+// T4 (23/11/2026, decidido com o usuário): montar, enviar, alterar, cancelar e fechar a ORDEM DE SERVIÇO EM LOTE é do Admin, dos gerentes e da Adaptação (a mesma conta de quem cadastra prestador);
+// quem só pediu o serviço vê a ordem e o selo, mas não mexe. É a conta da função do banco `terceiros_pode_ordem`, que as funções `terceiros_ordem_*` conferem de novo.
+// O texto do MODELO DO CONTRATO (as cláusulas) é só do Admin: o banco confere em `terceiros_config_salvar`.
+export const podeMontarOrdemDeTerceiros = (usuarioAtual: any): boolean => podeGerirPrestadoresDeTerceiros(usuarioAtual);
+export const podeEditarModeloDoContrato = (usuarioAtual: any): boolean => usuarioAtual?.perfil === 'Admin';
 
 // ── Parecer da análise entre setores (07/10/2026, pedido do usuário) ───────────────────────────────────────────────────
 // Depois de concluído, o parecer de um setor (analise_setores.notas) pode ser editado SÓ por quem fez a análise (analise_setores.analisado_por): nem Admin nem

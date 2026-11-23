@@ -12,6 +12,9 @@ export type PeriodoDoServico = 'manha' | 'tarde' | 'dia_todo';
 export type LigacaoDoServico = 'op' | 'os' | 'demanda' | 'projeto';
 export type FamiliaDoSelo = 'ok' | 'atencao' | 'erro' | 'info' | 'neutro' | 'marca';
 
+/** A situação da ordem de serviço em lote (T4, 23/11/2026): `montada` = aguardando a assinatura do prestador; `enviada` = as peças estão no prestador; `fechada` = voltaram e os serviços foram dados como realizados. */
+export type SituacaoDaOrdem = 'montada' | 'enviada' | 'fechada' | 'cancelada';
+
 export type PecaDoServico = { descricao: string; quantidade: number | null };
 /** `caminho` é a chave no armazenamento (bucket acn-media, pasta terceiros/); o endereço de leitura sai dele, nada é guardado a mais. */
 export type AnexoDoServico = { caminho: string; nome: string; tamanho?: number | null; por?: string | null; em?: string | null };
@@ -26,7 +29,18 @@ export type ServicoDeTerceiro = {
   conferido_por: string | null; conferido_em: string | null; pecas: PecaDoServico[]; anexos: AnexoDoServico[]; observacao: string | null;
   cancelado_motivo: string | null; cancelado_em: string | null; cancelado_por: string | null; historico?: EventoDoServico[];
   criado_em: string; criado_por: string | null; atualizado_em: string; atualizado_por: string | null;
+  /** a ordem de serviço em lote em que o serviço está (a fechada continua apontada, para o rastro; a cancelada solta os serviços) */
+  ordem_id?: string | null;
+  /** os três abaixo NÃO vêm do banco: `anexarOrdens` (TerceirosOrdens.ts) os põe a partir da lista de ordens lida. 'desconhecida' = a ordem não foi lida (trata-se como ativa, por segurança) */
+  ordem_numero?: string | null; ordem_status?: SituacaoDaOrdem | 'desconhecida' | null; ordem_previsao_retorno?: string | null;
 };
+
+/**
+ * O serviço está numa ordem que ainda não terminou (montada ou enviada)? Então ele anda COM a ordem: o banco recusa agendar, realizar, voltar, cancelar e alterar o serviço sozinho,
+ * e a tela some com esses botões e manda a pessoa para a ordem. Ordem fechada ou cancelada não prende ninguém. Ordem que a tela não conseguiu ler vale como ativa: o banco decide.
+ */
+export const estaEmOrdemAtiva = (s: Pick<ServicoDeTerceiro, 'ordem_id' | 'ordem_status'>): boolean =>
+  !!s.ordem_id && s.ordem_status !== 'fechada' && s.ordem_status !== 'cancelada';
 
 // ═══ AS COLUNAS ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // Três colunas (decisão do usuário em 22/11/2026): "no prestador", atrasado, choque de data e a pagar são SELOS calculados, não colunas, para ninguém ter um passo a mais ao atualizar.
@@ -118,6 +132,8 @@ export type MovimentoDoServico = {
 export function movimentosDoServico(s: ServicoDeTerceiro, tipo: TipoDeServico | null | undefined, u: any): MovimentoDoServico[] {
   const l: MovimentoDoServico[] = [];
   if (!s) return l;
+  // o serviço de uma ordem montada ou enviada anda com a ordem (T4): sem passo individual; quem mexe é a janela da ordem
+  if (estaEmOrdemAtiva(s)) return l;
   const mexe = podeMexerNoServico(u, s, tipo);
   const data = podeMarcarData(u, s, tipo);
   if (s.status === 'solicitado') {
@@ -138,6 +154,7 @@ export function movimentosDoServico(s: ServicoDeTerceiro, tipo: TipoDeServico | 
 /** Soltar o cartão numa coluna (arrastar): o passo que leva até ela, ou o porquê de não poder. */
 export function movimentoParaAColuna(s: ServicoDeTerceiro, tipo: TipoDeServico | null | undefined, destino: string, u: any): { movimento?: MovimentoDoServico; porque?: string } {
   if (s.status === destino) return {};
+  if (estaEmOrdemAtiva(s)) return { porque: `Este serviço anda junto com a ordem ${s.ordem_numero || 'de serviço'}: abra a ordem para enviar as peças, dar o retorno ou tirar o serviço dela.` };
   const todos = movimentosDoServico(s, tipo, u);
   const m = todos.find(x => x.para === destino && x.acao !== 'reagendar');
   if (m) return { movimento: m };
@@ -255,6 +272,13 @@ export function selosDoServico(s: ServicoDeTerceiro, hoje: string, tipo: Pick<Ti
     const d = diferencaDeValor(s);
     if (d !== null && d > 0) l.push({ id: 'acima_do_combinado', rotulo: 'Acima do combinado', familia: 'atencao', title: textoDaDiferenca(s) });
   }
+  // a ordem de serviço em lote (T4): o número sempre aparece; a ordem que espera a assinatura chama a atenção (sem a cópia assinada as peças não saem)
+  if (s.ordem_id && s.ordem_status !== 'cancelada') {
+    const n = s.ordem_numero || 'Ordem';
+    if (s.ordem_status === 'montada') l.push({ id: 'ordem_montada', rotulo: `${n} · aguardando assinatura`, familia: 'atencao', title: 'A ordem foi montada, mas as peças só saem depois que a cópia assinada pelo prestador for anexada.' });
+    else if (s.ordem_status === 'enviada') l.push({ id: 'ordem_enviada', rotulo: `${n} · peças no prestador`, familia: 'info', title: `As peças já foram enviadas${s.ordem_previsao_retorno ? '; retorno previsto para ' + s.ordem_previsao_retorno.split('-').reverse().join('/') : ''}.` });
+    else l.push({ id: 'ordem_feita', rotulo: n, familia: 'neutro', title: 'Este serviço foi feito dentro de uma ordem de serviço em lote.' });
+  }
   return l;
 }
 
@@ -262,10 +286,14 @@ export function selosDoServico(s: ServicoDeTerceiro, hoje: string, tipo: Pick<Ti
 // Escolha minha, a confirmar: a MESMA venda (ou a mesma ligação) no mesmo dia e prestador é UMA visita, mesmo que em períodos diferentes (39 carros da mesma venda não "batem" entre si);
 // só visitas diferentes batem, e só AVISA: nunca impede de gravar (o prestador pode atender duas coisas no mesmo período).
 const sobrepoe = (a: string | null, b: string | null): boolean => !!a && !!b && (a === 'dia_todo' || b === 'dia_todo' || a === b);
-export const chaveDaVisita = (s: Pick<ServicoDeTerceiro, 'id' | 'venda_base' | 'ligacao_tipo' | 'ligacao_id'>): string =>
-  (s.venda_base ? `venda:${s.venda_base}` : s.ligacao_id ? `${s.ligacao_tipo}:${s.ligacao_id}` : `servico:${s.id}`);
+// T4 (23/11/2026): os serviços de uma MESMA ordem de serviço em lote são uma visita só (as peças de várias vendas vão juntas ao prestador, no mesmo dia), mesmo que sejam de vendas diferentes;
+// o banco agrupa igual (`calendario_eventos_terceiros`). A ordem cancelada solta os serviços, então não conta.
+const daOrdem = (s: Pick<ServicoDeTerceiro, 'ordem_id' | 'ordem_status'>): boolean => !!s.ordem_id && s.ordem_status !== 'cancelada';
+export const chaveDaVisita = (s: Pick<ServicoDeTerceiro, 'id' | 'venda_base' | 'ligacao_tipo' | 'ligacao_id' | 'ordem_id' | 'ordem_status'>): string =>
+  (daOrdem(s) ? `ordem:${s.ordem_id}` : s.venda_base ? `venda:${s.venda_base}` : s.ligacao_id ? `${s.ligacao_tipo}:${s.ligacao_id}` : `servico:${s.id}`);
 function rotuloDaVisita(grupo: ServicoDeTerceiro[]): string {
   const b = grupo[0];
+  if (daOrdem(b) && b.ordem_numero) return grupo.length === 1 ? `${b.numero} · ordem ${b.ordem_numero}` : `ordem ${b.ordem_numero} · ${grupo.length} serviços`;
   if (grupo.length === 1) return `${b.numero}${b.ligacao_rotulo ? ' · ' + b.ligacao_rotulo : ''}`;
   return b.venda_base ? `venda ${b.venda_base} · ${grupo.length} serviços` : `${b.ligacao_rotulo || b.numero} · ${grupo.length} serviços`;
 }
@@ -346,6 +374,8 @@ export function ordenarServicos(lista: ServicoDeTerceiro[], situacao: SituacaoDo
  * (outra data, outro prestador) virar cartão próprio, como o plano pede. Serviço sem venda (OS, demanda, projeto, avulso) nunca agrupa.
  */
 function chaveDoGrupo(s: ServicoDeTerceiro): string | null {
+  // T4: o serviço de uma ordem agrupa pela ORDEM (a venda não importa: a ordem junta peças de vendas diferentes); a situação entra na chave para o serviço reaberto não colar nos realizados
+  if (daOrdem(s)) return ['ordem', s.ordem_id, s.status, s.status === 'agendado' ? `${s.data_agendada}|${s.periodo}` : s.status === 'realizado' ? String(s.data_realizada || '') : ''].join('§');
   if (!s.venda_base) return null;
   const parte = s.status === 'agendado' ? `${s.data_agendada}|${s.periodo}` : s.status === 'realizado' ? String(s.data_realizada || '') : s.status === 'cancelado' ? String(s.cancelado_em || '') : String(s.data_desejada || '');
   return [s.status, s.tipo_id, s.venda_base, s.prestador_id || '', parte].join('§');
@@ -413,7 +443,7 @@ export function passaNoContador(s: ServicoDeTerceiro, contador: ContadorDeTercei
 
 /** O que a busca enxerga num serviço (valores ficam de fora: quem não vê valores não os acha pela busca). */
 export function textoDeBuscaDoServico(s: ServicoDeTerceiro, tipo: TipoDeServico | undefined, prestador: PrestadorDeTerceiros | undefined): string {
-  return [s.numero, s.descricao, tipo?.nome, prestador?.nome, prestador?.razao_social, s.ligacao_rotulo, s.venda_base, s.solicitante_nome, s.solicitante_perfil, s.observacao,
+  return [s.numero, s.descricao, tipo?.nome, prestador?.nome, prestador?.razao_social, s.ligacao_rotulo, s.venda_base, s.ordem_numero, s.solicitante_nome, s.solicitante_perfil, s.observacao,
     ...(s.pecas || []).map(p => p.descricao), rotuloDaSituacao(s.status), s.status === 'cancelado' ? s.cancelado_motivo : ''].filter(Boolean).join(' ');
 }
 

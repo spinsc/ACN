@@ -21,7 +21,7 @@ export const DIAS_DA_JANELA_DE_LEITURA = 120;
 
 /** Tudo do serviço MENOS o histórico (que é a coluna mais pesada e só a janela de detalhe usa, lendo à parte). */
 export const COLUNAS_DO_SERVICO =
-  'id,numero,tipo_id,descricao,status,status_desde,solicitante_id,solicitante_nome,solicitante_perfil,ligacao_tipo,ligacao_id,ligacao_rotulo,venda_base,prestador_id,onde,'
+  'id,numero,tipo_id,descricao,status,status_desde,solicitante_id,solicitante_nome,solicitante_perfil,ligacao_tipo,ligacao_id,ligacao_rotulo,venda_base,ordem_id,prestador_id,onde,'
   + 'valor_combinado,valor_final,data_desejada,data_agendada,periodo,data_realizada,conferido_por,conferido_em,pecas,anexos,observacao,cancelado_motivo,cancelado_em,cancelado_por,'
   + 'criado_em,criado_por,atualizado_em,atualizado_por';
 
@@ -69,8 +69,8 @@ export async function lerHistoricoDoServico(id: string): Promise<{ historico: Ev
 // `reler` vem ligado quando o banco diz que o serviço mudou de situação enquanto a janela estava aberta (alguém mexeu antes): a tela de trás ainda mostra a coluna de antes,
 // e quem recebe a resposta lê a lista de novo, sem esperar a pessoa clicar em "Atualizar" (teste da T2, 23/11/2026: o cartão ficava na coluna velha).
 export type RespostaDoBanco<T> = { ok: boolean; dados?: T; erro: string; codigo: string; reler?: boolean };
-const deu = <T>(dados: T): RespostaDoBanco<T> => ({ ok: true, dados, erro: '', codigo: '' });
-const falhou = <T>(erro: string, codigo = ''): RespostaDoBanco<T> => {
+export const deu = <T>(dados: T): RespostaDoBanco<T> => ({ ok: true, dados, erro: '', codigo: '' });
+export const falhou = <T>(erro: string, codigo = ''): RespostaDoBanco<T> => {
   // a frase do banco termina em "Atualize a tela."; como a tela se atualiza sozinha, a frase passa a dizer o que de fato acontece
   const reler = /mudou de situa/i.test(erro);
   return { ok: false, erro: reler ? erro.replace(/\s*Atualize a tela\.?\s*$/i, ' A tela já foi atualizada: feche esta janela e confira onde o serviço está.') : erro, codigo, reler };
@@ -88,7 +88,8 @@ export function fraseDoErroDeServico(erro: any): string {
   return explicarErroDoBanco(erro);
 }
 
-async function chamar<T>(funcao: string, args: Record<string, any>): Promise<RespostaDoBanco<T>> {
+/** Chama uma função `terceiros_*` do banco. As funções da ordem (TerceirosOrdens.ts) e o modelo do contrato (TerceirosConfig.ts) usam a mesma, para a frase do erro e o `reler` valerem igual. */
+export async function chamar<T>(funcao: string, args: Record<string, any>): Promise<RespostaDoBanco<T>> {
   try {
     const { data, error } = await supabase.rpc(funcao, args);
     if (error) return falhou<T>(fraseDoErroDeServico(error), String(error.code || ''));
@@ -285,6 +286,26 @@ export async function lerUnidadesDaOp(opId: string): Promise<{ unidades: Unidade
     return { unidades: vivas, base, erro: null };
   } catch (e: any) {
     return { unidades: [], base: '', erro: explicarErroDoBanco(e) };
+  }
+}
+
+/**
+ * O modelo, a placa e o chassi dos carros (as OPs) de um contrato ou de uma ordem de serviço (T4, 23/11/2026): vêm da OP, não do serviço, porque o serviço só guarda o número da OP.
+ * Leitura que falha devolve o erro e o mapa vazio: quem imprime avisa na própria folha e deixa as linhas em branco para escrever à mão (a falha nunca vira "carro sem dados").
+ */
+export async function lerCarrosDasOps(opIds: string[]): Promise<{ mapa: Record<string, UnidadeDaVenda>; erro: string | null }> {
+  const mapa: Record<string, UnidadeDaVenda> = {};
+  const ids = [...new Set(opIds.filter(Boolean))];
+  if (!ids.length) return { mapa, erro: null };
+  try {
+    for (let i = 0; i < ids.length; i += 60) {
+      const { data, error } = await supabase.from('oples').select(COLUNAS_DA_UNIDADE).in('id', ids.slice(i, i + 60));
+      if (error) return { mapa: {}, erro: explicarErroDoBanco(error) };
+      for (const u of (data || []) as UnidadeDaVenda[]) mapa[u.id] = u;
+    }
+    return { mapa, erro: null };
+  } catch (e: any) {
+    return { mapa: {}, erro: explicarErroDoBanco(e) };
   }
 }
 

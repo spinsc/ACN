@@ -68,7 +68,7 @@ export function ModalTipo({ tipo = null, tipos, onClose, aoSalvar, currentUser }
             <div className="acn-terc-campo acn-terc-largo">
               <label className="acn-terc-marca">
                 <input type="checkbox" checked={form.usa_ordem_em_lote} onChange={e => set('usa_ordem_em_lote', e.target.checked)} />
-                <span><strong>Usa ordem de serviço em lote.</strong> Marque nos serviços em que vários carros ou peças vão juntos numa só ordem, assinada pelo prestador (a pintura eletrostática). A impressão da ordem ainda não está pronta; a marca já fica guardada.</span>
+                <span><strong>Usa ordem de serviço em lote.</strong> Marque nos serviços em que vários carros ou peças vão juntos numa só ordem, assinada pelo prestador (a pintura eletrostática). Os serviços deste tipo aparecem na aba "Ordens de pintura" para montar a ordem, imprimi-la com a relação de peças e registrar o retorno.</span>
               </label>
             </div>
           </div>

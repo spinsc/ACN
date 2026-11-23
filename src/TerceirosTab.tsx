@@ -2,6 +2,8 @@
 // Serviços de terceiros: película, plotagem, pintura, lavagem, funilaria, corte e dobra e os outros serviços feitos por quem é de fora (pedido do usuário em 22/11/2026;
 // PLANO_SERVICOS_TERCEIROS.md). Fatia T2: o pedido de serviço, o Quadro (A definir, Agendado, Realizado), a Lista e os filtros de pendência, junto dos dois cadastros da T1 (prestadores e tipos).
 // Fatia T3 (23/11/2026): a Agenda (semana e mês, por prestador ou por tipo, com o choque em vermelho) e o aviso do Calendário que abre o serviço atrasado daqui.
+// Fatia T4 (23/11/2026): o contrato impresso de todo serviço, a ordem de serviço em lote da pintura eletrostática (aba "Ordens de pintura": montar, enviar com a cópia assinada, registrar o retorno)
+// e a aba "Modelo do contrato" (o texto e os dados das empresas, que só o Admin edita).
 // Todo usuário entra aqui (todos pedem e todos veem todos os serviços); quem pode mexer em cada um é regra de TerceirosFluxo.ts, conferida de novo pelo banco.
 // Esta tela só orquestra: lê, filtra, abre as janelas e junta à lista o que o banco confirmou. As regras estão em TerceirosFluxo.ts (e, da Agenda, em TerceirosAgenda.ts) e a leitura e a gravação em TerceirosServicos.ts.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,10 +12,10 @@ import { CabecalhoTela, Abas, Botao, Faixa, hojeISO } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { lerTipos, lerPrestadores } from './TerceirosModelo';
-import { podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros } from './utils/permissoes';
+import { podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros, podeEditarModeloDoContrato } from './utils/permissoes';
 import { PrestadoresDeTerceiros } from './TerceirosPrestadores';
 import { TiposDeTerceiros } from './TerceirosTipos';
-import { FILTROS_VAZIOS, cartoesDaColuna, choquesDeData, contarPendencias, passaNosFiltros, veValores, rotuloDoPeriodo } from './TerceirosFluxo';
+import { FILTROS_VAZIOS, cartoesDaColuna, choquesDeData, contarPendencias, passaNosFiltros, veValores, rotuloDoPeriodo, estaEmOrdemAtiva } from './TerceirosFluxo';
 import { lerServicos, auditarServicos, cancelarServicos, voltarServicos, descreverNumeros, DIAS_DA_JANELA_DE_LEITURA } from './TerceirosServicos';
 import { BarraDeFiltros } from './TerceirosFiltros';
 import { QuadroDeTerceiros } from './TerceirosQuadro';
@@ -22,11 +24,19 @@ import { AgendaDeTerceiros } from './TerceirosAgendaTela';
 import { ModalAgendar, ModalRealizar, pedirMotivoValido } from './TerceirosAcoes';
 import { ModalSolicitar } from './TerceirosSolicitar';
 import { ModalDoServico, ModalDoGrupo } from './TerceirosServicoModal';
+import { lerOrdens, anexarOrdens, auditarOrdem, ordemEstaAtiva } from './TerceirosOrdens';
+import { lerConfigDoContrato } from './TerceirosConfig';
+import { OrdensDeTerceiros } from './TerceirosOrdensTela';
+import { ModalDaOrdem } from './TerceirosOrdemModal';
+import { ModalMontarOrdem } from './TerceirosOrdemPassos';
+import { ModalImprimir } from './TerceirosImprimir';
+import { ModeloDoContrato } from './TerceirosModeloContrato';
 import { diaCompleto } from './TerceirosPecas';
 import './terceiros.css';
 
 const VAZIO = { lista: [], erro: null, lido: false };
 const SERVICOS_VAZIOS = { lista: [], erro: null, lido: false, escondidos: 0, desde: null };
+const CONFIG_VAZIA = { config: null, erro: null, lido: false };
 const CHAVE_DA_VISAO = 'acn_terceiros_visao';
 const UM_MINUTO = 60000;   // a regra do custo do banco: uma consulta por minuto por tela, no máximo (CLAUDE.md, "Custo do banco")
 
@@ -53,6 +63,8 @@ export default function TerceirosTab({ currentUser }) {
   const [tipos, setTipos] = useState<any>(VAZIO);
   const [prestadores, setPrestadores] = useState<any>(VAZIO);
   const [servicos, setServicos] = useState<any>(SERVICOS_VAZIOS);
+  const [ordens, setOrdens] = useState<any>(VAZIO);
+  const [config, setConfig] = useState<any>(CONFIG_VAZIA);   // o modelo do contrato (empresas e cláusulas); lido uma vez, não de minuto em minuto
   const [todos, setTodos] = useState(false);
   const [filtros, setFiltros] = useState<any>({ ...FILTROS_VAZIOS });
   const [solicitando, setSolicitando] = useState(false);
@@ -61,11 +73,16 @@ export default function TerceirosTab({ currentUser }) {
   const [agendar, setAgendar] = useState<any>(null);
   const [realizar, setRealizar] = useState<any>(null);
   const [pendente, setPendente] = useState<any>(null);   // o serviço que o aviso do Calendário quer abrir: { id, tentouTodos }
+  const [ordemAbertaId, setOrdemAbertaId] = useState<string | null>(null);
+  const [montando, setMontando] = useState<any[] | null>(null);   // os serviços escolhidos para a janela de montar a ordem
+  const [imprimindo, setImprimindo] = useState<any>(null);   // { tipo: 'contrato' | 'ordem', servicos, ordem }
   const [trocandoJanela, setTrocandoJanela] = useState(false);   // true enquanto a leitura de "todos os dias" (ou a volta aos últimos 120) não terminou
   const todosRef = useRef(false);
+  const ordensRef = useRef<any>(VAZIO);
   const versaoLocal = useRef(0);   // sobe a cada gravação nossa: a leitura que começou antes dela não pode desfazê-la
   const montada = useRef(true);
   todosRef.current = todos;
+  ordensRef.current = ordens;
 
   // Releitura que falha NÃO esvazia a lista que já está na tela: mantém a de antes e mostra o aviso (a leitura recusada nunca vale como "não há nada").
   const carregarCadastros = useCallback(async () => {
@@ -84,36 +101,64 @@ export default function TerceirosTab({ currentUser }) {
       if (tentativas > 0) return carregarServicos(todosOsDias, contar, tentativas - 1);   // devolve a promessa: quem espera a leitura (o aviso do Calendário) só segue depois da segunda
       return;
     }
+    // As ordens de serviço vêm junto (T4, 23/11/2026): o serviço só sabe em que ordem está pelo id, e a situação dela (que o trava) está na ordem. Na atualização de minuto em minuto (`contar` falso)
+    // a segunda consulta só roda quando há o que atualizar: algum serviço lido está numa ordem ou a tela já tinha uma ordem em andamento (que outra pessoa pode ter fechado ou cancelado).
+    // Leitura que falha NÃO esvazia as ordens: mantém as de antes e avisa; o serviço de uma ordem desconhecida vale como preso a ela (mais seguro).
+    let o: any = null;
+    if (!r.erro) {
+      const idsDasOrdens = r.lista.map((s: any) => s.ordem_id).filter(Boolean);
+      if (contar || idsDasOrdens.length > 0 || ordensRef.current.lista.some(ordemEstaAtiva)) {
+        o = await lerOrdens(hojeISO(), todosOsDias, idsDasOrdens);
+        if (!montada.current) return;
+        if (!o.erro && v !== versaoLocal.current) {
+          if (tentativas > 0) return carregarServicos(todosOsDias, contar, tentativas - 1);
+          return;
+        }
+      }
+    }
     setServicos((antes: any) => (r.erro
       ? { ...antes, erro: r.erro, lido: true }
       : { lista: r.lista, erro: null, lido: true, escondidos: r.escondidos === undefined ? antes.escondidos : r.escondidos, desde: r.desde }));
+    if (o) setOrdens((antes: any) => (o.erro ? { ...antes, erro: o.erro, lido: true } : { lista: o.lista, erro: null, lido: true }));
+    else if (!r.erro) setOrdens((antes: any) => (antes.lido ? antes : { ...antes, lido: true }));
+  }, []);
+
+  const carregarConfig = useCallback(async () => {
+    const r = await lerConfigDoContrato();
+    if (!montada.current) return;
+    setConfig((antes: any) => (r.erro ? { ...antes, erro: r.erro, lido: true } : { config: r.config, erro: null, lido: true }));
   }, []);
 
   useEffect(() => {
     montada.current = true;
     carregarCadastros();
+    carregarConfig();
     carregarServicos(false);
     // atualização de minuto em minuto, só com a aba à vista, e sem a contagem dos antigos (seria uma segunda consulta por minuto)
     const id = intervaloVisivel(() => { carregarServicos(todosRef.current, false); }, UM_MINUTO);
     return () => { montada.current = false; clearInterval(id); };
-  }, [carregarCadastros, carregarServicos]);
+  }, [carregarCadastros, carregarConfig, carregarServicos]);
+
+  // os serviços que a tela mostra: os lidos, já com o número e a situação da ordem em que cada um está (campos derivados)
+  const lista = useMemo(() => anexarOrdens(servicos.lista, ordens.lista), [servicos.lista, ordens.lista]);
 
   const mapaTipos = useMemo(() => new Map(tipos.lista.map((t: any) => [t.id, t])), [tipos.lista]);
   const mapaPrestadores = useMemo(() => new Map(prestadores.lista.map((p: any) => [p.id, p])), [prestadores.lista]);
   const nomesDosPrestadores = useMemo(() => Object.fromEntries(prestadores.lista.map((p: any) => [p.id, p.nome])), [prestadores.lista]);
-  const choques = useMemo(() => choquesDeData(servicos.lista), [servicos.lista]);
+  const choques = useMemo(() => choquesDeData(lista), [lista]);
   const hoje = hojeISO();
   const verValor = veValores(currentUser);
 
   const visiveis = useMemo(
-    () => servicos.lista.filter((s: any) => passaNosFiltros(s, filtros, { u: currentUser, hoje, tipos: mapaTipos, prestadores: mapaPrestadores, choques })),
-    [servicos.lista, filtros, mapaTipos, mapaPrestadores, choques, hoje, currentUser],
+    () => lista.filter((s: any) => passaNosFiltros(s, filtros, { u: currentUser, hoje, tipos: mapaTipos, prestadores: mapaPrestadores, choques })),
+    [lista, filtros, mapaTipos, mapaPrestadores, choques, hoje, currentUser],
   );
   const contagens = useMemo(
-    () => contarPendencias(servicos.lista, filtros, { u: currentUser, hoje, tipos: mapaTipos, prestadores: mapaPrestadores, choques }),
-    [servicos.lista, filtros, mapaTipos, mapaPrestadores, choques, hoje, currentUser],
+    () => contarPendencias(lista, filtros, { u: currentUser, hoje, tipos: mapaTipos, prestadores: mapaPrestadores, choques }),
+    [lista, filtros, mapaTipos, mapaPrestadores, choques, hoje, currentUser],
   );
-  const abertos = useMemo(() => servicos.lista.filter((s: any) => s.status === 'solicitado' || s.status === 'agendado').length, [servicos.lista]);
+  const abertos = useMemo(() => lista.filter((s: any) => s.status === 'solicitado' || s.status === 'agendado').length, [lista]);
+  const ordensAndando = useMemo(() => ordens.lista.filter(ordemEstaAtiva).length, [ordens.lista]);
 
   const mudarFiltros = useCallback((parte: any) => setFiltros((f: any) => ({ ...f, ...parte })), []);
   const mudarAba = (id: string) => { setAba(id); if (VISOES_DOS_SERVICOS.includes(id)) guardarVisao(id); };
@@ -161,10 +206,28 @@ export default function TerceirosTab({ currentUser }) {
     gravou(r.dados, alvos, frase);
   }, [gravou, reler]);
 
+  /** Junta o que o banco confirmou de uma ordem (a ordem e os serviços tocados), sem esperar a próxima leitura; registra no histórico geral e diz o que foi feito. */
+  const gravouOrdem = useCallback((r: any, ordemAntes: any, antes: any[], frase?: string) => {
+    versaoLocal.current++;
+    setOrdens((a: any) => ({ ...a, lista: a.lista.some((o: any) => o.id === r.ordem.id) ? a.lista.map((o: any) => (o.id === r.ordem.id ? r.ordem : o)) : [...a.lista, r.ordem] }));
+    if (r.servicos?.length) gravou(r.servicos, antes, undefined);
+    auditarOrdem(ordemAntes, r.ordem, currentUser);
+    if (frase) mostrarAviso(frase, 'ok');
+  }, [currentUser, gravou]);
+
   const abrirServico = useCallback((s: any) => setDetalheId(s.id), []);
+  // a janela da ordem fica POR BAIXO da do serviço e da do grupo (desenhadas depois): quem abre a ordem a partir delas as fecha, e quem abre um serviço de dentro da ordem o vê por cima dela
+  const abrirOrdem = useCallback((id: string) => { setDetalheId(null); setGrupo(null); setOrdemAbertaId(id); }, []);
+  const comecarOrdem = useCallback((escolhidos: any[]) => setMontando(escolhidos), []);
+  const imprimirContrato = useCallback((escolhidos: any[]) => {
+    const ordemId = escolhidos[0]?.ordem_id;
+    const ordem = ordemId && escolhidos.every((s: any) => s.ordem_id === ordemId) ? ordens.lista.find((o: any) => o.id === ordemId && o.status !== 'cancelada') || null : null;
+    setImprimindo({ tipo: 'contrato', servicos: escolhidos, ordem });
+  }, [ordens.lista]);
+  const imprimirDaOrdem = useCallback((p: any) => setImprimindo(p), []);
   const abrirGrupo = useCallback((cartao: any) => setGrupo({ ids: cartao.servicos.map((s: any) => s.id), status: cartao.base.status }), []);
 
-  const detalhe = detalheId ? servicos.lista.find((s: any) => s.id === detalheId) : null;
+  const detalhe = detalheId ? lista.find((s: any) => s.id === detalheId) : null;
   useEffect(() => { if (detalheId && servicos.lido && !detalhe) setDetalheId(null); }, [detalheId, detalhe, servicos.lido]);
 
   // O aviso do Calendário (serviço atrasado) e o botão "Abrir" dele chegam por aqui (T3, 23/11/2026): o recado fica em window.__acnDeepLink e o evento cobre a tela já aberta, como nas Viagens.
@@ -182,9 +245,10 @@ export default function TerceirosTab({ currentUser }) {
   }, []);
   useEffect(() => {
     if (!pendente || !servicos.lido || trocandoJanela) return;
-    const s = servicos.lista.find((x: any) => x.id === pendente.id);
+    const s = lista.find((x: any) => x.id === pendente.id);
     if (s) {
-      const cartao = cartoesDaColuna(servicos.lista, s.status).find((c: any) => (c.tipo === 'grupo' ? c.servicos.some((y: any) => y.id === s.id) : c.servico.id === s.id));
+      if (estaEmOrdemAtiva(s)) { abrirOrdem(s.ordem_id); setPendente(null); return; }   // a visita de uma ordem em lote é a própria ordem
+      const cartao = cartoesDaColuna(lista, s.status).find((c: any) => (c.tipo === 'grupo' ? c.servicos.some((y: any) => y.id === s.id) : c.servico.id === s.id));
       if (cartao?.tipo === 'grupo') abrirGrupo(cartao); else setDetalheId(s.id);
       setPendente(null);
       return;
@@ -195,7 +259,7 @@ export default function TerceirosTab({ currentUser }) {
       ? 'Não foi possível abrir o serviço do aviso: a leitura dos serviços falhou. Atualize a tela e tente de novo.'
       : 'Não encontrei o serviço deste aviso. Confira na Lista, em "Todos" (ele pode ter sido cancelado).', 'atencao');
     setPendente(null);
-  }, [pendente, servicos.lido, servicos.lista, servicos.erro, trocandoJanela, abrirGrupo]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendente, servicos.lido, lista, servicos.erro, trocandoJanela, abrirGrupo, abrirOrdem]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const lido = tipos.lido && prestadores.lido && servicos.lido;
   const semTipos = tipos.lido && tipos.lista.length === 0;
@@ -208,7 +272,7 @@ export default function TerceirosTab({ currentUser }) {
         subtitulo="Película, plotagem, pintura, lavagem e os outros serviços feitos por quem é de fora: peça, agende e confira aqui. Todo mundo pede e todo mundo vê; cada um mexe no que é seu."
         acoes={(
           <>
-            <Botao variante="secundario" icone={mdiRefresh} onClick={() => { carregarCadastros(); reler(); }}>Atualizar</Botao>
+            <Botao variante="secundario" icone={mdiRefresh} onClick={() => { carregarCadastros(); carregarConfig(); reler(); }}>Atualizar</Botao>
             <Botao variante="primario" icone={mdiPlus} disabled={!tipos.lido || semTipos} onClick={() => setSolicitando(true)}>Solicitar serviço</Botao>
           </>
         )}
@@ -217,8 +281,10 @@ export default function TerceirosTab({ currentUser }) {
             { id: 'quadro', rotulo: 'Quadro', contagem: servicos.lido ? abertos : null, titulo: 'Serviços em aberto: A definir e Agendado' },
             { id: 'agenda', rotulo: 'Agenda', titulo: 'Quem está onde em cada dia: a semana e o mês, por prestador ou por tipo' },
             { id: 'lista', rotulo: 'Lista' },
+            { id: 'ordens', rotulo: 'Ordens de pintura', contagem: ordens.lido ? ordensAndando : null, titulo: 'Ordens de serviço em lote da pintura eletrostática: montar, enviar as peças e registrar o retorno' },
             { id: 'prestadores', rotulo: 'Prestadores', contagem: prestadores.lido ? prestadores.lista.filter((p: any) => p.ativo).length : null },
             { id: 'tipos', rotulo: 'Tipos de serviço', contagem: tipos.lido ? tipos.lista.filter((t: any) => t.ativo).length : null },
+            { id: 'modelo', rotulo: 'Modelo do contrato', titulo: 'O texto e os dados das empresas que saem no contrato e na ordem de serviço impressos' },
           ]} />
         )}
       />
@@ -257,12 +323,12 @@ export default function TerceirosTab({ currentUser }) {
               <Botao pequeno variante="discreto" className="acn-cmp-link" onClick={() => verTodos(false)}>Voltar aos últimos {DIAS_DA_JANELA_DE_LEITURA} dias</Botao>
             </p>
           )}
-          {servicos.lista.length === 0 && !servicos.erro && (
+          {lista.length === 0 && !servicos.erro && (
             <Faixa tom="info">Ainda não há serviços de terceiros pedidos. Use "Solicitar serviço" aqui no alto ou o botão da própria OP, da OS, da Engenharia, da Serralheria e do Almoxarifado.</Faixa>
           )}
           {aba === 'quadro' && (
             <QuadroDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje} currentUser={currentUser}
-              verValor={verValor} ver={filtros.ver} aoAbrir={abrirServico} aoAbrirGrupo={abrirGrupo} aoMover={mover} />
+              verValor={verValor} ver={filtros.ver} aoAbrir={abrirServico} aoAbrirGrupo={abrirGrupo} aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMover={mover} />
           )}
           {aba === 'agenda' && (
             <AgendaDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje}
@@ -270,11 +336,19 @@ export default function TerceirosTab({ currentUser }) {
           )}
           {aba === 'lista' && (
             <ListaDeTerceiros servicos={visiveis} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} choques={choques} hoje={hoje} currentUser={currentUser}
-              verValor={verValor} aoAbrir={abrirServico} aoMover={mover} />
+              verValor={verValor} aoAbrir={abrirServico} aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMover={mover} />
           )}
         </>
       )}
 
+      {lido && aba === 'ordens' && (
+        <OrdensDeTerceiros ordens={ordens.lista} erro={ordens.erro} servicos={lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} hoje={hoje} currentUser={currentUser}
+          aoAbrirOrdem={abrirOrdem} aoAbrirServico={abrirServico} aoMontar={comecarOrdem} aoRecarregar={reler} />
+      )}
+      {aba === 'modelo' && (
+        <ModeloDoContrato config={config} podeEditar={podeEditarModeloDoContrato(currentUser)} currentUser={currentUser}
+          aoSalvar={(dados: any) => setConfig({ config: dados, erro: null, lido: true })} aoRecarregar={carregarConfig} />
+      )}
       {lido && aba === 'tipos' && (
         <TiposDeTerceiros tipos={tipos.lista} prestadores={prestadores.lista} erro={tipos.erro} onMudou={carregarCadastros} podeEditar={podeEditarTiposDeTerceiros(currentUser)} currentUser={currentUser} />
       )}
@@ -288,21 +362,40 @@ export default function TerceirosTab({ currentUser }) {
         <ModalSolicitar tipos={tipos.lista} prestadores={prestadores.lista} currentUser={currentUser} onClose={() => setSolicitando(false)}
           aoPedido={() => { setSolicitando(false); reler(); }} aoCadastrarPrestador={carregarCadastros} />
       )}
+      {ordemAbertaId && (
+        <ModalDaOrdem ordemId={ordemAbertaId} ordens={ordens.lista} servicos={lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista} hoje={hoje}
+          currentUser={currentUser} verValor={verValor} onClose={() => setOrdemAbertaId(null)} aoAbrirServico={abrirServico} aoImprimir={imprimirDaOrdem} aoRecarregar={reler}
+          aoMudou={(r: any, ordemAntes: any, antes: any[], frase: string) => gravouOrdem(r, ordemAntes, antes, frase)} />
+      )}
       {grupo && (
-        <ModalDoGrupo ids={grupo.ids} statusInicial={grupo.status} servicos={servicos.lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista}
-          choques={choques} hoje={hoje} currentUser={currentUser} verValor={verValor} onClose={() => setGrupo(null)} aoAbrir={abrirServico} aoMover={mover} aoMudou={gravou} aoRecarregar={reler} />
+        <ModalDoGrupo ids={grupo.ids} statusInicial={grupo.status} servicos={lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista}
+          choques={choques} hoje={hoje} currentUser={currentUser} verValor={verValor} onClose={() => setGrupo(null)} aoAbrir={abrirServico} aoMover={mover} aoMudou={gravou} aoRecarregar={reler}
+          aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMontarOrdem={comecarOrdem} />
       )}
       {detalhe && (
         <ModalDoServico servico={detalhe} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} prestadores={prestadores.lista} choques={choques} hoje={hoje} currentUser={currentUser}
-          verValor={verValor} onClose={() => setDetalheId(null)} aoMover={mover} aoMudou={gravou} aoRecarregar={reler} aoIrParaRegistro={() => { setDetalheId(null); setGrupo(null); }} />
+          verValor={verValor} onClose={() => setDetalheId(null)} aoMover={mover} aoMudou={gravou} aoRecarregar={reler} aoIrParaRegistro={() => { setDetalheId(null); setGrupo(null); }}
+          aoAbrirOrdem={abrirOrdem} aoImprimir={imprimirContrato} aoMontarOrdem={comecarOrdem} />
       )}
       {agendar && (
-        <ModalAgendar servicos={agendar.servicos} statusAtual={agendar.statusAtual} todos={servicos.lista} tipos={tipos.lista} prestadores={prestadores.lista} onClose={() => setAgendar(null)} aoRecarregar={reler}
+        <ModalAgendar servicos={agendar.servicos} statusAtual={agendar.statusAtual} todos={lista} tipos={tipos.lista} prestadores={prestadores.lista} onClose={() => setAgendar(null)} aoRecarregar={reler}
           aoGravar={(linhas: any[], antes: any[]) => { setAgendar(null); gravou(linhas, antes, fraseDoAgendamento(linhas, agendar.statusAtual)); }} />
       )}
       {realizar && (
         <ModalRealizar servicos={realizar.servicos} statusAtual={realizar.statusAtual} tipos={tipos.lista} prestadores={prestadores.lista} currentUser={currentUser} onClose={() => setRealizar(null)} aoRecarregar={reler}
           aoGravar={(linhas: any[], antes: any[]) => { setRealizar(null); gravou(linhas, antes, fraseDaConclusao(linhas)); }} />
+      )}
+      {montando && (
+        <ModalMontarOrdem servicos={montando} tipos={tipos.lista} prestadores={prestadores.lista} onClose={() => setMontando(null)} aoRecarregar={reler}
+          aoGravar={(r: any, antes: any[]) => {
+            setMontando(null); setDetalheId(null); setGrupo(null);
+            gravouOrdem(r, null, antes, `Ordem ${r.ordem.numero} montada com ${r.servicos.length} serviço${r.servicos.length === 1 ? '' : 's'}. Imprima a ordem, leve ao prestador para assinar e anexe a cópia para enviar as peças.`);
+            setOrdemAbertaId(r.ordem.id);
+          }} />
+      )}
+      {imprimindo && (
+        <ModalImprimir tipo={imprimindo.tipo} servicos={imprimindo.servicos} ordem={imprimindo.ordem} config={config} tipos={tipos.lista} prestadores={prestadores.lista}
+          currentUser={currentUser} onClose={() => setImprimindo(null)} />
       )}
     </div>
   );

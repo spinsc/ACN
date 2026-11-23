@@ -5,7 +5,7 @@
 // Nada aqui grava por conta própria o que muda de coluna: agendar, realizar, voltar e cancelar sobem para a tela (`aoMover`), que abre a janela certa e confirma com o banco.
 // Quem grava de verdade é o banco, pelas funções `terceiros_*` (TerceirosServicos.ts); a tela só deixa de oferecer o que ele recusaria (regras em TerceirosFluxo.ts).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { mdiClose, mdiPencilOutline, mdiPaperclip, mdiTrashCanOutline, mdiOpenInNew, mdiPlus, mdiHistory, mdiLinkVariant } from '@mdi/js';
+import { mdiClose, mdiPencilOutline, mdiPaperclip, mdiTrashCanOutline, mdiOpenInNew, mdiPlus, mdiHistory, mdiLinkVariant, mdiPrinterOutline, mdiClipboardTextOutline } from '@mdi/js';
 import Icone from './Icone';
 import { Botao, Faixa, Selo, Tag, MenuAcoes } from './Interface';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -13,9 +13,10 @@ import { abrirVinculo } from './VinculoPicker';
 import { lerValorDigitado } from './LerValor';
 import {
   colunaDoServico, rotuloDaSituacao, rotuloDoPeriodo, rotuloDaLigacao, selosDoServico, movimentosDoServico, podeMexerNoServico, explicacaoDeQuemMarcaOData, erroDoPedido, pecasParaGravar,
-  valorDigitadoOuNulo, reaisDoServico, diferencaDeValor, textoDaDiferenca,
+  valorDigitadoOuNulo, reaisDoServico, diferencaDeValor, textoDaDiferenca, estaEmOrdemAtiva,
 } from './TerceirosFluxo';
-import { itensDoMenu, movimentosEmComum, opcoesDePrestador, resumoDosServicos } from './TerceirosAcoes';
+import { rotuloDaOrdem, podeMexerNaOrdem } from './TerceirosOrdens';
+import { itensDoMenu, movimentosEmComum, opcoesDePrestador, resumoDosServicos, extrasDoServico } from './TerceirosAcoes';
 import { SelosDoServico, diaCompleto, momentoBR, textoDoDia } from './TerceirosPecas';
 import {
   atualizarServico, atualizarVarios, lerHistoricoDoServico, enviarAnexos, retirarArquivosSoltos, enderecoDoAnexo, tamanhoLegivel, PASTA_DOS_ANEXOS, LIMITE_DE_ANEXO,
@@ -23,6 +24,7 @@ import {
 
 const ROTULO_NO_HISTORICO: Record<string, string> = {
   solicitado: 'Pedido', alterado: 'Dados alterados', agendado: 'Agendado', reagendado: 'Reagendado', realizado: 'Realizado', voltou: 'Voltou para A definir', reaberto: 'Reaberto', cancelado: 'Cancelado',
+  em_ordem: 'Entrou numa ordem de serviço', saiu_da_ordem: 'Saiu da ordem de serviço', ordem_enviada: 'Peças enviadas ao prestador',
 };
 const ROTULO_DO_LOCAL: Record<string, string> = { fabrica: 'Na fábrica', prestador: 'No prestador' };
 const MAXIMO_DE_ANEXOS_NO_SERVICO = 30;   // o limite do banco (terceiros_limpar_anexos)
@@ -50,8 +52,9 @@ function porQueSemPassos(s: any, tipo: any): string {
 /**
  * `aoMover(movimento, [servico])` e `aoMudou(linhasGravadas, linhasDeAntes, frase)` vêm da tela: a primeira abre a janela do passo; a segunda junta o que o banco confirmou à lista,
  * grava a auditoria e mostra a frase. `aoRecarregar` lê tudo de novo (quando o banco diz que alguém mexeu antes). `aoIrParaRegistro` fecha as janelas quando a pessoa vai para a OP ou a OS.
+ * T4 (23/11/2026): `aoAbrirOrdem(id)` abre a ordem de serviço em que o serviço está, `aoImprimir(servicos)` abre a impressão do contrato e `aoMontarOrdem(servicos)` a janela de montar a ordem.
  */
-export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoMover, aoMudou, aoRecarregar, aoIrParaRegistro }) {
+export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoMover, aoMudou, aoRecarregar, aoIrParaRegistro, aoAbrirOrdem, aoImprimir, aoMontarOrdem }) {
   const s = servico;
   const tipo = mapaTipos.get(s.tipo_id);
   const prestador = s.prestador_id ? mapaPrestadores.get(s.prestador_id) : null;
@@ -59,7 +62,11 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
   const movs = movimentosDoServico(s, tipo, currentUser);
   const selos = selosDoServico(s, hoje, tipo, choques, verValor);
   const aberto = s.status === 'solicitado' || s.status === 'agendado';
-  const podeEditar = aberto && podeMexerNoServico(currentUser, s, tipo);
+  // o serviço que está numa ordem em andamento muda pela ordem (o banco recusa a edição avulsa); a janela nem a oferece
+  const emOrdem = estaEmOrdemAtiva(s);
+  const podeEditar = aberto && !emOrdem && podeMexerNoServico(currentUser, s, tipo);
+  const podeMontarOrdem = !!aoMontarOrdem && aberto && !emOrdem && !!tipo?.usa_ordem_em_lote && podeMexerNaOrdem(currentUser);
+  const textoDaOrdem = s.ordem_status && s.ordem_status !== 'desconhecida' ? rotuloDaOrdem(s.ordem_status) : 'em andamento';
   const dif = verValor && s.status === 'realizado' ? textoDaDiferenca(s) : '';
 
   const [editando, setEditando] = useState(false);
@@ -179,6 +186,11 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
                 <SelosDoServico selos={selos} />
                 <span className="acn-fraco" title="Desde quando o serviço está nesta coluna">desde {momentoBR(s.status_desde || s.atualizado_em)}</span>
               </div>
+              {emOrdem && (
+                <Faixa tom="info" acao={aoAbrirOrdem && s.ordem_id ? <Botao pequeno variante="secundario" icone={mdiClipboardTextOutline} onClick={() => aoAbrirOrdem(s.ordem_id)}>Abrir a ordem</Botao> : null}>
+                  Este serviço está na ordem de serviço {s.ordem_numero || ''} ({textoDaOrdem.toLowerCase()}). Enquanto a ordem andar, o prestador, o dia, as peças e o resto se mudam por ela: o serviço não anda sozinho.
+                </Faixa>
+              )}
               {movs.length > 0
                 ? (
                   <div className="acn-terc-passos" role="group" aria-label="Passos do serviço">
@@ -221,6 +233,12 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
                     )
                     : <span className="acn-fraco">Serviço avulso, sem ligação</span>}
                 </Item>
+                {s.ordem_id && !emOrdem && (
+                  <Item rotulo="Ordem de serviço">
+                    <span className="acn-terc-lig-texto"><Icone path={mdiClipboardTextOutline} size={14} />{s.ordem_numero || 'Ordem'} · {textoDaOrdem}</span>
+                    {aoAbrirOrdem && <Botao pequeno variante="discreto" icone={mdiOpenInNew} onClick={() => aoAbrirOrdem(s.ordem_id)}>Abrir a ordem</Botao>}
+                  </Item>
+                )}
                 {verValor && (
                   <Item rotulo="Valores">
                     <div>Combinado: <strong>{reaisDoServico(s.valor_combinado)}</strong></div>
@@ -345,6 +363,8 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
             : (
               <>
                 {podeEditar && <Botao variante="secundario" icone={mdiPencilOutline} disabled={ocupado} onClick={abrirEdicao}>Editar dados</Botao>}
+                {podeMontarOrdem && <Botao variante="secundario" icone={mdiClipboardTextOutline} disabled={ocupado} onClick={() => aoMontarOrdem([s])}>Montar ordem de serviço</Botao>}
+                {aoImprimir && s.status !== 'cancelado' && <Botao variante="secundario" icone={mdiPrinterOutline} disabled={ocupado} onClick={() => aoImprimir([s])}>Imprimir contrato</Botao>}
                 <Botao variante="primario" onClick={onClose}>Fechar</Botao>
               </>
             )}
@@ -361,7 +381,7 @@ const AJUSTE_VAZIO = { prestador_id: '', valor: '', onde: '', data_desejada: '',
  * Os carros de um cartão de grupo. `ids` são os do cartão no momento em que a janela abriu e `statusInicial` a coluna em que estavam: a janela mostra só os que AINDA estão nessa coluna
  * (um carro que saiu por um passo, pelo menu dele ou por outra pessoa, some da lista) e fecha sozinha quando não sobra nenhum.
  */
-export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoAbrir, aoMover, aoMudou, aoRecarregar }) {
+export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPrestadores, prestadores, choques, hoje, currentUser, verValor, onClose, aoAbrir, aoMover, aoMudou, aoRecarregar, aoAbrirOrdem, aoImprimir, aoMontarOrdem }) {
   const tipoDe = (s: any) => mapaTipos.get(s.tipo_id);
   const chaveDosIds = ids.join(',');
   const linhas = useMemo(
@@ -386,8 +406,12 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
   const todosMarcados = marcadas.length === linhas.length;
   const movs = movimentosEmComum(marcadas, tipoDe, currentUser);
   const aberto = statusInicial === 'solicitado' || statusInicial === 'agendado';
-  const podeAjustar = aberto && marcadas.length > 0 && marcadas.every((s: any) => podeMexerNoServico(currentUser, s, tipoDe(s)));
+  const podeAjustar = aberto && marcadas.length > 0 && marcadas.every((s: any) => podeMexerNoServico(currentUser, s, tipoDe(s)) && !estaEmOrdemAtiva(s));
   const opcoes = opcoesDePrestador(prestadores, base.tipo_id);
+  // T4 (23/11/2026): o grupo que é uma ordem de serviço (as chaves do Quadro agrupam por ordem) leva o atalho para ela; os marcados podem virar uma ordem ou ter o contrato impresso
+  const naOrdem = linhas.find((l: any) => estaEmOrdemAtiva(l));
+  const podeMontarOrdem = !!aoMontarOrdem && aberto && marcadas.length > 0 && podeMexerNaOrdem(currentUser)
+    && marcadas.every((s: any) => !estaEmOrdemAtiva(s) && !!tipoDe(s)?.usa_ordem_em_lote);
 
   const alternar = (id: string) => setMarcados(m => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const setCampo = (k: string, v: string) => setAj(a => ({ ...a, [k]: v }));
@@ -427,6 +451,11 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
           <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
+          {naOrdem && (
+            <Faixa tom="info" acao={aoAbrirOrdem ? <Botao pequeno variante="secundario" icone={mdiClipboardTextOutline} onClick={() => aoAbrirOrdem(naOrdem.ordem_id)}>Abrir a ordem</Botao> : null}>
+              Estes serviços estão na ordem de serviço {naOrdem.ordem_numero || ''}: eles andam juntos, pela ordem.
+            </Faixa>
+          )}
           <p className="acn-terc-det-desc">{base.descricao}</p>
           <div className="acn-terc-grupo-barra">
             <label className="acn-terc-marca">
@@ -438,6 +467,8 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
                 <Botao key={m.acao} pequeno variante={m.perigo ? 'perigo-sec' : (m.sentido === 'avanca' ? 'primario' : 'secundario')} onClick={() => aoMover(m, marcadas)}>{m.rotulo}</Botao>
               ))}
               {podeAjustar && <Botao pequeno variante="secundario" icone={mdiPencilOutline} onClick={() => { setAjustando(v => !v); setErro(''); }}>{ajustando ? 'Fechar o ajuste' : 'Ajustar os marcados'}</Botao>}
+              {podeMontarOrdem && <Botao pequeno variante="secundario" icone={mdiClipboardTextOutline} onClick={() => aoMontarOrdem(marcadas)}>Montar ordem de serviço</Botao>}
+              {aoImprimir && marcadas.some((s: any) => s.status !== 'cancelado') && <Botao pequeno variante="secundario" icone={mdiPrinterOutline} onClick={() => aoImprimir(marcadas)}>Imprimir contrato</Botao>}
             </div>
           </div>
           {marcadas.length === 0 && <p className="acn-terc-dica">Marque os carros que quer mexer. Os passos e o ajuste valem só para os marcados.</p>}
@@ -501,7 +532,7 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
                       <td>{selos.length > 0 ? <div className="acn-terc-celula-selos"><SelosDoServico selos={selos} /></div> : <Tag>{rotuloDaSituacao(s.status)}</Tag>}</td>
                       {verValor && <td className="acn-num">{reaisDoServico(valor)}</td>}
                       <td className="acn-dir" onClick={e => e.stopPropagation()}>
-                        <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movsDoCarro, m => aoMover(m, [s]), [{ rotulo: 'Abrir', icone: mdiOpenInNew, onClick: () => aoAbrir(s) }])} />
+                        <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movsDoCarro, m => aoMover(m, [s]), extrasDoServico([s], { aoAbrir: () => aoAbrir(s), aoAbrirOrdem, aoImprimir }))} />
                       </td>
                     </tr>
                   );

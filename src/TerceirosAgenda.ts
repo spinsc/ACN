@@ -97,10 +97,15 @@ export const nomeDoPrestadorDaVisita = (v: VisitaDaAgenda, m: Mapas): string => 
 /** O que vem depois do período, em texto curto: "Manhã", "Dia todo", "Feito" ou "Desejado". */
 export const textoDoPeriodoDaVisita = (v: VisitaDaAgenda): string => (v.situacao === 'agendado' ? rotuloDoPeriodo(v.periodo) : v.situacao === 'realizado' ? 'Feito' : 'Desejado');
 
-/** A segunda linha do chip: o número e a OP de um carro só, ou quantos carros e a venda. */
+/**
+ * A segunda linha do chip: o número e a OP de um carro só, ou quantos carros e a venda. Visita que é uma ORDEM de serviço em lote diz a ordem e não a venda (T4, 23/11/2026: a ordem junta
+ * carros de vendas diferentes, e "venda A1960" no chip de uma ordem de duas vendas enganava).
+ */
 export function detalheDaVisita(v: VisitaDaAgenda): string {
-  if (v.carros > 1) return `${v.carros} carros${v.base.venda_base ? ` · venda ${v.base.venda_base}` : ''}`;
-  return `${v.base.numero}${v.base.ligacao_rotulo ? ` · ${v.base.ligacao_rotulo}` : ''}`;
+  const daOrdem = !!v.base.ordem_id && v.base.ordem_status !== 'cancelada';
+  const ordem = `ordem ${v.base.ordem_numero || 'de serviço'}`;
+  if (v.carros > 1) return `${v.carros} carros${daOrdem ? ` · ${ordem}` : v.base.venda_base ? ` · venda ${v.base.venda_base}` : ''}`;
+  return `${v.base.numero}${v.base.ligacao_rotulo ? ` · ${v.base.ligacao_rotulo}` : ''}${daOrdem ? ` · ${ordem}` : ''}`;
 }
 
 /** A ordem dentro do dia: o que é compromisso antes do que é só desejo ou já foi feito; dentro disso manhã, dia todo, tarde; por fim pelo nome, para a tela não pular de lugar. */

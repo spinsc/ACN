@@ -172,6 +172,18 @@ a.acn-terc-anexo-nome { color: var(--acn-info); text-decoration: underline; }
 .acn-terc-ag-mdia.hoje .acn-terc-ag-mdia-num { color: var(--acn-brand-ink); text-decoration: underline; }
 html body .acn-terc-ag-mdia .acn-terc-ag-mais:not(#acn) { align-self: flex-start; }
 
+/* ═══ T4: ordem de serviço em lote e modelo do contrato ═══ */
+.acn-terc-arquivos { display: grid; gap: 6px; min-width: 0; }
+.acn-terc-valor-final { width: 118px; min-width: 0; height: 32px; box-sizing: border-box; text-align: right; }
+.acn-terc-modelo { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-terc-modelo-t { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--acn-ink); }
+.acn-terc-modelo-empresas { display: grid; gap: 10px; min-width: 0; }
+.acn-terc-modelo-empresa { display: grid; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); }
+.acn-terc-modelo-empresa-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; color: var(--acn-ink); }
+html body .acn-terc-modelo-texto:not(#acn) { width: 100%; min-width: 0; box-sizing: border-box; font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical; }
+.acn-terc-modelo-lista { margin: 0; padding-left: 22px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-modelo-botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+
 /* ═══ Celular e tablet em pé: as três colunas do quadro viram uma pilha (A definir, depois Agendado, depois Realizado), sem rolar para o lado; a agenda vira uma lista de dias, só os que têm visita ═══ */
 @media (max-width: 760px) {
   .acn-terc-quadro, .acn-terc-quadro.c4, .acn-terc-quadro.c1 { grid-template-columns: minmax(0, 1fr); overflow-x: visible; }

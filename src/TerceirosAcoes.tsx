@@ -3,7 +3,7 @@
 // Aqui estão o menu "⋯" dos cartões, a pergunta do motivo e as duas janelas que pedem dados: Agendar (prestador, dia e período, com o aviso vermelho de choque de data) e Dar como realizado
 // (dia, valor final e quem conferiu). Quem grava é o banco, pelas funções `terceiros_*` (TerceirosServicos.ts); as regras de quem pode o quê estão em TerceirosFluxo.ts.
 import React, { useMemo, useState } from 'react';
-import { mdiClose, mdiCalendarOutline, mdiCalendarClockOutline, mdiCheckBold, mdiUndo, mdiCancel } from '@mdi/js';
+import { mdiClose, mdiCalendarOutline, mdiCalendarClockOutline, mdiCheckBold, mdiUndo, mdiCancel, mdiOpenInNew, mdiPrinterOutline, mdiClipboardTextOutline } from '@mdi/js';
 import { Botao, Faixa, Chips, hojeISO } from './Interface';
 import { pedirTexto, mostrarAviso } from './Feedback';
 import {
@@ -29,6 +29,19 @@ export function itensDoMenu(movimentos: any[], aoEscolher: (m: any) => void, ext
     ...extras,
     ...movimentos.map(m => ({ rotulo: m.rotulo, icone: ICONE_DO_PASSO[m.acao], perigo: !!m.perigo, grupo: m.sentido === 'cancela' ? 'Encerrar' : 'Passar para', onClick: () => aoEscolher(m) })),
   ];
+}
+
+/**
+ * Os itens que todo menu "⋯" de serviço leva além dos passos (T4, 23/11/2026): "Abrir", "Abrir a ordem" (se o serviço está numa ordem de serviço em lote) e "Imprimir contrato".
+ * `servicos` é o que o cartão representa (um serviço ou os carros de um grupo); as três ações são opcionais: a tela passa só as que fazem sentido onde está.
+ */
+export function extrasDoServico(servicos: any[], { aoAbrir, aoAbrirOrdem, aoImprimir }: { aoAbrir?: () => void; aoAbrirOrdem?: (id: string) => void; aoImprimir?: (s: any[]) => void }) {
+  const l: any[] = [];
+  if (aoAbrir) l.push({ rotulo: servicos.length > 1 ? 'Abrir os carros do grupo' : 'Abrir', icone: mdiOpenInNew, onClick: aoAbrir });
+  const naOrdem = servicos.find((s: any) => s.ordem_id && s.ordem_status !== 'cancelada');
+  if (naOrdem && aoAbrirOrdem) l.push({ rotulo: `Abrir a ordem ${naOrdem.ordem_numero || 'de serviço'}`, icone: mdiClipboardTextOutline, onClick: () => aoAbrirOrdem(naOrdem.ordem_id) });
+  if (aoImprimir && servicos.some((s: any) => s.status !== 'cancelado')) l.push({ rotulo: 'Imprimir contrato', icone: mdiPrinterOutline, onClick: () => aoImprimir(servicos) });
+  return l;
 }
 
 /** Pede o motivo até vir com 5 letras ou mais (o banco exige) ou a pessoa desistir (devolve null). */
@@ -58,7 +71,9 @@ const comum = (servicos: any[], campo: string): string => {
 export function resumoDosServicos(servicos: any[], tipoDe: (s: any) => any): string {
   const t = tipoDe(servicos[0])?.nome || 'Serviço';
   if (servicos.length === 1) return `${servicos[0].numero} · ${t}${servicos[0].ligacao_rotulo ? ' — ' + servicos[0].ligacao_tipo?.toUpperCase() + ' ' + servicos[0].ligacao_rotulo : ''}`;
-  return `${t} — ${descreverNumeros(servicos)}${servicos[0].venda_base ? ` · venda ${servicos[0].venda_base}` : ''}`;
+  // os serviços de uma ordem de serviço em lote são de vendas diferentes: o cabeçalho diz a ordem, não a venda (T4)
+  const naOrdem = servicos[0].ordem_id && servicos[0].ordem_status !== 'cancelada' && servicos[0].ordem_numero;
+  return `${t} — ${descreverNumeros(servicos)}${naOrdem ? ` · ordem ${servicos[0].ordem_numero}` : servicos[0].venda_base ? ` · venda ${servicos[0].venda_base}` : ''}`;
 }
 
 // ═══ AGENDAR ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════

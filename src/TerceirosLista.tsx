@@ -2,10 +2,9 @@
 // Serviços de terceiros: a LISTA (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026): uma linha por serviço (por carro), com os mesmos filtros e passos do Quadro, para quem prefere tabela
 // ou precisa ordenar e somar. A tabela larga vai dentro de `acn-rolagem` e a coluna "Ações" fica fixa à direita (automática, `ColunaAcoesFixa.ts`).
 import React, { useMemo, useState } from 'react';
-import { mdiOpenInNew } from '@mdi/js';
 import { MenuAcoes, Selo } from './Interface';
 import { rotuloDaSituacao, colunaDoServico, rotuloDaLigacao, selosDoServico, movimentosDoServico, dataDeReferencia, reaisDoServico, textoDaDiferenca } from './TerceirosFluxo';
-import { itensDoMenu } from './TerceirosAcoes';
+import { itensDoMenu, extrasDoServico } from './TerceirosAcoes';
 import { SelosDoServico, textoDoDia } from './TerceirosPecas';
 
 const ORDENS = [
@@ -35,7 +34,7 @@ function ordenar(lista: any[], ordem: string, mapaTipos: Map<string, any>, mapaP
   return c;
 }
 
-export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques, hoje, currentUser, verValor, aoAbrir, aoMover }) {
+export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques, hoje, currentUser, verValor, aoAbrir, aoAbrirOrdem, aoImprimir, aoMover }) {
   const [ordem, setOrdem] = useState('situacao');
   const linhas = useMemo(() => ordenar(servicos, ordem, mapaTipos, mapaPrestadores), [servicos, ordem, mapaTipos, mapaPrestadores]);
   const totais = useMemo(() => {
@@ -79,7 +78,7 @@ export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques
                   <td className="acn-num"><strong>{s.numero}</strong></td>
                   <td>{tipo?.nome || '—'}</td>
                   <td className="acn-terc-celula-desc" title={s.descricao}>{s.descricao}</td>
-                  <td className="acn-terc-nowrap">{rotuloDaLigacao(s)}</td>
+                  <td className="acn-terc-nowrap">{rotuloDaLigacao(s)}{s.ordem_id && s.ordem_status !== 'cancelada' && <div className="acn-fraco">Ordem {s.ordem_numero}</div>}</td>
                   <td>{prestador ? prestador.nome : <span className="acn-terc-sem">Sem prestador</span>}</td>
                   <td className="acn-terc-nowrap">{textoDoDia(s)}</td>
                   <td><Selo familia={col.familia}>{rotuloDaSituacao(s.status)}</Selo>{selos.length > 0 && <div className="acn-terc-celula-selos"><SelosDoServico selos={selos} /></div>}</td>
@@ -87,7 +86,7 @@ export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques
                   <td className="acn-terc-celula-pedido">{s.solicitante_nome}{s.solicitante_perfil && <div className="acn-fraco">{s.solicitante_perfil}</div>}</td>
                   <td className="acn-num" title="Dias desde que o serviço mudou de coluna">{dias(s)}</td>
                   <td className="acn-dir" onClick={e => e.stopPropagation()}>
-                    <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movs, m => aoMover(m, [s]), [{ rotulo: 'Abrir', icone: mdiOpenInNew, onClick: () => aoAbrir(s) }])} />
+                    <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movs, m => aoMover(m, [s]), extrasDoServico([s], { aoAbrir: () => aoAbrir(s), aoAbrirOrdem, aoImprimir }))} />
                   </td>
                 </tr>
               );
