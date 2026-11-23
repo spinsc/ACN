@@ -34,6 +34,7 @@ import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
 import CalendarioTab from './CalendarioTab';
 import PontoTab from './PontoTab';
+import TerceirosTab from './TerceirosTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
 import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
@@ -52,15 +53,16 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
+import { podeGerirPrestadoresDeTerceiros } from './utils/permissoes';
 import { gruposParaRecolher } from './utils/menuLateral';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
-  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline, ponto: mdiClockCheckOutline,
+  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline, ponto: mdiClockCheckOutline, terceiros: mdiAccountWrenchOutline,
   crm: mdiHandshakeOutline, licitacoes: mdiGavel, cotacoes: mdiFileDocumentOutline, clientes: mdiAccountGroupOutline, marketing: mdiBullhornOutline,
   engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
   producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
@@ -137,6 +139,7 @@ const SIDEBAR_GROUPS = [
       { id: 'pcp',          label: 'PCP' },
       { id: 'almoxarifado', label: 'Almoxarifado' },
       { id: 'compras',      label: 'Compras' },
+      { id: 'terceiros',    label: 'Serviços de terceiros' },   // 22/11/2026 (pedido do usuário): película, plotagem, pintura, lavagem e afins feitos por quem é de fora (ver TerceirosTab.tsx e PLANO_SERVICOS_TERCEIROS.md)
     ],
   },
   {
@@ -1137,6 +1140,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (id === 'calendario') return true;
     // Ponto (19/11/2026): é de todos, porque cada pessoa vê o próprio; quem vê a equipe é decidido pelo banco (RH, Admin e gerentes), não pela aba marcada no Admin.
     if (id === 'ponto') return true;
+    // Serviços de terceiros (22/11/2026): na fatia T1 só tem os cadastros, então só aparece para quem cadastra prestadores (Admin, gerentes e Adaptação); da T2 em diante será de todos (todos pedem e todos veem).
+    if (id === 'terceiros') return podeGerirPrestadoresDeTerceiros(currentUser);
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -1154,6 +1159,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       }
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
       case 'ponto':        return <PontoTab currentUser={currentUser} />;
+      case 'terceiros':    return <TerceirosTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
@@ -1760,7 +1766,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             ) : (
               <>
                 {/* Título da tela para as abas que ainda não têm cabeçalho próprio */}
-                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio'].includes(activeTab) && (() => {   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
+                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio', 'terceiros'].includes(activeTab) && (() => {   // 'terceiros' (22/11/2026): a tela tem o cabeçalho dela, com subtítulo e abas   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}

@@ -1,0 +1,24 @@
+/* Serviços de terceiros (22/11/2026). Só as cores e medidas do design system (--acn-*), então o modo escuro vem junto. Prefixo acn-terc-. */
+
+.acn-terc { display: grid; gap: 12px; min-width: 0; }
+.acn-terc > * { min-width: 0; }
+
+/* Janela de cadastro: mais larga que a padrão para os campos ficarem em duas colunas. O peso da regra empata com `.acn-modal-cadastro` (design.css),
+   senão a largura de 500 px da janela padrão vence e a de cadastro perde a grade. */
+html body .modal-box.acn-modal-cadastro.acn-terc-box { width: min(720px, 95vw); }
+
+/* Campo dentro de grade: a coluna do campo não cresce com o controle (CLAUDE.md, "campo dentro de uma grade de duas colunas pode passar da própria coluna"). */
+.acn-terc-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.acn-terc-campo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; min-width: 0; }
+.acn-terc-campo .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-terc-campo select.acn-input { height: 32px; }   /* o select nativo nasce ~8 px mais alto que o input ao lado */
+.acn-terc-largo { grid-column: 1 / -1; }
+.acn-terc-dica { margin: 0; font-size: 12px; line-height: 1.4; color: var(--acn-muted); }
+.acn-terc-marca { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--acn-ink); cursor: pointer; }
+.acn-terc-marca input { margin-top: 2px; flex: none; }
+
+/* Listas */
+.acn-terc-inativo td { opacity: .6; }
+.acn-terc-acoes { white-space: nowrap; }
+.acn-terc-fazem { max-width: 260px; }
+.acn-terc-vazio { color: var(--acn-muted); }

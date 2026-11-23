@@ -201,6 +201,19 @@ export function podePostarNoInicio(usuarioAtual: any): boolean {
   return usuarioAtual?.perfil === 'Admin' || usuarioAtual?.pode_postar_inicio === true;
 }
 
+// ── Serviços de terceiros (22/11/2026, pedido do usuário; PLANO_SERVICOS_TERCEIROS.md) ───────────────────────────────────────────────
+// Cadastro de PRESTADORES: Admin, qualquer "Gerente …" e quem tem a aba Adaptação (`producao`; lista de abas vazia = todas, a mesma regra do menu). É a conta da função do banco
+// `terceiros_pode_gerir_prestadores()`, que as políticas da tabela usam: a tela só esconde o botão, quem recusa é o banco. Os TIPOS de serviço são só do Admin (`eh_admin()` no banco).
+// As duas regras são suposições minhas, a confirmar com o usuário (plano, seção 6). Na fatia T1 a aba só aparece para quem cadastra; da T2 em diante todos veem e todos pedem.
+export function podeGerirPrestadoresDeTerceiros(usuarioAtual: any): boolean {
+  if (ehAdminOuGerente(usuarioAtual)) return true;
+  const abas = usuarioAtual?.abas_permitidas;
+  return !Array.isArray(abas) || abas.length === 0 || abas.includes('producao');
+}
+export function podeEditarTiposDeTerceiros(usuarioAtual: any): boolean {
+  return usuarioAtual?.perfil === 'Admin';
+}
+
 // ── Parecer da análise entre setores (07/10/2026, pedido do usuário) ───────────────────────────────────────────────────
 // Depois de concluído, o parecer de um setor (analise_setores.notas) pode ser editado SÓ por quem fez a análise (analise_setores.analisado_por): nem Admin nem
 // Gerente — foi o que o usuário pediu, para o parecer continuar sendo a palavra de quem o assinou. A comparação é pelo nome (ou e-mail), sem diferenciar maiúscula,
