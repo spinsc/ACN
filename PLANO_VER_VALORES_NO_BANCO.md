@@ -1,4 +1,4 @@
-# PLANO — "Ver valores" valendo no banco (proposto em 24/11/2026, nada construído)
+# PLANO — "Ver valores" valendo no banco (opção B escolhida em 24/11/2026; V0 feita, V1 aguarda decisões)
 
 > Origem: etapa 6 da revisão de permissões. A caixa **"Ver valores financeiros"** do cadastro de usuário (`auth_usuarios.ver_valores`) hoje só **esconde o número na tela**
 > (`podeVerValores`, usado em ~26 arquivos). O banco entrega o valor a qualquer pessoa que entrou: quem chamar o banco por fora, ou abrir o que a tela esquece de esconder, vê tudo.
@@ -66,3 +66,55 @@ Cada onda: **ensaio de custo antes** (`supabase/sql/ensaio_de_custo.sql`) e **`/
 ## 7. Próximo passo
 
 Você responde as decisões da seção 4. Com **A**, só atualizo o manual e encerro. Com **B** ou **C**, começo pela V0 (inventário e medição), sem mexer em nada, e trago o resultado antes da V1.
+
+## 8. Resultado da V0 — inventário e medição (24/11/2026; nada foi alterado no banco nem no código)
+
+**Decisão do usuário:** opção **B** (proteger só o sensível): `cadastro_itens` (custo e markup), `oples` (valor total e mão de obra), `pcp_pedidos_compra` e `demandas_setoriais` (valor da compra) e `pcp_fretes` (frete e nota).
+
+### 8.1 O que lê cada coluna (a lista a refazer tela a tela)
+
+**No banco** (funções, gatilhos e visões que citam as colunas): só quatro, o que é uma boa notícia:
+- `gerar_pedido_faturamento` e o gatilho `trg_pedido_faturamento` (leem `valor_compra` do pedido de compra e da demanda do setor);
+- `unificar_item` (lê `custo_unit`);
+- a visão `rh_comissoes` (lê `oples.valor_total`).
+Limite da busca: ela acha quem cita o NOME da coluna; função que lê a linha inteira (`select *`, `%rowtype`) só aparece na V1 de cada tabela, com a leitura do corpo.
+
+**No código** (arquivos que citam a coluna; `valor_total` é nome comum a várias tabelas, então a lista dele é um teto):
+
+| Coluna | Arquivos | Quais |
+|---|---|---|
+| `custo_unit` | 9 | CadastroItensTab, CadastroProdutosTab, CotacoesTab, DesenvolvimentoFormularios, DesenvolvimentoModelo, FormacaoCalculo, FormacaoPrecosTab, KitEstrutura, MarkupTermometro |
+| `custo_embalagem` | 2 | CadastroItensTab, FormacaoPrecosTab |
+| `custo_fixo_pct` | 4 | CadastroItensTab, CadastroProdutosTab, CotacoesTab, FormacaoPrecosTab |
+| `markup_pct` | 6 | CadastroItensTab, CadastroProdutosTab, CotacoesTab, FormacaoCalculo, FormacaoPrecosTab, MarkupTermometro |
+| `valor_mao_de_obra` e `_serralheria` | 17 | AcnTabShared, ComissaoCalculo, ComissaoDocumento, CopiarOpOs, CrmTab, EdicaoDeLote, EquipeDaOp, FluxoMisto, NovaOpOsModal, OplEdicao, OpLote, OpLotes, RelatoriosTab, RHTab, SacResumoOS, SacTab, TrocaDeFluxo (+ FluxoEntrega e PainelProducaoTV na serralheria) |
+| `oples.valor_total` | ~23 | AcnTabShared, AdminTab, ComissaoCalculo, ComissaoDocumento, ConciliacaoBancaria, CopiarOpOs, CotacoesTab, CrmTab, EdicaoDeLote, FiscalTab, FormacaoPrecosTab, NovaOpOsModal, OpDossie, OpDossieLote, OplEdicao, OpLote, OpLotes, ProducaoTab, RelatoriosTab, ResumoLoteOpl, RHTab, SacFluxo, SacTab |
+| `valor_compra` | 18 | AcnTabShared, CentroCusto (4 arquivos), ComprasBuscaOrdem, ComprasFluxo, ComprasLigadas, ComprasTab, ConciliacaoBancaria, DemandaAvulsaPanel, FinanceiroTab, FormacaoOrdensCompra, LogisticaTab, MinhasSolicitacoesTab, OpVinculos, RelatoriosTab, SetorDemandaTab |
+| `valor_frete` e `valor_nota` | 2 | LogisticaTab, OpVinculos |
+
+### 8.2 O que a medição mostrou (linha de base, usuário comum, resposta montada em JSON)
+
+| Consulta | Tempo | Tamanho |
+|---|---|---|
+| conferência de acesso (`esta_logado`) | 0,64 ms | — |
+| lista de OPs (`select *`, 1.000) | **163 ms** (acima do limite de 120 do ensaio) | 4,6 MB |
+| PCP: OPs com `select *` | 16 ms | 0,9 MB |
+| Fiscal: OPs com `select *` | 16 ms | 0,8 MB |
+| pedidos de compra (1.000) | 10 ms | 0,6 MB |
+| cadastro de itens (tudo) | 99 ms | 4,8 MB |
+| fretes | 1 ms | 22 KB |
+
+Duas leituras: (1) a lista de OPs já passa um pouco do limite **antes** de qualquer mudança (a primeira medida de uma sessão sai mais cara; vale repetir antes da V2) e leva 4,6 MB por mil linhas, então qualquer junção extra pesa nela; (2) o cadastro de itens inteiro é 4,8 MB: ele já é lido por completo em várias telas, e tirar o custo e o markup dele **emagrece** a resposta de quem não precisa.
+
+### 8.3 Achados que mudam o desenho
+
+1. **`cadastro_itens` é a melhor primeira onda:** só 9 arquivos, todos do universo de preços e da Engenharia (nenhuma tela do Almoxarifado, Logística ou Chicotes cita o custo). **Aqui o critério certo talvez não seja "ver valores", e sim a aba:** quem precisa de custo e markup é quem tem Formação de Preços, Cadastro de itens, Cadastro de produtos, Cotações e Engenharia. Proposta: a tabela-irmã de custo abre por **aba** (como as tabelas da onda 3a), e a caixa "ver valores" continua mandando na tela.
+2. **`oples` é a mais pesada:** quase toda tela de OP lê com `select *` e a comissão, o RH e a conciliação usam o valor. Tirar `valor_total` e a mão de obra da tabela comum mexe em ~23 arquivos. Alternativa a avaliar na V2: **visão básica da OP sem os valores para quem não pode ver** (padrão `crm_oportunidades_basico`), em vez de tabela-irmã, e só as telas de quem não vê valor passam a ler a visão.
+3. **Compras e fretes** já têm a maior parte do código atrás de `podeVerValores` ou de aba; o risco está nas funções `gerar_pedido_faturamento` e no gatilho, que precisam continuar enxergando o valor.
+4. **Quem hoje seria afetado:** só o Jairo e o Marlon (e a conta de teste). Telas deles: Almoxarifado, Chicotes, Logística, Vistorias, Demandas gerais. A Logística lê o pedido de compra, o frete e a OP: é a tela a conferir em toda onda.
+
+### 8.4 O que preciso de você para começar a V1
+
+- **O Admin vê sempre no banco?** (a proposta é que sim.)
+- **Na V1 (`cadastro_itens`), abrir custo e markup por aba (recomendado) ou por "ver valores"?** Por aba protege de quem tem a caixa ligada mas não trabalha com preço; por "ver valores" segue a caixa do cadastro de usuário.
+- **Janela de publicação:** a V1 troca a leitura de 9 telas e muda a tabela do banco; prefiro publicar à noite e conferir a Formação de Preços e o Cadastro de itens com a conta de teste antes de você abrir o sistema.
