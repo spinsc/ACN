@@ -146,3 +146,29 @@ Custo unitário, custo da embalagem, custo fixo % e markup % moram em `cadastro_
 - **V2d escrita em 24/11/2026, NÃO aplicada** (`supabase/sql/ver_valores_v2d_fechar_oples.sql`): o gatilho `oples_desviar_valores` leva toda gravação de valor das colunas antigas para `oples_valores` e deixa a OP com nulo (nulo nunca apaga o valor guardado; para zerar, grava 0), o espelho da V2a sai, as colunas antigas são zeradas (cerca de 470 OPs) e a conferência desfaz tudo se algo não bate. Conferido no banco: nenhuma função ou visão lê essas colunas além dos gatilhos da própria V2. **Efeito a conhecer:** `select *` da OP devolve os três campos nulos; apagar um valor pela tela não o apaga (grava-se 0). Aplicar fora do horário, com ensaio de custo antes e /saude-banco depois.
 
 - **V2d APLICADA em 24/11/2026 às 23h (migração `ver_valores_v2d_fechar_oples`), depois do ensaio de custo sem falha (lista de OPs 104 ms, limite 120):** as colunas antigas de `oples` ficaram nulas nas 471 OPs, a tabela `oples_valores` tem as mesmas 471 linhas (igual à cópia `oples_valores_antes_v2d`), as marcas seguem 329 (adaptação) e 58 (serralheria) e o gatilho `oples_desviar_valores` é o único dessa família. Conferência com a conta sem a caixa: `oples_valores` vem vazio, Produção, PCP e Fiscal abrem sem erro e os selos de Serralheria não mudaram. **Falta:** conferir com uma pessoa que tem a caixa (cartão da OP, comissão, dossiê) e, depois, a V3 (compras e demandas), a V4 (fretes e faturamento) e a V6 (retirar as colunas antigas, só com OK).
+
+## 10. V3 — pedido de compra e demanda do Compras: inventário e desenho (24/11/2026; nada foi alterado no banco nem no código)
+
+**Decisão do usuário (24/11/2026): proteger os três lugares onde o pedido guarda dinheiro**, não só `valor_compra`.
+
+### 10.1 Onde está o dinheiro (conferido no banco)
+- `pcp_pedidos_compra` (253 pedidos, 208 com valor): `valor_compra`; dentro de `vencedoras` (lista) a chave `valor`, ao lado de `cotacao_id`, `fornecedor` e `itens`, que **não** são dinheiro e o recebimento por fornecedor da Logística usa; dentro de `itens` (lista) a chave `valor_unitario`, ao lado de `quantidade_comprada`, `nome`, `item_id` etc.
+- `demandas_setoriais` (447 demandas, 25 com `valor_compra`, todas do setor Compras) e a lista de itens da demanda, que também tem `valor_unitario` (`DemandaItens.tsx`).
+- `compras_requisicoes` tem `valor_total` e `valor_unitario`, mas a tabela está **vazia** (0 linhas): fora desta onda.
+- `pcp_cotacoes_fornecedores` (cotações) e `pcp_pedidos_faturamento` já são tratadas à parte (a primeira já fechada por aba na onda 3a; a segunda é da V4).
+
+### 10.2 O que lê no banco
+Só `gerar_pedido_faturamento` (gatilho `trg_pedido_faturamento`, AFTER UPDATE): ao virar "Comprado" copia `NEW.valor_compra` para `pcp_pedidos_faturamento.valor`. Depois de a coluna ficar nula ela precisa ler a tabela nova (função `security definer`). `compras_dividir_pedido` mexe em `itens` e `vencedoras` pelo índice do item: se o preço unitário sair de `itens`, a tabela nova precisa ser dividida junto.
+
+### 10.3 O que lê no código
+`valor_compra`: 18 arquivos (AcnTabShared, CentroCusto×4, ComprasBuscaOrdem, ComprasFluxo, ComprasLigadas, ComprasTab, ConciliacaoBancaria, DemandaAvulsaPanel, FinanceiroTab, FormacaoOrdensCompra, LogisticaTab, MinhasSolicitacoesTab, OpVinculos, RelatoriosTab, SetorDemandaTab). `vencedoras`: 14 (também ChegadaDeItens, ComprasEntregas, DivisaoDoPedido, EsperaDeMaterial, OpPendencias, FormacaoPrecosTab). A tela do Compras (`ComprasTab.tsx`) mexe nos preços de item das cotações e do pedido.
+
+### 10.4 Desenho
+- Tabela-irmã `pcp_pedidos_compra_valores(pedido_id, valor_compra, vencedoras_valores jsonb, itens_valores jsonb)`, com a mesma política da V2 (`pode_ver_valores()`): `vencedoras_valores` é `{cotacao_id: valor}` e `itens_valores` é a lista de `valor_unitario` na ordem de `itens`. Equivalente para `demandas_setoriais_valores(demanda_id, valor_compra, itens_valores)`.
+- O `OpValores.ts` ganha o par para pedidos: `anexarValoresDosPedidos(pedidos)` devolve o pedido com `valor_compra`, `vencedoras[].valor` e `itens[].valor_unitario` recolocados (nulos se a pessoa não vê); leitura recusada vira `erro`.
+- Mesmo roteiro da V2: V3a (SQL aditivo + gatilho espelho + cópia), V3b (telas que só leem), V3c (telas que gravam e formulários que preenchem), V3d (desviar e zerar), cada uma com ensaio de custo antes e `/saude-banco` depois, V3d só fora do horário.
+- **Cuidado que a V2 não teve:** o dinheiro está DENTRO de listas JSON que também levam dados de rota (fornecedor, itens que cada vencedora cobre, quantidade comprada). O gatilho da V3d tira só as chaves de dinheiro e as telas de recebimento seguem lendo o resto sem mudança. O gatilho `gerar_pedido_faturamento` passa a ler a tabela nova, e `compras_dividir_pedido` a dividir `itens_valores` junto.
+- **Quem é afetado:** hoje só quem está sem a caixa (duas pessoas da Logística e a conta de teste). A tela da Logística lê o pedido, as entregas e as vencedoras: é a primeira a conferir em cada onda.
+
+### 10.5 Próximo passo
+Escrever a V3a (SQL aditivo, não aplicado) e mostrar antes de aplicar.
