@@ -14,7 +14,8 @@ import { CampoTelefone } from './CampoTelefone';
 import { erroDeTelefone, whatsappParaGravar } from './Telefone';
 import PainelFeriados from './FeriadosAdmin';
 import PermissoesDoUsuario from './PermissoesDoUsuario';
-import { Tag } from './Interface';
+import MatrizDePermissoes from './MatrizDePermissoes';
+import { Tag, Chips } from './Interface';
 import { resumoDosExtras, IDS_DAS_ABAS } from './PermissoesCatalogo';
 // só conta as abas que a tela de permissões mostra (24/11/2026): ids guardados fora do catálogo, como comissoes_tecnicos, não entram na conta
 const contarAbas = (abas: string[]) => IDS_DAS_ABAS.filter(id => abas.includes(id)).length;
@@ -106,6 +107,7 @@ function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true });
   const [showForm, setShowForm] = useState(false);
+  const [visao, setVisao] = useState('lista');   // 24/11/2026: 'lista' (editar) ou 'matriz' (quem tem o quê, só leitura)
   const [loading, setLoading] = useState(false);
   const [modalEditar, setModalEditar] = useState(null);
   const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true, gestor_id: null });
@@ -355,11 +357,15 @@ function PainelUsuarios() {
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Usuarios do Sistema ({usuarios.length})</span>
-          <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>setShowForm(s=>!s)}>
-            {showForm ? 'Cancelar' : '+ Novo Usuario'}
-          </button>
+          <Chips rotulo="Visão" ativo={visao} onChange={setVisao} itens={[{ id: 'lista', rotulo: 'Lista' }, { id: 'matriz', rotulo: 'Matriz: quem tem o quê' }]} />
+          {visao === 'lista' && (
+            <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>setShowForm(s=>!s)}>
+              {showForm ? 'Cancelar' : '+ Novo Usuario'}
+            </button>
+          )}
         </div>
-        {showForm && (
+        {visao === 'matriz' && <div className="sec-body"><MatrizDePermissoes usuarios={usuarios} /></div>}
+        {visao === 'lista' && showForm && (
           <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
             <div className="form-row">
               <div className="form-group"><label className="acn-label">Nome Completo *</label>
@@ -398,7 +404,7 @@ function PainelUsuarios() {
             </button>
           </div>
         )}
-        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+        {visao === 'lista' && <div className="sec-body" style={{overflowX:'auto',padding:0}}>
           {loading ? <div className="acn-empty">Carregando...</div> : (
             <table>
               <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>📱 WhatsApp</th><th>Abas</th><th>Status</th><th>Ações</th></tr></thead>
@@ -459,7 +465,7 @@ function PainelUsuarios() {
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );

@@ -7471,3 +7471,30 @@ html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; over
 .acn-perm-link { background: none; border: 0; padding: 0; color: var(--acn-info); font-size: 11px; cursor: pointer; text-decoration: underline; }
 .acn-perm-lista { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .acn-perm-lista-abas { font-size: 12px; font-weight: 700; color: var(--acn-info); margin-right: 2px; }
+
+/* ── Matriz de permissões (MatrizDePermissoes.tsx; 24/11/2026): quem tem o quê, só leitura ── */
+.acn-mx { display: flex; flex-direction: column; gap: 10px; }
+.acn-mx-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.acn-mx-filtros .acn-input { min-width: 0; max-width: 220px; }
+.acn-mx-inativos { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; color: var(--acn-text); }
+.acn-mx-acoes { display: flex; gap: 6px; margin-left: auto; }
+.acn-mx-legenda { font-size: 12px; color: var(--acn-muted); }
+.acn-mx-sim { color: var(--acn-ok); font-weight: 700; }
+.acn-mx-perfil { color: var(--acn-info); font-weight: 700; }
+.acn-mx-rolagem { max-height: 70vh; overflow: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-mx-tab { border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.acn-mx-tab th, .acn-mx-tab td { border-bottom: 1px solid var(--acn-line-soft); border-right: 1px solid var(--acn-line-soft); padding: 3px 5px; background: var(--acn-surface); }
+.acn-mx-tab thead th { position: sticky; top: 0; z-index: 2; background: var(--acn-surface-2); }
+.acn-mx-tab .acn-mx-nome { position: sticky; left: 0; z-index: 1; min-width: 190px; text-align: left; background: var(--acn-surface-2); }
+.acn-mx-tab thead .acn-mx-nome { z-index: 3; }
+.acn-mx-nome strong { display: block; color: var(--acn-ink); }
+.acn-mx-nome span { color: var(--acn-muted); font-size: 11px; }
+.acn-mx-v { height: 150px; vertical-align: bottom; width: 26px; min-width: 26px; padding: 4px 2px; }
+.acn-mx-v div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 600; color: var(--acn-text); }
+.acn-mx-v.extra { background: var(--acn-brand-soft); }
+.acn-mx-c { text-align: center; font-weight: 700; }
+.acn-mx-c.sim { color: var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-mx-c.perfil { color: var(--acn-info); background: var(--acn-info-soft); }
+.acn-mx-c.tot { background: var(--acn-surface-2); color: var(--acn-ink); }
+.acn-mx-tab tfoot td { position: sticky; bottom: 0; background: var(--acn-surface-2); }
+.acn-mx-tab tr.inativo td { opacity: .55; }
