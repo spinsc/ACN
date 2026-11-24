@@ -10,6 +10,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { mdiSwapHorizontal } from '@mdi/js';
 import Icone from './Icone';
 import { supabase } from './supabaseClient';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { Botao, Faixa } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { fluxoLabel, soEnvio } from './FluxoEntrega';
@@ -20,6 +21,7 @@ import { lerRemessasAtivasDe } from './Remessas';
 import { modoDoVeiculoOuErro } from './ConfigEstrutura';
 import { lerValorDigitado } from './LerValor';
 import { podeTrocarFluxo, fluxosDeDestino, planejarTroca, destinoInicial, moSugerida, trocarFluxoDaUnidade } from './TrocaDeFluxo';
+import { CampoMoeda } from './CampoMoeda';
 
 const moeda = (v: any) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -39,7 +41,8 @@ export default function TrocarFluxoModal({ op, currentUser, onClose, onTrocada }
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const { data: fresca, error: e1 } = await supabase.from('oples').select('*').eq('id', op.id).maybeSingle();
+      const { data: frescaSemValor, error: e1 } = await supabase.from('oples').select('*').eq('id', op.id).maybeSingle();
+      const fresca = frescaSemValor ? (await anexarValoresDaOp(frescaSemValor)).op : frescaSemValor;   // V2c: a mão de obra da unidade vem de `oples_valores`
       if (!vivo) return;
       if (e1 || !fresca) { setCarga(c => ({ ...c, pronto: true, erro: `Não foi possível ler a OP ${op.opl} (${e1?.message || 'sem resposta'}).` })); return; }
       const [{ lista, erro: e2 }, rem] = await Promise.all([lerOutrasUnidadesDoLote(fresca), lerRemessasAtivasDe([String(fresca.id)])]);
@@ -114,7 +117,7 @@ export default function TrocarFluxoModal({ op, currentUser, onClose, onTrocada }
                   {volta && (
                     <div className="form-group" data-teste="mao-de-obra-da-volta">
                       <label className="acn-label" htmlFor="tf-mo">Mão de obra desta unidade (R$)</label>
-                      <input id="tf-mo" className="acn-input" inputMode="decimal" placeholder="0,00" value={moTexto} onChange={e => setMoTexto(e.target.value)} />
+                      <CampoMoeda id="tf-mo" className="acn-input" placeholder="0,00" value={moTexto} onChange={reais => setMoTexto(reais)} />
                       <div className={moInvalida ? 'acn-txt-erro' : 'acn-ajuda'}>
                         {moInvalida ? 'Número inválido: digite só o valor, como 1.500,00.' : 'A comissão lê este valor. Já vem com o das outras unidades de produção do lote; em branco, a unidade fica sem mão de obra.'}
                       </div>

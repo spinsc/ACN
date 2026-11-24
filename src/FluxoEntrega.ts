@@ -198,10 +198,11 @@ export const SERRALHERIA_STATUS = ['Pendente', 'Em Execucao', 'Concluido'] as co
  *  'Sanado' sai da lista do PCP, que só mostra Pendente e Concluido. */
 export const SERRALHERIA_SANADO = 'Sanado';
 
+// V2b do "ver valores no banco" (24/11/2026): a mão de obra também decide ROTA e quem não vê valores a recebe nula; a marca `tem_mo_*` (sem valor) é o que vale, e o valor só até a V2d.
 export function temSerralheria(o: any): boolean {
   if (!o) return false;
   return o.fluxo_entrega === 'fabricacao_serralheria_envio'
-      || Number(o.valor_mao_de_obra_serralheria) > 0
+      || o.tem_mo_serralheria === true || Number(o.valor_mao_de_obra_serralheria) > 0
       || (o.tipo_projeto || '') === 'Reboque';
 }
 
@@ -210,6 +211,6 @@ export function temSerralheria(o: any): boolean {
 export function motivoSerralheria(o: any): string {
   if (o?.fluxo_entrega === 'fabricacao_serralheria_envio') return 'Fabricação da serralheria (item inteiro)';
   if ((o?.tipo_projeto || '') === 'Reboque')               return 'Reboque / carretinha';
-  if (Number(o?.valor_mao_de_obra_serralheria) > 0)        return 'Etapa dentro da adaptação';
+  if (o?.tem_mo_serralheria === true || Number(o?.valor_mao_de_obra_serralheria) > 0) return 'Etapa dentro da adaptação';
   return 'Serralheria';
 }

@@ -16,3 +16,6 @@ export function lerValorDigitado(texto: any): { vazio?: true; valor?: number; in
   const v = parseFloat(n);
   return Number.isFinite(v) ? { valor: v } : { invalido: true };
 }
+
+/** O número de um campo de dinheiro (o do CampoMoeda e o texto digitado à moda antiga), ou null se está vazio ou não é número. Use no lugar de tirar os pontos à mão. */
+export const numeroOuNulo = (texto: any): number | null => { const r = lerValorDigitado(texto); return r.valor === undefined ? null : r.valor; };

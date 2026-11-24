@@ -142,6 +142,8 @@ Cada pessoa grava **só o grupo que pode editar**, e cada setor deixa uma linha 
 ![Verba, pedágio e hotel](img/18-parte-financeiro.jpg)
 
 - **Verba total\*:** o dinheiro que a equipe vai levar. Digite o valor e **salve a viagem**.
+
+> **Dica:** todo campo de dinheiro das Viagens (verba, pedágio, diária do quarto, custo real, custo da manutenção…) mostra o valor já com o ponto dos milhares e a vírgula dos centavos enquanto você digita: escreva `4500` e ele mostra `4.500`; use a vírgula só para os centavos (`4500,50`). Só aceita números; ao sair do campo ele completa os centavos (`4.500,00`).
 - **Liberar verba:** com o valor salvo, clique em **Liberar verba** e confirme. O sistema guarda **quem liberou, quando e quanto**. A equipe só sai com a verba liberada.
 - **Pedágio:** **Reembolso** (a equipe paga e depois pede o reembolso) ou **Convênio** (passa pela tag, sem pagar na cancela).
 - **Hotel:** nome, telefone, endereço e reserva/observações.

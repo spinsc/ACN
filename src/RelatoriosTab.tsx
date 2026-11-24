@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
+import { anexarValoresDasOps } from './OpValores';
 import { VeiculoOuEnvio } from './AcnTabShared';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
@@ -1173,7 +1174,7 @@ function RelComissoes() {
       const [resFuncs, resOps, divisores, dep] = await Promise.all([
         supabase.from('rh_funcionarios_basico').select('id,nome,cargo,departamento,ativo,percentual_comissao,percentuais_por_tipo,incide_em,recebe_comissao').eq('recebe_comissao', true),
         // Documento detalhado (05/10/2026): o número da NF e as datas de conclusão e de entrega vão junto, para o PDF mostrar as datas de cada comissão
-        supabase.from('oples').select('id,opl,crm_oportunidade_id,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
+        supabase.from('oples').select('id,opl,crm_oportunidade_id,responsavel_comercial,cliente_nome,status_geral,data_emissao_nf,numero_nf,nfe,numero_nf_servico,data_conclusao_producao,data_entrega')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
           .lt('data_emissao_nf', `${proximoMes}-01T00:00:00-03:00`),
         lerDivisorPorBaseDeLote(),
@@ -1183,7 +1184,10 @@ function RelComissoes() {
       if (falha) setErro(falha.message);
       // 14/10/2026: os departamentos vêm da lista do RH (se a leitura falhar, vale o texto antigo, que continua no cadastro) — "é do Comercial?" decide quem aparece sem ter vendido
       setFuncionarios(resFuncs.data ? (dep.erro ? resFuncs.data : anexarDepartamentos(resFuncs.data, dep.departamentos, dep.vinculos)) : []);
-      setOps(resOps.data || []);
+      // o valor da OP mora em `oples_valores` (V2b, 24/11/2026); leitura recusada é avisada, nunca vira comissão zerada
+      const opsComValor = await anexarValoresDasOps(resOps.data || []);
+      if (opsComValor.erro) setErro('Não foi possível ler os valores das OPs: ' + opsComValor.erro);
+      setOps(opsComValor.ops);
       // 08/10/2026: tipo de negócio (Revenda/Venda/Pós-vendas) de cada OP = o do card do CRM a que ela está ligada; decide qual percentual do vendedor vale
       const idsCrm = [...new Set((resOps.data || []).map((x: any) => x.crm_oportunidade_id).filter(Boolean))];
       const tiposCrm: Record<string, string> = {};

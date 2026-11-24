@@ -24,6 +24,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { Botao } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiPackageVariantClosed, mdiCurrencyUsd, mdiCheck, mdiLinkVariant, mdiClose, mdiChevronUp, mdiChevronDown, mdiChevronRight, mdiPowerPlugOutline } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 // Fabricação interna: cada setor fabricante tem a sua categoria de produto
 // (os modelos ficam em Produtos e mercadorias, com a estrutura de cada um)
@@ -198,8 +199,8 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
                 </select>
               )}
               {comValor && (
-                <input inputMode="decimal" value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário" className="acn-input acn-dmi-val"
-                  onChange={e => set(i, { valor_unitario: e.target.value })} />
+                <CampoMoeda value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário" className="acn-input acn-dmi-val"
+                  onChange={reais => set(i, { valor_unitario: reais })} />
               )}
               <Botao variante="discreto" pequeno icone={mdiClose} onClick={() => remover(i)} title="Remover item" aria-label="Remover item" />
             </div>
@@ -311,8 +312,8 @@ export function ItensDemandaView({ itens, mostrarValor = false, onSalvarValores 
               </Botao>
             )}
             {editando ? (
-              <input inputMode="decimal" value={valores[i] ?? ''} placeholder="R$ un." aria-label={`Valor unitário de ${it.nome}`} className="acn-input acn-dmi-valedit"
-                onChange={e => setValores(v => v.map((x, k) => k === i ? e.target.value : x))} />
+              <CampoMoeda value={valores[i] ?? ''} placeholder="R$ un." aria-label={`Valor unitário de ${it.nome}`} className="acn-input acn-dmi-valedit"
+                onChange={reais => setValores(v => v.map((x, k) => k === i ? reais : x))} />
             ) : mostrarValor && (
               <span className={'acn-dmi-valor' + (it.valor_unitario != null && it.valor_unitario !== '' ? ' tem' : '')}>
                 {it.valor_unitario != null && it.valor_unitario !== ''

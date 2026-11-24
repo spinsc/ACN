@@ -114,10 +114,26 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
  * Grava a solicitação — o mesmo caminho para todo mundo. Devolve { id, numero_pedido, errosAnexos } ou { erro }.
  * `contexto` entra no começo das observações (ex.: de qual oportunidade ou licitação veio); `opl` é o número da OP em texto quando não há vínculo.
  */
-export async function enviarSolicitacaoCompra({ valor, currentUser, origemSetor = 'Demanda geral', oportunidadeId = null, opl = null, contexto = '' }: any) {
+/**
+ * Pedido do usuário em 24/11/2026: o pedido de compra pedido por um LOTE (ex.: 10 Corollas) pode valer para o lote inteiro. A pessoa digita o que
+ * cada VEÍCULO leva (1 conjunto de calhas, 2 faróis de manejo) e, marcada a caixa, o pedido sai com a conta feita (10 conjuntos, 20 faróis).
+ * A multiplicação é feita uma vez, aqui, na gravação: o pedido guarda a quantidade final (é ela que o Compras cota e o Almoxarifado confere) e a
+ * descrição do item diz de onde ela veio ("1 por veículo × 10").
+ */
+export function itensParaOLote(itens: any[], unidades: number) {
+  const n = Math.round(Number(unidades) || 0);
+  if (n < 2) return itens;
+  return itens.map((i: any) => {
+    const porVeiculo = Number(i.quantidade) || 1;
+    const nota = `${porVeiculo} por veículo × ${n} veículos`;
+    return { ...i, quantidade: porVeiculo * n, descricao: [String(i.descricao || '').trim(), nota].filter(Boolean).join(' · ') };
+  });
+}
+
+export async function enviarSolicitacaoCompra({ valor, currentUser, origemSetor = 'Demanda geral', oportunidadeId = null, opl = null, contexto = '', paraOLote = 0 }: any) {
   // a regra vale para TODA solicitação, venha de onde vier (a janela confere antes; esta é a garantia final)
   if (!valor.centroCustoId && await lerCentroObrigatorio()) return { erro: MSG_CENTRO_OBRIGATORIO };
-  const itens = itensPreenchidos(valor.itens || []);
+  const itens = itensParaOLote(itensPreenchidos(valor.itens || []), paraOLote);
   let centro: string | null = null;
   if (valor.centroCustoId) {
     const centros = await fetchCentrosCusto(true);
@@ -126,7 +142,7 @@ export async function enviarSolicitacaoCompra({ valor, currentUser, origemSetor 
   }
   const r: any = await criarRequisicaoCompra({
     titulo: valor.titulo, descricao: valor.descricao, itens, prioridade: valor.prioridade, prazo: valor.prazo || null,
-    observacoes: [contexto, valor.observacoes].filter(Boolean).join('\n'),
+    observacoes: [contexto, paraOLote > 1 ? `Pedido para o lote inteiro: as quantidades foram multiplicadas por ${paraOLote} veículos.` : '', valor.observacoes].filter(Boolean).join('\n'),
     centro_custo: centro, centro_custo_id: valor.centroCustoId || null,
     vinculo: valor.vinculo || null, opl,
     responsavel_nome: valor.comprador || null,
@@ -147,8 +163,12 @@ export async function enviarSolicitacaoCompra({ valor, currentUser, origemSetor 
 }
 
 /** A janela da solicitação: o mesmo desenho em qualquer tela. `onCriada(resultado, valor)` roda depois de gravar. */
-export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra', subtitulo = '', valorInicial = {}, origemSetor, oportunidadeId = null, opl = null, contexto = '', onClose, onCriada }: any) {
+export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra', subtitulo = '', valorInicial = {}, origemSetor, oportunidadeId = null, opl = null, contexto = '', unidadesDoLote = 0, onClose, onCriada }: any) {
   const [valor, setValor] = useState(() => solicitacaoCompraVazia(valorInicial));
+  // só existe quando o pedido sai de um lote de 2 ou mais veículos; começa DESMARCADA (marcar sem querer multiplicaria o pedido)
+  const [valeParaOLote, setValeParaOLote] = useState(false);
+  const temLote = Number(unidadesDoLote) > 1;
+  const paraOLote = temLote && valeParaOLote ? Number(unidadesDoLote) : 0;
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const centroObrigatorio = useCentroObrigatorio();
@@ -157,7 +177,7 @@ export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra',
     const falta = validarSolicitacaoCompra(valor, centroObrigatorio);
     if (falta) { setErro(falta); return; }
     setSalvando(true); setErro('');
-    const r: any = await enviarSolicitacaoCompra({ valor, currentUser, origemSetor, oportunidadeId, opl, contexto });
+    const r: any = await enviarSolicitacaoCompra({ valor, currentUser, origemSetor, oportunidadeId, opl, contexto, paraOLote });
     setSalvando(false);
     if (r.erro) { setErro('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
     if (r.errosAnexos?.length) alert('A requisição foi criada, mas houve falha ao enviar alguns anexos:\n\n' + r.errosAnexos.join('\n'));
@@ -174,6 +194,26 @@ export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra',
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
           {subtitulo && <div className="acn-ajuda">{subtitulo}</div>}
+          {temLote && (
+            <div className="form-group acn-sco-lote">
+              <label className="acn-check">
+                <input type="checkbox" checked={valeParaOLote} onChange={e => setValeParaOLote(e.target.checked)} />
+                Este pedido vale para o lote inteiro ({unidadesDoLote} veículos)
+              </label>
+              <div className="acn-ajuda">
+                {valeParaOLote
+                  ? 'Digite nos itens o que UM veículo leva: ao enviar, cada quantidade é multiplicada por ' + unidadesDoLote + '.'
+                  : 'Desmarcado, as quantidades são as do pedido todo, do jeito que você digitar.'}
+              </div>
+              {valeParaOLote && itensPreenchidos(valor.itens || []).length > 0 && (
+                <div className="acn-sco-lote-previa">
+                  {itensPreenchidos(valor.itens || []).map((i: any, k: number) => (
+                    <div key={k}>{i.nome}: {i.quantidade} por veículo → <strong>{i.quantidade * unidadesDoLote}</strong> no pedido</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <CamposSolicitacaoCompra valor={valor} onChange={setValor} />
           {erro && <Faixa tom="erro">{erro}</Faixa>}
         </div>

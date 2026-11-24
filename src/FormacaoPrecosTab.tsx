@@ -8,7 +8,8 @@ import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgr
          somarResultados, estruturaFormacao, custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { temPoderDeGerente, perfilComPoderes, ehAdminOuGerente } from './utils/permissoes';
 import { buscarPorPalavras, combinaBusca } from './SearchUtils';
-import { estruturaDoKit } from './KitEstrutura';
+import { estruturaDoKitComValores } from './KitEstrutura';
+import { anexarValoresAosItens, gravarValoresDoItem } from './CadastroItensValores';
 import { confirmar, pedirTexto } from './Feedback';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { Faixa, Botao, Selo, Chips, Abas, Tag, SelectBusca } from './Interface';
@@ -18,6 +19,8 @@ import ExcluirFormacaoModal from './ExcluirFormacaoModal';
 import FormacoesExcluidas from './FormacoesExcluidas';
 import { podeExcluirFormacao, lerFamiliaDaFormacao } from './ExclusaoDeFormacao';
 import Icone from './Icone';
+import { numeroOuNulo } from './LerValor';
+import { CampoMoeda } from './CampoMoeda';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
   mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline, mdiArrowLeft, mdiFileDocumentOutline,
@@ -489,7 +492,7 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
 // Aceita tanto "15000" quanto o formato brasileiro "15.000,50" — sem isso,
 // parseFloat("15.000") vira 15 (trunca no ponto de milhar) e o resultado
 // sai errado por um fator de 1000, sem nenhum aviso ao usuário.
-const parseNumBr = (v) => parseFloat(String(v).trim().replace(/\./g, '').replace(',', '.')) || 0;
+const parseNumBr = (v) => numeroOuNulo(String(v).trim()) || 0; // 24/11/2026: regra única (LerValor.ts); o campo de dinheiro entrega "1500.5"
 
 // ─── MARKUP REVERSO POR PRODUTO ───────────────────────────────────────────────
 // Inverso exato do calcItem:
@@ -513,9 +516,9 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
     <div className="acn-fp-span2" title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
       <div className="acn-fp-ir-rot2 com-ic"><Icone path={mdiRefresh} size={12} /> Preço unit. desejado</div>
       <div className="acn-fp-mr-linha">
-        <input className="acn-input acn-fp-ir-campo acn-fp-num"
+        <CampoMoeda className="acn-input acn-fp-ir-campo acn-fp-num"
           placeholder={bloqueado ? 'markup global' : 'R$'} value={preco} disabled={bloqueado}
-          onChange={e => setPreco(e.target.value)}
+          onChange={reais => setPreco(reais)}
           onKeyDown={e => { if (e.key === 'Enter') aplicar(); }} />
         <Botao variante="primario" pequeno icone={mdiRefresh} onClick={aplicar} disabled={bloqueado || !preco}
           title={modoTabela ? 'Calcula e aplica o desconto' : 'Calcula e aplica o markup'}
@@ -547,11 +550,11 @@ function CalcMarkupReverso() {
       <div className="acn-fp-calc-linha">
         <div>
           <div className="acn-fp-rot">Preço de Venda (R$)</div>
-          <input className="acn-input acn-fp-in-110" placeholder="Ex: 15000" value={precoVenda} onChange={e=>setPrecoVenda(e.target.value)} />
+          <CampoMoeda className="acn-input acn-fp-in-110" placeholder="Ex: 15000" value={precoVenda} onChange={reais =>setPrecoVenda(reais)} />
         </div>
         <div>
           <div className="acn-fp-rot">Custo c/Impostos BRL</div>
-          <input className="acn-input acn-fp-in-110" placeholder="Ex: 8000" value={custoFob} onChange={e=>setCustoFob(e.target.value)} />
+          <CampoMoeda className="acn-input acn-fp-in-110" placeholder="Ex: 8000" value={custoFob} onChange={reais =>setCustoFob(reais)} />
         </div>
         <div>
           <div className="acn-fp-rot">DIFAL %</div>
@@ -589,7 +592,7 @@ function CalcImpostoReverso() {
       <div className="acn-fp-calc-linha">
         <div>
           <div className="acn-fp-rot">Preço com Imposto (R$)</div>
-          <input className="acn-input acn-fp-in-120" placeholder="Ex: 18600" value={precoComImposto} onChange={e=>setPrecoComImposto(e.target.value)} />
+          <CampoMoeda className="acn-input acn-fp-in-120" placeholder="Ex: 18600" value={precoComImposto} onChange={reais =>setPrecoComImposto(reais)} />
         </div>
         <div>
           <div className="acn-fp-rot">Imposto %</div>
@@ -623,17 +626,22 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
     setSalvando(true);
     const { data, error: erroItem } = await supabase.from('cadastro_itens').insert([{
       nome: form.nome.trim(), marca: form.marca?.trim() || '', fornecedor: form.fornecedor?.trim() || '',
-      moeda: form.moeda || 'REAL', custo_unit: Number(form.custo_unit) || 0,
+      moeda: form.moeda || 'REAL',
       ipi_pct: Number(form.ipi_pct) || 0, st_pct: Number(form.st_pct) || 0,
       tipo_calculo: form.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-      markup_pct: Number(form.markup_pct) || 30, difal_pct: Number(form.difal_pct) || 0,
-      imposto_pct: Number(form.imposto_pct) || 16, custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
+      difal_pct: Number(form.difal_pct) || 0,
+      imposto_pct: Number(form.imposto_pct) || 16,
       unidade: form.unidade || 'UN', ativo: true,
     }]).select().single();
     salvandoRef.current = false;
     setSalvando(false);
     if (erroItem) { alert('Não foi possível criar o item no catálogo: ' + erroItem.message); return; }   // 7.59: não fazia nada, sem aviso
-    if (data) onSalvo(data);
+    if (!data) return;
+    // custo e markup do item moram na tabela de valores (V1 do "ver valores no banco", 24/11/2026)
+    const valores = { custo_unit: Number(form.custo_unit) || 0, markup_pct: Number(form.markup_pct) || 30, custo_fixo_pct: Number(form.custo_fixo_pct) || 3 };
+    const gv = await gravarValoresDoItem(data.id, valores);
+    if (gv.erro) alert('O item foi criado no catálogo, mas o custo e o markup não puderam ser gravados (' + gv.erro + '). Abra o item no Cadastro de itens e informe o custo.');
+    onSalvo({ ...data, ...valores });
   };
 
   return (
@@ -658,7 +666,7 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
                 {['REAL','DOLAR','EURO'].map(m=><option key={m}>{m}</option>)}
               </select>
             </div>
-            <div><span className="acn-label">Custo Unitário</span><input className="acn-input" type="number" min={0} step="0.01" value={form.custo_unit} onChange={e=>set('custo_unit',e.target.value)} /></div>
+            <div><span className="acn-label">Custo Unitário</span><CampoMoeda className="acn-input" value={form.custo_unit} onChange={reais =>set('custo_unit',reais)} casas={4} /></div>
             <div>
               <span className="acn-label">Tipo Cálculo</span>
               <select className="acn-input" value={form.tipo_calculo} onChange={e=>set('tipo_calculo',e.target.value)}>
@@ -707,14 +715,16 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       setBuscando(true);
       const [{ data: itens, error: errItens }, { data: produtos, error: errProdutos }] = await Promise.all([
         buscarPorPalavras(supabase.from('cadastro_itens')
-          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,compra_multiplo,custo_embalagem')
+          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,ipi_pct,st_pct,tipo_calculo,difal_pct,imposto_pct,compra_multiplo')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(8),
         buscarPorPalavras(supabase.from('cadastro_produtos')
           .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(5),
       ]);
-      setErroBusca((errItens || errProdutos)?.message || '');
-      setRes({ itens: itens || [], produtos: produtos || [] });
+      // custo e markup do item moram na tabela de valores (V1 do "ver valores no banco", 24/11/2026)
+      const comValores = errItens ? { itens: [], erro: '' } : await anexarValoresAosItens(itens || []);
+      setErroBusca((errItens || errProdutos)?.message || (comValores.erro ? 'não foi possível ler os custos (' + comValores.erro + ')' : ''));
+      setRes({ itens: comValores.itens, produtos: produtos || [] });
       setOpen(true);
       setBuscando(false);
     }, 260);
@@ -764,8 +774,9 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
   // na COMPOSIÇÃO; custo, markup e demais valores são desta formação (começam
   // pelos do catálogo e ficam livres para ajuste aqui).
   const expandirBom = async (p) => {
-    const linhasKit = await estruturaDoKit(p.id);
+    const { linhas: linhasKit, erro: erroValores } = await estruturaDoKitComValores(p.id);
     setOpen(false);
+    if (erroValores) { setErroBusca('não foi possível ler os custos do kit (' + erroValores + ')'); return; }
     if (!linhasKit.length) { selecionarProdutoKit(p); return; }
     const linhas = linhasKit.map(l => {
       const it = l.item || {};
@@ -974,8 +985,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <div className="acn-fp-ir-rot" title="Custo unitário do produto, na moeda escolhida em Custo/impostos (sem IPI e ST)">
                 Custo unit.{item.moeda && item.moeda !== 'BRL' ? ` (${item.moeda})` : ''}
               </div>
-              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-                aria-label="Custo unitário do produto" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+              <CampoMoeda className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto" value={item.custo_unit} onChange={reais =>onSet('custo_unit', reais)} casas={4} />
             </div>
           )}
           {/* Markup (ou desconto, no modo TABELA) deste produto — à vista e editável por todos os usuários. Com "Markup Global" ligado fica
@@ -1051,8 +1062,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             </div>
             <div>
               <div className="acn-fp-ir-rot2">Custo Unit.</div>
-              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-                aria-label="Custo unitário do produto (dentro de Custo/impostos)" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+              <CampoMoeda className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto (dentro de Custo/impostos)" value={item.custo_unit} onChange={reais =>onSet('custo_unit', reais)} casas={4} />
             </div>
             <div>
               <div className="acn-fp-ir-rot2">IPI%</div>

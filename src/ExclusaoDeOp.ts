@@ -11,7 +11,8 @@ import { logChange } from './AuditSystem';
 
 /** Admin e qualquer perfil "Gerente ..." — a equipe do Comercial que só vale como gerente do setor NÃO exclui OP (o banco confere o perfil real). */
 export function podeExcluirOp(usuario: any): boolean {
-  return ehAdminOuGerente(usuario);
+  // 24/11/2026: também quem recebeu a caixa "Excluir OP" no cadastro (op_excluir confere a mesma marca no banco)
+  return ehAdminOuGerente(usuario) || usuario?.pode_excluir_op === true;
 }
 
 export type ConferenciaDaExclusao = { erro?: string; opl?: string; status?: string; bloqueios: string[]; desligados: string[]; avisos: string[] };
@@ -41,7 +42,7 @@ export function textoDaPergunta(op: any, c: ConferenciaDaExclusao): string {
  * Devolve true quando a OP foi excluída (a tela fecha a janela e atualiza as listas).
  */
 export async function excluirOpComMotivo(op: any, usuario: any): Promise<boolean> {
-  if (!podeExcluirOp(usuario)) { mostrarAviso('Só Admin e gerentes podem excluir uma OP.', 'atencao'); return false; }
+  if (!podeExcluirOp(usuario)) { mostrarAviso('Só Admin, gerentes e quem recebeu essa permissão podem excluir uma OP.', 'atencao'); return false; }
   const c = await conferirExclusaoDeOp(op.id);
   if (c.erro) { mostrarAviso(`Não foi possível conferir o que está ligado à OP ${op.opl} (${c.erro}). Por segurança, nada foi excluído.`, 'erro'); return false; }
   if (c.bloqueios.length) {

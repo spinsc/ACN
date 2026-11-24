@@ -27,6 +27,7 @@ import {
   pvDe, erroDoEnvioDaProposta, contatoAtrasado, textoDoHistorico, PADROES_DA_OP_TELECOM, EMPRESAS_DA_VENDA, erroDoPedidoFechado,
   FOCOS, passaNoFoco, cardParado, diasSemMovimento, resumoDasPerdas, itensDoTexto, textoDosItens,
 } from './VendasTelecom';
+import { CampoMoeda } from './CampoMoeda';
 
 /** Campo de descrição do item com busca no Cadastro de itens (pedido do usuário em 04/11/2026): digitar livre continua valendo; ao digitar 2 letras ou mais aparecem os itens do cadastro (código ou nome, sem acento) e escolher um preenche a descrição com o nome dele. Só texto: o card guarda o mesmo texto de sempre. */
 function BuscaItemDoCadastro({ valor, rotulo, onTexto, onEscolher, onEnter }: { valor: string; rotulo: string; onTexto: (v: string) => void; onEscolher: (item: any) => void; onEnter: () => void }) {
@@ -440,7 +441,7 @@ function JanelaDoContato({ card, encerrado, currentUser, umaVez, estagioLeadId, 
           </div>
           <div className="acn-vtel-linha3">
             <div className="form-group"><label className="acn-label" htmlFor="vt-valor">Valor estimado (R$)</label>
-              <input id="vt-valor" className="acn-input" inputMode="decimal" value={form.valor} placeholder="0,00" onChange={e => set('valor', e.target.value)} /></div>
+              <CampoMoeda id="vt-valor" className="acn-input" value={form.valor} placeholder="0,00" onChange={reais => set('valor', reais)} /></div>
             <div className="form-group"><label className="acn-label" htmlFor="vt-prox">Próximo contato</label>
               <input id="vt-prox" className="acn-input" type="date" value={form.prox_contato} onChange={e => set('prox_contato', e.target.value)} /></div>
             <div className="form-group"><label className="acn-label" htmlFor="vt-hora">Horário</label>

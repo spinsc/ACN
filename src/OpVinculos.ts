@@ -20,6 +20,7 @@
 // aberto?" é a mesma pergunta que esta função já responde.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { anexarValoresDaOp } from './OpValores';
 
 export type GrupoVinculo =
   | 'origem' | 'demanda' | 'compra' | 'frete' | 'engenharia'
@@ -332,10 +333,12 @@ export async function buscarOps(termo: string) {
 }
 
 export async function carregarDossie(opOuId: any) {
-  const op = typeof opOuId === 'string'
+  const opLida = typeof opOuId === 'string'
     ? (await tentar(supabase.from('oples').select('*').eq('id', opOuId).maybeSingle()))[0]
     : opOuId;
-  if (!op) return null;
+  if (!opLida) return null;
+  // o valor da OP mora em `oples_valores` (V2b do "ver valores no banco", 24/11/2026); leitura recusada deixa a OP como veio
+  const op = (await anexarValoresDaOp(opLida)).op;
 
   const [origem, vinculos, logs, acomps, irmas] = await Promise.all([
     origemDaOp(op),

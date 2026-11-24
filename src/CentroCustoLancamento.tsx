@@ -25,6 +25,7 @@ import { enviarAnexosDespesa } from './DespesaAnexos';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { conferirMesesAbertos, mesDe } from './CentroCustoFechamento';
 import { mdiPlus, mdiTrashCanOutline, mdiRefresh } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 export const MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const p2 = (n: number) => String(n).padStart(2, '0');
@@ -188,7 +189,7 @@ export function ModalLancarDespesa({ centro, currentUser, onClose, onSalvo }: an
           <div className="acn-cc-linha">
             <div className="form-group">
               <label className="acn-label" htmlFor="dp-valor">{ehParcelado ? 'Valor total negociado (R$) *' : 'Valor (R$) *'}</label>
-              <input id="dp-valor" className="acn-input" inputMode="decimal" placeholder="0,00" value={valor} onChange={e => setValor(e.target.value)} autoFocus />
+              <CampoMoeda id="dp-valor" className="acn-input" placeholder="0,00" value={valor} onChange={reais => setValor(reais)} autoFocus />
             </div>
             <div className="form-group">
               <label className="acn-label" htmlFor="dp-data">Data do lançamento *</label>
@@ -339,7 +340,7 @@ function FormRecorrencia({ rec, categorias, currentUser, onClose, onSalvo }: any
           <div className="acn-ajuda">Vale daqui para frente: o que já foi lançado não muda. Para trocar o centro (ou o rateio), pause esta e crie outra.</div>
           <div className="form-group"><label className="acn-label" htmlFor="rc-desc">Descrição *</label><input id="rc-desc" className="acn-input" value={descricao} onChange={e => setDescricao(e.target.value)} /></div>
           <div className="acn-cc-linha">
-            <div className="form-group"><label className="acn-label" htmlFor="rc-valor">Valor (R$) *</label><input id="rc-valor" className="acn-input" inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} /></div>
+            <div className="form-group"><label className="acn-label" htmlFor="rc-valor">Valor (R$) *</label><CampoMoeda id="rc-valor" className="acn-input" value={valor} onChange={reais => setValor(reais)} /></div>
             <div className="form-group"><label className="acn-label" htmlFor="rc-dia">Dia do mês *</label><input id="rc-dia" className="acn-input" inputMode="numeric" value={dia} onChange={e => setDia(e.target.value.replace(/\D/g, '').slice(0, 2))} /></div>
             <div className="form-group"><label className="acn-label" htmlFor="rc-fim">Repetir até</label><input id="rc-fim" className="acn-input" type="date" value={fim} onChange={e => setFim(e.target.value)} /></div>
           </div>

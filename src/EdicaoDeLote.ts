@@ -14,6 +14,7 @@
 //   • cada unidade alterada ganha uma linha no histórico e na auditoria.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { logChange } from './AuditSystem';
 import { camposQueChegamNaUnidade, fluxoDaOp, resumoDosFluxosDoLote } from './FluxoMisto';
 
@@ -67,8 +68,12 @@ export const loteComProblema = (r: ResultadoLote) => !!r.erroLeitura || r.falhas
 export async function lerOutrasUnidadesDoLote(op: any): Promise<{ lista: any[]; erro: string }> {
   const base = baseDoLoteDe(op?.opl);
   if (!base) return { lista: [], erro: '' };
-  const { data, error } = await supabase.from('oples').select('*').like('opl', `${base}/%`).order('opl');
+  const { data: dadosSemValor, error } = await supabase.from('oples').select('*').like('opl', `${base}/%`).order('opl');
   if (error) return { lista: [], erro: error.message };
+  // V2c (24/11/2026): o valor das unidades vem de `oples_valores`; sem ele a edição do lote confundiria "sem valor" com "valor igual"
+  const comValor = await anexarValoresDasOps(dadosSemValor || []);
+  if (comValor.erro) return { lista: [], erro: 'não foi possível ler os valores das unidades: ' + comValor.erro };
+  const data = comValor.ops;
   return { lista: (data || []).filter((o: any) => o.id !== op.id), erro: '' };
 }
 
