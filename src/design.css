@@ -7447,3 +7447,27 @@ html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; over
 
 /* L4 (19/11/2026): na tabela de Cotações (tablet) a coluna Nome encolhia a 40 px porque o texto quebra em qualquer ponto (overflow-wrap: anywhere zera a largura mínima): "DL 445/2026 - LIMEIRA" saía uma letra por linha. Largura mínima na coluna; a tabela passa a rolar em vez de espremer. */
 .acn-cot-nome { min-width: 170px; }
+
+/* ── Permissões do usuário (Admin → Usuários, PermissoesDoUsuario.tsx; 24/11/2026): abas e extras agrupadas como o menu ── */
+.acn-perm { display: flex; flex-direction: column; gap: 14px; margin: 10px 0; }
+.acn-perm-secao { border: 1px solid var(--acn-line); border-radius: var(--acn-r3); background: var(--acn-surface); padding: 12px; }
+.acn-perm-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.acn-perm-tit { font-weight: 700; color: var(--acn-ink); font-size: 14px; }
+.acn-perm-sub { color: var(--acn-muted); font-size: 12px; margin-top: 2px; }
+.acn-perm-botoes { display: flex; gap: 6px; }
+.acn-perm-grupos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.acn-perm-grupo { border: 1px solid var(--acn-line-soft); border-radius: var(--acn-r2); background: var(--acn-surface-2); padding: 8px 10px 8px; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.acn-perm-legenda { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--acn-brand-ink); padding: 0 4px; }
+.acn-perm-cont { color: var(--acn-muted); font-weight: 600; margin-left: 4px; }
+.acn-perm-item { display: flex; align-items: flex-start; gap: 7px; font-size: 13px; color: var(--acn-text); cursor: pointer; padding: 3px 4px; border-radius: var(--acn-r1); }
+.acn-perm-item:hover { background: var(--acn-brand-soft); }
+.acn-perm-item.on { color: var(--acn-ink); font-weight: 600; }
+.acn-perm-item input { margin-top: 2px; flex: none; accent-color: var(--acn-brand); }
+.acn-perm-item input:disabled { cursor: default; }
+.acn-perm-extra { display: flex; flex-direction: column; }
+.acn-perm-ajuda-extra { color: var(--acn-muted); font-size: 11px; margin: 0 0 4px 27px; }
+.acn-perm-ajuda { color: var(--acn-muted); font-size: 12px; margin-top: 8px; }
+.acn-perm-grupo-botoes { display: flex; gap: 10px; margin-top: 2px; padding-left: 4px; }
+.acn-perm-link { background: none; border: 0; padding: 0; color: var(--acn-info); font-size: 11px; cursor: pointer; text-decoration: underline; }
+.acn-perm-lista { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.acn-perm-lista-abas { font-size: 12px; font-weight: 700; color: var(--acn-info); margin-right: 2px; }

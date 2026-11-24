@@ -13,6 +13,11 @@ import { confirmar } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
 import { erroDeTelefone, whatsappParaGravar } from './Telefone';
 import PainelFeriados from './FeriadosAdmin';
+import PermissoesDoUsuario from './PermissoesDoUsuario';
+import { Tag } from './Interface';
+import { resumoDosExtras, IDS_DAS_ABAS } from './PermissoesCatalogo';
+// só conta as abas que a tela de permissões mostra (24/11/2026): ids guardados fora do catálogo, como comissoes_tecnicos, não entram na conta
+const contarAbas = (abas: string[]) => IDS_DAS_ABAS.filter(id => abas.includes(id)).length;
 import { PainelFipeSync } from './Veiculos';
 import { PainelFichasVeiculos } from './VeiculoCadastro';
 import ConfigEstruturaTela from './ConfigEstruturaTela';
@@ -97,74 +102,11 @@ const PERFIS_PADRAO_RH: Record<string, boolean> = {
   'Admin': true, 'Gerente': true, 'Gerente Comercial': true, 'RH': true,
 };
 
-function ModalPermissoes({ usuario, onClose, onSalvo }) {
-  const [selecionadas, setSelecionadas] = useState(
-    Array.isArray(usuario.abas_permitidas) && usuario.abas_permitidas.length > 0
-      ? usuario.abas_permitidas
-      : TODAS_ABAS.map(a => a.id) // padrão: todas liberadas
-  );
-  const [salvando, setSalvando] = useState(false);
-
-  const toggle = (id) => setSelecionadas(prev =>
-    prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-  );
-  const todasOn = selecionadas.length === TODAS_ABAS.length;
-
-  const salvar = async () => {
-    setSalvando(true);
-    const { error } = await supabase.from('auth_usuarios')
-      .update({ abas_permitidas: selecionadas }).eq('id', usuario.id);
-    if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
-    onSalvo();
-    onClose();
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-box" style={{maxWidth:480}}>
-        <div className="modal-title">Permissões de Acesso — {usuario.nome}</div>
-        <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>
-          Marque as abas que este usuário pode visualizar. Dashboard é sempre visível.
-        </div>
-        <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-          <button className="acn-btn" style={{background:'#1e293b',fontSize:9}}
-            onClick={()=>setSelecionadas(TODAS_ABAS.map(a=>a.id))}>Marcar Todas</button>
-          <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}}
-            onClick={()=>setSelecionadas(['dashboard'])}>Limpar</button>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:14}}>
-          {TODAS_ABAS.map(aba => (
-            <label key={aba.id} style={{
-              display:'flex',alignItems:'center',gap:6,padding:'5px 8px',
-              border:'1px solid',borderRadius:3,cursor:'pointer',
-              borderColor: selecionadas.includes(aba.id) ? '#1e293b' : '#e5e7eb',
-              background: selecionadas.includes(aba.id) ? '#f0f9ff' : 'transparent',
-              fontSize:10,fontWeight: selecionadas.includes(aba.id)?700:400,
-            }}>
-              <input type="checkbox" checked={selecionadas.includes(aba.id)}
-                onChange={()=>aba.id!=='dashboard'&&toggle(aba.id)}
-                style={{accentColor:'#1e293b'}} disabled={aba.id==='dashboard'} />
-              {aba.label}
-            </label>
-          ))}
-        </div>
-        <div style={{display:'flex',gap:8}}>
-          <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'7px'}} onClick={salvar} disabled={salvando}>
-            {salvando ? 'Salvando...' : 'SALVAR PERMISSÕES'}
-          </button>
-          <button className="acn-btn" style={{background:'#94a3b8'}} onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, pode_enviar_avisos: false });
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true });
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
   const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
@@ -211,13 +153,6 @@ function PainelUsuarios() {
     setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, pode_gerir_terceiros: u.pode_gerir_terceiros === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
-
-  const toggleAbaEdit = (id) => setEditForm(f => ({
-    ...f,
-    abas_permitidas: f.abas_permitidas.includes(id)
-      ? f.abas_permitidas.filter(a => a !== id)
-      : [...f.abas_permitidas, id]
-  }));
 
   const definirSenhaPeloAdmin = async (usuarioId, nova) => {
     const eu = JSON.parse(localStorage.getItem('user') || '{}');
@@ -310,13 +245,6 @@ function PainelUsuarios() {
     fetchUsuarios();
   };
 
-  const toggleAba = (id) => setForm(f => ({
-    ...f,
-    abas_permitidas: f.abas_permitidas.includes(id)
-      ? f.abas_permitidas.filter(a => a !== id)
-      : [...f.abas_permitidas, id]
-  }));
-
   const salvar = async () => {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
     if (form.senha.length < 4) { alert('A senha precisa ter no mínimo 4 caracteres.'); return; }
@@ -334,7 +262,7 @@ function PainelUsuarios() {
     if (error) { alert('Erro: ' + error.message); return; }
     if (!(await definirSenhaPeloAdmin(novo.id, form.senha))) alert('O usuário foi criado, mas ficou SEM senha definida. Abra "Editar" nele e defina a senha.');
     setSenhaAdmin('');
-    setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, pode_enviar_avisos: false });
+    setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true });
     setShowForm(false); fetchUsuarios();
   };
 
@@ -350,18 +278,10 @@ function PainelUsuarios() {
 
   return (
     <div>
-      {modalPerm && (
-        <ModalPermissoes
-          usuario={modalPerm}
-          onClose={() => setModalPerm(null)}
-          onSalvo={fetchUsuarios}
-        />
-      )}
-
       {/* MODAL EDITAR USUÁRIO */}
       {modalEditar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth:820,width:"95vw",maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">✏️ Editar Usuário — {modalEditar.nome}</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
               <div style={{gridColumn:'1/-1'}}>
@@ -422,177 +342,8 @@ function PainelUsuarios() {
                 </div>
               )}
             </div>
-            {/* ABAS */}
-            <div style={{marginBottom:10}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-                <label className="acn-label" style={{margin:0}}>Abas com Acesso</label>
-                <div style={{display:'flex',gap:4}}>
-                  <button className="acn-btn" style={{background:'#1e293b',fontSize:9,padding:'2px 8px'}}
-                    onClick={()=>setEditForm(f=>({...f,abas_permitidas:TODAS_ABAS.map(a=>a.id)}))}>Marcar Todas</button>
-                  <button className="acn-btn" style={{background:'#94a3b8',fontSize:9,padding:'2px 8px'}}
-                    onClick={()=>setEditForm(f=>({...f,abas_permitidas:['dashboard']}))}>Desmarcar</button>
-                </div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:4}}>
-                {TODAS_ABAS.map(aba => {
-                  const sel = editForm.abas_permitidas.includes(aba.id);
-                  return (
-                    <label key={aba.id} style={{
-                      display:'flex',alignItems:'center',gap:5,padding:'4px 7px',
-                      border:'1px solid',borderRadius:3,cursor: aba.id==='dashboard'?'default':'pointer',fontSize:10,
-                      borderColor: sel?'#1e293b':'#e5e7eb',
-                      background: sel?'#f0f9ff':'transparent',
-                      fontWeight: sel?700:400,
-                    }}>
-                      <input type="checkbox" checked={sel}
-                        onChange={()=>aba.id!=='dashboard'&&toggleAbaEdit(aba.id)}
-                        style={{accentColor:'#1e293b'}} disabled={aba.id==='dashboard'} />
-                      {aba.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-            {/* PERMISSÕES EXTRAS */}
-            <div style={{marginBottom:10,padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:6,background:'#fafafa'}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Permissões Extras</div>
-              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer',marginBottom:5}}>
-                <input type="checkbox"
-                  checked={editForm.pode_autorizar_rh}
-                  onChange={e=>setEditForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
-                  style={{accentColor:'#7c3aed'}} />
-                <span>🖨️ Pode emitir Autorizações (RH)</span>
-              </label>
-              {/* CRM */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <div style={{fontWeight:700,fontSize:9,color:'#0891b2',marginBottom:5}}>📊 CRM — Acesso a Relatórios</div>
-                {[
-                  { id:'relatorio_vendedores', label:'👤 Relatório por Vendedor' },
-                  { id:'totais_vendas',        label:'💰 Totais de Vendas' },
-                  { id:'painel_faturamentos',  label:'📋 Painel de Faturamentos' },
-                ].map(({ id, label }) => (
-                  <label key={id} style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer',marginBottom:3}}>
-                    <input type="checkbox"
-                      checked={(editForm.permissoes_crm||[]).includes(id)}
-                      onChange={e => setEditForm(f => ({
-                        ...f,
-                        permissoes_crm: e.target.checked
-                          ? [...(f.permissoes_crm||[]), id]
-                          : (f.permissoes_crm||[]).filter(p => p !== id)
-                      }))}
-                      style={{accentColor:'#0891b2'}} />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-              {/* RH — acesso restrito a Comissões, sem o resto da aba */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',marginBottom:5}}>💰 RH — Acesso Restrito</div>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={(editForm.permissoes_rh||[]).includes('comissoes_tecnicos')}
-                    onChange={e => setEditForm(f => ({
-                      ...f,
-                      permissoes_rh: e.target.checked
-                        ? [...(f.permissoes_rh||[]), 'comissoes_tecnicos']
-                        : (f.permissoes_rh||[]).filter(p => p !== 'comissoes_tecnicos')
-                    }))}
-                    style={{accentColor:'#7c3aed'}} />
-                  <span>💰 Comissões de Técnicos (sem acesso ao resto do RH)</span>
-                </label>
-                <div style={{fontSize:8,color:'#94a3b8',marginTop:2,marginLeft:22}}>
-                  Só tem efeito se a aba "RH" acima NÃO estiver marcada — se estiver, o usuário já vê Comissões dentro do RH inteiro.
-                </div>
-              </div>
-              {/* Análise Orçamentária */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.recebe_alerta_analise}
-                    onChange={e=>setEditForm(f=>({...f,recebe_alerta_analise:e.target.checked}))}
-                    style={{accentColor:'#d97706'}} />
-                  <span>🔔 Recebe alertas de Análise Orçamentária</span>
-                </label>
-              </div>
-              {/* Avisos do Sistema: só Admin publica (02/10/2026, pedido do usuário) — a caixa "Pode publicar Avisos do Sistema" saiu; a coluna pode_enviar_avisos não vale mais */}
-              {/* Aprovação de compra — por pessoa, não por perfil. Regra do
-                  usuário em 24/09/2026: aprovam Rafael Nunes, Luciano Spinelli,
-                  Bruna e Raphael Weber Mello, e mais ninguém. É aqui que se
-                  habilita outra pessoa quando for necessário. */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.pode_aprovar_compra||false}
-                    onChange={e=>setEditForm(f=>({...f,pode_aprovar_compra:e.target.checked}))}
-                    style={{accentColor:'#0f766e'}} />
-                  <span>✅ Pode aprovar compra</span>
-                </label>
-                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
-                  Vale para os dois caminhos: alçada por valor e aprovação do departamento.
-                </div>
-              </div>
-              {/* Tarefas do Financeiro — quem vê o quadro inteiro. Por pessoa,
-                  não por perfil: quem coordena o setor muda, e trocar isso não
-                  pode exigir uma publicação nova (28/09/2026). */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.ve_todas_tarefas_financeiro||false}
-                    onChange={e=>setEditForm(f=>({...f,ve_todas_tarefas_financeiro:e.target.checked}))}
-                    style={{accentColor:'#0f766e'}} />
-                  <span>📋 Vê todas as tarefas do Financeiro</span>
-                </label>
-                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
-                  Desmarcado, a pessoa vê só as tarefas de que é responsável.
-                </div>
-              </div>
-              {/* Licitações — exclusão de anexos */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.pode_deletar_anexos||false}
-                    onChange={e=>setEditForm(f=>({...f,pode_deletar_anexos:e.target.checked}))}
-                    style={{accentColor:'#0891b2'}} />
-                  <span>🗑️ Pode excluir anexos em Licitações</span>
-                </label>
-              </div>
-              {/* Tela Início — quem posta no carrossel (pedido do RH, 09/11/2026): só essa caixa foi construída aqui; a tela do Admin não foi migrada (combinado com o usuário) */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.pode_postar_inicio||false}
-                    onChange={e=>setEditForm(f=>({...f,pode_postar_inicio:e.target.checked}))}
-                    style={{accentColor:'#0e7068'}} />
-                  <span>🖼️ Pode postar na tela Início (slides do carrossel e datas da empresa)</span>
-                </label>
-                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
-                  Todo usuário do sistema vê a tela Início. Só o Admin e quem tiver esta caixa marcada editam.
-                </div>
-              </div>
-              {/* Serviços de terceiros (24/11/2026, pedido do usuário): permissão pessoa a pessoa */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.pode_gerir_terceiros||false}
-                    onChange={e=>setEditForm(f=>({...f,pode_gerir_terceiros:e.target.checked}))}
-                    style={{accentColor:'#0e7068'}} />
-                  <span>🤝 Pode gerir serviços de terceiros (cadastrar prestadores e montar a ordem em lote)</span>
-                </label>
-                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
-                  Admin, gerentes e quem tem a aba Adaptação já podem. Tipos de serviço e modelo do contrato continuam só do Admin.
-                </div>
-              </div>
-              {/* Visualização de valores financeiros */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.ver_valores !== false}
-                    onChange={e=>setEditForm(f=>({...f,ver_valores:e.target.checked}))}
-                    style={{accentColor:'#16a34a'}} />
-                  <span>💰 Pode visualizar valores financeiros (Valor Total, M.O., etc.)</span>
-                </label>
-              </div>
-            </div>
+            {/* Abas e permissões extras agrupadas como o menu (24/11/2026, pedido do usuário) */}
+            <PermissoesDoUsuario valor={editForm} onChange={patch=>setEditForm(f=>({...f,...patch}))} />
             <div style={{display:'flex',gap:8,marginTop:4}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarEdicao}>SALVAR</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditar(null)}>Cancelar</button>
@@ -640,45 +391,8 @@ function PainelUsuarios() {
                   onChange={v=>setForm({...form,whatsapp:v})} />
               </div>
             </div>
-            {/* Seleção de abas */}
-            <div style={{marginTop:8}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-                <label className="acn-label" style={{margin:0}}>Abas com Acesso</label>
-                <div style={{display:'flex',gap:4}}>
-                  <button className="acn-btn" style={{background:'#1e293b',fontSize:9,padding:'2px 8px'}}
-                    onClick={()=>setForm(f=>({...f,abas_permitidas:TODAS_ABAS.map(a=>a.id)}))}>Marcar Todas</button>
-                  <button className="acn-btn" style={{background:'#94a3b8',fontSize:9,padding:'2px 8px'}}
-                    onClick={()=>setForm(f=>({...f,abas_permitidas:['dashboard']}))}>Limpar</button>
-                </div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:4}}>
-                {TODAS_ABAS.map(aba => (
-                  <label key={aba.id} style={{
-                    display:'flex',alignItems:'center',gap:5,padding:'4px 7px',
-                    border:'1px solid',borderRadius:3,cursor:'pointer',fontSize:10,
-                    borderColor: form.abas_permitidas.includes(aba.id)?'#1e293b':'#e5e7eb',
-                    background: form.abas_permitidas.includes(aba.id)?'#f0f9ff':'transparent',
-                    fontWeight: form.abas_permitidas.includes(aba.id)?700:400,
-                  }}>
-                    <input type="checkbox" checked={form.abas_permitidas.includes(aba.id)}
-                      onChange={()=>aba.id!=='dashboard'&&toggleAba(aba.id)}
-                      style={{accentColor:'#1e293b'}} disabled={aba.id==='dashboard'} />
-                    {aba.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-            {/* Permissões extras no formulário de criação */}
-            <div style={{marginTop:8,padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:6,background:'#fafafa'}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:5}}>Permissões Extras</div>
-              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer',marginBottom:5}}>
-                <input type="checkbox"
-                  checked={form.pode_autorizar_rh}
-                  onChange={e=>setForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
-                  style={{accentColor:'#7c3aed'}} />
-                <span>🖨️ Pode emitir Autorizações de Saída/Entrada (RH)</span>
-              </label>
-            </div>
+            {/* Abas e permissões extras agrupadas como o menu (24/11/2026) */}
+            <div style={{marginTop:8}}><PermissoesDoUsuario valor={form} onChange={patch=>setForm(f=>({...f,...patch}))} /></div>
             <button className="acn-btn" style={{background:'#22c55e',width:'100%',padding:'7px',marginTop:10}} onClick={salvar}>
               Criar Usuario
             </button>
@@ -709,12 +423,10 @@ function PainelUsuarios() {
                           </span>
                         </td>
                         <td>
-                          <span style={{fontSize:9,color:'#64748b'}}>
-                            {abas.length === TODAS_ABAS.length
-                              ? <span style={{color:'#22c55e',fontWeight:700}}>Todas ({abas.length})</span>
-                              : <span style={{color:'#3b82f6',fontWeight:700}}>{abas.length} abas</span>
-                            }
-                          </span>
+                          <div className="acn-perm-lista">
+                            <span className="acn-perm-lista-abas">{contarAbas(abas) >= IDS_DAS_ABAS.length ? 'Todas as abas' : contarAbas(abas) + ' abas'}</span>
+                            {resumoDosExtras(u).map(t => <Tag key={t}>{t}</Tag>)}
+                          </div>
                         </td>
                         <td>
                           <span className="acn-badge" style={{background: u.ativo?'#22c55e':'#ef4444'}}>
@@ -730,8 +442,6 @@ function PainelUsuarios() {
                             </button>
                             <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
                               onClick={()=>abrirEditar(u)}>✏️ Editar</button>
-                            <button className="acn-btn" style={{background:'#6366f1',fontSize:9}}
-                              onClick={()=>setModalPerm(u)}>Permissões</button>
                             <button className="acn-btn"
                               style={{background: u.ativo?'#ef4444':'#22c55e',fontSize:9}}
                               onClick={()=>toggleAtivo(u)}>
