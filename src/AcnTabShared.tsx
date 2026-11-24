@@ -33,7 +33,7 @@ import { ehEnvioDeMaterial, setorPadraoDaVenda } from './SeparacaoEnvio';
 import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
-import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente } from './utils/permissoes';
+import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente, podeCopiarOp } from './utils/permissoes';
 import CopiarOpModal from './CopiarOpModal';
 import TrocarFluxoModal from './TrocarFluxoModal';
 import { excluirOpComMotivo, podeExcluirOp } from './ExclusaoDeOp';
@@ -1067,7 +1067,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: `Resumo do lote (${qtdLote})`, icone: mdiFormatListNumbered, onClick: () => setVerResumoLote(true), oculto: qtdLote <= 1 },
               { rotulo: 'Alterar o número da OP', icone: mdiPencilOutline, onClick: trocarNumero, oculto: !podeTrocarNumero },
               // quem abre OP (Admin, gerentes e a equipe de Comercial/CRM e Licitações, que valem como gerente do setor); a cópia nasce como OP nova, no PCP
-              { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
+              { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !podeCopiarOp(usuario) },
               // só a unidade de um lote (o fluxo misto nasce no lote) e quem tem poder de gerente; a janela confere a etapa e explica quando não dá
               { rotulo: 'Trocar o fluxo desta unidade', icone: mdiSwapHorizontal, onClick: () => setTrocandoFluxo(true), oculto: !(temPoderDeGerente(usuario) && qtdLote > 1 && ehUnidadeDeLote(opl?.opl)) },
               // qualquer pessoa pede (decidido em 22/11/2026): película, plotagem, pintura, lavagem e afins feitos por quem é de fora; o quadro está em Serviços de terceiros

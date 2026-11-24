@@ -31,6 +31,8 @@ const AVISO_SEM_NOTA = 'Informe ao menos uma nota: a NF-e (material) ou a NFS-e 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
+import { podeCorrigirDataDaNota } from './utils/permissoes';
+
 export default function FiscalTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [ordensOS, setOrdensOS] = useState([]);
@@ -646,8 +648,8 @@ export default function FiscalTab({ currentUser }) {
         </div>
       </div>
       <div className="acn-fis-barra">
-        <Botao pequeno icone={mdiCalendarEditOutline} onClick={() => setCorrigindoData({})}
-          title="Procura uma nota já emitida (também as de OP já entregue) e corrige o dia em que ela foi emitida">Corrigir a data de uma nota emitida</Botao>
+        {podeCorrigirDataDaNota(currentUser) && <Botao pequeno icone={mdiCalendarEditOutline} onClick={() => setCorrigindoData({})}
+          title="Procura uma nota já emitida (também as de OP já entregue) e corrige o dia em que ela foi emitida">Corrigir a data de uma nota emitida</Botao>}
       </div>
 
       {/* AGUARDANDO EMISSÃO */}
@@ -807,7 +809,7 @@ export default function FiscalTab({ currentUser }) {
                         <Botao pequeno variante="primario" icone={mdiTruckCheckOutline} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>Confirmar entrega</Botao>
                         <MenuAcoes rotulo="Mais ações da OP" itens={[
                           { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
-                          { rotulo: 'Corrigir a data da nota', icone: mdiCalendarEditOutline, onClick: () => setCorrigindoData({ op: o }) },
+                          { rotulo: 'Corrigir a data da nota', icone: mdiCalendarEditOutline, onClick: () => setCorrigindoData({ op: o }), oculto: !podeCorrigirDataDaNota(currentUser) },
                         ]} />
                       </div>
                     </td>

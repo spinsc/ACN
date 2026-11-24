@@ -96,6 +96,14 @@ export const GRUPOS_DE_EXTRAS: GrupoDeExtras[] = [
     { chave: 'autorizar_rh', campo: 'pode_autorizar_rh', rotulo: 'Emitir autorizações (RH)' },
     { chave: 'rh_comissoes', lista: 'permissoes_rh', valor: 'comissoes_tecnicos', rotulo: 'Ver só as Comissões de técnicos', ajuda: 'Só vale se a aba RH acima NÃO estiver marcada: com a aba RH a pessoa já vê as comissões dentro dela.' },
   ] },
+  { titulo: 'Ações sensíveis (soma ao que o perfil já faz)', extras: [
+    { chave: 'excluir_op', campo: 'pode_excluir_op', rotulo: 'Excluir OP', ajuda: 'Só Admin e gerentes excluem OP por padrão. Sempre com motivo; a OP não é apagada, só some das telas.' },
+    { chave: 'numero_op', campo: 'pode_alterar_numero_op', rotulo: 'Alterar o nº da OP e o PV já preenchidos', ajuda: 'Por padrão: Admin, gerentes e a equipe de Comercial, CRM e Licitações. A primeira atribuição do número é livre para todos.' },
+    { chave: 'copiar_op', campo: 'pode_copiar_op', rotulo: 'Copiar OP', ajuda: 'Por padrão: quem tem poder de gerente (Admin, gerentes, Comercial, CRM e Licitações).' },
+    { chave: 'excluir_formacao', campo: 'pode_excluir_formacao', rotulo: 'Excluir qualquer formação de preços', ajuda: 'Por padrão: Admin e gerentes excluem qualquer uma; quem criou exclui só a sua.' },
+    { chave: 'data_nota', campo: 'pode_corrigir_data_nota', rotulo: 'Corrigir a data de uma nota emitida (Fiscal)', ajuda: 'Só Admin, gerentes e quem tem esta caixa corrigem; ter só a aba Fiscal não basta.' },
+    { chave: 'excluir_registros', campo: 'pode_excluir_registros', rotulo: 'Excluir registros (hoje: cadastro de clientes)', ajuda: 'Por padrão só o Admin.' },
+  ] },
   { titulo: 'Telas com edição restrita', extras: [
     { chave: 'postar_inicio', campo: 'pode_postar_inicio', rotulo: 'Postar na tela Início (slides do carrossel e datas da empresa)', ajuda: 'Todo mundo vê a tela Início; só o Admin e quem tem esta caixa edita.' },
     { chave: 'gerir_terceiros', campo: 'pode_gerir_terceiros', rotulo: 'Gerir serviços de terceiros (cadastrar prestadores e tipos de serviço, montar a ordem em lote)', ajuda: 'Prestadores e a ordem em lote: Admin, gerentes e quem tem a aba Adaptação já podem. Os tipos de serviço só o Admin e quem tem esta caixa. O modelo do contrato continua só do Admin.' },

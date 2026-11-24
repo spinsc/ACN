@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { mdiPrinter, mdiDownload } from '@mdi/js';
 import { Botao, Chips } from './Interface';
 import { GRUPOS_DE_ABAS, TODOS_OS_EXTRAS, extraLigada } from './PermissoesCatalogo';
-import { ehAdminOuGerente } from './utils/permissoes';
+import { ehAdminOuGerente, temPoderDeGerente } from './utils/permissoes';
 
 type Celula = 'sim' | 'perfil' | '';   // 'perfil' = a pessoa pode pelo perfil ou por outra regra, sem a caixa marcada
 
@@ -24,6 +24,10 @@ function celulaDaAba(u: any, id: string): Celula {
 function celulaDoExtra(u: any, e: any): Celula {
   if (extraLigada(u, e)) return 'sim';
   if (e.chave === 'postar_inicio' && ehAdmin(u)) return 'perfil';
+  // ações sensíveis: o que já vale pelo perfil (mesmas regras de permissoes.ts)
+  if (['excluir_op', 'excluir_formacao', 'data_nota'].includes(e.chave) && ehAdminOuGerente(u)) return 'perfil';
+  if (['numero_op', 'copiar_op'].includes(e.chave) && temPoderDeGerente(u)) return 'perfil';
+  if (e.chave === 'excluir_registros' && ehAdmin(u)) return 'perfil';
   if (e.chave === 'gerir_terceiros' && (ehAdminOuGerente(u) || abasDe(u).includes('producao') || abasDe(u).length === 0)) return 'perfil';
   return '';
 }

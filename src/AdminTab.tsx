@@ -106,13 +106,13 @@ const PERFIS_PADRAO_RH: Record<string, boolean> = {
 
 function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true });
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true });
   const [showForm, setShowForm] = useState(false);
   const [histPessoa, setHistPessoa] = useState('');   // 24/11/2026: pessoa do botão "Histórico" da linha
   const [visao, setVisao] = useState('lista');   // 24/11/2026: 'lista' (editar) ou 'matriz' (quem tem o quê, só leitura)
   const [loading, setLoading] = useState(false);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true, gestor_id: null });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
   // Etapa 16c (10/10/2026): definir a senha de OUTRA pessoa exige a senha de quem está definindo (um Admin) — conferida no servidor, que guarda só o resumo da nova.
   const [senhaAdmin, setSenhaAdmin] = useState('');
@@ -156,7 +156,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, pode_gerir_terceiros: u.pode_gerir_terceiros === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, pode_gerir_terceiros: u.pode_gerir_terceiros === true, pode_excluir_op: u.pode_excluir_op === true, pode_alterar_numero_op: u.pode_alterar_numero_op === true, pode_excluir_formacao: u.pode_excluir_formacao === true, pode_copiar_op: u.pode_copiar_op === true, pode_excluir_registros: u.pode_excluir_registros === true, pode_corrigir_data_nota: u.pode_corrigir_data_nota === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -196,6 +196,13 @@ function PainelUsuarios() {
       pode_postar_inicio: !!editForm.pode_postar_inicio,
       // Serviços de terceiros (24/11/2026): quem cadastra prestadores e monta a ordem em lote além de Admin, gerentes e Adaptação (o banco confere pela marca)
       pode_gerir_terceiros: !!editForm.pode_gerir_terceiros,
+      // Ações sensíveis por pessoa (24/11/2026, etapa 5 da revisão de permissões); os bancos conferem as marcas de excluir OP, nº da OP e excluir formação
+      pode_excluir_op: !!editForm.pode_excluir_op,
+      pode_alterar_numero_op: !!editForm.pode_alterar_numero_op,
+      pode_excluir_formacao: !!editForm.pode_excluir_formacao,
+      pode_copiar_op: !!editForm.pode_copiar_op,
+      pode_excluir_registros: !!editForm.pode_excluir_registros,
+      pode_corrigir_data_nota: !!editForm.pode_corrigir_data_nota,
       permissoes_crm: editForm.permissoes_crm,
       permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
@@ -239,6 +246,7 @@ function PainelUsuarios() {
         pode_deletar_anexos: u.pode_deletar_anexos === true,
         pode_postar_inicio: u.pode_postar_inicio === true,
         pode_gerir_terceiros: u.pode_gerir_terceiros === true,
+        pode_excluir_op: u.pode_excluir_op === true, pode_alterar_numero_op: u.pode_alterar_numero_op === true, pode_excluir_formacao: u.pode_excluir_formacao === true, pode_copiar_op: u.pode_copiar_op === true, pode_excluir_registros: u.pode_excluir_registros === true, pode_corrigir_data_nota: u.pode_corrigir_data_nota === true,
         ultimo_login_anterior: null,
       }));
     } catch (e: any) { alert('Erro: ' + e.message); return; }
