@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -1111,7 +1112,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // gravava tudo, inclusive esses vazios que a pessoa nunca viu (achado em 29/09/2026, na OP
     // 1482.1502: o banco tinha o resumo e a origem, a tela abria em branco). Por isso o formulário
     // parte da OP INTEIRA, lida do banco na hora de abrir.
-    const { data: completa, error } = await supabase.from('oples').select('*').eq('id', o.id).maybeSingle();
+// V2c do "ver valores no banco" (24/11/2026): o valor da OP mora em `oples_valores`; a leitura que alimenta formulário, cópia e conta de divisão o traz de lá (nulo se a pessoa não vê)
+    const { data: lidaEdicao, error } = await supabase.from('oples').select('*').eq('id', o.id).maybeSingle();
+    const completa = lidaEdicao ? (await anexarValoresDaOp(lidaEdicao)).op : lidaEdicao;
     if (error || !completa) {
       mostrarAviso(`Não foi possível abrir a edição\n${error?.message || 'A OP não foi encontrada — pode ter sido excluída. Atualize a tela.'}`, 'erro');
       return;
@@ -1168,7 +1171,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           alert(`Já existe uma OP "${baseOpl}/02" — parece que esta OP já foi parcialmente desmembrada antes. Ajuste manualmente.`);
           return;
         }
-        const { data: completa, error: errFetch } = await supabase.from('oples').select('*').eq('id', oplEditando.id).single();
+        const { data: lidaDesmembra, error: errFetch } = await supabase.from('oples').select('*').eq('id', oplEditando.id).single();
+        const valoresDesmembra = lidaDesmembra ? await anexarValoresDaOp(lidaDesmembra) : null;
+        const completa = valoresDesmembra?.op;
+        if (valoresDesmembra?.erro) { setOplSalvando(false); alert('Não foi possível ler o valor da OP para dividir entre as unidades: ' + valoresDesmembra.erro + '. Nada foi criado.'); return; }
         if (errFetch || !completa) {
           setOplSalvando(false);
           alert('Erro ao buscar dados completos da OP: ' + (errFetch?.message || 'não encontrada'));

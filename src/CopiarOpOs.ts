@@ -11,6 +11,7 @@
 // Uma coluna nova de andamento que alguém criar amanhã nunca pode vir junto por esquecimento; a dos dados da venda entra aqui de propósito, com a decisão registrada.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { hojeISO } from './Interface';
 
 export const MAX_COPIAS = 30;
@@ -157,8 +158,12 @@ export async function copiarOp({ origem, numeros, usuario, crmPorNumero }: { ori
   if (!numeros.length) return vazio('Informe o número de pelo menos uma cópia.');
   if (numeros.length > MAX_COPIAS) return vazio(`No máximo ${MAX_COPIAS} cópias de uma vez.`);
   // a OP de origem é relida inteira: quem chama pode ter só a linha de uma lista
-  const { data: lida, error: erroOrigem } = await supabase.from('oples').select('*').eq('id', origem.id).maybeSingle();
-  if (erroOrigem || !lida) return vazio(`Não foi possível ler a OP de origem (${erroOrigem?.message || 'não encontrada'}). Nada foi criado.`);
+  const { data: lidaSemValor, error: erroOrigem } = await supabase.from('oples').select('*').eq('id', origem.id).maybeSingle();
+  if (erroOrigem || !lidaSemValor) return vazio(`Não foi possível ler a OP de origem (${erroOrigem?.message || 'não encontrada'}). Nada foi criado.`);
+  // o valor e a mão de obra da OP vêm de `oples_valores` (V2c, 24/11/2026); leitura recusada barra a cópia, senão ela nasceria sem valor
+  const comValor = await anexarValoresDaOp(lidaSemValor);
+  if (comValor.erro) return vazio(`Não foi possível ler o valor da OP de origem (${comValor.erro}). Nada foi criado.`);
+  const lida = comValor.op;
   const { data: existentes, error: erroExiste } = await supabase.from('oples').select('opl').in('opl', numeros);
   if (erroExiste) return vazio(`Não foi possível conferir se os números já existem (${erroExiste.message}). Nada foi criado.`);
   if (existentes?.length) return vazio(`Já existe OP com este número: ${existentes.map((e: any) => e.opl).join(', ')}. Use números diferentes.`);

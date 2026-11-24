@@ -10,6 +10,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { mdiSwapHorizontal } from '@mdi/js';
 import Icone from './Icone';
 import { supabase } from './supabaseClient';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { Botao, Faixa } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { fluxoLabel, soEnvio } from './FluxoEntrega';
@@ -40,7 +41,8 @@ export default function TrocarFluxoModal({ op, currentUser, onClose, onTrocada }
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const { data: fresca, error: e1 } = await supabase.from('oples').select('*').eq('id', op.id).maybeSingle();
+      const { data: frescaSemValor, error: e1 } = await supabase.from('oples').select('*').eq('id', op.id).maybeSingle();
+      const fresca = frescaSemValor ? (await anexarValoresDaOp(frescaSemValor)).op : frescaSemValor;   // V2c: a mão de obra da unidade vem de `oples_valores`
       if (!vivo) return;
       if (e1 || !fresca) { setCarga(c => ({ ...c, pronto: true, erro: `Não foi possível ler a OP ${op.opl} (${e1?.message || 'sem resposta'}).` })); return; }
       const [{ lista, erro: e2 }, rem] = await Promise.all([lerOutrasUnidadesDoLote(fresca), lerRemessasAtivasDe([String(fresca.id)])]);

@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { logChange } from './AuditSystem';
 import { FLUXOS, soEnvio, terminaEmEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -207,7 +208,8 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
     }
     setSalvando(false);
     if (falhas.length) { alert('Não foi possível salvar:\n' + falhas.join('\n')); return; }
-    const { data } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
+    const { data: dadosSalvos } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
+    const data = dadosSalvos ? (await anexarValoresDaOp(dadosSalvos)).op : dadosSalvos;   // V2c: o valor vem de `oples_valores`
     onSalvo(data || { ...opl });
   };
   return (
