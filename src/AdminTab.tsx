@@ -16,7 +16,7 @@ import PainelFeriados from './FeriadosAdmin';
 import PermissoesDoUsuario from './PermissoesDoUsuario';
 import MatrizDePermissoes from './MatrizDePermissoes';
 import { Tag, Chips } from './Interface';
-import { resumoDosExtras, IDS_DAS_ABAS } from './PermissoesCatalogo';
+import { resumoDosExtras, IDS_DAS_ABAS, extrasMarcadosDoForm, formDosExtras, ligarExtrasDoModelo, contarExtrasDoModelo } from './PermissoesCatalogo';
 // só conta as abas que a tela de permissões mostra (24/11/2026): ids guardados fora do catálogo, como comissoes_tecnicos, não entram na conta
 const contarAbas = (abas: string[]) => IDS_DAS_ABAS.filter(id => abas.includes(id)).length;
 import { PainelFipeSync } from './Veiculos';
@@ -132,7 +132,7 @@ function PainelUsuarios() {
 
   const fetchPerfisDB = async () => {
     try {
-      const { data } = await supabase.from('admin_perfis_sistema').select('nome, abas_permitidas, pode_autorizar_rh');
+      const { data } = await supabase.from('admin_perfis_sistema').select('nome, abas_permitidas, pode_autorizar_rh, extras');
       setPerfisDB(data || []);
     } catch {}
   };
@@ -141,10 +141,12 @@ function PainelUsuarios() {
     const pDB = perfisDB.find((p: any) => p.nome === nomePerfil);
     const abas: string[] = pDB ? (pDB.abas_permitidas || ['dashboard']) : (PERFIS_PADRAO_ABAS[nomePerfil] || ['dashboard']);
     const autoRH: boolean = pDB ? (pDB.pode_autorizar_rh || false) : (PERFIS_PADRAO_RH[nomePerfil] || false);
+    // 24/11/2026: o modelo também liga as permissões extras que guarda (só liga: nunca tira as que a pessoa já tem)
+    const extras = pDB?.extras || {};
     if (target === 'form') {
-      setForm(f => ({ ...f, abas_permitidas: abas, pode_autorizar_rh: autoRH }));
+      setForm(f => ({ ...f, abas_permitidas: abas, pode_autorizar_rh: autoRH || extras.pode_autorizar_rh === true, ...ligarExtrasDoModelo(f, extras) }));
     } else {
-      setEditForm(f => ({ ...f, abas_permitidas: abas, pode_autorizar_rh: autoRH }));
+      setEditForm(f => ({ ...f, abas_permitidas: abas, pode_autorizar_rh: autoRH || extras.pode_autorizar_rh === true, ...ligarExtrasDoModelo(f, extras) }));
     }
   };
 
@@ -476,7 +478,7 @@ function PainelPerfis() {
   const [perfis, setPerfis] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null); // {mode:'novo'|'editar', id?, nome?}
-  const [form, setForm] = useState({ nome:'', descricao:'', abas_permitidas:['dashboard'], pode_autorizar_rh:false });
+  const [form, setForm] = useState({ nome:'', descricao:'', abas_permitidas:['dashboard'], pode_autorizar_rh:false, ...formDosExtras({}) });
   const [salvando, setSalvando] = useState(false);
   const [importando, setImportando] = useState(false);
 
@@ -492,12 +494,12 @@ function PainelPerfis() {
   };
 
   const abrirNovo = () => {
-    setForm({ nome:'', descricao:'', abas_permitidas:['dashboard'], pode_autorizar_rh:false });
+    setForm({ nome:'', descricao:'', abas_permitidas:['dashboard'], pode_autorizar_rh:false, ...formDosExtras({}) });
     setModal({ mode:'novo' });
   };
 
   const abrirEditar = (p) => {
-    setForm({ nome:p.nome, descricao:p.descricao||'', abas_permitidas:Array.isArray(p.abas_permitidas)?p.abas_permitidas:['dashboard'], pode_autorizar_rh:p.pode_autorizar_rh||false });
+    setForm({ nome:p.nome, descricao:p.descricao||'', abas_permitidas:Array.isArray(p.abas_permitidas)?p.abas_permitidas:['dashboard'], pode_autorizar_rh:p.pode_autorizar_rh||false, ...formDosExtras({ ...(p.extras||{}), pode_autorizar_rh: p.pode_autorizar_rh === true || p.extras?.pode_autorizar_rh === true }) });
     setModal({ mode:'editar', id:p.id, nome:p.nome });
   };
 
@@ -515,13 +517,13 @@ function PainelPerfis() {
       if (modal.mode === 'novo') {
         const { error } = await supabase.from('admin_perfis_sistema').insert([{
           nome: form.nome.trim(), descricao: form.descricao,
-          abas_permitidas: form.abas_permitidas, pode_autorizar_rh: form.pode_autorizar_rh,
+          abas_permitidas: form.abas_permitidas, pode_autorizar_rh: form.pode_autorizar_rh, extras: extrasMarcadosDoForm(form),
         }]);
         if (error) { alert('Erro: ' + error.message); return; }
       } else {
         const { error } = await supabase.from('admin_perfis_sistema').update({
           nome: form.nome.trim(), descricao: form.descricao,
-          abas_permitidas: form.abas_permitidas, pode_autorizar_rh: form.pode_autorizar_rh,
+          abas_permitidas: form.abas_permitidas, pode_autorizar_rh: form.pode_autorizar_rh, extras: extrasMarcadosDoForm(form),
         }).eq('id', modal.id);
         if (error) { alert('Erro: ' + error.message); return; }
       }
@@ -584,6 +586,7 @@ function PainelPerfis() {
                 <th>Descrição</th>
                 <th style={{textAlign:'center'}}>Abas Liberadas</th>
                 <th style={{textAlign:'center'}}>Autoriza RH</th>
+                <th style={{textAlign:'center'}}>Outras extras</th>
                 <th>Ações</th>
               </tr></thead>
               <tbody>
@@ -604,6 +607,7 @@ function PainelPerfis() {
                         ? <span style={{color:'#7c3aed',fontWeight:700,fontSize:13}}>✓</span>
                         : <span style={{color:'#e2e8f0'}}>—</span>}
                     </td>
+                    <td style={{textAlign:'center',fontSize:11,color:'#475569'}}>{Math.max(0, contarExtrasDoModelo(p.extras) - (p.extras?.pode_autorizar_rh === true ? 1 : 0)) || '—'}</td>
                     <td>
                       <div style={{display:'flex',gap:4}}>
                         <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
@@ -623,7 +627,7 @@ function PainelPerfis() {
       {/* MODAL CRIAR/EDITAR PERFIL */}
       {modal && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:560,maxHeight:'92vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth:760,maxHeight:'92vh',overflowY:'auto'}}>
             <div className="modal-title">
               {modal.mode==='novo' ? '+ Novo Perfil de Acesso' : `✏️ Editar Perfil — ${modal.nome}`}
             </div>
@@ -641,49 +645,9 @@ function PainelPerfis() {
               </div>
             </div>
 
-            {/* Seleção de abas */}
-            <div style={{marginBottom:10}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                <label className="acn-label" style={{margin:0}}>Abas com Acesso</label>
-                <div style={{display:'flex',gap:4}}>
-                  <button className="acn-btn" style={{background:'#1e293b',fontSize:9,padding:'2px 8px'}}
-                    onClick={()=>setForm(f=>({...f,abas_permitidas:TODAS_ABAS.map(a=>a.id)}))}>Todas</button>
-                  <button className="acn-btn" style={{background:'#94a3b8',fontSize:9,padding:'2px 8px'}}
-                    onClick={()=>setForm(f=>({...f,abas_permitidas:['dashboard']}))}>Limpar</button>
-                </div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(155px,1fr))',gap:4}}>
-                {TODAS_ABAS.map(aba => {
-                  const sel = form.abas_permitidas.includes(aba.id);
-                  return (
-                    <label key={aba.id} style={{
-                      display:'flex',alignItems:'center',gap:5,padding:'4px 7px',
-                      border:'1px solid',borderRadius:3,fontSize:10,
-                      cursor:aba.id==='dashboard'?'default':'pointer',
-                      borderColor: sel?'#166534':'#e5e7eb',
-                      background: sel?'#f0fdf4':'transparent',
-                      fontWeight: sel?700:400,
-                    }}>
-                      <input type="checkbox" checked={sel}
-                        onChange={()=>toggleAba(aba.id)}
-                        style={{accentColor:'#166534'}} disabled={aba.id==='dashboard'} />
-                      {aba.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Permissões extras */}
-            <div style={{padding:'8px 10px',border:'1px solid #ede9fe',borderRadius:6,background:'#faf5ff',marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',textTransform:'uppercase',marginBottom:6}}>Permissões Extras</div>
-              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer'}}>
-                <input type="checkbox"
-                  checked={form.pode_autorizar_rh}
-                  onChange={e=>setForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
-                  style={{accentColor:'#7c3aed'}} />
-                <span>🖨️ Pode emitir Autorizações de Saída/Entrada (RH)</span>
-              </label>
+            {/* 24/11/2026: o modelo usa o mesmo bloco do cadastro de usuário (telas + permissões extras) */}
+            <div style={{marginBottom:12}}>
+              <PermissoesDoUsuario modelo valor={form} onChange={patch=>setForm(f=>({...f,...patch}))} />
             </div>
 
             <div style={{display:'flex',gap:8}}>

@@ -124,3 +124,46 @@ export function mudarExtra(u: any, e: Extra, ligar: boolean): Record<string, any
 export function resumoDosExtras(u: any): string[] {
   return TODOS_OS_EXTRAS.filter(e => e.ligadaPorPadrao ? !extraLigada(u, e) : extraLigada(u, e)).map(e => e.ligadaPorPadrao ? 'Sem ver valores' : e.rotulo.replace(/ \(.*$/, ''));
 }
+
+// ── Modelos de perfil (admin_perfis_sistema.extras; 24/11/2026) ────────────────────────────────────────────────────────────────────────────
+// O modelo guarda só o que LIGA ({campo: true, permissoes_crm: [...], permissoes_rh: [...]}). Aplicar o modelo a uma pessoa liga estas permissões e NUNCA tira as que ela já tem:
+// permissões como "aprovar compra" são dadas pessoa a pessoa, e um perfil sem a caixa não pode apagá-las. (As abas continuam sendo substituídas, como sempre foram.)
+// "Ver valores" fica fora do modelo: a caixa vem ligada para todos e o modelo só liga.
+const EXTRAS_DO_MODELO = TODOS_OS_EXTRAS.filter(e => !e.ligadaPorPadrao);
+
+/** As caixas marcadas no formulário do modelo, no formato guardado. */
+export function extrasMarcadosDoForm(form: any): Record<string, any> {
+  const r: Record<string, any> = {};
+  for (const e of EXTRAS_DO_MODELO) {
+    if (e.lista) { const v = Array.isArray(form?.[e.lista]) ? form[e.lista] : []; if (v.length) r[e.lista] = Array.from(new Set([...(r[e.lista] || []), ...v])); }
+    else if (form?.[e.campo as string] === true) r[e.campo as string] = true;
+  }
+  return r;
+}
+
+/** O formulário do modelo a partir do que está guardado. */
+export function formDosExtras(extras: any): Record<string, any> {
+  const f: Record<string, any> = { permissoes_crm: [], permissoes_rh: [] };
+  for (const e of EXTRAS_DO_MODELO) if (!e.lista) f[e.campo as string] = extras?.[e.campo as string] === true;
+  if (Array.isArray(extras?.permissoes_crm)) f.permissoes_crm = extras.permissoes_crm;
+  if (Array.isArray(extras?.permissoes_rh)) f.permissoes_rh = extras.permissoes_rh;
+  return f;
+}
+
+/** O que o modelo liga numa pessoa (o formulário dela é `u`): só acrescenta. */
+export function ligarExtrasDoModelo(u: any, extras: any): Record<string, any> {
+  const patch: Record<string, any> = {};
+  for (const e of EXTRAS_DO_MODELO) {
+    if (e.lista) continue;
+    if (extras?.[e.campo as string] === true) patch[e.campo as string] = true;
+  }
+  for (const lista of ['permissoes_crm', 'permissoes_rh']) {
+    if (Array.isArray(extras?.[lista]) && extras[lista].length) patch[lista] = Array.from(new Set([...(Array.isArray(u?.[lista]) ? u[lista] : []), ...extras[lista]]));
+  }
+  return patch;
+}
+
+/** Quantas permissões extras o modelo liga (para a lista de perfis). */
+export const contarExtrasDoModelo = (extras: any): number =>
+  EXTRAS_DO_MODELO.filter(e => e.lista ? false : extras?.[e.campo as string] === true).length
+  + (Array.isArray(extras?.permissoes_crm) ? extras.permissoes_crm.length : 0) + (Array.isArray(extras?.permissoes_rh) ? extras.permissoes_rh.length : 0);

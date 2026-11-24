@@ -5,7 +5,7 @@ import React from 'react';
 import { Botao } from './Interface';
 import { GRUPOS_DE_ABAS, GRUPOS_DE_EXTRAS, IDS_DAS_ABAS, TELAS_PARA_TODOS, extraLigada, mudarExtra } from './PermissoesCatalogo';
 
-export default function PermissoesDoUsuario({ valor, onChange }: { valor: any; onChange: (patch: any) => void }) {
+export default function PermissoesDoUsuario({ valor, onChange, modelo }: { valor: any; onChange: (patch: any) => void; modelo?: boolean }) {
   const abas: string[] = Array.isArray(valor?.abas_permitidas) ? valor.abas_permitidas : ['dashboard'];
   // ids guardados que o catálogo não mostra (ex.: 'comissoes_tecnicos', que é uma permissão do RH): nunca são apagados por aqui
   const fora = abas.filter(a => !IDS_DAS_ABAS.includes(a));
@@ -19,7 +19,7 @@ export default function PermissoesDoUsuario({ valor, onChange }: { valor: any; o
       <div className="acn-perm-secao">
         <div className="acn-perm-cab">
           <div>
-            <div className="acn-perm-tit">Telas que a pessoa pode abrir</div>
+            <div className="acn-perm-tit">{modelo ? 'Telas que o perfil libera' : 'Telas que a pessoa pode abrir'}</div>
             <div className="acn-perm-sub">{marcadas} de {IDS_DAS_ABAS.length} liberadas</div>
           </div>
           <div className="acn-perm-botoes">
@@ -57,14 +57,14 @@ export default function PermissoesDoUsuario({ valor, onChange }: { valor: any; o
         <div className="acn-perm-cab">
           <div>
             <div className="acn-perm-tit">Permissões extras</div>
-            <div className="acn-perm-sub">Coisas que a pessoa pode fazer além de abrir a tela</div>
+            <div className="acn-perm-sub">{modelo ? 'Aplicar o perfil LIGA estas permissões na pessoa e nunca tira as que ela já tem' : 'Coisas que a pessoa pode fazer além de abrir a tela'}</div>
           </div>
         </div>
         <div className="acn-perm-grupos">
-          {GRUPOS_DE_EXTRAS.map(g => (
+          {GRUPOS_DE_EXTRAS.filter(g => !modelo || g.extras.some(e => !e.ligadaPorPadrao)).map(g => (
             <fieldset key={g.titulo} className="acn-perm-grupo">
               <legend className="acn-perm-legenda">{g.titulo}</legend>
-              {g.extras.map(e => (
+              {g.extras.filter(e => !(modelo && e.ligadaPorPadrao)).map(e => (
                 <div key={e.chave} className="acn-perm-extra">
                   <label className={`acn-perm-item${extraLigada(valor, e) ? ' on' : ''}`}>
                     <input type="checkbox" checked={extraLigada(valor, e)} onChange={ev => onChange(mudarExtra(valor, e, ev.target.checked))} />
