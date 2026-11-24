@@ -50,6 +50,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel,
   mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip, mdiArrowDown } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
+import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
 import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
@@ -674,7 +675,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const contatosHoje   = ops.filter(o =>
     o.prox_contato === hoje &&
     o.funil === 'venda_direta' &&
-    o.responsavel_nome === currentUser?.nome
+    ehEu(currentUser, o, 'responsavel_nome')
   );
   // faixa de markup do card (a mesma do selo: corte do tipo de negócio dele; sem preço formado = "neutro")
   const faixaDoCard = (o: any) => idFaixaMarkup(markupPorOp[o.id]?.pct, o.tipo_negocio ? bandasMarkup[o.tipo_negocio] : undefined);
@@ -2148,8 +2149,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (errCard) { mostrarAviso(`Não foi possível enviar a proposta\n${errCard.message}`, 'erro'); setSalvandoEnviado(false); return; }
 
     let respEmail = currentUser?.email;
-    if (op.responsavel_nome && op.responsavel_nome !== currentUser?.nome) {
-      const { data: respUser } = await supabase.from('auth_usuarios').select('email').eq('nome', op.responsavel_nome).maybeSingle();
+    if (op.responsavel_nome && !ehEu(currentUser, op, 'responsavel_nome')) {
+      // o responsável é achado pelo ID quando o card o traz (renomear a pessoa não quebra); sem ID, pelo nome, como antes
+      const { data: respUser } = await (op.responsavel_nome_pessoa_id ? supabase.from('auth_usuarios').select('email').eq('id', op.responsavel_nome_pessoa_id) : supabase.from('auth_usuarios').select('email').eq('nome', op.responsavel_nome)).maybeSingle();
       if (respUser?.email) respEmail = respUser.email;
     }
     const { error: errAgenda } = await supabase.from('agenda_compromissos').insert([{

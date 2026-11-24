@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
@@ -145,7 +146,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // 7.x (13/10/2026): o selo contava toda mensagem não lida do sistema — inclusive a de contato de outro operador (que a pessoa nem vê) e a sem contato (que nenhuma tela mostra e por isso nunca zerava)
   useEffect(() => {
     if (falhas.contatos && contatos.length === 0) return;   // os contatos não chegaram: não zera o selo por isso
-    const visiveis = new Set(contatos.filter(c => veTodos || c.operador_nome === currentUser?.nome).map(c => c.id));
+    const visiveis = new Set(contatos.filter(c => veTodos || ehEu(currentUser, c, 'operador_nome')).map(c => c.id));
     const naoLidas = waMsgs.filter(m => !m.lida && m.contato_id && visiveis.has(m.contato_id)).length;
     window.dispatchEvent(new CustomEvent('crm:wa-unread-count', { detail: { count: naoLidas } }));
   }, [waMsgs, contatos, falhas]);
@@ -160,7 +161,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
   // ─── filtros ───
   const contatosFiltrados = contatos.filter(c => {
-    if (!veTodos && c.operador_nome !== currentUser?.nome) return false;
+    if (!veTodos && !ehEu(currentUser, c, 'operador_nome')) return false;
     if (filtroOp && c.operador_nome !== filtroOp) return false;
     if (busca) return combinaBusca([c.nome, c.empresa, c.cargo, c.whatsapp, c.email], busca);
     return true;
@@ -401,7 +402,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               onClick={() => { setFormC({ ...VAZIO_CONTATO, ...c }); setModalContato(c); }}>
               ✏️ Editar
             </Botao>
-            {(veTodos || c.operador_nome === currentUser?.nome) && (
+            {(veTodos || ehEu(currentUser, c, 'operador_nome')) && (
               <Botao variante="perigo" pequeno onClick={() => excluirContato(c)}>✕</Botao>
             )}
           </div>
