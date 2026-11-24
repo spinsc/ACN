@@ -22,6 +22,7 @@ import { SecaoPecasGarantia, SecaoApontamentos } from './GarantiaPecas';
 import { ProjetoDeOrigem } from './GarantiaProjeto';
 import { mdiClose, mdiCartOutline, mdiClipboardPlusOutline } from '@mdi/js';
 import { podeGerarOsDaGarantia, cobrancaDaOS, ROTULOS_COBRANCA } from './SacFluxo';
+import { CampoMoeda } from './CampoMoeda';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -228,7 +229,7 @@ function SecaoExecucao({ g, conduz, executar, ocupado, currentUser }: any) {
           ) : (
             <div className="acn-gar-grade">
               <div><label className="acn-label">Terceiro (empresa ou pessoa) *</label><input className="acn-input" aria-label="Terceiro" value={terceiro} onChange={ev => setTerceiro(ev.target.value)} /></div>
-              <div><label className="acn-label">Custo previsto (R$)</label><input className="acn-input" aria-label="Custo previsto do terceiro" inputMode="decimal" placeholder="opcional por enquanto" value={custo} onChange={ev => setCusto(ev.target.value)} /></div>
+              <div><label className="acn-label">Custo previsto (R$)</label><CampoMoeda className="acn-input" aria-label="Custo previsto do terceiro" placeholder="opcional por enquanto" value={custo} onChange={reais => setCusto(reais)} /></div>
             </div>
           )}
           <div className="acn-dev-acoes">

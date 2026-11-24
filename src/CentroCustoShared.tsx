@@ -20,6 +20,7 @@ import Icone from './Icone';
 import { mdiReceiptTextOutline, mdiPencilOutline, mdiCartOutline, mdiContentSaveOutline } from '@mdi/js';
 import { AnexosDespesa } from './DespesaAnexos';
 import { conferirMesesAbertos, mesDe, mesDoLancamento, mesDaCompra } from './CentroCustoFechamento';
+import { CampoMoeda } from './CampoMoeda';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
   let q = supabase.from('centros_custo').select('*').order('codigo');
@@ -327,8 +328,8 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
           )}
           <div className="form-group">
             <label className="acn-label" htmlFor="mm-valor">Valor desta Medição (R$) *</label>
-            <input id="mm-valor" className="acn-input" placeholder="0,00" inputMode="decimal"
-              value={valor} onChange={e => setValor(e.target.value)} autoFocus />
+            <CampoMoeda id="mm-valor" className="acn-input" placeholder="0,00"
+              value={valor} onChange={reais => setValor(reais)} autoFocus />
           </div>
           {vNum > 0 && excedente > 0 && (
             <Faixa tom="atencao">Isso ultrapassa o valor total negociado em R$ {excedente.toLocaleString('pt-BR',{minimumFractionDigits:2})}.</Faixa>
@@ -582,7 +583,7 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
           <div className="acn-cc-linha">
             <div className="form-group">
               <label className="acn-label" htmlFor="el-valor">{ehContrato ? 'Valor total negociado (R$) *' : 'Valor (R$) *'}</label>
-              <input id="el-valor" className="acn-input" inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+              <CampoMoeda id="el-valor" className="acn-input" value={valor} onChange={reais => setValor(reais)} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label className="acn-label" htmlFor="el-data">Data *</label>
@@ -750,7 +751,7 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
           <div className="acn-cc-linha">
             <div className="form-group">
               <label className="acn-label" htmlFor="ep-valor">Valor da compra (R$)</label>
-              <input id="ep-valor" className="acn-input" inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+              <CampoMoeda id="ep-valor" className="acn-input" value={valor} onChange={reais => setValor(reais)} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label className="acn-label" htmlFor="ep-data">Data</label>

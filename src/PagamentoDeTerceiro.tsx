@@ -13,6 +13,7 @@ import { Botao, Chips, Faixa } from './Interface';
 import { lerValorDigitado } from './LerValor';
 import { logChange } from './AuditSystem';
 import { mdiPencilOutline, mdiContentSaveOutline, mdiClose } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 export const TIPOS_DE_CUSTO = [
   { id: 'servico', rotulo: 'Serviço de terceiro' }, { id: 'material', rotulo: 'Material ou peça' }, { id: 'frete', rotulo: 'Frete ou transporte' },
@@ -68,7 +69,7 @@ export function CamposDoPagamento({ valor, onChange }: any) {
       <div className="acn-pgt-campo"><label className="acn-label" htmlFor="pgt-doc">CPF ou CNPJ</label>
         <input id="pgt-doc" className="acn-input" inputMode="numeric" placeholder="só números" value={valor.documento} onChange={e => set('documento', e.target.value)} /></div>
       <div className="acn-pgt-campo"><label className="acn-label" htmlFor="pgt-valor">Valor a pagar (R$) *</label>
-        <input id="pgt-valor" className="acn-input" inputMode="decimal" placeholder="0,00" value={valor.valor} onChange={e => set('valor', e.target.value)} /></div>
+        <CampoMoeda id="pgt-valor" className="acn-input" placeholder="0,00" value={valor.valor} onChange={reais => set('valor', reais)} /></div>
       <div className="acn-pgt-campo"><label className="acn-label" htmlFor="pgt-venc">Vencimento</label>
         <input id="pgt-venc" type="date" className="acn-input" value={valor.vencimento} onChange={e => set('vencimento', e.target.value)} /></div>
       <div className="acn-pgt-campo acn-pgt-largo"><label className="acn-label">Tipo de custo</label>

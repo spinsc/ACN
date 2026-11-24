@@ -25,6 +25,7 @@ import { PainelFichasVeiculos } from './VeiculoCadastro';
 import ConfigEstruturaTela from './ConfigEstruturaTela';
 import FluxoConfigTela from './FluxoConfigTela';
 import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
+import { CampoMoeda } from './CampoMoeda';
 
 
 const PERFIS = [
@@ -2076,10 +2077,10 @@ function PainelAlcadasAprovacao() {
               </div>
               <div>
                 <label className="acn-label">Valor Mínimo (R$) *</label>
-                <input className="acn-input" style={{ width:'100%' }}
+                <CampoMoeda className="acn-input" style={{ width:'100%' }}
                   placeholder="Ex: 5000,00"
                   value={form.valor_minimo}
-                  onChange={e => setForm(f => ({ ...f, valor_minimo: e.target.value }))} />
+                  onChange={reais => setForm(f => ({ ...f, valor_minimo: reais }))} />
               </div>
             </div>
             <div style={{ marginBottom:10 }}>
@@ -2257,10 +2258,10 @@ function PainelAlcadasAprovacaoFretes() {
               </div>
               <div>
                 <label className="acn-label">Valor Mínimo (R$) *</label>
-                <input className="acn-input" style={{ width:'100%' }}
+                <CampoMoeda className="acn-input" style={{ width:'100%' }}
                   placeholder="Ex: 1500,00"
                   value={form.valor_minimo}
-                  onChange={e => setForm(f => ({ ...f, valor_minimo: e.target.value }))} />
+                  onChange={reais => setForm(f => ({ ...f, valor_minimo: reais }))} />
               </div>
             </div>
             <div style={{ marginBottom:10 }}>

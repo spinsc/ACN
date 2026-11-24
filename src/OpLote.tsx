@@ -22,6 +22,7 @@ import { lerValorDigitado } from './LerValor';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 import { UFS } from './FluxoEntrega';
 import { resumoDosFluxosDoLote, CAMPOS_QUE_DEPENDEM_DO_FLUXO } from './FluxoMisto';
+import { CampoMoeda } from './CampoMoeda';
 
 const usuarioDaSessao = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 /** Quem muda o lote inteiro: Admin, Gerente e Comercial (decidido com o usuário em 16/10/2026). */
@@ -201,6 +202,8 @@ function PainelDadosDoLote({ base, usuario, aoFechar, aoSalvar }: any) {
               </select>
             ) : c.tipo === 'area' ? (
               <textarea id={`lote-${c.campo}`} className="acn-input" rows={2} value={v[c.campo] || ''} placeholder={`hoje: ${hoje(c.campo)}`} onChange={e => set(c.campo, e.target.value)} />
+            ) : c.tipo === 'valor' ? (
+              <CampoMoeda id={`lote-${c.campo}`} className="acn-input" value={v[c.campo] || ''} placeholder={`hoje: ${hoje(c.campo)}`} onChange={reais => set(c.campo, reais)} />
             ) : (
               <input id={`lote-${c.campo}`} className="acn-input" type={c.tipo === 'data' ? 'date' : 'text'} value={v[c.campo] || ''}
                 placeholder={c.tipo === 'data' ? undefined : `hoje: ${hoje(c.campo)}`} onChange={e => set(c.campo, e.target.value)} />

@@ -48,6 +48,8 @@ import { FotosVeiculoVer } from './FotosVeiculo';
 import { itensPreenchidos } from './DemandaItens';
 import { EquipeDaOpResumo } from './EquipeDaOp';
 import { lerValorDigitado } from './LerValor';
+import { ChegadaDoVeiculo } from './ChegadaDoVeiculoBotao';
+import { diaEmBrasilia } from './ChegadaDoVeiculo';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -1357,6 +1359,13 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               <div className="acn-opl-card-corpo acn-opl-prazos">
                 {prazo('Data de entrada', opl.data_entrada, 'data_entrada')}
                 {prazo('Previsão de chegada do veículo', opl.data_chegada_veiculo, 'data_chegada_veiculo')}
+                {/* 24/11/2026: a chegada de verdade (botão "Veículo chegou à matriz") e o prazo em dias que o Comercial deu na abertura; a entrega é chegada + dias */}
+                {prazo('Chegada do veículo à matriz', opl.veiculo_chegou_em ? diaEmBrasilia(opl.veiculo_chegou_em) : null, 'veiculo_chegou_em')}
+                {opl.prazo_dias_apos_chegada != null && (
+                  <div className="acn-opl-prazo" style={campoDestaque('prazo_dias_apos_chegada')}>
+                    <span className="acn-opl-rot">Prazo após a chegada</span><span className="acn-opl-val">{opl.prazo_dias_apos_chegada} dia(s)</span>
+                  </div>
+                )}
                 {prazo('Aceite do cliente', opl.data_aceite_cliente, 'data_aceite_cliente')}
                 {prazo('Prazo entrega produção', opl.prazo_entrega_producao, 'prazo_entrega_producao')}
                 {prazo('Prazo entrega comercial', opl.prazo_entrega_comercial, 'prazo_entrega_comercial')}
@@ -1372,6 +1381,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <section className="acn-opl-card">
               <header className="acn-opl-card-cab"><span>{soEnvio(opl.fluxo_entrega) ? '📦 Envio' : '🚗 Veículo e entrega'}</span></header>
               <div className="acn-opl-card-corpo">
+                {/* 24/11/2026: o SAC (ou o PCP, a Adaptação e o Comercial) registra aqui que o carro entrou no pátio; ver ChegadaDoVeiculo.ts */}
+                <ChegadaDoVeiculo opl={opl} usuario={usuario} aoRegistrar={() => { recarregarOpl(); recarregarLogs(); recarregarAcomps(); }} />
                 {/* quem paga o frete só aparece em OP que sai daqui embalada */}
                 {(terminaEmEnvio(opl.fluxo_entrega) || opl.tipo_projeto === TIPO_VENDA_ENVIO) && (
                   <div className="acn-opl-bloco"><SeloFrete o={opl} /></div>

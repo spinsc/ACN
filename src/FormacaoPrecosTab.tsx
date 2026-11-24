@@ -19,6 +19,8 @@ import ExcluirFormacaoModal from './ExcluirFormacaoModal';
 import FormacoesExcluidas from './FormacoesExcluidas';
 import { podeExcluirFormacao, lerFamiliaDaFormacao } from './ExclusaoDeFormacao';
 import Icone from './Icone';
+import { numeroOuNulo } from './LerValor';
+import { CampoMoeda } from './CampoMoeda';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
   mdiDownloadOutline, mdiLinkVariant, mdiCheck, mdiRefresh, mdiCalculatorVariantOutline, mdiTimerSand, mdiPackageVariantClosed, mdiPackageVariant,
   mdiFactory, mdiChevronUp, mdiChevronDown, mdiCashMultiple, mdiReceiptTextOutline, mdiInformationOutline, mdiArrowLeft, mdiFileDocumentOutline,
@@ -490,7 +492,7 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
 // Aceita tanto "15000" quanto o formato brasileiro "15.000,50" — sem isso,
 // parseFloat("15.000") vira 15 (trunca no ponto de milhar) e o resultado
 // sai errado por um fator de 1000, sem nenhum aviso ao usuário.
-const parseNumBr = (v) => parseFloat(String(v).trim().replace(/\./g, '').replace(',', '.')) || 0;
+const parseNumBr = (v) => numeroOuNulo(String(v).trim()) || 0; // 24/11/2026: regra única (LerValor.ts); o campo de dinheiro entrega "1500.5"
 
 // ─── MARKUP REVERSO POR PRODUTO ───────────────────────────────────────────────
 // Inverso exato do calcItem:
@@ -514,9 +516,9 @@ function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onApl
     <div className="acn-fp-span2" title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
       <div className="acn-fp-ir-rot2 com-ic"><Icone path={mdiRefresh} size={12} /> Preço unit. desejado</div>
       <div className="acn-fp-mr-linha">
-        <input className="acn-input acn-fp-ir-campo acn-fp-num"
+        <CampoMoeda className="acn-input acn-fp-ir-campo acn-fp-num"
           placeholder={bloqueado ? 'markup global' : 'R$'} value={preco} disabled={bloqueado}
-          onChange={e => setPreco(e.target.value)}
+          onChange={reais => setPreco(reais)}
           onKeyDown={e => { if (e.key === 'Enter') aplicar(); }} />
         <Botao variante="primario" pequeno icone={mdiRefresh} onClick={aplicar} disabled={bloqueado || !preco}
           title={modoTabela ? 'Calcula e aplica o desconto' : 'Calcula e aplica o markup'}
@@ -548,11 +550,11 @@ function CalcMarkupReverso() {
       <div className="acn-fp-calc-linha">
         <div>
           <div className="acn-fp-rot">Preço de Venda (R$)</div>
-          <input className="acn-input acn-fp-in-110" placeholder="Ex: 15000" value={precoVenda} onChange={e=>setPrecoVenda(e.target.value)} />
+          <CampoMoeda className="acn-input acn-fp-in-110" placeholder="Ex: 15000" value={precoVenda} onChange={reais =>setPrecoVenda(reais)} />
         </div>
         <div>
           <div className="acn-fp-rot">Custo c/Impostos BRL</div>
-          <input className="acn-input acn-fp-in-110" placeholder="Ex: 8000" value={custoFob} onChange={e=>setCustoFob(e.target.value)} />
+          <CampoMoeda className="acn-input acn-fp-in-110" placeholder="Ex: 8000" value={custoFob} onChange={reais =>setCustoFob(reais)} />
         </div>
         <div>
           <div className="acn-fp-rot">DIFAL %</div>
@@ -590,7 +592,7 @@ function CalcImpostoReverso() {
       <div className="acn-fp-calc-linha">
         <div>
           <div className="acn-fp-rot">Preço com Imposto (R$)</div>
-          <input className="acn-input acn-fp-in-120" placeholder="Ex: 18600" value={precoComImposto} onChange={e=>setPrecoComImposto(e.target.value)} />
+          <CampoMoeda className="acn-input acn-fp-in-120" placeholder="Ex: 18600" value={precoComImposto} onChange={reais =>setPrecoComImposto(reais)} />
         </div>
         <div>
           <div className="acn-fp-rot">Imposto %</div>
@@ -664,7 +666,7 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
                 {['REAL','DOLAR','EURO'].map(m=><option key={m}>{m}</option>)}
               </select>
             </div>
-            <div><span className="acn-label">Custo Unitário</span><input className="acn-input" type="number" min={0} step="0.01" value={form.custo_unit} onChange={e=>set('custo_unit',e.target.value)} /></div>
+            <div><span className="acn-label">Custo Unitário</span><CampoMoeda className="acn-input" value={form.custo_unit} onChange={reais =>set('custo_unit',reais)} casas={4} /></div>
             <div>
               <span className="acn-label">Tipo Cálculo</span>
               <select className="acn-input" value={form.tipo_calculo} onChange={e=>set('tipo_calculo',e.target.value)}>
@@ -983,8 +985,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
               <div className="acn-fp-ir-rot" title="Custo unitário do produto, na moeda escolhida em Custo/impostos (sem IPI e ST)">
                 Custo unit.{item.moeda && item.moeda !== 'BRL' ? ` (${item.moeda})` : ''}
               </div>
-              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-                aria-label="Custo unitário do produto" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+              <CampoMoeda className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto" value={item.custo_unit} onChange={reais =>onSet('custo_unit', reais)} casas={4} />
             </div>
           )}
           {/* Markup (ou desconto, no modo TABELA) deste produto — à vista e editável por todos os usuários. Com "Markup Global" ligado fica
@@ -1060,8 +1062,8 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             </div>
             <div>
               <div className="acn-fp-ir-rot2">Custo Unit.</div>
-              <input type="number" className="acn-input acn-fp-ir-campo acn-fp-num"
-                aria-label="Custo unitário do produto (dentro de Custo/impostos)" min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+              <CampoMoeda className="acn-input acn-fp-ir-campo acn-fp-num"
+                aria-label="Custo unitário do produto (dentro de Custo/impostos)" value={item.custo_unit} onChange={reais =>onSet('custo_unit', reais)} casas={4} />
             </div>
             <div>
               <div className="acn-fp-ir-rot2">IPI%</div>

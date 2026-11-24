@@ -29,6 +29,7 @@ import { osSemCobranca } from './SacFluxo';
 import { EditorDeViagem } from './ViagensTab';
 import { statusDaViagem, rotuloDoStatus, viagemSeguraAOp } from './ViagemFluxo';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
+import { CampoMoeda } from './CampoMoeda';
 import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
   mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
   mdiMessageTextOutline, mdiPause, mdiCheck, mdiChevronDown, mdiChevronUp, mdiTrayArrowDown, mdiHammerWrench, mdiClose,
@@ -546,7 +547,7 @@ function ItemTable({ itens, setItens }) {
               <td><input className="acn-input" value={item.codigo} onChange={e=>set(idx,'codigo',e.target.value)} /></td>
               <td><input className="acn-input" value={item.descricao} onChange={e=>set(idx,'descricao',e.target.value)} placeholder="Peça / serviço..." /></td>
               <td><input type="number" min={1} className="acn-input acn-prod-it-num acn-centro" value={item.quantidade} onChange={e=>set(idx,'quantidade',Number(e.target.value)||1)} /></td>
-              <td><input type="number" min={0} step="0.01" className="acn-input acn-prod-it-num acn-dir" value={item.valor_unitario} onChange={e=>set(idx,'valor_unitario',Number(e.target.value)||0)} /></td>
+              <td><CampoMoeda className="acn-input acn-prod-it-num acn-dir" value={item.valor_unitario} onChange={reais =>set(idx,'valor_unitario',Number(reais)||0)} /></td>
               <td className="acn-dir acn-num acn-forte">{((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
               <td><Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item" title="Remover item" onClick={()=>rem(idx)} /></td>
             </tr>
@@ -1429,8 +1430,8 @@ function VoucherItemTable({ itens, setItens }) {
                   onChange={e=>setField(idx,'modelo',e.target.value)} placeholder="Ex: Fiat Strada 2023" />
               </td>
               <td>
-                <input type="number" min={0} step="0.01" className="acn-input acn-prod-it-num acn-dir" value={item.valor}
-                  onChange={e=>setField(idx,'valor',e.target.value)} placeholder="0,00" />
+                <CampoMoeda className="acn-input acn-prod-it-num acn-dir" value={item.valor}
+                  onChange={reais =>setField(idx,'valor',reais)} placeholder="0,00" />
               </td>
               <td>
                 <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover linha" title="Remover linha" onClick={()=>rem(idx)} />

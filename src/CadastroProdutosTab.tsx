@@ -11,6 +11,7 @@ import { anexarValoresAosItens, anexarValoresAoItemEmbutido } from './CadastroIt
 import { Faixa, Botao } from './Interface';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
+import { CampoMoeda } from './CampoMoeda';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -848,8 +849,8 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
             {form.preco_manual && (
               <div className="acn-cp-c863">
                 <span className="acn-cp-s768">Preço de Venda (R$)</span>
-                <input className="acn-cp-inp769" type="number" min={0} step="0.01"
-                  value={form.preco_venda} onChange={e => set('preco_venda', e.target.value)} />
+                <CampoMoeda className="acn-cp-inp769"
+                  value={form.preco_venda} onChange={reais => set('preco_venda', reais)} />
               </div>
             )}
 

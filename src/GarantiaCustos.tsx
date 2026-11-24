@@ -16,6 +16,7 @@ import {
   salvarCustos, lancarCustoDoTerceiro, registrarAlinhamento, pedirAutorizacao, decidirAutorizacao, cancelarAutorizacao, podeConduzirGarantia,
 } from './GarantiaModelo';
 import { mdiPlus, mdiClose } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -89,8 +90,8 @@ export function SecaoCustos({ g, conduz, executar, ocupado, currentUser }: any) 
                 <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar custo ${n + 1}`} title="Tirar" onClick={() => setRascunho(r => r.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
               </div>
               <div className="acn-dev-form-linha">
-                <input className="acn-input acn-dev-bom-num" aria-label={`Valor previsto ${n + 1}`} inputMode="decimal" placeholder="Previsto R$ *" value={l.previsto} onChange={e => mudar(n, 'previsto', e.target.value)} />
-                <input className="acn-input acn-dev-bom-num" aria-label={`Valor negociado ${n + 1}`} inputMode="decimal" placeholder="Negociado R$" value={l.negociado} onChange={e => mudar(n, 'negociado', e.target.value)} />
+                <CampoMoeda className="acn-input acn-dev-bom-num" aria-label={`Valor previsto ${n + 1}`} placeholder="Previsto R$ *" value={l.previsto} onChange={reais => mudar(n, 'previsto', reais)} />
+                <CampoMoeda className="acn-input acn-dev-bom-num" aria-label={`Valor negociado ${n + 1}`} placeholder="Negociado R$" value={l.negociado} onChange={reais => mudar(n, 'negociado', reais)} />
                 <input className="acn-input" aria-label={`Quem negociou ${n + 1}`} placeholder="Quem negociou" value={l.negociado_por || ''} onChange={e => mudar(n, 'negociado_por', e.target.value)} />
               </div>
               <div className="acn-dev-form-linha">
@@ -219,7 +220,7 @@ export function SecaoDirecao({ g, conduz, executar, ocupado, currentUser }: any)
             <div><label className="acn-label">O que está sendo pedido *</label>
               <select className="acn-input" aria-label="Tipo de autorização" value={c.tipo} onChange={e => mudar('tipo', e.target.value)}>{Object.entries(TIPOS_AUTORIZACAO).map(([v, r]) => <option key={v} value={v}>{r}</option>)}</select></div>
             <div><label className="acn-label">Valor (R$) *</label>
-              <input className="acn-input" aria-label="Valor da autorização" inputMode="decimal" value={c.valor} onChange={e => mudar('valor', e.target.value)} />
+              <CampoMoeda className="acn-input" aria-label="Valor da autorização" value={c.valor} onChange={reais => mudar('valor', reais)} />
               <div className="acn-ajuda">Já vem o que a empresa paga no quadro de custos.</div></div>
           </div>
           <div><label className="acn-label">Motivo *</label>

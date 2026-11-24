@@ -21,6 +21,7 @@ import {
   custoRealContra, ITENS_DE_ACABAMENTO, RESULTADOS_UNIDADE,
 } from './DesenvolvimentoModelo';
 import { mdiPlus, mdiClose, mdiContentSaveOutline, mdiPaperclip } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
 const brl = (v: any) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -97,7 +98,7 @@ function EditorMeta({ inicial, onSalvar, onCancelar, ocupado }: any) {
     <div className="acn-dev-form">
       <div className="acn-dev-campos">
         <div className="acn-dev-campo-data"><label className="acn-label">Custo alvo por unidade (R$) *</label>
-          <input className="acn-input" inputMode="decimal" aria-label="Custo alvo" placeholder="0,00" value={custo} onChange={e => setCusto(e.target.value)} /></div>
+          <CampoMoeda className="acn-input" aria-label="Custo alvo" placeholder="0,00" value={custo} onChange={reais => setCusto(reais)} /></div>
         <div className="acn-dev-campo-data"><label className="acn-label">Prazo *</label>
           <input type="date" className="acn-input" aria-label="Prazo" value={prazo} onChange={e => setPrazo(e.target.value)} /></div>
         <div className="acn-dev-campo-data"><label className="acn-label">Quantidade prevista</label>
@@ -293,7 +294,7 @@ function EditorBom({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
           <input className="acn-input" aria-label={`Material ${n + 1}`} placeholder="Material ou componente" value={l.item} onChange={e => mudar(n, 'item', e.target.value)} />
           <input className="acn-input acn-dev-bom-num" aria-label={`Quantidade do material ${n + 1}`} inputMode="decimal" placeholder="Qtd" value={l.quantidade} onChange={e => mudar(n, 'quantidade', e.target.value)} />
           <input className="acn-input acn-dev-bom-un" aria-label={`Unidade do material ${n + 1}`} placeholder="un" value={l.unidade} onChange={e => mudar(n, 'unidade', e.target.value)} />
-          <input className="acn-input acn-dev-bom-num" aria-label={`Custo unitário do material ${n + 1}`} inputMode="decimal" placeholder="R$ un." value={l.custo_unit} onChange={e => mudar(n, 'custo_unit', e.target.value)} />
+          <CampoMoeda className="acn-input acn-dev-bom-num" aria-label={`Custo unitário do material ${n + 1}`} placeholder="R$ un." value={l.custo_unit} onChange={reais => mudar(n, 'custo_unit', reais)} />
           <span className="acn-ajuda acn-dev-bom-sub">{brl((lido(l.quantidade) || 0) * (lido(l.custo_unit) || 0))}</span>
           <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar material ${n + 1}`} title="Tirar" onClick={() => setLinhas(ls => ls.filter((_, i) => i !== n))}><Icone path={mdiClose} size={15} /></button>
         </div>
@@ -470,7 +471,7 @@ function EditorPrototipos({ demanda, inicial, onSalvar, onCancelar, ocupado, env
           <div className="acn-dev-form-linha">
             <input className="acn-input" aria-label={`Material do protótipo ${n + 1}`} placeholder="Material usado" value={p.material || ''} onChange={e => mudar(n, 'material', e.target.value)} />
             <input className="acn-input acn-dev-bom-num" aria-label={`Horas do protótipo ${n + 1}`} inputMode="decimal" placeholder="Horas *" value={p.horas} onChange={e => mudar(n, 'horas', e.target.value)} />
-            <input className="acn-input acn-dev-bom-num" aria-label={`Custo do protótipo ${n + 1}`} inputMode="decimal" placeholder="Custo R$" value={p.custo} onChange={e => mudar(n, 'custo', e.target.value)} />
+            <CampoMoeda className="acn-input acn-dev-bom-num" aria-label={`Custo do protótipo ${n + 1}`} placeholder="Custo R$" value={p.custo} onChange={reais => mudar(n, 'custo', reais)} />
           </div>
           <CampoDeFotos fotos={p.fotos} onChange={(f: any[]) => mudar(n, 'fotos', f)} enviar={enviar} />
         </div>
@@ -794,7 +795,7 @@ function EditorCustoReal({ demanda, inicial, onSalvar, onCancelar, ocupado }: an
   return (
     <div className="acn-dev-form">
       <div className="acn-dev-campo-data"><label className="acn-label">Custo real por unidade (R$) *</label>
-        <input className="acn-input" aria-label="Custo real" inputMode="decimal" placeholder="0,00" value={custo} onChange={e => setCusto(e.target.value)} /></div>
+        <CampoMoeda className="acn-input" aria-label="Custo real" placeholder="0,00" value={custo} onChange={reais => setCusto(reais)} /></div>
       {v > 0 && meta > 0 && <Faixa tom={acima ? 'atencao' : 'ok'}>Meta da Concepção: {brl(meta)} — o custo real está {pct(v, meta)} da meta.</Faixa>}
       {v > 0 && est > 0 && <div className="acn-ajuda">Estimado na lista de materiais: {brl(est)} — o real está {pct(v, est)} do estimado.</div>}
       {acima && <div><label className="acn-label">Por que o custo real ficou acima da meta *</label>

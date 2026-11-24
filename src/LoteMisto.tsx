@@ -20,10 +20,12 @@ import { confirmarRemocao } from './Feedback';
 import { itensPreenchidos } from './DemandaItens';
 import { ItensVendidosEditor } from './OpItens';
 import { Botao } from './Interface';
+import { lerValorDigitado } from './LerValor';
 import Icone from './Icone';
 import { mdiPlus, mdiCheck, mdiTrashCanOutline } from '@mdi/js';
 import { FluxoDoGrupo } from './FluxoMistoTela';
 import { destinoVazio } from './FluxoMisto';
+import { CampoMoeda } from './CampoMoeda';
 
 // `fluxo` e `destino` só existem quando a venda é de FLUXO MISTO (26/10/2026, PLANO_FLUXO_MISTO.md): cada grupo escolhe o seu fluxo de entrega e, se ele termina em envio, o seu destino e frete.
 export type GrupoLote = { qtd: number; servicos: string; valor: string; itens: any[]; fluxo?: string; destino?: any };
@@ -36,7 +38,9 @@ export const grupoInicial = (quantidade: number, servicos = '', itens: any[] = [
 const parseValor = (v: any): number | null => {
   const s = String(v ?? '').trim();
   if (!s) return null;
-  const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  // 24/11/2026: o campo de dinheiro entrega "1500.5" (ponto decimal); tirar todos os pontos, como se fazia, leria 15005. A regra única é a do lerValorDigitado.
+  const lido = lerValorDigitado(s);
+  const n = lido.valor ?? NaN;
   return Number.isFinite(n) ? n : null;
 };
 
@@ -96,8 +100,8 @@ export function GruposLoteMisto({ quantidade, grupos, onChange, compacto = false
               </label>
               <label className="acn-lot-rot">
                 Valor/un. (R$)
-                <input className="acn-input acn-lot-valor" value={g.valor} placeholder="opcional"
-                  onChange={e => set(i, 'valor', e.target.value)} />
+                <CampoMoeda className="acn-input acn-lot-valor" value={g.valor} placeholder="opcional"
+                  onChange={reais => set(i, 'valor', reais)} />
               </label>
               {grupos.length > 1 && (
                 <Botao variante="perigo-sec" pequeno icone={mdiTrashCanOutline} onClick={async () => { if (!await confirmarRemocao('o grupo ' + LETRA(i) + ' do lote')) return; onChange(grupos.filter((_, j) => j !== i)); }} title={`Remover grupo ${LETRA(i)}`} />

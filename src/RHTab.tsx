@@ -26,6 +26,7 @@ import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 import Icone from './Icone';
 import { mdiFilePdfBox, mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -428,14 +429,14 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
               <div style={campoDestaque('salario')}>
                 {/* 14/10/2026: o salário é o BASE; o adicional e a insalubridade têm campo próprio e o total é calculado (antes, em 6 cadastros, o total estava digitado aqui) */}
                 {lbl('Salário base (R$)')}
-                <input type="number" min="0" step="0.01" className="acn-input" value={form.salario} onChange={e=>set('salario',e.target.value)}
-                  placeholder="Ex: 3500.00" />
+                <CampoMoeda className="acn-input" value={form.salario} onChange={reais =>set('salario',reais)}
+                  placeholder="Ex: 3500,00" />
               </div>
             ) : (
               <div style={campoDestaque('valor_servicos')}>
                 {lbl('Valor dos Serviços (R$)')}
-                <input type="number" min="0" step="0.01" className="acn-input" value={form.valor_servicos} onChange={e=>set('valor_servicos',e.target.value)}
-                  placeholder="Ex: 5000.00" />
+                <CampoMoeda className="acn-input" value={form.valor_servicos} onChange={reais =>set('valor_servicos',reais)}
+                  placeholder="Ex: 5000,00" />
                 <div className="acn-ajuda">Valor do contrato ou por serviço prestado</div>
               </div>
             )}
@@ -447,8 +448,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
             {form.cargo_confianca && (
               <div style={campoDestaque('adicional_cargo_confianca')}>
                 {lbl('Adicional de cargo de confiança (R$)')}
-                <input type="number" min="0" step="0.01" className="acn-input" value={form.adicional_cargo_confianca} onChange={e=>set('adicional_cargo_confianca',e.target.value)}
-                  placeholder="Ex: 1045.97" />
+                <CampoMoeda className="acn-input" value={form.adicional_cargo_confianca} onChange={reais =>set('adicional_cargo_confianca',reais)}
+                  placeholder="Ex: 1045,97" />
                 <div className="acn-ajuda">O "Adicional 40%" da planilha do quadro de colaboradores.</div>
               </div>
             )}
@@ -462,20 +463,20 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
                   </div>
                   <div style={campoDestaque('insalubridade_valor')}>
                     {lbl('Insalubridade (R$)')}
-                    <input type="number" min="0" step="0.01" className="acn-input" value={form.insalubridade_valor} onChange={e=>set('insalubridade_valor',e.target.value)}
-                      placeholder="Ex: 648.40" />
+                    <CampoMoeda className="acn-input" value={form.insalubridade_valor} onChange={reais =>set('insalubridade_valor',reais)}
+                      placeholder="Ex: 648,40" />
                   </div>
                 </div>
                 <div className="acn-grade-2">
                   <div style={campoDestaque('ajuda_custo')}>
                     {lbl('Ajuda de custo (R$)')}
-                    <input type="number" min="0" step="0.01" className="acn-input" value={form.ajuda_custo} onChange={e=>set('ajuda_custo',e.target.value)}
-                      placeholder="Ex: 359.00" />
+                    <CampoMoeda className="acn-input" value={form.ajuda_custo} onChange={reais =>set('ajuda_custo',reais)}
+                      placeholder="Ex: 359,00" />
                   </div>
                   <div style={campoDestaque('alimentacao')}>
                     {lbl('Alimentação (R$)')}
-                    <input type="number" min="0" step="0.01" className="acn-input" value={form.alimentacao} onChange={e=>set('alimentacao',e.target.value)}
-                      placeholder="Ex: 436.00" />
+                    <CampoMoeda className="acn-input" value={form.alimentacao} onChange={reais =>set('alimentacao',reais)}
+                      placeholder="Ex: 436,00" />
                   </div>
                 </div>
                 {totalMensal != null && (

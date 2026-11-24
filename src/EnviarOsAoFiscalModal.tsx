@@ -15,6 +15,7 @@ import { mostrarAviso } from './Feedback';
 import { notificarEvento } from './whatsappHelper';
 import { lerValorDigitado } from './LerValor';
 import { validarEnvioAoFiscal, dadosIniciaisParaOFiscal, STATUS_AGUARDANDO_NOTA } from './SacFluxo';
+import { CampoMoeda } from './CampoMoeda';
 
 export default function EnviarOsAoFiscalModal({ os, currentUser, onClose, onEnviada }: { os: any; currentUser?: any; onClose: () => void; onEnviada?: () => void }) {
   const ini = dadosIniciaisParaOFiscal(os);
@@ -61,7 +62,7 @@ export default function EnviarOsAoFiscalModal({ os, currentUser, onClose, onEnvi
 
           <div className="form-group">
             <label className="acn-label" htmlFor="efo-valor">Valor total da OS (R$) *</label>
-            <input id="efo-valor" className="acn-input" inputMode="decimal" placeholder="0,00" value={valor} onChange={e => setValor(e.target.value)} />
+            <CampoMoeda id="efo-valor" className="acn-input" placeholder="0,00" value={valor} onChange={reais => setValor(reais)} />
             <div className={valorInvalido ? 'acn-txt-erro' : 'acn-ajuda'}>{valorInvalido ? 'Número inválido: digite só o valor, como 1.500,00.' : 'Já vem o valor do orçamento aprovado, quando existe. É o valor da nota.'}</div>
           </div>
           <div className="form-group">

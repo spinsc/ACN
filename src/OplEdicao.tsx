@@ -23,6 +23,8 @@ import { CampoTelefone } from './CampoTelefone';
 import { SeletorEscopo, useTamanhoDoLote } from './EscopoDaEdicao';
 import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote } from './EdicaoDeLote';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
+import { somenteDigitos, diasParaGravar } from './ChegadaDoVeiculo';
+import { CampoMoeda } from './CampoMoeda';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 
@@ -40,7 +42,7 @@ const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','P
 
 // 'veiculo' = o campo do catálogo de veículos (veiculo_id): o mesmo seletor da criação da OP, que
 // também preenche o texto "Modelo". Pedido do usuário em 29/09/2026 — na edição só dava para digitar.
-type Campo = { campo: string; rotulo: string; tipo: 'texto' | 'numero' | 'moeda' | 'data' | 'select' | 'textarea' | 'veiculo'; opcoes?: string[]; grupo: string };
+type Campo = { campo: string; rotulo: string; tipo: 'texto' | 'numero' | 'dias' | 'moeda' | 'data' | 'select' | 'textarea' | 'veiculo'; opcoes?: string[]; grupo: string };
 export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Identificação', campo: 'cliente_nome', rotulo: 'Cliente', tipo: 'texto' },
   { grupo: 'Identificação', campo: 'tipo_projeto', rotulo: 'Tipo de projeto', tipo: 'texto' },
@@ -65,6 +67,7 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Veículo / envio', campo: 'destino_telefone', rotulo: 'Telefone de quem recebe', tipo: 'telefone' },
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Previsão de chegada do veículo', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'prazo_dias_apos_chegada', rotulo: 'Prazo após a chegada do veículo (dias)', tipo: 'dias' },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_comercial', rotulo: 'Prazo entrega comercial', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_producao', rotulo: 'Prazo entrega produção', tipo: 'data' },
@@ -101,6 +104,7 @@ const paraBanco = (c: Campo, t: string) => {
   const s = String(t ?? '').trim();
   if (!s) return null;
   if (c.tipo === 'numero') { const n = parseInt(s, 10); return Number.isFinite(n) ? n : null; }
+  if (c.tipo === 'dias') return diasParaGravar(s);   // 24/11/2026: só inteiro de 0 a 3650; ilegível não vira zero, vira vazio
   if (c.tipo === 'moeda') { const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return Number.isFinite(n) ? n : null; }
   return s;
 };
@@ -128,6 +132,8 @@ function Entrada({ c, valor, onChange, onVeiculo, onCep, currentUser }: { c: Cam
     );
   }
   if (c.tipo === 'textarea') return <textarea value={valor} onChange={e => onChange(e.target.value)} rows={3} style={{ ...est, resize: 'vertical' }} aria-label={c.rotulo} />;
+  if (c.tipo === 'dias') return <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30" value={valor} onChange={e => onChange(somenteDigitos(e.target.value))} style={est} aria-label={c.rotulo} />;
+  if (c.tipo === 'moeda') return <CampoMoeda value={valor} onChange={reais => onChange(reais)} style={est} aria-label={c.rotulo} />;
   return (
     <input type={c.tipo === 'data' ? 'date' : c.tipo === 'numero' ? 'number' : 'text'} inputMode={c.tipo === 'moeda' ? 'decimal' : undefined}
       value={valor} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />
@@ -330,7 +336,7 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
 // regra de desmembrar o lote quando a quantidade aumenta. Aqui é só o
 // formulário — por isso o componente é controlado (form + onCampo).
 // ─────────────────────────────────────────────────────────────────────────────
-type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi' | 'veiculo';
+type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'dias' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi' | 'veiculo';
 type CampoCom = {
   campo: string; rotulo: string; tipo: TipoCampoCom; grupo: string;
   opcoes?: { valor: string; label: string }[];
@@ -399,6 +405,8 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   // ── Datas e prazos ──
   { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Previsão de chegada do veículo', tipo: 'data', soVeiculo: true },
+  { grupo: 'Datas e prazos', campo: 'prazo_dias_apos_chegada', rotulo: 'Prazo após a chegada do veículo (dias)', tipo: 'dias', soVeiculo: true,
+    dica: 'a entrega prevista é a chegada do veículo + estes dias; só números inteiros' },
   { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_comercial', rotulo: 'Prazo entrega comercial', tipo: 'data' },
   { grupo: 'Datas e prazos', campo: 'prazo_entrega_producao', rotulo: 'Prazo entrega produção', tipo: 'data' },
@@ -515,12 +523,15 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
   if (c.tipo === 'data') {
     return <input type="date" value={txt.slice(0, 10)} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />;
   }
+  if (c.tipo === 'dias') {
+    return <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30" value={txt}
+      onChange={e => onChange(somenteDigitos(e.target.value))} style={est} aria-label={c.rotulo} />;
+  }
   if (c.tipo === 'numero') {
     return <input type="number" min={1} value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />;
   }
   if (c.tipo === 'moeda') {
-    return <input type="number" step="0.01" min={0} inputMode="decimal" value={txt}
-      onChange={e => onChange(e.target.value)} style={est} placeholder="0,00" aria-label={c.rotulo} />;
+    return <CampoMoeda value={txt} onChange={reais => onChange(reais)} style={est} aria-label={c.rotulo} />;
   }
   return <input type="text" value={txt} onChange={e => onChange(e.target.value)} style={est}
     placeholder={c.dica} aria-label={c.rotulo} />;
