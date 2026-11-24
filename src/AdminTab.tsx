@@ -112,7 +112,7 @@ function PainelUsuarios() {
   const [visao, setVisao] = useState('lista');   // 24/11/2026: 'lista' (editar) ou 'matriz' (quem tem o quê, só leitura)
   const [loading, setLoading] = useState(false);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true, gestor_id: null });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
   // Etapa 16c (10/10/2026): definir a senha de OUTRA pessoa exige a senha de quem está definindo (um Admin) — conferida no servidor, que guarda só o resumo da nova.
   const [senhaAdmin, setSenhaAdmin] = useState('');
@@ -156,7 +156,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, pode_gerir_terceiros: u.pode_gerir_terceiros === true, pode_excluir_op: u.pode_excluir_op === true, pode_alterar_numero_op: u.pode_alterar_numero_op === true, pode_excluir_formacao: u.pode_excluir_formacao === true, pode_copiar_op: u.pode_copiar_op === true, pode_excluir_registros: u.pode_excluir_registros === true, pode_corrigir_data_nota: u.pode_corrigir_data_nota === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, pode_gerir_terceiros: u.pode_gerir_terceiros === true, pode_excluir_op: u.pode_excluir_op === true, pode_alterar_numero_op: u.pode_alterar_numero_op === true, pode_excluir_formacao: u.pode_excluir_formacao === true, pode_copiar_op: u.pode_copiar_op === true, pode_excluir_registros: u.pode_excluir_registros === true, pode_corrigir_data_nota: u.pode_corrigir_data_nota === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -186,7 +186,6 @@ function PainelUsuarios() {
       whatsapp: whatsappParaGravar(editForm.whatsapp) || null,
       abas_permitidas: editForm.abas_permitidas,
       pode_autorizar_rh: editForm.pode_autorizar_rh,
-      pode_enviar_avisos: editForm.pode_enviar_avisos,
       pode_aprovar_compra: !!editForm.pode_aprovar_compra,
       ve_todas_tarefas_financeiro: !!editForm.ve_todas_tarefas_financeiro,
       // a caixa "Pode excluir anexos em Licitações" existia na tela, mas não era carregada nem gravada:
@@ -239,7 +238,6 @@ function PainelUsuarios() {
         permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [],
         permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [],
         recebe_alerta_analise: u.recebe_alerta_analise || false,
-        pode_enviar_avisos: u.pode_enviar_avisos || false,
         pode_aprovar_compra: u.pode_aprovar_compra || false,
         eh_dev: u.eh_dev || false,
         ver_valores: u.ver_valores !== false,                      // R7 (13/10/2026): como o login monta (vazio vale "vê")
