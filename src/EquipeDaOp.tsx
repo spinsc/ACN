@@ -75,16 +75,19 @@ export async function carregarEquipeDaOp(oplId) {
 }
 
 /** Por OP: quantas pessoas há em cada papel. Serve à tela do Fiscal, que avisa antes de faturar. */
-export async function situacaoDaEquipe(ids) {
-  if (!ids?.length) return {};
-  const { data } = await supabase.from('responsaveis_producao').select('referencia_id,papel')
+// 7.x (24/11/2026): antes devolvia só o mapa e a leitura recusada virava `{}` ("nenhuma OP tem equipe"), o que apagava o aviso "Equipe não apontada" do Fiscal
+// logo antes de ele faturar (e depois de faturar a equipe trava, sem comissão). Agora devolve também o erro; quem chama decide o que mostrar.
+export async function lerSituacaoDaEquipe(ids) {
+  if (!ids?.length) return { mapa: {}, erro: null };
+  const { data, error } = await supabase.from('responsaveis_producao').select('referencia_id,papel')
     .eq('tipo', 'op').in('referencia_id', ids);
+  if (error) return { mapa: {}, erro: error.message || 'falha na leitura' };
   const mapa = {};
   (data || []).forEach(r => {
     const s = (mapa[r.referencia_id] ||= { responsavel: 0, apoio: 0, serralheria: 0 });
     if (s[r.papel] != null) s[r.papel]++;
   });
-  return mapa;
+  return { mapa, erro: null };
 }
 
 /** A OP tem mão de obra lançada e ninguém apontado para recebê-la? Então não sai comissão. */
