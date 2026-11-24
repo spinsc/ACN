@@ -56,6 +56,7 @@ import {
   mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { telaInicialDoUsuario } from './utils/telaInicial';
 import { gruposParaRecolher } from './utils/menuLateral';
 
@@ -210,6 +211,29 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-busca-limpar:hover { color:#17212b; background:#eef1f4; }
 .acn-kbd { font:500 11px 'IBM Plex Mono', ui-monospace, monospace; padding:1px 6px; border:1px solid #dee4ea; border-radius:4px; color:#6b7886; background:#fff; white-space:nowrap; }
 .acn-busca-resultados { background:#fff; border:1px solid #dee4ea; border-radius:10px; box-shadow:0 18px 48px rgba(23,33,43,.18), 0 4px 12px rgba(23,33,43,.08); }
+/* 12e76 (24/11/2026): a caixa de resultados da busca, a marca do trecho achado e a janela de senha deixaram o estilo solto; as cores vêm dos tokens, que já têm o escuro */
+.acn-busca-resultados { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:9999; max-height:460px; overflow-y:auto; }
+.acn-busca-vazio { padding:16px 14px; color:var(--acn-muted); font-size:12px; text-align:center; }
+.acn-busca-grupo { padding:6px 12px 4px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--acn-line-soft); background:var(--acn-surface-2); position:sticky; top:0; }
+.acn-busca-item { padding:9px 14px; cursor:pointer; border-bottom:1px solid var(--acn-line-soft); transition:background .1s; }
+.acn-busca-item:hover { background:var(--acn-info-soft); }
+.acn-busca-item-titulo { font-size:13px; font-weight:600; color:var(--acn-ink); line-height:1.4; }
+.acn-busca-item-titulo.com-contexto { margin-bottom:3px; }
+.acn-busca-item-contexto { font-size:11px; color:var(--acn-muted); display:flex; align-items:center; gap:4px; }
+.acn-busca-item-contexto b { font-weight:600; }
+.acn-busca-item-status { display:inline-block; margin-top:3px; font-size:10px; font-weight:700; border-radius:4px; padding:1px 6px; }
+.acn-busca-rodape { padding:6px 12px; font-size:10px; color:var(--acn-muted); border-top:1px solid var(--acn-line-soft); text-align:center; }
+.acn-busca-marca { background:#fef08a; color:#1e293b; padding:0; border-radius:2px; font-weight:700; }
+.acn-menu-seta { transition:transform .15s; }
+.acn-menu-seta.recolhida { transform:rotate(-90deg); }
+.acn-kpi-titulo { display:flex; align-items:center; gap:8px; }
+.acn-kpi-desc { min-width:180px; }
+.acn-kpi-diretriz { min-width:160px; }
+html body .modal-box.acn-modal-cadastro.acn-senha-jan { width:min(400px, 95vw); }
+.acn-senha-jan .acn-modal-corpo > * { flex-shrink:0; }
+.acn-senha-campo { display:grid; gap:4px; grid-template-columns:minmax(0, 1fr); }
+.acn-senha-campo input { width:100%; min-width:0; box-sizing:border-box; }
+.acn-senha-rodape { justify-content:space-between; flex-direction:row-reverse; }
 .acn-right { display:flex; align-items:center; gap:2px; }
 .acn-notif { position:relative; display:flex; align-items:center; gap:6px; height:36px; padding:0 10px; border-radius:8px; color:#3b4856; cursor:pointer; user-select:none; font-size:13px; font-weight:500; }
 .acn-notif:hover { background:#eef1f4; color:#17212b; }
@@ -977,6 +1001,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [senhaLoading, setSenhaLoading] = useState(false);
 
   const salvarSenha = async () => {
+    // 12e76 (24/11/2026), achado 7.x: sem esta trava o Enter (ou o botão) durante o "Salvando" e nos 1,5 s da mensagem de sucesso mandava a troca de novo;
+    // o segundo envio levava a senha atual já trocada e a tela passava de "Senha alterada" para "Senha atual incorreta".
+    if (senhaLoading || senhaMsg.startsWith('ok:')) return;
     setSenhaMsg('');
     if (!senhaForm.nova || senhaForm.nova.length < 4) { setSenhaMsg('error:Mínimo 4 caracteres.'); return; }
     if (senhaForm.nova !== senhaForm.confirmar) { setSenhaMsg('error:As senhas não coincidem.'); return; }
@@ -998,7 +1025,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       setSenhaMsg('ok:Senha alterada com sucesso!');
       setTimeout(() => { setModalSenha(false); setSenhaForm({ atual:'', nova:'', confirmar:'' }); setSenhaMsg(''); }, 1500);
     } catch (e: any) {
-      setSenhaMsg('error:Erro: ' + e.message);
+      setSenhaMsg('error:Não foi possível trocar a senha. ' + explicarErroDoBanco(e));
     } finally {
       setSenhaLoading(false);
     }
@@ -1244,7 +1271,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       if (fim <= cursor) return;
       const de = Math.max(ini, cursor);
       if (de > cursor) partes.push(s.slice(cursor, de));
-      partes.push(<mark key={i} style={{ background:'#fef08a', padding:0, borderRadius:2, fontWeight:700 }}>{s.slice(de, fim)}</mark>);
+      partes.push(<mark key={i} className="acn-busca-marca">{s.slice(de, fim)}</mark>);
       cursor = fim;
     });
     partes.push(s.slice(cursor));
@@ -1411,7 +1438,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                         return next;
                       })}>
                       <span>{group.section}</span>
-                      <Icone path={mdiChevronDown} size={14} style={{ transform: collapsed ? 'rotate(-90deg)' : undefined, transition:'transform .15s' }} />
+                      <Icone path={mdiChevronDown} size={14} className={'acn-menu-seta' + (collapsed ? ' recolhida' : '')} />
                     </button>
                   )}
                   {!collapsed && visibleItems.map(item => (
@@ -1504,11 +1531,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
             {/* Dropdown de resultados */}
             {showGlobalRes && (
-              <div className="acn-busca-resultados" style={{ position:'absolute', top:'calc(100% + 6px)', left:0, right:0,
-                zIndex:9999, maxHeight:460, overflowY:'auto' }}>
+              <div className="acn-busca-resultados">
 
                 {globalResultados.length === 0 && !globalBuscando && (
-                  <div style={{ padding:'16px 14px', color:'#9ca3af', fontSize:11, textAlign:'center' }}>
+                  <div className="acn-busca-vazio">
                     Nenhum resultado para "{globalBusca}"
                   </div>
                 )}
@@ -1521,9 +1547,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                   return (
                     <div key={tipo}>
                       {/* Header do grupo */}
-                      <div style={{ padding:'6px 12px 4px', fontSize:9, fontWeight:800, color:meta.cor,
-                        textTransform:'uppercase', letterSpacing:.5, borderBottom:'1px solid #f1f5f9',
-                        background:'#fafafa', position:'sticky', top:0 }}>
+                      <div className="acn-busca-grupo" style={{ color: meta.cor }}>
                         {meta.icon} {meta.label}
                       </div>
                       {grupo.map((r, i) => {
@@ -1538,29 +1562,25 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                         const status = r.status_geral || r.funil || r.status || '';
                         return (
                           <div key={r.id||i}
-                            onClick={() => abrirResultado(r)}
-                            style={{ padding:'9px 14px', cursor:'pointer', borderBottom:'1px solid #f8fafc',
-                              transition:'background .1s' }}
-                            onMouseEnter={e => (e.currentTarget.style.background='#f0f9ff')}
-                            onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+                            className="acn-busca-item"
+                            onClick={() => abrirResultado(r)}>
 
                             {/* Título principal com highlight */}
-                            <div style={{ fontSize:12, fontWeight:600, color:'#1e293b', marginBottom: ctx ? 3 : 0, lineHeight:1.4 }}>
+                            <div className={'acn-busca-item-titulo' + (ctx ? ' com-contexto' : '')}>
                               {hilite(titulo, globalBusca)}
                             </div>
 
                             {/* Contexto: campo onde a busca bateu */}
                             {ctx && (
-                              <div style={{ fontSize:10, color:'#64748b', display:'flex', alignItems:'center', gap:4 }}>
-                                <span style={{ fontWeight:600, color:meta.cor }}>{ctx.campo}:</span>
+                              <div className="acn-busca-item-contexto">
+                                <b style={{ color: meta.cor }}>{ctx.campo}:</b>
                                 <span>{hilite(ctx.valor, globalBusca)}</span>
                               </div>
                             )}
 
                             {/* Badge de status */}
                             {status && (
-                              <span style={{ display:'inline-block', marginTop:3, fontSize:8, fontWeight:700,
-                                background: meta.cor + '18', color: meta.cor, borderRadius:4, padding:'1px 6px' }}>
+                              <span className="acn-busca-item-status" style={{ background: meta.cor + '18', color: meta.cor }}>
                                 {status}
                               </span>
                             )}
@@ -1571,7 +1591,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                   );
                 })}
 
-                <div style={{ padding:'6px 12px', fontSize:9, color:'#94a3b8', borderTop:'1px solid #f1f5f9', textAlign:'center' }}>
+                <div className="acn-busca-rodape">
                   {globalResultados.length} resultado(s) — clique para abrir
                 </div>
               </div>
@@ -1699,18 +1719,18 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
                 <div className="sec-card">
                   <div className="sec-hdr">
-                    <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span className="acn-kpi-titulo">
                       KPIs por setor <Selo familia="neutro" ponto={false}>{METRICAS_CONFIG.length} setores</Selo>
                     </span>
                   </div>
-                  <div className="sec-body" style={{ overflowX:'auto', padding:0 }}>
+                  <div className="sec-body acn-sem-recuo acn-rolagem">
                     <table className="acn-tabela">
                       <thead><tr>
                         <th>Setor</th>
                         <th>Indicador</th>
-                        <th style={{ textAlign:'right' }}>Meta</th>
-                        <th style={{ textAlign:'right' }}>Tolerância</th>
-                        <th style={{ textAlign:'right' }}>Realizado</th>
+                        <th className="acn-dir">Meta</th>
+                        <th className="acn-dir">Tolerância</th>
+                        <th className="acn-dir">Realizado</th>
                         <th>Status</th>
                         <th>Diretriz</th>
                       </tr></thead>
@@ -1724,20 +1744,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                           const h = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
                           return (
                             <tr key={m.key} className={st.cls === 'st-crit' ? 'acn-linha-alerta' : ''}>
-                              <td className="acn-forte" style={{ whiteSpace:'nowrap' }}>{m.nome}</td>
-                              <td style={{ minWidth:180 }}>{m.desc}</td>
-                              <td className="acn-num" style={{ textAlign:'right', whiteSpace:'nowrap' }}>{h(m.meta)}</td>
-                              <td className="acn-num" style={{ textAlign:'right', whiteSpace:'nowrap' }}>{h(m.tol)}</td>
-                              <td style={{ whiteSpace:'nowrap' }}>
+                              <td className="acn-forte acn-nowrap">{m.nome}</td>
+                              <td className="acn-kpi-desc">{m.desc}</td>
+                              <td className="acn-num acn-dir acn-nowrap">{h(m.meta)}</td>
+                              <td className="acn-num acn-dir acn-nowrap">{h(m.tol)}</td>
+                              <td className="acn-nowrap">
                                 {real != null ? (
                                   <div className="acn-barra" title={`${usoTol}% da tolerância`}>
                                     <span><i style={{ width: `${Math.max(3, usoTol)}%`, background: cor }} /></span>
                                     <b className="acn-num acn-forte">{h(real)}</b>
                                   </div>
-                                ) : <div className="acn-fraco" style={{ textAlign:'right' }}>—</div>}
+                                ) : <div className="acn-fraco acn-dir">—</div>}
                               </td>
                               <td><Selo familia={fam as any}>{st.cls === 'st-ok' ? 'No prazo' : st.cls === 'st-warn' ? 'Atenção' : st.cls === 'st-crit' ? 'Crítico' : 'Sem dados'}</Selo></td>
-                              <td className="acn-fraco" style={{ minWidth:160 }}>{m.diretriz}</td>
+                              <td className="acn-fraco acn-kpi-diretriz">{m.diretriz}</td>
                             </tr>
                           );
                         })}
@@ -1749,7 +1769,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 {/* Telecom: análises técnicas (contagem; ver o comentário em buscarTelecom) */}
                 <div className="sec-card">
                   <div className="sec-hdr">
-                    <span style={{ display:'flex', alignItems:'center', gap:8 }}>Telecom — análises técnicas <Selo familia="neutro" ponto={false}>contagem</Selo></span>
+                    <span className="acn-kpi-titulo">Telecom — análises técnicas <Selo familia="neutro" ponto={false}>contagem</Selo></span>
                   </div>
                   <div className="sec-body">
                     {erroTelecom && <Faixa tom="erro" acao={<Botao pequeno onClick={buscarTelecom}>Tentar de novo</Botao>}>Não foi possível ler as análises do Telecom ({erroTelecom}).</Faixa>}
@@ -1796,54 +1816,46 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         </div>
       </div>
 
-      {/* MODAL TROCAR SENHA */}
+      {/* MODAL TROCAR SENHA (12e76, 24/11/2026: no molde das janelas do sistema; o primeiro acesso continua sem Cancelar, sem ✕ e sem fechar fora) */}
       {modalSenha && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:380}}>
-            <div className="modal-title">
-              🔑 {currentUser?.primeiro_acesso ? 'Defina sua Nova Senha' : 'Alterar Senha'}
+          <div className="modal-box acn-modal-cadastro acn-senha-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title">
+                <Icone path={mdiKeyOutline} size={18} /> {currentUser?.primeiro_acesso ? 'Defina sua nova senha' : 'Alterar senha'}
+              </span>
             </div>
-            {currentUser?.primeiro_acesso && (
-              <div style={{fontSize:12,color:'#92400e',background:'#fef3c7',padding:'8px 10px',borderRadius:6,marginBottom:12,lineHeight:1.5}}>
-                ⚠️ Por segurança, defina uma senha pessoal antes de continuar.
-              </div>
-            )}
-            {senhaMsg && (
-              <div style={{fontSize:12,padding:'8px 10px',borderRadius:6,marginBottom:10,
-                background: senhaMsg.startsWith('ok:') ? '#f0fdf4' : '#fef2f2',
-                color: senhaMsg.startsWith('ok:') ? '#166534' : '#991b1b',
-                border: `1px solid ${senhaMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`}}>
-                {senhaMsg.startsWith('ok:') ? '✅ ' : '❌ '}{/* 16c (10/10/2026): o texto de erro aparecia cortado ("or:Senha atual incorreta.") — o prefixo "error:" tem 6 letras e só 3 eram tiradas, o mesmo defeito do login (7.x) */}{senhaMsg.replace(/^(ok|error):/, '')}
-              </div>
-            )}
-            {(
-              <div style={{marginBottom:10}}>
-                <label className="acn-label">{currentUser?.primeiro_acesso ? 'Senha com que você entrou' : 'Senha Atual'}</label>
-                <input className="acn-input" type="password" style={{width:'100%'}}
+            <div className="acn-modal-corpo">
+              {currentUser?.primeiro_acesso && (
+                <Faixa tom="atencao">Por segurança, defina uma senha pessoal antes de continuar.</Faixa>
+              )}
+              {senhaMsg && (
+                /* 16c (10/10/2026): o texto de erro aparecia cortado ("or:Senha atual incorreta.") — o prefixo "error:" tem 6 letras e só 3 eram tiradas, o mesmo defeito do login (7.x) */
+                <Faixa tom={senhaMsg.startsWith('ok:') ? 'ok' : 'erro'}>{senhaMsg.replace(/^(ok|error):/, '')}</Faixa>
+              )}
+              <div className="acn-senha-campo">
+                <label className="acn-label">{currentUser?.primeiro_acesso ? 'Senha com que você entrou' : 'Senha atual'}</label>
+                <input className="acn-input" type="password" autoComplete="current-password"
                   value={senhaForm.atual} onChange={e=>setSenhaForm(f=>({...f,atual:e.target.value}))} />
               </div>
-            )}
-            <div style={{marginBottom:10}}>
-              <label className="acn-label">Nova Senha (mín. 4 caracteres)</label>
-              <input className="acn-input" type="password" style={{width:'100%'}}
-                value={senhaForm.nova} onChange={e=>setSenhaForm(f=>({...f,nova:e.target.value}))} />
+              <div className="acn-senha-campo">
+                <label className="acn-label">Nova senha (mín. 4 caracteres)</label>
+                <input className="acn-input" type="password" autoComplete="new-password"
+                  value={senhaForm.nova} onChange={e=>setSenhaForm(f=>({...f,nova:e.target.value}))} />
+              </div>
+              <div className="acn-senha-campo">
+                <label className="acn-label">Confirmar nova senha</label>
+                <input className="acn-input" type="password" autoComplete="new-password"
+                  value={senhaForm.confirmar} onChange={e=>setSenhaForm(f=>({...f,confirmar:e.target.value}))}
+                  onKeyDown={e=>e.key==='Enter'&&salvarSenha()} />
+              </div>
             </div>
-            <div style={{marginBottom:14}}>
-              <label className="acn-label">Confirmar Nova Senha</label>
-              <input className="acn-input" type="password" style={{width:'100%'}}
-                value={senhaForm.confirmar} onChange={e=>setSenhaForm(f=>({...f,confirmar:e.target.value}))}
-                onKeyDown={e=>e.key==='Enter'&&salvarSenha()} />
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px'}}
-                onClick={salvarSenha} disabled={senhaLoading}>
-                {senhaLoading ? 'Salvando...' : 'SALVAR SENHA'}
-              </button>
+            <div className="acn-modal-rodape acn-senha-rodape">
+              <Botao variante="primario" onClick={salvarSenha} disabled={senhaLoading || senhaMsg.startsWith('ok:')}>
+                {senhaLoading ? 'Salvando...' : 'Salvar senha'}
+              </Botao>
               {!currentUser?.primeiro_acesso && (
-                <button className="acn-btn" style={{background:'#94a3b8',padding:'9px'}}
-                  onClick={()=>{setModalSenha(false);setSenhaMsg('');}}>
-                  Cancelar
-                </button>
+                <Botao disabled={senhaLoading || senhaMsg.startsWith('ok:')} onClick={()=>{setModalSenha(false);setSenhaMsg('');}}>Cancelar</Botao>
               )}
             </div>
           </div>
