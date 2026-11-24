@@ -172,3 +172,6 @@ Só `gerar_pedido_faturamento` (gatilho `trg_pedido_faturamento`, AFTER UPDATE):
 
 ### 10.5 Próximo passo
 Escrever a V3a (SQL aditivo, não aplicado) e mostrar antes de aplicar.
+
+### 10.6 V3a escrita em 24/11/2026, NÃO aplicada (`supabase/sql/ver_valores_v3a_pedidos_compra_valores.sql`)
+Cria `pcp_pedidos_compra_valores` e `demandas_setoriais_valores` (política `pode_ver_valores()`), a função `pedido_compra_extrair_valores`, a cópia de segurança, a cópia dos valores e os gatilhos de espelho; **nenhuma coluna antiga muda**. Ensaiada no banco dentro de uma transação desfeita: 218 pedidos copiados (39 com valor de vencedora, 44 com preço de item) e **0 divergências** na ida e volta (o valor recolocado é igual ao original). **Achado novo:** a lista de itens da demanda avulsa (`demandas_avulsas.itens[].valor_unitario`, 2 itens no banco) é outra tabela quente; ficou FORA da V3 (onda própria, se o usuário quiser). Falta o ensaio de custo com o arquivo no lugar marcado, e aplicar só fora do horário.
