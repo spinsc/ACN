@@ -10,6 +10,7 @@
 import { supabase } from './supabaseClient';
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { diaISO } from './Interface';
+import { anexarValoresDasOps } from './OpValores';
 
 /**
  * Calcula a comissão de cada técnico no período [inicio, fim] (AAAA-MM-DD).
@@ -23,7 +24,7 @@ export async function calcularComissaoTecnicos({ funcionarios, inicio, fim, modo
     // dentro do período). A Faturar: já concluído na produção dentro do
     // período, mas ainda sem NF emitida — dá visão do que vem pela frente.
     let opQuery = supabase.from('oples')
-      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,numero_nf,nfe,numero_nf_servico,data_entrega');
+      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,numero_nf,nfe,numero_nf_servico,data_entrega');
     // Antes havia aqui `.not('tecnico_producao_id','is',null)`: OP sem o técnico principal nem entrava na
     // conta. Desde 30/09/2026 a equipe pode ser apontada ou corrigida depois (EquipeDaOp.tsx), inclusive
     // numa OP que nunca teve técnico principal — e quem manda é a lista em `responsaveis_producao`, não
@@ -55,7 +56,10 @@ export async function calcularComissaoTecnicos({ funcionarios, inicio, fim, modo
         : Promise.resolve({ data: [] as any[] }),
     ]);
 
-    const ops: any[] = opRes.data || [];
+    // o valor e a mão de obra da OP moram em `oples_valores` (V2b do "ver valores no banco", 24/11/2026); leitura recusada para a conta: comissão com valor zero seria pagar a menos sem avisar
+    const comValores = await anexarValoresDasOps(opRes.data || []);
+    if (comValores.erro) return { dados: [], grupos: [], semTecnico: [], fechamentos: [], erro: 'Não foi possível ler os valores das OPs: ' + comValores.erro };
+    const ops: any[] = comValores.ops;
     // Origem "Adaptação": OPs (toda fabricação/transformação de veículo) +
     // só as OS de manutenção veicular — exclui SAC de equipamento/rádio avulso.
     const oss: any[] = (osRes.data || []).filter((os: any) => filtroOrigem === 'todos' || os.is_manutencao_veicular === true);

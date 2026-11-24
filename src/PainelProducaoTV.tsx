@@ -139,7 +139,7 @@ export default function PainelProducaoTV() {
 
   const carregar = useCallback(async () => {
     const { data } = await supabase.from('oples')
-      .select('id,opl,cliente_nome,modelo,status_geral,data_prevista_entrega,fluxo_entrega,tipo_projeto,valor_mao_de_obra_serralheria,serralheria_status,responsavel_producao,equipe_nome,modo_execucao,origem_venda')
+      .select('id,opl,cliente_nome,modelo,status_geral,data_prevista_entrega,fluxo_entrega,tipo_projeto,tem_mo_serralheria,serralheria_status,responsavel_producao,equipe_nome,modo_execucao,origem_venda')
       .in('status_geral', STATUS_PRODUCAO)
       .order('data_prevista_entrega', { ascending: true });
     setOpls(data || []);

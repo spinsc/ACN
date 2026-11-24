@@ -1,5 +1,6 @@
 // @ts-nocheck
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { anexarValoresDasOps } from './OpValores';
 import { Botao, Selo } from './Interface';
 import { mdiClose, mdiPackageVariantClosed, mdiSendOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, fluxoLabel } from './FluxoEntrega';
@@ -30,7 +31,15 @@ export const lotePedidoIgual = (irmaos: any[]): boolean => {
   return irmaos.every(o => assinaturaDeItens(o) === a);
 };
 
-export default function ResumoLoteOpl({ base, irmaos, onClose, onCompra, onLiberarFiscal, onAbrirUnidade, desde, currentUser }: any) {
+export default function ResumoLoteOpl({ base, irmaos: irmaosDaTela, onClose, onCompra, onLiberarFiscal, onAbrirUnidade, desde, currentUser }: any) {
+  // o valor da OP mora em `oples_valores` (V2b do "ver valores no banco", 24/11/2026): as listas das telas não o trazem, então o resumo o lê ao abrir
+  const [irmaosComValor, setIrmaosComValor] = useState<any[] | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    anexarValoresDasOps(irmaosDaTela).then(r => { if (vivo && !r.erro) setIrmaosComValor(r.ops); });
+    return () => { vivo = false; };
+  }, [irmaosDaTela.map((o: any) => o.id).join(',')]);   // as telas passam uma lista nova a cada desenho: a chave são os ids
+  const irmaos = irmaosComValor || irmaosDaTela;
   const dados = useMemo(() => {
     const n = irmaos.length;
     const porStatus: Record<string, number> = {};

@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 import { loteNasceuDoFluxoMisto } from './FluxoMisto';
+import { anexarValoresDasOps } from './OpValores';
 
 /** "1560.2608/15" → "1560.2608": a base que une os veículos do mesmo lote. */
 export const baseOplDe = (opl: any): string => String(opl || '').replace(/\/\d+$/, '');
@@ -40,6 +41,9 @@ export function divisorPorBaseDeLote(todasOps: any[]): Record<string, number> {
 /** Lê a tabela inteira de OPs (só id/opl/valores, ~poucas centenas de linhas) e devolve o divisor de cada lote. */
 export async function lerDivisorPorBaseDeLote(): Promise<Record<string, number>> {
   const { data } = await supabase.from('oples')
-    .select('id,opl,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,fluxo_entrega,tipo_projeto');   // fluxo e tipo: para reconhecer o lote do fluxo misto
-  return divisorPorBaseDeLote(data || []);
+    .select('id,opl,fluxo_entrega,tipo_projeto');   // fluxo e tipo: para reconhecer o lote do fluxo misto
+  // os valores moram em `oples_valores` (V2b, 24/11/2026); sem eles o divisor sairia errado, então a leitura recusada vira erro
+  const r = await anexarValoresDasOps(data || []);
+  if (r.erro) throw new Error('Não foi possível ler os valores das OPs: ' + r.erro);
+  return divisorPorBaseDeLote(r.ops);
 }

@@ -64,7 +64,7 @@ async function unidadesDoLote(numero) {
     .sort((a, b) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true }));
 }
 
-const COLUNAS_OP = 'id,opl,status_geral,data_emissao_nf,valor_mao_de_obra,valor_mao_de_obra_serralheria';
+const COLUNAS_OP = 'id,opl,status_geral,data_emissao_nf,tem_mo_adaptacao,tem_mo_serralheria';   // marcas no lugar dos valores (V2b, 24/11/2026): quem não vê valores também precisa saber que falta apontar a equipe
 
 export async function carregarEquipeDaOp(oplId) {
   const [{ data: op }, { data: linhas }] = await Promise.all([
@@ -93,8 +93,8 @@ export async function lerSituacaoDaEquipe(ids) {
 /** A OP tem mão de obra lançada e ninguém apontado para recebê-la? Então não sai comissão. */
 export function faltaApontar(op, situacao) {
   const s = situacao || {};
-  const adaptacao = Number(op?.valor_mao_de_obra) > 0 && !(s.responsavel > 0);
-  const serralheria = Number(op?.valor_mao_de_obra_serralheria) > 0 && !(s.serralheria > 0);
+  const adaptacao = (op?.tem_mo_adaptacao === true || Number(op?.valor_mao_de_obra) > 0) && !(s.responsavel > 0);
+  const serralheria = (op?.tem_mo_serralheria === true || Number(op?.valor_mao_de_obra_serralheria) > 0) && !(s.serralheria > 0);
   return { adaptacao, serralheria, algum: adaptacao || serralheria };
 }
 

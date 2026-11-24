@@ -34,6 +34,7 @@ import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente, podeCopiarOp } from './utils/permissoes';
+import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import CopiarOpModal from './CopiarOpModal';
 import TrocarFluxoModal from './TrocarFluxoModal';
 import { excluirOpComMotivo, podeExcluirOp } from './ExclusaoDeOp';
@@ -542,10 +543,12 @@ async function lerUnidadesDoLote(opl: string): Promise<{ lista: any[]; erro: str
   const base = baseDoLote(opl);
   if (!base) return { lista: [], erro: '' };
   const { data, error } = await supabase.from('oples')
-    .select('id,opl,status_geral,chassi,placa,modelo,responsavel_producao,equipe_nome,modo_execucao,resumo_servicos,data_prevista_entrega,valor_total,cliente_nome,origem_venda')
+    .select('id,opl,status_geral,chassi,placa,modelo,responsavel_producao,equipe_nome,modo_execucao,resumo_servicos,data_prevista_entrega,cliente_nome,origem_venda')
     .like('opl', escLike(base) + '/%');
   if (error) return { lista: [], erro: error.message };
-  return { erro: '', lista: (data || [])
+  // o valor da OP mora em `oples_valores` (V2b do "ver valores no banco", 24/11/2026); quem não pode ver recebe nulo
+  const comValores = await anexarValoresDasOps(data || []);
+  return { erro: '', lista: comValores.ops
     .filter((o: any) => /^\/\d+$/.test(String(o.opl).slice(base.length)))
     .sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })) };
 }
@@ -701,8 +704,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
    */
   const recarregarOpl = async () => {
     if (!oplProp?.id) return;
-    const { data, error } = await supabase.from('oples').select('*').eq('id', oplProp.id).maybeSingle();
+    const { data: dados, error } = await supabase.from('oples').select('*').eq('id', oplProp.id).maybeSingle();
     setErroOpl(error ? error.message : '');
+    const data = dados ? (await anexarValoresDaOp(dados)).op : dados;
     if (data) setOpl(data);
   };
   useEffect(() => { setOpl(oplProp); recarregarOpl(); }, [oplProp?.id]);
@@ -833,8 +837,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     if (lote.erro) { alert('Não foi possível ler as unidades do lote: ' + lote.erro); return; }
     const ids = lote.lista.map((u: any) => u.id);
     if (!ids.length) return;
-    const { data, error: erroLote } = await supabase.from('oples').select('*').in('id', ids);
+    const { data: dadosLote, error: erroLote } = await supabase.from('oples').select('*').in('id', ids);
     if (erroLote) { alert('Não foi possível ler as unidades do lote: ' + erroLote.message); return; }
+    const data = (await anexarValoresDasOps(dadosLote || [])).ops;
     setEditandoLote([...(data || [])].sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })));
   };
 
@@ -1034,7 +1039,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <ModalEditarOplLote ops={editandoLote} currentUser={usuario} onClose={() => setEditandoLote(null)}
           onSalvo={async () => {
             setEditandoLote(null);
-            const { data } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
+            const { data: dadosOp } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
+            const data = dadosOp ? (await anexarValoresDaOp(dadosOp)).op : dadosOp;
             if (data) setOpl(data);
             recarregarLogs();
           }} />
@@ -1463,7 +1469,8 @@ export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: an
     // string-only: busca o objeto no banco
     if (!numero) return;
     setLoading(true);
-    const { data, error } = await supabase.from('oples').select('*').eq('opl', numero).maybeSingle();
+    const { data: dadosOp, error } = await supabase.from('oples').select('*').eq('opl', numero).maybeSingle();
+    const data = dadosOp ? (await anexarValoresDaOp(dadosOp)).op : dadosOp;
     setLoading(false);
     // 7.x (15/10/2026): clicar no número e não abrir nada, sem dizer por quê, deixava a pessoa sem saber se era erro ou se a OP não existia
     if (error) { alert(`Não foi possível abrir a OP ${numero}: ${error.message}`); return; }
