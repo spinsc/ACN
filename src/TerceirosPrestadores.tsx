@@ -154,7 +154,7 @@ export function PrestadoresDeTerceiros({ prestadores, tipos, erro, onMudou, pode
       </div>
       <div className="acn-ajuda">
         Prestadores são as empresas e os profissionais de fora que fazem os serviços (película, pintura, lavagem…). Este cadastro é só dos Serviços de terceiros: não é o de fornecedores do Compras.
-        Nada se apaga: quem parou de atender fica inativo.{!podeCadastrar && ' Quem cadastra e corrige: Admin, gerentes e a Adaptação.'}
+        Nada se apaga: quem parou de atender fica inativo.{!podeCadastrar && ' Quem cadastra e corrige: Admin, gerentes, a Adaptação e quem o Admin autorizou.'}
       </div>
       {erro && <Faixa tom="erro">Não foi possível ler os prestadores ({erro}). A lista abaixo pode estar desatualizada ou incompleta.</Faixa>}
       {aviso && <Faixa tom="erro">{aviso}</Faixa>}
@@ -189,7 +189,7 @@ export function PrestadoresDeTerceiros({ prestadores, tipos, erro, onMudou, pode
             {lista.length === 0 && (
               <tr><td colSpan={colunas} className="acn-centro acn-fraco">
                 {prestadores.length === 0
-                  ? (podeCadastrar ? 'Nenhum prestador cadastrado ainda. Cadastre o primeiro no botão acima.' : 'Nenhum prestador cadastrado ainda. Quem cadastra: Admin, gerentes e a Adaptação.')
+                  ? (podeCadastrar ? 'Nenhum prestador cadastrado ainda. Cadastre o primeiro no botão acima.' : 'Nenhum prestador cadastrado ainda. Quem cadastra: Admin, gerentes, a Adaptação e quem o Admin autorizou.')
                   : 'Nenhum prestador encontrado com esse filtro.'}
               </td></tr>
             )}

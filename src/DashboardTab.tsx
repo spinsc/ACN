@@ -710,7 +710,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       // tem a marca, e sem ela ninguém aprovava compra. A leitura corrige a sessão na próxima abertura.
       // R7 (13/10/2026): `ver_valores` e `pode_deletar_anexos` entram pelo mesmo motivo — a sessão guardada antes do login novo não os tem
       // Início (09/11/2026): `pode_postar_inicio` também — a tela Início mostra os botões de editar a quem tem a marca (o login não a traz; o banco confere de novo em toda gravação)
-      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra,eh_dev,ver_valores,pode_deletar_anexos,pode_postar_inicio')
+      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra,eh_dev,ver_valores,pode_deletar_anexos,pode_postar_inicio,pode_gerir_terceiros')
       .eq('id', currentUserProp.id)
       .single()
       .then(({ data }) => {

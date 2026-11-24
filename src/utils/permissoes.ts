@@ -207,6 +207,8 @@ export function podePostarNoInicio(usuarioAtual: any): boolean {
 // As duas regras são suposições minhas, a confirmar com o usuário (plano, seção 6). Na fatia T1 a aba só aparece para quem cadastra; da T2 em diante todos veem e todos pedem.
 export function podeGerirPrestadoresDeTerceiros(usuarioAtual: any): boolean {
   if (ehAdminOuGerente(usuarioAtual)) return true;
+  // 24/11/2026 (pedido do usuário): o Admin pode dar a permissão a uma pessoa (Admin → Usuários, caixa "Pode gerir serviços de terceiros"); o banco repete a conta
+  if (usuarioAtual?.pode_gerir_terceiros === true) return true;
   const abas = usuarioAtual?.abas_permitidas;
   return !Array.isArray(abas) || abas.length === 0 || abas.includes('producao');
 }

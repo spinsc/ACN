@@ -166,7 +166,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, ver_valores: true, gestor_id: null });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
   // Etapa 16c (10/10/2026): definir a senha de OUTRA pessoa exige a senha de quem está definindo (um Admin) — conferida no servidor, que guarda só o resumo da nova.
   const [senhaAdmin, setSenhaAdmin] = useState('');
@@ -208,7 +208,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, pode_postar_inicio: u.pode_postar_inicio === true, pode_gerir_terceiros: u.pode_gerir_terceiros === true, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -253,6 +253,8 @@ function PainelUsuarios() {
       pode_deletar_anexos: !!editForm.pode_deletar_anexos,
       // Tela Início (09/11/2026): quem pode postar slides do carrossel, datas da empresa e imagens (o Admin sempre pode; o banco confere pela função pode_postar_inicio)
       pode_postar_inicio: !!editForm.pode_postar_inicio,
+      // Serviços de terceiros (24/11/2026): quem cadastra prestadores e monta a ordem em lote além de Admin, gerentes e Adaptação (o banco confere pela marca)
+      pode_gerir_terceiros: !!editForm.pode_gerir_terceiros,
       permissoes_crm: editForm.permissoes_crm,
       permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
@@ -295,6 +297,7 @@ function PainelUsuarios() {
         ver_valores: u.ver_valores !== false,                      // R7 (13/10/2026): como o login monta (vazio vale "vê")
         pode_deletar_anexos: u.pode_deletar_anexos === true,
         pode_postar_inicio: u.pode_postar_inicio === true,
+        pode_gerir_terceiros: u.pode_gerir_terceiros === true,
         ultimo_login_anterior: null,
       }));
     } catch (e: any) { alert('Erro: ' + e.message); return; }
@@ -564,6 +567,19 @@ function PainelUsuarios() {
                 </label>
                 <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
                   Todo usuário do sistema vê a tela Início. Só o Admin e quem tiver esta caixa marcada editam.
+                </div>
+              </div>
+              {/* Serviços de terceiros (24/11/2026, pedido do usuário): permissão pessoa a pessoa */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.pode_gerir_terceiros||false}
+                    onChange={e=>setEditForm(f=>({...f,pode_gerir_terceiros:e.target.checked}))}
+                    style={{accentColor:'#0e7068'}} />
+                  <span>🤝 Pode gerir serviços de terceiros (cadastrar prestadores e montar a ordem em lote)</span>
+                </label>
+                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
+                  Admin, gerentes e quem tem a aba Adaptação já podem. Tipos de serviço e modelo do contrato continuam só do Admin.
                 </div>
               </div>
               {/* Visualização de valores financeiros */}
