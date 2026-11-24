@@ -9,6 +9,7 @@ import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes, resolverMencoesDeTodos } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
+import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { PinturaCampos, PinturaSelo, PinturaPedirAgora, abrirPedidoPintura, ehSerralheria, pinturaJaPedida } from './PinturaSerralheria';
 import { CamposSolicitacaoCompra, solicitacaoCompraVazia, validarSolicitacaoCompra, enviarSolicitacaoCompra } from './SolicitacaoCompra';
@@ -503,7 +504,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   // quem pode mexer nos envolvidos e nas descrições dos anexos: Admin, quem criou a demanda, o responsável ou um envolvido
   const meuEmail = String(currentUser?.email || '').trim().toLowerCase();
   const podeMexerNaDemanda = ehAdmin || (!!meuEmail && String(d.criado_por || '').trim().toLowerCase() === meuEmail)
-    || (!!currentUser?.nome && (currentUser.nome === d.criado_por_nome || currentUser.nome === d.responsavel_nome))
+    || ehEu(currentUser, d, 'criado_por_nome') || ehEu(currentUser, d, 'responsavel_nome')
     || (Array.isArray(d.membros) && d.membros.some((m: any) => String(m?.email || '').trim().toLowerCase() === meuEmail));
   const [mostrarReabrir, setMostrarReabrir] = useState(false);
   const [reabrirForm, setReabrirForm] = useState({ status: 'Pendente', motivo: '' });
@@ -543,7 +544,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     }).eq('id', d.id);
     setSalvando(false);
     if (error) { alert('Não foi possível cancelar: ' + error.message); return; }
-    if (d.responsavel_nome && d.responsavel_nome !== currentUser?.nome) {
+    if (d.responsavel_nome && !ehEu(currentUser, d, 'responsavel_nome')) {
       notificarEvento('demanda_criada_setor', `*Demanda cancelada* — ${d.titulo}\nSetor: ${d.setor}\nMotivo: ${motivoCancelar.trim()}\nPor: ${currentUser?.nome || ''}`, d.setor);
     }
     setMostrarCancelar(false); setMotivoCancelar('');

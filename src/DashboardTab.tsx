@@ -703,7 +703,21 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     window.location.href = window.location.origin + import.meta.env.BASE_URL;
   };
 
+  // 24/11/2026 (plano pessoa por ID, U4): a leitura abaixo roda na abertura E toda vez que a aba volta a ser vista (no máximo uma por 2 minutos): quem renomeia um
+  // usuário no Admin leva o nome novo ao banco todo pelo ID, e a sessão que já estava aberta passa a usar o nome novo sem sair e entrar (o ID nunca muda).
+  const ultimaLeituraDaSessao = useRef(0);
   useEffect(() => {
+    if (!currentUserProp?.id) return;
+    const reler = () => {
+      ultimaLeituraDaSessao.current = Date.now();
+      lerSessaoDoBanco();
+    };
+    const aoVoltar = () => { if (document.visibilityState === 'visible' && Date.now() - ultimaLeituraDaSessao.current > 120000) reler(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => document.removeEventListener('visibilitychange', aoVoltar);
+  }, [currentUserProp?.id]);
+
+  const lerSessaoDoBanco = () => {
     if (!currentUserProp?.id) return;
     supabase.from('auth_usuarios')
       // `pode_aprovar_compra` entra aqui (30/09/2026) para quem já estava logado: a sessão guardada antes não
@@ -715,12 +729,17 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       .single()
       .then(({ data }) => {
         if (!data) return;
-        const merged = { ...currentUserProp, ...data };
-        setCurrentUser(merged);
+        // parte do que está guardado agora (e não só do que a tela recebeu ao abrir): senão a releitura desfaria o que a sessão já mudou, como o fim do primeiro acesso depois de trocar a senha
+        let guardado: any = {};
+        try { guardado = JSON.parse(localStorage.getItem('user') || '{}') || {}; } catch (_) {}
+        const merged = { ...currentUserProp, ...(guardado.id === currentUserProp.id ? guardado : {}), ...data };
+        // só troca o estado quando algo mudou de fato (nome, perfil, abas…): evita refazer a tela toda a cada volta à aba
+        setCurrentUser(prev => JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged);
         // Atualiza localStorage para próximo login não precisar recarregar
         try { localStorage.setItem('user', JSON.stringify(merged)); } catch(_) {}
       });
-  }, [currentUserProp?.id]);
+  };
+  useEffect(() => { ultimaLeituraDaSessao.current = Date.now(); lerSessaoDoBanco(); }, [currentUserProp?.id]);
 
   const [activeTab, setActiveTab]       = useState('inicio');   // 09/11/2026: o sistema abre na tela Início (antes abria no Dashboard geral, que segue no menu)
   const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);

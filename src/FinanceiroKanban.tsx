@@ -27,6 +27,7 @@ import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { Faixa, Botao, Selo, Tag } from './Interface';
+import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import Icone from './Icone';
 import {
   mdiClipboardTextOutline, mdiCalendarMonthOutline, mdiTagOutline, mdiBellOutline, mdiRepeat,
@@ -701,7 +702,7 @@ export default function FinanceiroKanban({ currentUser }) {
 
   // o recorte da vista: quem não vê tudo só enxerga o que é seu
   const visiveis = tarefas
-    .filter(t => veTudo || (t.responsavel_nome && t.responsavel_nome === currentUser?.nome))
+    .filter(t => veTudo || (t.responsavel_nome && ehEu(currentUser, t, 'responsavel_nome')))
     .filter(t => !filtroResp || t.responsavel_nome === filtroResp);
   const responsaveis = [...new Set(tarefas.map(t => t.responsavel_nome).filter(Boolean))].sort();
   const nomeTipo = (id) => tipos.find(t => t.id === id)?.nome || '';
