@@ -7,6 +7,7 @@ import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils'
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
 import { linhasDoKitComErro, custoDoKitComErro, usosDoKitComErro } from './KitEstrutura';
+import { anexarValoresAosItens, anexarValoresAoItemEmbutido } from './CadastroItensValores';
 import { Faixa, Botao } from './Interface';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
@@ -68,11 +69,14 @@ function ItemBuscador({ onSelect, excluirIds = [] }: { onSelect: (item: any) => 
     const t = setTimeout(async () => {
       const { data, error } = await buscarPorPalavras(supabase
         .from('cadastro_itens')
-        .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
+        .select('id, codigo, nome, marca, fornecedor, unidade, ipi_pct, st_pct, moeda')
         .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(20);
       if (minha !== seq.current) return;
-      setErro(error ? (error.message || 'falha na consulta') : '');
-      setItens(error ? [] : (data || []).filter(i => !excluirIds.includes(i.id)));
+      // o custo do item mora na tabela de valores (V1 do "ver valores no banco", 24/11/2026)
+      const comValores = error ? { itens: [], erro: '' } : await anexarValoresAosItens(data || []);
+      if (minha !== seq.current) return;
+      setErro(error ? (error.message || 'falha na consulta') : (comValores.erro ? 'não foi possível ler os custos (' + comValores.erro + ')' : ''));
+      setItens(error ? [] : comValores.itens.filter(i => !excluirIds.includes(i.id)));
       setOpen(true);
     }, 250);
     return () => clearTimeout(t);
@@ -140,7 +144,9 @@ async function itensPorCodigo(codigos: string[]) {
     const { data, error } = await supabase.from('cadastro_itens').select('*').in('codigo_norm', lote);
     // 7.x (23/10/2026): leitura recusada valia como "esses códigos não existem" e o relatório listava todos como não encontrados
     if (error) { const e: any = new Error('Não foi possível consultar o catálogo (' + (error.message || 'falha na consulta') + ').'); e.daConsulta = true; throw e; }
-    (data || []).forEach((it: any) => achados.set(normalizarBusca(String(it.codigo || '').trim()), it));
+    const comValores = await anexarValoresAosItens(data || []);
+    if (comValores.erro) { const e: any = new Error('Não foi possível ler os custos do catálogo (' + comValores.erro + ').'); e.daConsulta = true; throw e; }
+    comValores.itens.forEach((it: any) => achados.set(normalizarBusca(String(it.codigo || '').trim()), it));
   }
   return achados;
 }
@@ -178,11 +184,13 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
     setBuscando(true);
     const t = setTimeout(async () => {
       const { data, error } = await buscarPorPalavras(supabase.from('cadastro_itens')
-        .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
+        .select('id, codigo, nome, marca, fornecedor, unidade, ipi_pct, st_pct, moeda')
         .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).order('nome').limit(200);
       if (minha !== seqBusca.current) return;
-      setErroBusca(error ? (error.message || 'falha na consulta') : '');
-      setResultados(error ? [] : (data || []));
+      const comValores = error ? { itens: [], erro: '' } : await anexarValoresAosItens(data || []);
+      if (minha !== seqBusca.current) return;
+      setErroBusca(error ? (error.message || 'falha na consulta') : (comValores.erro ? 'não foi possível ler os custos (' + comValores.erro + ')' : ''));
+      setResultados(error ? [] : comValores.itens);
       setBuscando(false);
     }, 250);
     return () => clearTimeout(t);
@@ -290,7 +298,9 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }:
       .eq('produto_id', kitSel).order('ordem');
     // 7.x: leitura recusada valia como "esse kit não tem itens"
     if (error) { alert('Não foi possível ler os itens desse kit (' + (error.message || 'falha na consulta') + '). Nada foi copiado.'); setProcessando(false); return; }
-    const itens = (data || []).filter((l: any) => l.cadastro_itens)
+    const comV = await anexarValoresAoItemEmbutido(data || []);
+    if (comV.erro) { alert('Não foi possível ler os custos desse kit (' + comV.erro + '). Nada foi copiado.'); setProcessando(false); return; }
+    const itens = comV.linhas.filter((l: any) => l.cadastro_itens)
       .map((l: any) => ({ item: l.cadastro_itens, quantidade: Number(l.quantidade) || 1, observacoes: l.observacoes || '' }));
     if (!itens.length) { alert('Esse kit não tem itens na estrutura.'); setProcessando(false); return; }
     concluir(itens);
@@ -515,7 +525,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
   useEffect(() => {
     if (!idDoBom) return;
     setLoadingBom(true); setBomCarregado(false); setErroBom('');
-    linhasDoKitComErro(idDoBom)
+    linhasDoKitComErro(idDoBom, true)
       .then(async ({ linhas: linhasSalvas, erro }: { linhas: any[]; erro: string }) => {
         if (erro) { setErroBom(erro); setLoadingBom(false); return; }
         const montadas = [];
@@ -1060,7 +1070,7 @@ function BomViewer({ produto, onClose }: any) {
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const { linhas: salvas, erro: e } = await linhasDoKitComErro(produto.id);
+      const { linhas: salvas, erro: e } = await linhasDoKitComErro(produto.id, true);
       if (!vivo) return;
       if (e) { setErro(e); setLoading(false); return; }
       const custos: Record<string, number> = {};

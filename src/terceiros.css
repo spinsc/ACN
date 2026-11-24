@@ -1,0 +1,237 @@
+/* Serviços de terceiros (22/11/2026). Só as cores e medidas do design system (--acn-*), então o modo escuro vem junto. Prefixo acn-terc-. */
+
+.acn-terc { display: grid; gap: 12px; min-width: 0; }
+.acn-terc > * { min-width: 0; }
+
+/* Janelas. O peso da regra empata com `.acn-modal-cadastro` (design.css), senão a largura de 500 px da janela padrão vence e a janela perde a grade; max-width junto, como nas outras janelas largas.
+   O corpo da janela é uma coluna que rola: o que tem rolagem própria (a tabela dos carros) não pode encolher até sumir, então nada dentro dele encolhe. */
+html body .modal-box.acn-modal-cadastro.acn-terc-box { width: min(720px, 95vw); max-width: 720px; }
+html body .modal-box.acn-modal-cadastro.acn-terc-box-g { width: min(860px, 96vw); max-width: 860px; }
+html body .modal-box.acn-modal-cadastro.acn-terc-box-p { width: min(520px, 95vw); max-width: 520px; }
+.acn-terc-box .acn-modal-corpo > *, .acn-terc-box-g .acn-modal-corpo > *, .acn-terc-box-p .acn-modal-corpo > * { flex-shrink: 0; }
+
+/* Campo dentro de grade: a coluna do campo não cresce com o controle (CLAUDE.md, "campo dentro de uma grade de duas colunas pode passar da própria coluna"). */
+.acn-terc-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.acn-terc-campo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; min-width: 0; }
+.acn-terc-campo .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-terc-campo select.acn-input { height: 32px; }   /* o select nativo nasce ~8 px mais alto que o input ao lado */
+.acn-terc-largo { grid-column: 1 / -1; }
+.acn-terc-dica { margin: 0; font-size: 12px; line-height: 1.4; color: var(--acn-muted); }
+.acn-terc-marca { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--acn-ink); cursor: pointer; }
+.acn-terc-marca input { margin-top: 2px; flex: none; }
+
+/* Listas dos cadastros (T1) */
+.acn-terc-inativo td { opacity: .6; }
+.acn-terc-acoes { white-space: nowrap; }
+.acn-terc-fazem { max-width: 260px; }
+.acn-terc-vazio { color: var(--acn-muted); }
+
+/* ═══ T2: filtros ═══ */
+.acn-terc-barra { display: grid; gap: 8px; min-width: 0; }
+.acn-terc-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.acn-terc-filtros select.acn-input { height: 32px; max-width: 220px; }
+.acn-terc-periodo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-muted); }
+.acn-terc-data { width: 142px; min-width: 0; height: 32px; box-sizing: border-box; }
+.acn-terc-janela { margin: 0; }
+
+/* ═══ T2: quadro (o modelo é o das Viagens: grade de colunas, cada uma com a sua rolagem) ═══ */
+.acn-terc-quadro { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 6px; }
+.acn-terc-quadro.c4 { grid-template-columns: repeat(4, minmax(250px, 1fr)); }
+.acn-terc-quadro.c1 { grid-template-columns: minmax(250px, 1fr); }
+.acn-terc-col { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); display: flex; flex-direction: column; min-width: 0; }
+.acn-terc-col.alvo { border-color: var(--acn-brand); box-shadow: 0 0 0 2px var(--acn-brand-soft); }
+.acn-terc-col-cab { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-ink); border-bottom: 1px solid var(--acn-line); }
+.acn-terc-col-cab em { font-style: normal; font-weight: 600; color: var(--acn-muted); }
+.acn-terc-col-corpo { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 64px; max-height: 72vh; overflow-y: auto; }
+.acn-terc-col-vazia { padding: 10px; text-align: center; font-size: 12px; color: var(--acn-muted); }
+
+.acn-terc-card { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; cursor: pointer; min-width: 0; }
+.acn-terc-card:hover { border-color: var(--acn-ink); }
+.acn-terc-card:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 1px; }
+.acn-terc-card.arrastavel { cursor: grab; }
+.acn-terc-grupo { border-left: 3px solid var(--acn-brand); }   /* o cartão que junta vários carros da mesma venda se distingue pela faixa na borda */
+.acn-terc-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.acn-terc-card-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.acn-terc-card-id strong { font-size: 13px; overflow-wrap: anywhere; color: var(--acn-ink); }
+.acn-terc-card-desc { margin: 0; color: var(--acn-text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.acn-terc-card-lig { display: flex; align-items: center; gap: 4px; color: var(--acn-muted); overflow-wrap: anywhere; }
+.acn-terc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--acn-text); }
+.acn-terc-card-meta > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.acn-terc-card-selos { display: flex; flex-wrap: wrap; gap: 4px; }
+/* o selo "Atrasado há 12 dias" ou "Choque de data" pode ser longo: quebra a linha dentro do cartão em vez de vazar (CLAUDE.md, texto longo dentro de componente) */
+html body .acn-terc-card-selos .acn-selo:not(#acn), html body .acn-terc-celula-selos .acn-selo:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; padding: 4px 8px; line-height: 1.3; border-radius: 12px; }
+.acn-terc-card-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--acn-muted); }
+.acn-terc-card-pe > span { max-width: 100%; overflow-wrap: anywhere; }
+.acn-terc-card-valor { margin-left: auto; font-weight: 800; color: var(--acn-ink); }
+.acn-terc-sem { color: var(--acn-warn); font-weight: 600; }   /* "Sem prestador": pendência, não erro */
+
+/* ═══ T2: lista ═══ */
+.acn-terc-lista-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 8px; }
+.acn-terc-ordem { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--acn-muted); }
+.acn-terc-linha { cursor: pointer; }
+.acn-terc-linha:hover td { background: var(--acn-surface-2); }
+.acn-terc-celula-desc { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acn-terc-celula-selos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+/* o número ("TS-00005"), a ligação e o dia não quebram no meio; a tabela já rola de lado dentro do .acn-rolagem, então não estoura a página */
+.acn-terc-linha .acn-num strong, .acn-terc-linha td.acn-terc-nowrap { white-space: nowrap; }
+.acn-terc-celula-pedido { min-width: 118px; }
+
+/* ═══ T2: janelas de agendar e de dar como realizado ═══ */
+.acn-terc-resumo { padding: 8px 10px; border-radius: var(--acn-r2); background: var(--acn-surface-2); border: 1px solid var(--acn-line); font-size: 13px; font-weight: 600; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-previa { margin: 0; font-size: 12px; font-weight: 600; color: var(--acn-ink); }
+
+/* ═══ T2: janela de pedir ═══ */
+.acn-terc-un-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.acn-terc-un-lista { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-terc-un-lista li { padding: 6px 10px; border-bottom: 1px solid var(--acn-line); }
+.acn-terc-un-lista li:last-child { border-bottom: 0; }
+.acn-terc-un-dup { color: var(--acn-bad); font-style: normal; }
+.acn-terc-pecas { display: grid; gap: 6px; }
+.acn-terc-peca { display: grid; grid-template-columns: minmax(0, 1fr) 84px auto; gap: 6px; align-items: center; }
+.acn-terc-peca .acn-input { width: 100%; min-width: 0; box-sizing: border-box; height: 32px; }
+.acn-terc-anexos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.acn-terc-anexos li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.acn-terc-anexo-nome { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--acn-ink); }
+a.acn-terc-anexo-nome { color: var(--acn-info); text-decoration: underline; }
+
+/* ═══ T2: janela do serviço e janela do grupo ═══ */
+.acn-terc-det-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.acn-terc-passos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.acn-terc-det-desc { margin: 0; font-size: 14px; line-height: 1.45; color: var(--acn-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+.acn-terc-det-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px 16px; }
+.acn-terc-det-item { display: grid; gap: 2px; min-width: 0; align-content: start; }
+.acn-terc-det-item.largo { grid-column: 1 / -1; }
+.acn-terc-det-rot { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-terc-det-val { min-width: 0; font-size: 13px; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-lig-texto { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; }
+.acn-terc-det-texto { white-space: pre-wrap; }
+.acn-terc-det-lista { margin: 0; padding-left: 18px; }
+.acn-terc-det-hist { display: grid; gap: 6px; }
+.acn-terc-historico { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--acn-ink); }
+.acn-terc-historico li { padding: 4px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-terc-hist-quando { display: inline-block; min-width: 118px; margin-right: 6px; color: var(--acn-muted); font-variant-numeric: tabular-nums; }
+.acn-terc-hist-detalhe { margin-top: 2px; color: var(--acn-text); overflow-wrap: anywhere; }
+.acn-terc-grupo-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.acn-terc-ajuste { display: grid; gap: 10px; padding: 12px; border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); }
+.acn-terc-ajuste-rodape { display: flex; justify-content: flex-end; }
+
+/* ═══ T3: agenda (semana por prestador ou tipo; mês em grade) ═══ */
+.acn-terc-agenda { display: grid; gap: 10px; min-width: 0; }
+.acn-terc-ag-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-width: 0; }
+.acn-terc-ag-nav, .acn-terc-ag-escolhas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.acn-terc-ag-periodo { margin: 0 6px; font-size: 14px; color: var(--acn-ink); }
+.acn-terc-ag-resumo { margin: 0; }
+.acn-terc-ag-legenda { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--acn-muted); }
+.acn-terc-legenda { display: inline-flex; align-items: center; gap: 6px; }
+.acn-terc-legenda::before { content: ''; width: 12px; height: 12px; flex: none; border-radius: 3px; border: 1px solid var(--acn-line); background: var(--acn-surface); box-sizing: border-box; }
+.acn-terc-legenda.sit-agendado::before { background: var(--acn-info-soft); border-color: var(--acn-info); }
+.acn-terc-legenda.sit-solicitado::before { border: 1px dashed var(--acn-muted); }
+.acn-terc-legenda.sit-realizado::before { background: var(--acn-ok-soft); border-color: var(--acn-ok); }
+.acn-terc-legenda.choque::before { background: var(--acn-bad-soft); border-color: var(--acn-bad); }
+
+.acn-terc-ag-semana { min-width: 880px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); overflow: hidden; }
+.acn-terc-ag-cab, .acn-terc-ag-linha { display: grid; grid-template-columns: 150px repeat(7, minmax(104px, 1fr)); min-width: 0; }
+.acn-terc-ag-cab { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-terc-ag-dia { display: flex; flex-direction: column; align-items: center; padding: 4px 0; font-size: 11px; text-transform: uppercase; color: var(--acn-muted); }
+.acn-terc-ag-dia em { font-style: normal; font-weight: 700; font-size: 12px; color: var(--acn-ink); }
+.acn-terc-ag-dia.hoje em { color: var(--acn-brand-ink); text-decoration: underline; }
+.acn-terc-ag-linha { border-top: 1px solid var(--acn-line); }
+.acn-terc-ag-cab + .acn-terc-ag-linha { border-top: 0; }
+.acn-terc-ag-rot { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 10px; min-width: 0; font-size: 13px; }
+.acn-terc-ag-rot strong { color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-ag-rot .acn-ajuda, .acn-terc-ag-rot .acn-txt-erro { font-size: 11px; }
+.acn-terc-ag-cel { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 44px; padding: 4px; border-left: 1px solid var(--acn-line); }
+.acn-terc-ag-dia.fds, .acn-terc-ag-cel.fds, .acn-terc-ag-mdia.fds { background: var(--acn-surface-2); }
+.acn-terc-ag-cel.hoje, .acn-terc-ag-mdia.hoje { background: color-mix(in srgb, var(--acn-brand) 10%, transparent); }
+.acn-terc-ag-cel.choque, .acn-terc-ag-mdia.choque { background: var(--acn-bad-soft); }   /* o dia em que o mesmo prestador tem duas visitas que batem */
+.acn-terc-ag-vazia { padding: 14px; text-align: center; font-size: 13px; color: var(--acn-muted); border-top: 1px solid var(--acn-line); }
+
+/* a visita: azul quando é compromisso, tracejada quando é só a data desejada do pedido, verde esmaecida quando já foi feita, vermelha no choque e no atraso */
+.acn-terc-visita { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 4px 6px; border: 1px solid var(--acn-info); border-left-width: 3px; border-radius: 6px; background: var(--acn-info-soft); color: var(--acn-ink); font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; cursor: pointer; }
+.acn-terc-visita:hover { border-color: var(--acn-ink); }
+.acn-terc-visita:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 1px; }
+.acn-terc-visita-topo { font-weight: 700; }
+.acn-terc-visita-topo em { margin-right: 4px; font-style: normal; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--acn-muted); }
+.acn-terc-visita-sub { color: var(--acn-text); }
+.acn-terc-visita-alerta { font-weight: 700; color: var(--acn-bad); }
+.acn-terc-visita.sit-solicitado { background: var(--acn-surface); border: 1px dashed var(--acn-muted); border-left-width: 3px; }
+.acn-terc-visita.sit-realizado { background: var(--acn-ok-soft); border-color: var(--acn-ok); opacity: .75; }
+.acn-terc-visita.hoje { border-color: var(--acn-brand); box-shadow: 0 0 0 1px var(--acn-brand); }
+.acn-terc-visita.choque, .acn-terc-visita.atrasada { background: var(--acn-bad-soft); border-color: var(--acn-bad); }
+
+.acn-terc-ag-mes { min-width: 760px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); overflow: hidden; }
+.acn-terc-ag-mes-cab, .acn-terc-ag-mes-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.acn-terc-ag-mes-cab { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-terc-ag-mes-cab span { padding: 6px 0; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+.acn-terc-ag-mdia { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 96px; padding: 4px; border-left: 1px solid var(--acn-line); border-top: 1px solid var(--acn-line); }
+.acn-terc-ag-mdia:nth-child(7n + 1) { border-left: 0; }
+.acn-terc-ag-mdia:nth-child(-n + 7) { border-top: 0; }
+.acn-terc-ag-mdia.outro { background: var(--acn-surface-2); }
+.acn-terc-ag-mdia-num { font-size: 11px; font-weight: 700; color: var(--acn-ink); }
+.acn-terc-ag-mdia.outro .acn-terc-ag-mdia-num { color: var(--acn-muted); font-weight: 600; }
+.acn-terc-ag-mdia.hoje .acn-terc-ag-mdia-num { color: var(--acn-brand-ink); text-decoration: underline; }
+html body .acn-terc-ag-mdia .acn-terc-ag-mais:not(#acn) { align-self: flex-start; }
+
+/* ═══ T4: ordem de serviço em lote e modelo do contrato ═══ */
+.acn-terc-arquivos { display: grid; gap: 6px; min-width: 0; }
+.acn-terc-valor-final { width: 118px; min-width: 0; height: 32px; box-sizing: border-box; text-align: right; }
+.acn-terc-modelo { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-terc-modelo-t { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--acn-ink); }
+.acn-terc-modelo-empresas { display: grid; gap: 10px; min-width: 0; }
+.acn-terc-modelo-empresa { display: grid; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); }
+.acn-terc-modelo-empresa-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; color: var(--acn-ink); }
+html body .acn-terc-modelo-texto:not(#acn) { width: 100%; min-width: 0; box-sizing: border-box; font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical; }
+.acn-terc-modelo-lista { margin: 0; padding-left: 22px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-terc-modelo-botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+
+/* ═══ Celular e tablet em pé: as três colunas do quadro viram uma pilha (A definir, depois Agendado, depois Realizado), sem rolar para o lado; a agenda vira uma lista de dias, só os que têm visita ═══ */
+@media (max-width: 760px) {
+  .acn-terc-quadro, .acn-terc-quadro.c4, .acn-terc-quadro.c1 { grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
+  .acn-terc-col-corpo { max-height: none; }
+  .acn-terc-hist-quando { display: block; }
+
+  .acn-terc-ag-semana, .acn-terc-ag-mes { min-width: 0; }
+  .acn-terc-ag-cab, .acn-terc-ag-mes-cab { display: none; }
+  .acn-terc-ag-linha { grid-template-columns: minmax(0, 1fr); }
+  .acn-terc-ag-rot { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+  .acn-terc-ag-cel { border-left: 0; }
+  .acn-terc-ag-cel.vazia, .acn-terc-ag-mdia.vazia { display: none; }
+  .acn-terc-ag-mes-grade { grid-template-columns: minmax(0, 1fr); }
+  .acn-terc-ag-mdia { min-height: 0; border-left: 0; border-top: 1px solid var(--acn-line); }
+  .acn-terc-ag-mdia:nth-child(-n + 7) { border-top: 1px solid var(--acn-line); }
+  .acn-terc-ag-mdia-num { display: none; }
+  .acn-terc-ag-cel::before, .acn-terc-ag-mdia::before { content: attr(data-rotulo); font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--acn-muted); }
+  .acn-terc-ag-cel.hoje::before, .acn-terc-ag-mdia.hoje::before { color: var(--acn-brand-ink); }
+}
+
+/* ═══ T5 (23/11/2026): a caixa do pagamento e a da saída da vistoria, nas janelas do serviço, do grupo e da ordem ═══ */
+.acn-terc-caixa { display: grid; gap: 6px; min-width: 0; }
+.acn-terc-caixa-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.acn-terc-caixa-linha > span { min-width: 0; overflow-wrap: anywhere; }
+/* o selo "No prestador desde 23/11 · retorno atrasado" pode ser longo: quebra dentro da janela em vez de vazar (CLAUDE.md, texto longo dentro de componente) */
+html body .acn-terc-caixa .acn-selo:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; padding: 4px 8px; line-height: 1.3; border-radius: 12px; }
+.acn-terc-caixa .acn-terc-dica { margin: 0; }
+.acn-terc-saidas { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-terc-saidas li { padding: 8px 10px; border-bottom: 1px solid var(--acn-line); }
+.acn-terc-saidas li:last-child { border-bottom: 0; }
+.acn-terc-saidas .acn-terc-marca > span { min-width: 0; overflow-wrap: anywhere; }
+/* a barra do grupo e a da ordem ganham uma segunda faixa, com o pagamento e a saída, sem espremer os botões de passo */
+.acn-terc-faixas { display: grid; gap: 10px; }
+
+/* ═══ T6 (23/11/2026): o relatório do mês por prestador ═══ */
+.acn-terc-rel { display: grid; gap: 12px; min-width: 0; }
+.acn-terc-rel > * { min-width: 0; }
+.acn-terc-rel-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.acn-terc-rel-mes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+/* o nome do mês vem em minúsculas ("novembro de 2026", que serve também no meio das frases); só a primeira letra sobe: "capitalize" faria "De" */
+.acn-terc-rel-mes-nome { display: inline-block; min-width: 150px; text-align: center; font-size: 15px; color: var(--acn-ink); }
+.acn-terc-rel-mes-nome::first-letter { text-transform: uppercase; }
+.acn-terc-rel-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.acn-terc-rel-regra { margin: 0; max-width: 78ch; line-height: 1.45; }
+/* o nome do prestador é texto longo dentro de um botão: a regra genérica de botão impõe nowrap, então empata o peso para o texto quebrar dentro da célula (CLAUDE.md, "Texto longo dentro de botão") */
+html body .acn-b.acn-terc-rel-nome:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; min-height: 28px; text-align: left; justify-content: flex-start; font-weight: 600; }
+.acn-terc-rel-total td { background: var(--acn-surface-2); }
+.acn-terc-rel-detalhe > td { background: var(--acn-surface-2); padding: 0; }
+.acn-terc-rel-lista { display: grid; gap: 10px; padding: 8px 10px 10px; min-width: 0; }
+.acn-terc-rel-sub { padding: 2px 0 6px; font-size: 12px; font-weight: 600; color: var(--acn-muted); }
+.acn-terc-rel-desc { min-width: 180px; overflow-wrap: anywhere; }

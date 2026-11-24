@@ -31,8 +31,8 @@ export function podeEditarRegistro(registro: any, usuarioAtual: any): boolean {
 export function podeDeletarRegistro(usuarioAtual: any): boolean {
   if (!usuarioAtual) return false;
 
-  // Apenas Admin pode deletar
-  return usuarioAtual.perfil === 'Admin';
+  // Admin, ou quem recebeu a caixa "Excluir registros" no cadastro (24/11/2026, revisão de permissões; só regra de tela)
+  return usuarioAtual.perfil === 'Admin' || usuarioAtual.pode_excluir_registros === true;
 }
 
 /**
@@ -43,7 +43,8 @@ export function podeDeletarRegistro(usuarioAtual: any): boolean {
  * A troca do número da OP é conferida de novo no banco (renomear_opl).
  */
 export function podeAlterarNumeroOplPv(usuarioAtual: any): boolean {
-  return temPoderDeGerente(usuarioAtual);
+  // 24/11/2026: também quem recebeu a caixa "Alterar nº da OP/PV" (o banco, renomear_opl, confere a mesma marca)
+  return temPoderDeGerente(usuarioAtual) || usuarioAtual?.pode_alterar_numero_op === true;
 }
 
 // ── Comercial/CRM e Licitações: a equipe tem os poderes do gerente do setor ──
@@ -77,6 +78,12 @@ export function ehAdminOuGerente(usuarioAtual: any): boolean {
   const perfil = String(usuarioAtual?.perfil || '').trim();
   return perfil === 'Admin' || /^gerente/i.test(perfil);
 }
+
+/** Copiar OP (24/11/2026): poder de gerente ou a caixa "Copiar OP" do cadastro. Só regra de tela. */
+export const podeCopiarOp = (usuarioAtual: any): boolean => temPoderDeGerente(usuarioAtual) || usuarioAtual?.pode_copiar_op === true;
+
+/** Corrigir a data de uma nota já emitida (24/11/2026, decidido com o usuário): Admin, gerentes e quem recebeu a caixa; ter só a aba Fiscal não basta mais. Só regra de tela. */
+export const podeCorrigirDataDaNota = (usuarioAtual: any): boolean => ehAdminOuGerente(usuarioAtual) || usuarioAtual?.pode_corrigir_data_nota === true;
 
 /**
  * Quem corrige a equipe de uma OP (quem trabalhou na adaptação e na serralheria) — decidido com o
@@ -200,6 +207,27 @@ export function podeMexerNoAviso(usuarioAtual: any, aviso: any): boolean {
 export function podePostarNoInicio(usuarioAtual: any): boolean {
   return usuarioAtual?.perfil === 'Admin' || usuarioAtual?.pode_postar_inicio === true;
 }
+
+// ── Serviços de terceiros (22/11/2026, pedido do usuário; PLANO_SERVICOS_TERCEIROS.md) ───────────────────────────────────────────────
+// Cadastro de PRESTADORES: Admin, qualquer "Gerente …" e quem tem a aba Adaptação (`producao`; lista de abas vazia = todas, a mesma regra do menu). É a conta da função do banco
+// `terceiros_pode_gerir_prestadores()`, que as políticas da tabela usam: a tela só esconde o botão, quem recusa é o banco. Os TIPOS de serviço são só do Admin (`eh_admin()` no banco).
+// As duas regras são suposições minhas, a confirmar com o usuário (plano, seção 6). Na fatia T1 a aba só aparece para quem cadastra; da T2 em diante todos veem e todos pedem.
+export function podeGerirPrestadoresDeTerceiros(usuarioAtual: any): boolean {
+  if (ehAdminOuGerente(usuarioAtual)) return true;
+  // 24/11/2026 (pedido do usuário): o Admin pode dar a permissão a uma pessoa (Admin → Usuários, caixa "Pode gerir serviços de terceiros"); o banco repete a conta
+  if (usuarioAtual?.pode_gerir_terceiros === true) return true;
+  const abas = usuarioAtual?.abas_permitidas;
+  return !Array.isArray(abas) || abas.length === 0 || abas.includes('producao');
+}
+// 24/11/2026 (pedido do usuário): os TIPOS de serviço também podem ser dados pessoa a pessoa, pela mesma caixa "Pode gerir serviços de terceiros" (o banco confere em terceiros_pode_gerir_tipos).
+export function podeEditarTiposDeTerceiros(usuarioAtual: any): boolean {
+  return usuarioAtual?.perfil === 'Admin' || usuarioAtual?.pode_gerir_terceiros === true;
+}
+// T4 (23/11/2026, decidido com o usuário): montar, enviar, alterar, cancelar e fechar a ORDEM DE SERVIÇO EM LOTE é do Admin, dos gerentes e da Adaptação (a mesma conta de quem cadastra prestador);
+// quem só pediu o serviço vê a ordem e o selo, mas não mexe. É a conta da função do banco `terceiros_pode_ordem`, que as funções `terceiros_ordem_*` conferem de novo.
+// O texto do MODELO DO CONTRATO (as cláusulas) é só do Admin: o banco confere em `terceiros_config_salvar`.
+export const podeMontarOrdemDeTerceiros = (usuarioAtual: any): boolean => podeGerirPrestadoresDeTerceiros(usuarioAtual);
+export const podeEditarModeloDoContrato = (usuarioAtual: any): boolean => usuarioAtual?.perfil === 'Admin';
 
 // ── Parecer da análise entre setores (07/10/2026, pedido do usuário) ───────────────────────────────────────────────────
 // Depois de concluído, o parecer de um setor (analise_setores.notas) pode ser editado SÓ por quem fez a análise (analise_setores.analisado_por): nem Admin nem

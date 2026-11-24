@@ -34,6 +34,7 @@ import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
 import CalendarioTab from './CalendarioTab';
 import PontoTab from './PontoTab';
+import TerceirosTab from './TerceirosTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
 import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
@@ -52,7 +53,7 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
@@ -60,7 +61,7 @@ import { gruposParaRecolher } from './utils/menuLateral';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
-  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline, ponto: mdiClockCheckOutline,
+  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline, ponto: mdiClockCheckOutline, terceiros: mdiAccountWrenchOutline,
   crm: mdiHandshakeOutline, licitacoes: mdiGavel, cotacoes: mdiFileDocumentOutline, clientes: mdiAccountGroupOutline, marketing: mdiBullhornOutline,
   engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
   producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
@@ -137,6 +138,7 @@ const SIDEBAR_GROUPS = [
       { id: 'pcp',          label: 'PCP' },
       { id: 'almoxarifado', label: 'Almoxarifado' },
       { id: 'compras',      label: 'Compras' },
+      { id: 'terceiros',    label: 'Serviços de terceiros' },   // 22/11/2026 (pedido do usuário): película, plotagem, pintura, lavagem e afins feitos por quem é de fora (ver TerceirosTab.tsx e PLANO_SERVICOS_TERCEIROS.md)
     ],
   },
   {
@@ -708,7 +710,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       // tem a marca, e sem ela ninguém aprovava compra. A leitura corrige a sessão na próxima abertura.
       // R7 (13/10/2026): `ver_valores` e `pode_deletar_anexos` entram pelo mesmo motivo — a sessão guardada antes do login novo não os tem
       // Início (09/11/2026): `pode_postar_inicio` também — a tela Início mostra os botões de editar a quem tem a marca (o login não a traz; o banco confere de novo em toda gravação)
-      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra,eh_dev,ver_valores,pode_deletar_anexos,pode_postar_inicio')
+      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra,eh_dev,ver_valores,pode_deletar_anexos,pode_postar_inicio,pode_gerir_terceiros,pode_excluir_op,pode_alterar_numero_op,pode_excluir_formacao,pode_copiar_op,pode_excluir_registros,pode_corrigir_data_nota')
       .eq('id', currentUserProp.id)
       .single()
       .then(({ data }) => {
@@ -1137,6 +1139,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (id === 'calendario') return true;
     // Ponto (19/11/2026): é de todos, porque cada pessoa vê o próprio; quem vê a equipe é decidido pelo banco (RH, Admin e gerentes), não pela aba marcada no Admin.
     if (id === 'ponto') return true;
+    // Serviços de terceiros (22/11/2026): na T1 só quem cadastra prestadores via o item; desde a T2 é de todos (todos pedem e todos veem todos os serviços; quem pode mexer em cada um é regra do módulo,
+    // conferida de novo pelo banco: TerceirosFluxo.ts). Cadastrar prestador e tipo continua restrito dentro das abas (podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros).
+    if (id === 'terceiros') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -1154,6 +1159,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       }
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
       case 'ponto':        return <PontoTab currentUser={currentUser} />;
+      case 'terceiros':    return <TerceirosTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
@@ -1760,7 +1766,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             ) : (
               <>
                 {/* Título da tela para as abas que ainda não têm cabeçalho próprio */}
-                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio'].includes(activeTab) && (() => {   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
+                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio', 'terceiros'].includes(activeTab) && (() => {   // 'terceiros' (22/11/2026): a tela tem o cabeçalho dela, com subtítulo e abas   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}

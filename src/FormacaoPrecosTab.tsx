@@ -8,7 +8,8 @@ import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgr
          somarResultados, estruturaFormacao, custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { temPoderDeGerente, perfilComPoderes, ehAdminOuGerente } from './utils/permissoes';
 import { buscarPorPalavras, combinaBusca } from './SearchUtils';
-import { estruturaDoKit } from './KitEstrutura';
+import { estruturaDoKitComValores } from './KitEstrutura';
+import { anexarValoresAosItens, gravarValoresDoItem } from './CadastroItensValores';
 import { confirmar, pedirTexto } from './Feedback';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { Faixa, Botao, Selo, Chips, Abas, Tag, SelectBusca } from './Interface';
@@ -625,17 +626,22 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
     setSalvando(true);
     const { data, error: erroItem } = await supabase.from('cadastro_itens').insert([{
       nome: form.nome.trim(), marca: form.marca?.trim() || '', fornecedor: form.fornecedor?.trim() || '',
-      moeda: form.moeda || 'REAL', custo_unit: Number(form.custo_unit) || 0,
+      moeda: form.moeda || 'REAL',
       ipi_pct: Number(form.ipi_pct) || 0, st_pct: Number(form.st_pct) || 0,
       tipo_calculo: form.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-      markup_pct: Number(form.markup_pct) || 30, difal_pct: Number(form.difal_pct) || 0,
-      imposto_pct: Number(form.imposto_pct) || 16, custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
+      difal_pct: Number(form.difal_pct) || 0,
+      imposto_pct: Number(form.imposto_pct) || 16,
       unidade: form.unidade || 'UN', ativo: true,
     }]).select().single();
     salvandoRef.current = false;
     setSalvando(false);
     if (erroItem) { alert('Não foi possível criar o item no catálogo: ' + erroItem.message); return; }   // 7.59: não fazia nada, sem aviso
-    if (data) onSalvo(data);
+    if (!data) return;
+    // custo e markup do item moram na tabela de valores (V1 do "ver valores no banco", 24/11/2026)
+    const valores = { custo_unit: Number(form.custo_unit) || 0, markup_pct: Number(form.markup_pct) || 30, custo_fixo_pct: Number(form.custo_fixo_pct) || 3 };
+    const gv = await gravarValoresDoItem(data.id, valores);
+    if (gv.erro) alert('O item foi criado no catálogo, mas o custo e o markup não puderam ser gravados (' + gv.erro + '). Abra o item no Cadastro de itens e informe o custo.');
+    onSalvo({ ...data, ...valores });
   };
 
   return (
@@ -709,14 +715,16 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       setBuscando(true);
       const [{ data: itens, error: errItens }, { data: produtos, error: errProdutos }] = await Promise.all([
         buscarPorPalavras(supabase.from('cadastro_itens')
-          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,compra_multiplo,custo_embalagem')
+          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,ipi_pct,st_pct,tipo_calculo,difal_pct,imposto_pct,compra_multiplo')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(8),
         buscarPorPalavras(supabase.from('cadastro_produtos')
           .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(5),
       ]);
-      setErroBusca((errItens || errProdutos)?.message || '');
-      setRes({ itens: itens || [], produtos: produtos || [] });
+      // custo e markup do item moram na tabela de valores (V1 do "ver valores no banco", 24/11/2026)
+      const comValores = errItens ? { itens: [], erro: '' } : await anexarValoresAosItens(itens || []);
+      setErroBusca((errItens || errProdutos)?.message || (comValores.erro ? 'não foi possível ler os custos (' + comValores.erro + ')' : ''));
+      setRes({ itens: comValores.itens, produtos: produtos || [] });
       setOpen(true);
       setBuscando(false);
     }, 260);
@@ -766,8 +774,9 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
   // na COMPOSIÇÃO; custo, markup e demais valores são desta formação (começam
   // pelos do catálogo e ficam livres para ajuste aqui).
   const expandirBom = async (p) => {
-    const linhasKit = await estruturaDoKit(p.id);
+    const { linhas: linhasKit, erro: erroValores } = await estruturaDoKitComValores(p.id);
     setOpen(false);
+    if (erroValores) { setErroBusca('não foi possível ler os custos do kit (' + erroValores + ')'); return; }
     if (!linhasKit.length) { selecionarProdutoKit(p); return; }
     const linhas = linhasKit.map(l => {
       const it = l.item || {};

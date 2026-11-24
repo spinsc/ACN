@@ -10,7 +10,7 @@ import MencaoTextarea, { salvarMencoes, resolverMencoesDeTodos } from './MencaoT
 import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
-import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from './PinturaSerralheria';
+import { PinturaCampos, PinturaSelo, PinturaPedirAgora, abrirPedidoPintura, ehSerralheria, pinturaJaPedida } from './PinturaSerralheria';
 import { CamposSolicitacaoCompra, solicitacaoCompraVazia, validarSolicitacaoCompra, enviarSolicitacaoCompra } from './SolicitacaoCompra';
 import { useCentroObrigatorio } from './CentroCustoUso';
 import { ParticipantesPicker, notificarParticipantes } from './Participantes';
@@ -662,9 +662,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     await reload(); onRefresh();
   };
   const concluir = async () => {
-    const vaiPintar = ehSerralheria(d.setor) && d.pintura && !d.pintura_pedido_id;
+    const vaiPintar = ehSerralheria(d.setor) && d.pintura && !pinturaJaPedida(d);
+    // T5 (23/11/2026): a pintura deixou de ir para o Compras e vira um serviço de terceiros, avisando a Adaptação
     if (!await confirmar(`Concluir a demanda "${d.titulo}"? Ela sai da lista de ativas.${
-      vaiPintar ? '\n\nComo esta peça tem pintura, o pedido do serviço será aberto para o Compras.' : ''}`)) return;
+      vaiPintar ? '\n\nComo esta peça tem pintura, será aberto o pedido de pintura em Serviços de terceiros (a Adaptação é avisada).' : ''}`)) return;
     const agora = new Date().toISOString();
     // 7.x (16/10/2026): conclusão recusada não abre o pedido de pintura (a peça ainda não estava concluída) nem diz "demanda concluída"
     // pausa e horas úteis (16/10/2026): concluir fecha o trecho aberto (se estava pausada, o tempo já estava fechado)
@@ -674,7 +675,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     await resolverMencoesDaDemanda();
     if (vaiPintar) {
       const r = await abrirPedidoPintura(d, currentUser);
-      if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
+      if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + String(r.erro).replace(/[.s]+$/, '') + '. Abra a demanda e use "Pedir a pintura agora".');
+      else if (r?.aviso) alert(r.aviso);
     }
     await reload(); onRefresh();
   };
@@ -701,9 +703,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     }
     if (!await gravarDemanda(upd, 'gravar a etapa')) return false;
     if (upd.status === 'Concluída') await resolverMencoesDaDemanda();   // a última etapa concluída conclui a demanda
-    if (upd.status === 'Concluída' && ehSerralheria(d.setor) && d.pintura && !d.pintura_pedido_id) {
+    if (upd.status === 'Concluída' && ehSerralheria(d.setor) && d.pintura && !pinturaJaPedida(d)) {
       const r = await abrirPedidoPintura(d, currentUser);
-      if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
+      if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + String(r.erro).replace(/[.s]+$/, '') + '. Abra a demanda e use "Pedir a pintura agora".');
+      else if (r?.aviso) alert(r.aviso);
     }
     await reload(); onRefresh();
     return true;
@@ -975,7 +978,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
           {/* ── Pintura pedida (Serralheria): quem abriu definiu, aqui é leitura ── */}
           {!editando && camposSetor.pintura && d.pintura && (
-            <PinturaCampos valor={d} onChange={() => {}} somenteLeitura />
+            <>
+              <PinturaCampos valor={d} onChange={() => {}} somenteLeitura />
+              <PinturaPedirAgora d={d} currentUser={currentUser} aoFeito={async () => { await reload(); onRefresh(); }} />
+            </>
           )}
 
           {/* ── Itens da demanda ── */}

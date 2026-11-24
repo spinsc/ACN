@@ -35,7 +35,8 @@ export function ehAutorDa(usuario: any, criadoPor: any): boolean {
 export function escoposPermitidos(usuario: any, familia: any[], id: string): { versao: boolean; formacao: boolean } {
   const eu = (familia || []).find((l: any) => String(l.id) === String(id));
   if (!eu) return { versao: false, formacao: false };
-  if (ehAdminOuGerente(usuario)) return { versao: true, formacao: true };
+  // 24/11/2026: a caixa "Excluir qualquer formação" vale como a direção (formacao_excluir confere a mesma marca no banco)
+  if (ehAdminOuGerente(usuario) || usuario?.pode_excluir_formacao === true) return { versao: true, formacao: true };
   const raiz = familia.find((l: any) => String(l.id) === String(raizDaCotacao(eu))) || eu;
   const formacao = ehAutorDa(usuario, raiz.criado_por);
   if (familia.length <= 1) return { versao: formacao, formacao };

@@ -323,7 +323,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ## Menu ⋯ (Mais ações da OS)
 
-O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido. Os itens vêm em **três grupos**, com o título de cada um: **Dados da OS** (Responsável, Previsão de chegada, Financeiro, Compras, Anexar, PDF, Copiar OS), **Mover a OS** (os passos de cada etapa, inclusive *Registrar atendimento já realizado*) e **Encerrar a OS** (Entregar sem nota e, por último e em vermelho, **Cancelar OS**).
+O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só aparecem quando fazem sentido. Os itens vêm em **três grupos**, com o título de cada um: **Dados da OS** (Responsável, Previsão de chegada, Financeiro, Compras, Serviço de terceiro, Anexar, PDF, Copiar OS), **Mover a OS** (os passos de cada etapa, inclusive *Registrar atendimento já realizado*) e **Encerrar a OS** (Entregar sem nota e, por último e em vermelho, **Cancelar OS**).
 
 ![Menu Mais ações da OS](img/08-menu-mais-acoes.jpg)
 
@@ -333,6 +333,7 @@ O menu de três pontinhos tem o que **toda OS** pode fazer. Alguns itens só apa
 | **Previsão de chegada** | Informa ou muda o **dia previsto para o veículo chegar** à fábrica (em branco tira a previsão; não aceita dia que já passou) | OS de veículo que vem à fábrica, enquanto o veículo não chegou |
 | **Financeiro** | **Valor total** e **Mão de obra** (a comissão lê). Mostra a **data de faturamento**, que vem da nota do Fiscal e **não se digita** | Sempre |
 | **Compras** | Lista as compras ligadas à OS e permite **Solicitar compra** ao Compras (fica ligada à OS) | Sempre |
+| **Serviço de terceiro** | Abre o pedido de um serviço feito por quem é de fora (película, plotagem, pintura, lavagem…), **já ligado à OS**; o andamento dos pedidos está em **Serviços de terceiros** (menu, grupo Controle de produção) | Em toda OS que não esteja cancelada |
 | **Anexar** | Envia arquivos (imagens, PDFs, Word, Excel) para a OS | Sempre |
 | **PDF** | Gera a OS em PDF, A4, com campo de **assinatura do cliente** no pé | Sempre |
 | **Entregar sem nota (cortesia)** | Veja acima | OS cobrada e Concluído |

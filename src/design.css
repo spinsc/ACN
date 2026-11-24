@@ -366,6 +366,21 @@ button.acn-selo.clicavel:focus-visible { outline: 2px solid var(--acn-brand); ou
 /* Corrigir a data de uma nota emitida (27/10/2026): o aviso diz uma coisa por linha; o botão fica logo abaixo do resumo do Fiscal */
 .acn-fis-corrigir-aviso { white-space: pre-line; overflow-wrap: anywhere; }
 .acn-fis-barra { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+/* 12e75 (24/11/2026): os 30 estilos pintados à mão no FiscalTab viraram classes (a medida e o antes/depois estão no plano de UX). Nada aqui muda regra: só aparência, com as mesmas medidas de antes. */
+.acn-fis-lote-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* o resumo do lote era `font-size: 10` solto, que a regra global da letra pequena já reescrevia para 12px: a classe traz o tamanho que se via (12px) */
+.acn-fis-lote-resumo { margin-top: 3px; font-size: 12px; }
+.acn-fis-lote-selo { margin-left: 6px; }
+.acn-input.acn-fis-nf { width: 118px; }
+.acn-input.acn-fis-nf-os { width: 130px; }
+.acn-input.acn-fis-nf-barra { width: 150px; }
+.acn-tabela td.acn-fis-unidade { padding-left: 22px; }
+.acn-fis-selo-sub { margin-top: 3px; }
+.acn-input.acn-fis-modal-texto { width: 100%; resize: vertical; margin-bottom: 10px; }
+.acn-input.acn-fis-modal-nome { width: 100%; margin-bottom: 14px; }
+.acn-fis-modal-notas { margin-bottom: 12px; }
+.acn-fis-modal-rodape { display: flex; gap: 8px; }
+.acn-fis-modal-rodape .acn-fis-confirma { flex: 1; }
 .acn-nota-mono { font-family: var(--acn-mono); font-size: 12px; white-space: pre-wrap; max-width: 260px; margin-top: 3px; padding: 4px 8px; border-radius: var(--acn-r1); background: var(--acn-surface-2); border: 1px solid var(--acn-line); color: var(--acn-ink); }
 body.dark .acn-nota-mono { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 /* Relatórios (Etapa 12 do plano de UX, 30/09/2026): o que cada relatório pintava à mão, agora uma classe */
@@ -6119,6 +6134,9 @@ html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([typ
 /* ══ Notas da OP (22/10/2026) — editar e apagar a nota que a pessoa escreveu ══ */
 .acn-aco-edicao { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .acn-aco-edicao-botoes { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+.acn-aco-lote { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border: 1px solid var(--acn-borda, #d8dde3); border-radius: 8px; }
+.acn-aco-lote-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 10px; max-height: 180px; overflow: auto; }
+.acn-aco-lote-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 /* ══ Cadastro de itens (CadastroItensTab.tsx, 12e69 — 22/10/2026) ═══════════════════════════════════════════════════════════════════════════
    Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar: o tamanho mínimo de letra,
    os tons e as cores que os ajustes de tela aplicavam por cima). Cada elemento leva uma classe principal (acn-cit-b, acn-cit-td, acn-cit-inp…) e variações (centro, dir, ativo, on…);
@@ -7432,3 +7450,58 @@ html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; over
 
 /* L4 (19/11/2026): na tabela de Cotações (tablet) a coluna Nome encolhia a 40 px porque o texto quebra em qualquer ponto (overflow-wrap: anywhere zera a largura mínima): "DL 445/2026 - LIMEIRA" saía uma letra por linha. Largura mínima na coluna; a tabela passa a rolar em vez de espremer. */
 .acn-cot-nome { min-width: 170px; }
+
+/* ── Permissões do usuário (Admin → Usuários, PermissoesDoUsuario.tsx; 24/11/2026): abas e extras agrupadas como o menu ── */
+.acn-perm { display: flex; flex-direction: column; gap: 14px; margin: 10px 0; }
+.acn-perm-secao { border: 1px solid var(--acn-line); border-radius: var(--acn-r3); background: var(--acn-surface); padding: 12px; }
+.acn-perm-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.acn-perm-tit { font-weight: 700; color: var(--acn-ink); font-size: 14px; }
+.acn-perm-sub { color: var(--acn-muted); font-size: 12px; margin-top: 2px; }
+.acn-perm-botoes { display: flex; gap: 6px; }
+.acn-perm-grupos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.acn-perm-grupo { border: 1px solid var(--acn-line-soft); border-radius: var(--acn-r2); background: var(--acn-surface-2); padding: 8px 10px 8px; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.acn-perm-legenda { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--acn-brand-ink); padding: 0 4px; }
+.acn-perm-cont { color: var(--acn-muted); font-weight: 600; margin-left: 4px; }
+.acn-perm-item { display: flex; align-items: flex-start; gap: 7px; font-size: 13px; color: var(--acn-text); cursor: pointer; padding: 3px 4px; border-radius: var(--acn-r1); }
+.acn-perm-item:hover { background: var(--acn-brand-soft); }
+.acn-perm-item.on { color: var(--acn-ink); font-weight: 600; }
+.acn-perm-item input { margin-top: 2px; flex: none; accent-color: var(--acn-brand); }
+.acn-perm-item input:disabled { cursor: default; }
+.acn-perm-extra { display: flex; flex-direction: column; }
+.acn-perm-ajuda-extra { color: var(--acn-muted); font-size: 11px; margin: 0 0 4px 27px; }
+.acn-perm-ajuda { color: var(--acn-muted); font-size: 12px; margin-top: 8px; }
+.acn-perm-grupo-botoes { display: flex; gap: 10px; margin-top: 2px; padding-left: 4px; }
+.acn-perm-link { background: none; border: 0; padding: 0; color: var(--acn-info); font-size: 11px; cursor: pointer; text-decoration: underline; }
+.acn-perm-lista { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.acn-perm-lista-abas { font-size: 12px; font-weight: 700; color: var(--acn-info); margin-right: 2px; }
+
+/* ── Matriz de permissões (MatrizDePermissoes.tsx; 24/11/2026): quem tem o quê, só leitura ── */
+.acn-mx { display: flex; flex-direction: column; gap: 10px; }
+.acn-mx-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.acn-mx-filtros .acn-input { min-width: 0; max-width: 220px; }
+.acn-mx-inativos { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; color: var(--acn-text); }
+.acn-mx-acoes { display: flex; gap: 6px; margin-left: auto; }
+.acn-mx-legenda { font-size: 12px; color: var(--acn-muted); }
+.acn-mx-sim { color: var(--acn-ok); font-weight: 700; }
+.acn-mx-perfil { color: var(--acn-info); font-weight: 700; }
+.acn-mx-rolagem { max-height: 70vh; overflow: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-mx-tab { border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.acn-mx-tab th, .acn-mx-tab td { border-bottom: 1px solid var(--acn-line-soft); border-right: 1px solid var(--acn-line-soft); padding: 3px 5px; background: var(--acn-surface); }
+.acn-mx-tab thead th { position: sticky; top: 0; z-index: 2; background: var(--acn-surface-2); }
+.acn-mx-tab .acn-mx-nome { position: sticky; left: 0; z-index: 1; min-width: 190px; text-align: left; background: var(--acn-surface-2); }
+.acn-mx-tab thead .acn-mx-nome { z-index: 3; }
+.acn-mx-nome strong { display: block; color: var(--acn-ink); }
+.acn-mx-nome span { color: var(--acn-muted); font-size: 11px; }
+.acn-mx-v { height: 150px; vertical-align: bottom; width: 26px; min-width: 26px; padding: 4px 2px; }
+.acn-mx-v div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 600; color: var(--acn-text); }
+.acn-mx-v.extra { background: var(--acn-brand-soft); }
+.acn-mx-c { text-align: center; font-weight: 700; }
+.acn-mx-c.sim { color: var(--acn-ok); background: var(--acn-ok-soft); }
+.acn-mx-c.perfil { color: var(--acn-info); background: var(--acn-info-soft); }
+.acn-mx-c.tot { background: var(--acn-surface-2); color: var(--acn-ink); }
+.acn-mx-tab tfoot td { position: sticky; bottom: 0; background: var(--acn-surface-2); }
+.acn-mx-tab tr.inativo td { opacity: .55; }
+
+.acn-hp-tab { width: 100%; border-collapse: collapse; font-size: 12px; }
+.acn-hp-tab th, .acn-hp-tab td { padding: 6px 8px; border-bottom: 1px solid var(--acn-line, #e2e8f0); text-align: left; vertical-align: top; }
+.acn-hp-antes { text-decoration: line-through; color: var(--acn-ink-3, #94a3b8); }

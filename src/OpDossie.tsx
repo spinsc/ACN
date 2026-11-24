@@ -24,6 +24,7 @@ import { textosDasOps } from './TextosDaOp';
 import { OndeEstaAgora } from './OndeEstaAgora';
 import { DossieLote, baseDoLote } from './OpDossieLote';
 import { QuadroComprasLigadas, podePedirCompraDaOp, usuarioAtual } from './ComprasLigadas';
+import { QuadroServicosLigados } from './TerceirosLigados';
 
 // Entrada, prazo e data do pedido são colunas do tipo date, e a data dos vínculos mistura date e data com hora: `diaBR` lê do texto a data pura e converte a que tem hora (R16, 05/10/2026; antes `new Date(d)`: 0 de 32 batiam com o banco).
 const fmtD   = (d) => diaBR(d);
@@ -251,6 +252,10 @@ export function DossieOp({ op, dossieCarregado = null }) {
           <QuadroComprasLigadas vinculoTipo="op" vinculoId={o.id} descricao={`${o.opl || ''} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '')}
             titulo="Pedir compra para esta OP" origemSetor="SAC" opl={o.opl} mostrarLista={false} />
         )}
+
+        {/* 23/11/2026 (T5 de Serviços de terceiros): o que já foi pedido a quem é de fora para esta OP (película, pintura, lavagem…), com a situação, e o botão de pedir mais; qualquer pessoa pede, como no menu "Mais ações da OP" */}
+        <QuadroServicosLigados ligacaoTipo="op" ligacaoId={o.id} descricao={`${o.opl || ''} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '')}
+          podePedir={o.status_geral !== 'Cancelado'} titulo="Serviços de terceiros desta OP" />
 
         {/* ── Grupos de vínculos ── */}
         {GRUPOS.map(g => {

@@ -8,6 +8,7 @@
 // de cada formação de preço.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { anexarValoresAoItemEmbutido, anexarValoresAosItens } from './CadastroItensValores';
 
 export type LinhaKit = {
   item: any;          // registro de cadastro_itens
@@ -31,11 +32,14 @@ export async function linhasDoKit(produtoId: string) {
 /** Igual a `linhasDoKit`, mas DIZ quando a leitura falhou. Quem vai regravar a estrutura precisa
  *  saber a diferença entre "kit sem itens" e "não consegui ler": lista vazia por falha, salva por
  *  cima, apagava a estrutura (29/09/2026). */
-export async function linhasDoKitComErro(produtoId: string): Promise<{ linhas: any[]; erro: string }> {
+export async function linhasDoKitComErro(produtoId: string, comValores = false): Promise<{ linhas: any[]; erro: string }> {
   if (!produtoId) return { linhas: [], erro: '' };
   const { data, error } = await supabase.from('cadastro_produtos_itens')
     .select(SELECT_LINHAS).eq('produto_id', produtoId).order('ordem');
-  return { linhas: data || [], erro: error?.message || '' };
+  if (error || !comValores) return { linhas: data || [], erro: error?.message || '' };
+  // custo e markup do item moram em `cadastro_itens_valores` (V1 do "ver valores no banco", 24/11/2026); quem calcula custo pede `comValores`
+  const v = await anexarValoresAoItemEmbutido(data || []);
+  return { linhas: v.linhas, erro: v.erro ? 'não foi possível ler os custos dos itens (' + v.erro + ')' : '' };
 }
 
 /** Estrutura do kit com os sub-kits abertos, item a item (protegida contra ciclo) */
@@ -55,6 +59,13 @@ export async function estruturaDoKit(produtoId: string, quantidade = 1, caminho:
   return saida;
 }
 
+/** A estrutura do kit com custo e markup de cada item (a tabela-irmã de valores); `erro` diz se a leitura dos valores foi recusada. */
+export async function estruturaDoKitComValores(produtoId: string): Promise<{ linhas: LinhaKit[]; erro: string }> {
+  const linhas = await estruturaDoKit(produtoId);
+  const v = await anexarValoresAosItens(linhas.map(l => l.item));
+  return { linhas: linhas.map((l, i) => ({ ...l, item: v.itens[i] })), erro: v.erro };
+}
+
 /** Custo de uma linha do catálogo, com IPI e ST do item */
 export function custoDoItem(item: any) {
   return (Number(item?.custo_unit) || 0)
@@ -64,7 +75,7 @@ export function custoDoItem(item: any) {
 
 /** Custo do kit inteiro (itens diretos + sub-kits) */
 export async function custoDoKit(produtoId: string) {
-  const linhas = await estruturaDoKit(produtoId);
+  const { linhas } = await estruturaDoKitComValores(produtoId);
   return linhas.reduce((s, l) => s + custoDoItem(l.item) * l.quantidade, 0);
 }
 
@@ -73,7 +84,7 @@ export async function custoDoKitComErro(produtoId: string): Promise<{ custo: num
   let erro = '';
   const visitar = async (id: string, quantidade: number, vistos: string[]): Promise<number> => {
     if (!id || vistos.includes(id)) return 0;
-    const { linhas, erro: e } = await linhasDoKitComErro(id);
+    const { linhas, erro: e } = await linhasDoKitComErro(id, true);
     if (e) { erro = erro || e; return 0; }
     let soma = 0;
     for (const l of linhas as any[]) {

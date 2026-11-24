@@ -6,12 +6,14 @@
 // Aqui a chave vira o contexto e o id que a tela de origem já sabe abrir (os mesmos das menções comuns).
 // Decisão do usuário no mesmo dia: esses avisos não são menções; moram no painel Avisos (AvisosOpPanel.tsx), e Menções os ignora.
 
-export type AlvoDoAviso = { contexto: 'licitacao' | 'crm' | 'compra' | 'demanda_avulsa' | 'sac'; id: string };
+export type AlvoDoAviso = { contexto: 'licitacao' | 'crm' | 'compra' | 'demanda_avulsa' | 'sac' | 'terceiro_servico'; id: string };
 
 // Só entram as fontes cuja tela de origem comprovadamente abre o registro pelo id (licitação e CRM pelo `analise:abrir-origem`; compra,
-// demanda avulsa e OS do SAC pelo `acn:abrir-registro`). As outras fontes do calendário (chegada de veículo, entrega de OP, vistoria,
+// demanda avulsa, OS do SAC e serviço de terceiro pelo `acn:abrir-registro`). As outras fontes do calendário (chegada de veículo, entrega de OP, vistoria,
 // tarefa do Financeiro, agendamento, compromisso) seguem só trocando de aba, como sempre foi: quem for ligar uma delas confere primeiro
 // que a tela de destino escuta o contexto.
+// Serviço de terceiro (T3, 23/11/2026): o aviso de serviço atrasado abre a janela do serviço (ou do grupo de carros da visita) em Serviços de terceiros;
+// a chave leva o id do primeiro serviço da visita (`terceiro_servico:<id>:<dia>`), e a tela do módulo é quem acha o grupo a partir dele.
 const CONTEXTO_DA_FONTE: Record<string, AlvoDoAviso['contexto']> = {
   licitacao: 'licitacao',
   crm_retorno: 'crm',
@@ -19,6 +21,7 @@ const CONTEXTO_DA_FONTE: Record<string, AlvoDoAviso['contexto']> = {
   compra_entrega: 'compra',
   demanda_avulsa: 'demanda_avulsa',
   sac_prazo: 'sac',
+  terceiro_servico: 'terceiro_servico',
 };
 
 // Nome da fonte para o cabeçalho do aviso no painel Avisos (a chave começa pela fonte).
@@ -39,6 +42,8 @@ const ROTULO_DA_FONTE: Record<string, string> = {
   tarefa_financeiro: 'Tarefa do Financeiro',
   agendamento: 'Agendamento',
   compromisso: 'Compromisso',
+  terceiro_servico: 'Serviço de terceiro',
+  terceiro_desejado: 'Data desejada do serviço de terceiro',
 };
 
 export function rotuloDoAvisoDoCalendario(chave: string | null | undefined): string {

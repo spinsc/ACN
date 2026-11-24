@@ -10,7 +10,7 @@
 // nada falha em silêncio: toda gravação confere a resposta do banco, leitura recusada não parece "lista vazia" e duas pessoas na
 // mesma demanda não passam mais uma por cima da outra (cada gravação relê a demanda antes de mexer).
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { nomeSeguroDeArquivo, contentTypeUpload } from './FormatosArquivo';
@@ -33,7 +33,9 @@ import { PainelDaEngenharia, SelosDeAlerta, TabelaDeCustos, passaNoAlerta } from
 import { alertasDaDemanda } from './DesenvolvimentoModelo';
 import { hojeISO } from './Interface';
 import { PainelGuiado, FaixaDeTipo, RessalvasAbertas, HistoricoDaDemanda, MenuDaDemanda } from './DesenvolvimentoPorta';
-import { mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh } from '@mdi/js';
+import { mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh, mdiAccountWrenchOutline } from '@mdi/js';
+// Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada ao projeto (corte e dobra com o desenho anexado, pintura, o que o projeto pedir); importação preguiçosa que não divide o pacote (ver o comentário do AcnTabShared)
+const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 
 export const ETAPAS_DEV = [
   'Concepção', 'Criação', 'Desenvolvimento', 'Prototipagem',
@@ -319,6 +321,27 @@ function PainelEtapa({ demanda, etapa, idx, onAtualizado, currentUser }: any) {
   );
 }
 
+// ─── Serviço de terceiro ligado ao projeto ────────────────────────────────────
+// Serviços de terceiros (T2, 23/11/2026): corte e dobra, pintura e o que mais o projeto pedir, feitos por quem é de fora. Qualquer pessoa pede (decidido em 22/11/2026); demanda cancelada
+// não recebe serviço novo; o desenho vai como anexo do pedido. Vale para os dois formatos de cartão (o pedido do PCP e o de etapas), por isso é uma peça só, com a própria janela.
+function ServicoDeTerceiroDoProjeto({ demanda, currentUser }: any) {
+  const [pedindo, setPedindo] = useState(false);
+  if (estaCancelada(demanda)) return null;
+  return (
+    <div className="acn-pdp-bloco">
+      <div className="acn-pdp-rotulo">Serviço de terceiro</div>
+      <div className="acn-ajuda">Corte e dobra, pintura e outros serviços feitos por quem é de fora, ligados a este projeto. Anexe o desenho no próprio pedido.</div>
+      <div><Botao variante="secundario" pequeno icone={mdiAccountWrenchOutline} onClick={() => setPedindo(true)}>Solicitar serviço de terceiro</Botao></div>
+      {pedindo && (
+        <Suspense fallback={null}>
+          <SolicitarServicoDeTerceiro currentUser={currentUser} onClose={() => setPedindo(false)} aoPedido={() => setPedindo(false)}
+            preset={{ ligacao: { tipo: 'projeto', id: String(demanda.id), descricao: `${demanda.numero_opl ? 'OP ' + demanda.numero_opl + ' — ' : ''}${demanda.titulo || 'Projeto'}` }, bloquearLigacao: true }} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
 // ─── Card de uma demanda ──────────────────────────────────────────────────────
 function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
   // 18d (13/10/2026): o pedido que o PCP faz à Engenharia tem os itens como lista de verdade (PedidoDesenvolvimentoPcp.tsx, que fecha o pedido quando
@@ -337,6 +360,7 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
             <div className="acn-pdp-rotulo">Anexos</div>
             <AnexosDev demanda={demanda} onAtualizado={onAtualizado} />
           </div>
+          <ServicoDeTerceiroDoProjeto demanda={demanda} currentUser={currentUser} />
           <div className="acn-pdp-bloco">
             <div className="acn-pdp-rotulo">Área Livre</div>
             <AreaLivreDev demanda={demanda} onAtualizado={onAtualizado} currentUser={currentUser} />
@@ -440,6 +464,8 @@ function DemandaComEtapas({ demanda, onAtualizado, currentUser }: any) {
           <div className="acn-pdp-rotulo">Anexos</div>
           <AnexosDev demanda={demanda} onAtualizado={onAtualizado} />
         </div>
+
+        <ServicoDeTerceiroDoProjeto demanda={demanda} currentUser={currentUser} />
 
         <div className="acn-pdp-bloco">
           <div className="acn-pdp-rotulo">Área Livre</div>
