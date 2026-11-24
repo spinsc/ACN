@@ -10,6 +10,7 @@ import { confirmar } from './Feedback';
 import { CamposEstoqueItem, CamposEstruturaChicote } from './Estoque';
 import { hojeISO, Faixa, Botao, Selo } from './Interface';
 import { lerPaginado } from './LerPaginado';
+import { anexarValoresAosItens, gravarValoresDoItem, gravarValoresPorCodigo, separarValores } from './CadastroItensValores';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -593,7 +594,10 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
       setLoading(false);
       return;
     }
-    setErroLeitura('');
+    // custo, custo da embalagem, custo fixo e markup moram em `cadastro_itens_valores` (V1 do "ver valores no banco", 24/11/2026)
+    const comValores = await anexarValoresAosItens(lista, true);
+    lista = comValores.erro ? lista.map((i: any) => ({ ...i, _valoresIlegiveis: true })) : comValores.itens;
+    setErroLeitura(comValores.erro ? 'Os custos e markups não puderam ser lidos (' + comValores.erro + '); a lista está sem eles e o custo dos itens não será alterado ao salvar.' : '');
     setItens(lista);
 
     // Extrair categorias únicas (merge com default)
@@ -627,12 +631,22 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   const salvarItem = async (data: any) => {
     let error: any = null;
     let codigoNovo = '';
+    const { resto, valores } = separarValores(data);
     if (data.id) {
-      const { id, ...payload } = data;
+      const { id, ...payload } = resto;
       ({ error } = await supabase.from('cadastro_itens').update(payload).eq('id', id));
+      // com a leitura dos valores recusada a janela abriu com zeros: gravar por cima apagaria o custo de verdade
+      if (!error && !itens.find((i: any) => i.id === id)?._valoresIlegiveis) {
+        const gv = await gravarValoresDoItem(id, valores);
+        if (gv.erro) error = { message: 'os dados do item foram salvos, mas o custo e o markup não (' + gv.erro + ')' };
+      }
     } else {
-      const r = await supabase.from('cadastro_itens').insert([{ ...data, criado_por: currentUser?.email }]).select('codigo').maybeSingle();
+      const r = await supabase.from('cadastro_itens').insert([{ ...resto, criado_por: currentUser?.email }]).select('id,codigo').maybeSingle();
       error = r.error; codigoNovo = r.data?.codigo || '';
+      if (!error && r.data?.id) {
+        const gv = await gravarValoresDoItem(r.data.id, valores);
+        if (gv.erro) error = { message: 'o item foi criado, mas o custo e o markup não puderam ser gravados (' + gv.erro + '). Abra o item e informe o custo' };
+      }
     }
     if (error) { alert('Não foi possível salvar o item: ' + error.message); return; }
     if (codigoNovo) alert(`Item cadastrado com o código ${codigoNovo}.`);
@@ -708,17 +722,26 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
           if (!codigosExistentes.has(it.codigo) && CONJUNTO_POR_PEDIDO.test(it.nome || '')) { conjuntosInativos++; return { ...base, ativo: false }; }
           return base;
         });
-        const { error } = await supabase.from('cadastro_itens').upsert(lote, { onConflict: 'codigo' });
+        const { error } = await supabase.from('cadastro_itens').upsert(lote.map((l: any) => separarValores(l).resto), { onConflict: 'codigo' });
         if (error) throw error;
+        const gv = await gravarValoresPorCodigo(lote);
+        if (gv.erro) throw new Error('Os itens deste bloco foram gravados, mas os custos e markups não (' + gv.erro + ').');
         lote.forEach(it => codigosExistentes.has(it.codigo) ? atualizados++ : novos++);
       }
 
       // Itens sem código: sempre insert (não há como identificar duplicata)
       for (let i = 0; i < semCodigo.length; i += TAM_LOTE) {
         const lote = semCodigo.slice(i, i + TAM_LOTE).map(it => ({ ...it, criado_por: currentUser?.email || '' }));
-        const { error } = await supabase.from('cadastro_itens').insert(lote);
+        const sep = lote.map((l: any) => separarValores(l));
+        const { data: criados, error } = await supabase.from('cadastro_itens').insert(sep.map((s: any) => s.resto)).select('id');
         if (error) throw error;
         novos += lote.length;
+        // os itens sem código voltam na ordem em que foram enviados
+        for (let k = 0; k < sep.length; k++) {
+          if (!criados?.[k]?.id) continue;
+          const gv = await gravarValoresDoItem(criados[k].id, sep[k].valores);
+          if (gv.erro) throw new Error('Os itens deste bloco foram criados, mas os custos e markups não (' + gv.erro + ').');
+        }
       }
 
       setResultadoImport({ novos, atualizados, ignorados: 0, mantidosInativos, conjuntosInativos });

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { anexarValoresAoItemEmbutido } from './CadastroItensValores';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
@@ -1176,11 +1177,14 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
     const itensComCusto = await Promise.all(selecionados.map(async ({ produto, qt }) => {
       const { data: bom, error: erroBom } = await supabase
         .from('cadastro_produtos_itens')
-        .select('quantidade, cadastro_itens(custo_unit, ipi_pct, st_pct)')
+        .select('quantidade, cadastro_itens(id, ipi_pct, st_pct)')
         .eq('produto_id', produto.id);
       // 7.60: a leitura que falhava virava custo ZERO — a cotação saía com preço de venda zero, sem aviso
       if (erroBom) falhasBom.push(produto.nome + ' (' + erroBom.message + ')');
-      const custoUnit = (bom || []).reduce((acc, l) => {
+      // o custo do item mora na tabela de valores (V1 do "ver valores no banco", 24/11/2026)
+      const comValores = await anexarValoresAoItemEmbutido(bom || []);
+      if (comValores.erro) falhasBom.push(produto.nome + ' (custos: ' + comValores.erro + ')');
+      const custoUnit = comValores.linhas.reduce((acc, l) => {
         const item = l.cadastro_itens || {};
         const cu = Number(item.custo_unit) || 0;
         const cu_c = cu * (1 + (Number(item.ipi_pct)||0)/100) * (1 + (Number(item.st_pct)||0)/100);
