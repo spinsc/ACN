@@ -2,7 +2,9 @@
 import { supabase } from './supabaseClient';
 import { iniciarVerComo } from './VerComo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
-import { confirmarRemocao } from './Feedback';
+import { confirmarRemocao, mostrarAviso } from './Feedback';
+import { Faixa } from './Interface';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
@@ -258,11 +260,18 @@ function PainelUsuarios() {
       recebe_alerta_analise: editForm.recebe_alerta_analise,
       gestor_id: editForm.gestor_id || null,
     };
+    const renomeou = updates.nome !== modalEditar.nome;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Não foi possível salvar: ' + explicarErroDoBanco(error)); return; }
     // ver_valores salvo separadamente — requer coluna no BD:
     // ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS ver_valores boolean DEFAULT true;
     await supabase.from('auth_usuarios').update({ ver_valores: editForm.ver_valores }).eq('id', modalEditar.id);
+    // plano "pessoa por ID" (U5, 24/11/2026): o banco leva o nome novo a todos os registros da pessoa pelo ID e anota quantos acompanharam; o Admin vê o número na hora
+    if (renomeou) {
+      const { data: reg, error: erroReg } = await supabase.from('usuarios_renomeios').select('registros').eq('usuario_id', modalEditar.id).order('em', { ascending: false }).limit(1).maybeSingle();
+      if (erroReg || !reg) mostrarAviso(`Nome alterado para ${updates.nome}. Os registros da pessoa acompanham o nome novo pelo ID (não foi possível ler quantos).`, 'info');
+      else mostrarAviso(`Nome alterado para ${updates.nome}: ${Number(reg.registros).toLocaleString('pt-BR')} registros (responsável, criado por, menções, histórico…) acompanharam o nome novo.`, 'ok');
+    }
     setSenhaAdmin(''); setModalEditar(null); fetchUsuarios();
   };
 
@@ -328,7 +337,7 @@ function PainelUsuarios() {
     // a senha nunca vai para a tabela de usuários (16d: a coluna deixou de existir): o usuário nasce sem senha e ela é definida pela função do servidor, que guarda só o resumo
     const { senha: _senhaDigitada, ...dadosDoUsuario } = form;
     const { data: novo, error } = await supabase.from('auth_usuarios').insert([{ ...dadosDoUsuario, whatsapp: whatsappParaGravar(form.whatsapp) || null, ativo: true }]).select('id').single();
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { alert('Não foi possível criar o usuário: ' + explicarErroDoBanco(error)); return; }
     if (!(await definirSenhaPeloAdmin(novo.id, form.senha))) alert('O usuário foi criado, mas ficou SEM senha definida. Abra "Editar" nele e defina a senha.');
     setSenhaAdmin('');
     setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, pode_enviar_avisos: false });
@@ -366,6 +375,14 @@ function PainelUsuarios() {
                 <input className="acn-input" style={{width:'100%'}}
                   value={editForm.nome}
                   onChange={e=>setEditForm(f=>({...f,nome:e.target.value.toUpperCase()}))} />
+                {/* U5 do plano "pessoa por ID" (24/11/2026): renomear é seguro, o nome novo acompanha todos os registros pelo ID da pessoa */}
+                <div style={{marginTop:6}}>
+                  <Faixa tom={String(editForm.nome || '').trim() !== String(modalEditar.nome || '').trim() ? 'atencao' : 'info'}>
+                    {String(editForm.nome || '').trim() !== String(modalEditar.nome || '').trim()
+                      ? <>Ao salvar, <b>{modalEditar.nome}</b> passa a ser <b>{String(editForm.nome || '').trim()}</b> em todos os registros (responsável, criado por, menções, histórico…): a pessoa é a mesma, pelo ID. Você verá quantos acompanharam.</>
+                      : <>Pode renomear sem medo: o nome novo acompanha todos os registros da pessoa pelo ID, inclusive os antigos. Dois usuários não podem ter o mesmo nome.</>}
+                  </Faixa>
+                </div>
               </div>
               <div style={{gridColumn:'1/-1'}}>
                 <label className="acn-label">E-mail *</label>

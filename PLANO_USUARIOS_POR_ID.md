@@ -58,7 +58,7 @@ Foram conferidos **43.203 valores** em **~190 colunas de texto** que guardam uma
 
 ## Estado
 
-✅ **U1 feito** (24/11/2026). ✅ **Decisões respondidas (24/11/2026):** pessoa do RH sem usuário usa o **ID da ficha do RH** (trocado pelo do usuário quando a ficha ganhar `usuario_id`); **sistema e automação ficam como texto, sem ID**. ✅ **U2 APLICADA em 24/11/2026, à noite (≈20h30 a 21h, com o OK do usuário "pode fazer agora, já não tem ninguém trabalhando")** — ver "Resultado da aplicação" no fim. ✅ **U3 aplicada em 24/11/2026** (ver "Resultado do U3"). ✅ **U4 feito em 24/11/2026**, só falta publicar (ver "Resultado do U4"). ⬜ U5.
+✅ **U1 feito** (24/11/2026). ✅ **Decisões respondidas (24/11/2026):** pessoa do RH sem usuário usa o **ID da ficha do RH** (trocado pelo do usuário quando a ficha ganhar `usuario_id`); **sistema e automação ficam como texto, sem ID**. ✅ **U2 APLICADA em 24/11/2026, à noite (≈20h30 a 21h, com o OK do usuário "pode fazer agora, já não tem ninguém trabalhando")** — ver "Resultado da aplicação" no fim. ✅ **U3 aplicada em 24/11/2026** (ver "Resultado do U3"). ✅ **U4 feito em 24/11/2026**, só falta publicar (ver "Resultado do U4"). ✅ **U5 feito em 24/11/2026** (ver "Resultado do U5"); falta só publicar.
 
 ## Resultado do ensaio do U2 (24/11/2026, tudo desfeito no fim; nada ficou no banco)
 
@@ -103,4 +103,13 @@ O ensaio rodou **como uma transação única** e **trava cada tabela por inteiro
 - **Gravações (276 pontos que mandam `currentUser.nome`): ficam como estão, de propósito.** O gatilho já acha o ID pelo nome e, com a sessão sempre fresca e o banco gravando o nome atual, mandar o ID junto não muda o resultado e custaria mexer em 90 arquivos sem prova melhor. Código novo que grava pessoa usa `quemFez` (`id` e `nome`).
 - **Provas:** `vite build` verde, `typecheck` sem erro, bateria no navegador com gravação bloqueada (conta ZZTESTE com ID real): nome antigo da sessão corrigido ao abrir, corrigido de novo ao voltar à aba depois de 3 minutos, não consulta antes de 2 minutos, a releitura preserva `primeiro_acesso=false`, Comercial/CRM, Demandas gerais e Financeiro abrem sem erro de script (0 erros).
 - **Auditoria do que sobrou por nome (de propósito):** (1) o filtro `.eq('responsavel_nome', …)` do `ContatoAlertWidget`, porque a visão `crm_oportunidades_basico` não tem a coluna de ID (acrescentar exige cuidado com a visão; funciona porque o nome da sessão está fresco); (2) `GarantiaCustos` (`pedida_por` mora dentro de uma lista JSON) e as demais listas (`membros`, `participantes`, `lida_por`…), que são o **U2b**; (3) as 276 gravações acima.
-- **Falta:** U5 (aviso no Admin, documentação, publicação com a sua autorização de push, `/saude-banco`) e U2b.
+- **Falta:** U5 (ver abaixo) e U2b.
+
+## Resultado do U5 (24/11/2026, fechamento)
+
+✅ **U5 feito** (publicação aguardando a autorização de push do usuário).
+- **Banco (migração `usuarios_por_id_u5_20261124`, `supabase/sql/usuarios_por_id_u5.sql`, reverter ao lado):** (1) **trava de nome único** sem acento nem maiúscula em `auth_usuarios` (índice `auth_usuarios_nome_unico`; não havia nome repetido): "TÁTIANA RÓSA" e "Tatiana Rosa" são barrados pelo banco; (2) **tabela `usuarios_renomeios`** (quem foi renomeado, nome antes e depois, quantos valores acompanharam, quem fez e quando; só Admin lê, só o gatilho grava), alimentada pelo gatilho `pessoa_trg_auth_usuarios`. Prova desfeita: renomear a Tatiana gravou "TATIANA ROSA → TATIANA ROSA TESTE, 2.259 registros".
+- **Tela de Usuários do Admin:** a janela Editar mostra, sob o campo Nome, que renomear é seguro; ao mudar o nome a faixa passa a dizer "X passa a ser Y em todos os registros… a pessoa é a mesma, pelo ID"; depois de salvar, um aviso diz **quantos registros acompanharam o nome novo** (lido de `usuarios_renomeios`); nome repetido vira a frase "Já existe um usuário com esse nome" (`ErroDoBanco.ts`), também na criação. Só a peça nova (a `Faixa`), sem migrar a `AdminTab`.
+- **Provas:** `vite build` e `typecheck` verdes; navegador com gravação bloqueada e a leitura do número simulada: faixa nos dois estados, aviso "2.259 registros acompanharam", 0 erros de script; depois de aplicar: CPU ~410 ms, 0 timeouts em 3 h, 0 esperas de trava.
+- **Documentação:** `CLAUDE.md` (regra "pessoa é o ID, não o nome"), este plano e a memória.
+- **Fica para quando quiserem (não pedido):** U2b (colunas em lista), o filtro por nome do `ContatoAlertWidget`, e **o primeiro renome real de um usuário, que o usuário deve conferir** (o histórico é lido em `usuarios_renomeios`).
