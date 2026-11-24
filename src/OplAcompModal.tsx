@@ -46,11 +46,16 @@ interface Props {
   sugestoes?:     string[];
   /** Outras chaves em que a mesma nota pode ter sido guardada (a OP do CRM usava o tipo "opl" com o id). Só leitura: as notas novas vão sempre na chave principal. */
   outrasChaves?:  { tipo: string; id: string }[];
+  /** As OUTRAS OPs do mesmo lote (/NN), para a mesma nota poder ser gravada em várias de uma vez (pedido do usuário em 24/11/2026: lote das Renegade, 32 das 39 carros recebem o mesmo aviso). Só vale para a OP. */
+  irmas?:         { numero: string; desc: string }[];
 }
 
 export default function OplAcompModal({
-  referenciaId, referenciaDesc, referenciaType, setor, currentUser, onClose, sugestoes, outrasChaves,
+  referenciaId, referenciaDesc, referenciaType, setor, currentUser, onClose, sugestoes, outrasChaves, irmas,
 }: Props) {
+  const outras = referenciaType === 'op' ? (irmas || []).filter(i => String(i.numero) !== String(referenciaId)) : [];
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const alternar = (n: string) => setMarcadas(prev => { const nv = new Set(prev); nv.has(n) ? nv.delete(n) : nv.add(n); return nv; });
   const [lista,    setLista]    = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [texto,    setTexto]    = useState('');
@@ -82,16 +87,18 @@ export default function OplAcompModal({
     if (!conteudo || salvando) return;
     setSalvando(true);
 
-    const { error } = await supabase.from('op_acompanhamentos').insert({
-      referencia_id:   referenciaId,
-      referencia_tipo: referenciaType,
-      referencia_desc: referenciaDesc,
-      setor,
-      texto:           conteudo,
-      usuario_id:      String(currentUser?.id || ''),
-      usuario_nome:    currentUser?.nome || 'Sistema',
-      criado_em:       new Date().toISOString(),
-    });
+    // A nota vai na OP aberta e nas OPs do lote marcadas, numa gravação só (tudo ou nada).
+    const agora = new Date().toISOString();
+    const base = {
+      referencia_tipo: referenciaType, setor, texto: conteudo,
+      usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema', criado_em: agora,
+    };
+    const escolhidas = outras.filter(o => marcadas.has(String(o.numero)));
+    const linhas = [
+      { ...base, referencia_id: referenciaId, referencia_desc: referenciaDesc },
+      ...escolhidas.map(o => ({ ...base, referencia_id: String(o.numero), referencia_desc: o.desc })),
+    ];
+    const { error } = await supabase.from('op_acompanhamentos').insert(linhas);
 
     if (error) {
       console.error('[OplAcompModal] insert:', error.message);
@@ -120,12 +127,14 @@ export default function OplAcompModal({
       mencionanteNome:     currentUser?.nome || 'Sistema',
       contexto:            referenciaType,
       contextoId:          referenciaId,
-      contextoDescricao:   referenciaDesc,
+      // Uma menção só por pessoa, ancorada na OP aberta: 32 avisos iguais na caixa de Menções seriam ruído
+      contextoDescricao:   escolhidas.length ? `${referenciaDesc} (e mais ${escolhidas.length} OP(s) do lote)` : referenciaDesc,
       campo:               'acompanhamento',
       abaDestino:          ABA_DESTINO[referenciaType] || 'producao',
     });
 
     setTexto('');
+    setMarcadas(new Set());
     setSalvando(false);
     await load();
   };
@@ -267,6 +276,26 @@ export default function OplAcompModal({
               rows={3}
               placeholder="Descreva o andamento, decisão ou pendência... use @Nome para mencionar"
             />
+
+            {outras.length > 0 && (
+              <div className="acn-aco-lote">
+                <div className="acn-ajuda">
+                  Esta OP faz parte de um lote. Marque as outras OPs que devem receber <b>a mesma nota</b> ({marcadas.size} de {outras.length} marcada(s)); quem for mencionado recebe um aviso só.
+                </div>
+                <div className="acn-aco-edicao-botoes">
+                  <Botao pequeno disabled={salvando} onClick={() => setMarcadas(new Set(outras.map(o => String(o.numero))))}>Marcar todas</Botao>
+                  <Botao pequeno disabled={salvando} onClick={() => setMarcadas(new Set())}>Limpar</Botao>
+                </div>
+                <div className="acn-aco-lote-lista">
+                  {outras.map(o => (
+                    <label key={o.numero} className="acn-aco-lote-item">
+                      <input type="checkbox" checked={marcadas.has(String(o.numero))} onChange={() => alternar(String(o.numero))} disabled={salvando} />
+                      <span>{o.numero}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

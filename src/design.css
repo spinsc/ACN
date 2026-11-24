@@ -6116,6 +6116,9 @@ html body .acn-main .acn-dav-nova-compras .form-group > input.acn-input:not([typ
 /* ══ Notas da OP (22/10/2026) — editar e apagar a nota que a pessoa escreveu ══ */
 .acn-aco-edicao { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .acn-aco-edicao-botoes { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+.acn-aco-lote { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px; border: 1px solid var(--acn-borda, #d8dde3); border-radius: 8px; }
+.acn-aco-lote-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 10px; max-height: 180px; overflow: auto; }
+.acn-aco-lote-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 /* ══ Cadastro de itens (CadastroItensTab.tsx, 12e69 — 22/10/2026) ═══════════════════════════════════════════════════════════════════════════
    Antes tudo era estilo solto dentro do componente; aqui está o desenho, com os valores que a pessoa já via (medidos antes de migrar: o tamanho mínimo de letra,
    os tons e as cores que os ajustes de tela aplicavam por cima). Cada elemento leva uma classe principal (acn-cit-b, acn-cit-td, acn-cit-inp…) e variações (centro, dir, ativo, on…);

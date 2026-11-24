@@ -838,9 +838,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [qtdLote, setQtdLote] = useState(0);
   const [verResumoLote, setVerResumoLote] = useState(false);
   const [abrirLote, setAbrirLote] = useState(false);   // a janela do lote inteiro (OpLote.tsx), aberta do detalhe de uma unidade
+  const [unidadesDoLote, setUnidadesDoLote] = useState<any[]>([]);   // 24/11/2026: a janela de andamento oferece gravar a mesma nota nas outras OPs do lote
   useEffect(() => {
-    if (!opl?.opl) { setQtdLote(0); return; }
-    buscarUnidadesDoLote(opl.opl).then(u => setQtdLote(u.length));
+    if (!opl?.opl) { setQtdLote(0); setUnidadesDoLote([]); return; }
+    buscarUnidadesDoLote(opl.opl).then(u => { setQtdLote(u.length); setUnidadesDoLote(u); });
   }, [opl?.opl]);
 
   // Origem da venda (Licitação / Venda direta) — completar nas OPs antigas
@@ -998,6 +999,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <OplAcompModal
           referenciaId={opl.opl}
           outrasChaves={[{ tipo: 'opl', id: String(opl.id) }]}
+          irmas={unidadesDoLote.map((u: any) => ({ numero: String(u.opl), desc: `OP ${u.opl}${u.cliente_nome ? ' — ' + u.cliente_nome : ''}` }))}
           referenciaDesc={`OP ${opl.opl}${opl.cliente_nome ? ' — ' + opl.cliente_nome : ''}`}
           referenciaType="op"
           setor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')}
