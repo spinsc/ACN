@@ -80,5 +80,24 @@
       }
     ],
     "caminho": "manuais/viagens/index.html"
+  },
+  {
+    "id": "servicos-terceiros",
+    "setor": "Serviços de terceiros",
+    "titulo": "Manual dos Serviços de terceiros",
+    "descricao": "Passo a passo completo dos Serviços de terceiros (película, plotagem, pintura, lavagem, funilaria, mecânica, corte e dobra e pintura eletrostática), com fotos: pedir o serviço de qualquer tela, o Quadro, a Agenda e a Lista, agendar, dar como realizado, o pedido de pagamento ao Financeiro, a saída da Vistoria de pátio, a ordem de serviço em lote da pintura eletrostática, o contrato impresso, o relatório do mês por prestador (com planilha e folha para imprimir), os cadastros de prestadores e tipos, quem recebe cada aviso, quem pode o quê e as dúvidas comuns.",
+    "ordem": 3,
+    "atualizadoEm": "2026-11-23",
+    "mudancas": [
+      {
+        "data": "2026-11-23",
+        "texto": "Primeira versão do manual, com 24 fotos das telas (dados de exemplo): o Quadro, a Agenda, a Lista e o Relatório do mês; pedir, agendar, dar como realizado, voltar, reabrir e cancelar; o pedido de pagamento ao Financeiro; a saída da Vistoria de pátio; a ordem de serviço em lote da pintura eletrostática (montar, imprimir, enviar com a cópia assinada, retorno e fechamento); o contrato impresso; a pintura da Serralheria; o quadro Serviços de terceiros na OP e na OS; os cadastros de prestadores, tipos e o modelo do contrato; quem recebe cada aviso; quem pode o quê; o que trava cada passo; os 203 serviços que vieram da caixinha da OP; e as dúvidas comuns."
+      },
+      {
+        "data": "2026-11-23",
+        "texto": "Relatório do mês por prestador: quantos serviços cada prestador fez no mês (pelo dia em que foi realizado), quanto estava combinado, quanto cobrou, a diferença, o que já foi pago, o que foi pedido ao Financeiro e o que ainda falta pedir (a mesma conta do contador A pagar), mais a coluna Ainda a fazer. Tem um quadro por tipo de serviço, baixa uma planilha do Excel com três folhas e imprime uma folha A4. Quem não vê valores vê só as quantidades."
+      }
+    ],
+    "caminho": "manuais/servicos-terceiros/index.html"
   }
 ]

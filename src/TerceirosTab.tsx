@@ -4,6 +4,7 @@
 // Fatia T3 (23/11/2026): a Agenda (semana e mês, por prestador ou por tipo, com o choque em vermelho) e o aviso do Calendário que abre o serviço atrasado daqui.
 // Fatia T4 (23/11/2026): o contrato impresso de todo serviço, a ordem de serviço em lote da pintura eletrostática (aba "Ordens de pintura": montar, enviar com a cópia assinada, registrar o retorno)
 // e a aba "Modelo do contrato" (o texto e os dados das empresas, que só o Admin edita).
+// Fatia T6 (23/11/2026): a aba "Relatório do mês" (por prestador e por tipo, com planilha do Excel e folha para imprimir; lê o mês escolhido por conta própria).
 // Todo usuário entra aqui (todos pedem e todos veem todos os serviços); quem pode mexer em cada um é regra de TerceirosFluxo.ts, conferida de novo pelo banco.
 // Esta tela só orquestra: lê, filtra, abre as janelas e junta à lista o que o banco confirmou. As regras estão em TerceirosFluxo.ts (e, da Agenda, em TerceirosAgenda.ts) e a leitura e a gravação em TerceirosServicos.ts.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,6 +36,7 @@ import { ModalDaOrdem } from './TerceirosOrdemModal';
 import { ModalMontarOrdem } from './TerceirosOrdemPassos';
 import { ModalImprimir } from './TerceirosImprimir';
 import { ModeloDoContrato } from './TerceirosModeloContrato';
+import { RelatorioDeTerceiros } from './TerceirosRelatorioTela';
 import { diaCompleto } from './TerceirosPecas';
 import './terceiros.css';
 
@@ -371,6 +373,7 @@ export default function TerceirosTab({ currentUser }) {
             { id: 'quadro', rotulo: 'Quadro', contagem: servicos.lido ? abertos : null, titulo: 'Serviços em aberto: A definir e Agendado' },
             { id: 'agenda', rotulo: 'Agenda', titulo: 'Quem está onde em cada dia: a semana e o mês, por prestador ou por tipo' },
             { id: 'lista', rotulo: 'Lista' },
+            { id: 'relatorio', rotulo: 'Relatório do mês', titulo: 'Por prestador, no mês: quantos serviços fez, quanto estava combinado, quanto cobrou e o que falta pedir ao Financeiro' },
             { id: 'ordens', rotulo: 'Ordens de pintura', contagem: ordens.lido ? ordensAndando : null, titulo: 'Ordens de serviço em lote da pintura eletrostática: montar, enviar as peças e registrar o retorno' },
             { id: 'prestadores', rotulo: 'Prestadores', contagem: prestadores.lido ? prestadores.lista.filter((p: any) => p.ativo).length : null },
             { id: 'tipos', rotulo: 'Tipos de serviço', contagem: tipos.lido ? tipos.lista.filter((t: any) => t.ativo).length : null },
@@ -436,6 +439,11 @@ export default function TerceirosTab({ currentUser }) {
         </>
       )}
 
+      {/* T6 (23/11/2026): o relatório lê sozinho o mês escolhido (não depende da janela de 120 dias da lista); o "Abrir" de um serviço usa o mesmo caminho do aviso do Calendário, que lê todos os dias se preciso */}
+      {lido && aba === 'relatorio' && (
+        <RelatorioDeTerceiros mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} verValor={verValor} currentUser={currentUser} hoje={hoje}
+          aoAbrirServico={(id: string) => setPendente({ id: String(id), tentouTodos: false })} />
+      )}
       {lido && aba === 'ordens' && (
         <OrdensDeTerceiros ordens={ordens.lista} erro={ordens.erro} servicos={lista} mapaTipos={mapaTipos} mapaPrestadores={mapaPrestadores} hoje={hoje} currentUser={currentUser}
           aoAbrirOrdem={abrirOrdem} aoAbrirServico={abrirServico} aoMontar={comecarOrdem} aoRecarregar={reler} />

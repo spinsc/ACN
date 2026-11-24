@@ -217,3 +217,21 @@ html body .acn-terc-caixa .acn-selo:not(#acn) { white-space: normal; overflow-wr
 .acn-terc-saidas .acn-terc-marca > span { min-width: 0; overflow-wrap: anywhere; }
 /* a barra do grupo e a da ordem ganham uma segunda faixa, com o pagamento e a saída, sem espremer os botões de passo */
 .acn-terc-faixas { display: grid; gap: 10px; }
+
+/* ═══ T6 (23/11/2026): o relatório do mês por prestador ═══ */
+.acn-terc-rel { display: grid; gap: 12px; min-width: 0; }
+.acn-terc-rel > * { min-width: 0; }
+.acn-terc-rel-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.acn-terc-rel-mes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+/* o nome do mês vem em minúsculas ("novembro de 2026", que serve também no meio das frases); só a primeira letra sobe: "capitalize" faria "De" */
+.acn-terc-rel-mes-nome { display: inline-block; min-width: 150px; text-align: center; font-size: 15px; color: var(--acn-ink); }
+.acn-terc-rel-mes-nome::first-letter { text-transform: uppercase; }
+.acn-terc-rel-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.acn-terc-rel-regra { margin: 0; max-width: 78ch; line-height: 1.45; }
+/* o nome do prestador é texto longo dentro de um botão: a regra genérica de botão impõe nowrap, então empata o peso para o texto quebrar dentro da célula (CLAUDE.md, "Texto longo dentro de botão") */
+html body .acn-b.acn-terc-rel-nome:not(#acn) { white-space: normal; overflow-wrap: anywhere; max-width: 100%; height: auto; min-height: 28px; text-align: left; justify-content: flex-start; font-weight: 600; }
+.acn-terc-rel-total td { background: var(--acn-surface-2); }
+.acn-terc-rel-detalhe > td { background: var(--acn-surface-2); padding: 0; }
+.acn-terc-rel-lista { display: grid; gap: 10px; padding: 8px 10px 10px; min-width: 0; }
+.acn-terc-rel-sub { padding: 2px 0 6px; font-size: 12px; font-weight: 600; color: var(--acn-muted); }
+.acn-terc-rel-desc { min-width: 180px; overflow-wrap: anywhere; }
