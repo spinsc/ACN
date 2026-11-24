@@ -15,6 +15,7 @@ import { erroDeTelefone, whatsappParaGravar } from './Telefone';
 import PainelFeriados from './FeriadosAdmin';
 import PermissoesDoUsuario from './PermissoesDoUsuario';
 import MatrizDePermissoes from './MatrizDePermissoes';
+import HistoricoDePermissoes from './HistoricoDePermissoes';
 import { Tag, Chips } from './Interface';
 import { resumoDosExtras, IDS_DAS_ABAS, extrasMarcadosDoForm, formDosExtras, ligarExtrasDoModelo, contarExtrasDoModelo } from './PermissoesCatalogo';
 // só conta as abas que a tela de permissões mostra (24/11/2026): ids guardados fora do catálogo, como comissoes_tecnicos, não entram na conta
@@ -107,6 +108,7 @@ function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, ver_valores: true });
   const [showForm, setShowForm] = useState(false);
+  const [histPessoa, setHistPessoa] = useState('');   // 24/11/2026: pessoa do botão "Histórico" da linha
   const [visao, setVisao] = useState('lista');   // 24/11/2026: 'lista' (editar) ou 'matriz' (quem tem o quê, só leitura)
   const [loading, setLoading] = useState(false);
   const [modalEditar, setModalEditar] = useState(null);
@@ -359,7 +361,7 @@ function PainelUsuarios() {
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Usuarios do Sistema ({usuarios.length})</span>
-          <Chips rotulo="Visão" ativo={visao} onChange={setVisao} itens={[{ id: 'lista', rotulo: 'Lista' }, { id: 'matriz', rotulo: 'Matriz: quem tem o quê' }]} />
+          <Chips rotulo="Visão" ativo={visao} onChange={setVisao} itens={[{ id: 'lista', rotulo: 'Lista' }, { id: 'matriz', rotulo: 'Matriz: quem tem o quê' }, { id: 'historico', rotulo: 'Histórico de permissões' }]} />
           {visao === 'lista' && (
             <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>setShowForm(s=>!s)}>
               {showForm ? 'Cancelar' : '+ Novo Usuario'}
@@ -367,6 +369,7 @@ function PainelUsuarios() {
           )}
         </div>
         {visao === 'matriz' && <div className="sec-body"><MatrizDePermissoes usuarios={usuarios} /></div>}
+        {visao === 'historico' && <div className="sec-body"><HistoricoDePermissoes usuarios={usuarios} pessoaInicial={histPessoa} aoLimparPessoa={()=>setHistPessoa('')} /></div>}
         {visao === 'lista' && showForm && (
           <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
             <div className="form-row">
@@ -450,6 +453,9 @@ function PainelUsuarios() {
                             </button>
                             <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
                               onClick={()=>abrirEditar(u)}>✏️ Editar</button>
+                            <button className="acn-btn" style={{background:'#64748b',fontSize:9}}
+                              onClick={()=>{ setHistPessoa(String(u.id)); setVisao('historico'); }}
+                              title="Ver quem mudou as permissões desta pessoa">🕘 Histórico</button>
                             <button className="acn-btn"
                               style={{background: u.ativo?'#ef4444':'#22c55e',fontSize:9}}
                               onClick={()=>toggleAtivo(u)}>

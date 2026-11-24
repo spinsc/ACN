@@ -7498,3 +7498,7 @@ html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; over
 .acn-mx-c.tot { background: var(--acn-surface-2); color: var(--acn-ink); }
 .acn-mx-tab tfoot td { position: sticky; bottom: 0; background: var(--acn-surface-2); }
 .acn-mx-tab tr.inativo td { opacity: .55; }
+
+.acn-hp-tab { width: 100%; border-collapse: collapse; font-size: 12px; }
+.acn-hp-tab th, .acn-hp-tab td { padding: 6px 8px; border-bottom: 1px solid var(--acn-line, #e2e8f0); text-align: left; vertical-align: top; }
+.acn-hp-antes { text-decoration: line-through; color: var(--acn-ink-3, #94a3b8); }
