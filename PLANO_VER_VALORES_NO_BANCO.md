@@ -1,4 +1,4 @@
-# PLANO — "Ver valores" valendo no banco (opção B escolhida em 24/11/2026; V0 feita, V1 aguarda decisões)
+# PLANO — "Ver valores" valendo no banco (opção B escolhida em 24/11/2026; V0 e V1 feitas e publicadas; V2 desenhada, aguardando início)
 
 > Origem: etapa 6 da revisão de permissões. A caixa **"Ver valores financeiros"** do cadastro de usuário (`auth_usuarios.ver_valores`) hoje só **esconde o número na tela**
 > (`podeVerValores`, usado em ~26 arquivos). O banco entrega o valor a qualquer pessoa que entrou: quem chamar o banco por fora, ou abrir o que a tela esquece de esconder, vê tudo.
@@ -118,3 +118,23 @@ Duas leituras: (1) a lista de OPs já passa um pouco do limite **antes** de qual
 - **O Admin vê sempre no banco?** (a proposta é que sim.)
 - **Na V1 (`cadastro_itens`), abrir custo e markup por aba (recomendado) ou por "ver valores"?** Por aba protege de quem tem a caixa ligada mas não trabalha com preço; por "ver valores" segue a caixa do cadastro de usuário.
 - **Janela de publicação:** a V1 troca a leitura de 9 telas e muda a tabela do banco; prefiro publicar à noite e conferir a Formação de Preços e o Cadastro de itens com a conta de teste antes de você abrir o sistema.
+
+## 9. V1 feita (24/11/2026) e desenho da V2 (OPs)
+
+### 9.1 V1 — `cadastro_itens`: publicada
+Custo unitário, custo da embalagem, custo fixo % e markup % moram em `cadastro_itens_valores` (política por aba: cadastro_itens, cadastro_produtos, formacao_precos, cotacoes, crm, licitacoes, telecom; Admin sempre). 4.645 itens copiados sem diferença; cópia de segurança `cadastro_itens_custos_antes_20261124`. As colunas antigas **continuam** em `cadastro_itens` (saem na V6, com OK do usuário). Telas: Cadastro de itens, Produtos, Cotações e Formação de Preços; `unificar_item` e o histórico de unificações também. Código: `CadastroItensValores.ts`. Testada no navegador (lista, edição, gravação separada, busca na Formação).
+
+### 9.2 V2 — `oples`: o que o levantamento achou (usuário escolheu "fazer a V2 completa")
+- **Colunas:** `valor_total`, `valor_mao_de_obra` e `valor_mao_de_obra_serralheria` (nulas quando não informadas; **nulo ≠ zero**: várias telas decidem por `!= null`). Nenhum preço dentro de `itens_vendidos`. 543 OPs; 459 com valor total, 345 com mão de obra. A função `pode_ver_valores()` **não existe** ainda.
+- **No banco:** nenhuma função ou visão cita as colunas (a busca não achou); gatilhos da `oples`: avisar e gerar viagem, entrega pela chegada, lead time e `sync_norm`.
+- **No código:** ~30 arquivos (comissão, RH, Relatórios, Conciliação, Fiscal, dossiê da OP e do lote, resumo do lote, edição da OP e em lote, Nova OP, Copiar OP, CRM, troca de fluxo, fluxo misto, Painel TV, cartão da OP em todo setor).
+- **Achado que muda o desenho — a mão de obra também é "sinal de rota", não só dinheiro:** `temSerralheria()` / `motivoSerralheria()` (`FluxoEntrega.ts`) mandam a OP para a fila da Serralheria quando `valor_mao_de_obra_serralheria > 0`; `faltaApontar()` (`EquipeDaOp.tsx`) decide se falta apontar equipe pelo `valor_mao_de_obra` e pelo da serralheria; `FluxoMisto` e `TrocaDeFluxo` usam `== null`/`> 0`. Quem NÃO vê valores (Jairo, Marlon, conta de teste) trabalha justamente nessas filas: se a mão de obra sumir da leitura deles, a OP some da Serralheria. **Por isso a V2 precisa de duas marcas sem valor (ex.: `oples.tem_mo_adaptacao` e `oples.tem_mo_serralheria`, booleanas, mantidas por gatilho a partir dos valores) e essas telas passam a ler as marcas.**
+- **Leitura espalhada:** o cartão da OP (`AcnTabShared`, bloco "Financeiro") lê `opl.valor_*` do objeto que cada setor trouxe com `select *`; sem cuidado, o bloco some até para quem pode ver.
+
+### 9.3 Desenho (em ondas, cada uma publicável e reversível)
+- **V2a (banco, aditiva):** função `pode_ver_valores()` (Admin ou `ver_valores` diferente de falso, pelo `uid_efetivo()`, usada como `(select …)`); tabela `oples_valores` (op_id, os 3 valores, `atualizado_em`; política por `pode_ver_valores()`); duas marcas booleanas em `oples` com gatilho; cópia dos 543 e cópia de segurança; **gatilho que copia das colunas antigas para a tabela nova** (as telas que ainda gravam nas colunas antigas continuam valendo). Ensaio de custo antes (gatilho na `oples`, tabela quente) e só fora do horário.
+- **V2b (telas que só LEEM):** comissão e RH, Relatórios, Conciliação (hoje filtra por `valor_total` no banco: passa a partir de `oples_valores`), Fiscal, dossiês, resumo do lote, Painel TV, cartão da OP; `temSerralheria`, `faltaApontar`, fluxo misto e troca de fluxo passam às marcas.
+- **V2c (telas que GRAVAM):** Nova OP, CRM (lote e edição), Copiar OP, edição da OP e em lote, troca de fluxo: gravam na tabela nova (e o gatilho mantém as colunas antigas até a V6).
+- **V2d (fechar):** colunas antigas zeradas, gatilho invertido (o que alguém ainda gravar nelas vai para a tabela nova e some da `oples`); conferência com `ver_valores = false`.
+- Regras já decididas pelo usuário (24/11/2026): Admin vê sempre; quem lê é decidido pela caixa "Ver valores" (para a `oples` o critério é a caixa, não a aba).
+- **Riscos a vigiar:** custo da lista de OPs (já 163 ms, acima do limite do ensaio, antes de qualquer mudança); comissão do RH (conferir que o valor calculado de um mês fechado não muda); rodar `/saude-banco` depois de cada onda.
