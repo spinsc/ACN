@@ -58,7 +58,7 @@ Foram conferidos **43.203 valores** em **~190 colunas de texto** que guardam uma
 
 ## Estado
 
-✅ **U1 feito** (24/11/2026). ✅ **Decisões respondidas (24/11/2026):** pessoa do RH sem usuário usa o **ID da ficha do RH** (trocado pelo do usuário quando a ficha ganhar `usuario_id`); **sistema e automação ficam como texto, sem ID**. ✅ **U2 APLICADA em 24/11/2026, à noite (≈20h30 a 21h, com o OK do usuário "pode fazer agora, já não tem ninguém trabalhando")** — ver "Resultado da aplicação" no fim. ⬜ U3 a U5.
+✅ **U1 feito** (24/11/2026). ✅ **Decisões respondidas (24/11/2026):** pessoa do RH sem usuário usa o **ID da ficha do RH** (trocado pelo do usuário quando a ficha ganhar `usuario_id`); **sistema e automação ficam como texto, sem ID**. ✅ **U2 APLICADA em 24/11/2026, à noite (≈20h30 a 21h, com o OK do usuário "pode fazer agora, já não tem ninguém trabalhando")** — ver "Resultado da aplicação" no fim. ✅ **U3 aplicada em 24/11/2026** (ver "Resultado do U3"). ⬜ U4 e U5.
 
 ## Resultado do ensaio do U2 (24/11/2026, tudo desfeito no fim; nada ficou no banco)
 
@@ -81,4 +81,14 @@ O ensaio rodou **como uma transação única** e **trava cada tabela por inteiro
 - **Provas (desfeitas no fim):** gravar só o nome numa linha de `oples` achou o ID sozinho; renomear a Tatiana levou o nome novo a **2.260 valores e 0 ficaram com o nome antigo**; depois da prova o nome dela continua TATIANA ROSA.
 - **Saúde do banco depois:** CPU ~376 ms (normal), zero "statement timeout" nem espera de trava desde as 19h30. Nenhum dado de negócio foi alterado (só colunas de ID novas e preenchidas); nenhum texto de nome mudou.
 - **O que muda para quem usa agora: nada.** O sistema grava e lê os nomes como sempre; o banco mantém o ID ao lado. **Já vale:** renomear um usuário no Admin leva o nome novo a todas as colunas `tipo=nome` pelo ID (primeiro renome real: conferir).
-- **Falta:** U3 (21 funções, 18 gatilhos e 1 política que olham o nome), U4 (as telas: `currentUser.id`, `QuemFez.ts`), U5 (aviso no Admin, documentação, publicação). Colunas de lista (`membros`, `participantes`, `lida_por`, `tecnicos_producao`, `autorizacoes`) ficam para o U2b. Reverter, se preciso: `supabase/sql/usuarios_por_id_u2_reverter.sql`.
+- **Falta:** U4 (as telas: `currentUser.id`, `QuemFez.ts`), U5 (aviso no Admin, documentação, publicação). Colunas de lista (`membros`, `participantes`, `lida_por`, `tecnicos_producao`, `autorizacoes`) ficam para o U2b. Reverter, se preciso: `supabase/sql/usuarios_por_id_u2_reverter.sql`.
+
+## Resultado do U3 (24/11/2026, depois do U2)
+
+✅ **U3 aplicada** (migração `usuarios_por_id_u3_20261124`; só `create or replace` de funções, nenhuma tabela travada). A conferência das 21 funções e 18 gatilhos mostrou que **só quatro precisavam mudar**; o resto já usa o ID (`uid_efetivo`, `auth_id`), casa pelo nome que o U2 mantém em dia ao renomear, ou só grava o nome de quem age sem comparar. Nenhuma política de acesso compara nome.
+- **`pessoa_propagar_nome`:** ao renomear, também reescreve o campo de busca sem acento (`<coluna>_norm`), que o gatilho do usuário não recalculava (fica desligado durante a troca). Prova: renomear a Tatiana levou o nome novo a 12 cards do CRM e 0 ficaram com a busca errada.
+- **`formacao_excluir`:** "quem criou a formação" vale também pelo ID (`criado_por_pessoa_id`), com o nome/e-mail como reserva.
+- **`fretes_avisar_sem_entrega`:** o aviso ao responsável comercial, vendedor e criador da OP acha a pessoa pelo ID, com o nome como reserva. Prova com frete sintético (nomes da OP trocados por texto inexistente): a Letícia recebeu o aviso só pelo ID.
+- **`viagens_ao_mudar_de_etapa`:** o aviso do Comercial ao chegar em Provisionamento acha a pessoa pelo ID, com o nome como reserva. Prova na viagem "A 1733": igual por nome (adaptação 2, comercial 1, financeiro 4) e igual só pelo ID, com os nomes da OP trocados.
+- Tudo ensaiado em transação desfeita antes de aplicar; depois: CPU ~380 ms, 0 timeouts, 0 esperas de trava. Os direitos das funções não mudaram (`formacao_excluir` para quem entrou; as outras só o servidor). **Não cobre** (decisão de custo/risco): as funções do Calendário (~14 KB), que casam pelo nome que a propagação mantém. Reverter: `supabase/sql/usuarios_por_id_u3_reverter.sql`.
+- **Falta:** U4 (telas), U5, U2b.
