@@ -21,6 +21,7 @@ import { itensPreenchidos } from './DemandaItens';
 import { hojeISO, Botao } from './Interface';
 import { CampoTelefone } from './CampoTelefone';
 import { lerValorDigitado } from './LerValor';
+import { somenteDigitos, erroDosDias, diasParaGravar, somarDias, dataBr } from './ChegadaDoVeiculo';
 import { quemExecutaValido, statusInicialDaOsDoCrm, numeroPvParaOS, demandaDeExecucaoDaOsDoCrm, ROTULOS_QUEM_EXECUTA } from './SacFluxo';
 import { notificarEvento } from './whatsappHelper';
 import { mostrarAviso, confirmar } from './Feedback';
@@ -34,6 +35,7 @@ import { exigeEnderecoCompleto, enderecoQueFalta } from './EnderecoEntrega';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 import { FLUXO_MISTO, ROTULO_FLUXO_MISTO, validarFluxosDosGrupos, ajustarOpPeloFluxoDoGrupo, dividirSoEntreElegiveis, grupoEhDeEnvio, grupoPrecisaFrete, resumoDosFluxos } from './FluxoMisto';
+import { CampoMoeda } from './CampoMoeda';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -165,6 +167,8 @@ const VAZIO = {
   valor_mao_de_obra:      '',
   valor_mao_de_obra_serralheria: '',
   prazo_entrega:          '',
+  // 24/11/2026: na OP que passa pela adaptação o Comercial não digita a data de entrega, e sim QUANTOS DIAS a fábrica leva da chegada do veículo até a conclusão (número inteiro livre); a data sai da chegada + esses dias (gatilho do banco, ver ChegadaDoVeiculo.ts)
+  prazo_dias_apos_chegada: '',
   prazo_garantia:         '',   // texto livre: "12 meses a partir da entrega", etc.
   data_chegada_veiculo:   '',
   observacoes:            '',
@@ -275,6 +279,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // mesmo dado.
   // (o fluxo misto SEMPRE usa os grupos: cada grupo é quem escolhe o fluxo)
   const loteEhMisto = (loteMisto || ehFluxoMisto) && Number(form.quantidade) > 1 && !soEnvio(fluxoEf);
+  // Prazo (24/11/2026): a OP com veículo (adaptação) pede os DIAS depois da chegada; o que sai embalado (envio, OS) segue pedindo a DATA. No fluxo misto vale cada um para as unidades do seu fluxo.
+  const temUnidadeDeAdaptacao = form.tipo === 'OP' && !ehVendaEnvio && (ehFluxoMisto ? grupos.some((g: any) => !grupoEhDeEnvio(g)) : !soEnvio(fluxoEf));
+  const temUnidadeDeEnvio = form.tipo !== 'OP' || ehVendaEnvio || (ehFluxoMisto ? grupos.some((g: any) => grupoEhDeEnvio(g)) : soEnvio(fluxoEf));
   // Fluxo misto: a regra "veículo obrigatório" é da Administração POR FLUXO, então lê-se uma vez para cada fluxo que os grupos escolheram (uma leitura que falha barra o salvar, como na venda comum)
   const [modosPorFluxo, setModosPorFluxo] = useState<Record<string, { modo: string; erro: string | null }>>({});
   const fluxosDosGrupos = ehFluxoMisto ? [...new Set(grupos.map((g: any) => g.fluxo).filter(Boolean))].sort().join(',') : '';
@@ -436,7 +443,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (form.tipo === 'OS' && !form.descricao_problema.trim()) { setErro('Descreva o problema/serviço.'); return; }
     // S3 (29/10/2026): o valor da OS vendida vai para a OS (é o que o Fiscal fatura); valor ilegível não vira vazio em silêncio
     if (form.tipo === 'OS' && lerValorDigitado(form.valor_total).invalido) { setErro(`Valor Total inválido: "${String(form.valor_total).trim()}". Use só números, por exemplo 450 ou 1.450,50.`); return; }
-    if (!form.prazo_entrega) { setErro('Informe o prazo de entrega.'); return; }
+    if (temUnidadeDeAdaptacao) {
+      const faltaDias = erroDosDias(form.prazo_dias_apos_chegada);
+      if (faltaDias) { setErro(faltaDias); return; }
+    }
+    if (temUnidadeDeEnvio && !form.prazo_entrega) { setErro(ehFluxoMisto ? 'Informe o prazo de entrega (data) das unidades de envio.' : 'Informe o prazo de entrega.'); return; }
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
     // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
     // Adaptação por omissão — que é justamente o problema que isto resolve.
@@ -592,7 +603,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           valor_mao_de_obra:      ehVendaEnvio ? null : (valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra)),
           valor_mao_de_obra_serralheria: ehVendaEnvio ? null : (valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria)),
           data_entrada:           form.data_entrada,
-          data_prevista_entrega:  form.prazo_entrega || null,
+          // 24/11/2026: com dias, a data de entrega nasce da chegada do veículo + dias (o gatilho do banco calcula quando há previsão de chegada; sem ela fica em aberto até o carro chegar)
+          data_prevista_entrega:  temUnidadeDeAdaptacao ? null : (form.prazo_entrega || null),
+          prazo_dias_apos_chegada: temUnidadeDeAdaptacao ? diasParaGravar(form.prazo_dias_apos_chegada) : null,
           prazo_garantia:         form.prazo_garantia?.trim() || null,
           data_chegada_veiculo:   ehVendaEnvio ? null : (form.data_chegada_veiculo || null),
           cliente_nome:           form.cliente_nome.trim(),
@@ -637,7 +650,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             const suf = String(i + 1).padStart(2, '0');
             let payload: any = makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] });
             // fluxo misto: a OP nasce com o fluxo (e o destino/frete) do grupo da unidade
-            if (ehFluxoMisto && unidades) payload = ajustarOpPeloFluxoDoGrupo(payload, grupos[unidades[i].grupo], cepParaGravar);
+            if (ehFluxoMisto && unidades) {
+              payload = ajustarOpPeloFluxoDoGrupo(payload, grupos[unidades[i].grupo], cepParaGravar);
+              // 24/11/2026: a unidade de envio não espera carro nenhum: leva a DATA de entrega; a de adaptação leva os DIAS depois da chegada
+              if (grupoEhDeEnvio(grupos[unidades[i].grupo])) { payload.prazo_dias_apos_chegada = null; payload.data_prevista_entrega = form.prazo_entrega || null; }
+            }
             if (unidades) {
               // lote misto: serviços, itens vendidos (e valor, se informado por grupo) da unidade vêm do grupo
               payload.resumo_servicos = unidades[i].servicos;
@@ -1221,8 +1238,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               {ehVendaEnvio ? (<>
                 <div className="acn-nop-bl">
                   <div className="acn-nop-rot">Valor Total (R$)</div>
-                  <input className="acn-input acn-nop-w" placeholder="Ex: 45000"
-                    value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
+                  <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 45000"
+                    value={form.valor_total} onChange={reais => setF('valor_total', reais)} />
                 </div>
               </>) : (<>
               <div className="acn-nop-gr g3">
@@ -1289,19 +1306,19 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               <div className="acn-nop-gr g2">
                 <div>
                   <div className="acn-nop-rot">Valor Total (R$)</div>
-                  <input className="acn-input acn-nop-w" placeholder="Ex: 45000"
-                    value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
+                  <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 45000"
+                    value={form.valor_total} onChange={reais => setF('valor_total', reais)} />
                 </div>
                 <div>
                   <div className="acn-nop-rot">Valor M.O. (R$)</div>
-                  <input className="acn-input acn-nop-w" placeholder="Ex: 12000"
-                    value={form.valor_mao_de_obra} onChange={e => setF('valor_mao_de_obra', e.target.value)} />
+                  <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 12000"
+                    value={form.valor_mao_de_obra} onChange={reais => setF('valor_mao_de_obra', reais)} />
                 </div>
               </div>
               <div className="acn-nop-bl">
                 <div className="acn-nop-rot">Valor M.O. Serralheria (R$)</div>
-                <input className="acn-input acn-nop-w" placeholder="Ex: 5000"
-                  value={form.valor_mao_de_obra_serralheria} onChange={e => setF('valor_mao_de_obra_serralheria', e.target.value)} />
+                <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 5000"
+                  value={form.valor_mao_de_obra_serralheria} onChange={reais => setF('valor_mao_de_obra_serralheria', reais)} />
               </div>
 
               <div className="acn-nop-bl">
@@ -1404,8 +1421,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               <div className="acn-nop-gr g2">
                 <div>
                   <div className="acn-nop-rot">Valor Total (R$){crmCard && form.valor_total && <span className="acn-nop-rot-sub"> · vem da venda do card</span>}</div>
-                  <input className="acn-input acn-nop-w" placeholder="Ex: 450" aria-label="Valor total da OS"
-                    value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
+                  <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 450" aria-label="Valor total da OS"
+                    value={form.valor_total} onChange={reais => setF('valor_total', reais)} />
                 </div>
                 <div>
                   <div className="acn-nop-rot">Quem executa *</div>
@@ -1438,11 +1455,29 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               <input type="date" className="acn-input acn-nop-w"
                 value={form.data_entrada} onChange={e => setF('data_entrada', e.target.value)} />
             </div>
-            <div>
-              <div className="acn-nop-rot">Prazo de Entrega *</div>
-              <input type="date" className="acn-input acn-nop-w"
-                value={form.prazo_entrega} onChange={e => setF('prazo_entrega', e.target.value)} />
-            </div>
+            {temUnidadeDeEnvio && (
+              <div>
+                <div className="acn-nop-rot">{ehFluxoMisto ? 'Prazo de Entrega das unidades de envio *' : 'Prazo de Entrega *'}</div>
+                <input type="date" className="acn-input acn-nop-w"
+                  value={form.prazo_entrega} onChange={e => setF('prazo_entrega', e.target.value)} />
+              </div>
+            )}
+            {temUnidadeDeAdaptacao && (
+              <div>
+                <div className="acn-nop-rot">{temUnidadeDeEnvio ? 'Prazo após a chegada do veículo (dias) — unidades da adaptação *' : 'Prazo após a chegada do veículo (dias) *'}</div>
+                <input className="acn-input acn-nop-w" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30"
+                  value={form.prazo_dias_apos_chegada} onChange={e => setF('prazo_dias_apos_chegada', somenteDigitos(e.target.value))} />
+                <div className="acn-ajuda">
+                  {(() => {
+                    const dias = diasParaGravar(form.prazo_dias_apos_chegada);
+                    const previsao = somarDias(form.data_chegada_veiculo, dias);
+                    if (dias === null) return 'Quantos dias a fábrica leva da chegada do veículo até a conclusão. Só números inteiros: 1, 2, 10, 30, 60…';
+                    if (previsao) return `Entrega prevista: ${dataBr(previsao)} (previsão de chegada + ${dias} dia(s)). Recalcula quando o veículo chegar à matriz.`;
+                    return `A data de entrega sai da chegada do veículo + ${dias} dia(s). Informe a previsão de chegada para já ter uma data, ou o SAC registra a chegada na OP.`;
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
 
           {form.tipo === 'OP' && (

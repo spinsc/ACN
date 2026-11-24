@@ -22,6 +22,8 @@ import { lerDemandasQueEsperam } from './EsperaDeMaterial';
 import { podeVerValores, ehAdminOuGerente } from './utils/permissoes';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
+import { CampoMoeda } from './CampoMoeda';
+import { numeroOuNulo } from './LerValor';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -564,7 +566,7 @@ function FretesPanel({ currentUser }: any) {
     const { error } = await supabase.from('pcp_cotacoes_fretes').insert([{
       frete_id: modalFrete.id,
       transportadora_nome: novaCotacao.transportadora_nome.trim(),
-      valor: parseFloat(String(novaCotacao.valor).replace(/\./g,'').replace(',','.')) || null,
+      valor: numeroOuNulo(novaCotacao.valor) || null,
       condicao_pagamento: novaCotacao.condicao_pagamento.trim() || null,
       prazo_entrega: novaCotacao.prazo_entrega.trim() || null,
       anexo_url: anexo?.url || null,
@@ -1077,8 +1079,8 @@ function FretesPanel({ currentUser }: any) {
               </div>
               <div className="form-group">
                 <label className="acn-label">Valor da Nota (R$)</label>
-                <input className="acn-input" value={form.valor_nota}
-                  onChange={e=>setForm({...form,valor_nota:e.target.value})} placeholder="Ex: 1500,00" />
+                <CampoMoeda className="acn-input" value={form.valor_nota}
+                  onChange={reais =>setForm({...form,valor_nota:reais})} placeholder="Ex: 1500,00" />
               </div>
             </div>
             <div className="form-row">
@@ -1348,9 +1350,9 @@ function FretesPanel({ currentUser }: any) {
                   </div>
                   <div>
                     <label className="acn-label">Valor (R$) *</label>
-                    <input className="acn-input" value={novaCotacao.valor}
+                    <CampoMoeda className="acn-input" value={novaCotacao.valor}
                       placeholder="Ex: 350,00"
-                      onChange={e=>setNovaCotacao(f=>({...f,valor:e.target.value}))} />
+                      onChange={reais =>setNovaCotacao(f=>({...f,valor:reais}))} />
                   </div>
                   <div>
                     <label className="acn-label">Condição de Pagamento</label>

@@ -3940,6 +3940,9 @@ html body .sec-body.acn-fer-ajuda { font-size: 12px; }
 html body .sec-body.acn-fer-tabela { overflow-x: auto; padding: 0; }
 .acn-fer-data { white-space: nowrap; }
 .acn-sco-prio { display: flex; gap: 6px; }
+/* 24/11/2026: caixa "vale para o lote inteiro" do pedido de compra de um lote (SolicitacaoCompra.tsx) */
+.acn-sco-lote { background: var(--acn-surface-2, rgba(0,0,0,.03)); border: 1px solid var(--acn-line); border-radius: 8px; padding: 10px 12px; }
+.acn-sco-lote-previa { margin-top: 6px; font-size: 13px; color: var(--acn-ink); display: grid; gap: 2px; }
 html body .modal-overlay.acn-sco-fundo { z-index: 2600; }
 
 /* ── 12e58 (09/10/2026): peças pequenas compartilhadas — pausar/retomar, origem da venda, etapas do celular, modo dividido, "não lido" e colaborador ──

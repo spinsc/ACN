@@ -29,6 +29,7 @@ import { ListaConfiguravelModal } from './ListaConfiguravel';
 import { lerCentroObrigatorio, gravarCentroObrigatorio, contarComprasSemCentro, ModalComprasSemCentro } from './CentroCustoUso';
 import { PainelCentroCusto, carregarMovimentosCentros, normalizarMovimentos, calcularCentro, somarPeriodo, faixaDoConsumo } from './CentroCustoPainel';
 import { mdiTagOutline, mdiPlus, mdiPencilOutline, mdiCashPlus, mdiMagnify, mdiShapeOutline, mdiRefresh, mdiContentCopy, mdiChartBoxOutline } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const reais = (v: any) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -597,8 +598,8 @@ function FichaCentro({ centro, centros, tipos, anoInicial, currentUser, onClose,
             ) : (
               <>
                 <div className="acn-cc-orc-atalhos">
-                  <input className="acn-input acn-cc-orc-anual" inputMode="decimal" placeholder="Valor anual (ex.: 120.000,00)" aria-label="Valor anual para dividir igual"
-                    value={anualTxt} onChange={e => setAnualTxt(e.target.value)} disabled={!orcPronto || !!orcErro} />
+                  <CampoMoeda className="acn-input acn-cc-orc-anual" placeholder="Valor anual (ex.: 120.000,00)" aria-label="Valor anual para dividir igual"
+                    value={anualTxt} onChange={reais => setAnualTxt(reais)} disabled={!orcPronto || !!orcErro} />
                   <Botao pequeno onClick={dividirIgual} disabled={!orcPronto || !!orcErro}>Dividir igual pelos 12 meses</Botao>
                   <Botao pequeno icone={mdiContentCopy} onClick={copiarAnterior} disabled={!orcPronto || !!orcErro}>Copiar de {anoOrc - 1}</Botao>
                   <Botao pequeno variante="discreto" onClick={limparAno} disabled={!orcPronto || !!orcErro}>Esvaziar {anoOrc}</Botao>
@@ -607,8 +608,8 @@ function FichaCentro({ centro, centros, tipos, anoInicial, currentUser, onClose,
                   {MESES.map((m, i) => (
                     <label key={m}>
                       <span>{m}</span>
-                      <input className="acn-input" inputMode="decimal" placeholder="0,00" aria-label={`Orçamento de ${m} de ${anoOrc}`}
-                        value={campos[i]} onChange={e => digitarMes(i, e.target.value)} disabled={!orcPronto || !!orcErro} />
+                      <CampoMoeda className="acn-input" placeholder="0,00" aria-label={`Orçamento de ${m} de ${anoOrc}`}
+                        value={campos[i]} onChange={reais => digitarMes(i, reais)} disabled={!orcPronto || !!orcErro} />
                     </label>
                   ))}
                 </div>

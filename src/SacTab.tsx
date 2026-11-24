@@ -38,6 +38,7 @@ import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
 import { ModalComprasDaOS } from './ComprasLigadas';
 import { SelectVeiculo } from './VeiculoCadastro';
+import { CampoMoeda } from './CampoMoeda';
 import { mdiContentCopy, mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline, mdiCartOutline, mdiCalendarClock } from '@mdi/js';
 
@@ -2720,14 +2721,14 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                 <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCarOutline} size={14} /> Despesas de Campo</span></div>
                 <div className="form-row">
                   <div className="form-group"><label className="acn-label">Deslocamento (R$)</label>
-                    <input className="acn-input" placeholder="0,00"
-                      value={form.despesa_deslocamento} onChange={e=>setForm(f=>({...f,despesa_deslocamento:e.target.value}))} /></div>
+                    <CampoMoeda className="acn-input" placeholder="0,00"
+                      value={form.despesa_deslocamento} onChange={reais =>setForm(f=>({...f,despesa_deslocamento:reais}))} /></div>
                   <div className="form-group"><label className="acn-label">Hospedagem (R$)</label>
-                    <input className="acn-input" placeholder="0,00"
-                      value={form.despesa_hospedagem} onChange={e=>setForm(f=>({...f,despesa_hospedagem:e.target.value}))} /></div>
+                    <CampoMoeda className="acn-input" placeholder="0,00"
+                      value={form.despesa_hospedagem} onChange={reais =>setForm(f=>({...f,despesa_hospedagem:reais}))} /></div>
                   <div className="form-group"><label className="acn-label">Alimentação (R$)</label>
-                    <input className="acn-input" placeholder="0,00"
-                      value={form.despesa_alimentacao} onChange={e=>setForm(f=>({...f,despesa_alimentacao:e.target.value}))} /></div>
+                    <CampoMoeda className="acn-input" placeholder="0,00"
+                      value={form.despesa_alimentacao} onChange={reais =>setForm(f=>({...f,despesa_alimentacao:reais}))} /></div>
                   <div className="form-group acn-sac-total">
                     <Selo familia="atencao" ponto={false}>
                       Total: R$ {(
@@ -2864,11 +2865,11 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCurrencyUsd} size={14} /> Valores Financeiros (Comissões)</span></div>
               <div className="form-row">
                 <div className="form-group acn-sac-valor-campo"><label className="acn-label">Valor Total (R$)</label>
-                  <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
-                    value={form.valor_total||''} onChange={e=>setForm(f=>({...f,valor_total:e.target.value}))} /></div>
+                  <CampoMoeda className="acn-input" placeholder="0,00"
+                    value={form.valor_total||''} onChange={reais =>setForm(f=>({...f,valor_total:reais}))} /></div>
                 <div className="form-group acn-sac-valor-campo"><label className="acn-label">Mão de Obra (R$)</label>
-                  <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
-                    value={form.valor_mao_de_obra||''} onChange={e=>setForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
+                  <CampoMoeda className="acn-input" placeholder="0,00"
+                    value={form.valor_mao_de_obra||''} onChange={reais =>setForm(f=>({...f,valor_mao_de_obra:reais}))} /></div>
               </div>
             </div>
 
@@ -2951,8 +2952,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
               )}
               <div className="form-group">
                 <label className="acn-label">Valor do Orçamento (R$) *</label>
-                <input className="acn-input" placeholder="Ex: 1.500,00"
-                  value={orcForm.valor} onChange={e=>setOrcForm(f=>({...f,valor:e.target.value}))} />
+                <CampoMoeda className="acn-input" placeholder="Ex: 1.500,00"
+                  value={orcForm.valor} onChange={reais =>setOrcForm(f=>({...f,valor:reais}))} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Condições de Pagamento</label>
@@ -3252,8 +3253,8 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                               onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
                           </td>
                           <td>
-                            <input type="number" min={0} step="0.01" className="acn-input acn-sac-in-dir" value={item.valor_unitario}
-                              onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
+                            <CampoMoeda className="acn-input acn-sac-in-dir" value={item.valor_unitario}
+                              onChange={reais =>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(reais)||0}:x))} />
                           </td>
                           <td className="acn-dir acn-num acn-forte">
                             {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
@@ -3432,7 +3433,7 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                               <input type="number" min={1} className="acn-input acn-sac-in-centro" value={item.quantidade||1} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
                             </td>
                             <td>
-                              <input type="number" min={0} step="0.01" className="acn-input acn-sac-in-dir" value={item.valor_unitario||0} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
+                              <CampoMoeda className="acn-input acn-sac-in-dir" value={item.valor_unitario||0} onChange={reais =>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(reais)||0}:x))} />
                             </td>
                             <td className="acn-dir acn-num acn-forte">
                               {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
@@ -3591,13 +3592,13 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
             <div className="acn-modal-corpo acn-form-cheio">
               <div className="form-group">
                 <label className="acn-label">Valor Total (R$)</label>
-                <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
-                  value={financeiroForm.valor_total} onChange={e=>setFinanceiroForm(f=>({...f,valor_total:e.target.value}))} />
+                <CampoMoeda className="acn-input" placeholder="0,00"
+                  value={financeiroForm.valor_total} onChange={reais =>setFinanceiroForm(f=>({...f,valor_total:reais}))} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Mão de Obra (R$)</label>
-                <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
-                  value={financeiroForm.valor_mao_de_obra} onChange={e=>setFinanceiroForm(f=>({...f,valor_mao_de_obra:e.target.value}))} />
+                <CampoMoeda className="acn-input" placeholder="0,00"
+                  value={financeiroForm.valor_mao_de_obra} onChange={reais =>setFinanceiroForm(f=>({...f,valor_mao_de_obra:reais}))} />
               </div>
               <div className="acn-ajuda" data-teste="data-de-faturamento-da-os">
                 Data de faturamento: <strong>{modalFinanceiro?.data_faturamento ? fmtDataSAC(modalFinanceiro.data_faturamento) : '— (ainda sem nota)'}</strong>. É o dia da nota que o Fiscal emite (a que a comissão usa); não se digita aqui.

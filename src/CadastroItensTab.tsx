@@ -10,6 +10,7 @@ import { confirmar } from './Feedback';
 import { CamposEstoqueItem, CamposEstruturaChicote } from './Estoque';
 import { hojeISO, Faixa, Botao, Selo } from './Interface';
 import { lerPaginado } from './LerPaginado';
+import { CampoMoeda } from './CampoMoeda';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -379,8 +380,8 @@ function ItemModal({
               </select>
             </Field>
             <Field label={`Custo Unitário (${moedaSimbolo(form.moeda)})`} flex={1.2}>
-              <input className="acn-cit-inp" type="number" min={0} step="0.01"
-                value={form.custo_unit} onChange={e => set('custo_unit', e.target.value)}
+              <CampoMoeda className="acn-cit-inp" casas={4}
+                value={form.custo_unit} onChange={reais => set('custo_unit', reais)}
                 placeholder="0,00" disabled={emEmbalagem}
                 title={emEmbalagem ? 'Calculado a partir do custo da embalagem' : ''} />
             </Field>
@@ -415,8 +416,8 @@ function ItemModal({
                     onChange={e => set('compra_multiplo', Math.max(1, parseInt(e.target.value, 10) || 1))} />
                 </Field>
                 <Field label={`Custo da embalagem (${moedaSimbolo(form.moeda)})`} flex={1.2}>
-                  <input className="acn-cit-inp" type="number" min={0} step="0.01" value={form.custo_embalagem ?? ''}
-                    onChange={e => set('custo_embalagem', e.target.value)} placeholder="como vem na nota" />
+                  <CampoMoeda className="acn-cit-inp" casas={4} value={form.custo_embalagem ?? ''}
+                    onChange={reais => set('custo_embalagem', reais)} placeholder="como vem na nota" />
                 </Field>
                 <Field label="Custo por unidade" flex={1.2}>
                   <div className="acn-cit-inp calc">

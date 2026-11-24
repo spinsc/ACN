@@ -73,6 +73,9 @@ import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { centroDisponivel } from './CentroCustoShared';
 import { ViagensLigadas } from './ViagemVinculos';
+import { diasParaGravar } from './ChegadaDoVeiculo';
+import { CampoMoeda } from './CampoMoeda';
+import { numeroOuNulo } from './LerValor';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -972,10 +975,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       data_validade_ata: limpar(formOp.data_validade_ata),
       data_prev_fechamento: limpar(formOp.data_prev_fechamento),
       valor_registrado:  formOp.valor_registrado
-        ? parseFloat(String(formOp.valor_registrado).replace(/\./g,'').replace(',','.'))
+        ? numeroOuNulo(formOp.valor_registrado)
         : null,
       valor_acn:         formOp.valor_acn
-        ? parseFloat(String(formOp.valor_acn).replace(/\./g,'').replace(',','.'))
+        ? numeroOuNulo(formOp.valor_acn)
         : null,
       faturamento_empresa: formOp.faturamento_empresa || 'ACN',
       cliente_id:        limpar(formOp.cliente_id),
@@ -1122,6 +1125,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       prazo_entrega_comercial:  soData(completa.prazo_entrega_comercial),
       prazo_entrega_producao:   soData(completa.prazo_entrega_producao),
       data_aceite_cliente:      soData(completa.data_aceite_cliente),
+      prazo_dias_apos_chegada:  completa.prazo_dias_apos_chegada == null ? '' : String(completa.prazo_dias_apos_chegada),   // 24/11/2026: o campo de tela é texto (só dígitos)
     });
     setOplEditando(completa);
   };
@@ -1301,6 +1305,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       prazo_entrega_comercial: txt(oplFormEdit.prazo_entrega_comercial),
       prazo_entrega_producao:  txt(oplFormEdit.prazo_entrega_producao),
       data_aceite_cliente:     txt(oplFormEdit.data_aceite_cliente),
+      prazo_dias_apos_chegada: diasParaGravar(oplFormEdit.prazo_dias_apos_chegada),   // 24/11/2026: dias depois da chegada do veículo; o banco recalcula a entrega
       prazo_garantia:          txt(oplFormEdit.prazo_garantia),
       // faturamento
       cnpj_faturamento:         txt(oplFormEdit.cnpj_faturamento),
@@ -1343,7 +1348,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // campo que ninguém tocou não deve ser regravado — nem por engano de leitura, nem por cima do que
     // outro setor alterou enquanto a janela ficou aberta.
     const CAMPOS_DATA = new Set(['data_entrada', 'data_chegada_veiculo', 'data_prevista_entrega', 'prazo_entrega_comercial', 'prazo_entrega_producao', 'data_aceite_cliente']);
-    const CAMPOS_NUM  = new Set(['quantidade', 'valor_total', 'valor_mao_de_obra', 'valor_mao_de_obra_serralheria']);
+    const CAMPOS_NUM  = new Set(['quantidade', 'prazo_dias_apos_chegada', 'valor_total', 'valor_mao_de_obra', 'valor_mao_de_obra_serralheria']);
     const norm = (k: string, v: any) => {
       if (k === 'servico_terceiro') return v ? '1' : '0';
       if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) return '';
@@ -1840,7 +1845,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       data_validade_ata: limpar(formOp.data_validade_ata),
       data_prev_fechamento: limpar(formOp.data_prev_fechamento),
       valor_registrado:  formOp.valor_registrado
-        ? parseFloat(String(formOp.valor_registrado).replace(/\./g,'').replace(',','.'))
+        ? numeroOuNulo(formOp.valor_registrado)
         : null,
       cliente_id:        limpar(formOp.cliente_id),
       estagio_id:        limpar(formOp.estagio_id),
@@ -2378,9 +2383,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       descricao:         limpar(formVenda.descricao),
       quantidade:        formVenda.quantidade || null,
       valor_unitario:    formVenda.valor_unitario
-        ? parseFloat(String(formVenda.valor_unitario).replace(/\./g,'').replace(',','.'))
+        ? numeroOuNulo(formVenda.valor_unitario)
         : null,
-      valor_total:       parseFloat(String(formVenda.valor_total).replace(/\./g,'').replace(',','.')),
+      valor_total:       numeroOuNulo(formVenda.valor_total),
       status_faturamento: formVenda.status_faturamento || 'pendente',
       numero_nf:         limpar(formVenda.numero_nf),
       data_faturamento:  limpar(formVenda.data_faturamento),
@@ -3465,7 +3470,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const nomes = irmaos.map((o: any) => o.opl).sort((a: any, b: any) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }));
           setModalCompras({ id: rep.crm_oportunidade_id || null,
             titulo: `Lote ${base} — ${irmaos.length} unidades — ${rep.cliente_nome || rep.modelo || ''}`.replace(/ — $/, ''),
-            orgao: null, _oplText: base, _oplId: rep.id,
+            orgao: null, _oplText: base, _oplId: rep.id, _unidadesDoLote: irmaos.length,
             _oplDescricao: `Lote ${base} (${irmaos.length} unidades: ${nomes.length > 4 ? nomes.slice(0, 2).join(', ') + ' … ' + nomes[nomes.length - 1] : nomes.join(', ')}) — ${rep.cliente_nome || rep.modelo || ''}`.replace(/ — $/, '') });
         };
         // 08/10/2026: também serve ao botão do LOTE (idsDoLote = as unidades daquele lote, sem precisar marcar uma por uma); sem ele, vale a seleção por caixinha, como sempre
@@ -3954,8 +3959,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               ] as any[]).map(({ label, key, placeholder, type }) => (
                 <div key={key}>
                   <label className="acn-label">{label}</label>
-                  <input className="acn-input" type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
-                    onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))} />
+                  {key === 'valor_registrado'
+                    ? <CampoMoeda className="acn-input" value={formOp[key]||''} placeholder={placeholder} onChange={reais => setFormOp(f => ({...f, [key]: reais}))} />
+                    : <input className="acn-input" type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
+                        onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))} />}
                 </div>
               ))}
 
@@ -4037,10 +4044,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                       Valor ACN/Detech (R$)
                       <span className="acn-fraco"> parceiro</span>
                     </label>
-                    <input className="acn-input" type="text"
+                    <CampoMoeda className="acn-input"
                       placeholder="Valor que entra como receita"
                       value={formOp.valor_acn||''}
-                      onChange={e => setFormOp((f:any) => ({ ...f, valor_acn: e.target.value }))} />
+                      onChange={reais => setFormOp((f:any) => ({ ...f, valor_acn: reais }))} />
                   </div>
                 </div>
                 {(formOp.faturamento_empresa==='Detech' || formOp.classificacao==='Parceiro') && !formOp.valor_acn && (
@@ -4551,9 +4558,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               ] as any[]).map(({ label, key, placeholder }) => (
                 <div key={key}>
                   <label className="acn-label">{label}</label>
-                  <input className="acn-input" value={formVenda[key]||''} placeholder={placeholder}
-                    onChange={e => setFormVenda(f => ({...f,[key]:e.target.value}))}
-                  />
+                  {key.startsWith('valor_')
+                    ? <CampoMoeda className="acn-input" value={formVenda[key]||''} placeholder={placeholder} onChange={reais => setFormVenda(f => ({...f,[key]:reais}))} />
+                    : <input className="acn-input" value={formVenda[key]||''} placeholder={placeholder}
+                        onChange={e => setFormVenda(f => ({...f,[key]:e.target.value}))} />}
                 </div>
               ))}
 
@@ -4623,6 +4631,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           oportunidadeId={modalCompras.id || null}
           // número da OP (lista de OPs em aberto) ou do edital (card de licitação): o que o pedido sempre guardou em "opl"
           opl={modalCompras._oplText || modalCompras.numero_edital || null}
+          unidadesDoLote={modalCompras._unidadesDoLote || 0}
           contexto={[`Pedido de Compra — CRM: ${modalCompras.titulo || '—'}`, modalCompras.orgao ? `Órgão: ${modalCompras.orgao}` : ''].filter(Boolean).join('\n')}
           onClose={() => setModalCompras(null)} onCriada={aoCriarCompraCrm} />
       )}
@@ -4715,8 +4724,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 ] as any[]).map(({ label, key, placeholder, type }) => (
                   <div key={key} className="acn-crm-ab-campo" style={campoDestaque(key)}>
                     <div className="acn-label">{label}</div>
-                    <input className="acn-input" type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
-                      onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))} />
+                    {key === 'valor_registrado'
+                      ? <CampoMoeda className="acn-input" value={formOp[key]||''} placeholder={placeholder} onChange={reais => setFormOp(f => ({...f, [key]: reais}))} />
+                      : <input className="acn-input" type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
+                          onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))} />}
                   </div>
                 ))}
 

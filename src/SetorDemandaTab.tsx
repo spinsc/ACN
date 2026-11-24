@@ -19,6 +19,7 @@ import Icone from './Icone';
 import {
   mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline,
 } from '@mdi/js';
+import { CampoMoeda } from './CampoMoeda';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -1159,10 +1160,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
               {canVerValorCompra && (
                 <div className="form-group">
                   <label className="acn-label" htmlFor="cc-valor"><Icone path={mdiCashMultiple} size={13} /> Valor total da compra (R$)</label>
-                  <input id="cc-valor" className="acn-input" type="number" step="0.01" min="0"
+                  <CampoMoeda id="cc-valor" className="acn-input"
                     value={compraForm.valor}
-                    onChange={e=>setCompraForm(f=>({...f,valor:e.target.value}))}
-                    placeholder="Ex: 1500.00" />
+                    onChange={reais =>setCompraForm(f=>({...f,valor:reais}))}
+                    placeholder="Ex: 1500,00" />
                 </div>
               )}
 
@@ -1255,8 +1256,8 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
               </div>
               <div className="form-group">
                 <label className="acn-label" htmlFor="orc-valor">Valor do Orçamento (R$) *</label>
-                <input id="orc-valor" className="acn-input" placeholder="Ex: 1.500,00"
-                  value={finalizarOrcForm.valor} onChange={e=>setFinalizarOrcForm(f=>({...f,valor:e.target.value}))} />
+                <CampoMoeda id="orc-valor" className="acn-input" placeholder="Ex: 1.500,00"
+                  value={finalizarOrcForm.valor} onChange={reais =>setFinalizarOrcForm(f=>({...f,valor:reais}))} />
               </div>
               <div className="form-group">
                 <label className="acn-label" htmlFor="orc-cond">Condições de Pagamento</label>

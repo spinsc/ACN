@@ -24,7 +24,7 @@ export const CAMPOS_COPIADOS_DA_OP = [
   // entrega e frete (o destino é da venda, não do carro)
   'destino_cidade', 'destino_uf', 'destino_cep', 'destino_logradouro', 'destino_numero', 'destino_bairro', 'destino_complemento', 'destino_destinatario', 'destino_telefone', 'frete_responsavel',
   // quantidade, valores e prazos
-  'quantidade', 'valor_total', 'valor_mao_de_obra', 'valor_mao_de_obra_serralheria', 'data_prevista_entrega', 'prazo_entrega_comercial', 'prazo_entrega_producao', 'prazo_garantia',
+  'quantidade', 'valor_total', 'valor_mao_de_obra', 'valor_mao_de_obra_serralheria', 'data_prevista_entrega', 'prazo_dias_apos_chegada', 'prazo_entrega_comercial', 'prazo_entrega_producao', 'prazo_garantia',
   // faturamento
   'cnpj_faturamento', 'razao_social_faturamento', 'observacoes_faturamento',
   // observações e descrição do serviço

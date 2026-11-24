@@ -31,6 +31,8 @@ import { ModalReceberPedido } from './LogisticaTab';
 import { entregasDoPedido, lerEntregas, gravarEntregas, salvarDatasDasEntregas, dataMaisProxima, temEntrega } from './ComprasEntregas';
 import { PrevisaoDoPedido, QuadroDeEntregas, ModalPrazoDeEntrega } from './ComprasEntregasView';
 import { listarEsperandoAprovacao, rotuloDaAlcada } from './AprovacaoCompras';
+import { CampoMoeda } from './CampoMoeda';
+import { numeroOuNulo } from './LerValor';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
   ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao,
@@ -42,7 +44,7 @@ const VAZIO_COTACAO = {
 };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
 // (ex: "1.500,00" -> 1500.00) — separador de milhar "." e decimal ",".
-const parseValorBr = (v: any) => parseFloat(String(v ?? '').replace(/\./g,'').replace(',','.')) || null;
+const parseValorBr = (v: any) => numeroOuNulo(v) || null; // 24/11/2026: regra única (LerValor.ts); o campo de dinheiro entrega "1500.5" e tirar todos os pontos leria 15005
 const valorBrTexto = (n: any) => n == null || n === '' ? '' : String(Number(n).toFixed(2)).replace('.', ',');
 
 // Composição do preço de um orçamento: itens (unitário × quantidade) + frete +
@@ -167,8 +169,8 @@ function ComposicaoCotacao({ form, setForm, fornecedores = [], onCadastrarFornec
         {!form.itens_cot && (<>
         <div>
           <label className="acn-label">Valor unitário (R$) *</label>
-          <input className="acn-input" value={form.valor_unitario} placeholder="Ex: 15,00" inputMode="decimal"
-            onChange={e=>set('valor_unitario', e.target.value)} />
+          <CampoMoeda className="acn-input" value={form.valor_unitario} placeholder="Ex: 15,00"
+            onChange={reais =>set('valor_unitario', reais)} />
         </div>
         <div>
           <label className="acn-label">Quantidade *</label>
@@ -192,8 +194,8 @@ function ComposicaoCotacao({ form, setForm, fornecedores = [], onCadastrarFornec
                 {i.marcado && (<>
                   <input className="acn-input acn-cmp-comp-sval" value={i.quantidade} inputMode="decimal" placeholder="Qtd"
                     onChange={e=>mudarItem(i.indice, 'quantidade', e.target.value)} aria-label={`Quantidade de ${i.nome}`} />
-                  <input className="acn-input acn-cmp-comp-sval" value={i.valor_unitario} inputMode="decimal" placeholder="Valor un."
-                    onChange={e=>mudarItem(i.indice, 'valor_unitario', e.target.value)} aria-label={`Valor unitário de ${i.nome}`} />
+                  <CampoMoeda className="acn-input acn-cmp-comp-sval" value={i.valor_unitario} placeholder="Valor un."
+                    onChange={reais =>mudarItem(i.indice, 'valor_unitario', reais)} aria-label={`Valor unitário de ${i.nome}`} />
                 </>)}
               </div>
             ))}
@@ -210,19 +212,19 @@ function ComposicaoCotacao({ form, setForm, fornecedores = [], onCadastrarFornec
             <Chips rotulo="Frete" ativo={form.frete_tipo === 'pago' ? 'pago' : 'gratis'} onChange={(v) => set('frete_tipo', v)}
               itens={[{ id: 'gratis', rotulo: 'Grátis' }, { id: 'pago', rotulo: 'Pago' }]} />
             {form.frete_tipo === 'pago' && (
-              <input className="acn-input acn-cmp-comp-fretevalor" value={form.frete_valor} placeholder="Valor do frete" inputMode="decimal"
-                onChange={e=>set('frete_valor', e.target.value)} aria-label="Valor do frete" />
+              <CampoMoeda className="acn-input acn-cmp-comp-fretevalor" value={form.frete_valor} placeholder="Valor do frete"
+                onChange={reais =>set('frete_valor', reais)} aria-label="Valor do frete" />
             )}
           </div>
         </div>
         <div className="acn-cmp-comp-g2">
           <div>
             <label className="acn-label">Outras taxas (R$)</label>
-            <input className="acn-input" value={form.outras_taxas} inputMode="decimal" onChange={e=>set('outras_taxas', e.target.value)} />
+            <CampoMoeda className="acn-input" value={form.outras_taxas} onChange={reais =>set('outras_taxas', reais)} />
           </div>
           <div>
             <label className="acn-label">Desconto (R$)</label>
-            <input className="acn-input" value={form.desconto_valor} inputMode="decimal" onChange={e=>set('desconto_valor', e.target.value)} />
+            <CampoMoeda className="acn-input" value={form.desconto_valor} onChange={reais =>set('desconto_valor', reais)} />
           </div>
         </div>
       </div>
@@ -232,8 +234,8 @@ function ComposicaoCotacao({ form, setForm, fornecedores = [], onCadastrarFornec
           <div key={i} className="acn-cmp-comp-servico">
             <input className="acn-input acn-cmp-comp-sdesc" value={s.descricao} placeholder="Ex.: instalação, montagem, garantia estendida"
               onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, descricao: e.target.value } : x))} aria-label="Descrição do serviço" />
-            <input className="acn-input acn-cmp-comp-sval" value={s.valor} placeholder="Valor" inputMode="decimal"
-              onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, valor: e.target.value } : x))} aria-label="Valor do serviço" />
+            <CampoMoeda className="acn-input acn-cmp-comp-sval" value={s.valor} placeholder="Valor"
+              onChange={reais =>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, valor: reais } : x))} aria-label="Valor do serviço" />
             <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover serviço"
               onClick={async ()=>{ if (!await confirmarRemocao('este serviço')) return; set('servicos', servicos.filter((_: any, j: number) => j !== i)); }} />
           </div>
