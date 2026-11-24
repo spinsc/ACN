@@ -366,6 +366,21 @@ button.acn-selo.clicavel:focus-visible { outline: 2px solid var(--acn-brand); ou
 /* Corrigir a data de uma nota emitida (27/10/2026): o aviso diz uma coisa por linha; o botão fica logo abaixo do resumo do Fiscal */
 .acn-fis-corrigir-aviso { white-space: pre-line; overflow-wrap: anywhere; }
 .acn-fis-barra { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+/* 12e75 (24/11/2026): os 30 estilos pintados à mão no FiscalTab viraram classes (a medida e o antes/depois estão no plano de UX). Nada aqui muda regra: só aparência, com as mesmas medidas de antes. */
+.acn-fis-lote-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* o resumo do lote era `font-size: 10` solto, que a regra global da letra pequena já reescrevia para 12px: a classe traz o tamanho que se via (12px) */
+.acn-fis-lote-resumo { margin-top: 3px; font-size: 12px; }
+.acn-fis-lote-selo { margin-left: 6px; }
+.acn-input.acn-fis-nf { width: 118px; }
+.acn-input.acn-fis-nf-os { width: 130px; }
+.acn-input.acn-fis-nf-barra { width: 150px; }
+.acn-tabela td.acn-fis-unidade { padding-left: 22px; }
+.acn-fis-selo-sub { margin-top: 3px; }
+.acn-input.acn-fis-modal-texto { width: 100%; resize: vertical; margin-bottom: 10px; }
+.acn-input.acn-fis-modal-nome { width: 100%; margin-bottom: 14px; }
+.acn-fis-modal-notas { margin-bottom: 12px; }
+.acn-fis-modal-rodape { display: flex; gap: 8px; }
+.acn-fis-modal-rodape .acn-fis-confirma { flex: 1; }
 .acn-nota-mono { font-family: var(--acn-mono); font-size: 12px; white-space: pre-wrap; max-width: 260px; margin-top: 3px; padding: 4px 8px; border-radius: var(--acn-r1); background: var(--acn-surface-2); border: 1px solid var(--acn-line); color: var(--acn-ink); }
 body.dark .acn-nota-mono { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 /* Relatórios (Etapa 12 do plano de UX, 30/09/2026): o que cada relatório pintava à mão, agora uma classe */
@@ -1028,7 +1043,7 @@ html body select.acn-conc-sel { width: auto; min-width: 220px; padding: 4px 8px 
 html body .acn-form-cheio .acn-input.acn-cal-hora-campo { flex: none; width: 120px; }
 .acn-cal-novo { justify-content: center; width: 100%; }
 /* celular: sete colunas estreitas; letra um pouco menor e a célula mais baixa */
-@media (max-width: 480px) { .acn-cal-dia { min-height: 64px; padding: 2px 3px; } .acn-cal-ev, .acn-cal-evsem, .acn-cal-mais { font-size: 10px; } .acn-cal-titulo { font-size: 13px; } }
+@media (max-width: 480px) { .acn-cal-dia { min-height: 64px; padding: 2px 3px; } .acn-cal-ev, .acn-cal-evsem, .acn-cal-mais { font-size: 11px; } .acn-cal-titulo { font-size: 13px; } }
 /* ── Clientes (Etapa 12e7, 04/10/2026): só aparência ───────────────────────────────────────────────────── */
 .acn-cli-filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .acn-cli-busca { flex: 1; min-width: 220px; max-width: 400px; }
@@ -2197,7 +2212,7 @@ html body .acn-main table.acn-tabela tr.acn-cot-linha.nao-lida > td:first-child 
 .acn-cot-link.acn-b { padding: 0; min-height: 0; font-weight: 700; text-decoration: underline; color: var(--acn-info); }
 .acn-cot-nome { max-width: 220px; overflow-wrap: anywhere; }
 .acn-cot-nome-t { font-weight: 600; color: var(--acn-ink); }
-html body .acn-input.acn-cot-setor { width: auto; max-width: 200px; font-weight: 600; }
+html body .acn-input.acn-cot-setor { width: auto; max-width: min(200px, 100%); font-weight: 600; }
 html body .acn-input.acn-cot-setor.reservado { border-color: var(--acn-warn); background: var(--acn-warn-soft); color: var(--acn-warn); }
 .acn-cot-opl { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--acn-ok); }
 /* painel do card do CRM */
@@ -2814,7 +2829,7 @@ button.acn-crm-temp-btn:hover { background: var(--acn-neutral-soft); }
 .acn-crm-prox { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; color: var(--acn-info); min-width: 0; }
 .acn-crm-prox.hoje { color: var(--acn-warn); }
 .acn-crm-prox.atrasado { color: var(--acn-bad); }
-.acn-crm-resp { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--acn-info-soft); color: var(--acn-info); font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.acn-crm-resp { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--acn-info-soft); color: var(--acn-info); font-size: 11px; font-weight: 700; flex-shrink: 0; }
 
 /* ── Card da OP (OplDetalheModal) · painel grande de duas colunas (07/10/2026) ──
    Pedido do usuário: reformular a apresentação — informação do mesmo assunto junta, janela maior. Resumo e ações no alto, o que é e o que fazer na coluna principal, quem/quando/onde/quanto na lateral. */
@@ -5934,7 +5949,7 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-dev-painel-corpo { display: flex; flex-direction: column; gap: 8px; }
 .acn-dev-campos { display: flex; gap: 8px; flex-wrap: wrap; }
 .acn-dev-campo-resp { flex: 1; min-width: 180px; }
-.acn-dev-campo-data { width: 160px; }
+.acn-dev-campo-data { width: 160px; max-width: 100%; }
 .acn-dev-obs-lista { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r1); padding: 8px; max-height: 160px; overflow-y: auto; }
 .acn-dev-obs { font-size: 13px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-dev-obs:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
@@ -7373,3 +7388,62 @@ html body button.acn-vg-barra-ag.corta-dir { border-top-right-radius: 0; border-
 .acn-cmp-forn-linha { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .acn-cmp-forn-linha > :first-child { flex: 1 1 200px; min-width: 0; }
 .acn-cmp-forn-aviso { margin-top: 4px; }
+
+/* RH em abas (20/11/2026): visão geral, cartões e cadastro a completar */
+.acn-rh-aba { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
+.acn-rh-aba > * { min-width: 0; }
+.acn-rh-acoes-aba { margin-left: 0; }
+.acn-rh-grade2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+.acn-rh-cartao { padding: 12px 14px; display: grid; gap: 10px; align-content: start; }
+.acn-rh-cartao-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.acn-rh-vazio { margin: 0; font-size: 12px; color: var(--acn-muted); }
+.acn-rh-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.acn-rh-lista li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 3px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-rh-lista li.passou { color: var(--acn-muted); }
+.acn-rh-selos { display: flex; gap: 4px; flex-wrap: wrap; }
+/* ── Plano de ajustes de layout, L3 (19/11/2026): caixas que passavam da própria borda. Uma regra por padrão; cada uma mede-se pelo auditor (ferramentas/auditoria_layout). ── */
+/* 3.1 Cabeçalho: com a janela em ~960 px o caminho "Seção › Tela" passava até 39 px da caixa (o selo não encolhia); agora a seção encolhe com reticências e a tela atual continua inteira */
+html body .acn-header .acn-aba-selo { min-width: 0; overflow: hidden; }
+html body .acn-aba-selo .acn-trilha-secao { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+/* na janela de ~960 px a seção encolhia e a tela atual também ("Controle de produção › Compras" virava "Contro… › C…"); o nome da tela nunca encolhe e, abaixo de 1100 px, a seção e a seta saem (a barra lateral já diz onde se está) */
+html body .acn-aba-selo .acn-trilha-aba { flex: 0 0 auto; }
+@media (max-width: 1099.98px) { html body .acn-header .acn-trilha-secao, html body .acn-header .acn-trilha-sep { display: none; } }
+/* 3.2 Campo dentro de .form-group (datas De/Até dos relatórios etc.): o controle nasce com a largura natural e passava da coluna estreita (regra do CLAUDE.md para campo em grade) */
+html body .form-group :is(input, select, textarea) { max-width: 100%; min-width: 0; box-sizing: border-box; }
+/* 3.3 Aviso "sem modelo · sem chassi · sem placa" (Adaptação, Qualidade): não quebrava e cobria a coluna do prazo */
+html body .acn-aviso-mini { white-space: normal; max-width: 100%; overflow-wrap: anywhere; }
+html body .acn-forte { min-width: 0; overflow-wrap: anywhere; }
+/* 3.4 SAC, cartão de lote: o cartão é uma grade e a coluna única crescia até o texto mais largo, levando os botões 53 px para fora */
+html body .acn-kb-card.acn-kb-lote { grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; }
+html body .acn-kb-card.acn-kb-lote > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+html body .acn-kb-card.acn-kb-lote > .acn-b:not(#acn) { white-space: normal; height: auto; text-align: left; }
+/* 3.5 Marketing: a grade do cabeçalho do cartão não tinha min-width e os chips e "0 registros" passavam da borda */
+.acn-mkt-info { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.acn-mkt-info > * { min-width: 0; overflow-wrap: anywhere; }
+/* 3.6 Quadro (Nova licitação e outras janelas): o título em maiúsculas sem espaço alargava o quadro e a janela inteira passava da tela no celular */
+.acn-quadro { min-width: 0; }
+.acn-quadro > * { min-width: 0; }
+.acn-quadro-titulo { min-width: 0; overflow-wrap: anywhere; }
+/* 3.7 e 3.8 Selo de texto longo (Engenharia › Estruturas, cabeçalhos do PCP, FOB/CIF das OPs): quebra em vez de passar da borda */
+html body :is(.acn-cet-perg-txt, .sec-hdr.acn-alm-hdr-atencao, .sec-hdr.acn-pcp-hdr-marca, .acn-ats-fob) .acn-selo { white-space: normal; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.acn-ats-fob { max-width: 100%; min-width: 0; }
+
+/* ── L4 (19/11/2026): coluna "Ações" presa à direita nas tabelas que rolam para o lado (marcada por ColunaAcoesFixa.ts); tabela que cabe na tela não muda ── */
+html body .acn-main table th.acn-col-fixa, html body .acn-main table td.acn-col-fixa { position: sticky; right: 0; z-index: 2; background-clip: padding-box; box-shadow: -8px 0 8px -8px rgba(15, 23, 42, .28); }
+html body .acn-main table td.acn-col-fixa { background-color: var(--acn-surface); }
+html body .acn-main table th.acn-col-fixa { background-color: var(--acn-surface-2); z-index: 3; }
+html body .acn-main table tr.acn-linha-alerta > td.acn-col-fixa { background-color: #fdf5f4; }
+body.dark .acn-main table tr.acn-linha-alerta > td.acn-col-fixa { background-color: #2a1b1c; }
+
+/* L5 (19/11/2026): a borda da barra de abas que tem mais abas além da vista esmaece (Abas em Interface.tsx liga os data-rola-*) */
+.acn-abas[data-rola-dir] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+.acn-abas[data-rola-esq] { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); }
+.acn-abas[data-rola-esq][data-rola-dir] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+
+/* L3 (19/11/2026), restos da primeira medição: o campo de data da Engenharia passava 3 px da própria caixa e o selo da linha do Marketing, 4 px */
+.acn-dev-campo-data > input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-mkt-linha1 { min-width: 0; }
+html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; overflow-wrap: anywhere; }
+
+/* L4 (19/11/2026): na tabela de Cotações (tablet) a coluna Nome encolhia a 40 px porque o texto quebra em qualquer ponto (overflow-wrap: anywhere zera a largura mínima): "DL 445/2026 - LIMEIRA" saía uma letra por linha. Largura mínima na coluna; a tabela passa a rolar em vez de espremer. */
+.acn-cot-nome { min-width: 170px; }

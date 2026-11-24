@@ -33,6 +33,8 @@ import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
 import CalendarioTab from './CalendarioTab';
+import PontoTab from './PontoTab';
+import TerceirosTab from './TerceirosTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
 import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
@@ -51,7 +53,7 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh, mdiMapMarkerPath, mdiBookOpenPageVariantOutline, mdiClockCheckOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
@@ -59,7 +61,7 @@ import { gruposParaRecolher } from './utils/menuLateral';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
-  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline,
+  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline, ponto: mdiClockCheckOutline, terceiros: mdiAccountWrenchOutline,
   crm: mdiHandshakeOutline, licitacoes: mdiGavel, cotacoes: mdiFileDocumentOutline, clientes: mdiAccountGroupOutline, marketing: mdiBullhornOutline,
   engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
   producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
@@ -76,6 +78,7 @@ import ContatoAlertWidget from './ContatoAlertWidget';
 import ContatoComercialAlertWidget from './ContatoComercialAlertWidget';
 import { OplDetalheModal } from './AcnTabShared';
 import { normalizarBusca, palavrasDaBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
+import { ligarColunaDeAcoesFixa } from './ColunaAcoesFixa';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -103,6 +106,7 @@ const SIDEBAR_GROUPS = [
       { id: 'inicio', label: 'Início' },   // 09/11/2026 (pedido do RH, decidido com o usuário): a tela em que o sistema abre — carrossel de imagens, tempo, aniversariantes; o Dashboard geral continua logo abaixo
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'calendario', label: 'Calendário' },
+      { id: 'ponto',      label: 'Ponto' },   // 19/11/2026 (pedido do usuário): o ponto dos CLT da Detech vindo da Secullum; cada um vê o seu, RH/Admin/gerentes veem a equipe (ver PontoTab.tsx)
       { id: 'ajustes',    label: 'Demandas gerais' },
       { id: 'minhas_solicitacoes', label: 'Minhas solicitações' },
       { id: 'manuais', label: 'Manuais' },   // 30/10/2026 (pedido do usuário): um manual por setor, o primeiro é o do SAC (ver ManuaisTab.tsx)
@@ -134,6 +138,7 @@ const SIDEBAR_GROUPS = [
       { id: 'pcp',          label: 'PCP' },
       { id: 'almoxarifado', label: 'Almoxarifado' },
       { id: 'compras',      label: 'Compras' },
+      { id: 'terceiros',    label: 'Serviços de terceiros' },   // 22/11/2026 (pedido do usuário): película, plotagem, pintura, lavagem e afins feitos por quem é de fora (ver TerceirosTab.tsx e PLANO_SERVICOS_TERCEIROS.md)
     ],
   },
   {
@@ -738,6 +743,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [waNotifCount, setWaNotifCount] = useState(0);
   // Pendências de análise técnica por setor — contador no menu das abas que
   // têm o quadro de análises (Engenharia, Produção). Tempo real + a cada 60s.
+  // L4 do plano de layout (19/11/2026): a coluna "Ações" das tabelas largas fica presa à direita (ver ColunaAcoesFixa.ts)
+  useEffect(() => ligarColunaDeAcoesFixa(), []);
   const [analisesPorSetor, setAnalisesPorSetor] = useState<Record<string, number>>({});
   useEffect(() => {
     const atualizar = () => contarAnalisesPendentesPorSetor().then(setAnalisesPorSetor).catch(() => {});
@@ -1130,6 +1137,11 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     // Calendário (pedido do usuário em 12/11/2026): é de todos, também de usuário novo, sem depender de marcar a aba no Admin.
     // As tabelas que ele lê (agenda e tarefas do Financeiro) passaram a valer para quem entrou, senão o calendário abriria vazio.
     if (id === 'calendario') return true;
+    // Ponto (19/11/2026): é de todos, porque cada pessoa vê o próprio; quem vê a equipe é decidido pelo banco (RH, Admin e gerentes), não pela aba marcada no Admin.
+    if (id === 'ponto') return true;
+    // Serviços de terceiros (22/11/2026): na T1 só quem cadastra prestadores via o item; desde a T2 é de todos (todos pedem e todos veem todos os serviços; quem pode mexer em cada um é regra do módulo,
+    // conferida de novo pelo banco: TerceirosFluxo.ts). Cadastrar prestador e tipo continua restrito dentro das abas (podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros).
+    if (id === 'terceiros') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -1146,6 +1158,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           abasParaLink={SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => i.id !== 'inicio' && isVisible(i.id))} />;
       }
       case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
+      case 'ponto':        return <PontoTab currentUser={currentUser} />;
+      case 'terceiros':    return <TerceirosTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <TelecomTab currentUser={currentUser} />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
@@ -1752,7 +1766,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             ) : (
               <>
                 {/* Título da tela para as abas que ainda não têm cabeçalho próprio */}
-                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio'].includes(activeTab) && (() => {   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
+                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc', 'viagens', 'inicio', 'terceiros'].includes(activeTab) && (() => {   // 'terceiros' (22/11/2026): a tela tem o cabeçalho dela, com subtítulo e abas   // 'inicio' (09/11/2026): o cabeçalho é o da própria tela (saudação e data)   // 'viagens' (04/11/2026): a tela já tem o cabeçalho dela, com subtítulo e botões; o título saía duas vezes
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}

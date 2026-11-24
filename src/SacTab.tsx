@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import { EXT_PLANILHAS, nomeSeguroDeArquivo } from './FormatosArquivo';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -33,10 +33,12 @@ import { erroDeTelefone, telefoneParaMostrar } from './Telefone';
 import { gerarPdfDaOS } from './SacImpressaoOS';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
-import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline } from '@mdi/js';
+import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline, mdiAccountWrenchOutline } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
 import { ModalComprasDaOS } from './ComprasLigadas';
+// Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OS (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
+const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 import { SelectVeiculo } from './VeiculoCadastro';
 import { mdiContentCopy, mdiShieldCheckOutline, mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline, mdiCartOutline, mdiCalendarClock } from '@mdi/js';
@@ -332,6 +334,7 @@ function SacTabCompleto({ currentUser }) {
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
   const [resumoOS, setResumoOS]         = useState<any>(null); // resumo completo da OS (clique no card do Kanban, 08/10/2026)
   const [comprasOS, setComprasOS]       = useState<any>(null); // janela "Compras da OS" (menu ⋯ da OS, 26/10/2026)
+  const [terceiroOS, setTerceiroOS]     = useState<any>(null); // janela "Solicitar serviço de terceiro" ligada à OS (menu ⋯ da OS, T2 de Serviços de terceiros, 23/11/2026)
 
   // Cadastros estados
   const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'|'tipos_servico'>('equipamentos');
@@ -1453,6 +1456,8 @@ OK = ACN   |   Cancelar = DETECH`;
       { grupo: 'Dados da OS', rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
         onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??''});setModalFinanceiro(os);} },
       { grupo: 'Dados da OS', rotulo: 'Compras', titulo: 'Compras desta OS: ver o andamento e solicitar uma nova ao Compras (fica ligada à OS)', icone: mdiCartOutline, onClick: ()=>setComprasOS(os) },
+      // qualquer pessoa pede (decidido em 22/11/2026): película, plotagem, pintura, lavagem e afins feitos por quem é de fora; o pedido fica ligado a esta OS e o quadro está em Serviços de terceiros
+      { grupo: 'Dados da OS', rotulo: 'Serviço de terceiro', titulo: 'Pedir um serviço feito por quem é de fora (película, pintura, lavagem…), ligado a esta OS', icone: mdiAccountWrenchOutline, oculto: os.status === 'Cancelada', onClick: ()=>setTerceiroOS(os) },
       { grupo: 'Dados da OS', rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
       { grupo: 'Dados da OS', rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
       // S2: a OS cobrada concluída pode sair SEM nota só com um motivo (cortesia): vira "sem cobrança" e segue para a entrega. É a saída de exceção; o caminho normal é "Enviar ao Fiscal"
@@ -3617,6 +3622,12 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
       {movDados && <DadosDoMovimentoModal os={movDados.os} movimento={movDados.mov} salvando={movSalvando} onClose={() => setMovDados(null)} onConfirmar={(d: any) => gravarMovimento(movDados.os, movDados.mov, d)} />}
       {resumoOS && <SacResumoOS os={ordens.find((x: any) => x.id === resumoOS.id) || resumoOS} currentUser={currentUser} onClose={() => setResumoOS(null)} fichaNumero={numerosFichas[resumoOS.garantia_id]} onAbrirFicha={() => { abrirFichaDaOS(resumoOS); setResumoOS(null); }} onAcompanhamento={() => { setModalAcomp(resumoOS); setResumoOS(null); }} />}
       {comprasOS && <ModalComprasDaOS os={ordens.find((x: any) => x.id === comprasOS.id) || comprasOS} currentUser={currentUser} onClose={() => setComprasOS(null)} />}
+      {terceiroOS && (
+        <Suspense fallback={null}>
+          <SolicitarServicoDeTerceiro currentUser={currentUser} onClose={() => setTerceiroOS(null)} aoPedido={() => setTerceiroOS(null)}
+            preset={{ ligacao: { tipo: 'os', id: String(terceiroOS.id), descricao: `${terceiroOS.numero_os || '—'}${terceiroOS.cliente_nome || terceiroOS.equipamento_nome ? ' — ' + (terceiroOS.cliente_nome || terceiroOS.equipamento_nome) : ''}` }, bloquearLigacao: true }} />
+        </Suspense>
+      )}
       {modalAcomp && (
         <OplAcompModal
           referenciaId={String(modalAcomp.id)}

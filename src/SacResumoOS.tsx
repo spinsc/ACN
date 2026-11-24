@@ -4,6 +4,7 @@ import { Botao, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiClose, mdiMessageTextOutline } from '@mdi/js';
 import { QuadroComprasLigadas } from './ComprasLigadas';
+import { QuadroServicosLigados } from './TerceirosLigados';
 import { progressoDaOS } from './SacFluxo';
 import { ViagensLigadas } from './ViagemVinculos';
 
@@ -157,6 +158,10 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
           {/* 26/10/2026: o SAC pede compra a partir da OS e vê aqui o andamento (a compra fica ligada à OS pelo vínculo; ver ComprasLigadas.tsx) */}
           <QuadroComprasLigadas vinculoTipo="os" vinculoId={os.id} descricao={`${os.numero_os || ''} — ${os.cliente_nome || os.equipamento_nome || ''}`.replace(/ — $/, '')}
             titulo="Compras desta OS" origemSetor="SAC" currentUser={currentUser} podePedir={!['Entregue', 'Cancelada'].includes(os.status)} />
+
+          {/* 23/11/2026 (T5 de Serviços de terceiros): os serviços de quem é de fora ligados a esta OS, com a situação; o botão do menu ⋯ da OS continua valendo */}
+          <QuadroServicosLigados ligacaoTipo="os" ligacaoId={os.id} descricao={`${os.numero_os || ''} — ${os.cliente_nome || os.equipamento_nome || ''}`.replace(/ — $/, '')}
+            currentUser={currentUser} podePedir={os.status !== 'Cancelada'} titulo="Serviços de terceiros desta OS" />
 
           <Grupo titulo="Responsáveis" linhas={[
             ['Responsável da OS', os.responsavel_nome], ['Técnico', os.tecnico_responsavel], ['Segundo técnico', os.tecnico_producao_2_nome],

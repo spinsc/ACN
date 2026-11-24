@@ -6,7 +6,7 @@ import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline, mdiAccountWrenchOutline } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -15,6 +15,9 @@ import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'rea
 // pacote principal, só baixando quando alguém abre o dossiê).
 const ModalDossieOp = lazy(() => import('./OpDossie').then(m => ({ default: m.ModalDossieOp })));
 const ModalLote = lazy(() => import('./OpLote').then(m => ({ default: m.ModalLote })));
+// Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OP. Importação preguiçosa só para a janela montar no clique: ela NÃO divide o pacote, porque o menu
+// Serviços de terceiros importa o módulo de forma fixa (o aviso INEFFECTIVE_DYNAMIC_IMPORT do build, igual ao do OpDossie, é esperado)
+const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -804,6 +807,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [copiando, setCopiando] = useState(false);
   // Trocar o fluxo da unidade (fluxo misto, M3, 27/10/2026): uma unidade de lote passa de adaptação para envio, ou o contrário, até o Almoxarifado fechar o kit
   const [trocandoFluxo, setTrocandoFluxo] = useState(false);
+  const [pedindoTerceiro, setPedindoTerceiro] = useState(false);   // janela "Solicitar serviço de terceiro" desta OP (T2 de Serviços de terceiros, 23/11/2026)
   // 16/11/2026 (pedido do usuário): as atualizações do andamento (com @menção, como a "Nova atualização" das Licitações) abrem de qualquer tela onde a OP é aberta, não só da fila da Produção
   const [atualizando, setAtualizando] = useState(false);
   // Excluir a OP (11/11/2026): só Admin e gerentes, com motivo; a OP some das telas e fica guardada, marcada (ExclusaoDeOp.ts). A função confere o que impede, mostra o que será desligado, pede o motivo e confirma.
@@ -968,6 +972,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     ? opl.tipos_servico_terceiro
     : (opl.tipo_servico_terceiro ? [opl.tipo_servico_terceiro] : []);
   const obsServTerceiro = opl.obs_servico_terceiro || '';
+  // Serviços de terceiros (T2, 23/11/2026): a OP onde a pessoa clicou já vem como a ligação do pedido, travada (o carro não se troca; a janela deixa escolher quais carros da mesma venda levam o serviço).
+  // A caixinha "precisa de serviço de terceiro" da OP só sugere o tipo quando marcou UM só, e leva a observação escrita nela. OP cancelada não recebe serviço novo.
+  const podePedirTerceiro = opl.status_geral !== 'Cancelado';
+  const presetDoServico = {
+    ligacao: { tipo: 'op', id: String(opl.id), descricao: `${opl.opl || '—'}${opl.cliente_nome || opl.modelo ? ' — ' + (opl.cliente_nome || opl.modelo) : ''}` },
+    bloquearLigacao: true,
+    tipoNome: tiposServ.length === 1 ? tiposServ[0] : undefined,
+    observacao: obsServTerceiro || undefined,
+  };
 
   // ── Prazos: a lista de datas da OP, com a previsão de entrega em vermelho se já passou e a OP ainda não terminou ──
   const previsaoEntrega = String(opl.data_prevista_entrega || '').slice(0, 10);
@@ -1008,6 +1021,11 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         />
       )}
       {trocandoFluxo && <TrocarFluxoModal op={opl} currentUser={usuario} onClose={() => setTrocandoFluxo(false)} onTrocada={() => { recarregarOpl(); recarregarLogs(); }} />}
+      {pedindoTerceiro && (
+        <Suspense fallback={null}>
+          <SolicitarServicoDeTerceiro currentUser={usuario} preset={presetDoServico} onClose={() => setPedindoTerceiro(false)} aoPedido={() => setPedindoTerceiro(false)} />
+        </Suspense>
+      )}
       {editando && (
         <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
           onSalvo={(nova: any) => { setOpl(nova); setEditando(false); recarregarLogs(); }} />
@@ -1052,6 +1070,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               { rotulo: 'Copiar OP', icone: mdiContentCopy, onClick: () => setCopiando(true), oculto: !temPoderDeGerente(usuario) },
               // só a unidade de um lote (o fluxo misto nasce no lote) e quem tem poder de gerente; a janela confere a etapa e explica quando não dá
               { rotulo: 'Trocar o fluxo desta unidade', icone: mdiSwapHorizontal, onClick: () => setTrocandoFluxo(true), oculto: !(temPoderDeGerente(usuario) && qtdLote > 1 && ehUnidadeDeLote(opl?.opl)) },
+              // qualquer pessoa pede (decidido em 22/11/2026): película, plotagem, pintura, lavagem e afins feitos por quem é de fora; o quadro está em Serviços de terceiros
+              { rotulo: 'Solicitar serviço de terceiro', icone: mdiAccountWrenchOutline, onClick: () => setPedindoTerceiro(true), oculto: !podePedirTerceiro },
               // só Admin e gerentes de verdade (a equipe do Comercial, que vale como gerente do setor, não exclui); o banco confere o perfil de novo
               { rotulo: 'Excluir OP', icone: mdiDeleteOutline, onClick: excluirEstaOp, perigo: true, oculto: !podeExcluirOp(usuario) },
             ]} />
@@ -1088,6 +1108,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 <span className="acn-opl-chips">{tiposServ.map(t => <span key={t} className="acn-opl-chip">{t}</span>)}</span>
                 {obsServTerceiro && <span>Obs: {obsServTerceiro}</span>}
               </div>
+              {/* a caixinha só avisa que a OP precisa; o botão abre o pedido já ligado a ela (T2 de Serviços de terceiros, 23/11/2026) */}
+              {podePedirTerceiro && <Botao pequeno variante="secundario" icone={mdiAccountWrenchOutline} onClick={() => setPedindoTerceiro(true)}>Solicitar o serviço</Botao>}
             </div>
           )}
         </div>

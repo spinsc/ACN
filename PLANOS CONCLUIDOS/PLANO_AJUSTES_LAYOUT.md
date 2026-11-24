@@ -1,7 +1,7 @@
 # Plano de ajustes de layout (celular, tablet e computador)
 
 **Origem:** pedido do usuário em 16/11/2026 — análise completa do frontend, mobile e desktop, para achar erro de layout, itens se sobrepondo e coisas do tipo, e um plano de ajustes.
-**Estado:** em andamento desde 18/11/2026. **L1 (folga no fim da tela) e L2 (botões cortados) feitas**; as outras fatias seguem a ordem da seção 3. Este arquivo é a fonte da verdade; as correções entram em fatias, uma por vez, cada uma com `npx vite build`, a auditoria rodada de novo na tela mexida e o plano atualizado no mesmo commit.
+**Estado:** ✅ **concluído em 19/11/2026** (L1 a L5 feitas; auditoria final: 610 vistas, **0 achados "alta"**, 60 grupos só de média/baixa, ver a seção 6). Este arquivo é a fonte da verdade; as correções entram em fatias, uma por vez, cada uma com `npx vite build`, a auditoria rodada de novo na tela mexida e o plano atualizado no mesmo commit.
 
 ## 1. Como foi medido
 
@@ -53,9 +53,9 @@ Pontos de 9×9 px do carrossel da tela Início e o contador "2 de 4"; setas ‹ 
 ## 3. Ordem de execução proposta (fatias)
 1. **L1 — folga no fim da tela** (P2): ✅ **feita em 18/11/2026** (ver a seção 6).
 2. ✅ **L2 (feita em 18/11/2026, ver a seção 6) — botões cortados** (P1.1 a P1.5): Engenharia, Almoxarifado, Telecom, RH, Formação de preços; **antes da migração visual dessas telas, conferir o quadro do `/ux-fluxo`** (Engenharia, Almoxarifado e Telecom já foram migradas; RH e Formação também) e, nos quatro arquivos grandes (Admin, `DemandaAvulsaPanel`, `CadastroProdutosTab`, `VeiculosNfcTab`), perguntar ao usuário antes de mexer.
-3. **L3 — campos e selos que vazam** (P3.1 a P3.10): quase só CSS (`min-width: 0`, `max-width: 100%`, quebra de linha), uma regra genérica por padrão.
-4. **L4 — tablet** (P4, item c): estender os cartões de tabela até 1023 px e coluna de Ações fixa.
-5. **L5 — abas que rolam e alvos de toque** (P4 abas e P5).
+3. ✅ **L3 (19/11/2026) — campos e selos que vazam** (P3.1 a P3.10): quase só CSS (`min-width: 0`, `max-width: 100%`, quebra de linha), uma regra genérica por padrão.
+4. ✅ **L4 (19/11/2026) — tablet** (P4, item c): estender os cartões de tabela até 1023 px e coluna de Ações fixa.
+5. ✅ **L5 (19/11/2026) — abas que rolam e alvos de toque** (P4 abas e P5).
 
 ## 4. Como conferir cada fatia
 Rodar o auditor na tela mexida (`node auditoria_layout.cjs <perfil> "^Tela$"`), nos 7 tamanhos, e exigir **zero achado "alta"** daquele grupo; fotografar antes e depois. O auditor mora em **`ferramentas/auditoria_layout/`** (trazido do scratchpad em 18/11/2026; o `LEIA-ME.md` da pasta diz como rodar; `node rodar_todos.cjs` roda os 7 tamanhos, com as partidas escalonadas). As saídas (fotos, achados, leituras guardadas do banco) ficam em `ferramentas/auditoria_layout/auditoria/`, fora do git; a linha de base de 16/11/2026 está em `auditoria/linha_de_base_16-11/` (só nesta máquina).
@@ -85,3 +85,10 @@ Rodar o auditor na tela mexida (`node auditoria_layout.cjs <perfil> "^Tela$"`), 
 - **Achado novo e corrigido:** no celular o 💬 cobria o botão "+ Criar" da janela "Nova Demanda Avulsa", porque essa janela (e outras camadas de tela cheia: painel da demanda, janela da OP, card do CRM, gavetas) trocou o estilo solto por classe e saiu da regra do `responsivo.css` que esconde o pino e o chat com janela aberta. As classes entraram na lista; camada de tela cheia nova com classe própria deve entrar nela.
 - **Medido (auditor, 611 vistas, antes = após L1):** corte escondendo controle 18 → 0, área que rola para o lado 2 → 0, culpado da área 10 → 0, vazamento "alta" 155 → 148, controle coberto 0. Rolagem lateral "média" 170 → 173: são as tabelas que agora rolam dentro do cartão (esperado; o botão fica alcançável, e a coluna fixa da L4 o deixa sempre à vista).
 - Restam em "alta" os da L3 (caminho do cabeçalho a 960 px, selos de Engenharia › Estruturas, aviso das OPs, SAC lote, Marketing, Licitações › Nova licitação, datas De/Até, CRM FOB). `vite build` verde.
+
+### L3, L4 e L5 (✅ 19/11/2026)
+- **L3 — campos e selos que vazam:** regras genéricas em `design.css` (cabeçalho, `.form-group`, quadros e selos com `min-width: 0`, `max-width: 100%` e quebra de linha); no cabeçalho, a aba atual nunca encolhe e a seção/separador da trilha somem abaixo de 1100 px (antes "Compras" virava "C…" a 960 px).
+- **L4 — tablet (decisão do usuário: coluna Ações fixa):** `ColunaAcoesFixa.ts` marca sozinho a coluna "Ações" de toda tabela larga (`acn-col-fixa`, ligada no `DashboardTab`) e o CSS a deixa presa à direita; os botões 📌 e 💬 também somem com camada aberta na faixa de tablet (640–1023 px) e com o painel lateral do Calendário. O auditor passou a ignorar a sobreposição proposital dessa coluna (`auditoria_dom.js`).
+- **L5 — abas e toque:** `Abas` (`Interface.tsx`) mostra um esmaecido na borda que tem mais abas e rola a aba ativa para a vista; no toque (`pointer: coarse`) chips, botões pequenos, busca do cabeçalho, títulos do menu, pontos do carrossel, contadores e botões de ícone ganham área de 32 px ou mais (o desenho continua pequeno onde era); letras de 10 px viraram 11 px.
+- **Resultado (auditoria limpa, sem mexer no código durante a rodada):** 610 vistas, 0 erro da auditoria, **0 "alta"**; sobram 60 grupos — 40 de rolagem lateral (abas e tabelas largas que rolam de propósito, agora com esmaecido e coluna fixa), 14 de alvo de toque pequeno (baixa), 3 de caixa que vaza (média), 2 de botão flutuante sobre conteúdo (média), 1 de letra miúda.
+- **Ficou de fora (aceito):** rolagem lateral das abas e das tabelas largas (é o desenho escolhido), os quatro arquivos grandes só com CSS (sem migrar), e a ideia de fundir 📌 e 💬 num botão só (decidida como "ficam como estão"; reabrir só se pedirem).

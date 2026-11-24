@@ -234,12 +234,15 @@ window.__auditar = function (opts) {
   itens.sort((a, b) => a.e.T - b.e.T);
   const limite = Math.min(itens.length, 4500);
   let pares = 0;
+  let colunaFixaSobre = 0;
   for (let i = 0; i < limite && pares < 40; i++) {
     const a = itens[i];
     for (let j = i + 1; j < limite; j++) {
       const b = itens[j];
       if (b.e.T >= a.e.B) break;
       if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      // L4 (19/11/2026): a coluna "Ações" presa à direita (acn-col-fixa) cobre de propósito a coluna que estaria sob ela até a pessoa rolar a tabela; não é defeito
+      if (a.el.closest('.acn-col-fixa') || b.el.closest('.acn-col-fixa')) { colunaFixaSobre++; continue; }
       // a melhor interseção entre as caixas das LINHAS de texto (ou a caixa inteira do controle)
       let melhor = null;
       for (const la of a.lines) for (const lb of b.lines) {
@@ -275,6 +278,7 @@ window.__auditar = function (opts) {
     const px = e.L + e.w / 2, py = e.T + e.h / 2;
     const top = document.elementFromPoint(px, py);
     if (!top || x.el.contains(top) || top.contains(x.el)) continue;
+    if (top.closest('.acn-col-fixa')) continue; // L4: coluna Ações fixa cobre de propósito (a tabela rola e o controle fica alcançável)
     if (x.el.tagName === 'INPUT' && top.tagName === 'LABEL') continue;
     if (x.el.tagName === 'LABEL' && top.tagName === 'INPUT') continue;
     if (top.closest('.modal-overlay, [role=dialog], [role=listbox], [role=tooltip], .acn-toast, .acn-selmulti-lista, .acn-menu, [role=menu]') && !x.el.closest('.modal-overlay, [role=dialog]')) continue;

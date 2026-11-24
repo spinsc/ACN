@@ -186,7 +186,7 @@
      18/11/2026 (plano de layout, L2): entraram na lista as camadas de tela cheia que trocaram o estilo solto por classe sem entrar aqui — a janela "Nova Demanda Avulsa" (`acn-dav-nova-1`) e o painel da demanda (`acn-dav-det-1`),
      a janela da OP (`acn-opl-overlay`), a do card do CRM (`acn-crm-ab-fundo`) e as gavetas (`acn-gav`, `acn-kb-lateral`, `acn-flx-gaveta`). Sem isto o 💬 ficava em cima do botão "+ Criar" da nova demanda (achado da auditoria de layout).
      Camada de tela cheia NOVA com classe própria entra nesta lista. */
-  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, .acn-nfc-fundo, .acn-cp-fundo, .acn-dav-nova-1, .acn-dav-det-1, .acn-opl-overlay, .acn-crm-ab-fundo, .acn-gav, .acn-kb-lateral, .acn-flx-gaveta, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
+  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, .acn-nfc-fundo, .acn-cp-fundo, .acn-dav-nova-1, .acn-dav-det-1, .acn-opl-overlay, .acn-crm-ab-fundo, .acn-gav, .acn-kb-lateral, .acn-flx-gaveta, .acn-cal-lateral, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
     display: none !important;
   }
 
@@ -229,6 +229,9 @@
   }
   html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes::before { display: none; }
   html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes div { flex-wrap: wrap !important; }
+  /* No cartão a coluna "Ações" deixa de ser presa à direita (L4, design.css): a célula virou uma linha do cartão e o `sticky` com a sombra da esquerda aparecia como uma faixa branca
+     com sombra no pé de todo cartão (achado em 23/11/2026, ao auditar os Serviços de terceiros no celular); fica só a cor de fundo que a L4 já dá, igual à do cartão */
+  html body table.acn-tab-cartoes > tbody > tr > td.acn-col-fixa { position: static; box-shadow: none; }
   html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira { border: none; box-shadow: none; background: transparent; padding: 0; }
   html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira > td::before { display: none; }
   html body table.acn-tab-cartoes > tbody > tr:hover > td { background: transparent !important; }
@@ -250,4 +253,29 @@
     border-radius: 0 0 8px 8px; background: var(--acn-surface);
   }
   html body:is(.dark, :not(.dark)) table.acn-tab-cartoes > tbody > tr.acn-eng-info > td { padding: 0 !important; border: none !important; }
+}
+
+/* 19/11/2026 (plano de layout, L3): a regra acima valia só até 639 px; no tablet em pé (820 px, toque) o 💬 ainda cobria o "+ Criar" da Nova Demanda Avulsa. Mesma lista, faixa do tablet. */
+@media (hover: none) and (pointer: coarse) and (min-width: 640px) and (max-width: 1023.98px) {
+  html body:has(:is(.modal-overlay, .acn-chat-ov, .acn-ctt-ov, .acn-nop-ov, .acn-cit-fundo, .acn-nfc-fundo, .acn-cp-fundo, .acn-dav-nova-1, .acn-dav-det-1, .acn-opl-overlay, .acn-crm-ab-fundo, .acn-gav, .acn-kb-lateral, .acn-flx-gaveta, .acn-cal-lateral, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
+    display: none !important;
+  }
+}
+
+/* L5 do plano de layout (19/11/2026): alvos de toque. Controle pequeno ganha área de toque de ~36 px sem mudar o desenho (o excedente é invisível); só no toque. */
+@media (hover: none) and (pointer: coarse) {
+  /* pontos do carrossel: o desenho continua de 9 px, a área de toque é de 37 px (margem negativa devolve o espaço) */
+  html body .acn-ini-ponto:not(#acn) { box-sizing: content-box; padding: 14px 5px; margin: -14px -5px; background-clip: content-box; box-shadow: none; }
+  html body .acn-ini-contador.acn-ini-contador:not(#acn) { min-height: 32px; padding: 6px 12px 6px 9px; }
+  html body .acn-chips > button:not(#acn) { min-height: 32px; }
+  html body .acn-b.acn-b-p:not(#acn) { min-height: 32px; }
+  html body .acn-busca-campo input { height: 34px; }
+  html body .sidebar-section { min-height: 32px; }
+  html body .acn-crm-temp-btn:not(#acn) { min-width: 32px; min-height: 32px; }
+  html body .acn-cet-perg-cab > button:not(#acn), html body .acn-cet-perg-cab .acn-cet-mini:not(#acn) { min-height: 32px; }
+  html body .acn-cal-nav-esq .acn-b:not(#acn) { min-width: 40px; }
+  html body .acn-man-mudancas > summary { padding: 10px 0; }
+  html body .acn-b.acn-cet-mini:not(#acn) { min-height: 32px; padding: 4px 10px; }
+  html body .acn-nfc-tel { min-height: 36px; padding: 8px 0; }
+  html body .acn-b.acn-b-icone:not(#acn), html body .acn-b[aria-label="Fechar"]:not(#acn) { min-width: 36px; }
 }

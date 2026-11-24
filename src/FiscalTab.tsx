@@ -10,9 +10,10 @@ import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
-import { Botao, Selo, Tag, MenuAcoes } from './Interface';
-import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose, mdiAccountMultipleOutline, mdiCalendarEditOutline } from '@mdi/js';
-import { EquipeDaOpModal, situacaoDaEquipe, faltaApontar } from './EquipeDaOp';
+import { Botao, Selo, Tag, MenuAcoes, Faixa } from './Interface';
+import { explicarErroDoBanco } from './ErroDoBanco';
+import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose, mdiAccountMultipleOutline, mdiCalendarEditOutline, mdiChevronDown, mdiChevronRight } from '@mdi/js';
+import { EquipeDaOpModal, lerSituacaoDaEquipe, faltaApontar } from './EquipeDaOp';
 import { podeEditarEquipeDaOp } from './utils/permissoes';
 import { FiscalAntecipadas } from './FaturamentoAntecipado';
 import CampoDataDaNota from './CampoDataDaNota';
@@ -57,6 +58,11 @@ export default function FiscalTab({ currentUser }) {
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalEntregue, setModalEntregue] = useState(null);
   const [nomeRecebeu, setNomeRecebeu] = useState('');
+  // 7.x (24/11/2026): leitura que falha não vale como "fila vazia", nem como "lote completo", nem como "equipe toda apontada":
+  // a tela guarda o que não deu para ler, mantém o que já estava e avisa em vermelho (antes a atualização de 30 s apagava a fila em silêncio).
+  const [falhas, setFalhas] = useState({ ops: false, os: false, lotes: false });
+  const [falhaEquipe, setFalhaEquipe] = useState(false);
+  const [gravandoModal, setGravandoModal] = useState(false);   // trava o clique duplo dos botões das duas janelas (devolver e confirmar entrega)
 
   // ── Faturamento em grupo (OPs desmembradas — mesmo lote, 1 NF-e cobrindo todas) ─
   const [selecionados, setSelecionados] = useState(() => new Set());
@@ -86,16 +92,22 @@ export default function FiscalTab({ currentUser }) {
       // quantas já chegaram, quantas já foram faturadas e quantas ainda faltam
       supabase.from('oples').select('id,opl,status_geral,numero_nf,numero_nf_servico,fluxo_entrega,tipo_projeto').like('opl', '%/%'),   // fluxo e tipo: para o selo "Fluxo misto" do bloco do lote (27/10/2026)
     ]);
-    const porBase = {};
-    (lotesRes.data || []).forEach(u => { if (/\/\d+$/.test(u.opl || '')) { const b = baseOplDe(u.opl); (porBase[b] = porBase[b] || []).push(u); } });
-    setUnidadesDoLote(porBase);
-    setOpls(oplsRes.data || []);
-    // remessas ativas das OPs da tela (leitura que falha deixa as que já estavam; a lista de OPs não depende disto)
-    const rem = await lerRemessasAtivasDe((oplsRes.data || []).map(o => o.id));
-    if (!rem.erro) setRemessasPorOp(rem.porOp);
-    setOrdensOS(osRes.data || []);
-    situacaoDaEquipe((oplsRes.data || []).filter(o => o.status_geral === 'Aguarda Emissao NF').map(o => o.id))
-      .then(setSituacaoEquipe);
+    setFalhas({ ops: !!oplsRes.error, os: !!osRes.error, lotes: !!lotesRes.error });
+    // as unidades dos lotes: se a leitura falhou, fica o que já estava (null = nunca leu) e o faturamento do lote se recusa até conseguir ler
+    if (!lotesRes.error) {
+      const porBase = {};
+      (lotesRes.data || []).forEach(u => { if (/\/\d+$/.test(u.opl || '')) { const b = baseOplDe(u.opl); (porBase[b] = porBase[b] || []).push(u); } });
+      setUnidadesDoLote(porBase);
+    }
+    if (!oplsRes.error) {
+      setOpls(oplsRes.data || []);
+      // remessas ativas das OPs da tela (leitura que falha deixa as que já estavam; a lista de OPs não depende disto)
+      const rem = await lerRemessasAtivasDe((oplsRes.data || []).map(o => o.id));
+      if (!rem.erro) setRemessasPorOp(rem.porOp);
+      lerSituacaoDaEquipe((oplsRes.data || []).filter(o => o.status_geral === 'Aguarda Emissao NF').map(o => o.id))
+        .then(r => { setFalhaEquipe(!!r.erro); if (!r.erro) setSituacaoEquipe(r.mapa); });
+    }
+    if (!osRes.error) setOrdensOS(osRes.data || []);
     if (!silent) setLoading(false);
   };
 
@@ -132,6 +144,13 @@ export default function FiscalTab({ currentUser }) {
   };
   const limparDataNota = (chave) => setDatasNota(prev => { const n = { ...prev }; delete n[chave]; return n; });
 
+  // 7.x (24/11/2026): o histórico da OP é gravado DEPOIS da mudança de etapa; antes uma falha aqui passava calada e a OP ficava sem a linha de quem fez o quê.
+  // A mudança já está feita e não se desfaz: a falha só avisa.
+  const registrarHistorico = async (linha, oQueFoiFeito) => {
+    const { error } = await supabase.from('logs_movimentacao_opl').insert([linha]);
+    if (error) mostrarAviso(`${oQueFoiFeito}, mas o histórico da OP ${linha.numero_opl} não foi gravado (${explicarErroDoBanco(error)}).`, 'atencao');
+  };
+
   const executarFaturamento = async ({ itens, nf, nfServ, notaNoHistorico = '', dataNota = { retroativa: false } }) => {
     const agora = new Date().toISOString();
     const obsCombinado = itens.length > 1
@@ -145,6 +164,7 @@ export default function FiscalTab({ currentUser }) {
       : null;
     const faturadas = [];
     const jaFaturadasPorOutro = [];
+    const comErro = [];   // o banco recusou (não é "outra sessão já faturou"): a nota digitada fica na tela para tentar de novo
     for (const o of itens) {
       const inicioFiscal = o.data_liberacao_comercial ? new Date(o.data_liberacao_comercial) : null;
       const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
@@ -157,20 +177,21 @@ export default function FiscalTab({ currentUser }) {
         observacoes_faturamento: obsCombinado,
         ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
       };
-      const { data: upd } = await supabase.from('oples').update(novoRow)
+      const { data: upd, error: erroUpd } = await supabase.from('oples').update(novoRow)
         .eq('id', o.id).eq('status_geral', 'Aguarda Emissao NF').select();
+      if (erroUpd) { comErro.push({ id: o.id, opl: o.opl, motivo: explicarErroDoBanco(erroUpd) }); continue; }
       if (!upd || upd.length === 0) { jaFaturadasPorOutro.push(o.opl); continue; }
       faturadas.push(o);
       logChange({ module: 'fiscal', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
         oldRow: o, newRow: { ...o, ...novoRow }, user: currentUser });
-      await supabase.from('logs_movimentacao_opl').insert([{
+      await registrarHistorico({
         opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
         evento: (itens.length > 1
           ? `Faturado em lote: ${descricaoNotas(nf, nfServ)} (junto com ${itens.length - 1} outra(s) unidade(s): ${itens.map(x=>x.opl).filter(n=>n!==o.opl).join(', ')}).`
           : `Faturado: ${descricaoNotas(nf, nfServ)}. Disponivel para entrega.`) + notaNoHistorico + textoDaDataNoHistorico(dataNota),
         status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
         usuario_nome: currentUser?.nome, data_hora: agora,
-      }]);
+      }, `A OP ${o.opl} foi faturada`);
     }
     if (faturadas.length > 0) {
       await gravarNfNasRemessas(faturadas.map(o => o.id), nf);   // OP com remessas: o mesmo número em cada remessa
@@ -180,7 +201,10 @@ export default function FiscalTab({ currentUser }) {
     if (jaFaturadasPorOutro.length > 0) {
       alert(`Atenção: ${jaFaturadasPorOutro.join(', ')} já ${jaFaturadasPorOutro.length>1?'foram faturadas':'foi faturada'} por outra sessão enquanto você selecionava — não foram faturadas de novo. Confira a lista atualizada.`);
     }
-    return faturadas;
+    if (comErro.length > 0) {
+      alert(`Não foi possível faturar ${comErro.map(e => e.opl).join(', ')} (${[...new Set(comErro.map(e => e.motivo))].join('; ')}). ${comErro.length > 1 ? 'Essas OPs não foram alteradas' : 'Essa OP não foi alterada'}${faturadas.length ? `; as outras ${faturadas.length} foram faturadas` : ''}. As notas digitadas continuam na tela.`);
+    }
+    return { faturadas, comErro };
   };
 
   // Barra de baixo: OPs AVULSAS marcadas à mão (vendas diferentes na mesma nota).
@@ -195,11 +219,15 @@ export default function FiscalTab({ currentUser }) {
     if (!conf) return;
     if (!await confirmar(`Faturar ${itens.length} OP(s) com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?${conf.aviso}`)) return;
     setFaturandoLote(true);
-    await executarFaturamento({ itens, nf, nfServ, dataNota: conf.dataNota });
-    setSelecionados(new Set());
-    setNfLote('');
-    setNfServicoLote('');
-    setDataNotaLote('');
+    const { comErro } = await executarFaturamento({ itens, nf, nfServ, dataNota: conf.dataNota });
+    if (comErro.length === 0) {
+      setSelecionados(new Set());
+      setNfLote('');
+      setNfServicoLote('');
+      setDataNotaLote('');
+    } else {
+      setSelecionados(new Set(comErro.map(e => e.id)));   // ficam marcadas só as que o banco recusou, com a nota digitada, para tentar de novo
+    }
     setFaturandoLote(false);
     fetchAll();
   };
@@ -211,6 +239,8 @@ export default function FiscalTab({ currentUser }) {
   // parcial é possível, só que DE PROPÓSITO: o botão muda de cara e a pergunta
   // de confirmação diz o que vai ficar de fora e que vai precisar de outra nota.
   const faturarLote = async ({ base, chegaram, faltam }) => {
+    // 7.x (24/11/2026): sem ter lido as unidades do lote não dá para saber se faltam unidades; antes a leitura que falhava deixava o lote parecer completo ("o lote inteiro, uma venda só")
+    if (unidadesDoLote === null) { alert('Não foi possível faturar o lote agora: a lista das unidades dos lotes ainda não foi lida. Atualize a lista e tente de novo.'); return; }
     const chave = `lote:${base}`;
     const nf = (nfs[chave] || '').trim();
     const nfServ = (nfsServico[chave] || '').trim();
@@ -231,14 +261,16 @@ export default function FiscalTab({ currentUser }) {
       : `Faturar o lote ${base} inteiro — ${marcadas.length} unidade(s), uma venda só — com a ${notas}?${conf.aviso}`;
     if (!await confirmar(pergunta)) return;
     setFaturandoId(chave);
-    await executarFaturamento({
+    const { comErro } = await executarFaturamento({
       itens: marcadas, nf, nfServ, dataNota: conf.dataNota,
       notaNoHistorico: parcial ? ` Faturamento PARCIAL do lote ${base}${faltam.length ? `; faltavam: ${faltam.map(u => u.opl).join(', ')}` : ''}${deFora.length ? `; deixadas de fora: ${deFora.map(u => u.opl).join(', ')}` : ''}.` : '',
     });
-    setNfs(prev => { const n = {...prev}; delete n[chave]; return n; });
-    setNfsServico(prev => { const n = {...prev}; delete n[chave]; return n; });
-    limparDataNota(chave);
-    setLotesDesmarcados(prev => { const n = new Set(prev); marcadas.forEach(u => n.delete(u.id)); return n; });
+    if (comErro.length === 0) {
+      setNfs(prev => { const n = {...prev}; delete n[chave]; return n; });
+      setNfsServico(prev => { const n = {...prev}; delete n[chave]; return n; });
+      limparDataNota(chave);
+      setLotesDesmarcados(prev => { const n = new Set(prev); marcadas.forEach(u => n.delete(u.id)); return n; });
+    }   // com recusa do banco, a nota digitada e as marcas ficam como estavam, para tentar de novo
     setFaturandoId(null);
     fetchAll();
   };
@@ -268,8 +300,14 @@ export default function FiscalTab({ currentUser }) {
       responsavel_fiscal: currentUser?.nome,
       ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
     };
-    const { data: upd } = await supabase.from('oples').update(novoRow)
+    const { data: upd, error: erroUpd } = await supabase.from('oples').update(novoRow)
       .eq('id', opl.id).eq('status_geral', 'Aguarda Emissao NF').select();
+    // 7.x (24/11/2026): o erro do banco antes valia como "já foi faturada por outra sessão" e o Fiscal desistia sem saber que nada tinha sido gravado
+    if (erroUpd) {
+      setFaturandoId(null);
+      alert(`Não foi possível faturar a OP ${opl.opl} (${explicarErroDoBanco(erroUpd)}). Nada foi alterado; a nota digitada continua na tela.`);
+      return;
+    }
     if (!upd || upd.length === 0) {
       setFaturandoId(null);
       alert(`Esta OP já foi faturada por outra sessão enquanto você digitava. Atualizando a lista.`);
@@ -278,12 +316,12 @@ export default function FiscalTab({ currentUser }) {
     }
     logChange({ module: 'fiscal', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
-    await supabase.from('logs_movimentacao_opl').insert([{
+    await registrarHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `Faturado: ${descricaoNotas(nf, nfServ)}${detalheRemessas}. Disponivel para entrega.${textoDaDataNoHistorico(conf.dataNota)}`,
       status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
       usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
+    }, `A OP ${opl.opl} foi faturada`);
     // remessas: cada uma recebe o seu número (uma NF-e por remessa) ou o mesmo número (NF-e compartilhada); a OP já está faturada, então uma falha aqui só avisa
     if (rems.length) {
       const erros = [];
@@ -315,6 +353,7 @@ export default function FiscalTab({ currentUser }) {
     const conf = await conferirDataDaNota(datasNota[os.id], 'os');
     if (!conf) return;
     if (!await confirmar(`Confirmar o faturamento da OS ${os.numero_os || ''} com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?${conf.aviso}`)) return;
+    setFaturandoId(os.id);   // 7.x: o botão fica travado durante a gravação, como o da OP
     const agora = new Date().toISOString();
     // o Fiscal conta o tempo dele do dia em que o SAC enviou a OS (a do Laboratório não passa por CQ); OS antiga sem esse dia segue contando do CQ
     const inicioDoFiscal = os.data_envio_fiscal || os.data_cq;
@@ -333,57 +372,82 @@ export default function FiscalTab({ currentUser }) {
     };
     // só pega se a OS ainda espera a nota (outra aba ou pessoa pode ter faturado); antes a gravação recusada seguia como se tivesse dado certo
     const { data: gravada, error: erroFatura } = await supabase.from('sac_ordens_servico').update(novoRow).eq('id', os.id).eq('status', STATUS_AGUARDANDO_NOTA).select('id');
-    if (erroFatura) { alert(`Não foi possível faturar a OS ${os.numero_os || ''} (${erroFatura.message}). Nada foi alterado.`); return; }
-    if (!gravada?.length) { alert(`A OS ${os.numero_os || ''} já não está aguardando a nota (outra pessoa pode ter faturado). A lista foi atualizada.`); fetchAll(); return; }
+    if (erroFatura) { setFaturandoId(null); alert(`Não foi possível faturar a OS ${os.numero_os || ''} (${explicarErroDoBanco(erroFatura)}). Nada foi alterado.`); return; }
+    if (!gravada?.length) { setFaturandoId(null); alert(`A OS ${os.numero_os || ''} já não está aguardando a nota (outra pessoa pode ter faturado). A lista foi atualizada.`); fetchAll(); return; }
     logChange({ module: 'fiscal', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: os, newRow: { ...os, ...novoRow }, user: currentUser });
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[os.id]; return n; });
     setNfsServico(prev => { const n={...prev}; delete n[os.id]; return n; });
     limparDataNota(os.id);
+    setFaturandoId(null);
     fetchAll();
   };
 
   // ── Devolver ao Comercial (inconsistência na OP/OS) ──────────────────────
   const devolverComercial = async () => {
+    if (gravandoModal) return;
     if (!obsDevolver.trim()) { alert('Descreva a inconsistência encontrada.'); return; }
     const opl = modalDevolver;
     const agora = new Date().toISOString();
     const novoRow = { status_geral: 'Devolvida Comercial', obs_devolucao: obsDevolver.trim() };
-    await supabase.from('oples').update(novoRow).eq('id', opl.id);
+    setGravandoModal(true);
+    // 7.x (24/11/2026): antes a gravação não conferia o erro nem a etapa: com o banco recusando, o Comercial recebia o aviso de que a OP voltou e a OP seguia aqui;
+    // e a devolução podia desfazer um faturamento que outra pessoa acabava de fazer. Agora só devolve a OP que ainda espera a nota.
+    const { data: devolvida, error: erroDev } = await supabase.from('oples').update(novoRow)
+      .eq('id', opl.id).eq('status_geral', 'Aguarda Emissao NF').select('id');
+    if (erroDev) { setGravandoModal(false); alert(`Não foi possível devolver a OP ${opl.opl} ao Comercial (${explicarErroDoBanco(erroDev)}). Nada foi alterado; o texto continua na janela.`); return; }
+    if (!devolvida?.length) {
+      setGravandoModal(false); setModalDevolver(null); setObsDevolver('');
+      alert(`A OP ${opl.opl} já não está aguardando a nota (outra pessoa pode ter faturado ou devolvido). A lista foi atualizada.`);
+      fetchAll();
+      return;
+    }
     logChange({ module: 'fiscal', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
-    await supabase.from('logs_movimentacao_opl').insert([{
+    await registrarHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `OP devolvida para Comercial. Inconsistência: ${obsDevolver.trim()}`,
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
+    }, `A OP ${opl.opl} foi devolvida ao Comercial`);
     // R3 (13/10/2026): o evento 'fiscal_devolve_comerc' nunca existiu na configuração, então este aviso nunca saiu; agora existe, e vai para quem abriu a OP e o gerente dele
     avisarDevolucaoAoComercial({ opl, evento: 'fiscal_devolve_comerc', autorEmail: currentUser?.email,
       mensagem: msg.oplVoltouAoComercial(opl.opl, obsDevolver.trim(), currentUser?.nome || '—') });
     setModalDevolver(null); setObsDevolver('');
+    setGravandoModal(false);
     fetchAll();
   };
 
   // ── Confirmar Entrega (fecha o ciclo: OP passa a status_geral='Faturado') ──
   const confirmarEntrega = async () => {
+    if (gravandoModal) return;
     if (!nomeRecebeu.trim()) { alert('Informe o nome de quem recebeu!'); return; }
     const opl = modalEntregue;
     const agora = new Date().toISOString();
     const novoRow = { status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu.trim(), data_entrega: agora };
-    const { error } = await supabase.from('oples').update(novoRow).eq('id', opl.id);
-    if (error) { alert('Erro ao confirmar entrega: ' + error.message); return; }
+    setGravandoModal(true);
+    // 7.x (24/11/2026): sem conferir a etapa, o clique duplo (ou duas pessoas) gravava a entrega duas vezes: duas linhas no histórico e dois avisos de "entregue" ao Comercial
+    const { data: entregue, error } = await supabase.from('oples').update(novoRow)
+      .eq('id', opl.id).eq('status_geral', 'Faturado e Disponivel para Entrega').select('id');
+    if (error) { setGravandoModal(false); alert('Erro ao confirmar entrega: ' + explicarErroDoBanco(error) + '. Nada foi alterado.'); return; }
+    if (!entregue?.length) {
+      setGravandoModal(false); setModalEntregue(null); setNomeRecebeu('');
+      alert(`A entrega da OP ${opl.opl} já foi confirmada (outra pessoa pode ter confirmado). A lista foi atualizada.`);
+      fetchAll();
+      return;
+    }
     logChange({ module: 'fiscal', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
-    await supabase.from('logs_movimentacao_opl').insert([{
+    await registrarHistorico({
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `Equipamento entregue. Recebeu: ${nomeRecebeu.trim()}`,
       status_anterior: opl.status_geral, status_novo: 'Faturado',
       usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
+    }, `A entrega da OP ${opl.opl} foi confirmada`);
     notificarEvento('comercial_entregue', msg.entregue(opl.opl, opl.cliente_nome||'—', nomeRecebeu.trim()));
     setModalEntregue(null); setNomeRecebeu('');
+    setGravandoModal(false);
     fetchAll();
   };
 
@@ -445,21 +509,22 @@ export default function FiscalTab({ currentUser }) {
       <React.Fragment key={chave}>
         <tr className={naoLida ? 'acn-linha-nova' : 'acn-linha-marca'}>
           <td colSpan={8}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => setLotesAbertos(p => ({ ...p, [base]: !aberto }))}
+            <div className="acn-fis-lote-topo">
+              <Botao pequeno variante="discreto" icone={aberto ? mdiChevronDown : mdiChevronRight} aria-expanded={aberto}
+                aria-label={aberto ? 'Esconder as unidades' : 'Ver as unidades'}
                 title={aberto ? 'Esconder as unidades' : 'Ver as unidades'}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: 0 }}>{aberto ? '▾' : '▸'}</button>
+                onClick={() => setLotesAbertos(p => ({ ...p, [base]: !aberto }))} />
               <strong className="acn-forte">🔗 {base}</strong>
               <Tag title="O lote é da produção; a nota é de uma venda só">Lote · {totalVenda || chegaram.length} unidades</Tag>
               {/* fluxo misto (M2): as unidades de envio chegam ao Fiscal em outro ritmo que as adaptadas; faturar só parte do lote é a saída deliberada, já prevista abaixo */}
               <SeloFluxosDoLote unidades={todas ? ativas : chegaram} />
               <span className="acn-fraco">{chegaram[0]?.cliente_nome || ''}</span>
             </div>
-            <div className="acn-fraco" style={{ marginTop: 3, fontSize: 10 }}>
+            <div className="acn-fraco acn-fis-lote-resumo">
               {chegaram.length} aguardando nota
               {jaFaturadas.length > 0 && <> · {jaFaturadas.length} já faturada(s){nfsJaEmitidas.length ? ` (${nfsJaEmitidas.join('; ')})` : ''}</>}
               {faltam.length > 0 && (
-                <span style={{ marginLeft: 6 }}>
+                <span className="acn-fis-lote-selo">
                   <Selo familia="atencao" ponto={false}
                     title={faltam.map(u => `${u.opl} — ${u.status_geral}`).join('\n')}>
                     Faltam {faltam.length} chegar ao Fiscal
@@ -467,7 +532,7 @@ export default function FiscalTab({ currentUser }) {
                 </span>
               )}
               {jaFaturadas.length > 0 && (
-                <span style={{ marginLeft: 6 }}>
+                <span className="acn-fis-lote-selo">
                   <Selo familia="atencao" ponto={false}
                     title="Parte deste lote já saiu em outra nota. Conferir se o cliente aceita notas separadas.">
                     Lote já faturado em parte
@@ -477,13 +542,13 @@ export default function FiscalTab({ currentUser }) {
             </div>
           </td>
           <td>
-            <input className="acn-input" style={{ width: 118 }} placeholder="NF-e (material)"
+            <input className="acn-input acn-fis-nf" placeholder="NF-e (material)"
               value={nfs[chave] || ''}
               onChange={e => setNfs(prev => ({ ...prev, [chave]: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && faturarLote({ base, chegaram, faltam })} />
           </td>
           <td>
-            <input className="acn-input" style={{ width: 118 }} placeholder="NFS-e (serviço)"
+            <input className="acn-input acn-fis-nf" placeholder="NFS-e (serviço)"
               value={nfsServico[chave] || ''}
               onChange={e => setNfsServico(prev => ({ ...prev, [chave]: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && faturarLote({ base, chegaram, faltam })} />
@@ -512,7 +577,7 @@ export default function FiscalTab({ currentUser }) {
               <input type="checkbox" checked={!lotesDesmarcados.has(o.id)} onChange={() => alternar(o.id)}
                 title="Desmarque para deixar esta unidade fora da nota (vira faturamento parcial)" />
             </td>
-            <td style={{ paddingLeft: 22 }}>
+            <td className="acn-fis-unidade">
               <LinkOpl opl={o} currentUser={currentUser} />
               {situacaoEquipe && faltaApontar(o, situacaoEquipe[o.id]).algum && (
                 <div>
@@ -560,15 +625,22 @@ export default function FiscalTab({ currentUser }) {
     <div>
       {/* Faturamento antecipado (08/10/2026): OPs que o Comercial liberou para faturar antes de terminar a adaptação */}
       <FiscalAntecipadas currentUser={currentUser} />
+      {/* 7.x (24/11/2026): leitura que falha avisa em vermelho; a tela mantém o que já tinha e nunca mostra "nenhuma" no lugar de "não consegui ler" */}
+      {(falhas.ops || falhas.os || falhas.lotes || falhaEquipe) && (
+        <Faixa tom="erro" acao={<Botao pequeno variante="secundario" onClick={() => fetchAll()}>Tentar de novo</Botao>}>
+          {(falhas.ops || falhas.os || falhas.lotes) && <>Não foi possível ler {[falhas.ops && 'as OPs', falhas.os && 'as OS do SAC', falhas.lotes && 'as unidades dos lotes'].filter(Boolean).join(', ')} agora; o que está na tela pode estar desatualizado{falhas.lotes && unidadesDoLote === null ? ' e o faturamento de lote fica barrado até a leitura voltar' : ''}.</>}
+          {falhaEquipe && <>{(falhas.ops || falhas.os || falhas.lotes) ? ' ' : ''}Não foi possível conferir a equipe apontada em cada OP: o aviso "Equipe não apontada" pode não aparecer, e depois de faturar a equipe trava.</>}
+        </Faixa>
+      )}
       {/* RESUMO — notas pendentes / emitidas (OPs + OS veiculares, tudo que está na fila agora) */}
       <div className="acn-kpis">
         <div className="acn-kpi">
-          <span className="rot"><i style={{ background: 'var(--acn-warn)' }} />Notas pendentes</span>
+          <span className="rot"><i data-acn-familia="atencao" />Notas pendentes</span>
           <span className="val acn-num">{totalPendentes}</span>
           <span className="sub">{aguardando.length} OP{aguardando.length!==1?'s':''} · {osAguardando.length} OS</span>
         </div>
         <div className="acn-kpi">
-          <span className="rot"><i style={{ background: 'var(--acn-ok)' }} />Notas emitidas</span>
+          <span className="rot"><i data-acn-familia="ok" />Notas emitidas</span>
           <span className="val acn-num">{totalEmitidas}</span>
           <span className="sub">{faturados.length} OP{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</span>
         </div>
@@ -585,9 +657,9 @@ export default function FiscalTab({ currentUser }) {
         </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
 
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : aguardando.length === 0 ? (
-            <div className="acn-empty">Nenhuma OP aguardando emissão de nota fiscal.</div>
+            <div className="acn-empty">{falhas.ops ? 'Não foi possível ler as OPs agora.' : 'Nenhuma OP aguardando emissão de nota fiscal.'}</div>
           ) : (
             <table className="acn-tabela">
               <thead><tr>
@@ -629,7 +701,7 @@ export default function FiscalTab({ currentUser }) {
                       )}
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:118}}
+                      <input className="acn-input acn-fis-nf"
                         placeholder="NF-e (material)"
                         value={porRem ? 'uma por remessa ↓' : (nfs[o.id] || '')}
                         disabled={porRem}
@@ -638,7 +710,7 @@ export default function FiscalTab({ currentUser }) {
                       />
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:118}}
+                      <input className="acn-input acn-fis-nf"
                         placeholder="NFS-e (serviço)"
                         value={nfsServico[o.id] || ''}
                         onChange={e => setNfsServico(prev => ({...prev,[o.id]:e.target.value}))}
@@ -676,7 +748,7 @@ export default function FiscalTab({ currentUser }) {
                           {porRem ? rems.map(r => (
                             <label key={r.id} className="acn-fis-remessa-nf">
                               <span>Remessa {r.numero} ({r.unidades} un.)</span>
-                              <input className="acn-input" style={{width:118}} placeholder="NF-e da remessa" aria-label={`NF-e da remessa ${r.numero}`}
+                              <input className="acn-input acn-fis-nf" placeholder="NF-e da remessa" aria-label={`NF-e da remessa ${r.numero}`}
                                 value={nfsRemessa[r.id] || ''}
                                 onChange={e => setNfsRemessa(prev => ({...prev,[r.id]:e.target.value}))}
                                 onKeyDown={e => e.key === 'Enter' && faturar(o)} />
@@ -702,7 +774,7 @@ export default function FiscalTab({ currentUser }) {
           <div className="sec-hdr">
             <span>Faturados — aguardando retirada/entrega <Selo familia="ok" ponto={false}>{faturados.length}</Selo></span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+          <div className="sec-body acn-rolagem">
             <table className="acn-tabela">
               <thead><tr>
                 <th>OP</th><th>Veículo</th><th>Cliente</th><th>Notas</th><th>Data de emissão</th><th>Resp. fiscal</th><th>Ação</th>
@@ -718,7 +790,7 @@ export default function FiscalTab({ currentUser }) {
                     <td>
                       {o.numero_nf && <Selo familia="ok" ponto={false} title="NF-e de venda de material">NF-e #{o.numero_nf}</Selo>}
                       {o.numero_nf_servico && (
-                        <div style={{marginTop:3}}><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
+                        <div className="acn-fis-selo-sub"><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
                       )}
                       {/* OP que saiu em remessas com NF-e diferentes: qual nota levou cada remessa */}
                       {(() => { const rs = remessasPorOp.get(o.id) || [];
@@ -753,7 +825,7 @@ export default function FiscalTab({ currentUser }) {
           <div className="sec-hdr">
             <span>OS aguardando emissão de nota fiscal <Selo familia="atencao" ponto={false}>{osAguardando.length}</Selo></span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+          <div className="sec-body acn-rolagem">
             <table className="acn-tabela">
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo / equipamento</th><th>Faturar para</th><th>Valor</th><th>NF-e (material)</th><th>NFS-e (serviço)</th><th title="Dia em que a nota foi emitida. Deixe em hoje para registrar agora; escolha um dia anterior para lançar uma nota de mês passado.">Data da nota</th><th>Ação</th></tr></thead>
               <tbody>
@@ -776,13 +848,13 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td className="acn-num" data-teste="valor-da-os">{currentUser?.ver_valores === false ? '—' : (o.valor_total ?? o.valor_orcamento) == null ? '—' : Number(o.valor_total ?? o.valor_orcamento).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td>
-                      <input className="acn-input" style={{width:130}} placeholder="NF-e (material)"
+                      <input className="acn-input acn-fis-nf-os" placeholder="NF-e (material)"
                         value={nfs[o.id] || ''}
                         onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturarOS(o)} />
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:130}} placeholder="NFS-e (serviço)"
+                      <input className="acn-input acn-fis-nf-os" placeholder="NFS-e (serviço)"
                         value={nfsServico[o.id] || ''}
                         onChange={e => setNfsServico(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturarOS(o)} />
@@ -792,7 +864,7 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td>
                       <div className="acn-acoes-linha">
-                        <Botao pequeno variante="primario" icone={mdiReceiptTextCheckOutline} onClick={()=>faturarOS(o)}>Faturado</Botao>
+                        <Botao pequeno variante="primario" icone={mdiReceiptTextCheckOutline} disabled={faturandoId===o.id} onClick={()=>faturarOS(o)}>{faturandoId===o.id ? '...' : 'Faturado'}</Botao>
                       </div>
                     </td>
                   </tr>
@@ -809,7 +881,7 @@ export default function FiscalTab({ currentUser }) {
           <div className="sec-hdr">
             <span>OS faturadas — aguardando entrega <Selo familia="ok" ponto={false}>{osFaturadas.length}</Selo></span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+          <div className="sec-body acn-rolagem">
             <table className="acn-tabela">
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>Notas</th><th>Data de emissão</th><th>Resp. fiscal</th></tr></thead>
               <tbody>
@@ -820,7 +892,7 @@ export default function FiscalTab({ currentUser }) {
                     <td>
                       {o.numero_nf && <Selo familia="ok" ponto={false} title="NF-e de venda de material">NF-e #{o.numero_nf}</Selo>}
                       {o.numero_nf_servico && (
-                        <div style={{marginTop:3}}><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
+                        <div className="acn-fis-selo-sub"><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
                       )}
                     </td>
                     <td className="acn-num">{fmtDt(o.data_emissao_nf)}</td>
@@ -840,10 +912,10 @@ export default function FiscalTab({ currentUser }) {
       {selecionados.size > 0 && (
         <div className="acn-barra-selecao">
           <strong className="acn-num">{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
-          <input className="acn-input" style={{width:150}} placeholder="NF-e (material)"
+          <input className="acn-input acn-fis-nf-barra" placeholder="NF-e (material)"
             value={nfLote} onChange={e=>setNfLote(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
-          <input className="acn-input" style={{width:150}} placeholder="NFS-e (serviço)"
+          <input className="acn-input acn-fis-nf-barra" placeholder="NFS-e (serviço)"
             title="Nota de serviço — informe uma das duas notas, ou as duas"
             value={nfServicoLote} onChange={e=>setNfServicoLote(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
@@ -868,12 +940,12 @@ export default function FiscalTab({ currentUser }) {
           <div className="modal-box">
             <div className="modal-title">Devolver ao Comercial — {modalDevolver.opl}</div>
             <label className="acn-label">Inconsistência encontrada *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
+            <textarea className="acn-input acn-fis-modal-texto" rows={3}
               placeholder="Descreva o que precisa ser corrigido pelo Comercial..."
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} autoFocus />
-            <div style={{display:'flex',gap:8}}>
+            <div className="acn-fis-modal-rodape">
               <Botao variante="secundario" onClick={()=>setModalDevolver(null)}>Cancelar</Botao>
-              <Botao variante="perigo" style={{flex:1}} onClick={devolverComercial}>Confirmar devolução</Botao>
+              <Botao variante="perigo" className="acn-fis-confirma" disabled={gravandoModal} onClick={devolverComercial}>{gravandoModal ? 'Devolvendo...' : 'Confirmar devolução'}</Botao>
             </div>
           </div>
         </div>
@@ -884,17 +956,17 @@ export default function FiscalTab({ currentUser }) {
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalEntregue(null);}}>
           <div className="modal-box">
             <div className="modal-title">Confirmar entrega — {modalEntregue.opl}</div>
-            <div className="acn-fraco" style={{marginBottom:12}}>
+            <div className="acn-fraco acn-fis-modal-notas">
               {modalEntregue.numero_nf && <>NF-e: <strong className="acn-forte">#{modalEntregue.numero_nf}</strong></>}
               {modalEntregue.numero_nf && modalEntregue.numero_nf_servico && ' · '}
               {modalEntregue.numero_nf_servico && <>NFS-e: <strong className="acn-forte">#{modalEntregue.numero_nf_servico}</strong></>}
             </div>
             <label className="acn-label">Nome completo de quem recebeu o equipamento</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:14}}
+            <input className="acn-input acn-fis-modal-nome"
               autoFocus placeholder="Nome do receptor" value={nomeRecebeu} onChange={e=>setNomeRecebeu(e.target.value)} onKeyDown={e=>e.key==='Enter'&&confirmarEntrega()} />
-            <div style={{display:'flex',gap:8}}>
+            <div className="acn-fis-modal-rodape">
               <Botao variante="secundario" onClick={()=>setModalEntregue(null)}>Cancelar</Botao>
-              <Botao variante="primario" style={{flex:1}} onClick={confirmarEntrega}>Confirmar entrega</Botao>
+              <Botao variante="primario" className="acn-fis-confirma" disabled={gravandoModal} onClick={confirmarEntrega}>{gravandoModal ? 'Gravando...' : 'Confirmar entrega'}</Botao>
             </div>
           </div>
         </div>
