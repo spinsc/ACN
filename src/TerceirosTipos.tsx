@@ -83,7 +83,7 @@ export function ModalTipo({ tipo = null, tipos, onClose, aoSalvar, currentUser }
   );
 }
 
-/** A aba "Tipos de serviço": a lista com as regras de cada um; cadastrar, editar, desativar e reativar (só o Admin). */
+/** A aba "Tipos de serviço": a lista com as regras de cada um; cadastrar, editar, desativar e reativar (o Admin e quem ele autorizou). */
 export function TiposDeTerceiros({ tipos, prestadores, erro, onMudou, podeEditar, currentUser }) {
   const [modal, setModal] = useState<any>(null);       // { tipo } | {}
   const [aviso, setAviso] = useState('');
@@ -116,7 +116,7 @@ export function TiposDeTerceiros({ tipos, prestadores, erro, onMudou, podeEditar
       </div>
       <div className="acn-ajuda">
         Cada tipo diz quem marca a data e onde o serviço costuma ser feito. Nos serviços da Adaptação (película, plotagem e pintura) quem pede só diz a data que gostaria e a Adaptação marca o dia;
-        nos demais, quem pediu marca. {podeEditar ? 'Nada se apaga: um tipo que não se usa mais fica inativo.' : 'Só o Admin muda os tipos.'}
+        nos demais, quem pediu marca. {podeEditar ? 'Nada se apaga: um tipo que não se usa mais fica inativo.' : 'Só o Admin e quem ele autorizou mudam os tipos.'}
       </div>
       {erro && <Faixa tom="erro">Não foi possível ler os tipos de serviço ({erro}). A lista abaixo pode estar desatualizada ou incompleta.</Faixa>}
       {aviso && <Faixa tom="erro">{aviso}</Faixa>}

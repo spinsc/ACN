@@ -212,8 +212,9 @@ export function podeGerirPrestadoresDeTerceiros(usuarioAtual: any): boolean {
   const abas = usuarioAtual?.abas_permitidas;
   return !Array.isArray(abas) || abas.length === 0 || abas.includes('producao');
 }
+// 24/11/2026 (pedido do usuário): os TIPOS de serviço também podem ser dados pessoa a pessoa, pela mesma caixa "Pode gerir serviços de terceiros" (o banco confere em terceiros_pode_gerir_tipos).
 export function podeEditarTiposDeTerceiros(usuarioAtual: any): boolean {
-  return usuarioAtual?.perfil === 'Admin';
+  return usuarioAtual?.perfil === 'Admin' || usuarioAtual?.pode_gerir_terceiros === true;
 }
 // T4 (23/11/2026, decidido com o usuário): montar, enviar, alterar, cancelar e fechar a ORDEM DE SERVIÇO EM LOTE é do Admin, dos gerentes e da Adaptação (a mesma conta de quem cadastra prestador);
 // quem só pediu o serviço vê a ordem e o selo, mas não mexe. É a conta da função do banco `terceiros_pode_ordem`, que as funções `terceiros_ordem_*` conferem de novo.

@@ -98,7 +98,7 @@ export const GRUPOS_DE_EXTRAS: GrupoDeExtras[] = [
   ] },
   { titulo: 'Telas com edição restrita', extras: [
     { chave: 'postar_inicio', campo: 'pode_postar_inicio', rotulo: 'Postar na tela Início (slides do carrossel e datas da empresa)', ajuda: 'Todo mundo vê a tela Início; só o Admin e quem tem esta caixa edita.' },
-    { chave: 'gerir_terceiros', campo: 'pode_gerir_terceiros', rotulo: 'Gerir serviços de terceiros (cadastrar prestadores e montar a ordem em lote)', ajuda: 'Admin, gerentes e quem tem a aba Adaptação já podem. Tipos de serviço e modelo do contrato continuam só do Admin.' },
+    { chave: 'gerir_terceiros', campo: 'pode_gerir_terceiros', rotulo: 'Gerir serviços de terceiros (cadastrar prestadores e tipos de serviço, montar a ordem em lote)', ajuda: 'Prestadores e a ordem em lote: Admin, gerentes e quem tem a aba Adaptação já podem. Os tipos de serviço só o Admin e quem tem esta caixa. O modelo do contrato continua só do Admin.' },
   ] },
 ];
 
