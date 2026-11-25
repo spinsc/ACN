@@ -44,6 +44,7 @@ const ROTULO_DA_FONTE: Record<string, string> = {
   compromisso: 'Compromisso',
   terceiro_servico: 'Serviço de terceiro',
   terceiro_desejado: 'Data desejada do serviço de terceiro',
+  ponto_dia: 'Ponto a ajustar na Secullum',
 };
 
 export function rotuloDoAvisoDoCalendario(chave: string | null | undefined): string {
@@ -62,6 +63,9 @@ export function diaDoAvisoDoCalendario(chave: string | null | undefined): string
  * `irParaAba` troca de aba e fecha o painel (quem chama passa a função da casca).
  */
 export function abrirRegistroDoAviso(aviso: { contexto_id?: string | null; aba_destino?: string | null }, irParaAba?: (aba: string) => void) {
+  // Ponto (P3, 25/11/2026): o aviso de batida incompleta ou falta é de um DIA e de várias pessoas, não de um registro: leva à aba RH já na parte
+  // "A tratar" do Relógio Ponto (o RHTab lê o pedido ao montar e o apaga).
+  if (String(aviso.contexto_id || '').startsWith('ponto_dia:')) (window as any).__acnDeepLink = { rhAba: 'ponto', pontoVisao: 'tratar' };
   const alvo = alvoDoAvisoDoCalendario(aviso.contexto_id);
   if (alvo) {
     if (alvo.contexto === 'crm' || alvo.contexto === 'licitacao') {

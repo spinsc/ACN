@@ -35,6 +35,7 @@ const FAMILIA_POR_FONTE: Record<string, string> = {
   crm_retorno: 'atencao', telecom_retorno: 'atencao', crm_limite: 'atencao', tarefa_financeiro: 'neutro', tarefa_engenharia: 'ok', desenvolvimento_etapa: 'info', agendamento: 'atencao',
   licitacao: 'marca', demanda_avulsa: 'info', demanda_etapa: 'info', frete_previsto: 'neutro', viagem_saida: 'neutro', frota_reserva: 'neutro', sac_prazo: 'info', sac_chegada_veiculo: 'atencao', op_chegada_veiculo: 'atencao', op_entrega: 'neutro', vistoria_retorno: 'atencao', compra_entrega: 'atencao',
   terceiro_servico: 'info', terceiro_desejado: 'neutro',   // serviço de terceiro (T3, 23/11/2026): o agendado em azul, o pedido que só tem data desejada em neutro
+  ponto_dia: 'atencao',   // ponto a ajustar na Secullum (P3, 25/11/2026): um evento por dia que passou, para o RH
 };
 const SETOR_POR_FONTE: Record<string, string> = {
   crm_retorno: 'comercial', telecom_retorno: 'comercial', crm_limite: 'comercial', op_entrega: 'comercial', licitacao: 'licitacoes', tarefa_engenharia: 'engenharia', desenvolvimento_etapa: 'engenharia', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
@@ -43,13 +44,13 @@ const SETOR_POR_FONTE: Record<string, string> = {
 const ABA_POR_FONTE: Record<string, string> = {
   crm_retorno: 'crm', telecom_retorno: 'telecom', crm_limite: 'crm', op_entrega: 'crm', licitacao: 'licitacoes', demanda_avulsa: 'ajustes', demanda_etapa: 'ajustes', frete_previsto: 'logistica', viagem_saida: 'viagens', frota_reserva: 'viagens', sac_prazo: 'sac', sac_chegada_veiculo: 'sac',
   op_chegada_veiculo: 'almoxarifado', vistoria_retorno: 'vistorias', compra_entrega: 'compras', tarefa_financeiro: 'financeiro', tarefa_engenharia: 'engenharia', desenvolvimento_etapa: 'engenharia', agendamento: 'producao',
-  terceiro_servico: 'terceiros', terceiro_desejado: 'terceiros',
+  terceiro_servico: 'terceiros', terceiro_desejado: 'terceiros', ponto_dia: 'rh',
 };
 const ROTULO_FONTE: Record<string, string> = {
   crm_retorno: 'Contato com cliente', telecom_retorno: 'Contato com cliente (Telecom)', crm_limite: 'Prazo do CRM', licitacao: 'Licitação', demanda_avulsa: 'Prazo de demanda', demanda_etapa: 'Prazo de etapa de demanda', frete_previsto: 'Entrega prevista do frete', viagem_saida: 'Saída de viagem', frota_reserva: 'Veículo reservado', sac_prazo: 'Prazo da OS', sac_chegada_veiculo: 'Chegada do veículo (OS)',
   op_chegada_veiculo: 'Chegada do veículo', op_entrega: 'Entrega ao cliente', vistoria_retorno: 'Retorno da vistoria', compra_entrega: 'Recebimento de material',
   tarefa_financeiro: 'Tarefa do Financeiro', tarefa_engenharia: 'Tarefa da Engenharia', desenvolvimento_etapa: 'Etapa do Desenvolvimento', agendamento: 'Manutenção agendada', compromisso: 'Compromisso',
-  terceiro_servico: 'Serviço de terceiro', terceiro_desejado: 'Data desejada (serviço de terceiro)',
+  terceiro_servico: 'Serviço de terceiro', terceiro_desejado: 'Data desejada (serviço de terceiro)', ponto_dia: 'Ponto a ajustar (Secullum)',
 };
 
 // Vence hoje / atrasado (só para o que é prazo e ainda não foi resolvido): o mesmo critério da rotina de alertas
@@ -207,7 +208,10 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
               </div>
               {ev.tipo !== 'compromisso' && ABA_POR_FONTE[ev.tipo] && (
                 <div className="acn-acoes-linha">
-                  <Botao pequeno onClick={() => window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: ABA_POR_FONTE[ev.tipo] } }))} title="Abrir a tela de origem desta data">Abrir</Botao>
+                  <Botao pequeno onClick={() => {
+                    if (ev.tipo === 'ponto_dia') (window as any).__acnDeepLink = { rhAba: 'ponto', pontoVisao: 'tratar' };   // P3: leva à parte "A tratar" do Relógio Ponto
+                    window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: ABA_POR_FONTE[ev.tipo] } }));
+                  }} title="Abrir a tela de origem desta data">Abrir</Botao>
                 </div>
               )}
               {ev.tipo === 'compromisso' && (ehDonoDoItem(ev.raw, currentUser) || ehAdminOuGerente(currentUser)) && (
