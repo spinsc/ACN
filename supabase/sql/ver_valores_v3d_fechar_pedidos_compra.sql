@@ -224,7 +224,8 @@ begin
   select count(*) into c from public.pcp_pedidos_compra_antes_v3d_20261124 x
     cross join lateral public.pedido_compra_extrair_valores(x.vencedoras, x.itens) y
     join public.pcp_pedidos_compra_valores v on v.pedido_id = x.id
-   where v.valor_compra is not distinct from x.valor_compra and v.vencedoras_valores is not distinct from y.vencedoras_valores and v.itens_valores is not distinct from y.itens_valores;
+   where (x.valor_compra is not null or y.vencedoras_valores is not null or y.itens_valores is not null)
+     and v.valor_compra is not distinct from x.valor_compra and v.vencedoras_valores is not distinct from y.vencedoras_valores and v.itens_valores is not distinct from y.itens_valores;
   if b <> c then raise exception 'V3d: a tabela nova difere da cópia em % de % pedidos', b - c, b; end if;
   select count(*) into d from public.demandas_setoriais_antes_v3d_20261124;
   select count(*) into e from public.demandas_setoriais_valores v join public.demandas_setoriais_antes_v3d_20261124 x on x.id = v.demanda_id where v.valor_compra is not distinct from x.valor_compra;
