@@ -2,6 +2,7 @@
 import { nomeDoPedido } from './NomeDoPedido';
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA } from './ComprasFluxo';
@@ -448,7 +449,9 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     setErroCarga('');
     setCarregouUmaVez(true);
     setCentros(cData || []);
-    setCompras(pData || []);
+    const comValor = await anexarValoresDosPedidos(pData || [], true);   // V3b: o valor da compra mora em `pcp_pedidos_compra_valores`
+    if (comValor.erro) { setErroCarga('Não foi possível ler os valores das compras: ' + comValor.erro); setLoading(false); return; }
+    setCompras(comValor.pedidos);
     setFaturamentos(fData || []);
     setDespesas(dData || []);
     setLoading(false);

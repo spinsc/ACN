@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDasOps } from './OpValores';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
@@ -127,7 +128,7 @@ async function carregarCandidatos() {
     supabase.from('oples').select('id,opl,cliente_nome,numero_nf,numero_nf_servico,data_emissao_nf,data_nf,status_geral')
       .or('numero_nf.not.is.null,status_geral.ilike.Faturado%'),
     supabase.from('pcp_pedidos_faturamento').select('id,numero_pedido,numero_oc,fornecedor,valor,data_pagamento,recebimento_confirmado_em,criado_em,nf_fornecedor_numero'),
-    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,fornecedor,valor_compra,data_prevista_recebimento,data_criacao,status_compra,vencedoras,vencedora_id,tem_divergencia').not('valor_compra', 'is', null),
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,fornecedor,valor_compra,data_prevista_recebimento,data_criacao,status_compra,vencedoras,vencedora_id,tem_divergencia'),
     supabase.from('centro_custo_despesas').select('id,descricao,valor,data'),
   ]);
   // Etapa 7.36 (04/10/2026): leitura que falha não pode virar "nada no sistema com este valor". Antes o erro era
@@ -136,17 +137,20 @@ async function carregarCandidatos() {
   // o valor da OP mora em `oples_valores` (V2b do "ver valores no banco", 24/11/2026): o filtro "tem valor" passou do banco para cá
   const opsComValor = await anexarValoresDasOps(ops.data || []);
   const opsFaturadas = opsComValor.ops.filter((o: any) => o.valor_total != null);
-  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas], ['os valores das OPs', { error: opsComValor.erro ? { message: opsComValor.erro } : null }], ['as datas de cada fornecedor', { error: entregasDasCompras.erro ? { message: entregasDasCompras.erro } : null }]]
+  // idem o pedido de compra (V3b, 24/11/2026): o valor e o de cada vencedora moram em `pcp_pedidos_compra_valores`, então o filtro "tem valor" também passou para cá
+  const comprasComValor = await anexarValoresDosPedidos(compras.data || []);
+  const comprasLidas = comprasComValor.pedidos.filter((p: any) => p.valor_compra != null);
+  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas], ['os valores das OPs', { error: opsComValor.erro ? { message: opsComValor.erro } : null }], ['os valores das compras', { error: comprasComValor.erro ? { message: comprasComValor.erro } : null }], ['as datas de cada fornecedor', { error: entregasDasCompras.erro ? { message: entregasDasCompras.erro } : null }]]
     .filter(([, r]: any) => r.error).map(([nome, r]: any) => `${nome} (${r.error.message})`);
   const lista = [
     ...opsFaturadas.map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: diaDoRegistro(o.data_emissao_nf || o.data_nf),
       descricao: `OP ${o.opl} — ${o.cliente_nome || ''}${o.numero_nf ? ` · NF ${o.numero_nf}` : ''}${o.numero_nf_servico ? ` · NFS-e ${o.numero_nf_servico}` : ''}` })),
     ...(fats.data || []).map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: diaDoRegistro(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em),
       descricao: `Faturamento ${f.numero_oc || f.numero_pedido || ''} — ${f.fornecedor || ''}${f.nf_fornecedor_numero ? ` · NF ${f.nf_fornecedor_numero}` : ''}` })),
-    ...(compras.data || []).map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: diaDoRegistro(p.data_prevista_recebimento || p.data_criacao),
+    ...comprasLidas.map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: diaDoRegistro(p.data_prevista_recebimento || p.data_criacao),
       descricao: `Compra ${p.numero_oc || p.numero_pedido || ''} — ${p.fornecedor || ''} (${p.status_compra || ''})` })),
     // um candidato por fornecedor dos pedidos com mais de um (id composto "pedido#cotação"; some quando o pedido inteiro já foi conciliado: ver `sugestoes`)
-    ...(compras.data || []).flatMap((p: any) => {
+    ...comprasLidas.flatMap((p: any) => {
       const entregas = entregasDoPedido(p, entregasDasCompras.linhas);
       if (entregas.length < 2 || entregasDasCompras.erro) return [];
       return entregas.map((e: any) => {

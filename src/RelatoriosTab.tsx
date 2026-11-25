@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { anexarValoresDasOps } from './OpValores';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { VeiculoOuEnvio } from './AcnTabShared';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
@@ -658,7 +659,10 @@ function RelRecebimentosEnvios() {
         if (erroLeitura) erroExtras = erroLeitura.message; else pedidosDoPeriodo = [...pedidosDoPeriodo, ...(extras || [])];
       }
     }
-    const montado = recRes.error ? { linhas: [], erro: null } : await montarLinhasDeRecebimento(pedidosDoPeriodo, ini, fim);
+    // V3b (24/11/2026): o valor da compra e o de cada fornecedor moram em `pcp_pedidos_compra_valores`
+    const pedidosComValor = recRes.error ? { pedidos: pedidosDoPeriodo, erro: '' } : await anexarValoresDosPedidos(pedidosDoPeriodo);
+    if (pedidosComValor.erro) erroExtras = erroExtras || 'valores das compras: ' + pedidosComValor.erro;
+    const montado = recRes.error ? { linhas: [], erro: null } : await montarLinhasDeRecebimento(pedidosComValor.pedidos, ini, fim);
     setErroEntregas(recRes.error ? `Não foi possível ler os pedidos (${recRes.error.message}).` : entPeriodo.error || erroExtras ? `Não foi possível ler as entregas por fornecedor (${entPeriodo.error?.message || erroExtras}); pedidos de vários fornecedores podem faltar.` : montado.erro ? `Não foi possível ler a data de cada fornecedor (${montado.erro}); os pedidos de vários fornecedores aparecem com a data mais distante.` : '');
     setRecebimentos(montado.linhas);
     setEnvios(envRes.data || []);
@@ -858,13 +862,16 @@ function RelCentroCusto() {
       setLoading(true);
       const [{ data, error }, { data: dData }, { data: cData }] = await Promise.all([
         supabase.from('pcp_pedidos_compra')
-          .select('id,numero_pedido,descricao_material,fornecedor,valor_total:valor_compra,centro_custo,centro_custo_id,status_compra,data_pedido:data_criacao')
+          .select('id,numero_pedido,descricao_material,fornecedor,valor_compra,centro_custo,centro_custo_id,status_compra,data_criacao')
           .or('centro_custo.not.is.null,centro_custo_id.not.is.null')
           .order('data_criacao',{ascending:false}),
         supabase.from('centro_custo_despesas').select('*').order('data',{ascending:false}),
         supabase.from('centros_custo').select('*'),
       ]);
-      if (!error && data) setRows(data);
+      if (!error && data) {
+        const comValor = await anexarValoresDosPedidos(data, true);   // V3b: o valor da compra mora em `pcp_pedidos_compra_valores`
+        setRows(comValor.pedidos.map((p: any) => ({ ...p, valor_total: p.valor_compra, data_pedido: p.data_criacao })));
+      }
       setDespesas(dData || []);
       setCentrosCusto(cData || []);
       setLoading(false);

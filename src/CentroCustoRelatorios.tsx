@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import Icone from './Icone';
 import { Botao, Selo, Faixa, diaBR } from './Interface';
 import { abrirVinculo } from './VinculoPicker';
@@ -22,7 +23,11 @@ const SEM_CENTRO = '__sem_centro__';
 
 /** As compras ligadas a uma OP e os pagamentos delas. Lança erro se alguma leitura falhar (quem chama avisa). */
 export async function carregarComprasDeOp() {
-  const compras = await lerPaginado(() => supabase.from('pcp_pedidos_compra').select(COLUNAS_COMPRA).in('vinculo_tipo', TIPOS_VINCULO_DE_OP).not('vinculo_id', 'is', null).order('id'));
+  const comprasLidas = await lerPaginado(() => supabase.from('pcp_pedidos_compra').select(COLUNAS_COMPRA).in('vinculo_tipo', TIPOS_VINCULO_DE_OP).not('vinculo_id', 'is', null).order('id'));
+// V3b do "ver valores no banco" (24/11/2026): o dinheiro do pedido mora em `pcp_pedidos_compra_valores`; quem não pode ver recebe nulo
+  const comValor = await anexarValoresDosPedidos(comprasLidas);
+  if (comValor.erro) throw new Error('Não foi possível ler os valores das compras: ' + comValor.erro);
+  const compras = comValor.pedidos;
   const faturamentos: any[] = [];
   const ids = compras.map((c: any) => c.id);
   for (let i = 0; i < ids.length; i += 150) {

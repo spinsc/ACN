@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos, anexarValoresDoPedido } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
@@ -1219,7 +1220,7 @@ export default function ComprasTab({ currentUser }) {
       if (!pend || (pend.contexto !== 'compra' && pend.contexto !== 'compra_aprovacao')) return;
       (window as any).__acnDeepLink = null;
       supabase.from('pcp_pedidos_compra').select('*').eq('id', pend.contextoId).maybeSingle()
-        .then(({ data }) => { if (data) abrirModalCotacoes(data); });
+        .then(async ({ data }) => { if (data) abrirModalCotacoes((await anexarValoresDoPedido(data)).pedido); });   // V3b: o dinheiro do pedido mora em `pcp_pedidos_compra_valores`
     };
     tentarAbrir();
     window.addEventListener('acn:abrir-registro', tentarAbrir);
@@ -1364,7 +1365,10 @@ export default function ComprasTab({ currentUser }) {
     // 7.57: a releitura de 30 s que falhava esvaziava a lista (parecia "nenhuma requisição"); agora a lista fica. Numa leitura
     // pedida (troca de filtro, recarregar) segue vazia, porque a lista antiga seria de outro filtro.
     if (error) { setQueryError(error.message); if (!silent) { setLoading(false); setPedidos([]); } return; }
-    setPedidos(data || []);
+    // V3b (24/11/2026): valor da compra, valor de cada vencedora e preço de cada item moram em `pcp_pedidos_compra_valores`; leitura recusada avisa e a lista de antes fica
+    const comValor = await anexarValoresDosPedidos(data || [], true);
+    if (comValor.erro) { setQueryError('Não foi possível ler os valores das compras: ' + comValor.erro); if (!silent) { setLoading(false); setPedidos([]); } return; }
+    setPedidos(comValor.pedidos);
     // As entregas dos comprados: a releitura silenciosa (30 s) refaz só os "Comprado" (os recebidos não mudam sozinhos). Leitura recusada mantém as de antes e AVISA:
     // sem elas o pedido de vários fornecedores cairia, calado, numa data só.
     const idsEntregas = (data || []).filter((p: any) => temEntrega(p) && (!silent || p.status_compra === 'Comprado')).map((p: any) => p.id);

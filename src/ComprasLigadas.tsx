@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { Botao, Selo, Faixa } from './Interface';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -32,6 +33,7 @@ const familiaDoStatus = (s: any) => {
  * Lê as compras ligadas ao registro. Leitura recusada devolve `erro` — nunca "nenhuma compra": quem pede de novo por achar que a lista está vazia abriria compra em dobro.
  * OP: além do vínculo pelo id, entram as compras que só têm o número da OP em texto (como o Dossiê da OP já faz em OpVinculos.ts).
  */
+// V3b (24/11/2026): o valor da compra mora em `pcp_pedidos_compra_valores`; leitura dele recusada deixa as compras na lista sem valor (nunca esconde a compra)
 export async function lerComprasLigadas({ vinculoTipo, vinculoId, opl = null }: any) {
   if (!vinculoId) return { lista: [], erro: '' };
   const { data, error } = await supabase.from('pcp_pedidos_compra').select(COLUNAS)
@@ -43,7 +45,7 @@ export async function lerComprasLigadas({ vinculoTipo, vinculoId, opl = null }: 
     if (erroTexto) return { lista: [], erro: erroTexto.message };
     lista = [...lista, ...(texto || [])];
   }
-  return { lista, erro: '' };
+  return { lista: (await anexarValoresDosPedidos(lista)).pedidos, erro: '' };
 }
 
 /** O quadro: lista das compras do registro + botão "Solicitar compra". `podePedir` esconde só o botão, a lista fica sempre. */
