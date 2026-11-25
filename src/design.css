@@ -7537,3 +7537,42 @@ html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; over
 .acn-dlote-det { margin-bottom: 4px; }
 .acn-dlote-det > summary { cursor: pointer; font-size: 13px; font-weight: 700; }
 .acn-dlote-det .acn-dlote-tab { margin-top: 4px; }
+
+/* ── 12e78 (25/11/2026): janelas de edição da OP (OplEdicao.tsx) ───────────────────────────────────────────────
+   Saíram os `style` soltos da edição completa, da edição em lote e da janela do Comercial. A letra vale o que a pessoa já via
+   (a regra global reescrevia 9 a 11 px para 12 e 13). As cores de ardósia escritas à mão viraram tokens do guia. */
+html body .modal-overlay.acn-oe-overlay { z-index: 2200; }
+html body .modal-overlay.acn-oe-overlay.com { z-index: 2100; }
+html body .modal-box.acn-oe-janela { width: 96vw; max-width: 760px; max-height: 92vh; display: flex; flex-direction: column; }
+html body .modal-box.acn-oe-janela.larga { max-width: 900px; }
+html body .modal-box.acn-oe-janela-lote { max-width: 520px; }
+.acn-oe-titulo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-oe-titulo-sub { font-size: 12px; font-weight: 400; color: var(--acn-muted); }
+.acn-oe-intro { font-size: 12px; color: var(--acn-muted); margin-bottom: 8px; }
+.acn-oe-intro.lote { max-height: 60px; overflow-y: auto; }
+.acn-oe-corpo { overflow-y: auto; flex: 1; padding-right: 4px; }
+.acn-oe-grupo { margin-bottom: 10px; }
+.acn-oe-grupo.com { margin-bottom: 12px; }
+.acn-oe-grupo-titulo { font-size: 12px; font-weight: 800; color: var(--acn-text); text-transform: uppercase; border-bottom: 1px solid var(--acn-line); margin-bottom: 6px; padding-bottom: 2px; }
+.acn-oe-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.acn-oe-cheio { grid-column: 1 / -1; }
+.acn-oe-rot { display: block; font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; margin-bottom: 2px; }
+.acn-oe-rot[data-mudou] { color: var(--acn-warn); }
+.acn-oe-dica { font-size: 11px; color: var(--acn-muted); margin-top: 2px; }
+html body .acn-oe-campo { width: 100%; padding: 5px 8px; border: 1px solid var(--acn-line); border-radius: 4px; font-size: 13px; box-sizing: border-box; font-family: inherit; }
+html body textarea.acn-oe-campo { resize: vertical; }
+.acn-oe-bool { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--acn-text); cursor: pointer; padding: 5px 0; }
+.acn-oe-bool input, .acn-oe-multi input { cursor: pointer; }
+.acn-oe-multi { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px 0; }
+.acn-oe-multi label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--acn-text); cursor: pointer; }
+.acn-oe-multi label[data-sel] { color: var(--acn-brand-ink); font-weight: 700; }
+.acn-oe-rodape { border-top: 1px solid var(--acn-line); padding-top: 8px; margin-top: 6px; }
+.acn-oe-rodape.com { display: flex; gap: 8px; align-items: center; }
+.acn-oe-acoes { display: flex; gap: 8px; }
+.acn-oe-salvar { flex: 1; }
+.acn-oe-espaco { flex: 1; }
+.acn-oe-contagem { font-size: 12px; font-weight: 700; color: var(--acn-muted); }
+.acn-oe-contagem[data-mudou] { color: var(--acn-warn); }
+.acn-input.acn-oe-motivo, .acn-input.acn-oe-campo-lote { width: 100%; margin-bottom: 8px; }
+.acn-input.acn-oe-motivo.lote { margin-bottom: 10px; }
+.acn-oe-entrada-lote { margin-bottom: 4px; }

@@ -9,14 +9,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
+import { anexarValoresDaOp, CAMPOS_DE_VALOR_DA_OP } from './OpValores';
 import { logChange } from './AuditSystem';
 import { FLUXOS, soEnvio, terminaEmEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, STATUS_AGUARDANDO_TERCEIRO, FLUXO_SO_TERCEIROS_DEF, soTerceiros } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { ORIGENS } from './OrigemVenda';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { TIPOS_SERVICO_TERCEIRO } from './NovaOpOsModal';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
+import { Botao } from './Interface';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { carregarVeiculos, textoVeiculo } from './Veiculos';
 import { CampoCep } from './CampoCep';
@@ -117,33 +119,34 @@ const mostrar = (c: Campo, v: any) => {
 };
 
 function Entrada({ c, valor, onChange, onVeiculo, onCep, currentUser }: { c: Campo; valor: string; onChange: (v: string) => void; onVeiculo?: (p: { veiculo_id: string; modelo?: string }) => void; onCep?: (r: any) => void; currentUser?: any }) {
-  const est = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' as const };
-  if (c.tipo === 'cep') return <CampoCep valor={valor} onChange={onChange} estilo={est} rotulo={c.rotulo} onResultado={onCep} />;
-  if (c.tipo === 'telefone') return <CampoTelefone valor={valor} onChange={onChange} style={est} />;
+  // 12e78: o estilo do campo mora em `acn-oe-campo` (design.css); CEP e telefone já nascem com `acn-input`, que a classe só complementa
+  if (c.tipo === 'cep') return <CampoCep valor={valor} onChange={onChange} className="acn-input acn-oe-campo" rotulo={c.rotulo} onResultado={onCep} />;
+  if (c.tipo === 'telefone') return <CampoTelefone valor={valor} onChange={onChange} className="acn-input acn-oe-campo" />;
   if (c.tipo === 'veiculo') {
     return <VeiculoDaOp veiculoId={valor} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
   }
   if (c.tipo === 'select') {
     const ops = c.opcoes || [];
     return (
-      <select value={valor} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo}>
+      <select value={valor} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo}>
         {ops.map(o => <option key={o} value={o}>{o || '—'}</option>)}
         {valor && !ops.includes(valor) && <option value={valor}>{valor}</option>}
       </select>
     );
   }
-  if (c.tipo === 'textarea') return <textarea value={valor} onChange={e => onChange(e.target.value)} rows={3} style={{ ...est, resize: 'vertical' }} aria-label={c.rotulo} />;
-  if (c.tipo === 'dias') return <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30" value={valor} onChange={e => onChange(somenteDigitos(e.target.value))} style={est} aria-label={c.rotulo} />;
-  if (c.tipo === 'moeda') return <CampoMoeda value={valor} onChange={reais => onChange(reais)} style={est} aria-label={c.rotulo} />;
+  if (c.tipo === 'textarea') return <textarea value={valor} onChange={e => onChange(e.target.value)} rows={3} className="acn-oe-campo" aria-label={c.rotulo} />;
+  if (c.tipo === 'dias') return <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30" value={valor} onChange={e => onChange(somenteDigitos(e.target.value))} className="acn-oe-campo" aria-label={c.rotulo} />;
+  if (c.tipo === 'moeda') return <CampoMoeda value={valor} onChange={reais => onChange(reais)} className="acn-input acn-oe-campo" aria-label={c.rotulo} />;
   return (
     <input type={c.tipo === 'data' ? 'date' : c.tipo === 'numero' ? 'number' : 'text'} inputMode={c.tipo === 'moeda' ? 'decimal' : undefined}
-      value={valor} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />
+      value={valor} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo} />
   );
 }
 
-/** Aplica as alterações em cada OP, com histórico e auditoria. Devolve as falhas. */
+/** Aplica as alterações em cada OP, com histórico e auditoria. Devolve as falhas (a OP NÃO foi alterada) e os avisos (a OP foi alterada, mas algo ficou sem registro). */
 async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, motivo: string, currentUser: any, origem: string) {
   const falhas: string[] = [];
+  const avisos: string[] = [];
   const agora = new Date().toISOString();
   // o histórico mostra o NOME do veículo, não o código da ficha
   const fichas = new Map((await carregarVeiculos()).map((v: any) => [v.id, textoVeiculo(v)]));
@@ -164,8 +167,10 @@ async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, m
       continue;
     }
     const alteracao = Object.fromEntries(campos.map(k => [k, upd[k]]));
-    const { error } = await supabase.from('oples').update(alteracao).eq('id', op.id);
-    if (error) { falhas.push(`${op.opl}: ${error.message}`); continue; }
+    // 25/11/2026 (7.x da 12e78): `.select('id')` confere a linha devolvida; o banco responde "ok, 0 linhas" a uma gravação negada, e a tela seguia como se tivesse salvo (e ainda escrevia o histórico)
+    const { data: gravadas, error } = await supabase.from('oples').update(alteracao).eq('id', op.id).select('id');
+    if (error) { falhas.push(`${op.opl}: ${explicarErroDoBanco(error)}`); continue; }
+    if (!gravadas?.length) { falhas.push(`${op.opl}: o banco não alterou a OP (ela pode ter sido excluída ou você não tem permissão para mudá-la). Atualize a tela e confira.`); continue; }
     logChange({ module: 'oples', entityType: 'oples', entityId: op.id, changeType: 'UPDATE',
       oldRow: Object.fromEntries(campos.map(k => [k, op[k]])), newRow: alteracao, user: currentUser });
     const texto = campos.map(k => {
@@ -173,14 +178,16 @@ async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, m
       const fmt = (v: any) => c?.tipo === 'veiculo' ? nomeFicha(v) : (c ? mostrar(c, v) : v);
       return `${c?.rotulo || k}: ${fmt(op[k])} → ${fmt(upd[k])}`;
     }).join('; ');
-    await supabase.from('logs_movimentacao_opl').insert([{
+    const { error: erroHistorico } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: op.id, numero_opl: op.opl, setor: currentUser?.perfil || 'Admin',
       evento: `${origem} por ${currentUser?.nome || '—'} — ${texto}. Motivo: ${motivo}`,
       status_anterior: op.status_geral, status_novo: alteracao.status_geral ?? op.status_geral,
       usuario_nome: currentUser?.nome || null, usuario_email: currentUser?.email || null, data_hora: agora,
     }]);
+    // 25/11/2026: a OP já mudou; o histórico que não gravou NÃO pode passar calado (a janela promete "cada campo alterado fica no histórico")
+    if (erroHistorico) avisos.push(`${op.opl}: a OP foi alterada, mas o registro no histórico NÃO foi gravado (${explicarErroDoBanco(erroHistorico)}). Anote a mudança (${texto}) à mão.`);
   }
-  return falhas;
+  return { falhas, avisos };
 }
 
 // ── Edição completa de uma OP ────────────────────────────────────────────────
@@ -193,8 +200,9 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
   const tamanhoDoLote = useTamanhoDoLote(opl?.opl);
   const [escopo, setEscopo] = useState<'unidade' | 'lote'>('unidade');
   const salvar = async () => {
-    if (!alterados.length) { alert('Nenhum campo foi alterado.'); return; }
-    if (!motivo.trim()) { alert('Informe o motivo da alteração.'); return; }
+    if (salvando) return;
+    if (!alterados.length) { mostrarAviso('Nenhum campo foi alterado.', 'atencao'); return; }
+    if (!motivo.trim()) { mostrarAviso('Informe o motivo da alteração.', 'atencao'); return; }
     const mudadosOp = Object.fromEntries(alterados.map(c => [c.campo, paraBanco(c, form[c.campo])]));
     const noLote = escopo === 'lote' && tamanhoDoLote > 1;
     // 25/11/2026: trocar de ou para "Somente serviço de terceiro" muda a etapa e pede os serviços de CADA unidade: nunca vai para o lote de uma vez, só para a unidade aberta
@@ -206,40 +214,60 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
       if (!await confirmar(`Aplicar também nas outras ${tamanhoDoLote - 1} unidades do lote?\n\n${camposLote.map(k => `• ${rotulo(k)}`).join('\n')}\n\nChassi, placa, veículo, status e NF não mudam nas outras, e unidade já faturada ou cancelada não é mexida.`)) return;
     }
     setSalvando(true);
-    const falhas = await aplicar([opl], () => mudadosOp, motivo.trim(), currentUser, 'Edição completa');
-    if (!falhas.length && noLote) {
-      if (!camposLote.length) alert('Salvo só nesta unidade: os campos alterados (chassi, placa, veículo, status ou NF) são de cada carro e não vão para o lote.');
-      else {
-        const r = await aplicarNoLote({ op: opl, mudados: mudadosLote, usuario: currentUser, ehGerente: true, origem: `Edição completa (vale para o lote inteiro). Motivo: ${motivo.trim()}` });
-        alert(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length)));
+    // 25/11/2026 (7.x da 12e78): qualquer exceção no meio da gravação deixava o botão em "Salvando..." para sempre; agora volta e diz o que houve
+    try {
+      const { falhas, avisos } = await aplicar([opl], () => mudadosOp, motivo.trim(), currentUser, 'Edição completa');
+      avisos.forEach(a => mostrarAviso(a, 'erro'));
+      if (falhas.length) { mostrarAviso('Não foi possível salvar:\n' + falhas.join('\n'), 'erro'); return; }
+      if (noLote) {
+        if (!camposLote.length) mostrarAviso('Salvo só nesta unidade: os campos alterados (chassi, placa, veículo, status ou NF) são de cada carro e não vão para o lote.', 'atencao');
+        else {
+          const r = await aplicarNoLote({ op: opl, mudados: mudadosLote, usuario: currentUser, ehGerente: true, origem: `Edição completa (vale para o lote inteiro). Motivo: ${motivo.trim()}` });
+          const deuErro = !!r.erroLeitura || r.falhas.length > 0 || (r.semHistorico || []).length > 0;
+          mostrarAviso(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length)), deuErro ? 'erro' : (r.puladas.length || (r.deOutroFluxo || []).length) ? 'atencao' : 'ok');
+        }
+        if (trocaDeTerceiros) mostrarAviso('O fluxo "Somente serviço de terceiro" foi trocado só nesta unidade: ele muda a etapa da OP e pede os serviços de cada uma. Troque as outras unidades do lote uma a uma.', 'atencao');
       }
+      // a leitura de volta que falha nunca vale como "tudo certo": a tela recebe o que acabou de ser gravado e a pessoa é avisada
+      const { data: dadosSalvos, error: erroReleitura } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
+      let nova: any;
+      if (erroReleitura || !dadosSalvos) {
+        mostrarAviso('As alterações foram salvas, mas não foi possível reler a OP: a tela pode mostrar dados de antes. Atualize a página para conferir.', 'erro');
+        nova = { ...opl, ...mudadosOp };
+      } else {
+        const comValor = await anexarValoresDaOp(dadosSalvos);   // V2c: o valor vem de `oples_valores`
+        nova = comValor.op;
+        if (comValor.erro) {
+          mostrarAviso('As alterações foram salvas, mas não foi possível reler os valores em R$ da OP: a tela mostra os valores de antes. Atualize a página para conferir.', 'erro');
+          nova = { ...nova, ...Object.fromEntries(CAMPOS_DE_VALOR_DA_OP.map(k => [k, k in mudadosOp ? mudadosOp[k] : opl[k]])) };
+        }
+      }
+      onSalvo(nova);
+    } catch (e: any) {
+      mostrarAviso('Não foi possível salvar: ' + explicarErroDoBanco(e), 'erro');
+    } finally {
+      setSalvando(false);
     }
-    setSalvando(false);
-    if (!falhas.length && noLote && trocaDeTerceiros) alert('O fluxo "Somente serviço de terceiro" foi trocado só nesta unidade: ele muda a etapa da OP e pede os serviços de cada uma. Troque as outras unidades do lote uma a uma.');
-    if (falhas.length) { alert('Não foi possível salvar:\n' + falhas.join('\n')); return; }
-    const { data: dadosSalvos } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
-    const data = dadosSalvos ? (await anexarValoresDaOp(dadosSalvos)).op : dadosSalvos;   // V2c: o valor vem de `oples_valores`
-    onSalvo(data || { ...opl });
   };
   return (
-    <div className="modal-overlay" style={{ zIndex: 2200 }}>
-      <div className="modal-box" style={{ maxWidth: 760, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="modal-overlay acn-oe-overlay">
+      <div className="modal-box acn-oe-janela">
         <div className="modal-title">✏️ Editar OP {opl.opl}</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+        <div className="acn-oe-intro">
           Edição completa (Admin/Gerente). O status muda a fase da OP sem passar pelos botões do fluxo: use com cuidado.
           Cada campo alterado fica no histórico da OP com o valor anterior.
         </div>
         <SeletorEscopo opl={opl?.opl} tamanho={tamanhoDoLote} valor={escopo} onChange={setEscopo} texto="Valores em R$ são por carro e ficam iguais em todas." />
-        <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+        <div className="acn-oe-corpo">
           {GRUPOS.map(g => (
-            <div key={g} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0', marginBottom: 6, paddingBottom: 2 }}>{g}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
+            <div key={g} className="acn-oe-grupo">
+              <div className="acn-oe-grupo-titulo">{g}</div>
+              <div className="acn-oe-grade">
                 {CAMPOS_OPL.filter(c => c.grupo === g).map(c => {
                   const mudou = alterados.includes(c);
                   return (
-                    <div key={c.campo} style={{ gridColumn: c.tipo === 'textarea' ? '1 / -1' : undefined }}>
-                      <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: mudou ? '#b45309' : '#6b7280', textTransform: 'uppercase', marginBottom: 2 }}>
+                    <div key={c.campo} className={c.tipo === 'textarea' ? 'acn-oe-cheio' : undefined}>
+                      <label className="acn-oe-rot" data-mudou={mudou ? '' : undefined}>
                         {c.rotulo}{mudou ? ' • alterado' : ''}
                       </label>
                       <Entrada c={c} valor={form[c.campo]} onChange={v => setForm(f => ({ ...f, [c.campo]: v }))} currentUser={currentUser}
@@ -252,15 +280,15 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
             </div>
           ))}
         </div>
-        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 6 }}>
+        <div className="acn-oe-rodape">
           <label className="acn-label">Motivo da alteração * {alterados.length ? `(${alterados.length} campo${alterados.length > 1 ? 's' : ''} alterado${alterados.length > 1 ? 's' : ''})` : ''}</label>
-          <input className="acn-input" style={{ width: '100%', marginBottom: 8 }} value={motivo} onChange={e => setMotivo(e.target.value)}
+          <input className="acn-input acn-oe-motivo" value={motivo} onChange={e => setMotivo(e.target.value)}
             placeholder="Ex.: correção do prazo combinado com o cliente" aria-label="Motivo da alteração" />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="acn-btn" style={{ background: '#2563eb', flex: 1, opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={salvar}>
+          <div className="acn-oe-acoes">
+            <Botao variante="primario" pequeno className="acn-oe-salvar" disabled={salvando} onClick={salvar}>
               {salvando ? 'Salvando...' : 'Salvar alterações'}
-            </button>
-            <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+            </Botao>
+            <Botao pequeno disabled={salvando} onClick={onClose}>Cancelar</Botao>
           </div>
         </div>
       </div>
@@ -279,29 +307,38 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
   const [modeloDaFicha, setModeloDaFicha] = useState<string | undefined>(undefined);
   useEffect(() => { setValor(c.tipo === 'select' ? (c.opcoes?.[0] ?? '') : ''); setModeloDaFicha(undefined); }, [campo]);
   const salvar = async () => {
-    if (!motivo.trim()) { alert('Informe o motivo da alteração.'); return; }
+    if (salvando) return;
+    if (!motivo.trim()) { mostrarAviso('Informe o motivo da alteração.', 'atencao'); return; }
     const novo = paraBanco(c, valor);
     // era o confirm() do navegador, a última janela nativa do sistema fora do Estoque (Etapa 7, 29/09/2026)
     if (novo == null && !await confirmar(`Deixar "${c.rotulo}" em branco nas ${ops.length} OPs?`)) return;
     setSalvando(true);
-    const mudanca = c.tipo === 'veiculo' && novo && modeloDaFicha !== undefined
-      ? { veiculo_id: novo, modelo: modeloDaFicha }
-      : { [c.campo]: novo };
-    const falhas = await aplicar(ops, () => mudanca, motivo.trim(), currentUser, `Edição em lote (${ops.length} OPs)`);
-    setSalvando(false);
-    if (falhas.length) alert('Algumas OPs não foram alteradas:\n' + falhas.join('\n'));
-    onSalvo();
+    try {
+      const mudanca = c.tipo === 'veiculo' && novo && modeloDaFicha !== undefined
+        ? { veiculo_id: novo, modelo: modeloDaFicha }
+        : { [c.campo]: novo };
+      const { falhas, avisos } = await aplicar(ops, () => mudanca, motivo.trim(), currentUser, `Edição em lote (${ops.length} OPs)`);
+      avisos.forEach(a => mostrarAviso(a, 'erro'));
+      if (falhas.length) mostrarAviso('Algumas OPs não foram alteradas:\n' + falhas.join('\n'), 'erro');
+      // 25/11/2026 (7.x da 12e78): se NENHUMA OP mudou (todas falharam), a janela fica aberta com o que a pessoa digitou, em vez de fechar como se tivesse dado certo
+      if (falhas.length && falhas.length >= ops.length - iguais) return;
+      onSalvo();
+    } catch (e: any) {
+      mostrarAviso('Não foi possível salvar: ' + explicarErroDoBanco(e), 'erro');
+    } finally {
+      setSalvando(false);
+    }
   };
   const iguais = ops.filter(o => String(o[c.campo] ?? '').slice(0, c.tipo === 'data' ? 10 : undefined) === String(paraBanco(c, valor) ?? '')).length;
   return (
-    <div className="modal-overlay" style={{ zIndex: 2200 }}>
-      <div className="modal-box" style={{ maxWidth: 520 }}>
+    <div className="modal-overlay acn-oe-overlay">
+      <div className="modal-box acn-oe-janela-lote">
         <div className="modal-title">✏️ Editar {ops.length} OPs de uma vez</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8, maxHeight: 60, overflowY: 'auto' }}>
+        <div className="acn-oe-intro lote">
           {ops.map(o => o.opl).join(' · ')}
         </div>
         <label className="acn-label">Campo</label>
-        <select className="acn-input" style={{ width: '100%', marginBottom: 8 }} value={campo} onChange={e => setCampo(e.target.value)} aria-label="Campo a alterar">
+        <select className="acn-input acn-oe-campo-lote" value={campo} onChange={e => setCampo(e.target.value)} aria-label="Campo a alterar">
           {GRUPOS.map(g => (
             <optgroup key={g} label={g}>
               {CAMPOS_OPL.filter(x => x.grupo === g).map(x => <option key={x.campo} value={x.campo}>{x.rotulo}</option>)}
@@ -309,22 +346,22 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
           ))}
         </select>
         <label className="acn-label">Novo valor</label>
-        <div style={{ marginBottom: 4 }}>
+        <div className="acn-oe-entrada-lote">
           <Entrada c={c} valor={valor} onChange={setValor} currentUser={currentUser}
             onVeiculo={p => { setValor(p.veiculo_id); setModeloDaFicha(p.modelo); }} />
         </div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+        <div className="acn-oe-intro">
           {iguais ? `${iguais} de ${ops.length} já estão com este valor e não mudam.` : `Muda nas ${ops.length} OPs.`}
           {c.campo === 'status_geral' && ' Mudar o status tira as OPs da fase atual sem passar pelo fluxo.'}
         </div>
         <label className="acn-label">Motivo da alteração *</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={motivo} onChange={e => setMotivo(e.target.value)}
+        <input className="acn-input acn-oe-motivo lote" value={motivo} onChange={e => setMotivo(e.target.value)}
           placeholder="Ex.: cliente adiou a entrega de todo o lote" aria-label="Motivo da alteração em lote" />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="acn-btn" style={{ background: '#2563eb', flex: 1, opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={salvar}>
+        <div className="acn-oe-acoes">
+          <Botao variante="primario" pequeno className="acn-oe-salvar" disabled={salvando} onClick={salvar}>
             {salvando ? 'Aplicando...' : `Aplicar em ${ops.length - iguais} OP${ops.length - iguais === 1 ? '' : 's'}`}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao pequeno disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -463,12 +500,10 @@ const GRUPOS_COM = [...new Set(CAMPOS_OPL_COMERCIAL.map(c => c.grupo))];
 
 /** Campo do formulário. Controlado: quem guarda o estado é a tela do CRM. */
 function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo = null, onCep = null, currentUser = null }) {
-  const est = { width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
-    fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
   const txt = valor == null ? '' : String(valor);
 
-  if (c.tipo === 'cep') return <CampoCep valor={txt} onChange={onChange} estilo={est} rotulo={c.rotulo} onResultado={onCep || undefined} />;
-  if (c.tipo === 'telefone') return <CampoTelefone valor={txt} onChange={onChange} style={est} />;
+  if (c.tipo === 'cep') return <CampoCep valor={txt} onChange={onChange} className="acn-input acn-oe-campo" rotulo={c.rotulo} onResultado={onCep || undefined} />;
+  if (c.tipo === 'telefone') return <CampoTelefone valor={txt} onChange={onChange} className="acn-input acn-oe-campo" />;
 
   if (c.tipo === 'veiculo') {
     return <VeiculoDaOp veiculoId={txt} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
@@ -479,8 +514,8 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
   }
   if (c.tipo === 'bool') {
     return (
-      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#334155', cursor: 'pointer', padding: '5px 0' }}>
-        <input type="checkbox" checked={!!valor} onChange={e => onChange(e.target.checked)} style={{ cursor: 'pointer' }} />
+      <label className="acn-oe-bool">
+        <input type="checkbox" checked={!!valor} onChange={e => onChange(e.target.checked)} />
         {c.rotulo}
       </label>
     );
@@ -489,13 +524,12 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
     // o banco guarda uma lista (jsonb); marcar e desmarcar monta a lista
     const marcados: string[] = Array.isArray(valor) ? valor : [];
     return (
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '3px 0' }}>
+      <div className="acn-oe-multi">
         {(c.opcoes || []).map(o => {
           const sel = marcados.includes(o.valor);
           return (
-            <label key={o.valor} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11,
-              color: sel ? '#1d4ed8' : '#334155', fontWeight: sel ? 700 : 400, cursor: 'pointer' }}>
-              <input type="checkbox" checked={sel} style={{ cursor: 'pointer' }}
+            <label key={o.valor} data-sel={sel ? '' : undefined}>
+              <input type="checkbox" checked={sel}
                 onChange={() => onChange(sel ? marcados.filter(x => x !== o.valor) : [...marcados, o.valor])} />
               {o.label}
             </label>
@@ -506,7 +540,7 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
   }
   if (c.tipo === 'centro') {
     return (
-      <select value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo}>
+      <select value={txt} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo}>
         <option value="">— Não definido —</option>
         {(centrosCusto || []).map((x: any) => <option key={x.codigo} value={x.codigo}>{x.codigo} — {x.nome}</option>)}
         {txt && !(centrosCusto || []).some((x: any) => x.codigo === txt) && <option value={txt}>{txt}</option>}
@@ -520,7 +554,7 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
       : (c.opcoes || []);
     const conhecido = ops.some(o => o.valor === txt);
     return (
-      <select value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo}>
+      <select value={txt} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo}>
         {ops.map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}
         {/* valor antigo que saiu da lista continua visível, para não sumir sozinho */}
         {txt && !conhecido && <option value={txt}>{txt} (descontinuado)</option>}
@@ -529,22 +563,22 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo 
   }
   if (c.tipo === 'textarea') {
     return <textarea value={txt} onChange={e => onChange(e.target.value)} rows={3}
-      style={{ ...est, resize: 'vertical' }} placeholder={c.dica} aria-label={c.rotulo} />;
+      className="acn-oe-campo" placeholder={c.dica} aria-label={c.rotulo} />;
   }
   if (c.tipo === 'data') {
-    return <input type="date" value={txt.slice(0, 10)} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />;
+    return <input type="date" value={txt.slice(0, 10)} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo} />;
   }
   if (c.tipo === 'dias') {
     return <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30" value={txt}
-      onChange={e => onChange(somenteDigitos(e.target.value))} style={est} aria-label={c.rotulo} />;
+      onChange={e => onChange(somenteDigitos(e.target.value))} className="acn-oe-campo" aria-label={c.rotulo} />;
   }
   if (c.tipo === 'numero') {
-    return <input type="number" min={1} value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />;
+    return <input type="number" min={1} value={txt} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo} />;
   }
   if (c.tipo === 'moeda') {
-    return <CampoMoeda value={txt} onChange={reais => onChange(reais)} style={est} aria-label={c.rotulo} />;
+    return <CampoMoeda value={txt} onChange={reais => onChange(reais)} className="acn-input acn-oe-campo" aria-label={c.rotulo} />;
   }
-  return <input type="text" value={txt} onChange={e => onChange(e.target.value)} style={est}
+  return <input type="text" value={txt} onChange={e => onChange(e.target.value)} className="acn-oe-campo"
     placeholder={c.dica} aria-label={c.rotulo} />;
 }
 
@@ -575,23 +609,21 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
   const qtdAlterados = CAMPOS_OPL_COMERCIAL.filter(c => visivel(c) && mudou(c)).length;
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 2100 }}>
-      <div className="modal-box" style={{ maxWidth: 900, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div className="modal-overlay acn-oe-overlay com">
+      <div className="modal-box acn-oe-janela larga">
+        <div className="modal-title acn-oe-titulo">
           ✏️ Editar OP {opl?.opl}
           {onAlterarNumero && (
-            <button type="button" onClick={onAlterarNumero}
-              title="Alterar o número desta OP (só administradores e gerentes)"
-              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4,
-                padding: '1px 7px', fontSize: 9, fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+            <Botao pequeno onClick={onAlterarNumero}
+              title="Alterar o número desta OP (só administradores e gerentes)">
               ✏️ Alterar nº
-            </button>
+            </Botao>
           )}
-          <span style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>
+          <span className="acn-oe-titulo-sub">
             {opl?.cliente_nome || '—'} · {opl?.status_geral || 'sem status'}
           </span>
         </div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+        <div className="acn-oe-intro">
           A fase da OP não se muda por aqui: ela anda pelos botões do fluxo de cada setor.
           {!podeVerValores && ' Os valores estão ocultos para o seu acesso.'}
         </div>
@@ -599,20 +631,18 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
         <SeletorEscopo opl={opl?.opl} tamanho={tamanhoDoLote} valor={form?.__escopo === 'lote' ? 'lote' : 'unidade'} onChange={v => onCampo('__escopo', v)}
           texto="Valores em R$ são por carro e ficam iguais em todas." />
 
-        <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+        <div className="acn-oe-corpo">
           {GRUPOS_COM.map(g => {
             const campos = CAMPOS_OPL_COMERCIAL.filter(c => c.grupo === g && visivel(c));
             if (!campos.length) return null;
             return (
-              <div key={g} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase',
-                  borderBottom: '1px solid #e2e8f0', marginBottom: 6, paddingBottom: 2 }}>{g}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
+              <div key={g} className="acn-oe-grupo com">
+                <div className="acn-oe-grupo-titulo">{g}</div>
+                <div className="acn-oe-grade">
                   {campos.map(c => (
-                    <div key={c.campo} style={{ gridColumn: (c.cheio || c.tipo === 'textarea') ? '1 / -1' : undefined }}>
+                    <div key={c.campo} className={(c.cheio || c.tipo === 'textarea') ? 'acn-oe-cheio' : undefined}>
                       {c.tipo !== 'bool' && (
-                        <label style={{ display: 'block', fontSize: 9, fontWeight: 700, marginBottom: 2,
-                          color: mudou(c) ? '#b45309' : '#6b7280', textTransform: 'uppercase' }}>
+                        <label className="acn-oe-rot" data-mudou={mudou(c) ? '' : undefined}>
                           {c.rotulo}{mudou(c) ? ' • alterado' : ''}
                         </label>
                       )}
@@ -622,7 +652,7 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
                         onCep={(r: any) => { if (r.status === 'ok') { onCampo('destino_cidade', r.cidade); onCampo('destino_uf', r.uf); } }}
                         onChange={(v: any) => onCampo(c.campo, v)} />
                       {c.dica && c.tipo !== 'texto' && c.tipo !== 'textarea' && (
-                        <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>{c.dica}</div>
+                        <div className="acn-oe-dica">{c.dica}</div>
                       )}
                     </div>
                   ))}
@@ -632,15 +662,15 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
           })}
         </div>
 
-        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: qtdAlterados ? '#b45309' : '#94a3b8', fontWeight: 700 }}>
+        <div className="acn-oe-rodape com">
+          <span className="acn-oe-contagem" data-mudou={qtdAlterados ? '' : undefined}>
             {qtdAlterados ? `${qtdAlterados} campo${qtdAlterados > 1 ? 's' : ''} alterado${qtdAlterados > 1 ? 's' : ''}` : 'Nada alterado ainda'}
           </span>
-          <div style={{ flex: 1 }} />
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onCancelar}>Cancelar</button>
-          <button className="acn-btn" style={{ background: '#16a34a', opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={onSalvar}>
+          <div className="acn-oe-espaco" />
+          <Botao pequeno disabled={salvando} onClick={onCancelar}>Cancelar</Botao>
+          <Botao variante="primario" pequeno disabled={salvando} onClick={onSalvar}>
             {salvando ? 'Salvando...' : '💾 Salvar alterações'}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>
