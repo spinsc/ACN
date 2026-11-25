@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import Icone from './Icone';
 import { Botao, Chips, Selo, Faixa, diaBR } from './Interface';
 import { lerEntregas, entregasDoPedido, temEntrega } from './ComprasEntregas';
@@ -92,7 +93,9 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
     ]);
     const falhas: string[] = [];
     const ler = (r: any, quem: string) => { if (r.error) { falhas.push(`${quem}: ${r.error.message}`); return []; } return r.data || []; };
-    const comprasLista = ler(c, 'compras').filter(meu);
+    const comprasLidas = await anexarValoresDosPedidos(ler(c, 'compras'));   // V3b: o valor da compra mora em `pcp_pedidos_compra_valores`
+    if (comprasLidas.erro) falhas.push(`valores das compras: ${comprasLidas.erro}`);
+    const comprasLista = comprasLidas.pedidos.filter(meu);
     const avulsas = ler(da, 'demandas').filter(meu);
     const setoriais = ler(ds, 'demandas dos setores').filter(meu);
     const analises = ler(an, 'análises');

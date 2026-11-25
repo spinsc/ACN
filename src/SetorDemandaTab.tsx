@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { anexarValoresDasDemandas } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
@@ -177,8 +178,9 @@ function RelatoriosSetor({ setor, cor }) {
       .lte('data_abertura', filtroFim + 'T23:59:59')
       .order('data_abertura', { ascending: false });
     if (error) { setErroBusca(error.message); setCarregando(false); return; }
-    setErroBusca('');
-    setDados(data || []);
+    const comValor = await anexarValoresDasDemandas(data || []);   // V3b (24/11/2026): o valor da compra mora em `demandas_setoriais_valores`
+    setErroBusca(comValor.erro ? 'Não foi possível ler os valores das demandas: ' + comValor.erro : '');
+    setDados(comValor.demandas);
     setCarregando(false);
   };
 
@@ -435,7 +437,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       if (!pend || pend.contexto !== 'demanda_cotacao') return;
       (window as any).__acnDeepLink = null;
       supabase.from('demandas_setoriais').select('*').eq('id', pend.contextoId).maybeSingle()
-        .then(({ data }) => { if (data) setModalVer(data); });
+        .then(async ({ data }) => { if (data) setModalVer((await anexarValoresDasDemandas([data])).demandas[0]); });
     };
     tentarAbrir();
     window.addEventListener('acn:abrir-registro', tentarAbrir);
@@ -448,8 +450,9 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     if (filtro !== 'Todos') q = q.eq('status', filtro);
     const { data: lista, error: erroLista } = await q;
     if (erroLista) { setErroLeitura(erroLista.message); if (!silent) setLoading(false); return; }   // 7.53: fica a lista que já estava na tela
-    setErroLeitura('');
-    setDemandas(lista || []);
+    const listaComValor = await anexarValoresDasDemandas(lista || []);   // V3b
+    setErroLeitura(listaComValor.erro ? 'Não foi possível ler os valores das demandas: ' + listaComValor.erro : '');
+    setDemandas(listaComValor.demandas);
 
     // Para Laboratório: buscar OS SAC vinculadas
     if (setor === 'Laboratorio') {

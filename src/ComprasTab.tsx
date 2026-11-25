@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos, anexarValoresDoPedido, vencedorasSemValor, AVISO_SEM_VALORES } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
@@ -1219,7 +1220,7 @@ export default function ComprasTab({ currentUser }) {
       if (!pend || (pend.contexto !== 'compra' && pend.contexto !== 'compra_aprovacao')) return;
       (window as any).__acnDeepLink = null;
       supabase.from('pcp_pedidos_compra').select('*').eq('id', pend.contextoId).maybeSingle()
-        .then(({ data }) => { if (data) abrirModalCotacoes(data); });
+        .then(async ({ data }) => { if (data) abrirModalCotacoes((await anexarValoresDoPedido(data)).pedido); });   // V3b: o dinheiro do pedido mora em `pcp_pedidos_compra_valores`
     };
     tentarAbrir();
     window.addEventListener('acn:abrir-registro', tentarAbrir);
@@ -1364,7 +1365,10 @@ export default function ComprasTab({ currentUser }) {
     // 7.57: a releitura de 30 s que falhava esvaziava a lista (parecia "nenhuma requisição"); agora a lista fica. Numa leitura
     // pedida (troca de filtro, recarregar) segue vazia, porque a lista antiga seria de outro filtro.
     if (error) { setQueryError(error.message); if (!silent) { setLoading(false); setPedidos([]); } return; }
-    setPedidos(data || []);
+    // V3b (24/11/2026): valor da compra, valor de cada vencedora e preço de cada item moram em `pcp_pedidos_compra_valores`; leitura recusada avisa e a lista de antes fica
+    const comValor = await anexarValoresDosPedidos(data || [], true);
+    if (comValor.erro) { setQueryError('Não foi possível ler os valores das compras: ' + comValor.erro); if (!silent) { setLoading(false); setPedidos([]); } return; }
+    setPedidos(comValor.pedidos);
     // As entregas dos comprados: a releitura silenciosa (30 s) refaz só os "Comprado" (os recebidos não mudam sozinhos). Leitura recusada mantém as de antes e AVISA:
     // sem elas o pedido de vários fornecedores cairia, calado, numa data só.
     const idsEntregas = (data || []).filter((p: any) => temEntrega(p) && (!silent || p.status_compra === 'Comprado')).map((p: any) => p.id);
@@ -1642,6 +1646,7 @@ export default function ComprasTab({ currentUser }) {
     if (vencedoraId) { mostrarAviso('Todos os itens já têm vencedora e a compra foi enviada para aprovação. Para trocar, volte a demanda para "Em Andamento".', 'atencao'); return; }
     if (!await confirmar(`Desfazer a escolha da cotação de ${c.fornecedor_nome}? Os itens dela voltam a ficar sem vencedora.`)) return;
     const nova = vencedoras.filter((v: any) => v.cotacao_id !== c.id);
+    if (vencedorasSemValor({ vencedoras: nova })) { alert(AVISO_SEM_VALORES); return; }   // V3c: regravar a lista sem os valores apagaria o das outras vencedoras
     const { error } = await supabase.from('pcp_pedidos_compra').update({ vencedoras: nova.length ? nova : null }).eq('id', modalCotacoes.id);
     if (error) { alert('Não foi possível desfazer a escolha: ' + error.message); return; }
     await registrarHistorico(modalCotacoes.id, { tipo: 'escolha_cotacao', motivo: `Escolha da cotação de ${c.fornecedor_nome} desfeita.` }, currentUser);
@@ -1667,6 +1672,7 @@ export default function ComprasTab({ currentUser }) {
         : 'Escolha o fornecedor cadastrado (se ele não está na lista, cadastre-o antes) e informe o valor unitário e a quantidade.'); return;
     }
     const comoVencedora = vencedoras.find((v: any) => v.cotacao_id === c.id);
+    if (comoVencedora && vencedorasSemValor({ vencedoras })) { alert(AVISO_SEM_VALORES); return; }   // V3c
     if (comoVencedora && editCotacaoForm.itens_cot) {
       const marcados = editCotacaoForm.itens_cot.filter((i: any) => i.marcado).map((i: any) => i.indice);
       if (comoVencedora.itens.some((ix: number) => !marcados.includes(ix))) {
@@ -1763,9 +1769,10 @@ export default function ComprasTab({ currentUser }) {
   // Devolve null se a demanda nasceu e a mensagem do problema se não nasceu (7.57: a falha era engolida).
   const criarDemandaComprasFinalizada = async (pedidoId: string): Promise<string | null> => {
     try {
-      const { data: pedido, error: erroPed } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
+      const { data: pedidoBruto, error: erroPed } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
       if (erroPed) return erroPed.message;
-      if (!pedido) return 'pedido não encontrado';
+      if (!pedidoBruto) return 'pedido não encontrado';
+      const pedido = (await anexarValoresDoPedido(pedidoBruto)).pedido;   // V3c: o valor do texto da demanda mora na tabela nova
       const { error: erroDem } = await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras',
         descricao: `[COMPRA RECEBIDA] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — ${fmt(pedido.valor_compra)}`,
@@ -2085,9 +2092,13 @@ export default function ComprasTab({ currentUser }) {
     const { data: jaPendentes, error: erroJa } = await supabase.from('pcp_aprovacoes').select('id,tipo')
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
     const { data: pedidoVenc, error: erroVenc } = await supabase.from('pcp_pedidos_compra')
-      .select('vencedora_id,vencedoras').eq('id', modalCotacoes.id).maybeSingle();
+      .select('id,vencedora_id,vencedoras').eq('id', modalCotacoes.id).maybeSingle();
     // 7.57: falha de leitura aqui criava uma segunda linha de aprovação pendente para o mesmo nível
     if (erroJa || erroVenc) { setVerificandoSenha(false); setErroSenha('Não foi possível conferir as aprovações do pedido: ' + (erroJa || erroVenc).message); return; }
+    // V3c (24/11/2026): o valor das vencedoras já escolhidas mora na tabela nova; sem ele a SOMA gravada em valor_compra sairia menor
+    const pedidoVencBruto = pedidoVenc;
+    const venc3 = await anexarValoresDoPedido(pedidoVencBruto);
+    if (venc3.erro || (pedidoVencBruto && vencedorasSemValor(venc3.pedido) > 0)) { setVerificandoSenha(false); setErroSenha(venc3.erro ? 'Não foi possível ler os valores das cotações já escolhidas: ' + venc3.erro : AVISO_SEM_VALORES); return; }
     const alcadaJaPendente = (jaPendentes || []).some((a: any) => a.tipo !== 'departamento');
     // 19/10/2026: demanda de vários itens — cada cotação aprovada fica com os itens que cobre; só quando todos os itens
     // têm vencedora a compra segue para a alçada, com o valor da SOMA das vencedoras e os fornecedores juntos.
@@ -2096,7 +2107,7 @@ export default function ComprasTab({ currentUser }) {
     let faltamItens = false;
     let divisao: any = null;
     if (porItens) {
-      const atuais = vencedorasDoPedido(pedidoVenc);
+      const atuais = vencedorasDoPedido(venc3.pedido);
       const indices = cotacao.itens.map((i: any) => i.indice).filter((ix: number) => itensEscolhidos.includes(ix));
       if (!indices.length) { setVerificandoSenha(false); setErroSenha('Marque pelo menos um item que esta cotação vence.'); return; }
       // cotação que vence só parte dos itens: o valor é a fatia dela, e frete, serviços, taxas e desconto vão na mesma proporção

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
@@ -1824,7 +1825,8 @@ function PainelRecebimento({ currentUser }: any) {
       // coleta marcada e ainda não feita não é recebimento: o Compras busca a mercadoria e registra a coleta (20/10/2026)
       .or('forma_recebimento.is.null,forma_recebimento.eq.envio,coletado_em.not.is.null')
       .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
-    setPedidos(data || []);
+    const comValor = await anexarValoresDosPedidos(data || []);   // V3b (24/11/2026): o valor da compra mora em `pcp_pedidos_compra_valores`; sem direito, vem nulo
+    setPedidos(comValor.pedidos);
     const ent = await lerEntregas((data || []).map((p: any) => p.id));
     setErroEntregas(ent.erro || ''); setLinhasEntregas(ent.linhas);
     // leitura recusada aqui só tira o selo "Engenharia espera": a lista de recebimento segue igual

@@ -4,6 +4,7 @@ import { intervaloVisivel } from './IntervaloVisivel';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
+import { anexarValoresDoPedido } from './PedidoValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes, resolverMencoesDeTodos } from './MencaoTextarea';
@@ -463,7 +464,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   useEffect(() => {
     if (!d.pedido_compra_id) { setPedidoCompra(null); return; }
     supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,status_compra,valor_compra,fornecedor,data_prevista_recebimento')
-      .eq('id', d.pedido_compra_id).maybeSingle().then(({ data }) => setPedidoCompra(data));
+      .eq('id', d.pedido_compra_id).maybeSingle().then(async ({ data }) => setPedidoCompra(data ? (await anexarValoresDoPedido(data)).pedido : data));   // V3b: valor da compra vem de `pcp_pedidos_compra_valores`
   }, [d.pedido_compra_id]);
   const gerarPedidoCompra = async () => {
     const itens = d.itens || [];

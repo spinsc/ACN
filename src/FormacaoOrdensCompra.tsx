@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { confirmar } from './Feedback';
 import { Botao, Selo, SelectBusca } from './Interface';
 import Icone from './Icone';
@@ -46,7 +47,8 @@ export function OrdensDeCompraDaFormacao({ cotacaoId, currentUser }: any) {
     if (!ids.length) { setErro(''); setLigadas([]); return; }
     const { data: peds, error: erroPeds } = await supabase.from('pcp_pedidos_compra').select(COLUNAS_PEDIDO).in('id', ids).order('data_criacao', { ascending: false });
     if (erroPeds) { setErro(erroPeds.message); return; }
-    setErro(''); setLigadas(peds || []);
+    const comValor = await anexarValoresDosPedidos(peds || []);   // V3b
+    setErro(comValor.erro ? 'Não foi possível ler os valores das OCs: ' + comValor.erro : ''); setLigadas(comValor.pedidos);
   }, [cotacaoId]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -56,7 +58,9 @@ export function OrdensDeCompraDaFormacao({ cotacaoId, currentUser }: any) {
     const { data, error } = await supabase.from('pcp_pedidos_compra').select(COLUNAS_PEDIDO).not('numero_oc', 'is', null).order('data_criacao', { ascending: false }).limit(1000);
     if (error) { setErro(error.message); setAdicionando(false); return; }
     const jaLigadas = new Set(ligadas.map((p: any) => p.id));
-    setCandidatas((data || []).filter((p: any) => !jaLigadas.has(p.id)));
+    const comValor = await anexarValoresDosPedidos(data || []);   // V3b
+    if (comValor.erro) setErro('Não foi possível ler os valores das OCs: ' + comValor.erro);
+    setCandidatas(comValor.pedidos.filter((p: any) => !jaLigadas.has(p.id)));
   };
   const vincular = async () => {
     if (!escolha || !raiz || ocupado) return;

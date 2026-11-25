@@ -3,6 +3,7 @@ import { nomeDoPedido } from './NomeDoPedido';
 import { lerEntregasDosPedidos, temEntrega, chegadaDoPedido } from './ComprasEntregas';
 import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
@@ -734,7 +735,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         const ent = await lerEntregasDosPedidos(data || []);
         setErroEntregasCompras(ent.erro || '');
         setLinhasEntregasCompras(ent.linhas);
-        setComprasVinculadas(data || []);
+        const comValor = await anexarValoresDosPedidos(data || []);   // V3b: o valor da compra mora em `pcp_pedidos_compra_valores`
+        if (comValor.erro) setErroCompras('Não foi possível ler os valores das compras: ' + comValor.erro);
+        setComprasVinculadas(comValor.pedidos);
       });
   }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
 

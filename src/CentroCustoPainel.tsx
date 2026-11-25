@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { lerPaginado } from './LerPaginado';
 import Icone from './Icone';
 import { Botao, Selo, Faixa, diaBR, diaISO } from './Interface';
@@ -53,7 +54,10 @@ export async function carregarMovimentosCentros() {
     lerPaginado(() => supabase.from('pcp_pedidos_faturamento').select('id,pedido_id,valor,data_pagamento').order('id')),
     lerPaginado(() => supabase.from('centro_custo_despesas').select('id,centro_custo_id,valor,descricao,data,parcelado,valor_total_negociado,despesa_pai_id,num_parcelas,categoria_id,competencia,fornecedor,numero_nf').order('id')),
   ]);
-  return { compras, faturamentos, despesas };
+// V3b do "ver valores no banco" (24/11/2026): o dinheiro do pedido mora em `pcp_pedidos_compra_valores`; quem não pode ver recebe nulo
+  const comValor = await anexarValoresDosPedidos(compras, true);
+  if (comValor.erro) throw new Error('Não foi possível ler os valores das compras: ' + comValor.erro);
+  return { compras: comValor.pedidos, faturamentos, despesas };
 }
 
 /** As linhas de orçamento de um ano (todos os centros). */

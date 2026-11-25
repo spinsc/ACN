@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import Icone from './Icone';
 import { logChange } from './AuditSystem';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -161,7 +162,10 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
     ]);
     const falha = c.error || k.error;
     if (falha) { setErro(falha.message); setCarregando(false); return; }
-    setCompras(c.data || []); setCentros(k.data || []);
+// V3b do "ver valores no banco" (24/11/2026): o dinheiro do pedido mora em `pcp_pedidos_compra_valores`; quem não pode ver recebe nulo
+    const comValor = await anexarValoresDosPedidos(c.data || []);
+    if (comValor.erro) { setErro('Não foi possível ler os valores das compras: ' + comValor.erro); setCarregando(false); return; }
+    setCompras(comValor.pedidos); setCentros(k.data || []);
     try { setFechamentos(await lerFechamentos()); } catch (_) { setFechamentos([]); } // se não ler, a conferência na hora de gravar barra do mesmo jeito
     // o que a pessoa já escolheu e continua sem centro fica; o resto recebe a sugestão pelo texto (nada é gravado por isso).
     // As duas marcas são calculadas FORA de uma função de atualização de estado (dentro dela o React perdia a de "sugerido").

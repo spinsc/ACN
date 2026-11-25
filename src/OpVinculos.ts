@@ -20,6 +20,7 @@
 // aberto?" é a mesma pergunta que esta função já responde.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
+import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDaOp } from './OpValores';
 
 export type GrupoVinculo =
@@ -126,6 +127,8 @@ export async function origemDaOp(op: any) {
 }
 
 // ── TUDO QUE ESTÁ PENDURADO NA OP ────────────────────────────────────────────
+// V3b (24/11/2026): o valor da compra mora em `pcp_pedidos_compra_valores`; leitura recusada deixa o pedido como veio
+const comValorDoPedido = async (lista: Promise<any[]>) => (await anexarValoresDosPedidos(await lista)).pedidos;
 export async function vinculosDaOp(op: any): Promise<ItemVinculo[]> {
   const id = op?.id;
   const num = txt(op?.opl);
@@ -142,8 +145,8 @@ export async function vinculosDaOp(op: any): Promise<ItemVinculo[]> {
     // PostgREST e o banco recusa (22P02) — o texto JSON é o que ele entende.
     tentar(supabase.from('demandas_avulsas').select('*')
       .filter('vinculos', 'cs', JSON.stringify([{ id: String(id) }]))),
-    tentar(supabase.from('pcp_pedidos_compra').select('*').eq('vinculo_id', id)),
-    num ? tentar(supabase.from('pcp_pedidos_compra').select('*').is('vinculo_id', null).eq('opl', num)) : Promise.resolve([]),
+    comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').eq('vinculo_id', id))),
+    num ? comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').is('vinculo_id', null).eq('opl', num))) : Promise.resolve([]),
     tentar(supabase.from('pcp_fretes').select('*').eq('vinculo_id', id)),
     tentar(supabase.from('cq_auditorias').select('*').eq('opl_id', id)),
     // 18c (13/10/2026): o pedido do PCP vale para as várias OPs de um lote, então também se acha pela lista `opl_ids`

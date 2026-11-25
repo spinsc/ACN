@@ -745,6 +745,8 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
       .map(k => ({ campo: NOMES[k], de: pedido[k], para: novo[k] }));
     if (itensMudaram) campos.push({ campo: 'Itens a comprar', de: `${(pedido.itens || []).length} item(ns)`, para: `${itensNovos.length} item(ns)` });
     if (!campos.length && String(pedido.vinculo_tipo ?? '') === String(novo.vinculo_tipo ?? '')) { onClose?.(); return; }
+    // V3c (24/11/2026): quem não vê valores recebe a lista sem os preços; regravá-la apagaria os preços que o comprador lançou
+    if (itensMudaram && currentUser?.ver_valores === false && pedido._itens_com_preco) { alert('Este pedido já tem preços nos itens e a sua conta não os vê: a lista de itens não pode ser alterada por aqui. Peça ao Compras.'); return; }
     setSalvando(true);
     const { error } = await supabase.from('pcp_pedidos_compra').update(novo).eq('id', pedido.id);
     if (error) { setSalvando(false); alert('Não foi possível salvar: ' + error.message); return; }
