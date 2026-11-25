@@ -4,7 +4,7 @@
   "titulo": "Manual dos Serviços de terceiros",
   "descricao": "Passo a passo completo dos Serviços de terceiros (película, plotagem, pintura, lavagem, funilaria, mecânica, corte e dobra e pintura eletrostática), com fotos: pedir o serviço de qualquer tela, o Quadro, a Agenda e a Lista, agendar, dar como realizado, o pedido de pagamento ao Financeiro, a saída da Vistoria de pátio, a ordem de serviço em lote da pintura eletrostática, o contrato impresso, o relatório do mês por prestador (com planilha e folha para imprimir), os cadastros de prestadores e tipos, quem recebe cada aviso, quem pode o quê e as dúvidas comuns.",
   "ordem": 3,
-  "atualizadoEm": "2026-11-23",
+  "atualizadoEm": "2026-11-25",
   "mudancas": [
     {
       "data": "2026-11-23",
@@ -13,6 +13,10 @@
     {
       "data": "2026-11-23",
       "texto": "Relatório do mês por prestador: quantos serviços cada prestador fez no mês (pelo dia em que foi realizado), quanto estava combinado, quanto cobrou, a diferença, o que já foi pago, o que foi pedido ao Financeiro e o que ainda falta pedir (a mesma conta do contador A pagar), mais a coluna Ainda a fazer. Tem um quadro por tipo de serviço, baixa uma planilha do Excel com três folhas e imprime uma folha A4. Quem não vê valores vê só as quantidades."
+    },
+    {
+      "data": "2026-11-25",
+      "texto": "OP só de serviço de terceiro: novo fluxo de entrega para a venda que é só plotagem, película, pintura e afins. A OP não passa pelo PCP, pelo Almoxarifado nem pela Adaptação: nasce em Aguardando serviço de terceiro, com um serviço aberto por tipo e por unidade, e, quando todos os serviços estão realizados, o sistema a leva sozinho à Liberação Comercial (ou ao Fiscal, no faturamento antecipado), sem Controle de Qualidade. Nova seção no passo a passo e uma dúvida comum; sem fotos novas por enquanto."
     }
   ]
 }

@@ -17,7 +17,7 @@ import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { carregarDossie, buscarOps } from './OpVinculos';
 import { QuadroItensOp, conferenciaInicial } from './OpItens';
 import { RespostasDaOp } from './RespostasDaOp';
-import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
+import { fluxoLabel, fluxoEfetivo, soTerceiros } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
 import { diaBR } from './Interface';
 import { textosDasOps } from './TextosDaOp';
@@ -255,7 +255,7 @@ export function DossieOp({ op, dossieCarregado = null }) {
 
         {/* 23/11/2026 (T5 de Serviços de terceiros): o que já foi pedido a quem é de fora para esta OP (película, pintura, lavagem…), com a situação, e o botão de pedir mais; qualquer pessoa pede, como no menu "Mais ações da OP" */}
         <QuadroServicosLigados ligacaoTipo="op" ligacaoId={o.id} descricao={`${o.opl || ''} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '')}
-          podePedir={o.status_geral !== 'Cancelado'} titulo="Serviços de terceiros desta OP" />
+          podePedir={o.status_geral !== 'Cancelado'} titulo="Serviços de terceiros desta OP" exigeServico={soTerceiros(o.fluxo_entrega) && o.status_geral !== 'Cancelado'} />
 
         {/* ── Grupos de vínculos ── */}
         {GRUPOS.map(g => {

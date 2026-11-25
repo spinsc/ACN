@@ -51,7 +51,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip, mdiArrowDown } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
-import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { fluxoLabel, soEnvio, soTerceiros, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes, podeEditarAtualizacao } from './utils/permissoes';
 import { EdicaoDeAtualizacao, MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
@@ -1139,6 +1139,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // R17 (13/10/2026): o CEP de entrega que a pessoa mexeu precisa ser válido (a conferência da embalagem); o que já estava gravado e não mudou não trava a edição
     const recusaCep = await conferirCepAntesDeSalvar(oplFormEdit.destino_cep, 'CEP de entrega', oplEditando.destino_cep);
     if (recusaCep) { mostrarAviso(recusaCep, 'atencao'); return; }
+    // 25/11/2026: "Somente serviço de terceiro" é uma rota inteira (a OP pula o PCP e espera o prestador): a edição comercial não troca de ou para ele; o Admin faz pela edição completa da OP
+    if ((oplFormEdit.fluxo_entrega || '') !== (oplEditando.fluxo_entrega || '') && (soTerceiros(oplFormEdit.fluxo_entrega) || soTerceiros(oplEditando.fluxo_entrega))) {
+      mostrarAviso('O fluxo "Somente serviço de terceiro" não se troca por esta tela: ele muda a etapa da OP. Peça ao Admin para trocar pela edição completa da OP.', 'atencao'); return;
+    }
     setOplSalvando(true);
 
     const qtdAnterior = Number(oplEditando.quantidade) || 1;
@@ -1155,7 +1159,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // se esta OP não for ela mesma já um sufixo /NN de outra.
     // Envio direto (kit, material) não desmembra: não passa pela produção,
     // então não há veículo para acompanhar um a um — só muda a quantidade.
-    const ehEnvio = soEnvio(oplFormEdit.fluxo_entrega || oplEditando.fluxo_entrega);
+    const ehEnvio = soEnvio(oplFormEdit.fluxo_entrega || oplEditando.fluxo_entrega) || soTerceiros(oplFormEdit.fluxo_entrega || oplEditando.fluxo_entrega);   // 25/11/2026: a OP só de terceiro também não desmembra por aqui (cada unidade precisa do seu serviço aberto)
     if (qtdNova > qtdAnterior && qtdNova > 1 && !jaEhSufixo && !ehEnvio) {
       const desmembrar = await confirmar(
         `Quantidade aumentou de ${qtdAnterior} para ${qtdNova}.\n\n` +

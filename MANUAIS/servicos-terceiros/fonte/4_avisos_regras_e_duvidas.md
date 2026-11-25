@@ -68,6 +68,8 @@ Em **23/11/2026**, as OPs que estavam no PCP, no Almoxarifado e na Adaptação c
 
 **Pedi uma película e não consigo agendar.** O dia de película, plotagem e pintura é **marcado pela Adaptação**. Você ficou com o selo **Sem data** e já deixou o **dia desejado** para a Adaptação ler. Se a Adaptação não está vendo, chame o Admin para conferir o tipo na aba **Tipos de serviço**.
 
+**A OP só de serviço de terceiro não anda.** Confira no Dossiê da OP, quadro **Serviços de terceiros**: ela só vai à Liberação Comercial quando **todos** os serviços estão **realizados** (e ao menos um foi feito). Serviço ainda em **A definir** ou **Agendado** segura a OP; se todos foram cancelados, a OP fica parada de propósito.
+
 **Não consigo mexer no serviço.** Ou ele está numa **ordem de serviço em lote** montada ou enviada (a janela mostra a faixa azul com **Abrir a ordem**), ou é um dos 203 serviços da migração (só diretoria e Adaptação mexem), ou foi pedido por outra pessoa e o tipo não é da Adaptação.
 
 **O prestador que eu preciso não aparece.** Ele não faz aquele tipo (**Prestadores › Que serviços faz**), está **inativo** ou ainda não foi cadastrado. Quem cadastra: Admin, gerentes e Produção.

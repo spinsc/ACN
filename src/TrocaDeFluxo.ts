@@ -14,7 +14,7 @@
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
-import { FLUXOS, soEnvio, terminaEmEnvio, fluxoLabel, TIPO_VENDA_ENVIO } from './FluxoEntrega';
+import { FLUXOS, soEnvio, soTerceiros, terminaEmEnvio, fluxoLabel, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import { exigeEnderecoCompleto, enderecoQueFalta } from './EnderecoEntrega';
 import { CAMPOS_DESTINO, ajustarOpPeloFluxoDoGrupo, fluxoDaOp, ehUnidadeDeProducao, destinoVazio } from './FluxoMisto';
 import { cepParaGravar } from './Cep';
@@ -33,6 +33,8 @@ const moeda = (v: any) => num(v).toLocaleString('pt-BR', { style: 'currency', cu
 export function podeTrocarFluxo(op: any, { remessasAtivas = 0, erroRemessas = '' }: { remessasAtivas?: number; erroRemessas?: string } = {}): { pode: boolean; motivo: string } {
   if (!op?.id) return { pode: false, motivo: 'Não consegui identificar a OP.' };
   if (op.tipo_projeto === TIPO_VENDA_ENVIO) return { pode: false, motivo: 'Venda para Envio é sempre envio de material: o fluxo desta OP não muda.' };
+  // 25/11/2026: a OP "Somente serviço de terceiro" não passou pelo PCP e não tem kit: trocar o fluxo dela mudaria a etapa e deixaria o serviço aberto no módulo de terceiros
+  if (soTerceiros(op.fluxo_entrega)) return { pode: false, motivo: 'Esta OP é só de serviço de terceiro: o fluxo dela não se troca por aqui. Cancele os serviços no módulo Serviços de terceiros e peça ao Admin para trocar o fluxo pela edição completa da OP.' };
   if (!STATUS_QUE_PERMITEM_TROCAR.includes(op.status_geral)) {
     return { pode: false, motivo: `A OP está em "${op.status_geral || 'sem status'}". O fluxo só pode ser trocado até o Almoxarifado fechar o kit (Em Espera PCP, Devolvida PCP e Aguardando Almox): depois disso a unidade já tem material separado ou serial.` };
   }

@@ -9,7 +9,8 @@ import { explicarErroDoBanco } from './ErroDoBanco';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
-import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo, terminaEmEnvio } from './FluxoEntrega';
+import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo, terminaEmEnvio, FLUXO_SO_TERCEIROS_DEF, soTerceiros, statusInicialDaOp } from './FluxoEntrega';
+import { abrirServicosDaOp, erroDoServicoDaOp } from './TerceirosDaOp';
 import { ehEnvioDeMaterial, setorPadraoDaVenda } from './SeparacaoEnvio';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -280,8 +281,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // (o fluxo misto SEMPRE usa os grupos: cada grupo é quem escolhe o fluxo)
   const loteEhMisto = (loteMisto || ehFluxoMisto) && Number(form.quantidade) > 1 && !soEnvio(fluxoEf);
   // Prazo (24/11/2026): a OP com veículo (adaptação) pede os DIAS depois da chegada; o que sai embalado (envio, OS) segue pedindo a DATA. No fluxo misto vale cada um para as unidades do seu fluxo.
-  const temUnidadeDeAdaptacao = form.tipo === 'OP' && !ehVendaEnvio && (ehFluxoMisto ? grupos.some((g: any) => !grupoEhDeEnvio(g)) : !soEnvio(fluxoEf));
-  const temUnidadeDeEnvio = form.tipo !== 'OP' || ehVendaEnvio || (ehFluxoMisto ? grupos.some((g: any) => grupoEhDeEnvio(g)) : soEnvio(fluxoEf));
+  // 25/11/2026 (pedido do usuário): a OP "Somente serviço de terceiro" não espera carro nenhum na matriz (o serviço é feito por quem é de fora), então o prazo dela é uma DATA, como no envio; não tem mão de obra nem previsão de chegada do veículo
+  const soServicoDeTerceiro = form.tipo === 'OP' && !ehVendaEnvio && !ehFluxoMisto && soTerceiros(fluxoEf);
+  const temUnidadeDeAdaptacao = form.tipo === 'OP' && !ehVendaEnvio && !soServicoDeTerceiro && (ehFluxoMisto ? grupos.some((g: any) => !grupoEhDeEnvio(g)) : !soEnvio(fluxoEf));
+  const temUnidadeDeEnvio = form.tipo !== 'OP' || ehVendaEnvio || soServicoDeTerceiro || (ehFluxoMisto ? grupos.some((g: any) => grupoEhDeEnvio(g)) : soEnvio(fluxoEf));
   // Fluxo misto: a regra "veículo obrigatório" é da Administração POR FLUXO, então lê-se uma vez para cada fluxo que os grupos escolheram (uma leitura que falha barra o salvar, como na venda comum)
   const [modosPorFluxo, setModosPorFluxo] = useState<Record<string, { modo: string; erro: string | null }>>({});
   const fluxosDosGrupos = ehFluxoMisto ? [...new Set(grupos.map((g: any) => g.fluxo).filter(Boolean))].sort().join(',') : '';
@@ -448,6 +451,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       if (faltaDias) { setErro(faltaDias); return; }
     }
     if (temUnidadeDeEnvio && !form.prazo_entrega) { setErro(ehFluxoMisto ? 'Informe o prazo de entrega (data) das unidades de envio.' : 'Informe o prazo de entrega.'); return; }
+    if (soServicoDeTerceiro) {
+      const faltaServico = erroDoServicoDaOp({ tipos: form.tipos_servico_terceiro || [], obs: form.obs_servico_terceiro });
+      if (faltaServico) { setErro(faltaServico); return; }
+    }
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
     // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
     // Adaptação por omissão — que é justamente o problema que isto resolve.
@@ -600,32 +607,33 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           quantidade:             semLote ? qty : 1,
           frete_responsavel:      precisaFrete ? (form.frete_responsavel || null) : null,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
-          valor_mao_de_obra:      ehVendaEnvio ? null : (valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra)),
-          valor_mao_de_obra_serralheria: ehVendaEnvio ? null : (valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria)),
+          valor_mao_de_obra:      ehVendaEnvio || soServicoDeTerceiro ? null : (valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra)),
+          valor_mao_de_obra_serralheria: ehVendaEnvio || soServicoDeTerceiro ? null : (valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria)),
           data_entrada:           form.data_entrada,
           // 24/11/2026: com dias, a data de entrega nasce da chegada do veículo + dias (o gatilho do banco calcula quando há previsão de chegada; sem ela fica em aberto até o carro chegar)
           data_prevista_entrega:  temUnidadeDeAdaptacao ? null : (form.prazo_entrega || null),
           prazo_dias_apos_chegada: temUnidadeDeAdaptacao ? diasParaGravar(form.prazo_dias_apos_chegada) : null,
           prazo_garantia:         form.prazo_garantia?.trim() || null,
-          data_chegada_veiculo:   ehVendaEnvio ? null : (form.data_chegada_veiculo || null),
+          data_chegada_veiculo:   ehVendaEnvio || soServicoDeTerceiro ? null : (form.data_chegada_veiculo || null),
           cliente_nome:           form.cliente_nome.trim(),
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
           // Etapa 18e (13/10/2026): a OP nasce direto no PCP (decisão do usuário em 12/10/2026: a Engenharia só recebe pedidos de desenvolvimento)
-          status_geral:           'Em Espera PCP',
-          data_chegada_pcp:       new Date().toISOString(),   // ponto de partida do relógio do PCP
+          // 25/11/2026: a OP só de serviço de terceiro pula o PCP e nasce em "Aguardando Servico de Terceiro" (sem o relógio do PCP)
+          status_geral:           statusInicialDaOp(fluxoEf),
+          data_chegada_pcp:       soServicoDeTerceiro ? null : new Date().toISOString(),   // ponto de partida do relógio do PCP
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    oportunidadeVinculada?.id || null,
           // 09/10/2026 (pedido do usuário): a OP lançada a partir de uma licitação Vencida guarda de qual licitação veio — o prefill da Licitação (botão "Lançar OP" e "Gerar OP"
           // do pedido) já trazia o id, mas ele só servia para carregar os itens da formação de preços e nunca era gravado
           licitacao_id:           form.licitacao_id || null,
-          servico_terceiro:       !ehVendaEnvio && !!form.servico_terceiro,
-          ...(!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length > 0
+          servico_terceiro:       !ehVendaEnvio && (soServicoDeTerceiro || !!form.servico_terceiro),
+          ...(!ehVendaEnvio && (form.servico_terceiro || soServicoDeTerceiro) && form.tipos_servico_terceiro.length > 0
             ? { tipos_servico_terceiro: form.tipos_servico_terceiro }
             : {}),
-          tipo_servico_terceiro:  !ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
-          obs_servico_terceiro:   (!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
+          tipo_servico_terceiro:  !ehVendaEnvio && (form.servico_terceiro || soServicoDeTerceiro) && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
+          obs_servico_terceiro:   (!ehVendaEnvio && (form.servico_terceiro || soServicoDeTerceiro) && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
           resumo_servicos:        form.resumo_servicos || null,
           itens_vendidos:         itensPreenchidos(form.itens_vendidos || []),
           // as fotos valem para toda unidade do lote: é o mesmo lote de carros
@@ -634,6 +642,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         });
 
         let firstData: any;
+        const criadasComId: any[] = [];   // 25/11/2026: as OPs gravadas (id e número), para abrir os serviços de terceiro depois
         const criadas: string[] = [];   // 7.x: o lote é gravado uma OP por vez; se uma falha no meio, a pessoa precisa saber quais já existem
         const avisosConfig: string[] = [];
         if (desmembrar) {
@@ -671,6 +680,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               throw error;
             }
             criadas.push(`${baseOpl}/${suf}`);
+            criadasComId.push({ id: data.id, opl: data.opl, data_prevista_entrega: data.data_prevista_entrega });
             // a OP só existe agora, então é aqui que as respostas e o material
             // são gravados — no formulário ainda não havia id
             const falhaConfig = await gravarConfiguracaoDaOp({
@@ -681,7 +691,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             if (i === 0) firstData = data;
           }
           onSaved?.(firstData, 'op');
-          alert(`${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}${ehFluxoMisto ? `\n${resumoDosFluxos(grupos)}` : ''}`);
+          // 25/11/2026: OP só de serviço de terceiro: um serviço por tipo e por unidade, ligado a cada OP /NN
+          let avisoDosServicos = '';
+          if (soServicoDeTerceiro) {
+            const feito = await abrirServicosDaOp({ ops: criadasComId, modelo: { ...criadasComId[0], tipos_servico_terceiro: form.tipos_servico_terceiro, obs_servico_terceiro: form.obs_servico_terceiro, cliente_nome: form.cliente_nome.trim(), data_prevista_entrega: form.prazo_entrega } });
+            avisoDosServicos = feito.avisos.length
+              ? `\nOs serviços de terceiro NÃO foram todos abertos: ${feito.avisos.join(' ')} Abra cada OP e use "Pedir serviço de terceiro".`
+              : `\n${feito.abertos} serviço(s) de terceiro aberto(s) no quadro de Serviços de terceiros.`;
+          }
+          alert(`${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}${ehFluxoMisto ? `\n${resumoDosFluxos(grupos)}` : ''}${avisoDosServicos}`);
           // 7.x: as respostas sobre o carro e a lista de material são gravadas depois da OP; se falharem, a OP existe e a pessoa precisa saber
           if (avisosConfig.length) mostrarAviso(`As OPs foram criadas, mas nem tudo foi gravado:\n${avisosConfig.join('\n')}\nAbra a OP e confira as respostas sobre o carro e a lista de material.`, 'atencao');
           onClose();
@@ -694,6 +712,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           });
           // 7.x: a OP já existe; se as respostas sobre o carro ou a lista de material não foram gravadas, o aviso fica na tela (aviso solto, porque quem chamou pode fechar este modal em seguida)
           if (falhaConfig) mostrarAviso(`A OP ${data.opl} foi criada, mas nem tudo foi gravado: ${falhaConfig}\nAbra a OP e confira as respostas sobre o carro e a lista de material.`, 'atencao');
+          if (soServicoDeTerceiro) {
+            const feito = await abrirServicosDaOp({ ops: [{ id: data.id, opl: data.opl }], modelo: { ...data, tipos_servico_terceiro: form.tipos_servico_terceiro, obs_servico_terceiro: form.obs_servico_terceiro, cliente_nome: form.cliente_nome.trim(), data_prevista_entrega: form.prazo_entrega } });
+            if (feito.avisos.length) mostrarAviso(`A OP ${data.opl} foi criada, mas o serviço de terceiro NÃO foi aberto: ${feito.avisos.join(' ')}\nAbra a OP e use "Pedir serviço de terceiro".`, 'atencao');
+            else mostrarAviso(`OP ${data.opl} criada: o serviço de terceiro já está no quadro de Serviços de terceiros.`, 'ok');
+          }
           onSaved?.(data, 'op');
           setSavedOp(data);
           return; // vai para o passo 2 (documentos) em vez de fechar
@@ -1001,6 +1024,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 <select className="acn-input acn-nop-w" value={form.fluxo_entrega}
                   onChange={e => {
                     setF('fluxo_entrega', e.target.value);
+                    // 25/11/2026: "Somente serviço de terceiro" já nasce com a marca de serviço de terceiro ligada (os tipos são obrigatórios)
+                    if (soTerceiros(e.target.value)) setF('servico_terceiro', true);
                     // fluxo misto: os grupos do lote customizável passam a escolher o fluxo; parte dos grupos que já estavam preenchidos é aproveitada
                     if (e.target.value === FLUXO_MISTO) {
                       setLoteMisto(true);
@@ -1011,13 +1036,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   }}>
                   <option value="">— Selecione como esta venda será entregue —</option>
                   {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
+                  <option value={FLUXO_SO_TERCEIROS_DEF.valor}>{FLUXO_SO_TERCEIROS_DEF.label}</option>
                   <option value={FLUXO_MISTO}>{ROTULO_FLUXO_MISTO}</option>
                 </select>
                 <div className="acn-nop-fluxo-aj">
                   {ehFluxoMisto
                     ? 'Parte adaptada aqui e parte enviada, na mesma venda: cada grupo do lote (abaixo) escolhe o seu fluxo e, se for envio, o seu destino e frete. Cada unidade vira uma OP /01, /02…'
                     : form.fluxo_entrega
-                      ? FLUXOS.find(f => f.valor === form.fluxo_entrega)?.ajuda
+                      ? [...FLUXOS, FLUXO_SO_TERCEIROS_DEF].find(f => f.valor === form.fluxo_entrega)?.ajuda
                       : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
                 </div>
                 {ehFluxoMisto && !(Number(form.quantidade) > 1) && (
@@ -1309,12 +1335,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 45000"
                     value={form.valor_total} onChange={reais => setF('valor_total', reais)} />
                 </div>
+                {/* 25/11/2026: a OP só de serviço de terceiro não tem mão de obra nem previsão de chegada do veículo */}
+                {!soServicoDeTerceiro && (
                 <div>
                   <div className="acn-nop-rot">Valor M.O. (R$)</div>
                   <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 12000"
                     value={form.valor_mao_de_obra} onChange={reais => setF('valor_mao_de_obra', reais)} />
                 </div>
+                )}
               </div>
+              {!soServicoDeTerceiro && (<>
               <div className="acn-nop-bl">
                 <div className="acn-nop-rot">Valor M.O. Serralheria (R$)</div>
                 <CampoMoeda className="acn-input acn-nop-w" placeholder="Ex: 5000"
@@ -1326,22 +1356,24 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 <input type="date" className="acn-input acn-nop-w"
                   value={form.data_chegada_veiculo} onChange={e => setF('data_chegada_veiculo', e.target.value)} />
               </div>
+              </>)}
 
               {/* ── Serviço de Terceiro ──────────────────────────────────────── */}
               <div className={'acn-nop-st' + (form.servico_terceiro ? ' ativo' : '')}>
                 <label className="acn-nop-st-lbl">
-                  <input type="checkbox" checked={form.servico_terceiro}
+                  <input type="checkbox" checked={form.servico_terceiro || soServicoDeTerceiro}
+                    disabled={soServicoDeTerceiro}
                     onChange={e => setF('servico_terceiro', e.target.checked)}
                     className="acn-nop-st-chk" />
                   <span className={'acn-nop-st-tit' + (form.servico_terceiro ? ' ativo' : '')}>
-                    ⚠️ Necessita Serviço de Terceiro
+                    {soServicoDeTerceiro ? '🛠️ Serviço de Terceiro desta OP (é a OP inteira)' : '⚠️ Necessita Serviço de Terceiro'}
                   </span>
-                  {form.servico_terceiro && (
+                  {form.servico_terceiro && !soServicoDeTerceiro && (
                     <span className="acn-nop-st-chip">ATENÇÃO</span>
                   )}
                 </label>
 
-                {form.servico_terceiro && (
+                {(form.servico_terceiro || soServicoDeTerceiro) && (
                   <div className="acn-nop-st-corpo">
                     <div className="acn-nop-st-rot">
                       Tipos de Serviço de Terceiro * <span className="acn-nop-st-sub">(marque todos que se aplicam)</span>

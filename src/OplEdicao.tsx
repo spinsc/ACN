@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { logChange } from './AuditSystem';
-import { FLUXOS, soEnvio, terminaEmEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
+import { FLUXOS, soEnvio, terminaEmEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, STATUS_AGUARDANDO_TERCEIRO, FLUXO_SO_TERCEIROS_DEF, soTerceiros } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { ORIGENS } from './OrigemVenda';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -32,7 +32,7 @@ export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 // Fases da OP (mesma ordem do pipeline em AcnTabShared)
 export const STATUS_OPL = [
   'Em Espera Engenharia', 'Em Analise Engenharia', 'Devolvida para Engenharia', 'Devolvida Comercial',
-  'Em Espera PCP', 'Devolvida PCP', 'Aguardando Almox', 'Kit OK - Aguardando PCP',
+  'Em Espera PCP', 'Devolvida PCP', STATUS_AGUARDANDO_TERCEIRO, 'Aguardando Almox', 'Kit OK - Aguardando PCP',
   'Aguardando Inicio Producao', 'Aguardando Agendamento Manutenção', 'Manutenção Agendada', 'Em Producao',
   'Retrabalho', 'Aguardando CQ', 'Aguardando Embalagem', 'Aguardando Cotacao Frete',
   STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, 'Aguarda Emissao NF', 'Faturado',
@@ -56,7 +56,7 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Veículo / envio', campo: 'chassi', rotulo: 'Chassi', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'placa', rotulo: 'Placa', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'local_instalacao', rotulo: 'Local de instalação', tipo: 'texto' },
-  { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: 'Fluxo de entrega', tipo: 'select', opcoes: ['', ...FLUXOS.map(f => f.valor)] },
+  { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: 'Fluxo de entrega', tipo: 'select', opcoes: ['', ...FLUXOS.map(f => f.valor), FLUXO_SO_TERCEIROS_DEF.valor] },
   { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de destino', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF de destino', tipo: 'select', opcoes: ['', ...UFS] },
   { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de destino', tipo: 'cep' },   // R17 (13/10/2026): campo de CEP com conferência
@@ -158,6 +158,11 @@ async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, m
     }
     const campos = Object.keys(upd).filter(k => String(op[k] ?? '') !== String(upd[k] ?? ''));
     if (!campos.length) continue;
+    // 25/11/2026: "Somente serviço de terceiro" é uma rota inteira (a OP pula o PCP e espera o serviço do prestador): trocar de ou para ele sem mudar a fase deixaria a OP perdida; a fase se muda junto, na edição completa
+    if (campos.includes('fluxo_entrega') && (soTerceiros(op.fluxo_entrega) || soTerceiros(upd.fluxo_entrega)) && !campos.includes('status_geral')) {
+      falhas.push(`${op.opl}: trocar de ou para "Somente serviço de terceiro" muda a etapa da OP. Use a Edição completa e mude também a Fase (para esse fluxo: "${STATUS_AGUARDANDO_TERCEIRO}"; saindo dele: a fase em que a OP deve ficar, como "Em Espera PCP"). Os serviços de terceiro se pedem ou cancelam no módulo Serviços de terceiros.`);
+      continue;
+    }
     const alteracao = Object.fromEntries(campos.map(k => [k, upd[k]]));
     const { error } = await supabase.from('oples').update(alteracao).eq('id', op.id);
     if (error) { falhas.push(`${op.opl}: ${error.message}`); continue; }
@@ -192,7 +197,10 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
     if (!motivo.trim()) { alert('Informe o motivo da alteração.'); return; }
     const mudadosOp = Object.fromEntries(alterados.map(c => [c.campo, paraBanco(c, form[c.campo])]));
     const noLote = escopo === 'lote' && tamanhoDoLote > 1;
-    const camposLote = noLote ? camposDoLote(mudadosOp) : [];
+    // 25/11/2026: trocar de ou para "Somente serviço de terceiro" muda a etapa e pede os serviços de CADA unidade: nunca vai para o lote de uma vez, só para a unidade aberta
+    const trocaDeTerceiros = 'fluxo_entrega' in mudadosOp && (soTerceiros(opl.fluxo_entrega) || soTerceiros(mudadosOp.fluxo_entrega));
+    const mudadosLote = trocaDeTerceiros ? Object.fromEntries(Object.entries(mudadosOp).filter(([k]) => k !== 'fluxo_entrega')) : mudadosOp;
+    const camposLote = noLote ? camposDoLote(mudadosLote) : [];
     if (noLote && camposLote.length) {
       const rotulo = (k: string) => CAMPOS_OPL.find(x => x.campo === k)?.rotulo || k;
       if (!await confirmar(`Aplicar também nas outras ${tamanhoDoLote - 1} unidades do lote?\n\n${camposLote.map(k => `• ${rotulo(k)}`).join('\n')}\n\nChassi, placa, veículo, status e NF não mudam nas outras, e unidade já faturada ou cancelada não é mexida.`)) return;
@@ -202,11 +210,12 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
     if (!falhas.length && noLote) {
       if (!camposLote.length) alert('Salvo só nesta unidade: os campos alterados (chassi, placa, veículo, status ou NF) são de cada carro e não vão para o lote.');
       else {
-        const r = await aplicarNoLote({ op: opl, mudados: mudadosOp, usuario: currentUser, ehGerente: true, origem: `Edição completa (vale para o lote inteiro). Motivo: ${motivo.trim()}` });
+        const r = await aplicarNoLote({ op: opl, mudados: mudadosLote, usuario: currentUser, ehGerente: true, origem: `Edição completa (vale para o lote inteiro). Motivo: ${motivo.trim()}` });
         alert(textoDoResultadoLote(r, r.erroLeitura ? 0 : (r.atualizadas.length + r.iguais + r.puladas.length + r.falhas.length)));
       }
     }
     setSalvando(false);
+    if (!falhas.length && noLote && trocaDeTerceiros) alert('O fluxo "Somente serviço de terceiro" foi trocado só nesta unidade: ele muda a etapa da OP e pede os serviços de cada uma. Troque as outras unidades do lote uma a uma.');
     if (falhas.length) { alert('Não foi possível salvar:\n' + falhas.join('\n')); return; }
     const { data: dadosSalvos } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
     const data = dadosSalvos ? (await anexarValoresDaOp(dadosSalvos)).op : dadosSalvos;   // V2c: o valor vem de `oples_valores`
@@ -373,8 +382,8 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
 
   // ── Veículo / envio ──
   { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: '🚦 Fluxo de entrega', tipo: 'select',
-    opcoes: [{ valor: '', label: '— Fluxo de entrega —' }, ...FLUXOS.map(f => ({ valor: f.valor, label: f.label }))],
-    dica: 'define em qual fila a OP aparece na Produção' },
+    opcoes: [{ valor: '', label: '— Fluxo de entrega —' }, ...[...FLUXOS, FLUXO_SO_TERCEIROS_DEF].map(f => ({ valor: f.valor, label: f.label }))],
+    dica: 'define em qual fila a OP aparece na Produção. "Somente serviço de terceiro" não se escolhe nem se tira por aqui: muda a etapa da OP e pede os serviços (só o Admin, pela edição completa)' },
   // mesmo seletor da criação da OP: escolhe do catálogo (ou cadastra, com a faixa de anos) e preenche o
   // "Modelo" abaixo. Só para OP com veículo — venda de envio não tem (29/09/2026)
   { grupo: 'Veículo / envio', campo: 'veiculo_id', rotulo: 'Veículo (catálogo)', tipo: 'veiculo', soVeiculo: true,
