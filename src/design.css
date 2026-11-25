@@ -7505,3 +7505,35 @@ html body .acn-mkt-linha1 .acn-selo { white-space: normal; max-width: 100%; over
 .acn-hp-tab { width: 100%; border-collapse: collapse; font-size: 12px; }
 .acn-hp-tab th, .acn-hp-tab td { padding: 6px 8px; border-bottom: 1px solid var(--acn-line, #e2e8f0); text-align: left; vertical-align: top; }
 .acn-hp-antes { text-decoration: line-through; color: var(--acn-ink-3, #94a3b8); }
+
+/* 12e77 (25/11/2026): o dossiê do lote (OpDossieLote) — os 42 estilos pintados à mão viraram classes. Os tamanhos de letra são os que se VIAM (a regra global de letra pequena do sistema já reescrevia 9, 10 e 11 px para 12 e 13). Nada aqui muda regra: só aparência. */
+.acn-dlote { font-size: 12px; grid-column: 1 / -1; width: 100%; }
+.acn-dlote-estado { padding: 20px; font-size: 13px; color: var(--acn-muted); }
+.acn-dlote-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.acn-dlote-titulo { font-size: 17px; font-weight: 800; }
+.acn-dlote-sub { font-size: 13px; color: var(--acn-muted); }
+.acn-dlote-acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acn-dlote-historico { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.acn-dlote-faixa { margin-bottom: 10px; }
+.acn-dlote-sec { --acn-dl: var(--acn-ink); margin-bottom: 14px; }
+.acn-dlote-sec[data-tom=atencao] { --acn-dl: var(--acn-warn); }
+.acn-dlote-sec[data-tom=info] { --acn-dl: var(--acn-info); }
+.acn-dlote-sec[data-tom=marca] { --acn-dl: var(--acn-brand); }
+.acn-dlote-sec-titulo { font-size: 13px; font-weight: 800; color: var(--acn-dl); text-transform: uppercase; letter-spacing: .3px; border-bottom: 2px solid color-mix(in srgb, var(--acn-dl) 13%, transparent); padding-bottom: 3px; margin-bottom: 7px; }
+.acn-dlote-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.acn-dlote-rot { font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; }
+.acn-dlote-rot[data-atencao] { color: var(--acn-bad); }
+.acn-dlote-val { font-size: 13px; }
+.acn-dlote-situacoes { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-dlote-obs { margin-bottom: 6px; }
+.acn-dlote-obs-texto { font-size: 13px; white-space: pre-wrap; }
+.acn-dlote-grupo { margin-bottom: 6px; }
+.acn-dlote-difere { font-size: 12px; font-weight: 700; color: var(--acn-warn); }
+.acn-dlote-vazio { font-size: 12px; color: var(--acn-muted); }
+.acn-dlote-mudo { color: var(--acn-muted); }
+.acn-dlote-tab { width: 100%; border-collapse: collapse; }
+.acn-dlote-tab.larga { min-width: 560px; }
+.acn-dlote-tab.media { min-width: 480px; }
+.acn-dlote-det { margin-bottom: 4px; }
+.acn-dlote-det > summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.acn-dlote-det .acn-dlote-tab { margin-top: 4px; }

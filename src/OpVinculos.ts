@@ -67,12 +67,16 @@ const estaAberto = (s: any) => {
  *  quase todo uso é com `(d: any) =>`). */
 type LinhaDe<D> = D extends (infer L)[] ? L : D;
 
-/** Roda as consultas em paralelo e nunca deixa uma falha derrubar o dossiê. */
-async function tentar<D>(p: PromiseLike<{ data: D | null; error: any }>): Promise<LinhaDe<D>[]> {
+/** Roda as consultas em paralelo e nunca deixa uma falha derrubar o dossiê.
+ *  12e77 (25/11/2026): a falha ainda não derruba, mas deixou de passar calada: quem passa a lista `falhas` recebe o NOME do que não foi lido
+ *  (`rotulo`), para a tela dizer "não foi possível ler as compras" em vez de mostrar "nenhuma compra". Sem a lista, o jeito de antes (devolve vazio). */
+async function tentar<D>(p: PromiseLike<{ data: D | null; error: any }>, falhas?: string[], rotulo = 'dados da OP'): Promise<LinhaDe<D>[]> {
   try {
-    const { data } = await p;
+    const { data, error } = await p;
+    if (error) { falhas?.push(rotulo); return []; }
     return (Array.isArray(data) ? data : data ? [data] : []) as LinhaDe<D>[];
   } catch {
+    falhas?.push(rotulo);
     return [];
   }
 }
@@ -81,16 +85,16 @@ async function tentar<D>(p: PromiseLike<{ data: D | null; error: any }>): Promis
 // De onde a OP veio: card do CRM, empenho de licitação, ou nenhum dos dois
 // (OP digitada à mão). Junto vem a formação de preços do processo, que é onde
 // o preço foi realmente fechado.
-export async function origemDaOp(op: any) {
+export async function origemDaOp(op: any, falhas?: string[]) {
   const [crm, pedidos] = await Promise.all([
     op?.crm_oportunidade_id
       ? tentar(supabase.from('crm_oportunidades_basico')
           .select('id,titulo,numero_pv,responsavel_nome,orgao,valor_registrado,estagio_id,licitacao_processo_id')
-          .eq('id', op.crm_oportunidade_id).maybeSingle())
+          .eq('id', op.crm_oportunidade_id).maybeSingle(), falhas, 'card do CRM')
       : Promise.resolve([]),
     tentar(supabase.from('licitacao_pedidos')
       .select('id,licitacao_id,item_id,quantidade,data_pedido,prazo_entrega,documento,opl,opl_id')
-      .or(`opl_id.eq.${op.id},opl.eq.${txt(op.opl)}`)),
+      .or(`opl_id.eq.${op.id},opl.eq.${txt(op.opl)}`), falhas, 'pedido da licitação'),
   ]);
   const oportunidade = crm[0] || null;
   const pedido = pedidos[0] || null;
@@ -101,19 +105,19 @@ export async function origemDaOp(op: any) {
       // 04/11/2026: a visão básica (a tabela cheia fica vazia sem a aba Licitações/CRM, onda 3c) tem
       // `numero` e `objeto_principal`; `numero_processo` e `objeto` não existem e a consulta falhava calada
       ? tentar(supabase.from('licitacoes_basico').select('id,numero,nome_projeto,orgao,objeto_principal,status,operador,analista_nome')
-          .eq('id', licitacaoId).maybeSingle())
+          .eq('id', licitacaoId).maybeSingle(), falhas, 'licitação')
       : Promise.resolve([]),
     // a formação de preços se liga ao PROCESSO (card do CRM ou licitação), não à OP
     (oportunidade?.id || licitacaoId)
       ? tentar(supabase.from('cotacoes_precos_vinculos').select('cotacao_id,tipo,processo_id')
-          .in('processo_id', [oportunidade?.id, licitacaoId].filter(Boolean)))
+          .in('processo_id', [oportunidade?.id, licitacaoId].filter(Boolean)), falhas, 'formação de preços')
       : Promise.resolve([]),
   ]);
 
   const idsFormacao = vinculosFormacao.map((v: any) => v.cotacao_id).filter(Boolean);
   const formacoes = idsFormacao.length
     ? await tentar(supabase.from('cotacoes_precos')
-        .select('id,nome,versao,status,vencedora,criado_em,criado_por_nome').in('id', idsFormacao))
+        .select('id,nome,versao,status,vencedora,criado_em,criado_por_nome').in('id', idsFormacao), falhas, 'formação de preços')
     : [];
 
   return {
@@ -128,8 +132,13 @@ export async function origemDaOp(op: any) {
 
 // ── TUDO QUE ESTÁ PENDURADO NA OP ────────────────────────────────────────────
 // V3b (24/11/2026): o valor da compra mora em `pcp_pedidos_compra_valores`; leitura recusada deixa o pedido como veio
-const comValorDoPedido = async (lista: Promise<any[]>) => (await anexarValoresDosPedidos(await lista)).pedidos;
-export async function vinculosDaOp(op: any): Promise<ItemVinculo[]> {
+// 12e77: leitura do valor recusada = o pedido vem sem valor; com `falhas`, o nome "valor das compras" é registrado (o lote não pode mostrar total sem avisar)
+const comValorDoPedido = async (lista: Promise<any[]>, falhas?: string[]) => {
+  const r = await anexarValoresDosPedidos(await lista);
+  if (r.erro) falhas?.push('valor das compras');
+  return r.pedidos;
+};
+export async function vinculosDaOp(op: any, falhas?: string[]): Promise<ItemVinculo[]> {
   const id = op?.id;
   const num = txt(op?.opl);
   if (!id) return [];
@@ -138,30 +147,30 @@ export async function vinculosDaOp(op: any): Promise<ItemVinculo[]> {
     setoriais, setoriaisTexto, avulsasDiretas, avulsasLista,
     compras, comprasTexto, fretes, cqs, devs, tarefas, ajustes, anexos, agendas,
   ] = await Promise.all([
-    tentar(supabase.from('demandas_setoriais').select('*').eq('opl_id', id)),
-    num ? tentar(supabase.from('demandas_setoriais').select('*').is('opl_id', null).eq('numero_opl', num)) : Promise.resolve([]),
-    tentar(supabase.from('demandas_avulsas').select('*').eq('vinculo_id', id)),
+    tentar(supabase.from('demandas_setoriais').select('*').eq('opl_id', id), falhas, 'demandas dos setores'),
+    num ? tentar(supabase.from('demandas_setoriais').select('*').is('opl_id', null).eq('numero_opl', num), falhas, 'demandas dos setores') : Promise.resolve([]),
+    tentar(supabase.from('demandas_avulsas').select('*').eq('vinculo_id', id), falhas, 'demandas gerais'),
     // jsonb "contém": .contains() com array de objetos vira literal de array do
     // PostgREST e o banco recusa (22P02) — o texto JSON é o que ele entende.
     tentar(supabase.from('demandas_avulsas').select('*')
-      .filter('vinculos', 'cs', JSON.stringify([{ id: String(id) }]))),
-    comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').eq('vinculo_id', id))),
-    num ? comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').is('vinculo_id', null).eq('opl', num))) : Promise.resolve([]),
-    tentar(supabase.from('pcp_fretes').select('*').eq('vinculo_id', id)),
-    tentar(supabase.from('cq_auditorias').select('*').eq('opl_id', id)),
+      .filter('vinculos', 'cs', JSON.stringify([{ id: String(id) }])), falhas, 'demandas gerais'),
+    comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').eq('vinculo_id', id), falhas, 'compras'), falhas),
+    num ? comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').is('vinculo_id', null).eq('opl', num), falhas, 'compras'), falhas) : Promise.resolve([]),
+    tentar(supabase.from('pcp_fretes').select('*').eq('vinculo_id', id), falhas, 'fretes'),
+    tentar(supabase.from('cq_auditorias').select('*').eq('opl_id', id), falhas, 'controle de qualidade'),
     // 18c (13/10/2026): o pedido do PCP vale para as várias OPs de um lote, então também se acha pela lista `opl_ids`
-    tentar(supabase.from('engenharia_desenvolvimento').select('*').or(`opl_id.eq.${id},opl_ids.cs.{${id}}`)),
-    tentar(supabase.from('engenharia_horas_tarefas').select('*').eq('opl_id', id)),
-    num ? tentar(supabase.from('ajustes_trabalhos').select('*').eq('opl', num)) : Promise.resolve([]),
-    tentar(supabase.from('opl_anexos').select('*').eq('opl_id', id)),
-    tentar(supabase.from('agendamentos_manutencao').select('*').eq('opl_id', id)),
+    tentar(supabase.from('engenharia_desenvolvimento').select('*').or(`opl_id.eq.${id},opl_ids.cs.{${id}}`), falhas, 'pedidos de desenvolvimento'),
+    tentar(supabase.from('engenharia_horas_tarefas').select('*').eq('opl_id', id), falhas, 'tarefas da Engenharia'),
+    num ? tentar(supabase.from('ajustes_trabalhos').select('*').eq('opl', num), falhas, 'ajustes') : Promise.resolve([]),
+    tentar(supabase.from('opl_anexos').select('*').eq('opl_id', id), falhas, 'anexos'),
+    tentar(supabase.from('agendamentos_manutencao').select('*').eq('opl_id', id), falhas, 'agendamentos'),
   ]);
 
   // tarefas de horas da Engenharia não têm campo de OP preenchido na prática —
   // o número costuma estar no título. Entra como achado por texto, nunca
   // misturado com o que tem vínculo de verdade.
   const tarefasPorMencao = num
-    ? await tentar(supabase.from('engenharia_horas_tarefas').select('*').is('opl_id', null).ilike('titulo', `%${num}%`))
+    ? await tentar(supabase.from('engenharia_horas_tarefas').select('*').is('opl_id', null).ilike('titulo', `%${num}%`), falhas, 'tarefas da Engenharia')
     : [];
 
   const out: ItemVinculo[] = [];
@@ -262,16 +271,16 @@ export function pendenciasEmAberto(vinculos: ItemVinculo[]): ItemVinculo[] {
 }
 
 // ── LINHA DO TEMPO E TEMPOS POR SETOR ────────────────────────────────────────
-export async function linhaDoTempo(op: any) {
+export async function linhaDoTempo(op: any, falhas?: string[]) {
   return tentar(supabase.from('logs_movimentacao_opl').select('*')
-    .eq('opl_id', op.id).order('data_hora', { ascending: true }));
+    .eq('opl_id', op.id).order('data_hora', { ascending: true }), falhas, 'histórico');
 }
 
-export async function acompanhamentos(op: any) {
+export async function acompanhamentos(op: any, falhas?: string[]) {
   // 22/10/2026: as notas do PCP, Produção e Almoxarifado são do tipo "op" com o número da OP; as antigas do CRM, "opl" com o id. O dossiê lia só as do id.
   return tentar(supabase.from('op_acompanhamentos').select('*')
     .or(`and(referencia_tipo.eq.op,referencia_id.eq."${op.opl}"),and(referencia_tipo.eq.opl,referencia_id.eq."${op.id}")`)
-    .order('criado_em', { ascending: true }));
+    .order('criado_em', { ascending: true }), falhas, 'andamento da OP');
 }
 
 /** Horas por setor já medidas pelo próprio sistema (colunas tempo_*_horas). */
@@ -341,20 +350,25 @@ export async function carregarDossie(opOuId: any) {
     : opOuId;
   if (!opLida) return null;
   // o valor da OP mora em `oples_valores` (V2b do "ver valores no banco", 24/11/2026); leitura recusada deixa a OP como veio
-  const op = (await anexarValoresDaOp(opLida)).op;
+  // 12e77 (25/11/2026): e agora o dossiê diz o que NÃO conseguiu ler (`falhas`, nomes sem repetir): a tela e o PDF do lote avisam em vez de mostrar "nenhum" ou um total menor
+  const falhas: string[] = [];
+  const comValor = await anexarValoresDaOp(opLida);
+  const op = comValor.op;
+  if (comValor.erro) falhas.push('valor da OP');
 
   const [origem, vinculos, logs, acomps, irmas] = await Promise.all([
-    origemDaOp(op),
-    vinculosDaOp(op),
-    linhaDoTempo(op),
-    acompanhamentos(op),
+    origemDaOp(op, falhas),
+    vinculosDaOp(op, falhas),
+    linhaDoTempo(op, falhas),
+    acompanhamentos(op, falhas),
     // demais unidades do mesmo lote (A1530.2608/01, /02, ...)
     tentar(supabase.from('oples').select('id,opl,status_geral,cliente_nome')
-      .ilike('opl', `${txt(op.opl).replace(/\/\d+$/, '')}/%`).order('opl')),
+      .ilike('opl', `${txt(op.opl).replace(/\/\d+$/, '')}/%`).order('opl'), falhas, 'demais unidades do lote'),
   ]);
 
   return {
     op, origem, vinculos, logs, acompanhamentos: acomps,
+    falhas: [...new Set(falhas)],
     irmas: irmas.filter((x: any) => !igual(x.opl, op.opl)),
     pendencias: pendenciasEmAberto(vinculos),
     tempos: temposDaOp(op),
