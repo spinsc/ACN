@@ -25,3 +25,7 @@ dist-ssr
 
 # Auditoria de layout: saídas (fotos, achados e leituras guardadas do banco) não vão para o repositório
 ferramentas/auditoria_layout/auditoria/
+
+# Migração para o servidor interno (25/11/2026): relatórios internos da avaliação.
+# Ficam só na máquina enquanto o repositório for público; tirar esta linha quando ele for privado.
+MIGRACAO_SERVIDOR/
