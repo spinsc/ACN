@@ -289,3 +289,5 @@ FLUXO: Nova OP > Aguardando serviço de terceiro > Todos os serviços realizados
 > **Atenção:** o fluxo **Somente serviço de terceiro** **não se troca depois** pela troca de fluxo da unidade nem pela edição do Comercial: ele muda a etapa da OP. Só o Admin troca, pela edição completa da OP, mudando a fase junto.
 
 > **Dica:** o dia de plotagem, película e pintura continua sendo marcado **pela Adaptação** (regra do tipo), mesmo a OP não passando pela fila dela.
+
+> **Já foram para esse fluxo (25/11/2026):** as 22 OPs das vendas **A1760.2611** (12 carros), **A1797.2611** (8) e **A1806.2611** (2). Elas ganharam 24 serviços em **A definir** (TS-00204 a TS-00227: plotagem em todas e, nas 2 da A1806, um serviço **Outro** com o texto "LAVAÇÃO"), em nome de quem abriu a OP. Falta escolher prestador e dia: na Lista, use o filtro **Sem prestador**.
