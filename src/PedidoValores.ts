@@ -30,6 +30,8 @@ export async function lerValoresDosPedidos(ids: string[], todos = false) {
 export function pedidoComValores(p: any, linha: any) {
   if (!p) return p;
   const novo = { ...p };
+  // Só enquanto as colunas antigas ainda existem (antes da V3d): diz se a lista de itens TINHA preço, para o editor de itens não gravar a lista sem eles (V3c, 24/11/2026)
+  if (Array.isArray(p.itens)) novo._itens_com_preco = p.itens.some((it: any) => it && typeof it === 'object' && it.valor_unitario != null) || (Array.isArray(linha?.itens_valores) && linha.itens_valores.some((x: any) => x != null));
   if ('valor_compra' in p) novo.valor_compra = linha?.valor_compra ?? null;
   if (Array.isArray(p.vencedoras)) {
     const porCotacao = linha?.vencedoras_valores && typeof linha.vencedoras_valores === 'object' ? linha.vencedoras_valores : {};
@@ -59,6 +61,14 @@ export async function anexarValoresDosPedidos(pedidos: any[], todos = false) {
   if (erro) return { pedidos: lista, erro };
   return { pedidos: lista.map(p => (p?.id ? pedidoComValores(p, mapa.get(String(p.id))) : p)), erro: '' };
 }
+
+/** Quantas vencedoras do pedido estão sem valor (quem não vê valores recebe todas assim). Quem SOMA as vencedoras para gravar o total tem de parar se der mais que zero: o total sairia menor. */
+export function vencedorasSemValor(p: any) {
+  const l = Array.isArray(p?.vencedoras) ? p.vencedoras : [];
+  return l.filter((v: any) => v && (v.valor == null || v.valor === '')).length;
+}
+
+export const AVISO_SEM_VALORES = 'Esta ação soma os valores das cotações escolhidas, e a sua conta não os vê (ou a leitura falhou). Peça a quem tem a permissão "Ver valores".';
 
 /** O mesmo para UM pedido (ou nenhum). */
 export async function anexarValoresDoPedido(pedido: any) {
