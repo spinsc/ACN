@@ -1,0 +1,5 @@
+/* Aviso de endereço (plano de endereços e rotas, Fase 1, 25/11/2026): "conferindo o acesso" e "sem acesso" no lugar da tela.
+   Uma faixa do design system (Interface.tsx › Faixa) no alto da área da tela; no celular o botão desce para baixo do texto. */
+.acn-endereco-aviso { max-width: 760px; margin: 24px auto 0; min-width: 0; }
+.acn-endereco-aviso .acn-faixa { flex-wrap: wrap; }
+.acn-endereco-aviso .acn-faixa-texto { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }

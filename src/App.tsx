@@ -3,6 +3,7 @@ import LoginTab from './LoginTab';
 import DashboardTab from './DashboardTab';
 import { limparSessao, temSessao, EXIGIR_CRACHA } from './SessaoBanco';
 import { estaVendoComo, iniciarVerComo, encerrarVerComo } from './VerComo';
+import { zerarEndereco } from './EnderecoDoNavegador';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -47,6 +48,9 @@ export default function App() {
     // encerra tudo — não deixa a sessão original pendurada pra ser
     // restaurada depois por engano.
     localStorage.removeItem('admin_sessao_original');
+    // 25/11/2026 (plano de endereços e rotas): sair zera o endereço da barra; a próxima pessoa que entrar neste computador não pode parar na tela da anterior
+    // (a sessão vencida, que cai na tela de entrada sem passar por aqui, MANTÉM o endereço: link → entrar → destino)
+    zerarEndereco();
     setUser(null);
   };
 

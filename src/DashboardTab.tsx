@@ -59,6 +59,8 @@ import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { telaInicialDoUsuario } from './utils/telaInicial';
 import { gruposParaRecolher } from './utils/menuLateral';
+import { useNavegacao } from './useNavegacao';
+import AvisoDeEndereco from './AvisoDeEndereco';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
@@ -185,6 +187,11 @@ const SIDEBAR_GROUPS = [
     ],
   },
 ];
+
+// Endereços (plano de endereços e rotas, Fase 1, 25/11/2026): as telas que existem no menu e o nome de cada uma para as mensagens; o nome de cada uma no endereço é do Rotas.ts
+const IDS_DAS_TELAS = SIDEBAR_GROUPS.flatMap(g => g.items.map(i => i.id));
+const ROTULO_DAS_TELAS: Record<string, string> = {};
+SIDEBAR_GROUPS.forEach(g => g.items.forEach(i => { ROTULO_DAS_TELAS[i.id] = i.label; }));
 
 const CSS = `
 /* ── RESET ── */
@@ -752,6 +759,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       .eq('id', currentUserProp.id)
       .single()
       .then(({ data }) => {
+        setAcessoConferido(true);   // 25/11/2026 (plano de endereços): a releitura terminou (mesmo sem dado): o link de uma tela que as permissões guardadas não liberam só vira "sem acesso" agora
         if (!data) return;
         // parte do que está guardado agora (e não só do que a tela recebeu ao abrir): senão a releitura desfaria o que a sessão já mudou, como o fim do primeiro acesso depois de trocar a senha
         let guardado: any = {};
@@ -765,7 +773,24 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   };
   useEffect(() => { ultimaLeituraDaSessao.current = Date.now(); lerSessaoDoBanco(); }, [currentUserProp?.id]);
 
-  const [activeTab, setActiveTab]       = useState('inicio');   // 09/11/2026: o sistema abre na tela Início (antes abria no Dashboard geral, que segue no menu)
+  // 25/11/2026 (plano de endereços e rotas, Fase 1): a tela aberta passa a vir do hook `useNavegacao`, que também escreve o endereço na barra do navegador (F5, Voltar, Avançar e
+  // link colado) e confere a permissão de todo atalho. `activeTab` é a tela aberta ('' enquanto o acesso é conferido, ou se o link é de uma tela sem acesso: `bloqueio`).
+  // Era `useState('inicio')` (09/11/2026: o sistema abre na tela Início; o Dashboard geral segue no menu).
+  const [acessoConferido, setAcessoConferido] = useState(false);   // as permissões já foram relidas do banco? (lerSessaoDoBanco, acima)
+  const { tela: activeTab, bloqueio, irParaTela } = useNavegacao({
+    ids: IDS_DAS_TELAS,
+    podeVer: isVisible,
+    telaInicial: () => telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible),
+    acessoConferido,
+    avisar: (texto: string) => alert(texto),
+    chavePermissoes: [currentUser?.id, currentUser?.perfil, JSON.stringify(currentUser?.abas_permitidas || null), JSON.stringify(currentUser?.permissoes_rh || null)].join('|'),
+  });
+  // Título da aba do navegador por tela (25/11/2026): antes era sempre "ACN - Sinal Verde Flow", e a lista do botão Voltar (um passo por tela) ficaria toda igual.
+  // O primeiro efeito guarda o título original ANTES de o segundo mexer (a ordem dos efeitos importa) e o devolve quando o sistema fecha (sair).
+  useEffect(() => { const original = document.title; return () => { document.title = original; }; }, []);
+  useEffect(() => {
+    document.title = (bloqueio ? (bloqueio.tipo === 'conferindo' ? 'Conferindo o acesso' : 'Sem acesso') : (ROTULO_DAS_TELAS[activeTab] || 'Início')) + ' · ACN';
+  }, [activeTab, bloqueio?.tipo]);
   const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);
   const [pendingOpenCrmId, setPendingOpenCrmId]     = useState<string|null>(null);
 
@@ -942,7 +967,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   // Navegação cross-tab vinda do CRM
   useEffect(() => {
-    const handler = () => setActiveTab('sac');
+    const handler = () => { irParaTela('sac'); };   // 25/11/2026: confere a permissão (irParaTela)
     window.addEventListener('crm:navegar-sac', handler);
     return () => window.removeEventListener('crm:navegar-sac', handler);
   }, []);
@@ -953,14 +978,13 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const handler = (e: any) => {
       const aba = e?.detail?.aba;
       if (!aba) return;
-      if (!isVisible(aba)) { alert('Você não tem acesso a essa aba. Peça a liberação a um Admin.'); return; }
-      setActiveTab(aba);
+      if (!irParaTela(aba)) return;   // 25/11/2026: irParaTela confere a permissão e avisa quando a pessoa não tem a aba
       const depois = e?.detail?.depois;
       if (depois?.nome) setTimeout(() => window.dispatchEvent(new CustomEvent(depois.nome, { detail: depois.detalhe })), 400);
     };
     window.addEventListener('acn:ir-para-aba', handler);
     return () => window.removeEventListener('acn:ir-para-aba', handler);
-  }, [currentUser?.id, currentUser?.perfil, JSON.stringify(currentUser?.abas_permitidas || null)]);
+  }, []);
 
   // Navegação cross-tab: Telecom → Licitações ou CRM (abre card específico)
   useEffect(() => {
@@ -969,12 +993,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       if (!origemId) return;
       if (origem === 'crm') {
         // Processos novos ficam em crm_oportunidades (funil = 'licitacao' ou 'venda_direta')
+        if (!irParaTela('crm')) return;   // 25/11/2026: confere a permissão (antes abria a tela sem conferir); sem ela, o card não fica pendente
         setPendingOpenCrmId(origemId);
-        setActiveTab('crm');
       } else if (origem === 'licitacao') {
         // Compatibilidade com processos antigos na tabela licitacoes
+        if (!irParaTela('licitacoes')) return;
         setPendingOpenLicitId(origemId);
-        setActiveTab('licitacoes');
       }
     };
     window.addEventListener('analise:abrir-origem', handler);
@@ -988,7 +1012,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   useEffect(() => {
     const handler = (e: any) => {
       const { aba } = e.detail || {};
-      if (aba) setActiveTab(aba);
+      if (aba) irParaTela(aba);   // 25/11/2026: confere a permissão (antes trocava sem conferir)
     };
     window.addEventListener('acn:trocar-aba', handler);
     return () => window.removeEventListener('acn:trocar-aba', handler);
@@ -1158,7 +1182,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return { label: 'CRITICO', cls: 'st-crit' };
   };
 
-  const isVisible = (id: string) => {
+  // função e não const: o hook useNavegacao, bem acima, já a usa na primeira leitura da tela (25/11/2026)
+  function isVisible(id: string) {
     if (id === 'comissoes_tecnicos') {
       // Acesso restrito: só aparece pra quem NÃO tem a aba "RH" inteira (que
       // já mostra Comissões dentro, inclusive Admin) mas tem essa permissão
@@ -1191,14 +1216,14 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
-  };
+  }
 
   const renderContent = () => {
     switch (activeTab) {
       case 'inicio': {
         // os números do cartão "Para você hoje" são os mesmos dos botões do cabeçalho (menções, avisos, análises); "avisos" repete a conta do botão Avisos
         const qtdAvisos = (currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0)) + avisosCalCount;
-        return <InicioTab currentUser={currentUser} podeAbrir={isVisible} irPara={(id: string) => setActiveTab(id)}
+        return <InicioTab currentUser={currentUser} podeAbrir={isVisible} irPara={(id: string) => { irParaTela(id); }}
           contagens={{ mencoes: mencoesCount, analises: analiseAlertCount, avisos: qtdAvisos, comprasEsperando: aprovaCompra ? comprasEsperando : null }}
           abrir={{ mencoes: () => setShowMencoesPanel(true), analises: () => setShowAnalisePanel(true), avisos: () => (usaAlertasCompras ? setShowAlertasCompras(true) : setShowAvisosOp(true)) }}
           abasParaLink={SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => i.id !== 'inicio' && isVisible(i.id))} />;
@@ -1233,7 +1258,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'nfc':          return <VeiculosNfcTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
       case 'crm':          return <CrmTab currentUser={currentUser} autoOpenOpId={pendingOpenCrmId} onAutoOpenConsumed={() => setPendingOpenCrmId(null)} />;
-      case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { setPendingOpenCrmId(id); setActiveTab('crm'); }} />;
+      case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { if (irParaTela('crm')) setPendingOpenCrmId(id); }} />;
       case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} autoOpenLicitId={pendingOpenLicitId} onAutoOpenConsumed={() => setPendingOpenLicitId(null)} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'comissoes_tecnicos': return <ComissoesTecnicosStandalone currentUser={currentUser} />;
@@ -1370,24 +1395,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     setGlobalBusca('');
     setGlobalResultados([]);
     if (r._tipo === 'crm') {
-      setPendingOpenCrmId(r.id);
-      setActiveTab('crm');
+      if (irParaTela('crm')) setPendingOpenCrmId(r.id);
     } else if (r._tipo === 'opl') {
       const { data } = await supabase.from('oples').select('*').eq('id', r.id).single();
       if (data) setGlobalOplAberto(data);
     } else if (r._tipo === 'os') {
-      setActiveTab('sac');
-      setTimeout(() => window.dispatchEvent(new CustomEvent('os:abrir-global', { detail: { id: r.id } })), 400);
+      if (irParaTela('sac')) setTimeout(() => window.dispatchEvent(new CustomEvent('os:abrir-global', { detail: { id: r.id } })), 400);
     } else if (r._tipo === 'licitacao') {
-      setPendingOpenLicitId(r.id);
-      setActiveTab('licitacoes');
+      if (irParaTela('licitacoes')) setPendingOpenLicitId(r.id);
     } else if (r._tipo === 'item') {
-      setActiveTab('cadastro_itens');
+      irParaTela('cadastro_itens');
     } else if (r._tipo === 'produto') {
-      setActiveTab('cadastro_produtos');
+      irParaTela('cadastro_produtos');
     } else if (r._tipo === 'engenharia') {
-      setActiveTab('engenharia');
-      setTimeout(() => window.dispatchEvent(new CustomEvent('engenharia:abrir-desenvolvimento', { detail: { termo: termoBusca } })), 400);
+      if (irParaTela('engenharia')) setTimeout(() => window.dispatchEvent(new CustomEvent('engenharia:abrir-desenvolvimento', { detail: { termo: termoBusca } })), 400);
     }
   };
 
@@ -1446,7 +1467,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                       key={item.id}
                       className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
                       aria-current={activeTab === item.id ? 'page' : undefined}
-                      onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}>
+                      onClick={() => { irParaTela(item.id); setSidebarOpen(false); }}>
                       <Icone path={ICONE_ABA[item.id] || mdiViewDashboardOutline} size={18} className="sidebar-icone" />
                       <span className="sidebar-rotulo">{item.label}</span>
                       {(() => {
@@ -1489,7 +1510,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           </button>
           {/* Pedido do usuário em 02/10/2026: clicar no logo leva à tela inicial (Dashboard; sem acesso a ele, a primeira tela liberada no menu da pessoa). Desde 09/11/2026 a tela inicial é o Início (utils/telaInicial.ts) */}
           <button type="button" className="acn-logo-botao" title="Ir para a tela inicial" aria-label="Ir para a tela inicial"
-            onClick={() => { setActiveTab(telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)); setSidebarOpen(false); }}>
+            onClick={() => { irParaTela(telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)); setSidebarOpen(false); }}>
             <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.svg'} alt="ACN Sinal Verde" />
           </button>
 
@@ -1505,7 +1526,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 </div>
               );
             }
-            return <div className="acn-aba-selo"><span className="acn-trilha-aba">Início</span></div>;
+            return <div className="acn-aba-selo"><span className="acn-trilha-aba">{bloqueio ? (bloqueio.tipo === 'conferindo' ? 'Conferindo…' : 'Sem acesso') : 'Início'}</span></div>;
           })()}
 
           {/* ── BUSCA GLOBAL ── */}
@@ -1654,7 +1675,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                   <span>{currentUser?.perfil || ''}</span>
                 </div>
                 {isVisible('admin') && (
-                  <button role="menuitem" onClick={() => { setMenuUsuario(false); setActiveTab('admin'); }}>
+                  <button role="menuitem" onClick={() => { setMenuUsuario(false); irParaTela('admin'); }}>
                     <Icone path={mdiShieldAccountOutline} size={18} />Administração
                   </button>
                 )}
@@ -1681,7 +1702,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         )}
 
           <main className={`acn-main${activeTab === 'painel_tv' ? ' acn-main-tv' : ''}`}>
-            {activeTab === 'dashboard' ? (
+            {bloqueio ? (
+              <AvisoDeEndereco bloqueio={bloqueio} rotulo={ROTULO_DAS_TELAS[bloqueio.tela]} aoIrParaInicio={() => irParaTela(telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible), { substituir: true })} />
+            ) : activeTab === 'dashboard' ? (
               <div>
                 <CabecalhoTela
                   titulo="Dashboard"
@@ -1865,7 +1888,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <AvisoSistemaWidget currentUser={currentUser} />
       <ContatoAlertWidget currentUser={currentUser} />
       <ContatoComercialAlertWidget currentUser={currentUser} />
-      <ChatWidget currentUser={currentUser} onNavigate={setActiveTab} />
+      <ChatWidget currentUser={currentUser} onNavigate={(tab) => { irParaTela(tab); }} />
       {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte) */}
       <ViagemPorMencao currentUser={currentUser} />
 
@@ -1884,7 +1907,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           currentUser={currentUser}
           onClose={() => setShowAnalisePanel(false)}
           onCountChange={n => setAnaliseAlertCount(n)}
-          onNavigate={(tab) => { setShowAnalisePanel(false); setActiveTab(tab); }}
+          onNavigate={(tab) => { setShowAnalisePanel(false); irParaTela(tab); }}
         />
       )}
 
@@ -1893,7 +1916,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         <AlertasComprasPanel currentUser={currentUser}
           onClose={() => { setShowAlertasCompras(false); recarregarAlertasCompras(); }}
           onCountChange={() => recarregarAlertasCompras()}
-          onAbrirCompras={isVisible('compras') ? () => { setShowAlertasCompras(false); setActiveTab('compras'); } : undefined}
+          onAbrirCompras={isVisible('compras') ? () => { setShowAlertasCompras(false); irParaTela('compras'); } : undefined}
           onAvisosOp={() => { setShowAlertasCompras(false); setShowAvisosOp(true); }}
           qtdAvisosOp={(currentUser?.perfil !== 'Compras' ? avisosOpCount : 0) + avisosCalCount} />
       )}
@@ -1907,7 +1930,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         <AvisosOpPanel currentUser={currentUser} onClose={() => setShowAvisosOp(false)}
           onCountChange={n => setAvisosOpCount(n)}
           onCountChangeCalendario={n => setAvisosCalCount(n)}
-          onNavigate={(tab) => { setShowAvisosOp(false); setActiveTab(tab); }} />
+          onNavigate={(tab) => { setShowAvisosOp(false); irParaTela(tab); }} />
       )}
 
       {/* Painel lateral de Menções */}
@@ -1916,7 +1939,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           currentUser={currentUser}
           onClose={() => setShowMencoesPanel(false)}
           onCountChange={n => setMencoesCount(n)}
-          onNavigate={(tab) => { setShowMencoesPanel(false); setActiveTab(tab); }}
+          onNavigate={(tab) => { setShowMencoesPanel(false); irParaTela(tab); }}
         />
       )}
     </>

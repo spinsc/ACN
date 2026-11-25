@@ -54,7 +54,9 @@ export default function LoginTab() {
       if (data.sessao && data.sessao.access_token) guardarSessao(data.sessao); else limparSessao();   // sem crachá novo, nunca fica o de outra pessoa
       localStorage.setItem('user', JSON.stringify(data.usuario));
 
-      window.location.href = window.location.origin + '/ACN/';
+      // 25/11/2026 (plano de endereços e rotas): recarrega a página NO MESMO endereço. Antes ia para a raiz (`/ACN/` escrito fixo) e apagava o `#` do link que a pessoa abriu
+      // antes de entrar (link → entrar → destino). Sem `#` o resultado é o de antes.
+      window.location.reload();
     } catch (err) {
       setError('Erro: ' + String(err.message).replace(/^\w*Error:\s*/, ''));   // o cliente do banco antepõe "TypeError: " ao erro de rede
     } finally {

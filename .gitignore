@@ -25,3 +25,6 @@ dist-ssr
 
 # Auditoria de layout: saídas (fotos, achados e leituras guardadas do banco) não vão para o repositório
 ferramentas/auditoria_layout/auditoria/
+
+# Testes de endereço: saídas (fotos e resultado) não vão para o repositório
+ferramentas/teste_enderecos/saida/
