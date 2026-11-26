@@ -16,6 +16,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDasOps } from './OpValores';
 import { anexarValoresDosPedidos } from './PedidoValores';
+import { anexarValoresDoFaturamento } from './FreteValores';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
@@ -140,12 +141,15 @@ async function carregarCandidatos() {
   // idem o pedido de compra (V3b, 24/11/2026): o valor e o de cada vencedora moram em `pcp_pedidos_compra_valores`, então o filtro "tem valor" também passou para cá
   const comprasComValor = await anexarValoresDosPedidos(compras.data || []);
   const comprasLidas = comprasComValor.pedidos.filter((p: any) => p.valor_compra != null);
-  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas], ['os valores das OPs', { error: opsComValor.erro ? { message: opsComValor.erro } : null }], ['os valores das compras', { error: comprasComValor.erro ? { message: comprasComValor.erro } : null }], ['as datas de cada fornecedor', { error: entregasDasCompras.erro ? { message: entregasDasCompras.erro } : null }]]
+  // idem o pagamento da compra (V4b, 26/11/2026): o valor mora em `pcp_pedidos_faturamento_valores`, então o filtro "tem valor" também passa para cá
+  const fatsComValor = await anexarValoresDoFaturamento(fats.data || [], true);
+  const fatsLidas = fatsComValor.faturamentos.filter((f: any) => f.valor != null);
+  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas], ['os valores das OPs', { error: opsComValor.erro ? { message: opsComValor.erro } : null }], ['os valores das compras', { error: comprasComValor.erro ? { message: comprasComValor.erro } : null }], ['os valores dos pagamentos', { error: fatsComValor.erro ? { message: fatsComValor.erro } : null }], ['as datas de cada fornecedor', { error: entregasDasCompras.erro ? { message: entregasDasCompras.erro } : null }]]
     .filter(([, r]: any) => r.error).map(([nome, r]: any) => `${nome} (${r.error.message})`);
   const lista = [
     ...opsFaturadas.map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: diaDoRegistro(o.data_emissao_nf || o.data_nf),
       descricao: `OP ${o.opl} — ${o.cliente_nome || ''}${o.numero_nf ? ` · NF ${o.numero_nf}` : ''}${o.numero_nf_servico ? ` · NFS-e ${o.numero_nf_servico}` : ''}` })),
-    ...(fats.data || []).map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: diaDoRegistro(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em),
+    ...fatsLidas.map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: diaDoRegistro(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em),
       descricao: `Faturamento ${f.numero_oc || f.numero_pedido || ''} — ${f.fornecedor || ''}${f.nf_fornecedor_numero ? ` · NF ${f.nf_fornecedor_numero}` : ''}` })),
     ...comprasLidas.map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: diaDoRegistro(p.data_prevista_recebimento || p.data_criacao),
       descricao: `Compra ${p.numero_oc || p.numero_pedido || ''} — ${p.fornecedor || ''} (${p.status_compra || ''})` })),

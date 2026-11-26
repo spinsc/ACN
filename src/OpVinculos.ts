@@ -22,6 +22,7 @@
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDaOp } from './OpValores';
+import { anexarValoresDosFretes } from './FreteValores';
 
 export type GrupoVinculo =
   | 'origem' | 'demanda' | 'compra' | 'frete' | 'engenharia'
@@ -138,6 +139,12 @@ const comValorDoPedido = async (lista: Promise<any[]>, falhas?: string[]) => {
   if (r.erro) falhas?.push('valor das compras');
   return r.pedidos;
 };
+// V4b (26/11/2026): o valor do frete mora em `pcp_fretes_valores`; leitura recusada deixa o frete como veio e registra o nome "valor dos fretes"
+const comValorDoFrete = async (lista: Promise<any[]>, falhas?: string[]) => {
+  const r = await anexarValoresDosFretes(await lista);
+  if (r.erro) falhas?.push('valor dos fretes');
+  return r.fretes;
+};
 export async function vinculosDaOp(op: any, falhas?: string[]): Promise<ItemVinculo[]> {
   const id = op?.id;
   const num = txt(op?.opl);
@@ -156,7 +163,7 @@ export async function vinculosDaOp(op: any, falhas?: string[]): Promise<ItemVinc
       .filter('vinculos', 'cs', JSON.stringify([{ id: String(id) }])), falhas, 'demandas gerais'),
     comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').eq('vinculo_id', id), falhas, 'compras'), falhas),
     num ? comValorDoPedido(tentar(supabase.from('pcp_pedidos_compra').select('*').is('vinculo_id', null).eq('opl', num), falhas, 'compras'), falhas) : Promise.resolve([]),
-    tentar(supabase.from('pcp_fretes').select('*').eq('vinculo_id', id), falhas, 'fretes'),
+    comValorDoFrete(tentar(supabase.from('pcp_fretes').select('*').eq('vinculo_id', id), falhas, 'fretes'), falhas),
     tentar(supabase.from('cq_auditorias').select('*').eq('opl_id', id), falhas, 'controle de qualidade'),
     // 18c (13/10/2026): o pedido do PCP vale para as várias OPs de um lote, então também se acha pela lista `opl_ids`
     tentar(supabase.from('engenharia_desenvolvimento').select('*').or(`opl_id.eq.${id},opl_ids.cs.{${id}}`), falhas, 'pedidos de desenvolvimento'),
