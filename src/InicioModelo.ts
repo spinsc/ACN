@@ -81,7 +81,7 @@ export function ordenarSlides(slides: any[]): any[] {
 }
 /**
  * O que o carrossel mostra hoje, na ordem escolhida. É igual para TODO usuário do sistema: regra do usuário em 09/11/2026 ("ver o carrossel: todos os usuários do sistema devem poder ver").
- * A primeira versão deixava quem posta limitar um slide a alguns perfis ("Quem vê"); isso saiu. A coluna `inicio_slides.perfis_alvo` ficou no banco, sem uso, e é ignorada aqui.
+ * A primeira versão deixava quem posta limitar um slide a alguns perfis ("Quem vê"); isso saiu. A coluna `inicio_slides.perfis_alvo` deixou de ser lida e gravada e foi apagada do banco em 26/11/2026 (nenhum slide tinha valor nela).
  */
 export function slidesDoCarrossel(slides: any[], hoje: string): any[] {
   return ordenarSlides(slides).filter(s => situacaoDoSlide(s, hoje) === 'no_ar');

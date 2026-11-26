@@ -20,8 +20,7 @@ import { confirmar, mostrarAviso } from './Feedback';
 import { Botao, Selo, Faixa, diaBR } from './Interface';
 import { combinaBusca } from './SearchUtils';
 import { ehAdminOuGerente } from './utils/permissoes';
-import { centrosParaApontar, centroDisponivel, motivoBloqueio, fetchCentrosCusto } from './CentroCustoShared';
-import { carregarMovimentosCentros, carregarOrcamentoDoAno, normalizarMovimentos, calcularCentro, somarPeriodo, faixaDoConsumo } from './CentroCustoPainel';
+import { centrosParaApontar, centroDisponivel, motivoBloqueio } from './CentroCustoShared';
 import { lerFechamentos, fechamentoVigente, conferirMesesAbertos, mesDaCompra } from './CentroCustoFechamento';
 import { mdiMagnify, mdiRefresh } from '@mdi/js';
 
@@ -60,16 +59,21 @@ export function useCentroObrigatorio(): boolean {
 }
 
 // ─── 2) O AVISO DE SALDO ──────────────────────────────────────────────────────
-// Lê centros, compras, despesas e orçamento uma vez por minuto (a janela de solicitação troca de centro várias vezes).
-let cacheContas: { quando: number; dados: any } | null = null;
-async function carregarContas() {
-  if (cacheContas && Date.now() - cacheContas.quando < 60000) return cacheContas.dados;
-  const ano = new Date().getFullYear();
-  const [centros, mov, orcLinhas] = await Promise.all([fetchCentrosCusto(true), carregarMovimentosCentros(), carregarOrcamentoDoAno(ano)]);
-  const dados = { centros, itens: normalizarMovimentos(mov), orcLinhas, ano };
-  cacheContas = { quando: Date.now(), dados };
-  return dados;
+// 26/11/2026 (Etapa 17, onda 4c, decisão do usuário): a conta saiu do navegador. Antes esta peça baixava todas as despesas, as compras e o
+// orçamento do ano de qualquer pessoa que fazia uma solicitação, e mostrava os valores em reais; agora o banco (função `centro_aviso_saldo`)
+// faz a conta e devolve SÓ a faixa e o percentual, sem reais, e quem não tem Financeiro, Relatórios, Compras ou Admin deixou de poder ler
+// as despesas e o orçamento dos centros. A conta do banco repete a de CentroCustoPainel (`calcularCentro` / `somarPeriodo` / `faixaDoConsumo`).
+// Uma consulta por centro e por minuto (a janela de solicitação troca de centro várias vezes).
+const cacheAvisos = new Map<string, { quando: number; dados: any }>();
+async function lerAvisoDoCentro(centroId: string) {
+  const guardado = cacheAvisos.get(centroId);
+  if (guardado && Date.now() - guardado.quando < 60000) return guardado.dados;
+  const { data, error } = await supabase.rpc('centro_aviso_saldo', { p_centro: centroId });
+  if (error) throw error;
+  cacheAvisos.set(centroId, { quando: Date.now(), dados: data });
+  return data;
 }
+const pctTexto = (p: any) => String(p).replace('.', ',');
 
 /** Faixa de aviso sob o seletor de centro. SÓ AVISA: a compra segue normalmente. Sem orçamento, abaixo de 80% ou com leitura falhando: não mostra nada. */
 export function AvisoSaldoCentro({ centroId }: { centroId: string | null }) {
@@ -78,23 +82,17 @@ export function AvisoSaldoCentro({ centroId }: { centroId: string | null }) {
     let vivo = true;
     setAviso(null);
     if (!centroId) return;
-    carregarContas().then(({ centros, itens, orcLinhas, ano }) => {
-      const centro = centros.find((c: any) => c.id === centroId);
-      if (!centro || !vivo) return;
-      const mes = new Date().getMonth() + 1;
-      const { meses } = calcularCentro({ centro, centros, itens, orcLinhas, ano });
-      const sMes = somarPeriodo(meses, mes), sAno = somarPeriodo(meses, 0);
-      setAviso({ centro, mes, sMes, sAno, fMes: faixaDoConsumo(sMes.usado, sMes.orcado), fAno: faixaDoConsumo(sAno.usado, sAno.orcado) });
-    }).catch(() => { /* aviso é cortesia: se a leitura falhar, a solicitação segue sem ele */ });
+    lerAvisoDoCentro(centroId).then(dados => { if (vivo && dados) setAviso(dados); })
+      .catch(() => { /* aviso é cortesia: se a leitura falhar, a solicitação segue sem ele */ });
     return () => { vivo = false; };
   }, [centroId]);
   if (!aviso) return null;
-  const { sMes, sAno, fMes, fAno, mes, centro } = aviso;
+  const { codigo, mes, faixa_mes: fMes, pct_mes: pMes, faixa_ano: fAno, pct_ano: pAno } = aviso;
   const linhas: any[] = [];
-  if (fMes === 'estouro') linhas.push({ tom: 'erro', t: `${centro.codigo} já passou do orçamento de ${MESES[mes - 1]}: ${reais(sMes.usado)} de ${reais(sMes.orcado)} (${sMes.pct}%).` });
-  else if (fMes === 'atencao') linhas.push({ tom: 'atencao', t: `${centro.codigo} já usou ${sMes.pct}% do orçamento de ${MESES[mes - 1]}: ${reais(sMes.usado)} de ${reais(sMes.orcado)}.` });
-  if (fAno === 'estouro') linhas.push({ tom: 'erro', t: `No ano, ${centro.codigo} já passou do orçamento: ${reais(sAno.usado)} de ${reais(sAno.orcado)} (${sAno.pct}%).` });
-  else if (fAno === 'atencao') linhas.push({ tom: 'atencao', t: `No ano, ${centro.codigo} já usou ${sAno.pct}% do orçamento: ${reais(sAno.usado)} de ${reais(sAno.orcado)}.` });
+  if (fMes === 'estouro') linhas.push({ tom: 'erro', t: `${codigo} já passou do orçamento de ${MESES[mes - 1]} (${pctTexto(pMes)}%).` });
+  else if (fMes === 'atencao') linhas.push({ tom: 'atencao', t: `${codigo} já usou ${pctTexto(pMes)}% do orçamento de ${MESES[mes - 1]}.` });
+  if (fAno === 'estouro') linhas.push({ tom: 'erro', t: `No ano, ${codigo} já passou do orçamento (${pctTexto(pAno)}%).` });
+  else if (fAno === 'atencao') linhas.push({ tom: 'atencao', t: `No ano, ${codigo} já usou ${pctTexto(pAno)}% do orçamento.` });
   if (!linhas.length) return null;
   return (
     <div className="acn-cc-aviso-saldo" role="status">
