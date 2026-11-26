@@ -16,7 +16,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-api-key, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-api-key, apikey, x-client-info, content-type',   // 26/11/2026: a tela passou a mandar o apikey junto com o crachá
 }
 
 const json = (data: unknown, status = 200) =>
