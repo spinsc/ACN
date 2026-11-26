@@ -5,8 +5,6 @@ import { confirmar, mostrarAviso } from './Feedback';
 import { lerRemessasAtivasDe } from './Remessas';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
-import { notificarEvento, msg } from './whatsappHelper';
-import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -197,8 +195,6 @@ export default function FiscalTab({ currentUser }) {
     }
     if (faturadas.length > 0) {
       await gravarNfNasRemessas(faturadas.map(o => o.id), nf);   // OP com remessas: o mesmo número em cada remessa
-      notificarEvento('fiscal_nf_emitida',
-        msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     }
     if (jaFaturadasPorOutro.length > 0) {
       alert(`Atenção: ${jaFaturadasPorOutro.join(', ')} já ${jaFaturadasPorOutro.length>1?'foram faturadas':'foi faturada'} por outra sessão enquanto você selecionava — não foram faturadas de novo. Confira a lista atualizada.`);
@@ -338,7 +334,6 @@ export default function FiscalTab({ currentUser }) {
       }
       if (erros.length) mostrarAviso(`A OP foi faturada, mas a NF-e não ficou gravada nas remessas (${erros.join('; ')}).`, 'atencao');
     }
-    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     setOplsNfPorRemessa(prev => { const n = new Set(prev); n.delete(opl.id); return n; });
     setNfsRemessa(prev => { const n = {...prev}; rems.forEach(r => delete n[r.id]); return n; });
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
@@ -378,7 +373,6 @@ export default function FiscalTab({ currentUser }) {
     if (!gravada?.length) { setFaturandoId(null); alert(`A OS ${os.numero_os || ''} já não está aguardando a nota (outra pessoa pode ter faturado). A lista foi atualizada.`); fetchAll(); return; }
     logChange({ module: 'fiscal', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: os, newRow: { ...os, ...novoRow }, user: currentUser });
-    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[os.id]; return n; });
     setNfsServico(prev => { const n={...prev}; delete n[os.id]; return n; });
     limparDataNota(os.id);
@@ -413,9 +407,6 @@ export default function FiscalTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }, `A OP ${opl.opl} foi devolvida ao Comercial`);
-    // R3 (13/10/2026): o evento 'fiscal_devolve_comerc' nunca existiu na configuração, então este aviso nunca saiu; agora existe, e vai para quem abriu a OP e o gerente dele
-    avisarDevolucaoAoComercial({ opl, evento: 'fiscal_devolve_comerc', autorEmail: currentUser?.email,
-      mensagem: msg.oplVoltouAoComercial(opl.opl, obsDevolver.trim(), currentUser?.nome || '—') });
     setModalDevolver(null); setObsDevolver('');
     setGravandoModal(false);
     fetchAll();
@@ -447,7 +438,6 @@ export default function FiscalTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Faturado',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }, `A entrega da OP ${opl.opl} foi confirmada`);
-    notificarEvento('comercial_entregue', msg.entregue(opl.opl, opl.cliente_nome||'—', nomeRecebeu.trim()));
     setModalEntregue(null); setNomeRecebeu('');
     setGravandoModal(false);
     fetchAll();

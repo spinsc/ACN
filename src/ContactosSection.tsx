@@ -5,7 +5,6 @@ import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
-import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
 import { combinaBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
@@ -30,7 +29,6 @@ const fmtTel = (n: string | null) => {
   return n;
 };
 
-const waLink = (n: string) => `https://wa.me/${n.replace(/\D/g, '')}`;
 
 
 const initials = (nome: string) =>
@@ -70,14 +68,13 @@ const lerTudo = async (montar: () => any) => {
   try { return { data: await lerPaginado(montar), error: null }; }
   catch (e: any) { return { data: null, error: { message: e?.message || String(e) } }; }
 };
-const lerMensagens = () => lerPaginado(() => supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }).order('id'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ContactosSection({ currentUser }: { currentUser: any }) {
   // Ver os contatos de todos e filtrar por operador: só gerentes. As demais funções
-  // de gerente (conexões WhatsApp, trocar operador) valem para a equipe comercial.
+  // de gerente (trocar operador) valem para a equipe comercial.
   const veTodos = ['Admin', 'Gerente Comercial'].includes(currentUser?.perfil);
   const isGerente = ['Admin', 'Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
@@ -86,15 +83,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const [interacoes, setInteracoes]   = useState<any[]>([]);
   const [oportunidades, setOps]       = useState<any[]>([]);
   const [clientes, setClientes]       = useState<any[]>([]);
-  const [waMsgs, setWaMsgs]           = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
 
   // UI
   const [busca, setBusca]             = useState('');
   const [filtroOp, setFiltroOp]       = useState('');
   const [contatoSel, setContatoSel]   = useState<any | null>(null);
-  const [abaDetalhe, setAbaDetalhe]   = useState<'info'|'historico'|'whatsapp'>('info');
-  const [showWaConexoes, setShowWaConexoes] = useState(false);
+  const [abaDetalhe, setAbaDetalhe]   = useState<'info'|'historico'>('info');
 
   // modais
   const [modalContato, setModalContato]     = useState<any | null>(null); // null=fechado, {}=novo, obj=editar
@@ -113,17 +108,16 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // ─── carga ───
   const load = useCallback(async () => {
     if (!jaCarregouRef.current) setLoading(true);
-    const [r1, r2, r3, r4, r5] = await Promise.all([
+    const [r1, r2, r3, r4] = await Promise.all([
       lerTudo(() => supabase.from('crm_contatos').select('*').order('nome').order('id')),
       lerTudo(() => supabase.from('crm_interacoes').select('*').order('data_interacao', { ascending: false }).order('id')),
       lerTudo(() => supabase.from('crm_oportunidades_basico').select('id, titulo, funil, cliente_id').order('titulo').order('id')),   // 7.x: sem o cliente_id o quadro "Oportunidades" do contato nunca aparecia
       lerTudo(() => supabase.from('clientes').select('id, nome').order('nome').order('id')),
-      lerTudo(() => supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false }).order('id')),
     ]);
     // 7.x: a leitura que falha mantém o que já estava na tela (antes virava lista vazia, sem aviso)
     const novas: Record<string, string> = {};
     const aplica = (r: any, chave: string, set: (v: any[]) => void) => { if (r.error || !r.data) { novas[chave] = r.error?.message || 'sem resposta'; return; } set(r.data); };
-    aplica(r1, 'contatos', setContatos); aplica(r2, 'interacoes', setInteracoes); aplica(r3, 'oportunidades', setOps); aplica(r4, 'clientes', setClientes); aplica(r5, 'mensagens', setWaMsgs);
+    aplica(r1, 'contatos', setContatos); aplica(r2, 'interacoes', setInteracoes); aplica(r3, 'oportunidades', setOps); aplica(r4, 'clientes', setClientes);
     setFalhas(novas);
     jaCarregouRef.current = true;
     setLoading(false);
@@ -133,14 +127,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
   // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real).
 
-  // Emite total de msgs não lidas para o DashboardTab (badge no sidebar)
-  // 7.x (13/10/2026): o selo contava toda mensagem não lida do sistema — inclusive a de contato de outro operador (que a pessoa nem vê) e a sem contato (que nenhuma tela mostra e por isso nunca zerava)
-  useEffect(() => {
-    if (falhas.contatos && contatos.length === 0) return;   // os contatos não chegaram: não zera o selo por isso
-    const visiveis = new Set(contatos.filter(c => veTodos || ehEu(currentUser, c, 'operador_nome')).map(c => c.id));
-    const naoLidas = waMsgs.filter(m => !m.lida && m.contato_id && visiveis.has(m.contato_id)).length;
-    window.dispatchEvent(new CustomEvent('crm:wa-unread-count', { detail: { count: naoLidas } }));
-  }, [waMsgs, contatos, falhas]);
+  // 26/11/2026 (decisão do usuário: o WhatsApp não é usado no sistema): saíram as mensagens do WhatsApp, o selo de "não lidas" do menu e o link wa.me; o número do contato continua no cadastro.
 
   // atualiza contato selecionado quando dados recarregam
   useEffect(() => {
@@ -160,8 +147,6 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
   const interacoesContato = (id: string) =>
     interacoes.filter(i => i.contato_id === id).slice(0, 30);
-  const waMsgsContato = (id: string) =>
-    waMsgs.filter(m => m.contato_id === id);
   const opsContato = (c: any) =>
     oportunidades.filter(o => o.cliente_id === c.cliente_id && c.cliente_id);
 
@@ -216,10 +201,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // EXCLUIR CONTATO
   // ─────────────────────────────────────────────────────────────────────────
   const excluirContato = async (c: any) => {
-    // 7.x (13/10/2026): excluir o contato apaga TAMBÉM o histórico de interações dele (o banco apaga em cascata) e as mensagens de WhatsApp dele ficam sem contato, e a pergunta não dizia isso
+    // 7.x (13/10/2026): excluir o contato apaga TAMBÉM o histórico de interações dele (o banco apaga em cascata), e a pergunta não dizia isso
     const nInt = interacoes.filter(i => i.contato_id === c.id).length;
-    const nWa = waMsgs.filter(m => m.contato_id === c.id).length;
-    const junto = [nInt ? `O histórico de ${nInt} interaç${nInt !== 1 ? 'ões' : 'ão'} dele também será apagado.` : '', nWa ? `${nWa !== 1 ? 'As ' + nWa + ' mensagens' : 'A mensagem'} de WhatsApp dele deixa${nWa !== 1 ? 'm' : ''} de aparecer.` : ''].filter(Boolean).join(' ');
+    const junto = nInt ? `O histórico de ${nInt} interaç${nInt !== 1 ? 'ões' : 'ão'} dele também será apagado.` : '';
     if (!await confirmar(`Excluir "${c.nome}"?` + (junto ? '\n\n' + junto : ''))) return;
     const { error } = await supabase.from('crm_contatos').delete().eq('id', c.id);
     if (error) { mostrarAviso('Não foi possível excluir o contato: ' + error.message + '.', 'erro'); return; }   // 7.x: antes o erro era ignorado e o contato só "voltava" na leitura seguinte
@@ -285,22 +269,11 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // MARCAR MSG COMO LIDA
-  // ─────────────────────────────────────────────────────────────────────────
-  const marcarLida = async (msgId: string) => {
-    const { error } = await supabase.from('crm_whatsapp_msgs').update({ lida: true }).eq('id', msgId);
-    // 7.x (13/10/2026): gravação recusada não marca como lida na tela (antes o erro era ignorado: a mensagem parecia lida e o selo do menu caía, e na leitura seguinte tudo voltava)
-    if (error) { mostrarAviso('Não foi possível marcar a mensagem como lida: ' + error.message + '.', 'erro'); return; }
-    setWaMsgs(prev => prev.map(m => m.id === msgId ? { ...m, lida: true } : m));
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
   // RENDER CARD CONTATO
   // ─────────────────────────────────────────────────────────────────────────
   const renderCard = (c: any) => {
     const isSel = contatoSel?.id === c.id;
     const nInter = interacoes.filter(i => i.contato_id === c.id).length;
-    const nWA    = waMsgs.filter(m => m.contato_id === c.id && !m.lida).length;
     const ini    = initials(c.nome);
 
     return (
@@ -335,11 +308,6 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                   {nInter} {nInter !== 1 ? 'interações' : 'interação'}
                 </span>
               )}
-              {nWA > 0 && (
-                <span className="acn-wa-unread-badge acn-ctt-pil acn-ctt-pil-nl">
-                  💬 {nWA} não lida{nWA !== 1 ? 's' : ''}
-                </span>
-              )}
             </div>
             {veTodos && c.operador_nome && (
               <div className="acn-ctt-card-op">👤 {c.operador_nome}</div>
@@ -358,7 +326,6 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     const c = contatoSel;
     const ini = initials(c.nome);
     const interacoesC = interacoesContato(c.id);
-    const waMsgsC = waMsgsContato(c.id);
     const opsC = opsContato(c);
 
     return (
@@ -380,11 +347,6 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
           {/* Ações rápidas */}
           <div className="acn-ctt-acoes">
-            {c.whatsapp && (
-              <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer" className="acn-ctt-lnk-wa">
-                💬 WhatsApp
-              </a>
-            )}
             <Botao variante="primario" pequeno
               onClick={() => { setModalInteracao({ contato: c }); setFormI(interacaoVazia()); }}>
               + Registrar contato
@@ -404,19 +366,11 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
           {([
             ['info',     'ℹ️ Info'],
             ['historico', `📋 Histórico (${interacoesC.length})`],
-            ['whatsapp',  (() => {
-              const naoLidas = waMsgsC.filter((m: any) => !m.lida).length;
-              return naoLidas > 0
-                ? `💬 WA · ${naoLidas} nova${naoLidas !== 1 ? 's' : ''}`
-                : `💬 WA (${waMsgsC.length})`;
-            })()],
           ] as const).map(([aba, label]) => {
-            const naoLidasWa = aba === 'whatsapp' ? waMsgsC.filter((m: any) => !m.lida).length : 0;
-            const temNaoLidas = aba === 'whatsapp' && naoLidasWa > 0;
             return (
               <div key={aba} onClick={() => setAbaDetalhe(aba)}
-                className={'acn-ctt-aba' + (abaDetalhe===aba ? ' ativa' : '') + (temNaoLidas ? ' nova' : '')}>
-                <span className={temNaoLidas ? 'acn-wa-tab-ativa' : ''}>{label}</span>
+                className={'acn-ctt-aba' + (abaDetalhe===aba ? ' ativa' : '')}>
+                <span>{label}</span>
               </div>
             );
           })}
@@ -529,63 +483,6 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
             </div>
           )}
 
-          {/* ── Mensagens WhatsApp ── */}
-          {abaDetalhe === 'whatsapp' && (
-            <div>
-              {!c.whatsapp && (
-                <div className="acn-ctt-sem">
-                  Nenhum número WhatsApp cadastrado para este contato.
-                </div>
-              )}
-              {c.whatsapp && waMsgsC.length === 0 && (
-                <div className="acn-ctt-wa-vazio">
-                  <div className="acn-ctt-wa-vazio-tx">{falhas.mensagens ? 'Não foi possível carregar as mensagens.' : 'Nenhuma mensagem sincronizada.'}</div>
-                  {!falhas.mensagens && (
-                  <div className="acn-ctt-wa-dica">
-                    💡 Para sincronizar automaticamente, configure o webhook da <strong>Evolution API</strong> para gravar mensagens nesta tabela.<br /><br />
-                    Endpoint: <code className="acn-ctt-wa-cod">POST /functions/v1/whatsapp-webhook</code>
-                  </div>
-                  )}
-                  <a href={waLink(c.whatsapp)} target="_blank" rel="noreferrer" className="acn-ctt-lnk-wa acn-ctt-lnk-wa-g">
-                    💬 Abrir no WhatsApp
-                  </a>
-                </div>
-              )}
-              {waMsgsC.length > 0 && (
-                <div className="acn-ctt-msgs">
-                  {waMsgsC.map(m => (
-                    <div key={m.id} onClick={() => !m.lida && marcarLida(m.id)}
-                      className={'acn-ctt-msg' + (m.direcao === 'saida' ? ' saida' : '') + (m.lida ? ' lida' : '')}>
-                      <div className="acn-ctt-msg-tx">{m.conteudo || m.transcricao || '🎵 Áudio'}</div>
-                      {m.transcricao && m.tipo_msg === 'audio' && (
-                        <div className="acn-ctt-msg-trans">🎙️ Transcrito</div>
-                      )}
-                      <div className="acn-ctt-msg-rod">
-                        <Botao className="acn-ctt-b acn-ctt-salvar-crm"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setModalInteracao({ contato: c });
-                            setFormI({
-                              ...interacaoVazia(),
-                              tipo: 'whatsapp',
-                              descricao: m.conteudo || m.transcricao || '',
-                              transcricao: m.transcricao || '',
-                              oportunidade_id: null,
-                            });
-                          }}
-                          title="Salvar esta mensagem como interação em qualquer card CRM">
-                          📌 Salvar no CRM
-                        </Botao>
-                        <div className="acn-ctt-msg-data">
-                          {fmtDT(m.data_msg)} {!m.lida && <span className="acn-ctt-msg-novo">● novo</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     );
@@ -605,7 +502,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
           + Novo Contato
         </Botao>
         <input
-          placeholder="🔍 Nome, empresa, WhatsApp..."
+          placeholder="🔍 Nome, empresa, telefone..."
           value={busca} onChange={e => setBusca(e.target.value)}
           className="acn-ctt-busca"
         />
@@ -619,23 +516,15 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
         <span className="acn-ctt-contador">
           {contatosFiltrados.length} contato{contatosFiltrados.length !== 1 ? 's' : ''}
         </span>
-        {isGerente && (
-          <Botao variante="primario" pequeno className="acn-ctt-b-wa"
-            onClick={() => setShowWaConexoes(true)}>
-            ⚙️ WhatsApp
-          </Botao>
-        )}
       </div>
 
       {Object.keys(falhas).length > 0 && (
         <div className="acn-ctt-faixa">
           <Faixa tom="erro" acao={<Botao pequeno onClick={() => load()}>Tentar de novo</Botao>}>
-            Não foi possível carregar {Object.keys(falhas).map(k => ({ contatos: 'os contatos', interacoes: 'as interações', oportunidades: 'as oportunidades', clientes: 'os clientes', mensagens: 'as mensagens do WhatsApp' }[k])).join(', ')} ({[...new Set(Object.values(falhas))].join('; ')}).
+            Não foi possível carregar {Object.keys(falhas).map(k => ({ contatos: 'os contatos', interacoes: 'as interações', oportunidades: 'as oportunidades', clientes: 'os clientes' }[k])).join(', ')} ({[...new Set(Object.values(falhas))].join('; ')}).
           </Faixa>
         </div>
       )}
-
-      {showWaConexoes && <WhatsAppConexoesWidget onClose={() => setShowWaConexoes(false)} />}
 
       {/* ── Layout: lista + painel ── */}
       <div className="acn-ctt-corpo">

@@ -20,7 +20,6 @@ import { aplicarDiferencaNaBom, avisoDoQueNaoFoiTirado } from './CalculoDaEstrut
 import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { Faixa, Botao } from './Interface';
 import { logChange } from './AuditSystem';
-import { notificarEvento } from './whatsappHelper';
 import Icone from './Icone';
 import { mdiTrayArrowUp, mdiTagOutline, mdiWrenchOutline, mdiCogOutline } from '@mdi/js';
 
@@ -305,7 +304,6 @@ export function ModalLiberacaoParcialSerralheria({ opl, currentUser, onClose, on
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
       // mesma chave de aviso que a Engenharia usava: quem o Admin configurou para receber continua recebendo
-      notificarEvento('engenharia_libera_serralheria', `*Liberação parcial p/ Serralheria* — OP ${opl.opl}\n${obs.trim()}\nPor: ${currentUser?.nome} (PCP)`, 'Serralheria');
       onFeito?.();
     } finally {
       emAcao.current = false;

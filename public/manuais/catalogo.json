@@ -5,8 +5,12 @@
     "titulo": "Manual do SAC",
     "descricao": "Passo a passo das quatro abas do SAC (Ordens de Serviço, Chamados NFC, Garantia e Cadastros): o que cada botão faz, o que o sistema grava e para onde a OS vai.",
     "ordem": 1,
-    "atualizadoEm": "2026-11-23",
+    "atualizadoEm": "2026-11-26",
     "mudancas": [
+      {
+        "data": "2026-11-26",
+        "texto": "O sistema deixou de avisar por WhatsApp (nova OS, orçamento, cotação, aprovação, reprovação, aceite da data, envio ao Fiscal, entrega e cancelamento): saíram do manual os trechos \"avisa por WhatsApp\" e a seção \"O que o sistema avisa por WhatsApp\". O registro da OS, o histórico e as menções continuam como antes. Sem foto nova."
+      },
       {
         "data": "2026-11-23",
         "texto": "Serviço de terceiro: o menu ⋯ da OS ganha, no grupo Dados da OS, o item Serviço de terceiro, que abre o pedido de um serviço feito por quem é de fora (película, plotagem, pintura, lavagem e outros) já ligado à OS; o andamento dos pedidos fica no menu Serviços de terceiros. Não aparece em OS cancelada. Sem foto nova."
@@ -105,6 +109,10 @@
     "ordem": 3,
     "atualizadoEm": "2026-11-26",
     "mudancas": [
+      {
+        "data": "2026-11-26",
+        "texto": "O aviso por WhatsApp à Produção, quando a pintura da Serralheria é concluída, saiu: o serviço de Pintura eletrostática continua nascendo em A definir e aparece no quadro, sem aviso. Sem foto nova."
+      },
       {
         "data": "2026-11-23",
         "texto": "Primeira versão do manual, com 24 fotos das telas (dados de exemplo): o Quadro, a Agenda, a Lista e o Relatório do mês; pedir, agendar, dar como realizado, voltar, reabrir e cancelar; o pedido de pagamento ao Financeiro; a saída da Vistoria de pátio; a ordem de serviço em lote da pintura eletrostática (montar, imprimir, enviar com a cópia assinada, retorno e fechamento); o contrato impresso; a pintura da Serralheria; o quadro Serviços de terceiros na OP e na OS; os cadastros de prestadores, tipos e o modelo do contrato; quem recebe cada aviso; quem pode o quê; o que trava cada passo; os 203 serviços que vieram da caixinha da OP; e as dúvidas comuns."

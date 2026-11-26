@@ -387,68 +387,11 @@ body.dark .acn-footer-setor strong { color:#7fd8cc !important; }
 @media print { .acn-sidebar, .acn-header { display:none; } .acn-main { padding:0; } }
 
 /* ══════════════════════════════════════════════════════════════════
-   NOTIFICAÇÕES WHATSAPP
-   ══════════════════════════════════════════════════════════════════ */
-@keyframes acn-wa-ping {
-  0%   { transform: scale(1);   opacity: 1; }
-  70%  { transform: scale(2.2); opacity: 0; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-@keyframes acn-wa-glow {
-  0%, 100% { background: #16a34a; }
-  50%       { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
-}
-@keyframes acn-wa-badge-pulse {
-  0%, 100% { transform: scale(1); }
-  50%       { transform: scale(1.18); }
-}
-
-/* Ponto vermelho na sidebar (CRM) */
-.acn-wa-sidebar-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 15px;
-  height: 15px;
-  background: #ef4444;
-  border-radius: 8px;
-  font-size: 8px;
-  font-weight: 800;
-  color: #fff;
-  padding: 0 3px;
-  margin-left: 5px;
-  position: relative;
-  flex-shrink: 0;
-  animation: acn-wa-badge-pulse 1.4s ease-in-out infinite;
-}
-.acn-wa-sidebar-dot::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  background: #ef4444;
-  animation: acn-wa-ping 1.4s ease-out infinite;
-  z-index: -1;
-}
-
-/* Badge verde nas msgs não lidas (cards de contato) */
-.acn-wa-unread-badge {
-  animation: acn-wa-badge-pulse 1.4s ease-in-out infinite;
-}
-
-/* Aba WA pulsando quando tem msgs não lidas */
-.acn-wa-tab-ativa {
-  animation: acn-wa-glow 1.6s ease-in-out infinite;
-  border-radius: 4px;
-  padding: 2px 5px;
-}
-
-/* ══════════════════════════════════════════════════════════════════
    MOBILE — tela estreita (< 700px)
    ══════════════════════════════════════════════════════════════════ */
 .acn-hamburger { position:relative; display:flex; align-items:center; justify-content:center; width:36px; height:36px; background:transparent; border:none; border-radius:8px; color:#3b4856; cursor:pointer; flex-shrink:0; }
 .acn-hamburger:hover { background:#eef1f4; }
-/* soma dos avisos que ficam nos itens do menu (análises de Engenharia/Produção e WhatsApp do CRM): com o menu fechado eles não aparecem, então vêm no botão */
+/* soma dos avisos que ficam nos itens do menu (análises de Engenharia/Produção e compras esperando aprovação): com o menu fechado eles não aparecem, então vêm no botão */
 .acn-hamburger-aviso { position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:#c2700f; color:#fff; font-size:10px; font-weight:700; line-height:16px; text-align:center; pointer-events:none; }
 
 @media (max-width:700px) {
@@ -816,7 +759,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [buscaMobile, setBuscaMobile]   = useState(false);
   const [menuUsuario, setMenuUsuario]   = useState(false);
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
-  const [waNotifCount, setWaNotifCount] = useState(0);
   // Pendências de análise técnica por setor — contador no menu das abas que
   // têm o quadro de análises (Engenharia, Produção). Tempo real + a cada 60s.
   // L4 do plano de layout (19/11/2026): a coluna "Ações" das tabelas largas fica presa à direita (ver ColunaAcoesFixa.ts)
@@ -886,13 +828,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // Escuta contagem de msgs WA não lidas emitida pelo ContactosSection
-  useEffect(() => {
-    const handler = (e: any) => setWaNotifCount(e.detail?.count || 0);
-    window.addEventListener('crm:wa-unread-count', handler);
-    return () => window.removeEventListener('crm:wa-unread-count', handler);
   }, []);
 
   // Badge de análises — para todos; conta só o que é do(s) setor(es) da pessoa
@@ -1434,10 +1369,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     engenharia: { icon:'🔩', cor:'#0e7490', label:'Desenvolvimento (Engenharia)' },
   };
 
-  // Etapa 14a: com o menu escondido, os avisos dos itens (análises técnicas de Engenharia/Produção e as mensagens de WhatsApp do CRM) vêm somados no botão do menu
+  // Etapa 14a: com o menu escondido, os avisos dos itens (análises técnicas de Engenharia/Produção e as compras esperando aprovação) vêm somados no botão do menu
   const totalAvisosMenu = SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => isVisible(i.id)).reduce((soma, i) => {
     const setores = ({ engenharia: ['Engenharia', 'Prazo'], producao: ['Producao'] } as Record<string, string[]>)[i.id] || [];   // a análise de prazo pedida pelo Comercial é da Engenharia (23/10/2026)
-    return soma + setores.reduce((n, s) => n + (analisesPorSetor[s] || 0), 0) + (i.id === 'crm' ? waNotifCount : 0) + (i.id === 'compras' ? comprasEsperando : 0);
+    return soma + setores.reduce((n, s) => n + (analisesPorSetor[s] || 0), 0) + (i.id === 'compras' ? comprasEsperando : 0);
   }, 0);
 
   return (
@@ -1491,11 +1426,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                       })()}
                       {item.id === 'compras' && comprasEsperando > 0 && (
                         <span className="sidebar-contador" title={`${comprasEsperando} compra${comprasEsperando === 1 ? '' : 's'} esperando a sua aprovação`}>{comprasEsperando}</span>
-                      )}
-                      {item.id === 'crm' && waNotifCount > 0 && (
-                        <span className="acn-wa-sidebar-dot">
-                          {waNotifCount > 9 ? '9+' : waNotifCount}
-                        </span>
                       )}
                     </button>
                   ))}
