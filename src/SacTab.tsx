@@ -36,6 +36,7 @@ import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline, mdiAccountWrenchOutline } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
+import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): a OS aberta tem endereço próprio
 import { ModalComprasDaOS } from './ComprasLigadas';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OS (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
 const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
@@ -583,6 +584,24 @@ function SacTabCompleto({ currentUser }) {
     window.addEventListener('acn:abrir-registro', tentarAbrir);
     return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
   }, []);
+
+  // 26/11/2026 (plano de endereços e rotas, Fase 3): a OS aberta tem endereço próprio, `#/sac/os/<código>` (F5, Voltar, Avançar e link colado abrem a mesma OS). A janela da OS é o
+  // resumo (o clique no cartão ou na linha); o Acompanhamento, que as Menções abrem, é a outra janela da MESMA OS e usa o mesmo endereço, então passar de uma à outra não mexe nele.
+  // Quem chega PELO endereço (link colado, busca geral, Voltar) abre o resumo, na aba "Ordens de serviço" (a aba Garantia, Cadastros e Chamados não têm endereço: Fase 4). A janela
+  // só vale com a aba das OS à vista: com outra aba na tela o endereço da OS sai da barra.
+  useRegistroNoEndereco({
+    tela: 'sac', tipo: 'os', rotulo: 'a OS',
+    aberto: abaAtiva === 'os' ? (String(resumoOS?.id || modalAcomp?.id || '') || null) : null,
+    ler: (chave) => lerPorCodigo(supabase.from('sac_ordens_servico').select('*').eq('id', chave).maybeSingle()),
+    mostrar: (os) => {
+      setAbaAtiva('os');
+      // quem chega por uma Menção, pelo chat ou por um vínculo ("OS X" clicável) quer o Acompanhamento, como sempre foi (dica de uso único, vinda do recado em `irParaTela`);
+      // o link, o F5 e a busca geral abrem o resumo da OS
+      if (consumirDicaDeAbertura('sac', 'os', os.id) === 'acompanhamento') { setResumoOS(null); setModalAcomp(os); }
+      else { setModalAcomp(null); setResumoOS(os); }
+    },
+    fechar: () => { setResumoOS(null); setModalAcomp(null); },
+  });
 
   // Resposta do usuário em 01/10/2026: a aba Cadastros mostra TAMBÉM os equipamentos desativados, esmaecidos e com o botão "Ativar" (antes a lista só trazia
   // os ativos e desativar era definitivo pela tela — o banco tinha 12 desativados que ninguém via). Uma só leitura traz todos; a Nova OS continua só com os ativos.

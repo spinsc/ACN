@@ -86,6 +86,10 @@ export type SituacaoDoDia = { id: 'trabalhando' | 'saiu' | 'completo' | 'incompl
 export function situacaoDoDia(valores: any, dia: string, hoje: string): SituacaoDoDia {
   const v = valores || {};
   const marca = marcadorDoDia(v);
+  // Achado de 25/11/2026: nos dias de falta a Secullum escreve a marca FALTA no lugar das batidas (e preenche "Faltas"). Antes ela caía no aviso neutro
+  // "Falta" e nunca chegava ao "A tratar". Só vale de dia que já passou (o de hoje a Secullum conta como falta antes de acabar) e com horas de falta;
+  // a mesma conta está em SQL: `ponto_ocorrencia_do_dia` (supabase/sql/ponto_p3.sql).
+  if (marca && marca.trim().toUpperCase() === 'FALTA' && dia < hoje && paraMinutos(v['Faltas']) > 0) return { id: 'falta', rotulo: 'Falta', familia: 'erro' };
   if (marca) return { id: 'marcado', rotulo: marca.charAt(0).toUpperCase() + marca.slice(1).toLowerCase(), familia: 'neutro' };
   const pares = paresDoDia(v);
   const entradas = pares.filter(p => p.entrada).length, saidas = pares.filter(p => p.saida).length;

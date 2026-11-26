@@ -16,7 +16,9 @@ import { carregarDossie, pendenciasEmAberto } from './OpVinculos';
 import { etapaDaOp, desdeQuandoNaEtapa, diasDesde, textoDias } from './EtapasOp';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { fluxoDaOp, ehUnidadeDeEnvio, resumoDosFluxosDoLote } from './FluxoMisto';
-import { diaBR } from './Interface';
+import { diaBR, Faixa, Botao, Selo } from './Interface';
+import { mostrarAviso } from './Feedback';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { podeVerValores } from './utils/permissoes';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { LinkOpl } from './AcnTabShared';
@@ -46,7 +48,8 @@ export async function carregarLote(base, aoProgresso = () => {}) {
     supabase.from('oples').select('*').eq('opl', b),
   ]);
   const erroLeitura = sufixadas.error || avulsa.error;
-  if (erroLeitura) throw new Error('Não foi possível ler as OPs do lote: ' + erroLeitura.message);
+  // 12e77 (25/11/2026): a frase do erro vem em português (antes ia o texto técnico do banco)
+  if (erroLeitura) throw new Error('Não foi possível ler as OPs do lote. ' + explicarErroDoBanco(erroLeitura));
   const lista = [...(avulsa.data || []), ...(sufixadas.data || [])].filter(o => baseDoLote(o.opl) === b);
   const dossies = [];
   for (let i = 0; i < lista.length; i += 4) {
@@ -95,6 +98,12 @@ export function resumirLote(dados) {
   const vinculos = [...unicos.values()];
   const pendencias = pendenciasEmAberto(vinculos);
   const valorTotal = ops.reduce((s, o) => s + (Number(o.valor_total) || 0), 0);
+  // 12e77: o que o dossiê de cada unidade NÃO conseguiu ler (nomes de `carregarDossie().falhas`), com as unidades afetadas. Leitura que falha não vale como "nenhuma":
+  // a tela e o PDF avisam que o dossiê está incompleto, e o valor do lote não é mostrado como número se o valor de alguma OP não foi lido (a soma sairia menor, calada)
+  const falhasPorNome = new Map();
+  ds.forEach(d => (d.falhas || []).forEach(nome => falhasPorNome.set(nome, [...(falhasPorNome.get(nome) || []), sufixoDe(d.op.opl)])));
+  const falhas = [...falhasPorNome.entries()].map(([rotulo, unidades]) => ({ rotulo, unidades }));
+  const valorNaoLido = falhasPorNome.has('valor da OP');
   // fluxo misto (M2): o fluxo do lote deixa de ser "o da primeira OP"; o destino também pode mudar de uma unidade para outra
   const fluxos = resumoDosFluxosDoLote(ops);
   const porDestino = new Map();
@@ -102,7 +111,7 @@ export function resumirLote(dados) {
   const destino = porDestino.size <= 1 ? ([...porDestino.keys()][0] || '') : [...porDestino.entries()].map(([d, us]) => `${d} (${textoUnidades(us, ops.length)})`).join(' · ');
   return {
     base: dados.base, n: ops.length, primeira, origem: ds[0]?.origem || {}, unidades, porSituacao: [...porSituacao.entries()], fluxos, destino,
-    gruposDeItens: [...gruposDeItens.values()], vinculos, pendencias, valorTotal,
+    gruposDeItens: [...gruposDeItens.values()], vinculos, pendencias, valorTotal, falhas, valorNaoLido,
     textos: textosDasOps(ops, o => '/' + sufixoDe(o.opl)),
     prazoMin: ops.map(o => o.prazo_entrega_comercial || o.data_prevista_entrega).filter(Boolean).sort()[0] || null,
     prazoMax: ops.map(o => o.prazo_entrega_comercial || o.data_prevista_entrega).filter(Boolean).sort().slice(-1)[0] || null,
@@ -111,6 +120,12 @@ export function resumirLote(dados) {
 
 /** "todas (20)" quando a linha vale para todas as unidades; senão "/01, /02". */
 const textoUnidades = (lista, total) => (lista.length >= total && total > 1 ? `todas (${total})` : lista.map(s => '/' + s).join(', '));
+
+/** 12e77: "compras (todas (20)), fretes (/02)" — o que não foi lido e em quais unidades; vazio se tudo foi lido. */
+export const fraseDasFalhas = (falhas, total) => (falhas || []).map(f => `${f.rotulo} (${textoUnidades(f.unidades, total)})`).join(', ');
+const AVISO_INCOMPLETO = 'Este dossiê pode estar incompleto: o que não foi lido não aparece aqui, e isso não quer dizer que não exista.';
+/** O valor do lote só vira número quando o valor de todas as OPs foi lido. */
+const valorDoLoteTexto = (r, valor) => (r.valorNaoLido ? 'não lido' : valor);
 
 /** Monta o PDF do lote e devolve o documento (quem chama salva). `comHistorico`: inclui a linha do tempo de cada OP. */
 export async function montarPdfDossieLote(dados, { comHistorico = true, verValores = true } = {}) {
@@ -138,6 +153,12 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
   doc.setFontSize(12); doc.text(`${r.base} — ${r.n} unidade(s)`, 105, y, { align: 'center' }); y += 6;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100);
   doc.text(`Emitido em ${new Date().toLocaleString('pt-BR')}`, 105, y, { align: 'center' }); doc.setTextColor(0); y += 8;
+  // 12e77: papel impresso não pode afirmar "nenhuma pendência" quando a leitura falhou: o aviso vai no alto, em vermelho
+  if (r.falhas.length) {
+    const aviso = doc.splitTextToSize(`ATENÇÃO — NÃO FOI POSSÍVEL LER: ${fraseDasFalhas(r.falhas, r.n)}. ${AVISO_INCOMPLETO}`, 182);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(185, 28, 28);
+    doc.text(aviso, 14, y); doc.setTextColor(0); y += aviso.length * 4 + 4;
+  }
 
   titulo('RESUMO DO LOTE');
   const linhasResumo = [
@@ -147,7 +168,7 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
     ['Comercial', o.responsavel_comercial || o.vendedor || '—', 'Destino', r.destino || '—'],
     ['Entrada', fmtD(o.data_entrada), 'Prazo', r.prazoMin ? (r.prazoMin === r.prazoMax ? fmtD(r.prazoMin) : `${fmtD(r.prazoMin)} a ${fmtD(r.prazoMax)}`) : '—'],
   ];
-  if (verValores) linhasResumo.push(['Valor total do lote', fmtR(r.valorTotal), 'Valor por carro (médio)', fmtR(r.n ? r.valorTotal / r.n : null)]);
+  if (verValores) linhasResumo.push(['Valor total do lote', valorDoLoteTexto(r, fmtR(r.valorTotal)), 'Valor por carro (médio)', valorDoLoteTexto(r, fmtR(r.n ? r.valorTotal / r.n : null))]);
   tabela(['Campo', 'Valor', 'Campo', 'Valor'], linhasResumo);
 
   titulo('SITUAÇÃO DO LOTE');
@@ -208,14 +229,13 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
 }
 
 // ── Tela ─────────────────────────────────────────────────────────────────────
-const Secao = ({ titulo, cor = '#1e293b', children }) => (
-  <div style={{ marginBottom: 14 }}>
-    <div style={{ fontSize: 11, fontWeight: 800, color: cor, textTransform: 'uppercase', letterSpacing: '.3px', borderBottom: `2px solid ${cor}22`, paddingBottom: 3, marginBottom: 7 }}>{titulo}</div>
+// 12e77 (25/11/2026): os 42 estilos pintados à mão viraram classes `acn-dlote-*` (design.css); as tabelas seguem com a regra global de tabela (cabeçalho, margens e letra), só a largura mínima é daqui.
+const Secao = ({ titulo, tom, children }) => (
+  <div className="acn-dlote-sec" data-tom={tom}>
+    <div className="acn-dlote-sec-titulo">{titulo}</div>
     {children}
   </div>
 );
-const th = { textAlign: 'left', padding: '3px 6px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' };
-const td = { padding: '4px 6px', fontSize: 11, borderTop: '1px solid #f1f5f9', verticalAlign: 'top' };
 
 /** `semTitulo`: quando embutido na janela do lote (OpLote.tsx), que já tem o título; cada unidade da tabela abre o detalhe da sua OP. */
 export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
@@ -224,17 +244,18 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
   const [progresso, setProgresso] = useState({ feitas: 0, total: 0 });
   const [comHistorico, setComHistorico] = useState(true);
   const [gerando, setGerando] = useState(false);
+  const [tentativa, setTentativa] = useState(0);   // 12e77: "Tentar de novo" refaz a leitura do lote inteiro
   const usuario = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
   const verValores = podeVerValores(usuario);
 
   useEffect(() => {
     let vivo = true;
-    setDados(null); setErro('');
+    setDados(null); setErro(''); setProgresso({ feitas: 0, total: 0 });
     carregarLote(base, (feitas, total) => { if (vivo) setProgresso({ feitas, total }); })
       .then(d => { if (vivo) setDados(d); })
       .catch(e => { if (vivo) setErro(e?.message || String(e)); });
     return () => { vivo = false; };
-  }, [base]);
+  }, [base, tentativa]);
 
   const baixarPdf = async () => {
     setGerando(true);
@@ -242,99 +263,106 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
       const doc = await montarPdfDossieLote(dados, { comHistorico, verValores });
       doc.save(`Dossie_Lote_${String(dados.base).replace(/[^\w.-]/g, '_')}.pdf`);
     } catch (e) {
-      if (!tratarFalhaDeArquivoNovo(e)) alert('Não foi possível gerar o PDF do lote: ' + (e?.message || e));
+      // 12e77: o aviso nativo (alert) saiu; o de erro fica na tela até a pessoa fechar
+      if (!tratarFalhaDeArquivoNovo(e)) mostrarAviso('Não foi possível gerar o PDF do lote: ' + (e?.message || e), 'erro');
     } finally { setGerando(false); }
   };
 
-  if (erro) return <div style={{ padding: 20, fontSize: 12, color: '#b91c1c' }}>{erro}</div>;
-  if (!dados) return <div style={{ padding: 20, fontSize: 12, color: '#64748b' }}>Montando o dossiê do lote{progresso.total ? ` — ${progresso.feitas} de ${progresso.total} OPs lidas` : ''}...</div>;
-  if (!dados.dossies.length) return <div style={{ padding: 20, fontSize: 12, color: '#64748b' }}>Nenhuma OP encontrada para o lote {base}.</div>;
+  const tentarDeNovo = <Botao pequeno onClick={() => setTentativa(t => t + 1)}>Tentar de novo</Botao>;
+  if (erro) return <div className="acn-dlote-estado"><Faixa tom="erro" acao={tentarDeNovo}>{erro}</Faixa></div>;
+  if (!dados) return <div className="acn-dlote-estado">Montando o dossiê do lote{progresso.total ? ` — ${progresso.feitas} de ${progresso.total} OPs lidas` : ''}...</div>;
+  if (!dados.dossies.length) return <div className="acn-dlote-estado">Nenhuma OP encontrada para o lote {base}.</div>;
 
   const r = resumirLote(dados);
   const o = r.primeira;
   return (
-    <div id="dossie-lote" style={{ fontSize: 12, gridColumn: '1 / -1', width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+    <div id="dossie-lote" className="acn-dlote">
+      <div className="acn-dlote-topo">
         <div>
-          {!semTitulo && <div style={{ fontSize: 17, fontWeight: 800 }}>📦 Lote {r.base}</div>}
-          <div style={{ fontSize: 11, color: '#64748b' }}>{o.cliente_nome || '—'} · {r.n} unidade(s)</div>
+          {!semTitulo && <div className="acn-dlote-titulo">📦 Lote {r.base}</div>}
+          <div className="acn-dlote-sub">{o.cliente_nome || '—'} · {r.n} unidade(s)</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+        <div className="acn-dlote-acoes">
+          <label className="acn-dlote-historico">
             <input type="checkbox" checked={comHistorico} onChange={e => setComHistorico(e.target.checked)} />
             Incluir o histórico completo de cada OP no PDF
           </label>
-          <button onClick={baixarPdf} disabled={gerando}
-            style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 5, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: gerando ? .6 : 1 }}>
+          <Botao variante="primario" pequeno onClick={baixarPdf} disabled={gerando}>
             {gerando ? 'Gerando...' : '📄 Baixar PDF para imprimir'}
-          </button>
-          {onVoltar && (
-            <button onClick={onVoltar} style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', fontSize: 11, cursor: 'pointer' }}>← voltar à OP</button>
-          )}
+          </Botao>
+          {onVoltar && <Botao pequeno onClick={onVoltar}>← voltar à OP</Botao>}
         </div>
       </div>
 
+      {r.falhas.length > 0 && (
+        <div className="acn-dlote-faixa">
+          <Faixa tom="erro" acao={tentarDeNovo}>
+            Não foi possível ler: {fraseDasFalhas(r.falhas, r.n)}. {AVISO_INCOMPLETO}
+          </Faixa>
+        </div>
+      )}
+
       <Secao titulo="Resumo do lote">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+        <div className="acn-dlote-resumo">
           {[
             ['Cliente', o.cliente_nome], ['Pedido de venda', r.origem.oportunidade?.numero_pv], ['Tipo de projeto', o.tipo_projeto],
             ['Fluxo de entrega', r.fluxos.misto ? 'Misto — ' + r.fluxos.texto : fluxoLabel(fluxoEfetivo(o.tipo_projeto, o.fluxo_entrega))], ['Unidades', r.n], ['Empresa', o.faturamento_empresa],
             ['Comercial', o.responsavel_comercial || o.vendedor], ['Destino', r.destino],
             ['Entrada', fmtD(o.data_entrada)], ['Prazo', r.prazoMin ? (r.prazoMin === r.prazoMax ? fmtD(r.prazoMin) : `${fmtD(r.prazoMin)} a ${fmtD(r.prazoMax)}`) : null],
-            ...(verValores ? [['Valor total do lote', fmtR(r.valorTotal)], ['Valor por carro (médio)', fmtR(r.n ? r.valorTotal / r.n : null)]] : []),
+            ...(verValores ? [['Valor total do lote', valorDoLoteTexto(r, fmtR(r.valorTotal))], ['Valor por carro (médio)', valorDoLoteTexto(r, fmtR(r.n ? r.valorTotal / r.n : null))]] : []),
           ].map(([rot, val]) => (
             <div key={rot}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{rot}</div>
-              <div style={{ fontSize: 11.5 }}>{val ?? '—'}</div>
+              <div className="acn-dlote-rot">{rot}</div>
+              <div className="acn-dlote-val">{val ?? '—'}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div className="acn-dlote-situacoes">
           {r.porSituacao.map(([s, n]) => (
-            <span key={s} style={{ fontSize: 10.5, background: '#f1f5f9', borderRadius: 10, padding: '2px 9px', fontWeight: 700 }}>{n} em {s}</span>
+            <Selo key={s} familia="info" ponto={false}>{n} em {s}</Selo>
           ))}
         </div>
       </Secao>
 
       {r.textos.length > 0 && (
-        <Secao titulo="Descrição e observações" cor="#b45309">
+        <Secao titulo="Descrição e observações" tom="atencao">
           {r.textos.map(tx => tx.grupos.map((g, k) => (
-            <div key={tx.campo + k} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 9.5, fontWeight: 700, color: tx.atencao ? '#b91c1c' : '#94a3b8', textTransform: 'uppercase' }}>{tx.rotulo}{legendaDasUnidades(g, r.n) ? ` · ${legendaDasUnidades(g, r.n)}` : ''}</div>
-              <div style={{ fontSize: 11.5, whiteSpace: 'pre-wrap' }}>{g.texto}</div>
+            <div key={tx.campo + k} className="acn-dlote-obs">
+              <div className="acn-dlote-rot" data-atencao={tx.atencao ? '1' : undefined}>{tx.rotulo}{legendaDasUnidades(g, r.n) ? ` · ${legendaDasUnidades(g, r.n)}` : ''}</div>
+              <div className="acn-dlote-obs-texto">{g.texto}</div>
             </div>
           )))}
         </Secao>
       )}
 
-      <Secao titulo="Itens vendidos (por carro)" cor="#1d4ed8">
+      <Secao titulo="Itens vendidos (por carro)" tom="info">
         {r.gruposDeItens.map((g, i) => (
-          <div key={i} style={{ marginBottom: 6 }}>
-            {r.gruposDeItens.length > 1 && <div style={{ fontSize: 10.5, color: '#b45309', fontWeight: 700 }}>Unidades {textoUnidades(g.unidades, r.n)} (os itens diferem entre as unidades):</div>}
+          <div key={i} className="acn-dlote-grupo">
+            {r.gruposDeItens.length > 1 && <div className="acn-dlote-difere">Unidades {textoUnidades(g.unidades, r.n)} (os itens diferem entre as unidades):</div>}
             {g.itens.length ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={th}>Item</th><th style={th}>Qt por carro</th><th style={th}>Descrição</th></tr></thead>
+              <table className="acn-dlote-tab">
+                <thead><tr><th>Item</th><th>Qt por carro</th><th>Descrição</th></tr></thead>
                 <tbody>{g.itens.map((it, k) => (
-                  <tr key={k}><td style={td}>{it.nome || '—'}</td><td style={td}><strong>{it.quantidade ?? '—'}</strong></td><td style={{ ...td, color: '#64748b' }}>{it.descricao || ''}</td></tr>
+                  <tr key={k}><td>{it.nome || '—'}</td><td><strong>{it.quantidade ?? '—'}</strong></td><td className="acn-dlote-mudo">{it.descricao || ''}</td></tr>
                 ))}</tbody>
               </table>
-            ) : <div style={{ fontSize: 11, color: '#94a3b8' }}>Nenhum item vendido registrado.</div>}
+            ) : <div className="acn-dlote-vazio">Nenhum item vendido registrado.</div>}
           </div>
         ))}
       </Secao>
 
-      <Secao titulo="Carro a carro" cor="#0f766e">
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-            <thead><tr><th style={th}>Unid.</th>{r.fluxos.misto && <th style={th}>Fluxo</th>}<th style={th}>Modelo</th><th style={th}>Chassi</th><th style={th}>Placa</th><th style={th}>Situação</th><th style={th}>Onde está</th><th style={th}>Há</th><th style={th}>Pend.</th></tr></thead>
+      <Secao titulo="Carro a carro" tom="marca">
+        <div className="acn-rolagem">
+          <table className="acn-dlote-tab larga">
+            <thead><tr><th>Unid.</th>{r.fluxos.misto && <th>Fluxo</th>}<th>Modelo</th><th>Chassi</th><th>Placa</th><th>Situação</th><th>Onde está</th><th>Há</th><th>Pend.</th></tr></thead>
             <tbody>{r.unidades.map(u => (
               <tr key={u.id}>
-                <td style={td}><LinkOpl opl={u.opl} currentUser={usuario} /></td>{r.fluxos.misto && <td style={td}>{u.fluxo}</td>}<td style={td}>{u.modelo || '—'}</td>
+                <td><LinkOpl opl={u.opl} currentUser={usuario} /></td>{r.fluxos.misto && <td>{u.fluxo}</td>}<td>{u.modelo || '—'}</td>
                 {r.fluxos.misto && u.envio
-                  ? <td style={td} colSpan={2}><span style={{ color: '#64748b' }}>envio: sem chassi nem placa</span></td>
-                  : <><td style={td}>{u.chassi || '—'}</td><td style={td}>{u.placa || '—'}</td></>}
-                <td style={td}>{u.situacao}</td><td style={td}>{u.onde}</td><td style={td}>{u.desde}</td>
-                <td style={{ ...td, color: u.pendencias ? '#b45309' : undefined, fontWeight: u.pendencias ? 700 : 400 }}>{u.pendencias || '—'}</td>
+                  ? <td colSpan={2}><span className="acn-dlote-mudo">envio: sem chassi nem placa</span></td>
+                  : <><td>{u.chassi || '—'}</td><td>{u.placa || '—'}</td></>}
+                <td>{u.situacao}</td><td>{u.onde}</td><td>{u.desde}</td>
+                <td className={u.pendencias ? 'acn-txt-atencao' : undefined}>{u.pendencias || '—'}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -342,9 +370,11 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
       </Secao>
 
       {r.pendencias.length > 0 && (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '8px 10px', marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#b45309', marginBottom: 4 }}>⚠️ {r.pendencias.length} pendência(s) em aberto no lote</div>
-          <div style={{ fontSize: 11, color: '#78350f' }}>{r.pendencias.map(p => `${p.setor || p.grupo}: ${p.titulo} (${textoUnidades(p.unidades, r.n)})`).join(' · ')}</div>
+        <div className="acn-dlote-faixa">
+          <Faixa tom="atencao">
+            <strong>{r.pendencias.length} pendência(s) em aberto no lote</strong>
+            <div>{r.pendencias.map(p => `${p.setor || p.grupo}: ${p.titulo} (${textoUnidades(p.unidades, r.n)})`).join(' · ')}</div>
+          </Faixa>
         </div>
       )}
 
@@ -353,17 +383,17 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
         if (!itens.length) return null;
         return (
           <Secao key={g} titulo={`${TITULO_GRUPO[g]} (${itens.length})`}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-                <thead><tr><th style={th}>Unid.</th><th style={th}>O quê</th><th style={th}>Setor</th><th style={th}>Situação</th><th style={th}>Responsável</th><th style={th}>Data</th>{verValores && <th style={{ ...th, textAlign: 'right' }}>Valor</th>}</tr></thead>
+            <div className="acn-rolagem">
+              <table className="acn-dlote-tab media">
+                <thead><tr><th>Unid.</th><th>O quê</th><th>Setor</th><th>Situação</th><th>Responsável</th><th>Data</th>{verValores && <th className="acn-dir">Valor</th>}</tr></thead>
                 <tbody>{itens.map(v => (
                   <tr key={`${v.tipo}:${v.id}`}>
-                    <td style={td}>{textoUnidades(v.unidades, r.n)}</td>
-                    <td style={td}><strong>{v.numero ? v.numero + ' · ' : ''}{v.titulo}</strong></td>
-                    <td style={td}>{v.setor || '—'}</td>
-                    <td style={td}><span style={{ fontWeight: 700, color: v.aberto ? '#b45309' : '#16a34a' }}>{v.status || '—'}</span></td>
-                    <td style={td}>{v.responsavel || '—'}</td><td style={td}>{fmtD(v.data)}</td>
-                    {verValores && <td style={{ ...td, textAlign: 'right' }}>{v.valor != null ? fmtR(v.valor) : '—'}</td>}
+                    <td>{textoUnidades(v.unidades, r.n)}</td>
+                    <td><strong>{v.numero ? v.numero + ' · ' : ''}{v.titulo}</strong></td>
+                    <td>{v.setor || '—'}</td>
+                    <td><span className={v.aberto ? 'acn-txt-atencao' : 'acn-txt-ok'}>{v.status || '—'}</span></td>
+                    <td>{v.responsavel || '—'}</td><td>{fmtD(v.data)}</td>
+                    {verValores && <td className="acn-dir">{v.valor != null ? fmtR(v.valor) : '—'}</td>}
                   </tr>
                 ))}</tbody>
               </table>
@@ -372,13 +402,13 @@ export function DossieLote({ base, onVoltar = null, semTitulo = false }) {
         );
       })}
 
-      <Secao titulo="Histórico de cada OP" cor="#334155">
+      <Secao titulo="Histórico de cada OP">
         {dados.dossies.map(d => (
-          <details key={d.op.id} style={{ marginBottom: 4 }}>
-            <summary style={{ cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>{d.op.opl} — {d.logs.length} evento(s)</summary>
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+          <details key={d.op.id} className="acn-dlote-det">
+            <summary>{d.op.opl} — {d.logs.length} evento(s)</summary>
+            <table className="acn-dlote-tab">
               <tbody>{d.logs.map((l, k) => (
-                <tr key={k}><td style={{ ...td, whiteSpace: 'nowrap' }}>{fmtDH(l.data_hora)}</td><td style={td}>{l.setor || '—'}</td><td style={td}>{l.usuario_nome || '—'}</td><td style={td}>{l.evento}</td></tr>
+                <tr key={k}><td className="acn-nowrap">{fmtDH(l.data_hora)}</td><td>{l.setor || '—'}</td><td>{l.usuario_nome || '—'}</td><td>{l.evento}</td></tr>
               ))}</tbody>
             </table>
           </details>

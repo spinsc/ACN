@@ -19,7 +19,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { loteTemEnvioEProducao, ehUnidadeDeEnvio } from './FluxoMisto';
 import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia, textoDosSeriais, seriaisOutrosDaOp } from './OpItens';
-import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
+import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias, frasePendenciasNaoLidas } from './OpPendencias';
 import { confirmar, mostrarAviso, pedirTexto } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
 import { pendenciasSanadas, lerVistos, chaveDoUsuario, resumoDaFalta } from './PendenciasSanadas';
@@ -148,8 +148,12 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   // 100% fica barrado enquanto o material de Chicotes/Compras não estiver aqui dentro
   // (a Serralheria não trava o kit desde 17/11/2026: ver travaKit100 em OpPendencias.tsx).
   const [pendPorOp, setPendPorOp] = useState(new Map());
+  // 12e80 (25/11/2026): o que o banco recusou ler das pendências. Leitura recusada não vale como "sem pendência": enquanto houver falha o Kit 100% e o envio ficam travados
+  const [pendNaoLidas, setPendNaoLidas] = useState([]);
   const pendenciasDe = (o) => pendPorOp.get(String(o?.id)) || [];
-  const faltandoPara = (o) => travaKit100(pendenciasDe(o), o);
+  const faltandoPara = (o) => pendNaoLidas.length
+    ? [{ setor: 'Sistema', titulo: 'não foi possível conferir as pendências agora (tente de novo)', aberto: true }]
+    : travaKit100(pendenciasDe(o), o);
   // Embalar e enviar também espera a pendência (pedido do usuário em 27/10/2026, OP D0797): enquanto houver fabricação, compra ou desenvolvimento que não chegou (ou chegou e aguarda o "Recebi"), o botão fica desligado, como o KITING 100%
   const tituloEmbalar = (o, padrao) => {
     const falta = faltandoPara(o);
@@ -170,6 +174,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     if (!silent) setLoading(true);
     const mapa = await indicePendencias();
     setPendPorOp(mapa);
+    setPendNaoLidas(mapa.falhas || []);
     const { data, error: erroOpls } = await supabase.from('oples').select('*')
       // 'Aguardando Embalagem' = OP que JA foi produzida (hoje: fabricação da
       // serralheria com envio) e voltou só para ser pesada, medida e embalada.
@@ -1165,6 +1170,11 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         <Suspense fallback={null}>
           <SolicitarServicoDeTerceiro currentUser={currentUser} onClose={() => setPedindoTerceiro(false)} aoPedido={() => setPedindoTerceiro(false)} />
         </Suspense>
+      )}
+      {pendNaoLidas.length > 0 && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
+          {frasePendenciasNaoLidas(pendNaoLidas)} Enquanto isso o Kit 100% e o envio ficam travados.
+        </Faixa>
       )}
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>

@@ -1,9 +1,11 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
+import { explicarErroDoBanco } from './ErroDoBanco';
+import { Botao, Faixa } from './Interface';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -23,11 +25,7 @@ interface Config {
   webhook_secret: string;
 }
 
-const STATUS_COR: Record<string, string> = {
-  conectado:    '#16a34a',
-  desconectado: '#dc2626',
-  aguardando_qr:'#d97706',
-};
+// 12e81 (26/11/2026): a cor de cada situação mora no design.css, por `data-status` (era um mapa de hex escrito aqui)
 const STATUS_LABEL: Record<string, string> = {
   conectado:    '🟢 Conectado',
   desconectado: '🔴 Desconectado',
@@ -42,12 +40,48 @@ const EDGE_URL = `${SUPABASE_URL}/functions/v1/whatsapp-admin`;
 // supabase.auth.getSession() retorna null → usar anon key diretamente para chamar Edge Functions.
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
 
+/**
+ * 12e81 (26/11/2026): a ÚNICA porta de saída para a função "whatsapp-admin". Antes cada ação fazia o seu `fetch` e quase todas ignoravam a resposta: desconectar e excluir
+ * "davam certo" mesmo quando o servidor falhava, e a leitura da situação sem estado valia como "desconectado" (e a tela gravava isso no banco). Agora qualquer resposta
+ * que não seja um JSON de sucesso (HTTP fora de 2xx, campo `error`, sem conexão) vira um erro com a frase pronta para a pessoa.
+ */
+async function chamarFuncao(metodo: 'GET' | 'POST', acao: string, { instancia, corpo }: { instancia?: string; corpo?: any } = {}) {
+  const url = metodo === 'GET' ? `${EDGE_URL}?action=${acao}&instance=${encodeURIComponent(instancia || '')}` : EDGE_URL;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: metodo,
+      headers: metodo === 'POST'
+        ? { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+        : { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      body: metodo === 'POST' ? JSON.stringify({ action: acao, ...corpo }) : undefined,
+    });
+  } catch {
+    throw new Error('sem conexão com o sistema. Confira a internet e tente de novo');
+  }
+  const ehJson = (res.headers.get('content-type') || '').includes('application/json');
+  if (!ehJson) {
+    throw new Error(`a função "whatsapp-admin" não respondeu como esperado (HTTP ${res.status}); ela pode não estar publicada no Supabase (supabase functions deploy whatsapp-admin)`);
+  }
+  let json: any;
+  try { json = await res.json(); } catch { throw new Error('a resposta da função veio ilegível'); }
+  if (!res.ok || json?.error) throw new Error(String(json?.error || json?.message || json?.msg || `HTTP ${res.status}`));
+  return json || {};
+}
+
+// A Evolution API diz que a instância não existe de duas formas: `status: 404` ou uma mensagem em inglês (lista ou texto solto: o código antigo só aceitava lista e quebrava com texto)
+function instanciaNaoExiste(json: any): boolean {
+  const msgs = [json?.response?.message].flat().filter((m: any) => typeof m === 'string');
+  return json?.status === 404 || msgs.some((m: string) => m.toLowerCase().includes('does not exist') || m.toLowerCase().includes('not found'));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => void }) {
   const [instancias, setInstancias]   = useState<Instancia[]>([]);
   const [config, setConfig]           = useState<Partial<Config>>({});
   const [configId, setConfigId]       = useState<string | null>(null);
   const [loading, setLoading]         = useState(true);
+  const [falhas, setFalhas]           = useState<string[]>([]);   // 12e81: o que o banco recusou ler (nunca vale como "vazio")
   const [salvandoCfg, setSalvandoCfg] = useState(false);
 
   // nova instância
@@ -62,15 +96,36 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   const [instInexistente, setInstInexistente] = useState<Record<string, boolean>>({});
   const [recriando, setRecriando]     = useState<Record<string, boolean>>({});
 
+  // 12e81: travas que valem NA HORA (o `disabled` do botão só vale depois do desenho: dois cliques seguidos gravavam e criavam em dobro)
+  const trava = useRef<Record<string, boolean>>({});
+  const jaLeuAConfig = useRef(false);
+  const primeiraLeitura = useRef(true);
+  const comTrava = async (chave: string, fazer: () => Promise<void>) => {
+    if (trava.current[chave]) return;
+    trava.current[chave] = true;
+    try { await fazer(); } finally { trava.current[chave] = false; }
+  };
+
   // ─── carga ─────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    setLoading(true);
-    const [r1, r2] = await Promise.all([
-      supabase.from('crm_whatsapp_instancias').select('*').order('vendedor_nome'),
-      supabase.from('crm_whatsapp_config').select('*').limit(1).single(),
-    ]);
-    setInstancias(r1.data || []);
-    if (r2.data) {
+    if (primeiraLeitura.current) setLoading(true);
+    const nao: string[] = [];
+    let r1: any, r2: any;
+    try {
+      [r1, r2] = await Promise.all([
+        supabase.from('crm_whatsapp_instancias').select('*').order('vendedor_nome'),
+        // maybeSingle: "ainda não há configuração" (normal na primeira vez) é diferente de "o banco recusou ler" (erro)
+        supabase.from('crm_whatsapp_config').select('*').limit(1).maybeSingle(),
+      ]);
+    } catch (e) {
+      r1 = { error: e }; r2 = { error: e };
+    }
+    if (r1.error) nao.push('vendedores'); else setInstancias(r1.data || []);
+    if (r2.error) {
+      nao.push('configuração');
+    } else if (r2.data && !jaLeuAConfig.current) {
+      // só a primeira leitura preenche o formulário: reler depois (ex.: ao atualizar a situação de um vendedor) apagava o que a pessoa estava digitando
+      jaLeuAConfig.current = true;
       setConfig({
         evolution_url:  r2.data.evolution_url,
         api_token:      r2.data.api_token,
@@ -78,172 +133,186 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
       });
       setConfigId(r2.data.id);
     }
+    setFalhas(nao);
+    primeiraLeitura.current = false;
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // ─── salvar config global ──────────────────────────────────────────────────
-  const salvarConfig = async () => {
-    if (!config.evolution_url?.trim() || !config.api_token?.trim()) return;
-    setSalvandoCfg(true);
-    const payload = {
-      evolution_url:  config.evolution_url.trim().replace(/\/$/, ''),
-      api_token:      config.api_token.trim(),
-      webhook_secret: config.webhook_secret?.trim() || null,
-      atualizado_em:  new Date().toISOString(),
-    };
-    if (configId) {
-      await supabase.from('crm_whatsapp_config').update(payload).eq('id', configId);
-    } else {
-      const { data } = await supabase.from('crm_whatsapp_config').insert(payload).select().single();
-      if (data) setConfigId(data.id);
-    }
-    setSalvandoCfg(false);
-    alert('Configuração salva! Agora você pode criar instâncias.');
-  };
+  const naoLeuConfig = falhas.includes('configuração');
+  const naoLeuVendedores = falhas.includes('vendedores');
 
-  // ─── criar instância ───────────────────────────────────────────────────────
-  const criarInstancia = async () => {
-    if (!novaInst.trim() || !novaVend.trim()) return;
-    if (!configId) { alert('Salve a configuração da Evolution API primeiro.'); return; }
-    setCriando(true);
-    try {
-      const res = await fetch(EDGE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: 'create', instanceName: novaInst.trim(), vendedorNome: novaVend.trim() }),
-      });
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        throw new Error(`A Edge Function "whatsapp-admin" não foi encontrada no Supabase (HTTP ${res.status}). Execute: supabase functions deploy whatsapp-admin`);
-      }
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      setModalNova(false);
-      setNovaInst('');
-      setNovaVend('');
-      await load();
-      // abre QR automaticamente
-      await buscarQR(novaInst.trim());
-    } catch (e: any) {
-      alert('Erro ao criar instância: ' + e.message);
+  // ─── salvar config global ──────────────────────────────────────────────────
+  const salvarConfig = () => comTrava('config', async () => {
+    if (naoLeuConfig) return;   // sem ler o que já existe, salvar criaria uma SEGUNDA configuração
+    if (!config.evolution_url?.trim() || !config.api_token?.trim()) {
+      mostrarAviso('Preencha o endereço do servidor e a Global API Key antes de salvar.', 'atencao');
+      return;
     }
-    setCriando(false);
-  };
+    setSalvandoCfg(true);
+    try {
+      const payload = {
+        evolution_url:  config.evolution_url.trim().replace(/\/$/, ''),
+        api_token:      config.api_token.trim(),
+        webhook_secret: config.webhook_secret?.trim() || null,
+        atualizado_em:  new Date().toISOString(),
+      };
+      if (configId) {
+        const { data, error } = await supabase.from('crm_whatsapp_config').update(payload).eq('id', configId).select('id');
+        if (error) { mostrarAviso('Não foi possível salvar a configuração: ' + explicarErroDoBanco(error), 'erro'); return; }
+        // o banco responde "ok, 0 linhas" a uma gravação que não pode fazer (registro removido, sem permissão)
+        if (!data?.length) { mostrarAviso('Não foi possível salvar a configuração: nada foi alterado (o registro pode ter sido removido ou você não tem permissão). Reabra a janela e tente de novo.', 'erro'); return; }
+      } else {
+        // outra pessoa pode ter criado a configuração enquanto esta janela estava aberta: confere antes de criar uma segunda
+        const ja = await supabase.from('crm_whatsapp_config').select('id').limit(1);
+        if (ja.error) { mostrarAviso('Não foi possível conferir se já existe uma configuração: ' + explicarErroDoBanco(ja.error), 'erro'); return; }
+        if (ja.data?.length) { mostrarAviso('Não foi possível salvar: já existe uma configuração criada por outra pessoa. Reabra a janela para ver e alterar a que existe.', 'erro'); return; }
+        const { data, error } = await supabase.from('crm_whatsapp_config').insert(payload).select('id');
+        if (error) { mostrarAviso('Não foi possível salvar a configuração: ' + explicarErroDoBanco(error), 'erro'); return; }
+        if (!data?.length) { mostrarAviso('Não foi possível salvar a configuração: nada foi gravado (confira a sua permissão).', 'erro'); return; }
+        setConfigId(data[0].id);
+      }
+      mostrarAviso('Configuração salva! Agora você pode criar instâncias.', 'ok');
+    } catch (e: any) {
+      mostrarAviso('Não foi possível salvar a configuração: ' + explicarErroDoBanco(e), 'erro');
+    } finally {
+      setSalvandoCfg(false);
+    }
+  });
 
   // ─── buscar QR code ────────────────────────────────────────────────────────
-  const buscarQR = async (instanceName: string) => {
+  const buscarQR = (instanceName: string) => comTrava('qr:' + instanceName, async () => {
     setQrLoading(prev => ({ ...prev, [instanceName]: true }));
     try {
-      const res = await fetch(`${EDGE_URL}?action=qrcode&instance=${encodeURIComponent(instanceName)}`, {
-        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-      });
-      if (!res.ok && !(res.headers.get('content-type') || '').includes('application/json')) {
-        throw new Error(`Edge Function indisponível (HTTP ${res.status}). Deploy: supabase functions deploy whatsapp-admin`);
-      }
-      const json = await res.json();
+      const json = await chamarFuncao('GET', 'qrcode', { instancia: instanceName });
       // Evolution API v2 retorna { base64: 'data:image/png;base64,...' } ou { qrcode: { base64: ... } }
       const b64 = json.base64 || json.qrcode?.base64 || json.code || null;
       // Detecta instância inexistente no servidor Evolution API
-      const msgs: string[] = json.response?.message || [];
-      const inexistente = json.status === 404 ||
-        msgs.some((m: string) => m.toLowerCase().includes('does not exist') || m.toLowerCase().includes('not found'));
-      if (inexistente) {
+      if (instanciaNaoExiste(json)) {
         setInstInexistente(prev => ({ ...prev, [instanceName]: true }));
       } else if (b64) {
         setInstInexistente(prev => ({ ...prev, [instanceName]: false }));
         setQrData(prev => ({ ...prev, [instanceName]: b64 }));
       } else {
-        alert('QR code não disponível. Tente novamente em alguns segundos.\n\nResposta: ' + JSON.stringify(json));
+        mostrarAviso('O QR code ainda não está disponível. Tente novamente em alguns segundos.\n\nResposta: ' + JSON.stringify(json).slice(0, 200), 'atencao');
       }
     } catch (e: any) {
-      alert('Erro ao buscar QR: ' + e.message);
+      mostrarAviso('Não foi possível buscar o QR code: ' + e.message, 'erro');
+    } finally {
+      setQrLoading(prev => ({ ...prev, [instanceName]: false }));
     }
-    setQrLoading(prev => ({ ...prev, [instanceName]: false }));
-  };
+  });
+
+  // ─── criar instância ───────────────────────────────────────────────────────
+  const criarInstancia = () => comTrava('criar', async () => {
+    const nome = novaInst.trim();
+    const vendedor = novaVend.trim();
+    if (!nome || !vendedor) { mostrarAviso('Escolha o vendedor e informe o nome da instância.', 'atencao'); return; }
+    if (naoLeuConfig) { mostrarAviso('Não foi possível conferir a configuração do servidor agora. Use "Tentar de novo" antes de criar a instância.', 'erro'); return; }
+    if (!configId) { mostrarAviso('Salve a configuração da Evolution API primeiro.', 'atencao'); return; }
+    // a função apaga e recria no servidor a instância que já existe com o mesmo nome: quem já está conectado perderia a conexão sem aviso
+    if (instancias.some(i => i.instance_name === nome)) {
+      const seguir = await confirmar(`Já existe a instância "${nome}" (${instancias.find(i => i.instance_name === nome)?.vendedor_nome || ''}).\n\nCriar de novo APAGA a instância atual no servidor do WhatsApp e a conexão dela se perde. Continuar?`);
+      if (!seguir) return;
+    }
+    setCriando(true);
+    try {
+      await chamarFuncao('POST', 'create', { corpo: { instanceName: nome, vendedorNome: vendedor } });
+      setModalNova(false);
+      setNovaInst('');
+      setNovaVend('');
+      await load();
+      // abre QR automaticamente
+      await buscarQR(nome);
+    } catch (e: any) {
+      mostrarAviso('Não foi possível criar a instância: ' + e.message, 'erro');
+    } finally {
+      setCriando(false);
+    }
+  });
 
   // ─── recriar instância no servidor (quando Evolution API perdeu o registro) ──
-  const recriarInstancia = async (inst: Instancia) => {
+  const recriarInstancia = (inst: Instancia) => comTrava('recriar:' + inst.instance_name, async () => {
     setRecriando(prev => ({ ...prev, [inst.instance_name]: true }));
     try {
-      const res = await fetch(EDGE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ action: 'create', instanceName: inst.instance_name, vendedorNome: inst.vendedor_nome }),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      await chamarFuncao('POST', 'create', { corpo: { instanceName: inst.instance_name, vendedorNome: inst.vendedor_nome } });
       setInstInexistente(prev => ({ ...prev, [inst.instance_name]: false }));
       await load();
       // Aguarda Evolution API inicializar a instância antes de pedir QR
       await new Promise(resolve => setTimeout(resolve, 2500));
       await buscarQR(inst.instance_name);
     } catch (e: any) {
-      alert('Erro ao recriar instância: ' + e.message);
+      mostrarAviso('Não foi possível recriar a instância: ' + e.message, 'erro');
+    } finally {
+      setRecriando(prev => ({ ...prev, [inst.instance_name]: false }));
     }
-    setRecriando(prev => ({ ...prev, [inst.instance_name]: false }));
-  };
+  });
 
   // ─── verificar status ──────────────────────────────────────────────────────
-  const verificarStatus = async (inst: Instancia) => {
+  const verificarStatus = (inst: Instancia) => comTrava('status:' + inst.id, async () => {
     try {
-      const res = await fetch(`${EDGE_URL}?action=status&instance=${encodeURIComponent(inst.instance_name)}`, {
-        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-      });
-      if (!res.ok && !(res.headers.get('content-type') || '').includes('application/json')) {
-        throw new Error(`Edge Function indisponível (HTTP ${res.status})`);
+      const json = await chamarFuncao('GET', 'status', { instancia: inst.instance_name });
+      if (instanciaNaoExiste(json)) {
+        // o servidor não conhece a instância: mostra o quadro "Recriar" e NÃO mexe no cadastro (antes gravava "desconectado")
+        setInstInexistente(prev => ({ ...prev, [inst.instance_name]: true }));
+        mostrarAviso(`O servidor do WhatsApp não conhece a instância "${inst.instance_name}". Use "Recriar Instância" para cadastrá-la de novo.`, 'atencao');
+        return;
       }
-      const json = await res.json();
       // Evolution API v2: { instance: { instanceName, state } }
-      const state = json.instance?.state || json.state || 'close';
+      const state = json.instance?.state || json.state;
+      if (!state) {
+        // antes, resposta sem estado valia como "close": gravava "desconectado" e apagava o número de quem estava conectado
+        mostrarAviso('Não foi possível ler a situação: o servidor do WhatsApp não informou o estado da conexão. Nada foi alterado.', 'erro');
+        return;
+      }
       const statusMap: Record<string, string> = { open: 'conectado', close: 'desconectado', connecting: 'aguardando_qr' };
       const novoStatus = statusMap[state] || 'desconectado';
 
-      await supabase.from('crm_whatsapp_instancias').update({
+      const { data, error } = await supabase.from('crm_whatsapp_instancias').update({
         status: novoStatus,
         numero_conectado: state === 'open' ? (json.instance?.phone || inst.numero_conectado) : null,
         atualizado_em: new Date().toISOString(),
-      }).eq('id', inst.id);
-
+      }).eq('id', inst.id).select('id');
+      if (error) { mostrarAviso('Não foi possível guardar a situação: ' + explicarErroDoBanco(error), 'erro'); return; }
+      if (!data?.length) { mostrarAviso('Não foi possível guardar a situação: nada foi alterado (o vendedor pode ter sido removido ou você não tem permissão).', 'erro'); return; }
       await load();
     } catch (e: any) {
-      alert('Erro ao verificar status: ' + e.message);
+      mostrarAviso('Não foi possível verificar a situação: ' + e.message, 'erro');
     }
-  };
+  });
 
   // ─── desconectar ──────────────────────────────────────────────────────────
-  const desconectar = async (inst: Instancia) => {
+  const desconectar = (inst: Instancia) => comTrava('desconectar:' + inst.id, async () => {
     if (!await confirmar(`Desconectar WhatsApp de ${inst.vendedor_nome}?`)) return;
     try {
-      await fetch(EDGE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ action: 'logout', instanceName: inst.instance_name }),
-      });
+      await chamarFuncao('POST', 'logout', { corpo: { instanceName: inst.instance_name } });
       setQrData(prev => { const n = { ...prev }; delete n[inst.instance_name]; return n; });
       await load();
     } catch (e: any) {
-      alert('Erro ao desconectar: ' + e.message);
+      mostrarAviso('Não foi possível desconectar: ' + e.message, 'erro');
     }
-  };
+  });
 
   // ─── excluir instância ─────────────────────────────────────────────────────
-  const excluirInstancia = async (inst: Instancia) => {
+  const excluirInstancia = (inst: Instancia) => comTrava('excluir:' + inst.id, async () => {
     if (!await confirmar(`Excluir instância "${inst.instance_name}" de ${inst.vendedor_nome}?\n\nIsso remove a instância da Evolution API e do sistema.`)) return;
     try {
-      await fetch(EDGE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ action: 'delete', instanceName: inst.instance_name }),
-      });
+      await chamarFuncao('POST', 'delete', { corpo: { instanceName: inst.instance_name } });
       setQrData(prev => { const n = { ...prev }; delete n[inst.instance_name]; return n; });
       await load();
     } catch (e: any) {
-      alert('Erro ao excluir: ' + e.message);
+      mostrarAviso('Não foi possível excluir: ' + e.message, 'erro');
+    }
+  });
+
+  // ─── copiar o endereço do webhook ──────────────────────────────────────────
+  const copiarWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`);
+      mostrarAviso('Endereço do webhook copiado.', 'ok');
+    } catch {
+      mostrarAviso('Não foi possível copiar: o navegador recusou. Selecione o endereço e copie à mão.', 'erro');
     }
   };
 
@@ -251,134 +320,126 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:2000,
-      display:'flex', alignItems:'center', justifyContent:'center' }}
+    <div className="acn-wa-fundo"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
 
-      <div style={{ background:'white', borderRadius:10, width:'min(720px,96vw)',
-        maxHeight:'92vh', overflow:'auto', padding:'18px 20px', boxShadow:'0 12px 48px #0005' }}>
+      <div className="acn-wa-jan">
 
         {/* ── Header ── */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
-          <span style={{ fontSize:20 }}>💬</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:'#1e293b' }}>WhatsApp — Conexões dos Vendedores</div>
-            <div style={{ fontSize:9, color:'#64748b' }}>Via Evolution API — cada vendedor conecta seu próprio número</div>
+        <div className="acn-wa-cab">
+          <span className="acn-wa-cab-ico">💬</span>
+          <div className="acn-wa-cab-txt">
+            <div className="acn-wa-titulo">WhatsApp — Conexões dos Vendedores</div>
+            <div className="acn-wa-sub">Via Evolution API — cada vendedor conecta seu próprio número</div>
           </div>
-          <button onClick={onClose}
-            style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, color:'#94a3b8', padding:2 }}>✕</button>
+          <Botao variante="discreto" className="acn-wa-fechar" aria-label="Fechar" onClick={onClose}>✕</Botao>
         </div>
 
         {loading ? (
-          <div style={{ textAlign:'center', padding:30, color:'#64748b', fontSize:11 }}>Carregando...</div>
+          <div className="acn-wa-carregando">Carregando...</div>
         ) : (
           <>
+            {falhas.length > 0 && (
+              <div className="acn-wa-faixa">
+                <Faixa tom="erro" acao={<Botao pequeno variante="secundario" onClick={load}>Tentar de novo</Botao>}>
+                  Não foi possível ler {falhas.map(f => (f === 'vendedores' ? 'as conexões dos vendedores' : 'a configuração do servidor')).join(' e ')} agora (o banco recusou a leitura).
+                  O que não foi lido não aparece aqui — isso não quer dizer que não exista.
+                  {naoLeuConfig ? ' Enquanto a configuração não for lida, ela não pode ser salva.' : ''}
+                </Faixa>
+              </div>
+            )}
+
             {/* ── Configuração global da Evolution API ── */}
-            <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
-              padding:'12px 14px', marginBottom:16 }}>
-              <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:10, textTransform:'uppercase' }}>
+            <div className="acn-wa-cfg">
+              <div className="acn-wa-cfg-tit">
                 ⚙️ Evolution API — Configuração do Servidor
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 12px' }}>
-                <div style={{ gridColumn:'1/-1' }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>URL do Servidor *</div>
-                  <input value={config.evolution_url || ''} placeholder="https://api.seuservidor.com.br"
+              <div className="acn-wa-cfg-grade">
+                <div className="acn-wa-campo acn-wa-cfg-url">
+                  <div className="acn-wa-rot">URL do Servidor *</div>
+                  <input className="acn-input" value={config.evolution_url || ''} placeholder="https://api.seuservidor.com.br"
                     onChange={e => setConfig(f => ({ ...f, evolution_url: e.target.value }))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
                   />
                 </div>
-                <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Global API Key *</div>
-                  <input value={config.api_token || ''} placeholder="sua-api-key-aqui" type="password"
+                <div className="acn-wa-campo">
+                  <div className="acn-wa-rot">Global API Key *</div>
+                  <input className="acn-input" value={config.api_token || ''} placeholder="sua-api-key-aqui" type="password"
                     onChange={e => setConfig(f => ({ ...f, api_token: e.target.value }))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
                   />
                 </div>
-                <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                    Webhook Secret <span style={{ color:'#94a3b8', fontWeight:400 }}>(opcional)</span>
+                <div className="acn-wa-campo">
+                  <div className="acn-wa-rot">
+                    Webhook Secret <span className="acn-wa-opc">(opcional)</span>
                   </div>
-                  <input value={config.webhook_secret || ''} placeholder="chave-secreta-webhook" type="password"
+                  <input className="acn-input" value={config.webhook_secret || ''} placeholder="chave-secreta-webhook" type="password"
                     onChange={e => setConfig(f => ({ ...f, webhook_secret: e.target.value }))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
                   />
                 </div>
               </div>
 
               {/* Webhook URL para copiar */}
-              <div style={{ marginTop:10, padding:'6px 10px', background:'#eff6ff', border:'1px solid #bfdbfe',
-                borderRadius:5, fontSize:9 }}>
-                <span style={{ fontWeight:700, color:'#1e40af' }}>Webhook URL</span>
-                <span style={{ color:'#1e293b', marginLeft:6, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", userSelect:'all' }}>
+              <div className="acn-wa-hook">
+                <span className="acn-wa-hook-rot">Webhook URL</span>
+                <span className="acn-wa-hook-url">
                   {SUPABASE_URL}/functions/v1/whatsapp-webhook
                 </span>
-                <button onClick={() => navigator.clipboard.writeText(
-                  `${SUPABASE_URL}/functions/v1/whatsapp-webhook`
-                )} style={{ marginLeft:8, fontSize:8, background:'#2563eb', color:'white',
-                  border:'none', borderRadius:3, padding:'1px 6px', cursor:'pointer' }}>
+                <Botao pequeno variante="secundario" className="acn-wa-copiar" onClick={copiarWebhook}>
                   Copiar
-                </button>
+                </Botao>
               </div>
 
-              <div style={{ display:'flex', justifyContent:'flex-end', marginTop:10 }}>
-                <button className="acn-btn"
-                  style={{ background: salvandoCfg ? '#94a3b8' : '#0891b2', fontSize:9, padding:'4px 14px', opacity: salvandoCfg ? .6 : 1 }}
-                  onClick={salvarConfig} disabled={salvandoCfg}>
+              <div className="acn-wa-cfg-acoes">
+                <Botao variante="primario" pequeno onClick={salvarConfig} disabled={salvandoCfg || naoLeuConfig}>
                   {salvandoCfg ? 'Salvando...' : configId ? '💾 Salvar alterações' : '💾 Salvar configuração'}
-                </button>
+                </Botao>
               </div>
             </div>
 
             {/* ── Lista de instâncias ── */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-              <div style={{ fontWeight:700, fontSize:11, color:'#1e293b' }}>
-                Vendedores Conectados ({instancias.length})
+            <div className="acn-wa-lista-cab">
+              <div className="acn-wa-lista-tit">
+                Vendedores Conectados ({naoLeuVendedores ? 'não lido' : instancias.length})
               </div>
-              <button className="acn-btn" style={{ background:'#16a34a', fontSize:9, padding:'3px 12px' }}
-                onClick={() => setModalNova(true)}>
+              <Botao variante="primario" pequeno onClick={() => setModalNova(true)}>
                 + Adicionar Vendedor
-              </button>
+              </Botao>
             </div>
 
-            {instancias.length === 0 && (
-              <div style={{ textAlign:'center', padding:'24px 0', color:'#94a3b8', fontSize:10 }}>
+            {instancias.length === 0 && !naoLeuVendedores && (
+              <div className="acn-wa-vazio">
                 Nenhum vendedor configurado ainda.<br />
                 Clique em "+ Adicionar Vendedor" para começar.
               </div>
             )}
 
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div className="acn-wa-lista">
               {instancias.map(inst => {
-                const cor      = STATUS_COR[inst.status] || '#64748b';
                 const qr       = qrData[inst.instance_name];
                 const qrL      = qrLoading[inst.instance_name];
                 const instInex = instInexistente[inst.instance_name];
                 const recrL    = recriando[inst.instance_name];
 
                 return (
-                  <div key={inst.id} style={{ border:'1px solid #e2e8f0', borderRadius:8,
-                    padding:'12px 14px', background: inst.status === 'conectado' ? '#f0fdf4' : 'white' }}>
+                  <div key={inst.id} className="acn-wa-inst" data-conectado={inst.status === 'conectado' ? '' : undefined}>
 
-                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div className="acn-wa-inst-linha">
                       {/* Avatar */}
-                      <div style={{ width:38, height:38, borderRadius:'50%', background:'#0891b2',
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                        color:'white', fontSize:14, fontWeight:700, flexShrink:0 }}>
-                        {inst.vendedor_nome[0]?.toUpperCase()}
+                      <div className="acn-wa-avatar">
+                        {(inst.vendedor_nome || '?')[0]?.toUpperCase()}
                       </div>
 
                       {/* Info */}
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{inst.vendedor_nome}</div>
-                        <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>
-                          instance: <code style={{ fontSize:8 }}>{inst.instance_name}</code>
+                      <div className="acn-wa-info">
+                        <div className="acn-wa-nome">{inst.vendedor_nome}</div>
+                        <div className="acn-wa-inst-nome">
+                          instance: <code>{inst.instance_name}</code>
                         </div>
-                        <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-                          <span style={{ fontSize:9, fontWeight:700, color: cor }}>
+                        <div className="acn-wa-situacao">
+                          <span className="acn-wa-status" data-status={inst.status}>
                             {STATUS_LABEL[inst.status] || inst.status}
                           </span>
                           {inst.numero_conectado && (
-                            <span style={{ fontSize:9, color:'#16a34a' }}>
+                            <span className="acn-wa-numero">
                               📱 +{inst.numero_conectado}
                             </span>
                           )}
@@ -386,81 +447,68 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
                       </div>
 
                       {/* Ações */}
-                      <div style={{ display:'flex', gap:4, flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
-                        <button className="acn-btn" style={{ background:'#475569', fontSize:8, padding:'2px 8px' }}
-                          onClick={() => verificarStatus(inst)}>
+                      <div className="acn-wa-acoes">
+                        <Botao pequeno variante="secundario" onClick={() => verificarStatus(inst)}>
                           🔄 Status
-                        </button>
+                        </Botao>
 
                         {inst.status !== 'conectado' && (
-                          <button className="acn-btn"
-                            style={{ background: qrL ? '#94a3b8' : '#d97706', fontSize:8, padding:'2px 8px',
-                              opacity: qrL ? .6 : 1 }}
-                            onClick={() => buscarQR(inst.instance_name)} disabled={qrL}>
+                          <Botao pequeno variante="primario" onClick={() => buscarQR(inst.instance_name)} disabled={qrL}>
                             {qrL ? '⏳ Buscando...' : '📷 Ver QR'}
-                          </button>
+                          </Botao>
                         )}
 
                         {inst.status === 'conectado' && (
-                          <button className="acn-btn" style={{ background:'#ea580c', fontSize:8, padding:'2px 8px' }}
-                            onClick={() => desconectar(inst)}>
+                          <Botao pequeno variante="perigo-sec" onClick={() => desconectar(inst)}>
                             ↩ Desconectar
-                          </button>
+                          </Botao>
                         )}
 
-                        <button className="acn-btn" style={{ background:'#ef4444', fontSize:8, padding:'2px 8px' }}
-                          onClick={() => excluirInstancia(inst)}>
+                        <Botao pequeno variante="perigo" title="Excluir instância" aria-label="Excluir instância" onClick={() => excluirInstancia(inst)}>
                           🗑️
-                        </button>
+                        </Botao>
                       </div>
                     </div>
 
                     {/* Instância inexistente no servidor */}
                     {instInex && !qr && (
-                      <div style={{ marginTop:10, padding:'10px 12px', background:'#fef3c7',
-                        border:'1px solid #fbbf24', borderRadius:6, display:'flex', gap:10, alignItems:'flex-start' }}>
-                        <span style={{ fontSize:14 }}>⚠️</span>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:'#92400e', marginBottom:4 }}>
+                      <div className="acn-wa-inex">
+                        <span className="acn-wa-inex-ico">⚠️</span>
+                        <div className="acn-wa-inex-txt">
+                          <div className="acn-wa-inex-tit">
                             Instância não encontrada no servidor
                           </div>
-                          <div style={{ fontSize:9, color:'#78350f', marginBottom:8, lineHeight:1.4 }}>
+                          <div className="acn-wa-inex-corpo">
                             O servidor WhatsApp (Evolution API) foi reiniciado ou a instância foi removida. Clique em "Recriar" para recadastrá-la e escanear o QR novamente.
                           </div>
-                          <button className="acn-btn"
-                            style={{ background: recrL ? '#94a3b8' : '#d97706', fontSize:9, padding:'3px 12px', opacity: recrL?.6:1 }}
-                            onClick={() => recriarInstancia(inst)} disabled={recrL}>
+                          <Botao pequeno variante="primario" onClick={() => recriarInstancia(inst)} disabled={recrL}>
                             {recrL ? '⏳ Recriando...' : '🔁 Recriar Instância'}
-                          </button>
+                          </Botao>
                         </div>
                       </div>
                     )}
 
                     {/* QR Code */}
                     {qr && (
-                      <div style={{ marginTop:12, display:'flex', flexDirection:'column', alignItems:'center',
-                        padding:'12px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:6 }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:8 }}>
+                      <div className="acn-wa-qr">
+                        <div className="acn-wa-qr-tit">
                           📱 Escaneie o QR Code com o WhatsApp de {inst.vendedor_nome}
                         </div>
                         <img
+                          className="acn-wa-qr-img"
                           src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`}
                           alt="QR Code WhatsApp"
-                          style={{ width:200, height:200, imageRendering:'pixelated' }}
                         />
-                        <div style={{ fontSize:8, color:'#92400e', marginTop:6, textAlign:'center' }}>
+                        <div className="acn-wa-qr-dica">
                           WhatsApp → ⋮ → Aparelhos conectados → Conectar aparelho
                         </div>
-                        <button className="acn-btn"
-                          style={{ background:'#d97706', fontSize:8, padding:'2px 10px', marginTop:8 }}
-                          onClick={() => buscarQR(inst.instance_name)}>
+                        <Botao pequeno variante="secundario" className="acn-wa-qr-atualizar" onClick={() => buscarQR(inst.instance_name)}>
                           🔄 Atualizar QR
-                        </button>
-                        <button style={{ fontSize:8, color:'#94a3b8', background:'none', border:'none',
-                          cursor:'pointer', marginTop:4 }}
+                        </Botao>
+                        <Botao pequeno variante="discreto"
                           onClick={() => setQrData(prev => { const n = { ...prev }; delete n[inst.instance_name]; return n; })}>
                           Fechar QR
-                        </button>
+                        </Botao>
                       </div>
                     )}
                   </div>
@@ -473,18 +521,16 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
 
       {/* ══════ MODAL NOVA INSTÂNCIA ══════ */}
       {modalNova && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.4)', zIndex:2100,
-          display:'flex', alignItems:'center', justifyContent:'center' }}
+        <div className="acn-wa-fundo acn-wa-fundo-nova"
           onClick={e => { if (e.target === e.currentTarget) setModalNova(false); }}>
-          <div style={{ background:'white', borderRadius:8, width:'min(420px,94vw)',
-            padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+          <div className="acn-wa-nova">
 
-            <div style={{ fontWeight:700, fontSize:12, marginBottom:12, color:'#1e293b' }}>
+            <div className="acn-wa-nova-tit">
               + Adicionar Vendedor ao WhatsApp
             </div>
 
-            <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Vendedor *</div>
+            <div className="acn-wa-campo acn-wa-nova-campo">
+              <div className="acn-wa-rot">Vendedor *</div>
               <ColaboradorSelect departamentos={DEPTOS.comercial}
                 value={novaVend}
                 onChange={v => {
@@ -501,29 +547,24 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
               />
             </div>
 
-            <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                Nome da Instância * <span style={{ color:'#94a3b8', fontWeight:400 }}>(somente letras, números e _)</span>
+            <div className="acn-wa-campo acn-wa-nova-campo">
+              <div className="acn-wa-rot">
+                Nome da Instância * <span className="acn-wa-opc">(somente letras, números e _)</span>
               </div>
-              <input value={novaInst} placeholder="ex: joao_silva"
+              <input className="acn-input" value={novaInst} placeholder="ex: joao_silva"
                 onChange={e => setNovaInst(e.target.value.replace(/[^a-z0-9_-]/gi, '_').toLowerCase())}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
               />
             </div>
 
-            <div style={{ padding:'8px 10px', background:'#f0f9ff', border:'1px solid #bae6fd',
-              borderRadius:5, fontSize:9, color:'#0369a1', marginBottom:12 }}>
+            <div className="acn-wa-nova-info">
               Após criar, o QR Code abrirá automaticamente para o vendedor escanear com o WhatsApp.
             </div>
 
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }}
-                onClick={() => setModalNova(false)}>Cancelar</button>
-              <button className="acn-btn"
-                style={{ background: criando ? '#94a3b8' : '#16a34a', fontSize:10, padding:'4px 12px', opacity: criando ? .6 : 1 }}
-                onClick={criarInstancia} disabled={criando}>
+            <div className="acn-wa-nova-acoes">
+              <Botao variante="secundario" onClick={() => setModalNova(false)}>Cancelar</Botao>
+              <Botao variante="primario" onClick={criarInstancia} disabled={criando}>
                 {criando ? '⏳ Criando...' : '✓ Criar e Gerar QR'}
-              </button>
+              </Botao>
             </div>
           </div>
         </div>

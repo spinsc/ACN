@@ -184,7 +184,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
   const vazio = {
     nome:'', email:'', cpf:'', cnpj:'', cargo:'', cargo_ids: [] as string[], dep_ids: [] as string[], data_admissao:'', data_nascimento:'',
     tipo_colaborador:'Funcionário',
-    salario:'', valor_servicos:'', cargo_confianca: false,
+    salario:'', valor_servicos:'', cargo_confianca: false, nao_bate_ponto: false,
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento', pct_tipo: {} as Record<string, string>,
     ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, ''])),
     ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, ''])),
@@ -197,7 +197,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     tipo_colaborador: func.tipo_colaborador||'Funcionário',
     salario: func.salario!=null ? String(func.salario) : '',
     valor_servicos: func.valor_servicos!=null ? String(func.valor_servicos) : '',
-    cargo_confianca: !!func.cargo_confianca,
+    cargo_confianca: !!func.cargo_confianca, nao_bate_ponto: !!func.nao_bate_ponto,
     ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, func[k] != null ? String(func[k]) : ''])),
     recebe_comissao: func.recebe_comissao||false,
     percentual_comissao: func.percentual_comissao!=null ? String(func.percentual_comissao) : '',
@@ -242,6 +242,8 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
       salario: form.salario ? Number(form.salario) : null,
       valor_servicos: form.valor_servicos ? Number(form.valor_servicos) : null,
       cargo_confianca: !!form.cargo_confianca,
+      // a marca só vale para CLT; ao virar terceiro ela é desligada (terceiro nunca bate ponto na Secullum, a regra já o deixa de fora)
+      nao_bate_ponto: form.tipo_colaborador === 'Funcionário' && !!form.nao_bate_ponto,
       ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, String(form[k]).trim() !== '' && Number.isFinite(Number(form[k])) ? Number(form[k]) : null])),
       adicional_cargo_confianca: form.cargo_confianca && String(form.adicional_cargo_confianca).trim() !== '' && Number.isFinite(Number(form.adicional_cargo_confianca)) ? Number(form.adicional_cargo_confianca) : null,   // sem cargo de confiança não há adicional
       recebe_comissao: form.recebe_comissao,
@@ -338,6 +340,15 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
                 {form.empresa && !EMPRESAS_RH.includes(form.empresa) && <option value={form.empresa}>{form.empresa}</option>}
               </select>
             </div>
+            {/* 25/11/2026 (Ponto, P3): quem não bate ponto (sócio, diretoria, quem trabalha fora da escala) sai da faixa "sem par na Secullum", dos avisos de ponto e do relatório */}
+            {isFuncionario && (
+              <div style={campoDestaque('nao_bate_ponto')}>
+                {lbl('Não bate ponto na Secullum?')}
+                <Chips ativo={form.nao_bate_ponto ? 'sim' : 'nao'} onChange={v => set('nao_bate_ponto', v === 'sim')}
+                  itens={[{ id: 'nao', rotulo: 'Bate ponto' }, { id: 'sim', rotulo: 'Não bate ponto' }]} />
+                <div className="acn-ajuda">Marque para quem não precisa estar no ponto (a pessoa deixa de aparecer como pendência e de gerar aviso de falta ou batida incompleta).</div>
+              </div>
+            )}
             <div>
               {lbl('Departamentos (escolha um ou mais)')}
               {erroDepartamentos
@@ -2480,6 +2491,8 @@ export default function RHTab({ currentUser }) {
   const [modalLanc, setModalLanc]         = useState(false);
   const [modalAut, setModalAut]           = useState(false);
   // 20/11/2026: o RH é um sistema de abas. Quem chega pelo botão da tela Ponto (window.__acnDeepLink.rhAba) cai direto na aba pedida.
+  // 25/11/2026: o aviso de ponto do Calendário leva direto à parte "A tratar" do Relógio Ponto (`pontoVisao`); lido ANTES do rhAba, que limpa o pedido
+  const [visaoDoPonto] = useState(() => String((window as any).__acnDeepLink?.pontoVisao || ''));
   const [aba, setAba] = useState(() => {
     const pedida = (window as any).__acnDeepLink?.rhAba;
     if (pedida) { (window as any).__acnDeepLink = null; return ['geral','colaboradores','ponto','comissoes','relatorios','autorizacoes'].includes(pedida) ? pedida : 'geral'; }
@@ -2581,6 +2594,7 @@ export default function RHTab({ currentUser }) {
         </>
       ) : aba === 'ponto' ? (
         <RelogioPonto
+          visaoInicial={visaoDoPonto}
           funcionarios={funcionarios}
           desligados={desligados}
           currentUser={currentUser}

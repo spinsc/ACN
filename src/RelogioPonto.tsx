@@ -349,7 +349,8 @@ function VisaoVinculos({ funcionarios, devem, dados, rodadas, usuarios, abrirFic
   const paresDaSecullum = new Map((ultima?.detalhes?.pares || []).map(x => [x.rh_id, x.nome]));
   const soNaLista = Array.isArray(ultima?.detalhes?.so_na_secullum_lista) ? ultima.detalhes.so_na_secullum_lista : null;
   const idsComPonto = useMemo(() => new Set([...dados.totais.keys()]), [dados]);
-  const naoDetech = funcionarios.filter(f => f.ativo && f.tipo_colaborador === 'Funcionário' && !deveBaterPonto(f));
+  const naoDetech = funcionarios.filter(f => f.ativo && f.tipo_colaborador === 'Funcionário' && !deveBaterPonto(f) && !f.nao_bate_ponto);
+  const naoBatem = funcionarios.filter(f => f.ativo && f.tipo_colaborador === 'Funcionário' && f.nao_bate_ponto);   // 25/11/2026: marcados pelo RH na ficha
 
   const linhas = useMemo(() => devem.map(p => ({
     p, sec: situacaoNaSecullum(p, semParIds, idsComPonto), lig: ligacaoDoUsuario(p, usuarios), nomeNaSecullum: paresDaSecullum.get(p.id) || '',
@@ -451,6 +452,7 @@ function VisaoVinculos({ funcionarios, devem, dados, rodadas, usuarios, abrirFic
       )}
       <p className="acn-ponto-rodape">
         {naoDetech.length ? `${naoDetech.length} CLT ativo(s) de outra empresa (ACN) ficam fora do ponto, como combinado. ` : ''}
+        {naoBatem.length ? `${naoBatem.length} CLT marcado(s) como "Não bate ponto" na ficha (${naoBatem.map(nome).join(', ')}) também ficam fora. ` : ''}
         {ultima ? `Conferência da leitura de ${quandoFoi(ultima.iniciada_em)}.` : 'Ainda não houve leitura.'}
       </p>
     </>
@@ -458,11 +460,11 @@ function VisaoVinculos({ funcionarios, devem, dados, rodadas, usuarios, abrirFic
 }
 
 // ── A tela ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-export default function RelogioPonto({ funcionarios, desligados, currentUser, onAbrirFicha, onMudou, horasLancadas, onLancarHoras }) {
+export default function RelogioPonto({ funcionarios, desligados, currentUser, onAbrirFicha, onMudou, horasLancadas, onLancarHoras, visaoInicial = '' }) {
   const hoje = hojeISO();
   const mesAtual = primeiroDiaDoMes(hoje);
   const [perm, setPerm] = useState(null);
-  const [visao, setVisao] = useState('hoje');
+  const [visao, setVisao] = useState(['hoje', 'tratar', 'mes', 'extras', 'horas', 'vinculos'].includes(visaoInicial) ? visaoInicial : 'hoje');
   const [mes, setMes] = useState(mesAtual);
   const [meses, setMeses] = useState([]);
   const [aberta, setAberta] = useState(null);
@@ -493,7 +495,8 @@ export default function RelogioPonto({ funcionarios, desligados, currentUser, on
 
   const devem = useMemo(() => funcionarios.filter(deveBaterPonto).sort(porNome), [funcionarios]);
   const pessoas = useMemo(() => new Map([...funcionarios, ...(desligados || [])].map(f => [f.id, f])), [funcionarios, desligados]);
-  const ocorrencias = useMemo(() => ocorrenciasDoMes(base.dias, hoje), [base.dias, hoje]);
+  // 25/11/2026: quem o RH marcou "Não bate ponto" não gera ocorrência (a mesma regra do aviso do Calendário, que o ignora no banco)
+  const ocorrencias = useMemo(() => ocorrenciasDoMes(base.dias, hoje).filter(o => !pessoas.get(o.rhId)?.nao_bate_ponto), [base.dias, hoje, pessoas]);
   const contagem = useMemo(() => contarOcorrencias(ocorrencias), [ocorrencias]);
 
   const ultimaBoa = rodadas.find(r => r.terminada_em && r.ok);

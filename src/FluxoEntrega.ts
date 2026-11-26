@@ -18,11 +18,14 @@ export type FluxoEntrega =
   | 'adaptacao_externa'
   | 'fabricacao_serralheria_envio'
   | 'envio_adaptacao_terceiro'
-  | 'envio_material';
+  | 'envio_material'
+  | 'somente_servico_terceiro';
 
 /** Onde a OP aparece depois de liberada: fila da Adaptação, de Fabricação, ou
- *  nenhuma das duas (vai direto pro Almoxarifado separar/embalar/enviar). */
-export type DestinoFila = 'adaptacao' | 'fabricacao' | 'envio';
+ *  nenhuma das duas (vai direto pro Almoxarifado separar/embalar/enviar). A quarta,
+ *  'terceiros', é a OP que é SÓ serviço de terceiro (pedido do usuário em 25/11/2026):
+ *  não entra em fila de setor nenhum, quem a toca é o módulo Serviços de terceiros. */
+export type DestinoFila = 'adaptacao' | 'fabricacao' | 'envio' | 'terceiros';
 
 export const FLUXOS: { valor: FluxoEntrega; label: string; fila: DestinoFila; ajuda: string }[] = [
   { valor:'adaptacao_matriz',             label:'Adaptação na matriz',                  fila:'adaptacao',
@@ -37,6 +40,23 @@ export const FLUXOS: { valor: FluxoEntrega; label: string; fila: DestinoFila; aj
     ajuda:'Só separar, embalar e enviar. Não passa por produção.' },
 ];
 
+/** OP que é SÓ serviço de terceiro (pedido do usuário em 25/11/2026: as OPs 1806, 1797 e 1760 eram só plotagem e mais nada; não precisam passar pelo Almoxarifado nem
+ *  pela Adaptação). A OP nasce direto em "Aguardando Servico de Terceiro" (pula o PCP), um serviço do módulo de terceiros é aberto por unidade, e quando todos os serviços
+ *  são dados como realizados o banco leva a OP à Liberação Comercial (gatilho `terceiros_avancar_op`, supabase/sql/terceiros_so_servico.sql). Fica FORA de `FLUXOS` de
+ *  propósito: `FLUXOS` alimenta o fluxo misto, a troca de fluxo da unidade, a configuração do veículo e o fluxo padrão da licitação, e nenhum deles sabe mudar a etapa da OP
+ *  nem abrir o serviço. Só a Nova OP (e a cópia da OP) criam OP neste fluxo. */
+export const FLUXO_SO_TERCEIROS: FluxoEntrega = 'somente_servico_terceiro';
+export const FLUXO_SO_TERCEIROS_DEF: typeof FLUXOS[number] = {
+  valor: FLUXO_SO_TERCEIROS, label: 'Somente serviço de terceiro', fila: 'terceiros',
+  ajuda: 'A venda é só serviço de terceiro (plotagem, película…): não passa pelo PCP, pelo Almoxarifado nem pela Adaptação. Vai direto para o quadro de Serviços de terceiros e, feito o serviço, para a Liberação Comercial e o Fiscal.',
+};
+/** A OP é só serviço de terceiro? */
+export const soTerceiros = (v: any) => v === FLUXO_SO_TERCEIROS;
+/** Etapa da OP que só serve ao fluxo "Somente serviço de terceiro": o serviço está com o prestador. */
+export const STATUS_AGUARDANDO_TERCEIRO = 'Aguardando Servico de Terceiro';
+/** O status em que uma OP nasce (Nova OP e Copiar OP): o PCP, salvo a OP que é só serviço de terceiro, que pula o PCP (decidido com o usuário em 25/11/2026). */
+export const statusInicialDaOp = (fluxo: any): string => (soTerceiros(fluxo) ? STATUS_AGUARDANDO_TERCEIRO : 'Em Espera PCP');
+
 // APOSENTADO: 'fabricacao_interna_envio' saiu da lista a pedido do usuário --
 // hoje a serralheria é a única fabricação que termina em envio; o resto já é
 // item pronto, que cai em 'envio_material'. Nenhum registro usava o valor
@@ -49,7 +69,7 @@ const APOSENTADOS: Record<string, DestinoFila> = {
 };
 
 const PORVALOR: Record<string, typeof FLUXOS[number]> =
-  Object.fromEntries(FLUXOS.map(f => [f.valor, f]));
+  Object.fromEntries([...FLUXOS, FLUXO_SO_TERCEIROS_DEF].map(f => [f.valor, f]));
 
 export function fluxoLabel(v: string | null | undefined): string {
   if (!v) return 'Não classificado';
@@ -123,10 +143,11 @@ export const eraLiberacaoComercial = (s: any): boolean =>
   s === STATUS_AGUARDANDO_LIBERACAO_COMERCIAL || s === STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO;
 
 /** Termina com a mercadoria saindo daqui — ou seja, em algum momento precisa
- *  de embalagem e frete. Só as duas adaptações ficam de fora. */
+ *  de embalagem e frete. As duas adaptações e a OP só de serviço de terceiro ficam de fora. */
 export function terminaEmEnvio(v: string | null | undefined): boolean {
   if (!v) return false;                       // OP antiga: comportamento antigo
-  return filaDe(v) !== 'adaptacao';
+  const fila = filaDe(v);
+  return fila === 'fabricacao' || fila === 'envio';
 }
 
 /** "Fabricação serralheria com envio" (carretinha, por exemplo). Rota

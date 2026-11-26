@@ -13,6 +13,8 @@
 import { supabase } from './supabaseClient';
 import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { hojeISO } from './Interface';
+import { soTerceiros, statusInicialDaOp } from './FluxoEntrega';
+import { abrirServicosDaOp } from './TerceirosDaOp';
 
 export const MAX_COPIAS = 30;
 
@@ -48,7 +50,7 @@ export const LEVA_DA_OP = [
 export const NAO_LEVA_DA_OP = [
   'chassi, placa, seriais dos itens e a data de chegada do veículo',
   'as fotos do veículo e as fotos e o checklist anexados',
-  'o andamento: status, liberações, kit separado, embalagem, qualidade, nota fiscal, equipe da produção, notas e histórico — a cópia nasce como OP nova, "Em Espera PCP"',
+  'o andamento: status, liberações, kit separado, embalagem, qualidade, nota fiscal, equipe da produção, notas e histórico — a cópia nasce como OP nova, "Em Espera PCP" (a OP "Somente serviço de terceiro" nasce em "Aguardando serviço de terceiro", com os serviços já abertos)',
 ];
 
 const clonar = (v: any) => (v === undefined ? v : JSON.parse(JSON.stringify(v ?? null)));
@@ -98,8 +100,9 @@ export function payloadDaCopiaDaOp(origem: any, numero: string, usuario: any, ag
     tipo_op: origem?.tipo_op || 'OPL',
     data_entrada: hojeISO(),
     // a OP nasce direto no PCP (Etapa 18e, 13/10/2026), como a que sai da Nova OP: o relógio do PCP começa agora
-    status_geral: 'Em Espera PCP',
-    data_chegada_pcp: agora.toISOString(),
+    // 25/11/2026: a cópia de uma OP "Somente serviço de terceiro" também pula o PCP (os serviços são abertos por copiarOp)
+    status_geral: statusInicialDaOp(origem?.fluxo_entrega),
+    data_chegada_pcp: soTerceiros(origem?.fluxo_entrega) ? null : agora.toISOString(),
     criado_por: usuario?.email,
     criado_por_nome: usuario?.nome,
   };
@@ -200,10 +203,15 @@ export async function copiarOp({ origem, numeros, usuario, crmPorNumero }: { ori
   const agoraIso = new Date().toISOString();
   const quem = { usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: agoraIso };
   const { error: erroLog } = await supabase.from('logs_movimentacao_opl').insert([
-    ...criadas.map(c => ({ opl_id: c.id, numero_opl: c.numero, setor: usuario?.perfil || 'Comercial', evento: `OP criada como cópia da OP ${lida.opl}`, status_anterior: null, status_novo: 'Em Espera PCP', ...quem })),
+    ...criadas.map(c => ({ opl_id: c.id, numero_opl: c.numero, setor: usuario?.perfil || 'Comercial', evento: `OP criada como cópia da OP ${lida.opl}`, status_anterior: null, status_novo: statusInicialDaOp(lida.fluxo_entrega), ...quem })),
     { opl_id: lida.id, numero_opl: lida.opl, setor: usuario?.perfil || 'Comercial', evento: `OP copiada ${criadas.length === 1 ? 'para' : `${criadas.length} vezes, para`}: ${criadas.map(c => c.numero).join(', ')}`, status_anterior: lida.status_geral, status_novo: lida.status_geral, ...quem },
   ]);
   if (erroLog) avisos.push(`o histórico das OPs não foi gravado (${erroLog.message})`);
+  // 25/11/2026: a OP só de serviço de terceiro precisa do serviço aberto em cada cópia, senão fica parada sem nada a fazer
+  if (soTerceiros(lida.fluxo_entrega)) {
+    const feito = await abrirServicosDaOp({ ops: criadas, modelo: lida });
+    if (feito.avisos.length) avisos.push(`os serviços de terceiro não foram todos abertos: ${feito.avisos.join(' ')} Abra a OP e use "Pedir serviço de terceiro"`);
+  }
   return { criadas, avisos };
 }
 

@@ -19,8 +19,14 @@ import Icone from './Icone';
 import { mdiMapMarkerOutline, mdiTimerOutline, mdiAlertOutline, mdiTruckOutline, mdiReceiptTextOutline, mdiPackageVariantClosed } from '@mdi/js';
 
 /** A faixa, com os dados já em mãos (o Dossiê carrega os seus e repassa). */
-export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = null, carregando = false }) {
+/** 12e80 (25/11/2026): `falhas` = nomes do que não se conseguiu ler (vêm de `carregarDossie().falhas`). A faixa nunca afirma "sem pendência", "sem frete" ou "sem registro" quando foi a leitura que falhou. */
+export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = null, carregando = false, falhas = [] }) {
   if (!op) return null;
+  const naoLeu = (re) => (falhas || []).some(f => re.test(f));
+  const semPendencias = naoLeu(/demandas|compras|ajustes/i);
+  const semFrete = naoLeu(/fretes/i);
+  const semHistorico = naoLeu(/hist[óo]rico/i);
+  const naoLidos = [semPendencias && 'pendências', semFrete && 'frete', semHistorico && 'quando entrou na etapa', naoLeu(/^dados da OP$/i) && 'dados da OP'].filter(Boolean);
   const cancelada = op.status_geral === 'Cancelado';
   const et = etapaDaOp(op.status_geral, op);
   const desde = desdeQuandoNaEtapa(op, logs);
@@ -49,6 +55,8 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
         {!cancelada && (
           carregando ? (
             <span className="acn-oea-chip acn-oea-fraco"><Icone path={mdiTimerOutline} size={13} /> …</span>
+          ) : semHistorico ? (
+            <span className="acn-oea-chip acn-oea-fraco" title="Não foi possível ler o histórico da OP agora."><Icone path={mdiTimerOutline} size={13} /> desde quando: não lido</span>
           ) : desde ? (
             <span className="acn-oea-chip"
               title={desde.fonte === 'marco'
@@ -59,6 +67,12 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
           ) : (
             <span className="acn-oea-chip acn-oea-fraco" title="Nenhuma data registrada para esta OP."><Icone path={mdiTimerOutline} size={13} /> sem registro</span>
           )
+        )}
+
+        {naoLidos.length > 0 && (
+          <Selo familia="erro" ponto={false} title="O banco recusou a leitura: o que não foi lido não aparece aqui, e isso não quer dizer que não exista. Tente de novo.">
+            <Icone path={mdiAlertOutline} size={13} /> Não foi possível ler: {naoLidos.join(', ')}
+          </Selo>
         )}
 
         {pend.length > 0 && (
@@ -129,16 +143,22 @@ export function OndeEstaAgoraAuto({ op, onAbrirDossie = null }) {
     if (!op?.id) return;
     let vivo = true;
     (async () => {
-      const [completa, vinculos, logs] = await Promise.all([
-        supabase.from('oples').select('*').eq('id', op.id).maybeSingle().then(r => r.data),
-        vinculosDaOp(op),
-        linhaDoTempo(op),
-      ]);
-      if (vivo) setDados({ op: completa || op, vinculos, logs });
+      // 12e80 (25/11/2026): o que o banco recusar ler vai na lista `falhas` e a faixa avisa, em vez de mostrar "sem pendência" e "sem registro"
+      const falhas: string[] = [];
+      try {
+        const [completa, vinculos, logs] = await Promise.all([
+          supabase.from('oples').select('*').eq('id', op.id).maybeSingle().then(r => { if (r.error) falhas.push('dados da OP'); return r.data; }),
+          vinculosDaOp(op, falhas),
+          linhaDoTempo(op, falhas),
+        ]);
+        if (vivo) setDados({ op: completa || op, vinculos, logs, falhas: [...new Set(falhas)] });
+      } catch {
+        if (vivo) setDados({ op, vinculos: [], logs: [], falhas: ['pendências', 'fretes', 'histórico'] });
+      }
     })();
     return () => { vivo = false; };
   }, [op?.id, op?.status_geral]);
   // enquanto carrega, mostra o que já dá para saber só pelo status (sem "desde quando")
   if (!dados) return <OndeEstaAgora op={op} carregando />;
-  return <OndeEstaAgora op={dados.op} vinculos={dados.vinculos} logs={dados.logs} onAbrirDossie={onAbrirDossie} />;
+  return <OndeEstaAgora op={dados.op} vinculos={dados.vinculos} logs={dados.logs} falhas={dados.falhas} onAbrirDossie={onAbrirDossie} />;
 }

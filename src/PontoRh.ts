@@ -105,8 +105,12 @@ export function cpfMascarado(cpf: any): string {
 }
 export const cpfValido = (cpf: any): boolean => soDigitos(cpf).length === 11;
 
-/** Quem deveria bater ponto na Secullum: CLT ativo cuja empresa cita a Detech (a mesma regra da função de servidor). */
-export const deveBaterPonto = (p: any): boolean => !!p?.ativo && p?.tipo_colaborador === 'Funcionário' && /detech/i.test(String(p?.empresa || ''));
+/**
+ * Quem deveria bater ponto na Secullum: CLT ativo cuja empresa cita a Detech (a mesma regra da função de servidor), menos quem o RH marcou "Não bate ponto"
+ * na ficha (25/11/2026: sócio, diretoria e quem trabalha fora da escala; sem a marca eles apareciam para sempre na faixa "sem par na Secullum").
+ * A função de servidor da Secullum não conhece a marca: quem existe lá segue lido, só deixa de contar como pendência nas telas e nos avisos.
+ */
+export const deveBaterPonto = (p: any): boolean => !!p?.ativo && !p?.nao_bate_ponto && p?.tipo_colaborador === 'Funcionário' && /detech/i.test(String(p?.empresa || ''));
 
 /**
  * O possível par, na Secullum, de quem o CPF não achou: um cadastro que só existe lá e tem o MESMO nome (sem acento) ou pelo menos dois nomes iguais.

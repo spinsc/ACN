@@ -12,7 +12,7 @@
 // `setor` e `estado` são novos e valem só para a faixa: `setor` é quem tem a OP na
 // mão agora; `estado` diz o que ela está esperando, sem repetir o setor.
 // ─────────────────────────────────────────────────────────────────────────────
-import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, eraLiberacaoComercial } from './FluxoEntrega';
+import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, eraLiberacaoComercial, STATUS_AGUARDANDO_TERCEIRO } from './FluxoEntrega';
 import { ehVendaComposta, setoresPendentes, STATUS_DE_SEPARACAO, SETOR_TELECOM } from './SeparacaoEnvio';
 import { marcosDaOp } from './OpVinculos';
 import { diaISO, hojeISO } from './Interface';
@@ -34,6 +34,8 @@ export const ETAPAS_OP: EtapaOp[] = [
   { match: ['Em Analise Engenharia'], pct: 20, label: 'Em Análise — Engenharia', setor: 'Engenharia', estado: 'em análise' },
   { match: ['Devolvida para Engenharia'], pct: 20, label: 'Devolvida à Engenharia', setor: 'Engenharia', estado: 'devolvida, aguardando nova análise', retrabalho: true },
   { match: ['Em Espera PCP'], pct: 35, label: 'Aguardando PCP', setor: 'PCP', estado: 'na fila, aguardando triagem' },
+  // 25/11/2026 (fluxo "Somente serviço de terceiro"): a OP não passa pelo PCP, Almoxarifado nem Adaptação; fica com o prestador até todos os serviços serem dados como realizados (o banco a leva à Liberação Comercial)
+  { match: [STATUS_AGUARDANDO_TERCEIRO], pct: 50, label: 'Serviço de terceiro', setor: 'Serviços de terceiros', estado: 'aguardando o serviço do prestador' },
   { match: ['Devolvida PCP'], pct: 35, label: 'Devolvida ao PCP', setor: 'PCP', estado: 'devolvida, aguardando correção', retrabalho: true },
   { match: ['Aguardando Almox'], pct: 45, label: 'Almoxarifado', setor: 'Almoxarifado', estado: 'aguardando conferir o kit' },
   { match: ['Kit OK - Aguardando PCP'], pct: 45, label: 'Almoxarifado', setor: 'PCP', estado: 'kit pronto, aguardando liberar a produção' },

@@ -50,7 +50,7 @@ export async function lerServicosLigados(ligacaoTipo: string, ligacaoId: any) {
 /**
  * O quadro. `podePedir` esconde só o botão (a lista fica sempre); `aoAbrir` é chamado quando a pessoa vai para o serviço (a tela de cima fecha a janela, se for uma janela).
  */
-export function QuadroServicosLigados({ ligacaoTipo, ligacaoId, descricao, currentUser = null, podePedir = true, aoAbrir = null, titulo = 'Serviços de terceiros' }: any) {
+export function QuadroServicosLigados({ ligacaoTipo, ligacaoId, descricao, currentUser = null, podePedir = true, aoAbrir = null, titulo = 'Serviços de terceiros', exigeServico = false }: any) {
   const [estado, setEstado] = useState<any>({ carregando: true, lista: [], tipos: new Map(), prestadores: new Map(), erro: '' });
   const [tick, setTick] = useState(0);
   const [pedindo, setPedindo] = useState(false);
@@ -87,7 +87,9 @@ export function QuadroServicosLigados({ ligacaoTipo, ligacaoId, descricao, curre
           Não foi possível ler os serviços de terceiros desta {rotulo} ({estado.erro}). Não peça de novo antes de conferir: o serviço pode já existir.
         </Faixa>
       )}
-      {!estado.erro && !estado.carregando && estado.lista.length === 0 && <div className="acn-fraco">Nenhum serviço de terceiro pedido para esta {rotulo} ainda.</div>}
+      {!estado.erro && !estado.carregando && estado.lista.length === 0 && (exigeServico
+        ? <Faixa tom="erro">Esta {rotulo} é só de serviço de terceiro e ainda não tem serviço pedido: sem ele ela não anda. Use "Pedir serviço de terceiro".</Faixa>
+        : <div className="acn-fraco">Nenhum serviço de terceiro pedido para esta {rotulo} ainda.</div>)}
       {estado.lista.length > 0 && (
         <div className="acn-rolagem">
           <table className="acn-tabela acn-compacta">

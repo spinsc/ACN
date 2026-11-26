@@ -42,7 +42,7 @@ const SETOR_DESTINO_ABA: Record<string, string> = { Chicotes: 'chicotes', Serral
 
 // Dispara o deep-link já estabelecido no app pra abrir o registro vinculado —
 // evento 'acn:abrir-registro' (visto pela tela de destino) + evento
-// 'acn:trocar-aba' (visto por DashboardTab.tsx, que faz setActiveTab).
+// 'acn:trocar-aba' (visto por DashboardTab.tsx, que troca de tela por `irParaTela`, conferindo a permissão e escrevendo o endereço).
 // Usa eventos globais em vez de um callback onNavigate prop-drilled porque o
 // vínculo pode ser clicado de dentro de qualquer painel de Demandas Avulsas
 // aninhado bem fundo (Almoxarifado/PCP/Compras/Engenharia) — sem precisar

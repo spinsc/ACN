@@ -15,6 +15,7 @@ import { HORARIO_CONTAGEM_TEXTO, diaChave, type Intervalo } from './HorarioConta
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { Faixa, Selo, Chips, Botao, type Familia } from './Interface';
 import { explicarErroDoBanco } from './ErroDoBanco';
+import PontoDoPedido, { usePontoParaAprovar } from './PontoDoPedido';
 
 // ─── Texto dos erros ───────────────────────────────────────────────────────────
 // 7.x (09/11/2026): leitura ou gravação recusada pelo banco passava em silêncio por toda a tela (lista vazia, aviso que não sai, pedido
@@ -398,7 +399,7 @@ export function ModalHoraExtra({ currentUser, pessoaNome, tarefa, acao, onClose,
 }
 
 // ─── Janela: aprovar ou recusar ────────────────────────────────────────────────
-function ModalDecidir({ registro, aprovar, currentUser, onClose, onFeito }: any) {
+function ModalDecidir({ registro, aprovar, currentUser, onClose, onFeito, ponto }: any) {
   const ini = new Date(registro.inicio), fimOriginal = new Date(registro.fim);
   const [dia, setDia] = useState(diaChave(ini));
   const [das, setDas] = useState(horaInput(ini));
@@ -435,6 +436,8 @@ function ModalDecidir({ registro, aprovar, currentUser, onClose, onFeito }: any)
           <div className="acn-hx-t13">
             <strong>{registro.pessoa_nome}</strong> · {textoPeriodo(registro.inicio, registro.fim)}
             <div className="acn-fraco acn-hx-mt2">Motivo: {registro.motivo}</div>
+            {/* P3 (25/11/2026): o ponto da Secullum no dia do pedido, só para ler; nunca decide nada */}
+            {ponto && <div className="acn-hx-mt2"><PontoDoPedido pedido={registro} ponto={ponto} /></div>}
           </div>
           {aprovar && (
             <div className="acn-hx-trio">
@@ -479,6 +482,7 @@ export function PainelHorasExtras({ currentUser, onAtualizado }: any) {
   const [cancelando, setCancelando] = useState('');
   const leitura = useRef(0);        // 7.x: só a leitura mais nova vale (a lenta de antes não pode apagar a lista de agora)
   const travaCancelar = useRef(false);
+  const ponto = usePontoParaAprovar(gestor);   // 25/11/2026 (P3): quem aprova vê o ponto do dia ao lado do pedido; quem não pode ver o ponto dos outros não vê nada
 
   // 7.x (09/11/2026): a leitura recusada virava "Nenhuma hora extra nos últimos 90 dias" e esvaziava a lista que já estava na tela, e a
   // do cadastro do RH recusada escondia, sem aviso, as horas extras registradas com o nome do RH. Agora o aviso diz o motivo, oferece
@@ -566,6 +570,7 @@ export function PainelHorasExtras({ currentUser, onAtualizado }: any) {
                   <div className="acn-hx-t13"><strong>{x.pessoa_nome}</strong> · {textoPeriodo(x.inicio, x.fim)}</div>
                   <div className="acn-hx-motivo">{x.motivo}</div>
                   <div className="acn-fraco acn-hx-t12 acn-hx-mt2">Pedido por {x.solicitado_por_nome || '—'} em {dataHora(x.criado_em)}</div>
+                  <div className="acn-hx-mt2"><PontoDoPedido pedido={x} ponto={ponto} /></div>
                 </div>
                 <div className="acn-hx-acoes">
                   <Botao variante="primario" pequeno onClick={() => setDecisao({ registro: x, aprovar: true })}>Aprovar</Botao>
@@ -631,7 +636,7 @@ export function PainelHorasExtras({ currentUser, onAtualizado }: any) {
 
       {novo && <ModalHoraExtra currentUser={currentUser} onClose={() => setNovo(false)} onFeito={() => { setNovo(false); atualizar(); }} />}
       {decisao && <ModalDecidir registro={decisao.registro} aprovar={decisao.aprovar} currentUser={currentUser}
-        onClose={() => setDecisao(null)} onFeito={() => { setDecisao(null); atualizar(); }} />}
+        onClose={() => setDecisao(null)} onFeito={() => { setDecisao(null); atualizar(); }} ponto={ponto} />}
     </div>
   );
 }

@@ -2,7 +2,8 @@
 import React from 'react';
 import { Botao, Selo } from './Interface';
 import Icone from './Icone';
-import { mdiClose, mdiMessageTextOutline } from '@mdi/js';
+import { mdiClose, mdiMessageTextOutline, mdiLink } from '@mdi/js';
+import { copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): "Copiar link" da OS
 import { QuadroComprasLigadas } from './ComprasLigadas';
 import { QuadroServicosLigados } from './TerceirosLigados';
 import { progressoDaOS } from './SacFluxo';
@@ -51,10 +52,11 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box acn-modal-cadastro acn-sac-resumo" role="dialog" aria-label={'Resumo da OS ' + os.numero_os}>
-        <div className="acn-modal-cab">
+        <div className="acn-modal-cab acn-srs-cab">
           <span className="modal-title">OS {os.numero_os} <Selo familia="neutro" ponto={false}>{os.status}</Selo> {os.empresa && <Selo familia="marca" ponto={false}>{os.empresa}</Selo>}</span>
           <span className="acn-srs-acoes">
             {onAcompanhamento && <Botao pequeno icone={mdiMessageTextOutline} onClick={onAcompanhamento}>Acompanhamento</Botao>}
+            <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta OS" title="Copiar o link desta OS para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('sac', 'os', os.id, 'da OS')} />
             <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={onClose} />
           </span>
         </div>

@@ -11,6 +11,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { departamentosTexto, departamentoPrincipal } from './RhDepartamentos';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
+import { resumoDoMes, paraTexto } from './PontoSecullum';
+import { deveBaterPonto } from './PontoRh';
 
 export type Pessoa = any;
 export type ColunaDoRelatorio = { id: string; rotulo: string; texto: (f: Pessoa, hoje: string) => string; ordem?: (f: Pessoa, hoje: string) => number | string | null };
@@ -91,6 +93,19 @@ export const COLUNAS: ColunaDoRelatorio[] = [
   { id: 'tamanho_camiseta', rotulo: 'Camiseta', texto: f => f.tamanho_camiseta || '' },
   { id: 'tamanho_calca', rotulo: 'Calça', texto: f => f.tamanho_calca || '' },
   { id: 'tamanho_sapato', rotulo: 'Sapato', texto: f => f.tamanho_sapato || '' },
+  // Ponto do mês (P3, 25/11/2026): os totais que a Secullum calculou, lidos de `ponto_totais` pela tela e pendurados na pessoa em `__ponto` (só os CLT da Detech têm).
+  // Quem não tem leitura do mês fica em branco: o relatório não inventa zero. As horas saem como a Secullum as escreve (HH:MM).
+  ...([
+    ['ponto_normais', 'Horas normais', 'normais', false],
+    ['ponto_faltas', 'Faltas (horas)', 'faltas', false],
+    ['ponto_atrasos', 'Atrasos (horas)', 'atrasos', false],
+    ['ponto_extras', 'Horas extras', 'extras', false],
+    ['ponto_banco', 'Saldo do banco de horas', 'bancoSaldo', true],
+  ] as [string, string, 'normais' | 'faltas' | 'atrasos' | 'extras' | 'bancoSaldo', boolean][]).map(([id, rotulo, campo, comMais]): ColunaDoRelatorio => ({
+    id, rotulo,
+    texto: f => f.__ponto ? paraTexto(resumoDoMes(f.__ponto)[campo], comMais) : '',
+    ordem: f => f.__ponto ? resumoDoMes(f.__ponto)[campo] : null,
+  })),
 ];
 export const colunaPorId = (id: string) => COLUNAS.find(c => c.id === id);
 
@@ -102,8 +117,9 @@ export type FiltrosDoRelatorio = {
   mesNascimento: string;            // '' = todos; 'este' = o mês de hoje; '1'..'12'
   admissaoDe: string; admissaoAte: string;   // AAAA-MM-DD; vazio = sem limite
   busca: string;
+  soBatemPonto?: boolean;           // 25/11/2026: só quem deve bater ponto na Secullum (CLT ativo da Detech que o RH não marcou "Não bate ponto"); o modelo "Ponto do mês" liga
 };
-export const FILTROS_VAZIOS: FiltrosDoRelatorio = { situacao: 'ativos', tipo: '', empresa: '', departamento: '', cargo: '', sexo: '', mesNascimento: '', admissaoDe: '', admissaoAte: '', busca: '' };
+export const FILTROS_VAZIOS: FiltrosDoRelatorio = { situacao: 'ativos', tipo: '', empresa: '', departamento: '', cargo: '', sexo: '', mesNascimento: '', admissaoDe: '', admissaoAte: '', busca: '', soBatemPonto: false };
 
 const mesDoFiltro = (f: FiltrosDoRelatorio, hoje: string): number | null => {
   if (!f.mesNascimento) return null;
@@ -120,6 +136,7 @@ export function filtrarPessoas(pessoas: Pessoa[], fi: FiltrosDoRelatorio, hoje: 
     if (fi.situacao === 'ativos' && situacaoDe(f) !== 'Ativo') return false;
     if (fi.situacao === 'desligados' && situacaoDe(f) !== 'Desligado') return false;
     if (fi.tipo && tipoDe(f) !== fi.tipo) return false;
+    if (fi.soBatemPonto && !deveBaterPonto(f)) return false;
     if (fi.empresa && (f.empresa || '') !== fi.empresa) return false;
     if (fi.sexo && (f.sexo || '') !== fi.sexo) return false;
     if (fi.cargo && normalizarBusca(String(f.cargo || '').trim()) !== normalizarBusca(String(fi.cargo).trim())) return false;
@@ -190,6 +207,8 @@ export const MODELOS: ModeloPronto[] = [
     config: () => ({ colunas: ['nome', 'admissao', 'tempo_casa', 'cargo', 'departamento', 'tipo'], filtros: { ...FILTROS_VAZIOS }, agrupar: '', ordenarPor: 'admissao', crescente: true }) },
   { id: 'por_funcao', rotulo: 'Quadro por função', ajuda: 'Quem exerce cada função, com o total de cada uma.',
     config: () => ({ colunas: ['nome', 'tipo', 'departamento', 'admissao'], filtros: { ...FILTROS_VAZIOS }, agrupar: 'cargo', ordenarPor: 'nome', crescente: true }) },
+  { id: 'ponto_mes', rotulo: 'Ponto do mês', ajuda: 'Os totais do mês que a Secullum calculou para quem bate ponto: horas normais, faltas, atrasos, extras e saldo do banco de horas. Escolha o mês ao lado; o mês em andamento vale até ontem.',
+    config: () => ({ colunas: ['nome', 'departamento', 'ponto_normais', 'ponto_faltas', 'ponto_atrasos', 'ponto_extras', 'ponto_banco'], filtros: { ...FILTROS_VAZIOS, soBatemPonto: true }, agrupar: '', ordenarPor: 'nome', crescente: true }) },
   { id: 'quadro', rotulo: 'Quadro de colaboradores', ajuda: 'Todos os ativos por departamento, com tipo, empresa e admissão.',
     config: () => ({ colunas: ['nome', 'cargo', 'tipo', 'empresa', 'admissao'], filtros: { ...FILTROS_VAZIOS }, agrupar: 'departamento', ordenarPor: 'nome', crescente: true }) },
 ];

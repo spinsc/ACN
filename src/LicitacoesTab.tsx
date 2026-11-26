@@ -28,11 +28,12 @@ import Icone from './Icone';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import NovaOpOsModal from './NovaOpOsModal';
 import { ViagensLigadas } from './ViagemVinculos';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): a licitação aberta tem endereço próprio
 import { mdiClipboardTextOutline, mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate, mdiTrashCanOutline, mdiUndoVariant, mdiCheck,
   mdiChevronDown, mdiChevronRight, mdiPencilOutline, mdiEmailOutline, mdiCellphone, mdiPhoneOutline, mdiPaperclip, mdiAccountOutline, mdiClockOutline,
   mdiContentSaveOutline, mdiAlertOutline, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline, mdiFormatStrikethrough, mdiPalette, mdiFormatColorHighlight,
   mdiLinkVariant, mdiImageOutline, mdiTablePlus, mdiTableRemove, mdiWindowMinimize, mdiTrophyOutline, mdiCheckCircleOutline, mdiPackageVariantClosed,
-  mdiRocketLaunchOutline, mdiChevronUp, mdiNoteTextOutline } from '@mdi/js';
+  mdiRocketLaunchOutline, mdiChevronUp, mdiNoteTextOutline, mdiLink } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1106,7 +1107,7 @@ const COLUNAS_LISTA_LICITACOES = 'id,numero,nome_projeto,objeto_principal,orgao,
   + 'criado_em,atualizado_em,faturamento_empresa,operador,valor_estimado,horario_sessao,tipo_objeto,julgamento,forma_disputa,'
   + 'fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_entrega,epp,temperatura';
 
-function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir }) {
+function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir, fecharRef }: any) {
   const [licit, setLicit] = useState<any>(licitProp);
 
   // Marcadores têm estado PRÓPRIO. `licit` acima é uma cópia tirada só na
@@ -1140,6 +1141,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // sair da tela. O card na lista (useUnreadMap) se limpa sozinho via Realtime
   // em entity_views, sem precisar de callback direto pra cá.
   const fecharModal = () => { marcarComoLidoAudit(); onClose(); };
+  // 26/11/2026 (Fase 3 do plano de endereços): quando o endereço manda fechar a janela (o Voltar do navegador), a tela tem de fazer o mesmo que o X faz, marcar como lido:
+  // por isso a tela guarda esta função aqui, em vez de só esvaziar a licitação aberta
+  if (fecharRef) fecharRef.current = fecharModal;
 
   // ── Resize do painel ──────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(40);
@@ -1828,6 +1832,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </div>
             <div className="acn-lic-cab-acoes">
               <SeletorModoSplit modo={modoSplit} onModo={setModoSplit} escuro />
+              <Botao variante="discreto" pequeno icone={mdiLink} title="Copiar o link desta licitação para colar numa mensagem ou e-mail" aria-label="Copiar o link desta licitação" onClick={() => copiarLinkDoRegistroComAviso('licitacoes', 'licitacao', licit.id, 'da licitação')} />
               <Botao variante="discreto" pequeno icone={mdiWindowMinimize} title="Minimizar" aria-label="Minimizar" onClick={() => setMinimized(true)} />
               <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModal} />
             </div>
@@ -2249,6 +2254,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               <div className="acn-lic-abas-fim">
                 <span title={licit.numero} className="acn-lic-abas-num">{licit.numero}</span>
                 <SeletorModoSplit modo={modoSplit} onModo={setModoSplit} />
+                <Botao variante="discreto" pequeno icone={mdiLink} title="Copiar o link desta licitação para colar numa mensagem ou e-mail" aria-label="Copiar o link desta licitação" onClick={() => copiarLinkDoRegistroComAviso('licitacoes', 'licitacao', licit.id, 'da licitação')} />
                 <Botao variante="discreto" pequeno icone={mdiWindowMinimize} title="Minimizar" aria-label="Minimizar" onClick={() => setMinimized(true)} />
                 <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModal} />
               </div>
@@ -2849,7 +2855,8 @@ function PipelineCardsLicitacoes({ licitacoes, total = null }: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
+export default function LicitacoesTab({ currentUser }: any) {
+  // 26/11/2026 (Fase 3): saíram as propriedades `autoOpenLicitId` e `onAutoOpenConsumed` (a licitação a abrir quando a lista carregasse): ela abre pelo endereço, `#/licitacoes/licitacao/<código>`.
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
   // { pct ponderado pelo custo, min, max } por licitação — ver MarkupTermometro.
   // 12e74 (09/11/2026): o gancho do termômetro mantém a última leitura boa quando uma falha e diz o erro (faixa vermelha)
@@ -2882,15 +2889,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   // campo/item dentro do modal + borda lateral amarela no card aqui.
   const { naoLidoSet: licitacoesNaoLidas } = useUnreadMap('licitacoes', licitacoes.map(l => l.id), currentUser);
 
-  // Auto-abre licitação quando navegado via Telecom (analise:abrir-origem)
-  useEffect(() => {
-    if (!autoOpenLicitId || loading || licitacoes.length === 0) return;
-    const l = licitacoes.find(x => x.id === autoOpenLicitId);
-    if (l) {
-      setSelected(l);
-      onAutoOpenConsumed?.();
-    }
-  }, [autoOpenLicitId, loading, licitacoes]);
+  // 26/11/2026 (Fase 3): o auto-abrir por `autoOpenLicitId` saiu; quem abre a licitação pelas Análises, Menções, avisos e busca geral agora escreve o endereço e o gancho de baixo a lê.
+  // De quebra, a licitação passa a abrir mesmo quando o filtro da lista (status "Aberta" por padrão) não a mostra: antes ela precisava estar na lista carregada.
 
   // Deep-link genérico (Menções, Chat — "Licitação X" clicável, contexto
   // 'licitacao') — mesmo padrão já usado em ComprasTab/SetorDemandaTab/etc,
@@ -2907,6 +2907,18 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     window.addEventListener('acn:abrir-registro', tentarAbrir);
     return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
   }, []);
+
+  // 26/11/2026 (plano de endereços e rotas, Fase 3): a licitação aberta tem endereço próprio, `#/licitacoes/licitacao/<código>` (F5, Voltar, Avançar e link colado abrem a mesma
+  // licitação). Quem a abre por um clique na lista ou por uma Menção só faz o que sempre fez (`setSelected`) e o gancho escreve o endereço; quem chega PELO endereço faz o gancho
+  // lê-la no banco, pelo código. Fechar pelo endereço (Voltar) passa pela função da própria janela (`fecharLicitacaoRef`), que também marca como lido, como o X.
+  const fecharLicitacaoRef = useRef<any>(null);
+  useRegistroNoEndereco({
+    tela: 'licitacoes', tipo: 'licitacao', rotulo: 'a licitação',
+    aberto: selected?.id ? String(selected.id) : null,
+    ler: (chave) => lerPorCodigo(supabase.from('licitacoes').select('*').eq('id', chave).maybeSingle()),
+    mostrar: (l) => setSelected(l),
+    fechar: () => { const f = fecharLicitacaoRef.current; if (f) f(); else setSelected(null); },
+  });
 
   // Registra "últimas visualizadas" — upsert, dispara toda vez que uma
   // licitação diferente é aberta no detalhe.
@@ -3238,7 +3250,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       )}
       {selected && (
         <LicitacaoModal
+          key={selected.id}   // 26/11/2026 (Fase 3): a janela guarda a licitação que recebeu ao abrir; trocar de licitação pelo endereço sem desmontá-la mostraria os dados da anterior
           licit={selected}
+          fecharRef={fecharLicitacaoRef}
           currentUser={currentUser}
           onClose={() => setSelected(null)}
           onExcluir={() => excluirLicitacao(selected)}

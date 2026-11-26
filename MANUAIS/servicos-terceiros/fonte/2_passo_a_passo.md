@@ -268,3 +268,26 @@ No **Dossiê da OP** e no **resumo da OS** do SAC há o quadro **Serviços de te
 - **Abrir** leva à janela do serviço.
 - Lê uma vez ao abrir. Se a leitura falhar, uma faixa vermelha avisa e oferece **Tentar de novo**: **nunca** diz "nenhum serviço" no lugar do erro (nem deixa você pedir de novo sem conferir: o serviço pode já existir).
 - O **PDF do Dossiê** não leva os serviços.
+
+## A OP que é só serviço de terceiro
+
+**Quando acontece:** a venda é **só** um serviço de terceiro (por exemplo, só a plotagem do carro) e não há nada a fabricar, separar nem adaptar. Em vez de passar pelo PCP, pelo Almoxarifado e pela Adaptação, a OP vai direto ao prestador.
+
+FLUXO: Nova OP > Aguardando serviço de terceiro > Todos os serviços realizados > Liberação Comercial > Fiscal
+
+- Na **Nova OP**, o **Fluxo de Entrega** tem a opção **Somente serviço de terceiro**. Ao escolhê-la, a tela pede os **tipos de serviço** (película, blindagem, plotagem, pintura ou outro) e o **prazo de entrega** (uma data). **Não pede** valor de mão de obra, previsão de chegada do veículo nem o prazo em dias da adaptação.
+- A OP **nasce direto em "Aguardando serviço de terceiro"**: **não passa pelo PCP**, não aparece na fila do Almoxarifado nem na da Adaptação.
+- O **serviço nasce sozinho** ao criar a OP: **um por tipo marcado e por unidade** (num lote de 3 carros com plotagem e película, são 6 serviços), todos em **A definir**, com a descrição "Tipo — cliente" e o prazo da OP na observação. Aparecem no **Quadro** como qualquer outro serviço.
+- Daí em diante é o passo a passo de sempre: **agendar**, **dar como realizado**, pedir o pagamento ao Financeiro.
+- **Quando todos os serviços da OP estão realizados** (os cancelados não contam, mas ao menos um precisa ter sido feito), o **sistema leva a OP sozinho** à **Liberação Comercial** (ou direto ao Fiscal, se o faturamento foi antecipado). **Não há Controle de Qualidade** nesse caminho. A mudança fica no histórico da OP, com o setor "Serviços de terceiros".
+- Se um serviço é **reaberto** (volta de Realizado para Agendado) **antes de o Comercial liberar**, a OP **volta a esperar o prestador**.
+- Se **todos** os serviços forem **cancelados**, a OP **fica parada** onde está, para alguém decidir (pedir outro serviço ou cancelar a OP).
+- No **Dossiê da OP**, se a OP é só de terceiro e **não tem nenhum serviço**, o quadro **Serviços de terceiros** mostra uma faixa vermelha avisando que ela não anda sem serviço, com o botão **Pedir serviço de terceiro**.
+- Se a abertura dos serviços falhar ao criar a OP, a tela avisa em vermelho que a OP foi criada **sem** o serviço; abra a OP e use **Pedir serviço de terceiro**.
+- **Copiar OP** de uma OP só de terceiro também abre os serviços de cada cópia.
+
+> **Atenção:** o fluxo **Somente serviço de terceiro** **não se troca depois** pela troca de fluxo da unidade nem pela edição do Comercial: ele muda a etapa da OP. Só o Admin troca, pela edição completa da OP, mudando a fase junto.
+
+> **Dica:** o dia de plotagem, película e pintura continua sendo marcado **pela Adaptação** (regra do tipo), mesmo a OP não passando pela fila dela.
+
+> **Já foram para esse fluxo (25/11/2026):** as 22 OPs das vendas **A1760.2611** (12 carros), **A1797.2611** (8) e **A1806.2611** (2). Elas ganharam 24 serviços em **A definir** (TS-00204 a TS-00227: plotagem em todas e, nas 2 da A1806, um serviço **Outro** com o texto "LAVAÇÃO"), em nome de quem abriu a OP. Falta escolher prestador e dia: na Lista, use o filtro **Sem prestador**. A venda **A1799.2611** (2 quadriciclos, pintura total e plotagem) também foi passada para esse fluxo, e os serviços de **Plotagem** e **Pintura** dela (TS-00197 a TS-00200) já existiam.

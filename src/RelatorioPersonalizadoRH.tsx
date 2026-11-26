@@ -1,16 +1,18 @@
 // @ts-nocheck
 // RH — relatórios personalizados (pedido do usuário em 05/11/2026). As regras estão em RelatorioRhModelo.ts; aqui só a tela: modelos prontos, filtros, colunas, grupos, ordem, tabela,
 // impressão e planilha (CSV). Tudo sobre as pessoas que a tela do RH já leu (ativas e desligadas): nenhuma leitura nova ao banco.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Icone from './Icone';
 import { Botao, Chips, ChipsMultiplos, Faixa, hojeISO } from './Interface';
 import { mdiFileChartOutline, mdiPrinterOutline, mdiDownload, mdiChevronDown, mdiChevronRight, mdiSortAscending, mdiSortDescending, mdiRestore } from '@mdi/js';
 import {
   COLUNAS, colunaPorId, FILTROS_VAZIOS, MODELOS, AGRUPAMENTOS, filtrarPessoas, ordenarPessoas, agruparPessoas, paraCsv, nomeDoMes,
 } from './RelatorioRhModelo';
+import { lerPermissoes, lerMesesComDados, lerTotais, primeiroDiaDoMes, rotuloDoMes } from './PontoSecullum';
 
 const escHtml = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
 const MODELO_INICIAL = MODELOS[0];
+const ehColunaDePonto = (id: string) => id.startsWith('ponto_');
 const unicos = (lista: any[]) => [...new Set(lista.filter(Boolean))].sort((a: any, b: any) => String(a).localeCompare(String(b), 'pt-BR'));
 
 export default function RelatorioPersonalizadoRH({ funcionarios, desligados, departamentos }: { funcionarios: any[]; desligados: any[]; departamentos: any[] }) {
@@ -19,14 +21,51 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
   const [cfg, setCfg] = useState(() => MODELO_INICIAL.config());
   const hoje = hojeISO();
 
+  // Ponto do mês (P3, 25/11/2026): as colunas de ponto leem `ponto_totais` do mês escolhido, e só para quem pode ver o ponto de todos (RH, Admin e gerentes);
+  // quem não pode nem vê o modelo nem as colunas. A leitura só acontece com o relatório aberto e com alguma coluna de ponto escolhida.
+  const [podePonto, setPodePonto] = useState(false);
+  const [mesesPonto, setMesesPonto] = useState<string[]>([]);
+  const [mesPonto, setMesPonto] = useState(primeiroDiaDoMes(hoje));
+  const [totaisPonto, setTotaisPonto] = useState<Map<string, any>>(new Map());
+  const [erroPonto, setErroPonto] = useState('');
+  const [lendoPonto, setLendoPonto] = useState(false);
+  const usaPonto = cfg.colunas.some(ehColunaDePonto);
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    (async () => {
+      const [p, m] = await Promise.all([lerPermissoes(), lerMesesComDados()]);
+      if (!vivo) return;
+      setPodePonto(p.verTodos === true); setMesesPonto(m.dados);
+    })();
+    return () => { vivo = false; };
+  }, [aberto]);
+  useEffect(() => {
+    if (!aberto || !podePonto || !usaPonto) return;
+    let vivo = true;
+    setLendoPonto(true); setErroPonto('');
+    (async () => {
+      const r = await lerTotais(mesPonto);
+      if (!vivo) return;
+      setLendoPonto(false);
+      if (r.erro) { setErroPonto(r.erro); setTotaisPonto(new Map()); return; }
+      setTotaisPonto(new Map((r.dados || []).map((x: any) => [String(x.rh_id), x.valores])));
+    })();
+    return () => { vivo = false; };
+  }, [aberto, podePonto, usaPonto, mesPonto]);
+
   const base = useMemo(() => {
     const visto = new Set<string>();
-    return [...(funcionarios || []), ...(desligados || [])].filter(f => f?.id && !visto.has(f.id) && visto.add(f.id));
-  }, [funcionarios, desligados]);
+    const todas = [...(funcionarios || []), ...(desligados || [])].filter(f => f?.id && !visto.has(f.id) && visto.add(f.id));
+    return usaPonto ? todas.map(f => (totaisPonto.has(String(f.id)) ? { ...f, __ponto: totaisPonto.get(String(f.id)) } : f)) : todas;
+  }, [funcionarios, desligados, usaPonto, totaisPonto]);
+  const colunasEscolhiveis = useMemo(() => COLUNAS.filter(c => podePonto || !ehColunaDePonto(c.id)), [podePonto]);
+  const modelosVisiveis = useMemo(() => MODELOS.filter(m => podePonto || !m.config().colunas.some(ehColunaDePonto)), [podePonto]);
 
   const { lista, semNascimento, semAdmissao } = useMemo(() => filtrarPessoas(base, cfg.filtros, hoje), [base, cfg.filtros, hoje]);
   const grupos = useMemo(() => agruparPessoas(ordenarPessoas(lista, cfg.ordenarPor, cfg.crescente, hoje), cfg.agrupar), [lista, cfg.ordenarPor, cfg.crescente, cfg.agrupar, hoje]);
-  const colunas = cfg.colunas.map(colunaPorId).filter(Boolean);
+  const colunas = cfg.colunas.filter(id => podePonto || !ehColunaDePonto(id)).map(colunaPorId).filter(Boolean);
+  const semLeituraDoMes = usaPonto && podePonto && !lendoPonto && !erroPonto ? lista.filter(f => !f.__ponto).length : 0;
 
   const opcoes = useMemo(() => ({
     empresas: unicos(base.map(f => f.empresa)), cargos: unicos(base.map(f => String(f.cargo || '').trim())), sexos: unicos(base.map(f => f.sexo)),
@@ -50,6 +89,8 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
     if (f.mesNascimento) partes.push('Aniversário em ' + (f.mesNascimento === 'este' ? nomeDoMes(Number(hoje.slice(5, 7))) : nomeDoMes(Number(f.mesNascimento))));
     if (f.admissaoDe || f.admissaoAte) partes.push('Admissão ' + (f.admissaoDe ? 'de ' + f.admissaoDe.split('-').reverse().join('/') : '') + (f.admissaoAte ? ' até ' + f.admissaoAte.split('-').reverse().join('/') : ''));
     if (f.busca.trim()) partes.push('Busca "' + f.busca.trim() + '"');
+    if (f.soBatemPonto) partes.push('Só quem bate ponto');
+    if (usaPonto && podePonto) partes.push('Ponto de ' + rotuloDoMes(mesPonto));
     return partes.join(' · ');
   };
   const tituloDoRelatorio = modelo ? modelo.rotulo : 'Relatório personalizado';
@@ -58,7 +99,7 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
     const cab = colunas.map(c => `<th>${escHtml(c.rotulo)}</th>`).join('');
     const linha = (f: any) => `<tr>${colunas.map(c => `<td>${escHtml(c.texto(f, hoje))}</td>`).join('')}</tr>`;
     const corpo = grupos.map(g => (cfg.agrupar ? `<tr class="grp"><td colspan="${colunas.length}">${escHtml(g.titulo)} (${g.pessoas.length})</td></tr>` : '') + g.pessoas.map(linha).join('')).join('');
-    const avisos = [semNascimento ? `${semNascimento} pessoa(s) sem data de nascimento ficaram de fora` : '', semAdmissao ? `${semAdmissao} pessoa(s) sem data de admissão ficaram de fora` : ''].filter(Boolean).join(' · ');
+    const avisos = [semLeituraDoMes ? `${semLeituraDoMes} pessoa(s) sem ponto lido no mês ficam com as colunas de ponto em branco` : '', semNascimento ? `${semNascimento} pessoa(s) sem data de nascimento ficaram de fora` : '', semAdmissao ? `${semAdmissao} pessoa(s) sem data de admissão ficaram de fora` : ''].filter(Boolean).join(' · ');
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${escHtml(tituloDoRelatorio)}</title>` +
       `<style>body{font-family:Arial,sans-serif;font-size:11px;margin:25px;}h2{text-align:center;font-size:14px;margin-bottom:2px}.sub{text-align:center;font-size:10px;color:#555;margin-bottom:4px;}` +
       `.av{text-align:center;font-size:10px;color:#b91c1c;margin-bottom:12px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:10px}th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}` +
@@ -92,7 +133,7 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
       </div>
       {aberto && (
         <div className="sec-body acn-rhrel">
-          <Chips rotulo="Modelo de relatório" ativo={modeloId} onChange={aplicarModelo} itens={MODELOS.map(m => ({ id: m.id, rotulo: m.rotulo, titulo: m.ajuda }))} />
+          <Chips rotulo="Modelo de relatório" ativo={modeloId} onChange={aplicarModelo} itens={modelosVisiveis.map(m => ({ id: m.id, rotulo: m.rotulo, titulo: m.ajuda }))} />
           <div className="acn-ajuda">{modelo ? modelo.ajuda : 'Relatório montado por você: mude os filtros, as colunas, os grupos e a ordem abaixo. Escolha um modelo para voltar ao começo.'}</div>
 
           <div className="acn-rhrel-grade">
@@ -132,11 +173,26 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
               <input className="acn-input" value={f.busca} placeholder="nome, função, e-mail…" onChange={e => mudarFiltro('busca', e.target.value)} aria-label="Procurar no relatório" /></label>
           </div>
 
+          {usaPonto && podePonto && (
+            <div className="acn-rhrel-grade">
+              <label className="acn-rhrel-campo"><span className="acn-label">Mês do ponto</span>
+                <select className="acn-input" value={mesPonto} onChange={e => setMesPonto(e.target.value)} aria-label="Mês do ponto">
+                  {[...new Set([primeiroDiaDoMes(hoje), ...mesesPonto])].map(m => <option key={m} value={m}>{rotuloDoMes(m)}</option>)}
+                </select></label>
+              <label className="acn-rhrel-campo"><span className="acn-label">Quem entra</span>
+                <select className="acn-input" value={f.soBatemPonto ? 'sim' : 'todos'} onChange={e => mudarFiltro('soBatemPonto', e.target.value === 'sim')} aria-label="Quem entra no relatório de ponto">
+                  <option value="sim">Só quem bate ponto</option><option value="todos">Todas as pessoas do filtro</option>
+                </select></label>
+            </div>
+          )}
+          {usaPonto && podePonto && erroPonto && <Faixa tom="erro">Não foi possível ler o ponto de {rotuloDoMes(mesPonto)} ({erroPonto}). As colunas de ponto ficam em branco: tente de novo.</Faixa>}
+          {usaPonto && podePonto && lendoPonto && <div className="acn-ajuda">Lendo o ponto de {rotuloDoMes(mesPonto)}…</div>}
+
           <div className="acn-rhrel-bloco">
             <span className="acn-label">Colunas do relatório</span>
             <ChipsMultiplos rotulo="Colunas" ativos={cfg.colunas}
               onChange={ids => mudar({ colunas: COLUNAS.map(c => c.id).filter(id => ids.includes(id)) })}
-              itens={COLUNAS.map(c => ({ id: c.id, rotulo: c.rotulo }))} />
+              itens={colunasEscolhiveis.map(c => ({ id: c.id, rotulo: c.rotulo }))} />
             {!cfg.colunas.length && <div className="acn-ajuda atencao">Escolha ao menos uma coluna.</div>}
           </div>
 
@@ -163,6 +219,7 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
           </div>
 
           {semNascimento > 0 && <Faixa tom="erro">{semNascimento} {semNascimento === 1 ? 'pessoa ficou' : 'pessoas ficaram'} de fora porque {semNascimento === 1 ? 'não tem' : 'não têm'} a data de nascimento cadastrada. Preencha na ficha do colaborador para entrar no relatório.</Faixa>}
+          {semLeituraDoMes > 0 && <Faixa tom="atencao">{semLeituraDoMes} {semLeituraDoMes === 1 ? 'pessoa não tem' : 'pessoas não têm'} ponto lido em {rotuloDoMes(mesPonto)}: {semLeituraDoMes === 1 ? 'fica' : 'ficam'} com as colunas de ponto em branco (não bate ponto, CPF ainda não achado na Secullum ou mês sem leitura). Veja a parte Vínculos do Relógio Ponto.</Faixa>}
           {semAdmissao > 0 && <Faixa tom="erro">{semAdmissao} {semAdmissao === 1 ? 'pessoa ficou' : 'pessoas ficaram'} de fora porque {semAdmissao === 1 ? 'não tem' : 'não têm'} a data de admissão ou de início cadastrada.</Faixa>}
 
           {!lista.length ? <div className="acn-ajuda">Nenhuma pessoa com esses filtros.</div> : (
