@@ -6,7 +6,8 @@
 // Quem grava de verdade é o banco, pelas funções `terceiros_*` (TerceirosServicos.ts); a tela só deixa de oferecer o que ele recusaria (regras em TerceirosFluxo.ts).
 // T5 (23/11/2026): as duas janelas ganharam a caixa do pagamento ao prestador (TerceirosPagamentoTela.tsx) e a da saída da vistoria de pátio (TerceirosVistoriaTela.tsx).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { mdiClose, mdiPencilOutline, mdiPaperclip, mdiTrashCanOutline, mdiOpenInNew, mdiPlus, mdiHistory, mdiLinkVariant, mdiPrinterOutline, mdiClipboardTextOutline } from '@mdi/js';
+import { mdiClose, mdiPencilOutline, mdiPaperclip, mdiTrashCanOutline, mdiOpenInNew, mdiPlus, mdiHistory, mdiLinkVariant, mdiPrinterOutline, mdiClipboardTextOutline, mdiLink } from '@mdi/js';
+import { copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): "Copiar link" do serviço
 import Icone from './Icone';
 import { Botao, Faixa, Selo, Tag, MenuAcoes } from './Interface';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -181,7 +182,10 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
       <div className="modal-box acn-modal-cadastro acn-terc-box-g" role="dialog" aria-label={`Serviço ${s.numero}`}>
         <div className="acn-modal-cab">
           <span className="modal-title">{s.numero} · {tipo?.nome || 'Tipo removido'}</span>
-          <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
+          <span className="acn-terc-cab-acoes">
+            <Botao pequeno variante="discreto" icone={mdiLink} aria-label="Copiar o link deste serviço" title="Copiar o link deste serviço para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('terceiros', 'servico', s.id, 'do serviço')} />
+            <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
+          </span>
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
           {!editando ? (
@@ -464,7 +468,10 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
       <div className="modal-box acn-modal-cadastro acn-terc-box-g" role="dialog" aria-label="Carros do grupo">
         <div className="acn-modal-cab">
           <span className="modal-title">{resumoDosServicos(linhas, tipoDe)}</span>
-          <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
+          <span className="acn-terc-cab-acoes">
+            <Botao pequeno variante="discreto" icone={mdiLink} aria-label="Copiar o link deste grupo de serviços" title="Copiar o link deste grupo de serviços para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('terceiros', 'servico', ids[0], 'do grupo de serviços')} />
+            <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
+          </span>
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
           {naOrdem && (

@@ -28,7 +28,7 @@ import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import ViagensTab from './ViagensTab';
-import ViagemPorMencao from './ViagemPorMencao';
+import ViagemDoEndereco from './ViagemDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): substitui o ViagemPorMencao
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
@@ -1889,8 +1889,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <ContatoAlertWidget currentUser={currentUser} />
       <ContatoComercialAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} onNavigate={(tab) => { irParaTela(tab); }} />
-      {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte) */}
-      <ViagemPorMencao currentUser={currentUser} />
+      {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte). 26/11/2026 (Fase 5): agora é a janela da viagem aberta pelo
+          endereço (#/viagem/<código>), para qualquer pessoa, também depois de um F5 e em link colado */}
+      <ViagemDoEndereco currentUser={currentUser} />
 
       {/* ── Janela da OP aberta pelo endereço (#/op/<número>), pela busca geral e pelas Menções (plano de endereços, Fase 2) ── */}
       <OpDoEndereco currentUser={currentUser} tela={activeTab || telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)} />

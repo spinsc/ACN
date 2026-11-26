@@ -82,3 +82,11 @@ O que **não** trava: hotel, pedágio, descrição do serviço, contrato, o cust
 ## Onde o sistema guarda o histórico
 
 Toda mudança de coluna, com o motivo, quem fez e quando, fica no **histórico da viagem**, e cada setor deixa uma linha ao salvar a sua parte. Os arquivos (contrato e comprovantes) ficam no armazenamento do sistema, ligados à viagem. Nada se apaga sozinho: apagar uma viagem só o botão **Apagar**, e a pergunta avisa que não dá para desfazer.
+
+## O link da viagem
+
+Cada viagem já gravada tem um **endereço próprio** na barra do navegador (`#/viagem/...`). Na janela da viagem, o botão de **corrente** (**Copiar o link desta viagem**), ao lado do X, copia esse endereço completo para você colar numa mensagem ou e-mail. Quem receber o link e entrar no sistema cai direto nessa viagem, **mesmo sem ter a aba Viagens** (as partes dos outros setores aparecem só para leitura, como pelo aviso). O **F5** reabre a mesma viagem, o **Voltar** do navegador fecha a janela e o **Avançar** a reabre.
+
+> **Dica:** a **Nova viagem**, que ainda não foi gravada, não tem link: o botão só aparece depois de salvar.
+
+> **Atenção:** se o link for de uma viagem que não existe, ou a que você não tem acesso, o sistema avisa em vermelho e volta para onde você estava. Se o banco não responder, o aviso diz que a leitura falhou, e não que a viagem não existe.

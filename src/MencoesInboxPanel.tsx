@@ -334,7 +334,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       }
     }
     // 03/11/2026: a demanda avulsa gravava o setor ('comercial') como aba, mas a tela do Comercial é a aba 'crm': 'comercial' levava a uma tela vazia
-    // 04/11/2026: a viagem de quem não tem a aba Viagens abre por cima (ViagemPorMencao); trocar de aba levaria a uma tela que a pessoa não tem
+    // 04/11/2026: a viagem de quem não tem a aba Viagens abre por cima (ViagemDoEndereco); trocar de aba levaria a uma tela que a pessoa não tem
     const viagemSemAba = m.contexto === 'viagem' && !permissoesDaViagem(currentUser).base;
     if (m.aba_destino && onNavigate && !viagemSemAba) onNavigate(m.aba_destino === 'comercial' ? 'crm' : m.aba_destino);
   };

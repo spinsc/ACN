@@ -95,3 +95,9 @@ Em **23/11/2026**, as OPs que estavam no PCP, no Almoxarifado e na Adaptação c
 **A janela de impressão não abriu.** O navegador barrou a janela. A tela avisa em vermelho: libere as janelas deste endereço e clique de novo.
 
 **A Serralheria concluiu a peça e não nasceu a requisição do Compras.** É a regra nova: a pintura vira **serviço de Pintura eletrostática** neste módulo. Se não nasceu o serviço, a demanda ganhou o botão **Pedir a pintura agora** (vale até 30 dias depois de concluída).
+
+## O link de um serviço
+
+Cada serviço tem um **endereço próprio** na barra do navegador (`#/terceiros/servico/...`). Na janela do serviço, e também na janela dos carros de um grupo, o botão de **corrente** (**Copiar o link deste serviço** ou **deste grupo de serviços**), ao lado do X, copia o endereço completo para você colar numa mensagem ou e-mail. Quem receber o link abre a tela de Serviços de terceiros já com a janela do serviço (ou do grupo de carros, se o serviço está num cartão de vários carros). O **F5** reabre a mesma janela, o **Voltar** do navegador a fecha e o **Avançar** a reabre.
+
+> **Atenção:** o serviço que está numa **ordem de serviço em lote** (montada ou enviada) abre a janela **da ordem**, que não tem link próprio; o endereço do serviço sai da barra nesse caso. Link de serviço que não existe, ou a que você não tem acesso, avisa em vermelho e volta para a tela.

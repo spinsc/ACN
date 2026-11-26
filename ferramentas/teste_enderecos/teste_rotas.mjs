@@ -132,11 +132,11 @@ const U1 = '0b9f0c3e-2d4a-4a57-9f3e-3a6c6f5a1b11';
 const U2 = 'A1B2C3D4-0000-4000-8000-00000000AAAA';
 const comRegistro = (hash, tela, tipo, chave) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'tela', tela, resto: [tipo, chave], registro: { tipo, chave } });
 const semRegistro = (hash, tela, resto) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'tela', tela, resto });
-const QUATRO = [['licitacoes', 'licitacao'], ['crm', 'card'], ['compras', 'pedido'], ['sac', 'os']];
-t('a tabela dos registros conhece exatamente as quatro telas, cada uma com a sua palavra', () => assert.deepEqual(REGISTROS_DAS_TELAS, { licitacoes: ['licitacao'], crm: ['card'], compras: ['pedido'], sac: ['os'] }));
+const REGISTROS_DE_TELA = [['licitacoes', 'licitacao'], ['crm', 'card'], ['compras', 'pedido'], ['sac', 'os'], ['terceiros', 'servico']];   // o serviço de terceiro entrou na Fase 5
+t('a tabela dos registros conhece exatamente as cinco telas, cada uma com a sua palavra', () => assert.deepEqual(REGISTROS_DAS_TELAS, { licitacoes: ['licitacao'], crm: ['card'], compras: ['pedido'], sac: ['os'], terceiros: ['servico'] }));
 t('toda tela da tabela dos registros existe no menu', () => Object.keys(REGISTROS_DAS_TELAS).forEach(id => assert.ok(IDS.includes(id), id)));
 t('as palavras dos registros não são palavras reservadas nem nomes de tela', () => Object.values(REGISTROS_DAS_TELAS).flat().forEach(p => { assert.ok(!PALAVRAS_RESERVADAS.includes(p), p); assert.equal(idDaTela(p, IDS), null, p); }));
-QUATRO.forEach(([tela, tipo]) => {
+REGISTROS_DE_TELA.forEach(([tela, tipo]) => {
   t(`#/${nomeNoEndereco(tela)}/${tipo}/<código> é o ${tipo} da tela ${tela}`, () => comRegistro(`#/${nomeNoEndereco(tela)}/${tipo}/${U1}`, tela, tipo, U1));
   t(`${tela}: ida e volta pelo montarEnderecoDoRegistroDaTela`, () => { const h = montarEnderecoDoRegistroDaTela(tela, tipo, U1); assert.equal(h, `#/${nomeNoEndereco(tela)}/${tipo}/${U1}`); comRegistro(h, tela, tipo, U1); });
   t(`${tela}: registroDaTelaNoEndereco acha o registro e devolve tela, tipo e código`, () => assert.deepEqual(registroDaTelaNoEndereco(`#/${nomeNoEndereco(tela)}/${tipo}/${U1}`, tela), { tela, tipo, chave: U1 }));
@@ -146,8 +146,8 @@ QUATRO.forEach(([tela, tipo]) => {
   t(`${tela}: maiúscula na tela e na palavra vale (o tipo sai em minúscula); o código mantém a grafia`, () => assert.deepEqual(lerEndereco(`#/${nomeNoEndereco(tela).toUpperCase()}/${tipo.toUpperCase()}/${U2}`, IDS),
     { tipo: 'tela', tela, resto: [tipo.toUpperCase(), U2], registro: { tipo, chave: U2 } }));
   t(`${tela}: sem a barra depois do # e com ? depois`, () => comRegistro(`#${nomeNoEndereco(tela)}/${tipo}/${U1}?x=1`, tela, tipo, U1));
-  t(`${tela}: o registro de OUTRA tela não vale nesta`, () => QUATRO.filter(([, outro]) => outro !== tipo).forEach(([, outro]) => semRegistro(`#/${nomeNoEndereco(tela)}/${outro}/${U1}`, tela, [outro, U1])));
-  t(`${tela}: a tela do registro de outra tela não o enxerga`, () => QUATRO.filter(([outraTela]) => outraTela !== tela).forEach(([outraTela]) => assert.equal(registroDaTelaNoEndereco(`#/${nomeNoEndereco(tela)}/${tipo}/${U1}`, outraTela), null, outraTela)));
+  t(`${tela}: o registro de OUTRA tela não vale nesta`, () => REGISTROS_DE_TELA.filter(([, outro]) => outro !== tipo).forEach(([, outro]) => semRegistro(`#/${nomeNoEndereco(tela)}/${outro}/${U1}`, tela, [outro, U1])));
+  t(`${tela}: a tela do registro de outra tela não o enxerga`, () => REGISTROS_DE_TELA.filter(([outraTela]) => outraTela !== tela).forEach(([outraTela]) => assert.equal(registroDaTelaNoEndereco(`#/${nomeNoEndereco(tela)}/${tipo}/${U1}`, outraTela), null, outraTela)));
   t(`${tela}: a decisão do endereço do registro é a da TELA (abre com a permissão; sem ela, conferindo e depois sem acesso)`, () => {
     const h = `#/${nomeNoEndereco(tela)}/${tipo}/${U1}`;
     assert.deepEqual(decidirEndereco(h, ctxDe([tela], false)), { tipo: 'abrir', tela, corrigirEndereco: false });
@@ -169,7 +169,7 @@ t('uma tela sem registro no endereço continua com `resto` vazio e sem a chave `
 
 // o recado interno ("abra este registro") que as Menções, o chat, os avisos e os vínculos gravam
 const recado = (contexto, contextoId) => ({ contexto, contextoId });
-const ALVOS = [['crm', 'crm', 'card'], ['licitacao', 'licitacoes', 'licitacao'], ['compra', 'compras', 'pedido'], ['compra_aprovacao', 'compras', 'pedido'], ['sac', 'sac', 'os'], ['sac_revisao_orcamento', 'sac', 'os']];
+const ALVOS = [['crm', 'crm', 'card'], ['licitacao', 'licitacoes', 'licitacao'], ['compra', 'compras', 'pedido'], ['compra_aprovacao', 'compras', 'pedido'], ['sac', 'sac', 'os'], ['sac_revisao_orcamento', 'sac', 'os'], ['terceiro_servico', 'terceiros', 'servico']];
 ALVOS.forEach(([contexto, tela, tipo]) => {
   t(`recado "${contexto}" para a tela ${tela}: vira o registro ${tipo}`, () => {
     const r = registroDoRecado(recado(contexto, U1), tela);
@@ -179,7 +179,7 @@ ALVOS.forEach(([contexto, tela, tipo]) => {
   t(`recado "${contexto}" para OUTRA tela não vale`, () => IDS.filter(id => id !== tela).forEach(id => assert.equal(registroDoRecado(recado(contexto, U1), id), null, id)));
   t(`recado "${contexto}" com um código que não é código (número, texto) não vira endereço`, () => ['123', 'A1750.2611', '', null, undefined, 12].forEach(x => assert.equal(registroDoRecado(recado(contexto, x), tela), null, String(x))));
 });
-t('recado de contexto que a Fase 3 não conhece (garantia, op, viagem) não vira endereço', () => ['garantia', 'op', 'viagem', 'demanda_avulsa', 'formacao'].forEach(c => assert.equal(registroDoRecado(recado(c, U1), 'sac'), null, c)));
+t('recado de contexto que a Fase 3 não conhece (garantia, op, viagem) não vira endereço de registro de tela', () => ['garantia', 'op', 'viagem', 'demanda_avulsa', 'formacao'].forEach(c => assert.equal(registroDoRecado(recado(c, U1), 'sac'), null, c)));
 t('recado com contexto que é nome de propriedade do objeto (toString, constructor, __proto__) não derruba nem vale', () => ['toString', 'constructor', '__proto__', 'hasOwnProperty'].forEach(c => assert.equal(registroDoRecado(recado(c, U1), 'crm'), null, c)));
 t('recado vazio, texto ou número não derrubam', () => [null, undefined, '', 'crm', 7, [], {}].forEach(x => assert.equal(registroDoRecado(x, 'crm'), null, JSON.stringify(x))));
 t('o recado do card do CRM não carrega dica (a Menção de CRM usa o caminho das Análises)', () => assert.equal('dica' in registroDoRecado(recado('crm', U1), 'crm'), false));
@@ -309,5 +309,25 @@ t('duas camadas: ida e volta de todas as combinações', () => {
 });
 t('duas camadas: a conferência do quadro de mentira passa', () => assert.deepEqual(conferirQuadroDeAbas([...IDS, T]), []));
 delete ABAS_DAS_TELAS.tela_teste;
+
+// ── Fase 5 (26/11/2026): a viagem (registro sem tela dona, como a OP) e o serviço de terceiro (registro de tela, nas conferências acima) ──
+const viagem = (hash, chave) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'registro', registro: 'viagem', chave });
+t('#/viagem/<código> é a viagem', () => viagem('#/viagem/' + U1, U1));
+t('a palavra viagem em maiúscula vale; o código mantém a grafia', () => viagem('#/VIAGEM/' + U2, U2));
+t('sem a barra depois do # e com ? depois', () => viagem('#viagem/' + U1 + '?x=1', U1));
+t('montarEnderecoDaViagem monta #/viagem/<código> e apara os espaços', () => assert.equal(R.montarEnderecoDaViagem('  ' + U1 + ' '), '#/viagem/' + U1));
+t('montarEnderecoDeRegistro("viagem", …) é o mesmo que montarEnderecoDaViagem', () => assert.equal(montarEnderecoDeRegistro('viagem', U1), R.montarEnderecoDaViagem(U1)));
+t('registroDoEndereco acha a viagem e diz que é de viagem, não de OP', () => assert.deepEqual(registroDoEndereco('#/viagem/' + U1), { registro: 'viagem', chave: U1 }));
+t('#/viagem sem código não é registro (decisão: desconhecido)', () => { assert.equal(registroDoEndereco('#/viagem'), null); assert.equal(registroDoEndereco('#/viagem/'), null); assert.equal(decidirEndereco('#/viagem', ctxDe('todas', true)).tipo, 'desconhecido'); });
+t('a decisão do endereço da viagem é "registro", mesmo sem permissão e sem a releitura (quem decide é o banco)', () => { assert.deepEqual(decidirEndereco('#/viagem/' + U1, ctxDe([], false)), { tipo: 'registro', registro: 'viagem', chave: U1 }); assert.equal(decidirEndereco('#/viagem/' + U1, ctxDe([], true)).tipo, 'registro'); });
+t('a tela Viagens (#/viagens) não se confunde com a viagem (#/viagem/…)', () => { assert.equal(registroDoEndereco('#/viagens'), null); assert.equal(registroDoEndereco('#/viagens/' + U1), null); assert.equal(lerEndereco('#/viagens', IDS).tela, 'viagens'); });
+t('viagem e OP não se confundem: cada uma é lida pela palavra dela', () => { assert.equal(registroDoEndereco('#/op/A1750.2611').registro, 'op'); assert.equal(registroDoEndereco('#/viagem/' + U1).registro, 'viagem'); });
+t('o endereço de uma viagem não é de nenhuma tela nem de uma aba (a aba não muda por causa dele)', () => IDS.forEach(id => { assert.equal(R.enderecoEhDaTela('#/viagem/' + U1, id), false, id); assert.equal(R.abaNoEndereco('#/viagem/' + U1, id).tipo, 'fora', id); }));
+t('registroDaTelaNoEndereco não enxerga a viagem como registro de tela', () => IDS.forEach(id => assert.equal(registroDaTelaNoEndereco('#/viagem/' + U1, id), null, id)));
+t('% solto no código da viagem não derruba', () => assert.doesNotThrow(() => lerEndereco('#/viagem/%E0%A4%A', IDS)));
+t('viagem está entre as palavras reservadas e nenhuma tela a usa', () => { assert.ok(PALAVRAS_RESERVADAS.includes('viagem')); IDS.forEach(id => assert.notEqual(nomeNoEndereco(id), 'viagem')); });
+t('o serviço de terceiro: #/terceiros/servico/<código> é o registro da tela terceiros', () => comRegistro('#/terceiros/servico/' + U1, 'terceiros', 'servico', U1));
+t('o serviço de terceiro: nenhuma aba de terceiros se chama "servico" (o endereço ficaria ambíguo)', () => assert.ok(!R.ABAS_DAS_TELAS.terceiros.abas.some(a => R.nomeDaAba(a) === 'servico')));
+t('o serviço de terceiro aberto por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/terceiros/servico/' + U1, 'terceiros').tipo, 'fora'));
 
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS' : ''}`);

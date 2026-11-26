@@ -35,10 +35,18 @@ export function informarTelaDeBaixo(id: string): void {
   telaDeBaixo = String(id || '');
 }
 
-/** Tira o endereço da OP da barra: um passo atrás se o passo é do sistema; senão (link colado), o endereço da tela de baixo, sem criar passo. */
-export function tirarEnderecoDaOp(): void {
+/**
+ * Tira da barra o endereço de um registro SEM tela dona (a OP e, desde a Fase 5, a viagem): um passo atrás se o passo é do sistema; senão (link colado), o endereço da tela de baixo, sem criar passo.
+ * Serve às duas porque a tela de baixo é a mesma (`informarTelaDeBaixo`).
+ */
+export function tirarEnderecoDeRegistroSemTela(): void {
   if (temPassoAnterior()) { voltarUmPasso(); return; }
   irParaEndereco(montarEndereco(telaDeBaixo || 'inicio'), { substituir: true });
+}
+
+/** Tira o endereço da OP da barra (ver `tirarEnderecoDeRegistroSemTela`). */
+export function tirarEnderecoDaOp(): void {
+  tirarEnderecoDeRegistroSemTela();
 }
 
 /** Abre a janela de uma OP pelo endereço (um passo novo no histórico). A busca geral e as Menções entram por aqui; quem a monta é o `OpDoEndereco`. */

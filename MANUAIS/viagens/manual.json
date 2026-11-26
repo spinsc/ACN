@@ -4,8 +4,12 @@
   "titulo": "Manual das Viagens",
   "descricao": "Passo a passo completo das Viagens, com fotos: o quadro, como montar o roteiro e o orçamento, a aprovação, o que cada setor preenche em Provisionamento (com a liberação da verba pelo Financeiro e a fila de Pendências), o aviso de saída próxima e de conflito, a ficha da equipe, a volta, o custo real com comprovantes, a Agenda, o relatório de Custos e a Frota com manutenção.",
   "ordem": 2,
-  "atualizadoEm": "2026-11-24",
+  "atualizadoEm": "2026-11-26",
   "mudancas": [
+    {
+      "data": "2026-11-26",
+      "texto": "Link da viagem: cada viagem gravada tem um endereço próprio (#/viagem/...) e a janela ganhou o botão \"Copiar o link desta viagem\", ao lado do X; quem recebe o link abre a viagem por cima de qualquer tela, mesmo sem a aba Viagens (partes dos outros setores só para leitura); o F5 reabre a mesma viagem e o Voltar e o Avançar do navegador fecham e reabrem a janela"
+    },
     {
       "data": "2026-11-24",
       "texto": "Campos de dinheiro: verba, pedágio, diária do quarto, alimentação, valor do km, custo real e custo da manutenção passaram a ser campos de valor em reais: mostram o ponto dos milhares e a vírgula dos centavos enquanto se digita, só aceitam números e completam os centavos ao sair do campo. Sem foto nova desta parte."
