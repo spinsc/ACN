@@ -158,13 +158,4 @@ export async function lerCoberturaDosAniversarios(): Promise<{ cobertura?: { ati
   return { cobertura: { ativos: numero(linha.ativos), com_nascimento: numero(linha.com_nascimento) } };
 }
 
-/** As notas de atualização do sistema ainda no ar (as mesmas do botão Avisos): título, resumo e dia. */
-export async function lerNovidades(limite = 4): Promise<{ lista: any[]; erro?: string }> {
-  const { data, error } = await supabase.from('avisos_sistema').select('id,titulo,mensagem,criado_em,permanente,data_expiracao,criticidade').eq('ativo', true).order('criado_em', { ascending: false }).limit(30);
-  if (error) return { lista: [], erro: explicarErroDoBanco(error) };
-  const agora = new Date();
-  const no_ar = (data || []).filter((av: any) => av.permanente || (av.data_expiracao && new Date(av.data_expiracao) > agora));
-  return { lista: no_ar.slice(0, limite) };
-}
-
 export { ordenarSlides };
