@@ -1,6 +1,6 @@
 # PLANO — Endereços e rotas no sistema (links, F5, voltar e avançar)
 
-Proposto em 25/11/2026, a pedido do usuário. **Revisado contra o código publicado e decidido pelo usuário no mesmo dia** (seções 4 e 7). **Fase 1 construída, testada e publicada em 25/11/2026; Fase 2 (link da OP) construída e conferida no mesmo dia, aguardando publicação (seção 3); as Fases 3 a 5 não foram começadas.**
+Proposto em 25/11/2026, a pedido do usuário. **Revisado contra o código publicado e decidido pelo usuário no mesmo dia** (seções 4 e 7). **Fase 1 construída, testada e publicada em 25/11/2026; Fase 2 (link da OP) construída e conferida em 25/11/2026 e publicada em 26/11/2026 (seção 3); as Fases 3 a 5 não foram começadas.**
 
 ## 1. O problema (como está hoje)
 
@@ -41,7 +41,7 @@ Regras:
 | Fase | O que entrega | Tamanho (estimativa minha, a confirmar) |
 |---|---|---|
 | **1. Tela e aba da tela** ✅ *(25/11/2026, publicada)* | Menu lateral reflete o endereço; F5, voltar, avançar e link de TELA; quadro de nomes e função única; conferência de permissão em todos os atalhos, com "conferindo seu acesso…" e "sem acesso"; login que preserva o endereço e sair que o zera; título da aba por tela; Painel TV por endereço. **Só arquivos da parte central do sistema** (`App.tsx`, `LoginTab.tsx`, `AdminTab.tsx`, `DashboardTab.tsx` e o `Rotas.ts` novo): não colide com a "Ver valores". | poucos dias |
-| **2. Link da OP** ✅ *(25/11/2026, construída e conferida; aguardando publicação)* | `#/op/<número ou código>` abre a janela da OP por cima de qualquer tela (também depois de um F5 e num link colado); botão "Copiar link"; a busca geral e as Menções passam pelo endereço; abrir cria um passo no histórico e fechar a janela volta um passo (em link colado, leva à tela de baixo); uma só mensagem quando não acha. | alguns dias |
+| **2. Link da OP** ✅ *(construída e conferida em 25/11/2026; publicada em 26/11/2026)* | `#/op/<número ou código>` abre a janela da OP por cima de qualquer tela (também depois de um F5 e num link colado); botão "Copiar link"; a busca geral e as Menções passam pelo endereço; abrir cria um passo no histórico e fechar a janela volta um passo (em link colado, leva à tela de baixo); uma só mensagem quando não acha. | alguns dias |
 | **3. Demais registros** | Licitação e card do CRM, compra e OS, um tipo por vez, cada um com o seu "Copiar link"; a tela lê o endereço quando fica pronta. | uns dias, por tipo |
 | **4. Abas internas** | As cerca de 28 telas com aba ou visão interna, **junto de cada tela, na mesma fatia que já estiver mexendo nela** (quem mexe liga a aba ao endereço no mesmo commit; vale para a rotina `/ux-fluxo` e para a "Ver valores"). **Logística e Fiscal só depois da V4b a V4d.** Sem prazo fixo. | contínua, tela a tela |
 | **5. Acabamento (opcional)** | Filtros principais no endereço (setor, período; trocam o endereço sem criar passo) e lembrar filtros ao voltar; demanda, viagem e serviço de terceiro; avisos do Calendário e Menções dos tipos que faltarem. | a decidir |
@@ -78,7 +78,7 @@ Cada fase entra sozinha, é publicada e testada, e o sistema continua funcionand
 - **Achado fora do escopo, não mexido:** uma Menção criada pela aba de demandas do setor (`SetorDemandaTab.tsx`, linha 686) tem como destino `demandas_gerais`, que não é uma tela do menu (a tela das demandas gerais é `ajustes`). Antes o clique abria uma área em branco; agora avisa "Não encontrei a tela de destino". Corrigir o destino é decisão do usuário.
 - **Depois de publicar (feito em 25/11/2026; deploy terminado às 21h06, horário de Brasília):** o site no ar serve os mesmos arquivos do pacote conferido (`index-CndU_kig.js` e `index-legacy-BWPLJG-i.js`), com as frases novas do aviso. O `/saude-banco` deu CPU de 404 a 439 ms por ciclo (o normal é cerca de 400), zero timeouts desde as 19h10 e nenhuma tela consultando demais: os dois picos de volume (cerca de 1.500 pedidos por minuto das 19h10 às 19h30 e 490 por minuto das 20h30 às 20h50) eram navegadores de teste (97% a 99% dos pedidos) e, fora eles, o tráfego ficou de 8 a 18 pedidos por minuto, com uma janela de 91. Nenhuma consulta nova entre as mais caras (a de 268 ms em média, `entidades_com_alteracao_nao_vista`, 389 chamadas, é de 29/09 e não tem relação com esta fase). **Falta:** conferir o aviso num computador de uso real.
 
-### Fase 2 — o que foi feito (25/11/2026; **construída e conferida, aguardando publicação**)
+### Fase 2 — o que foi feito (25/11/2026; **publicada em 26/11/2026**)
 
 **Entregue:**
 
@@ -108,7 +108,7 @@ Cada fase entra sozinha, é publicada e testada, e o sistema continua funcionand
 - **Os atalhos de OP que ainda usam o recado interno `__acnDeepLink`** (o número clicável do `VinculoPicker`, o chat, o Calendário) **não foram mexidos nem conferidos um a um**: a janela que abrem é a mesma, então deve ganhar o endereço, mas isso não foi verificado.
 - As esperas de 0,4 s da busca geral (OS e Engenharia) e do "depois" do `acn:ir-para-aba` continuam.
 - Nenhuma tela ganhou pergunta nova de "descartar alteração" (a janela da OP não tem).
-- **Falta:** publicar (aguarda o OK do usuário) e, depois, conferir a janela e o "Copiar link" num computador de uso real e rodar o `/saude-banco`.
+- **Depois de publicar (feito em 26/11/2026; deploy terminado à 1h39, horário de Brasília):** o site no ar serve os mesmos arquivos do pacote conferido (`index-DKIPzSrB.js` e `index-legacy-HU2zlUpO.js`), com as frases novas ("Abrindo a OP", "Copiar link", "não a encontrei, ou você não tem acesso a ela"). O `/saude-banco` deu CPU de 384 a 470 ms por ciclo (o normal é cerca de 400), zero timeouts nas últimas duas horas e nenhuma tela consultando demais: o único pico de volume (7.755 pedidos entre 1h30 e 1h40) era dos meus navegadores de teste (98% dos pedidos, `HeadlessChrome`) e, fora eles, o tráfego da madrugada ficou de 65 a 103 pedidos a cada 10 minutos (de 1 a 26 por minuto logo depois do deploy). Nenhuma consulta da Fase 2 aparece entre as oito mais caras (a leitura de uma OP pelo endereço roda uma vez ao abrir o link, e as oito de cima são as listas de sempre: OPs, Menções, chat). **Falta:** conferir a janela e o "Copiar link" num computador de uso real (e o aviso de "sem acesso" da Fase 1).
 
 ## 4. Decisões do usuário (25/11/2026)
 
