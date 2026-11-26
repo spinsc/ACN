@@ -3219,6 +3219,235 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     });
   }
 
+  // ═════════ a ficha da Garantia (`#/sac/ficha/<código>`, DENTRO do SAC: a janela mora na aba Garantia) — Fase 6 ═════════
+  // O banco de produção não tem ficha que a conta de teste leia (a leitura volta vazia), então as fichas são SIMULADAS: a lista e a leitura de uma ficha respondem o que o cenário manda.
+  const reFicha = /^#\/sac\/ficha\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  const MSG_F_NAO_ACHOU = 'Não foi possível abrir a ficha de garantia: não a encontrei, ou você não tem acesso a ela.';
+  const JF = '[role="dialog"][aria-label^="Atendimento GAR-"]';
+  const fichaFalsa = (n, extra = {}) => ({
+    id: '0000000a-0000-4000-8000-00000000000' + n, numero: `GAR-000${n}/2026`, situacao: 'aberto',
+    cliente_nome: 'ZZTESTE Cliente ' + n, cliente_contato: '(51) 98644-0747', veiculo_id: null, veiculo_nome: 'ZZTESTE Veículo', placa: 'ABC1D23', chassi: '',
+    origem_tipo: 'nf', origem_ref: 'ZZ-' + n, opl_id: null, data_ocorrencia: '2026-11-01', descricao_falha: 'falha simulada pelo teste',
+    responsavel: { nome: 'ZZTESTE', email: 'zzteste@teste.local' }, aberto_por_nome: 'ZZTESTE', aberto_por_email: 'zzteste@teste.local', copiados: [],
+    criado_em: '2026-11-20T12:00:00Z', atualizado_em: '2026-11-20T12:00:00Z', historico: [], avaliacao: null, fornecedor: null, execucao: null, pedidos_compra: [], autorizacoes: [],
+    ...extra,
+  });
+  const F1 = fichaFalsa(1), F2 = fichaFalsa(2);
+  // o `.maybeSingle()` do supabase-js pede uma LISTA e pega a primeira linha (o cabeçalho de "objeto único" só vale para `.single()`): a leitura de uma ficha responde com um arranjo de zero ou uma ficha
+  const ehLeituraDeUmaFicha = (url) => url.includes('/rest/v1/garantia_atendimentos?') && url.includes('id=eq.');
+  const ehListaDeFichas = (url) => url.includes('/rest/v1/garantia_atendimentos?') && !url.includes('id=eq.') && !url.includes('id=in.');
+  /** O que o banco "responde" sobre as fichas: `fichas` na lista e na leitura de uma só; o que não está entre elas, deixa passar para o banco real (que não tem a ficha). */
+  const bancoDeFichas = (fichas, { lidas = [], recusa = () => false } = {}) => (url, r) => {
+    if (ehLeituraDeUmaFicha(url)) {
+      const m = url.match(/id=eq\.([^&]+)/); const id = m ? m[1] : '';
+      lidas.push(id);
+      if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+      const f = fichas.find(x => x.id === id);
+      return f ? { status: 200, body: [f] } : null;
+    }
+    if (ehListaDeFichas(url)) return { status: 200, body: fichas };
+    return null;
+  };
+  const estadoF = (page) => page.evaluate((jf) => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jf).length, rotulo: (document.querySelector(jf) || { getAttribute: () => null }).getAttribute('aria-label'),
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+      carregando: !!document.querySelector('.acn-op-endereco-carregando'),
+    };
+  }, JF);
+  const esperarFicha = (page, ms = 40000) => page.waitForSelector(JF, { timeout: ms });
+  const esperarSemFicha = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JF);
+  const fecharFicha = (page) => page.evaluate((s) => { const bs = [...document.querySelectorAll(s + ' button')].filter(b => b.innerText.trim() === 'Fechar'); if (!bs.length) throw new Error('não achei o botão Fechar da ficha'); bs[bs.length - 1].click(); }, JF);
+  const esperarDesfechoF = (page, ms = 25000) => page.waitForFunction(() => !/^#\/sac\/ficha\//i.test(location.hash), { timeout: ms }).catch(() => {});
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C83 Ficha da Garantia: o clique na lista escreve o endereço; Voltar fecha, Avançar reabre e o X volta um passo', { simular: bancoDeFichas([F1, F2]) }, async ({ page }) => {
+    await page.goto(BASE + '#/sac/garantia', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForSelector('.acn-gar-linha', { timeout: 40000 }); await espera(900);
+    const antes = await estadoF(page);
+    confere('a aba Garantia abre pelo link da aba (#/sac/garantia)', antes.hash === '#/sac/garantia' && antes.abaAtiva === 'Garantia', JSON.stringify({ h: antes.hash, a: antes.abaAtiva }));
+    await page.evaluate((n) => [...document.querySelectorAll('.acn-gar-linha')].find(t => t.innerText.includes(n)).click(), F1.numero);
+    await esperarFicha(page); await espera(900);
+    let e = await estadoF(page);
+    confere('o endereço da ficha foi escrito (#/sac/ficha/<código>), com o código da ficha clicada', e.hash === '#/sac/ficha/' + F1.id, e.hash);
+    confere('UM passo novo no histórico, do próprio sistema', e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+    confere('uma janela só, a da ficha clicada, e a aba continua a Garantia', e.janelas === 1 && e.rotulo === 'Atendimento ' + F1.numero && e.abaAtiva === 'Garantia', JSON.stringify({ j: e.janelas, r: e.rotulo, a: e.abaAtiva }));
+    await page.goBack(); await esperarSemFicha(page); await espera(700);
+    e = await estadoF(page);
+    confere('o Voltar fecha a janela e volta ao endereço da aba Garantia', e.hash === '#/sac/garantia' && e.janelas === 0 && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.goForward(); await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Avançar reabre a MESMA ficha, uma só', e.hash === '#/sac/ficha/' + F1.id && e.janelas === 1 && e.rotulo === 'Atendimento ' + F1.numero, JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo }));
+    await fecharFicha(page); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o X volta um passo (endereço da aba), sem janela', e.hash === '#/sac/garantia' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    // de uma ficha para a outra: abrir a segunda deixa só ela (a primeira saiu pelo X antes)
+    await page.evaluate((n) => [...document.querySelectorAll('.acn-gar-linha')].find(t => t.innerText.includes(n)).click(), F2.numero);
+    await esperarFicha(page); await espera(700);
+    e = await estadoF(page);
+    confere('a segunda ficha tem o endereço dela, e só uma janela', e.hash === '#/sac/ficha/' + F2.id && e.janelas === 1 && e.rotulo === 'Atendimento ' + F2.numero, JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C84 Ficha da Garantia: link colado (primeira página) abre a ficha na aba Garantia; F5 reabre; o X nunca sai do sistema', { simular: bancoDeFichas([F1, F2]) }, async ({ page }) => {
+    const end = '#/sac/ficha/' + F1.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarFicha(page); await espera(900);
+    let e = await estadoF(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a ficha certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && e.rotulo === 'Atendimento ' + F1.numero, JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo }));
+    confere('a aba aberta é a Garantia (a ficha mora nela) e o passo do link colado não é do sistema', e.abaAtiva === 'Garantia' && e.marca === false, JSON.stringify({ a: e.abaAtiva, m: e.marca }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('F5 reabre a mesma ficha, no mesmo endereço', e.hash === end && e.janelas === 1 && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await fecharFicha(page); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('fechar troca o endereço pelo da aba Garantia, sem sair do sistema nem criar passo', e.hash === '#/sac/garantia' && e.janelas === 0 && e.origem === origem && e.historico === h0 && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem === origem, h0, h1: e.historico, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    const SO_DE_OUTRO = fichaFalsa(3, { aberto_por_email: 'outra.pessoa@teste.local', aberto_por_nome: 'Outra Pessoa', responsavel: { nome: 'Outra Pessoa', email: 'outra.pessoa@teste.local' }, copiados: [] });
+    const lerBanco = bancoDeFichas([F1, SO_DE_OUTRO], { lidas, recusa: () => modo === 'recusa' });
+    await cenario('C85 Ficha que não existe, que não é código, de outra pessoa e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', { simular: lerBanco }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false],
+        ['o banco recusa a leitura', 'recusa', F1.id, true],
+      ];
+      for (const [nome, m, codigo, leBanco] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/sac/ficha/' + codigo);
+        await esperarSistema(page); await esperarDesfechoF(page); await espera(800);
+        const e = await estadoF(page);
+        const al = await A(page);
+        const texto = m === 'recusa' ? 'Não foi possível abrir a ficha de garantia: a leitura falhou (erro simulado do banco). Tente de novo.' : MSG_F_NAO_ACHOU;
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a ficha de garantia'));
+        confere(`ficha (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`ficha (${nome}): nenhuma janela e o endereço volta ao da aba`, e.janelas === 0 && e.hash === '#/sac/garantia', JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`ficha (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`ficha (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+    // a ficha de OUTRA pessoa: quem só vê o que é seu (perfil SAC comum) recebe a mesma mensagem de "não encontrei, ou sem acesso" e a janela não abre
+    await cenario('C85b Ficha de outra pessoa: o perfil comum recebe a mesma mensagem e a janela não abre; a própria ficha abre', {
+      usuario: { ...USUARIO_ADMIN, perfil: 'SAC', abas_permitidas: ['sac'] }, simular: (url, r) => bancoComAbas(['sac'])(url, r) || lerBanco(url, r),
+    }, async ({ page }) => {
+      lidas.length = 0;
+      await abrirComoLinkColado(page, '#/sac/ficha/' + SO_DE_OUTRO.id);
+      await esperarSistema(page); await esperarDesfechoF(page); await espera(800);
+      let e = await estadoF(page); let al = await A(page);
+      confere('ficha de outra pessoa: UMA mensagem de "não encontrei, ou você não tem acesso"', al.filter(x => x.startsWith('Não foi possível abrir a ficha')).length === 1 && al.includes(MSG_F_NAO_ACHOU), JSON.stringify(al));
+      confere('ficha de outra pessoa: nenhuma janela e o endereço volta ao da aba', e.janelas === 0 && e.hash === '#/sac/garantia', JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere('ficha de outra pessoa: a leitura foi ao banco (a regra é conferida depois de ler)', lidas.includes(SO_DE_OUTRO.id), JSON.stringify(lidas));
+      await LA(page);
+      await abrirComoLinkColado(page, '#/sac/ficha/' + F1.id);
+      await esperarSistema(page); await esperarFicha(page); await espera(900);
+      e = await estadoF(page); al = await A(page);
+      confere('a ficha da própria pessoa abre', e.janelas === 1 && e.hash === '#/sac/ficha/' + F1.id, JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere('nenhum aviso ao abrir a própria ficha', al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C86 Ficha da Garantia: "Copiar link"; aberta de outra aba (Ordens de serviço) troca para a Garantia; Voltar e Avançar entre a aba e a ficha', { simular: bancoDeFichas([F1, F2]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + '#/sac/ficha/' + F1.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarFicha(page); await espera(900);
+    const SEL = JF + ' button[aria-label="Copiar o link desta ficha"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/sac/ficha/' + F1.id;
+      const ok = 'Link da ficha copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/sac/ficha/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da ficha. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoF(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/sac/ficha/' + F1.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+    await LA(page);
+    // com a aba das OS aberta, o endereço de uma ficha troca para a aba Garantia e abre a ficha; o Voltar volta à aba das OS
+    await page.goto(BASE + '#/sac', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoF(page);
+    confere('a aba das OS abre sem janela (#/sac)', e.hash === '#/sac' && e.janelas === 0 && /Ordens/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    const h0 = e.historico;
+    await page.evaluate((h) => { location.hash = h; }, '#/sac/ficha/' + F2.id);
+    await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o endereço de uma ficha, com a aba das OS aberta, troca para a Garantia e abre a ficha', e.janelas === 1 && e.rotulo === 'Atendimento ' + F2.numero && e.abaAtiva === 'Garantia' && e.hash === '#/sac/ficha/' + F2.id, JSON.stringify({ j: e.janelas, r: e.rotulo, a: e.abaAtiva, h: e.hash }));
+    await page.goBack(); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Voltar fecha a ficha e volta à aba das OS (#/sac)', e.janelas === 0 && e.hash === '#/sac' && /Ordens/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Avançar reabre a ficha, na aba Garantia', e.janelas === 1 && e.hash === '#/sac/ficha/' + F2.id && e.abaAtiva === 'Garantia', JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C87: os dois atalhos de dentro do sistema que abriam a ficha pelo recado antigo: o aviso (Menção, "Abrir o atendimento" do Desenvolvimento) e o selo "Ficha GAR-…" de uma OS do SAC
+  const OS_DA_FICHA = { id: '0000000b-0000-4000-8000-000000000001', numero_os: 'ZZ-OS-GAR-1', status: 'Em Provisionamento', garantia_id: F1.id, cobranca: 'garantia', tipo_servico: 'Garantia', tipo_projeto: 'Veicular', empresa: 'ACN', cliente_nome: 'ZZTESTE Cliente 1', data_abertura: '2026-11-20T12:00:00Z', status_desde: '2026-11-20T12:00:00Z', atualizado_em: '2026-11-20T12:00:00Z', equipamentos: [], acessorios: [], historico: [] };
+  await cenario('C87 Ficha da Garantia: o aviso (recado interno) e o selo da OS abrem a ficha pelo endereço, na aba Garantia, em UM passo', {
+    simular: (url, r) => {
+      if (url.includes('/rest/v1/sac_ordens_servico?') && !url.includes('id=eq.') && !url.includes('select=id,')) return { status: 200, body: [OS_DA_FICHA] };
+      return bancoDeFichas([F1, F2])(url, r);
+    },
+  }, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoF(page)).historico;
+    // o aviso: grava o recado e pede a troca de tela (a mesma coisa que as Menções e o "Abrir o atendimento" fazem)
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'garantia', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'sac' } })); }, F2.id);
+    await esperarFicha(page); await espera(900);
+    let e = await estadoF(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('o aviso abre a ficha pelo endereço (#/sac/ficha/<código>), na aba Garantia, uma janela só', e.hash === '#/sac/ficha/' + F2.id && e.janelas === 1 && e.rotulo === 'Atendimento ' + F2.numero && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo, a: e.abaAtiva }));
+    confere('UM passo novo no histórico (a tela e a ficha num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    await page.goBack(); await page.waitForFunction(() => !document.querySelector('.acn-main [role="tab"]'), { timeout: 15000 }).catch(() => {}); await espera(900);
+    e = await estadoF(page);
+    confere('o Voltar fecha a ficha e sai da tela do SAC (volta ao Início, de onde o aviso partiu)', e.janelas === 0 && !/^#\/sac/.test(e.hash), JSON.stringify({ j: e.janelas, h: e.hash }));
+    // o selo da OS: com a aba das OS aberta, o clique no selo abre a ficha (um passo) e o Voltar volta à aba das OS
+    await page.goto(BASE + '#/sac', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(3000);
+    const temSelo = await page.waitForFunction(() => [...document.querySelectorAll('.acn-main *')].some(x => x.children.length === 0 && /^Ficha /.test((x.textContent || '').trim())), { timeout: 30000 }).then(() => true).catch(() => false);
+    confere('o quadro das OS mostra o selo "Ficha GAR-…" da OS de garantia simulada', temSelo, 'sem selo');
+    if (!temSelo) return;
+    const h1 = (await estadoF(page)).historico;
+    await page.evaluate(() => { const s = [...document.querySelectorAll('.acn-main *')].find(x => x.children.length === 0 && /^Ficha /.test((x.textContent || '').trim())); s.click(); });
+    await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o clique no selo abre a ficha pelo endereço, na aba Garantia, em UM passo', e.hash === '#/sac/ficha/' + F1.id && e.janelas === 1 && e.abaAtiva === 'Garantia' && e.historico === h1 + 1, JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva, h1, h2: e.historico }));
+    await page.goBack(); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Voltar fecha a ficha e volta à aba das OS (#/sac)', e.janelas === 0 && e.hash === '#/sac' && /Ordens/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);

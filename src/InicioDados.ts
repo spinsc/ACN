@@ -39,7 +39,6 @@ const camposDoSlide = (f: any, usuario: any) => ({
   link_destino: f.link_tipo && f.link_tipo !== 'nenhum' ? (String(f.link_destino || '').trim() || null) : null,
   exibir_de: f.exibir_de || null,
   exibir_ate: f.exibir_ate || null,
-  perfis_alvo: null,                       // todo usuário vê todo slide (regra de 09/11/2026); gravar null também limpa qualquer limite que um slide tenha tido
   rascunho: !!f.rascunho,
   atualizado_por_nome: usuario?.nome || usuario?.email || null,
   atualizado_em: new Date().toISOString(),
@@ -157,15 +156,6 @@ export async function lerCoberturaDosAniversarios(): Promise<{ cobertura?: { ati
   const numero = (v: any) => (v === null || v === undefined || String(v).trim() === '' ? NaN : Number(v));
   if (!linha || !Number.isFinite(numero(linha.ativos)) || !Number.isFinite(numero(linha.com_nascimento))) return { erro: 'a resposta veio incompleta' };
   return { cobertura: { ativos: numero(linha.ativos), com_nascimento: numero(linha.com_nascimento) } };
-}
-
-/** As notas de atualização do sistema ainda no ar (as mesmas do botão Avisos): título, resumo e dia. */
-export async function lerNovidades(limite = 4): Promise<{ lista: any[]; erro?: string }> {
-  const { data, error } = await supabase.from('avisos_sistema').select('id,titulo,mensagem,criado_em,permanente,data_expiracao,criticidade').eq('ativo', true).order('criado_em', { ascending: false }).limit(30);
-  if (error) return { lista: [], erro: explicarErroDoBanco(error) };
-  const agora = new Date();
-  const no_ar = (data || []).filter((av: any) => av.permanente || (av.data_expiracao && new Date(av.data_expiracao) > agora));
-  return { lista: no_ar.slice(0, limite) };
 }
 
 export { ordenarSlides };
