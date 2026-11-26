@@ -309,6 +309,55 @@ export async function lerCarrosDasOps(opIds: string[]): Promise<{ mapa: Record<s
   }
 }
 
+// ═══ O VEÍCULO DE CADA SERVIÇO (pedido do usuário em 26/11/2026: "mostrar o veículo e o que será pintado") ════════════════════════════════════════════
+export type VeiculoDaLigacao = { modelo: string | null; placa: string | null; chassi: string | null };
+export type LeituraDeVeiculos = { mapa: Record<string, VeiculoDaLigacao>; erro: string | null };
+
+/**
+ * O modelo, a placa e o chassi do carro de cada serviço ligado a uma OP ou a uma OS (id da ligação → veículo). O serviço só guarda o número, então o carro vem da OP (modelo, placa, chassi)
+ * ou da OS do SAC (modelo ou equipamento, chassi: a OS não tem placa). Serviço de demanda, de projeto ou avulso não tem carro e não entra. Lê em blocos de 60.
+ * Leitura que falha devolve o erro (e o que já tinha lido): a tela diz "veículo não lido", nunca "sem veículo".
+ */
+export async function lerVeiculosDasLigacoes(ligacoes: { tipo: string | null; id: string | null }[]): Promise<LeituraDeVeiculos> {
+  const mapa: Record<string, VeiculoDaLigacao> = {};
+  const ops = [...new Set(ligacoes.filter(l => l.tipo === 'op' && l.id).map(l => l.id as string))];
+  const oss = [...new Set(ligacoes.filter(l => l.tipo === 'os' && l.id).map(l => l.id as string))];
+  if (!ops.length && !oss.length) return { mapa, erro: null };
+  try {
+    if (ops.length) {
+      const r = await lerCarrosDasOps(ops);
+      if (r.erro) return { mapa, erro: r.erro };
+      for (const id of Object.keys(r.mapa)) { const u = r.mapa[id]; mapa[id] = { modelo: u.modelo || null, placa: u.placa || null, chassi: u.chassi || null }; }
+    }
+    for (let i = 0; i < oss.length; i += 60) {
+      const { data, error } = await supabase.from('sac_ordens_servico').select('id,marca,modelo,veiculo_modelo,chassi,equipamento_nome').in('id', oss.slice(i, i + 60));
+      if (error) return { mapa, erro: explicarErroDoBanco(error) };
+      for (const o of (data || []) as any[]) {
+        const modelo = String(o.veiculo_modelo || '').trim() || [o.marca, o.modelo].map(x => String(x || '').trim()).filter(Boolean).join(' ') || String(o.equipamento_nome || '').trim();
+        mapa[o.id] = { modelo: modelo || null, placa: null, chassi: o.chassi || null };
+      }
+    }
+    return { mapa, erro: null };
+  } catch (e: any) {
+    return { mapa, erro: explicarErroDoBanco(e) };
+  }
+}
+
+/**
+ * Põe o veículo em cada serviço (campos derivados, como os da ordem e do pagamento). `leitura` nulo = ainda não se leu nada: o serviço fica como veio.
+ * Com erro na leitura, o serviço de OP ou OS que não está no que já se sabia fica "não lido".
+ */
+export function anexarVeiculos(servicos: ServicoDeTerceiro[], leitura: LeituraDeVeiculos | null): ServicoDeTerceiro[] {
+  if (!leitura) return servicos;
+  return servicos.map(s => {
+    if ((s.ligacao_tipo !== 'op' && s.ligacao_tipo !== 'os') || !s.ligacao_id) return s;
+    const v = leitura.mapa[s.ligacao_id];
+    if (v) return { ...s, veiculo_modelo: v.modelo, veiculo_placa: v.placa, veiculo_chassi: v.chassi, veiculo_lido: true };
+    // OP ou OS que não veio: se a leitura falhou, não se sabe; se deu certo, a OP/OS não existe mais (foi excluída): sem veículo a mostrar
+    return leitura.erro ? { ...s, veiculo_nao_lido: true } : s;
+  });
+}
+
 /** Dos ids de OP/OS/demanda/projeto dados, quais já têm um serviço EM ABERTO deste tipo (id da ligação → número do serviço). Leitura que falha devolve o erro; o banco confere de novo ao gravar. */
 export async function lerServicosAbertosDasLigacoes(tipoId: string, ligacaoIds: string[]): Promise<{ mapa: Record<string, string>; erro: string | null }> {
   const mapa: Record<string, string> = {};

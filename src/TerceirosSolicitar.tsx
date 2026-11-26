@@ -13,7 +13,7 @@ import { VinculoPicker } from './VinculoPicker';
 import { ModalPrestador } from './TerceirosPrestadores';
 import { opcoesDePrestador } from './TerceirosAcoes';
 import { podeGerirPrestadoresDeTerceiros } from './utils/permissoes';
-import { FORM_PEDIDO_VAZIO, ROTULO_DA_LIGACAO, erroDoPedido, pecasParaGravar, valorDigitadoOuNulo, veValores } from './TerceirosFluxo';
+import { FORM_PEDIDO_VAZIO, ROTULO_DA_LIGACAO, erroDoPedido, pecasParaGravar, valorDigitadoOuNulo, veValores, rotuloDasPecas } from './TerceirosFluxo';
 import { lerTipos, lerPrestadores } from './TerceirosModelo';
 import {
   pedirServicos, enviarAnexos, retirarArquivosSoltos, novaPastaDeAnexos, lerUnidadesDaOp, lerServicosAbertosDasLigacoes, auditarPedido,
@@ -253,7 +253,7 @@ export function ModalSolicitar({ tipos, prestadores, currentUser, preset = null,
                 </div>
               )}
 
-              <div className="acn-terc-campo acn-terc-largo"><span className="acn-label">Peças que vão ao prestador</span>
+              <div className="acn-terc-campo acn-terc-largo"><span className="acn-label">{rotuloDasPecas(tipo)}</span>
                 {form.pecas.length > 0 && (
                   <div className="acn-terc-pecas">
                     {form.pecas.map((p, i) => (

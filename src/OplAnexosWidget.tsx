@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { contarAnexosDaOp } from './ContagemAnexos';
 import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
@@ -215,9 +216,8 @@ export function useContagemAnexos(oplId: any): [number | null, () => void] {
   const [count, setCount] = useState<number | null>(null);
   const recarregar = useCallback(async () => {
     if (!oplId) return;
-    const { count: c } = await supabase.from('opl_anexos')
-      .select('*', { count:'exact', head:true }).eq('opl_id', oplId);
-    setCount(c ?? 0);
+    // 26/11/2026: a contagem sai em lote com a dos outros cartões da tela (ContagemAnexos.ts); se o banco recusar, fica "…" em vez de "0"
+    try { setCount(await contarAnexosDaOp(oplId)); } catch { /* segue sem número */ }
   }, [oplId]);
   useEffect(() => { recarregar(); }, [recarregar]);
   return [count, recarregar];
@@ -230,9 +230,7 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
   const [uploading, setUploading] = useState(false);
 
   const loadCount = useCallback(async () => {
-    const { count: c } = await supabase.from('opl_anexos')
-      .select('*', { count:'exact', head:true }).eq('opl_id', opl.id);
-    setCount(c ?? 0);
+    try { setCount(await contarAnexosDaOp(opl.id)); } catch { /* segue sem número: mostra "…" */ }
   }, [opl.id]);
 
   useEffect(() => { loadCount(); }, [loadCount]);

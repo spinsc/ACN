@@ -13,7 +13,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { permissoesDaViagem } from './ViagemFluxo';
-import { EditorDeViagem } from './ViagensTab';
+import { telaSobDemanda, TelaSobDemanda } from './CarregarTela';
+// 26/11/2026 (lentidão): esta peça fica montada o tempo todo na casca; se importasse a ViagensTab direto, a tela inteira das Viagens viria junto no pacote de abertura. O editor só é baixado quando uma viagem realmente abre.
+const EditorDeViagem = telaSobDemanda(() => import('./ViagensTab'), m => m.EditorDeViagem);
 import { aoMudarEndereco } from './EnderecoDoNavegador';
 import { ehCodigoInterno } from './Rotas';
 import { tirarEnderecoDeRegistroSemTela } from './OpNoEndereco';
@@ -81,7 +83,11 @@ export default function ViagemDoEndereco({ currentUser }: any) {
   return (
     <>
       {carregando && chave && <div className="acn-op-endereco-carregando" role="status">Abrindo a viagem…</div>}
-      {viagem && <EditorDeViagem key={viagem.id} inicial={viagem} currentUser={currentUser} aoFechar={fechar} aoSalvar={salvou} />}
+      {viagem && (
+        <TelaSobDemanda chave={viagem.id}>
+          <EditorDeViagem key={viagem.id} inicial={viagem} currentUser={currentUser} aoFechar={fechar} aoSalvar={salvou} />
+        </TelaSobDemanda>
+      )}
     </>
   );
 }

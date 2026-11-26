@@ -4,12 +4,13 @@
 // (clicar no cartão do grupo abre a lista dos carros). Arrastar o cartão para outra coluna faz o mesmo que o menu "⋯": o passo que leva até lá, ou o porquê de não poder.
 // Quem confere de verdade é o banco; a tela só deixa de oferecer o passo que ele recusaria (regras em TerceirosFluxo.ts).
 import React, { useRef, useState } from 'react';
-import { mdiLinkVariant, mdiAccountWrenchOutline, mdiCalendarOutline, mdiClipboardTextOutline } from '@mdi/js';
+import { mdiLinkVariant, mdiAccountWrenchOutline, mdiCalendarOutline, mdiClipboardTextOutline, mdiCarOutline } from '@mdi/js';
 import Icone from './Icone';
 import { MenuAcoes, Tag } from './Interface';
 import { mostrarAviso } from './Feedback';
 import {
   COLUNAS_TERCEIROS, COLUNA_CANCELADO, cartoesDaColuna, movimentosDoServico, movimentoParaAColuna, selosDoServico, rotuloDaLigacao, diasNaColunaDoServico, reaisDoServico,
+  veiculoParaMostrar, veiculoSemDado, resumoDosVeiculos, textoDasPecas, rotuloDasPecas,
 } from './TerceirosFluxo';
 import { itensDoMenu, movimentosEmComum, extrasDoServico } from './TerceirosAcoes';
 import { SelosDoServico, juntarSelos, textoDoDia } from './TerceirosPecas';
@@ -44,6 +45,8 @@ function CartaoDeServico({ s, tipo, prestador, selos, verValor, currentUser, aoA
         <MenuAcoes rotulo={`Ações do serviço ${s.numero}`} itens={itensDoMenu(movs, m => aoMover(m, [s]), extrasDoServico([s], { aoAbrir: () => aoAbrir(s), aoAbrirOrdem, aoImprimir }))} />
       </div>
       <p className="acn-terc-card-desc">{s.descricao}</p>
+      {veiculoParaMostrar(s) && <div className={'acn-terc-card-veic' + (s.veiculo_nao_lido ? ' nao-lido' : veiculoSemDado(s) ? ' sem-dado' : '')} title="Veículo"><Icone path={mdiCarOutline} size={13} />{veiculoParaMostrar(s)}</div>}
+      {textoDasPecas(s) && <div className="acn-terc-card-pecas" title={`${rotuloDasPecas(tipo)}: ${textoDasPecas(s)}`}><strong>{rotuloDasPecas(tipo)}:</strong> {textoDasPecas(s)}</div>}
       {s.ligacao_tipo && <div className="acn-terc-card-lig"><Icone path={mdiLinkVariant} size={13} />{rotuloDaLigacao(s)}</div>}
       <div className="acn-terc-card-meta">
         <span className={prestador ? '' : 'acn-terc-sem'}><Icone path={mdiAccountWrenchOutline} size={13} />{prestador?.nome || 'Sem prestador'}</span>
@@ -87,6 +90,8 @@ function CartaoDeGrupo({ cartao, tipo, prestador, selos, verValor, tipoDe, curre
         <MenuAcoes rotulo={`Ações dos ${servicos.length} serviços`} itens={itensDoMenu(movs, m => aoMover(m, servicos), extrasDoServico(servicos, { aoAbrir: () => aoAbrirGrupo(cartao), aoAbrirOrdem, aoImprimir }))} />
       </div>
       <p className="acn-terc-card-desc">{base.descricao}</p>
+      {resumoDosVeiculos(servicos) && <div className={'acn-terc-card-veic' + (servicos.some(s => s.veiculo_nao_lido) ? ' nao-lido' : servicos.every(veiculoSemDado) ? ' sem-dado' : '')} title="Veículos"><Icone path={mdiCarOutline} size={13} />{resumoDosVeiculos(servicos)}</div>}
+      {textoDasPecas(base) && <div className="acn-terc-card-pecas" title={`${rotuloDasPecas(tipo)}: ${textoDasPecas(base)}`}><strong>{rotuloDasPecas(tipo)}:</strong> {textoDasPecas(base)}</div>}
       <div className="acn-terc-card-lig"><Icone path={daOrdem ? mdiClipboardTextOutline : mdiLinkVariant} size={13} />{daOrdem ? `Ordem ${base.ordem_numero || 'de serviço'}` : `Venda ${base.venda_base}`}</div>
       <div className="acn-terc-card-meta">
         <span className={prestador ? '' : 'acn-terc-sem'}><Icone path={mdiAccountWrenchOutline} size={13} />{prestador?.nome || 'Sem prestador'}</span>

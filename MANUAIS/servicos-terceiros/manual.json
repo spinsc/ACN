@@ -20,6 +20,10 @@
     },
     {
       "data": "2026-11-26",
+      "texto": "O veículo e o que será pintado agora aparecem no serviço: no cartão do Quadro, na Lista (coluna Veículo), na janela do serviço e do grupo, na Agenda e na busca (placa, chassi e modelo). A lista de peças passa a se chamar O que será pintado nos serviços de pintura. OP sem modelo cadastrado mostra, em cinza, Sem veículo informado na OP; leitura que falha mostra, em vermelho, Veículo não lido. Texto atualizado; as fotos do Quadro, da Lista e da Agenda ainda são as antigas."
+    },
+    {
+      "data": "2026-11-26",
       "texto": "Link do serviço: cada serviço tem um endereço próprio (#/terceiros/servico/...) e as janelas do serviço e do grupo de carros ganharam o botão \"Copiar o link\", ao lado do X; o F5 reabre a mesma janela e o Voltar e o Avançar do navegador a fecham e reabrem; o serviço de uma ordem em lote abre a janela da ordem, que não tem link"
     }
   ]

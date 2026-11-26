@@ -9,7 +9,7 @@ import { selosDoServico } from './TerceirosFluxo';
 import { diaCurto } from './TerceirosPecas';
 import {
   DIAS_DA_SEMANA, janelaDaAgenda, andarNaAgenda, rotuloDaJanela, diaDeOutroMes, visitasDaAgenda, visitasDaJanela, linhasDaAgenda, visitasPorDia, resumoDaAgenda, choquesDaJanela,
-  nomeDoTipoDaVisita, nomeDoPrestadorDaVisita, textoDoPeriodoDaVisita, detalheDaVisita,
+  nomeDoTipoDaVisita, nomeDoPrestadorDaVisita, textoDoPeriodoDaVisita, detalheDaVisita, veiculoEPecasDaVisita,
 } from './TerceirosAgenda';
 
 const CHAVE_DA_AGENDA = 'acn_terceiros_agenda';
@@ -33,13 +33,15 @@ function VisitaNaAgenda({ v, principal, mapas, hoje, verValor, aoAbrir, aoAbrirG
   const choque = selos.find(s => s.id === 'choque');
   const atraso = selos.find(s => s.id === 'atrasado');
   const quando = textoDoPeriodoDaVisita(v);
-  const dica = [nomeDoTipoDaVisita(v, mapas), nomeDoPrestadorDaVisita(v, mapas), quando, detalheDaVisita(v), choque?.title, atraso?.title].filter(Boolean).join(' · ');
+  const veiculoEPecas = veiculoEPecasDaVisita(v);   // 26/11/2026: o carro e o que será feito nele aparecem na própria visita
+  const dica = [nomeDoTipoDaVisita(v, mapas), nomeDoPrestadorDaVisita(v, mapas), quando, detalheDaVisita(v), veiculoEPecas, choque?.title, atraso?.title].filter(Boolean).join(' · ');
   return (
     <div className={`acn-terc-visita sit-${v.situacao}${v.choque ? ' choque' : ''}${v.atrasada ? ' atrasada' : ''}${v.ehHoje ? ' hoje' : ''}`}
       role="button" tabIndex={0} data-visita={v.chave} title={dica} aria-label={dica}
       onClick={abrir} onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); abrir(); } }}>
       <span className="acn-terc-visita-topo"><em>{quando}</em>{principal}</span>
       <span className="acn-terc-visita-sub">{detalheDaVisita(v)}</span>
+      {veiculoEPecas && <span className="acn-terc-visita-veic">{veiculoEPecas}</span>}
       {choque && <span className="acn-terc-visita-alerta">Choque de data</span>}
       {atraso && <span className="acn-terc-visita-alerta">{atraso.rotulo}</span>}
     </div>

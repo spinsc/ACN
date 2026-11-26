@@ -108,6 +108,8 @@ O cartão mostra o tipo, o número (**TS-…**), a descrição, a ligação (OP,
 
 ![A janela de um grupo de carros](img/03-grupo-de-carros.jpg)
 
+**O veículo e o que será feito nele.** Todo cartão de serviço ligado a uma OP ou a uma OS mostra, logo abaixo da descrição, o **veículo** (modelo e placa, ou o chassi quando não há placa) e as **peças** que vão ao prestador. Nos serviços de **pintura** e de **pintura eletrostática** a lista de peças se chama **O que será pintado**; nos outros, **Peças**. O cartão de grupo mostra quantos carros de cada modelo há ("2 Ranger · 1 Hilux SW4"). A mesma informação aparece na janela do serviço (linha **Veículo**), na janela do grupo, na **Agenda** (dentro da visita) e na **busca**: dá para achar o serviço pela placa, pelo chassi ou pelo modelo. Quando a OP não tem modelo, placa nem chassi cadastrados, o cartão diz, em cinza, **Sem veículo informado na OP** (quem cadastra a OP completa o dado). Se o sistema não conseguir ler o veículo, aparece, em vermelho, **Veículo não lido** e uma faixa com **Tentar de novo**.
+
 Uma venda com vários carros gera **um serviço por carro** (cada OP /NN). Para não virar dezenas de cartões iguais, o Quadro junta **os carros da mesma venda, do mesmo tipo, da mesma coluna, do mesmo prestador e do mesmo dia** num **cartão de grupo** ("Película · venda 1673.2609 · 10 carros"). Clique nele para abrir a lista dos carros, **marque os carros** que quer mexer (há **Marcar todos**) e use os botões da janela: os **passos** (**Agendar**, **Dar como realizado**…), **Ajustar os marcados** (prestador, valor combinado, dia desejado e observação de todos de uma vez, deixando em branco o que não quer mudar), **Montar ordem de serviço** e **Imprimir contrato**. Tudo vale só para os marcados e é **tudo ou nada**: se um falhar, nenhum muda. O carro que sai do grupo (outro dia, outro prestador, cancelado) vira cartão próprio.
 
 ### Mover um serviço
@@ -136,7 +138,7 @@ A Agenda mostra **a visita**, não cada carro. Uma visita é o mesmo agrupamento
 
 ![A Lista dos serviços, em tabela](img/05-lista.jpg)
 
-A Lista tem os mesmos serviços, filtros e contadores em tabela, para conferência. A coluna **Ações** fica fixa à direita. O menu **⋯** de cada linha é o mesmo do Quadro.
+A Lista tem os mesmos serviços, filtros e contadores em tabela, para conferência. A coluna **Veículo** mostra o modelo e a placa (ou o chassi) do carro, e, embaixo da descrição, aparecem as peças (ou **O que será pintado**, nos serviços de pintura). A coluna **Ações** fica fixa à direita. O menu **⋯** de cada linha é o mesmo do Quadro.
 
 ## O Relatório do mês
 
