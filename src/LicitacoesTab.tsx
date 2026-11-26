@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
+import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio, registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
@@ -2862,14 +2863,15 @@ export default function LicitacoesTab({ currentUser }: any) {
   // 12e74 (09/11/2026): o gancho do termômetro mantém a última leitura boa quando uma falha e diz o erro (faixa vermelha)
   const { markup: markupPorLicit, erro: erroMarkup, recarregar: recarregarMarkup } = useMarkupDaTela('licitacao');
   const [loading, setLoading] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
-  const [filtroTipo, setFiltroTipo] = useState<string>('Direta');
+  // status, tipo e período moram no endereço (`#/licitacoes?status=Finalizada&tipo=todos&de=2026-01-01`) e valem para a tela toda: abrir uma licitação e voltar mantém a lista como estava
+  const [filtroStatus, setFiltroStatus] = useFiltroNoEndereco({ tela: 'licitacoes', chave: 'status', padrao: 'Aberta', validar: v => v === 'todas' || STATUS_LIST.includes(v) });
+  const [filtroTipo, setFiltroTipo] = useFiltroNoEndereco({ tela: 'licitacoes', chave: 'tipo', padrao: 'Direta', validar: v => ['todos', 'Direta', 'Parceiro', 'Adesão a ATA'].includes(v) });
   const [filtroTemp, setFiltroTemp] = useState<string>('');
   const [filtroMarkup, setFiltroMarkup] = useState<string>('');   // faixa de markup (07/10/2026)
   const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
   const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
-  const [filtroPeriodoDe, setFiltroPeriodoDe] = useState('');
-  const [filtroPeriodoAte, setFiltroPeriodoAte] = useState('');
+  const [filtroPeriodoDe, setFiltroPeriodoDe] = useFiltroNoEndereco({ tela: 'licitacoes', chave: 'de', padrao: '', validar: v => /^\d{4}-\d{2}-\d{2}$/.test(v) });
+  const [filtroPeriodoAte, setFiltroPeriodoAte] = useFiltroNoEndereco({ tela: 'licitacoes', chave: 'ate', padrao: '', validar: v => /^\d{4}-\d{2}-\d{2}$/.test(v) });
   const [sortBy, setSortBy] = useState('data_disputa');
   const [modalNova, setModalNova] = useState(false);
   const [selected, setSelected] = useState<any|null>(null);

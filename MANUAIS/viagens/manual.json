@@ -8,6 +8,10 @@
   "mudancas": [
     {
       "data": "2026-11-26",
+      "texto": "O filtro Data de saída ganhou endereço: #/viagens?saida=semana (ou #/viagens/lista?saida=semana). Filtrar não cria passo no histórico; o F5, o Voltar, o Avançar e o link colado trazem o filtro de volta, e ele acompanha a troca entre Quadro, Lista e Agenda. Sair da tela pelo menu e voltar abre sem filtro. Nada mudou nos botões nem nas fotos."
+    },
+    {
+      "data": "2026-11-26",
       "texto": "Endereço de cada forma de ver: Quadro, Lista, Agenda e Custos passaram a ter endereço na barra do navegador (#/viagens, #/viagens/lista, #/viagens/agenda e #/viagens/custos). O F5 volta para a forma de ver em que a pessoa estava (antes voltava ao Quadro), o Voltar e o Avançar do navegador passam de uma para outra, e dá para mandar o link de uma delas. Nada mudou nos botões nem nas fotos."
     },
     {

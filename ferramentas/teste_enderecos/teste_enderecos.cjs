@@ -2762,6 +2762,272 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Fase 5, parte 3 (26/11/2026): os FILTROS no endereço (`#/viagens/lista?saida=semana`). Filtrar não é navegar: nunca cria passo no histórico. O endereço manda no F5, no link colado, no Voltar e
+  // no Avançar; valor que a tela não aceita cai no padrão com a barra corrigida SEM passo; sair da tela pelo menu e voltar abre limpo.
+  // ───────────────────────────────────────────────────────────────────────────
+  const FORMA_V = { tipo: 'chips', grupo: 'Forma de ver' };
+  const SAIDA_V = { tipo: 'chips', grupo: 'Data de saída' };
+  await cenario('C69 Viagens: a data de saída vai ao endereço sem passo, sobrevive à troca de visão, ao F5, ao Voltar e ao link colado', {}, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/viagens', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, FORMA_V); await esperarVisoes(page, SAIDA_V); await espera(1200);
+    let e = await estadoVisoes(page, SAIDA_V);
+    confere('abre com "Todas as datas" e o endereço curto', e.ativas[0] === 'Todas as datas' && e.hash === '#/viagens', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const h0 = e.historico;
+    await clicarNaVisao(page, SAIDA_V, 'Saem em 7 dias'); await aguardarVisao(page, SAIDA_V, 'Saem em 7 dias');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('filtrar → #/viagens?saida=semana, SEM passo novo', e.ativas[0] === 'Saem em 7 dias' && e.hash === '#/viagens?saida=semana' && e.historico === h0, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico }));
+    await clicarNaVisao(page, FORMA_V, 'Lista'); await aguardarVisao(page, FORMA_V, 'Lista');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('trocar para a Lista leva o filtro junto (#/viagens/lista?saida=semana), com UM passo', e.ativas[0] === 'Saem em 7 dias' && e.hash === '#/viagens/lista?saida=semana' && e.historico === h0 + 1, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVisoes(page, SAIDA_V); await espera(1200);
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('F5 reabre filtrado, na mesma visão, sem passo novo', e.ativas[0] === 'Saem em 7 dias' && e.hash === '#/viagens/lista?saida=semana' && e.historico === h0 + 1, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico }));
+    await page.goBack(); await aguardarVisao(page, FORMA_V, 'Quadro');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('Voltar → Quadro, ainda filtrado (o passo de antes guardou o filtro)', e.hash === '#/viagens?saida=semana' && e.ativas[0] === 'Saem em 7 dias', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await page.goForward(); await aguardarVisao(page, FORMA_V, 'Lista');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('Avançar → Lista filtrada', e.hash === '#/viagens/lista?saida=semana' && e.ativas[0] === 'Saem em 7 dias', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await clicarNaVisao(page, SAIDA_V, 'Todas as datas'); await aguardarVisao(page, SAIDA_V, 'Todas as datas');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('voltar ao padrão tira o filtro do endereço (#/viagens/lista)', e.hash === '#/viagens/lista', e.hash);
+    await page.goBack(); await aguardarVisao(page, FORMA_V, 'Quadro'); await aguardarVisao(page, SAIDA_V, 'Saem em 7 dias');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('Voltar a um passo com OUTRO filtro: o endereço manda e o chip passa a "Saem em 7 dias"', e.ativas[0] === 'Saem em 7 dias' && e.hash === '#/viagens?saida=semana', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await page.goForward(); await aguardarVisao(page, FORMA_V, 'Lista'); await aguardarVisao(page, SAIDA_V, 'Todas as datas');
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('Avançar de volta: "Todas as datas" e o endereço sem filtro', e.ativas[0] === 'Todas as datas' && e.hash === '#/viagens/lista', JSON.stringify({ a: e.ativas, h: e.hash }));
+    for (const [h, rot, esperadoHash] of [['#/viagens/lista?saida=atrasadas', 'Saída atrasada', '#/viagens/lista?saida=atrasadas'], ['#/viagens?saida=sem_data', 'Sem data', '#/viagens?saida=sem_data'],
+      ['#/viagens?saida=bobagem', 'Todas as datas', '#/viagens'], ['#/viagens/lista?saida=', 'Todas as datas', '#/viagens/lista']]) {
+      await abrirComoLinkColado(page, h); await esperarSistema(page); await esperarVisoes(page, SAIDA_V); await espera(1200);
+      e = await estadoVisoes(page, SAIDA_V);
+      confere(`link colado ${h} → "${rot}" e a barra fica ${esperadoHash}, sem passo`, e.ativas[0] === rot && e.hash === esperadoHash && e.historico === e.h0, JSON.stringify({ a: e.ativas, h: e.hash, h0: e.h0, h1: e.historico }));
+    }
+    await abrirComoLinkColado(page, '#/viagens?saida=semana'); await esperarSistema(page); await esperarVisoes(page, FORMA_V); await espera(1200);
+    await clicarNaVisao(page, FORMA_V, 'Agenda'); await aguardarVisao(page, FORMA_V, 'Agenda');
+    e = await estadoVisoes(page, FORMA_V);
+    confere('na Agenda (que esconde o chip) o filtro continua no endereço', e.hash === '#/viagens/agenda?saida=semana', e.hash);
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    await clicarNoMenu(page, 'Viagens'); await esperarVisoes(page, SAIDA_V); await espera(1200);
+    e = await estadoVisoes(page, SAIDA_V);
+    confere('sair da tela pelo menu e voltar abre SEM o filtro', e.ativas[0] === 'Todas as datas' && !/saida=/.test(e.hash), JSON.stringify({ a: e.ativas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  const REL_F = { tipo: 'chips', grupo: 'Relatório' };
+  const SETOR_F = { tipo: 'chips', grupo: 'Setor' };
+  const lerMes = (page) => page.evaluate(() => ({ valor: (document.querySelector('.acn-main input[type="month"]') || {}).value, hash: location.hash, historico: history.length, h0: window.__h0 }));
+  await cenario('C70 Relatórios: o setor (Por Área, Por Setor) e o mês (Comissões, Markup) vão ao endereço; o filtro de um relatório não apaga o do vizinho', {}, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/relatorios/area?setor=Compras', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, SETOR_F); await espera(1500);
+    let e = await estadoVisoes(page, SETOR_F);
+    confere('Por Área: o link com o setor abre filtrado e a barra não muda', e.ativas[0] === 'Compras' && e.hash === '#/relatorios/area?setor=Compras', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const h0 = e.historico;
+    await clicarNaVisao(page, SETOR_F, 'Serralheria'); await aguardarVisao(page, SETOR_F, 'Serralheria');
+    e = await estadoVisoes(page, SETOR_F);
+    confere('Por Área: trocar o setor atualiza a barra SEM passo', e.ativas[0] === 'Serralheria' && e.hash === '#/relatorios/area?setor=Serralheria' && e.historico === h0, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico }));
+    await clicarNaVisao(page, SETOR_F, 'Chicotes'); await aguardarVisao(page, SETOR_F, 'Chicotes');
+    e = await estadoVisoes(page, SETOR_F);
+    confere('Por Área: o setor padrão (Chicotes) tira a chave do endereço', e.hash === '#/relatorios/area', e.hash);
+    await clicarNaVisao(page, SETOR_F, 'Compras'); await aguardarVisao(page, SETOR_F, 'Compras');
+    await clicarNaVisao(page, REL_F, 'Por Setor'); await aguardarVisao(page, REL_F, 'Por Setor'); await esperarVisoes(page, SETOR_F); await espera(1200);
+    e = await estadoVisoes(page, SETOR_F);
+    confere('trocar de relatório deixa o filtro do outro para trás (#/relatorios/porsetor, setor "Todos")', e.hash === '#/relatorios/porsetor' && e.ativas[0] === 'Todos', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await clicarNaVisao(page, SETOR_F, 'Produção'); await aguardarVisao(page, SETOR_F, 'Produção');
+    e = await estadoVisoes(page, SETOR_F);
+    confere('Por Setor: o setor com acento vai codificado ao endereço', e.ativas[0] === 'Produção' && e.hash === '#/relatorios/porsetor?setor=Produ%C3%A7%C3%A3o', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVisoes(page, SETOR_F); await espera(1500);
+    e = await estadoVisoes(page, SETOR_F);
+    confere('F5 mantém "Produção"', e.ativas[0] === 'Produção' && e.hash === '#/relatorios/porsetor?setor=Produ%C3%A7%C3%A3o', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await page.goBack(); await aguardarVisao(page, REL_F, 'Por Área'); await esperarVisoes(page, SETOR_F); await espera(1500);
+    e = await estadoVisoes(page, SETOR_F);
+    confere('Voltar ao relatório de antes devolve o setor dele ("Compras"): o filtro do outro relatório não o apagou nem o corrompeu', e.ativas[0] === 'Compras' && e.hash === '#/relatorios/area?setor=Compras', JSON.stringify({ a: e.ativas, h: e.hash }));
+    for (const [h, rot, hashOk] of [['#/relatorios/porsetor?setor=Compras', 'Todos', '#/relatorios/porsetor'], ['#/relatorios/area?setor=Todos', 'Chicotes', '#/relatorios/area'], ['#/relatorios/porsetor?setor=Comercial%2FFiscal', 'Comercial/Fiscal', '#/relatorios/porsetor?setor=Comercial%2FFiscal']]) {
+      await abrirComoLinkColado(page, h); await esperarSistema(page); await esperarVisoes(page, SETOR_F); await espera(1500);
+      e = await estadoVisoes(page, SETOR_F);
+      confere(`link colado ${h} → "${rot}", barra ${hashOk}, sem passo`, e.ativas[0] === rot && e.hash === hashOk && e.historico === e.h0, JSON.stringify({ a: e.ativas, h: e.hash, h0: e.h0, h1: e.historico }));
+    }
+    // o mês: Comissões e Markup
+    for (const [aba, nome] of [['comissoes', 'Comissões'], ['markup', 'Markup']]) {
+      const base = '#/relatorios/' + aba;
+      await abrirComoLinkColado(page, base + '?mes=2026-09'); await esperarSistema(page); await espera(2500);
+      let m = await lerMes(page);
+      confere(`${nome}: o link com o mês abre nele e a barra fica`, m.valor === '2026-09' && m.hash === base + '?mes=2026-09' && m.historico === m.h0, JSON.stringify(m));
+      await page.evaluate(() => { const i = document.querySelector('.acn-main input[type="month"]'); if (!i) throw new Error('campo de mês não achado'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); });   // limpar o campo = "todos os meses" (o botão Todos só existe no Markup)
+      await espera(600); m = await lerMes(page);
+      confere(`${nome}: limpar o mês (todos os meses) vai ao endereço como mes=todos, sem passo`, m.valor === '' && m.hash === base + '?mes=todos' && m.historico === m.h0, JSON.stringify(m));
+      await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(2500);
+      m = await lerMes(page);
+      confere(`${nome}: F5 mantém "todos os meses"`, m.valor === '' && m.hash === base + '?mes=todos', JSON.stringify(m));
+      const agora = await page.evaluate(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); });
+      await abrirComoLinkColado(page, base + '?mes=lixo'); await esperarSistema(page); await espera(2500);
+      m = await lerMes(page);
+      confere(`${nome}: mês inválido cai no mês de agora e a barra volta ao curto, sem passo`, m.valor === agora && m.hash === base && m.historico === m.h0, JSON.stringify({ ...m, agora }));
+    }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  await cenario('C71 Ponto: o mês vai ao endereço, passa de uma parte a outra e só vale mês que existe', { escritaSimulada: comPonto(true, false) }, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/ponto/mes?mes=2026-09-01', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1800);
+    let e = await estadoVisoes(page, ALVO_PONTO);
+    confere('o link com o mês abre em "Resumo do mês" e a barra guarda o mês', e.ativas[0] === 'Resumo do mês' && e.hash === '#/ponto/mes?mes=2026-09-01', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const h0 = e.historico;
+    await clicarNaVisao(page, ALVO_PONTO, 'Horas extras'); await aguardarVisao(page, ALVO_PONTO, 'Horas extras');
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('trocar de parte leva o mês junto, com UM passo', e.hash === '#/ponto/extras?mes=2026-09-01' && e.historico === h0 + 1, JSON.stringify({ h: e.hash, h0, h1: e.historico }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1800);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('F5 mantém a parte e o mês', e.ativas[0] === 'Horas extras' && e.hash === '#/ponto/extras?mes=2026-09-01', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await page.goBack(); await aguardarVisao(page, ALVO_PONTO, 'Resumo do mês'); await espera(600);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('Voltar → Resumo do mês, no mesmo mês', e.hash === '#/ponto/mes?mes=2026-09-01', e.hash);
+    for (const [h, hashOk] of [['#/ponto/mes?mes=2019-01-01', '#/ponto/mes'], ['#/ponto/mes?mes=2099-01-01', '#/ponto/mes'], ['#/ponto/mes?mes=2026-09-15', '#/ponto/mes'], ['#/ponto/mes?mes=lixo', '#/ponto/mes']]) {
+      await abrirComoLinkColado(page, h); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1800);
+      e = await estadoVisoes(page, ALVO_PONTO);
+      confere(`mês inválido (${h}) → a barra volta a ${hashOk}, sem passo`, e.hash === hashOk && e.historico === e.h0, JSON.stringify({ h: e.hash, h0: e.h0, h1: e.historico }));
+    }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  const lerFin = (page) => page.evaluate(() => { const v = (r) => { const x = document.querySelector('.acn-main select[aria-label="' + r + '"]'); return x ? x.value : null; };
+    return { mes: v('Mês'), ano: v('Ano'), etapa: v('Etapa da compra'), hash: location.hash, historico: history.length, h0: window.__h0 }; });
+  await cenario('C72 Financeiro: mês, ano e etapa vão ao endereço, voltam à barra quando a pessoa volta à aba e só valem os valores que a tela tem', {}, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/financeiro?mes=todos&ano=todos&etapa=Comprado', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForSelector('.acn-main select[aria-label="Mês"]', { timeout: 40000 }); await espera(1500);
+    let f1 = await lerFin(page);
+    confere('o link abre com todos os meses, todos os anos e a etapa; a barra guarda tudo em ordem alfabética', f1.mes === '' && f1.ano === '' && f1.etapa === 'Comprado' && f1.hash === '#/financeiro?ano=todos&etapa=Comprado&mes=todos', JSON.stringify(f1));
+    const h0 = f1.historico;
+    await page.select('.acn-main select[aria-label="Mês"]', '03'); await espera(500);
+    f1 = await lerFin(page);
+    confere('escolher o mês 03 atualiza a barra SEM passo', f1.mes === '03' && f1.hash === '#/financeiro?ano=todos&etapa=Comprado&mes=03' && f1.historico === h0, JSON.stringify({ ...f1, h0 }));
+    await page.select('.acn-main select[aria-label="Mês"]', ''); await espera(500);
+    f1 = await lerFin(page);
+    confere('"Todos os meses" (vazio na tela) vai ao endereço como mes=todos', f1.mes === '' && f1.hash === '#/financeiro?ano=todos&etapa=Comprado&mes=todos', JSON.stringify(f1));
+    const mesDeAgora = String(new Date().getMonth() + 1).padStart(2, '0');
+    await page.select('.acn-main select[aria-label="Mês"]', mesDeAgora); await espera(500);
+    f1 = await lerFin(page);
+    confere('o mês de agora é o padrão e some do endereço', f1.mes === mesDeAgora && f1.hash === '#/financeiro?ano=todos&etapa=Comprado', JSON.stringify(f1));
+    await page.select('.acn-main select[aria-label="Etapa da compra"]', ''); await espera(500);
+    f1 = await lerFin(page);
+    confere('"Todos os status" (o padrão) tira a etapa do endereço', f1.etapa === '' && f1.hash === '#/financeiro?ano=todos', JSON.stringify(f1));
+    await clicarNaAba(page, 'Pendências'); await espera(1200);
+    f1 = await lerFin(page);
+    confere('trocar de aba deixa a barra sem filtro (os filtros são da aba Centros de custo)', f1.hash === '#/financeiro/pendencias', f1.hash);
+    await clicarNaAba(page, 'Centros de custo'); await page.waitForSelector('.acn-main select[aria-label="Mês"]', { timeout: 20000 }); await espera(800);
+    f1 = await lerFin(page);
+    confere('voltar à aba Centros de custo devolve à barra o filtro que a tela guardou (a barra não mente)', f1.ano === '' && f1.hash === '#/financeiro?ano=todos', JSON.stringify(f1));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await page.waitForSelector('.acn-main select[aria-label="Mês"]', { timeout: 40000 }); await espera(1500);
+    f1 = await lerFin(page);
+    confere('F5 mantém o filtro', f1.ano === '' && f1.hash === '#/financeiro?ano=todos', JSON.stringify(f1));
+    await abrirComoLinkColado(page, '#/financeiro?mes=13&ano=abc&etapa=zzz'); await esperarSistema(page); await page.waitForSelector('.acn-main select[aria-label="Mês"]', { timeout: 40000 }); await espera(1500);
+    f1 = await lerFin(page);
+    confere('valores que a tela não tem caem nos padrões e a barra volta a #/financeiro, sem passo', f1.hash === '#/financeiro' && f1.mes === mesDeAgora && f1.etapa === '' && f1.historico === f1.h0, JSON.stringify(f1));
+    await abrirComoLinkColado(page, '#/financeiro/pendencias?mes=todos'); await esperarSistema(page); await espera(2000);
+    f1 = await lerFin(page);
+    confere('o filtro de um link de OUTRA aba (Pendências) não é lido nem mexido', f1.hash === '#/financeiro/pendencias?mes=todos', f1.hash);
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  const SETOR_CAL = { tipo: 'chips', grupo: 'Setor' };
+  const STATUS_LIC = { tipo: 'chips', grupo: 'Status' };
+  const lerLic = (page) => page.evaluate(() => { const sels = [...document.querySelectorAll('.acn-main select')]; const tipo = sels.find(s => [...s.options].some(o => o.text === 'Adesão a ATA'));
+    const dts = [...document.querySelectorAll('.acn-main input[type="date"].acn-lic-auto')];
+    return { tipo: tipo && tipo.value, de: dts[0] && dts[0].value, ate: dts[1] && dts[1].value, hash: location.hash, historico: history.length, h0: window.__h0 }; });
+  await cenario('C73 Calendário e Licitações: o setor, o status, o tipo e o período vão ao endereço, sem passo, e valem no F5 e no link colado', {}, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/calendario?setor=sac', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, SETOR_CAL); await espera(1500);
+    let e = await estadoVisoes(page, SETOR_CAL);
+    confere('Calendário: o link abre no setor SAC e a barra guarda', e.ativas[0] === 'SAC' && e.hash === '#/calendario?setor=sac', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const h0 = e.historico;
+    await clicarNaVisao(page, SETOR_CAL, 'Engenharia'); await aguardarVisao(page, SETOR_CAL, 'Engenharia');
+    e = await estadoVisoes(page, SETOR_CAL);
+    confere('Calendário: trocar de setor muda a barra SEM passo', e.hash === '#/calendario?setor=engenharia' && e.historico === h0, JSON.stringify({ h: e.hash, h0, h1: e.historico }));
+    await clicarNaVisao(page, SETOR_CAL, 'Todos'); await aguardarVisao(page, SETOR_CAL, 'Todos');
+    e = await estadoVisoes(page, SETOR_CAL);
+    confere('Calendário: "Todos" (o padrão) tira o filtro do endereço', e.hash === '#/calendario', e.hash);
+    await abrirComoLinkColado(page, '#/calendario?setor=xyz'); await esperarSistema(page); await esperarVisoes(page, SETOR_CAL); await espera(1500);
+    e = await estadoVisoes(page, SETOR_CAL);
+    confere('Calendário: setor que não existe cai em "Todos", a barra volta a #/calendario, sem passo', e.ativas[0] === 'Todos' && e.hash === '#/calendario' && e.historico === e.h0, JSON.stringify({ a: e.ativas, h: e.hash, h0: e.h0, h1: e.historico }));
+
+    await abrirComoLinkColado(page, '#/licitacoes?status=todas&tipo=todos&de=2026-01-01&ate=2026-12-31'); await esperarSistema(page); await esperarVisoes(page, STATUS_LIC); await espera(2500);
+    e = await estadoVisoes(page, STATUS_LIC);
+    let l = await lerLic(page);
+    confere('Licitações: o link abre com status "Todas", tipo "todos" e o período; a barra guarda tudo', e.ativas[0] === 'Todas' && l.tipo === 'todos' && l.de === '2026-01-01' && l.ate === '2026-12-31' && l.hash === '#/licitacoes?ate=2026-12-31&de=2026-01-01&status=todas&tipo=todos', JSON.stringify({ a: e.ativas, ...l }));
+    const hl = l.historico;
+    await clicarNaVisao(page, STATUS_LIC, 'Aberta'); await aguardarVisao(page, STATUS_LIC, 'Aberta');
+    l = await lerLic(page);
+    confere('Licitações: o status padrão ("Aberta") sai do endereço, SEM passo', l.hash === '#/licitacoes?ate=2026-12-31&de=2026-01-01&tipo=todos' && l.historico === hl, JSON.stringify({ ...l, hl }));
+    await clicarNaVisao(page, STATUS_LIC, 'Finalizada'); await aguardarVisao(page, STATUS_LIC, 'Finalizada');
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVisoes(page, STATUS_LIC); await espera(2500);
+    e = await estadoVisoes(page, STATUS_LIC); l = await lerLic(page);
+    confere('Licitações: F5 mantém "Finalizada", o tipo e o período', e.ativas[0] === 'Finalizada' && l.tipo === 'todos' && l.de === '2026-01-01' && l.ate === '2026-12-31', JSON.stringify({ a: e.ativas, ...l }));
+    await page.evaluate(() => { const sels = [...document.querySelectorAll('.acn-main select')]; sels.find(s => [...s.options].some(o => o.text === 'Adesão a ATA')).setAttribute('data-teste-tipo', '1'); });
+    await page.select('.acn-main select[data-teste-tipo]', 'Direta'); await espera(600);
+    l = await lerLic(page);
+    confere('Licitações: o tipo padrão ("Direta") sai do endereço', l.tipo === 'Direta' && !/tipo=/.test(l.hash) && /status=Finalizada/.test(l.hash), JSON.stringify(l));
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    await clicarNoMenu(page, 'Licitações'); await esperarVisoes(page, STATUS_LIC); await espera(2000);
+    e = await estadoVisoes(page, STATUS_LIC); l = await lerLic(page);
+    confere('Licitações: sair da tela pelo menu e voltar abre SEM filtro (status "Aberta", sem consulta)', e.ativas[0] === 'Aberta' && !/\?/.test(l.hash) && l.de === '' && l.ate === '', JSON.stringify({ a: e.ativas, ...l }));
+    for (const [h, rot, hashOk] of [['#/licitacoes?status=lixo&tipo=lixo&de=ontem&ate=2026-13', 'Aberta', '#/licitacoes'], ['#/licitacoes?status=Em%20Andamento', 'Em Andamento', '#/licitacoes?status=Em%20Andamento']]) {
+      await abrirComoLinkColado(page, h); await esperarSistema(page); await esperarVisoes(page, STATUS_LIC); await espera(2500);
+      e = await estadoVisoes(page, STATUS_LIC); l = await lerLic(page);
+      confere(`Licitações: link colado ${h} → "${rot}", barra ${hashOk}, sem passo`, e.ativas[0] === rot && l.hash === hashOk && l.historico === l.h0, JSON.stringify({ a: e.ativas, ...l }));
+    }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // C74: o filtro da lista de Licitações e a janela de uma licitação dividem o MESMO endereço (`#/licitacoes/licitacao/<código>?tipo=todos`): abrir, F5, fechar e link colado não podem perder o filtro nem criar passo à toa
+  await cenario('C74 Licitações: o filtro acompanha a janela da licitação (abrir por clique, F5, X, Voltar e link colado)', {}, async ({ page }) => {
+    const F = FASE3.find(x => x.tipo === 'licitacao');
+    await marcarHistoricoInicial(page);
+    const { a } = (await registrosDoBanco())[F.tipo];
+    const reComFiltro = (q) => new RegExp('^#/licitacoes/licitacao/[0-9a-f-]{36}\\?' + q + '$', 'i');
+    await page.goto(BASE + '#/licitacoes?tipo=todos', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, STATUS_LIC); await espera(2500);
+    let e = await estadoReg(page, F); let l = await lerLic(page);
+    confere('a lista abre com o tipo "todos" e a barra o guarda', l.tipo === 'todos' && e.hash === '#/licitacoes?tipo=todos', JSON.stringify({ ...l }));
+    const h0 = e.historico;
+    await abrirPelaLista(page, F); await page.waitForSelector(F.janela, { timeout: 30000 }); await espera(900);
+    e = await estadoReg(page, F);
+    confere('abrir uma licitação pela lista: a janela abre e a barra leva o endereço da licitação COM o filtro, com UM passo', e.janelas === 1 && reComFiltro('tipo=todos').test(e.hash) && e.historico === h0 + 1 && e.marca === true, JSON.stringify({ h: e.hash, j: e.janelas, h0, h1: e.historico, m: e.marca }));
+    const comJanela = e.hash;
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await page.waitForSelector(F.janela, { timeout: 30000 }); await espera(1200);
+    e = await estadoReg(page, F);
+    confere('F5 com a janela aberta: reabre a mesma licitação, com o filtro, sem passo novo', e.janelas === 1 && e.hash === comJanela && e.historico === h0 + 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(1000);
+    e = await estadoReg(page, F); l = await lerLic(page);
+    confere('o X volta um passo: a lista, ainda com o tipo "todos" na barra e na tela', e.janelas === 0 && e.hash === '#/licitacoes?tipo=todos' && l.tipo === 'todos', JSON.stringify({ h: e.hash, j: e.janelas, tipo: l.tipo }));
+    await page.goForward(); await page.waitForSelector(F.janela, { timeout: 30000 }); await espera(900);
+    e = await estadoReg(page, F);
+    confere('Avançar reabre a licitação, com o filtro', e.janelas === 1 && e.hash === comJanela, JSON.stringify({ h: e.hash, j: e.janelas }));
+    const id = (e.hash.match(/licitacao\/([0-9a-f-]{36})/i) || [])[1];
+    await abrirComoLinkColado(page, '#/licitacoes/licitacao/' + id + '?status=todas&tipo=todos');
+    await esperarSistema(page); await page.waitForSelector(F.janela, { timeout: 30000 }); await espera(1500);
+    e = await estadoReg(page, F); l = await lerLic(page);
+    confere('link colado da licitação com filtros: abre a janela e mantém os filtros na barra, sem passo', e.janelas === 1 && e.hash === '#/licitacoes/licitacao/' + id + '?status=todas&tipo=todos' && e.historico === l.h0, JSON.stringify({ h: e.hash, j: e.janelas, h0: l.h0, h1: e.historico }));
+    const origem = e.origem;
+    await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(1200);
+    e = await estadoReg(page, F); l = await lerLic(page);
+    confere('o X de um link colado troca o endereço pelo da lista JÁ COM os filtros, sem sair do sistema e sem passo', e.janelas === 0 && e.hash === '#/licitacoes?status=todas&tipo=todos' && e.origem === origem && e.historico === l.h0 && l.tipo === 'todos', JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem === origem, h0: l.h0, h1: e.historico, tipo: l.tipo }));
+    const st = await estadoVisoes(page, STATUS_LIC);
+    confere('o chip de status mostra "Todas"', st.ativas[0] === 'Todas', JSON.stringify(st.ativas));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);

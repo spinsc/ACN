@@ -14,7 +14,7 @@
 // O quadro das abas de cada tela está em `Rotas.ts` (`ABAS_DAS_TELAS`); tela que não está lá fica como um `useState` comum (o endereço não é tocado).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';
-import { abaNoEndereco, abasDoNivel, montarEnderecoDaAba, montarEnderecoDaAbaDeFora, type AbasDeUmNivel } from './Rotas';
+import { abaNoEndereco, abasDoNivel, montarEnderecoDaAba, montarEnderecoDaAbaDeFora, separarConsulta, type AbasDeUmNivel } from './Rotas';
 
 export type EntradaDaAba = {
   tela: string;                                      // id interno da tela (a mesma chave de `ABAS_DAS_TELAS`)
@@ -62,6 +62,8 @@ export function useAbaNoEndereco(entrada: EntradaDaAba): [string, (nova: Atualiz
     if (!quadro() || lerDoEndereco().tipo === 'fora') return;
     // aba de fora que tem abas de dentro: se o endereço de agora já é desta aba de fora, a de dentro fica (o gancho de dentro roda antes e já escreveu a dela)
     const alvo = nivelDe() === 0 ? montarEnderecoDaAbaDeFora(enderecoAtual(), ref.current.tela, valor) : montarEnderecoDaAba(ref.current.tela, caminho(valor));
+    // Fase 5, parte 3 (26/11/2026): o caminho já é este e só a consulta (`?saida=semana`, os filtros) é de outro: não se mexe, senão o link colado perderia o filtro ao abrir a tela.
+    if (separarConsulta(enderecoAtual())[0] === alvo) return;
     irParaEndereco(alvo, { substituir });
   };
 

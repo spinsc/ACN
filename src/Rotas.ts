@@ -285,6 +285,45 @@ export function montarEnderecoDaAba(tela: string, caminho: readonly string[]): s
   return montarEndereco(tela, [nomeDaAba(fora), ...(dentro ? [nomeDaAba(dentro)] : [])]);
 }
 
+// ── Fase 5, parte 3 (26/11/2026): os filtros no endereço (`#/viagens/lista?saida=semana`) ──
+// O filtro mora DEPOIS do `?`: o caminho (tela, aba, registro) continua sendo o de sempre e as regras acima já ignoravam o que vem depois dele. Estas funções são só as regras
+// puras de ler e montar essa consulta; quem escreve na barra é o `FiltroNoEndereco.ts`.
+
+/** Separa o caminho da consulta: `#/relatorios/atrasadas?setor=X` → `['#/relatorios/atrasadas', 'setor=X']` (sem consulta, o segundo é texto vazio). */
+export function separarConsulta(hash: string): [string, string] {
+  const texto = String(hash || '');
+  const i = texto.indexOf('?');
+  return i < 0 ? [texto, ''] : [texto.slice(0, i), texto.slice(i + 1)];
+}
+
+/** Os filtros do endereço, decodificados. Chave repetida vale a PRIMEIRA; chave vazia é ignorada; `%` solto não derruba. */
+export function lerFiltros(hash: string): Record<string, string> {
+  const [, consulta] = separarConsulta(hash);
+  const filtros: Record<string, string> = {};
+  for (const par of consulta.split('&')) {
+    if (par === '') continue;
+    const i = par.indexOf('=');
+    const chave = decodificar((i < 0 ? par : par.slice(0, i)).replace(/\+/g, ' ')).trim();
+    if (!chave || Object.prototype.hasOwnProperty.call(filtros, chave)) continue;
+    filtros[chave] = i < 0 ? '' : decodificar(par.slice(i + 1).replace(/\+/g, ' '));
+  }
+  return filtros;
+}
+
+/** O caminho com os filtros: chaves em ordem alfabética (o mesmo conjunto dá sempre o mesmo endereço) e filtro vazio não aparece. */
+export function montarEnderecoComFiltros(caminho: string, filtros: Readonly<Record<string, string>>): string {
+  const pares = Object.keys(filtros).filter(k => k && filtros[k] !== '' && filtros[k] != null).sort()
+    .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(String(filtros[k])));
+  const [semConsulta] = separarConsulta(caminho);
+  return pares.length ? semConsulta + '?' + pares.join('&') : semConsulta;
+}
+
+/** O nome da tela no endereço (`#/formacao-precos/formacao?x=1` → `formacao-precos`), em minúscula; texto vazio se o endereço não é de tela. */
+export function telaDoEndereco(hash: string): string {
+  const p = partesDoEndereco(hash)[0];
+  return p ? normalizarChave(p) : '';
+}
+
 /**
  * O endereço da aba de FORA (nível 0) que NÃO apaga a aba de dentro quando o endereço de agora já é dessa mesma aba de fora: `#/rh/ponto/mes` continua `#/rh/ponto/mes` quando o gancho da tela
  * reescreve o endereço (decidido na Fase 5, parte 2, 26/11/2026: sem isso o gancho da aba de fora, que roda depois do da aba de dentro, apagava a visão de dentro de todo link colado).

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
+import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { anexarValoresDasOps } from './OpValores';
 import { anexarValoresDosPedidos } from './PedidoValores';
@@ -81,9 +82,18 @@ function FiltroPeriodo({ ini, setIni, fim, setFim, onFiltrar, imprimir = false, 
 // botão de imprimir só com o ícone, para o cabeçalho de um quadro
 const BotaoImprimir = () => <Botao pequeno variante="discreto" icone={mdiPrinterOutline} aria-label="Imprimir" title="Imprimir" onClick={()=>window.print()} />;
 
+// O mês de um relatório (Markup e Comissões) no endereço: `#/relatorios/comissoes?mes=2026-10`. O mês de agora é o padrão e não aparece; "Todos" (vazio na tela) vira a palavra `todos` no endereço,
+// porque um valor vazio nunca é escrito (26/11/2026, Fase 5, parte 3).
+function useMesDoRelatorio(aba: string): [string, (v: string) => void] {
+  const d = new Date();
+  const atual = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const [m, setM] = useFiltroNoEndereco({ tela: 'relatorios', aba, chave: 'mes', padrao: atual, validar: v => v === 'todos' || /^\d{4}-(0[1-9]|1[0-2])$/.test(v) });
+  return [m === 'todos' ? '' : m, (v: string) => setM(v === '' ? 'todos' : v)];
+}
+
 // ── Relatório por Área (demandas_setoriais) ──
 function RelAreaDemandas() {
-  const [setor, setSetor] = useState('Chicotes');
+  const [setor, setSetor] = useFiltroNoEndereco({ tela: 'relatorios', aba: 'area', chave: 'setor', padrao: 'Chicotes', validar: v => SETORES_DEMANDA.includes(v) });
   const [ini, setIni] = useState(iniPeriodo);
   const [fim, setFim] = useState(hojeISO());
   const [dados, setDados] = useState([]);
@@ -460,8 +470,6 @@ function RelOplsFinalizadas() {
 function RelOplsPorSetor() {
   const [ops, setOps] = useState([]);
   const [carregando, setCarregando] = useState(false);
-  const [setor, setSetor] = useState('Todos');
-
   const SETORES_STATUS = {
     'Engenharia':     ['Em Espera Engenharia','Em Analise Engenharia','Devolvida para Engenharia'],
     'PCP/Almox':      ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP'],
@@ -470,6 +478,8 @@ function RelOplsPorSetor() {
     'Comercial/Fiscal':[STATUS_AGUARDANDO_LIBERACAO_COMERCIAL,'Aguarda Emissao NF','Faturado e Disponivel para Entrega','Devolvida Comercial'],
     'Manutenção':     ['Aguardando Agendamento Manutenção','Manutenção Agendada'],
   };
+  // declarado depois da lista porque a validação do endereço a consulta já na primeira leitura
+  const [setor, setSetor] = useFiltroNoEndereco({ tela: 'relatorios', aba: 'porsetor', chave: 'setor', padrao: 'Todos', validar: v => v === 'Todos' || Object.prototype.hasOwnProperty.call(SETORES_STATUS, v) });
 
   const buscar = async () => {
     setCarregando(true);
@@ -994,7 +1004,7 @@ function RelCentroCusto() {
 // (markupPonderadoItens/cotacaoAlvo, MarkupTermometro.tsx — sem duplicar a conta).
 function RelMarkupVendedor() {
   const hoje = new Date();
-  const [mes, setMes]     = useState(`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`);
+  const [mes, setMes]     = useMesDoRelatorio('markup');
   const [funil, setFunil] = useState('todos'); // 'todos' | 'crm' | 'licitacao'
   const [linhas, setLinhas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1153,7 +1163,7 @@ function RelMarkupVendedor() {
 // ── RELATÓRIO DE COMISSÕES ──
 function RelComissoes() {
   const hoje = new Date();
-  const [mes, setMes] = useState(`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`);
+  const [mes, setMes] = useMesDoRelatorio('comissoes');
   const [funcionarios, setFuncionarios] = useState([]);
   const [ops, setOps] = useState([]);
   const [loading, setLoading] = useState(false);

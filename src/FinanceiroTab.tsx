@@ -28,6 +28,7 @@ import { mdiFileExcelOutline, mdiLockOutline, mdiTagOutline, mdiBankOutline, mdi
   mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline, mdiClipboardCheckOutline, mdiClipboardTextOutline } from '@mdi/js';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP.
 // Etapa 12e9 (05/10/2026): o seletor escuro escrito à mão virou as abas do guia (`Abas`); os nomes e a ordem são os de antes.
@@ -422,9 +423,14 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
 
   // Filtros
   const now = new Date();
-  const [filtroMes, setFiltroMes] = useState(String(now.getMonth() + 1).padStart(2, '0'));
-  const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
-  const [filtroStatus, setFiltroStatus] = useState('');
+  // os três filtros da aba Centros de custo moram no endereço (`#/financeiro?mes=10&ano=2026&etapa=Comprado`); o mês e o ano de agora são o padrão e não aparecem; "Todos" (vazio na tela) vira `todos`
+  const [mesNoEndereco, setMesNoEndereco] = useFiltroNoEndereco({ tela: 'financeiro', aba: 'centros', chave: 'mes', padrao: String(now.getMonth() + 1).padStart(2, '0'), validar: v => v === 'todos' || /^(0[1-9]|1[0-2])$/.test(v) });
+  const [anoNoEndereco, setAnoNoEndereco] = useFiltroNoEndereco({ tela: 'financeiro', aba: 'centros', chave: 'ano', padrao: String(now.getFullYear()), validar: v => v === 'todos' || /^\d{4}$/.test(v) });
+  const [filtroStatus, setFiltroStatus] = useFiltroNoEndereco({ tela: 'financeiro', aba: 'centros', chave: 'etapa', padrao: '', validar: v => ETAPAS_COMPRA.includes(v) });
+  const filtroMes = mesNoEndereco === 'todos' ? '' : mesNoEndereco;
+  const filtroAno = anoNoEndereco === 'todos' ? '' : anoNoEndereco;
+  const setFiltroMes = (v: string) => setMesNoEndereco(v === '' ? 'todos' : v);
+  const setFiltroAno = (v: string) => setAnoNoEndereco(v === '' ? 'todos' : v);
 
   const isAdmin = ['Admin', 'Gerente', 'Compras'].includes(currentUser?.perfil);
 

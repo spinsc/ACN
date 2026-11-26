@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 import { Faixa, Botao, Chips, Selo } from './Interface';
 import Icone from './Icone';
 import { mdiCalendarMonthOutline, mdiAccountGroupOutline, mdiAccountOutline } from '@mdi/js';
@@ -264,7 +265,7 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
 export default function CalendarioTab({ currentUser }: { currentUser: any }) {
   const [modo, setModo]           = useState<'mes' | 'semana'>('mes');
   const [cursor, setCursor]       = useState(new Date());
-  const [setorFiltro, setSetorFiltro] = useState('todos');
+  const [setorFiltro, setSetorFiltro] = useFiltroNoEndereco({ tela: 'calendario', chave: 'setor', padrao: 'todos', validar: v => SETORES.some(s => s.id === v) });   // `#/calendario?setor=sac`
   const [verTodos, setVerTodos]   = useState(false);
   const [linhas, setLinhas] = useState<any[]>([]);   // as datas do período, vindas da função do banco `calendario_eventos` (12/11/2026)
   const [loading, setLoading]     = useState(true);

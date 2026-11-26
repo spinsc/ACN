@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
+import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 import { mdiRefresh } from '@mdi/js';
 import { CabecalhoTela, Chips, Botao, Faixa, Selo, hojeISO } from './Interface';
 import {
@@ -248,7 +249,8 @@ export default function PontoTab({ currentUser }) {
   const hoje = hojeISO();
   const [perm, setPerm] = useState(null);
   const [meses, setMeses] = useState([]);
-  const [mes, setMes] = useState(primeiroDiaDoMes(hoje));
+  // o mês aberto no endereço (`#/ponto/mes?mes=2026-10-01`); o mês de agora é o padrão e não aparece. Só vale mês que já começou e de 2020 em diante (a lista de meses com dados chega depois)
+  const [mes, setMes] = useFiltroNoEndereco({ tela: 'ponto', chave: 'mes', padrao: primeiroDiaDoMes(hoje), validar: v => /^\d{4}-\d{2}-01$/.test(v) && v >= '2020-01-01' && v <= primeiroDiaDoMes(hoje) });
   // as partes da tela têm endereço: `#/ponto` é a equipe hoje (a padrão), `#/ponto/mes`, `#/ponto/extras` e `#/ponto/meu`. Quem só vê o próprio ponto tem uma parte só: mostra `meu` e,
   // se o link era de uma parte da equipe (ou o `#/ponto/meu`), a barra volta a `#/ponto` sem passo novo (decidido na Fase 5, parte 2, 26/11/2026)
   const [visaoDoEndereco, setVisao, trocarSemPasso] = useAbaNoEndereco({ tela: 'ponto' }) as [string, (v: any) => void, (v: string) => void];

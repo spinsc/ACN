@@ -391,4 +391,25 @@ t('os nomes das visões novas não colidem com palavra reservada nem com nome de
 t('o endereço de uma visão é da própria tela (enderecoEhDaTela) e de nenhuma outra', () => ['viagens', 'ponto', 'relatorios', 'cotacoes'].forEach(tela => { const h = montarEnderecoDaAba(tela, [ABAS_DAS_TELAS[tela].abas[1]]); assert.equal(R.enderecoEhDaTela(h, tela), true, tela); IDS.filter(i => i !== tela).forEach(i => assert.equal(R.enderecoEhDaTela(h, i), false, tela + ' × ' + i)); }));
 t('ponto: "Meu ponto" tem endereço próprio (#/ponto/meu) e a equipe hoje é a padrão (#/ponto)', () => { assert.equal(montarEnderecoDaAba('ponto', ['meu']), '#/ponto/meu'); assert.equal(montarEnderecoDaAba('ponto', ['hoje']), '#/ponto'); assert.equal(abaNoEndereco('#/ponto/meu', 'ponto', 0).aba, 'meu'); });
 
+// ── Fase 5, parte 3 (26/11/2026): os filtros depois do `?` ──
+const { separarConsulta, lerFiltros, montarEnderecoComFiltros, telaDoEndereco } = R;
+t('separarConsulta: caminho e consulta', () => { assert.deepEqual(separarConsulta('#/viagens/lista?saida=semana'), ['#/viagens/lista', 'saida=semana']); assert.deepEqual(separarConsulta('#/viagens'), ['#/viagens', '']); assert.deepEqual(separarConsulta(''), ['', '']); assert.deepEqual(separarConsulta(undefined), ['', '']); assert.deepEqual(separarConsulta('#/a?b=1?c=2'), ['#/a', 'b=1?c=2']); });
+t('lerFiltros: valores simples, vários, decodificados', () => { assert.deepEqual(lerFiltros('#/licitacoes?status=Em%20Andamento&tipo=todos'), { status: 'Em Andamento', tipo: 'todos' }); assert.deepEqual(lerFiltros('#/x?a=1&b=2'), { a: '1', b: '2' }); assert.deepEqual(lerFiltros('#/x'), {}); assert.deepEqual(lerFiltros('#/x?'), {}); });
+t('lerFiltros: "+" vira espaço; barra e acento ida e volta', () => { assert.deepEqual(lerFiltros('#/relatorios/porsetor?setor=Comercial%2FFiscal'), { setor: 'Comercial/Fiscal' }); assert.deepEqual(lerFiltros('#/x?s=Em+Andamento'), { s: 'Em Andamento' }); assert.deepEqual(lerFiltros('#/x?s=Produ%C3%A7%C3%A3o'), { s: 'Produção' }); });
+t('lerFiltros: chave repetida vale a primeira; chave vazia ignorada; sem "=" é valor vazio', () => { assert.deepEqual(lerFiltros('#/x?a=1&a=2'), { a: '1' }); assert.deepEqual(lerFiltros('#/x?=1&b=2'), { b: '2' }); assert.deepEqual(lerFiltros('#/x?a&b=2'), { a: '', b: '2' }); assert.deepEqual(lerFiltros('#/x?&&a=1&'), { a: '1' }); });
+t('lerFiltros: "%" solto não derruba', () => { assert.deepEqual(lerFiltros('#/x?a=100%&b=%E0%A4%A'), { a: '100%', b: '%E0%A4%A' }); });
+t('lerFiltros: "=" dentro do valor fica no valor', () => assert.deepEqual(lerFiltros('#/x?a=b=c'), { a: 'b=c' }));
+t('montarEnderecoComFiltros: ordem alfabética, vazios fora, codificado', () => { assert.equal(montarEnderecoComFiltros('#/licitacoes', { tipo: 'todos', status: 'Em Andamento' }), '#/licitacoes?status=Em%20Andamento&tipo=todos'); assert.equal(montarEnderecoComFiltros('#/viagens', {}), '#/viagens'); assert.equal(montarEnderecoComFiltros('#/viagens', { saida: '' }), '#/viagens'); assert.equal(montarEnderecoComFiltros('#/relatorios/porsetor', { setor: 'Comercial/Fiscal' }), '#/relatorios/porsetor?setor=Comercial%2FFiscal'); });
+t('montarEnderecoComFiltros troca a consulta que já havia no caminho', () => assert.equal(montarEnderecoComFiltros('#/viagens/lista?saida=semana', { saida: 'atrasadas' }), '#/viagens/lista?saida=atrasadas'));
+t('montarEnderecoComFiltros: ida e volta com lerFiltros para valores difíceis', () => ['Em Andamento', 'Comercial/Fiscal', 'Produção', 'a&b=c', '100%', 'x+y', 'ç ã é ñ', '2026-10-01'].forEach(v => assert.deepEqual(lerFiltros(montarEnderecoComFiltros('#/x', { k: v })), { k: v }, v)));
+t('telaDoEndereco: a tela, com aba, registro, consulta, maiúscula e barra no fim', () => { assert.equal(telaDoEndereco('#/viagens'), 'viagens'); assert.equal(telaDoEndereco('#/viagens/lista?saida=semana'), 'viagens'); assert.equal(telaDoEndereco('#/Licitacoes/licitacao/abc?status=x'), 'licitacoes'); assert.equal(telaDoEndereco('#/painel-tv/'), 'painel-tv'); assert.equal(telaDoEndereco('#viagens'), 'viagens'); assert.equal(telaDoEndereco(''), ''); assert.equal(telaDoEndereco('#/'), ''); assert.equal(telaDoEndereco('#/?a=1'), ''); });
+t('a consulta não muda o que os leitores de caminho já entendem (tela, aba, registro, OP)', () => {
+  tela('#/viagens?saida=semana', 'viagens');
+  assert.equal(abaNoEndereco('#/viagens/lista?saida=semana', 'viagens', 0).aba, 'lista');
+  assert.equal(abaNoEndereco('#/relatorios/area?setor=Compras', 'relatorios', 0).aba, 'area');
+  assert.deepEqual(registroDaTelaNoEndereco('#/licitacoes/licitacao/abc-123?status=todas', 'licitacoes'), { tela: 'licitacoes', tipo: 'licitacao', chave: 'abc-123' });
+  assert.deepEqual(registroDoEndereco('#/op/A1562.2610%2F01?x=1'), { registro: 'op', chave: 'A1562.2610/01' });
+});
+t('o mesmo conjunto de filtros dá sempre o mesmo endereço (ordem de entrada não importa)', () => assert.equal(montarEnderecoComFiltros('#/x', { b: '2', a: '1' }), montarEnderecoComFiltros('#/x', { a: '1', b: '2' })));
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS' : ''}`);

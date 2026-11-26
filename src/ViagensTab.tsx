@@ -12,6 +12,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
+import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { logChange } from './AuditSystem';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -741,7 +742,7 @@ export default function ViagensTab({ currentUser }: any) {
   const [erro, setErro] = useState('');
   const [visao, setVisao] = useAbaNoEndereco({ tela: 'viagens' });   // Quadro, Lista, Agenda e Custos: #/viagens/lista…
   const [busca, setBusca] = useState('');
-  const [saida, setSaida] = useState('todas');
+  const [saida, setSaida] = useFiltroNoEndereco({ tela: 'viagens', chave: 'saida', padrao: 'todas', validar: v => FILTROS_DE_SAIDA.some(f => f.id === v) });   // `#/viagens/lista?saida=semana`: vale em qualquer visão (passa de Quadro a Lista sem perder)
   const [editando, setEditando] = useState<any | null>(null);
   const [frotaAberta, setFrotaAberta] = useState(false);   // o cadastro de frota (fatia 2, 04/11/2026)
   const [soltarEm, setSoltarEm] = useState<string | null>(null);   // a coluna sobre a qual o cartão está sendo arrastado

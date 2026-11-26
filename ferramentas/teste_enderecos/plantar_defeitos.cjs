@@ -250,6 +250,37 @@ const DEFEITOS = [
   { id: 'df', nome: 'a correção da barra sem passo (a troca silenciosa do Ponto) passa a criar passo no histórico', cenarios: '^C67b', trocas: [
     { arquivo: 'src/AbaNoEndereco.ts', de: 'if (valida(nova)) alinhar(nova, true);', para: 'if (valida(nova)) alinhar(nova, false);' },
   ] },
+  // ── Fase 5, parte 3 (26/11/2026): os filtros no endereço ──
+  { id: 'dh', nome: 'mudar o filtro deixa de escrever no endereço', cenarios: '^C69', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: '    gravar(proximo);', para: '    /* gravar(proximo); */' },
+  ] },
+  { id: 'di', nome: 'mudar o filtro passa a criar um passo no histórico (filtrar vira navegar)', cenarios: '^C69', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: 'if (alvo !== atual) irParaEndereco(alvo, { substituir: true });', para: 'if (alvo !== atual) irParaEndereco(alvo);' },
+  ] },
+  { id: 'dj', nome: 'o Voltar e o Avançar deixam de trocar o filtro (o endereço não manda mais)', cenarios: '^C69', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: 'if (d.valor !== valorRef.current) { valorRef.current = d.valor; setValorEstado(d.valor); }', para: 'if (false) { valorRef.current = d.valor; setValorEstado(d.valor); }' },
+  ] },
+  { id: 'dk', nome: 'o filtro aceita qualquer valor do link, até o que a tela não tem', cenarios: '^C69', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: 'return aceita(v) ? { valor: v, limpo: true } : { valor: ref.current.padrao, limpo: false };', para: 'return { valor: v, limpo: true };' },
+  ] },
+  { id: 'dl', nome: 'a barra deixa de repor o filtro quando outro escreve o endereço (troca de visão, janela de um registro)', cenarios: '^C69|^C74', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: '      } else {\n        reafirmar();\n      }', para: '      } else {\n      }' },
+  ] },
+  { id: 'dm', nome: 'o filtro de um relatório age no endereço de qualquer aba (apaga o do vizinho)', cenarios: '^C70', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: 'if (aba === undefined) return true;', para: 'return true;' },
+  ] },
+  { id: 'dn', nome: 'o Ponto aceita um mês que ainda não começou', cenarios: '^C71', trocas: [
+    { arquivo: 'src/PontoTab.tsx', de: "&& v <= primeiroDiaDoMes(hoje) })", para: '})' },
+  ] },
+  { id: 'do', nome: '"Todos os meses" do Financeiro não vai ao endereço como todos (o vazio some e o link volta ao mês de agora)', cenarios: '^C72', trocas: [
+    { arquivo: 'src/FinanceiroTab.tsx', de: "const setFiltroMes = (v: string) => setMesNoEndereco(v === '' ? 'todos' : v);", para: 'const setFiltroMes = (v: string) => setMesNoEndereco(v);' },
+  ] },
+  { id: 'dp', nome: 'o Calendário aceita um setor que não existe', cenarios: '^C73', trocas: [
+    { arquivo: 'src/CalendarioTab.tsx', de: "padrao: 'todos', validar: v => SETORES.some(s => s.id === v) })", para: "padrao: 'todos' })" },
+  ] },
+  { id: 'dq', nome: 'o filtro não arruma o endereço ao abrir a tela (o valor torto do link fica na barra)', cenarios: '^C69', trocas: [
+    { arquivo: 'src/FiltroNoEndereco.ts', de: '    reafirmar();                                 // a aba da tela pode ter escrito o endereço antes de este gancho se inscrever', para: '    // reafirmar();' },
+  ] },
   { id: 'dg', nome: 'as partes do Relógio Ponto voltam a ser só da tela (sem endereço)', cenarios: '^C66 rh', trocas: [
     { arquivo: 'src/RelogioPonto.tsx', de: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial })", para: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto-sem-endereco', inicial: () => visaoInicial })" },
   ] },
