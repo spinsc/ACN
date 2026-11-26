@@ -30,6 +30,7 @@ import { lerRemessas, lerRemessasAtivasDe, saldoDeUnidades, unidadesDaOp, proxim
   lerComplementos, lerComplementosAtivosDe, pendenteDaOp, textoDoPendente, diasComPendencia, PRAZO_PENDENCIA_ENVIO_DIAS } from './Remessas';
 import ComplementoDeRemessa from './ComplementoDeRemessa';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
+import { faltasDoEndereco, avisarComercialDoEndereco } from './EnderecoDoComercial';
 import { caixaVazia, caixasDoForm, formComTotais, validarCaixas, descricaoDasCaixas } from './VolumesDaEmbalagem';
 import { normalizarBusca } from './SearchUtils';
 import { diaBR, hojeISO, Faixa, Botao, Chips, Selo } from './Interface';
@@ -38,6 +39,7 @@ import {
   mdiToolboxOutline, mdiPackageVariantClosed, mdiArrowULeftTop, mdiEyeOutline, mdiLinkVariant, mdiTrayArrowDown,
   mdiCloseCircleOutline, mdiAlertOutline, mdiChevronUp, mdiChevronDown, mdiTruckOutline, mdiClose, mdiNumeric,
   mdiContentSaveOutline, mdiCheckCircleOutline, mdiSendOutline, mdiPlus, mdiDeleteOutline, mdiAccountWrenchOutline,
+  mdiBellOutline,
 } from '@mdi/js';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, aberta pelo botão do Almoxarifado (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
 const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
@@ -270,10 +272,9 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
   const [modalEmbalagem, setModalEmbalagem] = useState<any|null>(null);
   const [embForm, setEmbForm] = useState<any>({});
   const [salvandoEmb, setSalvandoEmb] = useState(false);
-  // CEP da embalagem (Etapa 7.13, pedido do usuário em 01/10/2026): o que a conferência do CEP respondeu, e um contador para
-  // descartar a resposta de uma consulta antiga quando a pessoa já digitou outro CEP
-  const [cepInfo, setCepInfo] = useState<{ estado: string; texto: string }>({ estado: 'ocioso', texto: '' });
-  const cepSeq = useRef(0);
+  // Endereço de entrega (pedido do usuário em 26/11/2026): quem preenche e corrige é o COMERCIAL; o Almoxarifado e o Telecom só consultam.
+  // Aqui fica o estado do botão "Avisar o Comercial" (enviando / o que já foi avisado) — zerado a cada vez que a janela abre.
+  const [avisoComercial, setAvisoComercial] = useState<{ enviando: boolean; feito: string; erro: string }>({ enviando: false, feito: '', erro: '' });
 
   // Venda para Envio: seriais ACN produto a produto, linha a linha (decidido
   // com o usuário em 13/09). Não conclui sem pelo menos um serial por unidade
@@ -320,34 +321,15 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     });
   };
 
-  // O CEP manda na cidade e na UF (pedido do usuário em 01/10/2026, Etapa 7.13): ao digitar — ou ao abrir a janela com um CEP de formato
-  // válido que veio da OP — consulta e preenche. A pessoa ainda pode corrigir à mão depois; o que o sistema não deixa mais é embalar sem
-  // um CEP válido (4 das 5 solicitações de frete reais tinham CEP de zeros e cidade "NAI SEI" / "NAO TEM").
-  const aplicarCep = async (valor, cidadeAntes, ufAntes, aoAbrir = false) => {
-    const seq = ++cepSeq.current;
-    const d = soDigitosCep(valor);
-    if (!d) { setCepInfo({ estado: 'ocioso', texto: '' }); return; }
-    if (!cepComFormatoValido(valor)) {
-      // enquanto digita (menos de 8 dígitos) fica quieto; reclama quando já são 8 dígitos ou quando a OP já veio com um CEP assim
-      setCepInfo(d.length === 8 || aoAbrir
-        ? { estado: 'invalido', texto: 'CEP inválido — informe os 8 dígitos do CEP de entrega (não vale só zeros).' }
-        : { estado: 'ocioso', texto: '' });
-      return;
-    }
-    setCepInfo({ estado: 'buscando', texto: 'Consultando o CEP…' });
-    const r = await consultarCep(valor);
-    if (seq !== cepSeq.current) return;   // a pessoa já digitou outro CEP
-    if (r.status === 'ok') {
-      const tinhaAlgo = !!(String(cidadeAntes || '').trim() || ufAntes);
-      const mudou = tinhaAlgo && (normalizarBusca(cidadeAntes) !== normalizarBusca(r.cidade) || String(ufAntes || '') !== r.uf);
-      setEmbForm(f => ({ ...f, destino_cidade: r.cidade, destino_uf: r.uf }));
-      const rua = [r.logradouro, r.bairro].filter(Boolean).join(', ');
-      setCepInfo({ estado: 'ok', texto: `CEP encontrado — cidade e UF preenchidas: ${r.cidade} / ${r.uf}` + (rua ? ` (${rua})` : '') + (mudou ? ` · antes: ${[cidadeAntes, ufAntes].filter(Boolean).join(' / ')}` : '') });
-    } else if (r.status === 'inexistente') {
-      setCepInfo({ estado: 'inexistente', texto: 'CEP não encontrado — confira os números.' });
-    } else {
-      setCepInfo({ estado: 'indisponivel', texto: 'Não consegui consultar o CEP agora. Digite a cidade e a UF; o CEP segue válido pelo formato.' });
-    }
+  // O CEP, a cidade e a UF da embalagem NÃO são mais preenchidos nem corrigidos aqui (pedido do usuário em 26/11/2026: "endereço de envio de material é o
+  // Comercial que preenche e não Almoxarifado e Telecom"). Antes (01/10/2026, Etapa 7.13) o CEP digitado trocava a cidade e a UF e o ajuste ia só para o histórico, sem o
+  // vendedor saber. Agora a janela só mostra o que a OP tem; o que falta trava a embalagem e o botão "Avisar o Comercial" leva o recado ao vendedor da OP.
+  const avisarOComercial = async (faltas) => {
+    if (avisoComercial.enviando || !modalEmbalagem) return;
+    setAvisoComercial({ enviando: true, feito: '', erro: '' });
+    const r = await avisarComercialDoEndereco({ op: modalEmbalagem, usuario: currentUser, faltas, setor });
+    if (!r.ok) { setAvisoComercial({ enviando: false, feito: '', erro: r.erro || 'Não foi possível avisar o Comercial.' }); return; }
+    setAvisoComercial({ enviando: false, erro: '', feito: `Aviso enviado para ${(r.avisados || []).join(', ')}.` + (r.semHistorico ? ` O recado não ficou no andamento da OP (${r.semHistorico}).` : '') });
   };
 
   // Seriais da embalagem de envio que NÃO é "Venda para Envio" (23/10/2026): com a lista de separação na tela, cada item tem o seu serial e a caixa de texto vira "outros seriais";
@@ -408,8 +390,8 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       frete_responsavel: opl.frete_responsavel || '',
       observacoes: '',
     });
+    setAvisoComercial({ enviando: false, feito: '', erro: '' });
     setModalEmbalagem(opl);
-    aplicarCep(opl.destino_cep, opl.destino_cidade, opl.destino_uf, true);
   };
 
   // ── Venda composta, fatia T3 (22/10/2026): uma OP, duas separações, um só frete ─────────────────────────────────────────────────────────────────────────────────
@@ -612,25 +594,20 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     const erroConf = validarConferencia(conferencia);
     // texto montado na hora, sempre uma pendência de preenchimento: tom explícito (29/09/2026)
     if (erroConf) { mostrarAviso(erroConf, 'atencao'); return; }
-    // CEP obrigatório e válido (pedido do usuário em 01/10/2026, Etapa 7.13). Texto montado aqui = pendência de preenchimento: tom explícito.
-    if (!soDigitosCep(f.destino_cep)) {
-      mostrarAviso('Informe o CEP de entrega. É por ele que a cidade e a UF são preenchidas e que a Logística cota o frete.', 'atencao'); return;
-    }
-    if (!cepComFormatoValido(f.destino_cep)) {
-      mostrarAviso('CEP inválido: informe os 8 dígitos do CEP de entrega (não vale só zeros).', 'atencao'); return;
+    // Endereço de entrega (26/11/2026): é do Comercial. Falta CEP, cidade ou UF (ou o CEP não vale) = a embalagem trava e o Almoxarifado/Telecom avisa o vendedor pelo botão da janela.
+    const faltasCep = faltasDoEndereco({ destino_cep: f.destino_cep, destino_cidade: f.destino_cidade, destino_uf: f.destino_uf, frete_responsavel: 'FOB' });
+    if (faltasCep.length) {
+      mostrarAviso(`O endereço de entrega é preenchido pelo Comercial e esta OP está com pendência: ${faltasCep.join('; ')}. Use "Avisar o Comercial" na janela e embale depois que corrigirem.`, 'atencao'); return;
     }
     setSalvandoEmb(true);
     const cepConferido = await consultarCep(f.destino_cep);
     setSalvandoEmb(false);
     if (cepConferido.status === 'inexistente') {
-      mostrarAviso('CEP não encontrado: confira os números do CEP de entrega.', 'atencao'); return;
+      mostrarAviso('O CEP de entrega não existe. O endereço é preenchido pelo Comercial: use "Avisar o Comercial" na janela e embale depois que corrigirem.', 'atencao'); return;
     }
     // serviço de terceiro fora do ar não pode parar a embalagem: segue com o CEP de formato válido e deixa dito
     if (cepConferido.status === 'indisponivel') {
-      mostrarAviso('Não consegui conferir o CEP agora; segui com o CEP informado. Confira a cidade e a UF.', 'atencao');
-    }
-    if (!f.destino_cidade?.trim() || !f.destino_uf) {
-      alert('Informe a cidade e a UF de entrega.'); return;
+      mostrarAviso('Não consegui conferir o CEP agora; segui com o CEP que o Comercial informou na OP.', 'atencao');
     }
     // Sem CIF/FOB não dá para saber se a Logística precisa cotar. Em vez de
     // seguir como CIF calada (como era até 24/09/2026), a resposta é pedida
@@ -642,9 +619,9 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     // Pedido do usuário em 15/10/2026: Venda para Envio com frete por conta da empresa exige o endereço completo — é o que a Logística vê na cotação.
     // Quem deveria ter informado é o vendedor (ao gerar a OP); a OP antiga, sem ele, é completada aqui.
     if (exigeEnderecoCompleto(modalEmbalagem.tipo_projeto, modalEmbalagem.fluxo_entrega, f.frete_responsavel)) {
-      const faltaEnd = enderecoQueFalta(f);
+      const faltaEnd = faltasDoEndereco(f, modalEmbalagem.tipo_projeto, modalEmbalagem.fluxo_entrega);
       if (faltaEnd.length) {
-        mostrarAviso(`Frete por conta da empresa: a Logística cota o frete pelo endereço de entrega. Falta: ${faltaEnd.join(', ')}.`, 'atencao'); return;
+        mostrarAviso(`Frete por conta da empresa: a Logística cota o frete pelo endereço de entrega, e quem o preenche é o Comercial. Falta: ${faltaEnd.join('; ')}. Use "Avisar o Comercial" na janela.`, 'atencao'); return;
       }
     }
     // Fluxo de envio: aqui a mercadoria sai da empresa. Até 27/10/2026 a pendência de fabricação/compra só avisava e pedia confirmação (para não impedir envio parcial);
@@ -1813,60 +1790,62 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
                 </span>
               </div>
 
+              {/* Endereço de entrega SÓ PARA CONSULTA (26/11/2026): quem preenche é o Comercial. Faltando algo, a embalagem trava e o botão avisa o vendedor da OP. */}
               <div className="acn-quadro-titulo acn-alm-secao">
-                Destino da entrega
+                Destino da entrega (preenchido pelo Comercial)
               </div>
-              <div className="acn-alm-grade-cep">
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-cep">CEP *</label>
-                  <input id="alm-cep" className="acn-input" value={embForm.destino_cep||''} inputMode="numeric" maxLength={9}
-                    onChange={e=>{ const v = formatarCep(e.target.value); setEmbForm(f=>({...f, destino_cep:v})); aplicarCep(v, embForm.destino_cidade, embForm.destino_uf); }} placeholder="00000-000" />
-                </div>
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-cidade">Cidade *</label>
-                  <input id="alm-cidade" className="acn-input" value={embForm.destino_cidade||''}
-                    onChange={e=>setEmbForm(f=>({...f, destino_cidade:e.target.value}))} />
-                </div>
-                <div className="form-group">
-                  <label className="acn-label" htmlFor="alm-uf">UF *</label>
-                  <select id="alm-uf" className="acn-input" value={embForm.destino_uf||''}
-                    onChange={e=>setEmbForm(f=>({...f, destino_uf:e.target.value}))}>
-                    <option value="">—</option>
-                    {UFS.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
-                {cepInfo.texto && (
-                  <div className={'acn-alm-cep-info ' + (cepInfo.estado === 'ok' ? 'acn-txt-ok' : cepInfo.estado === 'buscando' ? 'acn-ajuda' : cepInfo.estado === 'indisponivel' ? 'acn-txt-atencao' : 'acn-txt-erro')}>
-                    {cepInfo.texto}
-                  </div>
-                )}
-              </div>
-
-              {/* Endereço completo (15/10/2026): vem preenchido pelo vendedor; com frete CIF a Logística cota por ele. Obrigatório em Venda para Envio. */}
-              {embForm.frete_responsavel === 'CIF' && (() => {
-                const obrig = exigeEnderecoCompleto(modalEmbalagem?.tipo_projeto, modalEmbalagem?.fluxo_entrega, 'CIF');
-                const campo = (id: string, chave: string, rotulo: string, extra: any = {}) => (
-                  <div className="form-group">
-                    <label className="acn-label" htmlFor={id}>{rotulo}{obrig ? ' *' : ''}</label>
-                    {chave === 'destino_telefone'
-                      ? <CampoTelefone id={id} valor={embForm[chave] || ''} onChange={v => setEmbForm(f => ({ ...f, [chave]: v }))} />
-                      : <input id={id} className="acn-input" value={embForm[chave] || ''} {...extra}
-                          onChange={e => setEmbForm(f => ({ ...f, [chave]: e.target.value }))} />}
-                  </div>
-                );
+              {(() => {
+                const exige = exigeEnderecoCompleto(modalEmbalagem?.tipo_projeto, modalEmbalagem?.fluxo_entrega, embForm.frete_responsavel);
+                const faltas = faltasDoEndereco(embForm, modalEmbalagem?.tipo_projeto, modalEmbalagem?.fluxo_entrega);
+                const valorDe = (chave: string) => String(embForm[chave] || '').trim();
+                const dado = (rotulo: string, chave: string, obrigatorio: boolean) => {
+                  const v = valorDe(chave);
+                  return (
+                    <div className="acn-alm-dado">
+                      <span className="acn-label">{rotulo}</span>
+                      <span className={'acn-alm-dado-valor' + (v ? '' : obrigatorio ? ' acn-alm-dado-falta' : ' acn-alm-dado-vazio')}>
+                        {v || (obrigatorio ? 'não informado' : '—')}
+                      </span>
+                    </div>
+                  );
+                };
                 return (
                   <>
-                    <div className="acn-quadro-titulo acn-alm-secao">Endereço de entrega (a Logística cota o frete com ele)</div>
-                    <div className="form-row">
-                      {campo('alm-rua', 'destino_logradouro', 'Rua')}
-                      {campo('alm-num', 'destino_numero', 'Número')}
-                      {campo('alm-bairro', 'destino_bairro', 'Bairro')}
+                    <div className="acn-alm-grade-cep">
+                      {dado('CEP', 'destino_cep', true)}
+                      {dado('Cidade', 'destino_cidade', true)}
+                      {dado('UF', 'destino_uf', true)}
                     </div>
-                    <div className="form-row">
-                      {campo('alm-compl', 'destino_complemento', 'Complemento', { placeholder: 'Se não houver: sem complemento' })}
-                      {campo('alm-dest', 'destino_destinatario', 'Quem recebe')}
-                      {campo('alm-tel', 'destino_telefone', 'Telefone de quem recebe', { inputMode: 'tel', placeholder: '(00) 00000-0000' })}
-                    </div>
+                    {embForm.frete_responsavel === 'CIF' && (
+                      <>
+                        <div className="acn-quadro-titulo acn-alm-secao">Endereço de entrega (a Logística cota o frete com ele)</div>
+                        <div className="acn-alm-grade-end">
+                          {dado('Rua', 'destino_logradouro', exige)}
+                          {dado('Número', 'destino_numero', exige)}
+                          {dado('Bairro', 'destino_bairro', exige)}
+                          {dado('Complemento', 'destino_complemento', exige)}
+                          {dado('Quem recebe', 'destino_destinatario', exige)}
+                          {dado('Telefone de quem recebe', 'destino_telefone', exige)}
+                        </div>
+                      </>
+                    )}
+                    {faltas.length > 0 ? (
+                      <div className="acn-alm-aviso-endereco" role="alert">
+                        <div>
+                          <strong>O endereço de entrega está incompleto ou com erro.</strong> Quem corrige é o Comercial (na edição da OP). Falta: {faltas.join('; ')}.
+                          {' '}Depois que corrigirem, feche e abra esta janela de novo para ler o endereço atualizado.
+                        </div>
+                        <div className="acn-alm-aviso-endereco-acao">
+                          <Botao pequeno variante="primario" icone={mdiBellOutline} disabled={avisoComercial.enviando || !!avisoComercial.feito} onClick={() => avisarOComercial(faltas)}>
+                            {avisoComercial.enviando ? 'Avisando…' : avisoComercial.feito ? 'Comercial avisado' : 'Avisar o Comercial'}
+                          </Botao>
+                          {avisoComercial.feito && <span className="acn-txt-ok">{avisoComercial.feito}</span>}
+                          {avisoComercial.erro && <span className="acn-txt-erro">{avisoComercial.erro}</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="acn-ajuda acn-alm-aviso-leitura">Para corrigir qualquer dado do endereço, peça ao Comercial: ele altera na edição da OP.</p>
+                    )}
                   </>
                 );
               })()}

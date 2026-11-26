@@ -1411,7 +1411,16 @@ html body .acn-input.acn-alm-produto-fixo { background: var(--acn-surface-2); co
 .acn-alm-grade5 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; gap: 8px; }
 .acn-alm-volumes-rodape { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
 .acn-alm-grade-cep { display: grid; grid-template-columns: minmax(112px, 1fr) 2fr minmax(64px, 1fr); gap: 8px; }
-.acn-alm-cep-info { grid-column: 1 / -1; font-size: 12px; }
+/* 26/11/2026: o endereço de entrega da embalagem é só para consulta (quem preenche é o Comercial): dado em leitura, o que falta em vermelho e o aviso ao vendedor */
+.acn-alm-grade-end { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.acn-alm-dado { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.acn-alm-dado-valor { padding: 6px 10px; min-height: 32px; box-sizing: border-box; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2, var(--acn-bg)); overflow-wrap: anywhere; }
+.acn-alm-dado-vazio { color: var(--acn-muted); }
+.acn-alm-dado-falta { color: var(--acn-bad); background: var(--acn-bad-soft); border-color: var(--acn-bad); font-weight: 600; }
+.acn-alm-aviso-endereco { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; padding: 10px 12px; border: 1px solid var(--acn-bad); border-radius: var(--acn-r2); background: var(--acn-bad-soft); color: var(--acn-bad); font-size: 13px; }
+.acn-alm-aviso-endereco-acao { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acn-alm-aviso-leitura { margin: 6px 0 8px; }
+@media (max-width: 600px) { .acn-alm-grade-end { grid-template-columns: minmax(0, 1fr); } }
 .acn-alm-lote-tabela { max-height: 160px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-alm-item-escolhido { grid-template-columns: 1fr auto; align-items: center; margin: 0; padding: 6px 10px; }
 @media (max-width: 600px) { .acn-alm-grade5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .acn-alm-grade-cep { grid-template-columns: 1fr; } }
