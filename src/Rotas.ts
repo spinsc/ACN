@@ -196,18 +196,25 @@ export type AbasDeUmNivel = { padrao: string; abas: readonly string[] };
 export type QuadroDeAbas = AbasDeUmNivel & { filhas?: Readonly<Record<string, AbasDeUmNivel>> };
 
 export const ABAS_DAS_TELAS: Readonly<Record<string, QuadroDeAbas>> = {
+  // Fase 5, parte 2 (26/11/2026): as visões que eram fichas de chips ou botões. Viagens, Relatórios, Ponto e Cotações são visões da PRÓPRIA tela (nível 0); as de dentro de uma aba (o Relógio Ponto do RH, a forma de ver as Vendas do Telecom, Tarefas e Horas extras da Engenharia) são o segundo nível.
+  viagens: { padrao: 'quadro', abas: ['quadro', 'lista', 'agenda', 'custos'] },
+  // `hoje` (a equipe hoje) é a padrão e `meu` é explícito (#/ponto/meu): o endereço do gestor que está no próprio ponto precisa dizer isso, senão o F5 o levava à equipe (achado do teste C67, 26/11/2026).
+  // Quem só vê o próprio ponto só tem uma parte: a tela mostra `meu` e a barra volta a #/ponto sem passo novo.
+  ponto: { padrao: 'hoje', abas: ['hoje', 'mes', 'extras', 'meu'] },
+  relatorios: { padrao: 'opls', abas: ['servico', 'opls', 'finalizadas', 'porsetor', 'atrasadas', 'paradas', 'recebenv', 'avulsas', 'area', 'producao', 'centrocusto', 'comissoes', 'markup', 'dossie', 'custohora'] },
+  cotacoes: { padrao: 'todas', abas: ['todas', 'avulsas'] },
   admin: { padrao: 'usuarios', abas: ['usuarios', 'perfis', 'plataformas', 'centros_custo', 'alcadas_aprovacao', 'alcadas_aprovacao_fretes', 'departamentos_compras', 'contratos_padrao', 'email_cfg', 'cotacoes_cfg', 'markup_cfg', 'nfc_cfg', 'notificacoes', 'feriados', 'veiculos', 'estruturas', 'fluxo_cfg', 'checklist', 'kpis', 'avisos', 'logs', 'dados', 'lixeira'] },
   formacao_precos: { padrao: 'formacao', abas: ['formacao', 'precos_formados'] },
   crm: { padrao: 'kanban', abas: ['kanban', 'agenda', 'recentes', 'relatorio', 'opls', 'faturamentos', 'demandas', 'contatos'] },
   producao: { padrao: 'producao', abas: ['producao', 'veicular', 'agenda', 'voucher', 'equipes'] },
-  rh: { padrao: 'geral', abas: ['geral', 'colaboradores', 'ponto', 'comissoes', 'relatorios', 'autorizacoes'] },
+  rh: { padrao: 'geral', abas: ['geral', 'colaboradores', 'ponto', 'comissoes', 'relatorios', 'autorizacoes'], filhas: { ponto: { padrao: 'hoje', abas: ['hoje', 'tratar', 'mes', 'extras', 'horas', 'vinculos'] } } },
   serralheria: { padrao: 'demandas', abas: ['demandas', 'relatorios'] },
   chicotes: { padrao: 'demandas', abas: ['demandas', 'relatorios'] },
   laboratorio: { padrao: 'demandas', abas: ['demandas', 'relatorios'] },
-  engenharia: { padrao: 'desenvolvimento', abas: ['analise', 'desenvolvimento', 'estruturas', 'horas'] },
+  engenharia: { padrao: 'desenvolvimento', abas: ['analise', 'desenvolvimento', 'estruturas', 'horas'], filhas: { horas: { padrao: 'tarefas', abas: ['tarefas', 'relatorio', 'extras', 'gerencial'] } } },
   financeiro: { padrao: 'centros', abas: ['pendencias', 'centros', 'conciliacao', 'kanban', 'custoop', 'demandas'] },
   marketing: { padrao: 'opls', abas: ['opls', 'pedidos'] },
-  telecom: { padrao: 'demandas', abas: ['vendas', 'separacao', 'demandas'] },
+  telecom: { padrao: 'demandas', abas: ['vendas', 'separacao', 'demandas'], filhas: { vendas: { padrao: 'quadro', abas: ['quadro', 'lista', 'perdas'] } } },
   sac: { padrao: 'os', abas: ['os', 'chamados_nfc', 'garantia', 'cadastros'] },
   compras: { padrao: 'pedidos', abas: ['pedidos', 'fornecedores'] },
   terceiros: { padrao: 'quadro', abas: ['quadro', 'agenda', 'lista', 'relatorio', 'ordens', 'prestadores', 'tipos', 'modelo'] },
@@ -276,6 +283,23 @@ export function montarEnderecoDaAba(tela: string, caminho: readonly string[]): s
   const dentro = filhas && caminho[1] && caminho[1] !== filhas.padrao ? caminho[1] : undefined;
   if (!dentro && fora === q.padrao) return montarEndereco(tela);
   return montarEndereco(tela, [nomeDaAba(fora), ...(dentro ? [nomeDaAba(dentro)] : [])]);
+}
+
+/**
+ * O endereço da aba de FORA (nível 0) que NÃO apaga a aba de dentro quando o endereço de agora já é dessa mesma aba de fora: `#/rh/ponto/mes` continua `#/rh/ponto/mes` quando o gancho da tela
+ * reescreve o endereço (decidido na Fase 5, parte 2, 26/11/2026: sem isso o gancho da aba de fora, que roda depois do da aba de dentro, apagava a visão de dentro de todo link colado).
+ * Em qualquer outro caso é o `montarEnderecoDaAba(tela, [aba])` de sempre.
+ */
+export function montarEnderecoDaAbaDeFora(hash: string, tela: string, aba: string): string {
+  const q = ABAS_DAS_TELAS[tela];
+  if (q && q.filhas && q.filhas[aba]) {
+    const fora = abaNoEndereco(hash, tela, 0);
+    if (fora.tipo === 'aba' && fora.aba === aba) {
+      const dentro = abaNoEndereco(hash, tela, 1, aba);
+      if (dentro.tipo === 'aba' && dentro.aba && !dentro.invalida) return montarEnderecoDaAba(tela, [aba, dentro.aba]);
+    }
+  }
+  return montarEnderecoDaAba(tela, [aba]);
 }
 
 /** O endereço de agora é desta tela (a tela em si, uma aba dela ou a janela de um registro dela)? A OP e as outras telas, não. Trocar para a tela em que já se está não mexe no endereço. */

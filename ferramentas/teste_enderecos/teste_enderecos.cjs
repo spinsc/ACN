@@ -327,7 +327,8 @@ const FASE4 = [
   { id: 'engenharia', menu: 'Engenharia', rotulos: { analise: 'Análise', desenvolvimento: 'Desenvolvimento', estruturas: 'Estruturas', horas: 'Horas/Tarefas' } },
   { id: 'financeiro', menu: 'Financeiro', rotulos: { pendencias: 'Pendências', centros: 'Centros de custo', conciliacao: 'Conciliação bancária', kanban: 'Tarefas', custoop: 'Custo por OP', demandas: 'Demandas' } },
   { id: 'marketing', menu: 'Marketing', rotulos: { opls: 'OPs Liberadas para Divulgação', pedidos: 'Pedidos de Registro' } },
-  { id: 'telecom', menu: 'Telecom', rotulos: { vendas: 'Vendas', separacao: 'Separação e envio', demandas: 'Análises e demandas' } },
+  // o Telecom abre SOZINHO em "Separação e envio" quando há OP de rádio esperando na fila (TelecomTab: `esperando > 0`): depende dos dados de agora, então o teste aceita as duas aberturas
+  { id: 'telecom', menu: 'Telecom', abreSozinhoEm: 'separacao', rotulos: { vendas: 'Vendas', separacao: 'Separação e envio', demandas: 'Análises e demandas' } },
   { id: 'terceiros', menu: 'Serviços de terceiros', lembra: 'lista', rotulos: { quadro: 'Quadro', agenda: 'Agenda', lista: 'Lista', relatorio: 'Relatório do mês', ordens: 'Ordens de pintura', prestadores: 'Prestadores', tipos: 'Tipos de serviço', modelo: 'Modelo do contrato' } },
 ];
 /** As abas da barra de abas número `n` da tela aberta (na ordem em que aparecem), qual está marcada, o endereço e quantos passos o histórico tem. */
@@ -344,6 +345,72 @@ const clicarNaAba = (page, rotulo, n = 0) => page.evaluate((r, n) => {
   b.click();
 }, rotulo, n);
 const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => document.querySelectorAll('.acn-main [role="tablist"]').length > n, { timeout: ms }, n);
+
+// ── Fase 5, parte 2 (26/11/2026): as visões que eram fichas de chips ou botões (Viagens, Relatórios, Ponto, Cotações) e as de DENTRO de uma aba (Relógio Ponto do RH, Vendas do Telecom, Horas/Tarefas) ──
+// Cada uma é descrita UMA vez (`FASE5B`); o quadro (quais visões, qual é a padrão, o nome no endereço) vem do PRÓPRIO `Rotas.ts`. `opcionais` são as visões que só existem para quem tem a permissão:
+// o teste confere as que a conta de teste tem e, se a opcional não está lá, que o link dela cai na padrão com a barra corrigida.
+//   alvo: { tipo: 'abas', n }  = a barra de abas número n (role=tablist)
+//         { tipo: 'chips', grupo } = a ficha de chips com esse aria-label (role=group, aria-pressed)
+//         { tipo: 'botoes' } = os quatro botões das visões de Horas/Tarefas (sem papel de aba: `.acn-ht-b1112`)
+// As permissões do Ponto (ponto_pode_ver_todos e pode_ver_rh são funções chamadas por POST, que o teste aborta) são simuladas pela `escritaSimulada`.
+// `ehRh` = quem tem a aba RH: na tela Ponto ele vê só o próprio ponto (a equipe fica no RH › Relógio Ponto), então o gestor que NÃO é do RH é `comPonto(true, false)`.
+const comPonto = (verTodos, ehRh = verTodos) => (url) => {
+  if (/\/rest\/v1\/rpc\/ponto_pode_ver_todos/.test(url)) return { body: verTodos };
+  if (/\/rest\/v1\/rpc\/pode_ver_rh/.test(url)) return { body: ehRh };
+  return null;
+};
+const FASE5B = [
+  { id: 'cotacoes', menu: 'Cotações', alvo: { tipo: 'abas', n: 0 }, rotulos: { todas: 'Todas', avulsas: 'Avulsas' } },
+  { id: 'viagens', menu: 'Viagens', alvo: { tipo: 'chips', grupo: 'Forma de ver' }, rotulos: { quadro: 'Quadro', lista: 'Lista', agenda: 'Agenda', custos: 'Custos' } },
+  { id: 'relatorios', menu: 'Relatórios', alvo: { tipo: 'chips', grupo: 'Relatório' }, opcionais: ['custohora'],
+    rotulos: { servico: 'Em Serviço', opls: 'OPs Geral', finalizadas: 'Finalizadas', porsetor: 'Por Setor', atrasadas: 'Atrasadas', paradas: 'Paradas', recebenv: 'Receb./Envios', avulsas: 'Dem. Avulsas', area: 'Por Área', producao: 'Produção', centrocusto: 'Centro Custo', comissoes: 'Comissões', markup: 'Markup Vendedor', dossie: 'Dossiê da OP', custohora: 'Custo da mão de obra' } },
+  // o segundo nível: a visão de dentro de uma aba da tela (`pai` = a aba de fora, `paiRotulo` = o rótulo dela na barra de abas)
+  { id: 'rh', pai: 'ponto', paiRotulo: 'Relógio Ponto', menu: 'RH', opcoes: { escritaSimulada: comPonto(true) }, alvo: { tipo: 'chips', grupo: 'Parte do relógio ponto' }, rotulos: { hoje: 'Hoje', tratar: 'A tratar', mes: 'Mês', extras: 'Horas extras', horas: 'Horas lançadas', vinculos: 'Vínculos' } },
+  { id: 'telecom', pai: 'vendas', paiRotulo: 'Vendas', menu: 'Telecom', alvo: { tipo: 'chips', grupo: 'Forma de ver' }, rotulos: { quadro: 'Quadro', lista: 'Lista', perdas: 'Perdas' } },
+  { id: 'engenharia', pai: 'horas', paiRotulo: 'Horas/Tarefas', menu: 'Engenharia', alvo: { tipo: 'botoes' }, opcionais: ['gerencial'], rotulos: { tarefas: 'Tarefas', relatorio: 'Relatório por Período', extras: 'Horas extras', gerencial: 'Relatório gerencial' } },
+];
+const quadroDaVisao = (D) => D.pai ? ROTAS.ABAS_DAS_TELAS[D.id].filhas[D.pai] : ROTAS.ABAS_DAS_TELAS[D.id];
+/** Lê as visões do alvo: o rótulo de cada uma (sem o "(12)" nem o emoji), qual está marcada, o endereço e quantos passos o histórico tem. */
+const estadoVisoes = (page, alvo) => page.evaluate((alvo) => {
+  const limpa = (t) => String(t == null ? '' : t).replace(/^[^\p{L}\p{N}]+/u, '').replace(/\s*\(\d+\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  let els = [], marcada = () => false, texto = (b) => b.innerText;
+  if (alvo.tipo === 'abas') {
+    const l = [...document.querySelectorAll('.acn-main [role="tablist"]')][alvo.n || 0];
+    els = l ? [...l.querySelectorAll('[role="tab"]')] : []; marcada = (b) => b.getAttribute('aria-selected') === 'true'; texto = (b) => (b.querySelector('span') || b).innerText;
+  } else if (alvo.tipo === 'chips') {
+    const g = [...document.querySelectorAll('.acn-main [role="group"]')].find(x => x.getAttribute('aria-label') === alvo.grupo);
+    els = g ? [...g.querySelectorAll('button')] : []; marcada = (b) => b.getAttribute('aria-pressed') === 'true';
+    texto = (b) => [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('');   // a contagem fica numa <em> à parte
+  } else {
+    els = [...document.querySelectorAll('.acn-main button')].filter(b => /acn-ht-b1112/.test(b.className)); marcada = (b) => /acn-ht-b1112-2/.test(b.className);
+  }
+  const itens = els.map(b => ({ rotulo: limpa(texto(b)), ativa: marcada(b) }));
+  return { hash: location.hash, historico: history.length, h0: window.__h0 == null ? null : window.__h0, itens, rotulos: itens.map(a => a.rotulo), ativas: itens.filter(a => a.ativa).map(a => a.rotulo) };
+}, alvo);
+const clicarNaVisao = (page, alvo, rotulo) => page.evaluate((alvo, r) => {
+  const limpa = (t) => String(t == null ? '' : t).replace(/^[^\p{L}\p{N}]+/u, '').replace(/\s*\(\d+\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  let els = [], texto = (b) => b.innerText;
+  if (alvo.tipo === 'abas') { const l = [...document.querySelectorAll('.acn-main [role="tablist"]')][alvo.n || 0]; els = l ? [...l.querySelectorAll('[role="tab"]')] : []; texto = (b) => (b.querySelector('span') || b).innerText; }
+  else if (alvo.tipo === 'chips') { const g = [...document.querySelectorAll('.acn-main [role="group"]')].find(x => x.getAttribute('aria-label') === alvo.grupo); els = g ? [...g.querySelectorAll('button')] : []; texto = (b) => [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(''); }
+  else els = [...document.querySelectorAll('.acn-main button')].filter(b => /acn-ht-b1112/.test(b.className));
+  const b = els.find(x => limpa(texto(x)) === r);
+  if (!b) throw new Error('visão não achada: ' + r);
+  b.click();
+}, alvo, rotulo);
+/** Espera o alvo existir (a barra de abas, a ficha de chips ou os botões montados). */
+const esperarVisoes = (page, alvo, ms = 40000) => page.waitForFunction((alvo) => {
+  if (alvo.tipo === 'abas') return document.querySelectorAll('.acn-main [role="tablist"]').length > (alvo.n || 0);
+  if (alvo.tipo === 'chips') { const g = [...document.querySelectorAll('.acn-main [role="group"]')].find(x => x.getAttribute('aria-label') === alvo.grupo); return !!g && g.querySelectorAll('button').length > 0; }
+  return [...document.querySelectorAll('.acn-main button')].some(b => /acn-ht-b1112/.test(b.className));
+}, { timeout: ms }, alvo);
+/** Espera a visão `esperado` ficar marcada (até 8 s); se não ficar, a conferência seguinte reprova e mostra o estado. */
+async function aguardarVisao(page, alvo, esperado) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < 8000) { const e = await estadoVisoes(page, alvo).catch(() => null); if (e && e.ativas[0] === esperado) break; await espera(150); }
+  await espera(250);
+}
+/** Página nova com a marca do tamanho do histórico no começo (`window.__h0`): quem prova "a barra foi corrigida SEM passo novo" compara o histórico de agora com ele. */
+const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (window.__h0 == null) window.__h0 = history.length; });
 
 (async () => {
   ROTAS = await import(require('url').pathToFileURL(require('path').join(__dirname, '../../src/Rotas.ts')).href);
@@ -1613,7 +1680,8 @@ const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => doc
   await cenario('C45 Quadro de abas: o teste cobre exatamente as telas do quadro, com as mesmas abas', {}, async () => {
     const quadro = Object.keys(ROTAS.ABAS_DAS_TELAS).sort();
     // o Admin tem barra de botões (não a de abas padrão) e o cenário próprio C48; as outras estão em FASE4
-    const coberto = [...FASE4.map(d => d.id), 'admin'].sort();
+    // as visões de chips e botões (Fase 5, parte 2) têm o cenário próprio C66; as telas só delas entram aqui como cobertas por ele
+    const coberto = [...new Set([...FASE4.map(d => d.id), 'admin', 'ponto', ...FASE5B.map(d => d.id)])].sort();   // o Ponto tem cenário próprio (C67: as permissões mudam o que existe)
     confere('as telas do quadro de abas e as do teste são as mesmas', JSON.stringify(quadro) === JSON.stringify(coberto), `quadro=${quadro.join(',')} teste=${coberto.join(',')}`);
     FASE4.forEach(d => confere(`${d.id}: as abas do teste são as do quadro`, JSON.stringify([...Object.keys(d.rotulos), ...(d.ausentes || [])].sort()) === JSON.stringify([...ROTAS.ABAS_DAS_TELAS[d.id].abas].sort()), `teste=${Object.keys(d.rotulos)} quadro=${ROTAS.ABAS_DAS_TELAS[d.id]?.abas}`));
   });
@@ -1636,7 +1704,8 @@ const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => doc
       await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
       let e = await ver();
       confere(`${D.id}: a barra de abas tem as abas do quadro, na ordem`, JSON.stringify(e.rotulos) === JSON.stringify(Object.values(D.rotulos)), JSON.stringify(e.rotulos));
-      confere(`${D.id}: abre na aba padrão (${rot(Q.padrao)}) e o endereço continua sem aba`, e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}`, JSON.stringify({ a: e.ativas, h: e.hash }));
+      const abriuSozinho = !!D.abreSozinhoEm && e.ativas[0] === rot(D.abreSozinhoEm) && e.hash === enderecoDaAba(D.abreSozinhoEm);
+      confere(`${D.id}: abre na aba padrão (${rot(Q.padrao)}) e o endereço continua sem aba${D.abreSozinhoEm ? ' (ou na que a tela abre sozinha, ' + rot(D.abreSozinhoEm) + ', com o endereço dela)' : ''}`, (e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}`) || abriuSozinho, JSON.stringify({ a: e.ativas, h: e.hash }));
       const h0 = e.historico;
       let passos = 0;
       for (const aba of outras) {
@@ -2453,6 +2522,246 @@ const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => doc
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
+  // C66 (Fase 5, parte 2): as visões de chips, botões e de dentro de uma aba. O quadro vem do código (Rotas.ts); o cenário roda em cada visão descrita em FASE5B.
+  await cenario('C66a Quadro das visões: o teste cobre exatamente as telas e as abas de dentro que o quadro tem', {}, async () => {
+    const quadro = Object.keys(ROTAS.ABAS_DAS_TELAS).sort();
+    const coberto = [...new Set([...FASE4.map(d => d.id), 'admin', 'ponto', ...FASE5B.map(d => d.id)])].sort();   // o Ponto tem cenário próprio (C67: as permissões mudam o que existe)
+    confere('as telas do quadro de abas e as do teste (abas, visões e Admin) são as mesmas', JSON.stringify(quadro) === JSON.stringify(coberto), `quadro=${quadro.join(',')} teste=${coberto.join(',')}`);
+    FASE5B.forEach(d => confere(`${d.id}${d.pai ? '/' + d.pai : ''}: as visões do teste são as do quadro`, JSON.stringify(Object.keys(d.rotulos).sort()) === JSON.stringify([...quadroDaVisao(d).abas].sort()), `teste=${Object.keys(d.rotulos)} quadro=${quadroDaVisao(d).abas}`));
+    // toda aba de fora que tem abas de dentro está no teste do segundo nível
+    const comFilhas = Object.entries(ROTAS.ABAS_DAS_TELAS).flatMap(([t, q]) => Object.keys(q.filhas || {}).map(p => `${t}/${p}`)).sort();
+    const testadas = FASE5B.filter(d => d.pai).map(d => `${d.id}/${d.pai}`).sort();
+    confere('as abas de dentro do quadro (filhas) e as do teste de segundo nível são as mesmas', JSON.stringify(comFilhas) === JSON.stringify(testadas), `quadro=${comFilhas.join(',')} teste=${testadas.join(',')}`);
+  });
+
+  for (const D of FASE5B) {
+    await cenario(`C66 ${D.id}${D.pai ? '/' + D.pai : ''}: as visões ganham endereço (um passo por troca); F5, link colado, Voltar e Avançar seguem o endereço`, D.opcoes || {}, async ({ page, consoleErros }) => {
+      const Q = quadroDaVisao(D);
+      const nome = ROTAS.nomeNoEndereco(D.id);
+      const caminho = (a) => D.pai ? [D.pai, a] : [a];
+      const enderecoDe = (a) => (a === Q.padrao ? ROTAS.montarEnderecoDaAba(D.id, D.pai ? [D.pai] : []) : ROTAS.montarEnderecoDaAba(D.id, caminho(a)));
+      const base = enderecoDe(Q.padrao);                        // a visão padrão não leva nome: #/rh/ponto, #/viagens…
+      const alvo = D.alvo;
+      const idDoRotulo = (r) => Object.keys(D.rotulos).find(a => D.rotulos[a] === r);
+      const rot = (a) => D.rotulos[a];
+      const ver = () => estadoVisoes(page, alvo);
+      const acorda = (e) => e.ativas.length === 1 && enderecoDe(idDoRotulo(e.ativas[0])) === e.hash;
+      const pronto = async () => { await esperarSistema(page); await esperarVisoes(page, alvo); await espera(900); };
+      const abrirLink = async (h) => { await abrirComoLinkColado(page, h); await pronto(); };
+      await marcarHistoricoInicial(page);
+
+      await page.goto(BASE + base, { waitUntil: 'domcontentloaded' });
+      await pronto();
+      let e = await ver();
+      // as visões que esta conta tem: as obrigatórias têm de estar todas, as opcionais podem faltar (permissão)
+      const opc = D.opcionais || [];
+      const obrigatorias = Object.keys(D.rotulos).filter(a => !opc.includes(a));
+      const presentes = Object.keys(D.rotulos).filter(a => e.rotulos.includes(rot(a)));
+      confere(`${D.id}: a tela tem todas as visões que não dependem de permissão, na ordem`, obrigatorias.every(a => presentes.includes(a)) && JSON.stringify(e.rotulos) === JSON.stringify(Object.values(D.rotulos).filter(r => e.rotulos.includes(r))), JSON.stringify(e.rotulos));
+      const ausentes = Object.keys(D.rotulos).filter(a => !presentes.includes(a));
+      console.log(`   (${D.id}: visões presentes = ${presentes.join(', ')}${ausentes.length ? ' · ausentes por permissão = ' + ausentes.join(', ') : ''})`);
+      confere(`${D.id}: abre na visão padrão (${rot(Q.padrao)}) e o endereço continua sem o nome dela`, e.ativas[0] === rot(Q.padrao) && e.hash === base, JSON.stringify({ a: e.ativas, h: e.hash, base }));
+      const outras = presentes.filter(a => a !== Q.padrao);
+      const h0 = e.historico;
+      let passos = 0;
+      for (const aba of outras) {
+        await clicarNaVisao(page, alvo, rot(aba)); await aguardarVisao(page, alvo, rot(aba));
+        e = await ver(); passos++;
+        confere(`${D.id}: clicar em "${rot(aba)}" → ${enderecoDe(aba)}, com UM passo novo`, e.ativas[0] === rot(aba) && e.hash === enderecoDe(aba) && e.historico === h0 + passos, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico, passos }));
+      }
+      const ultima = outras[outras.length - 1];
+      await clicarNaVisao(page, alvo, rot(ultima)); await espera(500);
+      e = await ver();
+      confere(`${D.id}: clicar de novo na visão aberta não cria passo`, e.historico === h0 + passos && e.hash === enderecoDe(ultima), JSON.stringify({ h0, h1: e.historico, passos, hash: e.hash }));
+      await clicarNaVisao(page, alvo, rot(Q.padrao)); await aguardarVisao(page, alvo, rot(Q.padrao));
+      e = await ver(); passos++;
+      confere(`${D.id}: voltar à visão padrão pelo clique → ${base}, um passo`, e.ativas[0] === rot(Q.padrao) && e.hash === base && e.historico === h0 + passos, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico, passos }));
+      await page.goBack(); await aguardarVisao(page, alvo, rot(ultima));
+      e = await ver();
+      confere(`${D.id}: Voltar → a visão de antes (${rot(ultima)}) e o endereço dela`, e.ativas[0] === rot(ultima) && e.hash === enderecoDe(ultima), JSON.stringify({ a: e.ativas, h: e.hash }));
+      await page.goForward(); await aguardarVisao(page, alvo, rot(Q.padrao));
+      e = await ver();
+      confere(`${D.id}: Avançar → a visão padrão de novo`, e.ativas[0] === rot(Q.padrao) && e.hash === base, JSON.stringify({ a: e.ativas, h: e.hash }));
+      let todosAcordam = true; const vistos = [];
+      for (let i = 0; i < passos; i++) { await page.goBack(); await espera(500); const x = await ver(); vistos.push(`${x.hash}=${x.ativas[0]}`); if (!acorda(x)) todosAcordam = false; }
+      confere(`${D.id}: do Voltar ao começo, o endereço e a visão marcada contam a mesma história a cada passo`, todosAcordam, vistos.join(' | '));
+      for (let i = 0; i < passos; i++) { await page.goForward(); await espera(400); }
+      await aguardarVisao(page, alvo, rot(Q.padrao));
+      // F5 numa visão que não é a padrão
+      await clicarNaVisao(page, alvo, rot(ultima)); await aguardarVisao(page, alvo, rot(ultima));
+      const antesDoF5 = await ver();
+      await page.reload({ waitUntil: 'domcontentloaded' }); await pronto();
+      e = await ver();
+      confere(`${D.id}: F5 em ${enderecoDe(ultima)} reabre na mesma visão, sem passo novo`, e.ativas[0] === rot(ultima) && e.hash === enderecoDe(ultima) && e.historico === antesDoF5.historico, JSON.stringify({ a: e.ativas, h: e.hash, antes: antesDoF5.historico, depois: e.historico }));
+      // link colado em cada visão
+      for (const aba of outras) {
+        await abrirLink(enderecoDe(aba));
+        e = await ver();
+        confere(`${D.id}: link colado ${enderecoDe(aba)} abre a visão "${rot(aba)}" e deixa o endereço como está`, e.ativas[0] === rot(aba) && e.hash === enderecoDe(aba), JSON.stringify({ a: e.ativas, h: e.hash }));
+      }
+      const aberta = outras[0];
+      await abrirLink(`#/${nome}/${D.pai ? ROTAS.nomeDaAba(D.pai) + '/' : ''}${ROTAS.nomeDaAba(Q.padrao)}`);
+      e = await ver();
+      confere(`${D.id}: o link com o nome da visão padrão escrito abre a padrão e a barra passa a mostrar o endereço curto`, e.ativas[0] === rot(Q.padrao) && e.hash === base, JSON.stringify({ a: e.ativas, h: e.hash }));
+      await abrirLink(`#/${nome.toUpperCase()}/${D.pai ? ROTAS.nomeDaAba(D.pai).toUpperCase() + '/' : ''}${ROTAS.nomeDaAba(aberta).toUpperCase()}`);
+      e = await ver();
+      confere(`${D.id}: o link em MAIÚSCULA abre a mesma visão e a barra é escrita no jeito certo`, e.ativas[0] === rot(aberta) && e.hash === enderecoDe(aberta), JSON.stringify({ a: e.ativas, h: e.hash }));
+      // visão que não existe → a padrão, com a barra corrigida
+      await abrirLink(`#/${nome}/${D.pai ? ROTAS.nomeDaAba(D.pai) + '/' : ''}visao-que-nao-existe`);
+      e = await ver();
+      confere(`${D.id}: visão que a tela não tem → a padrão, e a barra é corrigida`, e.ativas[0] === rot(Q.padrao) && e.hash === base, JSON.stringify({ a: e.ativas, h: e.hash }));
+      const al0 = await A(page);
+      confere(`${D.id}: visão desconhecida não gera aviso nem tela quebrada`, al0.length === 0 && e.itens.length > 0, JSON.stringify(al0));
+      // a visão que esta conta não tem (permissão): o link cai na padrão e a barra é corrigida sem passo
+      for (const aus of ausentes) {
+        await abrirLink(enderecoDe(aus));
+        e = await ver();
+        confere(`${D.id}: link de "${rot(aus)}" (a conta não tem permissão) → a padrão, barra corrigida`, e.ativas[0] === rot(Q.padrao) && e.hash === base, JSON.stringify({ a: e.ativas, h: e.hash }));
+      }
+      // clicar no menu da tela em que já está: a visão fica
+      await abrirLink(enderecoDe(aberta));
+      const h1 = (await ver()).historico;
+      await clicarNoMenu(page, D.menu); await espera(900);
+      e = await ver();
+      confere(`${D.id}: clicar no menu da tela em que já está NÃO derruba a visão nem cria passo`, e.ativas[0] === rot(aberta) && e.hash === enderecoDe(aberta) && e.historico === h1, JSON.stringify({ a: e.ativas, h: e.hash, h1, h2: e.historico }));
+      // sair para outra tela e voltar pelo Voltar: a visão volta
+      const outraTela = D.menu === 'PCP' ? 'Compras' : 'PCP';
+      await clicarNoMenu(page, outraTela); await espera(1000);
+      await page.goBack(); await esperarVisoes(page, alvo); await espera(900);
+      e = await ver();
+      confere(`${D.id}: Voltar para a tela reabre a MESMA visão (${rot(aberta)})`, e.ativas[0] === rot(aberta) && e.hash === enderecoDe(aberta), JSON.stringify({ a: e.ativas, h: e.hash }));
+      if (D.pai) {
+        // o segundo nível: o link da visão de dentro NÃO é apagado pelo da aba de fora (o gancho de fora roda depois do de dentro)
+        confere(`${D.id}: o link com a visão de dentro (${enderecoDe(aberta)}) continua inteiro depois de montar a tela (a aba de fora não o reescreve)`, e.hash === enderecoDe(aberta), e.hash);
+        // trocar a aba de FORA leva o endereço dela (sem a parte de dentro); Voltar traz a de dentro de volta
+        const barraFora = estadoAbas(page, 0);
+        const abaFora = await barraFora;
+        const outroFora = abaFora.rotulos.find(r => r !== D.paiRotulo);
+        const hFora0 = (await ver()).historico;
+        await clicarNaAba(page, outroFora, 0); await espera(1200);
+        const t = await estadoAbas(page, 0);
+        confere(`${D.id}: trocar para a aba "${outroFora}" deixa o endereço dela, sem a parte de dentro`, t.ativas[0] === outroFora && !new RegExp('^#/' + nome + '/' + ROTAS.nomeDaAba(D.pai) + '(/|$)').test(t.hash), JSON.stringify({ a: t.ativas, h: t.hash }));   // o passo novo se prova pelo Voltar logo abaixo (depois de um Voltar anterior o clique apaga os passos à frente e o tamanho do histórico não muda)
+        await page.goBack(); await esperarVisoes(page, alvo); await espera(1000);
+        e = await ver();
+        confere(`${D.id}: Voltar traz a aba de fora E a visão de dentro de antes (${rot(aberta)})`, e.ativas[0] === rot(aberta) && e.hash === enderecoDe(aberta), JSON.stringify({ a: e.ativas, h: e.hash }));
+        // entrar na aba de fora SEM dizer a de dentro: abre a de dentro padrão
+        await abrirLink(ROTAS.montarEnderecoDaAba(D.id, [D.pai]));
+        e = await ver();
+        confere(`${D.id}: o link só da aba de fora (${ROTAS.montarEnderecoDaAba(D.id, [D.pai])}) abre a visão de dentro padrão (${rot(Q.padrao)})`, e.ativas[0] === rot(Q.padrao) && e.hash === base, JSON.stringify({ a: e.ativas, h: e.hash }));
+      }
+      const al = await A(page);
+      confere(`${D.id}: nenhum aviso durante o uso`, al.length === 0, JSON.stringify(al));
+      const errosDoSistema = (consoleErros || []).filter(x => !/Failed to load resource|net::ERR|favicon|status of 4|status of 5/.test(x));
+      confere(`${D.id}: nenhum erro no console`, errosDoSistema.length === 0, errosDoSistema.slice(0, 3).join(' | '));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C67 (Fase 5, parte 2): o Ponto. "Equipe hoje" é a visão padrão (#/ponto) e "Meu ponto" é explícito (#/ponto/meu: o gestor que está no próprio ponto e dá F5 fica nele); quem só vê o seu tem uma parte só e a barra volta a #/ponto SEM passo.
+  // As permissões do banco (ponto_pode_ver_todos e pode_ver_rh, que são funções chamadas por POST) são simuladas pela `escritaSimulada` do teste.
+  const ALVO_PONTO = { tipo: 'chips', grupo: 'Parte do ponto' };
+  await cenario('C67a Ponto, quem vê a equipe: abre em "Equipe hoje" (#/ponto), um passo por troca, F5, link colado, Voltar e Avançar', { escritaSimulada: comPonto(true, false) }, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/ponto', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1500);
+    let e = await estadoVisoes(page, ALVO_PONTO);
+    confere('as quatro partes aparecem para quem vê a equipe', ['Equipe hoje', 'Resumo do mês', 'Horas extras', 'Meu ponto'].every(r => e.rotulos.includes(r)), JSON.stringify(e.rotulos));
+    confere('#/ponto abre em "Equipe hoje" e o endereço continua o curto', e.ativas[0] === 'Equipe hoje' && e.hash === '#/ponto', JSON.stringify({ a: e.ativas, h: e.hash }));
+    confere('abrir não criou passo no histórico', e.historico === e.h0, JSON.stringify({ h0: e.h0, h1: e.historico }));
+    const h0 = e.historico;
+    const IR = { 'Resumo do mês': '#/ponto/mes', 'Horas extras': '#/ponto/extras', 'Meu ponto': '#/ponto/meu', 'Equipe hoje': '#/ponto' };
+    let passos = 0;
+    for (const [r, h] of Object.entries(IR)) {
+      await clicarNaVisao(page, ALVO_PONTO, r); await aguardarVisao(page, ALVO_PONTO, r); passos++;
+      e = await estadoVisoes(page, ALVO_PONTO);
+      confere(`clicar em "${r}" → ${h}, com UM passo novo`, e.ativas[0] === r && e.hash === h && e.historico === h0 + passos, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico, passos }));
+    }
+    await page.goBack(); await aguardarVisao(page, ALVO_PONTO, 'Meu ponto');
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('Voltar → "Meu ponto" com o endereço dele (#/ponto/meu)', e.ativas[0] === 'Meu ponto' && e.hash === '#/ponto/meu', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await page.goForward(); await aguardarVisao(page, ALVO_PONTO, 'Equipe hoje');
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('Avançar → "Equipe hoje" de novo', e.ativas[0] === 'Equipe hoje' && e.hash === '#/ponto', JSON.stringify({ a: e.ativas, h: e.hash }));
+    // F5 no "Meu ponto": o gestor fica nele (o endereço conta a história)
+    await clicarNaVisao(page, ALVO_PONTO, 'Meu ponto'); await aguardarVisao(page, ALVO_PONTO, 'Meu ponto');
+    const antesMeu = await estadoVisoes(page, ALVO_PONTO);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1500);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('F5 em #/ponto/meu: o gestor continua em "Meu ponto", sem passo novo', e.ativas[0] === 'Meu ponto' && e.hash === '#/ponto/meu' && e.historico === antesMeu.historico, JSON.stringify({ a: e.ativas, h: e.hash, antes: antesMeu.historico, depois: e.historico }));
+    // F5 em "Resumo do mês"
+    await clicarNaVisao(page, ALVO_PONTO, 'Resumo do mês'); await aguardarVisao(page, ALVO_PONTO, 'Resumo do mês');
+    const antes = await estadoVisoes(page, ALVO_PONTO);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1500);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('F5 em #/ponto/mes reabre em "Resumo do mês", sem passo novo', e.ativas[0] === 'Resumo do mês' && e.hash === '#/ponto/mes' && e.historico === antes.historico, JSON.stringify({ a: e.ativas, h: e.hash, antes: antes.historico, depois: e.historico }));
+    // link colado
+    for (const [r, h] of Object.entries(IR)) {
+      await abrirComoLinkColado(page, h); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1300);
+      e = await estadoVisoes(page, ALVO_PONTO);
+      confere(`link colado ${h} abre "${r}" e deixa o endereço como está`, e.ativas[0] === r && e.hash === h, JSON.stringify({ a: e.ativas, h: e.hash }));
+    }
+    await abrirComoLinkColado(page, '#/ponto/parte-que-nao-existe'); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1300);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('parte que a tela não tem → "Equipe hoje" para quem vê a equipe, com a barra corrigida', e.ativas[0] === 'Equipe hoje' && e.hash === '#/ponto', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  await cenario('C67b Ponto, quem só vê o seu: só "Meu ponto"; o link de uma parte da equipe cai nele, com a barra corrigida e SEM passo', { escritaSimulada: comPonto(false, false) }, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    await page.goto(BASE + '#/ponto', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1500);
+    let e = await estadoVisoes(page, ALVO_PONTO);
+    confere('só existe "Meu ponto"', JSON.stringify(e.rotulos) === JSON.stringify(['Meu ponto']) && e.ativas[0] === 'Meu ponto', JSON.stringify(e));
+    const h0b = e.historico;
+    await clicarNaVisao(page, ALVO_PONTO, 'Meu ponto'); await espera(500);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('clicar no único botão ("Meu ponto") não muda o endereço nem cria passo', e.hash === '#/ponto' && e.historico === h0b, JSON.stringify({ h: e.hash, h0: h0b, h1: e.historico }));
+    confere('o endereço é o curto (#/ponto), a visão padrão', e.hash === '#/ponto', e.hash);
+    for (const h of ['#/ponto/hoje', '#/ponto/mes', '#/ponto/extras', '#/ponto/meu']) {
+      await abrirComoLinkColado(page, h); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1500);
+      e = await estadoVisoes(page, ALVO_PONTO);
+      confere(`link colado ${h} cai em "Meu ponto" e a barra mostra #/ponto`, e.ativas[0] === 'Meu ponto' && e.hash === '#/ponto', JSON.stringify({ a: e.ativas, h: e.hash }));
+    }
+    // (link colado = recarrega a página: um `goto` só com outro # seria a mesma página e somaria um passo por conta própria)
+    await abrirComoLinkColado(page, '#/ponto/mes'); await esperarSistema(page); await esperarVisoes(page, ALVO_PONTO); await espera(1500);
+    e = await estadoVisoes(page, ALVO_PONTO);
+    confere('a correção para #/ponto NÃO criou passo no histórico', e.hash === '#/ponto' && e.historico === e.h0, JSON.stringify({ h: e.hash, h0: e.h0, h1: e.historico }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C68 (Fase 5, parte 2): a visão que a pessoa NÃO pode ver (a conta de teste é Admin e vê tudo, então aqui o usuário é um perfil comum): o link dela cai na padrão e a barra é corrigida SEM passo.
+  await cenario('C68 Visões por permissão: Custo da mão de obra (Relatórios) e Relatório gerencial (Engenharia) não abrem pelo endereço para quem não pode', { usuario: { ...RESTRITO, abas_permitidas: ['relatorios', 'engenharia'] }, simular: bancoComAbas(['relatorios', 'engenharia']) }, async ({ page }) => {
+    await marcarHistoricoInicial(page);
+    const REL = { tipo: 'chips', grupo: 'Relatório' };
+    await page.goto(BASE + '#/relatorios', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVisoes(page, REL); await espera(1200);
+    let e = await estadoVisoes(page, REL);
+    confere('Relatórios: o Custo da mão de obra não aparece para quem não é do RH com valores', !e.rotulos.includes('Custo da mão de obra') && e.rotulos.includes('OPs Geral'), JSON.stringify(e.rotulos));
+    await abrirComoLinkColado(page, '#/relatorios/custohora'); await esperarSistema(page); await esperarVisoes(page, REL); await espera(1200);
+    e = await estadoVisoes(page, REL);
+    confere('Relatórios: o link do Custo da mão de obra cai em "OPs Geral" e a barra volta a #/relatorios', e.ativas[0] === 'OPs Geral' && e.hash === '#/relatorios', JSON.stringify({ a: e.ativas, h: e.hash }));
+    confere('Relatórios: a correção da barra não criou passo', e.historico === e.h0, JSON.stringify({ h0: e.h0, h1: e.historico }));
+    await abrirComoLinkColado(page, '#/relatorios/atrasadas'); await esperarSistema(page); await esperarVisoes(page, REL); await espera(1200);
+    e = await estadoVisoes(page, REL);
+    confere('Relatórios: um relatório que a pessoa pode ver abre normalmente pelo link', e.ativas[0] === 'Atrasadas' && e.hash === '#/relatorios/atrasadas', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const HOR = { tipo: 'botoes' };
+    await abrirComoLinkColado(page, '#/engenharia/horas'); await esperarSistema(page); await esperarVisoes(page, HOR); await espera(1200);
+    e = await estadoVisoes(page, HOR);
+    confere('Engenharia: o Relatório gerencial não aparece para quem não é gestor', !e.rotulos.includes('Relatório gerencial') && e.rotulos.includes('Tarefas'), JSON.stringify(e.rotulos));
+    await abrirComoLinkColado(page, '#/engenharia/horas/gerencial'); await esperarSistema(page); await esperarVisoes(page, HOR); await espera(1200);
+    e = await estadoVisoes(page, HOR);
+    confere('Engenharia: o link do Relatório gerencial cai em "Tarefas" e a barra volta a #/engenharia/horas', e.ativas[0] === 'Tarefas' && e.hash === '#/engenharia/horas', JSON.stringify({ a: e.ativas, h: e.hash }));
+    await abrirComoLinkColado(page, '#/engenharia/horas/extras'); await esperarSistema(page); await esperarVisoes(page, HOR); await espera(1200);
+    e = await estadoVisoes(page, HOR);
+    confere('Engenharia: "Horas extras" (que a pessoa pode ver) abre pelo link', e.ativas[0] === 'Horas extras' && e.hash === '#/engenharia/horas/extras', JSON.stringify({ a: e.ativas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);

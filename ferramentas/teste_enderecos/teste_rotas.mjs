@@ -347,4 +347,48 @@ t('o serviço de terceiro: #/terceiros/servico/<código> é o registro da tela t
 t('o serviço de terceiro: nenhuma aba de terceiros se chama "servico" (o endereço ficaria ambíguo)', () => assert.ok(!R.ABAS_DAS_TELAS.terceiros.abas.some(a => R.nomeDaAba(a) === 'servico')));
 t('o serviço de terceiro aberto por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/terceiros/servico/' + U1, 'terceiros').tipo, 'fora'));
 
+// ── Fase 5, parte 2 (26/11/2026): as visões de chips e botões (Viagens, Relatórios, Ponto, Cotações) e as visões de DENTRO de uma aba (Relógio Ponto, Vendas do Telecom, Horas/Tarefas) ──
+const { montarEnderecoDaAbaDeFora } = R;
+const VISOES = { viagens: ['quadro', 'lista', 'agenda', 'custos'], ponto: ['hoje', 'mes', 'extras', 'meu'], cotacoes: ['todas', 'avulsas'] };
+for (const [tela, abas] of Object.entries(VISOES)) {
+  t(tela + ': o quadro tem as visões esperadas e a padrão é a primeira', () => { assert.deepEqual(ABAS_DAS_TELAS[tela].abas, abas); assert.equal(ABAS_DAS_TELAS[tela].padrao, abas[0]); });
+  t(tela + ': ida e volta de cada visão (a padrão não leva nome)', () => abas.forEach(a => {
+    const h = montarEnderecoDaAba(tela, [a]);
+    assert.equal(h, a === abas[0] ? '#/' + nomeNoEndereco(tela) : '#/' + nomeNoEndereco(tela) + '/' + nomeDaAba(a));
+    const l = abaNoEndereco(h, tela, 0); assert.equal(l.tipo === 'aba' ? (l.aba ?? abas[0]) : null, a, h);
+  }));
+}
+t('relatorios: as 15 visões, a padrão é "opls" e todas fazem ida e volta', () => {
+  const q = ABAS_DAS_TELAS.relatorios; assert.equal(q.abas.length, 15); assert.equal(q.padrao, 'opls');
+  q.abas.forEach(a => { const l = abaNoEndereco(montarEnderecoDaAba('relatorios', [a]), 'relatorios', 0); assert.equal(l.tipo === 'aba' ? (l.aba ?? q.padrao) : null, a); });
+});
+t('relatorios: o nome "recebenv" e o "centrocusto" (com junção) se leem de volta', () => { assert.equal(montarEnderecoDaAba('relatorios', ['recebenv']), '#/relatorios/recebenv'); assert.equal(abaNoEndereco('#/relatorios/centrocusto', 'relatorios', 0).aba, 'centrocusto'); });
+const FILHAS = { rh: ['ponto', 'hoje', ['hoje', 'tratar', 'mes', 'extras', 'horas', 'vinculos']], telecom: ['vendas', 'quadro', ['quadro', 'lista', 'perdas']], engenharia: ['horas', 'tarefas', ['tarefas', 'relatorio', 'extras', 'gerencial']] };
+for (const [tela, [pai, padrao, abas]] of Object.entries(FILHAS)) {
+  t(tela + '/' + pai + ': o quadro de dentro tem as visões e a padrão esperadas', () => { const q = ABAS_DAS_TELAS[tela].filhas[pai]; assert.deepEqual(q.abas, abas); assert.equal(q.padrao, padrao); });
+  t(tela + '/' + pai + ': ida e volta das visões de dentro (a padrão de dentro não leva nome; a aba de fora leva sempre)', () => abas.forEach(a => {
+    const h = montarEnderecoDaAba(tela, [pai, a]);
+    assert.equal(h, a === padrao ? '#/' + nomeNoEndereco(tela) + '/' + nomeDaAba(pai) : '#/' + nomeNoEndereco(tela) + '/' + nomeDaAba(pai) + '/' + nomeDaAba(a));
+    assert.equal(abaNoEndereco(h, tela, 0).aba, pai);
+    const d = abaNoEndereco(h, tela, 1, pai); assert.equal(d.tipo === 'aba' ? (d.aba ?? padrao) : null, a, h);
+  }));
+  t(tela + '/' + pai + ': montarEnderecoDaAbaDeFora NÃO apaga a visão de dentro quando o endereço já é dessa aba de fora', () => abas.filter(a => a !== padrao).forEach(a => {
+    const h = montarEnderecoDaAba(tela, [pai, a]);
+    assert.equal(montarEnderecoDaAbaDeFora(h, tela, pai), h);
+    assert.equal(montarEnderecoDaAbaDeFora(h.toUpperCase(), tela, pai), h);   // em maiúscula também (o endereço é reescrito no jeito certo)
+  }));
+  t(tela + '/' + pai + ': montarEnderecoDaAbaDeFora faz o de sempre quando o endereço NÃO é dessa aba de fora', () => {
+    const outra = ABAS_DAS_TELAS[tela].abas.find(a => a !== pai);
+    assert.equal(montarEnderecoDaAbaDeFora(montarEnderecoDaAba(tela, [outra]), tela, pai), montarEnderecoDaAba(tela, [pai]));
+    assert.equal(montarEnderecoDaAbaDeFora('#/' + nomeNoEndereco(tela), tela, pai), montarEnderecoDaAba(tela, [pai]));
+    assert.equal(montarEnderecoDaAbaDeFora('#/inicio', tela, pai), montarEnderecoDaAba(tela, [pai]));
+  });
+  t(tela + '/' + pai + ': visão de dentro inválida no endereço é descartada pela aba de fora (volta à padrão de dentro)', () => assert.equal(montarEnderecoDaAbaDeFora('#/' + nomeNoEndereco(tela) + '/' + nomeDaAba(pai) + '/zzz', tela, pai), montarEnderecoDaAba(tela, [pai])));
+}
+t('montarEnderecoDaAbaDeFora numa aba de fora SEM abas de dentro é o de sempre', () => { assert.equal(montarEnderecoDaAbaDeFora('#/compras/fornecedores', 'compras', 'fornecedores'), '#/compras/fornecedores'); assert.equal(montarEnderecoDaAbaDeFora('#/rh/colaboradores', 'rh', 'colaboradores'), '#/rh/colaboradores'); });
+t('montarEnderecoDaAbaDeFora numa tela que não está no quadro devolve o endereço da tela', () => assert.equal(montarEnderecoDaAbaDeFora('#/pcp', 'pcp', 'x'), '#/pcp'));
+t('os nomes das visões novas não colidem com palavra reservada nem com nome de registro (o quadro inteiro passa na conferência)', () => assert.deepEqual(conferirQuadroDeAbas(IDS), []));
+t('o endereço de uma visão é da própria tela (enderecoEhDaTela) e de nenhuma outra', () => ['viagens', 'ponto', 'relatorios', 'cotacoes'].forEach(tela => { const h = montarEnderecoDaAba(tela, [ABAS_DAS_TELAS[tela].abas[1]]); assert.equal(R.enderecoEhDaTela(h, tela), true, tela); IDS.filter(i => i !== tela).forEach(i => assert.equal(R.enderecoEhDaTela(h, i), false, tela + ' × ' + i)); }));
+t('ponto: "Meu ponto" tem endereço próprio (#/ponto/meu) e a equipe hoje é a padrão (#/ponto)', () => { assert.equal(montarEnderecoDaAba('ponto', ['meu']), '#/ponto/meu'); assert.equal(montarEnderecoDaAba('ponto', ['hoje']), '#/ponto'); assert.equal(abaNoEndereco('#/ponto/meu', 'ponto', 0).aba, 'meu'); });
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS' : ''}`);

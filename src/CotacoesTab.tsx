@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { anexarValoresAoItemEmbutido } from './CadastroItensValores';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -1363,7 +1364,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [carregando,  setCarregando]  = useState(true);
   const [busca,       setBusca]       = useState('');
   const [filtroStatus,setFiltroStatus]= useState('');
-  const [abaLista,    setAbaLista]    = useState('todas'); // 'todas' | 'avulsas'
+  const [abaLista,    setAbaLista]    = useAbaNoEndereco({ tela: 'cotacoes' }); // 'todas' | 'avulsas': #/cotacoes/avulsas
   const [modalDetalhe,setModalDetalhe]= useState(null);
   const [modalDesc,   setModalDesc]   = useState(null);
   const [modalAprovs, setModalAprovs] = useState(false);

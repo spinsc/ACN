@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { lerPaginado } from './LerPaginado';
 import { logChange } from './AuditSystem';
 import { mostrarAviso, confirmar } from './Feedback';
@@ -109,7 +110,7 @@ export default function VendasTelecomTab({ currentUser }) {
   const [cards, setCards] = useState<any[]>([]);
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
-  const [visao, setVisao] = useState('quadro');
+  const [visao, setVisao] = useAbaNoEndereco({ tela: 'telecom', nivel: 1, pai: 'vendas' });   // Quadro, Lista e Perdas: #/telecom/vendas/lista (este componente só existe com a aba Vendas aberta)
   const [busca, setBusca] = useState('');
   const [foco, setFoco] = useState('todos');          // Fatia 3: todos, retornos de hoje, contato atrasado ou parados
   const [periodoPerdas, setPeriodoPerdas] = useState('90');

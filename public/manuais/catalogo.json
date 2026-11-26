@@ -56,6 +56,10 @@
     "mudancas": [
       {
         "data": "2026-11-26",
+        "texto": "Endereço de cada forma de ver: Quadro, Lista, Agenda e Custos passaram a ter endereço na barra do navegador (#/viagens, #/viagens/lista, #/viagens/agenda e #/viagens/custos). O F5 volta para a forma de ver em que a pessoa estava (antes voltava ao Quadro), o Voltar e o Avançar do navegador passam de uma para outra, e dá para mandar o link de uma delas. Nada mudou nos botões nem nas fotos."
+      },
+      {
+        "data": "2026-11-26",
         "texto": "Link da viagem: cada viagem gravada tem um endereço próprio (#/viagem/...) e a janela ganhou o botão \"Copiar o link desta viagem\", ao lado do X; quem recebe o link abre a viagem por cima de qualquer tela, mesmo sem a aba Viagens (partes dos outros setores só para leitura); o F5 reabre a mesma viagem e o Voltar e o Avançar do navegador fecham e reabrem a janela"
       },
       {
