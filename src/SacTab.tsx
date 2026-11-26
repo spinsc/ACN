@@ -38,6 +38,8 @@ import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
 import { useAbaNoEndereco } from './AbaNoEndereco';
 import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): a OS aberta tem endereço próprio
+import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';   // 26/11/2026 (Fase 6): a ficha da Garantia tem endereço; a aba Garantia abre sozinha quando o endereço pede uma ficha
+import { montarEnderecoDoRegistroDaTela, registroDaTelaNoEndereco } from './Rotas';
 import { ModalComprasDaOS } from './ComprasLigadas';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OS (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
 const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
@@ -286,7 +288,8 @@ export default function SacTab({ currentUser }) {
 function SacTabCompleto({ currentUser }) {
   // 26/11/2026 (Fase 4 do plano de endereços): a aba da tela tem endereço (#/sac/garantia…); a aba das OS é a padrão e fica sem nome na barra. O link de um aviso da Garantia
   // (recado __acnDeepLink) só dá o valor de partida: se o endereço já traz uma aba, é ele que vale.
-  const [abaAtiva, setAbaAtiva]         = useAbaNoEndereco({ tela: 'sac', inicial: () => (window as any).__acnDeepLink?.contexto === 'garantia' ? 'garantia' : 'os' }) as [string, (v: any) => void];
+  // Fase 6 (26/11/2026): o endereço de uma ficha da Garantia (`#/sac/ficha/<código>`) também parte na aba Garantia, que é onde a janela da ficha mora.
+  const [abaAtiva, setAbaAtiva]         = useAbaNoEndereco({ tela: 'sac', inicial: () => (registroDaTelaNoEndereco(enderecoAtual(), 'sac')?.tipo === 'ficha' || (window as any).__acnDeepLink?.contexto === 'garantia') ? 'garantia' : 'os' }) as [string, (v: any) => void];
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
   const [loadNfc,      setLoadNfc]      = useState(false);
   const [nfcStatus,    setNfcStatus]    = useState('');
@@ -407,6 +410,14 @@ function SacTabCompleto({ currentUser }) {
   // Fichas da Garantia que já podem gerar OS (avaliação feita e, fora da garantia, alinhamento e autorização); lidas quando a Nova OS é de tipo Garantia sem ficha escolhida
   const [fichas, setFichas] = useState<{ lista: any[]; erro: string; carregando: boolean; lida: boolean }>({ lista: [], erro: '', carregando: false, lida: false });
   const [lotesAbertos, setLotesAbertos]     = useState<Set<string>>(new Set());
+
+  // Fase 6 (26/11/2026): a ficha da Garantia tem endereço (`#/sac/ficha/<código>`) e a janela dela mora na aba Garantia: com o SAC já aberto, um endereço de ficha (o Voltar, o Avançar, um link
+  // colado ou o clique no selo de uma OS) troca para essa aba, que lê o endereço e abre a ficha. A troca de aba não escreve por cima do endereço da ficha (`AbaNoEndereco.ts`).
+  useEffect(() => {
+    const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'sac')?.tipo === 'ficha') setAbaAtiva('garantia'); };
+    sincronizar();
+    return aoMudarEndereco(sincronizar, { internas: true });
+  }, []);
 
   // Link de um aviso de garantia (G5, 20/10/2026) com o SAC já aberto: troca para a aba Garantia, que abre a ficha. O evento traz o mesmo dado do global; não se limpa o global aqui
   // porque quem o consome é a própria aba Garantia.
@@ -543,11 +554,9 @@ function SacTabCompleto({ currentUser }) {
     })();
     return () => { vivo = false; };
   }, [ordens]);
-  // o clique no selo da ficha: abre a aba Garantia direto na ficha (o mesmo atalho dos avisos da caixa de Menções)
+  // o clique no selo da ficha: abre a ficha pelo endereço dela (`#/sac/ficha/<código>`, um passo no histórico: o Voltar volta à OS de antes). A aba Garantia abre sozinha pelo efeito acima.
   const abrirFichaDaOS = (os: any) => {
-    (window as any).__acnDeepLink = { contexto: 'garantia', contextoId: String(os.garantia_id) };
-    setAbaAtiva('garantia');
-    window.dispatchEvent(new CustomEvent('acn:abrir-registro'));
+    irParaEndereco(montarEnderecoDoRegistroDaTela('sac', 'ficha', String(os.garantia_id)));
   };
 
   // A7: `silencioso` = a leitura automática ou o botão Atualizar: não pisca "Carregando..." no quadro e, se a leitura falhar, a tela mantém a lista que já tinha (antes uma falha esvaziava a lista sem avisar)

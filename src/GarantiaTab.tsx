@@ -24,7 +24,8 @@ import {
   validarGarantia, cargaDaGarantia, aplicarEdicao, cancelarGarantia, reabrirGarantia, fraseDoEvento, etapaDaGarantia, ROTULOS_ETAPA_GARANTIA,
   podeConduzirGarantia, encerrarGarantia, bloqueiosParaEncerrar, estaParada, diasParada, ultimaMovimentacao, PRAZO_PARADO_DIAS, proximoPassoDaGarantia,
 } from './GarantiaModelo';
-import { mdiShieldCheckOutline, mdiPlus, mdiMagnify, mdiRefresh, mdiPencilOutline, mdiCancel, mdiBackupRestore, mdiClose, mdiLockCheckOutline, mdiFileChartOutline } from '@mdi/js';
+import { mdiShieldCheckOutline, mdiPlus, mdiMagnify, mdiRefresh, mdiPencilOutline, mdiCancel, mdiBackupRestore, mdiClose, mdiLockCheckOutline, mdiFileChartOutline, mdiLink } from '@mdi/js';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): a ficha aberta tem endereço próprio
 
 const TABELA = 'garantia_atendimentos';
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -250,6 +251,7 @@ function DetalheGarantia({ g, currentUser, onFechar, onMudou, onEditar, onGerarO
           <span className="acn-dev-selos">
             {g.situacao === 'aberto' && <Selo familia="neutro" ponto={false}>{ROTULOS_ETAPA_GARANTIA[etapaDaGarantia(g)]}</Selo>}
             <Selo familia={FAMILIA_SITUACAO[g.situacao]}>{SITUACOES_GARANTIA[g.situacao]}</Selo>
+            <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta ficha" title="Copiar o link desta ficha para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('sac', 'ficha', g.id, 'da ficha')} />
           </span>
         </div>
         <div className="acn-modal-corpo">
@@ -325,6 +327,7 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
   const [ordem, setOrdem] = useState('parados');
   const [janela, setJanela] = useState<null | { modo: string; g?: any }>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [fichaLida, setFichaLida] = useState<any | null>(null);
   const [relatorio, setRelatorio] = useState(false);
   const abre = podeAbrirGarantia(currentUser);
 
@@ -357,7 +360,21 @@ export default function GarantiaTab({ currentUser, onGerarOS }: any) {
     const pa = a.situacao === 'aberto' ? diasParada(a, hojeISO()) : -1, pb = b.situacao === 'aberto' ? diasParada(b, hojeISO()) : -1;
     return pb - pa;
   });
-  const detalhe = detalheId ? (lista || []).find(g => g.id === detalheId && podeVerGarantia(g, currentUser)) : null;   // o link de um aviso só abre o que a pessoa pode ver
+  // a ficha que o endereço pediu pode não estar na lista lida (ficha nova, ou a lista ainda carregando): fica guardada à parte para a janela abrir sem esperar nem mostrar uma lista de uma linha só
+  const detalhe = detalheId ? ((lista || []).find(g => g.id === detalheId && podeVerGarantia(g, currentUser)) || (fichaLida && fichaLida.id === detalheId && podeVerGarantia(fichaLida, currentUser) ? fichaLida : null)) : null;   // o link de um aviso só abre o que a pessoa pode ver
+
+  // 26/11/2026 (plano de endereços e rotas, Fase 6): a ficha aberta tem endereço próprio, `#/sac/ficha/<código>` (F5, Voltar, Avançar e link colado abrem a mesma ficha). A regra de quem pode ver
+  // a ficha vale na leitura: ficha de outra pessoa responde como se não existisse (uma só mensagem: "não a encontrei, ou você não tem acesso"). Com a janela de edição por cima, a ficha continua aberta.
+  useRegistroNoEndereco({
+    tela: 'sac', tipo: 'ficha', rotulo: 'a ficha de garantia',
+    aberto: detalhe ? String(detalhe.id) : null,
+    ler: async (chave) => {
+      const r = await lerPorCodigo(supabase.from(TABELA).select('*').eq('id', chave).maybeSingle());
+      return r.registro && !podeVerGarantia(r.registro, currentUser) ? { registro: null, erro: '' } : r;
+    },
+    mostrar: (g) => { setFichaLida(g); setDetalheId(String(g.id)); },
+    fechar: () => { setDetalheId(null); setJanela(j => (j && j.modo === 'editar' ? null : j)); },
+  });
 
   return (
     <div>

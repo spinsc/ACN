@@ -58,14 +58,14 @@ export type TipoDeRegistro = 'op' | 'viagem' | 'demanda';
 const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem', demanda: 'demanda' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
-export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico';   // `servico` = o serviço de terceiro (Fase 5, 26/11/2026)
+export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha';   // `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
 
 /** Quais registros cada tela conhece (id interno da tela → as palavras que valem depois do nome dela). Tela que não está aqui não tem endereço de registro. */
 export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistroDaTela[]>> = {
   licitacoes: ['licitacao'],
   crm: ['card'],
   compras: ['pedido'],
-  sac: ['os'],
+  sac: ['os', 'ficha'],   // a ficha da Garantia mora na aba Garantia do SAC (a palavra não pode ser `garantia`: é o nome da aba)
   terceiros: ['servico'],
 };
 
@@ -368,6 +368,8 @@ const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string; tipo: TipoDe
   sac_revisao_orcamento: { tela: 'sac', tipo: 'os', dica: 'acompanhamento' },
   // Fase 5 (26/11/2026): o aviso do Calendário e o "Abrir" do quadro de serviços ligados à OP e à OS trazem o código do serviço (o do primeiro da visita, quando há vários carros)
   terceiro_servico: { tela: 'terceiros', tipo: 'servico' },
+  // Fase 6 (26/11/2026): o aviso de uma ficha de garantia (caixa de Menções, 'Abrir o atendimento' do Desenvolvimento) traz o id da ficha
+  garantia: { tela: 'sac', tipo: 'ficha' },
 };
 
 /**
