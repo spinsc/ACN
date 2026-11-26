@@ -606,7 +606,10 @@ function FretesPanel({ currentUser }: any) {
       const { data: aprovadores } = await supabase.from('auth_usuarios')
         .select('id, nome, email').in('perfil', perfis).eq('ativo', true);
       if (!aprovadores || aprovadores.length === 0) return;
-      const valorFmt = fmtReal(frete.valor_frete);
+      // V4c (26/11/2026): quem aprova o nível anterior pode não ver valores e então o frete chega aqui sem o valor (nulo): o aviso diz que o valor está no frete
+      // em vez de mandar "—" ao próximo aprovador como se o frete fosse de graça.
+      const temValor = frete.valor_frete != null;
+      const valorFmt = temValor ? fmtReal(frete.valor_frete) : 'valor no frete (Logística › Fretes)';
       const texto = `Aprovação de frete necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): ${frete.descricao} — ${valorFmt}`;
       for (const ap of aprovadores) {
         await supabase.from('mencoes').insert({
@@ -833,9 +836,9 @@ function FretesPanel({ currentUser }: any) {
   // antes, quando o frete SAI (ver `liberarOpAoSairOFrete`); a entrega só alcança a OP que ainda esperava.
   const postarAndamentoVinculo = async (frete: any) => {
     if (!frete.vinculo_tipo || !frete.vinculo_id) return;
-    const valorFmt = frete.valor_frete
-      ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(frete.valor_frete) : '—';
-    const texto = `🚚 Frete entregue — ${frete.descricao}\nTransportadora: ${frete.transportadora || '—'} · Valor: ${valorFmt}\nEntregue em: ${new Date().toLocaleString('pt-BR')}`;
+    // V4c (26/11/2026): o valor do frete saiu do texto do andamento. O andamento da OP é lido por qualquer pessoa da OP, e o valor agora é dado
+    // protegido por "Ver valores" no banco; gravar o dinheiro aqui o devolveria, em texto solto, a quem não pode vê-lo. O andamento já gravado não foi mexido.
+    const texto = `🚚 Frete entregue — ${frete.descricao}\nTransportadora: ${frete.transportadora || '—'}\nEntregue em: ${new Date().toLocaleString('pt-BR')}`;
     try {
       // Achado em 30/09/2026 (Etapa 7.11): os 5 fretes que já estavam em cotação foram criados ANTES da Etapa 1, quando o
       // Almoxarifado gravava 'opl' em vez de 'op_os'. Sem aceitar o valor antigo, a entrega deles seguiria sem avisar a OP
