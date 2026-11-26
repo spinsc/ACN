@@ -68,21 +68,25 @@ const LOG = (...a) => console.log(new Date().toLocaleTimeString('pt-BR'), ...a);
     if (!extra.modal && !extra.incluirMenu) {
       try {
         const rolou = await page.evaluate(() => {
-          let melhor = null, m = 0;
+          // 26/11/2026: rola TODAS as caixas que rolam por dentro (e a página), não só a maior. No quadro do CRM cada coluna tem a sua rolagem: rolando só a maior, as outras ficavam no topo,
+          // com cartões embaixo do 📌 / 💬, e o fim da tela acusava cobertura que não existe quando se rola cada coluna.
+          const caixas = [];
           for (const e of document.querySelectorAll('main, main *, .acn-pagina, .acn-pagina *, #root > div, #root > div > div')) {
             const c = getComputedStyle(e);
-            if (/(auto|scroll)/.test(c.overflowY) && e.scrollHeight - e.clientHeight > m && e.clientHeight > 200) { m = e.scrollHeight - e.clientHeight; melhor = e; }
+            if (/(auto|scroll)/.test(c.overflowY) && e.scrollHeight - e.clientHeight > 40 && e.clientHeight > 200) caixas.push(e);
           }
+          const m = caixas.reduce((a, e) => Math.max(a, e.scrollHeight - e.clientHeight), 0);
           const dr = document.documentElement.scrollHeight - innerHeight;
-          if (dr > Math.max(m, 40)) { scrollTo(0, 1e7); return dr; }
-          if (melhor && m > 40) { melhor.scrollTop = melhor.scrollHeight; window.__rolado = melhor; return m; }
-          return 0;
+          if (dr > 40) scrollTo(0, 1e7);
+          caixas.forEach(e => { e.scrollTop = e.scrollHeight; });
+          window.__roladas = caixas;
+          return Math.max(dr, m);
         });
         if (rolou > 40) {
           await espera(350);
           const f = await page.evaluate((o) => window.__auditar(o), { toque: P.toque, soFlutuantes: true });
           f.issues.forEach(i => { i.desc = '[no fim da tela] ' + i.desc; r.issues.push(i); });
-          await page.evaluate(() => { scrollTo(0, 0); if (window.__rolado) window.__rolado.scrollTop = 0; });
+          await page.evaluate(() => { scrollTo(0, 0); (window.__roladas || []).forEach(e => { e.scrollTop = 0; }); window.__roladas = null; });
           // 18/11/2026 (L1 do plano de layout): o botão flutuante (📌 / 💬) SEMPRE cobre o que está embaixo dele na vista do topo; se a tela rola, a pessoa tira o conteúdo de baixo
           // dele rolando — isso não é defeito. O que importa é a vista do FIM da tela (acima), onde não há mais para onde rolar. Por isso, quando a tela rola, o que o flutuante cobre
           // no topo deixa de contar como achado (fica só o número em `flutuanteNoTopo`, para o relatório). Tela que NÃO rola mantém o achado.
