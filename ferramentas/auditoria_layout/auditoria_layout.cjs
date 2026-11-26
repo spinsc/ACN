@@ -86,7 +86,8 @@ const LOG = (...a) => console.log(new Date().toLocaleTimeString('pt-BR'), ...a);
           // 18/11/2026 (L1 do plano de layout): o botão flutuante (📌 / 💬) SEMPRE cobre o que está embaixo dele na vista do topo; se a tela rola, a pessoa tira o conteúdo de baixo
           // dele rolando — isso não é defeito. O que importa é a vista do FIM da tela (acima), onde não há mais para onde rolar. Por isso, quando a tela rola, o que o flutuante cobre
           // no topo deixa de contar como achado (fica só o número em `flutuanteNoTopo`, para o relatório). Tela que NÃO rola mantém o achado.
-          const doFlutuante = (i) => (i.t === 'controle-coberto' && /avs-pino|chat-fab|aviso-widget|chat-raiz/.test(i.desc)) || (i.t === 'flutuante-cobre-conteudo' && !/^\[no fim da tela\]/.test(i.desc));
+          // 26/11/2026: o nome do que cobre também vem em `cobertoPor` (o `desc` cita só o elemento de dentro, como o `span.acn-avs-n` do número do 📌, e escapava deste filtro: achado "alta" falso no CRM em tablet paisagem)
+          const doFlutuante = (i) => (i.t === 'controle-coberto' && /avs-pino|avs-n|chat-fab|aviso-widget|chat-raiz/.test(i.desc + ' ' + (i.cobertoPor || ''))) || (i.t === 'flutuante-cobre-conteudo' && !/^\[no fim da tela\]/.test(i.desc));
           const antes = r.issues.length;
           r.issues = r.issues.filter(i => !doFlutuante(i));
           r.flutuanteNoTopo = antes - r.issues.length;
