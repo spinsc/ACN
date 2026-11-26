@@ -328,6 +328,31 @@ const DEFEITOS = [
   { id: 'gg', nome: 'a ficha não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C83', trocas: [
     { arquivo: 'src/GarantiaTab.tsx', de: 'fechar: () => { setDetalheId(null);', para: 'fechar: () => {' },
   ] },
+  // ── Fase 6 (26/11/2026): a tarefa do Financeiro (`#/financeiro/tarefa/<código>`) ──
+  { id: 'ta', nome: 'a tarefa aberta por um clique deixa de escrever o endereço', cenarios: '^C88', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: 'aberto: modalTarefa?.id ? String(modalTarefa.id) : null,', para: 'aberto: null,' },
+  ] },
+  { id: 'tb', nome: 'a tarefa de outra pessoa passa a abrir pelo link (some a conferência de quem vê o quadro)', cenarios: '^C90b', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: "return p.veTudo || (r.registro.responsavel_nome && ehEu(currentUser, r.registro, 'responsavel_nome')) ? r : { registro: null, erro: '' };", para: 'return r;' },
+  ] },
+  { id: 'tc', nome: 'a permissão ilegível passa a valer como "não encontrei" (em vez de dizer que a leitura falhou)', cenarios: '^C90c', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: 'if (p.erro) return { registro: null, erro: p.erro };', para: "if (p.erro) return { registro: null, erro: '' };" },
+  ] },
+  { id: 'td', nome: 'a tela do Financeiro deixa de trocar para a aba Tarefas quando o endereço pede uma tarefa', cenarios: '^C91', trocas: [
+    { arquivo: 'src/FinanceiroTab.tsx', de: "const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa') setAbaFin('kanban'); };", para: 'const sincronizar = () => { };' },
+  ] },
+  { id: 'te', nome: 'o "Copiar link" da tarefa copia o título no lugar do código', cenarios: '^C91', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: "copiarLinkDoRegistroComAviso('financeiro', 'tarefa', tarefa.id, 'da tarefa')", para: "copiarLinkDoRegistroComAviso('financeiro', 'tarefa', tarefa.titulo, 'da tarefa')" },
+  ] },
+  { id: 'tf', nome: 'a Menção de tarefa do Financeiro deixa de abrir a tarefa pelo endereço (volta a só trocar de aba)', cenarios: '^C92', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  tarefa_financeiro: { tela: 'financeiro', tipo: 'tarefa' },", para: "  // tarefa_financeiro: { tela: 'financeiro', tipo: 'tarefa' }," },
+  ] },
+  { id: 'tg', nome: 'a data da tarefa do Financeiro deixa de ser fonte com registro no Calendário (o "Abrir" só troca de aba)', cenarios: '^C92', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "  tarefa_financeiro: 'tarefa_financeiro',", para: "  // tarefa_financeiro: 'tarefa_financeiro'," },
+  ] },
+  { id: 'th', nome: 'a tarefa não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C88', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: 'fechar: () => setModalTarefa(null),', para: 'fechar: () => {},' },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

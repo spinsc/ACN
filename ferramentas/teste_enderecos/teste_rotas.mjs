@@ -132,8 +132,8 @@ const U1 = '0b9f0c3e-2d4a-4a57-9f3e-3a6c6f5a1b11';
 const U2 = 'A1B2C3D4-0000-4000-8000-00000000AAAA';
 const comRegistro = (hash, tela, tipo, chave) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'tela', tela, resto: [tipo, chave], registro: { tipo, chave } });
 const semRegistro = (hash, tela, resto) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'tela', tela, resto });
-const REGISTROS_DE_TELA = [['licitacoes', 'licitacao'], ['crm', 'card'], ['compras', 'pedido'], ['sac', 'os'], ['sac', 'ficha'], ['terceiros', 'servico']];   // o serviço de terceiro entrou na Fase 5; a ficha da Garantia (aba do SAC) na Fase 6
-t('a tabela dos registros conhece exatamente as cinco telas, cada uma com a sua palavra', () => assert.deepEqual(REGISTROS_DAS_TELAS, { licitacoes: ['licitacao'], crm: ['card'], compras: ['pedido'], sac: ['os', 'ficha'], terceiros: ['servico'] }));
+const REGISTROS_DE_TELA = [['licitacoes', 'licitacao'], ['crm', 'card'], ['compras', 'pedido'], ['sac', 'os'], ['sac', 'ficha'], ['terceiros', 'servico'], ['financeiro', 'tarefa']];   // o serviço de terceiro entrou na Fase 5; a ficha da Garantia (aba do SAC) na Fase 6
+t('a tabela dos registros conhece exatamente as cinco telas, cada uma com a sua palavra', () => assert.deepEqual(REGISTROS_DAS_TELAS, { licitacoes: ['licitacao'], crm: ['card'], compras: ['pedido'], sac: ['os', 'ficha'], terceiros: ['servico'], financeiro: ['tarefa'] }));
 t('toda tela da tabela dos registros existe no menu', () => Object.keys(REGISTROS_DAS_TELAS).forEach(id => assert.ok(IDS.includes(id), id)));
 t('as palavras dos registros não são palavras reservadas nem nomes de tela', () => Object.values(REGISTROS_DAS_TELAS).flat().forEach(p => { assert.ok(!PALAVRAS_RESERVADAS.includes(p), p); assert.equal(idDaTela(p, IDS), null, p); }));
 REGISTROS_DE_TELA.forEach(([tela, tipo]) => {
@@ -169,7 +169,7 @@ t('uma tela sem registro no endereço continua com `resto` vazio e sem a chave `
 
 // o recado interno ("abra este registro") que as Menções, o chat, os avisos e os vínculos gravam
 const recado = (contexto, contextoId) => ({ contexto, contextoId });
-const ALVOS = [['crm', 'crm', 'card'], ['licitacao', 'licitacoes', 'licitacao'], ['compra', 'compras', 'pedido'], ['compra_aprovacao', 'compras', 'pedido'], ['sac', 'sac', 'os'], ['garantia', 'sac', 'ficha'], ['sac_revisao_orcamento', 'sac', 'os'], ['terceiro_servico', 'terceiros', 'servico']];
+const ALVOS = [['crm', 'crm', 'card'], ['licitacao', 'licitacoes', 'licitacao'], ['compra', 'compras', 'pedido'], ['compra_aprovacao', 'compras', 'pedido'], ['sac', 'sac', 'os'], ['garantia', 'sac', 'ficha'], ['sac_revisao_orcamento', 'sac', 'os'], ['terceiro_servico', 'terceiros', 'servico'], ['tarefa_financeiro', 'financeiro', 'tarefa']];
 ALVOS.forEach(([contexto, tela, tipo]) => {
   t(`recado "${contexto}" para a tela ${tela}: vira o registro ${tipo}`, () => {
     const r = registroDoRecado(recado(contexto, U1), tela);
@@ -349,6 +349,10 @@ t('a ficha da Garantia: #/sac/ficha/<código> é o registro da tela sac (não a 
 t('a ficha da Garantia: nenhuma aba do SAC se chama "ficha" e a aba "garantia" segue sendo aba (o endereço ficaria ambíguo)', () => { assert.ok(!R.ABAS_DAS_TELAS.sac.abas.some(a => R.nomeDaAba(a) === 'ficha')); assert.equal(R.abaNoEndereco('#/sac/garantia', 'sac').aba, 'garantia'); });
 t('a ficha da Garantia aberta por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/sac/ficha/' + U1, 'sac').tipo, 'fora'));
 t('a ficha da Garantia e a OS dividem a tela do SAC sem se confundir', () => { assert.equal(registroDaTelaNoEndereco('#/sac/ficha/' + U1, 'sac').tipo, 'ficha'); assert.equal(registroDaTelaNoEndereco('#/sac/os/' + U1, 'sac').tipo, 'os'); });
+t('a tarefa do Financeiro: #/financeiro/tarefa/<código> é o registro da tela financeiro (não uma aba)', () => comRegistro('#/financeiro/tarefa/' + U1, 'financeiro', 'tarefa', U1));
+t('a tarefa do Financeiro: nenhuma aba do Financeiro se chama "tarefa" (a aba das tarefas é `kanban`) e o endereço da aba segue valendo', () => { assert.ok(!R.ABAS_DAS_TELAS.financeiro.abas.some(a => R.nomeDaAba(a) === 'tarefa')); assert.equal(R.abaNoEndereco('#/financeiro/kanban', 'financeiro').aba, 'kanban'); });
+t('a tarefa do Financeiro aberta por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/financeiro/tarefa/' + U1, 'financeiro').tipo, 'fora'));
+t('o recado de tarefa do Financeiro só vira endereço indo para o Financeiro, e sem dica', () => { assert.equal(registroDoRecado(recado('tarefa_financeiro', U1), 'calendario'), null); assert.equal('dica' in registroDoRecado(recado('tarefa_financeiro', U1), 'financeiro'), false); });
 t('o recado de garantia não carrega dica (a ficha só tem uma janela)', () => assert.equal('dica' in registroDoRecado(recado('garantia', U1), 'sac'), false));
 t('o serviço de terceiro aberto por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/terceiros/servico/' + U1, 'terceiros').tipo, 'fora'));
 

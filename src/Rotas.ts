@@ -58,7 +58,7 @@ export type TipoDeRegistro = 'op' | 'viagem' | 'demanda';
 const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem', demanda: 'demanda' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
-export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha';   // `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
+export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa';   // `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
 
 /** Quais registros cada tela conhece (id interno da tela → as palavras que valem depois do nome dela). Tela que não está aqui não tem endereço de registro. */
 export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistroDaTela[]>> = {
@@ -67,6 +67,7 @@ export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistr
   compras: ['pedido'],
   sac: ['os', 'ficha'],   // a ficha da Garantia mora na aba Garantia do SAC (a palavra não pode ser `garantia`: é o nome da aba)
   terceiros: ['servico'],
+  financeiro: ['tarefa'],   // a tarefa mora na aba Tarefas (`kanban`) do Financeiro; a palavra não colide com nenhuma aba da tela
 };
 
 /**
@@ -372,6 +373,8 @@ const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string; tipo: TipoDe
   terceiro_servico: { tela: 'terceiros', tipo: 'servico' },
   // Fase 6 (26/11/2026): o aviso de uma ficha de garantia (caixa de Menções, 'Abrir o atendimento' do Desenvolvimento) traz o id da ficha
   garantia: { tela: 'sac', tipo: 'ficha' },
+  // Fase 6 (26/11/2026): a Menção e o aviso do Calendário de uma tarefa do Financeiro trazem o id da tarefa
+  tarefa_financeiro: { tela: 'financeiro', tipo: 'tarefa' },
 };
 
 /**

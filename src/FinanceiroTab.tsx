@@ -28,6 +28,8 @@ import { mdiFileExcelOutline, mdiLockOutline, mdiTagOutline, mdiBankOutline, mdi
   mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline, mdiClipboardCheckOutline, mdiClipboardTextOutline } from '@mdi/js';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { aoMudarEndereco, enderecoAtual } from './EnderecoDoNavegador';
+import { registroDaTelaNoEndereco } from './Rotas';
 import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP.
@@ -413,7 +415,13 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [modalCentros, setModalCentros] = useState(false);
   const [modalCompras, setModalCompras] = useState<any>(null);
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/financeiro/pendencias…); Centros de custo é a padrão e fica sem nome na barra
-  const [abaFin, setAbaFin] = useAbaNoEndereco({ tela: 'financeiro' }) as [string, (v: any) => void];
+  const [abaFin, setAbaFin] = useAbaNoEndereco({ tela: 'financeiro', inicial: () => registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa' ? 'kanban' : null }) as [string, (v: any) => void];
+  // Fase 6 (26/11/2026): a tarefa do Financeiro (`#/financeiro/tarefa/<código>`) mora na aba Tarefas: com a tela já aberta, um endereço de tarefa (Voltar, Avançar, link ou aviso) troca para essa aba, que lê o endereço e abre a tarefa.
+  useEffect(() => {
+    const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa') setAbaFin('kanban'); };
+    sincronizar();
+    return aoMudarEndereco(sincronizar, { internas: true });
+  }, []);
   const [painelCentro, setPainelCentro] = useState<string | null>(null); // Etapa 15b: id do centro com o painel aberto
   const [semCentroAberto, setSemCentroAberto] = useState(false);            // Etapa 15c: tela "Compras sem centro"
   const [modalFechamento, setModalFechamento] = useState(false);            // Etapa 15e-2: janela "Fechamento do mês"
