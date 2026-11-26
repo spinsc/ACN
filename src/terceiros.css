@@ -55,6 +55,14 @@ html body .modal-box.acn-modal-cadastro.acn-terc-box-p { width: min(520px, 95vw)
 .acn-terc-card-id strong { font-size: 13px; overflow-wrap: anywhere; color: var(--acn-ink); }
 .acn-terc-card-desc { margin: 0; color: var(--acn-text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .acn-terc-card-lig { display: flex; align-items: center; gap: 4px; color: var(--acn-muted); overflow-wrap: anywhere; }
+/* 26/11/2026: o veículo e o que será feito nele (peças) aparecem no cartão; veículo que não foi lido é vermelho (alerta), nunca "sem veículo" */
+.acn-terc-card-veic { display: flex; align-items: center; gap: 4px; color: var(--acn-text); font-weight: 600; overflow-wrap: anywhere; }
+.acn-terc-card-veic.nao-lido, .acn-terc-celula-veic.nao-lido, .acn-terc-veic-nao-lido { color: var(--acn-bad); font-weight: 600; }
+.acn-terc-card-veic.sem-dado, .acn-terc-celula-veic.sem-dado { color: var(--acn-muted); font-weight: 400; }
+.acn-terc-card-pecas { color: var(--acn-text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.acn-terc-celula-veic { max-width: 220px; overflow-wrap: anywhere; }
+.acn-terc-celula-pecas { overflow: hidden; text-overflow: ellipsis; }
+.acn-terc-visita-veic { color: var(--acn-text); font-weight: 600; }
 .acn-terc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--acn-text); }
 .acn-terc-card-meta > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .acn-terc-card-selos { display: flex; flex-wrap: wrap; gap: 4px; }

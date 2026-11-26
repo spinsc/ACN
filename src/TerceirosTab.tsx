@@ -18,7 +18,7 @@ import { podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros, podeEditar
 import { PrestadoresDeTerceiros } from './TerceirosPrestadores';
 import { TiposDeTerceiros } from './TerceirosTipos';
 import { FILTROS_VAZIOS, cartoesDaColuna, choquesDeData, contarPendencias, passaNosFiltros, veValores, rotuloDoPeriodo, estaEmOrdemAtiva } from './TerceirosFluxo';
-import { lerServicos, auditarServicos, cancelarServicos, voltarServicos, descreverNumeros, DIAS_DA_JANELA_DE_LEITURA } from './TerceirosServicos';
+import { lerServicos, auditarServicos, cancelarServicos, voltarServicos, descreverNumeros, DIAS_DA_JANELA_DE_LEITURA, lerVeiculosDasLigacoes, anexarVeiculos } from './TerceirosServicos';
 import { BarraDeFiltros } from './TerceirosFiltros';
 import { QuadroDeTerceiros } from './TerceirosQuadro';
 import { ListaDeTerceiros } from './TerceirosLista';
@@ -110,6 +110,8 @@ export default function TerceirosTab({ currentUser }) {
   const [saidas, setSaidas] = useState<any>(LEITURA_VAZIA);   // T5: id da saída da vistoria → a saída (lida da Vistoria; o serviço só guarda o id)
   const [pagando, setPagando] = useState<any>(null);   // T5: os serviços do pedido de pagamento que a janela está montando
   const [ligandoSaida, setLigandoSaida] = useState<any>(null);   // T5: os serviços que a janela "Ligar a uma saída" está ligando
+  const [veiculos, setVeiculos] = useState<any>({ mapa: {}, erro: null, lido: false });   // id da OP ou da OS → { modelo, placa, chassi } (26/11/2026); lido da OP/OS, o serviço só guarda o número
+  const veiculosRef = useRef<any>({ mapa: {}, erro: null, lido: false });
   const todosRef = useRef(false);
   const ordensRef = useRef<any>(VAZIO);
   const demandasRef = useRef<any>(LEITURA_VAZIA);
@@ -120,6 +122,7 @@ export default function TerceirosTab({ currentUser }) {
   ordensRef.current = ordens;
   demandasRef.current = demandas;
   saidasRef.current = saidas;
+  veiculosRef.current = veiculos;
 
   // Releitura que falha NÃO esvazia a lista que já está na tela: mantém a de antes e mostra o aviso (a leitura recusada nunca vale como "não há nada").
   const carregarCadastros = useCallback(async () => {
@@ -164,6 +167,18 @@ export default function TerceirosTab({ currentUser }) {
         if (tentativas > 0) return carregarServicos(todosOsDias, contar, tentativas - 1);
         return;
       }
+      // O veículo de cada serviço (26/11/2026) vem da OP ou da OS: o carro quase não muda, então na atualização de minuto em minuto só se lê o que ainda não se sabe
+      // (a leitura completa fica para a abertura da tela e o botão Atualizar). Leitura que falha NÃO apaga o que já se sabia: avisa e o serviço sem dado fica "veículo não lido".
+      const faltam = r.lista.filter((s: any) => (s.ligacao_tipo === 'op' || s.ligacao_tipo === 'os') && s.ligacao_id && (contar || !veiculosRef.current.mapa[s.ligacao_id]))
+        .map((s: any) => ({ tipo: s.ligacao_tipo, id: s.ligacao_id }));
+      if (faltam.length) {
+        const ve = await lerVeiculosDasLigacoes(faltam);
+        if (!montada.current) return;
+        setVeiculos((antes: any) => ({ mapa: { ...antes.mapa, ...ve.mapa }, erro: ve.erro, lido: true }));
+      } else if (!veiculosRef.current.lido || veiculosRef.current.erro) {
+        // nada a ler (nenhum serviço de OP ou OS, ou já se sabe tudo): a leitura anterior que falhou deixou de valer
+        setVeiculos((antes: any) => ({ ...antes, lido: true, erro: null }));
+      }
     }
     setServicos((antes: any) => (r.erro
       ? { ...antes, erro: r.erro, lido: true }
@@ -195,8 +210,8 @@ export default function TerceirosTab({ currentUser }) {
   // os serviços que a tela mostra: os lidos, já com o número e a situação da ordem em que cada um está, a situação do pagamento pedido e a da saída da vistoria ligada (campos derivados, T4 e T5).
   // Enquanto uma das leituras não aconteceu (`lido` falso) vale `null`: o serviço com pedido ou saída ligados mostra "situação não lida", nunca um palpite.
   const lista = useMemo(
-    () => anexarVistorias(anexarPagamentos(anexarOrdens(servicos.lista, ordens.lista), demandas.lido ? demandas : null), saidas.lido ? saidas : null),
-    [servicos.lista, ordens.lista, demandas, saidas],
+    () => anexarVeiculos(anexarVistorias(anexarPagamentos(anexarOrdens(servicos.lista, ordens.lista), demandas.lido ? demandas : null), saidas.lido ? saidas : null), veiculos.lido ? veiculos : null),
+    [servicos.lista, ordens.lista, demandas, saidas, veiculos],
   );
 
   const mapaTipos = useMemo(() => new Map(tipos.lista.map((t: any) => [t.id, t])), [tipos.lista]);
@@ -397,6 +412,11 @@ export default function TerceirosTab({ currentUser }) {
       {erroDaLeituraAuxiliar && mostraServicos && (
         <Faixa tom="erro" acao={<Botao pequeno variante="secundario" onClick={reler}>Tentar de novo</Botao>}>
           Não foi possível conferir {erroDaLeituraAuxiliar}. Os serviços ligados a elas mostram "situação não lida" até a próxima leitura que der certo.
+        </Faixa>
+      )}
+      {veiculos.erro && mostraServicos && (
+        <Faixa tom="erro" acao={<Botao pequeno variante="secundario" onClick={reler}>Tentar de novo</Botao>}>
+          Não foi possível ler os veículos das OPs e OS ({veiculos.erro}). Os serviços sem o dado mostram "Veículo não lido" até a próxima leitura que der certo.
         </Faixa>
       )}
       {semTipos && mostraServicos && !tipos.erro && (

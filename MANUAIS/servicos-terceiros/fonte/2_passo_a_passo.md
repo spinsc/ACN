@@ -28,7 +28,7 @@
 5. Se a OP é de uma venda com vários carros, a janela mostra **Carros que levam o serviço**, com **Marcar todos** e **Desmarcar todos**: marque quais recebem o serviço (**até 100 de uma vez**).
 6. Escreva o **dia**. Em **película, plotagem e pintura** o campo se chama **Para quando você precisa**: é só um **pedido** de data, que a Adaptação lê e usa para marcar o dia de verdade. Nos outros tipos o campo é **Dia desejado**.
 7. Se já souber, escolha o **Prestador (opcional)** (a lista traz só quem faz aquele tipo; quem pode cadastrar vê o atalho **Cadastrar prestador**) e o **Valor combinado (R$)** (o campo do valor só aparece para quem vê valores; com vários carros, o valor vale para cada um).
-8. Em **Peças que vão ao prestador**, escreva cada uma (**Peça** e **Qtd**) e use **Adicionar peça**. É esta lista que sai impressa na ordem de serviço.
+8. Em **Peças** (nos serviços de pintura o campo se chama **O que será pintado**), escreva cada uma (**Peça** e **Qtd**) e use **Adicionar peça**. É esta lista que aparece no cartão do serviço e sai impressa na ordem de serviço.
 9. Se precisar, escreva uma **Observação** e use **Anexar arquivos** (desenho de corte e dobra, foto, orçamento): até **10 arquivos de 20 MB por pedido** e 30 por serviço.
 10. Clique em **Pedir serviço** (ou **Pedir N serviços**, quando há vários carros).
 

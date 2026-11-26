@@ -41,7 +41,43 @@ export type ServicoDeTerceiro = {
   pagamento_situacao?: SituacaoDoPagamento;
   vistoria_status?: 'Saiu' | 'Retornou' | 'desconhecida' | null;
   vistoria_saida?: string | null; vistoria_retorno?: string | null; vistoria_previsao?: string | null; vistoria_destino?: string | null;
+  /** O veículo (pedido do usuário em 26/11/2026): NÃO vem do serviço, que só guarda o número da OP ou da OS; `anexarVeiculos` (TerceirosServicos.ts) o põe a partir da OP/OS lida.
+   *  `veiculo_nao_lido` = a leitura falhou: a tela diz "veículo não lido" e nunca "sem veículo". Serviço sem OP nem OS (avulso, de demanda ou projeto) não tem veículo a mostrar. */
+  veiculo_modelo?: string | null; veiculo_placa?: string | null; veiculo_chassi?: string | null; veiculo_nao_lido?: boolean; veiculo_lido?: boolean;
 };
+
+// ── o veículo e o que será feito nele (pedido do usuário em 26/11/2026: "mostrar o veículo e o que será pintado") ─────────────────────────────────────
+/** "Ranger XLS CD · RYJ3J41": o modelo e a placa (ou o chassi, se não há placa). Vazio quando o serviço não tem veículo a mostrar. */
+export function textoDoVeiculo(s: Pick<ServicoDeTerceiro, 'veiculo_modelo' | 'veiculo_placa' | 'veiculo_chassi'>): string {
+  const t = (v: unknown) => String(v ?? '').trim();
+  return [t(s.veiculo_modelo), t(s.veiculo_placa) || t(s.veiculo_chassi)].filter(Boolean).join(' · ');
+}
+/** O veículo já com o aviso de leitura que falhou: é o que o cartão, a lista e a janela escrevem. Vazio = não há o que mostrar. */
+export const veiculoParaMostrar = (s: ServicoDeTerceiro): string =>
+  (s.veiculo_nao_lido ? 'Veículo não lido' : textoDoVeiculo(s) || (s.veiculo_lido ? 'Sem veículo informado na OP' : ''));
+/** A OP/OS foi lida e não tem modelo, placa nem chassi (49 dos 232 serviços de OP em 26/11/2026, quase todos do lote 1583.2608): a tela diz isso em cinza, não em vermelho. */
+export const veiculoSemDado = (s: ServicoDeTerceiro): boolean => !s.veiculo_nao_lido && !textoDoVeiculo(s) && !!s.veiculo_lido;
+/** Para a busca: modelo, placa e chassi (a busca acha o serviço pela placa ou pelo chassi). */
+export const textoDeBuscaDoVeiculo = (s: Pick<ServicoDeTerceiro, 'veiculo_modelo' | 'veiculo_placa' | 'veiculo_chassi'>): string =>
+  [s.veiculo_modelo, s.veiculo_placa, s.veiculo_chassi].filter(Boolean).join(' ');
+
+/** Os carros de um grupo em poucas palavras: "2 Ranger · 1 Hilux SW4". Carro cuja leitura falhou entra como "veículo não lido". Vazio quando nenhum carro tem veículo a mostrar. */
+export function resumoDosVeiculos(servicos: ServicoDeTerceiro[]): string {
+  const por = new Map<string, number>();
+  for (const s of servicos) {
+    const modelo = s.veiculo_nao_lido ? 'veículo não lido' : String(s.veiculo_modelo || '').trim() || (textoDoVeiculo(s) ? 'sem modelo' : (s.veiculo_lido ? 'sem veículo informado' : ''));
+    if (modelo) por.set(modelo, (por.get(modelo) || 0) + 1);
+  }
+  return [...por.entries()].map(([m, n]) => `${n} ${m}`).join(' · ');
+}
+
+/** "2× Grade · Para-choque": as peças que vão ao prestador, em uma linha. Vazio quando nenhuma peça foi informada. */
+export function textoDasPecas(s: Pick<ServicoDeTerceiro, 'pecas'>): string {
+  return (s.pecas || []).filter(p => p && String(p.descricao || '').trim())
+    .map(p => `${p.quantidade != null && Number(p.quantidade) > 1 ? `${p.quantidade}× ` : ''}${String(p.descricao).trim()}`).join(' · ');
+}
+/** O nome da lista de peças: nos serviços de pintura é "O que será pintado"; nos outros, "Peças". */
+export const rotuloDasPecas = (tipo?: { nome?: string | null } | null): string => (/pint/i.test(String(tipo?.nome || '')) ? 'O que será pintado' : 'Peças');
 
 /** `nenhum` = o pagamento não foi pedido (ou o pedido foi cancelado ou apagado no Financeiro: pode pedir de novo); `pedido` = a demanda está aberta no Financeiro; `pago` = o Financeiro a concluiu. */
 export type SituacaoDoPagamento = 'nenhum' | 'pedido' | 'pago' | 'desconhecido';
@@ -487,7 +523,7 @@ export function passaNoContador(s: ServicoDeTerceiro, contador: ContadorDeTercei
 /** O que a busca enxerga num serviço (valores ficam de fora: quem não vê valores não os acha pela busca). */
 export function textoDeBuscaDoServico(s: ServicoDeTerceiro, tipo: TipoDeServico | undefined, prestador: PrestadorDeTerceiros | undefined): string {
   return [s.numero, s.descricao, tipo?.nome, prestador?.nome, prestador?.razao_social, s.ligacao_rotulo, s.venda_base, s.ordem_numero, s.solicitante_nome, s.solicitante_perfil, s.observacao,
-    ...(s.pecas || []).map(p => p.descricao), rotuloDaSituacao(s.status), s.status === 'cancelado' ? s.cancelado_motivo : ''].filter(Boolean).join(' ');
+    ...(s.pecas || []).map(p => p.descricao), textoDeBuscaDoVeiculo(s), rotuloDaSituacao(s.status), s.status === 'cancelado' ? s.cancelado_motivo : ''].filter(Boolean).join(' ');
 }
 
 export type ContextoDosFiltros = {

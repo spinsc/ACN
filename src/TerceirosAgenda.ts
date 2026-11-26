@@ -2,7 +2,7 @@
 // Tudo aqui é conta pura, sem tela e sem banco. A Agenda mostra VISITAS, e não carros: o serviço de cada carro continua sendo um registro, mas a mesma venda, tipo, situação, prestador e dia
 // (e período, no agendado) é uma visita só, a mesma regra do cartão de grupo do Quadro e a do Calendário integrado no banco (`calendario_eventos_terceiros`), para a tela e o aviso não discordarem.
 // Datas só de DIA (AAAA-MM-DD) saem de texto, nunca de `new Date(texto)` (a meia-noite de Londres é o dia anterior no Brasil).
-import { cartoesDaColuna, dataDeReferencia, somarDiasISO, rotuloDoPeriodo } from './TerceirosFluxo';
+import { cartoesDaColuna, dataDeReferencia, somarDiasISO, rotuloDoPeriodo, resumoDosVeiculos, veiculoParaMostrar, textoDasPecas } from './TerceirosFluxo';
 import type { ServicoDeTerceiro } from './TerceirosFluxo';
 
 export type PeriodoDaAgenda = 'semana' | 'mes';
@@ -106,6 +106,13 @@ export function detalheDaVisita(v: VisitaDaAgenda): string {
   const ordem = `ordem ${v.base.ordem_numero || 'de serviço'}`;
   if (v.carros > 1) return `${v.carros} carros${daOrdem ? ` · ${ordem}` : v.base.venda_base ? ` · venda ${v.base.venda_base}` : ''}`;
   return `${v.base.numero}${v.base.ligacao_rotulo ? ` · ${v.base.ligacao_rotulo}` : ''}${daOrdem ? ` · ${ordem}` : ''}`;
+}
+
+/** O que vai na dica (ao parar o mouse) da visita: o veículo de um carro só, ou os modelos do grupo, e as peças. Vazio quando não há nada a dizer (26/11/2026). */
+export function veiculoEPecasDaVisita(v: VisitaDaAgenda): string {
+  const carros = v.carros > 1 ? resumoDosVeiculos(v.servicos) : veiculoParaMostrar(v.servicos[0] || v.base);
+  const pecas = textoDasPecas(v.base);
+  return [carros, pecas ? `peças: ${pecas}` : ''].filter(Boolean).join(' · ');
 }
 
 /** A ordem dentro do dia: o que é compromisso antes do que é só desejo ou já foi feito; dentro disso manhã, dia todo, tarde; por fim pelo nome, para a tela não pular de lugar. */

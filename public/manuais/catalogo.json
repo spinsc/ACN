@@ -91,7 +91,7 @@
     "titulo": "Manual dos Serviços de terceiros",
     "descricao": "Passo a passo completo dos Serviços de terceiros (película, plotagem, pintura, lavagem, funilaria, mecânica, corte e dobra e pintura eletrostática), com fotos: pedir o serviço de qualquer tela, o Quadro, a Agenda e a Lista, agendar, dar como realizado, o pedido de pagamento ao Financeiro, a saída da Vistoria de pátio, a ordem de serviço em lote da pintura eletrostática, o contrato impresso, o relatório do mês por prestador (com planilha e folha para imprimir), os cadastros de prestadores e tipos, quem recebe cada aviso, quem pode o quê e as dúvidas comuns.",
     "ordem": 3,
-    "atualizadoEm": "2026-11-25",
+    "atualizadoEm": "2026-11-26",
     "mudancas": [
       {
         "data": "2026-11-23",
@@ -104,6 +104,10 @@
       {
         "data": "2026-11-25",
         "texto": "OP só de serviço de terceiro: novo fluxo de entrega para a venda que é só plotagem, película, pintura e afins. A OP não passa pelo PCP, pelo Almoxarifado nem pela Adaptação: nasce em Aguardando serviço de terceiro, com um serviço aberto por tipo e por unidade, e, quando todos os serviços estão realizados, o sistema a leva sozinho à Liberação Comercial (ou ao Fiscal, no faturamento antecipado), sem Controle de Qualidade. Nova seção no passo a passo e uma dúvida comum; sem fotos novas por enquanto. As 22 OPs das vendas A1760.2611, A1797.2611 e A1806.2611 já foram passadas para esse fluxo, com 24 serviços em A definir (TS-00204 a TS-00227). A venda A1799.2611 (2 OPs, pintura total e plotagem) também foi passada, usando os serviços que ela já tinha (TS-00197 a TS-00200)."
+      },
+      {
+        "data": "2026-11-26",
+        "texto": "O veículo e o que será pintado agora aparecem no serviço: no cartão do Quadro, na Lista (coluna Veículo), na janela do serviço e do grupo, na Agenda e na busca (placa, chassi e modelo). A lista de peças passa a se chamar O que será pintado nos serviços de pintura. OP sem modelo cadastrado mostra, em cinza, Sem veículo informado na OP; leitura que falha mostra, em vermelho, Veículo não lido. Texto atualizado; as fotos do Quadro, da Lista e da Agenda ainda são as antigas."
       }
     ],
     "caminho": "manuais/servicos-terceiros/index.html"

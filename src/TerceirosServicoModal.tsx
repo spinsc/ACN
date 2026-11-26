@@ -13,7 +13,7 @@ import { confirmar, mostrarAviso } from './Feedback';
 import { abrirVinculo } from './VinculoPicker';
 import { lerValorDigitado } from './LerValor';
 import {
-  colunaDoServico, rotuloDaSituacao, rotuloDoPeriodo, rotuloDaLigacao, selosDoServico, movimentosDoServico, podeMexerNoServico, explicacaoDeQuemMarcaOData, erroDoPedido, pecasParaGravar,
+  colunaDoServico, rotuloDaSituacao, rotuloDoPeriodo, rotuloDaLigacao, selosDoServico, movimentosDoServico, podeMexerNoServico, explicacaoDeQuemMarcaOData, erroDoPedido, pecasParaGravar, veiculoParaMostrar, rotuloDasPecas, resumoDosVeiculos, textoDasPecas,
   valorDigitadoOuNulo, reaisDoServico, diferencaDeValor, textoDaDiferenca, estaEmOrdemAtiva,
 } from './TerceirosFluxo';
 import { rotuloDaOrdem, podeMexerNaOrdem } from './TerceirosOrdens';
@@ -238,6 +238,12 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
                     )
                     : <span className="acn-fraco">Serviço avulso, sem ligação</span>}
                 </Item>
+                {veiculoParaMostrar(s) && (
+                  <Item rotulo="Veículo">
+                    <span className={s.veiculo_nao_lido ? 'acn-terc-veic-nao-lido' : ''}>{veiculoParaMostrar(s)}</span>
+                    {!s.veiculo_nao_lido && s.veiculo_placa && s.veiculo_chassi && <div className="acn-fraco">Chassi {s.veiculo_chassi}</div>}
+                  </Item>
+                )}
                 {s.ordem_id && !emOrdem && (
                   <Item rotulo="Ordem de serviço">
                     <span className="acn-terc-lig-texto"><Icone path={mdiClipboardTextOutline} size={14} />{s.ordem_numero || 'Ordem'} · {textoDaOrdem}</span>
@@ -268,7 +274,7 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
               {s.observacao && <Item rotulo="Observação" largo><span className="acn-terc-det-texto">{s.observacao}</span></Item>}
 
               {(s.pecas || []).length > 0 && (
-                <Item rotulo="Peças que vão ao prestador" largo>
+                <Item rotulo={rotuloDasPecas(tipo)} largo>
                   <ul className="acn-terc-det-lista">
                     {s.pecas.map((p: any, i: number) => <li key={i}>{p.descricao}{p.quantidade != null && <strong> × {p.quantidade}</strong>}</li>)}
                   </ul>
@@ -346,7 +352,7 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
                   <input id="terc-e-valor" className="acn-input" inputMode="decimal" value={form.valor_combinado} onChange={e => set('valor_combinado', e.target.value)} placeholder="0,00" />
                 </div>
               )}
-              <div className="acn-terc-campo acn-terc-largo"><span className="acn-label">Peças que vão ao prestador</span>
+              <div className="acn-terc-campo acn-terc-largo"><span className="acn-label">{rotuloDasPecas(tipo)}</span>
                 {form.pecas.length > 0 && (
                   <div className="acn-terc-pecas">
                     {form.pecas.map((p: any, i: number) => (
@@ -473,6 +479,7 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
             </Faixa>
           )}
           <p className="acn-terc-det-desc">{base.descricao}</p>
+          {textoDasPecas(base) && <p className="acn-terc-dica"><strong>{rotuloDasPecas(tipoDe(base))}:</strong> {textoDasPecas(base)}</p>}
           <div className="acn-terc-grupo-barra">
             <label className="acn-terc-marca">
               <input type="checkbox" checked={todosMarcados} onChange={() => setMarcados(todosMarcados ? new Set() : new Set(linhas.map((l: any) => l.id)))} />
@@ -551,7 +558,7 @@ export function ModalDoGrupo({ ids, statusInicial, servicos, mapaTipos, mapaPres
                     <tr key={s.id} className="acn-terc-linha" data-servico={s.id} onClick={() => aoAbrir(s)}>
                       <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={marcados.has(s.id)} onChange={() => alternar(s.id)} aria-label={`Marcar o serviço ${s.numero}`} /></td>
                       <td className="acn-num"><strong>{s.numero}</strong></td>
-                      <td>{rotuloDaLigacao(s)}</td>
+                      <td>{rotuloDaLigacao(s)}{veiculoParaMostrar(s) && <div className={s.veiculo_nao_lido ? 'acn-terc-veic-nao-lido' : 'acn-fraco'}>{veiculoParaMostrar(s)}</div>}</td>
                       <td>{p ? p.nome : <span className="acn-terc-sem">Sem prestador</span>}</td>
                       <td>{textoDoDia(s)}</td>
                       <td>{selos.length > 0 ? <div className="acn-terc-celula-selos"><SelosDoServico selos={selos} /></div> : <Tag>{rotuloDaSituacao(s.status)}</Tag>}</td>

@@ -3,7 +3,7 @@
 // ou precisa ordenar e somar. A tabela larga vai dentro de `acn-rolagem` e a coluna "Ações" fica fixa à direita (automática, `ColunaAcoesFixa.ts`).
 import React, { useMemo, useState } from 'react';
 import { MenuAcoes, Selo } from './Interface';
-import { rotuloDaSituacao, colunaDoServico, rotuloDaLigacao, selosDoServico, movimentosDoServico, dataDeReferencia, reaisDoServico, textoDaDiferenca } from './TerceirosFluxo';
+import { rotuloDaSituacao, colunaDoServico, rotuloDaLigacao, selosDoServico, movimentosDoServico, dataDeReferencia, reaisDoServico, textoDaDiferenca, veiculoParaMostrar, veiculoSemDado, textoDasPecas, rotuloDasPecas } from './TerceirosFluxo';
 import { itensDoMenu, extrasDoServico } from './TerceirosAcoes';
 import { SelosDoServico, textoDoDia } from './TerceirosPecas';
 
@@ -46,7 +46,7 @@ export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques
     }
     return { combinado: Math.round(combinado * 100) / 100, final: Math.round(final * 100) / 100, semCombinado };
   }, [servicos]);
-  const colunas = verValor ? 11 : 10;
+  const colunas = verValor ? 12 : 11;
 
   return (
     <div className="acn-terc">
@@ -62,7 +62,7 @@ export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques
         <table className="acn-tabela acn-densa">
           <thead>
             <tr>
-              <th>Nº</th><th>Tipo</th><th>Descrição</th><th>Ligação</th><th>Prestador</th><th>Dia</th><th>Situação</th>{verValor && <th>Valor</th>}<th>Pedido por</th><th>Há</th><th>Ações</th>
+              <th>Nº</th><th>Tipo</th><th>Descrição</th><th>Veículo</th><th>Ligação</th><th>Prestador</th><th>Dia</th><th>Situação</th>{verValor && <th>Valor</th>}<th>Pedido por</th><th>Há</th><th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -77,7 +77,11 @@ export function ListaDeTerceiros({ servicos, mapaTipos, mapaPrestadores, choques
                 <tr key={s.id} className="acn-terc-linha" data-servico={s.id} onClick={() => aoAbrir(s)}>
                   <td className="acn-num"><strong>{s.numero}</strong></td>
                   <td>{tipo?.nome || '—'}</td>
-                  <td className="acn-terc-celula-desc" title={s.descricao}>{s.descricao}</td>
+                  <td className="acn-terc-celula-desc" title={s.descricao}>
+                    {s.descricao}
+                    {textoDasPecas(s) && <div className="acn-fraco acn-terc-celula-pecas" title={`${rotuloDasPecas(tipo)}: ${textoDasPecas(s)}`}>{rotuloDasPecas(tipo)}: {textoDasPecas(s)}</div>}
+                  </td>
+                  <td className={'acn-terc-celula-veic' + (s.veiculo_nao_lido ? ' nao-lido' : veiculoSemDado(s) ? ' sem-dado' : '')}>{veiculoParaMostrar(s) || <span className="acn-fraco">—</span>}</td>
                   <td className="acn-terc-nowrap">{rotuloDaLigacao(s)}{s.ordem_id && s.ordem_status !== 'cancelada' && <div className="acn-fraco">Ordem {s.ordem_numero}</div>}</td>
                   <td>{prestador ? prestador.nome : <span className="acn-terc-sem">Sem prestador</span>}</td>
                   <td className="acn-terc-nowrap">{textoDoDia(s)}</td>
