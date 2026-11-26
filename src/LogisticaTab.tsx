@@ -1921,7 +1921,16 @@ function PainelRecebimento({ currentUser }: any) {
 
 export default function LogisticaTab({ currentUser }) {
   // 26/11/2026 (plano de endereços, Fase 4): a aba aberta tem endereço na barra (`#/logistica/fretes`); a aba de sempre, o Histórico, é `#/logistica`.
-  const [abaLog, setAbaLog] = useAbaNoEndereco({ tela: 'logistica' });
+  // 26/11/2026: o recado da Menção de frete (`frete_aprovacao`) só é atendido pelo painel de Fretes, que só existe com a aba Fretes aberta; a Logística abre no Histórico e o clique
+  // na Menção não abria o frete (o recado ficava guardado, esperando). Quem chega com esse recado parte da aba Fretes (`inicial`: o endereço, se disser a aba, manda) e, com a tela
+  // já aberta em outra aba, o efeito logo abaixo a troca. O recado NÃO é apagado aqui: quem o consome é o painel de Fretes, ao montar.
+  const recadoDeFrete = () => (window as any).__acnDeepLink?.contexto === 'frete_aprovacao';
+  const [abaLog, setAbaLog] = useAbaNoEndereco({ tela: 'logistica', inicial: () => (recadoDeFrete() ? 'fretes' : null) });
+  useEffect(() => {
+    const irParaFretes = () => { if (recadoDeFrete()) setAbaLog('fretes'); };
+    window.addEventListener('acn:abrir-registro', irParaFretes);
+    return () => window.removeEventListener('acn:abrir-registro', irParaFretes);
+  }, []);
   const [manifestos, setManifestos] = useState([]);
   const [pedidosCompra, setPedidosCompra] = useState([]);
   const [entregasDosPedidos, setEntregasDosPedidos] = useState<{ linhas: any[]; erro: string | null }>({ linhas: [], erro: null });
