@@ -7714,3 +7714,73 @@ body.dark .acn-dos-pend { background: #3a2a0d; border-color: #6b4a14; }
 body.dark .acn-dos-log, body.dark .acn-dos-log-item { border-color: #334155; }
 body.dark .acn-dos-opl, body.dark .acn-dos-val { color: #f1f5f9; }
 body.dark .acn-dos-sec[data-tom=ink] { --acn-ds: #cbd5e1; }
+
+/* ── 12e81 (26/11/2026): Conexões do WhatsApp dos vendedores (WhatsAppConexoesWidget.tsx) ──────────────────────────────
+   Saíram os 71 `style` soltos. As letras valem o que a pessoa já via (a regra global reescrevia 9 a 11 px para 12 e 13) e as cores de ardósia, verde,
+   âmbar e azul escritas à mão viraram os tokens do guia; a cor da situação (conectado, desconectado, aguardando) vem de `data-status`.
+   No celular o endereço do webhook e a fileira de botões de cada vendedor passam a quebrar a linha (antes vazavam do cartão). */
+html body .acn-wa-fundo { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+html body .acn-wa-fundo.acn-wa-fundo-nova { background: rgba(0, 0, 0, .4); z-index: 2100; }
+.acn-wa-jan { background: var(--acn-surface); border-radius: 10px; width: min(720px, 96vw); max-height: 92vh; overflow: auto; padding: 18px 20px; box-shadow: 0 12px 48px #0005; }
+.acn-wa-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.acn-wa-cab-ico { font-size: 20px; }
+.acn-wa-cab-txt { flex: 1; min-width: 0; }
+.acn-wa-titulo { font-weight: 700; font-size: 14px; color: var(--acn-ink); }
+.acn-wa-sub { font-size: 12px; color: var(--acn-muted); }
+html body .acn-b.acn-wa-fechar:not(#acn) { font-size: 18px; padding: 2px 6px; }
+.acn-wa-carregando { text-align: center; padding: 30px; color: var(--acn-muted); font-size: 13px; }
+.acn-wa-faixa { margin-bottom: 16px; }
+.acn-wa-faixa > .acn-faixa { margin: 0; }
+.acn-wa-cfg { background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+.acn-wa-cfg-tit { font-weight: 700; font-size: 12px; color: var(--acn-neutral); margin-bottom: 10px; text-transform: uppercase; }
+.acn-wa-cfg-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.acn-wa-cfg-url { grid-column: 1 / -1; }
+.acn-wa-campo { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; }
+.acn-wa-campo > .acn-input, .acn-wa-campo > select { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-wa-rot { font-size: 12px; font-weight: 700; color: var(--acn-neutral); margin-bottom: 3px; }
+.acn-wa-opc { color: var(--acn-muted); font-weight: 400; }
+.acn-wa-hook { margin-top: 10px; padding: 6px 10px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 25%, var(--acn-line)); border-radius: 5px; font-size: 12px; }
+.acn-wa-hook-rot { font-weight: 700; color: var(--acn-info); }
+.acn-wa-hook-url { color: var(--acn-ink); margin-left: 6px; font-family: 'ACN Icones', 'IBM Plex Mono', monospace; user-select: all; overflow-wrap: anywhere; }
+html body .acn-b.acn-wa-copiar:not(#acn) { margin-left: 8px; vertical-align: middle; }
+.acn-wa-cfg-acoes { display: flex; justify-content: flex-end; margin-top: 10px; }
+.acn-wa-lista-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.acn-wa-lista-tit { font-weight: 700; font-size: 13px; color: var(--acn-ink); }
+.acn-wa-vazio { text-align: center; padding: 24px 0; color: var(--acn-muted); font-size: 12px; }
+.acn-wa-lista { display: flex; flex-direction: column; gap: 10px; }
+.acn-wa-inst { border: 1px solid var(--acn-line); border-radius: 8px; padding: 12px 14px; background: var(--acn-surface); }
+.acn-wa-inst[data-conectado] { background: var(--acn-ok-soft); }
+.acn-wa-inst-linha { display: flex; align-items: center; gap: 10px; }
+.acn-wa-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--acn-brand); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+.acn-wa-info { flex: 1; min-width: 0; }
+.acn-wa-nome { font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-wa-inst-nome { font-size: 12px; color: var(--acn-muted); margin-bottom: 2px; }
+.acn-wa-inst-nome code { font-size: 11px; }
+.acn-wa-situacao { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acn-wa-status { font-size: 12px; font-weight: 700; color: var(--acn-muted); }
+.acn-wa-status[data-status=conectado] { color: var(--acn-ok); }
+.acn-wa-status[data-status=desconectado] { color: var(--acn-bad); }
+.acn-wa-status[data-status=aguardando_qr] { color: var(--acn-warn); }
+.acn-wa-numero { font-size: 12px; color: var(--acn-ok); }
+.acn-wa-acoes { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.acn-wa-inex { margin-top: 10px; padding: 10px 12px; background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 40%, var(--acn-line)); border-radius: 6px; display: flex; gap: 10px; align-items: flex-start; }
+.acn-wa-inex-ico { font-size: 14px; }
+.acn-wa-inex-txt { flex: 1; min-width: 0; }
+.acn-wa-inex-tit { font-size: 12px; font-weight: 700; color: var(--acn-warn); margin-bottom: 4px; }
+.acn-wa-inex-corpo { font-size: 12px; color: var(--acn-warn); margin-bottom: 8px; line-height: 1.4; }
+.acn-wa-qr { margin-top: 12px; display: flex; flex-direction: column; align-items: center; padding: 12px; background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 25%, var(--acn-line)); border-radius: 6px; }
+.acn-wa-qr-tit { font-size: 12px; font-weight: 700; color: var(--acn-warn); margin-bottom: 8px; text-align: center; }
+.acn-wa-qr-img { width: 200px; height: 200px; max-width: 100%; image-rendering: pixelated; background: #fff; }
+.acn-wa-qr-dica { font-size: 11px; color: var(--acn-warn); margin-top: 6px; text-align: center; }
+html body .acn-b.acn-wa-qr-atualizar:not(#acn) { margin-top: 8px; }
+.acn-wa-nova { background: var(--acn-surface); border-radius: 8px; width: min(420px, 94vw); padding: 16px 18px; box-shadow: 0 8px 32px #0004; }
+.acn-wa-nova-tit { font-weight: 700; font-size: 12px; margin-bottom: 12px; color: var(--acn-ink); }
+.acn-wa-nova-campo { margin-bottom: 10px; }
+.acn-wa-nova-info { padding: 8px 10px; background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 25%, var(--acn-line)); border-radius: 5px; font-size: 12px; color: var(--acn-info); margin-bottom: 12px; }
+.acn-wa-nova-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .acn-wa-cfg-grade { grid-template-columns: minmax(0, 1fr); }
+  .acn-wa-inst-linha { flex-wrap: wrap; }
+  .acn-wa-info { flex-basis: calc(100% - 60px); }
+  .acn-wa-acoes { flex-basis: 100%; justify-content: flex-start; }
+}
