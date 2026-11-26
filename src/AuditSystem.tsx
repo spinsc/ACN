@@ -141,8 +141,9 @@ export function useAuditHistory(entityType, entityId, { pageSize = 20 } = {}) {
 // useUnreadChanges — o que mudou desde a última vez que este usuário viu este
 // registro. Sem watermark ainda (nunca visitou) = tudo é considerado não-lido,
 // pra sinalizar "existe histórico pendente" mesmo no primeiro acesso.
-// Assina Realtime em audit_log filtrado por entity_id — outros usuários
-// editando o mesmo registro atualizam isso ao vivo, sem precisar recarregar.
+// 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): não escuta mais o audit_log ao vivo (a auditoria saiu do
+// tempo real do banco, que era o maior gasto de CPU). Relê ao voltar para a aba do
+// navegador, no máximo uma vez por minuto; nenhuma consulta periódica nova.
 // ─────────────────────────────────────────────────────────────────────────────
 export function useUnreadChanges(entityType, entityId, currentUser) {
   const [naoLidos, setNaoLidos] = useState([]); // linhas de audit_log não vistas
@@ -167,15 +168,15 @@ export function useUnreadChanges(entityType, entityId, currentUser) {
 
   useEffect(() => {
     if (!entityType || !entityId) return;
-    const ch = supabase.channel(`audit-${entityType}-${entityId}-${idCanal()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log', filter: `entity_id=eq.${entityId}` }, (payload) => {
-        if (payload.new?.entity_type !== entityType) return;
-        if (payload.new?.user_id === currentUser?.id) return; // própria alteração não gera "não lido" pra mim mesmo
-        setNaoLidos(prev => [payload.new, ...prev]);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [entityType, entityId, currentUser?.id]);
+    let ultima = Date.now();
+    const aoVoltar = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - ultima < 60000) return;
+      ultima = Date.now();
+      buscar();
+    };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => document.removeEventListener('visibilitychange', aoVoltar);
+  }, [entityType, entityId, buscar]);
 
   const camposNaoLidos = new Set(naoLidos.filter(n => n.change_type === 'UPDATE').map(n => n.field_name));
   // Limpeza otimista local — necessária pra qualquer tela que NÃO desmonta ao
@@ -191,10 +192,12 @@ export function useUnreadChanges(entityType, entityId, currentUser) {
 // (Kanban, tabelas) onde N cards precisam saber se têm pendência sem fazer N
 // consultas — 1 chamada ao banco, independente de quantos itens existem.
 // Retorna um Set<entityId> com os registros que têm alteração não vista pelo
-// usuário atual. Assina Realtime uma única vez (não um canal por card).
+// usuário atual. 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): não escuta mais o audit_log ao vivo; recalcula
+// quando a lista muda ou quando a pessoa volta para a aba (no máximo uma vez por minuto).
 // ─────────────────────────────────────────────────────────────────────────────
 export function useUnreadMap(entityType, entityIds, currentUser) {
   const [naoLidoSet, setNaoLidoSet] = useState(() => new Set());
+  const [releitura, setReleitura] = useState(0);
   const idsKey = (entityIds || []).filter(Boolean).map(String).sort().join(',');
 
   useEffect(() => {
@@ -231,18 +234,18 @@ export function useUnreadMap(entityType, entityIds, currentUser) {
       if (!cancelado) setNaoLidoSet(resultado);
     })();
     return () => { cancelado = true; };
-  }, [entityType, idsKey, currentUser?.id]);
+  }, [entityType, idsKey, currentUser?.id, releitura]);
 
   useEffect(() => {
     if (!entityType || !currentUser?.id) return;
-    const ch = supabase.channel(`audit-map-${entityType}-${idCanal()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log' }, (payload) => {
-        if (payload.new?.entity_type !== entityType) return;
-        if (payload.new?.user_id === currentUser.id) return;
-        setNaoLidoSet(prev => new Set(prev).add(String(payload.new.entity_id)));
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    let ultima = Date.now();
+    const aoVoltar = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - ultima < 60000) return;
+      ultima = Date.now();
+      setReleitura(n => n + 1);
+    };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => document.removeEventListener('visibilitychange', aoVoltar);
   }, [entityType, currentUser?.id]);
 
   // Some com o destaque assim que ESTE usuário marca como lido em QUALQUER

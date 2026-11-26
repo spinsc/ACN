@@ -131,16 +131,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: recarrega quando chega msg nova
-  useEffect(() => {
-    const channel = supabase
-      .channel('wa-msgs-live')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_whatsapp_msgs' }, () => {
-        lerMensagens().then(data => { if (data) setWaMsgs(data); }).catch(() => {});   // 12e63: também em blocos de 1.000; leitura que falha mantém o que já está na tela, como antes
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+  // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real).
 
   // Emite total de msgs não lidas para o DashboardTab (badge no sidebar)
   // 7.x (13/10/2026): o selo contava toda mensagem não lida do sistema — inclusive a de contato de outro operador (que a pessoa nem vê) e a sem contato (que nenhuma tela mostra e por isso nunca zerava)

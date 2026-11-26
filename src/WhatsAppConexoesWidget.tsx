@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { tokenAtual } from './SessaoBanco';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -36,8 +37,9 @@ const STATUS_LABEL: Record<string, string> = {
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/whatsapp-admin`;
 
-// App usa auth customizada (auth_usuarios), não Supabase Auth.
-// supabase.auth.getSession() retorna null → usar anon key diretamente para chamar Edge Functions.
+// A chave pública vai só no cabeçalho "apikey" (o porteiro do Supabase pede). Quem chama se identifica pelo crachá de quem entrou
+// (26/11/2026, pacote de segurança S3: a função passou a conferir no banco se quem chama é Admin ou do Comercial; antes ia a chave pública
+// no lugar do crachá e a função atendia qualquer um que a tivesse, e ela está no site).
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
 
 /**
@@ -48,12 +50,13 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 async function chamarFuncao(metodo: 'GET' | 'POST', acao: string, { instancia, corpo }: { instancia?: string; corpo?: any } = {}) {
   const url = metodo === 'GET' ? `${EDGE_URL}?action=${acao}&instance=${encodeURIComponent(instancia || '')}` : EDGE_URL;
   let res: Response;
+  const cracha = (await tokenAtual(SUPABASE_ANON_KEY)) || SUPABASE_ANON_KEY;   // sem sessão, a função responde "entre de novo"
   try {
     res = await fetch(url, {
       method: metodo,
       headers: metodo === 'POST'
-        ? { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
-        : { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        ? { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${cracha}` }
+        : { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${cracha}` },
       body: metodo === 'POST' ? JSON.stringify({ action: acao, ...corpo }) : undefined,
     });
   } catch {

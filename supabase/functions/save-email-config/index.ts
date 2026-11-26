@@ -19,6 +19,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// 26/11/2026 (pacote de segurança da migração, S3): o porteiro do Supabase ("verify_jwt") aceita também a chave pública, que está no
+// site. Por isso a função pergunta ao banco, com o crachá de quem chamou, quem é (como já fazem o ponto-secullum e o viagem-rota).
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+async function perguntarAoBanco(autorizacao: string | null, funcao: string): Promise<unknown> {
+  if (!autorizacao) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcao}`, {
+      method: "POST", headers: { apikey: SUPABASE_ANON_KEY, Authorization: autorizacao, "Content-Type": "application/json" }, body: "{}",
+    });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -28,6 +41,12 @@ const CHAVES_SMTP = ["smtp_host", "smtp_porta", "smtp_usuario", "smtp_senha", "s
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+  if ((await perguntarAoBanco(req.headers.get("Authorization"), "eh_admin")) !== true) {
+    return new Response(JSON.stringify({ error: "Só o Admin altera a configuração do e-mail. Se você é Admin, entre de novo e tente outra vez." }), {
+      status: 403, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const body = await req.json();

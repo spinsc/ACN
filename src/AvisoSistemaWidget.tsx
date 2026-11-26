@@ -106,11 +106,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
 
   useEffect(() => {
     carregar();
-    const ch = supabase
-      .channel('avisos-sistema-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'avisos_sistema' }, carregar)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real).
   }, [carregar]);
 
   // Minimizado: mede a posição real do bloco de ícones da direita do header

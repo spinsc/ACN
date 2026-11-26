@@ -833,12 +833,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (!aprovaCompra) { setComprasEsperando(0); return; }
     const atualizar = () => contarEsperandoAprovacao().then(n => { if (n != null) setComprasEsperando(n); }).catch(() => {});
     atualizar();
-    const iv = intervaloVisivel(atualizar, 180000); // 12/11/2026: era 60 s; o tempo real já atualiza na hora
-    const ch = supabase.channel('menu-compras-aprovacao')
-      .on('postgres_changes', { event:'*', schema:'public', table:'pcp_pedidos_compra' }, atualizar)
-      .on('postgres_changes', { event:'*', schema:'public', table:'pcp_aprovacoes' }, atualizar)
-      .subscribe();
-    return () => { clearInterval(iv); supabase.removeChannel(ch); };
+    const iv = intervaloVisivel(atualizar, 180000); // 12/11/2026: era 60 s
+    // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real). O contador segue pela batida de 3 min.
+    return () => { clearInterval(iv); };
   }, [aprovaCompra]);
   const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);

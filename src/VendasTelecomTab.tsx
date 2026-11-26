@@ -169,12 +169,7 @@ export default function VendasTelecomTab({ currentUser }) {
 
   useEffect(() => {
     carregar();
-    let agendado: any = null;
-    const recarregar = () => { if (agendado) return; agendado = setTimeout(() => { agendado = null; carregar(true); }, 1500); };
-    const canal = supabase.channel('vendas-telecom')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, recarregar)
-      .subscribe();
-    return () => { if (agendado) clearTimeout(agendado); supabase.removeChannel(canal); };
+    // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real).
   }, [carregar]);
 
   const estagioPorId = useMemo(() => new Map(estagios.map(e => [e.id, e])), [estagios]);

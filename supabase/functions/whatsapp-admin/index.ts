@@ -8,7 +8,7 @@
 //   POST { action:'delete', instanceName }
 //   GET  ?action=listar                      → todas as instâncias da Evolution API
 //
-// Chamado apenas pelo painel admin do React (com anon key no header).
+// Chamado pelo painel do Contatos (Admin e equipe do Comercial), com o crachá de quem entrou.
 // Nunca expõe api_token para o browser.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,25 @@ const CORS = {
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+
+// 26/11/2026 (pacote de segurança da migração, S3): o porteiro do Supabase ("verify_jwt") aceita também a chave pública, que está no
+// site. Por isso a função pergunta ao banco, com o crachá de quem chamou, quem é (como já fazem o ponto-secullum e o viagem-rota).
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+async function perguntarAoBanco(autorizacao: string | null, funcao: string): Promise<unknown> {
+  if (!autorizacao) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcao}`, {
+      method: "POST", headers: { apikey: SUPABASE_ANON_KEY, Authorization: autorizacao, "Content-Type": "application/json" }, body: "{}",
+    });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
+// Quem pode: a mesma regra da tela (ContactosSection, "isGerente"): Admin, Gerente Comercial e a equipe do Comercial/CRM, que vale como gerente.
+const PERFIS_QUE_GERENCIAM = ['admin', 'gerente comercial', 'comercial', 'crm']
+const semAcento = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
 // ─── helpers Evolution API ────────────────────────────────────────────────────
 
@@ -52,6 +71,11 @@ async function evoDel(url: string, token: string, path: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+
+  const perfil = semAcento(String((await perguntarAoBanco(req.headers.get('Authorization'), 'perfil_atual')) || ''))
+  if (!PERFIS_QUE_GERENCIAM.includes(perfil)) {
+    return json({ error: 'Só o Admin e a equipe do Comercial gerenciam as conexões do WhatsApp. Se você é dessa equipe, entre de novo no sistema.' }, 403)
+  }
 
   try {
     const supabase = createClient(

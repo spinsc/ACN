@@ -2039,7 +2039,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                         <>
                           {d.conteudo && (
                             pareceHtmlFormatado(d.conteudo)
-                              ? <div className="acn-lic-and-txt" dangerouslySetInnerHTML={{ __html: d.conteudo }} />
+                              ? <div className="acn-lic-and-txt" dangerouslySetInnerHTML={{ __html: htmlSeguro(d.conteudo) }} />   /* 26/11/2026 (pacote de segurança S5): o andamento era mostrado sem limpeza */
                               : <div className="acn-lic-and-txt"><Linkify text={d.conteudo} /></div>
                           )}
                           {d.anexo_url && (

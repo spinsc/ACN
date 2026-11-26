@@ -13,7 +13,7 @@ import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel, carregarAnalisePorOrigem } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
-import RichTextInput, { pareceHtmlFormatado } from './RichTextInput';
+import RichTextInput, { pareceHtmlFormatado, htmlSeguro } from './RichTextInput';
 import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
@@ -609,14 +609,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     load();
     // Os avisos em tempo real chegam UM POR LINHA alterada (arrastar um cartão mexia na coluna toda: dezenas de avisos de uma vez) e cada aviso recarregava o quadro inteiro. Agora o primeiro aviso agenda
     // UM recarregamento para daqui a 1,5 s e os que chegam nesse intervalo entram nele (29/10/2026, queda do sistema de 28/10: ver `ColunaRolavel` e `carregarAnalisePorOrigem`).
-    let agendado: any = null;
-    const recarregarJunto = () => { if (agendado) return; agendado = setTimeout(() => { agendado = null; load(true); }, 1500); };
-    const ch = supabase
-      .channel('crm-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, recarregarJunto)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, recarregarJunto)
-      .subscribe();
-    return () => { if (agendado) clearTimeout(agendado); supabase.removeChannel(ch); };
+    // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real).
   }, [load]);
 
   useEffect(() => { setAbaInterna('kanban'); }, [funil]);
@@ -4392,7 +4385,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         onSalvar={salvarEdicaoAndCrm} onCancelar={() => { setEditandoAndId(null); setEditandoAndTexto(''); }} />
                     ) : (<>
                       {pareceHtmlFormatado(h.texto)
-                        ? <div className="acn-crm-and-txt" dangerouslySetInnerHTML={{ __html: h.texto }} />
+                        ? <div className="acn-crm-and-txt" dangerouslySetInnerHTML={{ __html: htmlSeguro(h.texto) }} />   /* 26/11/2026 (pacote de segurança S5): o andamento era mostrado sem limpeza */
                         : <div className="acn-crm-and-txt"><Linkify text={h.texto} /></div>}
                       <div className="acn-ajuda acn-crm-and-meta">
                         <span><Icone path={mdiAccountOutline} size={12} />{h.usuario_nome||'—'}</span>

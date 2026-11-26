@@ -32,9 +32,55 @@ import { mdiAccountOutline, mdiPalette } from '@mdi/js';
 // quem PRECISA exibir o valor fora deste componente (dangerouslySetInnerHTML
 // em uma lista/card) usar o mesmo critério, sem duplicar a regex por arquivo.
 export const pareceHtmlFormatado = (s: string) => /<\/?(b|i|u|strike|span|br|div|p|a|img|font)\b/i.test(s || '');
+// 26/11/2026 (pacote de segurança da migração, S5): antes, o texto que "parecia formatado" passava inteiro, inclusive uma imagem ou um
+// link com código escondido (atributos como onerror rodam um programa no navegador de quem abre a tela, com a sessão dele). Agora o HTML
+// é desmontado e só ficam as marcas de formatação que o editor produz, sem nenhum atributo que rode código; link só http, https, mailto,
+// âncora ou caminho do próprio sistema; imagem só http, https ou data:image. Texto comum continua só "escapado", como antes.
+const escaparHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const MARCAS_PERMITIDAS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'SPAN', 'BR', 'DIV', 'P', 'A', 'IMG', 'FONT', 'UL', 'OL', 'LI',
+  'SUB', 'SUP', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'PRE', 'CODE', 'HR', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH']);
+const MARCAS_REMOVIDAS_COM_CONTEUDO = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'FRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'SVG', 'MATH',
+  'LINK', 'META', 'BASE', 'FORM', 'INPUT', 'BUTTON', 'TEXTAREA', 'SELECT', 'AUDIO', 'VIDEO', 'SOURCE', 'TITLE', 'HEAD']);
+const ATRIBUTOS_POR_MARCA: Record<string, string[]> = { A: ['href', 'target', 'title'], IMG: ['src', 'alt', 'title', 'width', 'height'], FONT: ['color', 'face', 'size'] };
+const ATRIBUTOS_DE_TODAS = ['style', 'align', 'class'];
+function limparHtml(html: string): string {
+  if (typeof DOMParser === 'undefined') return escaparHtml(html);
+  const doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
+  const raiz = doc.body.firstChild as HTMLElement;
+  if (!raiz) return escaparHtml(html);
+  const visitar = (no: Node) => {
+    for (const filho of Array.from(no.childNodes)) {
+      if (filho.nodeType === 3) continue;                       // texto
+      if (filho.nodeType !== 1) { (filho as any).remove(); continue; }   // comentário e o resto
+      const el = filho as HTMLElement;
+      const marca = el.tagName.toUpperCase();
+      if (MARCAS_REMOVIDAS_COM_CONTEUDO.has(marca)) { el.remove(); continue; }
+      if (!MARCAS_PERMITIDAS.has(marca)) {                      // marca desconhecida: fica o conteúdo, sem a marca
+        visitar(el);
+        el.replaceWith(...Array.from(el.childNodes));
+        continue;
+      }
+      for (const atr of Array.from(el.attributes)) {
+        const nome = atr.name.toLowerCase();
+        const valor = (atr.value || '').trim();
+        const permitido = (ATRIBUTOS_POR_MARCA[marca] || []).includes(nome) || ATRIBUTOS_DE_TODAS.includes(nome);
+        if (!permitido
+          || (nome === 'href' && !/^(https?:|mailto:|#|\/)/i.test(valor))
+          || (nome === 'src' && !/^(https?:|data:image\/(png|jpe?g|gif|webp);)/i.test(valor))
+          || (nome === 'style' && /url\s*\(|expression|javascript:|behavior|@import/i.test(valor))) {
+          el.removeAttribute(atr.name);
+        }
+      }
+      if (marca === 'A') el.setAttribute('rel', 'noopener noreferrer');
+      visitar(el);
+    }
+  };
+  visitar(raiz);
+  return raiz.innerHTML;
+}
 export const htmlSeguro = (s: string) => {
   const bruto = s || '';
-  return pareceHtmlFormatado(bruto) ? bruto : bruto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return pareceHtmlFormatado(bruto) ? limparHtml(bruto) : escaparHtml(bruto);
 };
 
 // Acha o {node, offset} do DOM correspondente a um offset de texto plano

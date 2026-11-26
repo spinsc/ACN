@@ -14,6 +14,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+
+// 26/11/2026 (pacote de segurança da migração, S3): o porteiro do Supabase ("verify_jwt") aceita também a chave pública, que está no
+// site. Por isso a função pergunta ao banco, com o crachá de quem chamou, quem é (como já fazem o ponto-secullum e o viagem-rota).
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+async function perguntarAoBanco(autorizacao: string | null, funcao: string): Promise<unknown> {
+  if (!autorizacao) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcao}`, {
+      method: "POST", headers: { apikey: SUPABASE_ANON_KEY, Authorization: autorizacao, "Content-Type": "application/json" }, body: "{}",
+    });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
@@ -34,10 +48,24 @@ serve(async (req: Request) => {
       );
     }
 
+    if ((await perguntarAoBanco(req.headers.get("Authorization"), "esta_logado")) !== true) {
+      return new Response(
+        JSON.stringify({ error: "Só quem entrou no sistema pode transcrever áudio." }),
+        { status: 401, headers: { ...CORS, "Content-Type": "application/json" } }
+      );
+    }
+
     const { audio_url } = await req.json();
     if (!audio_url) {
       return new Response(
         JSON.stringify({ error: "Campo 'audio_url' é obrigatório." }),
+        { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
+      );
+    }
+    // 26/11/2026 (pacote de segurança S3): só áudio guardado no próprio sistema (antes baixava qualquer endereço da internet).
+    if (!String(audio_url).startsWith(`${SUPABASE_URL}/storage/v1/object/`)) {
+      return new Response(
+        JSON.stringify({ error: "Só dá para transcrever áudio guardado no próprio sistema." }),
         { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
       );
     }

@@ -343,36 +343,35 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     init();
 
     broadcastRef.current = supabase.channel(BROADCAST_CH)
-      .on('broadcast', { event: 'nova_msg' }, ({ payload }: any) => {
+      .on('broadcast', { event: 'nova_msg' }, async ({ payload }: any) => {
         if (String(payload.sender_id) === uid) return;
 
         const membro = (payload.membros || []).some((m: any) => String(m.id) === uid);
         if (!membro) return; // não é uma conversa minha — ignora completamente
+        // 26/11/2026 (pacote de segurança S6): o aviso não traz mais o conteúdo (o canal é alcançável com a chave pública, que está no site);
+        // a mensagem é lida no banco pelo número, e o banco exige ter entrado no sistema. O aviso de quem ainda está com a versão antiga
+        // aberta traz o texto, mas ele também é ignorado: vale o que está no banco.
+        const { data: msg } = await supabase.from('chat_mensagens').select('*').eq('id', payload.msg_id).maybeSingle();
         fetchSalas();
+        if (!msg) { atualizarContadorEPreview(); return; }   // leitura que falhou: a consulta periódica do selo e da conversa aberta acha depois
 
-        if (salaAtivaRef.current?.id === payload.sala_id) {
+        if (salaAtivaRef.current?.id === msg.sala_id) {
           setMensagens(prev => {
-            if (prev.find((m: any) => m.id === payload.msg_id)) return prev;
-            markRead(payload.sala_id, payload.criado_em);
+            if (prev.find((m: any) => m.id === msg.id)) return prev;
+            markRead(msg.sala_id, msg.criado_em);
             atualizarContadorEPreview();
-            return [...prev, {
-              id: payload.msg_id, sala_id: payload.sala_id,
-              remetente_id: payload.sender_id, remetente_nome: payload.remetente_nome,
-              texto: payload.texto, lida_por: [], criado_em: payload.criado_em,
-              anexo_url: payload.anexo_url || null, anexo_nome: payload.anexo_nome || null, anexo_tipo: payload.anexo_tipo || null,
-              ref_contexto: payload.ref_contexto || null, ref_contexto_id: payload.ref_contexto_id || null, ref_desc: payload.ref_desc || null,
-            }];
+            return [...prev, msg];
           });
           return;
         }
 
-        const sala = salasRef.current.find((s: any) => s.id === payload.sala_id)
-          || { id: payload.sala_id, nome: payload.sala_nome, tipo: payload.sala_tipo || 'direto', membros: payload.membros || [] };
+        const sala = salasRef.current.find((s: any) => s.id === msg.sala_id)
+          || { id: msg.sala_id, nome: null, tipo: 'direto', membros: payload.membros || [] };
 
-        setToast({ sala, remetente_nome: payload.remetente_nome, texto: payload.texto || payload.anexo_nome || payload.ref_desc || '' });
+        setToast({ sala, remetente_nome: msg.remetente_nome, texto: msg.texto || msg.anexo_nome || msg.ref_desc || '' });
         playAlerta();
         setNaoLidas(prev => { const n = prev + 1; prevCountRef.current = n; return n; });
-        setNaoLidasPorSala(prev => ({ ...prev, [payload.sala_id]: (prev[payload.sala_id] || 0) + 1 }));
+        setNaoLidasPorSala(prev => ({ ...prev, [msg.sala_id]: (prev[msg.sala_id] || 0) + 1 }));
       })
       .subscribe();
 
@@ -629,13 +628,10 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
       setUltimasMsg(prev => ({ ...prev, [salaAtiva.id]: inserido }));
       broadcastRef.current?.send({
         type: 'broadcast', event: 'nova_msg',
+        // 26/11/2026 (pacote de segurança S6): só os números (mensagem, sala, quem mandou e os membros, sem nome); quem recebe lê o resto no banco.
         payload: {
-          msg_id: inserido.id, sala_id: salaAtiva.id,
-          sala_nome: salaAtiva.nome || null, sala_tipo: salaAtiva.tipo,
-          membros: salaAtiva.membros || [], sender_id: uid,
-          remetente_nome: unome, texto: inserido.texto, criado_em: inserido.criado_em,
-          anexo_url: inserido.anexo_url, anexo_nome: inserido.anexo_nome, anexo_tipo: inserido.anexo_tipo,
-          ref_contexto: inserido.ref_contexto, ref_contexto_id: inserido.ref_contexto_id, ref_desc: inserido.ref_desc,
+          msg_id: inserido.id, sala_id: salaAtiva.id, sender_id: uid,
+          membros: (salaAtiva.membros || []).map((m: any) => ({ id: m.id })),
         },
       });
     }

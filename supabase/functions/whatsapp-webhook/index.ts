@@ -58,18 +58,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Validar webhook_secret (opcional — se config não tiver secret, aceita tudo)
+    // 26/11/2026 (pacote de segurança S4): o segredo passou a ser obrigatório. Sem segredo configurado, nenhuma chamada é aceita
+    // (antes, sem segredo, a função aceitava tudo: qualquer um com a chave pública, que está no site, gravava mensagens no CRM).
+    // Para ligar o WhatsApp do CRM: preencher crm_whatsapp_config.webhook_secret e o mesmo valor no cabeçalho x-webhook-secret da Evolution.
     const { data: cfg } = await supabase
       .from('crm_whatsapp_config')
       .select('webhook_secret')
       .limit(1)
       .single()
 
-    if (cfg?.webhook_secret) {
-      const secret = req.headers.get('x-webhook-secret')
-      if (secret !== cfg.webhook_secret) {
-        return json({ error: 'Unauthorized' }, 401)
-      }
+    const secret = req.headers.get('x-webhook-secret')
+    if (!cfg?.webhook_secret || secret !== cfg.webhook_secret) {
+      return json({ error: 'Unauthorized' }, 401)
     }
 
     const body = await req.json()
