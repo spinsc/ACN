@@ -1,0 +1,14 @@
+{
+  "id": "adaptacao",
+  "setor": "Adaptação",
+  "titulo": "Manual da Adaptação",
+  "descricao": "Passo a passo completo da tela Adaptação, com fotos: a fila de OPs e o Kanban por prazo, iniciar a produção com a equipe e o BOX do carro, pausar, trocar quem trabalha e a equipe da OP (comissão), os recados do Acompanhamento, a chegada do veículo, a viagem da OP externa, concluir com as pendências, retrabalho, devolver ao PCP, ações em lote e importação de técnicos; e as outras abas: SAC veicular (da data ao orçamento e à conclusão), Agendamentos, Voucher de serviços e Equipes.",
+  "ordem": 4,
+  "atualizadoEm": "2026-11-26",
+  "mudancas": [
+    {
+      "data": "2026-11-26",
+      "texto": "Manual criado, com 55 fotos de dados inventados: a tela Produção (filas, filtros, tabela, Kanban e lotes), o passo a passo da OP (iniciar com BOX, pausar, equipe, acompanhamento, anexos, chegada do veículo, viagem, concluir, retrabalho, devolver ao PCP e ações em lote) e as abas SAC veicular, Agendamentos, Voucher e Equipes, com avisos, regras e dúvidas."
+    }
+  ]
+}
