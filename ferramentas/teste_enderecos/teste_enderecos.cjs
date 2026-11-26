@@ -935,10 +935,12 @@ const OP_EXCLUIDA = 'A1760.2611';   // cancelada e excluída em 25/11/2026 (CLAU
     // menu "Mais ações da OP" → "Abrir o lote (N)": a janela do lote traz o "Carro a carro", com cada unidade como número clicável
     await page.evaluate(() => document.querySelector('.acn-opl[role="dialog"] button[aria-label="Mais ações da OP"]').click());
     await page.waitForSelector('.acn-menu [role="menuitem"]', { timeout: 8000 });
+    // 26/11/2026: a janela só sabe quantas unidades o lote tem depois de ler o banco (a contagem começa em 0 e o item "Abrir o lote" fica escondido até lá); olhar uma vez só, 0,9 s depois
+    // de abrir, falhou uma vez com o banco mais lento. O menu aberto se redesenha quando a contagem chega, então se espera o item aparecer.
+    await page.waitForFunction(() => [...document.querySelectorAll('.acn-menu [role="menuitem"]')].some(m => /^Abrir o lote \(\d+\)$/.test(m.innerText.trim())), { timeout: 25000 })
+      .catch(() => { throw new Error('o menu da OP não tem "Abrir o lote (N)", nem esperando 25 s a leitura das unidades do lote'); });
     await page.evaluate(() => {
-      const i = [...document.querySelectorAll('.acn-menu [role="menuitem"]')].find(m => /^Abrir o lote \(\d+\)$/.test(m.innerText.trim()));
-      if (!i) throw new Error('o menu da OP não tem "Abrir o lote (N)"');
-      i.click();
+      [...document.querySelectorAll('.acn-menu [role="menuitem"]')].find(m => /^Abrir o lote \(\d+\)$/.test(m.innerText.trim())).click();
     });
     await page.waitForFunction((s) => document.querySelector(s), { timeout: 30000 }, LINK_DO_LOTE);
     const b = await page.evaluate((s, num) => [...document.querySelectorAll(s)].map(x => x.innerText.trim()).find(n => n && n !== num) || null, LINK_DO_LOTE, a);
