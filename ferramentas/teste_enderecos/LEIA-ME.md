@@ -11,7 +11,7 @@ Criado em 25/11/2026, na Fase 1 do [PLANO_ENDERECOS_E_ROTAS.md](../../PLANO_ENDE
 
 ```powershell
 $env:NODE_PATH = "<pasta>\node_modules"
-node teste_rotas.mjs                    # regras puras do endereço, sem navegador (815 conferências em 26/11/2026, com as da viagem, do serviço de terceiro, da demanda e das visões; 605 eram até a Fase 4: as da Fase 4 são a tabela de abas de cada tela, o link de cada aba e as trocas do quadro)
+node teste_rotas.mjs                    # regras puras do endereço, sem navegador (837 conferências em 26/11/2026, com as da Logística, da viagem, do serviço de terceiro, da demanda e das visões; 605 eram até a Fase 4: as da Fase 4 são a tabela de abas de cada tela, o link de cada aba e as trocas do quadro)
 node teste_enderecos.cjs                # todos os cenários, em série (cerca de 50 minutos com as abas da Fase 4; 1.062 conferências em 26/11/2026; **cada navegador de teste lê o banco de produção, então a rodada completa derruba o banco por alguns instantes se o sistema está cheio de gente: prefira rodar fora do horário, ou só `"^C4[5678]"` para a Fase 4**)
 node teste_enderecos.cjs "^C5"          # só os cenários cujo nome casa com a expressão (rode em lotes, como "^C(1[6-9]|2[0-9]|3[01]) ", se quiser acompanhar)
 node plantar_defeitos.cjs --conferir    # só confere se os trechos dos defeitos plantados ainda existem no código (não planta nada)
