@@ -7,7 +7,7 @@ import { anexarValoresDosPedidos } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline, mdiAccountWrenchOutline } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiLink, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline, mdiAccountWrenchOutline } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -36,6 +36,7 @@ import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv, podeVerValores, temPoderDeGerente, podeCopiarOp } from './utils/permissoes';
 import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
+import { useEnderecoDaOp, copiarLinkDaOpComAviso } from './OpNoEndereco';
 import CopiarOpModal from './CopiarOpModal';
 import TrocarFluxoModal from './TrocarFluxoModal';
 import { excluirOpComMotivo, podeExcluirOp } from './ExclusaoDeOp';
@@ -769,6 +770,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // (rollout em andamento) — aqui só cobre a gravação que este modal faz.
   const { campoDestaque, marcarComoLido } = useFieldHighlight('oples', opl?.id, currentUser);
   const fecharEMarcarLido = () => { marcarComoLido(); onClose(); };
+  // 25/11/2026 (plano de endereços e rotas, Fase 2): a janela da OP tem endereço próprio (`#/op/<número>`), passo no histórico (o Voltar do navegador a fecha), título da aba
+  // e se fecha quando o endereço deixa de ser o dela. Fica aqui, e não em cada tela, porque 11 lugares do sistema abrem esta janela. Fechar pelo Voltar também marca como lido.
+  useEnderecoDaOp(opl, fecharEMarcarLido);
 
   // Nem toda tela que abre este modal passa currentUser — cai na sessão salva.
   const usuario = currentUser || (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
@@ -1058,7 +1062,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       <div className="acn-opl" role="dialog" aria-label={`OP ${opl.opl}`}>
 
         {/* ── Cabeçalho: quem é a OP, o essencial em uma linha, o status e as ações agrupadas ── */}
-        <header className="acn-opl-cab">
+        <header className="acn-opl-cab acn-opl-cab-op">
           <div className="acn-opl-cab-txt">
             <div className="acn-opl-cab-sup">{opl.faturamento_empresa || 'ACN'} · {opl.tipo_projeto || 'OP'}</div>
             <div className="acn-opl-cab-tit">
@@ -1071,6 +1075,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <div className="acn-opl-cab-acoes">
             <Botao variante="primario" icone={mdiBookOpenPageVariantOutline} onClick={() => setVerDossie(true)}
               title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF">Dossiê</Botao>
+            {/* o link desta OP, para colar numa mensagem ou e-mail (Fase 2 do plano de endereços, 25/11/2026): abre direto nesta janela, em qualquer tela */}
+            <Botao variante="discreto" icone={mdiLink} onClick={() => copiarLinkDaOpComAviso(opl)} title="Copiar o link desta OP para colar numa mensagem ou e-mail" aria-label="Copiar o link desta OP">Copiar link</Botao>
             <MenuAcoes rotulo="Mais ações da OP" itens={[
               { rotulo: 'Editar OP', icone: mdiPencilOutline, onClick: () => setEditando(true), oculto: !podeEditarTudo },
               { rotulo: 'Editar lote', icone: mdiPencilBoxMultipleOutline, onClick: abrirEdicaoLote, oculto: !(podeEditarTudo && qtdLote > 1) },

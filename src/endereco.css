@@ -3,3 +3,8 @@
 .acn-endereco-aviso { max-width: 760px; margin: 24px auto 0; min-width: 0; }
 .acn-endereco-aviso .acn-faixa { flex-wrap: wrap; }
 .acn-endereco-aviso .acn-faixa-texto { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+
+/* Janela da OP pelo endereço (Fase 2, 25/11/2026): "Abrindo a OP …" enquanto a OP do endereço é lida do banco (fica acima do fundo escuro da janela da OP, z-index 1000);
+   e o campo escondido do "Copiar link" quando o navegador recusa a forma moderna de copiar. */
+.acn-op-endereco-carregando { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1001; max-width: calc(100vw - 32px); padding: 8px 14px; border: 1px solid var(--acn-line); border-radius: 999px; background: var(--acn-surface); color: var(--acn-ink); box-shadow: 0 6px 20px rgba(15, 23, 42, .18); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.acn-copiar-oculto { position: fixed; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }

@@ -4,6 +4,7 @@
 // do próprio cadastro da pessoa (auth_usuarios), para provar o link de tela sem acesso, a permissão velha e a permissão nova.
 // Os avisos do sistema (alert) viram aviso no canto da tela (main.tsx): o lib_enderecos.cjs os guarda para o teste ler (`A`) e zerar (`LA`).
 const { abrir, espera, esperarSistema, estado, clicarNoMenu, lerAlertas, limparAlertas, BASE, ID_ZZTESTE, USUARIO_ADMIN } = require('./lib_enderecos.cjs');
+const { crachaDeTeste, URL_BASE, ANON } = require('../auditoria_layout/cracha_teste.cjs');   // Fase 2: ler (só ler) as OPs que os cenários da OP abrem
 const fs = require('fs');
 const SAIDA = __dirname + '/saida';   // fora do git (ver .gitignore)
 const FOTOS = SAIDA + '/fotos';
@@ -71,6 +72,112 @@ async function observar(page, ms, passo = 80) {
 const TEXTO_SEM_ACESSO = 'Você não tem acesso a essa aba. Peça a liberação a um Admin.';
 const AVISO_DESCONHECIDO = 'Não reconheci este endereço do sistema. Abri a tela inicial.';
 
+// ── Fase 2 (25/11/2026): a janela da OP pelo endereço ──
+const codif = encodeURIComponent;
+const SAUDACAO = /(Bom dia|Boa tarde|Boa noite)/;   // o título da tela Início (`saudacao`, InicioModelo.ts)
+/** O que a pessoa vê da janela da OP agora (endereço, título, passos do histórico, janelas abertas, a tela por baixo e o "Abrindo a OP…"). */
+const estadoOp = (page) => page.evaluate(() => {
+  const car = document.querySelector('.acn-op-endereco-carregando');
+  const main = document.querySelector('.acn-main') || document.body;
+  return {
+    hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+    janelas: document.querySelectorAll('.acn-opl-overlay').length,
+    rotulos: [...document.querySelectorAll('.acn-opl[role="dialog"]')].map(d => d.getAttribute('aria-label')),
+    carregando: car ? car.innerText.trim() : null,
+    painelAberto: !!document.querySelector('.acn-gav'),
+    telaDeBaixo: (main.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 240),
+    origem: location.origin + location.pathname,
+  };
+});
+const esperarJanelaOp = (page, rotulo, ms = 25000) => page.waitForFunction((r) => [...document.querySelectorAll('.acn-opl[role="dialog"]')].some(d => d.getAttribute('aria-label') === r), { timeout: ms }, rotulo);
+const esperarSemJanelaOp = (page, ms = 10000) => page.waitForFunction(() => !document.querySelector('.acn-opl-overlay'), { timeout: ms });
+/**
+ * Espera o DESFECHO de uma abertura que o endereço pediu e o banco recusou ou não achou: some o "Abrindo a OP…" e o endereço deixa de ser o da OP.
+ * Não é um tempo fixo porque a leitura do banco demora o que a instância pequena demorar (na 2ª rodada de 25/11/2026 3,5 s fixos reprovaram um sistema que estava certo, só lento).
+ * Se estourar o prazo, a conferência seguinte reprova e mostra o estado em que ficou: um "Abrindo a OP…" que nunca termina continua sendo pego.
+ */
+const esperarDesfechoDaAbertura = (page, ms = 25000) => page.waitForFunction(() => !document.querySelector('.acn-op-endereco-carregando') && !/^#\/op\//i.test(location.hash), { timeout: ms }).catch(() => {});
+/**
+ * Fica olhando a tela por `ms` e devolve o MÁXIMO de janelas de OP que apareceram e se o "Abrindo a OP…" chegou a aparecer. Um defeito que abre uma segunda janela DEPOIS de a leitura do
+ * banco terminar só se vê esperando: na 1ª versão o C24 olhava 0,7 s depois de abrir e NÃO pegou o defeito plantado de propósito (o hospedeiro ignorando a janela que o módulo já abriu).
+ */
+async function vigiarJanelasDeOp(page, ms = 3000, passo = 60) {
+  let maxJanelas = 0, viuCarregando = false;
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    const s = await page.evaluate(() => ({
+      n: [...document.querySelectorAll('.acn-opl[role="dialog"]')].filter(d => /^OP /.test(d.getAttribute('aria-label') || '')).length,
+      c: !!document.querySelector('.acn-op-endereco-carregando'),
+    })).catch(() => null);
+    if (s) { maxJanelas = Math.max(maxJanelas, s.n); if (s.c) viuCarregando = true; }
+    await espera(passo);
+  }
+  return { maxJanelas, viuCarregando };
+}
+/**
+ * Abre o endereço como quem COLA o link numa aba nova: o primeiro passo do histórico não é do sistema. Na primeira vez a página ainda está em branco e basta abrir o endereço;
+ * depois troca o endereço sem o sistema perceber (`replaceState` não dispara evento) e recarrega a página. (Ir por "about:blank" não serve: o script que o teste injeta
+ * em toda página mexe no localStorage, que o navegador nega numa página em branco, e isso aparece como exceção na página.)
+ */
+async function abrirComoLinkColado(page, hash) {
+  if (/^https?:/.test(page.url())) {
+    await page.evaluate((h) => { history.replaceState(null, '', location.pathname + location.search + h); }, hash);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+  } else {
+    await page.goto(BASE + hash, { waitUntil: 'domcontentloaded' });
+  }
+}
+const fecharJanelaOp = (page) => page.evaluate(() => { const x = document.querySelector('.acn-opl-x'); if (!x) throw new Error('não achei o X da janela da OP'); x.click(); });
+/** Digita o número na busca geral e clica no resultado do grupo "OP" cujo número é exatamente esse. */
+async function abrirOpPelaBusca(page, numero) {
+  await page.click('input[aria-label="Busca geral"]');
+  await page.keyboard.type(numero, { delay: 15 });
+  await page.waitForFunction((n) => [...document.querySelectorAll('.acn-busca-resultados .acn-busca-grupo')].some(g => g.innerText.trim().endsWith('OP')
+    && [...g.parentElement.querySelectorAll('.acn-busca-item-titulo')].some(t => t.innerText.split(' — ')[0].trim() === n)), { timeout: 20000 }, numero);
+  await page.evaluate((n) => {
+    const g = [...document.querySelectorAll('.acn-busca-resultados .acn-busca-grupo')].find(h => h.innerText.trim().endsWith('OP'));
+    const it = [...g.parentElement.querySelectorAll('.acn-busca-item')].find(i => i.querySelector('.acn-busca-item-titulo').innerText.split(' — ')[0].trim() === n);
+    it.click();
+  }, numero);
+}
+// as OPs reais que os cenários abrem (lidas do banco com o crachá da conta de teste: SÓ LEITURA, nada é gravado)
+let OPS = null;
+async function opsDeTeste() {
+  if (OPS) return OPS;
+  const s = await crachaDeTeste();
+  const ler = async (filtro, limite = 1, colunas = '*') => {
+    const r = await fetch(`${URL_BASE}/rest/v1/oples?select=${colunas}&${filtro}&limit=${limite}`, { headers: { apikey: ANON, Authorization: 'Bearer ' + s.access_token } });
+    const d = await r.json();
+    if (!Array.isArray(d)) throw new Error('a leitura das OPs de teste foi recusada: ' + JSON.stringify(d).slice(0, 200));
+    return d;
+  };
+  // "comum" = número simples que NENHUMA outra OP começa igual: a busca geral mostra no máximo 6 OPs, e o número de uma OP-base de lote se perderia entre as unidades /NN
+  const candidatas = await ler('opl=not.like.*/*&opl=not.like.*%20*&status_geral=neq.Cancelado&order=data_entrada.desc', 40);
+  const unicas = [];
+  for (const c of candidatas) {
+    if ((await ler(`opl=ilike.${encodeURIComponent(c.opl)}*`, 3, 'opl')).length === 1) unicas.push(c);
+    if (unicas.length === 2) break;
+  }
+  // um lote com PELO MENOS duas unidades vivas (o menu "Abrir o lote" só aparece nele): o C30 abre a OP de uma unidade de dentro da janela de outra
+  const doLote = await ler('opl=like.*/*&opl=not.like.*%20*&status_geral=neq.Cancelado&order=data_entrada.desc', 80, 'opl,id');
+  const porBase = {};
+  for (const u of doLote) { const base = u.opl.split('/')[0]; (porBase[base] = porBase[base] || []).push(u); }
+  const baseComVarias = Object.keys(porBase).find(k => porBase[k].length >= 2);
+  // um número ANTIGO com acento (6 das 571 OPs em 25/11/2026): o link digitado sem acento e em minúscula só acha pela coluna `opl_norm`
+  const comAcento = (await ler('order=opl.asc', 1000, 'opl,opl_norm')).find(o => o.opl_norm !== o.opl.toLowerCase()) || null;
+  OPS = {
+    comum: unicas[0] || null,
+    comAcento,
+    loteComVarias: baseComVarias ? porBase[baseComVarias][0] : null,
+    outra: unicas[1] || null,
+    lote: (await ler('opl=like.*/*&opl=not.like.*%20*&status_geral=neq.Cancelado&order=data_entrada.desc'))[0] || null,
+    estranha: (await ler('opl=like.*%20%2F%20*&order=data_entrada.desc'))[0] || null,   // número antigo com espaços e barra no meio ("D 715 / 717.2607 - …")
+  };
+  return OPS;
+}
+const NAO_ACHADA = 'ZZNAOEXISTE.9999';
+const OP_EXCLUIDA = 'A1760.2611';   // cancelada e excluída em 25/11/2026 (CLAUDE.md): o banco a esconde de todos
+
 (async () => {
   // ───────────────────────────────────────────────────────────────────────────
   await cenario('C1 Admin: abertura, menu, Voltar, Avançar e F5', {}, async ({ page }) => {
@@ -99,7 +206,7 @@ const AVISO_DESCONHECIDO = 'Não reconheci este endereço do sistema. Abri a tel
     confere('Voltar → #/compras com a tela Compras', e.hash === '#/compras' && /Resumo/.test(e.texto), e.hash + ' | ' + e.texto);
     await page.goBack(); await espera(1000);
     e = await estado(page);
-    confere('Voltar de novo → #/inicio com a tela Início', e.hash === '#/inicio' && /Boa (noite|tarde|dia)/.test(e.texto), e.hash + ' | ' + e.texto);
+    confere('Voltar de novo → #/inicio com a tela Início', e.hash === '#/inicio' && /(Bom dia|Boa tarde|Boa noite)/.test(e.texto), e.hash + ' | ' + e.texto);
     await page.goForward(); await espera(1000);
     await page.goForward(); await espera(1000);
     e = await estado(page);
@@ -391,6 +498,516 @@ const AVISO_DESCONHECIDO = 'Não reconheci este endereço do sistema. Abri a tel
     await esperarSistema(page); await espera(1500);
     e = await estado(page);
     confere('depois de entrar, abre a tela do link (Compras)', e.hash === '#/compras' && e.titulo === 'Compras · ACN' && /Resumo/.test(e.texto), JSON.stringify({ h: e.hash, t: e.titulo }));
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FASE 2 (25/11/2026): o endereço da OP, #/op/<número>
+  // ═══════════════════════════════════════════════════════════════════════════
+  await cenario('C16 OP pela busca geral: passo no histórico, título, Voltar fecha, Avançar reabre, X volta um passo', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    confere('achei no banco as OPs de teste (comum, outra, lote e número antigo)', ops.comum && ops.outra && ops.lote && ops.estranha, JSON.stringify(Object.fromEntries(Object.entries(ops).map(([k, v]) => [k, v && v.opl]))));
+    const n = ops.comum.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    let e = await estadoOp(page);
+    confere('começa em #/compras, sem janela de OP', e.hash === '#/compras' && e.janelas === 0, JSON.stringify(e));
+    const h0 = e.historico;
+    await abrirOpPelaBusca(page, n);
+    await esperarJanelaOp(page, rot); await espera(500);
+    e = await estadoOp(page);
+    confere('a janela da OP abriu e o endereço é #/op/<número>', e.hash === end && e.rotulos.length === 1 && e.rotulos[0] === rot, JSON.stringify(e));
+    confere('abrir a OP criou UM passo no histórico, do sistema', e.historico === h0 + 1 && e.marca === true, `${h0} → ${e.historico}, marca=${e.marca}`);
+    confere('título da aba = "OP <número> · ACN"', e.titulo === rot + ' · ACN', e.titulo);
+    confere('a tela de baixo continua sendo Compras', /Resumo/.test(e.telaDeBaixo), e.telaDeBaixo);
+    confere('só UMA janela (o hospedeiro não abriu outra)', e.janelas === 1, String(e.janelas));
+    await page.goBack(); await esperarSemJanelaOp(page); await espera(600);
+    e = await estadoOp(page);
+    confere('Voltar fecha a janela e volta a #/compras', e.hash === '#/compras' && e.janelas === 0 && e.titulo === 'Compras · ACN', JSON.stringify({ h: e.hash, j: e.janelas, t: e.titulo }));
+    await page.goForward(); await esperarJanelaOp(page, rot); await espera(500);
+    e = await estadoOp(page);
+    confere('Avançar reabre a OP (pelo endereço)', e.hash === end && e.janelas === 1 && e.titulo === rot + ' · ACN', JSON.stringify({ h: e.hash, j: e.janelas, t: e.titulo }));
+    const h1 = e.historico;
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    e = await estadoOp(page);
+    confere('o X da janela volta UM passo (#/compras), com a tela Compras e o título dela', e.hash === '#/compras' && e.janelas === 0 && e.titulo === 'Compras · ACN' && /Resumo/.test(e.telaDeBaixo), JSON.stringify({ h: e.hash, t: e.titulo }));
+    confere('fechar pelo X não criou passo novo (usa o Voltar)', e.historico === h1, `${h1} → ${e.historico}`);
+    await page.goForward(); await esperarJanelaOp(page, rot); await espera(400);
+    e = await estadoOp(page);
+    confere('depois do X, o Avançar ainda reabre a OP', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    const al = await A(page);
+    confere('nenhum aviso no uso normal', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C17 F5 com a OP aberta: reabre por cima do Início; fechar volta ao passo de antes', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    await abrirOpPelaBusca(page, n);
+    await esperarJanelaOp(page, rot); await espera(400);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page);
+    await esperarJanelaOp(page, rot); await espera(600);
+    let e = await estadoOp(page);
+    confere('F5 em #/op/<número> reabre a janela da OP', e.hash === end && e.janelas === 1 && e.rotulos[0] === rot, JSON.stringify(e));
+    confere('por baixo da janela fica o Início (a OP não tem tela dona)', SAUDACAO.test(e.telaDeBaixo), e.telaDeBaixo);
+    confere('título da aba = OP', e.titulo === rot + ' · ACN', e.titulo);
+    confere('o passo do histórico continua marcado como do sistema depois do F5', e.marca === true);
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(900);
+    e = await estadoOp(page);
+    confere('o X depois do F5 volta ao passo de antes (#/compras) e a tela Compras aparece', e.hash === '#/compras' && e.janelas === 0 && /Resumo/.test(e.telaDeBaixo) && e.titulo === 'Compras · ACN', JSON.stringify({ h: e.hash, t: e.titulo, b: e.telaDeBaixo.slice(0, 50) }));
+    await page.goForward(); await esperarJanelaOp(page, rot); await espera(500);
+    e = await estadoOp(page);
+    confere('Avançar reabre a OP por cima de Compras (a tela de baixo agora é Compras)', e.hash === end && e.janelas === 1 && /Resumo/.test(e.telaDeBaixo), JSON.stringify({ h: e.hash, b: e.telaDeBaixo.slice(0, 50) }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C18 Link colado (primeira página): abre por cima do Início; fechar troca o endereço e NUNCA sai do sistema', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaOp(page, rot); await espera(600);
+    let e = await estadoOp(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link colado abre a OP', e.hash === end && e.janelas === 1 && e.titulo === rot + ' · ACN', JSON.stringify({ h: e.hash, j: e.janelas, t: e.titulo }));
+    confere('por baixo fica o Início', SAUDACAO.test(e.telaDeBaixo), e.telaDeBaixo);
+    confere('o passo do link colado NÃO é do sistema (não há passo anterior dentro dele)', e.marca === false);
+    confere('abrir pelo link não criou passo no histórico', h0 <= 2, `historico=${h0}`);
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(800);
+    e = await estadoOp(page);
+    confere('fechar troca o endereço pelo da tela de baixo (#/inicio)', e.hash === '#/inicio' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('continua no sistema (mesma página) e sem passo novo', e.origem === origem && e.historico === h0, `${origem} | ${h0} → ${e.historico}`);
+    confere('o título volta ao do Início', e.titulo === 'Início · ACN', e.titulo);
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C19 OP que não existe e OP excluída: UMA mensagem, sem janela, sem "carregando" eterno, endereço limpo', {}, async ({ page }) => {
+    for (const [nome, numero] of [['inexistente', NAO_ACHADA], ['excluída', OP_EXCLUIDA]]) {
+      await LA(page).catch(() => {});
+      await abrirComoLinkColado(page, '#/op/' + codif(numero));   // link colado de verdade: só mudar o # na mesma página seria "endereço digitado"
+      await esperarSistema(page); await esperarDesfechoDaAbertura(page); await espera(800);
+      const e = await estadoOp(page);
+      const al = await A(page);
+      const msgs = al.filter(a => a.includes('Não foi possível abrir a OP ' + numero));
+      confere(`OP ${nome}: UMA mensagem dizendo que não achou ou sem acesso`, msgs.length === 1 && /não a encontrei, ou você não tem acesso/.test(msgs[0]), JSON.stringify(al));
+      confere(`OP ${nome}: nenhuma janela e nenhum "Abrindo a OP…"`, e.janelas === 0 && e.carregando === null, JSON.stringify({ j: e.janelas, c: e.carregando }));
+      confere(`OP ${nome}: o endereço é trocado pelo da tela de baixo`, e.hash === '#/inicio' && e.titulo === 'Início · ACN', JSON.stringify({ h: e.hash, t: e.titulo }));
+      await LA(page);
+      await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+      const depois = await A(page);
+      confere(`OP ${nome}: o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C20 Link com o código interno (uuid): abre e o endereço passa a ser o número', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.goto(BASE + '#/op/' + ops.comum.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaOp(page, rot); await espera(700);
+    let e = await estadoOp(page);
+    confere('abre a OP pelo código interno', e.janelas === 1 && e.rotulos[0] === rot, JSON.stringify(e));
+    confere('o endereço trocou o código pelo número, sem criar passo', e.hash === end && e.historico <= 2, `${e.hash} | historico=${e.historico}`);
+    confere('título com o número', e.titulo === rot + ' · ACN', e.titulo);
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    e = await estadoOp(page);
+    confere('fechar leva ao Início, sem deixar o endereço da OP na barra', e.hash === '#/inicio' && e.janelas === 0, JSON.stringify({ h: e.hash }));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C21 Números com barra e espaço (unidade de lote e número antigo): o link codifica e abre', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    for (const [nome, op] of [['unidade de lote', ops.lote], ['número antigo com espaços e barra', ops.estranha]]) {
+      const n = op.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+      await abrirComoLinkColado(page, end);   // link colado de verdade, não só outro # na mesma página
+      await esperarSistema(page); await esperarJanelaOp(page, rot); await espera(600);
+      let e = await estadoOp(page);
+      confere(`${nome}: abre a OP certa`, e.janelas === 1 && e.rotulos[0] === rot && e.hash === end, JSON.stringify({ h: e.hash, r: e.rotulos }));
+      confere(`${nome}: a barra mostra a barra codificada (%2F)`, !/\/op\/.*\/.*\//.test(e.hash.replace('#', '/')) && e.hash.includes('%2F'), e.hash);
+      confere(`${nome}: título com o número inteiro`, e.titulo === rot + ' · ACN', e.titulo);
+      // quem digita a barra sem codificar chega na mesma OP, sem abrir outra janela nem fechar esta
+      await page.evaluate((h) => { location.hash = h; }, '#/op/' + n);
+      await espera(1800);
+      e = await estadoOp(page);
+      confere(`${nome}: o mesmo número com a barra digitada sem codificar continua UMA janela, a mesma`, e.janelas === 1 && e.rotulos[0] === rot, JSON.stringify({ j: e.janelas, r: e.rotulos }));
+      await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+      e = await estadoOp(page);
+      confere(`${nome}: fechar leva ao Início`, e.hash === '#/inicio' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C22 Copiar link: o endereço completo da OP (moderno, jeito antigo e falha)', {}, async (ctx) => {
+    const { page } = ctx;
+    const ops = await opsDeTeste();
+    const n = ops.lote.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.evaluateOnNewDocument(() => {
+      window.__copiado = []; window.__execCopia = []; window.__modoCopia = 'moderna';
+      const stub = { writeText: async (t) => { if (window.__modoCopia === 'recusa' || window.__modoCopia === 'falha') throw new Error('recusado'); window.__copiado.push(t); } };
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, get: () => (window.__modoCopia === 'sem' ? undefined : stub) });
+      const original = document.execCommand.bind(document);
+      document.execCommand = (cmd, ...r) => {
+        if (cmd !== 'copy') return original(cmd, ...r);
+        const campo = document.querySelector('.acn-copiar-oculto');
+        window.__execCopia.push(campo ? campo.value : null);
+        return window.__modoCopia !== 'falha';
+      };
+    });
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaOp(page, rot); await espera(800);
+    const botao = await page.evaluate(() => { const b = document.querySelector('.acn-opl-cab-acoes button[aria-label="Copiar o link desta OP"]'); return b ? b.innerText.trim() : null; });
+    confere('a janela tem o botão "Copiar link"', botao === 'Copiar link', String(botao));
+    const completo = BASE + end;
+    const clicar = async () => { await page.evaluate(() => document.querySelector('.acn-opl-cab-acoes button[aria-label="Copiar o link desta OP"]').click()); await espera(900); };
+    await LA(page); await clicar();
+    let al = await A(page);
+    let copiado = await page.evaluate(() => window.__copiado);
+    confere('forma moderna: copia o endereço COMPLETO (base atual + #/op/<número codificado>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+    confere('forma moderna: avisa que copiou', al.length === 1 && /^Link da OP .* copiado\./.test(al[0]), JSON.stringify(al));
+    await page.evaluate(() => { window.__modoCopia = 'recusa'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    const exec = await page.evaluate(() => window.__execCopia);
+    confere('navegador recusa a forma moderna: usa o jeito antigo, com o mesmo endereço', exec.length === 1 && exec[0] === completo, JSON.stringify(exec));
+    confere('jeito antigo: avisa que copiou', al.length === 1 && /copiado\./.test(al[0]), JSON.stringify(al));
+    const sobrou = await page.evaluate(() => document.querySelectorAll('.acn-copiar-oculto').length);
+    confere('o campo escondido do jeito antigo é retirado da tela', sobrou === 0, String(sobrou));
+    await page.evaluate(() => { window.__modoCopia = 'sem'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    confere('sem a área de transferência moderna: copia pelo jeito antigo', al.length === 1 && /copiado\./.test(al[0]) && (await page.evaluate(() => window.__execCopia)).length === 2, JSON.stringify(al));
+    await page.evaluate(() => { window.__modoCopia = 'falha'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && /^Não foi possível copiar o link da OP .*barra do navegador/.test(al[0]), JSON.stringify(al));
+    const e = await estadoOp(page);
+    confere('copiar não mexeu no endereço nem fechou a janela', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C23 Menção de OP: abre a janela da OP por cima da tela atual, sem trocar de aba', {
+    simular: (url, r) => {
+      if (r.method() !== 'GET' || !url.includes('/rest/v1/mencoes?') || !url.includes('select=*')) return null;
+      return OPS && OPS.comum ? { status: 200, body: [{
+        id: '99999999-0000-4000-8000-000000000001', mencionado_id: ID_ZZTESTE, mencionado_nome: 'ZZTESTE', mencionante_nome: 'ZZTESTE Autor',
+        contexto: 'op', contexto_id: OPS.comum.opl, contexto_descricao: 'OP ' + OPS.comum.opl, aba_destino: 'pcp', texto_trecho: 'menção de teste (simulada)',
+        lida: false, resolvida: false, criado_em: new Date().toISOString(),
+      }] } : null;
+    },
+  }, async ({ page, gravacoes }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    const h0 = (await estadoOp(page)).historico;
+    await page.evaluate(() => { const b = document.querySelector('[title="Menções"], [title$="pendente(s)"]'); if (!b) throw new Error('botão de Menções não achado'); b.click(); });
+    await page.waitForSelector('.acn-men-desc.link', { timeout: 15000 });
+    let e = await estadoOp(page);
+    confere('o painel de Menções abriu com a menção de OP', e.painelAberto, JSON.stringify(e));
+    await page.evaluate(() => document.querySelector('.acn-men-desc.link').click());
+    await esperarJanelaOp(page, rot); await espera(600);
+    e = await estadoOp(page);
+    confere('a janela da OP abriu pelo endereço', e.hash === end && e.janelas === 1 && e.rotulos[0] === rot, JSON.stringify(e));
+    confere('NÃO trocou de aba (a menção apontava para o PCP): a tela de baixo segue sendo Compras', /Resumo/.test(e.telaDeBaixo), e.telaDeBaixo);
+    confere('o painel de Menções fechou', e.painelAberto === false);
+    confere('um passo no histórico', e.historico === h0 + 1, `${h0} → ${e.historico}`);
+    confere('uma janela só', e.janelas === 1, String(e.janelas));
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    e = await estadoOp(page);
+    confere('o X volta a #/compras', e.hash === '#/compras' && e.janelas === 0, JSON.stringify({ h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+    confere('a menção foi marcada como lida pela gravação normal (que o teste bloqueou)', gravacoes.some(g => g.metodo === 'PATCH' && /\/mencoes/.test(g.url) && /"lida":true/.test(g.corpo || '')), JSON.stringify(gravacoes.map(g => g.metodo + ' ' + g.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 60))));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C24 Número de OP clicável (LinkOpl) em uma tela: a janela do módulo ganha o endereço, uma só, e o Avançar reabre', {}, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    // o número de OP clicável é o `LinkOpl` (title "Abrir detalhes da OP"); o "Abrir o lote inteiro" do `OpLote` usa a mesma classe e não é uma OP
+    const LINK_DE_OP = '.acn-main span.acn-ats-link[title="Abrir detalhes da OP"]';
+    let achou = null;
+    for (const tela of ['PCP', 'Almoxarifado', 'Adaptação', 'Fiscal', 'Qualidade', 'Engenharia']) {
+      try { await clicarNoMenu(page, tela); } catch (e) { continue; }   // a tela não está no menu desta conta
+      const numero = await page.waitForSelector(LINK_DE_OP, { timeout: 9000 }).then(h => h.evaluate(l => l.innerText.trim())).catch(() => null);
+      if (numero) { achou = { tela, numero }; break; }
+    }
+    confere('achei uma tela com número de OP clicável', !!achou, 'nenhuma das telas tem');
+    if (!achou) return;
+    const rot = 'OP ' + achou.numero, end = '#/op/' + codif(achou.numero);
+    const antes = await estadoOp(page);
+    await page.evaluate((sel) => document.querySelector(sel).click(), LINK_DE_OP);
+    await esperarJanelaOp(page, rot);
+    // o hospedeiro, se não visse que o módulo já abriu a OP, leria a OP do banco e abriria uma SEGUNDA janela só depois da leitura: por isso se vigia por uns segundos
+    const vigia = await vigiarJanelasDeOp(page, 3500);
+    let e = await estadoOp(page);
+    confere(`a janela aberta pelo módulo (${achou.tela}) ganhou o endereço da OP`, e.hash === end && e.rotulos[0] === rot, JSON.stringify({ h: e.hash, r: e.rotulos }));
+    confere('UMA janela só, e o hospedeiro nem chegou a mostrar "Abrindo a OP…" (não leu a OP à toa)', e.janelas === 1 && vigia.maxJanelas === 1 && !vigia.viuCarregando, JSON.stringify({ janelas: e.janelas, ...vigia }));
+    confere('um passo no histórico e o título da OP', e.historico === antes.historico + 1 && e.titulo === rot + ' · ACN', `${antes.historico} → ${e.historico} | ${e.titulo}`);
+    await page.goBack(); await esperarSemJanelaOp(page); await espera(600);
+    e = await estadoOp(page);
+    confere('Voltar fecha a janela do módulo e volta ao endereço da tela', e.hash === antes.hash && e.janelas === 0 && e.titulo === antes.titulo, JSON.stringify({ h: e.hash, t: e.titulo }));
+    await page.goForward(); await esperarJanelaOp(page, rot); await espera(500);
+    e = await estadoOp(page);
+    confere('Avançar reabre a OP (agora pelo hospedeiro), uma janela só', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    e = await estadoOp(page);
+    confere('o X volta ao endereço da tela', e.hash === antes.hash && e.janelas === 0, JSON.stringify({ h: e.hash }));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C25 De uma OP para outra por endereço digitado, e Voltar entre elas', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const a = ops.comum.opl, b = ops.outra.opl;
+    const rotA = 'OP ' + a, rotB = 'OP ' + b, endA = '#/op/' + codif(a), endB = '#/op/' + codif(b);
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    await abrirOpPelaBusca(page, a); await esperarJanelaOp(page, rotA); await espera(500);
+    await page.evaluate((h) => { location.hash = h; }, endB);
+    await esperarJanelaOp(page, rotB); await espera(900);
+    let e = await estadoOp(page);
+    confere('digitar o endereço de outra OP fecha a primeira e abre a segunda (uma janela só)', e.hash === endB && e.janelas === 1 && e.rotulos[0] === rotB && e.titulo === rotB + ' · ACN', JSON.stringify({ h: e.hash, r: e.rotulos, t: e.titulo }));
+    await page.goBack(); await esperarJanelaOp(page, rotA); await espera(900);
+    e = await estadoOp(page);
+    confere('Voltar reabre a primeira OP (e fecha a segunda)', e.hash === endA && e.janelas === 1 && e.rotulos[0] === rotA, JSON.stringify({ h: e.hash, r: e.rotulos }));
+    await page.goBack(); await esperarSemJanelaOp(page); await espera(700);
+    e = await estadoOp(page);
+    confere('Voltar de novo fecha tudo e volta a #/compras', e.hash === '#/compras' && e.janelas === 0 && e.titulo === 'Compras · ACN', JSON.stringify({ h: e.hash, t: e.titulo }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  let leituraLenta = true;   // liga e desliga a demora simulada da leitura da OP
+  await cenario('C26 Banco lento: "Abrindo a OP…" aparece; Voltar durante a espera não deixa a janela aparecer depois', {
+    simular: (url, r) => (leituraLenta && r.method() === 'GET' && /\/rest\/v1\/oples\?select=\*&opl=eq\./.test(url) ? new Promise(res => setTimeout(() => res(null), 3500)) : null),
+  }, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl, rot = 'OP ' + n, end = '#/op/' + codif(n);
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Compras'); await espera(1200);
+    await page.evaluate((h) => { location.hash = h; }, end);
+    await espera(900);
+    let e = await estadoOp(page);
+    confere('enquanto lê: aparece "Abrindo a OP …" e ainda não há janela', e.carregando && e.carregando.includes(n) && e.janelas === 0, JSON.stringify({ c: e.carregando, j: e.janelas }));
+    await page.goBack(); await espera(300);
+    await espera(5000);
+    e = await estadoOp(page);
+    confere('Voltar durante a espera: a janela NÃO aparece quando a leitura termina', e.janelas === 0 && e.carregando === null && e.hash === '#/compras', JSON.stringify({ j: e.janelas, c: e.carregando, h: e.hash }));
+    // agora sem Voltar: espera a leitura e a janela aparece
+    await page.evaluate((h) => { location.hash = h; }, end);
+    await esperarJanelaOp(page, rot); await espera(400);
+    e = await estadoOp(page);
+    confere('esperando até o fim, a janela abre e o "Abrindo…" some', e.janelas === 1 && e.carregando === null, JSON.stringify({ j: e.janelas, c: e.carregando }));
+    leituraLenta = false;
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C27 Leitura da OP recusada pelo banco: a mensagem diz que a leitura falhou (não "não achei"), uma vez, e o endereço é limpo', {
+    simular: (url, r) => (r.method() === 'GET' && /\/rest\/v1\/oples\?select=\*&opl=eq\./.test(url) ? { status: 500, body: { message: 'erro simulado do banco' } } : null),
+  }, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl;
+    await page.goto(BASE + '#/op/' + codif(n), { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarDesfechoDaAbertura(page); await espera(800);
+    const e = await estadoOp(page);
+    const al = await A(page);
+    const msgs = al.filter(a => a.includes('Não foi possível abrir a OP ' + n));
+    confere('UMA mensagem dizendo que a leitura falhou', msgs.length === 1 && /a leitura falhou/.test(msgs[0]) && !/não a encontrei/.test(msgs[0]), JSON.stringify(al));
+    confere('sem janela, sem "Abrindo…" e com o endereço limpo', e.janelas === 0 && e.carregando === null && e.hash === '#/inicio', JSON.stringify({ j: e.janelas, c: e.carregando, h: e.hash }));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C28 O número da OP muda com a janela aberta (menu "Alterar o número da OP", feito pela tela): o endereço e o título acompanham', {
+    // a troca é a função do banco `renomear_opl` (POST): o teste a bloqueia (nada chega ao banco) e responde como se o banco tivesse trocado o número
+    escritaSimulada: (url, metodo, corpo) => {
+      if (metodo !== 'POST' || !/\/rest\/v1\/rpc\/renomear_opl/.test(url)) return null;
+      const c = JSON.parse(corpo || '{}');
+      return { status: 200, body: { antigo: OPS && OPS.comum && OPS.comum.opl, novo: c.p_novo, ops: 1, referencias: 0 } };
+    },
+  }, async ({ page, gravacoes }) => {
+    const ops = await opsDeTeste();
+    const n = ops.comum.opl, NOVO = 'ZZ-RENOMEADA.0001';
+    await page.goto(BASE + '#/op/' + codif(n), { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaOp(page, 'OP ' + n); await espera(900);
+    const h0 = (await estadoOp(page)).historico;
+    await page.evaluate(() => document.querySelector('.acn-opl[role="dialog"] button[aria-label="Mais ações da OP"]').click());
+    await page.waitForSelector('.acn-menu [role="menuitem"]', { timeout: 8000 });
+    await page.evaluate(() => {
+      const i = [...document.querySelectorAll('.acn-menu [role="menuitem"]')].find(b => b.innerText.trim() === 'Alterar o número da OP');
+      if (!i) throw new Error('o menu da OP não tem "Alterar o número da OP"');
+      i.click();
+    });
+    await page.waitForSelector('.acn-dialogo-campo', { timeout: 8000 });
+    await page.focus('.acn-dialogo-campo'); await espera(250);
+    await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control');
+    await page.keyboard.type(NOVO, { delay: 10 });
+    await page.keyboard.press('Enter');
+    // a 2ª janela (a de confirmar a troca) aparece sem o campo de texto
+    await page.waitForFunction(() => document.querySelector('.acn-dialogo') && !document.querySelector('.acn-dialogo-campo'), { timeout: 20000 });
+    await page.evaluate(() => [...document.querySelectorAll('.acn-dialogo-rodape button')].pop().click());
+    await esperarJanelaOp(page, 'OP ' + NOVO); await espera(900);
+    let e = await estadoOp(page);
+    const rpc = gravacoes.filter(g => /\/rest\/v1\/rpc\/renomear_opl/.test(g.url));
+    const corpo = rpc[0] ? JSON.parse(rpc[0].corpo || '{}') : {};
+    confere('a troca saiu UMA vez, para a OP certa e com o número digitado (a gravação foi bloqueada pelo teste)', rpc.length === 1 && corpo.p_opl_id === ops.comum.id && corpo.p_novo === NOVO, JSON.stringify(rpc.map(g => g.corpo)));
+    confere('a janela segue UMA só, agora com o número novo', e.janelas === 1 && e.rotulos[0] === 'OP ' + NOVO, JSON.stringify({ j: e.janelas, r: e.rotulos }));
+    confere('o endereço acompanhou o número novo, sem criar passo no histórico', e.hash === '#/op/' + NOVO && e.historico === h0, JSON.stringify({ h: e.hash, antes: h0, depois: e.historico }));
+    confere('o título acompanhou o número novo', e.titulo === 'OP ' + NOVO + ' · ACN', e.titulo);
+    const al = await A(page);
+    confere('o único aviso foi o "Número alterado: …" da própria troca', al.length === 1 && /^Número alterado: /.test(al[0]), JSON.stringify(al));
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(900);
+    e = await estadoOp(page);
+    confere('ao fechar, nenhum dos dois números fica na barra: volta ao Início', e.hash === '#/inicio' && e.janelas === 0 && e.titulo === 'Início · ACN', JSON.stringify({ h: e.hash, t: e.titulo }));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const [rotulo, largura, altura, toque] of [['celular 375', 375, 812, true], ['celular 360', 360, 740, true], ['celular 320', 320, 640, true], ['tablet 820', 820, 1180, true]]) {
+    await cenario(`C29 Janela da OP com o "Copiar link" — ${rotulo}: sem rolagem para o lado, botão inteiro na tela`, { largura, altura, toque }, async ({ page }) => {
+      const ops = await opsDeTeste();
+      const n = ops.comum.opl, rot = 'OP ' + n;
+      await page.goto(BASE + '#/op/' + codif(n), { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaOp(page, rot); await espera(900);
+      await page.screenshot({ path: FOTOS + '/op_copiar_link_' + rotulo.replace(/\s+/g, '_') + '.png' });   // para olhar com os olhos o cabeçalho com o botão novo
+      const m = await page.evaluate(() => {
+        const rect = (el) => { const r = el.getBoundingClientRect(); return { esq: Math.round(r.left), dir: Math.round(r.right), alt: Math.round(r.height), larg: Math.round(r.width) }; };
+        const b = document.querySelector('.acn-opl-cab-acoes button[aria-label="Copiar o link desta OP"]');
+        const x = document.querySelector('.acn-opl-x');
+        const largura = window.innerWidth;
+        // só os controles de ação do cabeçalho (o botão novo, o menu e o X): o título longo e o resto do cabeçalho já existiam e não são deste teste
+        const passam = [...document.querySelectorAll('.acn-opl-cab-acoes *, .acn-opl-x')].filter(el => { const q = el.getBoundingClientRect(); return q.width > 0 && (q.right > largura + 1 || q.left < -1); }).length;
+        // o texto do cabeçalho (quem é a OP) e a barra de ações não podem se cobrir: foi o defeito que a foto do celular mostrou ("Dossiê" por cima do texto)
+        const txt = document.querySelector('.acn-opl-cab-txt').getBoundingClientRect();
+        const acoes = document.querySelector('.acn-opl-cab-acoes').getBoundingClientRect();
+        const seCobrem = !(txt.right <= acoes.left + 1 || acoes.right <= txt.left + 1 || txt.bottom <= acoes.top + 1 || acoes.bottom <= txt.top + 1);
+        // a palavra mais comprida da linha de cima ("TRANSFORMAÇÃO") tem de caber na coluna do texto, senão ela passa por baixo dos botões
+        const sup = document.querySelector('.acn-opl-cab-sup');
+        const ruler = document.createElement('span');
+        ruler.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:' + getComputedStyle(sup).font + ';letter-spacing:' + getComputedStyle(sup).letterSpacing + ';text-transform:uppercase';
+        document.body.appendChild(ruler);
+        let palavraMaior = 0;
+        for (const p of sup.innerText.split(/\s+/)) { ruler.textContent = p; palavraMaior = Math.max(palavraMaior, ruler.getBoundingClientRect().width); }
+        ruler.remove();
+        return { botao: b && rect(b), fechar: x && rect(x), janelaLargura: largura, rolagem: document.documentElement.scrollWidth, passam, seCobrem, colunaDoTexto: Math.round(txt.width), palavraMaior: Math.round(palavraMaior) };
+      });
+      confere('o botão "Copiar link" existe e está inteiro dentro da tela', m.botao && m.botao.esq >= 0 && m.botao.dir <= m.janelaLargura, JSON.stringify(m));
+      confere('o botão é fácil de tocar (32 px ou mais de altura)', m.botao && m.botao.alt >= 32, JSON.stringify(m.botao));
+      confere('o X de fechar continua inteiro dentro da tela', m.fechar && m.fechar.esq >= 0 && m.fechar.dir <= m.janelaLargura, JSON.stringify(m.fechar));
+      confere('sem rolagem para o lado', m.rolagem <= m.janelaLargura, JSON.stringify(m));
+      confere('nenhum controle de ação do cabeçalho passa da borda da tela', m.passam === 0, String(m.passam));
+      confere('a barra de ações NÃO cobre o texto do cabeçalho', m.seCobrem === false, JSON.stringify(m));
+      confere('a palavra mais comprida do cabeçalho cabe na coluna do texto', m.palavraMaior <= m.colunaDoTexto, JSON.stringify({ coluna: m.colunaDoTexto, palavra: m.palavraMaior }));
+      // no celular as ações viram uma barra no alto e o texto fica com a largura toda (a foto mostrou ~27% antes do conserto); no tablet as ações ficam ao lado do texto, e 40% já separa o normal de um título espremido
+      confere('a coluna do texto tem folga de verdade (celular: 60% da largura da tela; tablet: 40%)', m.colunaDoTexto >= m.janelaLargura * (largura <= 640 ? 0.6 : 0.4), JSON.stringify({ coluna: m.colunaDoTexto, tela: m.janelaLargura }));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Janela de OP aberta de DENTRO de outra: o caso do lote ("Abrir o lote" → o número clicável de outra unidade). A lista de janelas abertas do `OpNoEndereco` existe para isso:
+  // a de baixo NÃO se fecha quando a de cima escreve o endereço dela, e cada X ou Voltar tira só uma.
+  await cenario('C30 OP aberta de dentro de outra (o lote): duas janelas, a de baixo fica; o X e o Voltar tiram só a de cima', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    confere('há um lote com pelo menos duas unidades vivas para o teste', !!ops.loteComVarias, 'nenhum lote do banco tem duas unidades não canceladas');
+    if (!ops.loteComVarias) return;
+    const a = ops.loteComVarias.opl, rotA = 'OP ' + a, endA = '#/op/' + codif(a);
+    const soOps = (x) => x.rotulos.filter(r => /^OP /.test(r));
+    const LINK_DO_LOTE = '.acn-opl[role="dialog"][aria-label^="Lote "] span.acn-ats-link[title="Abrir detalhes da OP"]';
+    const fecharJanelaDe = (rot) => page.evaluate((r) => {
+      const j = [...document.querySelectorAll('.acn-opl[role="dialog"]')].find(d => d.getAttribute('aria-label') === r);
+      if (!j) throw new Error('não achei a janela ' + r);
+      j.querySelector('.acn-opl-x').click();
+    }, rot);
+    const esperarSemJanela = (rot) => page.waitForFunction((r) => ![...document.querySelectorAll('.acn-opl[role="dialog"]')].some(d => d.getAttribute('aria-label') === r), { timeout: 12000 }, rot);
+
+    await abrirComoLinkColado(page, endA);
+    await esperarSistema(page); await esperarJanelaOp(page, rotA); await espera(900);
+    const inicio = await estadoOp(page);
+    const h0 = inicio.historico;
+    // menu "Mais ações da OP" → "Abrir o lote (N)": a janela do lote traz o "Carro a carro", com cada unidade como número clicável
+    await page.evaluate(() => document.querySelector('.acn-opl[role="dialog"] button[aria-label="Mais ações da OP"]').click());
+    await page.waitForSelector('.acn-menu [role="menuitem"]', { timeout: 8000 });
+    await page.evaluate(() => {
+      const i = [...document.querySelectorAll('.acn-menu [role="menuitem"]')].find(m => /^Abrir o lote \(\d+\)$/.test(m.innerText.trim()));
+      if (!i) throw new Error('o menu da OP não tem "Abrir o lote (N)"');
+      i.click();
+    });
+    await page.waitForFunction((s) => document.querySelector(s), { timeout: 30000 }, LINK_DO_LOTE);
+    const b = await page.evaluate((s, num) => [...document.querySelectorAll(s)].map(x => x.innerText.trim()).find(n => n && n !== num) || null, LINK_DO_LOTE, a);
+    confere('a janela do lote lista outra unidade para abrir', !!b, 'só a própria unidade apareceu');
+    if (!b) return;
+    const rotB = 'OP ' + b, endB = '#/op/' + codif(b);
+    // clica na unidade B e vigia por uns segundos: o hospedeiro não pode ler a OP à toa nem abrir uma TERCEIRA janela depois da leitura
+    const abrirB = async () => {
+      await page.evaluate((s, n) => [...document.querySelectorAll(s)].find(x => x.innerText.trim() === n).click(), LINK_DO_LOTE, b);
+      await esperarJanelaOp(page, rotB);
+      return vigiarJanelasDeOp(page, 3000);
+    };
+
+    // 1) a segunda abre de dentro da primeira
+    const vigia = await abrirB();
+    let e = await estadoOp(page);
+    confere('as DUAS janelas de OP ficam abertas (a de baixo não se fecha quando a de cima escreve o endereço), e nenhuma terceira aparece', soOps(e).length === 2 && soOps(e).includes(rotA) && soOps(e).includes(rotB) && vigia.maxJanelas === 2 && !vigia.viuCarregando, JSON.stringify({ r: e.rotulos, ...vigia }));
+    confere('o endereço e o título são os da de cima, com UM passo novo no histórico', e.hash === endB && e.titulo === rotB + ' · ACN' && e.historico === h0 + 1, JSON.stringify({ h: e.hash, t: e.titulo, antes: h0, depois: e.historico }));
+
+    // 2) o X da de cima: só ela sai, e o endereço volta ao da de baixo
+    await fecharJanelaDe(rotB); await esperarSemJanela(rotB); await espera(900);
+    e = await estadoOp(page);
+    confere('o X da de cima fecha SÓ ela: a de baixo continua, com o endereço e o título dela', soOps(e).length === 1 && soOps(e)[0] === rotA && e.hash === endA && e.titulo === rotA + ' · ACN', JSON.stringify({ r: e.rotulos, h: e.hash, t: e.titulo }));
+    confere('a janela do lote, por baixo delas, continua aberta', e.rotulos.some(r => /^Lote /.test(r)), JSON.stringify(e.rotulos));
+
+    // 3) abre de novo e usa o Voltar do navegador
+    await abrirB();
+    await page.goBack(); await esperarSemJanela(rotB); await espera(900);
+    e = await estadoOp(page);
+    confere('o Voltar do navegador também tira SÓ a de cima', soOps(e).length === 1 && soOps(e)[0] === rotA && e.hash === endA && e.titulo === rotA + ' · ACN', JSON.stringify({ r: e.rotulos, h: e.hash, t: e.titulo }));
+
+    // 4) o Avançar mostra a OP que o endereço pede
+    await page.goForward(); await esperarJanelaOp(page, rotB); await espera(1200);
+    e = await estadoOp(page);
+    confere('o Avançar mostra a OP que o endereço pede, com o título dela e sem "Abrindo…" preso', soOps(e).includes(rotB) && e.hash === endB && e.titulo === rotB + ' · ACN' && e.carregando === null, JSON.stringify({ r: e.rotulos, h: e.hash, t: e.titulo, c: e.carregando }));
+
+    // 5) o X da que sobrou volta um passo (o passo é do sistema): o endereço é o da anterior, e ela é reaberta
+    await fecharJanelaDe(rotB); await esperarJanelaOp(page, rotA); await espera(900);
+    e = await estadoOp(page);
+    confere('o X dessa OP leva de volta à anterior (um passo atrás no histórico)', soOps(e).length === 1 && soOps(e)[0] === rotA && e.hash === endA && e.titulo === rotA + ' · ACN', JSON.stringify({ r: e.rotulos, h: e.hash, t: e.titulo }));
+
+    // 6) o X da primeira: link colado, sem passo anterior dentro do sistema → o endereço vira o da tela de baixo
+    await fecharJanelaDe(rotA); await esperarSemJanelaOp(page); await espera(900);
+    e = await estadoOp(page);
+    confere('o X da última volta ao Início, sem passo novo e sem sair do sistema', e.hash === '#/inicio' && e.janelas === 0 && e.historico === h0 + 1 && e.origem === inicio.origem && e.titulo === 'Início · ACN', JSON.stringify({ h: e.hash, j: e.janelas, hist: [h0, e.historico], o: e.origem, t: e.titulo }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Link digitado em minúscula ou sem acento: o endereço acha a OP pela coluna `opl_norm` (o número sem maiúscula nem acento) quando o número exato não existe
+  await cenario('C31 Link em minúscula e sem acento: abre a mesma OP, com o título certo, e fechar leva ao Início', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    const casos = [['em minúscula', ops.comum.opl, ops.comum.opl.toLowerCase()]];
+    if (ops.comAcento) casos.push(['em minúscula e sem acento (número antigo)', ops.comAcento.opl, ops.comAcento.opl_norm]);
+    else console.log('   (nenhuma OP com acento no número: o caso sem acento não se aplica)');
+    for (const [nome, real, digitado] of casos) {
+      const rot = 'OP ' + real;
+      await abrirComoLinkColado(page, '#/op/' + codif(digitado));
+      await esperarSistema(page); await esperarJanelaOp(page, rot); await espera(700);
+      const e = await estadoOp(page);
+      confere(`link ${nome}: abre a OP certa, uma janela só`, e.janelas === 1 && e.rotulos[0] === rot, JSON.stringify({ r: e.rotulos, digitado }));
+      confere(`link ${nome}: o título é o da OP`, e.titulo === rot + ' · ACN', e.titulo);
+      await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+      const f = await estadoOp(page);
+      confere(`link ${nome}: fechar leva ao Início, sem deixar o endereço digitado na barra`, f.hash === '#/inicio' && f.janelas === 0, JSON.stringify({ h: f.hash }));
+    }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
   // ───────────────────────────────────────────────────────────────────────────

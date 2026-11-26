@@ -8,6 +8,9 @@
 //  - todo atalho passa a conferir a permissão (hoje só "ir para a aba" conferia): quem não tem a tela vê um aviso, nunca uma tela vazia;
 //  - num link, o "sem acesso" espera a releitura das permissões do banco (as guardadas no navegador podem estar velhas): "conferindo o acesso";
 //  - voltar e avançar reabrem a tela do zero (como já era ao trocar de aba pelo menu): aceito por ora.
+//
+// Fase 2 (25/11/2026): o endereço de um REGISTRO (`#/op/<número>`) não é tela: a tela fica como está (na abertura da página, a tela inicial) e a
+// janela da OP abre por cima dela, quem cuida disso é o `OpDoEndereco` e a própria janela da OP (`OpNoEndereco.ts`). Aqui só não se mexe na tela.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { decidirEndereco, montarEndereco, type ContextoDoEndereco, type Decisao } from './Rotas';
 import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';
@@ -32,6 +35,7 @@ const TEXTO_SEM_ACESSO = 'Você não tem acesso a essa aba. Peça a liberação 
 function telaDaDecisao(d: Decisao, telaInicial: () => string): string {
   if (d.tipo === 'abrir') return d.tela;
   if (d.tipo === 'desconhecido') return telaInicial();
+  if (d.tipo === 'registro') return telaInicial();   // a OP do endereço abre por cima; por baixo, na abertura da página, fica a tela inicial
   return '';   // conferindo ou sem acesso: nenhuma tela aberta
 }
 
@@ -59,6 +63,8 @@ export function useNavegacao(entrada: EntradaDaNavegacao) {
   if (inicial.current === null) inicial.current = decidirEndereco(enderecoAtual(), ctxRef.current);
   const [tela, setTela] = useState<string>(() => telaDaDecisao(inicial.current as Decisao, entrada.telaInicial));
   const [bloqueio, setBloqueio] = useState<Bloqueio | null>(() => bloqueioDaDecisao(inicial.current as Decisao));
+  const bloqueioRef = useRef(bloqueio);
+  bloqueioRef.current = bloqueio;
 
   /** Põe na tela o que a decisão manda (o endereço da barra NÃO ganha passo novo: o passo já foi dado pelo navegador). */
   const aplicar = useCallback((d: Decisao) => {
@@ -66,6 +72,10 @@ export function useNavegacao(entrada: EntradaDaNavegacao) {
     if (d.tipo === 'abrir') {
       setTela(d.tela); setBloqueio(null);
       if (d.corrigirEndereco) irParaEndereco(montarEndereco(d.tela), { substituir: true });
+    } else if (d.tipo === 'registro') {
+      // a janela da OP é do `OpDoEndereco`; a tela de baixo fica como está. Só se havia o aviso de "conferindo/sem acesso" (de OUTRO endereço, que
+      // já não está na barra) a tela inicial aparece por baixo da janela, em vez de a janela abrir por cima de um aviso que não vale mais
+      if (bloqueioRef.current) { setTela(atual.telaInicial()); setBloqueio(null); }
     } else if (d.tipo === 'desconhecido') {
       const t = atual.telaInicial();
       atual.avisar('Não reconheci este endereço do sistema. Abri a tela inicial.');

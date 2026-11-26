@@ -79,7 +79,9 @@ import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
 import ContatoAlertWidget from './ContatoAlertWidget';
 import ContatoComercialAlertWidget from './ContatoComercialAlertWidget';
-import { OplDetalheModal } from './AcnTabShared';
+// 25/11/2026 (plano de endereços e rotas, Fase 2): a janela da OP aberta pelo endereço, pela busca geral e pelas Menções vem do `OpDoEndereco` (a casca monta uma só)
+import OpDoEndereco from './OpDoEndereco';
+import { abrirOpPeloEndereco } from './OpNoEndereco';
 import { normalizarBusca, palavrasDaBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { ligarColunaDeAcoesFixa } from './ColunaAcoesFixa';
 
@@ -799,7 +801,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [globalResultados, setGlobalResultados] = useState<any[]>([]);
   const [globalBuscando, setGlobalBuscando]     = useState(false);
   const [showGlobalRes, setShowGlobalRes]       = useState(false);
-  const [globalOplAberto, setGlobalOplAberto]   = useState<any|null>(null);
   const globalDebounce = useRef<any>(null);
   const globalBarRef   = useRef<any>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
@@ -1397,8 +1398,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (r._tipo === 'crm') {
       if (irParaTela('crm')) setPendingOpenCrmId(r.id);
     } else if (r._tipo === 'opl') {
-      const { data } = await supabase.from('oples').select('*').eq('id', r.id).single();
-      if (data) setGlobalOplAberto(data);
+      // 25/11/2026 (plano de endereços e rotas, Fase 2): a OP abre pelo endereço (`#/op/<número>`, um passo no histórico); o `OpDoEndereco` lê a OP e monta a janela
+      abrirOpPeloEndereco(r.opl || r.id);
     } else if (r._tipo === 'os') {
       if (irParaTela('sac')) setTimeout(() => window.dispatchEvent(new CustomEvent('os:abrir-global', { detail: { id: r.id } })), 400);
     } else if (r._tipo === 'licitacao') {
@@ -1892,14 +1893,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte) */}
       <ViagemPorMencao currentUser={currentUser} />
 
-      {/* ── OPL aberto via busca global (modal flutuante) ── */}
-      {globalOplAberto && (
-        <OplDetalheModal
-          opl={globalOplAberto}
-          onClose={() => setGlobalOplAberto(null)}
-          currentUser={currentUser}
-        />
-      )}
+      {/* ── Janela da OP aberta pelo endereço (#/op/<número>), pela busca geral e pelas Menções (plano de endereços, Fase 2) ── */}
+      <OpDoEndereco currentUser={currentUser} tela={activeTab || telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)} />
 
       {/* Painel lateral de Análises Orçamentárias */}
       {showAnalisePanel && (

@@ -2897,6 +2897,14 @@ body.dark .acn-opl-texto.azul, body.dark .acn-opl-texto.verde, body.dark .acn-op
   .acn-opl-corpo { grid-template-columns: 1fr; padding: 10px 12px 20px; }
   .acn-opl-cab { flex-wrap: wrap; }
 }
+/* 25/11/2026 (Fase 2 do plano de endereços): o botão "Copiar link" alargou a barra de ações da janela da OP e, no celular, o título ficava numa coluna de ~100 px, com o "Dossiê" por
+   cima da primeira linha do texto (visto na foto do celular de 360 px). Abaixo de 640 px as ações viram uma barra própria no alto, alinhada à direita, e o título ocupa a largura
+   toda logo abaixo. Só a janela da OP (a do lote, que usa as mesmas classes, não ganhou botão e fica como estava). */
+@media (max-width: 640px) {
+  .acn-opl-cab.acn-opl-cab-op { row-gap: 6px; }
+  .acn-opl-cab.acn-opl-cab-op .acn-opl-cab-acoes { order: -1; flex: 0 0 100%; justify-content: flex-end; }
+  .acn-opl-cab.acn-opl-cab-op .acn-opl-cab-txt { flex: 1 1 100%; }
+}
 
 /* Calendário: lista do dia na lateral (08/10/2026). Não tampa a tela: no computador o calendário ganha uma folga à direita e continua clicável. */
 .acn-cal-lateral { position: fixed; top: 0; right: 0; bottom: 0; z-index: 900; width: min(440px, 100vw); display: flex; background: var(--acn-surface); border-left: 1px solid var(--acn-line); box-shadow: -6px 0 24px rgba(15, 23, 42, .14); }

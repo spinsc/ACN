@@ -5,6 +5,7 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { Botao, Chips, Tag } from './Interface';
 import Icone from './Icone';
 import { permissoesDaViagem } from './ViagemFluxo';
+import { abrirOpPeloEndereco } from './OpNoEndereco';
 import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -317,6 +318,9 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   // que ele montar — o global é lido no mount pra cobrir esse caso.
   const abrirRegistro = (m: any) => {
     if (!m.lida) marcarLida(m);
+    // 25/11/2026 (plano de endereços e rotas, Fase 2): a menção de OP abre a janela da OP pelo endereço (`#/op/<número>`), por cima da tela em que a pessoa está, em qualquer
+    // setor (antes só a tela da Produção a abria; nas outras o clique só trocava de aba). O painel fecha, como ao trocar de tela nas outras menções.
+    if (m.contexto === 'op' && m.contexto_id) { abrirOpPeloEndereco(m.contexto_id); onClose?.(); return; }
     if (m.contexto_id) {
       // CRM/Licitação já têm um mecanismo de deep-link próprio e testado
       // (analise:abrir-origem, ouvido em DashboardTab.tsx — já troca a aba E
