@@ -106,7 +106,8 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
  *  setor, há quantos dias e quantas pendências seguram a OP. Sem cor de alerta por tempo —
  *  decisão do usuário em 29/09/2026. `pendencias` são só as de fabricação/compra que ainda
  *  não fecharam as três etapas (índice de OpPendencias); o Dossiê conta mais tipos. */
-export function OndeEstaCelula({ op, desde = null, pendencias = [] }) {
+/** 26/11/2026 (pendências não lidas): `pendenciasNaoLidas` = nomes do que o banco recusou ler. Sem número de pendências na célula não quer dizer "nenhuma": com a leitura recusada ela diz, em vermelho, que não leu. */
+export function OndeEstaCelula({ op, desde = null, pendencias = [], pendenciasNaoLidas = [] }) {
   if (!op) return null;
   const et = etapaDaOp(op.status_geral, op);
   const dias = desde ? diasDesde(desde.data) : null;
@@ -124,6 +125,12 @@ export function OndeEstaCelula({ op, desde = null, pendencias = [] }) {
         </div>
       ) : (
         <div className="acn-oea-cel-quando acn-oea-fraco" title="Nenhuma data registrada para esta OP."><Icone path={mdiTimerOutline} size={12} /> sem registro</div>
+      )}
+      {pendenciasNaoLidas.length > 0 && (
+        <div className="acn-oea-cel-pend" data-nao-lidas="1"
+          title={`Não foi possível ler as pendências agora (não li: ${pendenciasNaoLidas.join(', ')}). Isso não quer dizer que não existam.`}>
+          <Icone path={mdiAlertOutline} size={12} /> pend.: não lidas
+        </div>
       )}
       {pendencias.length > 0 && (
         <div className="acn-oea-cel-pend"
