@@ -2,10 +2,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // "ESTA ALTERAÇÃO VALE PARA" — o seletor das telas de edição quando a OP é uma unidade de lote (pedido do usuário em 16/10/2026).
 // A regra de verdade mora em EdicaoDeLote.ts. Começa SEMPRE em "só esta unidade": aplicar no lote inteiro é uma escolha consciente.
+// 12e82 (26/11/2026): classes `acn-escopo-*` no design.css (saíram os 5 `style` e os 2 botões crus); e a leitura recusada do tamanho do lote
+// deixou de sumir com o seletor sem dizer nada (a pessoa achava que não havia lote e salvava só uma unidade).
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { baseDoLoteDe, sufixoDoLoteDe, ehUnidadeDeLote } from './EdicaoDeLote';
+import { Botao, Faixa } from './Interface';
 
 /** Quantas unidades tem o lote desta OP (0 se a OP não é de lote). Só a contagem; leitura que falha vale como "não sei" (null). */
 export function useTamanhoDoLote(opl: any): number | null {
@@ -21,26 +24,30 @@ export function useTamanhoDoLote(opl: any): number | null {
 }
 
 export function SeletorEscopo({ opl, tamanho, valor, onChange, texto = '' }: { opl: string; tamanho: number | null; valor: 'unidade' | 'lote'; onChange: (v: 'unidade' | 'lote') => void; texto?: string }) {
-  if (!ehUnidadeDeLote(opl) || !(tamanho > 1)) return null;
+  if (!ehUnidadeDeLote(opl)) return null;
+  // `null` = a leitura do tamanho do lote foi recusada (o 0 e o 1 são "não é lote": nesses casos não há o que escolher)
+  if (tamanho === null) {
+    return (
+      <div className="acn-escopo-aviso" data-escopo="nao-lido">
+        <Faixa tom="erro">Não foi possível saber se esta OP faz parte de um lote (o banco recusou a leitura). Por segurança, a alteração vale <strong>só para esta unidade</strong>. Para mudar o lote inteiro, feche esta janela e abra de novo.</Faixa>
+      </div>
+    );
+  }
+  if (!(tamanho > 1)) return null;
   const suf = sufixoDoLoteDe(opl);
   const opcoes = [
     { v: 'unidade', rotulo: `Só esta unidade (/${suf})` },
     { v: 'lote', rotulo: `O lote inteiro (${tamanho} unidades)` },
   ];
   return (
-    <div className="acn-escopo" role="group" aria-label="Esta alteração vale para" data-escopo={valor}
-      style={{ margin: '0 0 10px', padding: '8px 10px', border: `1px solid ${valor === 'lote' ? '#fde68a' : '#e2e8f0'}`, borderRadius: 6, background: valor === 'lote' ? '#fffbeb' : '#f8fafc' }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Esta alteração vale para</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div className="acn-escopo" role="group" aria-label="Esta alteração vale para" data-escopo={valor}>
+      <div className="acn-escopo-titulo">Esta alteração vale para</div>
+      <div className="acn-escopo-opcoes">
         {opcoes.map(o => (
-          <button key={o.v} type="button" aria-pressed={valor === o.v} onClick={() => onChange(o.v)}
-            style={{ padding: '5px 12px', fontSize: 11, fontWeight: 700, borderRadius: 5, cursor: 'pointer',
-              border: `1px solid ${valor === o.v ? '#0f766e' : '#cbd5e1'}`, background: valor === o.v ? '#0f766e' : '#fff', color: valor === o.v ? '#fff' : '#334155' }}>
-            {o.rotulo}
-          </button>
+          <Botao key={o.v} pequeno variante={valor === o.v ? 'primario' : 'secundario'} aria-pressed={valor === o.v} onClick={() => onChange(o.v)}>{o.rotulo}</Botao>
         ))}
       </div>
-      <div style={{ fontSize: 10, color: valor === 'lote' ? '#92400e' : '#64748b', marginTop: 5 }}>
+      <div className="acn-escopo-ajuda">
         {valor === 'lote'
           ? `Só o que você alterar vai para as outras ${tamanho - 1} unidades. Chassi, placa, veículo, status e NF são de cada carro e não mudam. Unidade já faturada ou cancelada não é mexida. ${texto}`
           : 'Só esta OP muda. Para valer em todos os carros, escolha "O lote inteiro".'}

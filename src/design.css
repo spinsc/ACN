@@ -7796,3 +7796,29 @@ html body .acn-b.acn-wa-qr-atualizar:not(#acn) { margin-top: 8px; }
   .acn-wa-info { flex-basis: calc(100% - 60px); }
   .acn-wa-acoes { flex-basis: 100%; justify-content: flex-start; }
 }
+
+/* ── 12e82 (26/11/2026): o seletor "esta alteração vale para" (EscopoDaEdicao.tsx) e a janela do lote (OpLote.tsx) ──────────────────────────────
+   Saíram os 5 `style` do seletor e os 13 da janela do lote; as cores de ardósia, âmbar e verde-azulado escritas à mão viraram os tokens do guia
+   (o escuro vem dos tokens de `body.dark`, sem regra própria). A marca de "lote inteiro" continua âmbar: é o aviso de que a mudança vai para outras unidades.
+   A letra pequena fica em 12px: o `style` de 10 a 11px era reescrito para 12 a 13px em execução (TonsVisuais), então 12px é o que a pessoa já via. */
+.acn-escopo { margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: 6px; background: var(--acn-surface-2); }
+.acn-escopo[data-escopo=lote] { border-color: color-mix(in srgb, var(--acn-warn) 40%, var(--acn-line)); background: var(--acn-warn-soft); }
+.acn-escopo-titulo { font-size: 12px; font-weight: 800; color: var(--acn-neutral); text-transform: uppercase; margin-bottom: 5px; }
+.acn-escopo-opcoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-escopo-ajuda { font-size: 12px; color: var(--acn-muted); margin-top: 5px; }
+.acn-escopo[data-escopo=lote] .acn-escopo-ajuda { color: var(--acn-warn); }
+.acn-escopo-aviso { margin: 0 0 10px; }
+.acn-escopo-aviso > .acn-faixa { margin: 0; }
+html body .acn-opl-overlay.acn-lote-fundo { z-index: 3100; }
+.acn-opl-corpo.acn-lote-corpo { display: block; padding: 14px; }
+.acn-lote-situacao { margin-bottom: 14px; }
+.acn-lote-situacao > .acn-faixa { margin: 0; }
+.acn-quadro.acn-lote-painel { margin-bottom: 14px; }
+html body .acn-label.acn-lote-titulo { margin-bottom: 6px; }
+html body .acn-label.acn-lote-titulo-dados { margin-bottom: 2px; }
+.acn-lote-diferentes { margin-bottom: 6px; }
+.acn-lote-ajuda { margin-bottom: 8px; }
+.acn-quadro.acn-lote-misto { margin-bottom: 8px; }
+.acn-lote-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.acn-lote-campo.largo { grid-column: 1 / -1; }
+.acn-opl-botoes.acn-lote-botoes { margin-top: 10px; }
