@@ -7641,3 +7641,68 @@ body.dark .acn-ce-titulo, body.dark .acn-ce-item-nome { color: #f1f5f9; }
 body.dark .acn-ce-linha, body.dark .acn-ce-sem-pedido { border-color: #334155; }
 body.dark .acn-ce-end { background: #0c2a3d; border-color: #1e4a66; }
 body.dark .acn-ce-form { background: #3a2a0d; border-color: #6b4a14; }
+
+/* ── 12e80 (25/11/2026): Dossiê da OP (OpDossie.tsx) ─────────────────────────────────────────────────────────────────
+   Saíram os 57 `style` soltos. As letras valem o que a pessoa já via (a regra global reescrevia 9 a 11 px para 12 e 13) e as cores de ardósia, roxo,
+   verde e azul escritas à mão viraram os tokens do guia (o roxo, que não existe no guia, virou a cor da marca). */
+.acn-dos { font-size: 12px; }
+.acn-dos-estado { padding: 20px; font-size: 13px; color: var(--acn-muted); }
+.acn-dos-estado > .acn-faixa { margin: 0; }
+.acn-dos-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.acn-dos-opl { font-size: 17px; font-weight: 800; }
+.acn-dos-sub { font-size: 13px; color: var(--acn-muted); }
+.acn-dos-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.acn-dos-faixa { margin: 0 0 10px; }
+.acn-dos-faixa > .acn-faixa { margin: 0; }
+.acn-dos-pend { background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 30%, var(--acn-line)); border-radius: 6px; padding: 8px 10px; margin: 12px 0; }
+.acn-dos-pend-tit { font-size: 13px; font-weight: 800; color: var(--acn-warn); margin-bottom: 4px; }
+.acn-dos-pend-txt { font-size: 13px; color: var(--acn-warn); }
+.acn-dos-corpo { margin-top: 12px; }
+.acn-dos-sec { --acn-ds: var(--acn-ink); margin-bottom: 14px; }
+.acn-dos-sec[data-tom=atencao] { --acn-ds: var(--acn-warn); }
+.acn-dos-sec[data-tom=info] { --acn-ds: var(--acn-info); }
+.acn-dos-sec[data-tom=marca] { --acn-ds: var(--acn-brand); }
+.acn-dos-sec[data-tom=ok] { --acn-ds: var(--acn-ok); }
+.acn-dos-sec[data-tom=neutro] { --acn-ds: var(--acn-neutral); }
+.acn-dos-sec-titulo { font-size: 13px; font-weight: 800; color: var(--acn-ds); text-transform: uppercase; letter-spacing: .3px; border-bottom: 2px solid color-mix(in srgb, var(--acn-ds) 13%, transparent); padding-bottom: 3px; margin-bottom: 7px; }
+.acn-dos-nada { font-size: 13px; color: var(--acn-muted); }
+.acn-dos-rot { font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; }
+.acn-dos-rot[data-atencao] { color: var(--acn-bad); }
+.acn-dos-val { font-size: 13px; color: var(--acn-ink); }
+.acn-dos-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.acn-dos-grade.m120 { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.acn-dos-grade.m160 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.acn-dos-lote { font-size: 12px; color: var(--acn-muted); margin-top: 6px; }
+.acn-dos-formacao { margin-top: 7px; font-size: 13px; }
+.acn-dos-obs { margin-bottom: 6px; }
+.acn-dos-obs-texto { font-size: 13px; white-space: pre-wrap; }
+.acn-dos-tab { width: 100%; border-collapse: collapse; min-width: 420px; }
+.acn-dos-tab td { vertical-align: top; }
+.acn-dos-vinc-nome { font-weight: 600; }
+.acn-dos-num { color: var(--acn-ds); font-weight: 800; }
+.acn-dos-vinc-desc { font-size: 12px; color: var(--acn-muted); }
+.acn-dos-nota { border-left: 2px solid color-mix(in srgb, var(--acn-warn) 25%, var(--acn-line)); padding-left: 8px; margin-bottom: 5px; }
+.acn-dos-meta { font-size: 12px; color: var(--acn-muted); }
+.acn-dos-nota-texto, .acn-dos-log-evento { font-size: 13px; }
+.acn-dos-log { max-height: 340px; overflow-y: auto; border: 1px solid var(--acn-line); border-radius: 5px; }
+.acn-dos-log-item { padding: 5px 8px; border-bottom: 1px solid var(--acn-neutral-soft); }
+.acn-dos-busca { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+html body .acn-input.acn-dos-busca-campo { flex: 1; min-width: 240px; }
+.acn-dos-nenhuma { font-size: 13px; color: var(--acn-warn); }
+.acn-dos-opcoes { margin-bottom: 12px; }
+.acn-dos-opcoes-tit { font-size: 13px; color: var(--acn-muted); margin-bottom: 5px; }
+.acn-dos-opcoes-lista { display: flex; flex-direction: column; gap: 4px; }
+html body .acn-b.acn-dos-opcao:not(#acn), html body .acn-b.acn-dos-lote-btn:not(#acn) { display: block; width: 100%; max-width: 100%; height: auto; text-align: left; white-space: normal; overflow-wrap: anywhere; padding-top: 6px; padding-bottom: 6px; }
+html body .acn-b.acn-dos-lote-btn:not(#acn) { margin-bottom: 6px; border: 2px solid var(--acn-brand); background: var(--acn-brand-soft); color: var(--acn-brand); font-weight: 800; }
+.acn-dos-montando { font-size: 13px; color: var(--acn-muted); }
+.acn-dos-volta { margin-bottom: 8px; }
+html body .modal-overlay.acn-dos-fundo { z-index: 3000; }
+html body .modal-box.acn-dos-jan { max-width: 900px; width: 96vw; max-height: 94vh; overflow-y: auto; }
+.acn-dos-jan-cab { background: var(--acn-brand); color: #fff; margin: -14px -14px 12px; padding: 10px 16px; border-radius: 6px 6px 0 0; display: flex; align-items: center; gap: 10px; }
+.acn-dos-jan-titulo { flex: 1; font-size: 13px; font-weight: 800; }
+html body .acn-b.acn-dos-fechar:not(#acn) { color: #fff; font-size: 20px; padding: 0 8px; }
+html body .acn-b.acn-dos-fechar:not(#acn):hover:not(:disabled) { background: rgba(255, 255, 255, .18); color: #fff; }
+body.dark .acn-dos-pend { background: #3a2a0d; border-color: #6b4a14; }
+body.dark .acn-dos-log, body.dark .acn-dos-log-item { border-color: #334155; }
+body.dark .acn-dos-opl, body.dark .acn-dos-val { color: #f1f5f9; }
+body.dark .acn-dos-sec[data-tom=ink] { --acn-ds: #cbd5e1; }

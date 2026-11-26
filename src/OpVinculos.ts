@@ -329,25 +329,32 @@ export function marcosDaOp(op: any) {
 export type Dossie = Awaited<ReturnType<typeof carregarDossie>>;
 
 /** Acha a OP pelo número (exato) ou pelo PV, e devolve as candidatas. */
-export async function buscarOps(termo: string) {
+/** 12e80 (25/11/2026): quem passa a lista `falhas` fica sabendo quando a busca foi recusada pelo banco (antes valia como "nenhuma OP encontrada"). */
+export async function buscarOps(termo: string, falhas?: string[]) {
   const t = txt(termo);
   if (!t) return [];
   const porNumero = await tentar(supabase.from('oples')
     .select('id,opl,cliente_nome,modelo,status_geral,data_entrada')
-    .ilike('opl', `%${t}%`).order('opl').limit(30));
+    .ilike('opl', `%${t}%`).order('opl').limit(30), falhas, 'busca de OPs');
   if (porNumero.length) return porNumero;
   // não achou por número: tenta como Pedido de Venda (card do CRM)
-  const cards = await tentar(supabase.from('crm_oportunidades_basico').select('id').eq('numero_pv', t.replace(/\D/g, '')));
+  const cards = await tentar(supabase.from('crm_oportunidades_basico').select('id').eq('numero_pv', t.replace(/\D/g, '')), falhas, 'busca de OPs');
   if (!cards.length) return [];
   return tentar(supabase.from('oples')
     .select('id,opl,cliente_nome,modelo,status_geral,data_entrada')
-    .in('crm_oportunidade_id', cards.map((c: any) => c.id)).order('opl'));
+    .in('crm_oportunidade_id', cards.map((c: any) => c.id)).order('opl'), falhas, 'busca de OPs');
 }
 
+/** Quando recebe o id (texto) e o banco recusa a leitura da OP, LANÇA o erro: "OP não encontrada" é só para OP que não existe (12e80, 25/11/2026). */
 export async function carregarDossie(opOuId: any) {
-  const opLida = typeof opOuId === 'string'
-    ? (await tentar(supabase.from('oples').select('*').eq('id', opOuId).maybeSingle()))[0]
-    : opOuId;
+  let opLida: any;
+  if (typeof opOuId === 'string') {
+    const falhaDaOp: string[] = [];
+    opLida = (await tentar(supabase.from('oples').select('*').eq('id', opOuId).maybeSingle(), falhaDaOp, 'a OP'))[0];
+    if (!opLida && falhaDaOp.length) throw new Error('O banco não respondeu à leitura da OP.');
+  } else {
+    opLida = opOuId;
+  }
   if (!opLida) return null;
   // o valor da OP mora em `oples_valores` (V2b do "ver valores no banco", 24/11/2026); leitura recusada deixa a OP como veio
   // 12e77 (25/11/2026): e agora o dossiê diz o que NÃO conseguiu ler (`falhas`, nomes sem repetir): a tela e o PDF do lote avisam em vez de mostrar "nenhum" ou um total menor

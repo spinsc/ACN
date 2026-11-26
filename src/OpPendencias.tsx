@@ -18,12 +18,13 @@
 // O que está ligado à OP quem responde é OpVinculos.ts. Aqui só se decide o
 // que segura, em que etapa está, e se desenha o checklist.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { vinculosDaOp } from './OpVinculos';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { logChange } from './AuditSystem';
-import { Botao, hojeISO } from './Interface';
+import { Botao, Faixa, hojeISO } from './Interface';
 import { lerEntregasDosPedidos, chegadaDoPedido, frasePorFornecedor } from './ComprasEntregas';
 import Icone from './Icone';
 import { mdiCheck, mdiCheckboxMarkedOutline, mdiCheckboxBlankOutline, mdiCheckCircleOutline } from '@mdi/js';
@@ -98,12 +99,19 @@ export function progressoPendencias(vinculos, op) {
   return { total, feitas, pct: Math.round((feitas / total) * 100), pendentes: pendenciasDaOp(todas, op) };
 }
 
-/** Carrega as pendências de uma OP (usado pelas telas que precisam travar). */
+/** Carrega as pendências de uma OP (usado pelas telas que precisam travar).
+ *  12e80 (25/11/2026): `falhas` diz o NOME do que o banco recusou ler. Antes a leitura recusada virava "nenhuma pendência" e a Produção concluía a OP
+ *  com compra e fabricação ainda em aberto: quem trava (a conclusão da Produção) tem de olhar `falhas` e NÃO seguir quando ela não está vazia. */
 export async function carregarPendencias(op) {
-  const vinculos = await vinculosDaOp(op);
+  const falhas: string[] = [];
+  const vinculos = await vinculosDaOp(op, falhas);
   const todas = vinculos.filter(seguraAOp);
-  return { todas, abertas: pendenciasDaOp(todas, op) };
+  return { todas, abertas: pendenciasDaOp(todas, op), falhas: [...new Set(falhas)] };
 }
+
+/** A frase que as telas mostram quando a leitura das pendências foi recusada. */
+export const frasePendenciasNaoLidas = (falhas) =>
+  `Não foi possível conferir as pendências de fabricação e compra agora (não li: ${(falhas || []).join(', ')}). Por isso não dá para dizer que não há nenhuma — tente de novo.`;
 
 /** Mensagem de bloqueio, ou '' quando pode seguir. */
 export function motivoBloqueio(abertas, acao) {
@@ -119,16 +127,19 @@ async function marcarEtapa(op, vinculo, etapa, currentUser, onFeito) {
   const reg = { ...(atual[vinculo.id] || {}) };
   reg[etapa] = { por: currentUser?.nome || currentUser?.email || '—', em: agora };
   atual[vinculo.id] = reg;
-  const { error } = await supabase.from('oples').update({ pendencias_kit: atual }).eq('id', op.id);
-  if (error) { alert('Não foi possível registrar: ' + error.message); return false; }
+  // 12e80: o banco responde "ok, 0 linhas" a uma gravação que não pôde fazer; a etapa só vale como registrada se a linha voltou
+  const { data: gravada, error } = await supabase.from('oples').update({ pendencias_kit: atual }).eq('id', op.id).select('id');
+  if (error) { mostrarAviso('Não foi possível registrar: ' + explicarErroDoBanco(error), 'erro'); return false; }
+  if (!gravada?.length) { mostrarAviso('Não foi possível registrar: o banco não alterou a OP (ela pode ter sido removida ou você não tem permissão). Nada foi registrado.', 'erro'); return false; }
   const texto = etapa === 'recebido'
     ? `Almoxarifado confirmou o recebimento de "${vinculo.titulo}" (${vinculo.setor || '—'}).`
     : `PCP liberou a pendência "${vinculo.titulo}" (${vinculo.setor || '—'}) para a produção.`;
-  await supabase.from('logs_movimentacao_opl').insert([{
+  const { error: erroHist } = await supabase.from('logs_movimentacao_opl').insert([{
     opl_id: op.id, numero_opl: op.opl, setor: etapa === 'recebido' ? 'Almoxarifado' : 'PCP',
     evento: texto, status_anterior: op.status_geral, status_novo: op.status_geral,
     usuario_nome: currentUser?.nome, data_hora: agora,
   }]);
+  if (erroHist) mostrarAviso('A etapa foi registrada, mas o histórico da OP não recebeu a linha desta etapa.', 'atencao');
   logChange({ module: etapa === 'recebido' ? 'almoxarifado' : 'pcp', entityType: 'oples', entityId: op.id,
     changeType: 'UPDATE', oldRow: { pendencias_kit: op.pendencias_kit }, newRow: { pendencias_kit: atual }, user: currentUser });
   onFeito?.(atual);
@@ -153,6 +164,7 @@ const Passo = ({ ok, texto, quem }) => (
 export function ChecklistPendencias({ op, vinculos, modo = 'ver', currentUser, onMudou, compacto = false }) {
   const [reg, setReg] = useState(op?.pendencias_kit || {});
   const [salvando, setSalvando] = useState(null);
+  const ocupado = useRef(false);   // 12e80: dois cliques no mesmo instante gravavam duas vezes (o botão só desliga depois do desenho)
   useEffect(() => { setReg(op?.pendencias_kit || {}); }, [op?.id, op?.pendencias_kit]);
 
   const opAtual = { ...op, pendencias_kit: reg };
@@ -164,10 +176,18 @@ export function ChecklistPendencias({ op, vinculos, modo = 'ver', currentUser, o
     const pergunta = etapa === 'recebido'
       ? `Confirmar que o Almoxarifado recebeu "${v.titulo}"?`
       : `Liberar a pendência "${v.titulo}" para a produção?`;
-    if (!await confirmar(pergunta)) return;
-    setSalvando(v.id);
-    await marcarEtapa(opAtual, v, etapa, currentUser, (novo) => { setReg(novo); onMudou?.(novo); });
-    setSalvando(null);
+    if (ocupado.current) return;
+    ocupado.current = true;
+    try {
+      if (!await confirmar(pergunta)) return;
+      setSalvando(v.id);
+      await marcarEtapa(opAtual, v, etapa, currentUser, (novo) => { setReg(novo); onMudou?.(novo); });
+    } catch (e) {
+      mostrarAviso('Não foi possível registrar: ' + explicarErroDoBanco(e), 'erro');
+    } finally {
+      ocupado.current = false;
+      setSalvando(null);
+    }
   };
 
   return (
@@ -217,15 +237,29 @@ export function ChecklistPendencias({ op, vinculos, modo = 'ver', currentUser, o
 /** Carrega os vínculos e desenha o checklist — para telas que não têm a lista. */
 export function ChecklistPendenciasAuto({ op, modo = 'ver', currentUser, onMudou, compacto = false }) {
   const [vinculos, setVinculos] = useState(null);
+  const [falhas, setFalhas] = useState([]);   // 12e80: o que o banco recusou ler; leitura recusada não vale como "nenhuma pendência"
+  const [tentativa, setTentativa] = useState(0);
   useEffect(() => {
     if (!op?.id) return;
     let vivo = true;
-    vinculosDaOp(op).then(v => { if (vivo) setVinculos(v); });
+    const lista = [];
+    vinculosDaOp(op, lista)
+      .then(v => { if (vivo) { setVinculos(v); setFalhas([...new Set(lista)]); } })
+      .catch(() => { if (vivo) { setVinculos([]); setFalhas(['pendências da OP']); } });
     return () => { vivo = false; };
-  }, [op?.id]);
+  }, [op?.id, tentativa]);
   if (!vinculos) return null;
-  return <ChecklistPendencias op={op} vinculos={vinculos} modo={modo} currentUser={currentUser}
-    onMudou={onMudou} compacto={compacto} />;
+  return (
+    <>
+      {falhas.length > 0 && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={() => { setVinculos(null); setTentativa(n => n + 1); }}>Tentar de novo</Botao>}>
+          {frasePendenciasNaoLidas(falhas)}
+        </Faixa>
+      )}
+      <ChecklistPendencias op={op} vinculos={vinculos} modo={modo} currentUser={currentUser}
+        onMudou={onMudou} compacto={compacto} />
+    </>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -245,7 +279,10 @@ const ENCERRADOS = ['Concluido', 'Concluído', 'Concluida', 'Concluída', 'Receb
 const CANCELADOS_RE = /cancelad|descartad/i;
 
 export async function indicePendencias() {
-  const mapa = new Map();               // opId -> [{id, setor, titulo, aberto}]
+  const mapa: any = new Map();          // opId -> [{id, setor, titulo, aberto}]
+  // 12e80 (25/11/2026): `mapa.falhas` = nomes do que o banco recusou ler. Antes a recusa virava "esta OP não tem pendência" (o Almoxarifado fechava o Kit 100% sem conferir):
+  // quem trava com o índice tem de olhar `mapa.falhas` e não liberar enquanto ela não estiver vazia.
+  mapa.falhas = [];
   const add = (opId, item) => {
     if (!opId || CANCELADOS_RE.test(item.statusBruto || '')) return;
     const k = String(opId);
@@ -263,6 +300,9 @@ export async function indicePendencias() {
     // 18c: só os pedidos do PCP seguram a OP (o desenvolvimento aberto pela própria Engenharia segue sendo apoio)
     supabase.from('engenharia_desenvolvimento').select('id,opl_id,opl_ids,titulo,concluida,origem').eq('origem', 'pcp'),
   ]);
+
+  [[setoriais, 'demandas dos setores'], [avulsas, 'demandas gerais'], [compras, 'compras'], [desenvolvimentos, 'pedidos de desenvolvimento']]
+    .forEach(([r, nome]: any) => { if (r.error) mapa.falhas.push(nome); });
 
   (setoriais.data || []).forEach(d => add(d.opl_id, {
     id: d.id, setor: d.setor_destino, titulo: d.descricao || `Demanda ${d.setor_destino}`,
