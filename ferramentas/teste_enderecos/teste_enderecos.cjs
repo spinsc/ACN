@@ -329,6 +329,7 @@ const FASE4 = [
   { id: 'marketing', menu: 'Marketing', rotulos: { opls: 'OPs Liberadas para Divulgação', pedidos: 'Pedidos de Registro' } },
   // o Telecom abre SOZINHO em "Separação e envio" quando há OP de rádio esperando na fila (TelecomTab: `esperando > 0`): depende dos dados de agora, então o teste aceita as duas aberturas
   { id: 'telecom', menu: 'Telecom', abreSozinhoEm: 'separacao', rotulos: { vendas: 'Vendas', separacao: 'Separação e envio', demandas: 'Análises e demandas' } },
+  { id: 'logistica', menu: 'Logística In/Out', rotulos: { recebimento: 'Aguardando Recebimento', historico: 'Histórico / Novo Registro', relatorio: 'Relatório IN/OUT', fretes: 'Fretes' } },
   { id: 'terceiros', menu: 'Serviços de terceiros', lembra: 'lista', rotulos: { quadro: 'Quadro', agenda: 'Agenda', lista: 'Lista', relatorio: 'Relatório do mês', ordens: 'Ordens de pintura', prestadores: 'Prestadores', tipos: 'Tipos de serviço', modelo: 'Modelo do contrato' } },
 ];
 /** As abas da barra de abas número `n` da tela aberta (na ordem em que aparecem), qual está marcada, o endereço e quantos passos o histórico tem. */

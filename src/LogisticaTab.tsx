@@ -26,6 +26,7 @@ import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 import { CampoMoeda } from './CampoMoeda';
 import { numeroOuNulo } from './LerValor';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -1919,7 +1920,8 @@ function PainelRecebimento({ currentUser }: any) {
 }
 
 export default function LogisticaTab({ currentUser }) {
-  const [abaLog, setAbaLog] = useState('historico');
+  // 26/11/2026 (plano de endereços, Fase 4): a aba aberta tem endereço na barra (`#/logistica/fretes`); a aba de sempre, o Histórico, é `#/logistica`.
+  const [abaLog, setAbaLog] = useAbaNoEndereco({ tela: 'logistica' });
   const [manifestos, setManifestos] = useState([]);
   const [pedidosCompra, setPedidosCompra] = useState([]);
   const [entregasDosPedidos, setEntregasDosPedidos] = useState<{ linhas: any[]; erro: string | null }>({ linhas: [], erro: null });
