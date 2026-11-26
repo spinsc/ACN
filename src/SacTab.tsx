@@ -4,7 +4,6 @@ import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import { EXT_PLANILHAS, nomeSeguroDeArquivo } from './FormatosArquivo';
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
@@ -824,9 +823,6 @@ function SacTabCompleto({ currentUser }) {
     }
     if (falhasDemanda.length) alert(`A OS ${numero} foi aberta, mas ${falhasDemanda.join(' e ')}. Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
-    // no lote, um aviso só (com todos os números), no fim
-    if (!emLote) notificarEvento('sac_os_aberta', `*Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
-    else if (u === unidades.length - 1) notificarEvento('sac_os_aberta', `*Novo lote de ${criadas.length} OS*\n${criadas.join(', ')}\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
     }   // fim do laço por unidade
 
     // S1: a ficha da Garantia registra as OS que nasceram dela (a OS já existe; se o registro falhar, o aviso diz)
@@ -855,7 +851,6 @@ function SacTabCompleto({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', modalOrc.id);
     if (error) { alert('Erro ao enviar o orçamento: ' + explicarErroDoBanco(error)); return; }
-    notificarEvento('sac_orcamento_enviado', `*Orçamento enviado — ${modalOrc.numero_os}*\nCliente: ${modalOrc.cliente_nome}\nValor: R$ ${orcForm.valor}\nPor: ${currentUser?.nome}`);
     setModalOrc(null); setOrcForm({ valor:'', condicoes:'' }); fetchOrdens();
   };
 
@@ -900,7 +895,6 @@ function SacTabCompleto({ currentUser }) {
     }]);
     if (errDem) alert(`A OS ${modalAprov.numero_os} foi aprovada, mas a demanda de execução para o Laboratório não foi criada (${explicarErroDoBanco(errDem)}). Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
-    notificarEvento('sac_os_aprovada', `*OS ${modalAprov.numero_os} APROVADA*\nCliente: ${modalAprov.cliente_nome}\nAprovador: ${aprovForm.nome}\nPor: ${currentUser?.nome}`);
     setModalAprov(null); setAprovForm({ nome:'', sig:null, data_entrega:'' }); fetchOrdens();
   };
 
@@ -917,7 +911,6 @@ function SacTabCompleto({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', modalRepr.id);
     if (error) { alert('Erro ao registrar a reprovação: ' + explicarErroDoBanco(error)); return; }
-    notificarEvento('sac_os_reprovada', `*OS ${modalRepr.numero_os} REPROVADA*\nCliente: ${modalRepr.cliente_nome}\nMotivo: ${reprForm.motivo}`);
     setModalRepr(null); setReprForm({ motivo:'', data_retirada:'', nome_retirada:'' }); fetchOrdens();
   };
 
@@ -953,7 +946,6 @@ function SacTabCompleto({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', modalSaida.id);
     if (error) { alert('Erro ao registrar a entrega: ' + explicarErroDoBanco(error)); return; }
-    notificarEvento('sac_os_entregue', `*OS ${modalSaida.numero_os} ENTREGUE*\nCliente: ${modalSaida.cliente_nome}\nRetirado por: ${saidaForm.nome}`);
     setModalSaida(null); setSaidaForm({ nome:'', sig:null }); setFotosSaidaFiles([]); fetchOrdens();
   };
 
@@ -986,7 +978,6 @@ function SacTabCompleto({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', os.id);
     if (error) { alert('Erro ao enviar a cotação: ' + explicarErroDoBanco(error)); return; }
-    notificarEvento('sac_cotacao_enviada', `*Cotação enviada — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
     fetchOrdens();
   };
 
@@ -999,7 +990,6 @@ function SacTabCompleto({ currentUser }) {
     if (!aprovCotacaoNome.trim()) { alert('Informe o nome de quem aprovou!'); return; }
     const os = modalAprovCotacao;
     const agora = new Date().toISOString();
-    const total = (os.itens_cotacao||[]).reduce((s:number,i:any)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
     const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Em Provisionamento',
       aprovado: true,
@@ -1008,12 +998,6 @@ function SacTabCompleto({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', os.id);
     if (error) { alert('Erro ao registrar a aprovação: ' + explicarErroDoBanco(error)); return; }
-    const msg2 = `✅ *Cotação APROVADA — ${os.numero_os}*
-Cliente: ${os.cliente_nome}
-Aprovado por: ${aprovCotacaoNome.trim()}
-Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
-⚙️ Produção: definir data de atendimento`;
-    notificarEvento('sac_aprovacao_remota', msg2);
     setModalAprovCotacao(null);
     fetchOrdens();
   }
@@ -1040,7 +1024,6 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       atualizado_em: agora,
     }).eq('id', os.id);
     if (error) { alert('Erro ao registrar o aceite: ' + explicarErroDoBanco(error)); return; }
-    notificarEvento('sac_aceite_data', `*SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
     setModalAceiteSAC(null);
     fetchOrdens();
   };
@@ -1114,7 +1097,6 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     }).eq('id', os.id).eq('status', 'Aguardando Envio Fiscal').select('id');
     if (error) { alert('Erro ao enviar para o Fiscal: ' + explicarErroDoBanco(error)); return; }
     if (!gravadas?.length) { alert('A OS já não está esperando o envio ao Fiscal (outra pessoa pode ter enviado). A lista foi atualizada.'); setModalEnviarFiscal(null); setFiscalItens([]); fetchOrdens(); return; }
-    notificarEvento('sac_enviado_fiscal', `*Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
     setModalEnviarFiscal(null); setFiscalItens([]);
     fetchOrdens();
   };
@@ -1146,9 +1128,6 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     if (!gravadas?.length) { alert('A OS já não está esperando a entrega (outra pessoa pode ter entregado). A lista foi atualizada.'); setModalEntregaVeic(null); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: { status: os.status }, newRow: { status: 'Entregue' }, user: currentUser });
-    notificarEvento('sac_os_entregue', `*Veículo entregue — ${os.numero_os}*
-Cliente: ${os.cliente_nome}
-Recebido por: ${nome}`);
     setModalEntregaVeic(null); setSaidaForm({ nome: '', sig: null }); setFotosSaidaFiles([]);
     fetchOrdens();
   };
@@ -1518,7 +1497,6 @@ OK = ACN   |   Cancelar = DETECH`;
     if (error) { alert('Não foi possível concluir a OS: ' + explicarErroDoBanco(error)); return; }
     if (!data || data.length === 0) { alert(`A ${os.numero_os} já mudou de etapa (outra pessoa mexeu nela). A lista foi atualizada.`); fetchOrdens(); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE', oldRow: { status: 'Em Execução' }, newRow: { status: 'Concluído', data_finalizacao_execucao: agora }, user: currentUser });
-    notificarEvento('sac_os_concluida', `*OS ${os.numero_os} concluída pelo SAC*\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}`);
     fetchOrdens();
   };
 
@@ -1548,7 +1526,6 @@ OK = ACN   |   Cancelar = DETECH`;
       if (erroRecado) falhas.push(`${d.setor_destino}: ${explicarErroDoBanco(erroRecado)}`);
     }
     if (falhas.length) mostrarAviso(`A ${os.numero_os} foi cancelada, mas não foi possível deixar o recado em ${falhas.length} demanda(s): ${falhas.join('; ')}. Avise o setor para encerrar a demanda.`, 'erro');
-    notificarEvento('sac_os_cancelada', `*OS ${os.numero_os} CANCELADA*\nCliente: ${os.cliente_nome}\nMotivo: ${String(motivo).trim()}\nPor: ${currentUser?.nome}` + (setores.length ? `\nEncerrar a demanda: ${setores.join(', ')}` : ''));
     fetchOrdens();
   };
 
@@ -1628,7 +1605,6 @@ OK = ACN   |   Cancelar = DETECH`;
         }
       }
       if (feitas.length) {
-        notificarEvento('sac_os_atendimento_realizado', `*Atendimento já realizado registrado pelo SAC* (${feitas.length} OS)\n${feitas.map((o: any) => o.numero_os).join(', ')}\nCliente: ${feitas[0].cliente_nome}\nFeito em ${String(dados.data).split('-').reverse().join('/')} por ${String(dados.executor).trim()}\nPor: ${currentUser?.nome}`);
         mostrarAviso(`${feitas.length} OS registrada${feitas.length > 1 ? 's' : ''} como atendimento já realizado e concluída${feitas.length > 1 ? 's' : ''}: ${feitas.map((o: any) => o.numero_os).join(', ')}.`, 'ok');
       }
       if (falhas.length) mostrarAviso(`Não foi possível registrar: ${falhas.join('; ')}. As outras foram registradas; confira a lista e tente de novo nas que faltam.`, 'erro');
@@ -1689,7 +1665,6 @@ OK = ACN   |   Cancelar = DETECH`;
       setMovDados(null);
       const falhas = await efeitosDoMovimento(os, mov, dados, agora);
       if (falhas.length) mostrarAviso(`A ${os.numero_os} foi movida para "${mov.para}", mas não foi possível concluir tudo: ${falhas.join('; ')}. Avise o setor.`, 'erro');
-      notificarEvento('sac_os_movida', `*OS ${os.numero_os} movida pelo SAC*\n${os.status} → ${mov.para}\nCliente: ${os.cliente_nome}\nPor: ${currentUser?.nome}` + (String(dados?.motivo || '').trim() ? `\nMotivo: ${String(dados.motivo).trim()}` : ''));
       fetchOrdens();
     } finally { setMovSalvando(false); }
   };
@@ -1735,7 +1710,6 @@ OK = ACN   |   Cancelar = DETECH`;
         }
       }
       if (feitas.length) {
-        notificarEvento(cancelando ? 'sac_os_cancelada' : 'sac_os_movida', `*${cancelando ? 'OS CANCELADAS' : 'OS movidas'} pelo SAC em lote* (${feitas.length})\n${feitas.map((o: any) => o.numero_os).join(', ')}\nCliente: ${feitas[0].cliente_nome}\n${passagem.rotulo}` + (String(dados?.motivo || '').trim() ? `\nMotivo: ${String(dados.motivo).trim()}` : '') + `\nPor: ${currentUser?.nome}`);
         mostrarAviso(`${passagem.rotulo}: ${feitas.length} OS${''} feita${feitas.length > 1 ? 's' : ''} (${feitas.map((o: any) => o.numero_os).join(', ')}).`, 'ok');
       }
       if (falhas.length) mostrarAviso(`Não foi possível passar: ${falhas.join('; ')}. As outras foram feitas; confira a lista e tente de novo nas que faltam.`, 'erro');

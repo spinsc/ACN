@@ -5708,6 +5708,8 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 
 #### ✅ 7.x do WhatsApp — conexões dos vendedores (`WhatsAppConexoesWidget.tsx`) — achados corrigidos antes da 12e81
 
+> **26/11/2026 (decisão do usuário: "o WhatsApp não está ligado ao sistema"): esta tela foi REMOVIDA do sistema junto com toda a integração com o WhatsApp** (`WhatsAppConexoesWidget.tsx`, os avisos por WhatsApp, os links `wa.me` e o "Esqueci minha senha"); o texto abaixo fica só como histórico. Ver a linha "WhatsApp" na tabela de utilitários do `CLAUDE.md`.
+
 **Feito em:** 26/11/2026 (a pedido do `/ux-fluxo`; o commit é o mesmo da 12e81, logo abaixo). É a janela em que o Admin configura o servidor do WhatsApp (Evolution API) e conecta o número de cada vendedor: cria a instância, lê o QR, confere o status, desconecta, recria e exclui. **Nenhuma regra de negócio mudou**; dado real: nenhum tocado (as leituras do teste são **dados inventados, simulados**, e **toda gravação e toda chamada à função de borda foram simuladas**).
 
 **Achados corrigidos** (todos "passam em silêncio"):
@@ -5726,6 +5728,8 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 **Suposições (a confirmar):** (1) com a configuração não lida, **o salvar fica desligado** (em vez de salvar às cegas); (2) o **nome de instância repetido pede confirmação** (a função do servidor continua apagando e recriando se a pessoa confirmar); (3) instância inexistente no servidor abre o "Recriar" e **não** grava "desconectado"; (4) "0 linhas alteradas" vale como **falha**.
 
 #### ✅ 12e81 — Conexões do WhatsApp dos vendedores (WhatsAppConexoesWidget.tsx), fatia única
+
+> **26/11/2026 (decisão do usuário: "o WhatsApp não está ligado ao sistema"): esta tela foi REMOVIDA do sistema junto com toda a integração com o WhatsApp** (`WhatsAppConexoesWidget.tsx`, os avisos por WhatsApp, os links `wa.me` e o "Esqueci minha senha"); o texto abaixo fica só como histórico. Ver a linha "WhatsApp" na tabela de utilitários do `CLAUDE.md`.
 
 **Feito em:** 26/11/2026. **Nenhuma regra de negócio mudou** (fora as correções da 7.x acima): saíram **71 `style` soltos e 13 `<button>` crus** (e todos os `alert()`), a janela passou a usar `Botao`, `Faixa` e as classes `acn-wa-*` do `design.css` (bloco "12e81"), com as cores de ardósia, verde, âmbar e azul escritas à mão trocadas pelos tokens (a cor da situação — conectado, desconectado, aguardando — vem de `data-status`; o escuro vem dos tokens de `body.dark`, sem regras próprias). No celular o endereço do webhook e a fileira de botões de cada vendedor agora **quebram a linha** (antes vazavam do cartão: única mudança visível além do arredondamento das letras que a regra global já reescrevia).
 

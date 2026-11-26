@@ -15,8 +15,6 @@
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
-import { notificarEvento, msg } from './whatsappHelper';
-import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import { liberarReservaDaOp } from './Estoque';
 import { Botao } from './Interface';
 
@@ -73,14 +71,6 @@ export async function devolverOp({ opl, destino, motivo, setorOrigem, currentUse
     const liberou = await liberarReservaDaOp({ oplId: opl.id, motivo: `BOM devolvida para ${destino === 'pcp' ? 'o PCP' : 'a Engenharia'}: ${motivo}`, currentUser });
     // 7.x do Estoque (15/10/2026): o erro era ignorado — a OP voltava e o material continuava reservado para ela, segurando peça das outras OPs sem ninguém saber
     if (liberou?.erro) alert('A OP foi devolvida, mas o material que ela tinha reservado NÃO foi liberado: ' + liberou.erro + '. Peça ao Almoxarifado para conferir as reservas.');
-    if (destino === 'pcp') notificarEvento('op_devolvida_ao_pcp', msg.oplDevolvida(opl.opl, 'PCP', motivo, currentUser?.nome));
-    else notificarEvento('pcp_devolve_engenharia', msg.oplDevolvida(opl.opl, 'Engenharia', motivo, currentUser?.nome));
-  } else if (destino === 'comercial') {
-    // R3 (13/10/2026): quem abriu a OP e o gerente dele, pessoa a pessoa (e não o perfil Comercial inteiro)
-    avisarDevolucaoAoComercial({ opl, evento: 'pcp_devolve_comercial', autorEmail: currentUser?.email,
-      mensagem: msg.oplVoltouAoComercial(opl.opl, motivo, currentUser?.nome || '—') });
-  } else {
-    notificarEvento('pcp_libera_almox', msg.oplDevolvida(opl.opl, 'Almoxarifado (refazer kit)', motivo, currentUser?.nome));
   }
   return null;
 }

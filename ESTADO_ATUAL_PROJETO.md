@@ -159,7 +159,7 @@
 - **Fix backdrop modal** — clicar fora fecha (task #22)
 - **CotacoesTab**: possível integração com catálogo de produtos para preencher itens automaticamente
 - **FinanceiroTab**: gráfico de linha por mês (atualmente só barra CSS) — possível Chart.js
-- **WhatsApp Evolution API**: edge functions e webhook já mencionados no publicar.bat — configurar instância
+- **WhatsApp**: o sistema não usa mais (26/11/2026, decisão do usuário); as funções de servidor e as tabelas `crm_whatsapp_*` ainda estão no banco até o usuário autorizar apagar (ver `CLAUDE.md`)
 - **App mobile** (React Native ou PWA) — mencionado em sessões anteriores como pós-deploy
 - **Relatórios PDF exportáveis** para mais abas (hoje só FormacaoPrecosTab e Proposta ao Cliente têm PDF)
 - **Dashboard de KPIs** com dados reais (DashboardKPIS.tsx existe mas ⚠️ CONFIRMAR se está wired)

@@ -16,7 +16,6 @@ import { supabase } from './supabaseClient';
 import { etapasIniciais } from './DesenvolvimentoPecasTab';
 import { TIPOS_DESENVOLVIMENTO, rotuloDoTipo } from './DesenvolvimentoTipos';
 import { logChange } from './AuditSystem';
-import { notificarEvento } from './whatsappHelper';
 import { Botao, Faixa } from './Interface';
 import Icone from './Icone';
 import { mdiCogOutline, mdiPlus, mdiClose } from '@mdi/js';
@@ -91,8 +90,6 @@ export default function ModalSolicitarDesenvolvimento({ ops, base = null, itensS
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
       if (erroLog) alert('O pedido foi enviado, mas o histórico da OP não foi gravado: ' + erroLog.message);
-      notificarEvento('pcp_solicita_desenvolvimento',
-        `*PCP solicitou desenvolvimento* — OP ${numero}${lote ? ` (lote de ${ops.length})` : ''}\n${resumo}\nPor: ${currentUser?.nome}`);
       onEnviado?.(criado.id);
     } finally {
       emAcao.current = false;

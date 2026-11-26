@@ -20,7 +20,6 @@ import { estruturaDoKit } from './KitEstrutura';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL, TIPOS_DEMANDA_AVULSA } from './VinculoPicker';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import type { VinculoValue } from './VinculoPicker';
-import { notificarEvento, msg } from './whatsappHelper';
 import { Botao } from './Interface';
 import Icone from './Icone';
 import { mdiPuzzleOutline, mdiPackageVariantClosed, mdiCurrencyUsd, mdiCheck, mdiLinkVariant, mdiClose, mdiChevronUp, mdiChevronDown, mdiChevronRight, mdiPowerPlugOutline } from '@mdi/js';
@@ -550,7 +549,6 @@ export async function gerarDemandasFabricacao({ valor, ops, origem, currentUser,
     }]);
     if (error) { falhas.push(`${setor}: ${error.message}`); continue; }
     criadas.push(setor);
-    notificarEvento('demanda_criada_setor', msg.demandaCriada(setor, ops.map(o => o.opl).join(', '), titulo, currentUser?.nome || ''), setor);
   }
   return { criadas, falhas };
 }

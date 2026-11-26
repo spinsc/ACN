@@ -27,12 +27,13 @@ import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ParticipantesPicker, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { Faixa, Botao, Selo, Tag } from './Interface';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): a tarefa aberta tem endereço próprio
 import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import Icone from './Icone';
 import {
   mdiClipboardTextOutline, mdiCalendarMonthOutline, mdiTagOutline, mdiBellOutline, mdiRepeat,
   mdiAccountOutline, mdiCommentOutline, mdiCalendarOutline, mdiAlertOutline, mdiArrowLeft, mdiArrowRight,
-  mdiTrashCanOutline, mdiPaperclip, mdiClose,
+  mdiTrashCanOutline, mdiPaperclip, mdiClose, mdiLink,
 } from '@mdi/js';
 
 const ETAPAS = ['A Fazer', 'Em Andamento', 'Concluído'];
@@ -387,6 +388,7 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
       <div className="modal-box acn-modal-cadastro acn-kb-jan acn-kb-tarefa" role="dialog" aria-label={editando ? 'Editar tarefa' : 'Nova tarefa'}>
         <div className="acn-modal-cab">
           <span className="modal-title">{editando ? 'Editar tarefa' : '+ Nova tarefa'}</span>
+          {editando && <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta tarefa" title="Copiar o link desta tarefa para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('financeiro', 'tarefa', tarefa.id, 'da tarefa')} />}
         </div>
         <div className="acn-modal-corpo acn-form-cheio">
           <div className="form-group">
@@ -651,6 +653,13 @@ function CartaoTarefa({ tarefa, tipo, onEditar, onMover, onExcluir, podeExcluir 
   );
 }
 
+// Quem vê o quadro inteiro: Admin ou a marca da pessoa (a mesma conta do quadro e do endereço da tarefa). Leitura recusada devolve `erro`, nunca "não vê".
+async function lerVeTudo(email: string): Promise<{ veTudo: boolean; erro: string }> {
+  const { data, error } = await supabase.from('auth_usuarios').select('ve_todas_tarefas_financeiro,perfil').eq('email', email).maybeSingle();
+  if (error) return { veTudo: false, erro: error.message || 'sem resposta' };
+  return { veTudo: !!data?.ve_todas_tarefas_financeiro || data?.perfil === 'Admin', erro: '' };
+}
+
 // ─── Componente principal ───────────────────────────────────────────────────
 export default function FinanceiroKanban({ currentUser }) {
   const [tarefas, setTarefas] = useState([]);
@@ -675,13 +684,11 @@ export default function FinanceiroKanban({ currentUser }) {
 
   useEffect(() => {
     if (!currentUser?.email) return;
-    supabase.from('auth_usuarios').select('ve_todas_tarefas_financeiro,perfil')
-      .eq('email', currentUser.email).maybeSingle()
-      .then(({ data, error }) => {
-        if (error) { setErroPermissao(error.message); return; }
-        setErroPermissao('');
-        setVeTudo(!!data?.ve_todas_tarefas_financeiro || data?.perfil === 'Admin');
-      });
+    lerVeTudo(currentUser.email).then(({ veTudo: v, erro }) => {
+      if (erro) { setErroPermissao(erro); return; }
+      setErroPermissao('');
+      setVeTudo(v);
+    });
   }, [currentUser?.email]);
 
   const carregar = useCallback(async () => {
@@ -755,6 +762,23 @@ export default function FinanceiroKanban({ currentUser }) {
     if (error) { alert('Não foi possível excluir a tarefa: ' + error.message); return; }
     setTarefas(prev => prev.filter(t => t.id !== tarefa.id));
   };
+
+  // 26/11/2026 (plano de endereços e rotas, Fase 6): a tarefa aberta tem endereço próprio, `#/financeiro/tarefa/<código>` (F5, Voltar, Avançar e link colado abrem a mesma tarefa). A regra de quem vê
+  // vale na leitura, a mesma do quadro (o responsável ou quem vê todas as tarefas): tarefa de outra pessoa responde como se não existisse (uma só mensagem). A tarefa nova ainda não tem código,
+  // então não tem endereço. Cancelar nunca perguntou sobre alteração não salva, então o Voltar também não pergunta.
+  useRegistroNoEndereco({
+    tela: 'financeiro', tipo: 'tarefa', rotulo: 'a tarefa',
+    aberto: modalTarefa?.id ? String(modalTarefa.id) : null,
+    ler: async (chave) => {
+      const r = await lerPorCodigo(supabase.from('financeiro_tarefas').select('*').eq('id', chave).maybeSingle());
+      if (!r.registro) return r;
+      const p = await lerVeTudo(currentUser?.email || '');
+      if (p.erro) return { registro: null, erro: p.erro };   // sem saber a permissão não se abre nem se recusa: a leitura falhou
+      return p.veTudo || (r.registro.responsavel_nome && ehEu(currentUser, r.registro, 'responsavel_nome')) ? r : { registro: null, erro: '' };
+    },
+    mostrar: (t) => setModalTarefa(t),
+    fechar: () => setModalTarefa(null),
+  });
 
   const meusAvisos = avisosDoUsuario(calcularAvisosFinanceiro(tarefas), currentUser);
   const totalAvisos = isAdmin ? calcularAvisosFinanceiro(visiveis).length : meusAvisos.length;

@@ -3,14 +3,13 @@
 //
 // Fora do horário de contagem (HorarioContagem.ts) a tarefa só roda com hora extra
 // aprovada. Quem não é gerente pede ao gestor cadastrado no próprio usuário
-// (Admin › Usuários › Gestor; sem gestor, aos Admins), que recebe aviso em Menções
-// e no WhatsApp. Gerentes e Admins registram direto, sem aprovação.
+// (Admin › Usuários › Gestor; sem gestor, aos Admins), que recebe aviso em Menções.
+// Gerentes e Admins registram direto, sem aprovação.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { normalizarBusca } from './SearchUtils';
-import { notificarPessoa } from './whatsappHelper';
 import { HORARIO_CONTAGEM_TEXTO, diaChave, type Intervalo } from './HorarioContagem';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { Faixa, Selo, Chips, Botao, type Familia } from './Interface';
@@ -76,7 +75,7 @@ async function nomeNasTarefas(u: any): Promise<{ nome: string; erro: string }> {
 }
 
 async function usuariosAtivos(): Promise<{ usuarios: any[]; erro: string }> {
-  const { data, error } = await supabase.from('auth_usuarios').select('id, nome, email, perfil, whatsapp, gestor_id, ativo');
+  const { data, error } = await supabase.from('auth_usuarios').select('id, nome, email, perfil, gestor_id, ativo');
   return { usuarios: (data || []).filter((u: any) => u.ativo !== false), erro: error ? motivoDe(error) : '' };
 }
 // Login da pessoa da tarefa, o gestor dela e quem aprova (gestor ou, sem gestor, os Admins).
@@ -133,7 +132,7 @@ const uuidOuNulo = (v: any) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}
 
 // 7.x (09/11/2026): o aviso em Menções e a baixa do aviso do aprovador ignoravam o erro do banco — a decisão ficava gravada e a pessoa nunca
 // soube. Os dois devolvem a frase do que falhou (vazia quando deu certo); a gravação principal nunca é desfeita por causa deles, e quem
-// grava junta as frases no aviso final. O WhatsApp segue "melhor esforço" por desenho (whatsappHelper.ts: a Menções é o canal garantido).
+// grava junta as frases no aviso final. A Menções é o canal do aviso (o aviso por WhatsApp saiu em 26/11/2026).
 async function mencionar(dest: any, registro: any, texto: string, user: any, campo: 'aprovacao' | 'resposta'): Promise<string> {
   if (!dest?.id || String(dest.id) === String(user?.id)) return '';
   try {
@@ -198,13 +197,11 @@ export async function registrarHoraExtra({ pessoaNome, inicio, fim, motivo, tare
       else if (usuario && String(usuario.id) !== String(currentUser?.id)) {
         const texto = `Hora extra liberada para você: ${periodo}. Registrada por ${currentUser?.nome}. Motivo: ${registro.motivo}`;
         const f = await mencionar(usuario, registro, texto, currentUser, 'resposta'); if (f) falhas.push(f);
-        await notificarPessoa('hora_extra_respondida', usuario.whatsapp, `✅ ${texto}`);
       }
     } else {
       const texto = `${pessoaNome} pede hora extra: ${periodo}. Motivo: ${registro.motivo}. Pedido por ${currentUser?.nome}. Aprove ou recuse em Engenharia › Horas/Tarefas › Horas extras.`;
       for (const a of aprovadores) {
         const f = await mencionar(a, registro, texto, currentUser, 'aprovacao'); if (f) falhas.push(f);
-        await notificarPessoa('hora_extra_solicitada', a.whatsapp, `⏰ Pedido de hora extra\n${texto}`);
       }
     }
   } catch (e: any) {
@@ -246,7 +243,6 @@ export async function decidirHoraExtra(registro: any, aprovar: boolean, currentU
         : `Hora extra recusada por ${currentUser?.nome}: ${atualizado.pessoa_nome}, ${periodo}. Motivo: ${atualizado.resposta || '—'}`;
       for (const d of destinos.values()) {
         const f = await mencionar(d, atualizado, texto, currentUser, 'resposta'); if (f) falhas.push(f);
-        await notificarPessoa('hora_extra_respondida', d.whatsapp, `${aprovar ? '✅' : '❌'} ${texto}`);
       }
     }
   } catch (e: any) {
@@ -382,7 +378,7 @@ export function ModalHoraExtra({ currentUser, pessoaNome, tarefa, acao, onClose,
             <div className="acn-fraco acn-hx-t12">
               {direto
                 ? 'Como gerente ou admin, a hora extra fica registrada na hora, sem aprovação.'
-                : `O pedido vai para ${aprovador || '…'}, com aviso em Menções e no WhatsApp.`}
+                : `O pedido vai para ${aprovador || '…'}, com aviso em Menções.`}
             </div>
           )}
           <div className="acn-hx-botoes">

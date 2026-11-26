@@ -287,10 +287,6 @@
         <span class="icon">📄</span>
         Manual do Veículo
       </a>
-      <a id="btn-whats" class="btn-acao btn-verde" href="#" target="_blank">
-        <span class="icon">💬</span>
-        WhatsApp SAC
-      </a>
       <a id="btn-maps" class="btn-acao btn-cinza" href="#" target="_blank">
         <span class="icon">📍</span>
         Nossa Localização
@@ -326,7 +322,7 @@
         <input id="f-nome" type="text" placeholder="Nome do solicitante" />
       </div>
       <div class="campo">
-        <label>Telefone / WhatsApp *</label>
+        <label>Telefone *</label>
         <input id="f-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="(48) 99999-9999" oninput="this.value = mascaraTelefone(this.value)" />
       </div>
       <div class="campo">
@@ -431,7 +427,7 @@
     if (!token) { mostrarErro(); return; }
 
     // Config
-    const cfgRaw = await supa('configuracoes_sistema?select=chave,valor&chave=in.(nfc_nome_empresa,nfc_logo_url,nfc_whatsapp_numero,nfc_endereco_maps)');
+    const cfgRaw = await supa('configuracoes_sistema?select=chave,valor&chave=in.(nfc_nome_empresa,nfc_logo_url,nfc_endereco_maps)');
     (cfgRaw || []).forEach(c => CONFIG[c.chave] = c.valor);
 
     // Atualizar header com nome/logo da empresa
@@ -470,14 +466,6 @@
       btnManual.href = VEICULO.manual_pdf_url;
       btnManual.style.display = '';
     }
-
-    // WhatsApp
-    const whats = CONFIG['nfc_whatsapp_numero'] || '5548999999999';
-    const waMsg = encodeURIComponent(
-      `Olá! Sou do ${VEICULO.orgao_cliente || 'órgão cliente'} e preciso de suporte para o veículo:\n` +
-      `Modelo: ${VEICULO.modelo || '—'}\nChassi: ${VEICULO.chassi}\n\nDescrição do problema:`
-    );
-    document.getElementById('btn-whats').href = `https://wa.me/${whats}?text=${waMsg}`;
 
     // Maps
     const maps = CONFIG['nfc_endereco_maps'] || 'ACN+Sinal+Verde';
@@ -593,7 +581,7 @@
       setTimeout(() => { fecharModal(); btn.disabled = false; btn.textContent = 'Enviar Solicitação'; }, 3000);
     } else {
       const errBody = await r.text().catch(() => '');
-      msg.innerHTML = `<div class="msg-err">❌ Erro ao enviar. Tente novamente ou entre em contato pelo WhatsApp.</div>`;
+      msg.innerHTML = `<div class="msg-err">❌ Erro ao enviar. Tente novamente ou entre em contato por telefone.</div>`;
       btn.disabled = false;
       btn.textContent = 'Enviar Solicitação';
     }

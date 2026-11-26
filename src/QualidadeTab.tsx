@@ -4,7 +4,6 @@ import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoCompacto } from './AcnTabShared';
-import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { statusAposCqAprovado, aguardaLiberacaoComercial, STATUS_EMBALAGEM } from './FluxoEntrega';
@@ -192,7 +191,6 @@ export default function QualidadeTab({ currentUser }) {
       if (errLog) alert('Erro ao registrar o histórico de movimentação (a OP foi aprovada mesmo assim): ' + errLog.message);
     }
 
-    notificarEvento('cq_aprovado', msg.cqAprovado(numero, currentUser?.nome));
     setUploading(false); setModalAudit(null); fetchAll();
   };
 
@@ -249,7 +247,6 @@ export default function QualidadeTab({ currentUser }) {
       if (errLog) alert('Erro ao registrar o histórico de movimentação (a OP foi reprovada mesmo assim): ' + errLog.message);
     }
 
-    notificarEvento('cq_reprovado', msg.cqReprovado(numero, obsAudit, currentUser?.nome));
     setModalAudit(null); fetchAll();
   };
 

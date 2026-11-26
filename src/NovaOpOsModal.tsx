@@ -24,7 +24,6 @@ import { CampoTelefone } from './CampoTelefone';
 import { lerValorDigitado } from './LerValor';
 import { somenteDigitos, erroDosDias, diasParaGravar, somarDias, dataBr } from './ChegadaDoVeiculo';
 import { quemExecutaValido, statusInicialDaOsDoCrm, numeroPvParaOS, demandaDeExecucaoDaOsDoCrm, ROTULOS_QUEM_EXECUTA } from './SacFluxo';
-import { notificarEvento } from './whatsappHelper';
 import { mostrarAviso, confirmar } from './Feedback';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
@@ -769,7 +768,6 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           })]);
           if (errDem) mostrarAviso(`A OS ${data.numero_os} foi aberta, mas não foi possível criar a demanda de execução para o Laboratório (${errDem.message}). Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`, 'erro');
         }
-        notificarEvento('sac_os_aberta', `*Nova OS ${data.numero_os}* (lançada pelo card do CRM)\nCliente: ${form.cliente_nome}\nServiço: ${form.tipo_servico}\nExecuta: ${ROTULOS_QUEM_EXECUTA[quemExecutaValido(form.quem_executa)]}\nPor: ${currentUser?.nome}`);
         onSaved?.(data, 'os');
       }
       onClose();

@@ -25,7 +25,6 @@
   .btn-action:active{transform:scale(.97)}
   .btn-action .icon{font-size:26px}
   .btn-action .label{font-size:10px;font-weight:700;text-align:center;line-height:1.3}
-  .btn-whatsapp{border-color:#25d366;color:#128c7e}
   .btn-maps{border-color:#4285f4;color:#1a73e8}
   .btn-manual{border-color:#dc2626;color:#dc2626}
   .btn-chamado{border-color:#f59e0b;color:#b45309}
@@ -76,7 +75,7 @@
     <div class="modal-sub" id="modal-chamado-sub">Informe seus dados para abrirmos seu atendimento.</div>
     <label class="field-label">Seu nome *</label>
     <input class="field-input" id="inp-nome" placeholder="Ex: João Silva"/>
-    <label class="field-label">Telefone / WhatsApp *</label>
+    <label class="field-label">Telefone *</label>
     <input class="field-input" id="inp-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="(48) 99999-9999" oninput="this.value = mascaraTelefone(this.value)"/>
     <label class="field-label">Descreva o problema *</label>
     <textarea class="field-input" id="inp-desc" placeholder="Ex: Sinalizador dianteiro esquerdo não liga..."></textarea>
@@ -166,9 +165,7 @@ function render() {
   const nome = CONFIG['nfc_nome_empresa'] || 'ACN Sinal Verde';
   const logo = CONFIG['nfc_logo_url'] || '';
   const ativa = garantiaAtiva(v.data_fim_garantia);
-  const whats = CONFIG['nfc_whatsapp_numero'] || '5500000000000';
   const maps  = CONFIG['nfc_endereco_maps']   || 'ACN+Sinal+Verde';
-  const waMsg = encodeURIComponent(`Olá ${nome}, preciso de atendimento para o veículo Chassi: ${v.chassi}${v.placa ? ', Placa: ' + v.placa : ''}.`);
 
   document.getElementById('app').innerHTML = `
     <div class="container">
@@ -204,10 +201,6 @@ function render() {
             <span class="label">Manual</span>
             <span style="font-size:8px;color:#9ca3af">Não disponível</span>
           </div>`}
-        <a class="btn-action btn-whatsapp" href="https://wa.me/${whats}?text=${waMsg}" target="_blank">
-          <span class="icon">💬</span>
-          <span class="label">WhatsApp SAC</span>
-        </a>
         <a class="btn-action btn-maps" href="https://www.google.com/maps/search/${maps}" target="_blank">
           <span class="icon">📍</span>
           <span class="label">Localização ACN</span>
@@ -344,7 +337,7 @@ async function init() {
   try {
     // Carregar configurações + veículo em paralelo
     const [cfgData, veicData] = await Promise.all([
-      sb('configuracoes_sistema?chave=in.(nfc_whatsapp_numero,nfc_endereco_maps,nfc_pin_global,nfc_nome_empresa,nfc_logo_url)&select=chave,valor'),
+      sb('configuracoes_sistema?chave=in.(nfc_endereco_maps,nfc_pin_global,nfc_nome_empresa,nfc_logo_url)&select=chave,valor'),
       sb(`veiculos_nfc?chassi=eq.${encodeURIComponent(CHASSI)}&ativo=eq.true&select=*&limit=1`),
     ]);
 
