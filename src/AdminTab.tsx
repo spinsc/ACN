@@ -7,7 +7,6 @@ import { confirmarRemocao, mostrarAviso } from './Feedback';
 import { Faixa } from './Interface';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import React, { useState, useEffect } from 'react';
-import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
 import { criadoEmLabel, paraCampoDataHora } from './AvisoSistemaWidget';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
@@ -1044,7 +1043,6 @@ const TABELAS_CONFIG = [
   { id:'crm_vendas',            label:'CRM — Vendas Fechadas',    desc:'OPs/OSs geradas a partir do CRM',         cor:'#16a34a' },
   { id:'crm_contatos',          label:'CRM — Contatos',           desc:'Pessoas físicas e leads do CRM',          cor:'#0d9488' },
   { id:'crm_interacoes',        label:'CRM — Interações',         desc:'Ligações, WA, reuniões registradas',      cor:'#6366f1' },
-  { id:'crm_whatsapp_msgs',     label:'CRM — Msgs WhatsApp',      desc:'Mensagens sincronizadas via Evolution API',cor:'#16a34a' },
   { id:'crm_anexos',            label:'CRM — Anexos',             desc:'Arquivos anexados às oportunidades',      cor:'#78716c' },
   // ── Compras / Financeiro ─────────────────────────────────────────────────
   { id:'pcp_pedidos_compra',       label:'Compras — Pedidos',        desc:'Requisições de compra e status',          cor:'#b45309' },
@@ -1105,7 +1103,6 @@ function PainelDados() {
       : tabelaAtiva === 'logistica_manifestos'              ? 'data'
       : tabelaAtiva === 'rh_autorizacoes'                   ? 'data'
       : tabelaAtiva === 'crm_interacoes'                    ? 'data_interacao'
-      : tabelaAtiva === 'crm_whatsapp_msgs'                 ? 'data_msg'
       : tabelaAtiva === 'licitacoes'                        ? 'criado_em'
       // tabelas com data_criacao
       : ['pcp_pedidos_compra','pcp_pedidos_chicotes','pcp_pedidos_serralheria','vistorias_patio']
@@ -1222,8 +1219,6 @@ function PainelDados() {
       return `${r.nome || '?'} — ${r.empresa || '?'} — ${r.whatsapp || r.email || '?'} — op: ${r.operador_nome || '?'}`;
     if (tabelaAtiva === 'crm_interacoes')
       return `[${r.tipo || '?'}] ${r.resultado || '?'}: ${r.descricao?.substring(0,60) || '?'} — ${r.operador_nome || '?'}`;
-    if (tabelaAtiva === 'crm_whatsapp_msgs')
-      return `${r.direcao === 'saida' ? '→' : '←'} ${r.vendedor_nome || r.instance_name || '?'} ↔ ${r.numero_whatsapp || '?'}: ${r.conteudo?.substring(0,60) || '[mídia]'}`;
     if (tabelaAtiva === 'crm_anexos')
       return `${r.tipo || '?'} — ${r.nome || '?'} — ${r.criado_por || '?'}`;
     if (tabelaAtiva === 'clientes')
@@ -1391,26 +1386,25 @@ function PainelDados() {
 }
 
 // ---- PAINEL NOTIFICAÇÕES ----
-// Destinatários do WhatsApp: o envio compara o perfil do usuário por nome EXATO (com
-// acento). A lista junta os perfis padrão, os que existem em usuários e os já
-// marcados; perfil sem nenhum usuário ativo aparece apagado (não recebe ninguém).
+// 26/11/2026 (decisão do usuário: o WhatsApp não é usado no sistema): saiu a configuração dos eventos de aviso por WhatsApp (tabela notificacoes_config).
+// Fica só "quem responde por cada perfil" (notificacoes_responsaveis), que o sistema usa para saber quem recebe as Menções de um setor
+// (por exemplo, a chegada do veículo à matriz avisa o PCP e a Adaptação).
 
 function PainelNotificacoes() {
-  const [eventos, setEventos] = useState([]);
-  const [salvando, setSalvando] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const [usuariosPorPerfil, setUsuariosPorPerfil] = useState<Record<string, number>>({});
   // Quem responde por um perfil sem ter esse perfil (ex.: PCP → Matheus)
   const [responsaveis, setResponsaveis] = useState<any[]>([]);
   const [usuariosAtivos, setUsuariosAtivos] = useState<any[]>([]);
   const [novoResp, setNovoResp] = useState({ perfil: '', usuario_id: '' });
+  const [falhaLeitura, setFalhaLeitura] = useState('');
   const carregarResponsaveis = async () => {
-    const [{ data: r }, { data: u }] = await Promise.all([
+    const [r, u] = await Promise.all([
       supabase.from('notificacoes_responsaveis').select('id, perfil, usuario_id, usuario:auth_usuarios(nome)').order('perfil'),
       supabase.from('auth_usuarios').select('id, nome, perfil').eq('ativo', true).order('nome'),
     ]);
-    setResponsaveis(r || []); setUsuariosAtivos(u || []);
+    // leitura recusada nunca vale como "ninguém definido"
+    if (r.error || u.error) { setFalhaLeitura('Não foi possível ler a lista de responsáveis. Atualize a página e tente de novo.'); return; }
+    setFalhaLeitura('');
+    setResponsaveis(r.data || []); setUsuariosAtivos(u.data || []);
   };
   useEffect(() => { carregarResponsaveis(); }, []);
   const addResponsavel = async () => {
@@ -1424,52 +1418,17 @@ function PainelNotificacoes() {
     await supabase.from('notificacoes_responsaveis').delete().eq('id', id);
     carregarResponsaveis();
   };
-  const alcance = (p: string) => (usuariosPorPerfil[p] || 0) + responsaveis.filter((r: any) => r.perfil === p).length;
-  useEffect(() => { fetchEventos(); }, []);
-  const PERFIS_WA = [...new Set([
-    ...PERFIS,
-    ...Object.keys(usuariosPorPerfil),
-    ...eventos.flatMap((e: any) => e.destinatarios_perfis || []),
-  ])];
-
-  const fetchEventos = async () => {
-    setLoading(true);
-    const [{ data }, { data: us }] = await Promise.all([
-      supabase.from('notificacoes_config').select('*').order('evento'),
-      supabase.from('auth_usuarios').select('perfil').eq('ativo', true),
-    ]);
-    const cont: Record<string, number> = {};
-    (us || []).forEach((u: any) => { if (u.perfil) cont[u.perfil] = (cont[u.perfil] || 0) + 1; });
-    setUsuariosPorPerfil(cont);
-    setEventos(data || []);
-    setLoading(false);
-  };
-
-  const toggleAtivo = async (ev) => {
-    await supabase.from('notificacoes_config').update({ ativo: !ev.ativo }).eq('evento', ev.evento);
-    invalidarCacheNotif();
-    fetchEventos();
-  };
-
-  const togglePerfil = async (ev, perfil) => {
-    const atual = ev.destinatarios_perfis || [];
-    const novo = atual.includes(perfil) ? atual.filter(p=>p!==perfil) : [...atual, perfil];
-    setSalvando(ev.evento);
-    await supabase.from('notificacoes_config').update({ destinatarios_perfis: novo }).eq('evento', ev.evento);
-    invalidarCacheNotif();
-    setSalvando(null);
-    fetchEventos();
-  };
-
-  if (loading) return <div className="acn-empty">Carregando configurações...</div>;
+  // os perfis padrão, os que existem em usuários ativos e os que já têm responsável
+  const PERFIS_LISTA = [...new Set([...PERFIS, ...usuariosAtivos.map((u: any) => u.perfil).filter(Boolean), ...responsaveis.map((r: any) => r.perfil)])];
 
   return (
     <div>
+      {falhaLeitura && <div className="acn-empty" style={{ color: 'var(--acn-bad)' }}>{falhaLeitura}</div>}
       <div className="sec-card">
         <div className="sec-hdr"><span>👤 Quem responde por cada perfil</span></div>
         <div className="sec-body" style={{ fontSize:11 }}>
           <div style={{ fontSize:10, color:'#64748b', marginBottom:8 }}>
-            Recebe os avisos de um perfil sem ter esse perfil (ex.: PCP → quem cuida do PCP). As permissões da pessoa não mudam.
+            Recebe os avisos (Menções) de um perfil sem ter esse perfil (ex.: PCP → quem cuida do PCP). As permissões da pessoa não mudam.
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
             {responsaveis.map((r: any) => (
@@ -1479,12 +1438,12 @@ function PainelNotificacoes() {
                   style={{ border:'none', background:'none', color:'#94a3b8', cursor:'pointer', padding:0 }}>✕</button>
               </span>
             ))}
-            {!responsaveis.length && <span style={{ color:'#94a3b8' }}>Nenhum definido.</span>}
+            {!responsaveis.length && !falhaLeitura && <span style={{ color:'#94a3b8' }}>Nenhum definido.</span>}
           </div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             <select className="acn-input" style={{ width:'auto' }} value={novoResp.perfil} onChange={e => setNovoResp(f => ({ ...f, perfil: e.target.value }))} aria-label="Perfil">
               <option value="">Perfil...</option>
-              {PERFIS_WA.map(p => <option key={p} value={p}>{p}</option>)}
+              {PERFIS_LISTA.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <select className="acn-input" style={{ width:'auto' }} value={novoResp.usuario_id} onChange={e => setNovoResp(f => ({ ...f, usuario_id: e.target.value }))} aria-label="Pessoa">
               <option value="">Pessoa...</option>
@@ -1492,65 +1451,6 @@ function PainelNotificacoes() {
             </select>
             <button className="acn-btn" style={{ background:'#0f766e' }} onClick={addResponsavel}>Adicionar</button>
           </div>
-        </div>
-      </div>
-      <div className="sec-card">
-        <div className="sec-hdr">
-          <span>Configuração de Notificações WhatsApp ({eventos.length} eventos)</span>
-          <button className="acn-btn" style={{background:'#475569'}} onClick={fetchEventos}>Atualizar</button>
-        </div>
-        <div className="sec-body" style={{padding:'8px 10px',fontSize:10,color:'#64748b',background:'#f0fdf4',borderBottom:'1px solid #e2e8f0'}}>
-          ✅ Marque os perfis que receberão a notificação em cada evento. Desative o toggle para silenciar completamente.
-        </div>
-        <div style={{overflowX:'auto'}}>
-          <table>
-            <thead><tr>
-              <th style={{minWidth:40}}>Ativo</th>
-              <th style={{minWidth:180}}>Evento</th>
-              <th style={{minWidth:200}}>Descrição</th>
-              <th>Destinatários</th>
-            </tr></thead>
-            <tbody>
-              {eventos.map(ev => (
-                <tr key={ev.evento} style={{opacity: ev.ativo ? 1 : 0.5}}>
-                  <td style={{textAlign:'center'}}>
-                    <button onClick={()=>toggleAtivo(ev)}
-                      style={{fontSize:16,background:'none',border:'none',cursor:'pointer',lineHeight:1}}>
-                      {ev.ativo ? '🔔' : '🔕'}
-                    </button>
-                  </td>
-                  <td>
-                    <strong style={{fontSize:10}}>{ev.label}</strong>
-                    <div style={{fontSize:9,color:'#94a3b8',fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}}>{ev.evento}</div>
-                  </td>
-                  <td style={{fontSize:10,color:'#64748b',maxWidth:220}}>{ev.descricao}</td>
-                  <td>
-                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-                      {PERFIS_WA.map(p => {
-                        const selecionado = (ev.destinatarios_perfis||[]).includes(p);
-                        const carregando = salvando === ev.evento;
-                        return (
-                          <button key={p} onClick={()=>!carregando && togglePerfil(ev,p)}
-                            title={alcance(p) ? `${usuariosPorPerfil[p] || 0} usuário(s) com este perfil + ${responsaveis.filter((r: any) => r.perfil === p).length} responsável(is)` : 'Ninguém recebe: nenhum usuário com este perfil nem responsável definido'}
-                            style={{ opacity: alcance(p) ? 1 : .5,
-                              fontSize:9, padding:'2px 6px', border:'1px solid',
-                              borderRadius:3, cursor: carregando ? 'default' : 'pointer',
-                              background: selecionado ? '#0f766e' : 'transparent',
-                              borderColor: selecionado ? '#0f766e' : '#d1d5db',
-                              color: selecionado ? '#fff' : '#6b7280',
-                              fontWeight: selecionado ? 700 : 400,
-                              opacity: carregando ? 0.6 : 1,
-                            }}>
-                            {p}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -1567,7 +1467,7 @@ const LABEL_TABELA = {
   licitacoes:'Licitações',
   crm_oportunidades:'CRM — Oportunidades', crm_historico:'CRM — Histórico',
   crm_vendas:'CRM — Vendas', crm_contatos:'CRM — Contatos',
-  crm_interacoes:'CRM — Interações', crm_whatsapp_msgs:'CRM — Msgs WA',
+  crm_interacoes:'CRM — Interações',
   crm_anexos:'CRM — Anexos',
   // Legado (compatibilidade)
   crm_clientes:'CRM — Clientes (legado)', crm_historico_contatos:'CRM — Histórico (legado)',
@@ -1640,7 +1540,6 @@ function PainelLixeira() {
       case 'crm_vendas': return `${d.tipo || '?'} — ${d.numero || '?'} — ${d.cliente_nome || '?'}`;
       case 'crm_contatos': return `${d.nome || '?'} — ${d.empresa || '?'} — ${d.whatsapp || d.email || '?'}`;
       case 'crm_interacoes': return `[${d.tipo || '?'}] ${(d.descricao || '').substring(0,60)} — ${d.operador_nome || '?'}`;
-      case 'crm_whatsapp_msgs': return `${d.direcao === 'saida' ? '→' : '←'} ${d.numero_whatsapp || '?'}: ${(d.conteudo || '[mídia]').substring(0,60)}`;
       case 'crm_anexos': return `${d.tipo || '?'} — ${d.nome || '?'}`;
       case 'clientes': return `[${d.tipo || '?'}] ${d.nome || '?'} — ${d.documento || '?'}`;
       // legado
@@ -2645,7 +2544,7 @@ const ABAS_ADMIN = [
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'markup_cfg',     label:'📈 Faixas de Markup' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
-  { id:'notificacoes',   label:'🔔 Notificações WA' },
+  { id:'notificacoes',   label:'🔔 Responsáveis por perfil' },
   { id:'feriados',       label:'📅 Feriados' },
   { id:'veiculos',       label:'🚗 Veículos' },
   { id:'estruturas',     label:'🧩 Estruturas' },

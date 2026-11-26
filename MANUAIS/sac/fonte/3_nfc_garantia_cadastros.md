@@ -460,23 +460,6 @@ Há **três listas**, nas abas internas: **Equipamentos**, **Categorias (Tipo Pr
 | **Duas pessoas mexeram na mesma OS** | O sistema avisa **"a OS já mudou de etapa (outra pessoa mexeu nela)"** e atualiza a lista. Confira e refaça se for o caso |
 | **Chamado NFC de cliente** | Aba **Chamados NFC** > **Atender** > **Notas** > **Concluir** (a nota do que foi feito é obrigatória). Se há serviço, **Abrir OS** no cartão ou abra a **ficha** |
 
-## O que o sistema avisa por WhatsApp
-
-Se o aviso estiver **ligado na configuração do sistema**, o grupo configurado recebe uma mensagem a cada um destes passos:
-
-| Passo | Mensagem |
-|---|---|
-| Nova OS | "Nova OS ..., cliente, equipamento, tipo, por quem" (no lote, **um aviso** com todos os números) |
-| Orçamento enviado | "Orçamento enviado — OS ..., cliente, valor" |
-| Cotação enviada | "Cotação enviada — OS ..., cliente, total" |
-| Cotação aprovada | "Cotação APROVADA ... Produção: definir data de atendimento" |
-| OS aprovada | "OS ... APROVADA, cliente, aprovador" |
-| OS reprovada | "OS ... REPROVADA, cliente, motivo" |
-| Aceite da data | "SAC confirmou data — OS ..., data e período" |
-| Enviado ao Fiscal | "Enviado para o Fiscal — OS ..." |
-| OS entregue | "OS ... ENTREGUE, cliente, retirado por" |
-| OS cancelada | "OS ... CANCELADA, motivo, setores que devem encerrar a demanda" |
-
 ## Todas as etapas e quem age
 
 | Etapa | Quem age | O que fazer |

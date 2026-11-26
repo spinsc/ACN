@@ -367,8 +367,6 @@ export function PainelMarkupCfg() {
 // CONFIG. NFC
 // ─────────────────────────────────────────────────────────────────────────────
 const NFC_KEYS = [
-  { chave: 'nfc_whatsapp_numero', label: 'Número WhatsApp SAC', tipo: 'text',
-    desc: 'Com DDI, sem espaços ou + (ex: 5548999999999)' },
   { chave: 'nfc_endereco_maps',   label: 'Endereço Google Maps', tipo: 'text',
     desc: 'Parâmetro de busca (ex: Rua+das+Flores,123+Florianópolis+SC)' },
   { chave: 'nfc_pin_global',      label: 'PIN Global Área Restrita', tipo: 'text',
@@ -395,7 +393,7 @@ export function PainelNfcCfg() {
     if (salvando || !leitura.dados) return;
     setSalvando(true);
     const agora = new Date().toISOString();
-    // UMA gravação com as sete chaves, conferida: antes eram sete, uma atrás da outra, sem olhar o erro, e a tela dizia "salvas com sucesso" de qualquer jeito
+    // UMA gravação com as chaves do NFC, conferida: antes eram sete (uma atrás da outra; a do WhatsApp saiu em 26/11/2026 com a retirada do WhatsApp do sistema), sem olhar o erro, e a tela dizia "salvas com sucesso" de qualquer jeito
     const { error } = await supabase.from('configuracoes_sistema').upsert(
       NFC_KEYS.map(k => ({ chave: k.chave, valor: String(cfg[k.chave] || '').trim(), descricao: k.desc, atualizado_em: agora })),
       { onConflict: 'chave' },

@@ -10,7 +10,6 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
 import Linkify from './Linkify';
 import { centrosParaApontar, motivoBloqueio, labelHierarquico } from './CentroCustoShared';
-import { notificarEvento } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -590,7 +589,6 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
           status_anterior: opl.status_geral, status_novo: opl.status_geral,
           usuario_nome: currentUser?.nome, data_hora: agora,
         }]);
-        notificarEvento('serralheria_conclui_parcial', `*Serralheria concluiu* — OP ${opl.opl}\nPor: ${currentUser?.nome}`, 'PCP');
       }
     }
 

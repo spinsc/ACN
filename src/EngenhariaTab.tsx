@@ -11,7 +11,6 @@ import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, SETORES_FABRICACAO } from './DemandaItens';
 import { PinturaCampos } from './PinturaSerralheria';
 import OplAnexosWidget from './OplAnexosWidget';
-import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
 import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
 import ConfigEstruturaTela from './ConfigEstruturaTela';
@@ -383,7 +382,6 @@ export default function EngenhariaTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     if (erroLogBom) alert(`A BOM foi liberada, mas o histórico de movimentação não foi gravado: ${erroLogBom.message}`);
-    notificarEvento('engenharia_libera_pcp', msg.oplEnviada(opl.opl,'PCP',currentUser?.nome));
     if (temFabricacao(fabBom)) {
       const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabBom, ops: [opl], origem: 'engenharia_bom', currentUser, pintura: pinturaBom });
       if (criadas.length) await supabase.from('logs_movimentacao_opl').insert([{
@@ -427,7 +425,6 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('engenharia_libera_serralheria', `*Liberação parcial p/ Serralheria* — OP ${opl.opl}\n${obsSerralheria.trim()}\nPor: ${currentUser?.nome}`, 'Serralheria');
     setEnviandoSerralheria(false);
     setModalSerralheria(null); setObsSerralheria(''); fetchAll();
   };
@@ -528,7 +525,6 @@ export default function EngenhariaTab({ currentUser }) {
         status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('engenharia_libera_pcp', `*BOM liberado em lote* — ${modalBomLote.base}\n${liberadas.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
       if (temFabricacao(fabBomLote)) {
         const { falhas } = await gerarDemandasFabricacao({ valor: fabBomLote, ops: liberadas, origem: 'engenharia_bom', currentUser, pintura: pinturaBomLote });
         if (falhas.length) alert('BOM liberada, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
@@ -556,7 +552,6 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('engenharia_devolve_comerc', msg.oplDevolvida(opl.opl,'Comercial',obsDevolver,currentUser?.nome));
     setModalDevolver(null); setObsDevolver(''); fetchAll();
   });
 

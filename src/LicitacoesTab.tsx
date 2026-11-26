@@ -320,12 +320,6 @@ async function uploadAnexo(file: File, licitacaoId: string, tipo: string): Promi
   return pub?.publicUrl || null;
 }
 
-function wppLink(num: string): string {
-  const digits = num.replace(/\D/g,'');
-  const br = digits.startsWith('55') ? digits : '55' + digits;
-  return `https://wa.me/${br}`;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // BADGE DE PRAZO
 // ─────────────────────────────────────────────────────────────────────────────
@@ -555,9 +549,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
                         {(c.telefones||[]).map((tel: any, i: number) => (
                           <span key={i} className="acn-lic-tel">
                             {isMobile(tel.tipo) ? (
-                              <a href={wppLink(tel.numero)} target="_blank" rel="noreferrer" className="acn-lic-link-ok">
-                                <Icone path={mdiCellphone} size={14} />{tel.numero}
-                              </a>
+                              <span className="acn-lic-tel-fixo"><Icone path={mdiCellphone} size={14} />{tel.numero}</span>
                             ) : (
                               <span className="acn-lic-tel-fixo"><Icone path={mdiPhoneOutline} size={14} />{tel.numero}</span>
                             )}

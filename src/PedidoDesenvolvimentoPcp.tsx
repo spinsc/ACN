@@ -23,7 +23,6 @@ import { supabase } from './supabaseClient';
 import { rotuloDoTipo } from './DesenvolvimentoTipos';
 import { OplDetalheModal } from './AcnTabShared';
 import { logChange } from './AuditSystem';
-import { notificarEvento } from './whatsappHelper';
 import { confirmar, pedirTexto } from './Feedback';
 import { Botao, Faixa, Selo } from './Interface';
 import { mdiEyeOutline, mdiPuzzleOutline } from '@mdi/js';
@@ -96,7 +95,6 @@ export default function PedidoDoPcp({ demanda, onAtualizado, currentUser }: any)
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
     }
-    if (todosFechados) notificarEvento('engenharia_entrega_desenvolvimento', `*Engenharia entregou o desenvolvimento* — OP ${demanda.numero_opl}\n${resumo}.\nPor: ${currentUser?.nome}`);
     onAtualizado?.();
   };
 

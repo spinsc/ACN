@@ -69,7 +69,6 @@ src/
 ├── NovaOpOsModal.tsx        — modal de criação de nova OP/OS
 ├── OplAcompModal.tsx        — modal de acompanhamento de OPL
 ├── ContatoAlertWidget.tsx   — alertas de contato
-├── WhatsAppConexoesWidget.tsx — integração WhatsApp
 └── ...outros componentes auxiliares
 ```
 

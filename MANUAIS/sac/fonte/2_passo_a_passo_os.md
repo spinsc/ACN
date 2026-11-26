@@ -77,7 +77,6 @@ Se a **Categoria** for do tipo que tem despesas (por exemplo, **Serviço Externo
 
 - Se marcou **Acompanhamento de Engenharia**, nasce também uma demanda para a **Engenharia**.
 - As **menções (@Nome)** viram avisos na caixa de Menções de quem foi chamado.
-- O sistema avisa por **WhatsApp** (se esse aviso estiver ligado na configuração): "Nova OS ..., cliente, equipamento, tipo, aberta por". No lote vai **um aviso só**, com todos os números.
 - Se a OS foi criada mas uma **demanda** (Laboratório ou Engenharia) **não** nasceu, o sistema diz qual faltou: avise o PCP ou a TI, porque o setor só enxerga a OS pela demanda.
 - O cliente digitado fica salvo no cadastro de clientes.
 
@@ -138,7 +137,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ![Janela Enviar orçamento ao cliente](img/12-enviar-orcamento.jpg)
 
-**O que acontece:** a OS grava o valor, as condições e **a data de envio**; o sistema avisa por WhatsApp (se ligado). **O sistema não manda o orçamento ao cliente por e-mail ou WhatsApp**: o SAC envia o orçamento ao cliente pelo meio de costume e usa este botão para **registrar** que enviou.
+**O que acontece:** a OS grava o valor, as condições e **a data de envio**. **O sistema não manda o orçamento ao cliente por e-mail ou WhatsApp**: o SAC envia o orçamento ao cliente pelo meio de costume e usa este botão para **registrar** que enviou.
 
 **Vai para:** **Orç. Enviado**. Quem age: o cliente (você cobra a resposta).
 
@@ -156,7 +155,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ![Janela Aprovação de orçamento](img/13-aprovacao-do-orcamento.jpg)
 
-**O que acontece:** a assinatura é guardada na OS; a OS fica **Aprovada** (com aprovador e data); **nasce a demanda de execução** para o Laboratório ("Cliente aprovou orçamento R$ ... Aprovador: ... Data prevista: ..."); o sistema avisa por WhatsApp. Se a demanda não nascer, o sistema diz: avise o PCP ou a TI.
+**O que acontece:** a assinatura é guardada na OS; a OS fica **Aprovada** (com aprovador e data); **nasce a demanda de execução** para o Laboratório ("Cliente aprovou orçamento R$ ... Aprovador: ... Data prevista: ..."). Se a demanda não nascer, o sistema diz: avise o PCP ou a TI.
 
 > **Atenção:** se a assinatura **não subir**, a aprovação **não é registrada** e a janela continua aberta com o que você digitou: tente de novo.
 
@@ -191,13 +190,13 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 > **Atenção:** **Enviar Cotação** sem itens não funciona: a tela avisa "Adicione os itens antes de enviar!".
 
-**O que acontece:** o **valor da cotação é a soma dos itens**; grava a data de envio; avisa por WhatsApp. Como no orçamento do Laboratório, **o sistema registra, não envia ao cliente**.
+**O que acontece:** o **valor da cotação é a soma dos itens**; grava a data de envio. Como no orçamento do Laboratório, **o sistema registra, não envia ao cliente**.
 
 **Vai para:** **Aguardando Aprovação Cliente**.
 
 **Registrar a resposta do cliente à cotação:**
 
-- **Aprovado:** o sistema pede o **Nome de quem aprovou\***. Clique **Confirmar aprovação**. A OS vai para **Em Provisionamento** e o WhatsApp avisa a Produção: "definir data de atendimento".
+- **Aprovado:** o sistema pede o **Nome de quem aprovou\***. Clique **Confirmar aprovação**. A OS vai para **Em Provisionamento**.
 
   ![Janela Aprovação de cotação](img/16-aprovacao-da-cotacao.jpg)
 
@@ -231,7 +230,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 **O que acontece:**
 
-- **Cliente confirmou:** a OS vai para **Aguardando Início** (avaliação remota) ou **Provisionada** (presencial). O WhatsApp avisa "SAC confirmou data".
+- **Cliente confirmou:** a OS vai para **Aguardando Início** (avaliação remota) ou **Provisionada** (presencial).
 - **Não confirmou:** o sistema pergunta se tem certeza ("o cliente não aceitou a data e a OS voltará para a Produção redefinir"). Ao confirmar, a OS volta para **Em Provisionamento**, **a data é apagada** e a Produção marca outra.
 
 ### Iniciar e concluir a execução (quando o SAC executa)
@@ -279,7 +278,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ![Janela Enviar para Fiscal (seriais)](img/18-enviar-para-fiscal-seriais.jpg)
 
-**O que acontece:** os itens com os seriais ficam gravados na OS; a OS vai a **Aguardando Emissão NF**; grava o dia do envio; avisa por WhatsApp. Se outra pessoa já enviou, o sistema avisa e atualiza.
+**O que acontece:** os itens com os seriais ficam gravados na OS; a OS vai a **Aguardando Emissão NF**; grava o dia do envio. Se outra pessoa já enviou, o sistema avisa e atualiza.
 
 > **Atenção:** o nome do botão é quase igual ao do Laboratório, mas **a janela pede outra coisa** (seriais, não valor e CPF/CNPJ). Está nos pontos de melhoria.
 
@@ -301,7 +300,7 @@ Em cada OS, o botão **verde** é o passo que **você** precisa dar naquela etap
 
 ![Janela Entrega de Veículo](img/20b-entrega-do-veiculo.jpg)
 
-**O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome, a assinatura e as fotos (no Laboratório e no veículo). Avisa por WhatsApp ("OS entregue" ou "Veículo entregue"). A entrega do veículo só é gravada se a OS ainda estiver esperando a entrega: se outra pessoa já entregou, o sistema avisa e atualiza a lista. A OS entregue **continua na lista e no quadro**, em **Concluído**.
+**O que acontece:** a OS vai a **Entregue** (o fim do caminho), com a data, o nome, a assinatura e as fotos (no Laboratório e no veículo). A entrega do veículo só é gravada se a OS ainda estiver esperando a entrega: se outra pessoa já entregou, o sistema avisa e atualiza a lista. A OS entregue **continua na lista e no quadro**, em **Concluído**.
 
 > **Atenção:** se a assinatura ou uma foto **não subir**, a entrega **não é registrada** e o que você digitou fica na janela para tentar de novo.
 
@@ -490,7 +489,6 @@ Em quase toda etapa, antes do Fiscal, também há **Cancelar a OS** e, antes da 
 - A OS fica **Cancelada**, com **motivo, data e quem cancelou**.
 - A OS **sai do quadro e da lista** (fica só no filtro de status **Cancelada**; uma faixa acima do quadro conta quantas estão fora).
 - As demandas abertas dos outros setores **recebem um recado** e o setor é **avisado**: **quem encerra a demanda é o setor**.
-- Avisa por WhatsApp, dizendo quais setores devem encerrar a demanda.
 
 > **Atenção:** **não se cancela** a OS que **já está no Fiscal** (Aguardando Emissão NF, Faturada - Aguardando Entrega), a **entregue** nem a **já cancelada**. Se a OS mudou de etapa enquanto você preenchia, o sistema avisa e não cancela.
 
