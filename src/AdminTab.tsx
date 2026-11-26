@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { anexarValoresDosFretes, anexarValoresDasCotacoesDeFrete, anexarValoresDoFaturamento } from './FreteValores';
 import { iniciarVerComo } from './VerComo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao, mostrarAviso } from './Feedback';
@@ -1074,6 +1075,7 @@ const TABELAS_CONFIG = [
 function PainelDados() {
   const [tabelaAtiva, setTabelaAtiva] = useState('oples');
   const [registros, setRegistros] = useState([]);
+  const [avisoValores, setAvisoValores] = useState('');
   const [loading, setLoading] = useState(false);
   const [contagens, setContagens] = useState({});
   const [selecionados, setSelecionados] = useState(new Set());
@@ -1118,7 +1120,22 @@ function PainelDados() {
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);
     if (error) console.error('[PainelDados] fetchRegistros error:', error);
-    setRegistros(data || []);
+    // 26/11/2026 (V4d do "ver valores no banco", pedido do usuário): as colunas de dinheiro destas três tabelas ficam sempre nulas; o valor mora nas tabelas
+    // `*_valores`, que o banco entrega ao Admin. Sem recolocá-lo a lista mostraria "—" e o JSON do registro, nulo. A cópia na lixeira (deletarSelecionados) leva o valor junto.
+    let linhas = data || [];
+    let falhaValores = '';
+    if (!error && linhas.length) {
+      const recolocar = tabelaAtiva === 'pcp_pedidos_faturamento' ? anexarValoresDoFaturamento(linhas).then(r => ({ linhas: r.faturamentos, erro: r.erro }))
+        : tabelaAtiva === 'pcp_cotacoes_fretes' ? anexarValoresDasCotacoesDeFrete(linhas).then(r => ({ linhas: r.cotacoes, erro: r.erro }))
+        : tabelaAtiva === 'pcp_fretes' ? anexarValoresDosFretes(linhas).then(r => ({ linhas: r.fretes, erro: r.erro }))
+        : null;
+      if (recolocar) {
+        const r = await recolocar;
+        if (r.erro) falhaValores = r.erro; else linhas = r.linhas;
+      }
+    }
+    setAvisoValores(falhaValores ? `Não foi possível ler os valores desta tabela (${falhaValores}). Os campos de dinheiro aparecem vazios, mas isso não quer dizer que não existam.` : '');
+    setRegistros(linhas);
     setLoading(false);
   };
 
@@ -1296,6 +1313,10 @@ function PainelDados() {
           </button>
         </div>
       </div>
+
+      {avisoValores && (
+        <div role="alert" style={{background:'#fef2f2',border:'1px solid #fecaca',color:'#b91c1c',borderRadius:6,padding:'8px 12px',fontSize:11,marginBottom:8}}>{avisoValores}</div>
+      )}
 
       {/* TABELA */}
       <div className="sec-card">
