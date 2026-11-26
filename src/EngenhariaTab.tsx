@@ -26,7 +26,7 @@ import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpIt
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
 import { aplicarDiferencaNaBom, avisoDoQueNaoFoiTirado } from './CalculoDaEstrutura';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
-import { indicePendencias } from './OpPendencias';
+import { indicePendencias, frasePendenciasNaoLidas } from './OpPendencias';
 import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
 import Icone from './Icone';
 import { useAbaNoEndereco } from './AbaNoEndereco';
@@ -324,25 +324,33 @@ export default function EngenhariaTab({ currentUser }) {
   // e quem esbarrava nisso era o Almoxarifado, na hora de fechar o kit. É
   // aviso, não trava: liberar com demanda aberta é normal (a liberação parcial
   // da Serralheria, por exemplo, abre uma de propósito). Devolve true para
-  // seguir. Se a consulta falhar, segue: um aviso que não carregou não pode
-  // impedir a Engenharia de trabalhar.
+  // seguir. 26/11/2026 (pendências não lidas): se a consulta falhar, NÃO segue calado como se não houvesse pendência
+  // (antes o `catch` devolvia true e a recusa do banco, em `indice.falhas`, nem era olhada): a pergunta
+  // diz que não deu para conferir e a pessoa decide. Continua sem travar: um aviso que não carregou
+  // não pode impedir a Engenharia de trabalhar, só não pode fingir que conferiu.
   const confirmarComPendenciasAbertas = async (ops) => {
     let abertas = [];
+    let falhas: string[] = [];
     try {
       const indice = await indicePendencias();
+      falhas = indice.falhas || [];
       ops.forEach(o => (indice.get(String(o.id)) || []).filter(p => p.aberto)
         .forEach(p => abertas.push({ ...p, opl: o.opl })));
     } catch (e) {
       console.error('Não consegui checar as pendências antes de liberar a BOM:', e);
-      return true;
+      falhas = ['pendências'];
     }
-    if (!abertas.length) return true;
+    if (!abertas.length && !falhas.length) return true;
     const varias = ops.length > 1;
     const linhas = abertas.slice(0, 10).map(p => `• ${varias ? p.opl + ' — ' : ''}${p.setor}: ${p.titulo}`).join('\n');
     const resto = abertas.length > 10 ? `\n… e mais ${abertas.length - 10}` : '';
+    const parteAberta = abertas.length
+      ? `${varias ? 'Estas OPs já têm' : 'Esta OP já tem'} ${abertas.length} demanda(s) de fabricação/compra em aberto:\n\n${linhas}${resto}\n\n`
+      : '';
+    const parteNaoLida = falhas.length ? `${frasePendenciasNaoLidas(falhas)}\n\n` : '';
     return confirmar(
-      `${varias ? 'Estas OPs já têm' : 'Esta OP já tem'} ${abertas.length} demanda(s) de fabricação/compra em aberto:\n\n${linhas}${resto}\n\n` +
-      'Liberar a BOM mesmo assim? As demandas seguem abertas, e o Almoxarifado vai encontrá-las na hora de fechar o kit.');
+      parteNaoLida + parteAberta +
+      'Liberar a BOM mesmo assim?' + (abertas.length ? ' As demandas seguem abertas, e o Almoxarifado vai encontrá-las na hora de fechar o kit.' : ''));
   };
 
   const liberarBOM = umaVez('liberar-bom', async () => {

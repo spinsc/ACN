@@ -73,7 +73,7 @@ import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura, copiarLink
 import ResumoLoteOpl from './ResumoLoteOpl';
 import { podeFaturarAntes, liberarFaturamentoAntecipado } from './FaturamentoAntecipado';
 import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias, resumoDasOps } from './EtapasOp';
-import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
+import { indicePendencias, travaConclusaoProducao, frasePendenciasNaoLidas } from './OpPendencias';
 import { VeiculoDaOp } from './VeiculoCadastro';
 import { centroDisponivel } from './CentroCustoShared';
 import { ViagensLigadas } from './ViagemVinculos';
@@ -343,6 +343,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // seguram cada uma. A ordem "parada há mais tempo" usa o primeiro.
   const [desdeOpls, setDesdeOpls] = useState<Record<string, any>>({});
   const [pendenciasOpls, setPendenciasOpls] = useState<Record<string, any[]>>({});
+  // 26/11/2026 (pendências não lidas): nomes do que o banco recusou ler nas pendências (`indicePendencias().falhas`). Leitura recusada nunca vale como "a OP não tem pendência":
+  // a coluna "Onde está" avisa em vermelho em cada linha e a lista ganha a faixa com "Tentar de novo".
+  const [pendNaoLidasOpls, setPendNaoLidasOpls] = useState<string[]>([]);
   const [oplsOrdem, setOplsOrdem] = useState<'entrada'|'parada'>('entrada');
   // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
   // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
@@ -1566,8 +1569,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     // A tela só aparece depois disto (oplsLoading), então a coluna nunca surge pela metade.
     const [desdeEvento, indice] = await Promise.all([
       desdeQuandoEmLote(lista.map((o: any) => o.id)),
-      indicePendencias().catch((e: any) => { console.error('Pendências da lista de OPs:', e); return new Map(); }),
+      // 26/11/2026: o erro inteiro (rede, exceção) também vira "não li as pendências", nunca um mapa vazio calado
+      indicePendencias().catch((e: any) => { console.error('Pendências da lista de OPs:', e); const vazio: any = new Map(); vazio.falhas = ['pendências']; return vazio; }),
     ]);
+    setPendNaoLidasOpls(indice.falhas || []);
     const desdeDe: Record<string, any> = {};
     const pendDe: Record<string, any[]> = {};
     lista.forEach((o: any) => {
@@ -3614,6 +3619,11 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               );
             })()}
             {erroOpls && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOplsEmAberto}>Tentar de novo</Botao>}>Não foi possível ler as OPs em aberto ({erroOpls}). Isso não quer dizer que não haja OP{oplsEmAberto.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.</Faixa>}
+            {pendNaoLidasOpls.length > 0 && !erroOpls && (
+              <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOplsEmAberto}>Tentar de novo</Botao>}>
+                {frasePendenciasNaoLidas(pendNaoLidasOpls)} Enquanto isso a coluna "Onde está" não mostra as pendências das OPs.
+              </Faixa>
+            )}
             {oplsLoading ? (
               <div className="acn-empty acn-crm-vazio">Carregando...</div>
             ) : oplsFiltradas.length === 0 ? (
@@ -3701,7 +3711,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                               })()}
                             </td>
                             <td className="acn-crm-opl-onde">
-                              <OndeEstaCelula op={o} desde={desdeOpls[o.id] || null} pendencias={pendenciasOpls[o.id] || []} />
+                              <OndeEstaCelula op={o} desde={desdeOpls[o.id] || null} pendencias={pendenciasOpls[o.id] || []} pendenciasNaoLidas={pendNaoLidasOpls} />
                             </td>
                             <td className="acn-fraco acn-lic-nowrap">
                               {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
