@@ -178,6 +178,138 @@ async function opsDeTeste() {
 const NAO_ACHADA = 'ZZNAOEXISTE.9999';
 const OP_EXCLUIDA = 'A1760.2611';   // cancelada e excluída em 25/11/2026 (CLAUDE.md): o banco a esconde de todos
 
+// ── Fase 3 (26/11/2026): licitação, card do CRM, pedido de compra e OS com endereço próprio (`#/<tela>/<palavra>/<código>`) ──
+// Cada registro é descrito uma vez (`FASE3`) e os cenários C32 a C44 rodam nos quatro: o que muda de um para outro é o seletor da janela, o título dela e o botão de fechar.
+const norm = (t) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim();
+const UUID_INEXISTENTE = '00000000-0000-4000-8000-00000000f003';
+const FASE3 = [
+  { tipo: 'licitacao', tela: 'licitacoes', nome: 'licitacoes', menu: 'Licitações', aba: 'Licitações · ACN', rotulo: 'a licitação', de: 'da licitação', contextoMencao: 'licitacao', abaMencao: 'licitacoes',
+    tabela: 'licitacoes', colunas: 'id,numero', filtro: 'numero=not.is.null', ordem: 'criado_em.desc', esperado: (r) => r.numero,
+    janela: '.acn-lic-overlay.acn-lic-ov-card', titulo: '.acn-lic-cab-titulo', fechar: '.acn-lic-cab-acoes button[aria-label="Fechar"]', copiar: '.acn-lic-cab-acoes button[aria-label="Copiar o link desta licitação"]', acoes: '.acn-lic-cab-acoes' },
+  { tipo: 'card', tela: 'crm', nome: 'crm', menu: 'Comercial / CRM', aba: 'Comercial / CRM · ACN', rotulo: 'o card', de: 'do card', contextoMencao: 'crm', abaMencao: 'crm',
+    tabela: 'crm_oportunidades', colunas: 'id,titulo', filtro: 'titulo=not.is.null', ordem: 'criado_em.desc', esperado: (r) => r.titulo,
+    janela: '.acn-crm-ab-fundo', titulo: '.acn-crm-ab-titulo', fechar: '.acn-crm-ab-acoes button[aria-label="Fechar"]', copiar: '.acn-crm-ab-acoes button[aria-label="Copiar o link deste card"]', acoes: '.acn-crm-ab-acoes' },
+  { tipo: 'pedido', tela: 'compras', nome: 'compras', menu: 'Compras', aba: 'Compras · ACN', rotulo: 'o pedido de compra', de: 'do pedido', contextoMencao: 'compra', abaMencao: 'compras',
+    tabela: 'pcp_pedidos_compra', colunas: 'id,numero_pedido', filtro: 'numero_pedido=not.is.null', ordem: 'numero_pedido.desc', esperado: (r) => 'Mesa de Cotações — ' + r.numero_pedido,
+    janela: '[role="dialog"][aria-label="Mesa de cotações"]', titulo: '.modal-title', fechar: null, copiar: '[role="dialog"][aria-label="Mesa de cotações"] button[aria-label="Copiar o link deste pedido"]', acoes: '[role="dialog"][aria-label="Mesa de cotações"] .acn-modal-cab' },
+  { tipo: 'os', tela: 'sac', nome: 'sac', menu: 'SAC', aba: 'SAC · ACN', rotulo: 'a OS', de: 'da OS', contextoMencao: 'sac', abaMencao: 'sac',
+    tabela: 'sac_ordens_servico', colunas: 'id,numero_os', filtro: 'numero_os=not.is.null', ordem: 'data_abertura.desc', esperado: (r) => 'Resumo da OS ' + r.numero_os,
+    janela: '[role="dialog"][aria-label^="Resumo da OS"]', titulo: null, fechar: '[role="dialog"][aria-label^="Resumo da OS"] button[aria-label="Fechar"]', copiar: '[role="dialog"][aria-label^="Resumo da OS"] button[aria-label="Copiar o link desta OS"]', acoes: '.acn-srs-acoes' },
+];
+const enderecoDe = (F, id) => `#/${F.nome}/${F.tipo}/${id}`;
+const reRegistro = (F) => new RegExp(`^#/${F.nome}/${F.tipo}/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`, 'i');
+
+// os registros reais que os cenários abrem (lidos com o crachá da conta de teste: SÓ LEITURA, nada é gravado)
+let REGS = null;
+async function registrosDoBanco() {
+  if (REGS) return REGS;
+  const s = await crachaDeTeste();
+  const ler = async (tabela, qs) => {
+    const r = await fetch(`${URL_BASE}/rest/v1/${tabela}?${qs}`, { headers: { apikey: ANON, Authorization: 'Bearer ' + s.access_token } });
+    const d = await r.json();
+    if (!Array.isArray(d)) throw new Error(`a leitura de ${tabela} foi recusada: ` + JSON.stringify(d).slice(0, 200));
+    return d;
+  };
+  REGS = {};
+  for (const F of FASE3) {
+    const linhas = await ler(F.tabela, `select=${F.colunas}&${F.filtro}&order=${F.ordem}&limit=8`);
+    // dois registros com títulos DIFERENTES: o teste de trocar de um para o outro precisa distinguir qual aparece
+    const a = linhas[0];
+    const b = linhas.find(x => x.id !== a.id && norm(F.esperado(x)) !== norm(F.esperado(a)));
+    REGS[F.tipo] = { a, b };
+  }
+  // um card com UMA só OP viva: o C41 abre a OP de dentro do card
+  const ops = await ler('oples', 'select=id,opl,crm_oportunidade_id&crm_oportunidade_id=not.is.null&status_geral=neq.Cancelado&order=data_entrada.desc&limit=300');
+  const porCard = {};
+  for (const o of ops) (porCard[o.crm_oportunidade_id] = porCard[o.crm_oportunidade_id] || []).push(o);
+  const cardId = Object.keys(porCard).find(k => porCard[k].length === 1 && !/[\s/]/.test(porCard[k][0].opl));
+  if (cardId) {
+    const cards = await ler('crm_oportunidades', `select=id,titulo&id=eq.${cardId}`);
+    REGS.cardComOp = cards[0] ? { card: cards[0], op: porCard[cardId][0] } : null;
+  } else REGS.cardComOp = null;
+  return REGS;
+}
+async function doBanco(F, id) {
+  const s = await crachaDeTeste();
+  const r = await fetch(`${URL_BASE}/rest/v1/${F.tabela}?select=${F.colunas}&id=eq.${id}`, { headers: { apikey: ANON, Authorization: 'Bearer ' + s.access_token } });
+  const d = await r.json();
+  return Array.isArray(d) ? (d[0] || null) : null;
+}
+
+/** O que a pessoa vê agora do registro: endereço, título da aba, passos do histórico, janelas abertas (do registro, da OP e o Acompanhamento da OS do SAC) e o aviso de endereço. */
+const estadoReg = (page, F) => page.evaluate((sel) => {
+  const aviso = document.querySelector('.acn-endereco-aviso');
+  return {
+    hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+    janelas: document.querySelectorAll(sel).length,
+    opJanelas: document.querySelectorAll('.acn-opl-overlay').length,
+    acomp: document.querySelectorAll('[role="dialog"][aria-label="Acompanhamentos"]').length,
+    painelAberto: !!document.querySelector('.acn-gav'),
+    aviso: aviso ? aviso.innerText.replace(/\s+/g, ' ').trim() : null,
+    origem: location.origin + location.pathname,
+  };
+}, F.janela);
+const lerTituloDaJanela = (page, F) => page.evaluate((F) => {
+  const j = document.querySelector(F.janela);
+  if (!j) return null;
+  if (F.tipo === 'os') return j.getAttribute('aria-label');
+  const t = F.tipo === 'pedido' ? j.querySelector(F.titulo) : document.querySelector(F.titulo);
+  return t ? t.innerText : null;
+}, { janela: F.janela, tipo: F.tipo, titulo: F.titulo });
+/** Espera a janela do registro `reg` (pelo título dela, não só por "existe uma janela": trocar de A para B tem de esperar o B). */
+const esperarJanelaDe = (page, F, reg, ms = 30000) => page.waitForFunction((F, esperado) => {
+  const norm = (t) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim();
+  const j = document.querySelector(F.janela);
+  if (!j) return false;
+  let t = null;
+  if (F.tipo === 'os') t = j.getAttribute('aria-label');
+  else { const x = F.tipo === 'pedido' ? j.querySelector(F.titulo) : document.querySelector(F.titulo); t = x && x.innerText; }
+  return norm(t) === esperado;
+}, { timeout: ms }, { janela: F.janela, tipo: F.tipo, titulo: F.titulo }, norm(F.esperado(reg)));
+const esperarSemJanela3 = (page, F, ms = 15000) => page.waitForFunction((sel) => !document.querySelector(sel), { timeout: ms }, F.janela);
+const fecharRegistro = (page, F) => page.evaluate((F) => {
+  if (F.tipo === 'pedido') {
+    const b = [...document.querySelectorAll(F.janela + ' button')].find(x => x.innerText.trim() === 'Fechar');
+    if (!b) throw new Error('não achei o botão "Fechar" da Mesa de Cotações');
+    b.click(); return;
+  }
+  const x = document.querySelector(F.fechar);
+  if (!x) throw new Error('não achei o botão de fechar de ' + F.tipo);
+  x.click();
+}, { tipo: F.tipo, janela: F.janela, fechar: F.fechar });
+/** Abre o primeiro registro da lista da tela, com um clique de verdade (o caminho de quem usa o sistema). */
+async function abrirPelaLista(page, F) {
+  if (F.tipo === 'pedido') {
+    // o Compras abre no Resumo; as listas (Tabela e Kanban) têm o botão que abre a Mesa de Cotações conforme a etapa do pedido
+    await page.waitForFunction(() => [...document.querySelectorAll('.acn-main button')].some(x => x.innerText.trim() === 'Tabela'), { timeout: 30000 });
+    await page.evaluate(() => [...document.querySelectorAll('.acn-main button')].find(x => x.innerText.trim() === 'Tabela').click());
+    const BOTAO = '^(Cotações|Ver Aprovação|Ver\\/Corrigir Cotações)';
+    await page.waitForFunction((re) => [...document.querySelectorAll('.acn-main button')].some(x => new RegExp(re).test(x.innerText.trim())), { timeout: 30000 }, BOTAO);
+    await page.evaluate((re) => [...document.querySelectorAll('.acn-main button')].find(x => new RegExp(re).test(x.innerText.trim())).click(), BOTAO);
+    return;
+  }
+  const CARTAO = { licitacao: '.acn-licit', card: '.acn-crm-card.abrivel', os: '.acn-kb-card.abrivel' }[F.tipo];
+  await page.waitForSelector(CARTAO, { timeout: 30000 });
+  await page.evaluate((s) => document.querySelector(s).click(), CARTAO);
+}
+/** Espera o DESFECHO de uma abertura que o endereço pediu e o sistema recusou: o endereço deixa de ser o do registro. */
+const esperarDesfechoDoRegistro = (page, F, ms = 25000) => page.waitForFunction((n, t) => !new RegExp('^#/' + n + '/' + t + '/', 'i').test(location.hash), { timeout: ms }, F.nome, F.tipo).catch(() => {});
+const msgNaoAchou = (F) => { const art = F.rotulo.startsWith('a ') ? 'a' : 'o'; return `Não foi possível abrir ${F.rotulo}: não ${art} encontrei, ou você não tem acesso a ${art === 'a' ? 'ela' : 'ele'}.`; };
+const msgLeituraFalhou = (F, erro) => `Não foi possível abrir ${F.rotulo}: a leitura falhou (${erro}). Tente de novo.`;
+/** O clipboard de mentira do C22, valendo para qualquer tela: guarda o que foi copiado (forma moderna e forma antiga) e deixa o teste escolher o modo. */
+const instalarClipboardDeTeste = (page) => page.evaluateOnNewDocument(() => {
+  window.__copiado = []; window.__execCopia = []; window.__modoCopia = 'moderna';
+  const stub = { writeText: async (t) => { if (window.__modoCopia === 'recusa' || window.__modoCopia === 'falha') throw new Error('recusado'); window.__copiado.push(t); } };
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, get: () => (window.__modoCopia === 'sem' ? undefined : stub) });
+  const original = document.execCommand.bind(document);
+  document.execCommand = (cmd, ...r) => {
+    if (cmd !== 'copy') return original(cmd, ...r);
+    const campo = document.querySelector('.acn-copiar-oculto');
+    window.__execCopia.push(campo ? campo.value : null);
+    return window.__modoCopia !== 'falha';
+  };
+});
+
 (async () => {
   // ───────────────────────────────────────────────────────────────────────────
   await cenario('C1 Admin: abertura, menu, Voltar, Avançar e F5', {}, async ({ page }) => {
@@ -1008,6 +1140,433 @@ const OP_EXCLUIDA = 'A1760.2611';   // cancelada e excluída em 25/11/2026 (CLAU
       const f = await estadoOp(page);
       confere(`link ${nome}: fechar leva ao Início, sem deixar o endereço digitado na barra`, f.hash === '#/inicio' && f.janelas === 0, JSON.stringify({ h: f.hash }));
     }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ── Fase 3 (26/11/2026): licitação, card do CRM, pedido de compra e OS com endereço próprio. Os cenários C32 a C44 rodam nos quatro (`FASE3`). ──
+  for (const F of FASE3) {
+    await cenario(`C32 ${F.nome}: o clique na lista escreve o endereço do registro; Voltar fecha, Avançar reabre e o X volta um passo`, {}, async ({ page }) => {
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(1200);
+      await clicarNoMenu(page, F.menu); await espera(2000);
+      const antes = await estadoReg(page, F);
+      confere(`${F.nome}: o menu abre a tela (#/${F.nome}) com o título dela`, antes.hash === '#/' + F.nome && antes.titulo === F.aba, JSON.stringify({ h: antes.hash, t: antes.titulo }));
+      await abrirPelaLista(page, F);
+      await page.waitForSelector(F.janela, { timeout: 30000 });
+      await espera(1000);
+      let e = await estadoReg(page, F);
+      const id = (e.hash.match(reRegistro(F)) || [])[1];
+      confere(`${F.nome}: o endereço do registro foi escrito (#/${F.nome}/${F.tipo}/<código>)`, !!id, e.hash);
+      confere(`${F.nome}: UM passo novo no histórico, do próprio sistema`, e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+      confere(`${F.nome}: o título da aba continua o da tela`, e.titulo === F.aba, e.titulo);
+      confere(`${F.nome}: uma janela só`, e.janelas === 1, String(e.janelas));
+      if (!id) return;
+      const reg = await doBanco(F, id);
+      confere(`${F.nome}: o código do endereço é de um registro que existe no banco`, !!reg, id);
+      if (!reg) return;
+      const tit = await lerTituloDaJanela(page, F);
+      confere(`${F.nome}: a janela mostra o registro do endereço (não outro)`, norm(tit) === norm(F.esperado(reg)), `${tit} ≠ ${F.esperado(reg)}`);
+      await page.goBack(); await esperarSemJanela3(page, F); await espera(600);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o Voltar fecha a janela e volta ao endereço da tela`, e.hash === '#/' + F.nome && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+      await page.goForward(); await esperarJanelaDe(page, F, reg); await espera(600);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o Avançar reabre o MESMO registro, uma janela só`, e.hash === enderecoDe(F, id) && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(800);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o X volta um passo (endereço da tela), sem janela`, e.hash === '#/' + F.nome && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+      const al = await A(page);
+      confere(`${F.nome}: nenhum aviso`, al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    await cenario(`C33 ${F.nome}: link colado (primeira página) abre por cima da tela; o X troca o endereço pelo da tela e NUNCA sai do sistema`, {}, async ({ page }) => {
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const end = enderecoDe(F, a.id);
+      await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(800);
+      let e = await estadoReg(page, F);
+      const origem = e.origem, h0 = e.historico;
+      confere(`${F.nome}: o link colado abre o registro certo, uma janela só, no endereço do link`, e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      confere(`${F.nome}: por baixo fica a tela dona (título da aba)`, e.titulo === F.aba, e.titulo);
+      confere(`${F.nome}: o passo do link colado não é do sistema e abrir não criou passo`, e.marca === false && h0 <= 2, JSON.stringify({ marca: e.marca, h0 }));
+      await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(900);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: fechar troca o endereço pelo da tela (#/${F.nome}), sem janela`, e.hash === '#/' + F.nome && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+      confere(`${F.nome}: continua no sistema (mesma página) e sem passo novo`, e.origem === origem && e.historico === h0, JSON.stringify({ o: origem, h0, h1: e.historico }));
+      confere(`${F.nome}: o título da aba continua o da tela`, e.titulo === F.aba, e.titulo);
+      const al = await A(page);
+      confere(`${F.nome}: nenhum aviso`, al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    await cenario(`C34 ${F.nome}: F5 com o registro aberto reabre o mesmo registro (aberto por link e aberto por clique)`, {}, async ({ page }) => {
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const end = enderecoDe(F, a.id);
+      // 1) aberto por link colado
+      await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(600);
+      await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(600);
+      let e = await estadoReg(page, F);
+      confere(`${F.nome}: F5 (aberto por link): reabre o mesmo registro, no mesmo endereço, uma janela`, e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(800);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: depois do F5 o X leva ao endereço da tela`, e.hash === '#/' + F.nome && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+      // 2) aberto por clique (o passo é do sistema) e F5: o X continua voltando um passo
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(1000);
+      await clicarNoMenu(page, F.menu); await espera(2000);
+      await abrirPelaLista(page, F);
+      await page.waitForSelector(F.janela, { timeout: 30000 }); await espera(800);
+      e = await estadoReg(page, F);
+      const id = (e.hash.match(reRegistro(F)) || [])[1];
+      const reg = id ? await doBanco(F, id) : null;
+      confere(`${F.nome}: aberto por clique, o endereço foi escrito e é de um registro que existe`, !!reg, e.hash);
+      if (!reg) return;
+      await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarJanelaDe(page, F, reg); await espera(600);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: F5 (aberto por clique): reabre o mesmo registro e o passo continua sendo do sistema`, e.hash === enderecoDe(F, id) && e.janelas === 1 && e.marca === true, JSON.stringify({ h: e.hash, j: e.janelas, m: e.marca }));
+      await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(900);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: depois do F5 o X volta um passo (endereço da tela)`, e.hash === '#/' + F.nome && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+      const al = await A(page);
+      confere(`${F.nome}: nenhum aviso`, al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    let modo = 'normal';
+    const lidos = [];
+    await cenario(`C35 ${F.nome}: registro que não existe, código que não é código e leitura recusada — UMA mensagem, sem janela, endereço limpo`, {
+      simular: (url, r) => {
+        if (r.method() !== 'GET' || !url.includes(`/rest/v1/${F.tabela}?select=*&id=eq.`)) return null;
+        lidos.push(url);
+        return modo === 'recusa' ? { status: 500, body: { message: 'erro simulado do banco' } } : null;
+      },
+    }, async ({ page }) => {
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, msgNaoAchou(F), true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', msgNaoAchou(F), false],
+        ['o banco recusa a leitura', 'recusa', a.id, msgLeituraFalhou(F, 'erro simulado do banco'), true],
+      ];
+      for (const [nome, m, codigo, texto, leBanco] of casos) {
+        modo = m; lidos.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, `#/${F.nome}/${F.tipo}/${codigo}`);
+        await esperarSistema(page); await esperarDesfechoDoRegistro(page, F); await espera(800);
+        const e = await estadoReg(page, F);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir ' + F.rotulo));
+        confere(`${F.nome} (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`${F.nome} (${nome}): nenhuma janela e o endereço volta ao da tela`, e.janelas === 0 && e.hash === '#/' + F.nome, JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`${F.nome} (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidos.length >= 1 : lidos.length === 0, JSON.stringify(lidos.map(u => u.slice(-60))));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`${F.nome} (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    let lento = true;   // liga e desliga a demora simulada da leitura do registro
+    await cenario(`C36 ${F.nome}: banco lento — o Voltar durante a leitura não deixa a janela aparecer depois`, {
+      simular: (url, r) => (lento && r.method() === 'GET' && url.includes(`/rest/v1/${F.tabela}?select=*&id=eq.`) ? new Promise(res => setTimeout(() => res(null), 3500)) : null),
+    }, async ({ page }) => {
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const end = enderecoDe(F, a.id);
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(1200);
+      await clicarNoMenu(page, F.menu); await espera(2500);
+      await page.evaluate((h) => { location.hash = h; }, end);
+      await espera(900);
+      let e = await estadoReg(page, F);
+      confere(`${F.nome}: enquanto lê, ainda não há janela`, e.janelas === 0, String(e.janelas));
+      await page.goBack(); await espera(300);
+      await espera(5000);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: Voltar durante a espera: a janela NÃO aparece quando a leitura termina`, e.janelas === 0 && e.hash === '#/' + F.nome, JSON.stringify({ j: e.janelas, h: e.hash }));
+      // agora sem Voltar: espera a leitura e a janela aparece
+      await page.evaluate((h) => { location.hash = h; }, end);
+      await esperarJanelaDe(page, F, a); await espera(400);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: esperando até o fim, a janela abre no endereço pedido`, e.janelas === 1 && e.hash === end, JSON.stringify({ j: e.janelas, h: e.hash }));
+      lento = false;
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    await cenario(`C37 ${F.nome}: "Copiar link" copia o endereço completo (moderno, jeito antigo e falha)`, {}, async ({ page }) => {
+      await instalarClipboardDeTeste(page);
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const end = enderecoDe(F, a.id);
+      await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(900);
+      const existe = await page.evaluate((s) => !!document.querySelector(s), F.copiar);
+      confere(`${F.nome}: a janela tem o botão "Copiar link"`, existe, F.copiar);
+      if (!existe) return;
+      const completo = BASE + end;
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), F.copiar); await espera(900); };
+      const ok = `Link ${F.de} copiado. É só colar na mensagem ou no e-mail.`;
+      const falha = `Não foi possível copiar o link ${F.de}. Copie o endereço que está na barra do navegador.`;
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere(`${F.nome}: forma moderna copia o endereço COMPLETO (base atual + #/${F.nome}/${F.tipo}/<código>)`, copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere(`${F.nome}: forma moderna avisa que copiou`, al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'recusa'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      const exec = await page.evaluate(() => window.__execCopia);
+      confere(`${F.nome}: o navegador recusa a forma moderna: usa o jeito antigo, com o mesmo endereço`, exec.length === 1 && exec[0] === completo, JSON.stringify(exec));
+      confere(`${F.nome}: o jeito antigo avisa que copiou`, al.length === 1 && al[0] === ok, JSON.stringify(al));
+      confere(`${F.nome}: o campo escondido do jeito antigo é retirado da tela`, (await page.evaluate(() => document.querySelectorAll('.acn-copiar-oculto').length)) === 0);
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere(`${F.nome}: as duas formas falham: mensagem de erro que manda copiar da barra`, al.length === 1 && al[0] === falha, JSON.stringify(al));
+      const e = await estadoReg(page, F);
+      confere(`${F.nome}: copiar não mexeu no endereço nem fechou a janela`, e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Menção, aviso, chat e vínculo gravam um "recado" (`__acnDeepLink`) e despacham `acn:abrir-registro` ANTES de trocar de tela; o `irParaTela` traduz o recado em UM endereço.
+  const MENCAO = { atual: null };
+  for (const F of FASE3) {
+    await cenario(`C38 ${F.nome}: Menção — uma passada só (troca de tela e abre o registro certo); Voltar e Avançar acompanham`, {
+      simular: (url, r) => (r.method() === 'GET' && url.includes('/rest/v1/mencoes?') && url.includes('select=*') && MENCAO.atual ? { status: 200, body: [MENCAO.atual] } : null),
+    }, async ({ page, gravacoes }) => {
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const end = enderecoDe(F, a.id);
+      MENCAO.atual = {
+        id: '99999999-0000-4000-8000-0000000000' + (10 + FASE3.indexOf(F)), mencionado_id: ID_ZZTESTE, mencionado_nome: 'ZZTESTE', mencionante_nome: 'ZZTESTE Autor',
+        contexto: F.contextoMencao, contexto_id: a.id, contexto_descricao: 'registro de teste', aba_destino: F.abaMencao, texto_trecho: 'menção de teste (simulada)',
+        lida: false, resolvida: false, criado_em: new Date().toISOString(),
+      };
+      const partida = F.tipo === 'pedido' ? { menu: 'Licitações', hash: '#/licitacoes' } : { menu: 'Compras', hash: '#/compras' };
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(1200);
+      await clicarNoMenu(page, partida.menu); await espera(1800);
+      const h0 = (await estadoReg(page, F)).historico;
+      await page.evaluate(() => { const b = document.querySelector('[title="Menções"], [title$="pendente(s)"]'); if (!b) throw new Error('botão de Menções não achado'); b.click(); });
+      await page.waitForSelector('.acn-men-desc.link', { timeout: 15000 });
+      await page.evaluate(() => document.querySelector('.acn-men-desc.link').click());
+      // a janela que a Menção abre: no SAC é o Acompanhamento (onde a Menção foi escrita, como sempre foi), nos outros a do registro
+      if (F.tipo === 'os') await page.waitForSelector('[role="dialog"][aria-label="Acompanhamentos"]', { timeout: 30000 });
+      else await esperarJanelaDe(page, F, a);
+      await espera(900);
+      let e = await estadoReg(page, F);
+      confere(`${F.nome}: a Menção abre o registro certo pelo endereço`, e.hash === end, e.hash);
+      confere(`${F.nome}: UM passo só (trocar de tela e abrir o registro não somam dois)`, e.historico === h0 + 1, `${h0} → ${e.historico}`);
+      confere(`${F.nome}: a tela dona está por baixo (título da aba)`, e.titulo === F.aba, e.titulo);
+      confere(`${F.nome}: o painel de Menções fechou`, e.painelAberto === false);
+      if (F.tipo === 'os') confere('os: a Menção abre o Acompanhamento (como sempre), não o resumo', e.acomp === 1 && e.janelas === 0, JSON.stringify({ a: e.acomp, j: e.janelas }));
+      else confere(`${F.nome}: uma janela só`, e.janelas === 1, String(e.janelas));
+      if (F.tipo === 'card') {
+        const aba = await page.evaluate(() => { const t = document.querySelector('.acn-crm-ab-abas [role="tab"][aria-selected="true"]'); return t ? t.innerText.trim() : null; });
+        confere('card: a Menção abre na aba "Análise", como sempre', /an[aá]lise/i.test(aba || ''), String(aba));
+      }
+      // Voltar leva à tela de onde a pessoa veio; Avançar reabre o registro (a tela dona monta de novo e lê o endereço)
+      await page.goBack(); await espera(1500);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o Voltar volta à tela de onde a Menção foi aberta (${partida.hash}), sem a janela`, e.hash === partida.hash && e.janelas === 0 && e.acomp === 0, JSON.stringify({ h: e.hash, j: e.janelas, a: e.acomp }));
+      await page.goForward();
+      if (F.tipo === 'os') await page.waitForSelector('[role="dialog"][aria-label^="Resumo da OS"], [role="dialog"][aria-label="Acompanhamentos"]', { timeout: 30000 });
+      else await esperarJanelaDe(page, F, a);
+      await espera(700);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o Avançar reabre o registro, uma janela só`, e.hash === end && (e.janelas + e.acomp) === 1, JSON.stringify({ h: e.hash, j: e.janelas, a: e.acomp }));
+      const al = await A(page);
+      confere(`${F.nome}: nenhum aviso`, al.length === 0, JSON.stringify(al));
+      confere(`${F.nome}: a Menção foi marcada como lida pela gravação normal (que o teste bloqueou)`, gravacoes.some(g => g.metodo === 'PATCH' && /\/mencoes/.test(g.url) && /"lida":true/.test(g.corpo || '')), JSON.stringify(gravacoes.map(g => g.metodo + ' ' + g.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 60))));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C39 Busca geral: o card, a licitação e a OS abrem pelo endereço (a OS antes só trocava de aba)', {}, async ({ page }) => {
+    const R = await registrosDoBanco();
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Compras'); await espera(1800);
+    const limpo = (t) => norm(String(t).replace(/[^\p{L}\p{N} ]+/gu, ' '));
+    const casos = [
+      [FASE3[1], 'Processo CRM', limpo(R.card.a.titulo), norm(R.card.a.titulo).slice(0, 25), R.card.a],
+      [FASE3[0], 'Licitação', limpo(R.licitacao.a.numero), norm(R.licitacao.a.numero).slice(0, 25), R.licitacao.a],
+      [FASE3[3], 'OS', limpo(R.os.a.numero_os), ('OS ' + norm(R.os.a.numero_os)).slice(0, 25), R.os.a],
+    ];
+    for (const [F, grupo, termo, inicio, reg] of casos) {
+      await page.click('input[aria-label="Busca geral"]');
+      await page.keyboard.type(termo, { delay: 12 });
+      // o rótulo do grupo sai em maiúsculas (CSS) e o innerText devolve o texto como está na tela: compara em maiúsculas
+      await page.waitForFunction((g, ini) => {
+        const grupos = [...document.querySelectorAll('.acn-busca-resultados .acn-busca-grupo')].filter(x => x.innerText.trim().toUpperCase().endsWith(g.toUpperCase()));
+        return grupos.some(x => [...x.parentElement.querySelectorAll('.acn-busca-item-titulo')].some(t => t.innerText.replace(/\s+/g, ' ').trim().startsWith(ini)));
+      }, { timeout: 25000 }, grupo, inicio);
+      await page.evaluate((g, ini) => {
+        const x = [...document.querySelectorAll('.acn-busca-resultados .acn-busca-grupo')].find(y => y.innerText.trim().toUpperCase().endsWith(g.toUpperCase()));
+        const it = [...x.parentElement.querySelectorAll('.acn-busca-item')].find(i => i.querySelector('.acn-busca-item-titulo').innerText.replace(/\s+/g, ' ').trim().startsWith(ini));
+        it.click();
+      }, grupo, inicio);
+      try { await esperarJanelaDe(page, F, reg); } catch (err) {
+        console.log('DIAG', F.nome, JSON.stringify(await estadoReg(page, F)), 'TITULO:', JSON.stringify(await lerTituloDaJanela(page, F)), 'ESPERADO:', JSON.stringify(norm(F.esperado(reg))), 'AVISOS:', JSON.stringify(await A(page)));
+        throw err;
+      }
+      await espera(700);
+      const e = await estadoReg(page, F);
+      confere(`${F.nome}: o resultado da busca (${grupo}) abre o registro pelo endereço`, e.hash === enderecoDe(F, reg.id) && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      // UM passo só, provado pelo Voltar: um Voltar leva à tela de onde a busca foi feita (se a busca tivesse somado dois passos, cairia na tela dona). history.length não serve: depois do Voltar
+      // da volta anterior o passo novo ocupa o lugar do que estava na frente e o tamanho do histórico não cresce
+      await page.goBack(); await esperarSemJanela3(page, F); await espera(1200);
+      const depois = await estadoReg(page, F);
+      confere(`${F.nome}: a busca criou UM passo só: o Voltar leva à tela de onde ela foi feita, sem a janela`, depois.hash === '#/compras' && depois.janelas === 0, JSON.stringify({ h: depois.hash, j: depois.janelas }));
+    }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    const lidos = [];
+    await cenario(`C40 ${F.nome}: quem não tem a aba da tela vê "conferindo" e depois "sem acesso", e o registro nem é lido`, {
+      usuario: RESTRITO,
+      simular: (url, r) => { if (r.method() === 'GET' && new RegExp(`/rest/v1/${F.tabela}\\?`).test(url)) lidos.push(url); return bancoComAbas(['pcp'], 2200)(url, r); },
+    }, async ({ page }) => {
+      const { a } = (await registrosDoBanco())[F.tipo];
+      const end = enderecoDe(F, a.id);
+      await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+      const linha = await observar(page, 5200);
+      const conferindo = linha.find(x => x.aviso && /Conferindo o seu acesso/.test(x.aviso));
+      const semAcesso = linha.find(x => x.aviso && /Você não tem acesso a esta tela/.test(x.aviso));
+      confere(`${F.nome}: primeiro "Conferindo o seu acesso…" (não recusa antes da releitura)`, !!conferindo, JSON.stringify(linha.map(x => x.aviso)));
+      confere(`${F.nome}: depois "sem acesso" com o nome da tela`, !!semAcesso && new RegExp(F.menu.split(' ')[0]).test(semAcesso.aviso), JSON.stringify(linha.map(x => x.aviso)));
+      const e = await estadoReg(page, F);
+      confere(`${F.nome}: nenhuma janela do registro e o endereço do link continua na barra`, e.janelas === 0 && e.hash === end, JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere(`${F.nome}: o registro nem foi lido do banco (a tela nem montou)`, lidos.length === 0, JSON.stringify(lidos.map(u => u.slice(-70))));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C41 OP aberta de dentro do card: as duas janelas ficam; o X da OP volta ao card; o X do card volta à tela', {}, async ({ page }) => {
+    const R = await registrosDoBanco();
+    confere('há um card com uma só OP viva para o teste', !!R.cardComOp, 'nenhum card tem exatamente uma OP');
+    if (!R.cardComOp) return;
+    const F = FASE3[1];
+    const { card, op } = R.cardComOp;
+    const end = enderecoDe(F, card.id), rotOp = 'OP ' + op.opl, endOp = '#/op/' + codif(op.opl);
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaDe(page, F, card); await espera(900);
+    const inicio = await estadoReg(page, F);
+    await page.waitForSelector('.acn-crm-ab-ir-op', { timeout: 30000 });
+    await page.evaluate(() => document.querySelector('.acn-crm-ab-ir-op').click());
+    await esperarJanelaOp(page, rotOp);
+    const vigia = await vigiarJanelasDeOp(page, 2500);
+    let e = await estadoReg(page, F);
+    confere('a janela da OP abre POR CIMA do card e o card continua aberto', e.janelas === 1 && e.opJanelas === 1 && e.hash === endOp, JSON.stringify({ h: e.hash, j: e.janelas, op: e.opJanelas }));
+    confere('uma janela de OP só (o hospedeiro não abre uma segunda nem lê a OP à toa)', vigia.maxJanelas === 1 && !vigia.viuCarregando, JSON.stringify(vigia));
+    confere('a OP criou UM passo no histórico', e.historico === inicio.historico + 1, `${inicio.historico} → ${e.historico}`);
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(900);
+    e = await estadoReg(page, F);
+    confere('o X da OP volta ao endereço do CARD e o card continua aberto (uma janela só)', e.hash === end && e.janelas === 1 && e.opJanelas === 0, JSON.stringify({ h: e.hash, j: e.janelas, op: e.opJanelas }));
+    // de novo, agora pelo Voltar do navegador: tira só a OP
+    await page.evaluate(() => document.querySelector('.acn-crm-ab-ir-op').click());
+    await esperarJanelaOp(page, rotOp); await espera(600);
+    await page.goBack(); await esperarSemJanelaOp(page); await espera(900);
+    e = await estadoReg(page, F);
+    confere('o Voltar do navegador tira só a OP: o card fica, no endereço dele', e.hash === end && e.janelas === 1 && e.opJanelas === 0, JSON.stringify({ h: e.hash, j: e.janelas, op: e.opJanelas }));
+    await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(900);
+    e = await estadoReg(page, F);
+    confere('o X do card leva ao endereço da tela, sem sair do sistema', e.hash === '#/crm' && e.janelas === 0 && e.origem === inicio.origem, JSON.stringify({ h: e.hash, j: e.janelas }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    await cenario(`C42 ${F.nome}: de um registro para outro pelo endereço digitado — a janela mostra o novo (não o velho) e o Voltar volta ao primeiro`, {}, async ({ page }) => {
+      const { a, b } = (await registrosDoBanco())[F.tipo];
+      confere(`${F.nome}: há dois registros diferentes para o teste`, !!b, 'só um registro com título diferente');
+      if (!b) return;
+      await page.goto(BASE + enderecoDe(F, a.id), { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(700);
+      await page.evaluate((h) => { location.hash = h; }, enderecoDe(F, b.id));
+      await esperarJanelaDe(page, F, b); await espera(900);
+      let e = await estadoReg(page, F);
+      confere(`${F.nome}: digitar o endereço de outro registro mostra o outro, uma janela só`, e.hash === enderecoDe(F, b.id) && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      const tit = await lerTituloDaJanela(page, F);
+      confere(`${F.nome}: o título da janela é o do segundo (nada do primeiro ficou)`, norm(tit) === norm(F.esperado(b)), `${tit} ≠ ${F.esperado(b)}`);
+      await page.goBack(); await esperarJanelaDe(page, F, a); await espera(900);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o Voltar reabre o primeiro`, e.hash === enderecoDe(F, a.id) && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      await page.goForward(); await esperarJanelaDe(page, F, b); await espera(600);
+      e = await estadoReg(page, F);
+      confere(`${F.nome}: o Avançar volta ao segundo`, e.hash === enderecoDe(F, b.id) && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+      const al = await A(page);
+      confere(`${F.nome}: nenhum aviso`, al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  for (const F of FASE3) {
+    for (const [rotulo, largura, altura, toque] of [['celular 375', 375, 812, true], ['celular 360', 360, 740, true], ['celular 320', 320, 640, true], ['tablet 820', 820, 1180, true]]) {
+      await cenario(`C43 ${F.nome} com o "Copiar link" — ${rotulo}: o botão não empurra nada para fora da tela`, { largura, altura, toque }, async ({ page }) => {
+        const { a } = (await registrosDoBanco())[F.tipo];
+        await page.goto(BASE + enderecoDe(F, a.id), { waitUntil: 'domcontentloaded' });
+        await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(1200);
+        await page.screenshot({ path: FOTOS + `/f3_${F.nome}_copiar_link_${rotulo.replace(/\s+/g, '_')}.png` });   // para olhar com os olhos o cabeçalho com o botão novo
+        const m = await page.evaluate((F) => {
+          const largura = window.innerWidth;
+          const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { esq: Math.round(r.left), dir: Math.round(r.right), alt: Math.round(r.height), larg: Math.round(r.width) }; };
+          const botao = document.querySelector(F.copiar);
+          const fechar = F.fechar ? document.querySelector(F.fechar) : null;   // o "Fechar" da Mesa de Cotações fica no rodapé: não divide o cabeçalho com o botão
+          const medir = () => ({ rolagem: document.documentElement.scrollWidth, botao: rect(botao), fechar: rect(fechar) });
+          const com = medir();
+          // sem o botão novo: o que já era assim antes da Fase 3 (a conferência é "o botão não piorou nada", e não "a tela inteira cabe")
+          const antigo = botao.style.display; botao.style.display = 'none';
+          const sem = medir();
+          botao.style.display = antigo;
+          return { largura, com, sem };
+        }, { copiar: F.copiar, fechar: F.fechar });
+        confere(`${F.nome}: o botão "Copiar link" existe e está inteiro dentro da tela`, m.com.botao && m.com.botao.esq >= 0 && m.com.botao.dir <= m.largura, JSON.stringify(m.com.botao));
+        confere(`${F.nome}: o botão é fácil de tocar (32 px ou mais de altura)`, m.com.botao && m.com.botao.alt >= 32, JSON.stringify(m.com.botao));
+        confere(`${F.nome}: o botão não criou rolagem para o lado (com ele ${m.com.rolagem}, sem ele ${m.sem.rolagem}, tela ${m.largura})`, m.com.rolagem <= Math.max(m.largura, m.sem.rolagem), JSON.stringify(m));
+        if (m.com.fechar) confere(`${F.nome}: o X de fechar não foi empurrado para fora da tela pelo botão novo`, m.com.fechar.dir <= Math.max(m.largura, m.sem.fechar.dir) && (m.com.fechar.esq >= 0 || m.sem.fechar.esq < 0), JSON.stringify({ com: m.com.fechar, sem: m.sem.fechar, tela: m.largura }));
+      });
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C44 OS: do resumo ao Acompanhamento o endereço é o mesmo; o X do Acompanhamento tira o endereço', {}, async ({ page }) => {
+    const F = FASE3[3];
+    const { a } = (await registrosDoBanco()).os;
+    const end = enderecoDe(F, a.id);
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaDe(page, F, a); await espera(800);
+    const h0 = (await estadoReg(page, F)).historico;
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll('[role="dialog"][aria-label^="Resumo da OS"] button')].find(x => x.innerText.trim() === 'Acompanhamento');
+      if (!b) throw new Error('o resumo da OS não tem o botão "Acompanhamento"');
+      b.click();
+    });
+    await page.waitForSelector('[role="dialog"][aria-label="Acompanhamentos"]', { timeout: 20000 });
+    await espera(900);
+    let e = await estadoReg(page, F);
+    confere('o Acompanhamento abre no lugar do resumo, com o mesmo endereço e sem passo novo', e.acomp === 1 && e.janelas === 0 && e.hash === end && e.historico === h0, JSON.stringify({ a: e.acomp, j: e.janelas, h: e.hash, h0, h1: e.historico }));
+    await page.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-label="Acompanhamentos"] button')].find(x => x.innerText.trim() === 'Fechar').click());
+    await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Acompanhamentos"]'), { timeout: 10000 }); await espera(900);
+    e = await estadoReg(page, F);
+    confere('o X do Acompanhamento tira o endereço da OS (link colado: troca pelo da tela)', e.hash === '#/sac' && e.acomp === 0 && e.janelas === 0, JSON.stringify({ h: e.hash, a: e.acomp, j: e.janelas }));
     const al = await A(page);
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });

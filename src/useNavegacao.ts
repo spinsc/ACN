@@ -11,9 +11,16 @@
 //
 // Fase 2 (25/11/2026): o endereço de um REGISTRO (`#/op/<número>`) não é tela: a tela fica como está (na abertura da página, a tela inicial) e a
 // janela da OP abre por cima dela, quem cuida disso é o `OpDoEndereco` e a própria janela da OP (`OpNoEndereco.ts`). Aqui só não se mexe na tela.
+//
+// Fase 3 (26/11/2026): licitação, card do CRM, compra e OS moram DENTRO de uma tela (`#/crm/card/<código>`). Dois acréscimos, ambos sobre o que já existia:
+//  - `irParaRegistro` troca de tela e escreve o endereço do registro num passo só (a busca geral, as Análises e o Cotações abrem card, licitação e OS por ela);
+//  - `irParaTela` traduz o recado interno `__acnDeepLink` ("abra este registro") em endereço quando o recado é de um registro da tela de destino: as Menções, o chat, os avisos e os
+//    vínculos continuam fazendo o que sempre fizeram (gravar o recado e trocar de tela) e ganham o endereço, também num passo só. Quem lê o endereço e abre a janela é a própria tela
+//    (`RegistroNoEndereco.ts`). Trocar para a tela em que a pessoa JÁ está, com a janela de um registro dela aberta, não mexe em nada (o mesmo que acontecia: a janela continua aberta).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { decidirEndereco, montarEndereco, type ContextoDoEndereco, type Decisao } from './Rotas';
+import { decidirEndereco, montarEndereco, montarEnderecoDoRegistroDaTela, registroDaTelaNoEndereco, registroDoRecado, type ContextoDoEndereco, type Decisao, type TipoDeRegistroDaTela } from './Rotas';
 import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';
+import { guardarDicaDeAbertura } from './RegistroNoEndereco';
 
 /** Por que nenhuma tela está aberta: o sistema ainda confere o acesso da pessoa, ou ela não tem a tela do link. */
 export type Bloqueio = { tipo: 'conferindo' | 'semAcesso'; tela: string };
@@ -125,10 +132,37 @@ export function useNavegacao(entrada: EntradaDaNavegacao) {
     };
     if (!atual.ids.includes(id)) return recusar('Não encontrei a tela de destino.');
     if (!atual.podeVer(id)) return recusar(TEXTO_SEM_ACESSO);
+    // Fase 3: o recado "abra este registro" (Menção, chat, aviso, vínculo) que é de um registro DESTA tela vira o endereço dele, num passo só; apaga-se o recado para a tela não
+    // abrir o registro uma segunda vez (ela lê o endereço, ao montar ou já montada, pelo gancho `useRegistroNoEndereco`)
+    const global = window as unknown as { __acnDeepLink?: unknown };
+    const doRecado = registroDoRecado(global.__acnDeepLink, id);
+    if (doRecado) global.__acnDeepLink = null;
+    if (doRecado?.dica) guardarDicaDeAbertura(id, doRecado.tipo, doRecado.chave, doRecado.dica);   // a OS de uma Menção abre o Acompanhamento, não o resumo
     setTela(id); setBloqueio(null);
-    irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });
+    if (doRecado) irParaEndereco(montarEnderecoDoRegistroDaTela(id, doRecado.tipo, doRecado.chave), { substituir: !!opcoes.substituir });
+    else if (!registroDaTelaNoEndereco(enderecoAtual(), id)) irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });   // já está na janela de um registro desta tela: ela fica
     return true;
   }, []);
 
-  return { tela, bloqueio, irParaTela };
+  /**
+   * Abre um registro que mora numa tela (a busca geral, as Análises e o Cotações abrem card, licitação e OS por aqui): confere a permissão da tela como `irParaTela`, troca de tela e escreve
+   * o endereço do registro num passo só. Quem abre a janela é a tela, lendo o endereço. `dica` (uso único) diz em que parte do registro cair (a aba "Análise" do card do CRM).
+   * Devolve se abriu. Registro cujo código não é de um registro, ou que não existe, a tela diz ao ler.
+   */
+  const irParaRegistro = useCallback((tela: string, tipo: TipoDeRegistroDaTela, chave: string, opcoes: { substituir?: boolean; dica?: string } = {}): boolean => {
+    const atual = ctxRef.current;
+    const recusar = (texto: string) => {
+      (window as unknown as { __acnDeepLink?: unknown }).__acnDeepLink = null;
+      atual.avisar(texto);
+      return false;
+    };
+    if (!atual.ids.includes(tela)) return recusar('Não encontrei a tela de destino.');
+    if (!atual.podeVer(tela)) return recusar(TEXTO_SEM_ACESSO);
+    if (opcoes.dica) guardarDicaDeAbertura(tela, tipo, chave, opcoes.dica);
+    setTela(tela); setBloqueio(null);
+    irParaEndereco(montarEnderecoDoRegistroDaTela(tela, tipo, chave), { substituir: !!opcoes.substituir });
+    return true;
+  }, []);
+
+  return { tela, bloqueio, irParaTela, irParaRegistro };
 }

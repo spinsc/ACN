@@ -48,7 +48,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiPhoneOutline, mdiDomain, mdiAlertOutline,
   mdiTrafficLight, mdiCar, mdiCommentTextOutline, mdiUndoVariant, mdiCheckCircleOutline, mdiRefresh, mdiSendOutline, mdiSelectionOff,
   mdiTrophyOutline, mdiThermometer, mdiLockOutline, mdiCloseCircleOutline, mdiCancel,
-  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip, mdiArrowDown } from '@mdi/js';
+  mdiNoteTextOutline, mdiFileDocumentOutline, mdiMinus, mdiMicroscope, mdiCurrencyUsd, mdiInformationOutline, mdiToolboxOutline, mdiPaperclip, mdiArrowDown, mdiLink } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { ehEu } from './QuemFez';   // 24/11/2026 (plano pessoa por ID, U4): "é meu" olha o ID da pessoa, não o nome
 import { fluxoLabel, soEnvio, soTerceiros, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
@@ -68,6 +68,7 @@ import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
 import { digitosSemPais, telefoneParaGravar } from './Telefone';
 import { OndeEstaCelula } from './OndeEstaAgora';
+import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): o card aberto tem endereço próprio
 import ResumoLoteOpl from './ResumoLoteOpl';
 import { podeFaturarAntes, liberarFaturamentoAntecipado } from './FaturamentoAntecipado';
 import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias, resumoDasOps } from './EtapasOp';
@@ -297,7 +298,8 @@ function ColunaRolavel({ children }: any) {
   );
 }
 
-export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }: { currentUser: any; autoOpenOpId?: string|null; onAutoOpenConsumed?: () => void }) {
+export default function CrmTab({ currentUser }: { currentUser: any }) {
+  // 26/11/2026 (Fase 3): saíram as propriedades `autoOpenOpId` e `onAutoOpenConsumed` (o card a abrir quando a lista carregasse): o card abre pelo endereço, `#/crm/card/<código>`, ver `useRegistroNoEndereco` abaixo.
   // ── permissões ──
   const pcrm = currentUser?.permissoes_crm || [];
   const podeVerTotais       = pcrm.includes('totais_vendas')        || currentUser?.perfil === 'Admin';
@@ -619,18 +621,21 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   useEffect(() => { setAbaInterna('kanban'); }, [funil]);
 
-  // Auto-abrir card quando navegado da aba Telecom (ou outro setor) via analise:abrir-origem
-  useEffect(() => {
-    if (!autoOpenOpId || loading || ops.length === 0) return;
-    const op = ops.find((o: any) => o.id === autoOpenOpId);
-    if (op) {
-      setFormOp(formOpFromOp(op));
-      setModalAbrir(op);
-      setAbrirTabDir('analise');  // abre direto na aba de Análise
-      setAbrirNovoText('');
-      onAutoOpenConsumed?.();
-    }
-  }, [autoOpenOpId, loading, ops]);
+  // 26/11/2026 (plano de endereços e rotas, Fase 3): o card aberto tem endereço próprio, `#/crm/card/<código>` (F5, Voltar, Avançar e link colado abrem o mesmo card). Quem abre o card
+  // por um clique na lista, uma Menção ou um aviso só faz o que sempre fez (`setModalAbrir`) e o gancho escreve o endereço; quem chega PELO endereço (link colado, busca geral, Análises,
+  // Voltar) faz o gancho ler o card no banco, pelo código, sem esperar a lista carregar (antes o card esperava `autoOpenOpId` e a lista inteira). A aba "Análise" é a de quem abre o
+  // card pelas Análises e pela busca (dica de uso único, `guardarDicaDeAbertura`); o link comum abre em "Andamento", como o clique na lista.
+  useRegistroNoEndereco({
+    tela: 'crm', tipo: 'card', rotulo: 'o card',
+    aberto: modalAbrir?.id ? String(modalAbrir.id) : null,
+    ler: (chave) => lerPorCodigo(supabase.from('crm_oportunidades').select('*').eq('id', chave).maybeSingle()),
+    mostrar: (op) => {
+      setFormOp(formOpFromOp(op)); setModalAbrir(op);
+      setAbrirTabDir(consumirDicaDeAbertura('crm', 'card', op.id) || 'andamento');
+      setAbrirNovoText(''); setAbrirMinimized(false);
+    },
+    fechar: fecharModalAbrir,
+  });
 
   // Deep-link genérico (Menções, Chat — "Oportunidade X" clicável, contexto
   // 'crm' -- mesmo contexto já gravado pelas @menções do Andamento CRM, ver
@@ -4695,6 +4700,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 </div>
                 <div className="acn-crm-ab-acoes">
                   <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} />
+                  <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link deste card" title="Copiar o link deste card para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('crm', 'card', modalAbrir.id, 'do card')} />
                   <Botao variante="discreto" pequeno icone={mdiMinus} aria-label="Minimizar" title="Minimizar" onClick={() => setAbrirMinimized(true)} />
                   <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={fecharModalAbrir} />
                 </div>
@@ -4914,6 +4920,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   <div className="acn-crm-ab-abas-fim">
                     <span title={modalAbrir.titulo} className="acn-crm-ab-abas-nome">{modalAbrir.titulo}</span>
                     <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} />
+                    <Botao variante="discreto" pequeno icone={mdiLink} title="Copiar o link deste card para colar numa mensagem ou e-mail" aria-label="Copiar o link deste card" onClick={() => copiarLinkDoRegistroComAviso('crm', 'card', modalAbrir.id, 'do card')} />
                     <Botao variante="discreto" pequeno icone={mdiMinus} title="Minimizar" aria-label="Minimizar" onClick={() => setAbrirMinimized(true)} />
                     <Botao variante="discreto" pequeno icone={mdiClose} title="Fechar" aria-label="Fechar" onClick={fecharModalAbrir} />
                   </div>

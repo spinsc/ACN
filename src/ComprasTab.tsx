@@ -27,10 +27,11 @@ import { mdiClose, mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiR
   mdiCogOutline, mdiFactory, mdiAccountOutline, mdiClipboardTextOutline, mdiMagnify, mdiLinkVariant, mdiForumOutline, mdiCommentTextOutline,
   mdiPrinterOutline, mdiPlay, mdiTagOutline, mdiLockOutline, mdiCartCheck, mdiPackageVariantClosed, mdiEarth, mdiAlertOutline, mdiCheck,
   mdiChevronUp, mdiChevronDown, mdiPlus, mdiContentSaveOutline, mdiOfficeBuildingOutline, mdiCalendarOutline, mdiBullseyeArrow,
-  mdiTrashCanOutline, mdiPaperclip, mdiTrophyOutline, mdiClockOutline, mdiCheckCircleOutline, mdiCameraOutline } from '@mdi/js';
+  mdiTrashCanOutline, mdiPaperclip, mdiTrophyOutline, mdiClockOutline, mdiCheckCircleOutline, mdiCameraOutline, mdiLink } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
 import { entregasDoPedido, lerEntregas, gravarEntregas, salvarDatasDasEntregas, dataMaisProxima, temEntrega } from './ComprasEntregas';
 import { PrevisaoDoPedido, QuadroDeEntregas, ModalPrazoDeEntrega } from './ComprasEntregasView';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): o pedido aberto na Mesa de Cotações tem endereço próprio
 import { listarEsperandoAprovacao, rotuloDaAlcada } from './AprovacaoCompras';
 import { CampoMoeda } from './CampoMoeda';
 import { numeroOuNulo } from './LerValor';
@@ -1226,6 +1227,22 @@ export default function ComprasTab({ currentUser }) {
     window.addEventListener('acn:abrir-registro', tentarAbrir);
     return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
   }, []);
+
+  // 26/11/2026 (plano de endereços e rotas, Fase 3): o pedido aberto na Mesa de Cotações tem endereço próprio, `#/compras/pedido/<código>` (F5, Voltar, Avançar e link colado abrem a
+  // mesma mesa). O endereço do pedido é o da Mesa, a janela de trabalho do pedido: o Resumo e as outras janelas do pedido não têm endereço. Quem abre a mesa por um clique ou por uma
+  // Menção só faz o que sempre fez (`abrirModalCotacoes`) e o gancho escreve o endereço; quem chega PELO endereço faz o gancho ler o pedido no banco, pelo código, com o dinheiro
+  // anexado como no caminho das Menções (a leitura inteira fica dentro de `ler`, para o Voltar durante a leitura não abrir a mesa depois).
+  useRegistroNoEndereco({
+    tela: 'compras', tipo: 'pedido', rotulo: 'o pedido de compra',
+    aberto: modalCotacoes?.id ? String(modalCotacoes.id) : null,
+    ler: async (chave) => {
+      const r = await lerPorCodigo(supabase.from('pcp_pedidos_compra').select('*').eq('id', chave).maybeSingle());
+      if (r.registro) r.registro = (await anexarValoresDoPedido(r.registro)).pedido;   // V3b: o dinheiro do pedido mora em `pcp_pedidos_compra_valores`
+      return r;
+    },
+    mostrar: (p) => { abrirModalCotacoes(p); },
+    fechar: () => setModalCotacoes(null),
+  });
 
   // Mesa de Cotações: se a leitura das cotações ou das aprovações falhar, a mesa não pode agir como se não houvesse cotação
   // nem aprovação pendente (a ausência de aprovação pendente liberava o botão "Aprovar").
@@ -2909,6 +2926,7 @@ export default function ComprasTab({ currentUser }) {
           <div className="modal-box acn-modal-cadastro acn-cmp-j640" role="dialog" aria-label="Mesa de cotações">
             <div className="acn-modal-cab">
               <span className="modal-title acn-prod-ic"><Icone path={mdiTagOutline} size={16} /> Mesa de Cotações — {modalCotacoes.numero_pedido}</span>
+              <Botao variante="discreto" pequeno icone={mdiLink} title="Copiar o link deste pedido para colar numa mensagem ou e-mail" aria-label="Copiar o link deste pedido" onClick={() => copiarLinkDoRegistroComAviso('compras', 'pedido', modalCotacoes.id, 'do pedido')} />
             </div>
             <div className="acn-modal-corpo acn-form-cheio">
               <QuadroDaSolicitacao p={modalCotacoes} canVerValor={canVerValor} currentUser={currentUser} />

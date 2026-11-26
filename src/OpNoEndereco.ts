@@ -14,6 +14,7 @@
 import { useEffect, useRef } from 'react';
 import { aoMudarEndereco, enderecoAtual, irParaEndereco, temPassoAnterior, voltarUmPasso } from './EnderecoDoNavegador';
 import { mesmaChave, montarEndereco, montarEnderecoDaOp, registroDoEndereco } from './Rotas';
+import { copiarTexto } from './CopiarTexto';
 
 /** A chave da OP no endereço: o número que a equipe usa (A1750.2611); se por algum motivo ela não tem número, o código interno. */
 export function chaveDaOp(op: any): string {
@@ -147,25 +148,9 @@ export function enderecoCompletoDaOp(op: any): string {
   return window.location.href.split('#')[0] + montarEnderecoDaOp(chaveDaOp(op));
 }
 
-/** Copia o endereço da OP para a área de transferência. Tenta a forma moderna e, se o navegador recusar, a antiga. Devolve se copiou. */
+/** Copia o endereço da OP para a área de transferência (a mesma rotina das janelas da Fase 3: `CopiarTexto.ts`). Devolve se copiou. */
 export async function copiarLinkDaOp(op: any): Promise<boolean> {
-  const link = enderecoCompletoDaOp(op);
-  try {
-    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(link); return true; }
-  } catch { /* o navegador recusou: tenta o jeito antigo */ }
-  try {
-    const campo = document.createElement('textarea');
-    campo.value = link;
-    campo.setAttribute('readonly', '');
-    campo.className = 'acn-copiar-oculto';
-    document.body.appendChild(campo);
-    campo.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(campo);
-    return !!ok;
-  } catch {
-    return false;
-  }
+  return copiarTexto(enderecoCompletoDaOp(op));
 }
 
 /** O botão "Copiar link" da janela da OP: copia e avisa. A falha avisa em vermelho e manda copiar da barra (que, com a janela aberta, mostra o mesmo endereço). */

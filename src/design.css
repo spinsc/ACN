@@ -2905,6 +2905,18 @@ body.dark .acn-opl-texto.azul, body.dark .acn-opl-texto.verde, body.dark .acn-op
   .acn-opl-cab.acn-opl-cab-op .acn-opl-cab-acoes { order: -1; flex: 0 0 100%; justify-content: flex-end; }
   .acn-opl-cab.acn-opl-cab-op .acn-opl-cab-txt { flex: 1 1 100%; }
 }
+/* 26/11/2026 (Fase 3 do plano de endereços): o botão "Copiar link" alargou a barra de ações do card do CRM e do resumo da OS do SAC e, no celular, o "Fechar" ficou ainda mais longe da
+   borda da tela (o teste C43 mediu a borda direita do X em 406 px numa tela de 375; sem o botão eram 366, e no resumo da OS o X já estava fora da tela: 481 px). Abaixo de 640 px as
+   ações viram uma barra própria no alto, alinhada à direita e com quebra de linha, e o título ocupa a largura toda logo abaixo (o mesmo desenho da janela da OP, logo acima). A Mesa
+   de Cotações e a janela da licitação não precisaram: o teste não achou nada empurrado para fora da tela nelas. */
+@media (max-width: 640px) {
+  .acn-crm-ab-cab { flex-wrap: wrap; row-gap: 6px; }
+  .acn-crm-ab-cab > .acn-crm-ab-acoes { order: -1; flex: 0 0 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .acn-crm-ab-cab > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .acn-modal-cab.acn-srs-cab { flex-wrap: wrap; row-gap: 6px; }
+  .acn-modal-cab.acn-srs-cab .acn-srs-acoes { order: -1; flex: 0 0 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .acn-modal-cab.acn-srs-cab .modal-title { flex: 1 1 100%; flex-wrap: wrap; row-gap: 4px; }
+}
 
 /* Calendário: lista do dia na lateral (08/10/2026). Não tampa a tela: no computador o calendário ganha uma folga à direita e continua clicável. */
 .acn-cal-lateral { position: fixed; top: 0; right: 0; bottom: 0; z-index: 900; width: min(440px, 100vw); display: flex; background: var(--acn-surface); border-left: 1px solid var(--acn-line); box-shadow: -6px 0 24px rgba(15, 23, 42, .14); }

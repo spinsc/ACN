@@ -779,7 +779,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   // link colado) e confere a permissão de todo atalho. `activeTab` é a tela aberta ('' enquanto o acesso é conferido, ou se o link é de uma tela sem acesso: `bloqueio`).
   // Era `useState('inicio')` (09/11/2026: o sistema abre na tela Início; o Dashboard geral segue no menu).
   const [acessoConferido, setAcessoConferido] = useState(false);   // as permissões já foram relidas do banco? (lerSessaoDoBanco, acima)
-  const { tela: activeTab, bloqueio, irParaTela } = useNavegacao({
+  const { tela: activeTab, bloqueio, irParaTela, irParaRegistro } = useNavegacao({
     ids: IDS_DAS_TELAS,
     podeVer: isVisible,
     telaInicial: () => telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible),
@@ -793,8 +793,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   useEffect(() => {
     document.title = (bloqueio ? (bloqueio.tipo === 'conferindo' ? 'Conferindo o acesso' : 'Sem acesso') : (ROTULO_DAS_TELAS[activeTab] || 'Início')) + ' · ACN';
   }, [activeTab, bloqueio?.tipo]);
-  const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);
-  const [pendingOpenCrmId, setPendingOpenCrmId]     = useState<string|null>(null);
+  // 26/11/2026 (plano de endereços e rotas, Fase 3): saíram o `pendingOpenLicitId` e o `pendingOpenCrmId` (o card e a licitação a abrir quando a tela montasse e a lista carregasse).
+  // O registro agora abre pelo ENDEREÇO (`irParaRegistro`) e a própria tela o lê pelo código, sem esperar a lista.
 
   // ── Busca Global ──────────────────────────────────────────────────────────
   const [globalBusca, setGlobalBusca]           = useState('');
@@ -987,19 +987,19 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return () => window.removeEventListener('acn:ir-para-aba', handler);
   }, []);
 
-  // Navegação cross-tab: Telecom → Licitações ou CRM (abre card específico)
+  // Navegação cross-tab: Telecom, Análises, Menções e avisos → card do CRM ou licitação específicos.
+  // 26/11/2026 (Fase 3 do plano de endereços): o registro abre pelo endereço (`#/crm/card/<código>`, `#/licitacoes/licitacao/<código>`), num passo só e conferindo a permissão da tela;
+  // quem lê o endereço e abre a janela é a própria tela. O card do CRM abre na aba "Análise", como sempre abriu por aqui (a dica é de uso único).
   useEffect(() => {
     const handler = (e: any) => {
       const { origem, origemId } = e.detail || {};
       if (!origemId) return;
       if (origem === 'crm') {
         // Processos novos ficam em crm_oportunidades (funil = 'licitacao' ou 'venda_direta')
-        if (!irParaTela('crm')) return;   // 25/11/2026: confere a permissão (antes abria a tela sem conferir); sem ela, o card não fica pendente
-        setPendingOpenCrmId(origemId);
+        irParaRegistro('crm', 'card', String(origemId), { dica: 'analise' });
       } else if (origem === 'licitacao') {
         // Compatibilidade com processos antigos na tabela licitacoes
-        if (!irParaTela('licitacoes')) return;
-        setPendingOpenLicitId(origemId);
+        irParaRegistro('licitacoes', 'licitacao', String(origemId));
       }
     };
     window.addEventListener('analise:abrir-origem', handler);
@@ -1258,9 +1258,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'sac':          return <SacTab currentUser={currentUser} />;
       case 'nfc':          return <VeiculosNfcTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
-      case 'crm':          return <CrmTab currentUser={currentUser} autoOpenOpId={pendingOpenCrmId} onAutoOpenConsumed={() => setPendingOpenCrmId(null)} />;
-      case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { if (irParaTela('crm')) setPendingOpenCrmId(id); }} />;
-      case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} autoOpenLicitId={pendingOpenLicitId} onAutoOpenConsumed={() => setPendingOpenLicitId(null)} />;
+      case 'crm':          return <CrmTab currentUser={currentUser} />;
+      case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { irParaRegistro('crm', 'card', String(id), { dica: 'analise' }); }} />;
+      case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'comissoes_tecnicos': return <ComissoesTecnicosStandalone currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
@@ -1396,14 +1396,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     setGlobalBusca('');
     setGlobalResultados([]);
     if (r._tipo === 'crm') {
-      if (irParaTela('crm')) setPendingOpenCrmId(r.id);
+      irParaRegistro('crm', 'card', String(r.id), { dica: 'analise' });   // 26/11/2026: pelo endereço; a aba "Análise" é a de sempre desta busca
     } else if (r._tipo === 'opl') {
       // 25/11/2026 (plano de endereços e rotas, Fase 2): a OP abre pelo endereço (`#/op/<número>`, um passo no histórico); o `OpDoEndereco` lê a OP e monta a janela
       abrirOpPeloEndereco(r.opl || r.id);
     } else if (r._tipo === 'os') {
-      if (irParaTela('sac')) setTimeout(() => window.dispatchEvent(new CustomEvent('os:abrir-global', { detail: { id: r.id } })), 400);
+      // 26/11/2026 (Fase 3): a OS abre pelo endereço (`#/sac/os/<código>`). Antes a busca trocava de aba e mandava o evento `os:abrir-global` 0,4 s depois, que NENHUMA tela escutava: o clique
+      // levava ao SAC e não abria a OS (achado ao mapear a fase). Sai a espera de 0,4 s.
+      irParaRegistro('sac', 'os', String(r.id));
     } else if (r._tipo === 'licitacao') {
-      if (irParaTela('licitacoes')) setPendingOpenLicitId(r.id);
+      irParaRegistro('licitacoes', 'licitacao', String(r.id));
     } else if (r._tipo === 'item') {
       irParaTela('cadastro_itens');
     } else if (r._tipo === 'produto') {

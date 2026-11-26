@@ -1,4 +1,4 @@
-// Planta, UM DE CADA VEZ, defeitos de propósito nos arquivos do endereço da OP (Fase 2 do plano de endereços) e roda o cenário que deveria pegá-lo.
+// Planta, UM DE CADA VEZ, defeitos de propósito nos arquivos do endereço da OP (Fase 2 do plano de endereços) e dos outros registros (Fase 3) e roda o cenário que deveria pegá-lo.
 // É a "prova de que o teste não é de enfeite": um teste que passa com o defeito plantado não protege nada. Em 25/11/2026 foi assim que se achou que o C24
 // olhava cedo demais (o hospedeiro ignorando a janela que o módulo já abriu passava, porque a segunda janela só aparece depois da leitura do banco).
 //
@@ -73,6 +73,62 @@ const DEFEITOS = [
   { id: 'o', nome: 'a chave do endereço deixa de ignorar o acento (o link sem acento não reconhece a janela e o X reabre a OP)', cenarios: '^C31', trocas: [
     { arquivo: 'src/Rotas.ts', de: ".trim().normalize('NFD')", para: ".trim()" },   // a regex seguinte tem os acentos "crus" no arquivo: o trecho não pode depender de como se escreve a barra invertida
   ] },
+
+  // ── Fase 3 (26/11/2026): licitação, card do CRM, pedido de compra e OS. Cada defeito roda só o cenário do registro mais sensível a ele (rodar os quatro de cada um levaria horas) ──
+  { id: 'p', nome: 'a janela aberta por um clique deixa de escrever o endereço do registro', cenarios: '^C32 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'irParaEndereco(montarEnderecoDoRegistroDaTela(tela, tipo, aberto));', para: 'void 0;' },
+  ] },
+  { id: 'q', nome: 'fechar a janela do registro deixa o endereço dele na barra', cenarios: '^C33 licitacoes', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'if (r2 && r2.tipo === atual.tipo && mesmaChave(r2.chave, aberto)) tirarEnderecoDoRegistro(atual.tela);', para: 'if (false && r2 && r2.tipo === atual.tipo && mesmaChave(r2.chave, aberto)) tirarEnderecoDoRegistro(atual.tela);' },
+  ] },
+  { id: 'r', nome: 'registro que não existe: o endereço não é limpo (fica #/…/<código> na barra)', cenarios: '^C35 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'tirarEnderecoDoRegistro(tela);', para: '/* tirarEnderecoDoRegistro(tela); */' },
+  ] },
+  { id: 's', nome: 'leitura recusada pelo banco passa a valer como "não encontrei"', cenarios: '^C35 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'window.alert(mensagemDeRegistroNaoAberto(rotulo, erro));', para: "window.alert(mensagemDeRegistroNaoAberto(rotulo, ''));" },
+  ] },
+  { id: 't', nome: 'a leitura que chega depois de um Voltar ainda abre a janela do registro', cenarios: '^C36 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'if (minha !== leitura.current) return;     // outra abertura ou o Voltar chegou antes', para: '// outra abertura ou o Voltar chegou antes (defeito plantado: sem a conferência)' },
+  ] },
+  { id: 'u', nome: 'um texto que não é código vai ao banco (que responde erro de sintaxe e a tela diria "a leitura falhou")', cenarios: '^C35 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: "if (!ehCodigoInterno(chave)) { naoAbriu(''); return; }", para: "if (false && !ehCodigoInterno(chave)) { naoAbriu(''); return; }" },
+  ] },
+  { id: 'v', nome: 'trocar de tela sobrescreve o endereço do registro que a tela já mostra (a Menção de card abriria e fecharia o card)', cenarios: '^C38 crm', trocas: [
+    { arquivo: 'src/useNavegacao.ts', de: 'else if (!registroDaTelaNoEndereco(enderecoAtual(), id)) irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });', para: 'else irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });' },
+  ] },
+  { id: 'w', nome: 'a dica do recado some no caminho (a Menção de OS abre o resumo em vez do Acompanhamento)', cenarios: '^C38 sac', trocas: [
+    { arquivo: 'src/useNavegacao.ts', de: 'if (doRecado?.dica) guardarDicaDeAbertura(', para: 'if (false && doRecado?.dica) guardarDicaDeAbertura(' },
+  ] },
+  { id: 'x', nome: 'a busca geral volta a só trocar de tela quando o resultado é uma OS (não abre a OS)', cenarios: '^C39 ', trocas: [
+    { arquivo: 'src/DashboardTab.tsx', de: "irParaRegistro('sac', 'os', String(r.id));", para: "irParaTela('sac');" },
+  ] },
+  { id: 'y', nome: 'a janela da licitação não é desmontada ao trocar de licitação (mostraria os dados da anterior)', cenarios: '^C42 licitacoes', trocas: [
+    { arquivo: 'src/LicitacoesTab.tsx', de: 'key={selected.id}   // 26/11/2026 (Fase 3):', para: '// 26/11/2026 (Fase 3):' },
+  ] },
+  { id: 'z', nome: 'a OS aberta só no Acompanhamento não conta como janela aberta (o endereço some da barra ao passar do resumo ao Acompanhamento)', cenarios: '^C44', trocas: [
+    { arquivo: 'src/SacTab.tsx', de: "(String(resumoOS?.id || modalAcomp?.id || '') || null)", para: "(String(resumoOS?.id || '') || null)" },
+  ] },
+  { id: 'aa', nome: 'o card aberto pelas Análises e pela Menção perde a aba "Análise" (abre sempre em "Andamento")', cenarios: '^C38 crm', trocas: [
+    { arquivo: 'src/CrmTab.tsx', de: "setAbrirTabDir(consumirDicaDeAbertura('crm', 'card', op.id) || 'andamento');", para: "setAbrirTabDir('andamento');" },
+  ] },
+  { id: 'ab', nome: 'a janela da OP aberta por cima do card fecha o card (o gancho não vê que o endereço é de OP)', cenarios: '^C41', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'if (registroDoEndereco(enderecoAtual())) return;', para: 'if (false && registroDoEndereco(enderecoAtual())) return;' },
+  ] },
+  { id: 'ac', nome: 'o "Copiar link" copia só a parte do endereço (sem o endereço do sistema)', cenarios: '^C37 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: "return window.location.href.split('#')[0] + montarEnderecoDoRegistroDaTela(tela, tipo, chave);", para: 'return montarEnderecoDoRegistroDaTela(tela, tipo, chave);' },
+  ] },
+  { id: 'ad', nome: 'o jeito antigo de copiar (campo escondido) deixa de funcionar', cenarios: '^C37 crm', trocas: [
+    { arquivo: 'src/CopiarTexto.ts', de: "const ok = document.execCommand('copy');", para: 'const ok = false;' },
+  ] },
+  { id: 'ae', nome: 'a tela da OS ignora a dica e abre sempre o resumo (a Menção de OS não abre o Acompanhamento)', cenarios: '^C38 sac', trocas: [
+    { arquivo: 'src/SacTab.tsx', de: "if (consumirDicaDeAbertura('sac', 'os', os.id) === 'acompanhamento') {", para: "if (false && consumirDicaDeAbertura('sac', 'os', os.id) === 'acompanhamento') {" },
+  ] },
+  { id: 'af', nome: 'as Análises e a Menção de card deixam de pedir a aba "Análise" (a dica não sai do DashboardTab)', cenarios: '^C38 crm', trocas: [
+    { arquivo: 'src/DashboardTab.tsx', de: "irParaRegistro('crm', 'card', String(origemId), { dica: 'analise' });", para: "irParaRegistro('crm', 'card', String(origemId));" },
+  ] },
+  { id: 'ag', nome: 'o Voltar do navegador deixa de fechar a janela do registro (o endereço mudou e a janela fica)', cenarios: '^C32 crm', trocas: [
+    { arquivo: 'src/RegistroNoEndereco.ts', de: 'atual.fechar();', para: '/* atual.fechar(); */' },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');
@@ -139,6 +195,9 @@ const apagarOriginal = (arquivo) => { try { fs.rmSync(path.join(ORIGINAIS, arqui
       const r = spawnSync('node', ['teste_enderecos.cjs', d.cenarios], { cwd: __dirname, env: process.env, encoding: 'utf8', timeout: 8 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
       const saida = (r.stdout || '') + (r.stderr || '');
       fs.writeFileSync(path.join(SAIDA, `defeito_${d.id}.log`), saida);
+      // 26/11/2026: um filtro que não casa com NENHUM cenário roda zero conferências, e isso saía como "não pego" (os defeitos w, z, aa, ae e af apontavam para "C38 os" e "C38 card", nomes que
+      // não existem: os registros dos cenários se chamam licitacoes, crm, compras e sac). "Nada rodou" não é "o teste está fraco": é erro da lista, e agora o roteiro diz isso.
+      if (/(^|\n)0 de 0 conferências/.test(saida)) throw new Error('o filtro de cenário "' + d.cenarios + '" não casou com nenhum cenário (0 de 0 conferências): confira os nomes dos cenários em teste_enderecos.cjs');
       const linhas = saida.split(/\r?\n/);
       falhas = linhas.filter(l => /^FALHOU/.test(l));
       resumoLinhas = linhas.filter(l => /de \d+ conferências/.test(l));
