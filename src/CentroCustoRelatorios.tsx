@@ -79,9 +79,9 @@ export default function CustoPorOpTab({ currentUser }: any) {
   const alternar = (id: string) => setAbertas(a => { const n = new Set(a); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   // A planilha: a mesma tabela da tela (com o total) e, em outra folha, as compras de cada OP.
-  const exportar = () => {
+  const exportar = async () => {
     try {
-      baixarPlanilha(`Custo_por_OP_${ano || 'todos'}${mes ? '-' + String(mes).padStart(2, '0') : ''}`, [
+      await baixarPlanilha(`Custo_por_OP_${ano || 'todos'}${mes ? '-' + String(mes).padStart(2, '0') : ''}`, [
         {
           nome: 'Custo por OP',
           colunas: [{ rotulo: 'OP', largura: 16 }, { rotulo: 'Cliente / modelo', largura: 32 }, { rotulo: 'Compras', formato: 'inteiro' }, { rotulo: 'Realizado', formato: 'moeda' },

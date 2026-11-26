@@ -6,7 +6,8 @@
 // Valor em dinheiro, quantidade e percentual saem como NÚMERO com formato (dá para somar e filtrar no Excel);
 // texto e datas saem como aparecem na tela ("dd/mm/aaaa"), para a planilha ser a mesma tabela que a pessoa vê.
 // ─────────────────────────────────────────────────────────────────────────────
-import * as XLSX from 'xlsx';
+// 26/11/2026 (lentidão): a biblioteca de planilhas (~1 MB de fonte) é baixada só quando alguém exporta, não no pacote de abertura; por isso montarPlanilha e baixarPlanilha são assíncronas.
+const carregarXlsx = () => import('xlsx');
 
 export type ColunaPlanilha = { rotulo: string; formato?: 'texto' | 'moeda' | 'inteiro' | 'percentual'; largura?: number };
 export type FolhaPlanilha = { nome: string; colunas: ColunaPlanilha[]; linhas: any[][] };
@@ -23,7 +24,8 @@ export function nomeDeAba(nome: string, usados: Set<string>): string {
   return n;
 }
 
-export function montarPlanilha(folhas: FolhaPlanilha[]) {
+export async function montarPlanilha(folhas: FolhaPlanilha[]) {
+  const XLSX = await carregarXlsx();
   const wb = XLSX.utils.book_new();
   const usados = new Set<string>();
   for (const f of folhas) {
@@ -43,8 +45,9 @@ export function montarPlanilha(folhas: FolhaPlanilha[]) {
 }
 
 /** Baixa o arquivo. O nome ganha .xlsx se faltar; caracteres que o Windows não aceita saem do nome. */
-export function baixarPlanilha(nomeArquivo: string, folhas: FolhaPlanilha[]) {
-  const wb = montarPlanilha(folhas);
+export async function baixarPlanilha(nomeArquivo: string, folhas: FolhaPlanilha[]): Promise<string> {
+  const XLSX = await carregarXlsx();
+  const wb = await montarPlanilha(folhas);
   const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const nome = String(nomeArquivo || 'planilha').replace(/[<>:"\/\\|?*]/g, '-').replace(/\.xlsx$/i, '') + '.xlsx';

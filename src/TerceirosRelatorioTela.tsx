@@ -59,7 +59,7 @@ export function RelatorioDeTerceiros({ mapaTipos, mapaPrestadores, verValor, cur
     if (!resumo) return;
     try {
       const { baixarPlanilha } = await import('./ExportarPlanilha');
-      const nome = baixarPlanilha(nomeDaPlanilha(mes), folhasDaPlanilha(resumo, verValor));
+      const nome = await baixarPlanilha(nomeDaPlanilha(mes), folhasDaPlanilha(resumo, verValor));
       mostrarAviso(`Planilha ${nome} gerada.`, 'ok');
     } catch (e: any) {
       mostrarAviso(`Não foi possível gerar a planilha: ${e?.message || e}`, 'erro');

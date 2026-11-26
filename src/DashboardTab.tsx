@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
-import Chart from 'chart.js/auto';
+import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import InicioTab from './InicioTab';
 import ViagemDoEndereco from './ViagemDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): substitui o ViagemPorMencao (hospedeiro da janela da viagem pelo endereço; o editor dentro dele carrega só quando uma viagem abre)
 import ChatWidget from './ChatWidget';
@@ -1096,7 +1096,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   // cada vez: 2.884 chamadas numa manhã). Agora saem na primeira vez que a pessoa entra no Dashboard e de novo a cada volta a ele (o botão Atualizar continua valendo).
   const noDashboard = activeTab === 'dashboard';
   useEffect(() => { if (noDashboard) buscarTelecom(); }, [noDashboard]);
-  const chartRef  = useRef<Chart | null>(null);
+  const chartRef  = useRef<any>(null);   // 26/11/2026 (lentidão): a biblioteca de gráficos (~500 KB) só é baixada quando o Dashboard abre, não no pacote de abertura
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => { if (noDashboard) buscarRealizados(); }, [noDashboard]);
@@ -1155,6 +1155,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
+    let cancelado = false;
+    import('chart.js/auto').then(({ default: Chart }) => {
+    if (cancelado || !canvasRef.current) return;
     chartRef.current = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -1177,7 +1180,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         },
       },
     });
-    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
+    }).catch((e: any) => { if (!tratarFalhaDeArquivoNovo(e)) console.error('Falha ao abrir o gráfico:', e); });
+    return () => { cancelado = true; if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
   }, [activeTab, realizados]);
 
   const getStatus = (real: number | null, meta: number, tol: number) => {
