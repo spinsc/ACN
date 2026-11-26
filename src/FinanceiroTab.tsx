@@ -609,9 +609,9 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   }
 
   // Etapa 15e (05/10/2026): a tabela "Consolidado por Centro" como está na tela (com o total) numa planilha
-  const exportarConsolidado = () => {
+  const exportarConsolidado = async () => {
     try {
-      baixarPlanilha(`Consolidado_por_centro_${filtroAno || 'todos'}${filtroMes ? '-' + filtroMes : ''}`, [{
+      await baixarPlanilha(`Consolidado_por_centro_${filtroAno || 'todos'}${filtroMes ? '-' + filtroMes : ''}`, [{
         nome: 'Consolidado por centro',
         colunas: [{ rotulo: 'Centro de Custo', largura: 48 }, { rotulo: 'Qtd. Compras', formato: 'inteiro' }, { rotulo: 'Total Gasto', formato: 'moeda' }, { rotulo: 'Recebidas', formato: 'inteiro' }, { rotulo: 'Pendentes', formato: 'inteiro' }],
         linhas: [

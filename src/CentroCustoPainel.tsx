@@ -540,10 +540,10 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
   };
 
   // Etapa 15e: baixa a planilha do que o painel mostra (ver `folhasDoPainel`: onde a tela só mostra os maiores, a planilha traz a lista toda)
-  const exportar = () => {
+  const exportar = async () => {
     if (!calc || !sMes || !sAno) return;
     try {
-      baixarPlanilha(`Centro_${centro.codigo}_${ano}-${String(mes).padStart(2, '0')}`,
+      await baixarPlanilha(`Centro_${centro.codigo}_${ano}-${String(mes).padStart(2, '0')}`,
         folhasDoPainel({ centro, ano, mes, sMes, sAno, comp, calc, filhos, doFilho, fornecedores: fornecedoresTodos, categorias: categoriasTodas, ops: opsTodas, lancamentos: lancamentosTodos, codigoDe }));
     } catch (e: any) { alert('Não foi possível gerar a planilha: ' + (e?.message || e)); }
   };

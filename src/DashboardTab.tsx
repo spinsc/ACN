@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
-import Chart from 'chart.js/auto';
+import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import InicioTab from './InicioTab';
 import DemandaDoEndereco from './DemandaDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): hospedeiro da janela da demanda pelo endereço (a janela só é baixada quando uma demanda abre)
 import ViagemDoEndereco from './ViagemDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): substitui o ViagemPorMencao (hospedeiro da janela da viagem pelo endereço; o editor dentro dele carrega só quando uma viagem abre)
@@ -914,16 +914,14 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (!currentUser?.id) return;
     const fetchMencoes = async () => {
       try {
-        // Busca por id E por nome (fallback p/ usuários com id trocado após recriação),
-        // mesmo critério usado no MencoesInboxPanel — mantém badge e painel consistentes.
+        // 26/11/2026 (lentidão): só pelo ID da pessoa, o mesmo critério do MencoesInboxPanel (badge e painel têm de bater). Antes havia também `mencionado_nome ilike %nome%`, que não usa índice
+        // (esta contagem rodava 6.800 vezes numa manhã, ~125 ms cada) e ainda errava: quem se chama "ISA" via as menções de ISABELLA. Hoje toda menção tem o ID e o resultado por ID é igual
+        // ao antigo para as outras 31 pessoas (conferido no banco).
         const uid  = String(currentUser.id || '');
-        const nome = String(currentUser.nome || '');
-        let orFilter = `mencionado_id.eq.${uid}`;
-        if (nome) orFilter += `,mencionado_nome.ilike.%${nome}%`;
         const { count } = await supabase
           .from('mencoes')
           .select('id', { count: 'exact', head: true })
-          .or(orFilter)
+          .eq('mencionado_id', uid)
           .neq('contexto', 'op_adaptacao')   // avisos de OP têm botão próprio
           .neq('contexto', 'calendario')     // 17/11/2026: as datas do calendário também são do botão Avisos; Menções é só de menções
           .eq('resolvida', false);
@@ -1095,11 +1093,14 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     pend.forEach((i: any) => { const q = quando[i.analise_solicitacoes?.origem_id]; if (q == null) return; if (q < agora) vencidas++; else if (q <= em7) proximas++; });
     setTelecom({ pendentes: pend.length, vencidas, proximas, concluidas30 });
   };
-  useEffect(() => { buscarTelecom(); }, []);
-  const chartRef  = useRef<Chart | null>(null);
+  // 26/11/2026 (lentidão): as médias e o resumo do Telecom só aparecem na tela Dashboard, mas eram lidos em TODA abertura do sistema, para todo mundo (as médias custavam ~190 ms de banco
+  // cada vez: 2.884 chamadas numa manhã). Agora saem na primeira vez que a pessoa entra no Dashboard e de novo a cada volta a ele (o botão Atualizar continua valendo).
+  const noDashboard = activeTab === 'dashboard';
+  useEffect(() => { if (noDashboard) buscarTelecom(); }, [noDashboard]);
+  const chartRef  = useRef<any>(null);   // 26/11/2026 (lentidão): a biblioteca de gráficos (~500 KB) só é baixada quando o Dashboard abre, não no pacote de abertura
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  useEffect(() => { buscarRealizados(); }, []);
+  useEffect(() => { if (noDashboard) buscarRealizados(); }, [noDashboard]);
 
   const buscarRealizados = async () => {
     try {
@@ -1155,6 +1156,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
+    let cancelado = false;
+    import('chart.js/auto').then(({ default: Chart }) => {
+    if (cancelado || !canvasRef.current) return;
     chartRef.current = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -1177,7 +1181,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         },
       },
     });
-    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
+    }).catch((e: any) => { if (!tratarFalhaDeArquivoNovo(e)) console.error('Falha ao abrir o gráfico:', e); });
+    return () => { cancelado = true; if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
   }, [activeTab, realizados]);
 
   const getStatus = (real: number | null, meta: number, tol: number) => {

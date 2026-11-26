@@ -112,8 +112,8 @@ export async function resolverMencoesRespondidas(opts: {
   const { contexto, contextoId, autorId, autorNome } = opts;
   if (!contexto || !contextoId || !autorId) return;
   const uid = String(autorId);
-  let orFilter = `mencionado_id.eq.${uid}`;
-  if (autorNome) orFilter += `,mencionado_nome.ilike.%${autorNome}%`;
+  // 26/11/2026: só pelo ID (o nome por trecho podia resolver a menção de OUTRA pessoa de nome parecido, e não usa índice)
+  const orFilter = `mencionado_id.eq.${uid}`;
   const { data: resolvidas, error } = await supabase.from('mencoes')
     .update({
       resolvida: true, resolvida_em: new Date().toISOString(),

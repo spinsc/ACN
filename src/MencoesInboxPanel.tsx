@@ -189,16 +189,12 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
     setLoading(true);
     try {
       const uid  = String(currentUser?.id   || '');
-      const nome = String(currentUser?.nome || '');
 
-      // Busca por id E por nome (fallback para usuários com id trocado após recriação)
-      let orFilter = `mencionado_id.eq.${uid}`;
-      if (nome) orFilter += `,mencionado_nome.ilike.%${nome}%`;
-
+      // 26/11/2026 (lentidão): só pelo ID da pessoa (o nome por trecho não usa índice e trazia menções de quem tem nome parecido); ver o comentário do selo no DashboardTab
       let q = supabase
         .from('mencoes')
         .select('*')
-        .or(orFilter)
+        .eq('mencionado_id', uid)
         .neq('contexto', 'op_adaptacao')   // avisos automáticos de OP ficam no botão "Avisos"
         .neq('contexto', 'calendario')     // 17/11/2026: aviso de data do calendário também é do botão "Avisos"; Menções é só de menções (pedido do usuário, bug da Renata)
         .order('criado_em', { ascending: false })
@@ -222,13 +218,10 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   // zero só por trocar de aba de filtro, mesmo com pendências reais restando).
   const refreshBadgeCount = useCallback(async () => {
     const uid  = String(currentUser?.id   || '');
-    const nome = String(currentUser?.nome || '');
-    let orFilter = `mencionado_id.eq.${uid}`;
-    if (nome) orFilter += `,mencionado_nome.ilike.%${nome}%`;
     const { count } = await supabase
       .from('mencoes')
       .select('id', { count: 'exact', head: true })
-      .or(orFilter)
+      .eq('mencionado_id', uid)
       .neq('contexto', 'op_adaptacao')
       .neq('contexto', 'calendario')
       .eq('resolvida', false);

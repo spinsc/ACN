@@ -24,10 +24,8 @@ export const CONTEXTO_AVISO_OP = 'op_adaptacao';
 export const CONTEXTO_AVISO_CALENDARIO = 'calendario';
 
 function filtroDoUsuario(currentUser: any) {
-  const uid = String(currentUser?.id || '');
-  const nome = String(currentUser?.nome || '');
-  // mesmo critério de Menções: por id e, de reserva, por nome
-  return nome ? `mencionado_id.eq.${uid},mencionado_nome.ilike.%${nome}%` : `mencionado_id.eq.${uid}`;
+  // 26/11/2026 (lentidão): só pelo ID da pessoa, como em Menções. O nome por trecho (`ilike %nome%`) não usa índice e pegava avisos de quem tem nome parecido.
+  return `mencionado_id.eq.${String(currentUser?.id || '')}`;
 }
 
 export async function contarAvisosOp(currentUser: any): Promise<number> {
