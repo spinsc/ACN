@@ -730,7 +730,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           defeito_reclamado:    form.descricao_problema.trim(),
           equipamento_nome:     form.equipamento || null,
           numero_serie:         form.numero_serie || null,
-          empresa:              form.empresa,
+          // Correção de 26/11/2026 (erro "sac_ordens_servico_empresa_check" mostrado à Letícia ao lançar a OS de um card da Detech): o formulário
+          // da OP escreve a empresa como 'Detech', mas a tabela de OS do SAC só aceita 'ACN' ou 'DETECH' (como o resto da tela do SAC grava).
+          empresa:              /detech/i.test(String(form.empresa || '')) ? 'DETECH' : 'ACN',
           cliente_nome:         form.cliente_nome.trim(),
           responsavel_nome:     form.responsavel.trim(),
           data_abertura:        form.data_entrada,
