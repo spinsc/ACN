@@ -1,0 +1,70 @@
+name: Verificação
+
+# B6 do plano de migração para o servidor interno (26/11/2026).
+# A cada publicação na main confere: os tipos (tsc), os ERROS de lint (os avisos não barram), as regras que se provam sem navegador,
+# o build e se algum segredo entrou nos commits novos.
+#
+# NÃO mexe na publicação: o deploy.yml continua sozinho, do mesmo jeito. Se algo falhar aqui, o site já foi publicado pelo outro fluxo;
+# o vermelho é o aviso para corrigir no próximo commit. Quando a main tiver proteção (depois de o repositório virar privado, F0.6 do plano),
+# esta verificação pode passar a ser exigida antes de publicar.
+#
+# Mesma imagem e mesmo Node do deploy.yml (ver o comentário de lá).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verificacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codigo:
+    name: Tipos, lint, regras e build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tipos (tsc)
+        run: npm run typecheck
+
+      - name: Lint (só os erros)
+        run: npx oxlint --quiet src
+
+      - name: Regras do endereço de cada tela (sem navegador)
+        run: node ferramentas/teste_enderecos/teste_rotas.mjs
+
+      - name: Trava de gravação dos testes de navegador
+        run: node ferramentas/comum/rede_de_teste.teste.cjs
+
+      - name: Build
+        run: npx vite build
+
+  segredos:
+    name: Varredura de segredos
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      # o histórico inteiro, para a varredura conseguir ler os commits novos desta publicação
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Só os commits novos de cada publicação. As regras e a exceção da chave pública do Supabase estão em .gitleaks.toml.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
