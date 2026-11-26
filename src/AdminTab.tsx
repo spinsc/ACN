@@ -28,6 +28,7 @@ import ConfigEstruturaTela from './ConfigEstruturaTela';
 import FluxoConfigTela from './FluxoConfigTela';
 import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
 import { CampoMoeda } from './CampoMoeda';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 
 
 const PERFIS = [
@@ -3300,7 +3301,8 @@ function PainelAvisos() {
 }
 
 export default function AdminTab() {
-  const [abaAtiva, setAbaAtiva] = useState('usuarios');
+  // 26/11/2026 (Fase 4 do plano de endereços, com o OK do usuário para só esta linha, sem migrar a tela): a aba tem endereço (#/admin/perfis…); Usuários é a padrão
+  const [abaAtiva, setAbaAtiva] = useAbaNoEndereco({ tela: 'admin' }) as [string, (v: any) => void];
 
   return (
     <div>

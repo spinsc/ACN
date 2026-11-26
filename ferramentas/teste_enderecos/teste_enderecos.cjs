@@ -310,7 +310,43 @@ const instalarClipboardDeTeste = (page) => page.evaluateOnNewDocument(() => {
   };
 });
 
+// ── Fase 4 (26/11/2026): as abas de dentro de cada tela (`#/<tela>/<aba>`) ──
+// Cada tela com abas é descrita UMA vez (`FASE4`: o menu e o rótulo que a pessoa vê em cada aba) e o cenário C45 roda em todas. O quadro (quais abas a tela tem, qual é a padrão e o nome de
+// cada uma no endereço) vem do PRÓPRIO `Rotas.ts`, lido do código: se uma tela entra no quadro e não aqui, ou o rótulo mudou, o teste pega.
+let ROTAS = null;
+const FASE4 = [
+  { id: 'compras', menu: 'Compras', rotulos: { pedidos: 'Requisições', fornecedores: 'Fornecedores' } },
+  { id: 'sac', menu: 'SAC', rotulos: { os: 'Ordens de Serviço', chamados_nfc: 'Chamados NFC', garantia: 'Garantia', cadastros: 'Cadastros' } },
+  { id: 'formacao_precos', menu: 'Formação de preços', rotulos: { formacao: 'Formação de Preços', precos_formados: 'Preços Formados' } },
+  { id: 'crm', menu: 'Comercial / CRM', rotulos: { kanban: 'Kanban', agenda: 'Agenda', recentes: 'Últimas visualizadas', relatorio: 'Relatório', opls: 'OPs em aberto', faturamentos: 'Faturamentos', demandas: 'Demandas', contatos: 'Contatos' } },
+  { id: 'producao', menu: 'Adaptação', rotulos: { producao: 'Produção', veicular: 'SAC veicular', agenda: 'Agendamentos', voucher: 'Voucher', equipes: 'Equipes' } },
+  { id: 'rh', menu: 'RH', rotulos: { geral: 'Visão geral', colaboradores: 'Colaboradores', ponto: 'Relógio Ponto', comissoes: 'Comissões', relatorios: 'Relatórios', autorizacoes: 'Autorizações' } },
+  { id: 'serralheria', menu: 'Serralheria', rotulos: { demandas: 'Demandas Ativas', relatorios: 'Relatórios' } },
+  { id: 'chicotes', menu: 'Chicotes', rotulos: { demandas: 'Demandas Ativas', relatorios: 'Relatórios' } },
+  { id: 'laboratorio', menu: 'Laboratório', rotulos: { demandas: 'Demandas Ativas', relatorios: 'Relatórios' } },
+  { id: 'engenharia', menu: 'Engenharia', rotulos: { analise: 'Análise', desenvolvimento: 'Desenvolvimento', estruturas: 'Estruturas', horas: 'Horas/Tarefas' } },
+  { id: 'financeiro', menu: 'Financeiro', rotulos: { pendencias: 'Pendências', centros: 'Centros de custo', conciliacao: 'Conciliação bancária', kanban: 'Tarefas', custoop: 'Custo por OP', demandas: 'Demandas' } },
+  { id: 'marketing', menu: 'Marketing', rotulos: { opls: 'OPs Liberadas para Divulgação', pedidos: 'Pedidos de Registro' } },
+  { id: 'telecom', menu: 'Telecom', rotulos: { vendas: 'Vendas', separacao: 'Separação e envio', demandas: 'Análises e demandas' } },
+  { id: 'terceiros', menu: 'Serviços de terceiros', lembra: 'lista', rotulos: { quadro: 'Quadro', agenda: 'Agenda', lista: 'Lista', relatorio: 'Relatório do mês', ordens: 'Ordens de pintura', prestadores: 'Prestadores', tipos: 'Tipos de serviço', modelo: 'Modelo do contrato' } },
+];
+/** As abas da barra de abas número `n` da tela aberta (na ordem em que aparecem), qual está marcada, o endereço e quantos passos o histórico tem. */
+const estadoAbas = (page, n = 0) => page.evaluate((n) => {
+  const listas = [...document.querySelectorAll('.acn-main [role="tablist"]')];
+  const l = listas[n];
+  const abas = l ? [...l.querySelectorAll('[role="tab"]')].map(b => ({ rotulo: ((b.querySelector('span') || b).innerText || '').replace(/\s*\([^)]*\)\s*$/, '').trim(), ativa: b.getAttribute('aria-selected') === 'true' })) : [];
+  return { hash: location.hash, historico: history.length, abas, rotulos: abas.map(a => a.rotulo), ativas: abas.filter(a => a.ativa).map(a => a.rotulo), listas: listas.length };
+}, n);
+const clicarNaAba = (page, rotulo, n = 0) => page.evaluate((r, n) => {
+  const l = [...document.querySelectorAll('.acn-main [role="tablist"]')][n];
+  const b = l && [...l.querySelectorAll('[role="tab"]')].find(x => ((x.querySelector('span') || x).innerText || '').replace(/\s*\([^)]*\)\s*$/, '').trim() === r);   // o "(12)" no fim do rótulo (Marketing) muda com os dados: não conta
+  if (!b) throw new Error('aba não achada: ' + r);
+  b.click();
+}, rotulo, n);
+const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => document.querySelectorAll('.acn-main [role="tablist"]').length > n, { timeout: ms }, n);
+
 (async () => {
+  ROTAS = await import(require('url').pathToFileURL(require('path').join(__dirname, '../../src/Rotas.ts')).href);
   // ───────────────────────────────────────────────────────────────────────────
   await cenario('C1 Admin: abertura, menu, Voltar, Avançar e F5', {}, async ({ page }) => {
     await page.goto(BASE, { waitUntil: 'domcontentloaded' });
@@ -1402,7 +1438,7 @@ const instalarClipboardDeTeste = (page) => page.evaluateOnNewDocument(() => {
     await clicarNoMenu(page, 'Compras'); await espera(1800);
     const limpo = (t) => norm(String(t).replace(/[^\p{L}\p{N} ]+/gu, ' '));
     const casos = [
-      [FASE3[1], 'Processo CRM', limpo(R.card.a.titulo), norm(R.card.a.titulo).slice(0, 25), R.card.a],
+      [FASE3[1], 'Processo CRM', limpo(R.card.a.titulo), norm(R.card.a.titulo), R.card.a]   /* título inteiro: em 26/11/2026 dois cards novos começavam igual (…TRACKER e …TRACKER LANTERNA) e o prefixo de 25 letras abria o errado */,
       [FASE3[0], 'Licitação', limpo(R.licitacao.a.numero), norm(R.licitacao.a.numero).slice(0, 25), R.licitacao.a],
       [FASE3[3], 'OS', limpo(R.os.a.numero_os), ('OS ' + norm(R.os.a.numero_os)).slice(0, 25), R.os.a],
     ];
@@ -1569,6 +1605,209 @@ const instalarClipboardDeTeste = (page) => page.evaluateOnNewDocument(() => {
     confere('o X do Acompanhamento tira o endereço da OS (link colado: troca pelo da tela)', e.hash === '#/sac' && e.acomp === 0 && e.janelas === 0, JSON.stringify({ h: e.hash, a: e.acomp, j: e.janelas }));
     const al = await A(page);
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
+  // C45 (Fase 4): as abas de CADA tela do quadro. O quadro vem do código; uma tela que entrou no quadro sem entrar em `FASE4` (ou o contrário) reprova.
+  await cenario('C45 Quadro de abas: o teste cobre exatamente as telas do quadro, com as mesmas abas', {}, async () => {
+    const quadro = Object.keys(ROTAS.ABAS_DAS_TELAS).sort();
+    // o Admin tem barra de botões (não a de abas padrão) e o cenário próprio C48; as outras estão em FASE4
+    const coberto = [...FASE4.map(d => d.id), 'admin'].sort();
+    confere('as telas do quadro de abas e as do teste são as mesmas', JSON.stringify(quadro) === JSON.stringify(coberto), `quadro=${quadro.join(',')} teste=${coberto.join(',')}`);
+    FASE4.forEach(d => confere(`${d.id}: as abas do teste são as do quadro`, JSON.stringify([...Object.keys(d.rotulos), ...(d.ausentes || [])].sort()) === JSON.stringify([...ROTAS.ABAS_DAS_TELAS[d.id].abas].sort()), `teste=${Object.keys(d.rotulos)} quadro=${ROTAS.ABAS_DAS_TELAS[d.id]?.abas}`));
+  });
+
+  for (const D of FASE4) {
+    await cenario(`C46 ${D.id}: as abas ganham endereço (um passo por troca), o endereço manda no F5, no link colado, no Voltar e no Avançar`, {}, async ({ page, consoleErros }) => {
+      const Q = ROTAS.ABAS_DAS_TELAS[D.id];
+      const nome = ROTAS.nomeNoEndereco(D.id);
+      const lista = D.lista || 0;
+      const rot = (a) => D.rotulos[a];
+      const idDoRotulo = (r) => Object.keys(D.rotulos).find(a => D.rotulos[a] === r);
+      const enderecoDaAba = (a) => ROTAS.montarEnderecoDaAba(D.id, [a]);
+      const outras = Q.abas.filter(a => a !== Q.padrao);
+      // o endereço e a aba marcada SEMPRE contam a mesma história (a regra central da Fase 4)
+      const acorda = (e) => e.ativas.length === 1 && enderecoDaAba(idDoRotulo(e.ativas[0])) === e.hash;
+      const ver = async () => estadoAbas(page, lista);
+      const aguardar = async (esperado) => { try { await page.waitForFunction((n, r) => { const l = [...document.querySelectorAll('.acn-main [role="tablist"]')][n]; const b = l && l.querySelector('[role="tab"][aria-selected="true"]'); return !!b && ((b.querySelector('span') || b).innerText || '').trim() === r; }, { timeout: 8000 }, lista, esperado); } catch (e) { /* a conferência seguinte reprova e mostra o estado */ } await espera(250); };
+
+      await page.goto(BASE + `#/${nome}`, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
+      let e = await ver();
+      confere(`${D.id}: a barra de abas tem as abas do quadro, na ordem`, JSON.stringify(e.rotulos) === JSON.stringify(Object.values(D.rotulos)), JSON.stringify(e.rotulos));
+      confere(`${D.id}: abre na aba padrão (${rot(Q.padrao)}) e o endereço continua sem aba`, e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}`, JSON.stringify({ a: e.ativas, h: e.hash }));
+      const h0 = e.historico;
+      let passos = 0;
+      for (const aba of outras) {
+        await clicarNaAba(page, rot(aba), lista); await aguardar(rot(aba));
+        e = await ver(); passos++;
+        confere(`${D.id}: clicar em "${rot(aba)}" → ${enderecoDaAba(aba)}, com UM passo novo`, e.ativas[0] === rot(aba) && e.hash === enderecoDaAba(aba) && e.historico === h0 + passos, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico, passos }));
+      }
+      const ultima = outras[outras.length - 1];
+      await clicarNaAba(page, rot(ultima), lista); await espera(500);
+      e = await ver();
+      confere(`${D.id}: clicar de novo na aba aberta não cria passo`, e.historico === h0 + passos && e.hash === enderecoDaAba(ultima), JSON.stringify({ h0, h1: e.historico, passos, hash: e.hash }));
+      await clicarNaAba(page, rot(Q.padrao), lista); await aguardar(rot(Q.padrao));
+      e = await ver(); passos++;
+      confere(`${D.id}: voltar à aba padrão pelo clique → #/${nome} (sem aba), um passo`, e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}` && e.historico === h0 + passos, JSON.stringify({ a: e.ativas, h: e.hash, h0, h1: e.historico, passos }));
+      // Voltar e Avançar andam entre as abas
+      await page.goBack(); await aguardar(rot(ultima));
+      e = await ver();
+      confere(`${D.id}: Voltar → a aba de antes (${rot(ultima)}) e o endereço dela`, e.ativas[0] === rot(ultima) && e.hash === enderecoDaAba(ultima), JSON.stringify({ a: e.ativas, h: e.hash }));
+      await page.goForward(); await aguardar(rot(Q.padrao));
+      e = await ver();
+      confere(`${D.id}: Avançar → a aba padrão de novo`, e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}`, JSON.stringify({ a: e.ativas, h: e.hash }));
+      // percorre o histórico inteiro para trás: cada passo mostra a aba que o endereço diz
+      let todosAcordam = true; const vistos = [];
+      for (let i = 0; i < passos; i++) { await page.goBack(); await espera(500); const x = await ver(); vistos.push(`${x.hash}=${x.ativas[0]}`); if (!acorda(x)) todosAcordam = false; }
+      confere(`${D.id}: do Voltar ao começo, o endereço e a aba marcada contam a mesma história a cada passo`, todosAcordam, vistos.join(' | '));
+      for (let i = 0; i < passos; i++) { await page.goForward(); await espera(400); }
+      await aguardar(rot(Q.padrao));
+      // F5 numa aba que não é a padrão
+      await clicarNaAba(page, rot(ultima), lista); await aguardar(rot(ultima));
+      const antesDoF5 = await ver();
+      await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarAbas(page, lista); await espera(1200);
+      e = await ver();
+      confere(`${D.id}: F5 em ${enderecoDaAba(ultima)} reabre na mesma aba, sem passo novo`, e.ativas[0] === rot(ultima) && e.hash === enderecoDaAba(ultima) && e.historico === antesDoF5.historico, JSON.stringify({ a: e.ativas, h: e.hash, antes: antesDoF5.historico, depois: e.historico }));
+      // link colado
+      for (const aba of outras) {
+        await abrirComoLinkColado(page, enderecoDaAba(aba)); await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
+        e = await ver();
+        confere(`${D.id}: link colado ${enderecoDaAba(aba)} abre a aba "${rot(aba)}" e deixa o endereço como está`, e.ativas[0] === rot(aba) && e.hash === enderecoDaAba(aba), JSON.stringify({ a: e.ativas, h: e.hash }));
+      }
+      const aberta = outras[0];
+      await abrirComoLinkColado(page, `#/${nome}/${ROTAS.nomeDaAba(Q.padrao)}`); await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
+      e = await ver();
+      confere(`${D.id}: o link com o nome da aba padrão escrito (#/${nome}/${ROTAS.nomeDaAba(Q.padrao)}) abre a padrão e a barra passa a mostrar o endereço curto`, e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}`, JSON.stringify({ a: e.ativas, h: e.hash }));
+      await abrirComoLinkColado(page, `#/${nome.toUpperCase()}/${ROTAS.nomeDaAba(aberta).toUpperCase()}`); await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
+      e = await ver();
+      confere(`${D.id}: o link em MAIÚSCULA abre a mesma aba e a barra é escrita no jeito certo`, e.ativas[0] === rot(aberta) && e.hash === enderecoDaAba(aberta), JSON.stringify({ a: e.ativas, h: e.hash }));
+      // aba que não existe
+      await abrirComoLinkColado(page, `#/${nome}/aba-que-nao-existe`); await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
+      e = await ver();
+      confere(`${D.id}: aba que a tela não tem → a padrão, e a barra é corrigida`, e.ativas[0] === rot(Q.padrao) && e.hash === `#/${nome}`, JSON.stringify({ a: e.ativas, h: e.hash }));
+      const al0 = await A(page);
+      confere(`${D.id}: aba desconhecida não gera aviso nem tela quebrada`, al0.length === 0 && e.listas > lista, JSON.stringify(al0));
+      // clicar no menu na tela em que já está: a aba fica
+      await abrirComoLinkColado(page, enderecoDaAba(aberta)); await esperarSistema(page); await esperarAbas(page, lista); await espera(900);
+      const h1 = (await ver()).historico;
+      await clicarNoMenu(page, D.menu); await espera(900);
+      e = await ver();
+      confere(`${D.id}: clicar no menu da tela em que já está NÃO derruba a aba nem cria passo`, e.ativas[0] === rot(aberta) && e.hash === enderecoDaAba(aberta) && e.historico === h1, JSON.stringify({ a: e.ativas, h: e.hash, h1, h2: e.historico }));
+      // sair para outra tela e voltar pelo Voltar: a aba volta
+      const outraTela = D.menu === 'PCP' ? 'Compras' : 'PCP';
+      await clicarNoMenu(page, outraTela); await espera(1000);
+      e = await estado(page);
+      confere(`${D.id}: ir para ${outraTela} deixa a tela e o endereço dela`, e.hash === `#/${outraTela === 'PCP' ? 'pcp' : 'compras'}`, e.hash);
+      await page.goBack(); await esperarAbas(page, lista); await espera(900);
+      e = await ver();
+      confere(`${D.id}: Voltar para a tela reabre a MESMA aba (${rot(aberta)})`, e.ativas[0] === rot(aberta) && e.hash === enderecoDaAba(aberta), JSON.stringify({ a: e.ativas, h: e.hash }));
+      // sair e entrar de novo pelo menu: a aba que a tela abre e o endereço contam a mesma história (a tela pode lembrar a última aba)
+      await clicarNoMenu(page, outraTela); await espera(900);
+      await clicarNoMenu(page, D.menu); await esperarAbas(page, lista); await espera(1100);
+      e = await ver();
+      confere(`${D.id}: entrar pelo menu → a aba que abriu e o endereço combinam`, acorda(e), JSON.stringify({ a: e.ativas, h: e.hash }));
+      if (D.lembra) {
+        // a tela lembra a última aba que a pessoa usou (guardada no navegador): ao entrar pelo menu abre nela, a barra passa a mostrá-la SEM passo novo e sem derrubar a lembrança
+        await clicarNaAba(page, rot(D.lembra), lista); await aguardar(rot(D.lembra));
+        await clicarNoMenu(page, outraTela); await espera(900);
+        const hAntes = (await estado(page)).historico;
+        await clicarNoMenu(page, D.menu); await esperarAbas(page, lista); await espera(1100);
+        e = await ver();
+        confere(`${D.id}: a tela lembra a última aba usada (${rot(D.lembra)}) e o endereço a mostra`, e.ativas[0] === rot(D.lembra) && e.hash === enderecoDaAba(D.lembra), JSON.stringify({ a: e.ativas, h: e.hash }));
+        confere(`${D.id}: mostrar a aba lembrada na barra não cria passo (só o clique do menu criou um)`, e.historico === hAntes + 1, JSON.stringify({ antes: hAntes, depois: e.historico }));
+        await page.goBack(); await espera(1000);
+        await page.goForward(); await esperarAbas(page, lista); await espera(1000);
+        e = await ver();
+        confere(`${D.id}: Voltar e Avançar sobre a aba lembrada: o endereço e a aba continuam combinando`, acorda(e), JSON.stringify({ a: e.ativas, h: e.hash }));
+      }
+      const al = await A(page);
+      confere(`${D.id}: nenhum aviso durante o uso`, al.length === 0, JSON.stringify(al));
+      const errosDoSistema = (consoleErros || []).filter(x => !/Failed to load resource|net::ERR|favicon|status of 4|status of 5/.test(x));
+      confere(`${D.id}: nenhum erro no console`, errosDoSistema.length === 0, errosDoSistema.slice(0, 3).join(' | '));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C47: a janela de um REGISTRO abre por cima da aba; o endereço do registro não diz aba e não derruba a que estava aberta
+  await cenario('C47 Compras: o endereço de um pedido, com a aba Fornecedores à vista, abre a mesa na aba Requisições; Voltar e Avançar devolvem as duas abas', {}, async ({ page }) => {
+    const F = FASE3[2];
+    const { a } = (await registrosDoBanco()).pedido;
+    const end = enderecoDe(F, a.id);
+    await page.goto(BASE + '#/compras/fornecedores', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarAbas(page, 0); await espera(900);
+    let t = await estadoAbas(page);
+    confere('começa na aba Fornecedores', t.ativas[0] === 'Fornecedores' && t.hash === '#/compras/fornecedores', JSON.stringify({ a: t.ativas, h: t.hash }));
+    const h0 = t.historico;
+    await page.evaluate((h) => { location.hash = h; }, end);                       // o mesmo que o endereço digitado na barra
+    await esperarJanelaDe(page, F, a); await espera(900);
+    t = await estadoAbas(page);
+    let r = await estadoReg(page, F);
+    confere('a mesa do pedido abre pelo endereço, com UM passo novo', r.hash === end && r.janelas === 1 && t.historico === h0 + 1, JSON.stringify({ h: r.hash, j: r.janelas, h0, h1: t.historico }));
+    confere('a aba que a janela precisa (Requisições) passa a ser a aberta, e o endereço do pedido não diz aba', t.ativas[0] === 'Requisições' && r.hash === end, JSON.stringify({ a: t.ativas, h: r.hash }));
+    await page.goBack(); await espera(1500);
+    t = await estadoAbas(page); r = await estadoReg(page, F);
+    confere('Voltar: a mesa fecha e a aba Fornecedores volta, com o endereço dela', r.janelas === 0 && t.ativas[0] === 'Fornecedores' && t.hash === '#/compras/fornecedores', JSON.stringify({ j: r.janelas, a: t.ativas, h: t.hash }));
+    await page.goForward(); await esperarJanelaDe(page, F, a); await espera(700);
+    t = await estadoAbas(page); r = await estadoReg(page, F);
+    confere('Avançar: a mesa reabre sobre Requisições, com o mesmo endereço', r.janelas === 1 && t.ativas[0] === 'Requisições' && r.hash === end, JSON.stringify({ j: r.janelas, a: t.ativas, h: r.hash }));
+    // fechar a janela (passo do histórico que não é do sistema, porque o endereço foi digitado): o endereço vira o da tela, sem aba, e a aba aberta continua sendo Requisições
+    await fecharRegistro(page, F); await esperarSemJanela3(page, F); await espera(900);
+    t = await estadoAbas(page); r = await estadoReg(page, F);
+    confere('o X da janela deixa a barra com o endereço da aba que está aberta (Requisições = sem aba)', r.janelas === 0 && t.ativas[0] === 'Requisições' && t.hash === '#/compras', JSON.stringify({ j: r.janelas, a: t.ativas, h: t.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // C48 (Fase 4): Admin. A barra dele é de botões (`.acn-tab-btn`, tela clássica não migrada), não a barra de abas padrão: por isso o cenário é próprio.
+  await cenario('C48 Admin: as 23 abas ganham endereço (um passo por troca); F5, link colado, Voltar e Avançar seguem o endereço', {}, async ({ page }) => {
+    const ids = ROTAS.ABAS_DAS_TELAS.admin.abas;
+    const est = () => page.evaluate(() => {
+      const bs = [...document.querySelectorAll('.acn-main .acn-tab-btn')];
+      return { hash: location.hash, historico: history.length, n: bs.length, ativos: bs.map((b, i) => b.classList.contains('ativo') ? i : -1).filter(i => i >= 0), rotulos: bs.map(b => b.innerText.trim()) };
+    });
+    const clicar = (i) => page.evaluate((i) => { [...document.querySelectorAll('.acn-main .acn-tab-btn')][i].click(); }, i);
+    const esperarBarra = () => page.waitForFunction(() => document.querySelectorAll('.acn-main .acn-tab-btn').length > 0, { timeout: 40000 });
+    const end = (i) => ROTAS.montarEnderecoDaAba('admin', [ids[i]]);
+    await page.goto(BASE + '#/admin', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarBarra(); await espera(900);
+    let e = await est();
+    confere('admin: a barra tem as 23 abas e abre em Usuários, com o endereço sem aba', e.n === ids.length && e.ativos.join() === '0' && e.hash === '#/admin', JSON.stringify({ n: e.n, a: e.ativos, h: e.hash }));
+    let h = e.historico;
+    for (let i = 1; i < ids.length; i++) {
+      await clicar(i); await espera(450);
+      e = await est();
+      confere(`admin: "${e.rotulos[i]}" → ${end(i)}, com UM passo novo e só ela marcada`, e.hash === end(i) && e.ativos.join() === String(i) && e.historico === h + 1, JSON.stringify({ h: e.hash, a: e.ativos, h0: h, h1: e.historico }));
+      h = e.historico;
+    }
+    const ULT = ids.length - 1;
+    await clicar(ULT); await espera(300);
+    e = await est();
+    confere('admin: clicar de novo na aba aberta não cria passo', e.historico === h && e.hash === end(ULT), JSON.stringify(e));
+    await page.goBack(); await espera(900); e = await est();
+    confere('admin: Voltar → a aba de antes e o endereço dela', e.hash === end(ULT - 1) && e.ativos.join() === String(ULT - 1), JSON.stringify({ h: e.hash, a: e.ativos }));
+    await page.goForward(); await espera(900); e = await est();
+    confere('admin: Avançar → a última aba de novo', e.hash === end(ULT) && e.ativos.join() === String(ULT), JSON.stringify({ h: e.hash, a: e.ativos }));
+    const antes = (await est()).historico;
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarBarra(); await espera(1200);
+    e = await est();
+    confere('admin: F5 numa aba reabre a mesma aba, sem passo novo', e.hash === end(ULT) && e.ativos.join() === String(ULT) && e.historico === antes, JSON.stringify({ h: e.hash, a: e.ativos, h0: antes, h1: e.historico }));
+    for (const i of [1, 5, 11]) {
+      await abrirComoLinkColado(page, end(i)); await esperarSistema(page); await esperarBarra(); await espera(900);
+      e = await est();
+      confere(`admin: link colado ${end(i)} abre "${e.rotulos[i]}" e deixa o endereço como está`, e.hash === end(i) && e.ativos.join() === String(i), JSON.stringify({ h: e.hash, a: e.ativos }));
+    }
+    await abrirComoLinkColado(page, '#/admin/aba-que-nao-existe'); await esperarSistema(page); await esperarBarra(); await espera(900);
+    e = await est();
+    confere('admin: aba que a tela não tem → Usuários, e a barra é corrigida', e.hash === '#/admin' && e.ativos.join() === '0', JSON.stringify({ h: e.hash, a: e.ativos }));
+    await abrirComoLinkColado(page, end(3)); await esperarSistema(page); await esperarBarra(); await espera(900);
+    const h2 = (await est()).historico;
+    await clicarNoMenu(page, 'Admin'); await espera(1200);
+    e = await est();
+    confere('admin: clicar no menu da tela em que já está NÃO derruba a aba nem cria passo', e.hash === end(3) && e.ativos.join() === '3' && e.historico === h2, JSON.stringify({ h: e.hash, a: e.ativos, h0: h2, h1: e.historico }));
+    const al = await A(page);
+    confere('admin: nenhum aviso durante o uso', al.length === 0, JSON.stringify(al));
   });
 
   // ───────────────────────────────────────────────────────────────────────────

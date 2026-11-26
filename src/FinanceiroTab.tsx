@@ -26,6 +26,7 @@ import { mdiFileExcelOutline, mdiLockOutline, mdiTagOutline, mdiBankOutline, mdi
   mdiCashMultiple, mdiRefresh, mdiChartBar, mdiFolderOutline, mdiFileDocumentOutline, mdiCartOutline, mdiPencilOutline,
   mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline, mdiClipboardCheckOutline, mdiClipboardTextOutline } from '@mdi/js';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP.
 // Etapa 12e9 (05/10/2026): o seletor escuro escrito à mão virou as abas do guia (`Abas`); os nomes e a ordem são os de antes.
@@ -409,7 +410,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [loading,  setLoading]  = useState(true);
   const [modalCentros, setModalCentros] = useState(false);
   const [modalCompras, setModalCompras] = useState<any>(null);
-  const [abaFin, setAbaFin] = useState('centros');
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/financeiro/pendencias…); Centros de custo é a padrão e fica sem nome na barra
+  const [abaFin, setAbaFin] = useAbaNoEndereco({ tela: 'financeiro' }) as [string, (v: any) => void];
   const [painelCentro, setPainelCentro] = useState<string | null>(null); // Etapa 15b: id do centro com o painel aberto
   const [semCentroAberto, setSemCentroAberto] = useState(false);            // Etapa 15c: tela "Compras sem centro"
   const [modalFechamento, setModalFechamento] = useState(false);            // Etapa 15e-2: janela "Fechamento do mês"

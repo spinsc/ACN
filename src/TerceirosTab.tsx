@@ -12,6 +12,7 @@ import { mdiPlus, mdiRefresh } from '@mdi/js';
 import { CabecalhoTela, Abas, Botao, Faixa, hojeISO } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { intervaloVisivel } from './IntervaloVisivel';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { lerTipos, lerPrestadores } from './TerceirosModelo';
 import { podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros, podeEditarModeloDoContrato } from './utils/permissoes';
 import { PrestadoresDeTerceiros } from './TerceirosPrestadores';
@@ -86,7 +87,8 @@ const fraseDoAgendamento = (linhas: any[], statusAntes: string): string => {
 const fraseDaConclusao = (linhas: any[]): string => `${descreverNumeros(linhas)} dado${linhas.length > 1 ? 's' : ''} como realizado${linhas.length > 1 ? 's' : ''}.`;
 
 export default function TerceirosTab({ currentUser }) {
-  const [aba, setAba] = useState<string>(visaoGuardada);
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba aberta mora também no endereço (`#/terceiros/agenda`; `#/terceiros` é o Quadro). Sem a aba no endereço, a tela abre na última visão que a pessoa usou (`visaoGuardada`), como sempre.
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'terceiros', inicial: visaoGuardada });
   const [tipos, setTipos] = useState<any>(VAZIO);
   const [prestadores, setPrestadores] = useState<any>(VAZIO);
   const [servicos, setServicos] = useState<any>(SERVICOS_VAZIOS);

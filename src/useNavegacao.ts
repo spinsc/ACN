@@ -18,7 +18,7 @@
 //    vínculos continuam fazendo o que sempre fizeram (gravar o recado e trocar de tela) e ganham o endereço, também num passo só. Quem lê o endereço e abre a janela é a própria tela
 //    (`RegistroNoEndereco.ts`). Trocar para a tela em que a pessoa JÁ está, com a janela de um registro dela aberta, não mexe em nada (o mesmo que acontecia: a janela continua aberta).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { decidirEndereco, montarEndereco, montarEnderecoDoRegistroDaTela, registroDaTelaNoEndereco, registroDoRecado, type ContextoDoEndereco, type Decisao, type TipoDeRegistroDaTela } from './Rotas';
+import { decidirEndereco, enderecoEhDaTela, montarEndereco, montarEnderecoDoRegistroDaTela, registroDoRecado, type ContextoDoEndereco, type Decisao, type TipoDeRegistroDaTela } from './Rotas';
 import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';
 import { guardarDicaDeAbertura } from './RegistroNoEndereco';
 
@@ -140,7 +140,9 @@ export function useNavegacao(entrada: EntradaDaNavegacao) {
     if (doRecado?.dica) guardarDicaDeAbertura(id, doRecado.tipo, doRecado.chave, doRecado.dica);   // a OS de uma Menção abre o Acompanhamento, não o resumo
     setTela(id); setBloqueio(null);
     if (doRecado) irParaEndereco(montarEnderecoDoRegistroDaTela(id, doRecado.tipo, doRecado.chave), { substituir: !!opcoes.substituir });
-    else if (!registroDaTelaNoEndereco(enderecoAtual(), id)) irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });   // já está na janela de um registro desta tela: ela fica
+    // Fase 4: o endereço de agora já é desta tela (a aba aberta, ou a janela de um registro dela): fica como está. Clicar no menu na tela em que se está nunca derrubou a aba nem fechou a janela
+    // (a tela não é montada de novo), e o endereço não pode contradizer isso passando a mostrar a tela sem aba.
+    else if (!enderecoEhDaTela(enderecoAtual(), id)) irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });
     return true;
   }, []);
 

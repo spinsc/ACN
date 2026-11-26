@@ -8,6 +8,7 @@ import Linkify from './Linkify';
 import { logChange, useFieldHighlight, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { Faixa, Botao, Selo, Chips, Abas } from './Interface';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { mdiCameraOutline, mdiVideoOutline, mdiChevronDown, mdiChevronUp, mdiTruckFastOutline } from '@mdi/js';
 
 // Etapa 12e4 (04/10/2026): a parte visual desta tela passou para as peças do design system (Abas, Chips, Botao, Selo, Faixa e as
@@ -224,7 +225,8 @@ export default function MarketingTab({ currentUser }) {
   const [intervencoes, setIntervencoes] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [aba, setAba] = useState('opls'); // opls | pedidos
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/marketing/pedidos); OPs liberadas é a padrão
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'marketing' }) as [string, (v: any) => void]; // opls | pedidos
   const [showFormPedido, setShowFormPedido] = useState(false);
   const [pedidoForm, setPedidoForm] = useState(PEDIDO_VAZIO);
   const [salvandoPedido, setSalvandoPedido] = useState(false);

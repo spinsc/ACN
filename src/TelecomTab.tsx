@@ -16,10 +16,14 @@ import { Abas } from './Interface';
 import SetorDemandaTab from './SetorDemandaTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
 import VendasTelecomTab from './VendasTelecomTab';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { estaNaFilaDe, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 
 export default function TelecomTab({ currentUser }) {
-  const [aba, setAba] = useState('demandas');
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/telecom/vendas); Análises e demandas é a padrão. A abertura sozinha na separação (abaixo) só vale se o endereço
+  // não trouxe uma aba: quem colou #/telecom/demandas pediu essa aba.
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'telecom' }) as [string, (v: any) => void];
+  const veioComAba = useRef(/^#\/telecom\/[^/?]/i.test(window.location.hash));
   // quantas OPs esperam o Telecom (null = ainda não sei, ou a leitura falhou: a aba fica sem número em vez de dizer "0" que não é verdade)
   const [esperando, setEsperando] = useState<number | null>(null);
   const [abriuSozinho, setAbriuSozinho] = useState(false);
@@ -40,7 +44,7 @@ export default function TelecomTab({ currentUser }) {
 
   // na primeira contagem, se há OP esperando, a tela já abre na separação (só uma vez: depois quem manda é a pessoa)
   useEffect(() => {
-    if (esperando != null && !abriuSozinho) { setAbriuSozinho(true); if (esperando > 0 && !escolheuAba.current) setAba('separacao'); }
+    if (esperando != null && !abriuSozinho) { setAbriuSozinho(true); if (esperando > 0 && !escolheuAba.current && !veioComAba.current) setAba('separacao'); }
   }, [esperando, abriuSozinho]);
 
   return (

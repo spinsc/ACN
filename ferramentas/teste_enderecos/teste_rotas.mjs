@@ -185,4 +185,129 @@ t('recado vazio, texto ou número não derrubam', () => [null, undefined, '', 'c
 t('o recado do card do CRM não carrega dica (a Menção de CRM usa o caminho das Análises)', () => assert.equal('dica' in registroDoRecado(recado('crm', U1), 'crm'), false));
 t('o recado com o código em maiúscula e espaço nas pontas vale', () => assert.equal(registroDoRecado(recado('crm', `  ${U2} `), 'crm').chave, U2));
 
+// ── Fase 4 (26/11/2026): as abas de dentro de cada tela ──
+const { ABAS_DAS_TELAS, nomeDaAba, abasDoNivel, abaDoNome, abaNoEndereco, montarEnderecoDaAba, enderecoEhDaTela, conferirQuadroDeAbas } = R;
+const NOME_DAS_TELAS_COM_ABAS = Object.keys(ABAS_DAS_TELAS);
+console.log(`telas com abas no endereço: ${NOME_DAS_TELAS_COM_ABAS.length} (${NOME_DAS_TELAS_COM_ABAS.join(', ')})`);
+
+t('nomeDaAba: minúscula, sem acento e com hífen', () => {
+  assert.equal(nomeDaAba('horas_extras'), 'horas-extras');
+  assert.equal(nomeDaAba('Relatórios'), 'relatorios');
+  assert.equal(nomeDaAba('  Vendas  '), 'vendas');
+  assert.equal(nomeDaAba('a  b__c'), 'a-b-c');
+  assert.equal(nomeDaAba('--x--'), 'x');
+  assert.equal(nomeDaAba(''), '');
+  assert.equal(nomeDaAba(null), '');
+});
+t('o quadro de abas real passa na conferência (e a conferência geral continua limpa)', () => { assert.deepEqual(conferirQuadroDeAbas(IDS), []); assert.deepEqual(conferirQuadroDeNomes(IDS), []); });
+t('a conferência do quadro pega: tela que não existe', () => assert.ok(conferirQuadroDeAbas(IDS, { xyz: { padrao: 'a', abas: ['a'] } }).some(p => p.includes('não é uma tela do menu'))));
+t('a conferência do quadro pega: lista de abas vazia', () => assert.ok(conferirQuadroDeAbas(IDS, { compras: { padrao: 'a', abas: [] } }).some(p => p.includes('nenhuma aba'))));
+t('a conferência do quadro pega: aba padrão fora da lista', () => assert.ok(conferirQuadroDeAbas(IDS, { compras: { padrao: 'z', abas: ['a', 'b'] } }).some(p => p.includes('aba padrão'))));
+t('a conferência do quadro pega: dois ids com o mesmo nome no endereço (a_b e a-b)', () => assert.ok(conferirQuadroDeAbas(IDS, { compras: { padrao: 'a_b', abas: ['a_b', 'a-b'] } }).some(p => p.includes('mesmo nome'))));
+t('a conferência do quadro pega: id que fica sem nome no endereço', () => assert.ok(conferirQuadroDeAbas(IDS, { compras: { padrao: 'a', abas: ['a', '--'] } }).some(p => p.includes('sem nome'))));
+t('a conferência do quadro pega: abas de dentro de uma aba que não existe', () => assert.ok(conferirQuadroDeAbas(IDS, { compras: { padrao: 'a', abas: ['a'], filhas: { z: { padrao: 'x', abas: ['x'] } } } }).some(p => p.includes('não é uma aba dela'))));
+t('a conferência do quadro pega: aba de dentro com a padrão fora da lista', () => assert.ok(conferirQuadroDeAbas(IDS, { compras: { padrao: 'a', abas: ['a'], filhas: { a: { padrao: 'z', abas: ['x'] } } } }).some(p => p.includes('aba padrão'))));
+t('a conferência do quadro pega: aba com nome de registro da tela E abas de dentro (ambíguo)', () => assert.ok(conferirQuadroDeAbas(IDS, { sac: { padrao: 'os', abas: ['os', 'x'], filhas: { os: { padrao: 'a', abas: ['a', 'b'] } } } }, { sac: ['os'] }).some(p => p.includes('ambíguo'))));
+t('a conferência do quadro NÃO reclama de aba com nome de registro quando ela não tem abas de dentro (SAC: aba "os" e registro "os")', () => assert.deepEqual(conferirQuadroDeAbas(IDS, { sac: { padrao: 'os', abas: ['os', 'x'] } }, { sac: ['os'] }), []));
+
+// o quadro real, tabela por tabela: cada aba de cada tela
+NOME_DAS_TELAS_COM_ABAS.forEach(telaId => {
+  const q = ABAS_DAS_TELAS[telaId];
+  const nome = nomeNoEndereco(telaId);
+  t(`${telaId}: a padrão (${q.padrao}) é o endereço da tela, sem aba`, () => {
+    assert.equal(montarEnderecoDaAba(telaId, [q.padrao]), `#/${nome}`);
+    assert.deepEqual(abaNoEndereco(`#/${nome}`, telaId), { tipo: 'aba', aba: null, invalida: false });
+  });
+  q.abas.forEach(aba => {
+    t(`${telaId}/${aba}: ida e volta do endereço da aba`, () => {
+      const h = montarEnderecoDaAba(telaId, [aba]);
+      assert.equal(h, aba === q.padrao ? `#/${nome}` : `#/${nome}/${nomeDaAba(aba)}`);
+      const lido = abaNoEndereco(h, telaId);
+      assert.deepEqual(lido, { tipo: 'aba', aba: aba === q.padrao ? null : aba, invalida: false });
+    });
+    t(`${telaId}/${aba}: o endereço com o nome da aba escrito por extenso (também a padrão) é lido; maiúscula e acento não atrapalham`, () => {
+      assert.deepEqual(abaNoEndereco(`#/${nome}/${nomeDaAba(aba)}`, telaId), { tipo: 'aba', aba, invalida: false });
+      assert.deepEqual(abaNoEndereco(`#/${nome.toUpperCase()}/${nomeDaAba(aba).toUpperCase()}`, telaId), { tipo: 'aba', aba, invalida: false });
+      assert.equal(abaDoNome(telaId, 0, null, nomeDaAba(aba)), aba);
+    });
+    t(`${telaId}/${aba}: a decisão do endereço da aba é a da TELA (abre com a permissão; sem ela, conferindo e depois sem acesso)`, () => {
+      const h = `#/${nome}/${nomeDaAba(aba)}`;
+      assert.deepEqual(decidirEndereco(h, ctxDe([telaId], false)), { tipo: 'abrir', tela: telaId, corrigirEndereco: false });
+      assert.deepEqual(decidirEndereco(h, ctxDe(['pcp'], false)), { tipo: 'conferindo', tela: telaId });
+      assert.deepEqual(decidirEndereco(h, ctxDe(['pcp'], true)), { tipo: 'semAcesso', tela: telaId });
+    });
+    t(`${telaId}/${aba}: o endereço da aba não é registro nem OP`, () => {
+      const h = `#/${nome}/${nomeDaAba(aba)}`;
+      assert.equal(lerEndereco(h, IDS).registro, undefined);
+      assert.equal(registroDaTelaNoEndereco(h, telaId), null);
+      assert.equal(registroDoEndereco(h), null);
+    });
+  });
+  t(`${telaId}: aba que a tela não tem é "inválida", sem aba`, () => assert.deepEqual(abaNoEndereco(`#/${nome}/aba-que-nao-existe`, telaId), { tipo: 'aba', aba: null, invalida: true }));
+  t(`${telaId}: o endereço de outra tela, de uma OP, vazio ou desconhecido não é desta tela (fora)`, () => {
+    const outra = IDS.find(id => id !== telaId);
+    ['', '#', '#/op/A1750.2611', montarEndereco(outra), '#/xyz', null, undefined].forEach(h => assert.deepEqual(abaNoEndereco(h, telaId), { tipo: 'fora' }, String(h)));
+  });
+  t(`${telaId}: a janela de um registro da própria tela (se ela tem) não diz aba (fora)`, () => (REGISTROS_DAS_TELAS[telaId] || []).forEach(tipo => assert.deepEqual(abaNoEndereco(montarEnderecoDoRegistroDaTela(telaId, tipo, U1), telaId), { tipo: 'fora' }, tipo)));
+  t(`${telaId}: enderecoEhDaTela vale para a tela, as abas dela e os registros dela, e para mais nada`, () => {
+    assert.equal(enderecoEhDaTela(`#/${nome}`, telaId), true);
+    q.abas.forEach(aba => assert.equal(enderecoEhDaTela(`#/${nome}/${nomeDaAba(aba)}`, telaId), true, aba));
+    (REGISTROS_DAS_TELAS[telaId] || []).forEach(tipo => assert.equal(enderecoEhDaTela(montarEnderecoDoRegistroDaTela(telaId, tipo, U1), telaId), true, tipo));
+    assert.equal(enderecoEhDaTela('#/op/A1750.2611', telaId), false);
+    assert.equal(enderecoEhDaTela(montarEndereco(IDS.find(id => id !== telaId)), telaId), false);
+    assert.equal(enderecoEhDaTela('', telaId), false);
+  });
+  t(`${telaId}: os nomes das abas não colidem com os registros da tela (só a aba SEM abas de dentro pode ter o nome de um registro)`, () => {
+    (REGISTROS_DAS_TELAS[telaId] || []).forEach(tipo => { if (q.filhas && q.filhas[tipo]) assert.fail(`a aba ${tipo} tem abas de dentro e o nome de um registro`); });
+  });
+});
+t('tela sem quadro de abas: nada de aba (fora) e o endereço montado é o da tela', () => { assert.deepEqual(abaNoEndereco('#/inicio/x', 'inicio'), { tipo: 'fora' }); assert.equal(montarEnderecoDaAba('inicio', ['x']), '#/inicio'); assert.equal(abasDoNivel('inicio', 0), null); });
+t('enderecoEhDaTela não precisa de quadro: vale para qualquer tela do menu', () => IDS.forEach(id => { assert.equal(enderecoEhDaTela(montarEndereco(id), id), true, id); assert.equal(enderecoEhDaTela(montarEndereco(id), IDS.find(x => x !== id)), false, id); }));
+
+// duas camadas (a aba de dentro de uma aba): provado com uma tela de mentira, para a regra não depender do que o quadro real tiver
+ABAS_DAS_TELAS.tela_teste = { padrao: 'a', abas: ['a', 'b', 'horas_extras'], filhas: { a: { padrao: 'x', abas: ['x', 'y'] }, b: { padrao: 'p', abas: ['p', 'q'] } } };
+const T = 'tela_teste';
+const aba0 = h => abaNoEndereco(h, T, 0);
+const aba1 = (h, pai) => abaNoEndereco(h, T, 1, pai);
+t('duas camadas: o endereço montado de cada combinação', () => {
+  const caso = (caminho, esperado) => assert.equal(montarEnderecoDaAba(T, caminho), esperado, JSON.stringify(caminho));
+  caso(['a'], '#/tela-teste');                    // as duas padrão: some tudo
+  caso(['a', 'x'], '#/tela-teste');
+  caso(['a', 'y'], '#/tela-teste/a/y');            // a aba de fora fica no endereço, mesmo sendo a padrão, porque há aba de dentro a dizer
+  caso(['b'], '#/tela-teste/b');
+  caso(['b', 'p'], '#/tela-teste/b');              // a de dentro padrão some
+  caso(['b', 'q'], '#/tela-teste/b/q');
+  caso(['horas_extras'], '#/tela-teste/horas-extras');
+  caso(['horas_extras', 'z'], '#/tela-teste/horas-extras');   // aba sem abas de dentro: o que vier a mais é ignorado
+  caso([], '#/tela-teste');
+});
+t('duas camadas: o nível 0 lê só a aba de fora, o nível 1 lê a de dentro (e só se o pai bate)', () => {
+  assert.deepEqual(aba0('#/tela-teste/a/y'), { tipo: 'aba', aba: 'a', invalida: false });
+  assert.deepEqual(aba1('#/tela-teste/a/y', 'a'), { tipo: 'aba', aba: 'y', invalida: false });
+  assert.deepEqual(aba1('#/tela-teste/b/q', 'b'), { tipo: 'aba', aba: 'q', invalida: false });
+  assert.deepEqual(aba1('#/tela-teste/b/q', 'a'), { tipo: 'fora' });          // a aba de fora do endereço é outra: o grupo de dentro de "a" não existe agora
+  assert.deepEqual(aba1('#/tela-teste/a/y', 'b'), { tipo: 'fora' });
+});
+t('duas camadas: sem aba de fora no endereço, o grupo de dentro da aba padrão vale (e o das outras não)', () => {
+  assert.deepEqual(aba1('#/tela-teste', 'a'), { tipo: 'aba', aba: null, invalida: false });
+  assert.deepEqual(aba1('#/tela-teste', 'b'), { tipo: 'fora' });
+});
+t('duas camadas: a aba de fora sem a de dentro diz "nenhuma" à de dentro', () => { assert.deepEqual(aba1('#/tela-teste/b', 'b'), { tipo: 'aba', aba: null, invalida: false }); assert.deepEqual(aba1('#/tela-teste/a', 'a'), { tipo: 'aba', aba: null, invalida: false }); });
+t('duas camadas: aba de dentro que não existe é "inválida"', () => assert.deepEqual(aba1('#/tela-teste/a/zzz', 'a'), { tipo: 'aba', aba: null, invalida: true }));
+t('duas camadas: o nome só de dentro (#/tela-teste/y, sem a de fora) não vale para a de dentro: seria ambíguo', () => { assert.deepEqual(aba1('#/tela-teste/y', 'a'), { tipo: 'fora' }); assert.deepEqual(aba0('#/tela-teste/y'), { tipo: 'aba', aba: null, invalida: true }); });
+t('duas camadas: nível 1 sem pai ou com pai que não tem abas de dentro é "fora"', () => { assert.deepEqual(abaNoEndereco('#/tela-teste/a/y', T, 1), { tipo: 'fora' }); assert.deepEqual(abaNoEndereco('#/tela-teste/horas-extras/x', T, 1, 'horas_extras'), { tipo: 'fora' }); });
+t('duas camadas: ida e volta de todas as combinações', () => {
+  for (const [fora, q] of Object.entries(ABAS_DAS_TELAS[T].filhas)) {
+    for (const dentro of q.abas) {
+      const h = montarEnderecoDaAba(T, [fora, dentro]);
+      assert.deepEqual(aba0(h), { tipo: 'aba', aba: fora === 'a' ? (dentro === 'x' ? null : 'a') : (fora), invalida: false }, h);
+      const lido = aba1(h, fora);
+      assert.equal(lido.tipo, 'aba', h);
+      assert.equal(lido.aba ?? q.padrao, dentro, h);
+    }
+  }
+});
+t('duas camadas: a conferência do quadro de mentira passa', () => assert.deepEqual(conferirQuadroDeAbas([...IDS, T]), []));
+delete ABAS_DAS_TELAS.tela_teste;
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS' : ''}`);

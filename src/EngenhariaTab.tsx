@@ -29,6 +29,7 @@ import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { indicePendencias } from './OpPendencias';
 import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import {
   mdiRulerSquareCompass, mdiCogOutline, mdiPuzzleOutline, mdiTimerOutline, mdiTrayArrowUp, mdiWrenchOutline, mdiCheckCircleOutline, mdiClockAlertOutline,
   mdiPauseCircleOutline, mdiEyeOutline, mdiNoteTextOutline, mdiPowerPlugOutline, mdiArrowULeftTop, mdiLinkVariant, mdiPlayOutline, mdiClipboardTextOutline,
@@ -105,7 +106,8 @@ function InfoOplEngenharia({ o, colunas, className }) {
 
 export default function EngenhariaTab({ currentUser }) {
   // Etapa 18e (13/10/2026): a Engenharia só recebe pedidos de desenvolvimento, então a aba de abertura é a de Desenvolvimento
-  const [abaEng, setAbaEng] = useState('desenvolvimento');
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/engenharia/estruturas…); Desenvolvimento é a padrão e fica sem nome na barra
+  const [abaEng, setAbaEng] = useAbaNoEndereco({ tela: 'engenharia' }) as [string, (v: any) => void];
   // Deep-link da busca global do topo (DashboardTab.tsx) — clicar num
   // resultado de "Desenvolvimento (Engenharia)" troca pra essa sub-aba e
   // pré-preenche a busca local com o mesmo termo digitado.
