@@ -1,4 +1,5 @@
--- Pacote de segurança e alívio de CPU (26/11/2026, plano de migração para o servidor interno: F0.3 e F0.4). APLICAR FORA DO HORÁRIO, com o OK do usuário.
+-- Pacote de segurança e alívio de CPU (26/11/2026, plano de migração para o servidor interno: F0.3 e F0.4).
+-- APLICADO em 26/11/2026, ~10h21 de Brasília (migração `seguranca_pacote_f03_f04_20261126`); conferido à noite no banco e nas funções de servidor.
 -- Não mexe em dado. Volta: supabase/sql/seguranca_pacote_f03_f04_reverter.sql.
 --
 -- S2 — as três funções de senha passam a valer só para a PRÓPRIA pessoa que chama (o crachá real, auth.uid(), não o "Ver como").
