@@ -19,6 +19,7 @@ import ExcluirFormacaoModal from './ExcluirFormacaoModal';
 import FormacoesExcluidas from './FormacoesExcluidas';
 import { podeExcluirFormacao, lerFamiliaDaFormacao } from './ExclusaoDeFormacao';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { numeroOuNulo } from './LerValor';
 import { CampoMoeda } from './CampoMoeda';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
@@ -1909,7 +1910,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [plataformaSelecionada, setPlataformaSelecionada] = useState(null);
 
   // Novos estados
-  const [abaAtiva, setAbaAtiva]             = useState('formacao');
+  // 26/11/2026 (Fase 4 do plano de endereços): as duas abas têm endereço (#/formacao-precos/precos-formados); Formação é a padrão. Embutida no CRM ou numa licitação a tela não tem
+  // barra de abas nem endereço próprio (`tela` vazia = o estado fica só local). Trocar de aba não descarta a formação em edição: ela fica guardada e só a tela sai da vista.
+  const [abaAtiva, setAbaAtiva]             = useAbaNoEndereco({ tela: embutido ? '' : 'formacao_precos' }) as [string, (v: any) => void];
   // Vínculo de uma demanda avulsa com uma formação de preço (16/10/2026): abrir o vínculo leva direto à formação, na aba "Preços Formados". Mesmo padrão dos outros
   // atalhos (global + evento), porque esta tela pode montar depois do clique. Dentro de Licitações/CRM (embutido) a formação é do processo e não responde ao atalho.
   const [abrirId, setAbrirId] = useState<string | null>(null);

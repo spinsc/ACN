@@ -15,6 +15,10 @@
 // `#/licitacoes/licitacao/<código>`, `#/crm/card/<código>`, `#/compras/pedido/<código>` e `#/sac/os/<código>`. Ao contrário da OP, a permissão da TELA vale (sem a aba, "sem acesso")
 // e a janela do registro abre DENTRO da tela. O <código> é o código interno (uuid) do registro: nenhum dos quatro tem um número que a equipe use e que não se repita
 // (títulos de card e números de licitação se repetem). Cada tela só conhece os tipos dela (`REGISTROS_DAS_TELAS`).
+//
+// Fase 4 (26/11/2026): as abas de dentro de cada tela ganham endereço (`#/compras/fornecedores`, `#/rh/ponto/mes`): o F5 volta à mesma aba, o Voltar e o Avançar andam entre as abas e o link de uma aba
+// abre a aba. O endereço SEM aba (`#/compras`) é a aba padrão da tela, então o link curto de sempre continua abrindo o que abria. O quadro de abas de cada tela está em `ABAS_DAS_TELAS` e a ligação
+// com o estado da tela, em `AbaNoEndereco.ts`. O endereço de um registro (`#/crm/card/<código>`) e o da OP não dizem aba: a janela abre por cima da aba que estiver aberta, como sempre abriu.
 
 /**
  * Primeiras palavras que NÃO são tela: ficam reservadas para endereços de registro sem tela dona (a OP, na Fase 2; a viagem, depois).
@@ -72,7 +76,7 @@ export type RegistroDaTela = { tela: string; tipo: TipoDeRegistroDaTela; chave: 
 
 export type Rota =
   | { tipo: 'vazio' }                                         // sem endereço: vale a tela inicial
-  | { tipo: 'tela'; tela: string; resto: string[]; registro?: { tipo: TipoDeRegistroDaTela; chave: string } }   // uma tela do menu (e o registro dela, quando o endereço pede um; o resto da Fase 4 ainda não é lido)
+  | { tipo: 'tela'; tela: string; resto: string[]; registro?: { tipo: TipoDeRegistroDaTela; chave: string } }   // uma tela do menu (e o registro dela, quando o endereço pede um; as abas, no `resto`, quem lê é `abaNoEndereco`)
   | { tipo: 'registro'; registro: TipoDeRegistro; chave: string }   // a janela de um registro (a OP) por cima da tela em que a pessoa está
   | { tipo: 'desconhecido'; texto: string };                  // o sistema não conhece este endereço
 
@@ -119,7 +123,8 @@ export function lerEndereco(hash: string, ids: readonly string[]): Rota {
 
 /**
  * Se o que vem DEPOIS do nome da tela é um registro dela (`card/<código>`): o tipo e o código. Só vale a palavra que a tela conhece (`REGISTROS_DAS_TELAS`) e só no primeiro pedaço
- * depois da tela (a Fase 4, das abas internas, vai acrescentar o pedaço da aba antes dele, sem mudar o que já foi publicado). Sem código (`#/crm/card`) não é registro.
+ * depois da tela. Decidido na Fase 4 (26/11/2026): o endereço de um registro NÃO leva a aba de baixo (`#/crm/card/<código>`, nunca `#/crm/funil/card/<código>`): o link já publicado continua valendo e a janela
+ * abre por cima da aba que a pessoa tiver (a aba é o estado da própria tela, que o gancho `useAbaNoEndereco` não mexe enquanto o endereço é de um registro). Sem código (`#/crm/card`) não é registro.
  * O código pode ter barra (quem digita a barra sem codificar também é entendido): tudo o que vier depois da palavra é o código.
  */
 function registroDoResto(tela: string, resto: string[]): { tipo: TipoDeRegistroDaTela; chave: string } | null {
@@ -166,6 +171,106 @@ export function montarEnderecoDeRegistro(registro: TipoDeRegistro, chave: string
 /** O endereço da janela de uma OP, pelo número dela. */
 export function montarEnderecoDaOp(numero: string): string {
   return montarEnderecoDeRegistro('op', numero);
+}
+
+// ── Fase 4: as abas de dentro de cada tela ──
+
+/** As abas de um nível de uma tela: `padrao` é a que o endereço sem aba mostra; `abas` são todas as que existem (os ids que a tela já usa no estado dela). */
+export type AbasDeUmNivel = { padrao: string; abas: readonly string[] };
+
+/**
+ * As abas de uma tela, em até DOIS níveis (a aba da tela e, dentro de uma aba, as dela: `#/rh/ponto/mes`). `filhas` diz de qual aba de fora cada grupo de dentro é.
+ * Tela que não está aqui não tem aba no endereço (o estado dela segue só dentro dela). **Tela nova com abas: uma entrada aqui, o gancho `useAbaNoEndereco` na tela e o cenário no teste.**
+ */
+export type QuadroDeAbas = AbasDeUmNivel & { filhas?: Readonly<Record<string, AbasDeUmNivel>> };
+
+export const ABAS_DAS_TELAS: Readonly<Record<string, QuadroDeAbas>> = {
+  admin: { padrao: 'usuarios', abas: ['usuarios', 'perfis', 'plataformas', 'centros_custo', 'alcadas_aprovacao', 'alcadas_aprovacao_fretes', 'departamentos_compras', 'contratos_padrao', 'email_cfg', 'cotacoes_cfg', 'markup_cfg', 'nfc_cfg', 'notificacoes', 'feriados', 'veiculos', 'estruturas', 'fluxo_cfg', 'checklist', 'kpis', 'avisos', 'logs', 'dados', 'lixeira'] },
+  formacao_precos: { padrao: 'formacao', abas: ['formacao', 'precos_formados'] },
+  crm: { padrao: 'kanban', abas: ['kanban', 'agenda', 'recentes', 'relatorio', 'opls', 'faturamentos', 'demandas', 'contatos'] },
+  producao: { padrao: 'producao', abas: ['producao', 'veicular', 'agenda', 'voucher', 'equipes'] },
+  rh: { padrao: 'geral', abas: ['geral', 'colaboradores', 'ponto', 'comissoes', 'relatorios', 'autorizacoes'] },
+  serralheria: { padrao: 'demandas', abas: ['demandas', 'relatorios'] },
+  chicotes: { padrao: 'demandas', abas: ['demandas', 'relatorios'] },
+  laboratorio: { padrao: 'demandas', abas: ['demandas', 'relatorios'] },
+  engenharia: { padrao: 'desenvolvimento', abas: ['analise', 'desenvolvimento', 'estruturas', 'horas'] },
+  financeiro: { padrao: 'centros', abas: ['pendencias', 'centros', 'conciliacao', 'kanban', 'custoop', 'demandas'] },
+  marketing: { padrao: 'opls', abas: ['opls', 'pedidos'] },
+  telecom: { padrao: 'demandas', abas: ['vendas', 'separacao', 'demandas'] },
+  sac: { padrao: 'os', abas: ['os', 'chamados_nfc', 'garantia', 'cadastros'] },
+  compras: { padrao: 'pedidos', abas: ['pedidos', 'fornecedores'] },
+  terceiros: { padrao: 'quadro', abas: ['quadro', 'agenda', 'lista', 'relatorio', 'ordens', 'prestadores', 'tipos', 'modelo'] },
+};
+
+/**
+ * O nome de uma aba no endereço: o id interno dela em minúscula, sem acento e com hífen no lugar de tudo o que não é letra ou número (`horas_extras` → `horas-extras`). Assim o rótulo da aba
+ * pode mudar sem quebrar o link, e uma aba cujo id tenha maiúscula ou acento também vira um nome seguro.
+ */
+export function nomeDaAba(id: string): string {
+  return normalizarChave(id).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/** As abas do nível pedido de uma tela (nível 0 = a aba da tela; nível 1 = as de dentro da aba `pai`), ou `null` se a tela não tem quadro de abas. */
+export function abasDoNivel(tela: string, nivel: 0 | 1 = 0, pai?: string | null): AbasDeUmNivel | null {
+  const q = ABAS_DAS_TELAS[tela];
+  if (!q) return null;
+  if (nivel === 0) return q;
+  return pai && q.filhas && q.filhas[pai] ? q.filhas[pai] : null;
+}
+
+/** O id interno da aba que o nome do endereço designa neste nível, ou `null` (nome que a tela não conhece). Não diferencia maiúscula, acento nem hífen×sublinhado. */
+export function abaDoNome(tela: string, nivel: 0 | 1, pai: string | null | undefined, nome: string): string | null {
+  const n = abasDoNivel(tela, nivel, pai);
+  const alvo = nomeDaAba(nome);
+  if (!n || !alvo) return null;
+  return n.abas.find(a => nomeDaAba(a) === alvo) ?? null;
+}
+
+/**
+ * O que o endereço diz sobre a aba de uma tela neste nível:
+ *  - `fora`: o endereço não é desta tela, ou é a janela de uma OP ou de um registro da tela (que abrem POR CIMA da aba): a aba não muda por causa dele;
+ *  - `aba`: o endereço é desta tela. `aba` é a aba que ele nomeia neste nível, ou `null` se não nomeia nenhuma (endereço sem aba = a padrão); `invalida` = nomeia uma aba que a tela não tem.
+ * No nível 1 o endereço só vale se a aba de fora dele é `pai` (`#/rh/ponto/mes` é do `ponto`; `#/rh/comissoes/mes` não é): senão, `fora`. A aba de fora padrão pode faltar no endereço
+ * quando não há aba de dentro (`#/rh`), mas nunca quando há (`#/rh/ponto/mes`): sem ela, `#/rh/mes` seria ambíguo.
+ */
+export type AbaNoEndereco = { tipo: 'fora' } | { tipo: 'aba'; aba: string | null; invalida: boolean };
+
+export function abaNoEndereco(hash: string, tela: string, nivel: 0 | 1 = 0, pai?: string | null): AbaNoEndereco {
+  const q = ABAS_DAS_TELAS[tela];
+  const partes = partesDoEndereco(hash);
+  if (!q || partes.length === 0 || registroDosPedacos(partes)) return { tipo: 'fora' };
+  if (idDaTela(partes[0], [tela]) !== tela) return { tipo: 'fora' };
+  const resto = partes.slice(1);
+  if (registroDoResto(tela, resto)) return { tipo: 'fora' };           // a janela de um registro desta tela: abre por cima de qualquer aba
+  const nomeia = (nivelDoNome: 0 | 1, nome: string | undefined): AbaNoEndereco => {
+    if (nome === undefined) return { tipo: 'aba', aba: null, invalida: false };
+    const a = abaDoNome(tela, nivelDoNome, pai, nome);
+    return a ? { tipo: 'aba', aba: a, invalida: false } : { tipo: 'aba', aba: null, invalida: true };
+  };
+  if (nivel === 0) return nomeia(0, resto[0]);
+  const deFora = resto.length === 0 ? q.padrao : abaDoNome(tela, 0, null, resto[0]);
+  if (!pai || deFora !== pai || !abasDoNivel(tela, 1, pai)) return { tipo: 'fora' };   // a aba de fora é outra, ou esta aba não tem abas de dentro
+  return nomeia(1, resto[1]);
+}
+
+/**
+ * O endereço de uma aba: `caminho` = [aba da tela] ou [aba da tela, aba de dentro], com os ids internos. O que é a aba padrão do nível some do endereço (`#/compras` é `pedidos`); a aba de fora
+ * só some se não há aba de dentro a dizer. Tela sem quadro: o endereço da tela.
+ */
+export function montarEnderecoDaAba(tela: string, caminho: readonly string[]): string {
+  const q = ABAS_DAS_TELAS[tela];
+  if (!q) return montarEndereco(tela);
+  const fora = caminho[0] || q.padrao;
+  const filhas = q.filhas ? q.filhas[fora] : undefined;
+  const dentro = filhas && caminho[1] && caminho[1] !== filhas.padrao ? caminho[1] : undefined;
+  if (!dentro && fora === q.padrao) return montarEndereco(tela);
+  return montarEndereco(tela, [nomeDaAba(fora), ...(dentro ? [nomeDaAba(dentro)] : [])]);
+}
+
+/** O endereço de agora é desta tela (a tela em si, uma aba dela ou a janela de um registro dela)? A OP e as outras telas, não. Trocar para a tela em que já se está não mexe no endereço. */
+export function enderecoEhDaTela(hash: string, tela: string): boolean {
+  const partes = partesDoEndereco(hash);
+  return partes.length > 0 && !registroDosPedacos(partes) && idDaTela(partes[0], [tela]) === tela;
 }
 
 const RE_CODIGO_INTERNO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -277,6 +382,43 @@ export function conferirQuadroDeNomes(ids: readonly string[]): string[] {
   }
   for (const [contexto, alvo] of Object.entries(REGISTRO_DO_CONTEXTO)) {
     if (!REGISTROS_DAS_TELAS[alvo.tela]?.includes(alvo.tipo)) problemas.push(`o recado "${contexto}" aponta para ${alvo.tela}/${alvo.tipo}, que a tela não conhece`);
+  }
+  problemas.push(...conferirQuadroDeAbas(ids));
+  return problemas;
+}
+
+/**
+ * Confere o quadro de abas (Fase 4; usado pelo teste, não pela tela): tela que não existe, aba padrão que não está na lista, nome de aba repetido ou vazio depois de normalizado, aba de dentro de uma aba que
+ * não existe e, o caso mais fácil de errar, aba com o nome de um registro da própria tela E abas de dentro: `#/sac/os/<x>` seria lido como a OS `<x>`, e não como a aba de dentro.
+ * O quadro e os registros podem ser passados para o teste provar que cada erro é pego.
+ */
+export function conferirQuadroDeAbas(
+  ids: readonly string[],
+  quadro: Readonly<Record<string, QuadroDeAbas>> = ABAS_DAS_TELAS,
+  registros: Readonly<Record<string, readonly string[]>> = REGISTROS_DAS_TELAS,
+): string[] {
+  const problemas: string[] = [];
+  const conferirNivel = (onde: string, n: AbasDeUmNivel) => {
+    if (!n.abas || n.abas.length === 0) { problemas.push(`${onde} não tem nenhuma aba`); return; }
+    if (!n.abas.includes(n.padrao)) problemas.push(`${onde}: a aba padrão "${n.padrao}" não está na lista de abas`);
+    const vistos = new Map<string, string>();
+    for (const a of n.abas) {
+      const nome = nomeDaAba(a);
+      if (!nome) { problemas.push(`${onde}: a aba "${a}" fica sem nome no endereço`); continue; }
+      const dono = vistos.get(nome);
+      if (dono) problemas.push(`${onde}: as abas "${dono}" e "${a}" usam o mesmo nome "${nome}" no endereço`);
+      else vistos.set(nome, a);
+    }
+  };
+  for (const [tela, q] of Object.entries(quadro)) {
+    if (!ids.includes(tela)) { problemas.push(`a tela "${tela}" tem abas no endereço, mas não é uma tela do menu`); continue; }
+    conferirNivel(`as abas de "${tela}"`, q);
+    const palavras = registros[tela] || [];
+    for (const [pai, filhas] of Object.entries(q.filhas || {})) {
+      if (!q.abas.includes(pai)) problemas.push(`a tela "${tela}" tem abas de dentro de "${pai}", que não é uma aba dela`);
+      conferirNivel(`as abas de dentro de "${pai}" em "${tela}"`, filhas);
+      if (palavras.includes(nomeDaAba(pai))) problemas.push(`a aba "${pai}" de "${tela}" tem o nome de um registro da tela e abas de dentro: o endereço ficaria ambíguo`);
+    }
   }
   return problemas;
 }

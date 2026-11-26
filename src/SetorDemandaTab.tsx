@@ -17,6 +17,7 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { confirmar, pedirTexto } from './Feedback';
 import { hojeISO, diaISO, Faixa, Botao, Chips, Abas, Selo } from './Interface';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import {
   mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline, mdiAccountWrenchOutline,
 } from '@mdi/js';
@@ -351,13 +352,15 @@ function RelatoriosSetor({ setor, cor }) {
 // ordem pedida pelo usuário em 21/09/2026 é: relatório, requisições, análise,
 // "Compras — Demandas" e histórico de movimentações. Os outros setores seguem
 // com as duas abas de sempre.
-export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico = false, slotRequisicoes = null }) {
+// 26/11/2026 (Fase 4 do plano de endereços): `telaEndereco` é o id da tela quando este componente É a tela inteira (Serralheria, Chicotes, Laboratório): aí as abas Demandas e
+// Relatórios ganham endereço. Dentro de outra tela (a aba do Telecom, por exemplo) ele não passa nada e as abas ficam só locais, como antes.
+export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico = false, slotRequisicoes = null, telaEndereco = '' }: any) {
   const [demandas, setDemandas]       = useState([]);
   const [sacOrdensMap, setSacOrdensMap] = useState<Record<string,any>>({});
   const [loading, setLoading]         = useState(false);
   const [filtro, setFiltro]           = useState('Todos');
   const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
-  const [abaAtiva, setAbaAtiva]       = useState('demandas');
+  const [abaAtiva, setAbaAtiva]       = useAbaNoEndereco({ tela: telaEndereco }) as [string, (v: any) => void];
   const [tick, setTick]               = useState(0);
   const [pedindoTerceiro, setPedindoTerceiro] = useState(false);   // janela "Solicitar serviço de terceiro" (só na Serralheria, T2 de Serviços de terceiros, 23/11/2026)
 

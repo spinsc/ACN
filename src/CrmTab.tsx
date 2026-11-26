@@ -40,6 +40,7 @@ import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO
 import { lerEntregasDosPedidos, chegadaDoPedido, frasePorFornecedor, dataCurta } from './ComprasEntregas';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline,
@@ -308,7 +309,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const podeVer             = podeVerTotais && currentUser?.ver_valores !== false;
 
   // ── estado principal ──
-  const [secaoCrm, setSecaoCrm]     = useState<'funil'|'contatos'>('funil');
+  // 26/11/2026 (Fase 4 do plano de endereços): as oito abas do CRM (Kanban… Contatos) são UMA barra só e têm endereço (#/crm/agenda…); Kanban é a padrão. `secaoCrm` e `abaInterna`
+  // continuam existindo, mas derivados dessa aba: Contatos é a seção própria e as outras sete são o funil. Faturamentos só abre para quem tem a permissão.
+  const [abaCrm, setAbaCrm] = useAbaNoEndereco({ tela: 'crm', permitida: (a) => a !== 'faturamentos' || podeVerFaturamentos }) as [string, (v: any) => void];
+  const secaoCrm: 'funil'|'contatos' = abaCrm === 'contatos' ? 'contatos' : 'funil';
   const [funil, setFunil]           = useState<'licitacao'|'venda_direta'>('venda_direta');
   const [estagios, setEstagios]     = useState<any[]>([]);
   const [ops, setOps]               = useState<any[]>([]);
@@ -317,7 +321,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [vendas, setVendas]         = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
-  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'|'demandas'>('kanban');
+  const abaInterna = (abaCrm === 'contatos' ? 'kanban' : abaCrm) as 'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'|'demandas';
   // Celular: kanban mostra uma etapa por vez e o card muda de etapa por "Mover para…" (sem arrastar)
   const celular = useCelular();
   const toque = useToque(); // celular ou tablet: sem arrastar
@@ -612,7 +616,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     // 26/11/2026 (alívio de CPU do Supabase, F0.4 do plano de migração): saiu a assinatura de tempo real desta tabela, que não está na publicação do banco (o aviso nunca chegava; só ocupava o tempo real).
   }, [load]);
 
-  useEffect(() => { setAbaInterna('kanban'); }, [funil]);
+  // (até 26/11/2026 havia aqui um efeito que voltava ao Kanban quando o funil mudava; o funil nunca muda, e no mount ele sobrescreveria a aba do endereço)
 
   // 26/11/2026 (plano de endereços e rotas, Fase 3): o card aberto tem endereço próprio, `#/crm/card/<código>` (F5, Voltar, Avançar e link colado abrem o mesmo card). Quem abre o card
   // por um clique na lista, uma Menção ou um aviso só faz o que sempre fez (`setModalAbrir`) e o gancho escreve o endereço; quem chega PELO endereço (link colado, busca geral, Análises,
@@ -639,7 +643,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     const tentarAbrir = () => {
       const pend = (window as any).__acnDeepLink;
       // 03/11/2026: demanda avulsa que tem o Comercial como destino (Menções): só abre a aba Demandas; o painel dela lê o recado (não o apago aqui) ao montar e abre a demanda
-      if (pend?.contexto === 'demanda_avulsa') { setSecaoCrm('funil'); setAbaInterna('demandas'); return; }
+      if (pend?.contexto === 'demanda_avulsa') { setAbaCrm('demandas'); return; }
       if (!pend || pend.contexto !== 'crm') return;
       (window as any).__acnDeepLink = null;
       supabase.from('crm_oportunidades').select('*').eq('id', pend.contextoId).maybeSingle()
@@ -3202,8 +3206,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         </>)}
         abas={
           <Abas
-            ativa={secaoCrm === 'contatos' ? 'contatos' : abaInterna}
-            onChange={id => { if (id === 'contatos') setSecaoCrm('contatos'); else { setSecaoCrm('funil'); setAbaInterna(id as any); } }}
+            ativa={abaCrm}
+            onChange={id => setAbaCrm(id)}
             itens={[
               { id:'kanban',    rotulo:'Kanban', icone: mdiViewColumnOutline },
               { id:'agenda',    rotulo:'Agenda', icone: mdiCalendarMonthOutline },

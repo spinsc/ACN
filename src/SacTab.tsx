@@ -36,6 +36,7 @@ import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline, mdiAccountWrenchOutline } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): a OS aberta tem endereço próprio
 import { ModalComprasDaOS } from './ComprasLigadas';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OS (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
@@ -283,7 +284,9 @@ export default function SacTab({ currentUser }) {
 }
 
 function SacTabCompleto({ currentUser }) {
-  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'|'garantia'>(() => (window as any).__acnDeepLink?.contexto === 'garantia' ? 'garantia' : 'os');
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba da tela tem endereço (#/sac/garantia…); a aba das OS é a padrão e fica sem nome na barra. O link de um aviso da Garantia
+  // (recado __acnDeepLink) só dá o valor de partida: se o endereço já traz uma aba, é ele que vale.
+  const [abaAtiva, setAbaAtiva]         = useAbaNoEndereco({ tela: 'sac', inicial: () => (window as any).__acnDeepLink?.contexto === 'garantia' ? 'garantia' : 'os' }) as [string, (v: any) => void];
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
   const [loadNfc,      setLoadNfc]      = useState(false);
   const [nfcStatus,    setNfcStatus]    = useState('');

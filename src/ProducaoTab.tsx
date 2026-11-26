@@ -24,6 +24,7 @@ import { boxesDaOp, textoDosBoxes, erroDosBoxes, ocupacaoDosBoxes, planejarTroca
 import { confirmar, pedirTexto } from './Feedback';
 import { ParticipantesPicker, novosParticipantes, notificarParticipantes } from './Participantes';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { carregarPendencias, frasePendenciasNaoLidas } from './OpPendencias';
 import { osSemCobranca } from './SacFluxo';
 import { EditorDeViagem } from './ViagensTab';
@@ -2621,7 +2622,8 @@ ${frasePendenciasNaoLidas(falhas)}`);
     if (tipo === 'gerenciar_equipe') setModalGerenciarEquipe(opl);
   };
 
-  const [abaProducao, setAbaProducao] = useState('producao');
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/producao/agenda…); Produção é a padrão e fica sem nome na barra
+  const [abaProducao, setAbaProducao] = useAbaNoEndereco({ tela: 'producao' }) as [string, (v: any) => void];
   const [maisFiltros, setMaisFiltros] = useState(false);
   const emRetrabalho = opls.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho');
 

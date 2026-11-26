@@ -32,6 +32,7 @@ import { ModalReceberPedido } from './LogisticaTab';
 import { entregasDoPedido, lerEntregas, gravarEntregas, salvarDatasDasEntregas, dataMaisProxima, temEntrega } from './ComprasEntregas';
 import { PrevisaoDoPedido, QuadroDeEntregas, ModalPrazoDeEntrega } from './ComprasEntregasView';
 import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): o pedido aberto na Mesa de Cotações tem endereço próprio
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { listarEsperandoAprovacao, rotuloDaAlcada } from './AprovacaoCompras';
 import { CampoMoeda } from './CampoMoeda';
 import { numeroOuNulo } from './LerValor';
@@ -1150,7 +1151,8 @@ export default function ComprasTab({ currentUser }) {
   const [modalRecebidos, setModalRecebidos]     = useState<any[]|null>(null);
   const [modalColetas, setModalColetas]         = useState(false);
   // Fornecedores cadastrados (16/11/2026): a cotação só aceita fornecedor da lista; o cadastro é a aba "Fornecedores" e o atalho "Cadastrar fornecedor" da cotação
-  const [secao, setSecao] = useState<'pedidos'|'fornecedores'>('pedidos');
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba aberta mora também no endereço (`#/compras/fornecedores`; `#/compras` é "Requisições")
+  const [secao, setSecao] = useAbaNoEndereco({ tela: 'compras' });
   const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [erroFornecedores, setErroFornecedores] = useState('');
   const [cadastroDaCotacao, setCadastroDaCotacao] = useState<null | 'nova' | 'edicao'>(null);
@@ -1514,6 +1516,9 @@ export default function ComprasTab({ currentUser }) {
   // o controle inteiro desta feature. A Mesa de Cotações (abrirModalCotacoes)
   // é agora o único caminho de Em Andamento → Comprado.
   const abrirModalCotacoes = async (p: any) => {
+    // 26/11/2026 (Fase 4): a Mesa só existe na aba "Requisições" (a aba "Fornecedores" é outra tela, sem a janela). Uma Menção ou um link que abre a mesa com a aba Fornecedores à vista
+    // a trazia para um estado em que a janela abria e não aparecia. Com o endereço de um pedido na barra a troca de aba não escreve nada (a janela está por cima), e o Voltar volta à aba de antes.
+    setSecao('pedidos');
     setModalCotacoes(p);
     setNovaCotacao(novoFormCotacao(p));
     setNovoAnexoCotacao(null);

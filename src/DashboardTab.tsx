@@ -1235,9 +1235,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'minhas_solicitacoes': return <MinhasSolicitacoesTab currentUser={currentUser} />;
       case 'manuais':      return <ManuaisTab currentUser={currentUser} />;
       case 'pcp':          return <PCPTab currentUser={currentUser} />;
-      case 'serralheria':  return <SetorDemandaTab currentUser={currentUser} setor="Serralheria" cor="#ea580c" />;
-      case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" />;
-      case 'laboratorio':  return <SetorDemandaTab currentUser={currentUser} setor="Laboratorio" cor="#0891b2" />;
+      case 'serralheria':  return <SetorDemandaTab currentUser={currentUser} setor="Serralheria" cor="#ea580c" telaEndereco="serralheria" />;
+      case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" telaEndereco="chicotes" />;
+      case 'laboratorio':  return <SetorDemandaTab currentUser={currentUser} setor="Laboratorio" cor="#0891b2" telaEndereco="laboratorio" />;
       // Compras: uma tela só, sem abas — relatório, requisições (onde toda
       // demanda de compra cai), análise, Compras—Demandas e histórico.
       case 'compras':         return <SetorDemandaTab currentUser={currentUser} setor="Compras" cor="#16a34a"

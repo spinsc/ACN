@@ -94,7 +94,7 @@ const DEFEITOS = [
     { arquivo: 'src/RegistroNoEndereco.ts', de: "if (!ehCodigoInterno(chave)) { naoAbriu(''); return; }", para: "if (false && !ehCodigoInterno(chave)) { naoAbriu(''); return; }" },
   ] },
   { id: 'v', nome: 'trocar de tela sobrescreve o endereço do registro que a tela já mostra (a Menção de card abriria e fecharia o card)', cenarios: '^C38 crm', trocas: [
-    { arquivo: 'src/useNavegacao.ts', de: 'else if (!registroDaTelaNoEndereco(enderecoAtual(), id)) irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });', para: 'else irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });' },
+    { arquivo: 'src/useNavegacao.ts', de: 'else if (!enderecoEhDaTela(enderecoAtual(), id)) irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });', para: 'else irParaEndereco(montarEndereco(id), { substituir: !!opcoes.substituir });' },
   ] },
   { id: 'w', nome: 'a dica do recado some no caminho (a Menção de OS abre o resumo em vez do Acompanhamento)', cenarios: '^C38 sac', trocas: [
     { arquivo: 'src/useNavegacao.ts', de: 'if (doRecado?.dica) guardarDicaDeAbertura(', para: 'if (false && doRecado?.dica) guardarDicaDeAbertura(' },
@@ -128,6 +128,28 @@ const DEFEITOS = [
   ] },
   { id: 'ag', nome: 'o Voltar do navegador deixa de fechar a janela do registro (o endereço mudou e a janela fica)', cenarios: '^C32 crm', trocas: [
     { arquivo: 'src/RegistroNoEndereco.ts', de: 'atual.fechar();', para: '/* atual.fechar(); */' },
+  ] },
+  // ── Fase 4 (abas de dentro de cada tela, 26/11/2026) ──
+  { id: 'ba', nome: 'a troca de aba deixa de criar um passo no histórico (troca o endereço do passo atual)', cenarios: '^C46 compras', trocas: [
+    { arquivo: 'src/AbaNoEndereco.ts', de: 'if (valida(valor)) alinhar(valor, false);', para: 'if (valida(valor)) alinhar(valor, true);' },
+  ] },
+  { id: 'bb', nome: 'o Voltar e o Avançar do navegador deixam de trocar a aba (o endereço muda e a aba fica)', cenarios: '^C46 compras', trocas: [
+    { arquivo: 'src/AbaNoEndereco.ts', de: 'if (dita !== atual) { abaRef.current = dita; setAbaEstado(dita); }', para: '/* if (dita !== atual) { abaRef.current = dita; setAbaEstado(dita); } */' },
+  ] },
+  { id: 'bc', nome: 'a aba padrão passa a aparecer escrita no endereço (#/compras/pedidos em vez de #/compras)', cenarios: '^C46 compras', trocas: [
+    { arquivo: 'src/Rotas.ts', de: 'if (!dentro && fora === q.padrao) return montarEndereco(tela);', para: 'if (false && !dentro && fora === q.padrao) return montarEndereco(tela);' },
+  ] },
+  { id: 'bd', nome: 'a aba escreve o endereço por cima da janela de um registro (o pedido de compra perde o endereço dele)', cenarios: '^C47', trocas: [
+    { arquivo: 'src/AbaNoEndereco.ts', de: "if (!quadro() || lerDoEndereco().tipo === 'fora') return;", para: 'if (!quadro()) return;' },
+  ] },
+  { id: 'be', nome: 'clicar no menu da tela em que já se está derruba a aba (o endereço volta ao da tela, sem aba)', cenarios: '^C46 terceiros', trocas: [
+    { arquivo: 'src/useNavegacao.ts', de: 'else if (!enderecoEhDaTela(enderecoAtual(), id)) irParaEndereco(', para: 'else irParaEndereco(' },
+  ] },
+  { id: 'bf', nome: 'abrir a mesa do pedido deixa de levar a tela do Compras para a aba Requisições (a janela abre numa aba onde ela não existe)', cenarios: '^C47', trocas: [
+    { arquivo: 'src/ComprasTab.tsx', de: "    setSecao('pedidos');", para: "    // setSecao('pedidos');" },
+  ] },
+  { id: 'bg', nome: 'o endereço da aba deixa de mandar na aba que a tela lembrava (Serviços de terceiros abre sempre na aba guardada)', cenarios: '^C46 terceiros', trocas: [
+    { arquivo: 'src/AbaNoEndereco.ts', de: "if (lido.tipo === 'aba' && valida(lido.aba)) return lido.aba;", para: "if (false && lido.tipo === 'aba' && valida(lido.aba)) return lido.aba;" },
   ] },
 ];
 

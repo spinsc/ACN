@@ -25,6 +25,7 @@ import { TIPOS_NEGOCIO_CRM } from './MarkupTermometro';
 import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
 import Icone from './Icone';
+import { useAbaNoEndereco } from './AbaNoEndereco';
 import { mdiFilePdfBox, mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
 import { CampoMoeda } from './CampoMoeda';
 
@@ -2493,11 +2494,13 @@ export default function RHTab({ currentUser }) {
   // 20/11/2026: o RH é um sistema de abas. Quem chega pelo botão da tela Ponto (window.__acnDeepLink.rhAba) cai direto na aba pedida.
   // 25/11/2026: o aviso de ponto do Calendário leva direto à parte "A tratar" do Relógio Ponto (`pontoVisao`); lido ANTES do rhAba, que limpa o pedido
   const [visaoDoPonto] = useState(() => String((window as any).__acnDeepLink?.pontoVisao || ''));
-  const [aba, setAba] = useState(() => {
+  // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/rh/ponto…); Visão geral é a padrão. O recado rhAba é só a aba de partida: se o endereço já traz uma aba, é ele que vale
+  // (o recado é lido e apagado do mesmo jeito).
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'rh', inicial: () => {
     const pedida = (window as any).__acnDeepLink?.rhAba;
     if (pedida) { (window as any).__acnDeepLink = null; return ['geral','colaboradores','ponto','comissoes','relatorios','autorizacoes'].includes(pedida) ? pedida : 'geral'; }
     return 'geral';
-  });
+  } }) as [string, (v: any) => void];
 
   const isAdmin = true; // acesso já controlado pelo dashboard (abas_permitidas)
   const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;
