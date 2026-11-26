@@ -250,6 +250,25 @@ const DEFEITOS = [
   { id: 'df', nome: 'a correção da barra sem passo (a troca silenciosa do Ponto) passa a criar passo no histórico', cenarios: '^C67b', trocas: [
     { arquivo: 'src/AbaNoEndereco.ts', de: 'if (valida(nova)) alinhar(nova, true);', para: 'if (valida(nova)) alinhar(nova, false);' },
   ] },
+  // ── Fase 5, parte 4 (26/11/2026): avisos do Calendário, botão "Abrir" do Calendário e vínculo de OP abrem pelo endereço ──
+  { id: 'dr', nome: 'o aviso de demanda do Calendário volta ao recado antigo (troca de aba em vez de abrir por cima)', cenarios: '^C75|^C76', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "if (alvo && alvo.contexto === 'demanda_avulsa' && ehCodigoInterno(alvo.id)) {", para: "if (false && alvo && alvo.contexto === 'demanda_avulsa' && ehCodigoInterno(alvo.id)) {" },
+  ] },
+  { id: 'ds', nome: 'o aviso de entrega de OP do Calendário volta ao recado antigo', cenarios: '^C75|^C76', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "if (alvo && alvo.contexto === 'op' && ehCodigoInterno(alvo.id)) {", para: "if (false && alvo && alvo.contexto === 'op' && ehCodigoInterno(alvo.id)) {" },
+  ] },
+  { id: 'dt', nome: 'o painel de Avisos não fecha quando o registro abre por cima', cenarios: '^C75', trocas: [
+    { arquivo: 'src/AvisosOpPanel.tsx', de: "if (abrirRegistroDoAviso(a, onNavigate ? (aba: string) => onNavigate(aba) : undefined)) onClose?.();", para: "abrirRegistroDoAviso(a, onNavigate ? (aba: string) => onNavigate(aba) : undefined);" },
+  ] },
+  { id: 'du', nome: 'o botão "Abrir" do Calendário volta a só trocar de aba', cenarios: '^C76', trocas: [
+    { arquivo: 'src/CalendarioTab.tsx', de: "contexto_id: `${ev.tipo}:${ev.id}:${ev.dia}`", para: "contexto_id: ''" },
+  ] },
+  { id: 'dv', nome: 'o vínculo de OP volta a trocar de aba pelo recado antigo (a Produção)', cenarios: '^C77', trocas: [
+    { arquivo: 'src/VinculoPicker.tsx', de: "if (v.tipo === 'op' && ehCodigoInterno(v.id)) {", para: "if (false && v.tipo === 'op' && ehCodigoInterno(v.id)) {" },
+  ] },
+  { id: 'dw', nome: 'a data de entrega de OP deixa de ser fonte com endereço no Calendário', cenarios: '^C75', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "  op_entrega: 'op',", para: "  // op_entrega: 'op'," },
+  ] },
   // ── Fase 5, parte 3 (26/11/2026): os filtros no endereço ──
   { id: 'dh', nome: 'mudar o filtro deixa de escrever no endereço', cenarios: '^C69', trocas: [
     { arquivo: 'src/FiltroNoEndereco.ts', de: '    gravar(proximo);', para: '    /* gravar(proximo); */' },

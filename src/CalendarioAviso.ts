@@ -5,8 +5,13 @@
 // então o botão só trocava de aba e a licitação não abria ("quando clico para ir onde está a suposta menção, não vai").
 // Aqui a chave vira o contexto e o id que a tela de origem já sabe abrir (os mesmos das menções comuns).
 // Decisão do usuário no mesmo dia: esses avisos não são menções; moram no painel Avisos (AvisosOpPanel.tsx), e Menções os ignora.
+// Fase 5, parte 4 (26/11/2026): a demanda geral tem endereço próprio (`#/demanda/<código>`), então o aviso (e o botão "Abrir" do Calendário) a abre
+// POR CIMA da tela em que a pessoa está, como a Menção de demanda já fazia, em vez de trocar de aba pelo recado antigo.
+import { abrirDemandaPeloEndereco } from './DemandaNoEndereco';
+import { abrirOpPeloEndereco } from './OpNoEndereco';
+import { ehCodigoInterno } from './Rotas';
 
-export type AlvoDoAviso = { contexto: 'licitacao' | 'crm' | 'compra' | 'demanda_avulsa' | 'sac' | 'terceiro_servico'; id: string };
+export type AlvoDoAviso = { contexto: 'licitacao' | 'crm' | 'compra' | 'demanda_avulsa' | 'sac' | 'terceiro_servico' | 'op'; id: string };
 
 // Só entram as fontes cuja tela de origem comprovadamente abre o registro pelo id (licitação e CRM pelo `analise:abrir-origem`; compra,
 // demanda avulsa, OS do SAC e serviço de terceiro pelo `acn:abrir-registro`). As outras fontes do calendário (chegada de veículo, entrega de OP, vistoria,
@@ -22,6 +27,9 @@ const CONTEXTO_DA_FONTE: Record<string, AlvoDoAviso['contexto']> = {
   demanda_avulsa: 'demanda_avulsa',
   sac_prazo: 'sac',
   terceiro_servico: 'terceiro_servico',
+  // 26/11/2026 (Fase 5, parte 4): a data de entrega e a de chegada do veículo guardam o código da OP, e a OP tem endereço próprio: abre por cima da tela de agora
+  op_entrega: 'op',
+  op_chegada_veiculo: 'op',
 };
 
 // Nome da fonte para o cabeçalho do aviso no painel Avisos (a chave começa pela fonte).
@@ -61,12 +69,21 @@ export function diaDoAvisoDoCalendario(chave: string | null | undefined): string
 /**
  * Abre o registro de origem do aviso (quando a tela de origem sabe abrir) e leva à aba de destino.
  * `irParaAba` troca de aba e fecha o painel (quem chama passa a função da casca).
+ * Devolve `true` quando o registro abriu POR CIMA da tela de agora (a demanda, pelo endereço): não há aba para trocar e quem chamou só precisa fechar o seu painel.
  */
-export function abrirRegistroDoAviso(aviso: { contexto_id?: string | null; aba_destino?: string | null }, irParaAba?: (aba: string) => void) {
+export function abrirRegistroDoAviso(aviso: { contexto_id?: string | null; aba_destino?: string | null }, irParaAba?: (aba: string) => void): boolean {
   // Ponto (P3, 25/11/2026): o aviso de batida incompleta ou falta é de um DIA e de várias pessoas, não de um registro: leva à aba RH já na parte
   // "A tratar" do Relógio Ponto (o RHTab lê o pedido ao montar e o apaga).
   if (String(aviso.contexto_id || '').startsWith('ponto_dia:')) (window as any).__acnDeepLink = { rhAba: 'ponto', pontoVisao: 'tratar' };
   const alvo = alvoDoAvisoDoCalendario(aviso.contexto_id);
+  if (alvo && alvo.contexto === 'demanda_avulsa' && ehCodigoInterno(alvo.id)) {
+    abrirDemandaPeloEndereco(alvo.id);
+    return true;
+  }
+  if (alvo && alvo.contexto === 'op' && ehCodigoInterno(alvo.id)) {
+    abrirOpPeloEndereco(alvo.id);
+    return true;
+  }
   if (alvo) {
     if (alvo.contexto === 'crm' || alvo.contexto === 'licitacao') {
       // o mesmo caminho das menções de CRM e licitação (DashboardTab: troca a aba e abre o card)
@@ -79,6 +96,7 @@ export function abrirRegistroDoAviso(aviso: { contexto_id?: string | null; aba_d
     }
   }
   if (aviso.aba_destino && irParaAba) irParaAba(aviso.aba_destino);
+  return false;
 }
 
 /** `fonte:ref_id:AAAA-MM-DD` → o registro de origem, ou `null` quando a chave não é conhecida (a tela só troca de aba). */

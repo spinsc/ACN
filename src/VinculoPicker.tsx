@@ -12,6 +12,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { Botao, Chips } from './Interface';
 import Icone from './Icone';
+import { abrirOpPeloEndereco } from './OpNoEndereco';
+import { ehCodigoInterno } from './Rotas';
 import { mdiLinkVariant, mdiClose } from '@mdi/js';
 
 export interface VinculoValue { tipo: string; id: string; descricao: string; }
@@ -69,6 +71,10 @@ export async function abrirVinculo(v: VinculoValue | null | undefined) {
     alert('Você não tem acesso à tela de Formação de preços. Peça a quem tem acesso para abrir esta formação: ' + (v.descricao || ''));
     return;
   }
+
+  // Fase 5, parte 4 (26/11/2026): a OP tem endereço próprio e abre POR CIMA da tela em que a pessoa está (inclusive de dentro de outra janela), sem trocar de aba
+  // pelo recado antigo; o vínculo guarda o código interno da OP.
+  if (v.tipo === 'op' && ehCodigoInterno(v.id)) { abrirOpPeloEndereco(String(v.id)); return; }
 
   let aba: string | null = TIPO_ABA[v.tipo];
   if (v.tipo === 'ofi') {

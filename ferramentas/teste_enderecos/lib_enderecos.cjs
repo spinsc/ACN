@@ -52,6 +52,12 @@ async function abrir({ largura = 1500, altura = 900, toque = false, usuario = US
     const metodo = r.method();
     const externo = vaiAoBancoOuParaFora(r.url());   // vai ao banco (em qualquer endereço) ou sai do computador
     const responder = (x) => r.respond({ status: x.status || 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify(x.body) });
+    // Fase 5, parte 4 (26/11/2026): as datas do Calendário podem ser simuladas (a leitura é POST e nunca passava pela simulação)
+    if (externo && metodo === 'POST' && /\/rest\/v1\/rpc\/calendario_eventos(\?|$)/.test(url)) {
+      const resp = simular(url, r);
+      if (resp && typeof resp.then === 'function') return resp.then(x => (x ? responder(x) : r.continue(comCracha(r))));
+      if (resp) return responder(resp);
+    }
     // leituras do banco que só LEEM (funções): passam para o banco real
     if (externo && metodo === 'POST' && /\/rest\/v1\/rpc\/(entidades_com_alteracao_nao_vista|desde_quando_na_etapa|calendario_eventos|inicio_aniversariantes_do_mes|inicio_aniversariantes_cobertura|ponto_meu_rh_id)/.test(url)) {
       return r.continue(comCracha(r));

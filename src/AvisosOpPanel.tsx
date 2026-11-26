@@ -114,7 +114,10 @@ export default function AvisosOpPanel({ currentUser, onClose, onCountChange, onC
     load();
   };
 
-  const abrirData = (a: any) => abrirRegistroDoAviso(a, onNavigate ? (aba: string) => onNavigate(aba) : undefined);
+  const abrirData = (a: any) => {
+    // a demanda abre por cima da tela de agora (endereço próprio): não há aba para trocar, então o painel se fecha aqui (Fase 5, parte 4, 26/11/2026)
+    if (abrirRegistroDoAviso(a, onNavigate ? (aba: string) => onNavigate(aba) : undefined)) onClose?.();
+  };
 
   const limparUm = async (a: any) => {
     setAvisos(prev => prev.filter(x => x.id !== a.id));

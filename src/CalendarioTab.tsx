@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { abrirRegistroDoAviso } from './CalendarioAviso';
 import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
 import { Faixa, Botao, Chips, Selo } from './Interface';
 import Icone from './Icone';
@@ -211,7 +212,10 @@ function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onCl
                 <div className="acn-acoes-linha">
                   <Botao pequeno onClick={() => {
                     if (ev.tipo === 'ponto_dia') (window as any).__acnDeepLink = { rhAba: 'ponto', pontoVisao: 'tratar' };   // P3: leva à parte "A tratar" do Relógio Ponto
-                    window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: ABA_POR_FONTE[ev.tipo] } }));
+                    // Fase 5, parte 4 (26/11/2026): as fontes com registro (licitação, card do CRM, compra, demanda, OS e serviço de terceiro) abrem o REGISTRO, como o aviso do
+                    // painel Avisos faz (mesma chave `fonte:ref:dia`); as outras só trocam de aba, como sempre foi
+                    abrirRegistroDoAviso({ contexto_id: `${ev.tipo}:${ev.id}:${ev.dia}`, aba_destino: ABA_POR_FONTE[ev.tipo] },
+                      (aba: string) => window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba } })));
                   }} title="Abrir a tela de origem desta data">Abrir</Botao>
                 </div>
               )}
@@ -311,7 +315,7 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
       const sit = situacaoDoPrazo(r.dia, hoje, !!r.alerta, !!r.concluido);
       const raw = tipo === 'compromisso' ? { ...(r.extra || {}), concluido: !!r.concluido } : r;
       const ev: any = {
-        tipo, id: r.ref_id, titulo: r.titulo, hora,
+        tipo, id: r.ref_id, dia: r.dia, titulo: r.titulo, hora,
         horaOrdem: hora ? parseInt(hora.slice(0, 2)) * 60 + parseInt(hora.slice(3, 5)) : -1,
         familia: sit ? 'erro' : (tipo === 'compromisso' ? (SETOR_FAMILIA[raw.setor] || SETOR_FAMILIA.geral) : (FAMILIA_POR_FONTE[tipo] || 'neutro')),
         raw, detalhe: r.detalhe, responsavel: r.responsavel, situacao: sit,

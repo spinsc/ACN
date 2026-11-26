@@ -3028,6 +3028,148 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Fase 5, parte 4 (26/11/2026): os avisos do Calendário (painel Avisos e botão "Abrir" do Calendário) e o vínculo abrem o registro que TEM endereço pelo endereço, por cima da tela de agora.
+  const AVISOS_CAL = { lista: [] };
+  const hojeLocal = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const avisoDoCal = (n, chave, aba, texto) => ({
+    id: '99999999-0000-4000-8000-0000000000' + (50 + n), mencionado_id: ID_ZZTESTE, mencionado_nome: 'ZZTESTE', mencionante_nome: 'Sistema', contexto: 'calendario', contexto_id: chave,
+    contexto_descricao: texto, aba_destino: aba, texto_trecho: texto, lida: false, resolvida: false, criado_em: new Date().toISOString(),
+  });
+  const abrirPainelAvisos = (page) => page.evaluate(() => { const b = [...document.querySelectorAll('.acn-notif')].find(x => /Avisos|aviso\(s\)/.test(x.title || '') || /Avisos/.test(x.innerText)); if (!b) throw new Error('botão de Avisos não achado'); b.click(); });
+  const clicarAbrirDoAviso = async (page, rotulo) => {
+    await page.waitForFunction((r) => [...document.querySelectorAll('.acn-avo-item')].some(i => i.innerText.includes(r)), { timeout: 20000 }, rotulo);
+    await page.evaluate((r) => [...document.querySelectorAll('.acn-avo-item')].find(i => i.innerText.includes(r)).querySelector('.acn-avo-abrir').click(), rotulo);
+  };
+  const painelAvisosAberto = (page) => page.evaluate(() => !!document.querySelector('.acn-avo-item, .acn-avo-vazio') || !!document.querySelector('[aria-label="Avisos"]'));
+
+  await cenario('C75 Avisos do Calendário: a demanda e a OP abrem pelo endereço, por cima da tela atual (sem trocar de aba), e o painel fecha', {
+    simular: (url, r) => (r.method() === 'GET' && url.includes('/rest/v1/mencoes?') && url.includes('contexto=eq.calendario') ? { status: 200, body: AVISOS_CAL.lista } : null),
+  }, async ({ page }) => {
+    const Dm = await demandasDeTeste(); const ops = await opsDeTeste();
+    if (!Dm.a || !ops.comum) { confere('há demanda e OP para testar', false, JSON.stringify({ d: !!Dm.a, o: !!ops.comum })); return; }
+    const dia = hojeLocal();
+    AVISOS_CAL.lista = [
+      avisoDoCal(1, 'demanda_avulsa:' + Dm.a.id + ':' + dia, 'ajustes', 'Prazo da demanda ' + Dm.a.titulo),
+      avisoDoCal(2, 'op_entrega:' + ops.comum.id + ':' + dia, 'crm', 'Entrega da OP ' + ops.comum.opl),
+    ];
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    // parte do Início de propósito: lá nenhum painel de demanda ou de OP está montado para escutar o recado antigo, então só o endereço abre o registro (em Compras o recado antigo também abria a janela e o defeito passava)
+    await espera(1500);
+    let e = await estadoD(page); const h0 = e.historico; const hash0 = e.hash;
+    confere('parte da tela Início', SAUDACAO.test(e.telaDeBaixo), e.telaDeBaixo.slice(0, 80));
+    // — a demanda —
+    await abrirPainelAvisos(page);
+    await clicarAbrirDoAviso(page, 'Demanda geral');
+    await esperarD(page); await espera(800);
+    e = await estadoD(page);
+    confere('demanda: a janela abriu pelo endereço (#/demanda/<código>)', e.hash === '#/demanda/' + Dm.a.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('demanda: NÃO trocou de aba (o aviso apontava para "ajustes"): a tela de baixo segue sendo o Início', SAUDACAO.test(e.telaDeBaixo), e.telaDeBaixo.slice(0, 80));
+    confere('demanda: o painel de Avisos fechou', !(await painelAvisosAberto(page)));
+    confere('demanda: UM passo no histórico', e.historico === h0 + 1, h0 + ' → ' + e.historico);
+    await fecharD(page); await esperarSemD(page); await espera(700);
+    e = await estadoD(page);
+    confere('demanda: o X volta ao endereço de antes', e.hash === hash0 && e.janelas === 0, JSON.stringify({ h: e.hash, antes: hash0 }));
+    // — a OP —
+    const rot = 'OP ' + ops.comum.opl;
+    await abrirPainelAvisos(page);
+    await clicarAbrirDoAviso(page, 'Entrega de OP');
+    await esperarJanelaOp(page, rot); await espera(800);
+    let o = await estadoOp(page);
+    confere('OP: a janela da OP abriu pelo endereço (#/op/…)', /^#\/op\//.test(o.hash) && o.janelas === 1 && o.rotulos[0] === rot, JSON.stringify({ h: o.hash, j: o.janelas, r: o.rotulos }));
+    confere('OP: NÃO trocou de aba (o aviso apontava para o CRM): a tela de baixo segue sendo o Início', SAUDACAO.test(o.telaDeBaixo), o.telaDeBaixo.slice(0, 80));
+    confere('OP: o painel de Avisos fechou', !(await painelAvisosAberto(page)));
+    confere('OP: UM passo no histórico', o.historico === h0 + 1, h0 + ' → ' + o.historico);
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    o = await estadoOp(page);
+    confere('OP: o X volta ao endereço de antes', o.hash === hash0 && o.janelas === 0, JSON.stringify({ h: o.hash, antes: hash0 }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  const EVENTOS_CAL = { lista: [] };
+  const eventoDoCal = (fonte, ref, titulo) => ({ fonte, ref_id: ref, dia: hojeLocal(), hora: null, titulo, alerta: false, concluido: false, detalhe: '', responsavel: '', extra: null });
+  const abrirDoDia = async (page, titulo) => {
+    await page.evaluate(() => { const d = document.querySelector('.acn-cal-dia.hoje'); if (!d) throw new Error('não achei o dia de hoje no calendário'); d.click(); });
+    await page.waitForFunction((t) => [...document.querySelectorAll('.acn-cal-item')].some(i => i.innerText.includes(t)), { timeout: 20000 }, titulo);
+    await page.evaluate((t) => {
+      const item = [...document.querySelectorAll('.acn-cal-item')].find(i => i.innerText.includes(t));
+      const b = [...item.querySelectorAll('button')].find(x => x.innerText.trim() === 'Abrir'); if (!b) throw new Error('o item não tem botão Abrir');
+      b.click();
+    }, titulo);
+  };
+  await cenario('C76 Calendário, botão "Abrir": a demanda e a OP abrem por cima do Calendário; licitação abre a tela com o registro; a fonte sem registro só troca de aba', {
+    simular: (url, r) => (r.method() === 'POST' && /\/rpc\/calendario_eventos/.test(url) ? { status: 200, body: EVENTOS_CAL.lista } : null),
+  }, async ({ page }) => {
+    const Dm = await demandasDeTeste(); const ops = await opsDeTeste(); const R = await registrosDoBanco();
+    if (!Dm.a || !ops.comum || !R.licitacao.a) { confere('há demanda, OP e licitação para testar', false); return; }
+    EVENTOS_CAL.lista = [
+      eventoDoCal('demanda_avulsa', Dm.a.id, 'ZZ prazo da demanda'),
+      eventoDoCal('op_entrega', ops.comum.id, 'ZZ entrega da OP'),
+      eventoDoCal('licitacao', R.licitacao.a.id, 'ZZ licitação'),
+      eventoDoCal('vistoria_retorno', 'sem-registro', 'ZZ retorno de vistoria'),
+    ];
+    const recarregar = async () => { await page.goto(BASE + '#/calendario', { waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1800); };
+    await recarregar();
+    let e = await estadoD(page); const h0 = e.historico;
+    // — a demanda: por cima do Calendário —
+    await abrirDoDia(page, 'ZZ prazo da demanda');
+    await esperarD(page); await espera(800);
+    e = await estadoD(page);
+    confere('demanda: abriu pelo endereço, por cima do Calendário (a tela de baixo não mudou)', e.hash === '#/demanda/' + Dm.a.id && e.janelas === 1 && /Compromissos|Hoje|Novo Compromisso/.test(e.telaDeBaixo), JSON.stringify({ h: e.hash, t: e.telaDeBaixo }));
+    confere('demanda: UM passo no histórico', e.historico === h0 + 1, h0 + ' → ' + e.historico);
+    await fecharD(page); await esperarSemD(page); await espera(700);
+    e = await estadoD(page);
+    confere('demanda: o X volta a #/calendario', e.hash === '#/calendario' && e.janelas === 0, JSON.stringify({ h: e.hash }));
+    // — a OP: por cima do Calendário —
+    await abrirDoDia(page, 'ZZ entrega da OP');
+    await esperarJanelaOp(page, 'OP ' + ops.comum.opl); await espera(800);
+    let o = await estadoOp(page);
+    confere('OP: abriu pelo endereço, por cima do Calendário', /^#\/op\//.test(o.hash) && o.janelas === 1 && /Novo Compromisso/.test(o.telaDeBaixo), JSON.stringify({ h: o.hash, t: o.telaDeBaixo.slice(0, 80) }));
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    o = await estadoOp(page);
+    confere('OP: o X volta a #/calendario', o.hash === '#/calendario' && o.janelas === 0, JSON.stringify({ h: o.hash }));
+    // — a licitação: a tela dona com o registro aberto (um endereço só) —
+    await abrirDoDia(page, 'ZZ licitação');
+    await page.waitForFunction((id) => location.hash === '#/licitacoes/licitacao/' + id, { timeout: 30000 }, R.licitacao.a.id).catch(() => {});
+    await espera(1500);
+    let l = await page.evaluate(() => ({ h: location.hash, historico: history.length }));
+    confere('licitação: o botão "Abrir" leva à tela de Licitações já com o registro (#/licitacoes/licitacao/<código>)', l.h === '#/licitacoes/licitacao/' + R.licitacao.a.id, l.h);
+    // — a fonte sem registro: só troca de aba, como sempre foi —
+    await recarregar();
+    await abrirDoDia(page, 'ZZ retorno de vistoria');
+    await page.waitForFunction(() => location.hash === '#/vistorias', { timeout: 20000 }).catch(() => {});
+    l = await page.evaluate(() => ({ h: location.hash }));
+    confere('fonte sem registro (vistoria): só troca de aba, como sempre foi', l.h === '#/vistorias', l.h);
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C77 Vínculo de OP (número clicável de dentro de uma janela): a OP abre por cima, pelo endereço, sem trocar de tela', {}, async ({ page }) => {
+    const ops = await opsDeTeste();
+    if (!ops.comum) { confere('há OP para testar', false); return; }
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await espera(1500);
+    let o = await estadoOp(page); const h0 = o.historico; const hash0 = o.hash;
+    // o vínculo é aberto por `abrirVinculo` (a mesma função do número clicável do VinculoPicker): chamada pelo módulo carregado, sem depender de uma janela com vínculo na base de produção
+    const chamou = await page.evaluate(async (id) => { try { const m = await import('/ACN/src/VinculoPicker.tsx'); await m.abrirVinculo({ tipo: 'op', id, descricao: 'teste' }); return true; } catch (e) { return false; } }, ops.comum.id);
+    if (!chamou) { console.log('  (C77 só roda no servidor de desenvolvimento: o pacote de produção não expõe o módulo; nada conferido aqui)'); return; }
+    await esperarJanelaOp(page, 'OP ' + ops.comum.opl); await espera(800);
+    o = await estadoOp(page);
+    confere('a OP abriu pelo endereço, por cima', /^#\/op\//.test(o.hash) && o.janelas === 1, JSON.stringify({ h: o.hash, j: o.janelas }));
+    confere('a tela de baixo segue sendo o Início (não trocou para a Produção)', SAUDACAO.test(o.telaDeBaixo), o.telaDeBaixo.slice(0, 80));
+    confere('UM passo no histórico', o.historico === h0 + 1, h0 + ' → ' + o.historico);
+    await fecharJanelaOp(page); await esperarSemJanelaOp(page); await espera(700);
+    o = await estadoOp(page);
+    confere('o X volta ao endereço de antes', o.hash === hash0 && o.janelas === 0, JSON.stringify({ h: o.hash, antes: hash0 }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);
