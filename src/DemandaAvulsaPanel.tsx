@@ -46,7 +46,6 @@ import { FormacaoDaDemanda } from './FormacaoDaDemanda';
 import { PagamentoNaNovaDemanda, PagamentoDaDemanda, pagamentoVazio, erroDoPagamento, pagamentoParaGravar, resumoDoPagamento } from './PagamentoDeTerceiro';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
-import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
 import { Faixa, hojeISO, Botao } from './Interface';
 // pausa e horas úteis (16/10/2026): a conta fica em HorarioDemanda.ts, o relógio e as perguntas da tela em PausaDaDemanda.tsx
@@ -549,7 +548,6 @@ export function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh
     setSalvando(false);
     if (error) { alert('Não foi possível cancelar: ' + error.message); return; }
     if (d.responsavel_nome && !ehEu(currentUser, d, 'responsavel_nome')) {
-      notificarEvento('demanda_criada_setor', `*Demanda cancelada* — ${d.titulo}\nSetor: ${d.setor}\nMotivo: ${motivoCancelar.trim()}\nPor: ${currentUser?.nome || ''}`, d.setor);
     }
     setMostrarCancelar(false); setMotivoCancelar('');
     await reload(); onRefresh();
@@ -1449,11 +1447,6 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     }
     // Painel "de despacho" (tem setoresDestino) — avisa o setor destino, mesmo
     // aviso que o sistema antigo ("Enviar Demanda para Setor") já mandava.
-    if (setoresDestino && setoresDestino.length > 1) {
-      const nomeCriador = currentUser?.nome || currentUser?.email || 'Usuário';
-      const ops = vinculos.filter(v => v.tipo === 'op').map(v => String(v.descricao || '').split(' — ')[0]);
-      for (const c of criadas) notificarEvento('demanda_criada_setor', msg.demandaCriada(c.setor, ops.join(', '), form.titulo, nomeCriador), c.setor);
-    }
     setSalvando(false);
     onSaved();
     onClose();

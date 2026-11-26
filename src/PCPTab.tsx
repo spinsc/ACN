@@ -9,7 +9,6 @@ import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
 import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp, frasePendenciasNaoLidas } from './OpPendencias';
 import { PinturaCampos } from './PinturaSerralheria';
-import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -192,7 +191,6 @@ export default function PCPTab({ currentUser }) {
       }).eq('id', sol.id);
       // 7.52: a OFI já nasceu; se a solicitação não for marcada, ela continua na fila e liberar de novo abriria uma segunda OFI
       if (erroSol) alert('A OFI foi aberta, mas a solicitação não foi marcada como liberada (' + erroSol.message + '). NÃO libere de novo: abriria uma segunda OFI.');
-      notificarEvento('pcp_libera_reposicao', `PCP liberou reposição de "${sol.item_nome}" — OFI aberta para ${itemRow.setor_fabricante}. Liberado por: ${nome}`);
     } else {
       const { data: pedido, error } = await supabase.from('pcp_pedidos_compra').insert([{
         numero_pedido: `PC-ALX-${Date.now()}`,
@@ -209,7 +207,6 @@ export default function PCPTab({ currentUser }) {
       }).eq('id', sol.id);
       // 7.52: o pedido de compra já nasceu; liberar de novo abriria um segundo pedido
       if (erroSol) alert('O pedido de compra foi aberto, mas a solicitação não foi marcada como liberada (' + erroSol.message + '). NÃO libere de novo: abriria um segundo pedido.');
-      notificarEvento('pcp_libera_reposicao', `PCP liberou reposição de "${sol.item_nome}" — pedido enviado a Compras. Liberado por: ${nome}`);
     }
     setLiberandoSolic(null);
     fetchAll();
@@ -272,7 +269,6 @@ export default function PCPTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('pcp_libera_producao', msg.oplEnviada(opl.opl,'Produção',currentUser?.nome));
     fetchAll();
   };
   const liberarProducaoUmaVez = (opl) => umaVez('producao-' + opl.id, liberarProducao)(opl);
@@ -300,7 +296,6 @@ export default function PCPTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl, 'Almoxarifado (embalagem)', currentUser?.nome));
     fetchAll();
   };
   const liberarEmbalagemUmaVez = (opl) => umaVez('embalagem-' + opl.id, liberarEmbalagem)(opl);
@@ -328,7 +323,6 @@ export default function PCPTab({ currentUser }) {
         status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('pcp_libera_almox', `*Embalagem liberada em lote* — ${grupo.base}\n${liberadas.length} OPs de envio no Almoxarifado.\nPor: ${currentUser?.nome}`);
       }
     } finally {
       setProcessandoLote(false);
@@ -368,7 +362,6 @@ export default function PCPTab({ currentUser }) {
     else if (res?.pedidos?.length) alert(textoPedidosDaReserva(res.pedidos));
     // 7.x do Estoque (15/10/2026): o pedido do que faltava que não pôde ser aberto era omitido, e a OP seguia achando que estava tudo pedido
     if (res?.falhasPedidos?.length) alert(textoFalhasDosPedidos(res.falhasPedidos));
-    notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
     return true;
   };
@@ -518,7 +511,6 @@ export default function PCPTab({ currentUser }) {
           status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
           usuario_nome: currentUser?.nome, data_hora: agora,
         })));
-        notificarEvento('pcp_libera_almox', `*Kiting liberado em lote* — ${grupo.base}\n${liberadas.length} OPs enviadas para o Almoxarifado.\nPor: ${currentUser?.nome}`);
       }
       liberouAlguma = liberadas.length > 0;
     } finally {
@@ -556,7 +548,6 @@ export default function PCPTab({ currentUser }) {
         status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('pcp_libera_producao', `*Produção liberada em lote* — ${grupo.base}\n${liberadas.length} OPs enviadas para Produção.\nPor: ${currentUser?.nome}`);
       }
     } finally {
       setProcessandoLote(false);

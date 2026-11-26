@@ -7,7 +7,6 @@ import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
-import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -1665,9 +1664,7 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, entrega: entregaIni
         recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado',
       }).eq('pedido_id', pedido.id);
       if (errFat) console.warn('Falha ao atualizar faturamento:', errFat.message);
-      notificarEvento('logistica_recebe_pedido', `*Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}${doFornecedor}\nNF: ${varias ? (res.campos?.numero_nf || form.numero_nf.trim()) : form.numero_nf.trim()}${varias ? '\nTodos os fornecedores do pedido foram recebidos.' : ''}`, 'Compras');
     } else if (form.confere) {
-      notificarEvento('logistica_recebe_pedido', `*Recebimento parcial* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}${doFornecedor}\nNF: ${form.numero_nf.trim()}\nAinda faltam: ${res.faltam.join(', ')}`, 'Compras');
     } else {
       await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras', numero_opl: pedido.opl || null,
@@ -1677,7 +1674,6 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, entrega: entregaIni
         logs_demanda: [{ texto: `Divergência no recebimento${varias ? ` (${nomeDoFornecedor})` : ''}: ${form.observacoes.trim()}`, usuario: currentUser?.nome, hora: agora }],
       }]);
       await notificarComprador(pedido, `⚠️ Divergência no recebimento do pedido ${pedido.numero_pedido}${doFornecedor}: ${form.observacoes.trim()}`);
-      notificarEvento('logistica_divergencia_recebimento', `*Divergência no recebimento* — Pedido ${pedido.numero_pedido}${doFornecedor}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
     }
 
     // Compra de reposição de estoque: o material entra no saldo pela quantidade

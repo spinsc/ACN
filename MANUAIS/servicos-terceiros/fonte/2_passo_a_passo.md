@@ -253,7 +253,7 @@ Depois que as peças **foram enviadas**, a ordem não pode mais ser cancelada ne
 
 - Ao concluir, o sistema abre sozinho um serviço de **Pintura eletrostática** em **A definir**, ligado à demanda, **em nome de quem concluiu**.
 - **Não nasce mais a requisição de compra no Compras** para a pintura.
-- A **Produção** recebe o aviso no WhatsApp: "escolha o prestador e o dia (ou entre numa ordem de pintura)".
+- A **Produção** vê o serviço novo na coluna **A definir** do quadro, para escolher o prestador e o dia (ou entrar numa ordem de pintura). O sistema não manda mais aviso por WhatsApp.
 - Se a abertura do serviço **falhar**, a demanda **conclui mesmo assim** e ganha o botão **Pedir a pintura agora** (para demandas concluídas há até 30 dias e ainda sem pedido).
 - A demanda antiga, que já tinha pedido no Compras, **não muda**.
 

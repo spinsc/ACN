@@ -12,7 +12,6 @@ import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { Botao, Faixa } from './Interface';
 import { mostrarAviso } from './Feedback';
-import { notificarEvento } from './whatsappHelper';
 import { lerValorDigitado } from './LerValor';
 import { validarEnvioAoFiscal, dadosIniciaisParaOFiscal, STATUS_AGUARDANDO_NOTA } from './SacFluxo';
 import { CampoMoeda } from './CampoMoeda';
@@ -43,7 +42,6 @@ export default function EnviarOsAoFiscalModal({ os, currentUser, onClose, onEnvi
       if (!data || data.length !== 1) { setErro('A OS mudou de etapa enquanto a janela estava aberta. Nada foi alterado: feche, confira a lista e tente de novo.'); return; }
       logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
         oldRow: { status: os.status, valor_total: os.valor_total ?? null, cnpj_faturamento: os.cnpj_faturamento ?? null }, newRow: novo, user: currentUser });
-      notificarEvento('sac_enviado_fiscal', `*Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nValor: R$ ${Number(lido.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
       mostrarAviso(`${os.numero_os} enviada ao Fiscal. Quando a nota for emitida, a OS volta para você entregar.`, 'ok');
       onEnviada?.();
       onClose();

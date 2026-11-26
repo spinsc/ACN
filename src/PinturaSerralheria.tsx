@@ -28,7 +28,6 @@ import { supabase } from './supabaseClient';
 import { itensPreenchidos } from './DemandaItens';
 import { lerTipos } from './TerceirosModelo';
 import { pedirServicos } from './TerceirosServicos';
-import { notificarEvento } from './whatsappHelper';
 import { Selo, Botao, Faixa } from './Interface';
 import { confirmar } from './Feedback';
 import Icone from './Icone';
@@ -132,9 +131,6 @@ export async function abrirPedidoPintura(d: any, currentUser: any) {
     ? `O serviço ${servico.numero} foi aberto, mas a demanda não guardou a ligação com ele (${erroMarca?.message || 'nenhuma linha atualizada'}). Não peça de novo: o serviço já existe em Serviços de terceiros.`
     : null;
 
-  notificarEvento('demanda_criada_setor',
-    `*Pintura para a Adaptação* — ${d.titulo}\n${tipoPedido || 'Tipo não informado'}\nPeça pronta na Serralheria. Serviço de terceiros ${servico.numero}, em "A definir": escolha o prestador e o dia (ou entre numa ordem de pintura).`,
-    'Produção');
 
   return { id: servico.id, numero: servico.numero, aviso: avisoDaMarca };
 }

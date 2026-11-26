@@ -9,13 +9,11 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
-import { CampoTelefone } from './CampoTelefone';
-import { digitosSemPais, telefoneComFormatoValido, erroDeTelefone } from './Telefone';
 import { Faixa, Botao, Selo, Abas, CabecalhoTela } from './Interface';
 import Icone from './Icone';
 import { mdiTimerSand, mdiLinkVariant, mdiFormatListBulleted, mdiChartBar, mdiPlus, mdiRefresh, mdiFolderOutline, mdiCashMultiple,
   mdiBankOutline, mdiClose, mdiCheckCircleOutline, mdiCloseCircleOutline, mdiCheck, mdiFileDocumentOutline, mdiSendOutline, mdiContentSaveOutline,
-  mdiWeb, mdiPrinterOutline, mdiCameraOutline, mdiEmailOutline, mdiWhatsapp, mdiPackageVariantClosed, mdiMagnify } from '@mdi/js';
+  mdiWeb, mdiPrinterOutline, mdiCameraOutline, mdiEmailOutline, mdiPackageVariantClosed, mdiMagnify } from '@mdi/js';
 import { perfilComPoderes } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -291,7 +289,6 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
   const [prazoEntrega, setPrazoEntrega] = useState(proposta?.prazo_entrega || '');
   const [incluirFotos, setIncluirFotos] = useState(true);
   const [emailCliente, setEmailCliente] = useState('');
-  const [whatsapp,     setWhatsapp]     = useState('');
   // Descrição da linha do serviço/produto mostrada ao cliente — pré-preenchida
   // com o título da cotação, mas o vendedor pode renomear antes de emitir.
   const [descricaoServico, setDescricaoServico] = useState(cotacao.nome || '');
@@ -334,16 +331,6 @@ Atenciosamente,
 ${cotacao.criado_por || 'ACN'}`
     );
     window.open(`mailto:${emailCliente.trim()}?subject=${assunto}&body=${corpo}`, '_blank');
-  };
-
-  const enviarWhatsApp = () => {
-    const num = digitosSemPais(whatsapp);
-    if (!num) { alert('Informe o telefone WhatsApp.'); return; }
-    if (!telefoneComFormatoValido(num)) { alert(erroDeTelefone(whatsapp, 'telefone WhatsApp')); return; }
-    const msg = encodeURIComponent(
-      `Olá! Segue nossa proposta comercial.\n\n📋 Nº ${cotacao.numero_cotacao || ''}\n💰 Valor: ${Number(totalLiq).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}\n⏳ Validade: ${validade} dias\n\nQualquer dúvida, estamos à disposição!`
-    );
-    window.open(`https://wa.me/55${num}?text=${msg}`, '_blank');
   };
 
   return (
@@ -408,17 +395,6 @@ ${cotacao.criado_por || 'ACN'}`
               <input className="acn-input" value={emailCliente} onChange={e=>setEmailCliente(e.target.value)}
                 placeholder="email@cliente.com.br" type="email" />
               <Botao variante="primario" onClick={enviarEmail}>
-                Enviar
-              </Botao>
-            </div>
-          </div>
-
-          {/* Envio por WhatsApp */}
-          <div className="acn-quadro tom-ok">
-            <div className="acn-quadro-titulo"><Icone path={mdiWhatsapp} size={14} /> Enviar por WhatsApp</div>
-            <div className="acn-cot-envio">
-              <CampoTelefone valor={whatsapp} onChange={setWhatsapp} placeholder="(11) 99999-8888" semAviso />
-              <Botao variante="primario" onClick={enviarWhatsApp}>
                 Enviar
               </Botao>
             </div>

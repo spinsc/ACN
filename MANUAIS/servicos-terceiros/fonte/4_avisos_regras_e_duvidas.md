@@ -10,7 +10,7 @@ O módulo avisa de duas formas: pelo **Calendário** e pelo painel **Avisos** (b
 | **Data desejada** de um pedido que ainda não foi agendado | Quem pediu e, nos tipos da Adaptação, a Adaptação | **Calendário**, só como lembrete (sem alerta) |
 | Serviço que passou do dia agendado **sem ser dado como realizado** | Quem pediu e a Adaptação, nos tipos dela | Painel **Avisos**, seção **Datas para cuidar** (**um aviso por visita e por dia**); o botão **Abrir** leva ao serviço |
 | **Serviço realizado** | Quem pediu | **Calendário**, só como registro (sem alerta) |
-| **Pintura da Serralheria** concluída | O perfil Produção | WhatsApp: "escolha o prestador e o dia (ou entre numa ordem de pintura)" |
+| **Pintura da Serralheria** concluída | O perfil Produção | Sem aviso: o serviço aparece em **A definir** no quadro, para escolher o prestador e o dia (ou entrar numa ordem de pintura) |
 | **Pagamento pedido** | O Financeiro | Uma demanda nova na aba **Demandas** do Financeiro |
 
 > **Dica:** quando o aviso de atraso for resolvido (o serviço é dado como realizado, reagendado ou cancelado), ele **some sozinho**. Quem já cuidou e quer tirar do painel usa **Já cuidei**.
