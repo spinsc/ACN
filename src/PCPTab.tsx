@@ -7,7 +7,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { LinkLote } from './OpLote';
 import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
-import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp } from './OpPendencias';
+import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp, frasePendenciasNaoLidas } from './OpPendencias';
 import { PinturaCampos } from './PinturaSerralheria';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
@@ -238,6 +238,8 @@ export default function PCPTab({ currentUser }) {
   const [pendPorOp, setPendPorOp] = useState(new Map());
   const carregarPendenciasAbertas = async () => {
     const mapa = await indicePendencias();
+    // 12e80 (25/11/2026): leitura recusada não vale como "nenhuma pendência": fica o que já estava na tela e o aviso vermelho diz o que não foi lido
+    if (mapa.falhas?.length) { setErroLeitura(frasePendenciasNaoLidas(mapa.falhas)); return; }
     setPendPorOp(mapa);
     const ids = [...mapa.keys()];
     if (!ids.length) { setOplsPendencia([]); return; }

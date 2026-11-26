@@ -24,7 +24,7 @@ import { boxesDaOp, textoDosBoxes, erroDosBoxes, ocupacaoDosBoxes, planejarTroca
 import { confirmar, pedirTexto } from './Feedback';
 import { ParticipantesPicker, novosParticipantes, notificarParticipantes } from './Participantes';
 import Icone from './Icone';
-import { carregarPendencias } from './OpPendencias';
+import { carregarPendencias, frasePendenciasNaoLidas } from './OpPendencias';
 import { osSemCobranca } from './SacFluxo';
 import { EditorDeViagem } from './ViagensTab';
 import { statusDaViagem, rotuloDoStatus, viagemSeguraAOp } from './ViagemFluxo';
@@ -2500,7 +2500,14 @@ export default function ProducaoTab({ currentUser }) {
     // A adaptação não fecha a sua etapa com peça de fabricação/compra em aberto:
     // a demanda tem que estar concluída no setor, recebida pelo Almoxarifado e
     // liberada pelo PCP (as três etapas do checklist — ver OpPendencias.tsx).
-    const { abertas } = await carregarPendencias(opl);
+    const { abertas, falhas } = await carregarPendencias(opl);
+    // 12e80 (25/11/2026): leitura recusada não vale como "nenhuma pendência": antes a OP concluía a produção com compra e fabricação ainda em aberto
+    if (falhas?.length) {
+      alert(`Não dá para concluir esta OP agora.
+
+${frasePendenciasNaoLidas(falhas)}`);
+      return false;
+    }
     if (abertas.length) {
       alert(`Não dá para concluir esta OP: ${abertas.length} pendência(s) de fabricação/compra ainda não fecharam.\n\n${abertas.map(v => `• ${v.setor || '—'}: ${v.titulo}`).join('\n')}\n\nCada uma precisa ser concluída no setor, recebida pelo Almoxarifado e liberada pelo PCP.`);
       return false;

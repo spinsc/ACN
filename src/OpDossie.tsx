@@ -11,15 +11,20 @@
 // desenha. Aparece em dois lugares:
 //   • aba "Dossiê" dentro do detalhe da OP (abre de qualquer tela pelo número);
 //   • aba "Dossiê da OP" em Relatórios, buscando por OPL ou por PV.
+//
+// 12e80 (25/11/2026): migrado para o design system (classes `acn-dos-*` no design.css; nenhum `style` solto, nenhum botão cru) e com a leitura recusada
+// dita em voz alta: o que o banco não deixou ler (`falhas` do `carregarDossie`) aparece numa faixa vermelha com "Tentar de novo", no PDF e no "Onde está
+// agora"; antes a página mostrava "nenhuma compra" e "sem pendências" quando a leitura tinha falhado. Nenhuma regra de negócio mudou.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { tratarFalhaDeArquivoNovo } from './VersaoNova';
 import { carregarDossie, buscarOps } from './OpVinculos';
 import { QuadroItensOp, conferenciaInicial } from './OpItens';
 import { RespostasDaOp } from './RespostasDaOp';
 import { fluxoLabel, fluxoEfetivo, soTerceiros } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
-import { diaBR } from './Interface';
+import { diaBR, Botao, Faixa, Selo } from './Interface';
+import { mostrarAviso } from './Feedback';
 import { textosDasOps } from './TextosDaOp';
 import { OndeEstaAgora } from './OndeEstaAgora';
 import { DossieLote, baseDoLote } from './OpDossieLote';
@@ -32,72 +37,71 @@ const fmtDH  = (d) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const fmtR   = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const fmtH   = (h) => `${Number(h || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;
 
+// `tom` escolhe a cor do título da seção por token do guia (antes cada grupo tinha o seu hexadecimal escrito à mão; o roxo virou a cor da marca)
 const GRUPOS = [
-  { id: 'demanda',     titulo: '🧰 Demandas dos setores', cor: '#7c3aed' },
-  { id: 'compra',      titulo: '🛒 Compras',              cor: '#16a34a' },
-  { id: 'engenharia',  titulo: '📐 Engenharia',           cor: '#0891b2' },
-  { id: 'ajuste',      titulo: '🔧 Ajustes',              cor: '#b45309' },
-  { id: 'qualidade',   titulo: '✅ Qualidade',            cor: '#15803d' },
-  { id: 'frete',       titulo: '🚚 Frete',                cor: '#0e7490' },
-  { id: 'agendamento', titulo: '📅 Agendamentos',         cor: '#4f46e5' },
-  { id: 'anexo',       titulo: '📎 Anexos',               cor: '#64748b' },
+  { id: 'demanda',     titulo: '🧰 Demandas dos setores', tom: 'marca' },
+  { id: 'compra',      titulo: '🛒 Compras',              tom: 'ok' },
+  { id: 'engenharia',  titulo: '📐 Engenharia',           tom: 'info' },
+  { id: 'ajuste',      titulo: '🔧 Ajustes',              tom: 'atencao' },
+  { id: 'qualidade',   titulo: '✅ Qualidade',            tom: 'ok' },
+  { id: 'frete',       titulo: '🚚 Frete',                tom: 'info' },
+  { id: 'agendamento', titulo: '📅 Agendamentos',         tom: 'info' },
+  { id: 'anexo',       titulo: '📎 Anexos',               tom: 'neutro' },
 ];
 
-const Secao = ({ titulo, cor = '#1e293b', children, vazio }) => (
-  <div style={{ marginBottom: 14 }}>
-    <div style={{ fontSize: 11, fontWeight: 800, color: cor, textTransform: 'uppercase',
-      letterSpacing: '.3px', borderBottom: `2px solid ${cor}22`, paddingBottom: 3, marginBottom: 7 }}>
-      {titulo}
-    </div>
-    {children || <div style={{ fontSize: 11, color: '#94a3b8' }}>{vazio || 'Nada registrado.'}</div>}
+/** O que a faixa e o PDF dizem quando o banco recusou alguma leitura. Leitura que falha não vale como "nenhum". */
+const AVISO_INCOMPLETO = 'Este dossiê pode estar incompleto: o que não foi lido não aparece aqui, e isso não quer dizer que não exista.';
+export const frasePorFalhas = (falhas) => `Não foi possível ler: ${(falhas || []).join(', ')}. ${AVISO_INCOMPLETO}`;
+
+const Secao = ({ titulo, tom = 'ink', children, vazio }) => (
+  <div className="acn-dos-sec" data-tom={tom}>
+    <div className="acn-dos-sec-titulo">{titulo}</div>
+    {children || <div className="acn-dos-nada">{vazio || 'Nada registrado.'}</div>}
   </div>
 );
 
 const Campo = ({ rot, children }) => (
   <div>
-    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{rot}</div>
-    <div style={{ fontSize: 11.5, color: 'var(--txt, #1e293b)' }}>{children ?? '—'}</div>
+    <div className="acn-dos-rot">{rot}</div>
+    <div className="acn-dos-val">{children ?? '—'}</div>
   </div>
 );
 
 const Grade = ({ children, min = 150 }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 8 }}>{children}</div>
+  <div className={'acn-dos-grade' + (min === 120 ? ' m120' : min === 160 ? ' m160' : '')}>{children}</div>
 );
 
 // ── Lista de vínculos de um grupo ────────────────────────────────────────────
-function ListaVinculos({ itens, cor }) {
+function ListaVinculos({ itens, valorNaoLido }) {
   if (!itens.length) return null;
-  const th = { textAlign: 'left', padding: '3px 6px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' };
-  const td = { padding: '4px 6px', fontSize: 11, borderTop: '1px solid #f1f5f9', verticalAlign: 'top' };
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+    <div className="acn-rolagem">
+      <table className="acn-dos-tab">
         <thead><tr>
-          <th style={th}>O quê</th><th style={th}>Setor</th><th style={th}>Situação</th>
-          <th style={th}>Responsável</th><th style={th}>Aberto em</th><th style={{ ...th, textAlign: 'right' }}>Valor</th>
+          <th>O quê</th><th>Setor</th><th>Situação</th>
+          <th>Responsável</th><th>Aberto em</th><th className="acn-dir">Valor</th>
         </tr></thead>
         <tbody>
           {itens.map(v => (
             <tr key={`${v.tipo}:${v.id}`}>
-              <td style={td}>
-                <div style={{ fontWeight: 600 }}>
-                  {v.numero ? <span style={{ color: cor, fontWeight: 800 }}>{v.numero} · </span> : null}
+              <td>
+                <div className="acn-dos-vinc-nome">
+                  {v.numero ? <span className="acn-dos-num">{v.numero} · </span> : null}
                   {v.titulo}
                 </div>
-                {v.descricao && <div style={{ fontSize: 10, color: '#64748b' }}>{String(v.descricao).slice(0, 160)}</div>}
+                {v.descricao && <div className="acn-dos-vinc-desc">{String(v.descricao).slice(0, 160)}</div>}
                 {v.porTexto && (
-                  <span title="Encontrado pelo número escrito no texto — não é um vínculo gravado"
-                    style={{ fontSize: 8.5, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a',
-                      borderRadius: 3, padding: '0 4px', fontWeight: 700 }}>por menção</span>
+                  <Selo familia="atencao" ponto={false} title="Encontrado pelo número escrito no texto — não é um vínculo gravado">por menção</Selo>
                 )}
               </td>
-              <td style={td}>{v.setor || '—'}</td>
-              <td style={td}>
-                <span style={{ fontWeight: 700, color: v.aberto ? '#b45309' : '#16a34a' }}>{v.status || '—'}</span>
+              <td>{v.setor || '—'}</td>
+              <td>
+                <span className={v.aberto ? 'acn-txt-atencao' : 'acn-txt-ok'}>{v.status || '—'}</span>
               </td>
-              <td style={td}>{v.responsavel || '—'}</td>
-              <td style={td}>{fmtD(v.data)}</td>
-              <td style={{ ...td, textAlign: 'right' }}>{v.valor != null ? fmtR(v.valor) : '—'}</td>
+              <td>{v.responsavel || '—'}</td>
+              <td>{fmtD(v.data)}</td>
+              {/* a leitura do valor das compras recusada: o campo diz "não lido" em vez de "—" (que significa "sem valor") */}
+              <td className="acn-dir">{v.grupo === 'compra' && valorNaoLido ? 'não lido' : v.valor != null ? fmtR(v.valor) : '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -111,70 +115,91 @@ export function DossieOp({ op, dossieCarregado = null }) {
   const [d, setD] = useState(dossieCarregado);
   const [carregando, setCarregando] = useState(!dossieCarregado);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const pdfOcupado = useRef(false);   // dois cliques no mesmo instante geravam dois PDFs (o botão só desliga depois do desenho)
+  const [erroMontagem, setErroMontagem] = useState('');
+  const [tentativa, setTentativa] = useState(0);
   // dossiê do lote inteiro (pedido do usuário em 16/10/2026): troca esta tela pela do lote, com o botão de voltar
   const [verLote, setVerLote] = useState(false);
 
   useEffect(() => {
-    if (dossieCarregado) { setD(dossieCarregado); return; }
+    if (dossieCarregado && tentativa === 0) { setD(dossieCarregado); return; }
     if (!op?.id) return;
     let vivo = true;
     setCarregando(true);
-    carregarDossie(op).then(r => { if (vivo) { setD(r); setCarregando(false); } });
+    carregarDossie(op)
+      .then(r => { if (vivo) { setD(r); setErroMontagem(''); setCarregando(false); } })
+      .catch(() => { if (vivo) { setErroMontagem('Não foi possível montar o dossiê agora: o banco não respondeu.'); setCarregando(false); } });
     return () => { vivo = false; };
-  }, [op?.id, dossieCarregado]);
+  }, [op?.id, dossieCarregado, tentativa]);
 
-  if (carregando) return <div style={{ padding: 20, fontSize: 12, color: '#64748b' }}>Montando o dossiê...</div>;
-  if (!d) return <div style={{ padding: 20, fontSize: 12, color: '#64748b' }}>OP não encontrada.</div>;
+  const tentarDeNovo = <Botao pequeno onClick={() => setTentativa(n => n + 1)}>Tentar de novo</Botao>;
+  if (carregando) return <div className="acn-dos-estado">Montando o dossiê...</div>;
+  if (erroMontagem && !d) return <div className="acn-dos-estado"><Faixa tom="erro" acao={tentarDeNovo}>{erroMontagem}</Faixa></div>;
+  if (!d) return <div className="acn-dos-estado">OP não encontrada.</div>;
 
   const { op: o, origem, vinculos, logs, acompanhamentos, irmas, pendencias, tempos, marcos } = d;
+  const falhas = d.falhas || [];
+  const valorDaOpNaoLido = falhas.includes('valor da OP');
+  const valorDasComprasNaoLido = falhas.includes('valor das compras');
   if (verLote) return <DossieLote base={baseDoLote(o.opl)} onVoltar={() => setVerLote(false)} />;
   const porGrupo = (g) => vinculos.filter(v => v.grupo === g);
   const totalHoras = tempos.reduce((s, t) => s + t.horas, 0);
 
+  const baixarPdf = async () => {
+    if (pdfOcupado.current) return;
+    pdfOcupado.current = true;
+    try { await gerarPdfDossie(d, setGerandoPdf); } finally { pdfOcupado.current = false; }
+  };
+
   return (
-    <div id="dossie-op" style={{ fontSize: 12 }}>
+    <div id="dossie-op" className="acn-dos">
       {/* ── Cabeçalho ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+      <div className="acn-dos-topo">
         <div>
-          <div style={{ fontSize: 17, fontWeight: 800 }}>{o.opl}</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>
+          <div className="acn-dos-opl">{o.opl}</div>
+          <div className="acn-dos-sub">
             {o.cliente_nome || '—'}{o.modelo ? ` · ${o.modelo}` : ''}{o.placa ? ` · ${o.placa}` : ''}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div className="acn-dos-acoes">
           {irmas.length > 0 && (
-            <button onClick={() => setVerLote(true)}
-              title="O lote inteiro numa página só, com PDF para imprimir"
-              style={{ background: '#fff', color: '#0f766e', border: '1px solid #0f766e', borderRadius: 5,
-                padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            <Botao pequeno onClick={() => setVerLote(true)} title="O lote inteiro numa página só, com PDF para imprimir">
               📦 Dossiê do lote ({irmas.length + 1} unidades)
-            </button>
+            </Botao>
           )}
-          <button onClick={() => gerarPdfDossie(d, setGerandoPdf)} disabled={gerandoPdf}
-            style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 5,
-              padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: gerandoPdf ? .6 : 1 }}>
+          <Botao variante="primario" pequeno onClick={baixarPdf} disabled={gerandoPdf}>
             {gerandoPdf ? 'Gerando...' : '📄 Baixar PDF'}
-          </button>
+          </Botao>
         </div>
       </div>
 
-      <OndeEstaAgora op={o} vinculos={vinculos} logs={logs} />
+      {/* leitura recusada: o dossiê segue na tela com o que foi lido, e diz o que faltou */}
+      {falhas.length > 0 && (
+        <div className="acn-dos-faixa">
+          <Faixa tom="erro" acao={tentarDeNovo}>{frasePorFalhas(falhas)}</Faixa>
+        </div>
+      )}
+      {erroMontagem && d && (
+        <div className="acn-dos-faixa"><Faixa tom="erro" acao={tentarDeNovo}>{erroMontagem} O que está na tela pode estar desatualizado.</Faixa></div>
+      )}
+
+      <OndeEstaAgora op={o} vinculos={vinculos} logs={logs} falhas={falhas} />
 
       <OplProgressBar status={o.status_geral} op={o} />
 
       {/* ── Pendências em aberto: o que interessa de imediato ── */}
       {pendencias.length > 0 && (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '8px 10px', margin: '12px 0' }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#b45309', marginBottom: 4 }}>
+        <div className="acn-dos-pend">
+          <div className="acn-dos-pend-tit">
             ⚠️ {pendencias.length} pendência(s) em aberto nesta OP
           </div>
-          <div style={{ fontSize: 11, color: '#78350f' }}>
+          <div className="acn-dos-pend-txt">
             {pendencias.map(p => `${p.setor || p.grupo}: ${p.titulo}`).join(' · ')}
           </div>
         </div>
       )}
 
-      <div style={{ marginTop: 12 }}>
+      <div className="acn-dos-corpo">
         <Secao titulo="Identificação">
           <Grade>
             <Campo rot="Situação">{o.status_geral}</Campo>
@@ -189,18 +214,20 @@ export function DossieOp({ op, dossieCarregado = null }) {
             <Campo rot="Chassi">{o.chassi}</Campo>
             <Campo rot="NF-e">{o.numero_nf || o.nfe}</Campo>
             {o.numero_nf_servico && <Campo rot="NFS-e (serviço)">{o.numero_nf_servico}</Campo>}
-            <Campo rot="Valor total">{fmtR(o.valor_total)}</Campo>
+            <Campo rot="Valor total">{valorDaOpNaoLido ? 'não lido' : fmtR(o.valor_total)}</Campo>
           </Grade>
           {irmas.length > 0 && (
-            <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 6 }}>
+            <div className="acn-dos-lote">
               Lote: mais {irmas.length} unidade(s) — {irmas.map(i => i.opl).join(', ')}
             </div>
           )}
         </Secao>
 
         {/* ── Origem da venda ── */}
-        <Secao titulo="Origem da venda" cor="#1d4ed8"
-          vazio="Sem card do CRM nem empenho de licitação ligados — OP criada direto.">
+        <Secao titulo="Origem da venda" tom="info"
+          vazio={falhas.some(f => /card do CRM|pedido da licitação|licitação|formação/i.test(f))
+            ? 'Não foi possível ler a origem da venda agora (veja o aviso no alto).'
+            : 'Sem card do CRM nem empenho de licitação ligados — OP criada direto.'}>
           {(origem.oportunidade || origem.licitacao || origem.formacoes.length) ? (
             <>
               <Grade>
@@ -214,7 +241,7 @@ export function DossieOp({ op, dossieCarregado = null }) {
                 {origem.pedido && <Campo rot="Data do pedido">{fmtD(origem.pedido.data_pedido)}</Campo>}
               </Grade>
               {origem.formacoes.length > 0 && (
-                <div style={{ marginTop: 7, fontSize: 11 }}>
+                <div className="acn-dos-formacao">
                   <strong>Formação de preços:</strong>{' '}
                   {origem.formacoes.map(f => `${f.nome || 'sem nome'} v${f.versao || 1}${f.vencedora ? ' (oficial)' : ''}`).join(' · ')}
                 </div>
@@ -225,18 +252,18 @@ export function DossieOp({ op, dossieCarregado = null }) {
 
         {/* ── Descrição e observações (22/10/2026: não apareciam no dossiê) ── */}
         {textosDasOps([o]).length > 0 && (
-          <Secao titulo="Descrição e observações" cor="#b45309">
+          <Secao titulo="Descrição e observações" tom="atencao">
             {textosDasOps([o]).map(tx => (
-              <div key={tx.campo} style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 9.5, fontWeight: 700, color: tx.atencao ? '#b91c1c' : '#94a3b8', textTransform: 'uppercase' }}>{tx.rotulo}</div>
-                <div style={{ fontSize: 11.5, whiteSpace: 'pre-wrap' }}>{tx.grupos[0].texto}</div>
+              <div key={tx.campo} className="acn-dos-obs">
+                <div className="acn-dos-rot" data-atencao={tx.atencao ? '1' : undefined}>{tx.rotulo}</div>
+                <div className="acn-dos-obs-texto">{tx.grupos[0].texto}</div>
               </div>
             ))}
           </Secao>
         )}
 
         {/* ── Vendido × BOM × Separado ── */}
-        <Secao titulo="O que foi vendido, o que a BOM pediu e o que saiu do estoque" cor="#0f766e"
+        <Secao titulo="O que foi vendido, o que a BOM pediu e o que saiu do estoque" tom="marca"
           vazio="Esta OP não tem itens vendidos nem BOM estruturada (OPs anteriores a set/2026).">
           {(o.itens_vendidos?.length || o.bom_itens?.length) ? (
             <>
@@ -262,15 +289,15 @@ export function DossieOp({ op, dossieCarregado = null }) {
           const itens = porGrupo(g.id);
           if (!itens.length) return null;
           return (
-            <Secao key={g.id} titulo={`${g.titulo} (${itens.length})`} cor={g.cor}>
-              <ListaVinculos itens={itens} cor={g.cor} />
+            <Secao key={g.id} titulo={`${g.titulo} (${itens.length})`} tom={g.tom}>
+              <ListaVinculos itens={itens} valorNaoLido={valorDasComprasNaoLido} />
             </Secao>
           );
         })}
 
         {/* ── Tempos ── */}
         {tempos.length > 0 && (
-          <Secao titulo={`Tempo por setor — ${fmtH(totalHoras)} no total`} cor="#7c3aed">
+          <Secao titulo={`Tempo por setor — ${fmtH(totalHoras)} no total`} tom="marca">
             <Grade min={120}>
               {tempos.map(t => <Campo key={t.setor} rot={t.setor}>{fmtH(t.horas)}</Campo>)}
             </Grade>
@@ -279,7 +306,7 @@ export function DossieOp({ op, dossieCarregado = null }) {
 
         {/* ── Marcos ── */}
         {marcos.length > 0 && (
-          <Secao titulo="Marcos" cor="#0891b2">
+          <Secao titulo="Marcos" tom="info">
             <Grade min={160}>
               {marcos.map(m => <Campo key={m.etapa} rot={m.etapa}>{fmtDH(m.data)}</Campo>)}
             </Grade>
@@ -288,29 +315,29 @@ export function DossieOp({ op, dossieCarregado = null }) {
 
         {/* ── Acompanhamento do comercial ── */}
         {acompanhamentos.length > 0 && (
-          <Secao titulo={`Acompanhamento (${acompanhamentos.length})`} cor="#b45309">
+          <Secao titulo={`Acompanhamento (${acompanhamentos.length})`} tom="atencao">
             {acompanhamentos.map(a => (
-              <div key={a.id} style={{ borderLeft: '2px solid #fde68a', paddingLeft: 8, marginBottom: 5 }}>
-                <div style={{ fontSize: 9.5, color: '#94a3b8' }}>{fmtDH(a.criado_em)} · {a.usuario_nome || '—'}{a.setor ? ` · ${a.setor}` : ''}</div>
-                <div style={{ fontSize: 11 }}>{a.texto}</div>
+              <div key={a.id} className="acn-dos-nota">
+                <div className="acn-dos-meta">{fmtDH(a.criado_em)} · {a.usuario_nome || '—'}{a.setor ? ` · ${a.setor}` : ''}</div>
+                <div className="acn-dos-nota-texto">{a.texto}</div>
               </div>
             ))}
           </Secao>
         )}
 
         {/* ── Linha do tempo ── */}
-        <Secao titulo={`Linha do tempo (${logs.length} evento(s))`} cor="#334155"
-          vazio="Sem eventos registrados.">
+        <Secao titulo={`Linha do tempo (${logs.length} evento(s))`}
+          vazio={falhas.includes('histórico') ? 'Não foi possível ler o histórico agora (veja o aviso no alto).' : 'Sem eventos registrados.'}>
           {logs.length ? (
-            <div style={{ maxHeight: 340, overflowY: 'auto', border: '1px solid #f1f5f9', borderRadius: 5 }}>
+            <div className="acn-dos-log">
               {logs.map(l => (
-                <div key={l.id} style={{ padding: '5px 8px', borderBottom: '1px solid #f8fafc' }}>
-                  <div style={{ fontSize: 9.5, color: '#94a3b8' }}>
+                <div key={l.id} className="acn-dos-log-item">
+                  <div className="acn-dos-meta">
                     {fmtDH(l.data_hora)} · <strong>{l.setor || '—'}</strong> · {l.usuario_nome || '—'}
                   </div>
-                  <div style={{ fontSize: 11 }}>{l.evento}</div>
+                  <div className="acn-dos-log-evento">{l.evento}</div>
                   {l.status_anterior !== l.status_novo && (
-                    <div style={{ fontSize: 9.5, color: '#64748b' }}>{l.status_anterior} → {l.status_novo}</div>
+                    <div className="acn-dos-meta">{l.status_anterior} → {l.status_novo}</div>
                   )}
                 </div>
               ))}
@@ -330,6 +357,7 @@ async function gerarPdfDossie(d, setGerando) {
     const autoTable = (await import('jspdf-autotable')).default;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const { op: o, origem, vinculos, logs, pendencias, tempos, marcos } = d;
+    const falhas = d.falhas || [];
     let y = 16;
 
     const novaPagina = (precisa = 12) => { if (y + precisa > 285) { doc.addPage(); y = 16; } };
@@ -356,6 +384,13 @@ async function gerarPdfDossie(d, setGerando) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     doc.setTextColor(100); doc.text(`Emitido em ${new Date().toLocaleString('pt-BR')}`, 105, y, { align: 'center' });
     doc.setTextColor(0); y += 8;
+
+    // 12e80: papel impresso não pode afirmar "nenhuma pendência" nem "sem compras" quando a leitura falhou: o aviso vai no alto, em vermelho (como no dossiê do lote)
+    if (falhas.length) {
+      const aviso = doc.splitTextToSize(`ATENÇÃO — ${frasePorFalhas(falhas).replace(/^Não foi possível ler/, 'NÃO FOI POSSÍVEL LER')}`, 182);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(185, 28, 28);
+      doc.text(aviso, 14, y); doc.setTextColor(0); y += aviso.length * 4 + 4;
+    }
 
     titulo('IDENTIFICAÇÃO');
     tabela(['Campo', 'Valor', 'Campo', 'Valor'], [
@@ -398,6 +433,7 @@ async function gerarPdfDossie(d, setGerando) {
         pendencias.map(p => [p.setor || p.grupo, p.titulo, p.status || '—', p.responsavel || '—', fmtD(p.data)]));
     }
 
+    const valorDasComprasNaoLido = falhas.includes('valor das compras');
     GRUPOS.forEach(g => {
       const itens = vinculos.filter(v => v.grupo === g.id);
       if (!itens.length) return;
@@ -405,7 +441,7 @@ async function gerarPdfDossie(d, setGerando) {
       tabela(['Nº', 'O quê', 'Setor', 'Situação', 'Responsável', 'Data', 'Valor'],
         itens.map(v => [
           v.numero || '—', `${v.titulo}${v.porTexto ? ' [por menção]' : ''}`, v.setor || '—',
-          v.status || '—', v.responsavel || '—', fmtD(v.data), v.valor != null ? fmtR(v.valor) : '—',
+          v.status || '—', v.responsavel || '—', fmtD(v.data), g.id === 'compra' && valorDasComprasNaoLido ? 'não lido' : v.valor != null ? fmtR(v.valor) : '—',
         ]));
     });
 
@@ -430,7 +466,7 @@ async function gerarPdfDossie(d, setGerando) {
     }
     doc.save(`Dossie_${String(o.opl || 'OP').replace(/[^\w.-]/g, '_')}.pdf`);
   } catch (e) {
-    if (!tratarFalhaDeArquivoNovo(e)) alert('Não foi possível gerar o PDF: ' + (e?.message || e));
+    if (!tratarFalhaDeArquivoNovo(e)) mostrarAviso('Não foi possível gerar o PDF: ' + (e?.message || e), 'erro');
   } finally {
     setGerando(false);
   }
@@ -443,6 +479,8 @@ export function RelDossieOp() {
   const [buscando, setBuscando] = useState(false);
   const [dossie, setDossie] = useState(null);
   const [montando, setMontando] = useState(false);
+  const [erro, setErro] = useState('');   // a busca ou a leitura da OP recusada pelo banco: nunca vale como "nenhuma OP"
+  const ocupado = useRef(false);
   // lote inteiro (pedido do usuário em 16/10/2026): quando o número digitado casa com várias unidades de um mesmo lote, a busca oferece o dossiê dele
   const [lote, setLote] = useState(null);
   const lotesAchados = (() => {
@@ -453,65 +491,76 @@ export function RelDossieOp() {
 
   const buscar = async (e) => {
     e?.preventDefault?.();
-    if (!termo.trim()) return;
-    setBuscando(true); setDossie(null); setLote(null);
-    const ops = await buscarOps(termo);
-    setOpcoes(ops);
-    setBuscando(false);
-    if (ops.length === 1) abrir(ops[0]);
+    if (!termo.trim() || ocupado.current) return;
+    ocupado.current = true;
+    setBuscando(true); setDossie(null); setLote(null); setErro('');
+    try {
+      const falhas = [];
+      const ops = await buscarOps(termo, falhas);
+      if (!ops.length && falhas.length) { setOpcoes(null); setErro('Não foi possível buscar agora: o banco não respondeu. Isso não quer dizer que a OP não exista — tente de novo.'); return; }
+      setOpcoes(ops);
+      if (ops.length === 1) await abrir(ops[0]);
+    } catch {
+      setOpcoes(null); setErro('Não foi possível buscar agora: o banco não respondeu. Tente de novo.');
+    } finally {
+      ocupado.current = false;
+      setBuscando(false);
+    }
   };
 
   const abrir = async (op) => {
-    setMontando(true);
-    const d = await carregarDossie(op.id);
-    setDossie(d); setMontando(false);
+    setMontando(true); setErro('');
+    try {
+      const d = await carregarDossie(op.id);
+      if (!d) setErro(`A OP ${op.opl} não foi encontrada.`);
+      setDossie(d);
+    } catch {
+      setDossie(null);
+      setErro(`Não foi possível abrir a OP ${op.opl} agora: o banco não respondeu. Tente de novo.`);
+    } finally {
+      setMontando(false);
+    }
   };
 
   return (
     <div>
-      <form onSubmit={buscar} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <input value={termo} onChange={e => setTermo(e.target.value)} aria-label="Número da OP ou do pedido de venda"
-          placeholder="Número da OP (ex.: A1530.2608) ou do pedido de venda (ex.: 1212)"
-          style={{ flex: 1, minWidth: 240, padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 12 }} />
-        <button type="submit" disabled={buscando}
-          style={{ background: '#1e293b', color: '#fff', border: 'none', borderRadius: 5, padding: '7px 16px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+      <form onSubmit={buscar} className="acn-dos-busca">
+        <input value={termo} onChange={e => setTermo(e.target.value)} aria-label="Número da OP ou do pedido de venda" className="acn-input acn-dos-busca-campo"
+          placeholder="Número da OP (ex.: A1530.2608) ou do pedido de venda (ex.: 1212)" />
+        <Botao type="submit" variante="primario" disabled={buscando}>
           {buscando ? 'Buscando...' : '🔍 Buscar'}
-        </button>
+        </Botao>
       </form>
 
-      {opcoes && opcoes.length === 0 && (
-        <div style={{ fontSize: 12, color: '#b45309' }}>Nenhuma OP encontrada para "{termo}".</div>
+      {erro && <div className="acn-dos-faixa"><Faixa tom="erro">{erro}</Faixa></div>}
+      {opcoes && opcoes.length === 0 && !erro && (
+        <div className="acn-dos-nenhuma">Nenhuma OP encontrada para "{termo}".</div>
       )}
       {lote && <DossieLote base={lote} onVoltar={() => setLote(null)} />}
       {opcoes && opcoes.length > 1 && !dossie && !lote && (
-        <div style={{ marginBottom: 12 }}>
+        <div className="acn-dos-opcoes">
           {lotesAchados.map(([base, n]) => (
-            <button key={base} onClick={() => setLote(base)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 6, padding: '8px 12px', border: '2px solid #0f766e', borderRadius: 5,
-                background: '#f0fdfa', color: '#0f766e', cursor: 'pointer', fontSize: 12, fontWeight: 800 }}>
+            <Botao key={base} className="acn-dos-lote-btn" onClick={() => setLote(base)}>
               📦 Dossiê do lote inteiro: {base} ({n} unidades)
-            </button>
+            </Botao>
           ))}
-          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5 }}>{opcoes.length} OPs encontradas — escolha uma:</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div className="acn-dos-opcoes-tit">{opcoes.length} OPs encontradas — escolha uma:</div>
+          <div className="acn-dos-opcoes-lista">
             {opcoes.map(op => (
-              <button key={op.id} onClick={() => abrir(op)}
-                style={{ textAlign: 'left', padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 5,
-                  background: 'var(--bg-card, #fff)', cursor: 'pointer', fontSize: 11.5 }}>
+              <Botao key={op.id} className="acn-dos-opcao" onClick={() => abrir(op)}>
                 <strong>{op.opl}</strong> — {op.cliente_nome || '—'} · {op.status_geral}
-              </button>
+              </Botao>
             ))}
           </div>
         </div>
       )}
-      {montando && <div style={{ fontSize: 12, color: '#64748b' }}>Montando o dossiê...</div>}
+      {montando && <div className="acn-dos-montando">Montando o dossiê...</div>}
       {dossie && (
         <>
           {opcoes?.length > 1 && (
-            <button onClick={() => setDossie(null)}
-              style={{ marginBottom: 8, padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', fontSize: 10.5, cursor: 'pointer' }}>
+            <Botao pequeno className="acn-dos-volta" onClick={() => setDossie(null)}>
               ← voltar à lista
-            </button>
+            </Botao>
           )}
           <DossieOp op={dossie.op} dossieCarregado={dossie} />
         </>
@@ -523,13 +572,12 @@ export function RelDossieOp() {
 // ── Modal: o dossiê aberto por cima do detalhe da OP ─────────────────────────
 export function ModalDossieOp({ op, onClose }) {
   return (
-    <div className="modal-overlay" style={{ zIndex: 3000 }}
+    <div className="modal-overlay acn-dos-fundo"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 900, width: '96vw', maxHeight: '94vh', overflowY: 'auto' }}>
-        <div style={{ background: '#0f766e', color: '#fff', margin: '-14px -14px 12px', padding: '10px 16px',
-          borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1, fontSize: 13, fontWeight: 800 }}>📚 Dossiê da OP {op?.opl}</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer' }}>✕</button>
+      <div className="modal-box acn-dos-jan">
+        <div className="acn-dos-jan-cab">
+          <div className="acn-dos-jan-titulo">📚 Dossiê da OP {op?.opl}</div>
+          <Botao variante="discreto" className="acn-dos-fechar" onClick={onClose} aria-label="Fechar o dossiê">✕</Botao>
         </div>
         <DossieOp op={op} />
       </div>
