@@ -7576,3 +7576,68 @@ html body textarea.acn-oe-campo { resize: vertical; }
 .acn-input.acn-oe-motivo, .acn-input.acn-oe-campo-lote { width: 100%; margin-bottom: 8px; }
 .acn-input.acn-oe-motivo.lote { margin-bottom: 10px; }
 .acn-oe-entrada-lote { margin-bottom: 4px; }
+
+/* ── 12e79 (25/11/2026): Contrato e Entregas e Endereços de entrega da licitação (LicitacaoEntregas.tsx) ─────────────
+   Saíram os 54 `style` soltos. A letra vale o que a pessoa já via (a regra global reescrevia 9 a 11 px para 12 e 13) e as cores de
+   ardósia, azul, roxo e verde escritas à mão viraram os tokens do guia (azul = info, roxo dos aditivos = marca, verde = ok). */
+.acn-ce { display: flex; flex-direction: column; gap: 10px; }
+.acn-ce > .acn-faixa { margin: 0; }
+.acn-ce-cab { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); padding: 10px; }
+.acn-ce-cab-linha { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+.acn-ce-titulo { font-weight: 800; font-size: 12px; color: var(--acn-ink); }
+.acn-ce-sub { font-size: 12px; color: var(--acn-muted); }
+.acn-ce-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-ce-acoes-form { margin-top: 8px; }
+.acn-ce-alerta { font-size: 12px; color: var(--acn-warn); margin-top: 6px; }
+.acn-ce-mudo { font-size: 12px; color: var(--acn-muted); }
+.acn-ce-fraco { color: var(--acn-text); }
+.acn-ce-carregando { padding: 12px; }
+.acn-ce-vazio { font-size: 13px; color: var(--acn-muted); text-align: center; padding: 16px; background: var(--acn-surface); border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); }
+.acn-ce-form { background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 30%, var(--acn-line)); border-radius: var(--acn-r2); padding: 10px; }
+.acn-ce-form-titulo { font-weight: 800; font-size: 13px; color: var(--acn-warn); margin-bottom: 6px; }
+.acn-ce-grade { display: grid; gap: 6px; margin-bottom: 6px; }
+.acn-ce-grade > div { min-width: 0; }
+.acn-ce-grade.item { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr); margin-bottom: 0; }
+.acn-ce-grade.pedido { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 0; }
+.acn-ce-grade.aditivo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); margin-bottom: 0; }
+.acn-ce-grade.end1 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.acn-ce-grade.end2 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
+.acn-ce-esq { grid-column: 1 / span 2; }
+.acn-ce-dir { grid-column: 3 / span 2; }
+.acn-ce-rot { display: block; font-size: 12px; font-weight: 700; color: var(--acn-muted); text-transform: uppercase; margin-bottom: 2px; }
+html body .acn-ce-campo { width: 100%; padding: 5px 8px; border: 1px solid var(--acn-line); border-radius: 4px; font-size: 13px; box-sizing: border-box; font-family: inherit; min-width: 0; }
+.acn-ce-item { background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); overflow: hidden; }
+.acn-ce-item-cab { padding: 8px 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--acn-surface-2); }
+.acn-ce-item-info { flex: 1; min-width: 180px; }
+.acn-ce-item-nome { font-weight: 800; font-size: 13px; color: var(--acn-ink); }
+.acn-ce-item-nums { font-size: 12px; color: var(--acn-text); }
+.acn-ce-saldo { --acn-sd: var(--acn-ok); text-align: right; }
+.acn-ce-saldo[data-tom=zero] { --acn-sd: var(--acn-neutral); }
+.acn-ce-saldo[data-tom=neg] { --acn-sd: var(--acn-bad); }
+.acn-ce-saldo-rot { font-size: 12px; color: var(--acn-muted); font-weight: 700; }
+.acn-ce-saldo-val { font-size: 16px; font-weight: 900; color: var(--acn-sd); }
+.acn-ce-saldo-un { font-size: 12px; }
+.acn-ce-item-acoes { display: flex; gap: 4px; flex-wrap: wrap; }
+.acn-ce-linha { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; padding: 4px 6px; border-top: 1px solid var(--acn-line); }
+.acn-ce-qtd { font-weight: 800; color: var(--acn-info); min-width: 70px; }
+.acn-ce-qtd.adit { color: var(--acn-brand); }
+.acn-ce-fim { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.acn-ce-sem-end { color: var(--acn-warn); }
+.acn-ce-sem-pedido { font-size: 12px; color: var(--acn-muted); padding: 6px 10px; border-top: 1px solid var(--acn-line); }
+.acn-ce-end { background: var(--acn-info-soft); border: 1px solid color-mix(in srgb, var(--acn-info) 22%, var(--acn-line)); border-radius: var(--acn-r2); padding: 7px 9px; margin-bottom: 6px; }
+.acn-ce-end > .acn-faixa { margin: 4px 0; }
+.acn-ce-end-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.acn-ce-end-titulo { font-size: 12px; font-weight: 700; color: var(--acn-info); text-transform: uppercase; }
+.acn-ce-end-linha { display: flex; align-items: center; gap: 6px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 4px; padding: 4px 7px; margin-bottom: 3px; }
+.acn-ce-end-texto { flex: 1; font-size: 12px; min-width: 0; }
+.acn-ce-end-form { background: var(--acn-surface); border: 1px solid color-mix(in srgb, var(--acn-info) 35%, var(--acn-line)); border-radius: 4px; padding: 8px; margin-top: 4px; }
+@media (max-width: 640px) {
+  .acn-ce-grade.item, .acn-ce-grade.pedido, .acn-ce-grade.aditivo, .acn-ce-grade.end1, .acn-ce-grade.end2 { grid-template-columns: minmax(0, 1fr); }
+  .acn-ce-esq, .acn-ce-dir { grid-column: auto; }
+}
+body.dark .acn-ce-cab, body.dark .acn-ce-item, body.dark .acn-ce-vazio, body.dark .acn-ce-end-linha, body.dark .acn-ce-end-form { background: #1e293b; border-color: #334155; }
+body.dark .acn-ce-item-cab { background: #0f172a; }
+body.dark .acn-ce-titulo, body.dark .acn-ce-item-nome { color: #f1f5f9; }
+body.dark .acn-ce-linha, body.dark .acn-ce-sem-pedido { border-color: #334155; }
+body.dark .acn-ce-end { background: #0c2a3d; border-color: #1e4a66; }
+body.dark .acn-ce-form { background: #3a2a0d; border-color: #6b4a14; }
