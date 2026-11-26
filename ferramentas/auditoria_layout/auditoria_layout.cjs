@@ -3,6 +3,7 @@
 // Gravações bloqueadas (lib.cjs). Para não sobrecarregar o banco de produção, as leituras são guardadas em disco (cache_leituras/) e reaproveitadas pelos outros perfis.
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { abrir, espera, BASE } = require('./lib.cjs');
+const { caminhoDe } = require('../comum/rede_de_teste.cjs');
 const PERFIS = {
   desktop: { largura: 1920, altura: 1080, toque: false },
   notebook: { largura: 1366, altura: 768, toque: false },
@@ -42,7 +43,7 @@ const LOG = (...a) => console.log(new Date().toLocaleTimeString('pt-BR'), ...a);
   page.on('response', async (resp) => {
     try {
       const rq = resp.request();
-      if (rq.method() !== 'GET' || !/supabase\.co\/rest\/v1\//.test(rq.url()) || resp.status() !== 200) return;
+      if (rq.method() !== 'GET' || !caminhoDe(rq.url()).startsWith('/rest/v1/') || resp.status() !== 200) return;   // 26/11/2026 (B5): pelo caminho, em qualquer endereço do banco
       const f = path.join(CACHE, chave(rq) + '.json');
       if (fs.existsSync(f)) return;
       const t = await resp.text(); if (t.length > 3e6) return;

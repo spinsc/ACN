@@ -28,6 +28,7 @@ import { telaInicialDoUsuario } from './utils/telaInicial';
 import { gruposParaRecolher } from './utils/menuLateral';
 import { useNavegacao } from './useNavegacao';
 import AvisoDeEndereco from './AvisoDeEndereco';
+import FaixaDeConexao from './FaixaDeConexao';
 import { telaSobDemanda, TelaSobDemanda } from './CarregarTela';
 
 // 26/11/2026 (lentidão do sistema): as telas não vêm mais todas no pacote de abertura (eram ~35 importadas de uma vez: 5,2 MB, 1,4 MB comprimido).
@@ -1705,6 +1706,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             <button onClick={voltarParaAdmin}>← Voltar ao Admin</button>
           </div>
         )}
+
+          {/* 26/11/2026 (B4 do plano de migração): "sem internet" / "o sistema não está respondendo", entre o cabeçalho e a tela */}
+          <FaixaDeConexao />
 
           <main className={`acn-main${activeTab === 'painel_tv' ? ' acn-main-tv' : ''}`}>
             {bloqueio ? (

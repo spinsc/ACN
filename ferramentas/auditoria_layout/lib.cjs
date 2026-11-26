@@ -5,6 +5,9 @@
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const { crachaDeTeste } = require('./cracha_teste.cjs');
+// 26/11/2026 (B5 do plano de migração): a trava de gravação passou a olhar também o CAMINHO (/rest/v1, /storage/v1, /functions/v1, /auth/v1, /realtime/v1, /api), não só o
+// endereço "de fora": no servidor interno o sistema e o banco dividem o endereço. Ver ferramentas/comum/rede_de_teste.cjs.
+const { vaiAoBancoOuParaFora } = require('../comum/rede_de_teste.cjs');
 // 16/10/2026: com a trava do crachá ligada (Etapa 17b), o app exige a sessão do banco.
 // 22/10/2026 (Etapa 17, onda 2): o banco não aceita mais a chave pública para ler (só os portais do cliente), então o crachá deixou de ser de mentira: é o da conta de teste ZZTESTE
 // (perfil Almoxarifado, sem aba nenhuma; senha fora do repositório — ver cracha_teste.cjs). Quem manda é `crachaReal`, preenchido em abrir(); uma requisição que ainda leve o texto FAKE recebe o real.
@@ -44,7 +47,7 @@ async function abrir({ largura = 1600, altura = 1000, simular = () => null, escr
   page.on('request', r => {
     const url = decodeURIComponent(r.url().replace(/\+/g, ' ')).replace('/rest/v1/rh_funcionarios_basico', '/rest/v1/rh_funcionarios');   // 14/10/2026 (Etapa 17b): nas simulações antigas a visão do RH básico responde como a tabela
     const metodo = r.method();
-    const externo = !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(r.url());
+    const externo = vaiAoBancoOuParaFora(r.url());   // vai ao banco (em qualquer endereço) ou sai do computador
     if (abortarLocal && !externo && abortarLocal.test(r.url())) return r.abort('failed');   // simula arquivo do site que sumiu depois de uma publicação
     // POST só de leitura: as funções do banco que só leem — "alteração não vista" (Etapa 5.6)
     // e "desde quando na etapa" (Etapa 6.2)

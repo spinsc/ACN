@@ -7,6 +7,36 @@
     <title>ACN - Sinal Verde Flow</title>
     <!-- preenchido no build pelo plugin acn-etiqueta-build (vite.config.ts) -->
     <meta name="acn-build" content="__ACN_BUILD__">
+    <!-- Aviso de erro inesperado (B3 do plano de migração, 26/11/2026): fica aqui, e não no design.css, porque precisa aparecer mesmo quando o pacote
+         do sistema nem chegou a carregar. As cores são as do design system, com o valor ao lado para esse caso. -->
+    <style>
+      .acn-erro-js { position: fixed; top: 12px; left: 50%; -webkit-transform: translateX(-50%); transform: translateX(-50%); z-index: 2147483000;
+        width: 520px; max-width: calc(100vw - 24px); box-sizing: border-box; display: -webkit-flex; display: flex; -webkit-align-items: flex-start; align-items: flex-start;
+        padding: 14px 12px 14px 16px; background: var(--acn-surface, #fff); color: var(--acn-text, #3b4856);
+        border: 1px solid #efc4c0; border-left: 4px solid var(--acn-bad, #b9302a); border-radius: 8px;
+        box-shadow: 0 18px 48px rgba(23, 33, 43, .18), 0 4px 12px rgba(23, 33, 43, .08);
+        font: 13px/1.45 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: left; }
+      .acn-erro-js-icone { -webkit-flex: 0 0 26px; flex: 0 0 26px; height: 26px; margin-right: 12px; border-radius: 50%; background: var(--acn-bad-soft, #fbe9e7);
+        color: var(--acn-bad, #b9302a); font-weight: 700; font-size: 15px; line-height: 26px; text-align: center; }
+      .acn-erro-js-corpo { -webkit-flex: 1; flex: 1; min-width: 0; }
+      .acn-erro-js-corpo strong { display: block; color: var(--acn-ink, #17212b); font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+      .acn-erro-js-corpo p { margin: 0 0 4px; }
+      .acn-erro-js-qtd:empty { display: none; }
+      .acn-erro-js-botoes { margin-top: 8px; }
+      html body .acn-erro-js button.acn-erro-js-b { display: inline-block; margin: 0 8px 6px 0; height: 32px; padding: 0 12px; border-radius: 6px; cursor: pointer;
+        font: 500 13px 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; white-space: normal;
+        background: var(--acn-surface, #fff); color: var(--acn-ink, #17212b); border: 1px solid var(--acn-line, #dee4ea); }
+      html body .acn-erro-js button.acn-erro-js-b.principal { background: var(--acn-brand, #0e7068); color: #fff; border-color: var(--acn-brand, #0e7068); }
+      html body .acn-erro-js button.acn-erro-js-fechar { -webkit-flex: 0 0 32px; flex: 0 0 32px; height: 32px; margin: -6px 0 0 8px; padding: 0; border: 0; border-radius: 6px;
+        background: transparent; color: var(--acn-muted, #6b7886); font-size: 22px; line-height: 32px; cursor: pointer; }
+      html body .acn-erro-js button.acn-erro-js-fechar:hover { background: var(--acn-neutral-soft, #eef1f4); }
+      .acn-erro-js button:focus-visible { outline: 2px solid var(--acn-brand, #0e7068); outline-offset: 2px; }
+      .acn-erro-js-copia { position: fixed; top: -1000px; left: 0; opacity: 0; }
+      body.dark .acn-erro-js { background: #1e293b; color: #cbd5e1; border-color: #334155; border-left-color: var(--acn-bad, #b9302a); }
+      body.dark .acn-erro-js-corpo strong { color: #f1f5f9; }
+      body.dark .acn-erro-js button.acn-erro-js-b:not(.principal) { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+      @media print { .acn-erro-js { display: none; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>
@@ -79,38 +109,123 @@
         };
       }
 
-      /* ── DEBUG VISUAL — remove depois de resolver ─────────────────── */
+      /* ── AVISO DE ERRO INESPERADO (B3 do plano de migração para o servidor interno, 26/11/2026) ──────────────────────────────
+         Antes havia aqui uma caixa de depuração ("⚠️ ERRO JS — copie e mande para o suporte") que mostrava o erro cru, em letra de
+         programador, a cada erro solto, inclusive de rede. Agora aparece um aviso no padrão do sistema, com "Atualizar" e "Copiar detalhes
+         para a TI": o texto técnico só sai pela área de transferência. Ficam de fora o que já tem o seu próprio aviso (o arquivo da versão
+         antiga que sumiu depois de uma publicação: VersaoNova.ts; a queda da internet ou do servidor: a faixa de conexão, Conexao.ts) e o
+         ruído que não é do sistema (extensões do navegador, "ResizeObserver loop", "Script error." sem origem, pedido cancelado).
+         Fechado, o aviso não volta por 5 minutos (os detalhes continuam guardados): um erro que se repete não pode impedir o uso da tela.
+         ES5 de propósito: roda até no iPad antigo (iOS 10). As cores estão no <style> do alto da página. */
       (function() {
-        var box = null;
-        function showErr(msg) {
-          if (!box) {
-            box = document.createElement('div');
-            box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;'
-              + 'background:#1e293b;color:#f87171;font:13px/1.5 monospace;'
-              + 'padding:12px 14px;max-height:45vh;overflow-y:auto;'
-              + 'border-top:3px solid #ef4444;white-space:pre-wrap;word-break:break-all;';
-            var title = document.createElement('div');
-            title.style.cssText = 'font-weight:bold;color:#fbbf24;margin-bottom:6px;font-size:14px;';
-            title.textContent = '⚠️ ERRO JS — copie e mande para o suporte:';
-            box.appendChild(title);
-            document.body ? document.body.appendChild(box) :
-              document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(box); });
+        var erros = [];
+        var painel = null, fechadoEm = 0;
+        var CINCO_MINUTOS = 300000;
+        var JA_TEM_AVISO = /dynamically imported module|Importing a module script failed|Unable to preload CSS|error loading dynamically imported module|ResizeObserver loop|Failed to fetch|NetworkError|Load failed|network connection was lost|AbortError|user aborted|signal is aborted/i;
+        function ignorar(msg, arquivo) {
+          if (!msg) return true;
+          if (/^Script error\.?$/i.test(msg) && !arquivo) return true;
+          if (arquivo && /^(chrome|moz|safari|safari-web)-extension:/i.test(arquivo)) return true;
+          return JA_TEM_AVISO.test(msg);
+        }
+        function pilhaDe(x) {
+          return x && x.stack ? '\n   ' + String(x.stack).split('\n').slice(0, 6).join('\n   ') : '';
+        }
+        function detalhes() {
+          var meta = document.querySelector('meta[name="acn-build"]');
+          var linhas = [
+            'Sistema ACN Sinal Verde: erro na tela',
+            'Quando: ' + new Date().toLocaleString('pt-BR'),
+            'Endereço: ' + location.href,
+            'Versão: ' + (meta ? meta.getAttribute('content') : '?'),
+            'Navegador: ' + navigator.userAgent,
+            ''
+          ];
+          for (var i = 0; i < erros.length; i++) linhas.push((i + 1) + '. ' + erros[i]);
+          return linhas.join('\n');
+        }
+        function copiarTexto(texto, pronto) {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(texto).then(function() { pronto(true); }, function() { pronto(copiarAntigo(texto)); });
+              return;
+            }
+          } catch (e) { /* cai no modo antigo */ }
+          pronto(copiarAntigo(texto));
+        }
+        function copiarAntigo(texto) {
+          var area = document.createElement('textarea');
+          area.value = texto; area.setAttribute('readonly', '');
+          area.className = 'acn-erro-js-copia';
+          document.body.appendChild(area);
+          area.select();
+          try { area.setSelectionRange(0, texto.length); } catch (e) { /* navegador antigo: o select() basta */ }
+          var ok = false;
+          try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+          document.body.removeChild(area);
+          return ok;
+        }
+        function montar() {
+          painel = document.createElement('div');
+          painel.className = 'acn-erro-js';
+          painel.setAttribute('role', 'alert');
+          painel.innerHTML =
+            '<div class="acn-erro-js-icone" aria-hidden="true">!</div>' +
+            '<div class="acn-erro-js-corpo">' +
+              '<strong>Algo deu errado nesta tela.</strong>' +
+              '<p>Se ela parou de responder, clique em Atualizar. O que ainda não foi salvo nesta tela pode se perder: se estiver no meio de um formulário, copie antes o que digitou.</p>' +
+              '<p class="acn-erro-js-qtd"></p>' +
+              '<div class="acn-erro-js-botoes">' +
+                '<button type="button" class="acn-erro-js-b principal" data-acao="atualizar">Atualizar</button>' +
+                '<button type="button" class="acn-erro-js-b" data-acao="copiar">Copiar detalhes para a TI</button>' +
+              '</div>' +
+            '</div>' +
+            '<button type="button" class="acn-erro-js-fechar" data-acao="fechar" aria-label="Fechar o aviso" title="Fechar">×</button>';
+          painel.addEventListener('click', function(ev) {
+            var alvo = ev.target;
+            while (alvo && alvo !== painel && !alvo.getAttribute('data-acao')) alvo = alvo.parentNode;
+            if (!alvo || alvo === painel) return;
+            var acao = alvo.getAttribute('data-acao');
+            if (acao === 'atualizar') { location.reload(); return; }
+            if (acao === 'fechar') { fechadoEm = Date.now(); painel.style.display = 'none'; return; }
+            if (acao === 'copiar') {
+              copiarTexto(detalhes(), function(ok) {
+                alvo.textContent = ok ? 'Copiado: cole na mensagem para a TI' : 'Não foi possível copiar';
+                setTimeout(function() { alvo.textContent = 'Copiar detalhes para a TI'; }, 4000);
+              });
+            }
+          });
+        }
+        function mostrar() {
+          if (!painel) montar();
+          var qtd = painel.querySelector('.acn-erro-js-qtd');
+          qtd.textContent = erros.length > 1 ? erros.length + ' erros nesta página.' : '';
+          painel.style.display = '';
+          if (!painel.parentNode) {
+            if (document.body) document.body.appendChild(painel);
+            else document.addEventListener('DOMContentLoaded', function() { document.body.appendChild(painel); });
           }
-          var line = document.createElement('div');
-          line.style.borderTop = '1px solid #334155';
-          line.style.paddingTop = '4px';
-          line.style.marginTop = '4px';
-          line.textContent = msg;
-          box.appendChild(line);
+        }
+        function registrar(texto) {
+          erros.push(texto);
+          if (erros.length > 30) erros.shift();
+          if (Date.now() - fechadoEm < CINCO_MINUTOS) return;
+          mostrar();
         }
         window.addEventListener('error', function(e) {
-          showErr('ERROR: ' + e.message + '\n  em: ' + e.filename + ':' + e.lineno + ':' + e.colno);
+          if (!e) return;
+          var msg = e.message;
+          if (ignorar(msg, e.filename)) return;
+          registrar('ERRO: ' + msg + '\n   em: ' + (e.filename || '?') + ':' + e.lineno + ':' + e.colno + pilhaDe(e.error));
         });
         window.addEventListener('unhandledrejection', function(e) {
-          showErr('PROMISE: ' + (e.reason && (e.reason.message || String(e.reason))));
+          var r = e && e.reason;
+          if (r && r.name === 'AbortError') return;
+          var msg = r && (r.message || String(r));
+          if (ignorar(msg, '')) return;
+          registrar('PROMESSA: ' + msg + pilhaDe(r));
         });
       })();
-      /* ────────────────────────────────────────────────────────────────── */
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

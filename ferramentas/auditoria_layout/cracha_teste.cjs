@@ -2,7 +2,9 @@
 // A conta (perfil Almoxarifado, sem nenhuma aba) e a senha são do projeto, mas a senha fica FORA do repositório: %USERPROFILE%\.acn-teste\zzteste.json.
 // A sessão vem da mesma função de servidor que a tela de entrada usa (`entrar`), dura 1 hora e é pedida uma vez por execução. As gravações continuam bloqueadas pelo teste (lib.cjs).
 const fs = require('fs'); const os = require('os'); const path = require('path');
-const URL_BASE = 'https://qgemelnuqdilnggxmrdw.supabase.co';
+// 26/11/2026 (B5 do plano de migração): o banco vem da variável ACN_BANCO (padrão: o Supabase de hoje), para o mesmo teste rodar contra a homologação do servidor interno
+const { ENDERECO_DO_BANCO } = require('../comum/rede_de_teste.cjs');
+const URL_BASE = ENDERECO_DO_BANCO;
 const ANON = (fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'supabaseClient.ts'), 'utf8').match(/eyJ[A-Za-z0-9_\-.]+/) || [])[0];   // 18/11/2026: caminho relativo ao repositório (a ferramenta mora em ferramentas/auditoria_layout)
 let guardado = null;
 

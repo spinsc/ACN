@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { Botao } from './Interface';
 import { guardarSessao, limparSessao, EXIGIR_CRACHA } from './SessaoBanco';
+import FaixaDeConexao from './FaixaDeConexao';
 
 export default function LoginTab() {
   const [email, setEmail]       = useState('');
@@ -109,6 +110,9 @@ export default function LoginTab() {
           <p className="acn-login-sub">Sistema Operacional Unificado</p>
         </div>
 
+        {/* 26/11/2026 (B4 do plano de migração): sem internet ou servidor fora, a pessoa sabe antes de tentar entrar */}
+        <FaixaDeConexao onde="login" />
+
         {/* ── TELA ESQUECI SENHA ── */}
         {telaEsqueci ? (
           <>
@@ -129,7 +133,7 @@ export default function LoginTab() {
               <form onSubmit={handleEsqueci}>
                 <div className="acn-login-campo recuperar">
                   <label htmlFor="login-esqueci-email" className="acn-login-rotulo">E-mail de login</label>
-                  <input id="login-esqueci-email" type="email" className="acn-login-input" value={emailReset}
+                  <input id="login-esqueci-email" type="email" name="email" autoComplete="username" className="acn-login-input" value={emailReset}
                     onChange={e=>setEmailReset(e.target.value)} required disabled={resetLoading} />
                 </div>
                 <Botao type="submit" variante={resetLoading ? 'secundario' : 'primario'} className="acn-login-btn" disabled={resetLoading}>
@@ -159,12 +163,14 @@ export default function LoginTab() {
               <div className="acn-login-campo">
                 {/* Etapa 7.x (10/10/2026): rótulos ligados aos campos (clicar em "E-mail"/"Senha" agora leva o cursor ao campo e o leitor de tela lê o nome) */}
                 <label htmlFor="login-email" className="acn-login-rotulo">E-mail</label>
-                <input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                {/* 26/11/2026 (B3 do plano de migração): name + autocomplete, para o navegador e o gerenciador de senhas reconhecerem a entrada (ajuda na campanha da senha
+                    antes da mudança de endereço, quando o navegador deixa de lembrar a senha guardada) */}
+                <input id="login-email" type="email" name="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)}
                   disabled={loading} className="acn-login-input" />
               </div>
               <div className="acn-login-campo senha">
                 <label htmlFor="login-senha" className="acn-login-rotulo">Senha</label>
-                <input id="login-senha" type="password" value={password} onChange={e=>setPassword(e.target.value)}
+                <input id="login-senha" type="password" name="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}
                   disabled={loading} placeholder="••••••" className="acn-login-input" />
               </div>
               <Botao type="submit" variante={loading ? 'secundario' : 'primario'} className="acn-login-btn" disabled={loading}>
