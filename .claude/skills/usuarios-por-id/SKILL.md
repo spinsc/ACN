@@ -1,11 +1,11 @@
 ---
 name: usuarios-por-id
-description: Aplicar à noite, no banco de produção, a troca "toda pessoa do sistema por ID" (U2 do PLANO_USUARIOS_POR_ID.md), em lotes pequenos e com trava curta, e conferir o resultado. Use quando o usuário digitar /usuarios-por-id.
+description: Aplicar à noite, no banco de produção, a troca "toda pessoa do sistema por ID" (U2 do PLANOS CONCLUIDOS/PLANO_USUARIOS_POR_ID.md; plano concluído em 24/11/2026, hoje só para consulta ou ajuste), em lotes pequenos e com trava curta, e conferir o resultado. Use quando o usuário digitar /usuarios-por-id.
 ---
 
 # Aplicar a troca "pessoa por ID" no banco (U2) — rotina da noite
 
-Criada em 24/11/2026. O usuário pediu: *"crie um comando para isso ser realizado e à noite eu só chamo o comando e você faz a aplicação."* O estado e as decisões estão em `PLANO_USUARIOS_POR_ID.md` (leia primeiro, inclusive o quadro do incidente de 24/11). Projeto Supabase `qgemelnuqdilnggxmrdw`. Responda em português, em linguagem de processo.
+Criada em 24/11/2026. O usuário pediu: *"crie um comando para isso ser realizado e à noite eu só chamo o comando e você faz a aplicação."* O estado e as decisões estão em `PLANOS CONCLUIDOS/PLANO_USUARIOS_POR_ID.md` (leia primeiro, inclusive o quadro do incidente de 24/11). Projeto Supabase `qgemelnuqdilnggxmrdw`. Responda em português, em linguagem de processo.
 
 **Por que existe esta rotina separada:** o ensaio de 24/11/2026 rodou como UMA transação travando as 133 tabelas e deu 102 "statement timeout" no sistema vivo em ~10 minutos. Aqui tudo roda **tabela por tabela, com `lock_timeout` curto, fora do horário**, e para ao primeiro sinal de lentidão. As ferramentas do Supabase (`execute_sql`, `apply_migration`, `query_logs`) são deferidas: carregue-as numa só chamada de `ToolSearch`.
 
@@ -37,7 +37,7 @@ Antes de gravar, **mostre ao usuário a lista nome curto → ficha** e espere o 
 - `/saude-banco` parte B de novo (CPU, timeouts, volume, consultas caras) e o `select count(*)` das esperas de trava.
 
 ## 5) Fechar
-- Atualize `PLANO_USUARIOS_POR_ID.md` (U2 ✅ com os números reais: tabelas, colunas, valores com ID, o que ficou sem ID e por quê, quanto tempo levou, qualquer FALHOU/PARCIAL) e crie a memória do projeto "usuários por ID" (decisões e estado).
+- Atualize `PLANOS CONCLUIDOS/PLANO_USUARIOS_POR_ID.md` (U2 ✅ com os números reais: tabelas, colunas, valores com ID, o que ficou sem ID e por quê, quanto tempo levou, qualquer FALHOU/PARCIAL) e crie a memória do projeto "usuários por ID" (decisões e estado).
 - **Commite local** (`supabase/sql/usuarios_por_id_u2*.sql`, o plano e este comando). **Nunca `git push`** sem a pergunta de push dedicada ao usuário.
 - **Relate**: o que foi aplicado, os números, o que falhou. **Diga que ainda faltam U3 (funções, gatilhos e política do banco que olham o nome), U4 (as telas: `currentUser.id`, `QuemFez.ts`) e U5**; por ora o sistema grava e lê como sempre (as colunas de ID são só um acréscimo mantido pelo banco), então **nada muda para quem usa**, mas renomear um usuário já leva o nome novo a todas as colunas pelo ID (avise o usuário de que o primeiro renome real ainda deve ser conferido por ele).
 - **Se algo deu errado de forma que não se resolve ali:** `supabase/sql/usuarios_por_id_u2_reverter.sql` desfaz tudo (só tira IDs e funções; nenhum nome em texto foi apagado). Use-o só se o sistema estiver prejudicado, e relate.
