@@ -217,6 +217,8 @@ export const ABAS_DAS_TELAS: Readonly<Record<string, QuadroDeAbas>> = {
   telecom: { padrao: 'demandas', abas: ['vendas', 'separacao', 'demandas'], filhas: { vendas: { padrao: 'quadro', abas: ['quadro', 'lista', 'perdas'] } } },
   sac: { padrao: 'os', abas: ['os', 'chamados_nfc', 'garantia', 'cadastros'] },
   compras: { padrao: 'pedidos', abas: ['pedidos', 'fornecedores'] },
+  // Logística (26/11/2026, depois da V4d): a aba de sempre é o Histórico / Novo Registro (`#/logistica`); as outras três ganham endereço. O Fiscal NÃO entra aqui: a tela dele não tem abas (é uma página só, em seções).
+  logistica: { padrao: 'historico', abas: ['recebimento', 'historico', 'relatorio', 'fretes'] },
   terceiros: { padrao: 'quadro', abas: ['quadro', 'agenda', 'lista', 'relatorio', 'ordens', 'prestadores', 'tipos', 'modelo'] },
 };
 

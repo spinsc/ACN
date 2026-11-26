@@ -304,25 +304,25 @@ const DEFEITOS = [
     { arquivo: 'src/RelogioPonto.tsx', de: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial })", para: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto-sem-endereco', inicial: () => visaoInicial })" },
   ] },
   // ── Fase 6 (26/11/2026): a ficha da Garantia (`#/sac/ficha/<código>`) ──
-  { id: 'ga', nome: 'a ficha aberta por um clique deixa de escrever o endereço', cenarios: '^C78', trocas: [
+  { id: 'ga', nome: 'a ficha aberta por um clique deixa de escrever o endereço', cenarios: '^C83', trocas: [
     { arquivo: 'src/GarantiaTab.tsx', de: 'aberto: detalhe ? String(detalhe.id) : null,', para: 'aberto: null,' },
   ] },
-  { id: 'gb', nome: 'a ficha de outra pessoa passa a abrir pelo link (some a conferência de quem pode ver na leitura)', cenarios: '^C80b', trocas: [
+  { id: 'gb', nome: 'a ficha de outra pessoa passa a abrir pelo link (some a conferência de quem pode ver na leitura)', cenarios: '^C85b', trocas: [
     { arquivo: 'src/GarantiaTab.tsx', de: "return r.registro && !podeVerGarantia(r.registro, currentUser) ? { registro: null, erro: '' } : r;", para: 'return r;' },
   ] },
-  { id: 'gc', nome: 'a tela do SAC deixa de trocar para a aba Garantia quando o endereço pede uma ficha', cenarios: '^C81', trocas: [
+  { id: 'gc', nome: 'a tela do SAC deixa de trocar para a aba Garantia quando o endereço pede uma ficha', cenarios: '^C86', trocas: [
     { arquivo: 'src/SacTab.tsx', de: "const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'sac')?.tipo === 'ficha') setAbaAtiva('garantia'); };", para: "const sincronizar = () => { };" },
   ] },
-  { id: 'gd', nome: 'o "Copiar link" da ficha copia o endereço de uma OS em vez do da ficha', cenarios: '^C81', trocas: [
+  { id: 'gd', nome: 'o "Copiar link" da ficha copia o endereço de uma OS em vez do da ficha', cenarios: '^C86', trocas: [
     { arquivo: 'src/GarantiaTab.tsx', de: "copiarLinkDoRegistroComAviso('sac', 'ficha', g.id, 'da ficha')", para: "copiarLinkDoRegistroComAviso('sac', 'os', g.id, 'da ficha')" },
   ] },
-  { id: 'ge', nome: 'o selo da ficha na OS não abre a ficha (nada acontece)', cenarios: '^C82', trocas: [
+  { id: 'ge', nome: 'o selo da ficha na OS não abre a ficha (nada acontece)', cenarios: '^C87', trocas: [
     { arquivo: 'src/SacTab.tsx', de: "irParaEndereco(montarEnderecoDoRegistroDaTela('sac', 'ficha', String(os.garantia_id)));", para: "void os;" },
   ] },
-  { id: 'gf', nome: 'o aviso de uma ficha de garantia deixa de abrir a ficha pelo endereço (volta a só trocar de aba)', cenarios: '^C82', trocas: [
+  { id: 'gf', nome: 'o aviso de uma ficha de garantia deixa de abrir a ficha pelo endereço (volta a só trocar de aba)', cenarios: '^C87', trocas: [
     { arquivo: 'src/Rotas.ts', de: "  garantia: { tela: 'sac', tipo: 'ficha' },", para: "  // garantia: { tela: 'sac', tipo: 'ficha' }," },
   ] },
-  { id: 'gg', nome: 'a ficha não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C78', trocas: [
+  { id: 'gg', nome: 'a ficha não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C83', trocas: [
     { arquivo: 'src/GarantiaTab.tsx', de: 'fechar: () => { setDetalheId(null);', para: 'fechar: () => {' },
   ] },
 ];

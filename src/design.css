@@ -3659,6 +3659,7 @@ body.dark .acn-lot-selo { color: #1e1b4b; }
 .acn-oea-cel-setor { font-weight: 700; color: var(--acn-oea-cel-cor); white-space: nowrap; }
 .acn-oea-cel-quando { color: var(--acn-text); white-space: nowrap; }
 .acn-oea-cel-pend { font-weight: 700; color: var(--acn-warn); white-space: nowrap; }
+.acn-oea-cel-pend[data-nao-lidas] { color: var(--acn-bad); }
 .acn-dex-resumo { font-size: 11px; font-weight: 700; color: var(--acn-text); }
 .acn-dex-caixa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; font-size: 12px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
 .acn-dex-tit { font-weight: 700; color: var(--acn-text); }
