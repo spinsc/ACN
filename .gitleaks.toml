@@ -1,0 +1,14 @@
+# Varredura de segredos da verificação automática (.github/workflows/verificacao.yml), B6 do plano de migração, 26/11/2026.
+# Usa todas as regras padrão do gitleaks. A única exceção é a chave PÚBLICA do Supabase (papel "anon"): ela é pública por desenho
+# (vai no navegador de todo mundo, nos portais do cliente e no código) e aparece em vários arquivos.
+# A exceção vale só para a chave deste projeto com o papel "anon": uma chave de serviço (papel "service_role") continua barrada.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chave pública (anon) do Supabase deste projeto"
+regexTarget = "match"
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24i''',
+]

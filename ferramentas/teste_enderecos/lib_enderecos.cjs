@@ -5,6 +5,7 @@
 //  - o `entrar` (POST da tela de entrada) só é respondido quando o teste devolve a resposta em `escritaSimulada`.
 const puppeteer = require('puppeteer-core');
 const { crachaDeTeste } = require('../auditoria_layout/cracha_teste.cjs');   // a conta de teste ZZTESTE e o crachá real (a senha fica fora do repositório)
+const { vaiAoBancoOuParaFora } = require('../comum/rede_de_teste.cjs');     // 26/11/2026 (B5 do plano de migração): a trava de gravação olha também o caminho do banco
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = process.env.BASE || 'http://localhost:5199/ACN/';
@@ -49,7 +50,7 @@ async function abrir({ largura = 1500, altura = 900, toque = false, usuario = US
   page.on('request', r => {
     const url = decodeURIComponent(r.url().replace(/\+/g, ' '));
     const metodo = r.method();
-    const externo = !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(r.url());
+    const externo = vaiAoBancoOuParaFora(r.url());   // vai ao banco (em qualquer endereço) ou sai do computador
     const responder = (x) => r.respond({ status: x.status || 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify(x.body) });
     // leituras do banco que só LEEM (funções): passam para o banco real
     if (externo && metodo === 'POST' && /\/rest\/v1\/rpc\/(entidades_com_alteracao_nao_vista|desde_quando_na_etapa|calendario_eventos|inicio_aniversariantes_do_mes|inicio_aniversariantes_cobertura|ponto_meu_rh_id)/.test(url)) {

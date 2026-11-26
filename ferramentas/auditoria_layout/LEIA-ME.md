@@ -8,6 +8,7 @@ Quem usa: o plano `PLANO_AJUSTES_LAYOUT.md` (cada fatia roda a auditoria na tela
 
 1. Dev server de pé (`npm run dev`, ou `preview_start` com o nome `acn-dev`). A ferramenta abre `http://localhost:5173/ACN/`; para outra porta: `BASE=http://localhost:5199/ACN/`.
 2. A conta de teste ZZTESTE precisa da senha em `%USERPROFILE%\.acn-teste\zzteste.json` (`{"email","senha"}`; ver `cracha_teste.cjs`).
+   O banco vem da variável `ACN_BANCO` (padrão: o Supabase de hoje). **Desde 26/11/2026 (B5 do plano de migração) a trava de gravação olha também o caminho** (`/rest/v1`, `/storage/v1`, `/functions/v1`, `/auth/v1`, `/realtime/v1`, `/api`), não só o endereço "de fora": no servidor interno o sistema e o banco dividem o endereço. A regra mora em `ferramentas/comum/rede_de_teste.cjs` e é conferida por `node ferramentas/comum/rede_de_teste.teste.cjs`.
 3. `puppeteer-core` não é dependência do projeto: aponte `NODE_PATH` para uma pasta `node_modules` que o tenha (`npm install puppeteer-core --prefix <pasta>`).
 4. Na pasta desta ferramenta:
 

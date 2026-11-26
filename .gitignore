@@ -32,3 +32,6 @@ MIGRACAO_SERVIDOR/
 
 # Testes de endereço: saídas (fotos e resultado) não vão para o repositório
 ferramentas/teste_enderecos/saida/
+
+# Fumaça das telas (B7 do plano de migração): o resultado de cada rodada fica só na máquina (traz nomes de tabelas e textos de erro)
+ferramentas/fumaca/saida/

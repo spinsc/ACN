@@ -1,0 +1,7 @@
+/* Faixa de conexão (plano de migração para o servidor interno, B4, 26/11/2026). As cores são as da Faixa do design system (design.css). */
+.acn-conexao { flex-shrink: 0; padding: 8px 14px 0; }
+.acn-conexao .acn-faixa { margin: 0; flex-wrap: wrap; }
+.acn-conexao .acn-faixa-texto { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.acn-conexao-login { padding: 0 0 12px; }
+@media (max-width: 767px) { .acn-conexao-tela { padding: 6px 8px 0; } }
+@media print { .acn-conexao { display: none; } }

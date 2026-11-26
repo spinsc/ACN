@@ -51,14 +51,14 @@ export function idDaTela(nome: string, ids: readonly string[]): string | null {
   return ids.find(id => nomeNoEndereco(id) === n) ?? null;
 }
 
-/** Os registros que têm endereço próprio, sem tela dona. Hoje só a OP (Fase 2). */
-export type TipoDeRegistro = 'op';
+/** Os registros que têm endereço próprio, sem tela dona: a OP (Fase 2) e a viagem (Fase 5, 26/11/2026: abre por cima de qualquer tela, como a OP, porque quem recebe o aviso de uma viagem pode nem ter a aba Viagens). */
+export type TipoDeRegistro = 'op' | 'viagem';
 
 /** A palavra de cada registro no endereço (`#/op/…`). Todas precisam estar em `PALAVRAS_RESERVADAS`. */
-const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op' };
+const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
-export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os';
+export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico';   // `servico` = o serviço de terceiro (Fase 5, 26/11/2026)
 
 /** Quais registros cada tela conhece (id interno da tela → as palavras que valem depois do nome dela). Tela que não está aqui não tem endereço de registro. */
 export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistroDaTela[]>> = {
@@ -66,6 +66,7 @@ export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistr
   crm: ['card'],
   compras: ['pedido'],
   sac: ['os'],
+  terceiros: ['servico'],
 };
 
 /**
@@ -166,6 +167,11 @@ export function montarEndereco(tela: string, resto: readonly string[] = []): str
 /** O endereço de um registro sem tela dona: `#/op/A1562.2610%2F01`. A chave é codificada inteira (a barra do número vira `%2F`). */
 export function montarEnderecoDeRegistro(registro: TipoDeRegistro, chave: string): string {
   return '#/' + PALAVRA_DO_REGISTRO[registro] + '/' + encodeURIComponent(String(chave ?? '').trim());
+}
+
+/** O endereço da janela de uma viagem, pelo código interno dela (Fase 5): `#/viagem/<código>`. */
+export function montarEnderecoDaViagem(id: string): string {
+  return montarEnderecoDeRegistro('viagem', id);
 }
 
 /** O endereço da janela de uma OP, pelo número dela. */
@@ -292,6 +298,8 @@ const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string; tipo: TipoDe
   // a Menção e o vínculo "OS X" sempre abriram o Acompanhamento da OS (a tela do SAC lê o recado), e continuam abrindo: o recado carrega essa dica
   sac: { tela: 'sac', tipo: 'os', dica: 'acompanhamento' },
   sac_revisao_orcamento: { tela: 'sac', tipo: 'os', dica: 'acompanhamento' },
+  // Fase 5 (26/11/2026): o aviso do Calendário e o "Abrir" do quadro de serviços ligados à OP e à OS trazem o código do serviço (o do primeiro da visita, quando há vários carros)
+  terceiro_servico: { tela: 'terceiros', tipo: 'servico' },
 };
 
 /**

@@ -1,6 +1,6 @@
 # Teste dos endereços do sistema (F5, Voltar, link de tela, "sem acesso")
 
-Criado em 25/11/2026, na Fase 1 do [PLANO_ENDERECOS_E_ROTAS.md](../../PLANO_ENDERECOS_E_ROTAS.md) (cenários C1 a C15); a Fase 2, o link da OP, trouxe os cenários C16 a C31; a Fase 3, os outros registros (licitação, card do CRM, pedido de compra e OS), os C32 a C44; a Fase 4, as abas de dentro de cada tela, os C45 a C48. **Roda a cada fase do plano** e ganha os cenários da fase. Nada aqui grava no banco: toda gravação externa é abortada pelo teste.
+Criado em 25/11/2026, na Fase 1 do [PLANO_ENDERECOS_E_ROTAS.md](../../PLANO_ENDERECOS_E_ROTAS.md) (cenários C1 a C15); a Fase 2, o link da OP, trouxe os cenários C16 a C31; a Fase 3, os outros registros (licitação, card do CRM, pedido de compra e OS), os C32 a C44; a Fase 4, as abas de dentro de cada tela, os C45 a C48; a Fase 5 (parte 1), a viagem e o serviço de terceiro, os C49 a C58. **Roda a cada fase do plano** e ganha os cenários da fase. Nada aqui grava no banco: toda gravação externa é abortada pelo teste.
 
 ## Como rodar
 
@@ -11,7 +11,7 @@ Criado em 25/11/2026, na Fase 1 do [PLANO_ENDERECOS_E_ROTAS.md](../../PLANO_ENDE
 
 ```powershell
 $env:NODE_PATH = "<pasta>\node_modules"
-node teste_rotas.mjs                    # regras puras do endereço, sem navegador (605 conferências em 26/11/2026: as da Fase 4 são a tabela de abas de cada tela, o link de cada aba e as trocas do quadro)
+node teste_rotas.mjs                    # regras puras do endereço, sem navegador (637 conferências em 26/11/2026, com as da viagem e do serviço de terceiro; 605 eram até a Fase 4: as da Fase 4 são a tabela de abas de cada tela, o link de cada aba e as trocas do quadro)
 node teste_enderecos.cjs                # todos os cenários, em série (cerca de 50 minutos com as abas da Fase 4; 1.062 conferências em 26/11/2026; **cada navegador de teste lê o banco de produção, então a rodada completa derruba o banco por alguns instantes se o sistema está cheio de gente: prefira rodar fora do horário, ou só `"^C4[5678]"` para a Fase 4**)
 node teste_enderecos.cjs "^C5"          # só os cenários cujo nome casa com a expressão (rode em lotes, como "^C(1[6-9]|2[0-9]|3[01]) ", se quiser acompanhar)
 node plantar_defeitos.cjs --conferir    # só confere se os trechos dos defeitos plantados ainda existem no código (não planta nada)
@@ -72,6 +72,8 @@ As fotos e o resultado ficam em `saida/` (fora do git). Os cenários rodam **sem
 | C46 | **Uma execução por tela do quadro** (Compras, SAC, Serviços de terceiros, Engenharia, Financeiro, Marketing, Telecom, CRM, Adaptação, RH, Serralheria, Chicotes, Laboratório e Formação de Preços): as abas da barra são as do quadro e na ordem; a padrão abre sem aba no endereço; cada clique numa aba cria UM passo e o endereço dela; clicar de novo na aberta não cria passo; Voltar e Avançar trocam a aba; do Voltar ao começo o endereço e a aba marcada contam a mesma história; F5 numa aba reabre a mesma; link colado de CADA aba abre a aba e deixa o endereço como está; o nome da aba padrão escrito, MAIÚSCULA e aba que não existe viram o endereço certo; clicar no menu da tela em que já está não derruba a aba; sair da tela e voltar reabre a mesma aba; Serviços de terceiros ainda lembra a última aba e o endereço a mostra; nenhum aviso nem erro no console. O número entre parênteses no fim do rótulo ("OPs Liberadas (12)") é ignorado |
 | C47 | Compras: o endereço de um pedido digitado com a aba Fornecedores à vista abre a mesa na aba Requisições; Voltar e Avançar devolvem as duas abas; o X deixa o endereço da aba aberta |
 | C48 | Admin (a barra é de botões `.acn-tab-btn`, não a padrão): as 23 abas, uma a uma, com um passo cada; clique repetido, Voltar, Avançar, F5, link colado, aba que não existe e menu na mesma tela |
+| C49 a C53 | **Viagem** (`#/viagem/<código>`, por cima de qualquer tela): o clique na tela Viagens, Voltar, Avançar e X; link colado, F5 e o X que nunca sai do sistema; inexistente, não é código e leitura recusada; quem não tem a aba Viagens (link e Menção); "Copiar link" e a "Nova viagem" sem endereço |
+| C54 a C58 | **Serviço de terceiro** (`#/terceiros/servico/<código>`): clique no Quadro, Voltar, Avançar e X; link colado de um serviço sozinho e de um carro de um grupo, F5; inexistente, não é código e leitura recusada; "Copiar link" do serviço e do grupo e abrir por cima da aba Agenda; trocar de um endereço de serviço para outro com uma janela só |
 
 ## Como o teste simula o que não existe nos dados reais
 

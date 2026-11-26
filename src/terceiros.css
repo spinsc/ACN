@@ -243,3 +243,6 @@ html body .acn-b.acn-terc-rel-nome:not(#acn) { white-space: normal; overflow-wra
 .acn-terc-rel-lista { display: grid; gap: 10px; padding: 8px 10px 10px; min-width: 0; }
 .acn-terc-rel-sub { padding: 2px 0 6px; font-size: 12px; font-weight: 600; color: var(--acn-muted); }
 .acn-terc-rel-desc { min-width: 180px; overflow-wrap: anywhere; }
+
+/* 26/11/2026 (Fase 5 do plano de endereços): o "Copiar link" e o X juntos, à direita do cabeçalho da janela do serviço e do grupo */
+.acn-terc-cab-acoes { display: inline-flex; align-items: center; gap: 4px; }

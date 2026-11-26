@@ -4,7 +4,7 @@
 // Para sozinho: sonda lenta (servidor > 400 ms ou resposta > 1,5 s), 2 pedidos sem resposta em 10 s ou erros > 2%. Arquivo PARAR também para.
 const fs = require('fs'), path = require('path');
 const USUARIOS = +process.argv[2] || 10, SEGUNDOS = +process.argv[3] || 60, RITMO = +process.argv[4] || 1;
-const BASE = 'https://qgemelnuqdilnggxmrdw.supabase.co';
+const BASE = require('../../ferramentas/comum/rede_de_teste.cjs').ENDERECO_DO_BANCO;   // 26/11/2026 (B5 do plano de migração): variável ACN_BANCO, padrão o Supabase de hoje
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
 const PARAR = path.join(require("os").tmpdir(), "acn-carga-PARAR");   // crie este arquivo para parar o teste na hora
 const conta = require(path.join(process.env.USERPROFILE, '.acn-teste', 'zzteste.json'));

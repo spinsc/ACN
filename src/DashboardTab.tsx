@@ -5,7 +5,7 @@ import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import InicioTab from './InicioTab';
-import ViagemPorMencao from './ViagemPorMencao';
+import ViagemDoEndereco from './ViagemDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): substitui o ViagemPorMencao (hospedeiro da janela da viagem pelo endereço; o editor dentro dele carrega só quando uma viagem abre)
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
 import AvisosOpPanel, { contarAvisosOp, contarAvisosCalendario } from './AvisosOpPanel';
@@ -28,6 +28,7 @@ import { telaInicialDoUsuario } from './utils/telaInicial';
 import { gruposParaRecolher } from './utils/menuLateral';
 import { useNavegacao } from './useNavegacao';
 import AvisoDeEndereco from './AvisoDeEndereco';
+import FaixaDeConexao from './FaixaDeConexao';
 import { telaSobDemanda, TelaSobDemanda } from './CarregarTela';
 
 // 26/11/2026 (lentidão do sistema): as telas não vêm mais todas no pacote de abertura (eram ~35 importadas de uma vez: 5,2 MB, 1,4 MB comprimido).
@@ -1707,6 +1708,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           </div>
         )}
 
+          {/* 26/11/2026 (B4 do plano de migração): "sem internet" / "o sistema não está respondendo", entre o cabeçalho e a tela */}
+          <FaixaDeConexao />
+
           <main className={`acn-main${activeTab === 'painel_tv' ? ' acn-main-tv' : ''}`}>
             {bloqueio ? (
               <AvisoDeEndereco bloqueio={bloqueio} rotulo={ROTULO_DAS_TELAS[bloqueio.tela]} aoIrParaInicio={() => irParaTela(telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible), { substituir: true })} />
@@ -1895,8 +1899,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <ContatoAlertWidget currentUser={currentUser} />
       <ContatoComercialAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} onNavigate={(tab) => { irParaTela(tab); }} />
-      {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte) */}
-      <ViagemPorMencao currentUser={currentUser} />
+      {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte). 26/11/2026 (Fase 5): agora é a janela da viagem aberta pelo
+          endereço (#/viagem/<código>), para qualquer pessoa, também depois de um F5 e em link colado */}
+      <ViagemDoEndereco currentUser={currentUser} />
 
       {/* ── Janela da OP aberta pelo endereço (#/op/<número>), pela busca geral e pelas Menções (plano de endereços, Fase 2) ── */}
       <OpDoEndereco currentUser={currentUser} tela={activeTab || telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)} />

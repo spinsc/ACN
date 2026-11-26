@@ -52,8 +52,12 @@
     "titulo": "Manual das Viagens",
     "descricao": "Passo a passo completo das Viagens, com fotos: o quadro, como montar o roteiro e o orçamento, a aprovação, o que cada setor preenche em Provisionamento (com a liberação da verba pelo Financeiro e a fila de Pendências), o aviso de saída próxima e de conflito, a ficha da equipe, a volta, o custo real com comprovantes, a Agenda, o relatório de Custos e a Frota com manutenção.",
     "ordem": 2,
-    "atualizadoEm": "2026-11-24",
+    "atualizadoEm": "2026-11-26",
     "mudancas": [
+      {
+        "data": "2026-11-26",
+        "texto": "Link da viagem: cada viagem gravada tem um endereço próprio (#/viagem/...) e a janela ganhou o botão \"Copiar o link desta viagem\", ao lado do X; quem recebe o link abre a viagem por cima de qualquer tela, mesmo sem a aba Viagens (partes dos outros setores só para leitura); o F5 reabre a mesma viagem e o Voltar e o Avançar do navegador fecham e reabrem a janela"
+      },
       {
         "data": "2026-11-24",
         "texto": "Campos de dinheiro: verba, pedágio, diária do quarto, alimentação, valor do km, custo real e custo da manutenção passaram a ser campos de valor em reais: mostram o ponto dos milhares e a vírgula dos centavos enquanto se digita, só aceitam números e completam os centavos ao sair do campo. Sem foto nova desta parte."
@@ -108,6 +112,10 @@
       {
         "data": "2026-11-26",
         "texto": "O veículo e o que será pintado agora aparecem no serviço: no cartão do Quadro, na Lista (coluna Veículo), na janela do serviço e do grupo, na Agenda e na busca (placa, chassi e modelo). A lista de peças passa a se chamar O que será pintado nos serviços de pintura. OP sem modelo cadastrado mostra, em cinza, Sem veículo informado na OP; leitura que falha mostra, em vermelho, Veículo não lido. Texto atualizado; as fotos do Quadro, da Lista e da Agenda ainda são as antigas."
+      },
+      {
+        "data": "2026-11-26",
+        "texto": "Link do serviço: cada serviço tem um endereço próprio (#/terceiros/servico/...) e as janelas do serviço e do grupo de carros ganharam o botão \"Copiar o link\", ao lado do X; o F5 reabre a mesma janela e o Voltar e o Avançar do navegador a fecham e reabrem; o serviço de uma ordem em lote abre a janela da ordem, que não tem link"
       }
     ],
     "caminho": "manuais/servicos-terceiros/index.html"

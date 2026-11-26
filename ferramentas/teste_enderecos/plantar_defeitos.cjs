@@ -151,6 +151,43 @@ const DEFEITOS = [
   { id: 'bg', nome: 'o endereço da aba deixa de mandar na aba que a tela lembrava (Serviços de terceiros abre sempre na aba guardada)', cenarios: '^C46 terceiros', trocas: [
     { arquivo: 'src/AbaNoEndereco.ts', de: "if (lido.tipo === 'aba' && valida(lido.aba)) return lido.aba;", para: "if (false && lido.tipo === 'aba' && valida(lido.aba)) return lido.aba;" },
   ] },
+  // ── Fase 5 (26/11/2026): a viagem (`#/viagem/<código>`, por cima de qualquer tela) e o serviço de terceiro (`#/terceiros/servico/<código>`) ──
+  { id: 'ca', nome: 'a janela da viagem fechada deixa de tirar o endereço dela da barra (o X não volta um passo)', cenarios: '^C49 ', trocas: [
+    { arquivo: 'src/ViagemNoEndereco.ts', de: 'if (c !== null && mesmaChave(c, id)) tirarEnderecoDeRegistroSemTela();', para: 'if (false && c !== null && mesmaChave(c, id)) tirarEnderecoDeRegistroSemTela();' },
+  ] },
+  { id: 'cb', nome: 'a janela da viagem não fecha quando o endereço deixa de ser o dela (o Voltar muda a barra e a janela fica)', cenarios: '^C49 ', trocas: [
+    { arquivo: 'src/ViagemNoEndereco.ts', de: 'if (c === null || !mesmaChave(c, j.id())) { j.fechando = true; j.fechar(); }', para: 'if (false && (c === null || !mesmaChave(c, j.id()))) { j.fechando = true; j.fechar(); }' },
+  ] },
+  { id: 'cc', nome: 'o hospedeiro ignora que a tela Viagens já abriu a viagem (abriria uma segunda janela por cima)', cenarios: '^C49 ', trocas: [
+    { arquivo: 'src/ViagemDoEndereco.tsx', de: 'if (janelaDaViagemEstaAberta(chave)) { setCarregando(false); return; }', para: 'if (false && janelaDaViagemEstaAberta(chave)) { setCarregando(false); return; }' },
+  ] },
+  { id: 'cd', nome: 'leitura da viagem recusada pelo banco passa a valer como "não achei"', cenarios: '^C51 ', trocas: [
+    { arquivo: 'src/ViagemDoEndereco.tsx', de: "if (error) return { viagem: null, erro: error.message || 'sem resposta' };", para: "if (error) return { viagem: null, erro: '' };" },
+  ] },
+  { id: 'ce', nome: 'um texto que não é código de viagem passa a ser perguntado ao banco', cenarios: '^C51 ', trocas: [
+    { arquivo: 'src/ViagemDoEndereco.tsx', de: 'if (!ehCodigoInterno(chave)) return { viagem: null, erro: \'\' };', para: 'if (false && !ehCodigoInterno(chave)) return { viagem: null, erro: \'\' };' },
+  ] },
+  { id: 'cf', nome: 'o "Copiar link" da viagem copia só a parte do endereço (sem o endereço do sistema)', cenarios: '^C53 ', trocas: [
+    { arquivo: 'src/ViagemNoEndereco.ts', de: "return window.location.href.split('#')[0] + montarEnderecoDaViagem(id);", para: 'return montarEnderecoDaViagem(id);' },
+  ] },
+  { id: 'cg', nome: 'a Menção da viagem de quem não tem a aba Viagens deixa de abrir a janela pelo endereço', cenarios: '^C52 ', trocas: [
+    { arquivo: 'src/ViagemDoEndereco.tsx', de: 'abrirViagemPeloEndereco(String(pend.contextoId));', para: '// abrirViagemPeloEndereco(String(pend.contextoId));' },
+  ] },
+  { id: 'ch', nome: 'fechar a viagem de um link colado volta um passo do navegador mesmo sem passo anterior (sairia do sistema)', cenarios: '^C50 ', trocas: [
+    { arquivo: 'src/OpNoEndereco.ts', de: 'if (temPassoAnterior()) { voltarUmPasso(); return; }', para: '{ voltarUmPasso(); return; }' },
+  ] },
+  { id: 'ci', nome: 'o Voltar do navegador deixa de fechar a janela do serviço de terceiro (o endereço muda e a janela fica)', cenarios: '^C54 ', trocas: [
+    { arquivo: 'src/TerceirosTab.tsx', de: 'fechar: () => { setDetalheId(null); setGrupo(null); },', para: 'fechar: () => {},' },
+  ] },
+  { id: 'cj', nome: 'o link do serviço deixa de abrir a janela (a tela lê o endereço e não abre nada)', cenarios: '^C55 ', trocas: [
+    { arquivo: 'src/TerceirosTab.tsx', de: "mostrar: r => setPendente({ id: String(r.id), tentouTodos: false, doEndereco: true }),", para: 'mostrar: r => { /* defeito plantado */ },' },
+  ] },
+  { id: 'ck', nome: 'trocar de um endereço de serviço para outro deixa a janela de antes aberta por baixo da nova', cenarios: '^C58 ', trocas: [
+    { arquivo: 'src/TerceirosTab.tsx', de: "if (cartao?.tipo === 'grupo') { setDetalheId(null); abrirGrupo(cartao, s.id); } else { setGrupo(null); setDetalheId(s.id); }", para: "if (cartao?.tipo === 'grupo') abrirGrupo(cartao, s.id); else setDetalheId(s.id);" },
+  ] },
+  { id: 'cl', nome: 'o "Copiar link" do serviço copia o endereço de outro registro (o botão não faz o que diz)', cenarios: '^C57 ', trocas: [
+    { arquivo: 'src/TerceirosServicoModal.tsx', de: "onClick={() => copiarLinkDoRegistroComAviso('terceiros', 'servico', s.id, 'do serviço')}", para: "onClick={() => copiarLinkDoRegistroComAviso('terceiros', 'servico', '00000000-0000-4000-8000-000000000000', 'do serviço')}" },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

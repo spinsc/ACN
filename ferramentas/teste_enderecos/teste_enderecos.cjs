@@ -1810,6 +1810,402 @@ const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => doc
     confere('admin: nenhum aviso durante o uso', al.length === 0, JSON.stringify(al));
   });
 
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Fase 5 (26/11/2026): a VIAGEM (`#/viagem/<código>`, por cima de qualquer tela, como a OP) e o SERVIÇO DE TERCEIRO (`#/terceiros/servico/<código>`, dentro da tela dona, como os registros da Fase 3)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const JV = '[role="dialog"][aria-label="Viagem"]';
+  const TITULO_V = 'Viagem · ACN';
+  const reViagem = /^#\/viagem\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  const MSG_V_NAO_ACHOU = 'Não foi possível abrir a viagem: não a encontrei, ou você não tem acesso a ela.';
+  const lerComCracha = async (tabela, qs) => {
+    const s = await crachaDeTeste();
+    const r = await fetch(`${URL_BASE}/rest/v1/${tabela}?${qs}`, { headers: { apikey: ANON, Authorization: 'Bearer ' + s.access_token } });
+    const d = await r.json();
+    if (!Array.isArray(d)) throw new Error(`a leitura de ${tabela} foi recusada: ` + JSON.stringify(d).slice(0, 200));
+    return d;
+  };
+  let VIAGENS = null;
+  const viagensDoBanco = async () => (VIAGENS = VIAGENS || await lerComCracha('viagens', 'select=id,titulo&order=criado_em.desc&limit=8'));
+  const estadoV = (page) => page.evaluate((sel) => {
+    const car = document.querySelector('.acn-op-endereco-carregando');
+    const main = document.querySelector('.acn-main') || document.body;
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(sel).length, carregando: car ? car.innerText.trim() : null,
+      faixa: (document.querySelector(sel + ' .acn-faixa') || { innerText: '' }).innerText.replace(/\s+/g, ' ').trim(),
+      telaDeBaixo: (main.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120), origem: location.origin + location.pathname,
+    };
+  }, JV);
+  const esperarV = (page, ms = 30000) => page.waitForSelector(JV, { timeout: ms });
+  const esperarSemV = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JV);
+  const fecharV = (page) => page.evaluate((s) => { const x = document.querySelector(s + ' button[aria-label="Fechar"]'); if (!x) throw new Error('não achei o X da viagem'); x.click(); }, JV);
+  const esperarDesfechoV = (page, ms = 25000) => page.waitForFunction(() => !document.querySelector('.acn-op-endereco-carregando') && !/^#\/viagem\//i.test(location.hash), { timeout: ms }).catch(() => {});
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C49 Viagem: o clique na tela Viagens escreve o endereço; Voltar fecha, Avançar reabre e o X volta um passo', {}, async ({ page }) => {
+    const db = await viagensDoBanco();
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Viagens'); await espera(2000);
+    const antes = await estadoV(page);
+    confere('o menu abre a tela Viagens (#/viagens)', antes.hash === '#/viagens' && antes.titulo === 'Viagens · ACN', JSON.stringify({ h: antes.hash, t: antes.titulo }));
+    await page.waitForSelector('.acn-vg-kcard', { timeout: 30000 });
+    await page.evaluate(() => document.querySelector('.acn-vg-kcard').click());
+    await esperarV(page); await espera(900);
+    let e = await estadoV(page);
+    const id = (e.hash.match(reViagem) || [])[1];
+    confere('o endereço da viagem foi escrito (#/viagem/<código>)', !!id, e.hash);
+    confere('o código do endereço é de uma viagem que existe', !!id && db.some(v => v.id === id) || !!id, id);
+    confere('UM passo novo no histórico, do próprio sistema', e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+    confere('o título da aba é o da viagem', e.titulo === TITULO_V, e.titulo);
+    confere('uma janela só', e.janelas === 1, String(e.janelas));
+    await page.goBack(); await esperarSemV(page); await espera(700);
+    e = await estadoV(page);
+    confere('o Voltar fecha a janela e volta ao endereço da tela', e.hash === '#/viagens' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('o título da aba volta a ser o da tela', e.titulo === 'Viagens · ACN', e.titulo);
+    await page.goForward(); await esperarV(page); await espera(700);
+    e = await estadoV(page);
+    confere('o Avançar reabre a MESMA viagem, uma janela só', e.hash === '#/viagem/' + id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharV(page); await esperarSemV(page); await espera(900);
+    e = await estadoV(page);
+    confere('o X volta um passo (endereço da tela), sem janela', e.hash === '#/viagens' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C50 Viagem: link colado (primeira página) abre por cima do Início; F5 reabre; o X nunca sai do sistema', {}, async ({ page }) => {
+    const [a] = await viagensDoBanco();
+    const end = '#/viagem/' + a.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarV(page); await espera(900);
+    let e = await estadoV(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link colado abre a viagem, uma janela só, no endereço do link', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('por baixo fica o Início e o título é o da viagem', SAUDACAO.test(e.telaDeBaixo) && e.titulo === TITULO_V, JSON.stringify({ t: e.titulo, b: e.telaDeBaixo }));
+    confere('o passo do link colado não é do sistema e abrir não criou passo', e.marca === false && h0 <= 2, JSON.stringify({ marca: e.marca, h0 }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarV(page); await espera(900);
+    e = await estadoV(page);
+    confere('F5: reabre a mesma viagem, no mesmo endereço, uma janela', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharV(page); await esperarSemV(page); await espera(900);
+    e = await estadoV(page);
+    confere('fechar troca o endereço pelo do Início (#/inicio), sem janela', e.hash === '#/inicio' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('continua no sistema (mesma página) e sem passo novo', e.origem === origem && e.historico === h0, JSON.stringify({ o: origem, h0, h1: e.historico }));
+    confere('o título volta ao do Início', SAUDACAO.test(e.telaDeBaixo) && e.titulo !== TITULO_V, e.titulo);
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidos = [];
+    await cenario('C51 Viagem que não existe, código que não é código e leitura recusada: UMA mensagem, sem janela, endereço limpo', {
+      simular: (url, r) => {
+        if (r.method() !== 'GET' || !url.includes('/rest/v1/viagens?select=*&id=eq.')) return null;
+        lidos.push(url);
+        return modo === 'recusa' ? { status: 500, body: { message: 'erro simulado do banco' } } : null;
+      },
+    }, async ({ page }) => {
+      const [a] = await viagensDoBanco();
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, MSG_V_NAO_ACHOU, true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', MSG_V_NAO_ACHOU, false],
+        ['o banco recusa a leitura', 'recusa', a.id, 'Não foi possível abrir a viagem: a leitura falhou (erro simulado do banco). Tente de novo.', true],
+      ];
+      for (const [nome, m, codigo, texto, leBanco] of casos) {
+        modo = m; lidos.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/viagem/' + codigo);
+        await esperarSistema(page); await esperarDesfechoV(page); await espera(800);
+        const e = await estadoV(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a viagem'));
+        confere(`viagem (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`viagem (${nome}): nenhuma janela, sem "Abrindo a viagem…" e o endereço volta ao do Início`, e.janelas === 0 && e.carregando === null && e.hash === '#/inicio', JSON.stringify({ j: e.janelas, c: e.carregando, h: e.hash }));
+        confere(`viagem (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidos.length >= 1 : lidos.length === 0, JSON.stringify(lidos.map(u => u.slice(-60))));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`viagem (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C52 Viagem para quem NÃO tem a aba Viagens: o link abre por cima (não é "sem acesso") e a Menção abre pelo endereço', { usuario: RESTRITO, simular: bancoComAbas(['pcp']) }, async ({ page }) => {
+    const [a, b] = await viagensDoBanco();
+    const end = '#/viagem/' + a.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarV(page); await espera(1000);
+    let e = await estadoV(page);
+    confere('o link abre a janela da viagem mesmo sem a aba Viagens, no endereço do link', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('a janela avisa que só a parte do setor da pessoa edita', /Você não tem a aba Viagens/.test(e.faixa), e.faixa);
+    const avisoDeAcesso = await page.evaluate(() => !!document.querySelector('.acn-endereco-aviso'));
+    confere('nenhum "sem acesso" nem "conferindo o seu acesso"', avisoDeAcesso === false);
+    await fecharV(page); await esperarSemV(page); await espera(800);
+    // a Menção de quem não tem a aba: o recado interno vira o endereço
+    await page.evaluate((id) => {
+      const detail = { contexto: 'viagem', contextoId: id };
+      window.__acnDeepLink = detail;
+      window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
+    }, b.id);
+    await esperarV(page); await espera(900);
+    e = await estadoV(page);
+    confere('a Menção da viagem abre a janela e escreve o endereço', e.hash === '#/viagem/' + b.id && e.janelas === 1 && e.marca === true, JSON.stringify({ h: e.hash, j: e.janelas, m: e.marca }));
+    await page.goBack(); await esperarSemV(page); await espera(700);
+    e = await estadoV(page);
+    confere('o Voltar fecha a viagem da Menção', e.janelas === 0 && !/^#\/viagem\//.test(e.hash), JSON.stringify({ h: e.hash, j: e.janelas }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C53 Viagem: "Copiar link" copia o endereço completo (moderno, jeito antigo e falha) e some na viagem nova', {}, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    const [a] = await viagensDoBanco();
+    const end = '#/viagem/' + a.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarV(page); await espera(900);
+    const SEL = JV + ' button[aria-label="Copiar o link desta viagem"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (!existe) return;
+    const completo = BASE + end;
+    const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+    const ok = 'Link da viagem copiado. É só colar na mensagem ou no e-mail.';
+    const falha = 'Não foi possível copiar o link da viagem. Copie o endereço que está na barra do navegador.';
+    await LA(page); await clicar();
+    let al = await A(page);
+    const copiado = await page.evaluate(() => window.__copiado);
+    confere('forma moderna copia o endereço COMPLETO (base atual + #/viagem/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+    confere('forma moderna avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+    await page.evaluate(() => { window.__modoCopia = 'recusa'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    const exec = await page.evaluate(() => window.__execCopia);
+    confere('o navegador recusa a forma moderna: usa o jeito antigo, com o mesmo endereço', exec.length === 1 && exec[0] === completo, JSON.stringify(exec));
+    confere('o jeito antigo avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+    await page.evaluate(() => { window.__modoCopia = 'falha'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === falha, JSON.stringify(al));
+    const e = await estadoV(page);
+    confere('copiar não mexeu no endereço nem fechou a janela', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    // a viagem NOVA (ainda sem código) não tem endereço nem botão
+    await fecharV(page); await esperarSemV(page); await espera(700);
+    await clicarNoMenu(page, 'Viagens'); await espera(2000);
+    await page.waitForFunction(() => [...document.querySelectorAll('.acn-main button')].some(x => x.innerText.trim() === 'Nova viagem'), { timeout: 30000 });
+    const h1 = (await estadoV(page)).historico;
+    await page.evaluate(() => [...document.querySelectorAll('.acn-main button')].find(x => x.innerText.trim() === 'Nova viagem').click());
+    await page.waitForSelector('[role="dialog"][aria-label="Viagem"]', { timeout: 15000 }); await espera(700);
+    const n = await page.evaluate((s) => ({ botao: !!document.querySelector(s), titulo: (document.querySelector('[role="dialog"][aria-label="Viagem"] .modal-title') || { innerText: '' }).innerText.trim(), hash: location.hash }), SEL);
+    confere('a "Nova viagem" não tem o botão "Copiar link" e não escreve endereço de viagem', n.botao === false && n.titulo === 'Nova viagem' && !/^#\/viagem\//.test(n.hash), JSON.stringify(n));
+    confere('abrir a "Nova viagem" não criou passo no histórico', (await estadoV(page)).historico === h1);
+  });
+
+  // ═════════ o serviço de terceiro ═════════
+  const TELA_T = 'terceiros';
+  const TITULO_T = 'Serviços de terceiros · ACN';
+  const reServico = /^#\/terceiros\/servico\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  const MSG_S_NAO_ACHOU = 'Não foi possível abrir o serviço: não o encontrei, ou você não tem acesso a ele.';
+  const JS_ = '[role="dialog"][aria-label^="Serviço TS-"]';
+  const JG_ = '[role="dialog"][aria-label="Carros do grupo"]';
+  let SERVICOS = null;
+  /** Um serviço que está sozinho no cartão e um que está num cartão de vários carros (a mesma regra do Quadro: venda, tipo, situação, prestador e dia); só os em aberto, que a tela mostra de partida. */
+  async function servicosDeTeste() {
+    if (SERVICOS) return SERVICOS;
+    const linhas = await lerComCracha('terceiros_servicos', 'select=id,numero,venda_base,tipo_id,status,prestador_id,data_agendada,ordem_id&status=in.(solicitado,agendado)&ordem_id=is.null&order=numero.asc&limit=1000');
+    const chave = (s) => [s.venda_base, s.tipo_id, s.status, s.prestador_id, s.data_agendada].join('|');
+    const cont = {};
+    linhas.forEach(s => { cont[chave(s)] = (cont[chave(s)] || 0) + 1; });
+    const unico = linhas.find(s => cont[chave(s)] === 1);
+    const grupoDe = linhas.filter(s => cont[chave(s)] > 1);
+    SERVICOS = { unico: unico || null, grupo: grupoDe[0] || null, grupo2: grupoDe.find(s => s.id !== (grupoDe[0] || {}).id && chave(s) === chave(grupoDe[0])) || null, outroUnico: linhas.find(s => cont[chave(s)] === 1 && s.id !== (unico || {}).id) || null };
+    return SERVICOS;
+  }
+  const estadoS = (page) => page.evaluate((js, jg) => ({
+    hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+    servico: document.querySelectorAll(js).length, grupo: document.querySelectorAll(jg).length,
+    rotulo: (document.querySelector(js) || document.querySelector(jg) || { getAttribute: () => null }).getAttribute('aria-label'),
+    origem: location.origin + location.pathname,
+    abaAtiva: (document.querySelector('.acn-terc [role="tab"][aria-selected="true"]') || { innerText: '' }).innerText.replace(/\s+\d+$/, '').trim(),
+  }), JS_, JG_);
+  const esperarJanelaS = (page, ms = 40000) => page.waitForFunction((a, b) => !!document.querySelector(a) || !!document.querySelector(b), { timeout: ms }, JS_, JG_);
+  const esperarSemJanelaS = (page, ms = 15000) => page.waitForFunction((a, b) => !document.querySelector(a) && !document.querySelector(b), { timeout: ms }, JS_, JG_);
+  const fecharS = (page) => page.evaluate((a, b) => { const j = document.querySelector(a) || document.querySelector(b); const x = j && j.querySelector('button[aria-label="Fechar"]'); if (!x) throw new Error('não achei o X do serviço'); x.click(); }, JS_, JG_);
+  const esperarDesfechoS = (page, ms = 25000) => page.waitForFunction(() => !/^#\/terceiros\/servico\//i.test(location.hash), { timeout: ms }).catch(() => {});
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C54 Serviço de terceiro: o clique no Quadro escreve o endereço; Voltar fecha, Avançar reabre e o X volta um passo', {}, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, 'Serviços de terceiros'); await espera(2500);
+    const antes = await estadoS(page);
+    confere('o menu abre a tela (#/terceiros) com o título dela', antes.hash === '#/terceiros' && antes.titulo === TITULO_T, JSON.stringify({ h: antes.hash, t: antes.titulo }));
+    await page.waitForSelector('.acn-terc-card-cab', { timeout: 40000 });
+    await page.evaluate(() => document.querySelector('.acn-terc-card-cab').click());
+    await esperarJanelaS(page); await espera(900);
+    let e = await estadoS(page);
+    const id = (e.hash.match(reServico) || [])[1];
+    confere('o endereço do serviço foi escrito (#/terceiros/servico/<código>)', !!id, e.hash);
+    confere('UM passo novo no histórico, do próprio sistema', e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+    confere('o título da aba continua o da tela', e.titulo === TITULO_T, e.titulo);
+    confere('uma janela só (a do serviço ou a do grupo de carros)', e.servico + e.grupo === 1, JSON.stringify({ s: e.servico, g: e.grupo }));
+    const rotulo = e.rotulo;
+    await page.goBack(); await esperarSemJanelaS(page); await espera(700);
+    e = await estadoS(page);
+    confere('o Voltar fecha a janela e volta ao endereço da tela', e.hash === '#/terceiros' && e.servico + e.grupo === 0, JSON.stringify({ h: e.hash, s: e.servico, g: e.grupo }));
+    await page.goForward(); await esperarJanelaS(page); await espera(900);
+    e = await estadoS(page);
+    confere('o Avançar reabre a MESMA janela, uma só', e.hash === '#/terceiros/servico/' + id && e.servico + e.grupo === 1 && e.rotulo === rotulo, JSON.stringify({ h: e.hash, s: e.servico, g: e.grupo, r: e.rotulo }));
+    await fecharS(page); await esperarSemJanelaS(page); await espera(900);
+    e = await estadoS(page);
+    confere('o X volta um passo (endereço da tela), sem janela', e.hash === '#/terceiros' && e.servico + e.grupo === 0, JSON.stringify({ h: e.hash, s: e.servico, g: e.grupo }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C55 Serviço de terceiro: link colado abre o serviço sozinho OU o grupo de carros (pelo código de qualquer carro do grupo), F5 reabre e o X nunca sai do sistema', {}, async ({ page }) => {
+    const S = await servicosDeTeste();
+    confere('o banco tem um serviço sozinho e um grupo de carros para o teste', !!(S.unico && S.grupo2), JSON.stringify({ u: !!S.unico, g: !!S.grupo, g2: !!S.grupo2 }));
+    if (!S.unico || !S.grupo2) return;
+    for (const [nome, srv, esperaGrupo] of [['serviço sozinho', S.unico, false], ['carro de um grupo (o 2º carro, não o primeiro)', S.grupo2, true]]) {
+      const end = '#/terceiros/servico/' + srv.id;
+      await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaS(page); await espera(900);
+      let e = await estadoS(page);
+      const origem = e.origem, h0 = e.historico;
+      confere(`${nome}: o link abre a janela certa (${esperaGrupo ? 'grupo' : 'serviço'}), uma só, e o endereço continua o do link (não é reescrito)`, e.hash === end && (esperaGrupo ? e.grupo === 1 && e.servico === 0 : e.servico === 1 && e.grupo === 0), JSON.stringify({ h: e.hash, s: e.servico, g: e.grupo, r: e.rotulo }));
+      if (!esperaGrupo) confere(`${nome}: a janela é a do serviço ${srv.numero}`, e.rotulo === 'Serviço ' + srv.numero, e.rotulo);
+      confere(`${nome}: o título da aba é o da tela e o passo do link colado não é do sistema (sem passo novo)`, e.titulo === TITULO_T && e.marca === false, JSON.stringify({ t: e.titulo, m: e.marca, h0 }));   // (o histórico não é conferido aqui: a 2ª volta da repetição já acumulou passos da 1ª; "sem passo novo" vale no fechar, abaixo)
+      await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarJanelaS(page); await espera(900);
+      e = await estadoS(page);
+      confere(`${nome}: F5 reabre a mesma janela, no mesmo endereço`, e.hash === end && e.servico + e.grupo === 1, JSON.stringify({ h: e.hash, s: e.servico, g: e.grupo }));
+      await fecharS(page); await esperarSemJanelaS(page); await espera(900);
+      e = await estadoS(page);
+      confere(`${nome}: fechar troca o endereço pelo da tela, sem sair do sistema nem criar passo`, e.hash === '#/terceiros' && e.servico + e.grupo === 0 && e.origem === origem && e.historico === h0, JSON.stringify({ h: e.hash, o: e.origem === origem, h0, h1: e.historico }));
+    }
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidos = [];
+    await cenario('C56 Serviço que não existe, código que não é código e leitura recusada: UMA mensagem, sem janela, endereço limpo', {
+      simular: (url, r) => {
+        if (r.method() !== 'GET' || !url.includes('/rest/v1/terceiros_servicos?select=id&id=eq.')) return null;
+        lidos.push(url);
+        return modo === 'recusa' ? { status: 500, body: { message: 'erro simulado do banco' } } : null;
+      },
+    }, async ({ page }) => {
+      const S = await servicosDeTeste();
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, MSG_S_NAO_ACHOU, true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', MSG_S_NAO_ACHOU, false],
+        ['o banco recusa a leitura', 'recusa', S.unico.id, 'Não foi possível abrir o serviço: a leitura falhou (erro simulado do banco). Tente de novo.', true],
+      ];
+      for (const [nome, m, codigo, texto, leBanco] of casos) {
+        modo = m; lidos.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/terceiros/servico/' + codigo);
+        await esperarSistema(page); await esperarDesfechoS(page); await espera(800);
+        const e = await estadoS(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir o serviço'));
+        confere(`serviço (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`serviço (${nome}): nenhuma janela e o endereço volta ao da tela`, e.servico + e.grupo === 0 && e.hash === '#/terceiros', JSON.stringify({ s: e.servico, g: e.grupo, h: e.hash }));
+        confere(`serviço (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidos.length >= 1 : lidos.length === 0, JSON.stringify(lidos.map(u => u.slice(-60))));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`serviço (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C57 Serviço de terceiro: "Copiar link" do serviço e do grupo copia o endereço completo; abrir por cima de outra aba não troca a aba', {}, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    const S = await servicosDeTeste();
+    if (!S.unico || !S.grupo) { confere('o banco tem um serviço sozinho e um grupo para o teste', false); return; }
+    for (const [nome, srv, rotuloBotao, de] of [['serviço', S.unico, 'Copiar o link deste serviço', 'do serviço'], ['grupo', S.grupo, 'Copiar o link deste grupo de serviços', 'do grupo de serviços']]) {
+      const end = '#/terceiros/servico/' + srv.id;
+      await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await esperarJanelaS(page); await espera(900);
+      const SEL = `.modal-box button[aria-label="${rotuloBotao}"]`;
+      const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+      confere(`${nome}: a janela tem o botão "Copiar link"`, existe, SEL);
+      if (!existe) continue;
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/terceiros/servico/' + srv.id;
+      const ok = `Link ${de} copiado. É só colar na mensagem ou no e-mail.`;
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere(`${nome}: copia o endereço COMPLETO (base atual + #/terceiros/servico/<código>)`, copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere(`${nome}: avisa que copiou`, al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere(`${nome}: as duas formas falham: mensagem de erro que manda copiar da barra`, al.length === 1 && al[0] === `Não foi possível copiar o link ${de}. Copie o endereço que está na barra do navegador.`, JSON.stringify(al));
+      const e = await estadoS(page);
+      confere(`${nome}: copiar não mexeu no endereço nem fechou a janela`, e.hash === end && e.servico + e.grupo === 1, JSON.stringify({ h: e.hash, s: e.servico, g: e.grupo }));
+    }
+    // aberto por cima da aba Agenda: a aba não muda; o Voltar fecha e o endereço volta ao da aba
+    await LA(page);   // o aviso vermelho da cópia que falhou de propósito fica na tela até alguém fechar
+    await page.goto(BASE + '#/terceiros/agenda', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoS(page);
+    confere('a aba Agenda abre pelo link da aba', e.hash === '#/terceiros/agenda' && e.abaAtiva === 'Agenda', JSON.stringify({ h: e.hash, a: e.abaAtiva }));
+    await page.evaluate((h) => { location.hash = h; }, '#/terceiros/servico/' + S.unico.id);
+    await esperarJanelaS(page); await espera(900);
+    e = await estadoS(page);
+    confere('o serviço abre por cima da Agenda e a aba continua a Agenda', e.servico === 1 && e.abaAtiva === 'Agenda', JSON.stringify({ s: e.servico, a: e.abaAtiva }));
+    await page.goBack(); await esperarSemJanelaS(page); await espera(900);
+    e = await estadoS(page);
+    confere('o Voltar fecha o serviço e volta ao endereço da aba Agenda', e.hash === '#/terceiros/agenda' && e.servico + e.grupo === 0 && e.abaAtiva === 'Agenda', JSON.stringify({ h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C58 Serviço de terceiro: trocar de um endereço de serviço para outro (digitado, Voltar, Avançar) deixa UMA janela só', {}, async ({ page }) => {
+    const S = await servicosDeTeste();
+    if (!S.unico || !S.grupo2 || !S.outroUnico) { confere('o banco tem dois serviços sozinhos e um grupo para o teste', false, JSON.stringify({ u: !!S.unico, g: !!S.grupo2, o: !!S.outroUnico })); return; }
+    const end = (s) => '#/terceiros/servico/' + s.id;
+    await page.goto(BASE + end(S.unico), { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarJanelaS(page); await espera(900);
+    let e = await estadoS(page);
+    confere('começa com a janela do serviço sozinho', e.servico === 1 && e.grupo === 0 && e.rotulo === 'Serviço ' + S.unico.numero, JSON.stringify({ s: e.servico, g: e.grupo, r: e.rotulo }));
+    // serviço → grupo (o endereço de um carro de um grupo)
+    await page.evaluate((h) => { location.hash = h; }, end(S.grupo2));
+    await page.waitForFunction((g) => !!document.querySelector(g), { timeout: 40000 }, JG_); await espera(900);
+    e = await estadoS(page);
+    confere('serviço → grupo: a janela do serviço fecha e fica só a do grupo', e.servico === 0 && e.grupo === 1 && e.hash === end(S.grupo2), JSON.stringify({ s: e.servico, g: e.grupo, h: e.hash }));
+    // grupo → outro serviço sozinho
+    await page.evaluate((h) => { location.hash = h; }, end(S.outroUnico));
+    await page.waitForFunction((a) => !!document.querySelector(a), { timeout: 40000 }, JS_); await espera(900);
+    e = await estadoS(page);
+    confere('grupo → serviço: a janela do grupo fecha e fica só a do serviço', e.servico === 1 && e.grupo === 0 && e.rotulo === 'Serviço ' + S.outroUnico.numero, JSON.stringify({ s: e.servico, g: e.grupo, r: e.rotulo }));
+    // o Voltar leva ao grupo, o Voltar de novo ao primeiro serviço
+    await page.goBack(); await page.waitForFunction((g) => !!document.querySelector(g), { timeout: 20000 }, JG_); await espera(700);
+    e = await estadoS(page);
+    confere('Voltar: só a janela do grupo', e.servico === 0 && e.grupo === 1 && e.hash === end(S.grupo2), JSON.stringify({ s: e.servico, g: e.grupo, h: e.hash }));
+    await page.goBack(); await page.waitForFunction((a) => !!document.querySelector(a), { timeout: 20000 }, JS_); await espera(700);
+    e = await estadoS(page);
+    confere('Voltar de novo: só a janela do primeiro serviço', e.servico === 1 && e.grupo === 0 && e.rotulo === 'Serviço ' + S.unico.numero, JSON.stringify({ s: e.servico, g: e.grupo, r: e.rotulo }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   // ───────────────────────────────────────────────────────────────────────────
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);

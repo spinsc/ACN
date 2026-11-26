@@ -13,6 +13,8 @@ import { CabecalhoTela, Abas, Botao, Faixa, hojeISO } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { useRegistroNoEndereco, lerPorCodigo, tirarEnderecoDoRegistro } from './RegistroNoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): o serviço aberto tem endereço (#/terceiros/servico/<código>)
+import { supabase } from './supabaseClient';
 import { lerTipos, lerPrestadores } from './TerceirosModelo';
 import { podeGerirPrestadoresDeTerceiros, podeEditarTiposDeTerceiros, podeEditarModeloDoContrato } from './utils/permissoes';
 import { PrestadoresDeTerceiros } from './TerceirosPrestadores';
@@ -297,7 +299,8 @@ export default function TerceirosTab({ currentUser }) {
     setImprimindo({ tipo: 'contrato', servicos: escolhidos, ordem });
   }, [ordens.lista]);
   const imprimirDaOrdem = useCallback((p: any) => setImprimindo(p), []);
-  const abrirGrupo = useCallback((cartao: any) => setGrupo({ ids: cartao.servicos.map((s: any) => s.id), status: cartao.base.status }), []);
+  // `chave` = o serviço que o endereço nomeia (o do aviso, ou o que o endereço pediu): o grupo guarda qual é, para a janela do grupo não escrever outro endereço por cima do que a pessoa abriu
+  const abrirGrupo = useCallback((cartao: any, chave?: string) => setGrupo({ ids: cartao.servicos.map((s: any) => s.id), status: cartao.base.status, chave: chave || '' }), []);
 
   // ── T5 (23/11/2026): o pagamento ao prestador e a saída da vistoria de pátio ──
   const tipoDoServico = useCallback((s: any) => mapaTipos.get(s.tipo_id), [mapaTipos]);
@@ -356,9 +359,14 @@ export default function TerceirosTab({ currentUser }) {
     if (!pendente || !servicos.lido || trocandoJanela) return;
     const s = lista.find((x: any) => x.id === pendente.id);
     if (s) {
-      if (estaEmOrdemAtiva(s)) { abrirOrdem(s.ordem_id); setPendente(null); return; }   // a visita de uma ordem em lote é a própria ordem
+      if (estaEmOrdemAtiva(s)) {   // a visita de uma ordem em lote é a própria ordem
+        abrirOrdem(s.ordem_id); setPendente(null);
+        if (pendente.doEndereco) tirarEnderecoDoRegistro('terceiros');   // a janela da ordem não tem endereço (Fase 5): o endereço do serviço sairia da barra sem janela que o mostrasse
+        return;
+      }
       const cartao = cartoesDaColuna(lista, s.status).find((c: any) => (c.tipo === 'grupo' ? c.servicos.some((y: any) => y.id === s.id) : c.servico.id === s.id));
-      if (cartao?.tipo === 'grupo') abrirGrupo(cartao); else setDetalheId(s.id);
+      // uma janela só (achado no teste da Fase 5, 26/11/2026): trocar de um endereço de serviço para outro deixava a janela de antes aberta por baixo da nova
+      if (cartao?.tipo === 'grupo') { setDetalheId(null); abrirGrupo(cartao, s.id); } else { setGrupo(null); setDetalheId(s.id); }
       setPendente(null);
       return;
     }
@@ -368,7 +376,18 @@ export default function TerceirosTab({ currentUser }) {
       ? 'Não foi possível abrir o serviço do aviso: a leitura dos serviços falhou. Atualize a tela e tente de novo.'
       : 'Não encontrei o serviço deste aviso. Confira na Lista, em "Todos" (ele pode ter sido cancelado).', 'atencao');
     setPendente(null);
+    if (pendente.doEndereco) tirarEnderecoDoRegistro('terceiros');
   }, [pendente, servicos.lido, lista, servicos.erro, trocandoJanela, abrirGrupo, abrirOrdem]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 26/11/2026 (Fase 5 do plano de endereços): o serviço aberto (a janela do serviço ou a do grupo de carros) e o endereço dele, nos dois sentidos. A janela abre pelo mesmo caminho do aviso do
+  // Calendário (`pendente`), que já acha o serviço, lê os mais antigos que 120 dias e abre o grupo quando o serviço está num cartão de vários carros. O que a pessoa abre num clique escreve o endereço.
+  useRegistroNoEndereco({
+    tela: 'terceiros', tipo: 'servico', rotulo: 'o serviço',
+    aberto: detalheId || (grupo ? (grupo.chave || grupo.ids?.[0] || null) : null),
+    ler: chave => lerPorCodigo(supabase.from('terceiros_servicos').select('id').eq('id', chave).maybeSingle()),
+    mostrar: r => setPendente({ id: String(r.id), tentouTodos: false, doEndereco: true }),
+    fechar: () => { setDetalheId(null); setGrupo(null); },
+  });
 
   const lido = tipos.lido && prestadores.lido && servicos.lido;
   const semTipos = tipos.lido && tipos.lista.length === 0;

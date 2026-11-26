@@ -34,6 +34,7 @@ import { lerReservas, travaPorReserva } from './ViagemReservas';
 import RelatorioDeCustos from './ViagemRelatorioTela';
 import AgendaDasViagens from './ViagemAgendaTela';
 import { dadosDaCopia } from './ViagemCopia';
+import { useEnderecoDaViagem, copiarLinkDaViagemComAviso } from './ViagemNoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): a viagem aberta tem endereço (#/viagem/<código>) e o botão "Copiar link"
 import {
   COLUNAS_VIAGEM, statusDaViagem, colunaDaViagem, rotuloDoStatus, movimentosDaViagem, movimentoParaAColuna, faltaParaMover, patchDoMovimento, entradaDoMovimento, entradaDeAlteracao,
   diasNaColuna, diasParaSair, saidaAtrasada, textoParaBusca, permissoesDaViagem, temProvisionamento, saidaPertoComFalta,
@@ -41,7 +42,7 @@ import {
 import type { Movimento } from './ViagemFluxo';
 import {
   mdiPlus, mdiClose, mdiArrowUp, mdiArrowDown, mdiMagnify, mdiContentSaveOutline, mdiContentCopy, mdiPrinterOutline,
-  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline, mdiFileDocumentOutline,
+  mdiTrashCanOutline, mdiMapMarkerPath, mdiMapMarker, mdiRefresh, mdiArrowRight, mdiOpenInNew, mdiCarOutline, mdiFileDocumentOutline, mdiLink,
 } from '@mdi/js';
 
 const novoId = () => Math.random().toString(36).slice(2, 8);
@@ -190,6 +191,8 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar, comoS
   const [v, setV] = useState(() => ({ ...viagemVazia(), ...inicial, custos: { ...CUSTOS_PADRAO, ...(inicial?.custos || {}) }, paradas: inicial?.paradas || [], data_saida: inicial?.data_saida || '', vinculo: inicial?.vinculo || '', vinculos: Array.isArray(inicial?.vinculos) ? inicial.vinculos : [] }));
   const fotoInicial = useRef('');   // o que a janela mostrava ao abrir: serve para avisar de alterações não salvas antes de sair para outro registro
   if (!fotoInicial.current) fotoInicial.current = JSON.stringify(v);
+  // 26/11/2026 (Fase 5): a janela da viagem já gravada escreve o endereço dela (#/viagem/<código>); o Voltar do navegador fecha com a mesma ação do X (que nunca perguntou sobre alteração não salva)
+  useEnderecoDaViagem(v, aoFechar);
   const [salvando, setSalvando] = useState(false);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState('');
@@ -436,7 +439,10 @@ export function EditorDeViagem({ inicial, currentUser, aoFechar, aoSalvar, comoS
       <div className="modal-box acn-modal-cadastro acn-vg-jan" role="dialog" aria-label="Viagem">
         <div className="acn-modal-cab">
           <span className="modal-title"><Icone path={mdiMapMarkerPath} size={18} />{v.id ? 'Viagem' : 'Nova viagem'}</span>
-          <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={aoFechar} />
+          <span className="acn-vg-cab-acoes">
+            {v.id && <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta viagem" title="Copiar o link desta viagem para colar numa mensagem ou e-mail" onClick={() => copiarLinkDaViagemComAviso(v.id)} />}
+            <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={aoFechar} />
+          </span>
         </div>
         <div className="acn-modal-corpo acn-vg-corpo">
 
@@ -750,6 +756,8 @@ export default function ViagensTab({ currentUser }: any) {
     setErro(''); setLista(data || []); setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+  // 26/11/2026 (Fase 5): a viagem aberta pelo endereço (`ViagemDoEndereco`) por cima desta tela e salva avisa aqui, para a lista não mostrar a viagem de antes
+  useEffect(() => { window.addEventListener('acn:viagens-mudaram', carregar); return () => window.removeEventListener('acn:viagens-mudaram', carregar); }, [carregar]);
   const carregarReservas = useCallback(async () => { const r = await lerReservas(hojeISO()); setReservasDoCarro(r.lista); setErroReservasDoCarro(r.erro); }, []);
   useEffect(() => { carregarReservas(); }, [carregarReservas]);
 
