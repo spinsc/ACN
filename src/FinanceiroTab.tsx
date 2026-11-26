@@ -3,6 +3,7 @@ import { nomeDoPedido } from './NomeDoPedido';
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
+import { anexarValoresDoFaturamento } from './FreteValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA } from './ComprasFluxo';
@@ -453,8 +454,11 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     setCentros(cData || []);
     const comValor = await anexarValoresDosPedidos(pData || [], true);   // V3b: o valor da compra mora em `pcp_pedidos_compra_valores`
     if (comValor.erro) { setErroCarga('Não foi possível ler os valores das compras: ' + comValor.erro); setLoading(false); return; }
+    // V4b (26/11/2026): idem o valor de cada pagamento (`pcp_pedidos_faturamento_valores`)
+    const fatComValor = await anexarValoresDoFaturamento(fData || [], true);
+    if (fatComValor.erro) { setErroCarga('Não foi possível ler os valores dos pagamentos: ' + fatComValor.erro); setLoading(false); return; }
     setCompras(comValor.pedidos);
-    setFaturamentos(fData || []);
+    setFaturamentos(fatComValor.faturamentos);
     setDespesas(dData || []);
     setLoading(false);
     // Etapa 15e-2: a faixa "mês fechado" — se a leitura falhar, só não mostra a faixa (a trava é conferida no banco ao gravar)
@@ -465,7 +469,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       const hoje = new Date();
       if ((cData || []).some((c: any) => c.ativo && c.responsavel_email)) {
         const orcLinhas = await carregarOrcamentoDoAno(hoje.getFullYear());
-        const itens = normalizarMovimentos({ compras: pData || [], faturamentos: fData || [], despesas: dData || [] });
+        // 26/11/2026: o aviso lia `pData`/`fData` (sem o dinheiro, que saiu das colunas antigas na V3d) e subestimava o consumo do orçamento; lê as listas com os valores recolocados
+        const itens = normalizarMovimentos({ compras: comValor.pedidos, faturamentos: fatComValor.faturamentos, despesas: dData || [] });
         await avaliarAlertasDeConsumo({ centros: cData || [], itens, orcLinhas, ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 });
       }
     } catch (e) { console.warn('Aviso de consumo do orçamento não avaliado:', e); }

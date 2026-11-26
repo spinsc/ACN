@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
+import { anexarValoresDoFaturamento } from './FreteValores';
 import Icone from './Icone';
 import { Botao, Selo, Faixa, diaBR } from './Interface';
 import { abrirVinculo } from './VinculoPicker';
@@ -35,6 +36,10 @@ export async function carregarComprasDeOp() {
     if (error) throw error;
     faturamentos.push(...(data || []));
   }
+  // V4b (26/11/2026): o valor do pagamento mora em `pcp_pedidos_faturamento_valores`; quem não pode ver recebe nulo
+  const fatComValor = await anexarValoresDoFaturamento(faturamentos);
+  if (fatComValor.erro) throw new Error('Não foi possível ler os valores dos pagamentos: ' + fatComValor.erro);
+  faturamentos.splice(0, faturamentos.length, ...fatComValor.faturamentos);
   const { data: centros, error: errCentros } = await supabase.from('centros_custo').select('id,codigo,nome').order('codigo');
   if (errCentros) throw errCentros;
   return { compras, faturamentos, centros: centros || [] };

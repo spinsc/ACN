@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
+import { anexarValoresDosFretes, anexarValoresDoFrete, anexarValoresDasCotacoesDeFrete, anexarValoresDasAprovacoesDeFrete, valorDaCotacaoOuNulo, AVISO_SEM_VALOR_DO_FRETE } from './FreteValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
@@ -412,7 +413,10 @@ function FretesPanel({ currentUser }: any) {
       supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material').eq('status_compra', 'Comprado'),
       supabase.from('fretes_alcadas_aprovacao').select('*').eq('ativo', true).order('nivel'),
     ]);
-    setFretes(fData || []);
+    // V4b do "ver valores no banco" (26/11/2026): o valor do frete e o da nota moram em `pcp_fretes_valores`; quem não pode ver recebe nulo
+    const comValor = await anexarValoresDosFretes(fData || []);
+    if (comValor.erro) mostrarAviso('Não foi possível ler os valores dos fretes (' + comValor.erro + '). Os valores podem aparecer vazios; atualize a tela.', 'erro');
+    setFretes(comValor.fretes);
     setPedidosCompra(pData || []);
     setAlcadasFrete(aData || []);
     setLoading(false);
@@ -429,7 +433,7 @@ function FretesPanel({ currentUser }: any) {
       if (!pend || pend.contexto !== 'frete_aprovacao') return;
       (window as any).__acnDeepLink = null;
       supabase.from('pcp_fretes').select('*').eq('id', pend.contextoId).maybeSingle()
-        .then(({ data }) => { if (data) setModalFrete(data); });
+        .then(async ({ data }) => { if (data) setModalFrete((await anexarValoresDoFrete(data)).frete); });
     };
     tentarAbrir();
     window.addEventListener('acn:abrir-registro', tentarAbrir);
@@ -537,11 +541,15 @@ function FretesPanel({ currentUser }: any) {
     setLoadingCotacoes(true);
     const { data } = await supabase.from('pcp_cotacoes_fretes')
       .select('*').eq('frete_id', f.id).order('criado_em', { ascending: true });
-    setCotacoes(data || []);
+    // V4b (26/11/2026): o valor de cada cotação e o da aprovação moram em tabelas à parte; quem não pode ver recebe nulo
+    const cotComValor = await anexarValoresDasCotacoesDeFrete(data || []);
+    if (cotComValor.erro) mostrarAviso('Não foi possível ler os valores das cotações (' + cotComValor.erro + ').', 'erro');
+    setCotacoes(cotComValor.cotacoes);
     if (f.status === 'Aguardando Aprovação') {
       const { data: aprov } = await supabase.from('pcp_aprovacoes_fretes')
         .select('*').eq('frete_id', f.id).order('nivel', { ascending: true });
-      setAprovacoesFrete(aprov || []);
+      const aprovComValor = await anexarValoresDasAprovacoesDeFrete(aprov || []);
+      setAprovacoesFrete(aprovComValor.aprovacoes);
     } else {
       setAprovacoesFrete([]);
     }
@@ -666,6 +674,10 @@ function FretesPanel({ currentUser }: any) {
     if (!justificativa.trim()) { alert('Informe a justificativa da cotação vencedora.'); return; }
     const vencedora = cotacoes.find(c => c.id === vencedoraId);
     if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
+    // V4b (26/11/2026): quem não vê valores recebe a cotação sem valor, e gravar daqui apagaria o valor do frete e escolheria a alçada errada (a conta sairia com zero).
+    // Só para a ação, até as telas de gravação passarem pelas tabelas novas (V4c).
+    // (quem vê valores e tem uma cotação antiga sem valor segue como sempre: o valor do frete fica vazio)
+    if (valorDaCotacaoOuNulo(vencedora) == null && !podeVerValores(currentUser)) { alert(AVISO_SEM_VALOR_DO_FRETE); return; }
     setConfirmando(true);
 
     const niveis = alcadasFrete

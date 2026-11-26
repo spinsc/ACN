@@ -23,6 +23,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
+import { anexarValoresDoFaturamento } from './FreteValores';
 import { lerPaginado } from './LerPaginado';
 import Icone from './Icone';
 import { Botao, Selo, Faixa, diaBR, diaISO } from './Interface';
@@ -57,7 +58,10 @@ export async function carregarMovimentosCentros() {
 // V3b do "ver valores no banco" (24/11/2026): o dinheiro do pedido mora em `pcp_pedidos_compra_valores`; quem não pode ver recebe nulo
   const comValor = await anexarValoresDosPedidos(compras, true);
   if (comValor.erro) throw new Error('Não foi possível ler os valores das compras: ' + comValor.erro);
-  return { compras: comValor.pedidos, faturamentos, despesas };
+  // V4b (26/11/2026): o valor do pagamento mora em `pcp_pedidos_faturamento_valores`; quem não pode ver recebe nulo
+  const fatComValor = await anexarValoresDoFaturamento(faturamentos, true);
+  if (fatComValor.erro) throw new Error('Não foi possível ler os valores dos pagamentos: ' + fatComValor.erro);
+  return { compras: comValor.pedidos, faturamentos: fatComValor.faturamentos, despesas };
 }
 
 /** As linhas de orçamento de um ano (todos os centros). */
