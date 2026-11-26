@@ -1,6 +1,6 @@
 # PLANO — Endereços e rotas no sistema (links, F5, voltar e avançar)
 
-Proposto em 25/11/2026, a pedido do usuário. **Revisado contra o código publicado e decidido pelo usuário no mesmo dia** (seções 4 e 7). **Fase 1 construída e testada em 25/11/2026 (seção 3), ainda não publicada; as outras fases não foram começadas.**
+Proposto em 25/11/2026, a pedido do usuário. **Revisado contra o código publicado e decidido pelo usuário no mesmo dia** (seções 4 e 7). **Fase 1 construída, testada e publicada em 25/11/2026 (seção 3); as outras fases não foram começadas.**
 
 ## 1. O problema (como está hoje)
 
@@ -40,7 +40,7 @@ Regras:
 
 | Fase | O que entrega | Tamanho (estimativa minha, a confirmar) |
 |---|---|---|
-| **1. Tela e aba da tela** ✅ *(25/11/2026, falta publicar)* | Menu lateral reflete o endereço; F5, voltar, avançar e link de TELA; quadro de nomes e função única; conferência de permissão em todos os atalhos, com "conferindo seu acesso…" e "sem acesso"; login que preserva o endereço e sair que o zera; título da aba por tela; Painel TV por endereço. **Só arquivos da parte central do sistema** (`App.tsx`, `LoginTab.tsx`, `AdminTab.tsx`, `DashboardTab.tsx` e o `Rotas.ts` novo): não colide com a "Ver valores". | poucos dias |
+| **1. Tela e aba da tela** ✅ *(25/11/2026, publicada)* | Menu lateral reflete o endereço; F5, voltar, avançar e link de TELA; quadro de nomes e função única; conferência de permissão em todos os atalhos, com "conferindo seu acesso…" e "sem acesso"; login que preserva o endereço e sair que o zera; título da aba por tela; Painel TV por endereço. **Só arquivos da parte central do sistema** (`App.tsx`, `LoginTab.tsx`, `AdminTab.tsx`, `DashboardTab.tsx` e o `Rotas.ts` novo): não colide com a "Ver valores". | poucos dias |
 | **2. Link da OP** | `#/op/<número ou código>` abre a janela da OP por cima de qualquer tela; botão "Copiar link"; a busca geral e as Menções passam pelo endereço; fechar a janela volta um passo (e, em link colado, leva à tela de baixo). | alguns dias |
 | **3. Demais registros** | Licitação e card do CRM, compra e OS, um tipo por vez, cada um com o seu "Copiar link"; a tela lê o endereço quando fica pronta. | uns dias, por tipo |
 | **4. Abas internas** | As cerca de 28 telas com aba ou visão interna, **junto de cada tela, na mesma fatia que já estiver mexendo nela** (quem mexe liga a aba ao endereço no mesmo commit; vale para a rotina `/ux-fluxo` e para a "Ver valores"). **Logística e Fiscal só depois da V4b a V4d.** Sem prazo fixo. | contínua, tela a tela |
@@ -48,7 +48,7 @@ Regras:
 
 Cada fase entra sozinha, é publicada e testada, e o sistema continua funcionando entre uma e outra. **Prazo (decidido): as Fases 1 e 2 antes de 18/12**, para o ramo da migração do servidor já nascer com elas. O prazo e a migração do servidor só aparecem neste plano; nenhum outro documento do projeto os descreve.
 
-### Fase 1 — o que foi feito (25/11/2026; tudo local, **falta publicar**)
+### Fase 1 — o que foi feito (25/11/2026; **publicada no mesmo dia**)
 
 **Entregue:**
 
@@ -76,7 +76,7 @@ Cada fase entra sozinha, é publicada e testada, e o sistema continua funcionand
 - Um endereço digitado fora da forma exata (`#PCP/`) abre a tela, mas **não é reescrito** na barra: reescrever apagaria o que vem depois da tela, que as Fases 3 e 4 vão usar.
 - O Painel TV abre dentro do sistema (com o menu e o cabeçalho); um modo "tela cheia sem menu" não foi pedido.
 - **Achado fora do escopo, não mexido:** uma Menção criada pela aba de demandas do setor (`SetorDemandaTab.tsx`, linha 686) tem como destino `demandas_gerais`, que não é uma tela do menu (a tela das demandas gerais é `ajustes`). Antes o clique abria uma área em branco; agora avisa "Não encontrei a tela de destino". Corrigir o destino é decisão do usuário.
-- **Depois de publicar:** rodar o `/saude-banco` (Voltar e Avançar reabrem a tela e releem o banco) e conferir o aviso num computador de uso real.
+- **Depois de publicar (feito em 25/11/2026; deploy terminado às 21h06, horário de Brasília):** o site no ar serve os mesmos arquivos do pacote conferido (`index-CndU_kig.js` e `index-legacy-BWPLJG-i.js`), com as frases novas do aviso. O `/saude-banco` deu CPU de 404 a 439 ms por ciclo (o normal é cerca de 400), zero timeouts desde as 19h10 e nenhuma tela consultando demais: os dois picos de volume (cerca de 1.500 pedidos por minuto das 19h10 às 19h30 e 490 por minuto das 20h30 às 20h50) eram navegadores de teste (97% a 99% dos pedidos) e, fora eles, o tráfego ficou de 8 a 18 pedidos por minuto, com uma janela de 91. Nenhuma consulta nova entre as mais caras (a de 268 ms em média, `entidades_com_alteracao_nao_vista`, 389 chamadas, é de 29/09 e não tem relação com esta fase). **Falta:** conferir o aviso num computador de uso real.
 
 ## 4. Decisões do usuário (25/11/2026)
 
