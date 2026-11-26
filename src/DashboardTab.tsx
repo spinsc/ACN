@@ -4,41 +4,8 @@ import { intervaloVisivel } from './IntervaloVisivel';
 import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
-import EngenhariaTab from './EngenhariaTab';
-import AjustesProjetoTab from './AjustesProjetoTab';
-import MinhasSolicitacoesTab from './MinhasSolicitacoesTab';
-import ManuaisTab from './ManuaisTab';
 import InicioTab from './InicioTab';
-import PCPTab from './PCPTab';
-import AlmoxarifadoTab from './AlmoxarifadoTab';
-import ProducaoTab from './ProducaoTab';
-import PainelProducaoTV from './PainelProducaoTV';
-import QualidadeTab from './QualidadeTab';
-import FiscalTab from './FiscalTab';
-import LogisticaTab from './LogisticaTab';
-import VistoriasPatio from './VistoriasPatio';
-import MarketingTab from './MarketingTab';
-import SetorDemandaTab from './SetorDemandaTab';
-import TelecomTab from './TelecomTab';
-import ComprasTab from './ComprasTab';
-import CadastroItensTab from './CadastroItensTab';
-import CadastroProdutosTab from './CadastroProdutosTab';
-import CotacoesTab from './CotacoesTab';
-import AdminTab from './AdminTab';
-import RelatoriosTab from './RelatoriosTab';
-import FormacaoPrecosTab from './FormacaoPrecosTab';
-import ViagensTab from './ViagensTab';
 import ViagemPorMencao from './ViagemPorMencao';
-import SacTab from './SacTab';
-import VeiculosNfcTab from './VeiculosNfcTab';
-import LicitacoesTab from './LicitacoesTab';
-import CalendarioTab from './CalendarioTab';
-import PontoTab from './PontoTab';
-import TerceirosTab from './TerceirosTab';
-import CrmTab from './CrmTab';
-import ClientesTab from './ClientesTab';
-import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
-import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
 import AvisosOpPanel, { contarAvisosOp, contarAvisosCalendario } from './AvisosOpPanel';
@@ -61,6 +28,44 @@ import { telaInicialDoUsuario } from './utils/telaInicial';
 import { gruposParaRecolher } from './utils/menuLateral';
 import { useNavegacao } from './useNavegacao';
 import AvisoDeEndereco from './AvisoDeEndereco';
+import { telaSobDemanda, TelaSobDemanda } from './CarregarTela';
+
+// 26/11/2026 (lentidão do sistema): as telas não vêm mais todas no pacote de abertura (eram ~35 importadas de uma vez: 5,2 MB, 1,4 MB comprimido).
+// Cada uma é baixada na primeira vez que a pessoa a abre. Tela nova de menu entra aqui com `telaSobDemanda`, nunca com `import` direto.
+const EngenhariaTab = telaSobDemanda(() => import('./EngenhariaTab'));
+const AjustesProjetoTab = telaSobDemanda(() => import('./AjustesProjetoTab'));
+const MinhasSolicitacoesTab = telaSobDemanda(() => import('./MinhasSolicitacoesTab'));
+const ManuaisTab = telaSobDemanda(() => import('./ManuaisTab'));
+const PCPTab = telaSobDemanda(() => import('./PCPTab'));
+const AlmoxarifadoTab = telaSobDemanda(() => import('./AlmoxarifadoTab'));
+const ProducaoTab = telaSobDemanda(() => import('./ProducaoTab'));
+const PainelProducaoTV = telaSobDemanda(() => import('./PainelProducaoTV'));
+const QualidadeTab = telaSobDemanda(() => import('./QualidadeTab'));
+const FiscalTab = telaSobDemanda(() => import('./FiscalTab'));
+const LogisticaTab = telaSobDemanda(() => import('./LogisticaTab'));
+const VistoriasPatio = telaSobDemanda(() => import('./VistoriasPatio'));
+const MarketingTab = telaSobDemanda(() => import('./MarketingTab'));
+const SetorDemandaTab = telaSobDemanda(() => import('./SetorDemandaTab'));
+const TelecomTab = telaSobDemanda(() => import('./TelecomTab'));
+const ComprasTab = telaSobDemanda(() => import('./ComprasTab'));
+const CadastroItensTab = telaSobDemanda(() => import('./CadastroItensTab'));
+const CadastroProdutosTab = telaSobDemanda(() => import('./CadastroProdutosTab'));
+const CotacoesTab = telaSobDemanda(() => import('./CotacoesTab'));
+const AdminTab = telaSobDemanda(() => import('./AdminTab'));
+const RelatoriosTab = telaSobDemanda(() => import('./RelatoriosTab'));
+const FormacaoPrecosTab = telaSobDemanda(() => import('./FormacaoPrecosTab'));
+const ViagensTab = telaSobDemanda(() => import('./ViagensTab'));
+const SacTab = telaSobDemanda(() => import('./SacTab'));
+const VeiculosNfcTab = telaSobDemanda(() => import('./VeiculosNfcTab'));
+const LicitacoesTab = telaSobDemanda(() => import('./LicitacoesTab'));
+const CalendarioTab = telaSobDemanda(() => import('./CalendarioTab'));
+const PontoTab = telaSobDemanda(() => import('./PontoTab'));
+const TerceirosTab = telaSobDemanda(() => import('./TerceirosTab'));
+const CrmTab = telaSobDemanda(() => import('./CrmTab'));
+const ClientesTab = telaSobDemanda(() => import('./ClientesTab'));
+const FinanceiroTab = telaSobDemanda(() => import('./FinanceiroTab'));
+const RHTab = telaSobDemanda(() => import('./RHTab'));
+const ComissoesTecnicosStandalone = telaSobDemanda(() => import('./RHTab'), m => m.ComissoesTecnicosStandalone);
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
@@ -1832,7 +1837,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}
-                {renderContent()}
+                <TelaSobDemanda chave={activeTab}>{renderContent()}</TelaSobDemanda>
               </>
             )}
           </main>

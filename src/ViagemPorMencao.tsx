@@ -10,7 +10,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { mostrarAviso } from './Feedback';
 import { permissoesDaViagem } from './ViagemFluxo';
-import { EditorDeViagem } from './ViagensTab';
+import { telaSobDemanda, TelaSobDemanda } from './CarregarTela';
+// 26/11/2026 (lentidão): esta peça fica montada o tempo todo na casca; se importasse a ViagensTab direto, a tela inteira das Viagens viria junto no pacote de abertura.
+// Agora o editor só é baixado quando uma Menção realmente abre a viagem.
+const EditorDeViagem = telaSobDemanda(() => import('./ViagensTab'), m => m.EditorDeViagem);
 
 export default function ViagemPorMencao({ currentUser }: any) {
   const [viagem, setViagem] = useState<any | null>(null);
@@ -30,5 +33,9 @@ export default function ViagemPorMencao({ currentUser }: any) {
   }, [temAba]);
 
   if (!viagem) return null;
-  return <EditorDeViagem key={viagem.id} inicial={viagem} currentUser={currentUser} aoFechar={() => setViagem(null)} aoSalvar={() => setViagem(null)} />;
+  return (
+    <TelaSobDemanda chave={viagem.id}>
+      <EditorDeViagem key={viagem.id} inicial={viagem} currentUser={currentUser} aoFechar={() => setViagem(null)} aoSalvar={() => setViagem(null)} />
+    </TelaSobDemanda>
+  );
 }

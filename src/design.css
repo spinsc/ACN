@@ -7831,3 +7831,6 @@ html body .acn-label.acn-lote-titulo-dados { margin-bottom: 2px; }
 .acn-lote-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
 .acn-lote-campo.largo { grid-column: 1 / -1; }
 .acn-opl-botoes.acn-lote-botoes { margin-top: 10px; }
+
+/* 26/11/2026 (lentidão): a linha que aparece enquanto o arquivo de uma tela vem do servidor (CarregarTela.tsx) */
+.acn-carregando-tela { padding: 16px 0; color: var(--acn-muted); font-size: 14px; }
