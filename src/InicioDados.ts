@@ -39,7 +39,6 @@ const camposDoSlide = (f: any, usuario: any) => ({
   link_destino: f.link_tipo && f.link_tipo !== 'nenhum' ? (String(f.link_destino || '').trim() || null) : null,
   exibir_de: f.exibir_de || null,
   exibir_ate: f.exibir_ate || null,
-  perfis_alvo: null,                       // todo usuário vê todo slide (regra de 09/11/2026); gravar null também limpa qualquer limite que um slide tenha tido
   rascunho: !!f.rascunho,
   atualizado_por_nome: usuario?.nome || usuario?.email || null,
   atualizado_em: new Date().toISOString(),
