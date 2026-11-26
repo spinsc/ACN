@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { logChange } from './AuditSystem';
 import { ehAdminOuGerente } from './utils/permissoes';
@@ -738,7 +739,7 @@ export default function ViagensTab({ currentUser }: any) {
   const [lista, setLista] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-  const [visao, setVisao] = useState('quadro');
+  const [visao, setVisao] = useAbaNoEndereco({ tela: 'viagens' });   // Quadro, Lista, Agenda e Custos: #/viagens/lista…
   const [busca, setBusca] = useState('');
   const [saida, setSaida] = useState('todas');
   const [editando, setEditando] = useState<any | null>(null);

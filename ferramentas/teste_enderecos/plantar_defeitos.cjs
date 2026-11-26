@@ -216,6 +216,43 @@ const DEFEITOS = [
   { id: 'cu', nome: 'o "Copiar link" da demanda copia o endereço de outro registro (o botão não faz o que diz)', cenarios: '^C64 ', trocas: [
     { arquivo: 'src/DemandaAvulsaPanel.tsx', de: 'onClick={() => copiarLinkDaDemandaComAviso(d.id)}', para: "onClick={() => copiarLinkDaDemandaComAviso('00000000-0000-4000-8000-000000000000')}" },
   ] },
+  // ── Fase 5, parte 2 (26/11/2026): as visões de chips e botões e as de dentro de uma aba ──
+  { id: 'cv', nome: 'a aba de fora reescreve o endereço sem guardar a visão de dentro (o link #/rh/ponto/mes perde o "mes")', cenarios: '^C66 rh', trocas: [
+    { arquivo: 'src/AbaNoEndereco.ts', de: 'const alvo = nivelDe() === 0 ? montarEnderecoDaAbaDeFora(enderecoAtual(), ref.current.tela, valor) : montarEnderecoDaAba(ref.current.tela, caminho(valor));', para: 'const alvo = montarEnderecoDaAba(ref.current.tela, caminho(valor));' },
+  ] },
+  { id: 'cw', nome: 'quem só vê o próprio ponto passa a ver a parte da equipe que o endereço pede (a permissão deixa de mandar)', cenarios: '^C67b', trocas: [
+    { arquivo: 'src/PontoTab.tsx', de: "const visao = !perm ? '' : perm.verTodos ? visaoDoEndereco : 'meu';", para: "const visao = !perm ? '' : visaoDoEndereco;" },
+  ] },
+  { id: 'cx', nome: 'o Ponto de quem só vê o seu deixa a barra com a parte da equipe (a correção da barra some)', cenarios: '^C67b', trocas: [
+    { arquivo: 'src/PontoTab.tsx', de: "if (perm && !perm.verTodos && visaoDoEndereco !== 'hoje') trocarSemPasso('hoje');", para: "if (false && perm && !perm.verTodos && visaoDoEndereco !== 'hoje') trocarSemPasso('hoje');" },
+  ] },
+  { id: 'cy', nome: 'as visões das Viagens voltam a ser só da tela (sem endereço)', cenarios: '^C66 viagens', trocas: [
+    { arquivo: 'src/ViagensTab.tsx', de: "const [visao, setVisao] = useAbaNoEndereco({ tela: 'viagens' });", para: "const [visao, setVisao] = useState('quadro');" },
+  ] },
+  { id: 'cz', nome: 'o Custo da mão de obra abre pelo endereço para quem não é do RH com valores', cenarios: '^C68', trocas: [
+    { arquivo: 'src/RelatoriosTab.tsx', de: "permitida: a => a !== 'custohora' || (temAbaDe(currentUser, 'rh') && podeVerValores(currentUser))", para: 'permitida: a => true' },
+  ] },
+  { id: 'da', nome: 'o Relatório gerencial das Horas abre pelo endereço para quem não é gestor da Engenharia', cenarios: '^C68', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "permitida: a => a !== 'gerencial' || ehGestorEngenharia(currentUser)", para: 'permitida: a => true' },
+  ] },
+  { id: 'db', nome: 'o filtro Todas/Avulsas das Cotações volta a ser só da tela (sem endereço)', cenarios: '^C66 cotacoes', trocas: [
+    { arquivo: 'src/CotacoesTab.tsx', de: "const [abaLista,    setAbaLista]    = useAbaNoEndereco({ tela: 'cotacoes' });", para: "const [abaLista,    setAbaLista]    = useState('todas');" },
+  ] },
+  { id: 'dc', nome: 'a forma de ver das Vendas do Telecom volta a ser só da tela (sem endereço)', cenarios: '^C66 telecom', trocas: [
+    { arquivo: 'src/VendasTelecomTab.tsx', de: "const [visao, setVisao] = useAbaNoEndereco({ tela: 'telecom', nivel: 1, pai: 'vendas' });", para: "const [visao, setVisao] = useState('quadro');" },
+  ] },
+  { id: 'dd', nome: 'o quadro de Horas/Tarefas perde uma visão ("Relatório por Período" fica sem endereço)', cenarios: '^C66a|^C66 engenharia', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "filhas: { horas: { padrao: 'tarefas', abas: ['tarefas', 'relatorio', 'extras', 'gerencial'] } }", para: "filhas: { horas: { padrao: 'tarefas', abas: ['tarefas', 'extras', 'gerencial'] } }" },
+  ] },
+  { id: 'de', nome: 'clicar no único botão do Ponto de quem só vê o seu passa a mudar o endereço e criar passo', cenarios: '^C67b', trocas: [
+    { arquivo: 'src/PontoTab.tsx', de: 'onChange={(v) => { if (v !== visao) setVisao(v); setAberta(null); }}', para: 'onChange={(v) => { setVisao(v); setAberta(null); }}' },
+  ] },
+  { id: 'df', nome: 'a correção da barra sem passo (a troca silenciosa do Ponto) passa a criar passo no histórico', cenarios: '^C67b', trocas: [
+    { arquivo: 'src/AbaNoEndereco.ts', de: 'if (valida(nova)) alinhar(nova, true);', para: 'if (valida(nova)) alinhar(nova, false);' },
+  ] },
+  { id: 'dg', nome: 'as partes do Relógio Ponto voltam a ser só da tela (sem endereço)', cenarios: '^C66 rh', trocas: [
+    { arquivo: 'src/RelogioPonto.tsx', de: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial })", para: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto-sem-endereco', inicial: () => visaoInicial })" },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { anexarValoresDasOps } from './OpValores';
 import { anexarValoresDosPedidos } from './PedidoValores';
@@ -1828,7 +1829,8 @@ function RelOpsOssEmServico() {
 }
 
 export default function RelatoriosTab({ currentUser }) {
-  const [aba, setAba] = useState('opls');
+  // o relatório aberto tem endereço (#/relatorios/atrasadas); o Custo da mão de obra só abre para quem tem a aba RH e vê valores (a mesma regra da lista abaixo)
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'relatorios', permitida: a => a !== 'custohora' || (temAbaDe(currentUser, 'rh') && podeVerValores(currentUser)) });
   const ABAS = [
     {id:'servico',    label:'Em Serviço'},
     {id:'opls',       label:'OPs Geral'},

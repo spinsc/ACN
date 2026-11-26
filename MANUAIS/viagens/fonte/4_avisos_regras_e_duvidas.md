@@ -90,3 +90,7 @@ Cada viagem já gravada tem um **endereço próprio** na barra do navegador (`#/
 > **Dica:** a **Nova viagem**, que ainda não foi gravada, não tem link: o botão só aparece depois de salvar.
 
 > **Atenção:** se o link for de uma viagem que não existe, ou a que você não tem acesso, o sistema avisa em vermelho e volta para onde você estava. Se o banco não responder, o aviso diz que a leitura falhou, e não que a viagem não existe.
+
+## O endereço de cada forma de ver
+
+Quadro, Lista, Agenda e Custos também têm endereço na barra do navegador: `#/viagens` é o Quadro e os outros são `#/viagens/lista`, `#/viagens/agenda` e `#/viagens/custos`. Por isso o **F5** volta para a forma de ver em que você estava (antes voltava sempre ao Quadro), o **Voltar** e o **Avançar** do navegador passam de uma forma de ver para outra, e dá para mandar o link da Agenda ou dos Custos a um colega.

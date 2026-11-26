@@ -14,7 +14,7 @@
 // O quadro das abas de cada tela está em `Rotas.ts` (`ABAS_DAS_TELAS`); tela que não está lá fica como um `useState` comum (o endereço não é tocado).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';
-import { abaNoEndereco, abasDoNivel, montarEnderecoDaAba, type AbasDeUmNivel } from './Rotas';
+import { abaNoEndereco, abasDoNivel, montarEnderecoDaAba, montarEnderecoDaAbaDeFora, type AbasDeUmNivel } from './Rotas';
 
 export type EntradaDaAba = {
   tela: string;                                      // id interno da tela (a mesma chave de `ABAS_DAS_TELAS`)
@@ -26,7 +26,8 @@ export type EntradaDaAba = {
 
 type Atualizacao = string | ((atual: string) => string);
 
-export function useAbaNoEndereco(entrada: EntradaDaAba): [string, (nova: Atualizacao) => void] {
+// O terceiro item é a troca SEM passo novo no histórico (Fase 5, parte 2): para a tela que, depois de saber quem a pessoa é, corrige a aba que o endereço pediu (o Ponto de quem só vê o próprio).
+export function useAbaNoEndereco(entrada: EntradaDaAba): [string, (nova: Atualizacao) => void, (nova: string) => void] {
   // sempre a última versão: o ouvinte do endereço e as funções estáveis leem daqui
   const ref = useRef(entrada);
   ref.current = entrada;
@@ -59,7 +60,9 @@ export function useAbaNoEndereco(entrada: EntradaDaAba): [string, (nova: Atualiz
   /** Põe na barra a aba `valor`. `substituir` troca o endereço do passo atual (sem passo novo). Não escreve por cima de outra tela, de uma janela de OP ou de um registro. */
   const alinhar = (valor: string, substituir: boolean): void => {
     if (!quadro() || lerDoEndereco().tipo === 'fora') return;
-    irParaEndereco(montarEnderecoDaAba(ref.current.tela, caminho(valor)), { substituir });
+    // aba de fora que tem abas de dentro: se o endereço de agora já é desta aba de fora, a de dentro fica (o gancho de dentro roda antes e já escreveu a dela)
+    const alvo = nivelDe() === 0 ? montarEnderecoDaAbaDeFora(enderecoAtual(), ref.current.tela, valor) : montarEnderecoDaAba(ref.current.tela, caminho(valor));
+    irParaEndereco(alvo, { substituir });
   };
 
   const setAba = useCallback((nova: Atualizacao): void => {
@@ -69,6 +72,14 @@ export function useAbaNoEndereco(entrada: EntradaDaAba): [string, (nova: Atualiz
     abaRef.current = valor;                         // duas trocas seguidas no mesmo clique (a segunda lê a primeira)
     setAbaEstado(valor);
     if (valida(valor)) alinhar(valor, false);       // passo novo no histórico; valor que a tela inventou fora do quadro fica só no estado
+  }, []);
+
+  /** Troca a aba e corrige a barra SEM passo novo (a aba que o endereço pediu não valia para esta pessoa). */
+  const substituirAba = useCallback((nova: string): void => {
+    if (nova === abaRef.current) return;
+    abaRef.current = nova;
+    setAbaEstado(nova);
+    if (valida(nova)) alinhar(nova, true);
   }, []);
 
   useEffect(() => {
@@ -102,5 +113,5 @@ export function useAbaNoEndereco(entrada: EntradaDaAba): [string, (nova: Atualiz
     }, { internas: true });
   }, [entrada.tela, entrada.nivel, entrada.pai]);
 
-  return [aba, setAba];
+  return [aba, setAba, substituirAba];
 }

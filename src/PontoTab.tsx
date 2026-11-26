@@ -8,6 +8,7 @@
 // As regras de conta (horas, situação do dia, extras) estão em PontoSecullum.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { mdiRefresh } from '@mdi/js';
 import { CabecalhoTela, Chips, Botao, Faixa, Selo, hojeISO } from './Interface';
 import {
@@ -248,7 +249,13 @@ export default function PontoTab({ currentUser }) {
   const [perm, setPerm] = useState(null);
   const [meses, setMeses] = useState([]);
   const [mes, setMes] = useState(primeiroDiaDoMes(hoje));
-  const [visao, setVisao] = useState('');
+  // as partes da tela têm endereço: `#/ponto` é a equipe hoje (a padrão), `#/ponto/mes`, `#/ponto/extras` e `#/ponto/meu`. Quem só vê o próprio ponto tem uma parte só: mostra `meu` e,
+  // se o link era de uma parte da equipe (ou o `#/ponto/meu`), a barra volta a `#/ponto` sem passo novo (decidido na Fase 5, parte 2, 26/11/2026)
+  const [visaoDoEndereco, setVisao, trocarSemPasso] = useAbaNoEndereco({ tela: 'ponto' }) as [string, (v: any) => void, (v: string) => void];
+  const visao = !perm ? '' : perm.verTodos ? visaoDoEndereco : 'meu';
+  useEffect(() => {
+    if (perm && !perm.verTodos && visaoDoEndereco !== 'hoje') trocarSemPasso('hoje');
+  }, [perm, visaoDoEndereco]);
   const [aberta, setAberta] = useState(null); // { id, nome }: a equipe abre o mês de uma pessoa
   const [rodadas, setRodadas] = useState([]);
   const [semPar, setSemPar] = useState([]);
@@ -263,7 +270,6 @@ export default function PontoTab({ currentUser }) {
     // 20/11/2026: quem tem a aba RH cuida do ponto da equipe em RH › Relógio Ponto; aqui fica o "Meu ponto" (e a equipe, para o gerente que não é do RH)
     const p = { ...p0, verTodos: p0.verTodos && !p0.ehRh };
     setPerm(p);
-    setVisao(v => v || (p.verTodos ? 'hoje' : 'meu'));
     const [m, t] = await Promise.all([lerMesesComDados(), lerTotais(primeiroDiaDoMes(hoje))]);
     setMeses(m.dados);
     setUltima(t.dados.reduce((mx, x) => (x.atualizado_em > mx ? x.atualizado_em : mx), ''));
@@ -307,7 +313,7 @@ export default function PontoTab({ currentUser }) {
             Abrir RH › Relógio Ponto
           </Botao>
         )}
-        abas={<Chips ativo={visao} onChange={(v) => { setVisao(v); setAberta(null); }} itens={opcoes} rotulo="Parte do ponto" />}
+        abas={<Chips ativo={visao} onChange={(v) => { if (v !== visao) setVisao(v); setAberta(null); }} itens={opcoes} rotulo="Parte do ponto" />}
       />
 
       {aviso && <Faixa tom={aviso.ok ? 'ok' : 'erro'}>{aviso.mensagem}</Faixa>}

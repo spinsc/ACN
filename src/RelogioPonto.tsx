@@ -8,6 +8,7 @@
 // As "Horas lançadas" são as que o RH digita à mão (RHTab.tsx, tabela rh_lancamentos): não se misturam com o ponto da Secullum, por isso vêm de fora (`horasLancadas`).
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { mdiRefresh, mdiDownload, mdiPlus } from '@mdi/js';
 import { Chips, Botao, Faixa, Selo, hojeISO } from './Interface';
 import { confirmar } from './Feedback';
@@ -464,7 +465,8 @@ export default function RelogioPonto({ funcionarios, desligados, currentUser, on
   const hoje = hojeISO();
   const mesAtual = primeiroDiaDoMes(hoje);
   const [perm, setPerm] = useState(null);
-  const [visao, setVisao] = useState(['hoje', 'tratar', 'mes', 'extras', 'horas', 'vinculos'].includes(visaoInicial) ? visaoInicial : 'hoje');
+  // as partes do Relógio Ponto têm endereço (#/rh/ponto/mes); o pedido que vem de um aviso (visaoInicial) só vale quando o endereço não traz a parte
+  const [visao, setVisao] = useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial }) as [string, (v: any) => void];
   const [mes, setMes] = useState(mesAtual);
   const [meses, setMeses] = useState([]);
   const [aberta, setAberta] = useState(null);

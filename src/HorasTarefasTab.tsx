@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
+import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { confirmar } from './Feedback';
@@ -992,7 +993,8 @@ function RelatorioHoras({ currentUser }: any) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUser: any; abaInicial?: string }) {
-  const [aba, setAba] = useState<string>(abaInicial || 'tarefas');
+  // o Relatório gerencial só existe para o gestor da Engenharia (a mesma regra dos botões abaixo): link dele colado por quem não é gestor cai em Tarefas
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'engenharia', nivel: 1, pai: 'horas', inicial: () => abaInicial, permitida: a => a !== 'gerencial' || ehGestorEngenharia(currentUser) }) as [string, (v: any) => void];   // Tarefas, Relatório por Período, Horas extras e gerencial: #/engenharia/horas/extras (a Menção de hora extra continua pedindo `extras` por `abaInicial`)
   const gestor = ehGestorEngenharia(currentUser);
   const [operador, setOperador] = useState('');
   const [tarefas, setTarefas] = useState<any[]>([]);
