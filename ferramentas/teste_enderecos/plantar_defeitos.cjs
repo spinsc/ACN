@@ -21,6 +21,9 @@ const RAIZ = path.resolve(__dirname, '../..');
 const SAIDA = path.join(__dirname, 'saida');
 const ORIGINAIS = path.join(SAIDA, 'originais');
 const ARGS = process.argv.slice(2);
+// 26/11/2026: arquivo novo da Fase 5 (`FiltroNoEndereco.ts`) nasceu com quebra de linha CRLF e o trecho multilinha do defeito `dl` está escrito com `\n`: o conferir dizia "0 vez(es)" e o plantio
+// recusava. A quebra de linha do trecho acompanha a do arquivo (tanto faz LF ou CRLF); trecho de uma linha só não muda.
+const noEstiloDoArquivo = (txt, trecho) => (txt.includes('\r\n') ? String(trecho).replace(/\r?\n/g, '\r\n') : trecho);
 const SO_CONFERIR = ARGS.includes('--conferir');   // só confere se cada trecho a trocar ainda aparece UMA vez no código; não planta nada e não precisa do servidor
 const FILTRO = ARGS.find(a => !a.startsWith('--'));
 const URL_BASE = (process.env.BASE || 'http://localhost:5199/ACN/').replace(/\/?$/, '/');
@@ -354,7 +357,7 @@ const apagarOriginal = (arquivo) => { try { fs.rmSync(path.join(ORIGINAIS, arqui
       if (FILTRO && !new RegExp(FILTRO).test(d.id)) continue;
       for (const t of d.trocas) {
         const txt = fs.readFileSync(path.join(RAIZ, t.arquivo), 'utf8');
-        const n = txt.split(t.de).length - 1;
+        const n = txt.split(noEstiloDoArquivo(txt, t.de)).length - 1;
         if (n !== 1) ruins++;
         console.log(`${n === 1 ? 'ok  ' : 'RUIM'} ${d.id}) ${t.arquivo}: o trecho aparece ${n} vez(es)`);
       }
@@ -381,9 +384,9 @@ const apagarOriginal = (arquivo) => { try { fs.rmSync(path.join(ORIGINAIS, arqui
       for (const a of arquivosDoDefeito) {
         let txt = originais.get(a).toString('utf8');
         for (const t of d.trocas.filter(x => x.arquivo === a)) {
-          const n = txt.split(t.de).length - 1;
+          const n = txt.split(noEstiloDoArquivo(txt, t.de)).length - 1;
           if (n !== 1) throw new Error(`o trecho não aparece exatamente 1 vez em ${a} (aparece ${n}): ${t.de.slice(0, 60)}. O código mudou: atualize a lista de defeitos.`);
-          txt = txt.replace(t.de, () => t.para);
+          txt = txt.replace(noEstiloDoArquivo(txt, t.de), () => noEstiloDoArquivo(txt, t.para));
         }
         fs.writeFileSync(path.join(RAIZ, a), txt, 'utf8');
       }
