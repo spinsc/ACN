@@ -3171,6 +3171,54 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // C78 (26/11/2026, depois da Fase 4 na Logística): a Menção de frete (`frete_aprovacao`) abre o frete. O recado só é atendido pelo painel de Fretes, que só existe com a aba Fretes aberta:
+  // a Logística abre no Histórico e o clique na Menção não abria nada (o recado ficava guardado). O teste repete o que o painel de Menções faz (`abrirRegistro`): grava o recado, dispara o
+  // evento e troca de tela. O frete é SIMULADO (a leitura por id devolve uma linha inventada): nenhum dado real é tocado.
+  {
+    const FRETE_FALSO = '11111111-1111-4111-8111-111111111111';
+    const freteFalso = { id: FRETE_FALSO, descricao: 'FRETE DE TESTE (simulado)', transportadora: 'TESTE', status: 'Aguardando Aprovação', tipo: 'outbound', created_at: new Date().toISOString() };
+    const mencaoDeFrete = (page) => page.evaluate((id) => { const detail = { contexto: 'frete_aprovacao', contextoId: id }; window.__acnDeepLink = detail; window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail })); }, FRETE_FALSO);
+    const olhar = (page) => page.evaluate(() => {
+      const j = document.querySelector('[role="dialog"], .acn-modal, .modal-overlay');
+      return { hash: location.hash, historico: history.length, aba: ((document.querySelector('.acn-main [role="tab"][aria-selected="true"]') || {}).innerText || '').replace(/\s+/g, ' ').trim(), janela: j ? j.innerText.replace(/\s+/g, ' ').slice(0, 160) : null, recado: window.__acnDeepLink || null };
+    });
+    // a leitura do frete por código é simulada; as outras (lista de fretes etc.) passam para o banco real, só leitura
+    let leituras = 0;
+    const simular = (url) => { if (/\/rest\/v1\/pcp_fretes\?/.test(url) && url.includes('id=eq.' + FRETE_FALSO)) { leituras++; return { body: freteFalso }; } return null; };
+    await cenario('C78 Menção de frete: abre a Logística na aba Fretes e a janela do frete (vindo de outra tela e com a Logística já aberta no Histórico)', { simular }, async ({ page }) => {
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(2000);
+      // 1) de outra tela (o Início): a tela troca, a aba é Fretes, o endereço também e a janela do frete abre
+      await mencaoDeFrete(page);
+      await clicarNoMenu(page, 'Logística In/Out');
+      await page.waitForFunction(() => /FRETE DE TESTE/.test(document.body.innerText), { timeout: 20000 }).catch(() => {});
+      let o = await olhar(page);
+      confere('de outra tela: o endereço é o da aba Fretes', o.hash === '#/logistica/fretes', o.hash);
+      confere('de outra tela: a aba marcada é Fretes', o.aba === 'Fretes', o.aba);
+      confere('de outra tela: a janela do frete abriu (e é a do frete pedido)', !!o.janela && /FRETE DE TESTE/.test(o.janela), String(o.janela));
+      confere('de outra tela: o frete foi lido UMA vez e o recado foi consumido', leituras === 1 && o.recado === null, JSON.stringify({ leituras, recado: o.recado }));
+      // 2) com a Logística já aberta no Histórico: a Menção troca a aba e abre a janela
+      leituras = 0;
+      await page.goto(BASE + '#/logistica', { waitUntil: 'domcontentloaded' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(2500);
+      o = await olhar(page);
+      confere('com a Logística aberta: parte do Histórico, sem janela', o.hash === '#/logistica' && /Hist/.test(o.aba) && !o.janela, JSON.stringify(o));
+      const h0 = o.historico;
+      await mencaoDeFrete(page);
+      await page.waitForFunction(() => /FRETE DE TESTE/.test(document.body.innerText), { timeout: 20000 }).catch(() => {});
+      o = await olhar(page);
+      confere('com a Logística aberta: a aba passa a Fretes, com o endereço dela, e a janela abre', o.hash === '#/logistica/fretes' && o.aba === 'Fretes' && !!o.janela && /FRETE DE TESTE/.test(o.janela), JSON.stringify(o));
+      confere('com a Logística aberta: UM passo novo no histórico, um frete lido e o recado consumido', o.historico === h0 + 1 && leituras === 1 && o.recado === null, JSON.stringify({ h0, h: o.historico, leituras, recado: o.recado }));
+      // 3) o Voltar leva à aba de antes
+      await page.goBack(); await espera(900);
+      o = await olhar(page);
+      confere('o Voltar leva ao Histórico', o.hash === '#/logistica' && /Hist/.test(o.aba), JSON.stringify({ h: o.hash, aba: o.aba }));
+      const al = await A(page);
+      confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+    });
+  }
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);
