@@ -188,6 +188,34 @@ const DEFEITOS = [
   { id: 'cl', nome: 'o "Copiar link" do serviço copia o endereço de outro registro (o botão não faz o que diz)', cenarios: '^C57 ', trocas: [
     { arquivo: 'src/TerceirosServicoModal.tsx', de: "onClick={() => copiarLinkDoRegistroComAviso('terceiros', 'servico', s.id, 'do serviço')}", para: "onClick={() => copiarLinkDoRegistroComAviso('terceiros', 'servico', '00000000-0000-4000-8000-000000000000', 'do serviço')}" },
   ] },
+  // ── Fase 5, a demanda geral (`#/demanda/<código>`, por cima de qualquer tela) ──
+  { id: 'cm', nome: 'a janela da demanda fechada deixa de tirar o endereço dela da barra (o X não volta um passo)', cenarios: '^C59 ', trocas: [
+    { arquivo: 'src/DemandaNoEndereco.ts', de: 'if (c !== null && mesmaChave(c, id)) tirarEnderecoDeRegistroSemTela();', para: 'if (false && c !== null && mesmaChave(c, id)) tirarEnderecoDeRegistroSemTela();' },
+  ] },
+  { id: 'cn', nome: 'a janela da demanda não fecha quando o endereço deixa de ser o dela (o Voltar muda a barra e a janela fica)', cenarios: '^C59 ', trocas: [
+    { arquivo: 'src/DemandaNoEndereco.ts', de: 'if (c === null || !mesmaChave(c, j.id())) { j.fechando = true; j.fechar(); }', para: 'if (false && (c === null || !mesmaChave(c, j.id()))) { j.fechando = true; j.fechar(); }' },
+  ] },
+  { id: 'co', nome: 'o hospedeiro ignora que o painel de um setor já abriu a demanda (abriria uma segunda janela por cima)', cenarios: '^C59 ', trocas: [
+    { arquivo: 'src/DemandaDoEndereco.tsx', de: 'if (janelaDaDemandaEstaAberta(chave)) { setCarregando(false); return; }', para: 'if (false && janelaDaDemandaEstaAberta(chave)) { setCarregando(false); return; }' },
+  ] },
+  { id: 'cp', nome: 'leitura da demanda recusada pelo banco passa a valer como "não achei"', cenarios: '^C61 ', trocas: [
+    { arquivo: 'src/DemandaDoEndereco.tsx', de: "if (error) return { demanda: null, erro: error.message || 'sem resposta' };", para: "if (error) return { demanda: null, erro: '' };" },
+  ] },
+  { id: 'cq', nome: 'um texto que não é código de demanda passa a ser perguntado ao banco', cenarios: '^C61 ', trocas: [
+    { arquivo: 'src/DemandaDoEndereco.tsx', de: "if (!ehCodigoInterno(chave)) return { demanda: null, erro: '' };", para: "if (false && !ehCodigoInterno(chave)) return { demanda: null, erro: '' };" },
+  ] },
+  { id: 'cr', nome: 'o "Copiar link" da demanda copia só a parte do endereço (sem o endereço do sistema)', cenarios: '^C64 ', trocas: [
+    { arquivo: 'src/DemandaNoEndereco.ts', de: "return window.location.href.split('#')[0] + montarEnderecoDaDemanda(id);", para: 'return montarEnderecoDaDemanda(id);' },
+  ] },
+  { id: 'cs', nome: 'a Menção da demanda deixa de abrir a janela pelo endereço (volta a só trocar de aba)', cenarios: '^C63 ', trocas: [
+    { arquivo: 'src/MencoesInboxPanel.tsx', de: 'abrirDemandaPeloEndereco(m.contexto_id); onClose?.(); return; }', para: 'void 0; }' },
+  ] },
+  { id: 'ct', nome: 'o link da demanda deixa de abrir a janela (o hospedeiro lê a demanda e não a mostra)', cenarios: '^C60 ', trocas: [
+    { arquivo: 'src/DemandaDoEndereco.tsx', de: 'if (r.demanda) { setDemanda(r.demanda); return; }', para: 'if (false && r.demanda) { setDemanda(r.demanda); return; }' },
+  ] },
+  { id: 'cu', nome: 'o "Copiar link" da demanda copia o endereço de outro registro (o botão não faz o que diz)', cenarios: '^C64 ', trocas: [
+    { arquivo: 'src/DemandaAvulsaPanel.tsx', de: 'onClick={() => copiarLinkDaDemandaComAviso(d.id)}', para: "onClick={() => copiarLinkDaDemandaComAviso('00000000-0000-4000-8000-000000000000')}" },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

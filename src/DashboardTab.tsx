@@ -5,6 +5,7 @@ import { encerrarVerComo } from './VerComo';
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import InicioTab from './InicioTab';
+import DemandaDoEndereco from './DemandaDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): hospedeiro da janela da demanda pelo endereço (a janela só é baixada quando uma demanda abre)
 import ViagemDoEndereco from './ViagemDoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): substitui o ViagemPorMencao (hospedeiro da janela da viagem pelo endereço; o editor dentro dele carrega só quando uma viagem abre)
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
@@ -1901,6 +1902,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       {/* 04/11/2026: a viagem aberta pela Menção para quem não tem a aba Viagens (Adaptação, Financeiro, Comercial preenchem a sua parte). 26/11/2026 (Fase 5): agora é a janela da viagem aberta pelo
           endereço (#/viagem/<código>), para qualquer pessoa, também depois de um F5 e em link colado */}
       <ViagemDoEndereco currentUser={currentUser} />
+      <DemandaDoEndereco currentUser={currentUser} />
 
       {/* ── Janela da OP aberta pelo endereço (#/op/<número>), pela busca geral e pelas Menções (plano de endereços, Fase 2) ── */}
       <OpDoEndereco currentUser={currentUser} tela={activeTab || telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)} />

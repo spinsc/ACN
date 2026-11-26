@@ -24,7 +24,7 @@
  * Primeiras palavras que NÃO são tela: ficam reservadas para endereços de registro sem tela dona (a OP, na Fase 2; a viagem, depois).
  * Nenhuma tela pode usar um destes nomes (`conferirQuadroDeNomes` confere).
  */
-export const PALAVRAS_RESERVADAS: readonly string[] = ['op', 'viagem'];
+export const PALAVRAS_RESERVADAS: readonly string[] = ['op', 'viagem', 'demanda'];
 
 /**
  * QUADRO DE NOMES (decidido em 25/11/2026): o nome da tela no endereço é um assunto separado do id interno dela. O id interno é o que as
@@ -51,11 +51,11 @@ export function idDaTela(nome: string, ids: readonly string[]): string | null {
   return ids.find(id => nomeNoEndereco(id) === n) ?? null;
 }
 
-/** Os registros que têm endereço próprio, sem tela dona: a OP (Fase 2) e a viagem (Fase 5, 26/11/2026: abre por cima de qualquer tela, como a OP, porque quem recebe o aviso de uma viagem pode nem ter a aba Viagens). */
-export type TipoDeRegistro = 'op' | 'viagem';
+/** Os registros que têm endereço próprio, sem tela dona: a OP (Fase 2), a viagem (Fase 5, 26/11/2026: abre por cima de qualquer tela, como a OP, porque quem recebe o aviso de uma viagem pode nem ter a aba Viagens) e a demanda geral (Fase 5, 26/11/2026, decidido com o usuário: o painel da demanda mora em seis telas e abas, então a janela dela também abre por cima de qualquer tela). */
+export type TipoDeRegistro = 'op' | 'viagem' | 'demanda';
 
 /** A palavra de cada registro no endereço (`#/op/…`). Todas precisam estar em `PALAVRAS_RESERVADAS`. */
-const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem' };
+const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem', demanda: 'demanda' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
 export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico';   // `servico` = o serviço de terceiro (Fase 5, 26/11/2026)
@@ -172,6 +172,11 @@ export function montarEnderecoDeRegistro(registro: TipoDeRegistro, chave: string
 /** O endereço da janela de uma viagem, pelo código interno dela (Fase 5): `#/viagem/<código>`. */
 export function montarEnderecoDaViagem(id: string): string {
   return montarEnderecoDeRegistro('viagem', id);
+}
+
+/** O endereço da janela de uma demanda geral, pelo código interno dela (Fase 5): `#/demanda/<código>`. */
+export function montarEnderecoDaDemanda(id: string): string {
+  return montarEnderecoDeRegistro('demanda', id);
 }
 
 /** O endereço da janela de uma OP, pelo número dela. */

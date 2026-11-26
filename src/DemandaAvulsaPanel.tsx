@@ -20,6 +20,7 @@ import VeiculoDaDemanda from './VeiculoDaDemanda';
 import VeiculoNaNovaDemanda, { veiculoVazio, erroDoVeiculoDaDemanda } from './VeiculoNaNovaDemanda';
 import { gravarReserva } from './ViagemReservas';
 import { MembrosResumo, MembrosDaDemanda, GrupoDaDemanda, DescricoesDosArquivos, DescricaoDoAnexo, chaveArquivo } from './DemandaExtras';
+import { useEnderecoDaDemanda, copiarLinkDaDemandaComAviso } from './DemandaNoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): o endereço #/demanda/<código> e o "Copiar link"
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
@@ -396,8 +397,10 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId, agora 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE DETALHE / EDIÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
-function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
+// 26/11/2026 (Fase 5 do plano de endereços): exportada para o `DemandaDoEndereco` abri-la por cima de qualquer tela, quando o endereço #/demanda/<código> a pede
+export function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [d, setD] = useState(initial);
+  useEnderecoDaDemanda(d, onClose);   // a janela da demanda tem endereço próprio (#/demanda/<código>), seja qual for o painel que a abriu
   const agora = useAgora();   // o relógio da tela: a pausa das 17:48 aparece sem ninguém recarregar
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -809,7 +812,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               d.responsavel_nome && <div className="acn-dav-det-6">👤 {d.responsavel_nome}</div>
             )}
           </div>
-          <Botao className="acn-dav-b acn-dav-det-7" onClick={onClose}>✕</Botao>
+          <span className="acn-dav-cab-acoes">
+            <Botao className="acn-dav-b acn-dav-det-7" aria-label="Copiar o link desta demanda" title="Copiar o link desta demanda para colar numa mensagem ou e-mail" onClick={() => copiarLinkDaDemandaComAviso(d.id)}>🔗</Botao>
+            <Botao className="acn-dav-b acn-dav-det-7" aria-label="Fechar" onClick={onClose}>✕</Botao>
+          </span>
         </div>
 
         {/* Barra de progresso (etapas múltiplas) */}

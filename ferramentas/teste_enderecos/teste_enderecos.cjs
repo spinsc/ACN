@@ -2206,6 +2206,252 @@ const esperarAbas = (page, n = 0, ms = 40000) => page.waitForFunction((n) => doc
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ═════════ a demanda geral (`#/demanda/<código>`, por cima de qualquer tela, como a OP e a viagem) ═════════
+  const JD = '.acn-dav-det-2';
+  const TITULO_D = 'Demanda · ACN';
+  const reDemanda = /^#\/demanda\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  const MSG_D_NAO_ACHOU = 'Não foi possível abrir a demanda: não a encontrei, ou você não tem acesso a ela.';
+  const MENU_DO_SETOR = { Serralheria: 'Serralheria', Chicotes: 'Chicotes', Laboratorio: 'Laboratório' };
+  let DEMANDAS = null;
+  /** Demandas em aberto das telas de setor que mostram o painel (as mesmas que ele lista de partida) e, entre elas, duas do mesmo setor para o cenário da troca. */
+  async function demandasDeTeste() {
+    if (DEMANDAS) return DEMANDAS;
+    const linhas = (await lerComCracha('demandas_avulsas', 'select=id,titulo,setor,status&setor=in.(Serralheria,Chicotes,Laboratorio)&order=criado_em.desc&limit=300'))
+      .filter(d => !['Concluída', 'Cancelada'].includes(d.status) && String(d.titulo || '').trim());
+    const poSetor = {};
+    linhas.forEach(d => { (poSetor[d.setor] = poSetor[d.setor] || []).push(d); });
+    const setor = Object.keys(poSetor).sort((a, b) => poSetor[b].length - poSetor[a].length)[0] || null;
+    const lista = setor ? poSetor[setor] : [];
+    DEMANDAS = { setor, menu: setor ? MENU_DO_SETOR[setor] : null, a: lista[0] || null, b: lista[1] || null, todas: linhas };
+    return DEMANDAS;
+  }
+  const estadoD = (page) => page.evaluate((sel) => {
+    const car = document.querySelector('.acn-op-endereco-carregando');
+    const main = document.querySelector('.acn-main') || document.body;
+    const j = document.querySelector(sel + ' .acn-dav-det-4');
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(sel).length, carregando: car ? car.innerText.trim() : null,
+      tituloDaJanela: j ? j.innerText.replace(/\s+/g, ' ').trim() : '',
+      telaDeBaixo: (main.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120), origem: location.origin + location.pathname,
+      painelAberto: !!document.querySelector('.acn-gav-mencao'),
+    };
+  }, JD);
+  const esperarD = (page, ms = 30000) => page.waitForSelector(JD, { timeout: ms });
+  const esperarSemD = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JD);
+  const fecharD = (page) => page.evaluate((s) => { const x = document.querySelector(s + ' button[aria-label="Fechar"]'); if (!x) throw new Error('não achei o X da demanda'); x.click(); }, JD);
+  const esperarDesfechoD = (page, ms = 25000) => page.waitForFunction(() => !document.querySelector('.acn-op-endereco-carregando') && !/^#\/demanda\//i.test(location.hash), { timeout: ms }).catch(() => {});
+  const clicarNoCartaoD = async (page, titulo) => {
+    await page.waitForFunction((t) => [...document.querySelectorAll('.acn-dav-card')].some(c => c.innerText.includes(t)), { timeout: 40000 }, titulo);
+    await page.evaluate((t) => [...document.querySelectorAll('.acn-dav-card')].find(c => c.innerText.includes(t)).click(), titulo);
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C59 Demanda: o clique no cartão escreve o endereço; Voltar fecha, Avançar reabre e o X volta um passo', {}, async ({ page }) => {
+    const D = await demandasDeTeste();
+    confere('há uma demanda em aberto numa tela de setor para testar', !!D.a, JSON.stringify({ setor: D.setor }));
+    if (!D.a) return;
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, D.menu); await espera(2000);
+    const antes = await estadoD(page);
+    await clicarNoCartaoD(page, D.a.titulo);
+    await esperarD(page); await espera(900);
+    let e = await estadoD(page);
+    confere('o endereço da demanda foi escrito (#/demanda/<código>) e é o da demanda clicada', e.hash === '#/demanda/' + D.a.id, e.hash);
+    confere('UM passo novo no histórico, do próprio sistema', e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+    confere('o título da aba é o da demanda', e.titulo === TITULO_D, e.titulo);
+    confere('uma janela só, com o título da demanda', e.janelas === 1 && e.tituloDaJanela === D.a.titulo.replace(/\s+/g, ' ').trim(), JSON.stringify({ j: e.janelas, t: e.tituloDaJanela }));
+    await page.goBack(); await esperarSemD(page); await espera(700);
+    e = await estadoD(page);
+    confere('o Voltar fecha a janela e volta ao endereço da tela', e.hash === antes.hash && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas, antes: antes.hash }));
+    confere('o título da aba volta a ser o da tela', e.titulo === antes.titulo && e.titulo !== TITULO_D, e.titulo);
+    await page.goForward(); await esperarD(page); await espera(700);
+    e = await estadoD(page);
+    confere('o Avançar reabre a MESMA demanda, uma janela só', e.hash === '#/demanda/' + D.a.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharD(page); await esperarSemD(page); await espera(900);
+    e = await estadoD(page);
+    confere('o X volta um passo (endereço da tela), sem janela', e.hash === antes.hash && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C60 Demanda: link colado (primeira página) abre por cima do Início; F5 reabre; o X nunca sai do sistema', {}, async ({ page }) => {
+    const D = await demandasDeTeste();
+    if (!D.a) { confere('há uma demanda para testar', false); return; }
+    const end = '#/demanda/' + D.a.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarD(page); await espera(900);
+    let e = await estadoD(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link colado abre a demanda, uma janela só, no endereço do link', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('por baixo fica o Início e o título é o da demanda', SAUDACAO.test(e.telaDeBaixo) && e.titulo === TITULO_D, JSON.stringify({ t: e.titulo, b: e.telaDeBaixo }));
+    confere('o passo do link colado não é do sistema e abrir não criou passo', e.marca === false && h0 <= 2, JSON.stringify({ marca: e.marca, h0 }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarD(page); await espera(900);
+    e = await estadoD(page);
+    confere('F5: reabre a mesma demanda, no mesmo endereço, uma janela', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharD(page); await esperarSemD(page); await espera(900);
+    e = await estadoD(page);
+    confere('fechar troca o endereço pelo do Início (#/inicio), sem janela', e.hash === '#/inicio' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    confere('continua no sistema (mesma página)', e.origem === origem, JSON.stringify({ o: origem, h1: e.origem }));
+    confere('o título volta ao do Início', SAUDACAO.test(e.telaDeBaixo) && e.titulo !== TITULO_D, e.titulo);
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidos = [];
+    await cenario('C61 Demanda que não existe, código que não é código e leitura recusada: UMA mensagem, sem janela, endereço limpo', {
+      simular: (url, r) => {
+        if (r.method() !== 'GET' || !url.includes('/rest/v1/demandas_avulsas?select=*&id=eq.')) return null;
+        lidos.push(url);
+        return modo === 'recusa' ? { status: 500, body: { message: 'erro simulado do banco' } } : null;
+      },
+    }, async ({ page }) => {
+      const D = await demandasDeTeste();
+      if (!D.a) { confere('há uma demanda para testar', false); return; }
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, MSG_D_NAO_ACHOU, true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', MSG_D_NAO_ACHOU, false],
+        ['o banco recusa a leitura', 'recusa', D.a.id, 'Não foi possível abrir a demanda: a leitura falhou (erro simulado do banco). Tente de novo.', true],
+      ];
+      for (const [nome, m, codigo, texto, leBanco] of casos) {
+        modo = m; lidos.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/demanda/' + codigo);
+        await esperarSistema(page); await esperarDesfechoD(page); await espera(800);
+        const e = await estadoD(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a demanda'));
+        confere(`demanda (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`demanda (${nome}): nenhuma janela, sem "Abrindo a demanda…" e o endereço volta ao do Início`, e.janelas === 0 && e.carregando === null && e.hash === '#/inicio', JSON.stringify({ j: e.janelas, c: e.carregando, h: e.hash }));
+        confere(`demanda (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidos.length >= 1 : lidos.length === 0, JSON.stringify(lidos.map(u => u.slice(-60))));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`demanda (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C62 Demanda para quem NÃO tem a tela do setor: o link abre por cima (não é "sem acesso")', { usuario: RESTRITO, simular: bancoComAbas(['pcp']) }, async ({ page }) => {
+    const D = await demandasDeTeste();
+    if (!D.a) { confere('há uma demanda para testar', false); return; }
+    const end = '#/demanda/' + D.a.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForFunction((s) => !!document.querySelector(s) || !!document.querySelector('.acn-endereco-aviso'), { timeout: 40000 }, JD); await espera(1000);
+    const e = await estadoD(page);
+    const avisoDeAcesso = await page.evaluate(() => !!document.querySelector('.acn-endereco-aviso'));
+    confere('nenhum "sem acesso" nem "conferindo o seu acesso"', avisoDeAcesso === false);
+    confere('o link abre a janela da demanda mesmo sem a tela do setor, no endereço do link', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas, t: e.telaDeBaixo }));
+    await fecharD(page); await esperarSemD(page); await espera(800);
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    const MENCAO_D = { atual: null };
+    await cenario('C63 Menção de demanda: abre a janela da demanda por cima da tela atual, sem trocar de aba', {
+      simular: (url, r) => (r.method() === 'GET' && url.includes('/rest/v1/mencoes?') && url.includes('select=*') && MENCAO_D.atual ? { status: 200, body: [MENCAO_D.atual] } : null),
+    }, async ({ page, gravacoes }) => {
+      const D = await demandasDeTeste();
+      if (!D.a) { confere('há uma demanda para testar', false); return; }
+      MENCAO_D.atual = {
+        id: '99999999-0000-4000-8000-000000000002', mencionado_id: ID_ZZTESTE, mencionado_nome: 'ZZTESTE', mencionante_nome: 'ZZTESTE Autor',
+        contexto: 'demanda_avulsa', contexto_id: D.a.id, contexto_descricao: 'Demanda ' + D.a.titulo, aba_destino: String(D.setor || 'serralheria').toLowerCase(), texto_trecho: 'menção de teste (simulada)',
+        lida: false, resolvida: false, criado_em: new Date().toISOString(),
+      };
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(1200);
+      await clicarNoMenu(page, 'Compras'); await espera(1200);
+      const h0 = (await estadoD(page)).historico;
+      await page.evaluate(() => { const b = document.querySelector('[title="Menções"], [title$="pendente(s)"]'); if (!b) throw new Error('botão de Menções não achado'); b.click(); });
+      await page.waitForSelector('.acn-men-desc.link', { timeout: 15000 });
+      let e = await estadoD(page);
+      confere('o painel de Menções abriu com a menção de demanda', e.painelAberto, JSON.stringify(e));
+      await page.evaluate(() => document.querySelector('.acn-men-desc.link').click());
+      await esperarD(page); await espera(700);
+      e = await estadoD(page);
+      confere('a janela da demanda abriu pelo endereço', e.hash === '#/demanda/' + D.a.id && e.janelas === 1, JSON.stringify(e));
+      confere('NÃO trocou de aba (a menção apontava para o setor): a tela de baixo segue sendo Compras', /Resumo/.test(e.telaDeBaixo), e.telaDeBaixo);
+      confere('o painel de Menções fechou', e.painelAberto === false);
+      confere('um passo no histórico', e.historico === h0 + 1, `${h0} → ${e.historico}`);
+      await fecharD(page); await esperarSemD(page); await espera(700);
+      e = await estadoD(page);
+      confere('o X volta a #/compras', e.hash === '#/compras' && e.janelas === 0, JSON.stringify({ h: e.hash }));
+      const al = await A(page);
+      confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+      confere('a menção foi marcada como lida pela gravação normal (que o teste bloqueou)', gravacoes.some(g => g.metodo === 'PATCH' && /\/mencoes/.test(g.url) && /"lida":true/.test(g.corpo || '')), JSON.stringify(gravacoes.map(g => g.metodo + ' ' + g.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 60))));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C64 Demanda: "Copiar link" copia o endereço completo (moderno, jeito antigo e falha)', {}, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    const D = await demandasDeTeste();
+    if (!D.a) { confere('há uma demanda para testar', false); return; }
+    const end = '#/demanda/' + D.a.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarD(page); await espera(900);
+    const SEL = JD + ' button[aria-label="Copiar o link desta demanda"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (!existe) return;
+    const completo = BASE + end;
+    const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+    const ok = 'Link da demanda copiado. É só colar na mensagem ou no e-mail.';
+    const falha = 'Não foi possível copiar o link da demanda. Copie o endereço que está na barra do navegador.';
+    await LA(page); await clicar();
+    let al = await A(page);
+    const copiado = await page.evaluate(() => window.__copiado);
+    confere('forma moderna copia o endereço COMPLETO (base atual + #/demanda/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+    confere('forma moderna avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+    await page.evaluate(() => { window.__modoCopia = 'recusa'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    const exec = await page.evaluate(() => window.__execCopia);
+    confere('o navegador recusa a forma moderna: usa o jeito antigo, com o mesmo endereço', exec.length === 1 && exec[0] === completo, JSON.stringify(exec));
+    confere('o jeito antigo avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+    await page.evaluate(() => { window.__modoCopia = 'falha'; });
+    await LA(page); await clicar();
+    al = await A(page);
+    confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === falha, JSON.stringify(al));
+    const e = await estadoD(page);
+    confere('copiar não mexeu no endereço nem fechou a janela', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C65 Demanda: trocar de um endereço de demanda para outro deixa UMA janela só (a da nova) e o Voltar leva à primeira', {}, async ({ page }) => {
+    const D = await demandasDeTeste();
+    confere('há duas demandas em aberto do mesmo setor para testar', !!D.a && !!D.b, JSON.stringify({ setor: D.setor }));
+    if (!D.a || !D.b) return;
+    const ta = D.a.titulo.replace(/\s+/g, ' ').trim(), tb = D.b.titulo.replace(/\s+/g, ' ').trim();
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1200);
+    await clicarNoMenu(page, D.menu); await espera(2000);
+    await clicarNoCartaoD(page, D.a.titulo);
+    await esperarD(page); await espera(900);
+    let e = await estadoD(page);
+    confere('a primeira demanda abriu pelo cartão', e.hash === '#/demanda/' + D.a.id && e.janelas === 1 && e.tituloDaJanela === ta, JSON.stringify({ h: e.hash, j: e.janelas, t: e.tituloDaJanela }));
+    await page.evaluate((h) => { location.hash = h; }, '#/demanda/' + D.b.id);
+    await page.waitForFunction((s, t) => { const j = document.querySelectorAll(s); return j.length === 1 && (j[0].querySelector('.acn-dav-det-4') || { innerText: '' }).innerText.replace(/\s+/g, ' ').trim() === t; }, { timeout: 40000 }, JD, tb);
+    await espera(900);
+    e = await estadoD(page);
+    confere('trocar o endereço deixa UMA janela, a da segunda demanda', e.janelas === 1 && e.tituloDaJanela === tb && e.hash === '#/demanda/' + D.b.id, JSON.stringify({ j: e.janelas, t: e.tituloDaJanela, h: e.hash }));
+    await page.goBack(); await page.waitForFunction((s, t) => { const j = document.querySelectorAll(s); return j.length === 1 && (j[0].querySelector('.acn-dav-det-4') || { innerText: '' }).innerText.replace(/\s+/g, ' ').trim() === t; }, { timeout: 40000 }, JD, ta);
+    await espera(700);
+    e = await estadoD(page);
+    confere('o Voltar leva à primeira demanda, uma janela só', e.janelas === 1 && e.tituloDaJanela === ta && e.hash === '#/demanda/' + D.a.id, JSON.stringify({ j: e.janelas, t: e.tituloDaJanela, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   // ───────────────────────────────────────────────────────────────────────────
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);

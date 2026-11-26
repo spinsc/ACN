@@ -326,6 +326,23 @@ t('o endereço de uma viagem não é de nenhuma tela nem de uma aba (a aba não 
 t('registroDaTelaNoEndereco não enxerga a viagem como registro de tela', () => IDS.forEach(id => assert.equal(registroDaTelaNoEndereco('#/viagem/' + U1, id), null, id)));
 t('% solto no código da viagem não derruba', () => assert.doesNotThrow(() => lerEndereco('#/viagem/%E0%A4%A', IDS)));
 t('viagem está entre as palavras reservadas e nenhuma tela a usa', () => { assert.ok(PALAVRAS_RESERVADAS.includes('viagem')); IDS.forEach(id => assert.notEqual(nomeNoEndereco(id), 'viagem')); });
+
+// ── Fase 5 (26/11/2026): a demanda geral, o terceiro registro sem tela dona (como a OP e a viagem) ──
+const demanda = (hash, chave) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'registro', registro: 'demanda', chave });
+t('#/demanda/<código> é a demanda', () => demanda('#/demanda/' + U1, U1));
+t('a palavra demanda em maiúscula vale; o código mantém a grafia', () => demanda('#/DEMANDA/' + U2, U2));
+t('sem a barra depois do # e com ? depois', () => demanda('#demanda/' + U1 + '?x=1', U1));
+t('montarEnderecoDaDemanda monta #/demanda/<código> e apara os espaços', () => assert.equal(R.montarEnderecoDaDemanda('  ' + U1 + ' '), '#/demanda/' + U1));
+t('montarEnderecoDeRegistro("demanda", …) é o mesmo que montarEnderecoDaDemanda', () => assert.equal(montarEnderecoDeRegistro('demanda', U1), R.montarEnderecoDaDemanda(U1)));
+t('registroDoEndereco acha a demanda e diz que é de demanda, não de OP nem de viagem', () => assert.deepEqual(registroDoEndereco('#/demanda/' + U1), { registro: 'demanda', chave: U1 }));
+t('#/demanda sem código não é registro (decisão: desconhecido)', () => { assert.equal(registroDoEndereco('#/demanda'), null); assert.equal(registroDoEndereco('#/demanda/'), null); assert.equal(decidirEndereco('#/demanda', ctxDe('todas', true)).tipo, 'desconhecido'); });
+t('a decisão do endereço da demanda é "registro", mesmo sem permissão e sem a releitura (quem decide é o banco)', () => { assert.deepEqual(decidirEndereco('#/demanda/' + U1, ctxDe([], false)), { tipo: 'registro', registro: 'demanda', chave: U1 }); assert.equal(decidirEndereco('#/demanda/' + U1, ctxDe([], true)).tipo, 'registro'); });
+t('a tela Demandas gerais (outro nome) não se confunde com a demanda (#/demanda/…)', () => { assert.equal(registroDoEndereco('#/demandas'), null); assert.equal(registroDoEndereco('#/demandas/' + U1), null); });
+t('demanda, viagem e OP não se confundem: cada uma é lida pela palavra dela', () => { assert.equal(registroDoEndereco('#/op/A1750.2611').registro, 'op'); assert.equal(registroDoEndereco('#/viagem/' + U1).registro, 'viagem'); assert.equal(registroDoEndereco('#/demanda/' + U1).registro, 'demanda'); });
+t('o endereço de uma demanda não é de nenhuma tela nem de uma aba (a aba não muda por causa dele)', () => IDS.forEach(id => { assert.equal(R.enderecoEhDaTela('#/demanda/' + U1, id), false, id); assert.equal(R.abaNoEndereco('#/demanda/' + U1, id).tipo, 'fora', id); }));
+t('registroDaTelaNoEndereco não enxerga a demanda como registro de tela', () => IDS.forEach(id => assert.equal(registroDaTelaNoEndereco('#/demanda/' + U1, id), null, id)));
+t('% solto no código da demanda não derruba', () => assert.doesNotThrow(() => lerEndereco('#/demanda/%E0%A4%A', IDS)));
+t('demanda está entre as palavras reservadas e nenhuma tela a usa', () => { assert.ok(PALAVRAS_RESERVADAS.includes('demanda')); IDS.forEach(id => assert.notEqual(nomeNoEndereco(id), 'demanda')); });
 t('o serviço de terceiro: #/terceiros/servico/<código> é o registro da tela terceiros', () => comRegistro('#/terceiros/servico/' + U1, 'terceiros', 'servico', U1));
 t('o serviço de terceiro: nenhuma aba de terceiros se chama "servico" (o endereço ficaria ambíguo)', () => assert.ok(!R.ABAS_DAS_TELAS.terceiros.abas.some(a => R.nomeDaAba(a) === 'servico')));
 t('o serviço de terceiro aberto por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/terceiros/servico/' + U1, 'terceiros').tipo, 'fora'));

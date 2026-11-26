@@ -1931,6 +1931,7 @@ html body .acn-vg-card-meta .acn-selo:not(#acn) { white-space: normal; overflow-
 .acn-vg-jan { width: min(980px, 96vw); max-height: 94vh; }
 /* 26/11/2026 (Fase 5 do plano de endereços): o "Copiar link" e o X juntos, à direita do cabeçalho da janela da viagem */
 .acn-vg-cab-acoes { display: inline-flex; align-items: center; gap: 4px; }
+.acn-dav-cab-acoes { display: inline-flex; align-items: flex-start; gap: 2px; flex-shrink: 0; }
 .acn-vg-corpo { display: flex; flex-direction: column; gap: 12px; }
 .acn-vg-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: start; }
 .acn-vg-largo { grid-column: span 2; }

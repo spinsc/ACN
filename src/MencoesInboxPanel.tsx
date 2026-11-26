@@ -6,6 +6,8 @@ import { Botao, Chips, Tag } from './Interface';
 import Icone from './Icone';
 import { permissoesDaViagem } from './ViagemFluxo';
 import { abrirOpPeloEndereco } from './OpNoEndereco';
+import { abrirDemandaPeloEndereco } from './DemandaNoEndereco';
+import { ehCodigoInterno } from './Rotas';
 import { mdiMessageTextOutline, mdiRefresh, mdiClose, mdiCheck, mdiCheckAll, mdiReply, mdiSend, mdiUndoVariant } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -321,6 +323,8 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
     // 25/11/2026 (plano de endereços e rotas, Fase 2): a menção de OP abre a janela da OP pelo endereço (`#/op/<número>`), por cima da tela em que a pessoa está, em qualquer
     // setor (antes só a tela da Produção a abria; nas outras o clique só trocava de aba). O painel fecha, como ao trocar de tela nas outras menções.
     if (m.contexto === 'op' && m.contexto_id) { abrirOpPeloEndereco(m.contexto_id); onClose?.(); return; }
+    // 26/11/2026 (Fase 5): a menção de demanda geral também abre a janela pelo endereço (`#/demanda/<código>`), por cima da tela em que a pessoa está, mesmo sem ter a tela do setor da demanda
+    if (m.contexto === 'demanda_avulsa' && ehCodigoInterno(m.contexto_id)) { abrirDemandaPeloEndereco(m.contexto_id); onClose?.(); return; }
     if (m.contexto_id) {
       // CRM/Licitação já têm um mecanismo de deep-link próprio e testado
       // (analise:abrir-origem, ouvido em DashboardTab.tsx — já troca a aba E
