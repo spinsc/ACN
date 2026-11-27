@@ -37,6 +37,14 @@ está no ar). Apagar o original público é **definitivo**: por isso o passo 4 s
 node ferramentas/migrar_bucket/teste_b1.cjs
 ```
 
+## Conferência da B2 (varredura do código + navegador com o armazenamento simulado)
+
+```powershell
+node ferramentas/migrar_bucket/teste_b2.cjs
+```
+
+(Cria e apaga sozinho um arquivo provisório `src/zz_teste_b2_montar.tsx` para desenhar as peças na tela; se o teste for interrompido, apague-o à mão.)
+
 ## Conferência das regras (sem banco)
 
 ```powershell

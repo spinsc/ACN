@@ -18,6 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo, ImagemPrivada } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
@@ -49,11 +51,10 @@ function nomeSeguro(nome: string): string {
 async function subirArquivo(file: File, tarefaId: string): Promise<string | null> {
   const caminho = `engenharia-tarefas/${tarefaId}/${Date.now()}_${nomeSeguro(file.name)}`;
   // Office e planilha sobem como octet-stream — ver FormatosArquivo.ts
-  const { data, error } = await supabase.storage.from('acn-media')
-    .upload(caminho, file, { upsert: true, contentType: contentTypeUpload(file) });
-  if (error || !data) { console.error('Upload do anexo falhou:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(caminho);
-  return pub?.publicUrl || null;
+  // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro: error } = await enviarArquivoPrivado(caminho, file, contentTypeUpload(file));
+  if (error || !valor) { console.error('Upload do anexo falhou:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
+  return valor;
 }
 
 /** Quem pode tirar o arquivo: quem subiu, ou o gestor da Engenharia. */
@@ -173,14 +174,14 @@ export function ModalAnexosTarefa({ tarefa, currentUser, onClose, onMudou }: any
           ) : anexos.map(a => (
             <div key={a.id} className="acn-tan-item">
               {ehImagem(a) ? (
-                <img src={a.url} alt="" className="acn-tan-img" />
+                <ImagemPrivada valor={a.url} alt="" className="acn-tan-img" />
               ) : (
                 <span className="acn-tan-icone"><Icone path={mdiFileDocumentOutline} size={20} /></span>
               )}
               <div className="acn-tan-info">
-                <a href={a.url} target="_blank" rel="noreferrer" className="acn-tan-nome">
+                <LinkDeArquivo valor={a.url} className="acn-tan-nome">
                   {a.nome}
-                </a>
+                </LinkDeArquivo>
                 <div className="acn-ajuda">
                   {a.criado_por_nome || a.criado_por || '—'} · {fmtDT(a.criado_em)}
                   {fmtTam(a.tamanho) ? ` · ${fmtTam(a.tamanho)}` : ''}

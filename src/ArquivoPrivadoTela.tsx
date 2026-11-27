@@ -4,11 +4,11 @@ import React from 'react';
 import { useUrlDoArquivo, abrirArquivo } from './ArquivoPrivado';
 
 /** <img> de um arquivo guardado no banco (privado ou comum). Enquanto o endereço assinado não chega, mostra "…"; se não dá para abrir, "imagem indisponível". */
-export function ImagemPrivada({ valor, alt, className }: { valor: string | null | undefined; alt?: string; className?: string }) {
+export function ImagemPrivada({ valor, alt, className, ...resto }: { valor: string | null | undefined; alt?: string; className?: string; [k: string]: any }) {
   const url = useUrlDoArquivo(valor);
   if (url === undefined) return <span className="acn-fraco" aria-busy="true">…</span>;
   if (!url) return <span className="acn-fraco">imagem indisponível</span>;
-  return <img src={url} alt={alt || ''} className={className} />;
+  return <img src={url} alt={alt || ''} className={className} {...resto} />;
 }
 
 /** Link que abre um arquivo (privado ou comum) em aba nova, pedindo o endereço assinado na hora do clique. Aceita className, style, title, aria-label e o resto dos atributos de <a>. */

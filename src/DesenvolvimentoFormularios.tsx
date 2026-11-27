@@ -9,6 +9,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Icone from './Icone';
 import { supabase } from './supabaseClient';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { lerPaginado } from './LerPaginado';
 import { itensAtivosDoCatalogo } from './ConfigEstrutura';
 import { Botao, Selo, Faixa, hojeISO, SelectBusca } from './Interface';
@@ -258,7 +259,7 @@ function LinhaDeRevisao({ r }: any) {
         <div className="acn-ajuda">{r.por} em {r.em ? new Date(r.em).toLocaleString('pt-BR') : '—'}</div>
         <div className="acn-dev-anexos-lista">
           {(r.anexos || []).map((a: any, i: number) => a.url
-            ? <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a>
+            ? <LinkDeArquivo key={i} valor={a.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</LinkDeArquivo>
             : <span key={i} className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>)}
         </div>
       </div>
@@ -424,7 +425,7 @@ function CampoDeFotos({ fotos, onChange, enviar, rotulo }: any) {
         <div className="acn-dev-anexos-lista">
           {fotos.map((a: any, i: number) => (
             <span key={i} className="acn-dev-anexo-grupo">
-              {a.url ? <a href={a.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a> : <span className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>}
+              {a.url ? <LinkDeArquivo valor={a.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</LinkDeArquivo> : <span className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>}
               <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar ${a.nome}`} title="Tirar" onClick={() => onChange(fotos.filter((_: any, k: number) => k !== i))}><Icone path={mdiClose} size={13} /></button>
             </span>
           ))}
@@ -994,7 +995,7 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
             <strong>{p.numero}</strong> na Rev {p.rev_desenho || '?'} — {p.descricao}
             <span className="acn-ajuda"> ({[p.material, p.horas !== null && p.horas !== undefined ? `${p.horas} h` : '', p.custo ? brl(p.custo) : ''].filter(Boolean).join(' · ')})</span>
             {vigente && p.rev_desenho && p.rev_desenho !== vigente && <> <Selo familia="atencao" ponto={false}>desenho já está na Rev {vigente}</Selo></>}
-            {(p.fotos || []).length > 0 && <> {p.fotos.map((f: any, i: number) => f.url ? <a key={i} href={f.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</a> : null)}</>}
+            {(p.fotos || []).length > 0 && <> {p.fotos.map((f: any, i: number) => f.url ? <LinkDeArquivo key={i} valor={f.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</LinkDeArquivo> : null)}</>}
           </li>
         ))}
       </ul>
@@ -1029,7 +1030,7 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
     <div className="acn-dev-resumo">
       <div>Veículo: <strong>{x.veiculo || '—'}</strong> · {dataBR(x.data)} · <Selo familia={x.resultado === 'aprovado' ? 'ok' : x.resultado === 'reprovado' ? 'erro' : 'neutro'} ponto={false}>{RESULTADOS_TESTE[x.resultado]}</Selo></div>
       {x.observacoes && <div className="acn-ajuda">{x.observacoes}</div>}
-      {(x.fotos || []).length > 0 && <div className="acn-dev-anexos-lista">{x.fotos.map((f: any, i: number) => f.url ? <a key={i} href={f.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</a> : null)}</div>}
+      {(x.fotos || []).length > 0 && <div className="acn-dev-anexos-lista">{x.fotos.map((f: any, i: number) => f.url ? <LinkDeArquivo key={i} valor={f.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</LinkDeArquivo> : null)}</div>}
     </div>
   );
   if (id === 'conferencia_normas' && (x.itens || []).length) return (
@@ -1037,7 +1038,7 @@ export function ResumoDoEntregavel({ id, dados, demanda }: any) {
       {x.itens.map((i: any) => <li key={i.norma_id}>{i.texto} <Selo familia={i.situacao === 'atende' ? 'ok' : i.situacao === 'nao_atende' ? 'erro' : 'neutro'} ponto={false}>{SITUACOES_NORMA[i.situacao] || 'Sem resposta'}</Selo>{i.obs && <span className="acn-ajuda"> — {i.obs}</span>}</li>)}
     </ul>
   );
-  const links = (arr: any[]) => (arr || []).length > 0 && <div className="acn-dev-anexos-lista">{arr.map((f: any, i: number) => f.url ? <a key={i} href={f.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</a> : <span key={i} className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {f.nome}</span>)}</div>;
+  const links = (arr: any[]) => (arr || []).length > 0 && <div className="acn-dev-anexos-lista">{arr.map((f: any, i: number) => f.url ? <LinkDeArquivo key={i} valor={f.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {f.nome}</LinkDeArquivo> : <span key={i} className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {f.nome}</span>)}</div>;
   if (id === 'item_catalogo' && (x.item_id || x.dispensa)) return (
     <div className="acn-dev-resumo">
       {x.item_id && <div>Item do catálogo: <strong>{x.item_nome || x.item_id}</strong>{x.item_codigo ? <span className="acn-ajuda"> (código {x.item_codigo})</span> : null}</div>}

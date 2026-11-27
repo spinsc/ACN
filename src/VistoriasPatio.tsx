@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { enviarArquivoPrivado, urlDoArquivo } from './ArquivoPrivado';   // 26/11/2026 (Etapa 17, onda 5b): as assinaturas moram no bucket PRIVADO
-import { ImagemPrivada } from './ArquivoPrivadoTela';
+import { ImagemPrivada, LinkDeArquivo } from './ArquivoPrivadoTela';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
@@ -153,9 +153,9 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
               <div className="acn-forte acn-vis-rotulo">Fotos de Saida:</div>
               <div className="acn-vis-fotos">
                 {v.fotos_saida.map((url,i) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer">
-                    <img src={url} alt="foto" className="acn-vis-foto" />
-                  </a>
+                  <LinkDeArquivo key={i} valor={url}>
+                    <ImagemPrivada valor={url} alt="foto" className="acn-vis-foto" />
+                  </LinkDeArquivo>
                 ))}
               </div>
             </div>
@@ -274,10 +274,10 @@ export default function VistoriasPatio({ currentUser }) {
     for (const f of files) {
       const ext = f.name.split('.').pop();
       const path = `vistorias/${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from('acn-media').upload(path, f, { contentType: f.type, upsert: true });
-      if (!error) {
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        urls.push(pub?.publicUrl || path);
+      // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor, erro: error } = await enviarArquivoPrivado(path, f, f.type || undefined);
+      if (!error && valor) {
+        urls.push(valor);
       } else falhas.push(`${f.name} (${explicarErroDeEnvio(error, f)})`);
     }
     if (falhas.length) throw new Error((falhas.length === 1 ? 'a foto ' : 'as fotos ') + falhas.join(', '));
@@ -477,7 +477,9 @@ export default function VistoriasPatio({ currentUser }) {
       let col = 0;
       for (const url of fotos) {
         try {
-          const resp = await fetch(url);
+          const enderecoFoto = await urlDoArquivo(url);   // foto privada: o endereço assinado é pedido na hora de montar o PDF
+          if (!enderecoFoto) continue;
+          const resp = await fetch(enderecoFoto);
           const blob = await resp.blob();
           const ext = blob.type.includes('png') ? 'PNG' : 'JPEG';
           const dataUrl = await new Promise(r => {

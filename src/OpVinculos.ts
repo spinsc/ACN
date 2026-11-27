@@ -257,7 +257,7 @@ export async function vinculosDaOp(op: any, falhas?: string[]): Promise<ItemVinc
 
   anexos.forEach((a: any) => push({
     grupo: 'anexo', tipo: 'opl_anexos', id: a.id, numero: null,
-    titulo: txt(a.nome) || 'Anexo', descricao: a.url,
+    titulo: txt(a.nome) || 'Anexo', descricao: String(a.url || '').startsWith('privado:') ? (a.tipo || '') : a.url,   // o valor privado não é um endereço que a pessoa leia (B2, 26/11/2026)
     setor: a.setor, responsavel: a.criado_por, data: a.criado_em, aberto: false,
   }));
 

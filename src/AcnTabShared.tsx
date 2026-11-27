@@ -47,6 +47,7 @@ import { SeletorEscopo } from './EscopoDaEdicao';
 import { aplicarNoLote, lerOutrasUnidadesDoLote, textoDoResultadoLote, ehUnidadeDeLote } from './EdicaoDeLote';
 import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
 import { FotosVeiculoVer } from './FotosVeiculo';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { itensPreenchidos } from './DemandaItens';
 import { EquipeDaOpResumo } from './EquipeDaOp';
 import { lerValorDigitado } from './LerValor';
@@ -121,9 +122,9 @@ function AnexosOPSection({ oplId }: { oplId: string }) {
           <span className="acn-ats-anx-ic">{TIPO_ICONE[a.tipo] || '📄'}</span>
           <div className="acn-ats-anx-meio">
             {/* a cor do link vem do tipo do documento; tipo desconhecido usa a do "documento" */}
-            <a href={a.url} target="_blank" rel="noreferrer" className="acn-ats-anx-lnk" data-tipo={TIPO_ICONE[a.tipo] ? a.tipo : 'documento'}>
+            <LinkDeArquivo valor={a.url} className="acn-ats-anx-lnk" data-tipo={TIPO_ICONE[a.tipo] ? a.tipo : 'documento'}>
               {a.nome}
-            </a>
+            </LinkDeArquivo>
             <div className="acn-ats-anx-meta">
               {a.setor && <span className="acn-ats-anx-setor">{a.setor}</span>}
               {a.criado_por && <span>{a.criado_por}</span>}
