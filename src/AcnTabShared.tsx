@@ -7,7 +7,7 @@ import { anexarValoresDosPedidos } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, pedirTexto } from './Feedback';
 import { diaBR, hojeISO, Botao, MenuAcoes, Selo } from './Interface';
-import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiLink, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline, mdiAccountWrenchOutline } from '@mdi/js';
+import { mdiBookOpenPageVariantOutline, mdiPencilOutline, mdiClose, mdiFormatListNumbered, mdiPencilBoxMultipleOutline, mdiLinkVariant, mdiLink, mdiContentCopy, mdiSwapHorizontal, mdiDeleteOutline, mdiMessageTextOutline, mdiAccountWrenchOutline, mdiCartOutline } from '@mdi/js';
 import Icone from './Icone';
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 
@@ -18,6 +18,8 @@ const ModalDossieOp = lazy(() => import('./OpDossie').then(m => ({ default: m.Mo
 const ModalLote = lazy(() => import('./OpLote').then(m => ({ default: m.ModalLote })));
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OP. Importação preguiçosa só para a janela montar no clique: ela NÃO divide o pacote, porque o menu
 // Serviços de terceiros importa o módulo de forma fixa (o aviso INEFFECTIVE_DYNAMIC_IMPORT do build, igual ao do OpDossie, é esperado)
+// 27/11/2026 (pedido do usuário): "Solicitar compra" dentro da janela da OP; a janela de pedido é a mesma de todo o sistema e só é baixada quando a pessoa clica
+const ModalSolicitarCompra = lazy(() => import('./SolicitacaoCompra').then(m => ({ default: m.ModalSolicitarCompra })));
 const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { departamentosDoSetor } from './RhDepartamentos';
@@ -681,6 +683,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
   const [erroCompras, setErroCompras] = useState('');
+  const [pedindoCompra, setPedindoCompra] = useState(false);   // janela "Solicitar compra" desta OP
+  const [avisoCompra, setAvisoCompra] = useState('');
+  const [tickCompras, setTickCompras] = useState(0);           // sobe depois de um pedido novo, para reler a lista de compras
   // E4 (17/11/2026): a data de cada fornecedor dos pedidos com mais de um (a leitura que falha avisa; nunca vale como "uma data só")
   const [linhasEntregasCompras, setLinhasEntregasCompras] = useState<any[]>([]);
   const [erroEntregasCompras, setErroEntregasCompras] = useState('');
@@ -741,7 +746,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         if (comValor.erro) setErroCompras('Não foi possível ler os valores das compras: ' + comValor.erro);
         setComprasVinculadas(comValor.pedidos);
       });
-  }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
+  }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id, tickCompras]);
 
   useEffect(() => {
     if (!opl?.id) { setSeriaisCq(null); return; }
@@ -1036,6 +1041,18 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         />
       )}
       {trocandoFluxo && <TrocarFluxoModal op={opl} currentUser={usuario} onClose={() => setTrocandoFluxo(false)} onTrocada={() => { recarregarOpl(); recarregarLogs(); }} />}
+      {pedindoCompra && (
+        <Suspense fallback={null}>
+          {/* a compra nasce ligada à OP (vínculo 'op' + número da OP) e aparece na lista "Compras desta OP"; em lote, a janela oferece multiplicar pelo número de veículos */}
+          <ModalSolicitarCompra currentUser={usuario} titulo={`Solicitar compra — OP ${opl.opl}`}
+            subtitulo="O pedido vai para o Compras ligado a esta OP: ele aparece aqui, com o andamento."
+            valorInicial={{ titulo: `Compra para a OP ${opl.opl}${opl.cliente_nome ? ' — ' + opl.cliente_nome : ''}`, vinculo: { tipo: 'op', id: String(opl.id), descricao: `${opl.opl}${opl.cliente_nome || opl.modelo ? ' — ' + (opl.cliente_nome || opl.modelo) : ''}` } }}
+            origemSetor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')} opl={opl.opl} contexto={`OP ${opl.opl}`}
+            unidadesDoLote={qtdLote}
+            onClose={() => setPedindoCompra(false)}
+            onCriada={(r: any) => { setAvisoCompra(`Requisição ${r.numero_pedido} enviada ao Compras, ligada à OP ${opl.opl}.`); setTickCompras(t => t + 1); }} />
+        </Suspense>
+      )}
       {pedindoTerceiro && (
         <Suspense fallback={null}>
           <SolicitarServicoDeTerceiro currentUser={usuario} preset={presetDoServico} onClose={() => setPedindoTerceiro(false)} aoPedido={() => setPedindoTerceiro(false)} />
@@ -1204,10 +1221,19 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             {/* ── Compras ligadas a esta OP: material que vai chegar ── */}
             {erroCompras && <div className="acn-opl-aviso erro">Não foi possível ler as compras vinculadas ({erroCompras}). Isso não quer dizer que não existam.</div>}
             {erroEntregasCompras && <div className="acn-opl-aviso erro">Não foi possível ler a data de cada fornecedor ({erroEntregasCompras}). Nas compras de vários fornecedores a data mostrada é a mais distante.</div>}
-            {comprasVinculadas.length > 0 && (
+            {/* o cartão aparece sempre: é onde mora o botão de pedir compra (OP cancelada só consulta) */}
+            {(
               <section className="acn-opl-card">
-                <header className="acn-opl-card-cab"><span>🛒 Compras vinculadas ({comprasVinculadas.length})</span></header>
-                <div className="acn-opl-card-corpo acn-opl-compras">
+                <header className="acn-opl-card-cab">
+                  <span>🛒 Compras vinculadas ({comprasVinculadas.length})</span>
+                  {opl.status_geral !== 'Cancelado' && (
+                    <Botao pequeno variante="secundario" icone={mdiCartOutline} onClick={() => { setAvisoCompra(''); setPedindoCompra(true); }}
+                      title="Pedir ao Compras um material para esta OP: o pedido fica ligado a ela">Solicitar compra</Botao>
+                  )}
+                </header>
+                {avisoCompra && <div className="acn-opl-aviso ok">{avisoCompra}</div>}
+                {!comprasVinculadas.length && !erroCompras && <div className="acn-opl-card-corpo"><div className="acn-ajuda acn-centro">Nenhuma compra pedida para esta OP ainda.</div></div>}
+                {comprasVinculadas.length > 0 && <div className="acn-opl-card-corpo acn-opl-compras">
                   {comprasVinculadas.map(c => (
                     <button key={c.id} type="button" className="acn-opl-compra" onClick={() => abrirVinculo({ tipo: 'compra', id: c.id, descricao: c.numero_pedido })}>
                       <span className="acn-opl-compra-nome">🔗 {c.numero_pedido} — {nomeDoPedido(c)}</span>
@@ -1233,7 +1259,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                       </span>
                     </button>
                   ))}
-                </div>
+                </div>}
               </section>
             )}
 
