@@ -246,25 +246,52 @@ export async function lerContextoDaProntidao(ops: any[]) {
     const clientes = await lerPaginado(() => supabase.from('clientes').select('id,nome,documento').order('id'));
     const fc = await lerTodosOsFiscaisDosClientes();
     if (fc.erro) return { ctx: null, erro: fc.erro };
+    const cat = await lerCatalogoCitado(ops);
+    if (cat.erro) return { ctx: null, erro: cat.erro };
+    const fi = await lerFiscalDosItens(cat.catalogo.map((i: any) => i.id));
+    if (fi.erro) return { ctx: null, erro: fi.erro };
+    return { ctx: { clientes, fiscaisDosClientes: fc.mapa, catalogo: cat.catalogo, fiscaisDosItens: fi.mapa, emitentes: em.lista }, erro: '' };
+  } catch (e: any) {
+    return { ctx: null, erro: explicarErroDoBanco(e) };
+  }
+}
+
+/** Os itens do cadastro que estas OPs citam (pelo id, ou pelo nome quando a linha vendida não tem o vínculo). Serve à prontidão e ao mapa de tipos de nota. Leitura recusada devolve `erro`. */
+export async function lerCatalogoCitado(ops: any[]) {
+  try {
     const { itemIds, nomes } = oQueAsOpsCitam(ops);
     const catalogo = new Map<string, any>();
     const COLUNAS = 'id,codigo,nome,ncm,ipi_pct,ativo,categoria';
     for (let i = 0; i < itemIds.length; i += TAMANHO_DO_BLOCO) {
       const { data, error } = await supabase.from('cadastro_itens').select(COLUNAS).in('id', itemIds.slice(i, i + TAMANHO_DO_BLOCO));
-      if (error) return { ctx: null, erro: explicarErroDoBanco(error) };
+      if (error) return { catalogo: [] as any[], erro: explicarErroDoBanco(error) };
       for (const l of data || []) catalogo.set(l.id, l);
     }
     const chavesDeNome = nomes.map(n => n.toLowerCase());   // `nome_norm` é o nome sem acento e em minúsculas
     for (let i = 0; i < chavesDeNome.length; i += TAMANHO_DO_BLOCO) {
       const { data, error } = await supabase.from('cadastro_itens').select(COLUNAS).in('nome_norm', chavesDeNome.slice(i, i + TAMANHO_DO_BLOCO)).neq('ativo', false);
-      if (error) return { ctx: null, erro: explicarErroDoBanco(error) };
+      if (error) return { catalogo: [] as any[], erro: explicarErroDoBanco(error) };
       for (const l of data || []) catalogo.set(l.id, l);
     }
-    const fi = await lerFiscalDosItens([...catalogo.keys()]);
-    if (fi.erro) return { ctx: null, erro: fi.erro };
-    return { ctx: { clientes, fiscaisDosClientes: fc.mapa, catalogo: [...catalogo.values()], fiscaisDosItens: fi.mapa, emitentes: em.lista }, erro: '' };
+    return { catalogo: [...catalogo.values()], erro: '' };
   } catch (e: any) {
-    return { ctx: null, erro: explicarErroDoBanco(e) };
+    return { catalogo: [] as any[], erro: explicarErroDoBanco(e) };
+  }
+}
+
+/**
+ * As OPs que já têm alguma nota informada (NF-e ou NFS-e), com o que elas vendem, e o catálogo dos itens que citam: é o que o mapa de tipos de nota precisa para conferir o que o Fiscal
+ * informou. Leitura recusada devolve `erro` (nunca "nenhuma OP com nota"). Lê UMA vez, quando a pessoa pede.
+ */
+export async function lerOpsComNota() {
+  try {
+    const todas = await lerPaginado(() => supabase.from('oples').select('id,opl,cliente_nome,status_geral,tipo_projeto,fluxo_entrega,itens_vendidos,numero_nf,numero_nf_servico').or('numero_nf.neq.,numero_nf_servico.neq.').order('id'));
+    const ops = todas.filter((o: any) => String(o.numero_nf || '').trim() || String(o.numero_nf_servico || '').trim());
+    const cat = await lerCatalogoCitado(ops);
+    if (cat.erro) return { ops: [] as any[], catalogo: [] as any[], erro: cat.erro };
+    return { ops, catalogo: cat.catalogo, erro: '' };
+  } catch (e: any) {
+    return { ops: [] as any[], catalogo: [] as any[], erro: explicarErroDoBanco(e) };
   }
 }
 

@@ -465,4 +465,69 @@ t('resumoDasLigacoes e gruposComSugestao: contam OPs e nomes, com e sem cadastro
   assert.deepEqual(L.resumoDasLigacoes(g), { ops: 3, nomes: 2, opsComSugestao: 2, nomesComSugestao: 1, opsSemSugestao: 1 });
 });
 
+// ═══ Mapa de tipos de nota por origem (27/11/2026) ═══
+const N = await import(pathToFileURL(RAIZ + '/FiscalTiposDeNota.ts').href);
+const PROD = { id: 'i1', nome: 'SINALIZADOR INTERLED2 VERMELHO', categoria: 'MERCADORIA PARA REVENDA', ativo: true };
+const SERV = { id: 's1', nome: 'INSTALACAO DE KIT ADAPTACAO', categoria: 'GENERICO', ativo: true };
+const FRETE = { id: 'f1', nome: 'FRETE SOBRE VENDAS', categoria: 'GENERICO', ativo: true };
+const CAT = [PROD, SERV, FRETE];
+const opCom = (...ids) => ({ itens_vendidos: ids.map(i => ({ item_id: i, nome: 'x', quantidade: 1 })) });
+
+t('notasQueAOpPede: só mercadoria pede a NF-e; só serviço pede a NFS-e; as duas pedem as duas', () => {
+  assert.equal(N.notasQueAOpPede(opCom('i1'), CAT).pede, 'material');
+  assert.equal(N.notasQueAOpPede(opCom('s1'), CAT).pede, 'servico');
+  const p = N.notasQueAOpPede(opCom('i1', 's1'), CAT);
+  assert.equal(p.pede, 'material_e_servico'); assert.equal(p.produtos, 1); assert.equal(p.servicos, 1); assert.equal(p.certa, true);
+});
+t('notasQueAOpPede: frete não conta para nenhum lado (a contabilidade diz onde vai) e é dito nos motivos', () => {
+  const p = N.notasQueAOpPede(opCom('i1', 'f1'), CAT);
+  assert.equal(p.pede, 'material'); assert.equal(p.fretes, 1); assert.equal(p.servicos, 0);
+  assert.ok(p.motivos.some(m => /frete/.test(m)));
+  assert.equal(N.notasQueAOpPede(opCom('f1'), CAT).pede, 'indefinida');
+});
+t('notasQueAOpPede: OP sem itens lançados é "indefinida" e NÃO é certa (nunca se chuta pelo tipo da OP)', () => {
+  const p = N.notasQueAOpPede({ itens_vendidos: [] }, CAT);
+  assert.equal(p.pede, 'indefinida'); assert.equal(p.certa, false); assert.equal(p.semItens, true);
+  assert.equal(N.notasQueAOpPede({ itens_vendidos: null }, CAT).certa, false);
+});
+t('notasQueAOpPede: linha que não se acha no cadastro tira a certeza (a OP pode vender mais do que se vê)', () => {
+  const p = N.notasQueAOpPede({ itens_vendidos: [{ item_id: 'i1', nome: 'x' }, { nome: 'COISA QUE NAO EXISTE' }] }, CAT);
+  assert.equal(p.naoSei, 1); assert.equal(p.certa, false); assert.equal(p.pede, 'material');
+});
+t('notasQueAOpPede: OP só de serviço de terceiro pede a NFS-e mesmo sem item lançado, e é certa', () => {
+  const p = N.notasQueAOpPede({ fluxo_entrega: 'somente_servico_terceiro', itens_vendidos: [] }, CAT);
+  assert.equal(p.pede, 'servico'); assert.equal(p.certa, true);
+  assert.equal(N.notasQueAOpPede({ fluxo_entrega: 'somente_servico_terceiro', ...opCom('i1') }, CAT).pede, 'material_e_servico');
+});
+t('conferirNotasInformadas: sem nota nenhuma não há o que conferir; sem base, também não', () => {
+  const pede = N.notasQueAOpPede(opCom('i1'), CAT);
+  assert.equal(N.conferirNotasInformadas(pede, { numero_nf: '', numero_nf_servico: null }).situacao, 'sem_nota');
+  assert.equal(N.conferirNotasInformadas(pede, { numero_nf: '  ', numero_nf_servico: ' ' }).situacao, 'sem_nota');   // só espaços não é número de nota
+  assert.equal(N.conferirNotasInformadas(N.notasQueAOpPede({ itens_vendidos: [] }, CAT), { numero_nf: '10' }).situacao, 'sem_base');
+});
+t('conferirNotasInformadas: a nota certa confere; falta a de serviço, falta a de material e nota a mais são pegos nos dois sentidos', () => {
+  const dois = N.notasQueAOpPede(opCom('i1', 's1'), CAT), mat = N.notasQueAOpPede(opCom('i1'), CAT), ser = N.notasQueAOpPede(opCom('s1'), CAT);
+  assert.equal(N.conferirNotasInformadas(dois, { numero_nf: '1', numero_nf_servico: '2' }).situacao, 'confere');
+  assert.match(N.conferirNotasInformadas(dois, { numero_nf: '1' }).divergencias[0], /só a NF-e foi informada/);
+  assert.match(N.conferirNotasInformadas(dois, { numero_nf_servico: '2' }).divergencias[0], /só a NFS-e foi informada/);
+  assert.equal(N.conferirNotasInformadas(mat, { numero_nf: '1' }).situacao, 'confere');
+  assert.match(N.conferirNotasInformadas(mat, { numero_nf: '1', numero_nf_servico: '2' }).divergencias[0], /só vende mercadoria/);
+  assert.equal(N.conferirNotasInformadas(ser, { numero_nf_servico: '2' }).situacao, 'confere');
+  assert.match(N.conferirNotasInformadas(ser, { numero_nf: '1' }).divergencias.join('|'), /só vende serviço/);
+  assert.equal(N.conferirNotasInformadas(ser, { numero_nf: '1' }).situacao, 'diverge');
+});
+t('resumoDaConferencia: conta confere, diverge e sem base e ignora OP sem nota', () => {
+  const c = (situacao) => ({ conferencia: { situacao, divergencias: [], informadas: {} } });
+  assert.deepEqual(N.resumoDaConferencia([c('confere'), c('diverge'), c('diverge'), c('sem_base'), c('sem_nota'), null]), { total: 4, confere: 1, diverge: 2, semBase: 1 });
+});
+t('ORIGENS_DE_NOTA: ids únicos, toda linha diz a base e o que o sistema sabe; o que não existe no sistema nunca é "historico"', () => {
+  const ids = N.ORIGENS_DE_NOTA.map(o => o.id);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const o of N.ORIGENS_DE_NOTA) {
+    assert.ok(['historico', 'a_confirmar'].includes(o.base), o.id); assert.ok(['sim', 'em_parte', 'nao'].includes(o.sistemaSabe), o.id);
+    assert.ok(o.origem && o.nota && o.quemDiz, o.id);
+    if (o.sistemaSabe === 'nao') assert.equal(o.base, 'a_confirmar', o.id);
+  }
+});
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS (veja acima)' : ''}.`);

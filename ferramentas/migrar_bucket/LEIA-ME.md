@@ -24,7 +24,7 @@ Remove-Item Env:SUPABASE_SERVICE_KEY
 ```
 
 **Outras fatias** (uma por vez, só quando a tela daquela fatia estiver publicada; a lista das pastas está no topo do script e no plano): `--fatia=b1` (Compras, Logística, Financeiro),
-`b2` (OP, Produção, Engenharia, Vistoria, SAC), `b3` (CRM), `b4` (Licitações e `crm-docs`); ou `--pastas=pasta1,pasta2` para escolher à mão. O ensaio mostra uma linha por pasta.
+`b2` (OP, Produção, Engenharia, Vistoria, SAC), `b3` (CRM), `b4` (Licitações e `crm-docs`), `b4b` (imagens coladas em texto: rode só depois que a tela da B4b estiver publicada); ou `--pastas=pasta1,pasta2` para escolher à mão. O ensaio mostra uma linha por pasta.
 Se uma cópia ficou pela metade (tamanho diferente), o `--copiar` a refaz; o `--apagar` se recusa enquanto houver qualquer uma.
 
 O `--apagar` se recusa a rodar se algum arquivo ainda não foi copiado ou foi copiado com tamanho diferente, e só aceita com `--tela-publicada` (você confirma que a tela da fatia
@@ -46,6 +46,16 @@ node ferramentas/migrar_bucket/teste_b4.cjs
 (Cria e apaga sozinho um arquivo provisório `src/zz_teste_b4_montar.tsx`; precisa do servidor de desenvolvimento na porta 5173. Não monta a tela das licitações: ela é conferida pela varredura do código.)
 
 **Rodar a cópia da B4 fora do horário de uso:** são ~1.560 arquivos, 1,5 GB. Comece pelo ensaio (`--fatia=b4`, sem `--copiar`).
+
+## Conferência da B4b (imagens coladas em texto formatado)
+
+```powershell
+node ferramentas/migrar_bucket/teste_b4b.cjs
+```
+
+(Varredura do código e as funções reais de `src/ImagensDeTexto.tsx` no navegador com o armazenamento simulado; cria e apaga sozinho `src/zz_teste_b4b_montar.tsx`; precisa do servidor de desenvolvimento na porta 5173. Não monta o editor das telas.)
+
+**A cópia da B4b (`--fatia=b4b`, 387 arquivos, 40 MB) só vale depois que a tela da B4b estiver publicada:** a tela nova lê pela marca e, enquanto o arquivo não está no privado, cai no endereço público do mesmo caminho. Depois da cópia, abra uma licitação com imagem na Área Livre e uma nota do CRM com imagem antes do `--apagar --tela-publicada`.
 
 ## Conferência da B3 (varredura do código + navegador com o armazenamento simulado)
 

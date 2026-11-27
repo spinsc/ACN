@@ -36,7 +36,7 @@ import FiscalCadastrosTela from './FiscalCadastrosTela';
 import FiscalConferidorTela from './FiscalConferidorTela';
 import FiscalArquivoTela from './FiscalArquivoTela';
 import { Janela } from './FiscalCadastrosTela';
-import { useProntidaoDasOps, SeloDaProntidao, DetalheDaProntidao } from './FiscalProntidaoTela';
+import { useProntidaoDasOps, SeloDaProntidao, DetalheDaProntidao, SeloDoTipoDeNota } from './FiscalProntidaoTela';
 import { resumoDasProntidoes } from './FiscalProntidao';
 
 // O que era a tela inteira do Fiscal virou a aba "Faturamento" (26/11/2026, preparação do módulo fiscal): nada dentro dela mudou.
@@ -596,6 +596,7 @@ function FaturamentoDoFiscal({ currentUser, aoIrAosCadastros }) {
                 </div>
               )}
               {prontidao.mapa.get(o.id) && <div><SeloDaProntidao p={prontidao.mapa.get(o.id)} onClick={() => setVerProntidao(o)} /></div>}
+              {prontidao.mapa.get(o.id) && <div><SeloDoTipoDeNota op={o} catalogo={prontidao.catalogo} /></div>}
             </td>
             <td><VeiculoOuEnvio o={o} /></td>
             <td><span className={'acn-num ' + ((o.quantidade||1)>1 ? 'acn-forte' : 'acn-fraco')}>{o.quantidade||1}</span></td>
@@ -707,6 +708,7 @@ function FaturamentoDoFiscal({ currentUser, aoIrAosCadastros }) {
                         </div>
                       )}
                       {prontidao.mapa.get(o.id) && <div><SeloDaProntidao p={prontidao.mapa.get(o.id)} onClick={() => setVerProntidao(o)} /></div>}
+              {prontidao.mapa.get(o.id) && <div><SeloDoTipoDeNota op={o} catalogo={prontidao.catalogo} /></div>}
                     </td>
                     <td>
                       <VeiculoOuEnvio o={o} />

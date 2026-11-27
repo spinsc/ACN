@@ -83,6 +83,25 @@ const simularLigacao = (url) => {
   return null;
 };
 
+// ── mapa de tipos de nota (27/11/2026): OPs com nota e itens SIMULADOS; só vale com `modoTipos` ligado ──
+let modoTipos = false;
+let modoLeituraDosTipos = 'ok';   // 'ok' | 'erro'
+const SERV_ID = '00000000-0000-4000-8000-0000000000bb';
+const linhaProd = { nome: 'SINALIZADOR INTERLED2 VERMELHO', item_id: ITEM_ID, quantidade: 2 }, linhaServ = { nome: 'INSTALACAO DE KIT ADAPTACAO', item_id: SERV_ID, quantidade: 1 };
+const opTipo = (n, o) => ({ id: uid(60 + n), status_geral: 'Faturado', cliente_nome: 'Prefeitura de Teste', tipo_projeto: 'Adaptacao', fluxo_entrega: 'adaptacao', numero_nf: '', numero_nf_servico: '', ...o });
+const OPS_TIPOS = [
+  opTipo(1, { opl: 'A400.2611', itens_vendidos: [linhaProd], numero_nf: '10' }),
+  opTipo(2, { opl: 'A401.2611', itens_vendidos: [linhaProd, linhaServ], numero_nf: '11' }),
+  opTipo(3, { opl: 'A402.2611', itens_vendidos: [linhaServ], numero_nf: '12', numero_nf_servico: '5' }),
+  opTipo(4, { opl: 'A403.2611', itens_vendidos: [], numero_nf: '13' }),
+  opTipo(5, { opl: 'A404.2611', itens_vendidos: [linhaProd, linhaServ], numero_nf: '14', numero_nf_servico: '6' }),
+];
+const simularTipos = (url) => {
+  if (/\/rest\/v1\/oples\?.*numero_nf_servico\.neq/.test(url)) return modoLeituraDosTipos === 'erro' ? { status: 500, body: { message: 'boom', code: 'XX000' } } : { status: 200, body: OPS_TIPOS };
+  if (/\/rest\/v1\/cadastro_itens\?/.test(url)) return /nome_norm=in/.test(url) ? { status: 200, body: [] } : { status: 200, body: [{ id: ITEM_ID, codigo: '225', nome: 'SINALIZADOR INTERLED2 VERMELHO', ncm: '85122011', ipi_pct: 0, ativo: true, categoria: 'MERCADORIA PARA REVENDA' }, { id: SERV_ID, codigo: '1680', nome: 'INSTALACAO DE KIT ADAPTACAO', ncm: null, ipi_pct: 0, ativo: true, categoria: 'GENERICO' }] };
+  return null;
+};
+
 let modoDaGravacao = 'ok';
 const respostaDaGravacao = (url, metodo, corpo) => {
   if (/rpc\/fiscal_guardar/.test(url)) return modoDaGravacao === 'ok' ? { status: 200, body: { novas: 1, atualizadas: 0, repetidas: 1, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0 } } : { status: 400, body: { message: 'canceling statement due to statement timeout', code: '57014' } };
@@ -109,7 +128,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
   fs.writeFileSync(arqs.errada, nota({ numero: 102, idDest: '2', cfop: '5102' }));   // interestadual (idDest 2) com CFOP de dentro do estado
   fs.writeFileSync(arqs.lixo, '<isto nao e uma nota>');
 
-  const ctx = await abrir({ simular: (url) => (modoLigacao ? simularLigacao(url) : null) || (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url, metodo, corpo) => respostaDaGravacao(url, metodo, corpo) });
+  const ctx = await abrir({ simular: (url) => (modoTipos ? simularTipos(url) : null) || (modoLigacao ? simularLigacao(url) : null) || (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url, metodo, corpo) => respostaDaGravacao(url, metodo, corpo) });
   const { page, gravacoes, consoleErros, falhasDePagina } = ctx;
   try {
     // ═══ Cadastros: empresas ═══
@@ -317,6 +336,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     confere('prontidão: a OP cujo cliente não está no cadastro mostra "Faltam dados fiscais (1)"', (await linhasDe('A101\\.2611')).some(x => /Faltam dados fiscais \(1\)/.test(x)), JSON.stringify(await linhasDe('A101')));
     confere('prontidão: o cartão do alto conta 2 prontas de 4 OPs, 2 com dado faltando', /Dados fiscais completos 2 de 4 OPs aguardando nota · 2 com dado faltando/.test(t), t.slice(0, 400));
     confere('prontidão: o cabeçalho do lote diz "1 de 2 com dado fiscal faltando"', /1 de 2 com dado fiscal faltando/.test(t), t.slice(0, 500));
+    confere('tipo de nota: a OP que vende só mercadoria mostra "Nota: NF-e" ao lado do selo de prontidão', (await linhasDe('A100\\.2611')).some(x => /Pronta para a nota/.test(x) && /Nota: NF-e/.test(x) && !/NFS-e/.test(x)), JSON.stringify(await linhasDe('A100')));
     confere('prontidão: as duas OPs já faturadas NÃO ganham selo de prontidão', (await linhasDe('A200\\.2611|A201\\.2611')).every(x => !/Pronta para a nota|Faltam dados fiscais/.test(x)));
     // o detalhe de uma OP incompleta
     await page.evaluate(() => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => /A101\.2611/.test(x.innerText)); [...tr.querySelectorAll('.acn-selo')].find(b => /Faltam dados fiscais/.test(b.innerText)).click(); });
@@ -358,11 +378,13 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     const fecharTudo = async () => { await page.keyboard.press('Escape'); await page.evaluate(() => document.querySelectorAll('button[aria-label="Fechar"], .modal-close, .acn-opl-x').forEach(b => b.click())); await espera(400); };
     t = await abrirDossie('A100.2611');
     confere('dossiê: OP sem nota mostra "Pronta para a nota" e o que foi conferido', /Pronta para a nota/.test(t) && /1 item\(ns\)/.test(t), t.slice(0, 300));
+    confere('dossiê: OP sem nota diz o tipo de nota que ela pede pelo que vende', /ela pede: NF-e de material/.test(t), t.slice(0, 400));
     await fecharTudo();
     t = await abrirDossie('A101.2611');
     confere('dossiê: OP incompleta lista o que falta', /Faltam dados fiscais/.test(t) && /não achei no cadastro de clientes/.test(t), t.slice(0, 300));
     await fecharTudo();
     t = await abrirDossie('A200.2611');
+    confere('dossiê: OP com nota mostra "Confere" (a NF-e informada combina com o que a OP vende)', /Confere/.test(t) && /combinam com o que a OP vende/.test(t), t.slice(0, 400));
     confere('dossiê: OP com nota mostra a nota guardada (nº, série, empresa e a chave)', /Nota 100/.test(t) && /série 3/.test(t) && t.includes(chaveDe(ACN, 3, 100)) && !/Sem XML guardado/.test(t), t.slice(0, 400));
     await fecharTudo();
     t = await abrirDossie('A201.2611');
@@ -458,6 +480,55 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     confere('celular 390: a janela de escolher o cliente cabe na tela', await page.evaluate(() => { const r = document.querySelector('.acn-fcad-box').getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth + 1; }));
     await page.setViewport({ width: 1500, height: 900 });
     modoLigacao = false;
+
+    // ═══ Cadastros fiscais › Tipos de nota: o mapa e a conferência das OPs com nota — dados SIMULADOS ═══
+    modoTipos = true;
+    await page.setViewport({ width: 1500, height: 900 });
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '#/fiscal/cadastros/tipos', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /De onde nasce cada nota/i.test(document.body.innerText), { timeout: 30000 });
+    t = await textoDaTela(page);
+    const antesT = gravacoes.length;
+    confere('tipos de nota: o endereço da visão é #/fiscal/cadastros/tipos', (await page.evaluate(() => location.hash)) === '#/fiscal/cadastros/tipos', await page.evaluate(() => location.hash));
+    confere('tipos de nota: o mapa lista as origens (venda de material, serviço, antecipado, devolução...)', /OP com mercadoria vendida/.test(t) && /Serviço vendido na OP/.test(t) && /Faturamento antecipado/.test(t) && /Devolução/.test(t), t.slice(0, 300));
+    confere('tipos de nota: o mapa separa "O histórico confirma" de "A confirmar com a contabilidade"', /O histórico confirma/.test(t) && /A confirmar com a contabilidade/.test(t));
+    confere('tipos de nota: avisa que nada é emitido nem trava o Fiscal', /Nada é emitido e nada trava o Fiscal/.test(t));
+    confere('tipos de nota: a conferência NÃO lê as OPs antes de a pessoa pedir', !/OPs com nota informada/.test(t));
+    await clicarTexto(page, '.acn-main button', 'Conferir as OPs com nota');
+    await page.waitForFunction(() => /OPs com nota informada/.test(document.body.innerText), { timeout: 15000 });
+    t = await textoDaTela(page);
+    confere('tipos de nota: 5 OPs com nota, 2 conferem, 2 divergem, 1 sem como conferir', /OPs com nota informada 5 2 conferem · 2 divergem · 1 sem como conferir/.test(t), t.slice(t.indexOf('OPs com nota informada'), t.indexOf('OPs com nota informada') + 160));
+    const linhasDaUltima = () => page.evaluate(() => [...document.querySelectorAll('.acn-main table')].pop().querySelectorAll('tbody tr') && [...[...document.querySelectorAll('.acn-main table')].pop().querySelectorAll('tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ')));
+    const trs = await linhasDaUltima();
+    confere('tipos de nota: por padrão só as que divergem (A401 e A402), com o porquê', trs.length === 2 && trs.some(x => /A401\.2611/.test(x) && /só a NF-e foi informada/.test(x)) && trs.some(x => /A402\.2611/.test(x) && /só vende serviço/.test(x)), JSON.stringify(trs));
+    await page.evaluate(() => [...document.querySelectorAll('.acn-chips button')].find(x => /^Sem como conferir/.test(x.innerText.trim()))?.click());
+    await espera(300);
+    const trs2 = await linhasDaUltima();
+    confere('tipos de nota: "Sem como conferir" mostra só a A403 (sem itens lançados)', trs2.length === 1 && /A403\.2611/.test(trs2[0]), JSON.stringify(trs2));
+    await page.evaluate(() => [...document.querySelectorAll('.acn-chips button')].find(x => /^Conferem/.test(x.innerText.trim()))?.click());
+    await espera(300);
+    const trs3 = await linhasDaUltima();
+    confere('tipos de nota: "Conferem" mostra a A400 e a A404', trs3.length === 2 && trs3.some(x => /A400\.2611/.test(x)) && trs3.some(x => /A404\.2611/.test(x)), JSON.stringify(trs3));
+    confere('tipos de nota: nenhuma gravação (a conferência só lê)', gravacoes.slice(antesT).length === 0, JSON.stringify(gravacoes.slice(antesT).map(x => x.url)));
+    // leitura recusada: nada é dado como conferido
+    modoLeituraDosTipos = 'erro';
+    await clicarTexto(page, '.acn-main button', 'Conferir de novo');
+    await page.waitForFunction(() => /Não foi possível ler as OPs/.test(document.body.innerText), { timeout: 15000 });
+    t = await textoDaTela(page);
+    confere('tipos de nota: leitura recusada → faixa vermelha e nenhum número de "conferem"', await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')) && !/conferem ·/.test(t), t.slice(0, 200));
+    modoLeituraDosTipos = 'ok';
+    // celular
+    await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await page.goto(BASE + '#/fiscal/cadastros/itens', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '#/fiscal/cadastros/tipos', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /De onde nasce cada nota/i.test(document.body.innerText), { timeout: 30000 });
+    await clicarTexto(page, '.acn-main button', 'Conferir as OPs com nota');
+    await page.waitForFunction(() => /OPs com nota informada/.test(document.body.innerText), { timeout: 15000 });
+    confere('celular 390: Tipos de nota (mapa e conferência) não estoura a largura da página', await semRolagemLateral(page), String(await page.evaluate(() => document.documentElement.scrollWidth)));
+    await page.setViewport({ width: 1500, height: 900 });
+    modoTipos = false;
 
     // ═══ Celular ═══
     for (const [rotulo, hash, esperar] of [['cadastros/empresas', '#/fiscal/cadastros', /DETECH/], ['cadastros/itens', '#/fiscal/cadastros/itens', /Itens ativos/], ['conferidor', '#/fiscal/conferidor', /Solte os arquivos/], ['arquivo/notas', '#/fiscal/arquivo', /Notas guardadas/], ['arquivo/numeracao', '#/fiscal/arquivo/numeracao', /Primeiro/]]) {
