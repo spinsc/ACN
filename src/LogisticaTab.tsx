@@ -28,6 +28,9 @@ import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 import { CampoMoeda } from './CampoMoeda';
 import { numeroOuNulo } from './LerValor';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { anexarValoresDaOp } from './OpValores';
+import { documentoDaOp, valorDaNfDaOp, formatarDocumento, erroDoDocumentoDoCliente, RODAPE_DA_ORIGEM } from './ClienteDocumentoOp';
+import { lerClientesDasOps, gravarDocumentoDaOp, pedirDocumentoAoVendedor } from './ClienteDocumentoOpDados';   // 27/11/2026: CPF/CNPJ do cliente e valor da NF-e na janela do frete
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -346,6 +349,13 @@ function FretesPanel({ currentUser }: any) {
   // e quando uma medida ficava em branco não havia onde corrigir depois. null = não está editando.
   const [editEmb, setEditEmb] = useState<any>(null);
   const [opDoFrete, setOpDoFrete] = useState<any>(null);   // a OP ligada ao frete aberto (para avisar se ela é FOB)
+  // 27/11/2026 (pedido do Financeiro): a cotação precisa do CPF/CNPJ do cliente e do valor da NF-e; saem da OP ligada ao frete (valor da NF-e = valor total da OP)
+  const [clientesDaOp, setClientesDaOp] = useState<any[]>([]);
+  const [erroDadosDaOp, setErroDadosDaOp] = useState('');
+  const [docDigitado, setDocDigitado] = useState('');
+  const [ocupadoDoc, setOcupadoDoc] = useState('');
+  const docDaOp = opDoFrete ? documentoDaOp(opDoFrete, clientesDaOp) : null;
+  const valorNfDaOp = opDoFrete ? valorDaNfDaOp(opDoFrete) : null;
   const [salvandoEmb, setSalvandoEmb] = useState(false);
   const [cotacoes, setCotacoes] = useState<any[]>([]);
   const [loadingCotacoes, setLoadingCotacoes] = useState(false);
@@ -524,11 +534,42 @@ function FretesPanel({ currentUser }: any) {
     else mostrarAviso('Embalagem do frete atualizada.', 'ok');
   };
 
+  // 27/11/2026: grava o CPF/CNPJ do cliente na OP (a Logística pode completar; o vendedor também corrige pela edição da OP)
+  const gravarDocumentoNaOp = async (valor: any) => {
+    if (!opDoFrete || ocupadoDoc) return;
+    setOcupadoDoc('gravar');
+    const r = await gravarDocumentoDaOp({ op: opDoFrete, valor, usuario: currentUser });
+    setOcupadoDoc('');
+    if (!r.ok) { mostrarAviso(r.erro || 'Não foi possível gravar o CPF/CNPJ.', 'erro'); return; }
+    setOpDoFrete((o: any) => ({ ...o, cliente_documento: String(valor).replace(/\D/g, '') }));
+    setDocDigitado('');
+    mostrarAviso(r.semHistorico ? 'CPF/CNPJ gravado na OP, mas o histórico da OP não foi atualizado: ' + r.semHistorico : 'CPF/CNPJ do cliente gravado na OP.', r.semHistorico ? 'atencao' : 'ok');
+  };
+  const pedirDocumentoAoComercial = async () => {
+    if (!opDoFrete || ocupadoDoc) return;
+    setOcupadoDoc('pedir');
+    const r = await pedirDocumentoAoVendedor({ op: opDoFrete, usuario: currentUser, setor: 'Logística' });
+    setOcupadoDoc('');
+    if (!r.ok) { mostrarAviso(r.erro || 'Não foi possível avisar o vendedor.', 'erro'); return; }
+    mostrarAviso(`Pedido enviado na caixa de Menções de ${(r.avisados || []).join(', ')}.` + (r.semHistorico ? ' (o andamento da OP não foi atualizado)' : ''), r.semHistorico ? 'atencao' : 'ok');
+  };
+
   const abrirModalFrete = async (f: any) => {
     setEditEmb(null);
     setOpDoFrete(null);
     if (f.vinculo_tipo === 'op_os' && f.vinculo_id) {
-      supabase.from('oples').select('id,opl,frete_responsavel').eq('id', f.vinculo_id).maybeSingle().then(({ data }: any) => setOpDoFrete(data || null));
+      setClientesDaOp([]); setErroDadosDaOp(''); setDocDigitado('');
+      supabase.from('oples').select('id,opl,frete_responsavel,status_geral,cliente_id,cliente_nome,cliente_documento,cnpj_faturamento,responsavel_comercial,vendedor,criado_por,criado_por_nome').eq('id', f.vinculo_id).maybeSingle().then(async ({ data, error }: any) => {
+        if (error) { setErroDadosDaOp(`Não foi possível ler os dados da OP (${error.message}).`); return; }
+        if (!data) { setOpDoFrete(null); return; }
+        // o valor total da OP mora em outra tabela (quem não vê valores recebe nulo)
+        const comValor = await anexarValoresDaOp(data);
+        const lidos = await lerClientesDasOps([comValor.op]);
+        const falhas = [comValor.erro && `o valor da OP (${comValor.erro})`, lidos.erro && `o cadastro do cliente (${lidos.erro})`].filter(Boolean);
+        setClientesDaOp(lidos.clientes);
+        setErroDadosDaOp(falhas.length ? `Não foi possível ler ${falhas.join(' e ')}.` : '');
+        setOpDoFrete(comValor.op);
+      });
     }
     setModalFrete(f);
     setNovaCotacao({ ...VAZIO_COTACAO_FRETE });
@@ -1248,7 +1289,7 @@ function FretesPanel({ currentUser }: any) {
               </Faixa>
             )}
 
-            {(modalFrete.cnpj_cpf_pagador || modalFrete.cep_origem || modalFrete.cep_destino || modalFrete.cnpj_cpf_remetente ||
+            {(opDoFrete || modalFrete.cnpj_cpf_pagador || modalFrete.cep_origem || modalFrete.cep_destino || modalFrete.cnpj_cpf_remetente ||
               modalFrete.cnpj_cpf_destinatario || modalFrete.valor_nota || modalFrete.quantidade_volumes || modalFrete.peso_total ||
               modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento || modalFrete.destino_endereco) && (
               <div className="acn-quadro acn-dados-grade">
@@ -1263,7 +1304,16 @@ function FretesPanel({ currentUser }: any) {
                 )}
                 {modalFrete.cnpj_cpf_remetente && <div><strong>Remetente:</strong> {modalFrete.cnpj_cpf_remetente}</div>}
                 {modalFrete.cnpj_cpf_destinatario && <div><strong>Destinatário:</strong> {modalFrete.cnpj_cpf_destinatario}</div>}
+                {/* 27/11/2026: frete sem o CPF/CNPJ digitado mostra o do cliente da OP ligada (digitado na OP, do cadastro ou, por último, o de faturamento, sempre dizendo de onde veio) */}
+                {!modalFrete.cnpj_cpf_destinatario && docDaOp && (
+                  <div><strong>CPF/CNPJ do cliente:</strong> {formatarDocumento(docDaOp.documento)}{RODAPE_DA_ORIGEM[docDaOp.origem] && <span className="acn-fraco"> ({RODAPE_DA_ORIGEM[docDaOp.origem]})</span>}</div>
+                )}
                 {modalFrete.valor_nota && <div><strong>Valor NF:</strong> {fmt(modalFrete.valor_nota)}</div>}
+                {!modalFrete.valor_nota && opDoFrete && podeVerValores(currentUser) && (
+                  valorNfDaOp != null
+                    ? <div><strong>Valor da NF-e:</strong> {fmt(valorNfDaOp)} <span className="acn-fraco">(valor total da OP)</span></div>
+                    : <div><strong>Valor da NF-e:</strong> <span className="acn-fraco">a OP não tem valor total lançado</span></div>
+                )}
                 {modalFrete.quantidade_volumes && <div><strong>Volumes:</strong> {modalFrete.quantidade_volumes}</div>}
                 {modalFrete.peso_total && <div><strong>Peso:</strong> {modalFrete.peso_total} kg</div>}
                 {/* em cm: é a unidade que a embalagem do Almoxarifado grava (os fretes reais têm de 10 a 100); aqui estava escrito "m" */}
@@ -1272,6 +1322,31 @@ function FretesPanel({ currentUser }: any) {
                 ) : (
                   <div><strong>Medidas (AxLxC):</strong> <span className="acn-fraco">não informadas</span></div>
                 )}
+              </div>
+            )}
+
+            {erroDadosDaOp && <Faixa tom="atencao" icone={mdiAlertOutline}>{erroDadosDaOp} O CPF/CNPJ e o valor da NF-e podem estar incompletos aqui; feche e abra o frete de novo.</Faixa>}
+            {opDoFrete && !modalFrete.cnpj_cpf_destinatario && (!docDaOp || docDaOp.origem !== 'op') && !erroDadosDaOp && (
+              <div className="acn-quadro acn-log-doc">
+                {docDaOp
+                  ? <div><strong>Confirmar o CPF/CNPJ do cliente na OP {opDoFrete.opl}?</strong> <span className="acn-fraco">O número acima {RODAPE_DA_ORIGEM[docDaOp.origem]}.</span></div>
+                  : <Faixa tom="erro" icone={mdiAlertOutline}>A OP {opDoFrete.opl} não tem o <strong>CPF/CNPJ do cliente</strong> (ele é pedido na abertura da OP de envio de material). Informe aqui ou peça ao vendedor da OP.</Faixa>}
+                <div className="acn-acoes-linha quebra">
+                  {docDaOp
+                    ? <Botao pequeno variante="primario" disabled={!!ocupadoDoc} onClick={() => gravarDocumentoNaOp(docDaOp.documento)}>Gravar na OP</Botao>
+                    : (
+                      <>
+                        <input className="acn-input acn-log-doc-campo" inputMode="numeric" placeholder="CPF ou CNPJ do cliente" value={docDigitado}
+                          onChange={e => setDocDigitado(formatarDocumento(e.target.value))} aria-label="CPF ou CNPJ do cliente" />
+                        <Botao pequeno variante="primario" disabled={!!ocupadoDoc || !docDigitado} onClick={() => {
+                          const falha = erroDoDocumentoDoCliente(docDigitado, true);
+                          if (falha) { mostrarAviso(falha, 'atencao'); return; }
+                          gravarDocumentoNaOp(docDigitado);
+                        }}>Salvar na OP</Botao>
+                      </>
+                    )}
+                  {!docDaOp && <Botao pequeno disabled={!!ocupadoDoc} onClick={pedirDocumentoAoComercial}>Pedir ao vendedor</Botao>}
+                </div>
               </div>
             )}
 

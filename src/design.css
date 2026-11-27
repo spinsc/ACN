@@ -4704,6 +4704,12 @@ html body .acn-b.acn-nop-b.acn-nop-fechar { padding: 1px 6px; color: #ffffff; fo
 .acn-nop-gr.g211 { grid-template-columns: 2fr 1fr 1fr; }
 .acn-nop-gr.g3 { grid-template-columns: 1fr 1fr 1fr; }
 .acn-nop-bl { margin-bottom: 10px; }
+/* 27/11/2026: CPF/CNPJ do cliente logo abaixo do cliente (obrigatório no envio de material); dentro de grade o campo não pode passar da coluna */
+.acn-nop-doc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; margin-top: 8px; }
+.acn-nop-doc .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+/* 27/11/2026: CPF/CNPJ do cliente na janela do frete (preencher ou pedir ao vendedor) */
+.acn-log-doc { display: grid; gap: 8px; }
+.acn-log-doc-campo { width: 100%; max-width: 260px; min-width: 0; box-sizing: border-box; }
 .acn-nop-rot { margin-bottom: 3px; color: #475569; font-size: 12px; font-weight: 700; line-height: 1.45; }
 .acn-nop-rot.r4 { margin-bottom: 4px; }
 .acn-nop-rot-box { margin-bottom: 5px; color: #334155; font-size: 12px; font-weight: 800; line-height: 1.45; }

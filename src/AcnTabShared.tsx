@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
+import { formatarDocumento } from './ClienteDocumentoOp';   // 27/11/2026
 import { lerEntregasDosPedidos, temEntrega, chegadaDoPedido } from './ComprasEntregas';
 import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { supabase } from './supabaseClient';
@@ -1370,6 +1371,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 <Campo label="Empresa"           value={opl.faturamento_empresa} />
                 <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
                 <Campo label="Cliente"           value={opl.cliente_nome} full />
+                <Campo label="CPF/CNPJ do cliente" value={formatarDocumento(opl.cliente_documento)} field="cliente_documento" />
                 <Campo label="Cliente final"     value={opl.cliente_final} field="cliente_final" />
                 <Campo label="Vendedor"          value={opl.vendedor} field="vendedor" />
                 <Campo label="Canal de venda"    value={opl.canal_venda} field="canal_venda" />
