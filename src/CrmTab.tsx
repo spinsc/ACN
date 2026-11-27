@@ -32,7 +32,6 @@ import { useAlturaDeCards } from './KanbanColuna';
 import { useCelular, useToque, SeletorEtapas, etapaInicial } from './Celular';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
-import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { useMarkupDaTela, FaixaDoMarkup, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
@@ -63,11 +62,9 @@ import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { camposQueFaltam, listaEmTexto } from './OpObrigatorios';
 import { conferirCepAntesDeSalvar, cepParaGravar, soDigitosCep } from './Cep';
-import { avisarDevolucaoAoComercial } from './AvisoDevolucao';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
-import { digitosSemPais, telefoneParaGravar } from './Telefone';
 import { OndeEstaCelula } from './OndeEstaAgora';
 import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 3 do plano de endereços): o card aberto tem endereço próprio
 import ResumoLoteOpl from './ResumoLoteOpl';
@@ -2048,8 +2045,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           usuario_nome: currentUser?.nome || 'Sistema', data_hora: agora,
         }]);
         if (errLogNasce) console.error('Histórico da OP automática incompleta não gravado:', errLogNasce);
-        avisarDevolucaoAoComercial({ opl: novaOp, evento: 'op_automatica_faltam_dados', autorEmail: currentUser?.email,
-          mensagem: msg.oplAutomaticaIncompleta(baseOpl, listaEmTexto(faltam), currentUser?.nome || '—') });
       }
     }
     return { opl: baseOpl, aviso: null, faltam };
@@ -3461,7 +3456,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             oldRow: { status_geral: o.status_geral }, newRow: novo, user: currentUser });
           // Só o PCP tem evento de aviso para "OP enviada" (op_enviada_pcp, desde a 18e; antes era o da Engenharia); o "Liberar
           // Fiscal" desta tela também não avisa, então o Fiscal segue igual.
-          if (d.setor === 'PCP') notificarEvento('op_enviada_pcp', msg.oplEnviada(o.opl, 'PCP', currentUser?.nome));
           mostrarAviso(`OP ${o.opl} reenviada para ${d.para}.`, 'ok');
           fetchOplsEmAberto();
         };
@@ -3544,7 +3538,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               usuario_nome: currentUser?.nome || null, data_hora: agora,
             }]);
             if (errLogEntrega) semHistoricoEntrega.push(`${o.opl}: ${errLogEntrega.message}`);
-            notificarEvento('comercial_entregue', msg.entregue(o.opl, o.cliente_nome||'—', nomeRecebeuLote.trim()));
           }
           setAplicandoLoteOpls(false);
           setModalEntregaLote(null); setNomeRecebeuLote('');
@@ -4861,11 +4854,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                       <div className="acn-label">Telefone</div>
                       <CampoTelefone valor={formOp.contato||''} placeholder="(99) 99999-9999"
                         onChange={v => setFormOp(f => ({...f, contato: v}))} />
-                      {formOp.contato && (
-                        <a className="acn-crm-ab-zap" href={`https://wa.me/55${digitosSemPais(formOp.contato)}`} target="_blank" rel="noreferrer">
-                          💬 WhatsApp
-                        </a>
-                      )}
                     </div>
                     <div className="acn-crm-ab-campo" style={campoDestaque('contato_email')}>
                       <div className="acn-label">E-mail</div>

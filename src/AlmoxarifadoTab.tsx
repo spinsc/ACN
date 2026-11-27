@@ -9,7 +9,6 @@ import { exigeEnderecoCompleto, enderecoQueFalta, enderecoEmLinha, CAMPOS_ENDERE
 import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { estaNaFilaDe, aguardaOutroSetor, ehVendaComposta, linhasDoSetor, outroSetor, parteConcluida, partesEmbaladas, SETORES_DE_SEPARACAO, SETOR_ALMOXARIFADO, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnvio';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
-import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { VinculoPicker } from './VinculoPicker';
@@ -943,7 +942,6 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
       const texto = 'Diferença com a BOM — ' + resumoDivergencias(conferencia);
       if (!await setAlmox(modalSeriais, 'Liberado com Pendencia', 'Aguardando Almox',
         [texto, recado].filter(Boolean).join(' · '), extra)) return;
-      notificarEvento('kit_pendencia', msg.kitPendencia(modalSeriais.opl, texto, currentUser?.nome));
       if (baixa.negativos.length) {
         alert(`Kit liberado com pendência, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
       }
@@ -953,7 +951,6 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
     }
     const obs = [modalSeriais._pendenciaSanada ? 'Pendencia sanada' : '', recado].filter(Boolean).join(' · ');
     if (!await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, extra)) return;
-    notificarEvento('kit_ok', msg.kitOk(modalSeriais.opl, currentUser?.nome));
     if (baixa.negativos.length) {
       alert(`Kit confirmado, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
     }
@@ -1007,13 +1004,11 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
 
   const faltaMaterial = async () => {
     if (!await setAlmox(modalFalta, 'Falta de Material', 'Aguardando Almox', obsFalta)) return;
-    notificarEvento('kit_falta_material', msg.kitFaltaMaterial(modalFalta.opl, obsFalta, currentUser?.nome));
     setModalFalta(null); setObsFalta(''); fetchAll();
   };
 
   const liberarPendencia = async () => {
     if (!await setAlmox(modalPend, 'Liberado com Pendencia', 'Aguardando Almox', obsPend)) return;
-    notificarEvento('kit_pendencia', msg.kitPendencia(modalPend.opl, obsPend, currentUser?.nome));
     setModalPend(null); setObsPend(''); fetchAll();
   };
 
@@ -1061,7 +1056,6 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         alert(`Kit fechado em lote, mas o estoque ficou negativo em:\n${avisos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
       }
       if (parouEm) alert(`O lote parou na OP ${parouEm}: ${aplicadas} unidade(s) fecharam o kit e as demais continuam como estavam. Confira a lista e repita para as que faltam.`);
-      if (aplicadas > 0) notificarEvento('kit_ok', msg.kitOk(modalSeriaisLote.base, currentUser?.nome) + ` (${aplicadas} unidades em lote)`);
     } finally {
       setAplicandoSeriaisLote(false);
       setModalSeriaisLote(null); setSeriaisLoteTexto('');
@@ -1096,7 +1090,6 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         aplicadas++;
       }
       if (parouEm) alert(`O lote parou na OP ${parouEm}: ${aplicadas} unidade(s) fecharam o kit e as demais continuam como estavam. Confira a lista e repita para as que faltam.`);
-      if (aplicadas > 0) notificarEvento('kit_ok', msg.kitOk(base, currentUser?.nome) + ` (${aplicadas} unidades em lote — seguem para embalagem)`);
     } finally {
       setProcessandoLote(false);
       setModalKitEnvioLote(null);
@@ -1111,7 +1104,7 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
 
   const confirmarLoteAcao = async () => {
     if (!obsLoteAcao.trim()) { alert('Descreva o material/pendencia.'); return; }
-    const { tipo, base, irmaos } = modalLoteAcao;
+    const { tipo, irmaos } = modalLoteAcao;
     const alvo = irmaos.filter(o => tipo === 'falta' ? o.status_almox !== 'Falta de Material' : o.status_almox !== 'Liberado com Pendencia');
     if (alvo.length === 0) { alert('Nenhuma unidade deste lote se aplica.'); return; }
     setProcessandoLote(true);
@@ -1123,9 +1116,6 @@ export default function AlmoxarifadoTab({ currentUser, setor = SETOR_ALMOXARIFAD
         aplicadas++;
       }
       if (parouEm) alert(`O lote parou na OP ${parouEm}: ${aplicadas} unidade(s) foram marcadas e as demais continuam como estavam. Confira a lista e repita para as que faltam.`);
-      const evento = tipo === 'falta' ? 'kit_falta_material' : 'kit_pendencia';
-      const msgFn = tipo === 'falta' ? msg.kitFaltaMaterial : msg.kitPendencia;
-      if (aplicadas > 0) notificarEvento(evento, msgFn(base, obsLoteAcao, currentUser?.nome) + ` (${aplicadas} unidades em lote)`);
     } finally {
       setProcessandoLote(false);
       setModalLoteAcao(null); setObsLoteAcao('');

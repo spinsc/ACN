@@ -7,7 +7,6 @@ import { confirmarRemocao, mostrarAviso } from './Feedback';
 import { Faixa } from './Interface';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import React, { useState, useEffect } from 'react';
-import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
 import { criadoEmLabel, paraCampoDataHora } from './AvisoSistemaWidget';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
@@ -27,7 +26,8 @@ import { PainelFipeSync } from './Veiculos';
 import { PainelFichasVeiculos } from './VeiculoCadastro';
 import ConfigEstruturaTela from './ConfigEstruturaTela';
 import FluxoConfigTela from './FluxoConfigTela';
-import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
+// 12e83 (26/11/2026): os painéis Config. Email, Config. Cotações, Faixas de Markup e Config. NFC moram em AdminPaineisConfig.tsx, já no padrão do design system
+import { PainelEmailCfg, PainelCotacoesCfg, PainelMarkupCfg, PainelNfcCfg } from './AdminPaineisConfig';
 import { CampoMoeda } from './CampoMoeda';
 import { useAbaNoEndereco } from './AbaNoEndereco';
 
@@ -1043,7 +1043,6 @@ const TABELAS_CONFIG = [
   { id:'crm_vendas',            label:'CRM — Vendas Fechadas',    desc:'OPs/OSs geradas a partir do CRM',         cor:'#16a34a' },
   { id:'crm_contatos',          label:'CRM — Contatos',           desc:'Pessoas físicas e leads do CRM',          cor:'#0d9488' },
   { id:'crm_interacoes',        label:'CRM — Interações',         desc:'Ligações, WA, reuniões registradas',      cor:'#6366f1' },
-  { id:'crm_whatsapp_msgs',     label:'CRM — Msgs WhatsApp',      desc:'Mensagens sincronizadas via Evolution API',cor:'#16a34a' },
   { id:'crm_anexos',            label:'CRM — Anexos',             desc:'Arquivos anexados às oportunidades',      cor:'#78716c' },
   // ── Compras / Financeiro ─────────────────────────────────────────────────
   { id:'pcp_pedidos_compra',       label:'Compras — Pedidos',        desc:'Requisições de compra e status',          cor:'#b45309' },
@@ -1104,7 +1103,6 @@ function PainelDados() {
       : tabelaAtiva === 'logistica_manifestos'              ? 'data'
       : tabelaAtiva === 'rh_autorizacoes'                   ? 'data'
       : tabelaAtiva === 'crm_interacoes'                    ? 'data_interacao'
-      : tabelaAtiva === 'crm_whatsapp_msgs'                 ? 'data_msg'
       : tabelaAtiva === 'licitacoes'                        ? 'criado_em'
       // tabelas com data_criacao
       : ['pcp_pedidos_compra','pcp_pedidos_chicotes','pcp_pedidos_serralheria','vistorias_patio']
@@ -1221,8 +1219,6 @@ function PainelDados() {
       return `${r.nome || '?'} — ${r.empresa || '?'} — ${r.whatsapp || r.email || '?'} — op: ${r.operador_nome || '?'}`;
     if (tabelaAtiva === 'crm_interacoes')
       return `[${r.tipo || '?'}] ${r.resultado || '?'}: ${r.descricao?.substring(0,60) || '?'} — ${r.operador_nome || '?'}`;
-    if (tabelaAtiva === 'crm_whatsapp_msgs')
-      return `${r.direcao === 'saida' ? '→' : '←'} ${r.vendedor_nome || r.instance_name || '?'} ↔ ${r.numero_whatsapp || '?'}: ${r.conteudo?.substring(0,60) || '[mídia]'}`;
     if (tabelaAtiva === 'crm_anexos')
       return `${r.tipo || '?'} — ${r.nome || '?'} — ${r.criado_por || '?'}`;
     if (tabelaAtiva === 'clientes')
@@ -1390,26 +1386,25 @@ function PainelDados() {
 }
 
 // ---- PAINEL NOTIFICAÇÕES ----
-// Destinatários do WhatsApp: o envio compara o perfil do usuário por nome EXATO (com
-// acento). A lista junta os perfis padrão, os que existem em usuários e os já
-// marcados; perfil sem nenhum usuário ativo aparece apagado (não recebe ninguém).
+// 26/11/2026 (decisão do usuário: o WhatsApp não é usado no sistema): saiu a configuração dos eventos de aviso por WhatsApp (tabela notificacoes_config).
+// Fica só "quem responde por cada perfil" (notificacoes_responsaveis), que o sistema usa para saber quem recebe as Menções de um setor
+// (por exemplo, a chegada do veículo à matriz avisa o PCP e a Adaptação).
 
 function PainelNotificacoes() {
-  const [eventos, setEventos] = useState([]);
-  const [salvando, setSalvando] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const [usuariosPorPerfil, setUsuariosPorPerfil] = useState<Record<string, number>>({});
   // Quem responde por um perfil sem ter esse perfil (ex.: PCP → Matheus)
   const [responsaveis, setResponsaveis] = useState<any[]>([]);
   const [usuariosAtivos, setUsuariosAtivos] = useState<any[]>([]);
   const [novoResp, setNovoResp] = useState({ perfil: '', usuario_id: '' });
+  const [falhaLeitura, setFalhaLeitura] = useState('');
   const carregarResponsaveis = async () => {
-    const [{ data: r }, { data: u }] = await Promise.all([
+    const [r, u] = await Promise.all([
       supabase.from('notificacoes_responsaveis').select('id, perfil, usuario_id, usuario:auth_usuarios(nome)').order('perfil'),
       supabase.from('auth_usuarios').select('id, nome, perfil').eq('ativo', true).order('nome'),
     ]);
-    setResponsaveis(r || []); setUsuariosAtivos(u || []);
+    // leitura recusada nunca vale como "ninguém definido"
+    if (r.error || u.error) { setFalhaLeitura('Não foi possível ler a lista de responsáveis. Atualize a página e tente de novo.'); return; }
+    setFalhaLeitura('');
+    setResponsaveis(r.data || []); setUsuariosAtivos(u.data || []);
   };
   useEffect(() => { carregarResponsaveis(); }, []);
   const addResponsavel = async () => {
@@ -1423,52 +1418,17 @@ function PainelNotificacoes() {
     await supabase.from('notificacoes_responsaveis').delete().eq('id', id);
     carregarResponsaveis();
   };
-  const alcance = (p: string) => (usuariosPorPerfil[p] || 0) + responsaveis.filter((r: any) => r.perfil === p).length;
-  useEffect(() => { fetchEventos(); }, []);
-  const PERFIS_WA = [...new Set([
-    ...PERFIS,
-    ...Object.keys(usuariosPorPerfil),
-    ...eventos.flatMap((e: any) => e.destinatarios_perfis || []),
-  ])];
-
-  const fetchEventos = async () => {
-    setLoading(true);
-    const [{ data }, { data: us }] = await Promise.all([
-      supabase.from('notificacoes_config').select('*').order('evento'),
-      supabase.from('auth_usuarios').select('perfil').eq('ativo', true),
-    ]);
-    const cont: Record<string, number> = {};
-    (us || []).forEach((u: any) => { if (u.perfil) cont[u.perfil] = (cont[u.perfil] || 0) + 1; });
-    setUsuariosPorPerfil(cont);
-    setEventos(data || []);
-    setLoading(false);
-  };
-
-  const toggleAtivo = async (ev) => {
-    await supabase.from('notificacoes_config').update({ ativo: !ev.ativo }).eq('evento', ev.evento);
-    invalidarCacheNotif();
-    fetchEventos();
-  };
-
-  const togglePerfil = async (ev, perfil) => {
-    const atual = ev.destinatarios_perfis || [];
-    const novo = atual.includes(perfil) ? atual.filter(p=>p!==perfil) : [...atual, perfil];
-    setSalvando(ev.evento);
-    await supabase.from('notificacoes_config').update({ destinatarios_perfis: novo }).eq('evento', ev.evento);
-    invalidarCacheNotif();
-    setSalvando(null);
-    fetchEventos();
-  };
-
-  if (loading) return <div className="acn-empty">Carregando configurações...</div>;
+  // os perfis padrão, os que existem em usuários ativos e os que já têm responsável
+  const PERFIS_LISTA = [...new Set([...PERFIS, ...usuariosAtivos.map((u: any) => u.perfil).filter(Boolean), ...responsaveis.map((r: any) => r.perfil)])];
 
   return (
     <div>
+      {falhaLeitura && <div className="acn-empty" style={{ color: 'var(--acn-bad)' }}>{falhaLeitura}</div>}
       <div className="sec-card">
         <div className="sec-hdr"><span>👤 Quem responde por cada perfil</span></div>
         <div className="sec-body" style={{ fontSize:11 }}>
           <div style={{ fontSize:10, color:'#64748b', marginBottom:8 }}>
-            Recebe os avisos de um perfil sem ter esse perfil (ex.: PCP → quem cuida do PCP). As permissões da pessoa não mudam.
+            Recebe os avisos (Menções) de um perfil sem ter esse perfil (ex.: PCP → quem cuida do PCP). As permissões da pessoa não mudam.
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
             {responsaveis.map((r: any) => (
@@ -1478,12 +1438,12 @@ function PainelNotificacoes() {
                   style={{ border:'none', background:'none', color:'#94a3b8', cursor:'pointer', padding:0 }}>✕</button>
               </span>
             ))}
-            {!responsaveis.length && <span style={{ color:'#94a3b8' }}>Nenhum definido.</span>}
+            {!responsaveis.length && !falhaLeitura && <span style={{ color:'#94a3b8' }}>Nenhum definido.</span>}
           </div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             <select className="acn-input" style={{ width:'auto' }} value={novoResp.perfil} onChange={e => setNovoResp(f => ({ ...f, perfil: e.target.value }))} aria-label="Perfil">
               <option value="">Perfil...</option>
-              {PERFIS_WA.map(p => <option key={p} value={p}>{p}</option>)}
+              {PERFIS_LISTA.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <select className="acn-input" style={{ width:'auto' }} value={novoResp.usuario_id} onChange={e => setNovoResp(f => ({ ...f, usuario_id: e.target.value }))} aria-label="Pessoa">
               <option value="">Pessoa...</option>
@@ -1491,65 +1451,6 @@ function PainelNotificacoes() {
             </select>
             <button className="acn-btn" style={{ background:'#0f766e' }} onClick={addResponsavel}>Adicionar</button>
           </div>
-        </div>
-      </div>
-      <div className="sec-card">
-        <div className="sec-hdr">
-          <span>Configuração de Notificações WhatsApp ({eventos.length} eventos)</span>
-          <button className="acn-btn" style={{background:'#475569'}} onClick={fetchEventos}>Atualizar</button>
-        </div>
-        <div className="sec-body" style={{padding:'8px 10px',fontSize:10,color:'#64748b',background:'#f0fdf4',borderBottom:'1px solid #e2e8f0'}}>
-          ✅ Marque os perfis que receberão a notificação em cada evento. Desative o toggle para silenciar completamente.
-        </div>
-        <div style={{overflowX:'auto'}}>
-          <table>
-            <thead><tr>
-              <th style={{minWidth:40}}>Ativo</th>
-              <th style={{minWidth:180}}>Evento</th>
-              <th style={{minWidth:200}}>Descrição</th>
-              <th>Destinatários</th>
-            </tr></thead>
-            <tbody>
-              {eventos.map(ev => (
-                <tr key={ev.evento} style={{opacity: ev.ativo ? 1 : 0.5}}>
-                  <td style={{textAlign:'center'}}>
-                    <button onClick={()=>toggleAtivo(ev)}
-                      style={{fontSize:16,background:'none',border:'none',cursor:'pointer',lineHeight:1}}>
-                      {ev.ativo ? '🔔' : '🔕'}
-                    </button>
-                  </td>
-                  <td>
-                    <strong style={{fontSize:10}}>{ev.label}</strong>
-                    <div style={{fontSize:9,color:'#94a3b8',fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}}>{ev.evento}</div>
-                  </td>
-                  <td style={{fontSize:10,color:'#64748b',maxWidth:220}}>{ev.descricao}</td>
-                  <td>
-                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-                      {PERFIS_WA.map(p => {
-                        const selecionado = (ev.destinatarios_perfis||[]).includes(p);
-                        const carregando = salvando === ev.evento;
-                        return (
-                          <button key={p} onClick={()=>!carregando && togglePerfil(ev,p)}
-                            title={alcance(p) ? `${usuariosPorPerfil[p] || 0} usuário(s) com este perfil + ${responsaveis.filter((r: any) => r.perfil === p).length} responsável(is)` : 'Ninguém recebe: nenhum usuário com este perfil nem responsável definido'}
-                            style={{ opacity: alcance(p) ? 1 : .5,
-                              fontSize:9, padding:'2px 6px', border:'1px solid',
-                              borderRadius:3, cursor: carregando ? 'default' : 'pointer',
-                              background: selecionado ? '#0f766e' : 'transparent',
-                              borderColor: selecionado ? '#0f766e' : '#d1d5db',
-                              color: selecionado ? '#fff' : '#6b7280',
-                              fontWeight: selecionado ? 700 : 400,
-                              opacity: carregando ? 0.6 : 1,
-                            }}>
-                            {p}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -1566,7 +1467,7 @@ const LABEL_TABELA = {
   licitacoes:'Licitações',
   crm_oportunidades:'CRM — Oportunidades', crm_historico:'CRM — Histórico',
   crm_vendas:'CRM — Vendas', crm_contatos:'CRM — Contatos',
-  crm_interacoes:'CRM — Interações', crm_whatsapp_msgs:'CRM — Msgs WA',
+  crm_interacoes:'CRM — Interações',
   crm_anexos:'CRM — Anexos',
   // Legado (compatibilidade)
   crm_clientes:'CRM — Clientes (legado)', crm_historico_contatos:'CRM — Histórico (legado)',
@@ -1639,7 +1540,6 @@ function PainelLixeira() {
       case 'crm_vendas': return `${d.tipo || '?'} — ${d.numero || '?'} — ${d.cliente_nome || '?'}`;
       case 'crm_contatos': return `${d.nome || '?'} — ${d.empresa || '?'} — ${d.whatsapp || d.email || '?'}`;
       case 'crm_interacoes': return `[${d.tipo || '?'}] ${(d.descricao || '').substring(0,60)} — ${d.operador_nome || '?'}`;
-      case 'crm_whatsapp_msgs': return `${d.direcao === 'saida' ? '→' : '←'} ${d.numero_whatsapp || '?'}: ${(d.conteudo || '[mídia]').substring(0,60)}`;
       case 'crm_anexos': return `${d.tipo || '?'} — ${d.nome || '?'}`;
       case 'clientes': return `[${d.tipo || '?'}] ${d.nome || '?'} — ${d.documento || '?'}`;
       // legado
@@ -1903,119 +1803,6 @@ function PainelPlataformas() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PAINEL CONFIGURAÇÕES DE EMAIL (SMTP)
-// ─────────────────────────────────────────────────────────────────────────────
-function PainelEmailCfg() {
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const [form, setForm] = useState({
-    smtp_host: '', smtp_porta: '587', smtp_usuario: '', smtp_senha: '',
-    smtp_from_nome: '', smtp_from_email: '',
-  });
-  const [destinatarioFiscal, setDestinatarioFiscal] = useState('fiscal@acn.com.br');
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [smtpConfigurado, setSmtpConfigurado] = useState(false);
-  const [testeEmail, setTesteEmail] = useState('');
-  const [testando, setTestando] = useState(false);
-
-  useEffect(() => {
-    // configuracoes_email_smtp tem RLS sem SELECT p/ anon — nunca conseguimos
-    // ler os valores de volta (propositalmente). Só lemos a flag pública.
-    supabase.from('configuracoes_sistema').select('chave,valor')
-      .in('chave', ['email_fiscal_destino', 'smtp_configurado'])
-      .then(({ data }) => {
-        const cfg = Object.fromEntries((data || []).map(r => [r.chave, r.valor]));
-        if (cfg.email_fiscal_destino) setDestinatarioFiscal(cfg.email_fiscal_destino);
-        setSmtpConfigurado(cfg.smtp_configurado === 'true');
-      });
-  }, []);
-
-  const salvar = async () => {
-    setSalvando(true); setMsg('');
-    // A tabela configuracoes_email_smtp tem RLS sem policy de SELECT para anon
-    // (propositalmente, para nunca expor os segredos de volta ao bundle público).
-    // No Postgres, UPDATE/DELETE sob RLS exigem que a linha alvo também seja
-    // visível via alguma policy de SELECT — mesmo com USING(true) na policy de
-    // UPDATE — então updates diretos do cliente são impossíveis aqui (só INSERT
-    // funciona). Por isso a gravação passa pela edge function save-email-config,
-    // que usa a service_role key (sempre ignora RLS).
-    const { error } = await supabase.functions.invoke('save-email-config', {
-      body: { ...form, email_fiscal_destino: destinatarioFiscal.trim(), atualizado_por: currentUser?.email },
-    });
-    if (error) { setMsg('❌ Erro ao salvar SMTP: ' + error.message); setSalvando(false); return; }
-    setSmtpConfigurado(true);
-    setForm(f => ({ ...f, smtp_senha: '' })); // nunca mantém a senha em memória após salvar
-    setSalvando(false);
-    setMsg('✅ Configurações salvas!');
-    setTimeout(() => setMsg(''), 3000);
-  };
-
-  const enviarTeste = async () => {
-    if (!testeEmail.trim()) { alert('Informe um email para o teste.'); return; }
-    setTestando(true);
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: { to: testeEmail.trim(), subject: 'Teste — ACN Sinal Verde', html: '<p>Email de teste enviado pelo painel de Configurações de Email.</p>' },
-    });
-    setTestando(false);
-    if (error || data?.error) alert('Falha no envio: ' + (data?.error || error?.message));
-    else alert('Email de teste enviado!');
-  };
-
-  const inp = { width: '100%', border: '1px solid #d1d5db', borderRadius: 5, padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' as const };
-  const lbl = { fontSize: 9, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 };
-
-  return (
-    <div className="sec-card">
-      <div className="sec-header">📧 Configurações de Email (SMTP)</div>
-      <div className="sec-body">
-        <p style={{ fontSize: 10, color: '#64748b', marginBottom: 12 }}>
-          Usado para o email automático ao Fiscal quando uma OP/OS é liberada para emissão de NF, e para futuros envios automáticos (contratos, etc).
-          {smtpConfigurado && <span style={{ color: '#16a34a', fontWeight: 700 }}> ✅ SMTP já configurado.</span>}
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 8 }}>
-          <div><label style={lbl}>Servidor SMTP (host)</label>
-            <input style={inp} placeholder="Ex: smtp.office365.com" value={form.smtp_host} onChange={e => setForm(f => ({ ...f, smtp_host: e.target.value }))} /></div>
-          <div><label style={lbl}>Porta</label>
-            <input style={inp} placeholder="587 (TLS) ou 465 (SSL)" value={form.smtp_porta} onChange={e => setForm(f => ({ ...f, smtp_porta: e.target.value }))} /></div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-          <div><label style={lbl}>Usuário SMTP</label>
-            <input style={inp} placeholder="usuario@acn.com.br" value={form.smtp_usuario} onChange={e => setForm(f => ({ ...f, smtp_usuario: e.target.value }))} /></div>
-          <div><label style={lbl}>Senha SMTP {smtpConfigurado && '(deixe em branco para manter a atual)'}</label>
-            <input type="password" style={inp} placeholder={smtpConfigurado ? '••••••••' : 'Senha'} value={form.smtp_senha} onChange={e => setForm(f => ({ ...f, smtp_senha: e.target.value }))} /></div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-          <div><label style={lbl}>Nome do Remetente</label>
-            <input style={inp} placeholder="ACN Sinal Verde" value={form.smtp_from_nome} onChange={e => setForm(f => ({ ...f, smtp_from_nome: e.target.value }))} /></div>
-          <div><label style={lbl}>Email do Remetente (opcional, padrão = usuário)</label>
-            <input style={inp} placeholder="sistema@acn.com.br" value={form.smtp_from_email} onChange={e => setForm(f => ({ ...f, smtp_from_email: e.target.value }))} /></div>
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={lbl}>Email do Fiscal (destinatário das liberações de NF)</label>
-          <input style={inp} placeholder="fiscal@acn.com.br" value={destinatarioFiscal} onChange={e => setDestinatarioFiscal(e.target.value)} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-          <button className="acn-btn" style={{ background: '#16a34a' }} onClick={salvar} disabled={salvando}>
-            {salvando ? 'Salvando...' : '💾 SALVAR'}
-          </button>
-          {msg && <span style={{ fontSize: 10, fontWeight: 700 }}>{msg}</span>}
-        </div>
-
-        {smtpConfigurado && (
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input style={{ ...inp, width: 220 }} placeholder="seuemail@teste.com" value={testeEmail} onChange={e => setTesteEmail(e.target.value)} />
-            <button className="acn-btn" style={{ background: '#0891b2', fontSize: 10 }} onClick={enviarTeste} disabled={testando}>
-              {testando ? 'Enviando...' : '✉️ Enviar Teste'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL ALÇADAS DE APROVAÇÃO (Compras Fase 2)
@@ -2757,7 +2544,7 @@ const ABAS_ADMIN = [
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'markup_cfg',     label:'📈 Faixas de Markup' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
-  { id:'notificacoes',   label:'🔔 Notificações WA' },
+  { id:'notificacoes',   label:'🔔 Responsáveis por perfil' },
   { id:'feriados',       label:'📅 Feriados' },
   { id:'veiculos',       label:'🚗 Veículos' },
   { id:'estruturas',     label:'🧩 Estruturas' },
@@ -2784,303 +2571,8 @@ const COR_CRIT: Record<string, { bg: string; border: string }> = {
   alta:  { bg: '#fee2e2', border: '#dc2626' },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PAINEL CONFIGURAÇÕES NFC
-// ─────────────────────────────────────────────────────────────────────────────
-function PainelNfcCfg() {
-  const [cfg,      setCfg]      = useState<Record<string,string>>({});
-  const [salvando, setSalvando] = useState(false);
-  const [msg,      setMsg]      = useState('');
 
-  const NFC_KEYS = [
-    { chave:'nfc_whatsapp_numero', label:'Número WhatsApp SAC', tipo:'text',
-      desc:'Com DDI, sem espaços ou + (ex: 5548999999999)' },
-    { chave:'nfc_endereco_maps',   label:'Endereço Google Maps', tipo:'text',
-      desc:'Parâmetro de busca (ex: Rua+das+Flores,123+Florianópolis+SC)' },
-    { chave:'nfc_pin_global',      label:'PIN Global Área Restrita', tipo:'text',
-      desc:'PIN padrão quando o veículo não tem PIN próprio' },
-    { chave:'nfc_base_url',        label:'URL Base da Página NFC (Tag)', tipo:'url',
-      desc:'URL onde veiculo.html está hospedado (sem ?chassi=)' },
-    { chave:'nfc_portal_url',      label:'URL Base do Portal do Cliente', tipo:'url',
-      desc:'URL onde portal.html está hospedado (sem ?token=). Enviada aos clientes como link de acesso.' },
-    { chave:'nfc_nome_empresa',    label:'Nome da Empresa', tipo:'text',
-      desc:'Exibido no cabeçalho da página pública' },
-    { chave:'nfc_logo_url',        label:'URL do Logotipo', tipo:'url',
-      desc:'PNG ou SVG. Deixe vazio para exibir o nome em texto.' },
-  ];
 
-  useEffect(() => {
-    supabase.from('configuracoes_sistema').select('chave,valor')
-      .in('chave', NFC_KEYS.map(k => k.chave))
-      .then(({ data }) => {
-        if (data) setCfg(Object.fromEntries(data.map(r => [r.chave, r.valor])));
-      });
-  }, []);
-
-  const salvar = async () => {
-    setSalvando(true); setMsg('');
-    for (const k of NFC_KEYS) {
-      await supabase.from('configuracoes_sistema').upsert({
-        chave: k.chave, valor: cfg[k.chave] || '',
-        descricao: k.desc, atualizado_em: new Date().toISOString(),
-      }, { onConflict: 'chave' });
-    }
-    setSalvando(false); setMsg('✅ Configurações NFC salvas com sucesso!');
-    setTimeout(() => setMsg(''), 3000);
-  };
-
-  return (
-    <div className="sec-card">
-      <div className="sec-header">📱 Configurações do Módulo NFC</div>
-      <div className="sec-body">
-        <p style={{fontSize:10,color:'#64748b',marginBottom:14}}>
-          Parametrize os dados que aparecem na página pública do veículo (acessada via etiqueta NFC).
-        </p>
-        {NFC_KEYS.map(k => (
-          <div key={k.chave} style={{marginBottom:12}}>
-            <label style={{fontSize:9,fontWeight:700,color:'#475569',display:'block',marginBottom:3}}>
-              {k.label}
-            </label>
-            <input type={k.tipo} value={cfg[k.chave]||''} onChange={e=>setCfg(c=>({...c,[k.chave]:e.target.value}))}
-              placeholder={k.desc}
-              style={{width:'100%',border:'1px solid #d1d5db',borderRadius:5,padding:'6px 8px',fontSize:10,boxSizing:'border-box'}} />
-            <div style={{fontSize:8,color:'#9ca3af',marginTop:2}}>{k.desc}</div>
-          </div>
-        ))}
-        <div style={{display:'flex',gap:10,alignItems:'center',marginTop:14}}>
-          <button onClick={salvar} disabled={salvando}
-            style={{background:'#14532d',color:'#fff',border:'none',borderRadius:5,
-              padding:'7px 18px',fontSize:10,fontWeight:700,cursor:'pointer',opacity:salvando?.5:1}}>
-            {salvando?'Salvando...':'💾 Salvar Configurações NFC'}
-          </button>
-          {msg && <span style={{fontSize:10,color:'#16a34a',fontWeight:700}}>{msg}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAINEL CONFIGURAÇÕES COTAÇÕES
-// ─────────────────────────────────────────────────────────────────────────────
-const COTACOES_CFG_KEYS = [
-  { chave: 'cotacoes_ver_custos_margens', label: 'Vendedores podem ver Custos e Margens',    desc: 'Exibe colunas de custo e margem de lucro nas cotações' },
-  { chave: 'cotacoes_ver_fornecedores',   label: 'Vendedores podem ver Fornecedores e Marcas', desc: 'Exibe colunas de fornecedor e marca nas cotações' },
-  { chave: 'cotacoes_ver_markup',         label: 'Vendedores podem ver o Markup',            desc: 'Exibe a coluna de markup aplicado nas cotações' },
-];
-
-function PainelCotacoesCfg() {
-  const [config,    setConfig]    = useState<Record<string, string>>({});
-  const [salvando,  setSalvando]  = useState(false);
-  const [msg,       setMsg]       = useState('');
-  const [maxDesc,   setMaxDesc]   = useState('0');
-
-  useEffect(() => {
-    supabase.from('configuracoes_sistema')
-      .select('chave,valor')
-      .in('chave', [...COTACOES_CFG_KEYS.map(k => k.chave), 'cotacoes_desconto_maximo_global'])
-      .then(({ data }) => {
-        if (data) {
-          const m = Object.fromEntries(data.map(r => [r.chave, r.valor]));
-          setConfig(m);
-          setMaxDesc(m['cotacoes_desconto_maximo_global'] || '0');
-        }
-      });
-  }, []);
-
-  const salvar = async () => {
-    setSalvando(true);
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const upserts = [
-      ...COTACOES_CFG_KEYS.map(k => ({
-        chave: k.chave,
-        valor: config[k.chave] || 'false',
-        descricao: k.desc,
-        atualizado_por: currentUser?.email,
-        atualizado_em: new Date().toISOString(),
-      })),
-      {
-        chave: 'cotacoes_desconto_maximo_global',
-        valor: maxDesc,
-        descricao: 'Desconto máximo global para vendedores (%)',
-        atualizado_por: currentUser?.email,
-        atualizado_em: new Date().toISOString(),
-      },
-    ];
-    const { error } = await supabase.from('configuracoes_sistema').upsert(upserts, { onConflict: 'chave' });
-    setSalvando(false);
-    setMsg(error ? '❌ Erro: ' + error.message : '✅ Configurações salvas!');
-    setTimeout(() => setMsg(''), 3000);
-  };
-
-  return (
-    <div>
-      <div className="sec-card" style={{ marginBottom:12 }}>
-        <div className="sec-hdr no-collapse">📋 Visibilidade de Dados nas Cotações (para Vendedores)</div>
-        <div className="sec-body" style={{ padding:'14px 16px' }}>
-          <div style={{ fontSize:10, color:'#475569', marginBottom:14 }}>
-            Controle quais campos sensíveis ficam visíveis para usuários com perfil de vendedor
-            ao visualizarem cotações na aba de Cotações.
-          </div>
-
-          {COTACOES_CFG_KEYS.map(k => {
-            const ativo = config[k.chave] === 'true';
-            return (
-              <div key={k.chave} style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                padding:'10px 12px', background: ativo ? '#f0fdf4' : '#f8fafc',
-                border:`1px solid ${ativo ? '#86efac' : '#e2e8f0'}`,
-                borderRadius:7, marginBottom:8, gap:12 }}>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{k.label}</div>
-                  <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>{k.desc}</div>
-                </div>
-                <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', flexShrink:0 }}>
-                  <span style={{ fontSize:9, color: ativo ? '#16a34a' : '#64748b', fontWeight:700 }}>
-                    {ativo ? 'Visível' : 'Oculto'}
-                  </span>
-                  <div onClick={() => setConfig(c => ({ ...c, [k.chave]: ativo ? 'false' : 'true' }))}
-                    style={{ width:36, height:20, background: ativo ? '#16a34a' : '#d1d5db',
-                      borderRadius:10, position:'relative', cursor:'pointer', transition:'background .2s', flexShrink:0 }}>
-                    <div style={{ position:'absolute', top:3, left: ativo ? 18 : 3,
-                      width:14, height:14, background:'#fff', borderRadius:'50%', transition:'left .2s',
-                      boxShadow:'0 1px 3px #0004' }} />
-                  </div>
-                </label>
-              </div>
-            );
-          })}
-
-          <div style={{ marginTop:12, marginBottom:14, padding:'10px 12px', background:'#f0f9ff',
-            border:'1px solid #bae6fd', borderRadius:7 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#0369a1', marginBottom:6 }}>
-              Desconto Máximo Global (%)
-            </div>
-            <div style={{ fontSize:9, color:'#475569', marginBottom:8 }}>
-              Vendedores podem conceder até este % de desconto sem precisar de aprovação.
-              (Será sobrescrito pelo desconto máximo configurado individualmente em cada cotação, se maior.)
-            </div>
-            <input type="number" min={0} max={100} step={0.5} value={maxDesc}
-              onChange={e => setMaxDesc(e.target.value)}
-              style={{ width:100, border:'1px solid #bae6fd', borderRadius:5, padding:'5px 8px', fontSize:11 }} />
-            <span style={{ fontSize:9, color:'#475569', marginLeft:8 }}>%</span>
-          </div>
-
-          <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-            <button onClick={salvar} disabled={salvando}
-              className="acn-btn"
-              style={{ background:'#0f766e', fontSize:10, padding:'6px 20px' }}>
-              {salvando ? 'Salvando...' : '💾 Salvar Configurações'}
-            </button>
-            {msg && <span style={{ fontSize:10, color: msg.startsWith('✅') ? '#16a34a' : '#dc2626', fontWeight:700 }}>{msg}</span>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAINEL FAIXAS DE MARKUP (por tipo de negócio do CRM)
-//
-// Pedido do Rafael Nunes (dono da empresa) em 23/09/2026: revenda tem markup
-// normal mais baixo (~65%), venda varia bastante, pós-vendas/manutenção
-// deveria exigir markup sempre mais alto — cada tipo com sua própria régua de
-// cor no termômetro (ver MarkupTermometro.tsx), configurável aqui em vez de
-// fixa no código, pra ele mesmo poder ajustar sem precisar pedir alteração.
-// ─────────────────────────────────────────────────────────────────────────────
-function PainelMarkupCfg() {
-  const [cfg,      setCfg]      = useState<Record<string, any>>({});
-  const [salvando, setSalvando] = useState(false);
-  const [msg,      setMsg]      = useState('');
-
-  useEffect(() => {
-    const chaves = Object.values(SLUG_TIPO_NEGOCIO).flatMap(s => [`markup_regua_${s}_ativa`, `markup_regua_${s}_min`, `markup_regua_${s}_bom`]);
-    supabase.from('configuracoes_sistema').select('chave,valor').in('chave', chaves)
-      .then(({ data }) => {
-        const mapa = Object.fromEntries((data || []).map(r => [r.chave, r.valor]));
-        const inicial: Record<string, any> = {};
-        for (const [tipo, slug] of Object.entries(SLUG_TIPO_NEGOCIO)) {
-          const ativaStr = mapa[`markup_regua_${slug}_ativa`];
-          inicial[tipo] = {
-            ativa: ativaStr === undefined ? true : ativaStr !== 'false',
-            min: mapa[`markup_regua_${slug}_min`] || String(BANDA_MARKUP_PADRAO.min),
-            bom: mapa[`markup_regua_${slug}_bom`] || String(BANDA_MARKUP_PADRAO.bom),
-          };
-        }
-        setCfg(inicial);
-      });
-  }, []);
-
-  const setCampo = (tipo: string, campo: string, valor: any) =>
-    setCfg(c => ({ ...c, [tipo]: { ...c[tipo], [campo]: valor } }));
-
-  const salvar = async () => {
-    setSalvando(true);
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const upserts = Object.entries(SLUG_TIPO_NEGOCIO).flatMap(([tipo, slug]) => {
-      const c = cfg[tipo] || {};
-      return [
-        { chave: `markup_regua_${slug}_ativa`, valor: c.ativa === false ? 'false' : 'true' },
-        { chave: `markup_regua_${slug}_min`,   valor: String(c.min ?? BANDA_MARKUP_PADRAO.min) },
-        { chave: `markup_regua_${slug}_bom`,   valor: String(c.bom ?? BANDA_MARKUP_PADRAO.bom) },
-      ].map(r => ({ ...r, descricao: `Régua de markup — ${tipo}`, atualizado_por: currentUser?.email, atualizado_em: new Date().toISOString() }));
-    });
-    const { error } = await supabase.from('configuracoes_sistema').upsert(upserts, { onConflict: 'chave' });
-    setSalvando(false);
-    setMsg(error ? '❌ Erro: ' + error.message : '✅ Faixas de markup salvas!');
-    setTimeout(() => setMsg(''), 3000);
-  };
-
-  return (
-    <div className="sec-card">
-      <div className="sec-header">📈 Faixas de Markup por Tipo de Negócio (CRM)</div>
-      <div className="sec-body">
-        <p style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
-          Cada tipo de negócio da oportunidade (Comercial → CRM) pode ter sua própria régua de alerta no
-          termômetro de markup. Abaixo de "mínimo aceitável" o markup acende vermelho; entre "mínimo" e "bom" fica
-          laranja (apertado); a partir de "bom" fica amarelo, até chegar em 100% (meta, verde) — acima disso é sempre
-          dourado (overmarkup), fixo pra todos os tipos. Sem "régua ativa", o markup aparece sem cor de alerta —
-          use isso para o tipo que "varia bastante" e não tem um número certo.
-        </p>
-        {TIPOS_NEGOCIO_CRM.map(tipo => {
-          const c = cfg[tipo] || { ativa: true, min: BANDA_MARKUP_PADRAO.min, bom: BANDA_MARKUP_PADRAO.bom };
-          return (
-            <div key={tipo} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', marginBottom:10 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-                <strong style={{ fontSize:11, color:'#0f172a', minWidth:90 }}>{tipo}</strong>
-                <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:9, color:'#475569' }}>
-                  <input type="checkbox" checked={c.ativa !== false} onChange={e => setCampo(tipo, 'ativa', e.target.checked)} />
-                  Régua ativa (mostra cor de alerta)
-                </label>
-                {c.ativa !== false && (<>
-                  <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:9, color:'#475569' }}>
-                    Mínimo aceitável (%)
-                    <input type="number" min={0} max={100} step={1} value={c.min ?? BANDA_MARKUP_PADRAO.min}
-                      onChange={e => setCampo(tipo, 'min', e.target.value)}
-                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:10 }} />
-                  </label>
-                  <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:9, color:'#475569' }}>
-                    Bom a partir de (%)
-                    <input type="number" min={0} max={100} step={1} value={c.bom ?? BANDA_MARKUP_PADRAO.bom}
-                      onChange={e => setCampo(tipo, 'bom', e.target.value)}
-                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:10 }} />
-                  </label>
-                </>)}
-              </div>
-            </div>
-          );
-        })}
-        <div style={{ display:'flex', gap:10, alignItems:'center', marginTop:14 }}>
-          <button onClick={salvar} disabled={salvando} className="acn-btn"
-            style={{ background:'#0f766e', fontSize:10, padding:'6px 20px' }}>
-            {salvando ? 'Salvando...' : '💾 Salvar Faixas de Markup'}
-          </button>
-          {msg && <span style={{ fontSize:10, color: msg.startsWith('✅') ? '#16a34a' : '#dc2626', fontWeight:700 }}>{msg}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL AVISOS DO SISTEMA

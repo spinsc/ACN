@@ -21,6 +21,9 @@ const RAIZ = path.resolve(__dirname, '../..');
 const SAIDA = path.join(__dirname, 'saida');
 const ORIGINAIS = path.join(SAIDA, 'originais');
 const ARGS = process.argv.slice(2);
+// 26/11/2026: arquivo novo da Fase 5 (`FiltroNoEndereco.ts`) nasceu com quebra de linha CRLF e o trecho multilinha do defeito `dl` está escrito com `\n`: o conferir dizia "0 vez(es)" e o plantio
+// recusava. A quebra de linha do trecho acompanha a do arquivo (tanto faz LF ou CRLF); trecho de uma linha só não muda.
+const noEstiloDoArquivo = (txt, trecho) => (txt.includes('\r\n') ? String(trecho).replace(/\r?\n/g, '\r\n') : trecho);
 const SO_CONFERIR = ARGS.includes('--conferir');   // só confere se cada trecho a trocar ainda aparece UMA vez no código; não planta nada e não precisa do servidor
 const FILTRO = ARGS.find(a => !a.startsWith('--'));
 const URL_BASE = (process.env.BASE || 'http://localhost:5199/ACN/').replace(/\/?$/, '/');
@@ -303,6 +306,53 @@ const DEFEITOS = [
   { id: 'dg', nome: 'as partes do Relógio Ponto voltam a ser só da tela (sem endereço)', cenarios: '^C66 rh', trocas: [
     { arquivo: 'src/RelogioPonto.tsx', de: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial })", para: "useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto-sem-endereco', inicial: () => visaoInicial })" },
   ] },
+  // ── Fase 6 (26/11/2026): a ficha da Garantia (`#/sac/ficha/<código>`) ──
+  { id: 'ga', nome: 'a ficha aberta por um clique deixa de escrever o endereço', cenarios: '^C83', trocas: [
+    { arquivo: 'src/GarantiaTab.tsx', de: 'aberto: detalhe ? String(detalhe.id) : null,', para: 'aberto: null,' },
+  ] },
+  { id: 'gb', nome: 'a ficha de outra pessoa passa a abrir pelo link (some a conferência de quem pode ver na leitura)', cenarios: '^C85b', trocas: [
+    { arquivo: 'src/GarantiaTab.tsx', de: "return r.registro && !podeVerGarantia(r.registro, currentUser) ? { registro: null, erro: '' } : r;", para: 'return r;' },
+  ] },
+  { id: 'gc', nome: 'a tela do SAC deixa de trocar para a aba Garantia quando o endereço pede uma ficha', cenarios: '^C86', trocas: [
+    { arquivo: 'src/SacTab.tsx', de: "const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'sac')?.tipo === 'ficha') setAbaAtiva('garantia'); };", para: "const sincronizar = () => { };" },
+  ] },
+  { id: 'gd', nome: 'o "Copiar link" da ficha copia o endereço de uma OS em vez do da ficha', cenarios: '^C86', trocas: [
+    { arquivo: 'src/GarantiaTab.tsx', de: "copiarLinkDoRegistroComAviso('sac', 'ficha', g.id, 'da ficha')", para: "copiarLinkDoRegistroComAviso('sac', 'os', g.id, 'da ficha')" },
+  ] },
+  { id: 'ge', nome: 'o selo da ficha na OS não abre a ficha (nada acontece)', cenarios: '^C87', trocas: [
+    { arquivo: 'src/SacTab.tsx', de: "irParaEndereco(montarEnderecoDoRegistroDaTela('sac', 'ficha', String(os.garantia_id)));", para: "void os;" },
+  ] },
+  { id: 'gf', nome: 'o aviso de uma ficha de garantia deixa de abrir a ficha pelo endereço (volta a só trocar de aba)', cenarios: '^C87', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  garantia: { tela: 'sac', tipo: 'ficha' },", para: "  // garantia: { tela: 'sac', tipo: 'ficha' }," },
+  ] },
+  { id: 'gg', nome: 'a ficha não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C83', trocas: [
+    { arquivo: 'src/GarantiaTab.tsx', de: 'fechar: () => { setDetalheId(null);', para: 'fechar: () => {' },
+  ] },
+  // ── Fase 6 (26/11/2026): a tarefa do Financeiro (`#/financeiro/tarefa/<código>`) ──
+  { id: 'ta', nome: 'a tarefa aberta por um clique deixa de escrever o endereço', cenarios: '^C88', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: 'aberto: modalTarefa?.id ? String(modalTarefa.id) : null,', para: 'aberto: null,' },
+  ] },
+  { id: 'tb', nome: 'a tarefa de outra pessoa passa a abrir pelo link (some a conferência de quem vê o quadro)', cenarios: '^C90b', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: "return p.veTudo || (r.registro.responsavel_nome && ehEu(currentUser, r.registro, 'responsavel_nome')) ? r : { registro: null, erro: '' };", para: 'return r;' },
+  ] },
+  { id: 'tc', nome: 'a permissão ilegível passa a valer como "não encontrei" (em vez de dizer que a leitura falhou)', cenarios: '^C90c', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: 'if (p.erro) return { registro: null, erro: p.erro };', para: "if (p.erro) return { registro: null, erro: '' };" },
+  ] },
+  { id: 'td', nome: 'a tela do Financeiro deixa de trocar para a aba Tarefas quando o endereço pede uma tarefa', cenarios: '^C91', trocas: [
+    { arquivo: 'src/FinanceiroTab.tsx', de: "const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa') setAbaFin('kanban'); };", para: 'const sincronizar = () => { };' },
+  ] },
+  { id: 'te', nome: 'o "Copiar link" da tarefa copia o título no lugar do código', cenarios: '^C91', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: "copiarLinkDoRegistroComAviso('financeiro', 'tarefa', tarefa.id, 'da tarefa')", para: "copiarLinkDoRegistroComAviso('financeiro', 'tarefa', tarefa.titulo, 'da tarefa')" },
+  ] },
+  { id: 'tf', nome: 'a Menção de tarefa do Financeiro deixa de abrir a tarefa pelo endereço (volta a só trocar de aba)', cenarios: '^C92', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  tarefa_financeiro: { tela: 'financeiro', tipo: 'tarefa' },", para: "  // tarefa_financeiro: { tela: 'financeiro', tipo: 'tarefa' }," },
+  ] },
+  { id: 'tg', nome: 'a data da tarefa do Financeiro deixa de ser fonte com registro no Calendário (o "Abrir" só troca de aba)', cenarios: '^C92', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "  tarefa_financeiro: 'tarefa_financeiro',", para: "  // tarefa_financeiro: 'tarefa_financeiro'," },
+  ] },
+  { id: 'th', nome: 'a tarefa não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C88', trocas: [
+    { arquivo: 'src/FinanceiroKanban.tsx', de: 'fechar: () => setModalTarefa(null),', para: 'fechar: () => {},' },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');
@@ -332,7 +382,7 @@ const apagarOriginal = (arquivo) => { try { fs.rmSync(path.join(ORIGINAIS, arqui
       if (FILTRO && !new RegExp(FILTRO).test(d.id)) continue;
       for (const t of d.trocas) {
         const txt = fs.readFileSync(path.join(RAIZ, t.arquivo), 'utf8');
-        const n = txt.split(t.de).length - 1;
+        const n = txt.split(noEstiloDoArquivo(txt, t.de)).length - 1;
         if (n !== 1) ruins++;
         console.log(`${n === 1 ? 'ok  ' : 'RUIM'} ${d.id}) ${t.arquivo}: o trecho aparece ${n} vez(es)`);
       }
@@ -359,9 +409,9 @@ const apagarOriginal = (arquivo) => { try { fs.rmSync(path.join(ORIGINAIS, arqui
       for (const a of arquivosDoDefeito) {
         let txt = originais.get(a).toString('utf8');
         for (const t of d.trocas.filter(x => x.arquivo === a)) {
-          const n = txt.split(t.de).length - 1;
+          const n = txt.split(noEstiloDoArquivo(txt, t.de)).length - 1;
           if (n !== 1) throw new Error(`o trecho não aparece exatamente 1 vez em ${a} (aparece ${n}): ${t.de.slice(0, 60)}. O código mudou: atualize a lista de defeitos.`);
-          txt = txt.replace(t.de, () => t.para);
+          txt = txt.replace(noEstiloDoArquivo(txt, t.de), () => noEstiloDoArquivo(txt, t.para));
         }
         fs.writeFileSync(path.join(RAIZ, a), txt, 'utf8');
       }

@@ -14,7 +14,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
-import { notificarEvento } from './whatsappHelper';
 import { STATUS_COTACAO_FRETE, statusDeLiberacaoComercial } from './FluxoEntrega';
 import { opTemRemessas, contarFretesQueNaoSairam, oFreteLiberaAOp } from './Remessas';
 import { diaISO, hojeISO } from './Interface';
@@ -107,6 +106,5 @@ export async function liberarOpQuandoOFreteSai({ frete, quando, usuario }: { fre
     usuario_nome: usuario?.nome, data_hora: new Date().toISOString(),
   });
   if (erroHistorico) console.warn('Falha ao gravar o histórico da OP', opl.opl, erroHistorico.message);
-  notificarEvento('frete_entregue', quando === 'saida' ? `🚚 Frete da OP ${opl.opl} saiu (em trânsito) — liberada para o Comercial.` : `🚚 Frete da OP ${opl.opl} entregue — liberada para o Comercial.`);
   return { avancou: true, opl: opl.opl, status: statusNovo };
 }

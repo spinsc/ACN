@@ -9,7 +9,6 @@ import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, L
 import { ModalAnexos, useContagemAnexos } from './OplAnexosWidget';
 import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
-import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { combinaBusca } from './SearchUtils';
@@ -664,7 +663,6 @@ function PainelSacVeicular({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', os.id);
     if (erroProv) { alert(`Não foi possível definir a data da OS ${os.numero_os}: ${erroProv.message}`); return; }   // 7.55: fechava a janela e avisava o SAC com a OS sem data
-    notificarEvento('sac_data_definida', `Producao definiu data — ${os.numero_os} — Cliente: ${os.cliente_nome} — Data: ${new Date(provisionarForm.data_provisao+'T12:00').toLocaleDateString('pt-BR')} (${provisionarForm.periodo})`);
     setModalProvisionar(null); setProvisionarForm({ data_provisao:'', periodo:'Manhã' }); load();
   });
 
@@ -685,7 +683,6 @@ function PainelSacVeicular({ currentUser }) {
     }).eq('id', os.id).eq('status', os.status).select('id');
     if (erroCheg) { alert(`Não foi possível confirmar a chegada da OS ${os.numero_os}: ${erroCheg.message}`); return; }   // 7.55
     if (!chegou?.length) { alert(`Não foi possível confirmar a chegada da OS ${os.numero_os}: ela mudou de etapa enquanto a janela estava aberta. Atualize a tela.`); setModalConfirmarChegada(null); load(); return; }
-    notificarEvento('sac_veiculo_chegou', `Veiculo chegou — ${os.numero_os} — ${os.cliente_nome} — Status: ${novoStatus}`);
     setModalConfirmarChegada(null); load();
   });
 
@@ -703,7 +700,6 @@ function PainelSacVeicular({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', os.id);
     if (erroVer) { alert(`Não foi possível enviar o orçamento da OS ${os.numero_os}: ${erroVer.message}`); return; }   // 7.55: perdia os itens digitados e avisava o SAC de um orçamento que não existia
-    notificarEvento('sac_verificacao_enviada', `Orcamento de verificacao — ${os.numero_os} — ${os.cliente_nome} — Total: ${fmtVal(total)}`);
     setModalVerificacao(null); setVerificacaoItens([]); load();
   });
 
@@ -2531,7 +2527,6 @@ ${frasePendenciasNaoLidas(falhas)}`);
       status_anterior: opl.status_geral, status_novo: 'Aguardando CQ',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('producao_finaliza', msg.producaoFinalizada(opl.opl, currentUser?.nome));
     await registrarAndamento(opl, 'Produção concluída. OP liberada para o Controle de Qualidade.');
     fetchAll();
     return true;

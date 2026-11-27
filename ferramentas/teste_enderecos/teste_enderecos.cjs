@@ -3171,6 +3171,512 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // C78 (26/11/2026, depois da Fase 4 na Logística): a Menção de frete (`frete_aprovacao`) abre o frete. O recado só é atendido pelo painel de Fretes, que só existe com a aba Fretes aberta:
+  // a Logística abre no Histórico e o clique na Menção não abria nada (o recado ficava guardado). O teste repete o que o painel de Menções faz (`abrirRegistro`): grava o recado, dispara o
+  // evento e troca de tela. O frete é SIMULADO (a leitura por id devolve uma linha inventada): nenhum dado real é tocado.
+  {
+    const FRETE_FALSO = '11111111-1111-4111-8111-111111111111';
+    const freteFalso = { id: FRETE_FALSO, descricao: 'FRETE DE TESTE (simulado)', transportadora: 'TESTE', status: 'Aguardando Aprovação', tipo: 'outbound', created_at: new Date().toISOString() };
+    const mencaoDeFrete = (page) => page.evaluate((id) => { const detail = { contexto: 'frete_aprovacao', contextoId: id }; window.__acnDeepLink = detail; window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail })); }, FRETE_FALSO);
+    const olhar = (page) => page.evaluate(() => {
+      const j = document.querySelector('[role="dialog"], .acn-modal, .modal-overlay');
+      return { hash: location.hash, historico: history.length, aba: ((document.querySelector('.acn-main [role="tab"][aria-selected="true"]') || {}).innerText || '').replace(/\s+/g, ' ').trim(), janela: j ? j.innerText.replace(/\s+/g, ' ').slice(0, 160) : null, recado: window.__acnDeepLink || null };
+    });
+    // a leitura do frete por código é simulada; as outras (lista de fretes etc.) passam para o banco real, só leitura
+    let leituras = 0;
+    const simular = (url) => { if (/\/rest\/v1\/pcp_fretes\?/.test(url) && url.includes('id=eq.' + FRETE_FALSO)) { leituras++; return { body: freteFalso }; } return null; };
+    await cenario('C78 Menção de frete: abre a Logística na aba Fretes e a janela do frete (vindo de outra tela e com a Logística já aberta no Histórico)', { simular }, async ({ page }) => {
+      await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(2000);
+      // 1) de outra tela (o Início): a tela troca, a aba é Fretes, o endereço também e a janela do frete abre
+      await mencaoDeFrete(page);
+      await clicarNoMenu(page, 'Logística In/Out');
+      await page.waitForFunction(() => /FRETE DE TESTE/.test(document.body.innerText), { timeout: 20000 }).catch(() => {});
+      let o = await olhar(page);
+      confere('de outra tela: o endereço é o da aba Fretes', o.hash === '#/logistica/fretes', o.hash);
+      confere('de outra tela: a aba marcada é Fretes', o.aba === 'Fretes', o.aba);
+      confere('de outra tela: a janela do frete abriu (e é a do frete pedido)', !!o.janela && /FRETE DE TESTE/.test(o.janela), String(o.janela));
+      confere('de outra tela: o frete foi lido UMA vez e o recado foi consumido', leituras === 1 && o.recado === null, JSON.stringify({ leituras, recado: o.recado }));
+      // 2) com a Logística já aberta no Histórico: a Menção troca a aba e abre a janela
+      leituras = 0;
+      await page.goto(BASE + '#/logistica', { waitUntil: 'domcontentloaded' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await esperarSistema(page); await espera(2500);
+      o = await olhar(page);
+      confere('com a Logística aberta: parte do Histórico, sem janela', o.hash === '#/logistica' && /Hist/.test(o.aba) && !o.janela, JSON.stringify(o));
+      const h0 = o.historico;
+      await mencaoDeFrete(page);
+      await page.waitForFunction(() => /FRETE DE TESTE/.test(document.body.innerText), { timeout: 20000 }).catch(() => {});
+      o = await olhar(page);
+      confere('com a Logística aberta: a aba passa a Fretes, com o endereço dela, e a janela abre', o.hash === '#/logistica/fretes' && o.aba === 'Fretes' && !!o.janela && /FRETE DE TESTE/.test(o.janela), JSON.stringify(o));
+      confere('com a Logística aberta: UM passo novo no histórico, um frete lido e o recado consumido', o.historico === h0 + 1 && leituras === 1 && o.recado === null, JSON.stringify({ h0, h: o.historico, leituras, recado: o.recado }));
+      // 3) o Voltar leva à aba de antes
+      await page.goBack(); await espera(900);
+      o = await olhar(page);
+      confere('o Voltar leva ao Histórico', o.hash === '#/logistica' && /Hist/.test(o.aba), JSON.stringify({ h: o.hash, aba: o.aba }));
+      const al = await A(page);
+      confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ═════════ a ficha da Garantia (`#/sac/ficha/<código>`, DENTRO do SAC: a janela mora na aba Garantia) — Fase 6 ═════════
+  // O banco de produção não tem ficha que a conta de teste leia (a leitura volta vazia), então as fichas são SIMULADAS: a lista e a leitura de uma ficha respondem o que o cenário manda.
+  const reFicha = /^#\/sac\/ficha\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  const MSG_F_NAO_ACHOU = 'Não foi possível abrir a ficha de garantia: não a encontrei, ou você não tem acesso a ela.';
+  const JF = '[role="dialog"][aria-label^="Atendimento GAR-"]';
+  const fichaFalsa = (n, extra = {}) => ({
+    id: '0000000a-0000-4000-8000-00000000000' + n, numero: `GAR-000${n}/2026`, situacao: 'aberto',
+    cliente_nome: 'ZZTESTE Cliente ' + n, cliente_contato: '(51) 98644-0747', veiculo_id: null, veiculo_nome: 'ZZTESTE Veículo', placa: 'ABC1D23', chassi: '',
+    origem_tipo: 'nf', origem_ref: 'ZZ-' + n, opl_id: null, data_ocorrencia: '2026-11-01', descricao_falha: 'falha simulada pelo teste',
+    responsavel: { nome: 'ZZTESTE', email: 'zzteste@teste.local' }, aberto_por_nome: 'ZZTESTE', aberto_por_email: 'zzteste@teste.local', copiados: [],
+    criado_em: '2026-11-20T12:00:00Z', atualizado_em: '2026-11-20T12:00:00Z', historico: [], avaliacao: null, fornecedor: null, execucao: null, pedidos_compra: [], autorizacoes: [],
+    ...extra,
+  });
+  const F1 = fichaFalsa(1), F2 = fichaFalsa(2);
+  // o `.maybeSingle()` do supabase-js pede uma LISTA e pega a primeira linha (o cabeçalho de "objeto único" só vale para `.single()`): a leitura de uma ficha responde com um arranjo de zero ou uma ficha
+  const ehLeituraDeUmaFicha = (url) => url.includes('/rest/v1/garantia_atendimentos?') && url.includes('id=eq.');
+  const ehListaDeFichas = (url) => url.includes('/rest/v1/garantia_atendimentos?') && !url.includes('id=eq.') && !url.includes('id=in.');
+  /** O que o banco "responde" sobre as fichas: `fichas` na lista e na leitura de uma só; o que não está entre elas, deixa passar para o banco real (que não tem a ficha). */
+  const bancoDeFichas = (fichas, { lidas = [], recusa = () => false } = {}) => (url, r) => {
+    if (ehLeituraDeUmaFicha(url)) {
+      const m = url.match(/id=eq\.([^&]+)/); const id = m ? m[1] : '';
+      lidas.push(id);
+      if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+      const f = fichas.find(x => x.id === id);
+      return f ? { status: 200, body: [f] } : null;
+    }
+    if (ehListaDeFichas(url)) return { status: 200, body: fichas };
+    return null;
+  };
+  const estadoF = (page) => page.evaluate((jf) => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jf).length, rotulo: (document.querySelector(jf) || { getAttribute: () => null }).getAttribute('aria-label'),
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+      carregando: !!document.querySelector('.acn-op-endereco-carregando'),
+    };
+  }, JF);
+  const esperarFicha = (page, ms = 40000) => page.waitForSelector(JF, { timeout: ms });
+  const esperarSemFicha = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JF);
+  const fecharFicha = (page) => page.evaluate((s) => { const bs = [...document.querySelectorAll(s + ' button')].filter(b => b.innerText.trim() === 'Fechar'); if (!bs.length) throw new Error('não achei o botão Fechar da ficha'); bs[bs.length - 1].click(); }, JF);
+  const esperarDesfechoF = (page, ms = 25000) => page.waitForFunction(() => !/^#\/sac\/ficha\//i.test(location.hash), { timeout: ms }).catch(() => {});
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C83 Ficha da Garantia: o clique na lista escreve o endereço; Voltar fecha, Avançar reabre e o X volta um passo', { simular: bancoDeFichas([F1, F2]) }, async ({ page }) => {
+    await page.goto(BASE + '#/sac/garantia', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForSelector('.acn-gar-linha', { timeout: 40000 }); await espera(900);
+    const antes = await estadoF(page);
+    confere('a aba Garantia abre pelo link da aba (#/sac/garantia)', antes.hash === '#/sac/garantia' && antes.abaAtiva === 'Garantia', JSON.stringify({ h: antes.hash, a: antes.abaAtiva }));
+    await page.evaluate((n) => [...document.querySelectorAll('.acn-gar-linha')].find(t => t.innerText.includes(n)).click(), F1.numero);
+    await esperarFicha(page); await espera(900);
+    let e = await estadoF(page);
+    confere('o endereço da ficha foi escrito (#/sac/ficha/<código>), com o código da ficha clicada', e.hash === '#/sac/ficha/' + F1.id, e.hash);
+    confere('UM passo novo no histórico, do próprio sistema', e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+    confere('uma janela só, a da ficha clicada, e a aba continua a Garantia', e.janelas === 1 && e.rotulo === 'Atendimento ' + F1.numero && e.abaAtiva === 'Garantia', JSON.stringify({ j: e.janelas, r: e.rotulo, a: e.abaAtiva }));
+    await page.goBack(); await esperarSemFicha(page); await espera(700);
+    e = await estadoF(page);
+    confere('o Voltar fecha a janela e volta ao endereço da aba Garantia', e.hash === '#/sac/garantia' && e.janelas === 0 && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.goForward(); await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Avançar reabre a MESMA ficha, uma só', e.hash === '#/sac/ficha/' + F1.id && e.janelas === 1 && e.rotulo === 'Atendimento ' + F1.numero, JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo }));
+    await fecharFicha(page); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o X volta um passo (endereço da aba), sem janela', e.hash === '#/sac/garantia' && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    // de uma ficha para a outra: abrir a segunda deixa só ela (a primeira saiu pelo X antes)
+    await page.evaluate((n) => [...document.querySelectorAll('.acn-gar-linha')].find(t => t.innerText.includes(n)).click(), F2.numero);
+    await esperarFicha(page); await espera(700);
+    e = await estadoF(page);
+    confere('a segunda ficha tem o endereço dela, e só uma janela', e.hash === '#/sac/ficha/' + F2.id && e.janelas === 1 && e.rotulo === 'Atendimento ' + F2.numero, JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C84 Ficha da Garantia: link colado (primeira página) abre a ficha na aba Garantia; F5 reabre; o X nunca sai do sistema', { simular: bancoDeFichas([F1, F2]) }, async ({ page }) => {
+    const end = '#/sac/ficha/' + F1.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarFicha(page); await espera(900);
+    let e = await estadoF(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a ficha certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && e.rotulo === 'Atendimento ' + F1.numero, JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo }));
+    confere('a aba aberta é a Garantia (a ficha mora nela) e o passo do link colado não é do sistema', e.abaAtiva === 'Garantia' && e.marca === false, JSON.stringify({ a: e.abaAtiva, m: e.marca }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('F5 reabre a mesma ficha, no mesmo endereço', e.hash === end && e.janelas === 1 && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await fecharFicha(page); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('fechar troca o endereço pelo da aba Garantia, sem sair do sistema nem criar passo', e.hash === '#/sac/garantia' && e.janelas === 0 && e.origem === origem && e.historico === h0 && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem === origem, h0, h1: e.historico, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    const SO_DE_OUTRO = fichaFalsa(3, { aberto_por_email: 'outra.pessoa@teste.local', aberto_por_nome: 'Outra Pessoa', responsavel: { nome: 'Outra Pessoa', email: 'outra.pessoa@teste.local' }, copiados: [] });
+    const lerBanco = bancoDeFichas([F1, SO_DE_OUTRO], { lidas, recusa: () => modo === 'recusa' });
+    await cenario('C85 Ficha que não existe, que não é código, de outra pessoa e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', { simular: lerBanco }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false],
+        ['o banco recusa a leitura', 'recusa', F1.id, true],
+      ];
+      for (const [nome, m, codigo, leBanco] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/sac/ficha/' + codigo);
+        await esperarSistema(page); await esperarDesfechoF(page); await espera(800);
+        const e = await estadoF(page);
+        const al = await A(page);
+        const texto = m === 'recusa' ? 'Não foi possível abrir a ficha de garantia: a leitura falhou (erro simulado do banco). Tente de novo.' : MSG_F_NAO_ACHOU;
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a ficha de garantia'));
+        confere(`ficha (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`ficha (${nome}): nenhuma janela e o endereço volta ao da aba`, e.janelas === 0 && e.hash === '#/sac/garantia', JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`ficha (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`ficha (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+    // a ficha de OUTRA pessoa: quem só vê o que é seu (perfil SAC comum) recebe a mesma mensagem de "não encontrei, ou sem acesso" e a janela não abre
+    await cenario('C85b Ficha de outra pessoa: o perfil comum recebe a mesma mensagem e a janela não abre; a própria ficha abre', {
+      usuario: { ...USUARIO_ADMIN, perfil: 'SAC', abas_permitidas: ['sac'] }, simular: (url, r) => bancoComAbas(['sac'])(url, r) || lerBanco(url, r),
+    }, async ({ page }) => {
+      lidas.length = 0;
+      await abrirComoLinkColado(page, '#/sac/ficha/' + SO_DE_OUTRO.id);
+      await esperarSistema(page); await esperarDesfechoF(page); await espera(800);
+      let e = await estadoF(page); let al = await A(page);
+      confere('ficha de outra pessoa: UMA mensagem de "não encontrei, ou você não tem acesso"', al.filter(x => x.startsWith('Não foi possível abrir a ficha')).length === 1 && al.includes(MSG_F_NAO_ACHOU), JSON.stringify(al));
+      confere('ficha de outra pessoa: nenhuma janela e o endereço volta ao da aba', e.janelas === 0 && e.hash === '#/sac/garantia', JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere('ficha de outra pessoa: a leitura foi ao banco (a regra é conferida depois de ler)', lidas.includes(SO_DE_OUTRO.id), JSON.stringify(lidas));
+      await LA(page);
+      await abrirComoLinkColado(page, '#/sac/ficha/' + F1.id);
+      await esperarSistema(page); await esperarFicha(page); await espera(900);
+      e = await estadoF(page); al = await A(page);
+      confere('a ficha da própria pessoa abre', e.janelas === 1 && e.hash === '#/sac/ficha/' + F1.id, JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere('nenhum aviso ao abrir a própria ficha', al.length === 0, JSON.stringify(al));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C86 Ficha da Garantia: "Copiar link"; aberta de outra aba (Ordens de serviço) troca para a Garantia; Voltar e Avançar entre a aba e a ficha', { simular: bancoDeFichas([F1, F2]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + '#/sac/ficha/' + F1.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarFicha(page); await espera(900);
+    const SEL = JF + ' button[aria-label="Copiar o link desta ficha"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/sac/ficha/' + F1.id;
+      const ok = 'Link da ficha copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/sac/ficha/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da ficha. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoF(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/sac/ficha/' + F1.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+    await LA(page);
+    // com a aba das OS aberta, o endereço de uma ficha troca para a aba Garantia e abre a ficha; o Voltar volta à aba das OS
+    await page.goto(BASE + '#/sac', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoF(page);
+    confere('a aba das OS abre sem janela (#/sac)', e.hash === '#/sac' && e.janelas === 0 && /Ordens/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    const h0 = e.historico;
+    await page.evaluate((h) => { location.hash = h; }, '#/sac/ficha/' + F2.id);
+    await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o endereço de uma ficha, com a aba das OS aberta, troca para a Garantia e abre a ficha', e.janelas === 1 && e.rotulo === 'Atendimento ' + F2.numero && e.abaAtiva === 'Garantia' && e.hash === '#/sac/ficha/' + F2.id, JSON.stringify({ j: e.janelas, r: e.rotulo, a: e.abaAtiva, h: e.hash }));
+    await page.goBack(); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Voltar fecha a ficha e volta à aba das OS (#/sac)', e.janelas === 0 && e.hash === '#/sac' && /Ordens/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Avançar reabre a ficha, na aba Garantia', e.janelas === 1 && e.hash === '#/sac/ficha/' + F2.id && e.abaAtiva === 'Garantia', JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // C87: os dois atalhos de dentro do sistema que abriam a ficha pelo recado antigo: o aviso (Menção, "Abrir o atendimento" do Desenvolvimento) e o selo "Ficha GAR-…" de uma OS do SAC
+  const OS_DA_FICHA = { id: '0000000b-0000-4000-8000-000000000001', numero_os: 'ZZ-OS-GAR-1', status: 'Em Provisionamento', garantia_id: F1.id, cobranca: 'garantia', tipo_servico: 'Garantia', tipo_projeto: 'Veicular', empresa: 'ACN', cliente_nome: 'ZZTESTE Cliente 1', data_abertura: '2026-11-20T12:00:00Z', status_desde: '2026-11-20T12:00:00Z', atualizado_em: '2026-11-20T12:00:00Z', equipamentos: [], acessorios: [], historico: [] };
+  await cenario('C87 Ficha da Garantia: o aviso (recado interno) e o selo da OS abrem a ficha pelo endereço, na aba Garantia, em UM passo', {
+    simular: (url, r) => {
+      if (url.includes('/rest/v1/sac_ordens_servico?') && !url.includes('id=eq.') && !url.includes('select=id,')) return { status: 200, body: [OS_DA_FICHA] };
+      return bancoDeFichas([F1, F2])(url, r);
+    },
+  }, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoF(page)).historico;
+    // o aviso: grava o recado e pede a troca de tela (a mesma coisa que as Menções e o "Abrir o atendimento" fazem)
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'garantia', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'sac' } })); }, F2.id);
+    await esperarFicha(page); await espera(900);
+    let e = await estadoF(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('o aviso abre a ficha pelo endereço (#/sac/ficha/<código>), na aba Garantia, uma janela só', e.hash === '#/sac/ficha/' + F2.id && e.janelas === 1 && e.rotulo === 'Atendimento ' + F2.numero && e.abaAtiva === 'Garantia', JSON.stringify({ h: e.hash, j: e.janelas, r: e.rotulo, a: e.abaAtiva }));
+    confere('UM passo novo no histórico (a tela e a ficha num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    await page.goBack(); await page.waitForFunction(() => !document.querySelector('.acn-main [role="tab"]'), { timeout: 15000 }).catch(() => {}); await espera(900);
+    e = await estadoF(page);
+    confere('o Voltar fecha a ficha e sai da tela do SAC (volta ao Início, de onde o aviso partiu)', e.janelas === 0 && !/^#\/sac/.test(e.hash), JSON.stringify({ j: e.janelas, h: e.hash }));
+    // o selo da OS: com a aba das OS aberta, o clique no selo abre a ficha (um passo) e o Voltar volta à aba das OS
+    await page.goto(BASE + '#/sac', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(3000);
+    const temSelo = await page.waitForFunction(() => [...document.querySelectorAll('.acn-main *')].some(x => x.children.length === 0 && /^Ficha /.test((x.textContent || '').trim())), { timeout: 30000 }).then(() => true).catch(() => false);
+    confere('o quadro das OS mostra o selo "Ficha GAR-…" da OS de garantia simulada', temSelo, 'sem selo');
+    if (!temSelo) return;
+    const h1 = (await estadoF(page)).historico;
+    await page.evaluate(() => { const s = [...document.querySelectorAll('.acn-main *')].find(x => x.children.length === 0 && /^Ficha /.test((x.textContent || '').trim())); s.click(); });
+    await esperarFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o clique no selo abre a ficha pelo endereço, na aba Garantia, em UM passo', e.hash === '#/sac/ficha/' + F1.id && e.janelas === 1 && e.abaAtiva === 'Garantia' && e.historico === h1 + 1, JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva, h1, h2: e.historico }));
+    await page.goBack(); await esperarSemFicha(page); await espera(900);
+    e = await estadoF(page);
+    confere('o Voltar fecha a ficha e volta à aba das OS (#/sac)', e.janelas === 0 && e.hash === '#/sac' && /Ordens/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ═════════ a tarefa do Financeiro (`#/financeiro/tarefa/<código>`, DENTRO do Financeiro: a janela mora na aba Tarefas) — Fase 6 ═════════
+  // As tarefas e a permissão de quem vê o quadro inteiro são SIMULADAS (o banco de produção só tem tarefas reais): a lista, a leitura de uma tarefa e a leitura de `ve_todas_tarefas_financeiro` respondem o que o cenário manda.
+  const MSG_T_NAO_ACHOU = 'Não foi possível abrir a tarefa: não a encontrei, ou você não tem acesso a ela.';
+  const JT = '[role="dialog"][aria-label="Editar tarefa"]';
+  // sem vencimento de propósito: tarefa vencida de quem entra abriria a janela obrigatória das vencidas por cima de tudo
+  const tarefaFalsa = (n, extra = {}) => ({
+    id: '0000000c-0000-4000-8000-00000000000' + n, titulo: 'ZZ Tarefa do teste ' + n, descricao: 'simulada pelo teste', etapa: 'A Fazer',
+    responsavel_nome: 'ZZTESTE', responsavel_email: 'zzteste@teste.local', data_vencimento: null, tipo_id: null, recorrencia: null, recorrencia_ativa: true,
+    participantes: [], observacoes: [], criado_por: 'zzteste@teste.local', criado_por_nome: 'ZZTESTE', criado_em: '2026-11-20T12:00:00Z', atualizado_em: '2026-11-20T12:00:00Z',
+    ...extra,
+  });
+  const T1 = tarefaFalsa(1), T2 = tarefaFalsa(2);
+  /** O que o banco "responde" sobre as tarefas: a lista, a leitura de uma só (lista de zero ou uma linha, como o `.maybeSingle()` pede), os tipos (vazios) e a permissão de ver o quadro inteiro. */
+  const bancoDeTarefas = (tarefas, { veTudo = true, recusa = () => false, recusaPermissao = false, lidas = [] } = {}) => (url, r) => {
+    if (r.method() !== 'GET') return null;
+    if (url.includes('/rest/v1/auth_usuarios?') && url.includes('ve_todas_tarefas_financeiro'))
+      return recusaPermissao ? { status: 500, body: { message: 'erro simulado da permissão' } } : { status: 200, body: [{ ve_todas_tarefas_financeiro: veTudo, perfil: veTudo ? 'Admin' : 'Financeiro' }] };
+    if (url.includes('/rest/v1/financeiro_tipos_tarefa?')) return { status: 200, body: [] };
+    if (url.includes('/rest/v1/financeiro_tarefas?')) {
+      if (url.includes('id=eq.')) {
+        const m = url.match(/id=eq\.([^&]+)/); const id = m ? m[1] : '';
+        lidas.push(id);
+        if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+        const t = tarefas.find(x => x.id === id);
+        return { status: 200, body: t ? [t] : [] };
+      }
+      return { status: 200, body: tarefas };
+    }
+    return null;
+  };
+  const estadoT = (page) => page.evaluate((jt) => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    const j = document.querySelector(jt);
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jt).length, tarefa: j ? (j.querySelector('#kb-titulo') || { value: null }).value : null,
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+    };
+  }, JT);
+  const esperarTarefa = (page, ms = 40000) => page.waitForSelector(JT, { timeout: ms });
+  const esperarSemTarefa = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JT);
+  const fecharTarefa = (page) => page.evaluate((s) => { const b = [...document.querySelectorAll(s + ' button')].find(x => x.innerText.trim() === 'Cancelar'); if (!b) throw new Error('não achei o botão Cancelar da tarefa'); b.click(); }, JT);
+  const esperarDesfechoT = (page, ms = 25000) => page.waitForFunction(() => !/^#\/financeiro\/tarefa\//i.test(location.hash), { timeout: ms }).catch(() => {});
+  const ENDERECO_DAS_TAREFAS = '#/financeiro/kanban';
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C88 Tarefa do Financeiro: o clique no cartão escreve o endereço; Voltar fecha, Avançar reabre e o Cancelar volta um passo', { simular: bancoDeTarefas([T1, T2]) }, async ({ page }) => {
+    await page.goto(BASE + ENDERECO_DAS_TAREFAS, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForSelector('.acn-kb-card', { timeout: 40000 }); await espera(900);
+    const antes = await estadoT(page);
+    confere('a aba Tarefas abre pelo link da aba (#/financeiro/kanban)', antes.hash === ENDERECO_DAS_TAREFAS && antes.abaAtiva === 'Tarefas', JSON.stringify({ h: antes.hash, a: antes.abaAtiva }));
+    await page.evaluate((n) => [...document.querySelectorAll('.acn-kb-card')].find(t => t.innerText.includes(n)).click(), T1.titulo);
+    await esperarTarefa(page); await espera(900);
+    let e = await estadoT(page);
+    confere('o endereço da tarefa foi escrito (#/financeiro/tarefa/<código>), com o código da tarefa clicada', e.hash === '#/financeiro/tarefa/' + T1.id, e.hash);
+    confere('UM passo novo no histórico, do próprio sistema', e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ antes: antes.historico, depois: e.historico, marca: e.marca }));
+    confere('uma janela só, a da tarefa clicada, e a aba continua a das Tarefas', e.janelas === 1 && e.tarefa === T1.titulo && e.abaAtiva === 'Tarefas', JSON.stringify({ j: e.janelas, t: e.tarefa, a: e.abaAtiva }));
+    await page.goBack(); await esperarSemTarefa(page); await espera(700);
+    e = await estadoT(page);
+    confere('o Voltar fecha a janela e volta ao endereço da aba Tarefas', e.hash === ENDERECO_DAS_TAREFAS && e.janelas === 0 && e.abaAtiva === 'Tarefas', JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.goForward(); await esperarTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o Avançar reabre a MESMA tarefa, uma só', e.hash === '#/financeiro/tarefa/' + T1.id && e.janelas === 1 && e.tarefa === T1.titulo, JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa }));
+    await fecharTarefa(page); await esperarSemTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o Cancelar volta um passo (endereço da aba), sem janela', e.hash === ENDERECO_DAS_TAREFAS && e.janelas === 0, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await page.evaluate((n) => [...document.querySelectorAll('.acn-kb-card')].find(t => t.innerText.includes(n)).click(), T2.titulo);
+    await esperarTarefa(page); await espera(700);
+    e = await estadoT(page);
+    confere('a segunda tarefa tem o endereço dela, e só uma janela', e.hash === '#/financeiro/tarefa/' + T2.id && e.janelas === 1 && e.tarefa === T2.titulo, JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C89 Tarefa do Financeiro: link colado (primeira página) abre a tarefa na aba Tarefas; F5 reabre; o Cancelar nunca sai do sistema', { simular: bancoDeTarefas([T1, T2]) }, async ({ page }) => {
+    const end = '#/financeiro/tarefa/' + T1.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarTarefa(page); await espera(900);
+    let e = await estadoT(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a tarefa certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && e.tarefa === T1.titulo, JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa }));
+    confere('a aba aberta é a das Tarefas (a tarefa mora nela) e o passo do link colado não é do sistema', e.abaAtiva === 'Tarefas' && e.marca === false, JSON.stringify({ a: e.abaAtiva, m: e.marca }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('F5 reabre a mesma tarefa, no mesmo endereço', e.hash === end && e.janelas === 1 && e.abaAtiva === 'Tarefas', JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await fecharTarefa(page); await esperarSemTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('cancelar troca o endereço pelo da aba Tarefas, sem sair do sistema nem criar passo', e.hash === ENDERECO_DAS_TAREFAS && e.janelas === 0 && e.origem === origem && e.historico === h0 && e.abaAtiva === 'Tarefas', JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem === origem, h0, h1: e.historico, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    const DE_OUTRO = tarefaFalsa(3, { responsavel_nome: 'Outra Pessoa', responsavel_email: 'outra.pessoa@teste.local' });
+    const banco = (opcoes) => bancoDeTarefas([T1, DE_OUTRO], { lidas, recusa: () => modo === 'recusa', ...opcoes });
+    await cenario('C90 Tarefa que não existe, que não é código e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', { simular: (url, r) => banco({ veTudo: true })(url, r) }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false],
+        ['o banco recusa a leitura', 'recusa', T1.id, true],
+      ];
+      for (const [nome, m, codigo, leBanco] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/financeiro/tarefa/' + codigo);
+        await esperarSistema(page); await esperarDesfechoT(page); await espera(800);
+        const e = await estadoT(page);
+        const al = await A(page);
+        const texto = m === 'recusa' ? 'Não foi possível abrir a tarefa: a leitura falhou (erro simulado do banco). Tente de novo.' : MSG_T_NAO_ACHOU;
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a tarefa'));
+        confere(`tarefa (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`tarefa (${nome}): nenhuma janela e o endereço volta ao da aba`, e.janelas === 0 && e.hash === ENDERECO_DAS_TAREFAS, JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`tarefa (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`tarefa (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+    // a regra de quem vê é a do quadro: quem não vê todas só abre a tarefa de que é responsável; quem não tem a permissão lida (leitura recusada) recebe "a leitura falhou", nunca "não encontrei"
+    await cenario('C90b Tarefa de outra pessoa: quem não vê o quadro inteiro recebe a mesma mensagem e a janela não abre; a própria tarefa abre; permissão ilegível = leitura falhou', {
+      simular: (url, r) => banco({ veTudo: false })(url, r),
+    }, async ({ page }) => {
+      lidas.length = 0;
+      await abrirComoLinkColado(page, '#/financeiro/tarefa/' + DE_OUTRO.id);
+      await esperarSistema(page); await esperarDesfechoT(page); await espera(800);
+      let e = await estadoT(page); let al = await A(page);
+      confere('tarefa de outra pessoa: UMA mensagem de "não encontrei, ou você não tem acesso"', al.filter(x => x.startsWith('Não foi possível abrir a tarefa')).length === 1 && al.includes(MSG_T_NAO_ACHOU), JSON.stringify(al));
+      confere('tarefa de outra pessoa: nenhuma janela e o endereço volta ao da aba', e.janelas === 0 && e.hash === ENDERECO_DAS_TAREFAS, JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere('tarefa de outra pessoa: a leitura foi ao banco (a regra é conferida depois de ler)', lidas.includes(DE_OUTRO.id), JSON.stringify(lidas));
+      await LA(page);
+      await abrirComoLinkColado(page, '#/financeiro/tarefa/' + T1.id);
+      await esperarSistema(page); await esperarTarefa(page); await espera(900);
+      e = await estadoT(page); al = await A(page);
+      confere('a tarefa da própria pessoa abre', e.janelas === 1 && e.hash === '#/financeiro/tarefa/' + T1.id, JSON.stringify({ j: e.janelas, h: e.hash }));
+      confere('nenhum aviso ao abrir a própria tarefa', al.length === 0, JSON.stringify(al));
+    });
+    await cenario('C90c Tarefa: a permissão de ver o quadro inteiro não pôde ser lida: "a leitura falhou" (nunca "não encontrei") e a janela não abre', {
+      simular: (url, r) => banco({ veTudo: true, recusaPermissao: true })(url, r),
+    }, async ({ page }) => {
+      await abrirComoLinkColado(page, '#/financeiro/tarefa/' + T1.id);
+      await esperarSistema(page); await esperarDesfechoT(page); await espera(800);
+      const e = await estadoT(page); const al = await A(page);
+      const msgs = al.filter(x => x.startsWith('Não foi possível abrir a tarefa'));
+      confere('permissão ilegível: UMA mensagem dizendo que a leitura falhou (e não que a tarefa não existe)', msgs.length === 1 && /a leitura falhou/.test(msgs[0]) && !/não a encontrei/.test(msgs[0]), JSON.stringify(al));
+      confere('permissão ilegível: nenhuma janela', e.janelas === 0, JSON.stringify({ j: e.janelas, h: e.hash }));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C91 Tarefa do Financeiro: "Copiar link"; aberta de outra aba (Centros de custo) troca para as Tarefas; Voltar e Avançar entre a aba e a tarefa', { simular: bancoDeTarefas([T1, T2]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + '#/financeiro/tarefa/' + T1.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarTarefa(page); await espera(900);
+    const SEL = JT + ' button[aria-label="Copiar o link desta tarefa"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/financeiro/tarefa/' + T1.id;
+      const ok = 'Link da tarefa copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/financeiro/tarefa/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da tarefa. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoT(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/financeiro/tarefa/' + T1.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+    await LA(page);
+    // com a aba dos Centros de custo aberta, o endereço de uma tarefa troca para as Tarefas e abre a tarefa; o Voltar volta à aba dos Centros
+    await page.goto(BASE + '#/financeiro', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoT(page);
+    confere('a aba dos Centros de custo abre sem janela (#/financeiro)', e.hash === '#/financeiro' && e.janelas === 0 && /Centros/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.evaluate((h) => { location.hash = h; }, '#/financeiro/tarefa/' + T2.id);
+    await esperarTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o endereço de uma tarefa, com os Centros de custo abertos, troca para as Tarefas e abre a tarefa', e.janelas === 1 && e.tarefa === T2.titulo && e.abaAtiva === 'Tarefas' && e.hash === '#/financeiro/tarefa/' + T2.id, JSON.stringify({ j: e.janelas, t: e.tarefa, a: e.abaAtiva, h: e.hash }));
+    await page.goBack(); await esperarSemTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o Voltar fecha a tarefa e volta à aba dos Centros de custo (#/financeiro)', e.janelas === 0 && e.hash === '#/financeiro' && /Centros/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o Avançar reabre a tarefa, na aba Tarefas', e.janelas === 1 && e.hash === '#/financeiro/tarefa/' + T2.id && e.abaAtiva === 'Tarefas', JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // os dois atalhos de dentro do sistema: a Menção (recado interno) e o botão "Abrir" do Calendário (a data da tarefa)
+  await cenario('C92 Tarefa do Financeiro: a Menção (recado) e o botão "Abrir" do Calendário abrem a tarefa pelo endereço, na aba Tarefas, em UM passo', {
+    simular: (url, r) => (r.method() === 'POST' && /\/rpc\/calendario_eventos/.test(url) ? { status: 200, body: EVENTOS_CAL.lista } : null) || bancoDeTarefas([T1, T2])(url, r),
+  }, async ({ page }) => {
+    EVENTOS_CAL.lista = [eventoDoCal('tarefa_financeiro', T2.id, 'ZZ vence a tarefa do Financeiro')];
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoT(page)).historico;
+    // a Menção: grava o recado e pede a troca de tela (a mesma coisa que a caixa de Menções faz)
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'tarefa_financeiro', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'financeiro' } })); }, T1.id);
+    await esperarTarefa(page); await espera(900);
+    let e = await estadoT(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('a Menção abre a tarefa pelo endereço (#/financeiro/tarefa/<código>), na aba Tarefas, uma janela só', e.hash === '#/financeiro/tarefa/' + T1.id && e.janelas === 1 && e.tarefa === T1.titulo && e.abaAtiva === 'Tarefas', JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa, a: e.abaAtiva }));
+    confere('UM passo novo no histórico (a tela e a tarefa num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    // o Calendário: o botão Abrir da data da tarefa
+    await page.goto(BASE + '#/calendario', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1800);
+    await abrirDoDia(page, 'ZZ vence a tarefa do Financeiro');
+    await esperarTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o botão "Abrir" do Calendário abre a tarefa pelo endereço, na aba Tarefas', e.hash === '#/financeiro/tarefa/' + T2.id && e.janelas === 1 && e.tarefa === T2.titulo && e.abaAtiva === 'Tarefas', JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa, a: e.abaAtiva }));
+    await page.goBack(); await esperarSemTarefa(page); await espera(900);
+    e = await estadoT(page);
+    confere('o Voltar fecha a tarefa e volta ao Calendário', e.janelas === 0 && e.hash === '#/calendario', JSON.stringify({ j: e.janelas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);

@@ -7,7 +7,6 @@ import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
-import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
@@ -1665,9 +1664,7 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, entrega: entregaIni
         recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado',
       }).eq('pedido_id', pedido.id);
       if (errFat) console.warn('Falha ao atualizar faturamento:', errFat.message);
-      notificarEvento('logistica_recebe_pedido', `*Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}${doFornecedor}\nNF: ${varias ? (res.campos?.numero_nf || form.numero_nf.trim()) : form.numero_nf.trim()}${varias ? '\nTodos os fornecedores do pedido foram recebidos.' : ''}`, 'Compras');
     } else if (form.confere) {
-      notificarEvento('logistica_recebe_pedido', `*Recebimento parcial* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}${doFornecedor}\nNF: ${form.numero_nf.trim()}\nAinda faltam: ${res.faltam.join(', ')}`, 'Compras');
     } else {
       await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras', numero_opl: pedido.opl || null,
@@ -1677,7 +1674,6 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, entrega: entregaIni
         logs_demanda: [{ texto: `Divergência no recebimento${varias ? ` (${nomeDoFornecedor})` : ''}: ${form.observacoes.trim()}`, usuario: currentUser?.nome, hora: agora }],
       }]);
       await notificarComprador(pedido, `⚠️ Divergência no recebimento do pedido ${pedido.numero_pedido}${doFornecedor}: ${form.observacoes.trim()}`);
-      notificarEvento('logistica_divergencia_recebimento', `*Divergência no recebimento* — Pedido ${pedido.numero_pedido}${doFornecedor}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
     }
 
     // Compra de reposição de estoque: o material entra no saldo pela quantidade
@@ -1921,7 +1917,16 @@ function PainelRecebimento({ currentUser }: any) {
 
 export default function LogisticaTab({ currentUser }) {
   // 26/11/2026 (plano de endereços, Fase 4): a aba aberta tem endereço na barra (`#/logistica/fretes`); a aba de sempre, o Histórico, é `#/logistica`.
-  const [abaLog, setAbaLog] = useAbaNoEndereco({ tela: 'logistica' });
+  // 26/11/2026: o recado da Menção de frete (`frete_aprovacao`) só é atendido pelo painel de Fretes, que só existe com a aba Fretes aberta; a Logística abre no Histórico e o clique
+  // na Menção não abria o frete (o recado ficava guardado, esperando). Quem chega com esse recado parte da aba Fretes (`inicial`: o endereço, se disser a aba, manda) e, com a tela
+  // já aberta em outra aba, o efeito logo abaixo a troca. O recado NÃO é apagado aqui: quem o consome é o painel de Fretes, ao montar.
+  const recadoDeFrete = () => (window as any).__acnDeepLink?.contexto === 'frete_aprovacao';
+  const [abaLog, setAbaLog] = useAbaNoEndereco({ tela: 'logistica', inicial: () => (recadoDeFrete() ? 'fretes' : null) });
+  useEffect(() => {
+    const irParaFretes = () => { if (recadoDeFrete()) setAbaLog('fretes'); };
+    window.addEventListener('acn:abrir-registro', irParaFretes);
+    return () => window.removeEventListener('acn:abrir-registro', irParaFretes);
+  }, []);
   const [manifestos, setManifestos] = useState([]);
   const [pedidosCompra, setPedidosCompra] = useState([]);
   const [entregasDosPedidos, setEntregasDosPedidos] = useState<{ linhas: any[]; erro: string | null }>({ linhas: [], erro: null });

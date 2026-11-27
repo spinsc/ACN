@@ -13,12 +13,6 @@ export default function LoginTab() {
   // aviso deixado pelo App quando a pessoa foi mandada de volta para cá (trava do crachá, 17b); mostrado uma vez
   const [aviso] = useState(() => { try { const a = sessionStorage.getItem('acn_aviso_login'); if (a) sessionStorage.removeItem('acn_aviso_login'); return a || ''; } catch { return ''; } });
 
-  // Esqueci minha senha
-  const [telaEsqueci, setTelaEsqueci] = useState(false);
-  const [emailReset, setEmailReset]   = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetMsg, setResetMsg]       = useState('');
-
   // Etapa 16b (10/10/2026): a senha não é mais conferida aqui. O servidor confere (função `auth_login`, que compara o resumo da senha e
   // devolve o usuário SEM nenhum segredo) e faz o que o código antigo fazia aqui: zerar a senha temporária e marcar o primeiro acesso quando
   // ela foi usada, e guardar o último acesso (devolvendo o anterior). O usuário guardado no navegador tem os mesmos campos de antes.
@@ -65,37 +59,8 @@ export default function LoginTab() {
     }
   };
 
-  // Etapa 16b (10/10/2026): a senha temporária agora nasce NO SERVIDOR (função `recuperar-senha`): ela guarda só o resumo e manda o WhatsApp.
-  // A tela nunca recebe a senha temporária — se recebesse, qualquer um pediria a recuperação do e-mail de outra pessoa e leria a senha.
-  // As regras continuam as de antes (6 caracteres, 30 minutos, usuário ativo, WhatsApp cadastrado); a novidade é "muito_cedo": não gera
-  // outra dentro de 1 minuto da anterior.
-  const MENSAGENS_RECUPERACAO = {
-    nao_encontrado: 'E-mail não encontrado no sistema.',
-    inativo: 'Usuário inativo.',
-    sem_whatsapp: 'Este usuário não tem WhatsApp cadastrado. Contate o administrador.',
-    muito_cedo: 'Uma senha temporária foi enviada há menos de 1 minuto. Confira o WhatsApp e aguarde um pouco antes de pedir outra.',
-    falha_gravar: 'Não foi possível gerar a senha temporária agora. Tente de novo em instantes.',
-    falha_envio: 'O WhatsApp não conseguiu entregar a mensagem. Tente de novo ou contate o administrador.',
-  };
-  const handleEsqueci = async (e) => {
-    e.preventDefault();
-    setResetLoading(true);
-    setResetMsg('');
-
-    try {
-      const { data, error: erroFn } = await supabase.functions.invoke('recuperar-senha', { body: { email: emailReset.trim() } });
-      if (erroFn) throw erroFn;
-      if (!data?.ok) {
-        setResetMsg('error:' + (MENSAGENS_RECUPERACAO[data?.erro] || MENSAGENS_RECUPERACAO.falha_gravar));
-        setResetLoading(false); return;
-      }
-      setResetMsg('ok:Senha temporária enviada para o WhatsApp cadastrado! Verifique e use-a para entrar.');
-    } catch (err) {
-      setResetMsg('error:Erro ao processar: ' + String(err.message).replace(/^\w*Error:\s*/, ''));
-    } finally {
-      setResetLoading(false);
-    }
-  };
+  // 26/11/2026 (decisão do usuário: o WhatsApp não é usado no sistema): saiu o "Esqueci minha senha" (a senha temporária era enviada por WhatsApp);
+  // quem esquece a senha pede ao administrador, que a redefine em Admin → Usuários.
 
   // 12e60 (10/10/2026): só aparência — o cartão, os campos, as mensagens e o rodapé passaram para o design.css (`acn-login-*`) e os quatro
   // botões crus viraram o botão do guia. Medido antes de mexer: o sistema já repintava os botões em tempo de execução (o verde e o teal do
@@ -113,41 +78,8 @@ export default function LoginTab() {
         {/* 26/11/2026 (B4 do plano de migração): sem internet ou servidor fora, a pessoa sabe antes de tentar entrar */}
         <FaixaDeConexao onde="login" />
 
-        {/* ── TELA ESQUECI SENHA ── */}
-        {telaEsqueci ? (
-          <>
-            <div className="acn-login-secao">🔑 Recuperar Senha</div>
-            <p className="acn-login-ajuda">
-              Informe seu e-mail de login. Enviaremos uma senha temporária pelo WhatsApp cadastrado.
-            </p>
-
-            {resetMsg && (
-              <div className="acn-login-msg" data-tipo={resetMsg.startsWith('ok:') ? 'ok' : 'erro'}>
-                {/* Etapa 7.x (10/10/2026): o texto das mensagens de erro aparecia cortado no meio ("❌ or:E-mail não encontrado…") porque
-                    só 3 letras do prefixo eram tiradas e o de erro tem 6 ("error:") */}
-                {resetMsg.startsWith('ok:') ? '✅ ' : '❌ '}{resetMsg.replace(/^(ok|error):/, '')}
-              </div>
-            )}
-
-            {!resetMsg.startsWith('ok:') && (
-              <form onSubmit={handleEsqueci}>
-                <div className="acn-login-campo recuperar">
-                  <label htmlFor="login-esqueci-email" className="acn-login-rotulo">E-mail de login</label>
-                  <input id="login-esqueci-email" type="email" name="email" autoComplete="username" className="acn-login-input" value={emailReset}
-                    onChange={e=>setEmailReset(e.target.value)} required disabled={resetLoading} />
-                </div>
-                <Botao type="submit" variante={resetLoading ? 'secundario' : 'primario'} className="acn-login-btn" disabled={resetLoading}>
-                  {resetLoading ? '⏳ Enviando...' : '📱 Enviar senha temporária'}
-                </Botao>
-              </form>
-            )}
-
-            <Botao variante="secundario" className="acn-login-voltar" onClick={()=>{setTelaEsqueci(false);setResetMsg('');setEmailReset('');}}>
-              ← Voltar ao login
-            </Botao>
-          </>
-        ) : (
-          /* ── TELA LOGIN ── */
+        {/* ── TELA LOGIN ── */}
+        {(
           <>
             {aviso && !error && (
               <div className="acn-login-aviso">{aviso}</div>
@@ -179,9 +111,7 @@ export default function LoginTab() {
             </form>
 
             <div className="acn-login-esqueci">
-              <Botao variante="discreto" className="acn-login-link" onClick={()=>setTelaEsqueci(true)}>
-                Esqueci minha senha
-              </Botao>
+              <p className="acn-login-ajuda">Esqueceu a senha? Peça ao administrador do sistema para redefini-la.</p>
             </div>
           </>
         )}
