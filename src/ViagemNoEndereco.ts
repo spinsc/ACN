@@ -1,4 +1,4 @@
-// A janela da viagem e o endereço dela (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 5, decidido com o usuário em 26/11/2026: "por cima de qualquer tela", como a OP).
+// A janela da viagem e o endereço dela (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 5, decidido com o usuário em 26/11/2026: "por cima de qualquer tela", como a OP).
 //
 // O endereço `#/viagem/<código>` abre a janela da viagem por cima da tela em que a pessoa está. Quem recebe o aviso de uma viagem (Adaptação, Financeiro, Comercial) muitas vezes
 // nem tem a aba Viagens (`ViagemPorMencao`, de 04/11/2026), então o endereço não pode ser "dentro da tela Viagens": um link para essa pessoa cairia em "sem acesso" e ela hoje abre

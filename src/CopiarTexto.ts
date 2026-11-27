@@ -1,4 +1,4 @@
-// Copiar um texto para a área de transferência (plano PLANO_ENDERECOS_E_ROTAS.md, Fases 2 e 3, 26/11/2026).
+// Copiar um texto para a área de transferência (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fases 2 e 3, 26/11/2026).
 //
 // O botão "Copiar link" é o mesmo na janela da OP (Fase 2) e nas janelas do card do CRM, da licitação, do pedido de compra e da OS (Fase 3): uma só rotina, para os cinco
 // copiarem do mesmo jeito. Tenta a forma moderna (só vale em página segura) e, se o navegador recusar, a antiga (campo escondido + `execCommand`).

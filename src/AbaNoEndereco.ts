@@ -1,4 +1,4 @@
-// A aba de dentro de uma tela e o endereço dela (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 4, construída em 26/11/2026).
+// A aba de dentro de uma tela e o endereço dela (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 4, construída em 26/11/2026).
 //
 // Cada tela guarda a aba aberta num `useState` dela (`aba`, `secao`, `visao`…). Este gancho é o mesmo `useState` com a barra do navegador por baixo: quem o usa troca UMA linha da tela
 // (`const [aba, setAba] = useAbaNoEndereco({ tela: 'compras' })`) e o resto da tela segue como estava. O que ele faz, nos dois sentidos:

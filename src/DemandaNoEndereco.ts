@@ -1,4 +1,4 @@
-// A janela da demanda geral e o endereço dela (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 5, decidido com o usuário em 26/11/2026: "por cima de qualquer tela, só a peça nova").
+// A janela da demanda geral e o endereço dela (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 5, decidido com o usuário em 26/11/2026: "por cima de qualquer tela, só a peça nova").
 //
 // O endereço `#/demanda/<código>` abre a janela da demanda por cima da tela em que a pessoa está. O painel de demandas (`DemandaAvulsaPanel`) mora em seis telas e abas (Comercial,
 // Engenharia, PCP, Financeiro, Almoxarifado e os setores), e quem recebe o aviso de uma demanda muitas vezes nem tem a tela do setor dela, então o endereço não pode ser "dentro de uma
