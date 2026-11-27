@@ -90,16 +90,13 @@ export async function resolverMencoesDeTodos(opts: {
 }) {
   const { contexto, contextoId } = opts;
   if (!contexto || !contextoId) return 0;
-  const { data, error } = await supabase.from('mencoes')
-    .update({
-      resolvida: true, resolvida_em: new Date().toISOString(),
-      resolvida_por: opts.porNome || null, lida: true,
-    })
-    .eq('contexto', contexto).eq('contexto_id', String(contextoId))
-    .eq('resolvida', false)
-    .select('id');
+  // 26/11/2026 (Etapa 17, onda 4d): cada pessoa só mexe nas menções que são dela; resolver as dos OUTROS avisados é função do banco
+  // (`mencoes_resolver_todos`), que só marca como resolvida, nunca apaga, e devolve quantas marcou.
+  const { data, error } = await supabase.rpc('mencoes_resolver_todos', {
+    p_contexto: contexto, p_contexto_id: String(contextoId), p_por: opts.porNome || null,
+  });
   if (error) { console.error('[resolverMencoesDeTodos] erro:', error.message); opts.aoFalhar?.(error.message); return 0; }
-  return (data || []).length;
+  return Number(data) || 0;
 }
 
 export async function resolverMencoesRespondidas(opts: {
@@ -199,12 +196,12 @@ export async function salvarMencoes(opts: {
     const uId = String(u.id);
     const mId = String(mencionanteId);
     if (uId === mId) continue;  // não menciona a si mesmo
-    const { count, error: errCount } = await supabase.from('mencoes')
-      .select('id', { count: 'exact', head: true })
-      .eq('mencionado_id', uId).eq('contexto_id', contextoId)
-      .eq('campo', campo).eq('lida', false);
+    // 26/11/2026 (onda 4d): ler a caixa de OUTRA pessoa não é mais permitido; a função do banco só diz sim ou não
+    const { data: jaTem, error: errCount } = await supabase.rpc('mencoes_ja_pendente', {
+      p_mencionado: uId, p_contexto_id: contextoId, p_campo: campo,
+    });
     if (errCount) { console.error('[salvarMencoes] check dup:', errCount.message); }
-    if ((count || 0) === 0) {
+    if (jaTem !== true) {
       const { error: errIns } = await supabase.from('mencoes').insert({
         mencionado_id: uId, mencionado_nome: u.nome,
         mencionante_id: mId, mencionante_nome: mencionanteNome,
