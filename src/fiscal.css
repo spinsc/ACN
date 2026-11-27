@@ -70,3 +70,7 @@ html body .modal-box.acn-modal-cadastro.acn-fcad-box-p { width: min(520px, 95vw)
 .acn-freg-manda > div { display: grid; gap: 2px; min-width: 0; }
 .acn-freg-manda dt { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--acn-muted); }
 .acn-freg-manda dd { margin: 0; font-size: 14px; color: var(--acn-ink); overflow-wrap: anywhere; }
+
+/* Levantamento do histórico das notas (27/11/2026) */
+.acn-flev-sel { width: 100%; max-width: 320px; min-width: 0; box-sizing: border-box; }
+.acn-flev-trat { display: grid; gap: 2px; margin-top: 4px; font-size: 13px; color: var(--acn-text); overflow-wrap: anywhere; }

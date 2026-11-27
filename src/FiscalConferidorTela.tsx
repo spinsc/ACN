@@ -11,6 +11,7 @@ import { baixarPlanilha } from './ExportarPlanilha';
 import { lerEmitentes, guardarNoArquivo } from './FiscalDados';
 import { podeEditarCadastroFiscal, podeVerValores } from './utils/permissoes';
 import { lerArquivoFiscal, montarLote, conferirNota, conferirLote, chavesCanceladas, NOMES_DAS_REGRAS } from './FiscalXml';
+import FiscalLevantamentoTela from './FiscalLevantamentoTela';
 import './fiscal.css';
 
 const LIMITE_NA_TELA = 300;
@@ -27,6 +28,7 @@ export default function FiscalConferidorTela({ currentUser }) {
   const [sobre, setSobre] = useState(false);
   const [filtro, setFiltro] = useState('todas');
   const [busca, setBusca] = useState('');
+  const [visao, setVisao] = useState('conferencia');   // Conferência das notas ou Levantamento do histórico (27/11/2026)
   const [guardando, setGuardando] = useState<{ feitas: number; total: number } | null>(null);
   const [guardou, setGuardou] = useState<{ tom: string; texto: string } | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
@@ -133,6 +135,11 @@ export default function FiscalConferidorTela({ currentUser }) {
 
       {arquivos.length > 0 && (
         <>
+          <div className="acn-fcad-barra">
+            <Chips rotulo="Ver" ativo={visao} onChange={setVisao} itens={[{ id: 'conferencia', rotulo: 'Conferência das notas' }, { id: 'levantamento', rotulo: 'Levantamento do histórico' }]} />
+          </div>
+          {visao === 'levantamento' && <FiscalLevantamentoTela notas={lote.notas} emitentes={emitentes} canceladas={canceladas} currentUser={currentUser} />}
+          {visao === 'conferencia' && (<>
           <div className="acn-kpis">
             <div className="acn-kpi"><span className="rot">Arquivos lidos</span><span className="val acn-num">{resumo.arquivos}</span><span className="sub">{resumo.eventos} evento(s) · {resumo.ilegiveis} ilegível(is)</span></div>
             <div className="acn-kpi"><span className="rot">Notas</span><span className="val acn-num">{resumo.notas}</span><span className="sub">{resumo.limpas} sem nenhum achado</span></div>
@@ -211,6 +218,7 @@ export default function FiscalConferidorTela({ currentUser }) {
               </tbody>
             </table>
           </div>
+          </>)}
         </>
       )}
     </div>

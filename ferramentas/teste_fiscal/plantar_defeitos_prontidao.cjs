@@ -1,7 +1,7 @@
 // Planta defeitos de propósito, um de cada vez, e confere que o teste das regras os pega (rode da raiz do projeto: node ferramentas/teste_fiscal/plantar_defeitos_prontidao.cjs).
 // Cada defeito diz o arquivo, o trecho que existe e o trecho estragado. O arquivo é sempre restaurado no fim, mesmo se algo falhar.
 const fs = require('fs'); const { spawnSync } = require('child_process');
-const PRONT = 'src/FiscalProntidao.ts', LIG = 'src/FiscalLigacaoDaOp.ts', TIPOS = 'src/FiscalTiposDeNota.ts', MOTOR = 'src/FiscalMotor.ts';
+const PRONT = 'src/FiscalProntidao.ts', LIG = 'src/FiscalLigacaoDaOp.ts', TIPOS = 'src/FiscalTiposDeNota.ts', MOTOR = 'src/FiscalMotor.ts', LEV = 'src/FiscalLevantamento.ts';
 const defeitos = [
   [PRONT, 'sem item lançado vira pronta', "if (conferidos === 0) {", "if (false) {"],
   [PRONT, 'ambíguo é chutado (cliente)', "if (porNome.length === 1) return { situacao: 'achado', cliente: porNome[0], por: 'nome' };", "if (porNome.length >= 1) return { situacao: 'achado', cliente: porNome[0], por: 'nome' };"],
@@ -44,6 +44,25 @@ const defeitos = [
   [MOTOR, 'regras com as mesmas condições passam', "if (vistas.has(k)) p.push(", "if (false) p.push("],
   [MOTOR, 'confirmada sem fonte é aceita no formulário', "if (f.confirmada && textoOuVazio(f.fonte).length < 3) return", "if (false) return"],
   [MOTOR, 'monofásico "não" vira nulo', "monofasico: f.monofasico === 'sim' ? true : f.monofasico === 'nao' ? false : null, cfop", "monofasico: f.monofasico === 'sim' ? true : null, cfop"],
+  // ── levantamento do histórico das notas (27/11/2026) ──
+  [LEV, 'nota cancelada entra no levantamento', "if (n.chave && canceladas.has(n.chave)) { lev.canceladas++; return; }", ""],
+  [LEV, 'nota não autorizada entra no levantamento', "if (n.autorizada === false) { lev.naoAutorizadas++; return; }", ""],
+  [LEV, 'natureza com pontuação não se junta', ".toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()", ".toUpperCase().trim()"],
+  [LEV, 'destino não separa os casos', "const situacao = [codigo || cnpj, destino, ie, nat, n.finNFe || ''].join(' | ');", "const situacao = [codigo || cnpj, ie, nat, n.finNFe || ''].join(' | ');"],
+  [LEV, 'IE do cliente não separa os casos', "const situacao = [codigo || cnpj, destino, ie, nat, n.finNFe || ''].join(' | ');", "const situacao = [codigo || cnpj, destino, nat, n.finNFe || ''].join(' | ');"],
+  [LEV, 'variação não é marcada', "for (const a of lista) a.g.variacao = true;", ""],
+  [LEV, 'variação sai com o menor primeiro', "notas: a.g.notas })).sort((x, y) => y.itens - x.itens)", "notas: a.g.notas })).sort((x, y) => x.itens - y.itens)"],
+  [LEV, 'só mostra um exemplo de nota', "if (a.g.exemplos.length < 3 && n.numero)", "if (a.g.exemplos.length < 1 && n.numero)"],
+  [LEV, 'Simples perde o CSOSN', "String(i.csosn || i.cst || '')", "String(i.cst || '')"],
+  [LEV, 'acumulado conta notas em vez de itens', "soma += n.itens;", "soma += n.notas;"],
+  [LEV, 'cobertura só olha o maior', "lev.grupos.slice(0, n).reduce", "lev.grupos.slice(0, 1).reduce"],
+  [LEV, 'natureza sem operação vira proposta', "if (!tipo) { ignora('natureza sem operação escolhida', g.itens); continue; }", "if (false) { continue; }"],
+  [LEV, 'empresa fora do cadastro vira proposta', "if (!g.emitenteCadastrado) { ignora(", "if (false) { ignora("],
+  [LEV, 'nota sem destino vira proposta', "if (!g.destino) { ignora(", "if (false) { ignora("],
+  [LEV, 'caso ambíguo vira proposta', "if (tratamentos.size > 1) { ambiguas.push(", "if (false) { ambiguas.push("],
+  [LEV, 'dado incompleto vira proposta', "if (erroDaRegra(form)) {", "if (false) {"],
+  [LEV, 'IE do cliente fora da condição da proposta', "const k = [g.emitente, tipo, g.destino, g.indicador_ie].join('|');", "const k = [g.emitente, tipo, g.destino].join('|');"],
+  [LEV, 'proposta já nasce confirmada', "emitente, tipo_operacao: tipo, destino, indicador_ie: ie, cfop: t.cfop,", "emitente, tipo_operacao: tipo, destino, indicador_ie: ie, confirmada: true, fonte: 'histórico', cfop: t.cfop,"],
 ];
 let pegos = 0;
 const originais = new Map();

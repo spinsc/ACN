@@ -5,7 +5,7 @@
 import { supabase } from './supabaseClient';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { logChange } from './AuditSystem';
-import { erroDaRegra, regraParaGravar } from './FiscalMotor';
+import { erroDaRegra, regraParaGravar, chaveDasCondicoes } from './FiscalMotor';
 
 /** Todas as versões (a mais nova primeiro), com o nome de quem aprovou. */
 export async function lerVersoesDasRegras() {
@@ -71,6 +71,33 @@ export async function aprovarVersaoDeRegras(versao: any, nota: string, usuario: 
   if (error) return { ok: false, erro: mensagemDaRegra(error), resultado: null };
   logChange({ module: 'fiscal', entityType: 'fiscal_regras_versoes', entityId: versao.id, changeType: 'UPDATE', oldRow: versao, newRow: { ...versao, situacao: 'aprovada', nota_aprovacao: nota }, user: usuario });
   return { ok: true, erro: '', resultado: data };
+}
+
+/**
+ * Põe as propostas do Levantamento do histórico num RASCUNHO (o aberto, ou um novo se não há). Tudo entra "a confirmar" (sem fonte): não vale para emitir e a versão não se aprova
+ * enquanto a contabilidade não confirmar regra por regra. Situação (as mesmas condições) que o rascunho já tem fica como está e é contada em `puladas`. Para no primeiro erro: o que já entrou fica.
+ */
+export async function gravarPropostasNoRascunho(propostas: { chave: string; form: any }[], usuario: any) {
+  const vs = await lerVersoesDasRegras();
+  if (vs.erro) return { ok: false, erro: `Não foi possível ler as versões das regras (${vs.erro}).`, gravadas: 0, puladas: 0, criou: false, versaoId: null };
+  let rascunho = vs.versoes.find(v => v.situacao === 'rascunho');
+  let criou = false;
+  if (!rascunho) {
+    const c = await criarVersaoDeRegras(null, 'Rascunho a partir do histórico de XMLs', usuario);
+    if (!c.ok) return { ok: false, erro: c.erro, gravadas: 0, puladas: 0, criou: false, versaoId: null };
+    rascunho = { id: c.id }; criou = true;
+  }
+  const rg = await lerRegrasDaVersao(rascunho.id);
+  if (rg.erro) return { ok: false, erro: `Não foi possível ler as regras do rascunho (${rg.erro}).`, gravadas: 0, puladas: 0, criou, versaoId: rascunho.id };
+  const jaTem = new Set(rg.regras.map((r: any) => chaveDasCondicoes(r)));
+  let gravadas = 0, puladas = 0;
+  for (const p of propostas) {
+    if (jaTem.has(p.chave)) { puladas++; continue; }
+    const r = await salvarRegra(p.form, rascunho.id, usuario);
+    if (!r.ok) return { ok: false, erro: r.erro, gravadas, puladas, criou, versaoId: rascunho.id };
+    jaTem.add(p.chave); gravadas++;
+  }
+  return { ok: true, erro: '', gravadas, puladas, criou, versaoId: rascunho.id };
 }
 
 /** As mensagens do banco desta área já vêm em português (são as `raise exception` das funções); o resto passa pelo tradutor geral. */
