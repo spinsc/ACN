@@ -3502,6 +3502,10 @@ html body .acn-b.acn-cta-banner-x { color: #fff; }
 html body .modal-overlay.acn-anx-ov { z-index: 2000; }
 html body .modal-box.acn-modal-cadastro.acn-anx-jan { width: min(620px, 96vw); max-width: 620px; max-height: 85vh; }
 .acn-anx-cab-txt { display: grid; gap: 2px; }
+/* arrastando arquivo por cima da janela (27/11/2026): borda tracejada na janela inteira e a faixa de cima em destaque */
+html body .modal-box.acn-modal-cadastro.acn-anx-jan.arrastando { outline: 3px dashed var(--acn-brand); outline-offset: -8px; }
+.acn-anx-jan.arrastando .acn-anx-upload { background: color-mix(in srgb, var(--acn-brand) 10%, var(--acn-surface-2)); }
+.acn-anx-jan.arrastando .acn-anx-upload .acn-ajuda { color: var(--acn-brand); font-weight: 700; }
 .acn-anx-upload { display: grid; gap: 8px; padding: 10px 16px; flex-shrink: 0; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
 .acn-anx-envio { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 html body label.acn-b.acn-anx-anexar { cursor: pointer; background: var(--acn-anx-cor, var(--acn-info)); border-color: var(--acn-anx-cor, var(--acn-info)); color: #fff; }

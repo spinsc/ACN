@@ -73,9 +73,33 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
 
   useEffect(() => { reload(); }, [reload]);
 
-  const upload = async (files: FileList) => {
+  // Os tipos que esta janela aceita: os mesmos do seletor "Anexar" (o arquivo solto vale pela mesma regra do escolhido).
+  const aceitos = (tipoFixo === 'checklist_entrega' ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt` : `.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.gif,.webp,.txt`);
+
+  // Arrastar e soltar (pedido do Comercial, 27/11/2026): soltar arquivos em qualquer ponto da janela anexa, como o botão "Anexar".
+  // O contador evita que a marca de "solte aqui" pisque quando o arquivo passa por cima dos elementos de dentro da janela.
+  const [arrastando, setArrastando] = useState(false);
+  const sobreJanela = useRef(0);
+  const temArquivos = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+  const aoEntrar = (e: React.DragEvent) => { if (!temArquivos(e)) return; e.preventDefault(); sobreJanela.current++; setArrastando(true); };
+  const aoSair = (e: React.DragEvent) => { if (!temArquivos(e)) return; sobreJanela.current = Math.max(0, sobreJanela.current - 1); if (!sobreJanela.current) setArrastando(false); };
+  const aoPassar = (e: React.DragEvent) => { if (!temArquivos(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = uploading ? 'none' : 'copy'; };
+  const aoSoltar = (e: React.DragEvent) => {
+    if (!temArquivos(e)) return;
+    e.preventDefault(); sobreJanela.current = 0; setArrastando(false);
+    if (uploading) return;   // já tem um envio andando: não mistura
+    const lista = Array.from(e.dataTransfer.files || []);
+    const ext = (n: string) => (n.lastIndexOf('.') >= 0 ? n.slice(n.lastIndexOf('.')).toLowerCase() : '');
+    const permitidas = aceitos.split(',');
+    const valem = lista.filter(f => permitidas.includes(ext(f.name)));
+    const recusados = lista.filter(f => !permitidas.includes(ext(f.name))).map(f => f.name + ' (tipo de arquivo não aceito aqui)');
+    if (valem.length) upload(valem, recusados);
+    else if (recusados.length) alert('Estes arquivos NÃO foram anexados:\n\n' + recusados.join('\n'));
+  };
+
+  const upload = async (files: FileList | File[], recusados: string[] = []) => {
     setUploading(true);
-    const falhas: string[] = [];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
+    const falhas: string[] = [...recusados];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const url = await uploadOplAnexo(f, opl.opl);
@@ -111,7 +135,8 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
   return (
     <div className="modal-overlay acn-anx-ov"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro acn-anx-jan" role="dialog" aria-label={tituloModal}>
+      <div className={'modal-box acn-modal-cadastro acn-anx-jan' + (arrastando ? ' arrastando' : '')} role="dialog" aria-label={tituloModal}
+        onDragEnter={aoEntrar} onDragOver={aoPassar} onDragLeave={aoSair} onDrop={aoSoltar}>
 
         {/* Header */}
         <div className="acn-modal-cab">
@@ -136,10 +161,11 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
                 : tipoFixo === 'orcamento' ? <><Icone path={mdiCurrencyUsd} size={14} />Anexar Orçamento (Word / planilha)</>
                 : <><Icone path={mdiPaperclip} size={14} />Anexar Arquivo</>}
               <input ref={fileRef} type="file" multiple
-                accept={isChecklistMode ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt` : `.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.gif,.webp,.txt`}
+                accept={aceitos}
                 onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
                 hidden disabled={uploading} />
             </label>
+            <span className="acn-ajuda">{arrastando ? 'Solte os arquivos para anexar.' : 'Ou arraste os arquivos para dentro desta janela.'}</span>
             {isChecklistMode && (
               <span className="acn-ajuda">Aceita apenas PDF</span>
             )}
