@@ -7842,3 +7842,13 @@ body.dark .acn-log-op { color: #7fd8cc; }
 .acn-dep-linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
 .acn-dep-inativo > td { opacity: .55; }
 .acn-dep td .acn-selo { margin-left: 8px; }
+/* 12e90 (27/11/2026): painel Dados / Limpeza do Admin (AdminPainelDados.tsx) */
+.acn-dados .acn-faixa { margin-bottom: 8px; }
+.acn-dados-chips { margin: 0 0 12px; }
+.acn-dados-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.acn-dados-barra-dir { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.acn-dados-desc { padding: 6px 14px 0; font-size: 12px; }
+.acn-dados-col-chk { width: 36px; text-align: center; }
+.acn-dados-chk { cursor: pointer; accent-color: var(--acn-bad); width: 16px; height: 16px; }
+.acn-dados-linha { cursor: pointer; }
+.acn-dados-sel > td { background: var(--acn-bad-soft); }

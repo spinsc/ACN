@@ -66,7 +66,8 @@ async function abrir({ largura = 1600, altura = 1000, simular = () => null, escr
       gravacoes.push({ metodo, url, corpo: r.postData() });
       const resp = escritaSimulada(url, metodo, r.postData(), r.headers());   // 16/10/2026: o 4º argumento são os cabeçalhos do pedido (ex.: Prefer: return=representation)
       // a resposta simulada pode ser uma Promise (resposta que demora): é assim que se fotografa a tela "enviando…" (12e50)
-      const responder = (x) => (x ? r.respond({ status: x.status || 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify(x.body) }) : r.abort('failed'));
+      // 27/11/2026 (12e90): `x.headers` deixa a escrita simulada devolver cabeçalhos, como o `content-range` de uma exclusão com contagem
+      const responder = (x) => (x ? r.respond({ status: x.status || 200, headers: { ...CORS, 'content-type': 'application/json', ...(x.headers || {}) }, body: JSON.stringify(x.body) }) : r.abort('failed'));
       if (resp && typeof resp.then === 'function') return resp.then(responder);
       return responder(resp);
     }
@@ -79,8 +80,16 @@ async function abrir({ largura = 1600, altura = 1000, simular = () => null, escr
     }
     // contagem (HEAD do supabase-js com count): a simulação devolve { count: N } e vira o cabeçalho content-range
     if (metodo === 'HEAD' && externo) {
-      const resp = simular(url, r);
-      if (resp && resp.count != null) return r.respond({ status: 200, headers: { ...CORS, 'Access-Control-Expose-Headers': 'content-range', 'content-range': '*/' + resp.count }, body: '' });
+      const resp0 = simular(url, r);
+      const respHead = (resp) => {
+        if (resp && resp.count != null) return r.respond({ status: 200, headers: { ...CORS, 'Access-Control-Expose-Headers': 'content-range', 'content-range': '*/' + resp.count }, body: '' });
+        // 27/11/2026 (12e90): contagem recusada ({ status: 500 }), para provar que a tela não a toma por zero
+        if (resp && resp.status >= 400) return r.respond({ status: resp.status, headers: { ...CORS }, body: '' });
+        return r.continue(comAnon(r));
+      };
+      // 27/11/2026 (12e90): a contagem simulada pode ser uma Promise (contagem que demora), para provar a guarda da ordem das respostas
+      if (resp0 && typeof resp0.then === 'function') return resp0.then(respHead);
+      return respHead(resp0);
     }
     return r.continue(comAnon(r));
   });
