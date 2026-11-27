@@ -24,8 +24,9 @@
 | **B2** | `opl-anexos`, `ops-em-criacao`, `demandas-avulsas`, `demandas-cotacoes` | 164 | 68 | `OplAnexosWidget`, `NovaOpOsModal`, `FormacaoPrecosTab`, `DemandaAvulsaPanel`, `SetorDemandaTab`, `FotosVeiculo` | `opl_anexos.url` (85), `demanda_avulsa_anexos.url` (52), `oples.fotos_veiculo` (10) |
 | | `desenvolvimento`, `engenharia-tarefas`, `analise`, `produtos` | 35 | 24 | `DesenvolvimentoPecasTab`, `DesenvolvimentoPorta`, `TarefaAnexos`, `AnaliseWidget`, `CadastroProdutosTab`, `ProdutoArquivos` | `engenharia_desenvolvimento.anexos` (4), `engenharia_tarefas_anexos.url` (6), `analise_anexos.url` (6) |
 | | `vistorias`, `sac` (as fotos) | 37 | 8 | `VistoriasPatio`, `SacTab` | `vistorias_patio.fotos_saida` (16), `sac_ordens_servico.arquivos_os` e `fotos_entrada` (1 cada) |
-| **B3** | `crm-docs`, `crm-anexos` | 330 | 145 | `CrmTab`, `CrmAnexosWidget` | `crm_anexos.url` (41); o resto de `crm-docs` (282 arquivos) **fica a descobrir na 7.x da fatia: a leitura por coluna não achou onde o endereço dele mora** |
-| **B4** | `licitacoes` | 1.660 | 1.545 | `LicitacoesTab` (documentos, anexos, "área livre") | `licitacao_documentos.url` (1.304) e `.anexo_url` (87) |
+| **B3** | `crm-anexos` | 48 | 32 | `CrmAnexosWidget` | `crm_anexos.url` (41) |
+| **B4** | `licitacoes` | 1.660 | 1.545 | `LicitacoesTab` (documentos, anexos, "área livre") | `licitacao_documentos.url` (1.124 dela) e `.anexo_url` (87) |
+| | `crm-docs` (**descoberto na B0: é o arquivo dos documentos das Licitações**, subido pelo `CrmTab` ao abrir uma licitação) | 282 | 114 | `CrmTab` | `licitacao_documentos.url` (180); **106 desses arquivos são imagens coladas dentro de notas** (`crm-docs/<licitação>/nota/`): o endereço está dentro do texto da nota (`licitacao_documentos.conteudo`, 27 notas) |
 | **Fim** | todas | 2.791 | 1.850 | | conferência final e virada do `acn-media` |
 
 Maior arquivo: 42,8 MB (licitações). **O bucket privado hoje aceita 20 MB por arquivo: subir para 50 MB na B0.**
@@ -41,17 +42,18 @@ Maior arquivo: 42,8 MB (licitações). **O bucket privado hoje aceita 20 MB por 
   3. **Apagar arquivo:** `CrmAnexosWidget` chama `remove`. Hoje, no público, a chamada "dá certo" sem apagar nada (não há política de apagar); no privado também não apaga. Nada se apaga pelo navegador (regra do projeto: nunca apagar dado do usuário); se um dia precisar apagar de verdade, é decisão própria.
   4. **Aba aberta de antes da publicação** grava no público até recarregar (`VersaoNova.ts` avisa); o script de cópia pega o que sobrar.
   5. **Fotos em lista dentro de `jsonb`** (`logistica_manifestos.fotos`, `oples.fotos_veiculo`, `vistorias_patio.fotos_saida`): cada elemento é um endereço; a leitura passa por `ImagemPrivada` elemento a elemento.
-  6. **O botão "Remover" e o "Substituir" de anexo** não podem mais comparar o endereço com `startsWith('https://…')`; usar `caminhoDoValor`.
+  6. **Imagem colada dentro de uma nota** (achado da B0: 106 arquivos de `crm-docs/…/nota/`, 27 notas em `licitacao_documentos.conteudo`): o endereço está **dentro do texto HTML** da nota, onde um `<img>` não pode usar o ajudante. Desenho a decidir na B4: a nota passa a guardar `<img data-arquivo="privado:caminho">` e um componente (`ConteudoComImagens`) troca pelo endereço assinado depois de desenhar a nota; as notas antigas, com endereço público inteiro, passam pelo mesmo componente (o ajudante já traduz). **Enquanto esse componente não existir, as imagens de nota ficam como exceção no público** (a pasta `crm-docs/*/nota/` fora da cópia).
+  7. **O botão "Remover" e o "Substituir" de anexo** não podem mais comparar o endereço com `startsWith('https://…')`; usar `caminhoDoValor`.
 
 ## 4. As fatias
 
 Cada fatia é: **7.x de achados → trocar envio e leitura → build → teste no navegador (armazenamento simulado) → publicar a tela → o usuário roda o script (`--copiar`, confere, `--apagar`)**. O script passa a aceitar a lista de pastas da fatia. Nenhuma fatia mexe no banco de dados dos registros: só os arquivos mudam de lugar e o endereço antigo continua valendo (o ajudante o traduz).
 
-- **B0 — Preparação (pequena, só banco e ferramentas).** Subir o limite do `acn-privado` para 50 MB; generalizar o script de cópia (pastas por argumento, com contagem por pasta); escrever a **varredura** (consulta só de leitura que conta, por coluna, as linhas que ainda guardam endereço público de `acn-media`: serve de conferência de cada fatia e do fechamento final); decidir com o usuário o espaço (copiar duplica por um tempo: 1,8 GB no total e 1,5 GB só nas licitações). **Peça nova:** `LinkDeArquivo` em lista (resolve no clique) e `ImagemPrivada` com adiamento (só quando aparece), se a B4 precisar.
+- **B0 — Preparação (feita em 26/11/2026, só banco e ferramentas).** (1) **Limite do `acn-privado` subido de 20 para 50 MB** (migração `bucket_privado_b0_limite_50mb`, `supabase/sql/bucket_privado_b0_limite_50mb.sql`, reverter ao lado; banco quieto, 0 consultas ativas). (2) **Script de cópia por fatia** (`--fatia=5b|b1|b2|b3|b4` ou `--pastas=a,b`): ensaio com tabela por pasta (públicos, privados, faltam, tamanho diferente), cópia que também refaz a cópia que ficou pela metade, e `--apagar` que **só roda com `--tela-publicada`** (confirma que a tela da fatia está no ar); testado com um armazenamento falso (guardas, cópia, tamanho diferente), **não rodado contra o real**. (3) **Varredura** (`supabase/sql/varredura_enderecos_publicos.sql`, só leitura): por coluna, quantas linhas têm endereço público e quantas já têm `privado:`; **resultado de hoje: 22 colunas com endereço público, 0 com `privado:`** (a maior: `licitacao_documentos.url`, 1.304; `cq_auditorias.assinatura_url`, 280, já lida pelo ajudante da 5b). (4) **Achado:** `crm-docs` é das Licitações (ver o inventário), e há imagens coladas dentro de notas (cuidado 6). (5) **Espaço:** copiar duplica por um tempo (1,8 GB no total, 1,5 GB só as licitações); o bucket já tem 1,8 GB, acima dos 1 GB do plano gratuito do Supabase, então o projeto está num plano pago, mas **o usuário confere a cota no painel (Storage) antes da B4**. **Não feito de propósito:** `LinkDeArquivo` em lista e `ImagemPrivada` com adiamento ficam para a B4, quando houver a tela real para testar.
 - **B1 — Compras, Logística e Financeiro (a primeira, escolha do usuário).** Pastas da tabela acima: `compras-anexos`, `pcp-cotacoes`, `pcp-nf-fornecedor`, `logistica`, `pcp-fretes-canhotos`, `centro-custo-despesas`, `financeiro-tarefas`, `viagens`, `terceiros`, `contratos-padrao`. ~200 arquivos, ~35 MB, a maior parte de imagens e PDFs de nota e cotação. Serve de ensaio de toda a técnica.
 - **B2 — OP, Produção, Engenharia, Vistoria e SAC (fotos).** As pastas de OP (`opl-anexos`, `ops-em-criacao`), de demandas, de desenvolvimento e engenharia, de vistoria e as fotos do SAC. ~236 arquivos, ~100 MB. **Telas grandes ainda não migradas para o design system (`DemandaAvulsaPanel`, `CadastroProdutosTab`): perguntar ao usuário se vale mexer só no ponto do anexo, sem migrar a tela** (regra do projeto).
-- **B3 — CRM.** `crm-docs` e `crm-anexos` (330 arquivos, 145 MB). **Primeiro descobrir onde o endereço dos 282 arquivos de `crm-docs` está guardado** (a 7.x), porque a leitura por coluna não o achou.
-- **B4 — Licitações (a maior).** 1.660 arquivos, 1,5 GB, 1.391 linhas de documento. É a que mais pede o cuidado da leitura em lista (cuidado 1) e a que mais demora a copiar: o script deve rodar fora do horário. Aqui também vale uma conferência por amostra: abrir um de cada tipo (PDF, imagem, planilha) antes do `--apagar`.
+- **B3 — CRM.** Só `crm-anexos` (48 arquivos, 32 MB, `CrmAnexosWidget`). Pequena.
+- **B4 — Licitações (a maior), com `crm-docs`.** 1.942 arquivos, 1,66 GB, 1.391 linhas de documento e 27 notas com imagem. É a que mais pede o cuidado da leitura em lista (cuidado 1) e a que mais demora a copiar: o script deve rodar fora do horário. Aqui também vale uma conferência por amostra: abrir um de cada tipo (PDF, imagem, planilha) antes do `--apagar`.
 - **Fim — Fechar o `acn-media`.** Só quando a varredura der **zero** linhas com endereço público e o script não achar mais nada para copiar: virar o `acn-media` para privado (`public = false`), com todas as telas já lendo pelo ajudante. A partir daí o endereço público deixa de existir para qualquer pasta. **Esse passo não tem volta limpa depois do `--apagar`:** por isso a ordem é cópia, conferência, uso no sistema por alguns dias, e só então apagar e virar. Depois: tirar `getPublicUrl` do código (nenhum envio novo usa), tirar as políticas antigas do `acn-media` e atualizar o `CLAUDE.md`.
 
 ## 5. Depois (fase própria, só se o usuário pedir)
@@ -74,10 +76,10 @@ Cada fatia é: **7.x de achados → trocar envio e leitura → build → teste n
 
 | Fatia | Situação |
 |---|---|
-| B0 Preparação | a fazer |
+| B0 Preparação | **feita em 26/11/2026** (limite de 50 MB aplicado, script por fatia, varredura, achado do `crm-docs`; nada de tela mudou) |
 | B1 Compras, Logística, Financeiro | a fazer (primeira, escolha do usuário em 26/11/2026) |
 | B2 OP, Produção, Engenharia, Vistoria, SAC | a fazer |
-| B3 CRM | a fazer |
-| B4 Licitações | a fazer |
+| B3 CRM (`crm-anexos`) | a fazer |
+| B4 Licitações e `crm-docs` | a fazer |
 | Fim: virar o `acn-media` | a fazer |
 | Pendência anterior (onda 5b) | o usuário rodar a cópia dos 378 arquivos de chat e assinaturas |
