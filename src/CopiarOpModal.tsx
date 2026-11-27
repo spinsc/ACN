@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CopiarOpModal — "Copiar OP": várias OPs iguais, cada uma com o seu número (pedido do usuário em 23/10/2026)
 //
@@ -97,7 +96,7 @@ export default function CopiarOpModal({ origem, currentUser, onClose, onCriadas 
 
           <div className="form-group" data-teste="ligacao-com-o-crm">
             <label className="acn-label">Ligação das cópias com o CRM</label>
-            <Chips ativo={modo} onChange={v => { setModo(v); setEscolhas({}); }}
+            <Chips ativo={modo} onChange={v => { setModo(v as 'mesmo' | 'proprio'); setEscolhas({}); }}
               itens={[
                 { id: 'mesmo', rotulo: 'Todas no mesmo card da OP de origem' },
                 { id: 'proprio', rotulo: 'Cada uma no card do seu pedido de venda' },

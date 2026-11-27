@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ColaboradorSelect — dropdown compartilhado para todos os campos de responsável.
  * Carrega rh_funcionarios uma vez por sessão (cache de módulo).
@@ -14,7 +13,7 @@ import { ehAdminOuGerente } from './utils/permissoes';
 let _cache: any[] | null = null;
 let _promise: Promise<any[]> | null = null;
 // 14/10/2026 (fatia 2 dos departamentos): cada colaborador do cache traz `departamentos` (nomes; sem a propriedade se a leitura falhou); _gerentes = Admin e perfis "Gerente …"
-let _gerentes: Promise<any[]> | null = null;
+let _gerentes: PromiseLike<any[]> | null = null;
 
 // Reseta o cache para forçar nova busca (ex: após cadastrar novo colaborador ou mexer nos departamentos)
 export function resetColaboradoresCache() {
@@ -23,7 +22,8 @@ export function resetColaboradoresCache() {
   _gerentes = null;
 }
 
-function lerBase(): Promise<any[]> {
+// PromiseLike e não Promise: o que o Supabase devolve com .then() é "thenable", sem .catch/.finally próprios
+function lerBase(): PromiseLike<any[]> {
   // Busca apenas colunas que sempre existem; tipo_colaborador é opcional
   // 14/10/2026 (Etapa 17b): lê a visão rh_funcionarios_basico (só nome, cargo, departamento, situação e comissão) em vez da tabela inteira, que traz CPF e salário e vai fechar para quem não é do RH
   return supabase
@@ -58,7 +58,7 @@ function loadColaboradores(): Promise<any[]> {
 }
 
 // Admin e "Gerente …" do sistema (para o seletor filtrado por departamento: o setor + Admin + gerentes)
-function loadGerentes(): Promise<any[]> {
+function loadGerentes(): PromiseLike<any[]> {
   if (!_gerentes) {
     _gerentes = supabase.from('auth_usuarios').select('id,nome,perfil').eq('ativo', true).order('nome')
       .then(({ data }) => (data || []).filter((u: any) => ehAdminOuGerente(u)));
@@ -68,8 +68,8 @@ function loadGerentes(): Promise<any[]> {
 
 // Usuários do sistema com acesso a uma aba (ex.: Admin que executa tarefa de
 // Engenharia sem estar no cadastro do RH). Cache por aba.
-const _usuariosPorAba: Record<string, Promise<any[]>> = {};
-function loadUsuariosDaAba(aba: string): Promise<any[]> {
+const _usuariosPorAba: Record<string, PromiseLike<any[]>> = {};
+function loadUsuariosDaAba(aba: string): PromiseLike<any[]> {
   if (!_usuariosPorAba[aba]) {
     _usuariosPorAba[aba] = supabase.from('auth_usuarios')
       .select('id,nome,perfil,abas_permitidas')

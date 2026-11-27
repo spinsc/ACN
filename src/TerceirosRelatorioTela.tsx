@@ -1,11 +1,10 @@
-// @ts-nocheck
 // Serviços de terceiros, fatia T6 (23/11/2026): a aba "Relatório do mês": por prestador (quantos serviços fez, quanto estava combinado, quanto cobrou, o que falta pedir ao Financeiro) e por tipo,
 // com a lista dos serviços de cada prestador, a planilha do Excel e a folha para imprimir. As contas e a leitura estão em TerceirosRelatorio.ts; a folha, em TerceirosRelatorioImpressao.ts.
 // O relatório lê por demanda (abrir a aba, trocar de mês, "Atualizar"); não há consulta de minuto em minuto. O serviço conta no mês em que foi REALIZADO (decidido com o usuário em 23/11/2026).
 // Valor (combinado, cobrado, diferença, pedido, pago, a pedir) só aparece para quem já vê valores no sistema; quem não vê tem as quantidades.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiFileExcelOutline, mdiPrinterOutline, mdiRefresh } from '@mdi/js';
-import { Botao, Faixa, Selo } from './Interface';
+import { Botao, Faixa, Selo, type Familia } from './Interface';
 import { mostrarAviso } from './Feedback';
 import { MENSAGEM_JANELA_BLOQUEADA, dataBR } from './TerceirosImpressao';
 import {
@@ -14,7 +13,7 @@ import {
 import { imprimirRelatorio } from './TerceirosRelatorioImpressao';
 
 const LEITURA_VAZIA = { lista: [], erro: null, erroDosPagamentos: null, lido: false, mes: '' };
-const FAMILIA_DO_PAGAMENTO: Record<string, string> = { 'Pago': 'ok', 'Pedido ao Financeiro': 'info', 'A pedir': 'atencao', 'Não conferido': 'neutro', 'Sem valor a pagar': 'neutro' };
+const FAMILIA_DO_PAGAMENTO: Record<string, Familia> = { 'Pago': 'ok', 'Pedido ao Financeiro': 'info', 'A pedir': 'atencao', 'Não conferido': 'neutro', 'Sem valor a pagar': 'neutro' };
 
 const Diferenca = ({ valor }: { valor: number | null }) => {
   if (valor === null) return <>—</>;

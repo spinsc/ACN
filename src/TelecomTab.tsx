@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // TelecomTab — a tela do setor Telecom (22/10/2026)
 //
@@ -22,7 +21,7 @@ import { estaNaFilaDe, SETOR_TELECOM, STATUS_DE_SEPARACAO } from './SeparacaoEnv
 export default function TelecomTab({ currentUser }) {
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/telecom/vendas); Análises e demandas é a padrão. A abertura sozinha na separação (abaixo) só vale se o endereço
   // não trouxe uma aba: quem colou #/telecom/demandas pediu essa aba.
-  const [aba, setAba] = useAbaNoEndereco({ tela: 'telecom' }) as [string, (v: any) => void];
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'telecom' });
   const veioComAba = useRef(/^#\/telecom\/[^/?]/i.test(window.location.hash));
   // quantas OPs esperam o Telecom (null = ainda não sei, ou a leitura falhou: a aba fica sem número em vez de dizer "0" que não é verdade)
   const [esperando, setEsperando] = useState<number | null>(null);

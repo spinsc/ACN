@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
@@ -38,7 +37,7 @@ function dismiss(id: string, tipo: string) {
 // 12e48 (09/10/2026): o tom (vermelho = hoje, âmbar = amanhã) e o "empilhar acima do de hoje" viraram classes (antes eram cor e posição passadas em estilo)
 // 10/2026 (pedido do usuário, 10/11/2026): cada contato do aviso abre o card no CRM. Quem recebe o aviso por ser gestor do vendedor
 // não tinha como saber onde o compromisso estava nem os detalhes; o clique leva ao card (o aviso mostra de quem é, no "Vendedor").
-function BannerComercial({ contatos, titulo, icone, tom, onClose, acima, onAbrir }) {
+function BannerComercial({ contatos, titulo, icone, tom, onClose, acima = false, onAbrir }) {
   return (
     <div className={'acn-cta-banner comercial ' + tom + (acima ? ' acima' : '')}>
       <div className="acn-cta-banner-cab">

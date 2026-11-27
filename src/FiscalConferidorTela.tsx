@@ -1,11 +1,10 @@
-// @ts-nocheck
 // O Conferidor de XML do Fiscal (preparação do módulo fiscal, 26/11/2026): a pessoa solta os XMLs de notas já emitidas e a tela diz o que está errado, pelas regras da
 // especificação do Fiscal (FiscalXml.ts). Os arquivos são lidos no próprio navegador e NADA sai do computador a menos que a pessoa clique em "Guardar no arquivo" (aba Notas emitidas):
 // só aí as notas vão para o banco da empresa (fiscal_guardar), que não regrava o que já estava guardado.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { mdiMagnify, mdiDownload, mdiFileUploadOutline, mdiDeleteOutline, mdiArchiveArrowDownOutline } from '@mdi/js';
 import Icone from './Icone';
-import { Botao, Faixa, Selo, Chips } from './Interface';
+import { Botao, Faixa, Selo, Chips, type Tom } from './Interface';
 import { combinaBusca } from './SearchUtils';
 import { baixarPlanilha } from './ExportarPlanilha';
 import { lerEmitentes, guardarNoArquivo } from './FiscalDados';
@@ -30,7 +29,7 @@ export default function FiscalConferidorTela({ currentUser }) {
   const [busca, setBusca] = useState('');
   const [visao, setVisao] = useState('conferencia');   // Conferência das notas ou Levantamento do histórico (27/11/2026)
   const [guardando, setGuardando] = useState<{ feitas: number; total: number } | null>(null);
-  const [guardou, setGuardou] = useState<{ tom: string; texto: string } | null>(null);
+  const [guardou, setGuardou] = useState<{ tom: Tom; texto: string } | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
   const cancelar = useRef(false);
 

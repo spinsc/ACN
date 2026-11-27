@@ -1,10 +1,9 @@
-// @ts-nocheck
 // Levantamento do histórico das notas (módulo fiscal, 27/11/2026): dentro do Conferidor de XML, a pessoa vê que operações as notas já emitidas mostram de fato, quanto pesa cada uma e onde o
 // MESMO caso saiu de jeitos diferentes. É a lista concreta para levar à contabilidade ("estas são as situações que existem; qual o tratamento certo de cada?"). Só lê o que já está na tela:
 // nada é gravado, a não ser que a pessoa peça o rascunho de regras (que entra "a confirmar", não vale para emitir). As regras que a regra de negócio manda confirmar continuam sendo da contabilidade.
 import React, { useMemo, useState } from 'react';
 import { mdiDownload, mdiFileDocumentEditOutline } from '@mdi/js';
-import { Botao, Faixa, Selo, Chips } from './Interface';
+import { Botao, Faixa, Selo, Chips, type Tom } from './Interface';
 import { confirmar } from './Feedback';
 import { baixarPlanilha } from './ExportarPlanilha';
 import { podeEditarCadastroFiscal } from './utils/permissoes';
@@ -22,7 +21,7 @@ export default function FiscalLevantamentoTela({ notas, emitentes, canceladas, c
   const [tipoPorNatureza, setTipoPorNatureza] = useState<Record<string, string>>({});
   const [mostrar, setMostrar] = useState('todos');
   const [ocupado, setOcupado] = useState(false);
-  const [aviso, setAviso] = useState<{ tom: string; texto: string } | null>(null);
+  const [aviso, setAviso] = useState<{ tom: Tom; texto: string } | null>(null);
 
   const lev = useMemo(() => levantar(notas, { emitentes, canceladas }), [notas, emitentes, canceladas]);
   const prop = useMemo(() => propostasDoHistorico(lev, tipoPorNatureza), [lev, tipoPorNatureza]);

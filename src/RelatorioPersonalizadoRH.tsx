@@ -1,4 +1,3 @@
-// @ts-nocheck
 // RH — relatórios personalizados (pedido do usuário em 05/11/2026). As regras estão em RelatorioRhModelo.ts; aqui só a tela: modelos prontos, filtros, colunas, grupos, ordem, tabela,
 // impressão e planilha (CSV). Tudo sobre as pessoas que a tela do RH já leu (ativas e desligadas): nenhuma leitura nova ao banco.
 import React, { useEffect, useMemo, useState } from 'react';
@@ -72,7 +71,7 @@ export default function RelatorioPersonalizadoRH({ funcionarios, desligados, dep
     departamentos: unicos((departamentos || []).map(d => d.nome)),
   }), [base, departamentos]);
 
-  const mudarFiltro = (campo: string, valor: string) => { setModeloId(''); setCfg(c => ({ ...c, filtros: { ...c.filtros, [campo]: valor } })); };
+  const mudarFiltro = (campo: string, valor: string | boolean) => { setModeloId(''); setCfg(c => ({ ...c, filtros: { ...c.filtros, [campo]: valor } })); };
   const mudar = (parte: any) => { setModeloId(''); setCfg(c => ({ ...c, ...parte })); };
   const aplicarModelo = (id: string) => { const m = MODELOS.find(x => x.id === id); if (m) { setModeloId(id); setCfg(m.config()); } };
   const colunaOrdem = colunas.some(c => c.id === cfg.ordenarPor) ? cfg.ordenarPor : (colunas[0]?.id || 'nome');

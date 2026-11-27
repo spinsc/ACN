@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // MINHAS SOLICITAÇÕES
 //
@@ -18,7 +17,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
 import Icone from './Icone';
-import { Botao, Chips, Selo, Faixa, diaBR } from './Interface';
+import { Botao, Chips, Selo, Faixa, diaBR, type Familia } from './Interface';
 import { lerEntregas, entregasDoPedido, temEntrega } from './ComprasEntregas';
 import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
@@ -39,7 +38,7 @@ const LIMITE = 300;
 const escaparLike = (t: string) => String(t).replace(/[\\%_]/g, m => '\\' + m);
 
 const TIPO_ROTULO: Record<string, string> = { compra: 'Compra', demanda: 'Demanda', analise: 'Análise' };
-const TIPO_FAMILIA: Record<string, string> = { compra: 'marca', demanda: 'info', analise: 'neutro' };
+const TIPO_FAMILIA: Record<string, Familia> = { compra: 'marca', demanda: 'info', analise: 'neutro' };
 
 // Compra: a mesma régua do quadro do Compras — Recebido e Descartada encerram
 const COMPRA_FAMILIA: Record<string, string> = {

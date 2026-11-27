@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTROLE DE USO DO CENTRO DE CUSTO (Etapa 15c do ux-fluxo, 05/10/2026)
 //
@@ -17,7 +16,7 @@ import { anexarValoresDosPedidos } from './PedidoValores';
 import Icone from './Icone';
 import { logChange } from './AuditSystem';
 import { confirmar, mostrarAviso } from './Feedback';
-import { Botao, Selo, Faixa, diaBR } from './Interface';
+import { Botao, Selo, Faixa, diaBR, type Familia } from './Interface';
 import { combinaBusca } from './SearchUtils';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { centrosParaApontar, centroDisponivel, motivoBloqueio } from './CentroCustoShared';
@@ -131,7 +130,7 @@ export async function contarComprasSemCentro(): Promise<number | null> {
 }
 
 // Etapa 12e9 (05/10/2026): exportada para o Financeiro usar a mesma cor de etapa da compra (uma família por etapa, igual em todas as telas do centro de custo)
-export const FAMILIA_COMPRA: Record<string, string> = { 'Pendente': 'atencao', 'Em Andamento': 'info', 'Aguardando Aprovação': 'marca', 'Aprovado': 'info', 'Comprado': 'ok', 'Recebido': 'ok' };
+export const FAMILIA_COMPRA: Record<string, Familia> = { 'Pendente': 'atencao', 'Em Andamento': 'info', 'Aguardando Aprovação': 'marca', 'Aprovado': 'info', 'Comprado': 'ok', 'Recebido': 'ok' };
 
 export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
   const [compras, setCompras] = useState<any[]>([]);

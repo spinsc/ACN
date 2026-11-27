@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos, anexarValoresDoPedido, vencedorasSemValor, AVISO_SEM_VALORES } from './PedidoValores';
@@ -22,7 +21,7 @@ import { pedidoCombinaComBusca, ordenarPedidos, ordensDisponiveis } from './Comp
 import { situacaoDaDivisao, renumerarVencedoras, dividirPedido, listaAlteradaDepoisDeCotar } from './DivisaoDoPedido';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
-import { Botao, MenuAcoes, Selo, Faixa, Chips, Abas, SelectBusca } from './Interface';
+import { Botao, MenuAcoes, Selo, Faixa, Chips, Abas, SelectBusca, type Familia } from './Interface';
 import { FornecedoresCompras, ModalFornecedor } from './FornecedoresCompras';
 import { lerFornecedores } from './ComprasFornecedores';
 import Icone from './Icone';
@@ -602,7 +601,7 @@ const RECEBIDOS_NO_QUADRO = 10;
 const COR_STATUS_COMPRA: Record<string,string> = COR_ETAPA_COMPRA;
 // Etapa 12e19 (06/10/2026): a cor de cada etapa na tela (selo, bolinha do total e borda do cartão) segue a família do sistema.
 // Suposição minha: a cor viva do quadro (KanbanColuna, compartilhado) segue por hexadecimal até ele ser migrado.
-const FAMILIA_COMPRA: Record<string,string> = {
+const FAMILIA_COMPRA: Record<string, Familia> = {
   'Pendente': 'neutro', 'Em Andamento': 'info', 'Aguardando Aprovação': 'atencao', 'Aprovado': 'ok',
   'Comprado': 'marca', 'Recebido': 'neutro', 'Descartada': 'erro',
 };
@@ -1088,7 +1087,7 @@ export default function ComprasTab({ currentUser }) {
   const [modalCotacoes, setModalCotacoes]       = useState<any>(null); // pedido em cotação
   const [cotacoes, setCotacoes]                 = useState<any[]>([]);
   const [loadingCotacoes, setLoadingCotacoes]   = useState(false);
-  const [novaCotacao, setNovaCotacao]           = useState({ ...VAZIO_COTACAO });
+  const [novaCotacao, setNovaCotacao]           = useState<typeof VAZIO_COTACAO & { itens_cot?: any[] }>({ ...VAZIO_COTACAO });
   const [novoAnexoCotacao, setNovoAnexoCotacao] = useState<File|null>(null);
   const [enviandoCotacao, setEnviandoCotacao]   = useState(false);
   const [vencedoraId, setVencedoraId]           = useState<string|null>(null);

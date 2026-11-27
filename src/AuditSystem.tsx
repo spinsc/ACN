@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // AuditSystem — infraestrutura global de auditoria/colaboração, reutilizável
 // por qualquer módulo (não recriar isso por módulo — ver plano em
@@ -256,7 +255,7 @@ export function useUnreadMap(entityType, entityIds, currentUser) {
     if (!entityType || !currentUser?.id) return;
     const ch = supabase.channel(`views-map-${entityType}-${currentUser.id}-${idCanal()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'entity_views', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
-        const row = payload.new;
+        const row = payload.new as Record<string, any>; // o tipo do realtime é genérico; as colunas de entity_views são conhecidas
         if (!row || row.entity_type !== entityType) return;
         setNaoLidoSet(prev => { const next = new Set(prev); next.delete(String(row.entity_id)); return next; });
       })

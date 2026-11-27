@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { enviarArquivoPrivado, urlDoArquivo } from './ArquivoPrivado';   // 26/11/2026 (Etapa 17, onda 5b): as assinaturas moram no bucket PRIVADO
@@ -368,10 +367,10 @@ export default function VistoriasPatio({ currentUser }) {
     } finally { retornandoRef.current = false; setRetornando(false); }
   };
 
-  const carregarScript = (url) => new Promise((res, rej) => {
+  const carregarScript = (url) => new Promise<void>((res, rej) => {
     if (document.querySelector(`script[src="${url}"]`)) { res(); return; }
     const s = document.createElement('script'); s.src = url;
-    s.onload = res; s.onerror = rej;
+    s.onload = () => res(); s.onerror = rej;
     document.head.appendChild(s);
   });
 

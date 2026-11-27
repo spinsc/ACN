@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONDER AS PERGUNTAS SOBRE O CARRO — EM LOTE, PARA OPs QUE JÁ EXISTEM
 //
@@ -44,7 +43,7 @@ const idsVendidos = (o) => (o?.itens_vendidos || []).filter(v => !v?.sem_estrutu
 // 15/10/2026: a pergunta da OP (sem item) vale para todas as OPs; as demais, só para as que venderam o item dono
 // Etapa 2 (15/10/2026): e só as que a condição "só quando estes itens foram vendidos juntos" deixa valer para a venda desta OP
 const perguntasDaOp = (perguntas, o) => {
-  const ids = new Set(idsVendidos(o));
+  const ids = new Set<string>(idsVendidos(o));
   return perguntas.filter(p => (ehPerguntaDaOp(p) || ids.has(String(p.item_id))) && perguntaCabeNaVenda(p, ids));
 };
 const restringir = (ps, mapa) => { const ok = new Set(ps.map(p => p.id)); const r = {}; Object.entries(mapa || {}).forEach(([k, v]) => { if (ok.has(k)) r[k] = v; }); return r; };
@@ -59,7 +58,7 @@ const resumoOps = (ops) => {
 
 // escopo de módulo de propósito: declarado dentro do componente, remontaria os botões a cada clique
 // 12e54 (09/10/2026): só aparência — as respostas viraram o seletor do guia (Chips); a pergunta cuja resposta o sistema já sabe trava o seletor
-function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }) {
+function ListaDePerguntas({ perguntas, efetivas, auto, onEscolher, resumo }: { perguntas: any; efetivas: any; auto: any; onEscolher: any; resumo?: any }) {
   const podadas = podarRespostas(perguntas, efetivas);
   const escolhidas = new Set(Object.values(podadas).filter(Boolean));
   const visiveis = perguntas.filter(p => !p.opcao_pai_id || escolhidas.has(p.opcao_pai_id));
@@ -195,7 +194,7 @@ export function RespostasEmLote({ ops, currentUser, onClose, onSalvo, aplicarNaB
       const ps = perguntasDaOp(perguntas, o);
       const auto = autoDaOp(o);
       const explicitas = { ...restringir(ps, padrao), ...restringir(ps, excecoes[o.id] || {}) };
-      const jaSalvas = {}; Object.entries(salvas[o.id] || {}).forEach(([pid, v]) => { jaSalvas[pid] = v.opcao_id; });
+      const jaSalvas = {}; Object.entries(salvas[o.id] || {}).forEach(([pid, v]: [string, any]) => { jaSalvas[pid] = v.opcao_id; });
       const finais = podarRespostas(ps, { ...jaSalvas, ...auto, ...explicitas });
       const desta = [];
       for (const p of ps) {

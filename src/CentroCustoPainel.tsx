@@ -26,7 +26,7 @@ import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDoFaturamento } from './FreteValores';
 import { lerPaginado } from './LerPaginado';
 import Icone from './Icone';
-import { Botao, Selo, Faixa, diaBR, diaISO } from './Interface';
+import { Botao, Selo, Faixa, diaBR, diaISO, type Familia } from './Interface';
 import { idsComDescendentes, orcamentoDoCentro, foraDaVigencia, ordenarArvore } from './CentroCustoShared';
 import { abrirVinculo } from './VinculoPicker';
 import { baixarPlanilha } from './ExportarPlanilha';
@@ -230,7 +230,7 @@ export function agruparPorOp(itens: any[]) {
 }
 
 /** Como o lançamento aparece na coluna "Situação" (a tela e a planilha usam a mesma frase). */
-export function situacaoDoItem(it: any): { texto: string; familia: string } {
+export function situacaoDoItem(it: any): { texto: string; familia: Familia } {
   if (it.previsto > 0) return { texto: `Previsto · ${it.status}`, familia: 'neutro' };
   if (it.comprometido > 0 && it.realizado > 0) return { texto: 'Parte paga', familia: 'info' };
   if (it.comprometido > 0) return { texto: it.tipo === 'contrato' ? 'Falta pagar' : 'Comprometido', familia: 'info' };

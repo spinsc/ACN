@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -144,7 +143,7 @@ function FaturamentoDoFiscal({ currentUser, aoIrAosCadastros }) {
 
   // Confere a data da nota ANTES da pergunta de confirmação: recusa data inválida ou futura e devolve o aviso que segue junto da pergunta (em que mês a nota entra e se o mês
   // já tem comissão aprovada). Leitura recusada do fechamento não vira "nenhum": o aviso diz que não deu para conferir. null = parou (o motivo já foi mostrado).
-  const conferirDataDaNota = async (entrada, tipo = 'op') => {
+  const conferirDataDaNota = async (entrada, tipo: 'op' | 'os' = 'op') => {
     const dataNota = resolverDataDaNota(entrada);
     if (dataNota.erro) { alert(dataNota.erro); return null; }
     // a comissão da OS também lê o dia da nota (S2 do SAC, 27/10/2026): a conferência do mês aprovado vale para as duas
@@ -1008,7 +1007,7 @@ function FaturamentoDoFiscal({ currentUser, aoIrAosCadastros }) {
 // A casca do Fiscal (26/11/2026, preparação do módulo fiscal): quatro abas. O faturamento de sempre, o arquivo das notas emitidas, os cadastros que a nota vai exigir e o conferidor de XML.
 // Cada aba tem endereço (#/fiscal, #/fiscal/arquivo, #/fiscal/cadastros, #/fiscal/conferidor); o arquivo se divide em três visões e os cadastros em quatro.
 export default function FiscalTab({ currentUser }) {
-  const [aba, setAba] = useAbaNoEndereco({ tela: 'fiscal' }) as [string, (v: any) => void];
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'fiscal' });
   return (
     <div>
       <Abas ativa={aba} onChange={setAba} itens={[

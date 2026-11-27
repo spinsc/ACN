@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // HorasTarefasTab — sub-aba "Horas/Tarefas" da Engenharia
 // Controle de tarefas com início/fim; toda pausa exige motivo. Relatório de
@@ -1046,7 +1045,7 @@ function JanelaDaTarefa({ tarefa, agora, ctx, ctxPronto, currentUser, onFechar }
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUser: any; abaInicial?: string }) {
   // o Relatório gerencial só existe para o gestor da Engenharia (a mesma regra dos botões abaixo): link dele colado por quem não é gestor cai em Tarefas
-  const [aba, setAba] = useAbaNoEndereco({ tela: 'engenharia', nivel: 1, pai: 'horas', inicial: () => abaInicial, permitida: a => a !== 'gerencial' || ehGestorEngenharia(currentUser) }) as [string, (v: any) => void];   // Tarefas, Relatório por Período, Horas extras e gerencial: #/engenharia/horas/extras (a Menção de hora extra continua pedindo `extras` por `abaInicial`)
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'engenharia', nivel: 1, pai: 'horas', inicial: () => abaInicial, permitida: a => a !== 'gerencial' || ehGestorEngenharia(currentUser) });   // Tarefas, Relatório por Período, Horas extras e gerencial: #/engenharia/horas/extras (a Menção de hora extra continua pedindo `extras` por `abaInicial`)
   const gestor = ehGestorEngenharia(currentUser);
   const [operador, setOperador] = useState('');
   const [tarefas, setTarefas] = useState<any[]>([]);

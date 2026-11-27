@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DESENVOLVIMENTO — pedido de mudança depois da liberação (D5 do PLANO_DESENVOLVIMENTO_ENGENHARIA.md, 19/10/2026)
 //
@@ -8,7 +7,7 @@
 import React, { useState, useRef } from 'react';
 import Icone from './Icone';
 import { confirmar, pedirTexto } from './Feedback';
-import { Botao, Selo, Faixa } from './Interface';
+import { Botao, Selo, Faixa, type Familia } from './Interface';
 import { useExecutar, enviarArquivos } from './DesenvolvimentoPorta';
 import {
   modeloGuiado, liberada, STATUS_MUDANCA, ROTULO_PAPEL, papeisQueOUsuarioCobre, letraDaRevisao, revisaoVigente, dadosDoEntregavel,
@@ -17,7 +16,7 @@ import {
 import { mdiPlus, mdiPaperclip, mdiCheck, mdiClose } from '@mdi/js';
 
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
-const FAMILIA: Record<string, string> = { pedida: 'atencao', aprovada: 'info', implementada: 'ok', recusada: 'erro', cancelada: 'neutro' };
+const FAMILIA: Record<string, Familia> = { pedida: 'atencao', aprovada: 'info', implementada: 'ok', recusada: 'erro', cancelada: 'neutro' };
 
 function FormularioDePedido({ onEnviar, onCancelar, ocupado }: any) {
   const [x, setX] = useState({ motivo: '', o_que_muda: '', impacto_custo: '', impacto_ops: '' });

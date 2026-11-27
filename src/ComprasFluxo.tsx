@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // FLUXO DE COMPRAS — etapas, reprocesso, descarte, edição da solicitação,
 // anexos, histórico e alertas do setor.
@@ -399,7 +398,7 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
     supabase.from('auth_usuarios').select('email, nome, perfil').eq('ativo', true).in('perfil', ['Compras', 'Admin'])
       .order('nome').then(({ data, error }) => {
         if (error) setErroCompradores(error.message);   // 7.58: a lista de compradores vazia por falha parecia "não há comprador"
-        const lista = data || [];
+        const lista: Array<{ email: string; nome: string; perfil?: string }> = data || [];
         if (currentUser?.email && !lista.some((u: any) => u.email === currentUser.email)) lista.unshift({ email: currentUser.email, nome: currentUser.nome });
         setCompradores(lista);
         const doSetor = lista.find((u: any) => u.perfil === 'Compras');

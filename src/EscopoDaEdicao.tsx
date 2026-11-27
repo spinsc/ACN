@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // "ESTA ALTERAÇÃO VALE PARA" — o seletor das telas de edição quando a OP é uma unidade de lote (pedido do usuário em 16/10/2026).
 // A regra de verdade mora em EdicaoDeLote.ts. Começa SEMPRE em "só esta unidade": aplicar no lote inteiro é uma escolha consciente.
@@ -44,7 +43,7 @@ export function SeletorEscopo({ opl, tamanho, valor, onChange, texto = '' }: { o
       <div className="acn-escopo-titulo">Esta alteração vale para</div>
       <div className="acn-escopo-opcoes">
         {opcoes.map(o => (
-          <Botao key={o.v} pequeno variante={valor === o.v ? 'primario' : 'secundario'} aria-pressed={valor === o.v} onClick={() => onChange(o.v)}>{o.rotulo}</Botao>
+          <Botao key={o.v} pequeno variante={valor === o.v ? 'primario' : 'secundario'} aria-pressed={valor === o.v} onClick={() => onChange(o.v as 'unidade' | 'lote')}>{o.rotulo}</Botao>
         ))}
       </div>
       <div className="acn-escopo-ajuda">

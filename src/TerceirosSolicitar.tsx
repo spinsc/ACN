@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a janela de PEDIR o serviço (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026). Qualquer pessoa pede, de qualquer tela: o quadro, a OP, a OS, a Engenharia, a Serralheria e o
 // Almoxarifado abrem esta mesma janela (`SolicitarServicoDeTerceiro`, que lê tipos e prestadores sozinha), cada um já com a ligação preenchida (`preset`).
 // Regras que a janela cuida (o banco confere de novo, ao gravar): um serviço POR CARRO (a OP escolhida abre a lista das OPs da mesma venda e cada carro marcado vira um serviço), o carro que já tem
@@ -27,7 +26,7 @@ const UNIDADES_VAZIAS = { lista: [], base: '', erro: null, lendo: false };
  * pode vir travada (`bloquearLigacao`): quem pede dali não troca o carro, mas ainda escolhe quais carros do lote levam o serviço.
  * `aoPedido(servicosPedidos)` é chamado depois de gravar (a janela já mostrou o aviso de sucesso); `aoCadastrarPrestador(prestador)` avisa a tela de trás que a lista de prestadores mudou.
  */
-export function ModalSolicitar({ tipos, prestadores, currentUser, preset = null, onClose, aoPedido, aoCadastrarPrestador }) {
+export function ModalSolicitar({ tipos, prestadores, currentUser, preset = null, onClose, aoPedido, aoCadastrarPrestador }: { tipos: any; prestadores: any; currentUser: any; preset?: any; onClose: any; aoPedido: any; aoCadastrarPrestador?: any }) {
   const hoje = hojeISO();
   const veValor = veValores(currentUser);
   const tiposAtivos = useMemo(() => tipos.filter(t => t.ativo), [tipos]);

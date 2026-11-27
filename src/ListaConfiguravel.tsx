@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // LISTA CONFIGURÁVEL (Etapa 15d do ux-fluxo, 05/10/2026)
 //
@@ -40,7 +39,7 @@ export function ListaConfiguravelModal({ tabela, entidade, itens, usosPorId = {}
   const duplicado = (nome: string, ignorar?: string) => itens.some((t: any) => t.id !== ignorar && t.nome.trim().toLowerCase() === nome.trim().toLowerCase());
   const traduzir = (e: any) => /duplicate|unique|23505/i.test(`${e?.code} ${e?.message}`) ? textos.duplicado : e.message;
 
-  const rodar = async (fn: () => Promise<any>) => {
+  const rodar = async (fn: () => PromiseLike<any>) => { // PromiseLike: o Supabase devolve um "thenable", não um Promise
     setOcupado(true); setErro('');
     const r = await fn();
     setOcupado(false);

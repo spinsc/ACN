@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
@@ -17,7 +16,7 @@ import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avalia
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
-import { hojeISO, diaBR, Abas, Botao, Faixa, Selo } from './Interface';
+import { hojeISO, diaBR, Abas, Botao, Faixa, Selo, type Familia } from './Interface';
 import Icone from './Icone';
 import CustoPorOpTab from './CentroCustoRelatorios';
 import PendenciasDoFinanceiro from './PendenciasFinanceiroTela';
@@ -284,7 +283,7 @@ function ModalComprasCentro({ centro, compras, todasDespesas, onClose, currentUs
 
 // ─── Faturamento de Compras (Fase 3 — Conferência Técnica) ───────────────────
 // Etapa 12e9: cada situação é um `Selo` do guia (o emoji decorativo de antes saiu; o texto é o mesmo)
-const STATUS_FAT_LABEL: Record<string, { label: string; familia: string }> = {
+const STATUS_FAT_LABEL: Record<string, { label: string; familia: Familia }> = {
   aguardando_recebimento: { label: 'Aguardando recebimento', familia: 'neutro' },
   liberado:                { label: 'Liberado p/ pagamento',  familia: 'info' },
   pago:                    { label: 'Pago',                   familia: 'ok' },
@@ -417,7 +416,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [modalCentros, setModalCentros] = useState(false);
   const [modalCompras, setModalCompras] = useState<any>(null);
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/financeiro/pendencias…); Centros de custo é a padrão e fica sem nome na barra
-  const [abaFin, setAbaFin] = useAbaNoEndereco({ tela: 'financeiro', inicial: () => registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa' ? 'kanban' : null }) as [string, (v: any) => void];
+  const [abaFin, setAbaFin] = useAbaNoEndereco({ tela: 'financeiro', inicial: () => registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa' ? 'kanban' : null });
   // Fase 6 (26/11/2026): a tarefa do Financeiro (`#/financeiro/tarefa/<código>`) mora na aba Tarefas: com a tela já aberta, um endereço de tarefa (Voltar, Avançar, link ou aviso) troca para essa aba, que lê o endereço e abre a tarefa.
   useEffect(() => {
     const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'financeiro')?.tipo === 'tarefa') setAbaFin('kanban'); };

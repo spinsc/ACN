@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react';
 
-type Tom = 'ok' | 'erro' | 'atencao' | 'info';
+export type Tom = 'ok' | 'erro' | 'atencao' | 'info';
 type Aviso = { id: number; texto: string; tom: Tom };
 type Pedido = {
   id: number; tipo: 'confirmar' | 'texto'; texto: string; padrao?: string;

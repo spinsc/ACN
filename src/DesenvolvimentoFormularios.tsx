@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DESENVOLVIMENTO — formulários da Concepção e da Criação (D2 do PLANO_DESENVOLVIMENTO_ENGENHARIA.md, 19/10/2026)
 //
@@ -12,7 +11,7 @@ import { supabase } from './supabaseClient';
 import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { lerPaginado } from './LerPaginado';
 import { itensAtivosDoCatalogo } from './ConfigEstrutura';
-import { Botao, Selo, Faixa, hojeISO, SelectBusca } from './Interface';
+import { Botao, Selo, Faixa, hojeISO, SelectBusca, type Familia } from './Interface';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { lerValorDigitado } from './LerValor';
 import {
@@ -318,7 +317,7 @@ function EditorBom({ demanda, inicial, onSalvar, onCancelar, ocupado }: any) {
 }
 
 // ── D3: riscos ──────────────────────────────────────────────────────────────────────────────────────────────────
-const FAMILIA_RISCO: Record<string, string> = { alto: 'erro', medio: 'atencao', baixo: 'ok' };
+const FAMILIA_RISCO: Record<string, Familia> = { alto: 'erro', medio: 'atencao', baixo: 'ok' };
 const ROTULO_RISCO: Record<string, string> = { alto: 'Risco alto', medio: 'Risco médio', baixo: 'Risco baixo' };
 function EditorRiscos({ inicial, onSalvar, onCancelar, ocupado }: any) {
   const [itens, setItens] = useState<any[]>((inicial?.itens || []).map((i: any) => ({ ...i })));

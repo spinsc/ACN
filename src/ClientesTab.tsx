@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect } from 'react';
@@ -130,7 +129,7 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
     const recusaTel = telefones.map(t => erroDeTelefone(t.numero)).find(Boolean);
     if (recusaTel) { alert(recusaTel); return; }
     setSalvando(true);
-    const payload = {
+    const payload: Record<string, any> = { // aberto: `criado_em` só entra mais abaixo, na criação
       nome:          f.nome.trim().toUpperCase(),
       tipo:          f.tipo,
       documento:     f.documento || null,
@@ -252,7 +251,7 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
               <ClienteAutocomplete
                 value={f._empresa_nome || ''}
                 onChange={v => set('_empresa_nome', v)}
-                onSelect={c => set('empresa_id', c.id) || set('_empresa_nome', c.nome) || set('empresa', c.nome)}
+                onSelect={c => { set('empresa_id', c.id); set('_empresa_nome', c.nome); set('empresa', c.nome); }}
                 placeholder="Buscar empresa cadastrada (PJ)..."
                 tipoFilter="PJ"
                 permitirCriar={true}

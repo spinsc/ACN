@@ -61,7 +61,8 @@ export function mensagemMesFechado(fechados: Array<{ ref: MesRef; f?: any }>) {
   return `${frase} Nada foi gravado. Para mexer, o Admin precisa reabrir o mês em Financeiro › Fechamento do mês.`;
 }
 
-export type ResultadoConferencia = { ok: true } | { ok: false; mensagem: string; falhaLeitura?: boolean; fechados?: MesRef[] };
+// `mensagem?: undefined` no ramo "ok": sem o modo estrito o compilador não estreita por `if (!r.ok)`, e quem lê `r.mensagem` depois do teste não passava
+export type ResultadoConferencia = { ok: true; mensagem?: undefined } | { ok: false; mensagem: string; falhaLeitura?: boolean; fechados?: MesRef[] };
 
 /**
  * Confere NO BANCO, agora, se algum dos meses está fechado. Chame antes de gravar (e, se um dos lados for nulo — ex.: despesa sem data —,

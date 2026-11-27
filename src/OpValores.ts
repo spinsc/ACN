@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Valor total e mão de obra da OP moram numa tabela à parte (`oples_valores`) desde a onda V2 do "ver valores no banco"
 // (decidido com o usuário em 24/11/2026; PLANO_VER_VALORES_NO_BANCO.md, seção 9). O banco só a entrega a quem tem a caixa "Ver valores" e ao Admin.
 // Tela que mostra ou calcula com esses valores lê a OP e chama `anexarValoresDasOps`, que devolve a OP com os três campos de volta:
@@ -18,7 +17,8 @@ export async function lerValoresDasOps(ids: string[]) {
     const { data, error } = await supabase.from('oples_valores')
       .select('op_id,' + CAMPOS_DE_VALOR_DA_OP.join(',')).in('op_id', unicos.slice(i, i + 150));
     if (error) return { mapa, erro: error.message || 'sem resposta' };
-    for (const l of data || []) mapa.set(String(l.op_id), l);
+    // o select monta a lista de colunas em tempo de execução, então o tipo da linha não é conhecido pelo compilador
+    for (const l of (data || []) as any[]) mapa.set(String(l.op_id), l);
   }
   return { mapa, erro: '' };
 }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
@@ -413,7 +412,7 @@ ${cotacao.criado_por || 'ACN'}`
   );
 }
 
-function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verMarkup, pedirAprovacao }) {
+function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verMarkup }: { cotacao: any; currentUser: any; onClose: any; onSalvo: any; verCustos: any; verMarkup: any; pedirAprovacao?: any }) {
   const [desconto, setDesconto] = useState(0);
   const [obs,      setObs]      = useState('');
   const [prazoEntrega, setPrazoEntrega] = useState('');
@@ -574,7 +573,7 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
 
 // ─── Modal Detalhe de Cotação ─────────────────────────────────────────────────
 function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
-  onClose, onAbrirDesconto, onVincularOp, onOpenCrm, recarregar }) {
+  onClose, onAbrirDesconto, onOpenCrm, recarregar }: { cotacao: any; currentUser: any; verCustos: any; verFornec: any; verMarkup: any; onClose: any; onAbrirDesconto: any; onVincularOp?: any; onOpenCrm: any; recarregar: any }) {
   const [propostas,   setPropostas]   = useState([]);
   const [aprovacoes,  setAprovacoes]  = useState([]);
   const [opBusca,     setOpBusca]     = useState('');

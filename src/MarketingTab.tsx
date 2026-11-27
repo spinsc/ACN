@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import React, { useState, useEffect } from 'react';
@@ -226,7 +225,7 @@ export default function MarketingTab({ currentUser }) {
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(false);
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/marketing/pedidos); OPs liberadas é a padrão
-  const [aba, setAba] = useAbaNoEndereco({ tela: 'marketing' }) as [string, (v: any) => void]; // opls | pedidos
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'marketing' }); // opls | pedidos
   const [showFormPedido, setShowFormPedido] = useState(false);
   const [pedidoForm, setPedidoForm] = useState(PEDIDO_VAZIO);
   const [salvandoPedido, setSalvandoPedido] = useState(false);

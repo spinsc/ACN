@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — o PDF do relatório semanal (G6, 20/10/2026)
 // Só desenha o modelo de GarantiaRelatorio.ts (a mesma conta da tela), no desenho do documento de comissões (ComissaoDocumento.ts): A4 paisagem, cabeçalho, critério, resumo e as seções.

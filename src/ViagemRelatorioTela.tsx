@@ -1,25 +1,24 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VIAGENS — a tela do relatório de custo real × orçado (04/11/2026). A conta está em ViagemRelatorio.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useMemo } from 'react';
 import { Chips, Faixa, Selo, hojeISO } from './Interface';
 import { fmtReais, fmtKm } from './ViagemCalculo';
-import { resumoDosCustos, rotuloDoMes } from './ViagemRelatorio';
+import { resumoDosCustos, rotuloDoMes, type PeriodoDoRelatorio } from './ViagemRelatorio';
 
 const pct = (x: number | null) => (x === null ? '—' : `${x > 0 ? '+' : ''}${(x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`);
 const dif = (d: number) => <span className={d > 0.004 ? 'acn-txt-erro' : undefined}>{d > 0.004 ? '+' : ''}{fmtReais(d)}</span>;
 const diaBR = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—');
 
 export default function RelatorioDeCustos({ viagens, aoAbrir }: any) {
-  const [periodo, setPeriodo] = useState('ano');
+  const [periodo, setPeriodo] = useState<PeriodoDoRelatorio>('ano');
   const hoje = hojeISO();
   const r = useMemo(() => resumoDosCustos(viagens, periodo, hoje), [viagens, periodo, hoje]);
   const t = r.totais;
   return (
     <div className="acn-vg-relatorio">
       <div className="acn-vg-barra">
-        <Chips ativo={periodo} onChange={setPeriodo} rotulo="Período" itens={[{ id: 'ano', rotulo: 'Este ano' }, { id: '90', rotulo: 'Últimos 90 dias' }, { id: 'tudo', rotulo: 'Tudo' }]} />
+        <Chips ativo={periodo} onChange={v => setPeriodo(v as PeriodoDoRelatorio)} rotulo="Período" itens={[{ id: 'ano', rotulo: 'Este ano' }, { id: '90', rotulo: 'Últimos 90 dias' }, { id: 'tudo', rotulo: 'Tudo' }]} />
         <span className="acn-ajuda">Pela data de saída. Só entram viagens com o custo real lançado pelo Financeiro; o desgaste do veículo fica de fora (não sai dinheiro).</span>
       </div>
 

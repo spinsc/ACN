@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // TELA DA ESTRUTURA DE INSTALAÇÃO
 //
@@ -621,7 +620,7 @@ function RegrasDoVeiculo({ veiculo, regras, falha, perguntas, itens, pode, curre
 }
 
 /** O interruptor: marcar o item que representa o material de instalação. */
-function MarcaConjunto({ item }) {
+function MarcaConjunto({ item }: { item: any; pode?: any }) { // `pode` ainda é passado por quem chama, mas a marca não se escolhe mais (ver abaixo)
   // Decisão do usuário em 29/09/2026: existe UM Conjunto Elétrico só, o item 1687, e ele já é o gatilho — a marca não se
   // escolhe mais aqui (o banco recusa qualquer outro). A tela só explica, e só no próprio 1687.
   if (String(item?.codigo) !== '1687') return null;

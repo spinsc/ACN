@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // TELA INÍCIO — a janela de quem posta (09/11/2026): os slides do carrossel (imagem, período, ordem, o que abre ao clicar) e as datas da empresa que aparecem em "Próximos dias".
 // Regra do usuário (09/11/2026, decisão final): todo usuário do sistema VÊ o carrossel; só o Admin e quem recebeu a marca "Pode postar na tela Início" (Admin → Usuários) EDITAM, nesta janela.
@@ -8,7 +7,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Icone from './Icone';
-import { Botao, Faixa, Selo, Abas, Chips, diaISO, diaBR } from './Interface';
+import { Botao, Faixa, Selo, Abas, Chips, diaISO, diaBR, type Familia } from './Interface';
 import { mostrarAviso, confirmar } from './Feedback';
 import {
   situacaoDoSlide, ROTULO_DA_SITUACAO, ordenarSlides, textoDoPeriodo, reordenar, erroDoSlide, erroDaImagem, endereco, MEDIDA_IDEAL_DA_IMAGEM,
@@ -19,7 +18,7 @@ import {
 } from './InicioDados';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTrashCanOutline, mdiArrowUp, mdiArrowDown, mdiEyeOffOutline, mdiEyeOutline, mdiImageOutline, mdiContentSaveOutline, mdiImagePlusOutline, mdiCalendarStar } from '@mdi/js';
 
-const FAMILIA_DA_SITUACAO = { no_ar: 'ok', agendado: 'info', encerrado: 'neutro', rascunho: 'atencao' };
+const FAMILIA_DA_SITUACAO: Record<string, Familia> = { no_ar: 'ok', agendado: 'info', encerrado: 'neutro', rascunho: 'atencao' };
 const formVazio = (usuario: any) => ({ titulo: '', legenda: '', area: usuario?.perfil && usuario.perfil !== 'Admin' ? usuario.perfil : '', exibir_de: '', exibir_ate: '', link_tipo: 'nenhum', link_destino: '', rascunho: false });
 const formDoSlide = (s: any) => ({ titulo: s.titulo || '', legenda: s.legenda || '', area: s.area || '', exibir_de: String(s.exibir_de || '').slice(0, 10), exibir_ate: String(s.exibir_ate || '').slice(0, 10), link_tipo: s.link_tipo || 'nenhum', link_destino: s.link_destino || '', rascunho: !!s.rascunho });
 

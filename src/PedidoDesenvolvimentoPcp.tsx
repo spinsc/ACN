@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PEDIDO DO PCP NA ENGENHARIA — os itens a desenvolver, um por linha (Etapa 18d, 13/10/2026)
 //
@@ -24,12 +23,12 @@ import { rotuloDoTipo } from './DesenvolvimentoTipos';
 import { OplDetalheModal } from './AcnTabShared';
 import { logChange } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { Botao, Faixa, Selo } from './Interface';
+import { Botao, Faixa, Selo, type Familia } from './Interface';
 import { mdiEyeOutline, mdiPuzzleOutline } from '@mdi/js';
 import { abrirTrecho, fecharTrecho, situacaoDoRelogio, type ItemComRelogio } from './HorarioDemanda';
 import { useAgora, confirmarAbertura, descricaoDoRelogio, tempoEmTexto, tempoDasEtapas } from './PausaDaDemanda';
 
-const SITUACAO: Record<string, { rotulo: string; familia: string }> = {
+const SITUACAO: Record<string, { rotulo: string; familia: Familia }> = {
   pendente: { rotulo: 'Pendente', familia: 'atencao' },
   em_andamento: { rotulo: 'Em andamento', familia: 'info' },
   entregue: { rotulo: 'Entregue', familia: 'ok' },

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DE PRODUÇÃO (modo TV)
 // Fica aberto num computador ligado a uma tela no chão de fábrica: ninguém

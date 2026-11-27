@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Peças de tela do BOX do carro na Adaptação (16/11/2026; regras em ProducaoBoxes.ts): o seletor (usado ao iniciar a produção e ao trocar o BOX),
 // a janela "BOX do carro" e o resumo com o histórico, que aparece na OP aberta.
 import React, { useState } from 'react';
@@ -13,7 +12,7 @@ import {
 const quando = (v: string | null) => { try { return v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'; } catch { return String(v || '—'); } };
 
 /** Escolha de um ou mais BOX, com o aviso de BOX que já tem outra OP (só avisa; ver ProducaoBoxes.ts). `ocupacao` vem de ocupacaoDosBoxes. */
-export function SeletorDeBoxes({ valores, onChange, ocupacao = {} }) {
+export function SeletorDeBoxes({ valores, onChange, ocupacao = {} }: { valores: string[]; onChange: (v: string[]) => void; ocupacao?: Record<string, string[]> }) {
   const conflitos = conflitosDeBox(valores || [], ocupacao);
   const emUso = Object.entries(ocupacao).sort(([a], [b]) => a.localeCompare(b));
   return (

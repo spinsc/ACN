@@ -445,7 +445,7 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar, veiculo
  *  agora no "+ Novo" não estava nela, o texto "Modelo" da OP ficava em branco e as listas
  *  passavam a dizer "sem modelo" (foi o que aconteceu no lote 1673.2609). */
 export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = false,
-                               recarregarEm, placeholder }) {
+                               recarregarEm, placeholder }: { valor: any; onChange: any; currentUser: any; style?: any; compacto?: boolean; recarregarEm?: any; placeholder?: any }) {
   const [veiculos, setVeiculos] = useState([]);
   const [cadastrando, setCadastrando] = useState(false);
   const [editandoFicha, setEditandoFicha] = useState(false);
