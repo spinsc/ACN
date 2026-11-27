@@ -6,7 +6,8 @@ import { lerPaginado } from './LerPaginado';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { logChange } from './AuditSystem';
 import { conferirNota } from './FiscalXml';
-import { registroDaNota, registroDoEvento, registroDaInutilizacao } from './FiscalArquivo';
+import { registroDaNota, registroDoEvento, registroDaInutilizacao, numerosDaNotaDaOp } from './FiscalArquivo';
+import { oQueAsOpsCitam } from './FiscalProntidao';
 import {
   erroDoFiscalCliente, fiscalClienteParaGravar, erroDoFiscalItem, fiscalItemParaGravar, erroDoEmitente, emitenteParaGravar,
   erroDaTransportadora, transportadoraParaGravar, soDigitos,
@@ -230,4 +231,66 @@ export async function lerXmlGuardado(ref: string) {
   if (error) return { xml: '', erro: explicarErroDoBanco(error) };
   if (!data) return { xml: '', erro: 'O XML desta nota não está no arquivo (ou você não tem permissão para lê-lo).' };
   return { xml: data.xml as string, erro: '' };
+}
+
+// ═══ Prontidão da OP para emitir e nota guardada na OP (26/11/2026; regras puras em FiscalProntidao.ts e FiscalArquivo.ts) ═══
+/**
+ * Tudo o que se precisa ler para conferir estas OPs: as empresas, os clientes e os dados fiscais deles, e SÓ os itens que as OPs citam (pelo id, ou pelo nome quando a linha vendida não
+ * tem o vínculo) com os dados fiscais deles. Leitura recusada devolve `erro` e `ctx` nulo: a tela diz "não consegui conferir", nunca "pronta" nem "faltam dados".
+ * Consulta nova de tela que reabre: quem chama lê UMA vez ao abrir (e quando o conjunto de OPs muda), não de 30 em 30 segundos.
+ */
+export async function lerContextoDaProntidao(ops: any[]) {
+  try {
+    const em = await lerEmitentes();
+    if (em.erro) return { ctx: null, erro: em.erro };
+    const clientes = await lerPaginado(() => supabase.from('clientes').select('id,nome,documento').order('id'));
+    const fc = await lerTodosOsFiscaisDosClientes();
+    if (fc.erro) return { ctx: null, erro: fc.erro };
+    const { itemIds, nomes } = oQueAsOpsCitam(ops);
+    const catalogo = new Map<string, any>();
+    const COLUNAS = 'id,codigo,nome,ncm,ipi_pct,ativo,categoria';
+    for (let i = 0; i < itemIds.length; i += TAMANHO_DO_BLOCO) {
+      const { data, error } = await supabase.from('cadastro_itens').select(COLUNAS).in('id', itemIds.slice(i, i + TAMANHO_DO_BLOCO));
+      if (error) return { ctx: null, erro: explicarErroDoBanco(error) };
+      for (const l of data || []) catalogo.set(l.id, l);
+    }
+    const chavesDeNome = nomes.map(n => n.toLowerCase());   // `nome_norm` é o nome sem acento e em minúsculas
+    for (let i = 0; i < chavesDeNome.length; i += TAMANHO_DO_BLOCO) {
+      const { data, error } = await supabase.from('cadastro_itens').select(COLUNAS).in('nome_norm', chavesDeNome.slice(i, i + TAMANHO_DO_BLOCO)).neq('ativo', false);
+      if (error) return { ctx: null, erro: explicarErroDoBanco(error) };
+      for (const l of data || []) catalogo.set(l.id, l);
+    }
+    const fi = await lerFiscalDosItens([...catalogo.keys()]);
+    if (fi.erro) return { ctx: null, erro: fi.erro };
+    return { ctx: { clientes, fiscaisDosClientes: fc.mapa, catalogo: [...catalogo.values()], fiscaisDosItens: fi.mapa, emitentes: em.lista }, erro: '' };
+  } catch (e: any) {
+    return { ctx: null, erro: explicarErroDoBanco(e) };
+  }
+}
+
+/**
+ * As notas guardadas que uma OP cita (número digitado + empresa), os eventos delas (cancelamento) e o dicionário CNPJ → empresa. Só quem tem a aba Fiscal lê o arquivo (para os
+ * outros o banco responde "nenhuma linha", não erro): quem chama NÃO deve mostrar "sem nota guardada" a quem não pode ler (use `podeVerArquivoFiscal`).
+ */
+export async function lerNotasDaOp(op: any) {
+  const vazio = { notas: [] as any[], eventos: [] as any[], codigoDoCnpj: new Map<string, string>(), erro: '' };
+  const numeros = [...new Set(numerosDaNotaDaOp(op?.numero_nf))];
+  if (!numeros.length) return vazio;
+  try {
+    const em = await lerEmitentes();
+    if (em.erro) return { ...vazio, erro: em.erro };
+    const { data: notas, error } = await supabase.from('fiscal_notas')
+      .select('chave, emitente_cnpj, emitente_nome, serie, numero, emissao_dia, autorizada, cstat, destinatario_nome, bloqueios, alertas').in('numero', numeros);
+    if (error) return { ...vazio, erro: explicarErroDoBanco(error) };
+    const chaves = (notas || []).map((n: any) => n.chave);
+    let eventos: any[] = [];
+    if (chaves.length) {
+      const r = await supabase.from('fiscal_eventos').select('chave, tp_evento').in('chave', chaves);
+      if (r.error) return { ...vazio, erro: explicarErroDoBanco(r.error) };
+      eventos = r.data || [];
+    }
+    return { notas: notas || [], eventos, codigoDoCnpj: new Map<string, string>(em.lista.map((e: any) => [soDigitos(e.cnpj), e.codigo])), erro: '' };
+  } catch (e: any) {
+    return { ...vazio, erro: explicarErroDoBanco(e) };
+  }
 }

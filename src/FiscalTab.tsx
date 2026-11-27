@@ -35,9 +35,12 @@ import { useAbaNoEndereco } from './AbaNoEndereco';
 import FiscalCadastrosTela from './FiscalCadastrosTela';
 import FiscalConferidorTela from './FiscalConferidorTela';
 import FiscalArquivoTela from './FiscalArquivoTela';
+import { Janela } from './FiscalCadastrosTela';
+import { useProntidaoDasOps, SeloDaProntidao, DetalheDaProntidao } from './FiscalProntidaoTela';
+import { resumoDasProntidoes } from './FiscalProntidao';
 
 // O que era a tela inteira do Fiscal virou a aba "Faturamento" (26/11/2026, preparação do módulo fiscal): nada dentro dela mudou.
-function FaturamentoDoFiscal({ currentUser }) {
+function FaturamentoDoFiscal({ currentUser, aoIrAosCadastros }) {
   const [opls, setOpls] = useState([]);
   const [ordensOS, setOrdensOS] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -460,6 +463,11 @@ function FaturamentoDoFiscal({ currentUser }) {
 
   const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', [...aguardando, ...faturados].map(o => o.id), currentUser);
   const { naoLidoSet: osNaoLidas } = useUnreadMap('sac_ordens_servico', [...osAguardando, ...osFaturadas].map(o => o.id), currentUser);
+  // Prontidão para a nota (26/11/2026, preparação do módulo fiscal): cada OP que espera a nota mostra se cliente, itens e empresa têm os dados fiscais completos. Só informa: não trava o Faturado.
+  // Lê UMA vez quando o conjunto de OPs muda (não acompanha a atualização de 30 s); leitura recusada vira a faixa vermelha, nunca "pronta".
+  const prontidao = useProntidaoDasOps(aguardando);
+  const resumoProntidao = resumoDasProntidoes([...prontidao.mapa.values()]);
+  const [verProntidao, setVerProntidao] = useState(null);
 
   const contagemPorBase = {};
   aguardando.forEach(o => { const b = baseOplDe(o.opl); contagemPorBase[b] = (contagemPorBase[b]||0) + 1; });
@@ -521,6 +529,8 @@ function FaturamentoDoFiscal({ currentUser }) {
             <div className="acn-fraco acn-fis-lote-resumo">
               {chegaram.length} aguardando nota
               {jaFaturadas.length > 0 && <> · {jaFaturadas.length} já faturada(s){nfsJaEmitidas.length ? ` (${nfsJaEmitidas.join('; ')})` : ''}</>}
+              {(() => { const r = resumoDasProntidoes(chegaram.map(u => prontidao.mapa.get(u.id)));
+                return r.total > 0 ? <span className="acn-fis-lote-selo"><Selo familia={r.faltam ? 'atencao' : 'ok'} ponto={false} title="Abra a unidade para ver o que falta em cada uma">{r.faltam ? `${r.faltam} de ${r.total} com dado fiscal faltando` : 'Dados fiscais completos'}</Selo></span> : null; })()}
               {faltam.length > 0 && (
                 <span className="acn-fis-lote-selo">
                   <Selo familia="atencao" ponto={false}
@@ -585,6 +595,7 @@ function FaturamentoDoFiscal({ currentUser }) {
                   </Selo>
                 </div>
               )}
+              {prontidao.mapa.get(o.id) && <div><SeloDaProntidao p={prontidao.mapa.get(o.id)} onClick={() => setVerProntidao(o)} /></div>}
             </td>
             <td><VeiculoOuEnvio o={o} /></td>
             <td><span className={'acn-num ' + ((o.quantidade||1)>1 ? 'acn-forte' : 'acn-fraco')}>{o.quantidade||1}</span></td>
@@ -630,6 +641,11 @@ function FaturamentoDoFiscal({ currentUser }) {
           {falhaEquipe && <>{(falhas.ops || falhas.os || falhas.lotes) ? ' ' : ''}Não foi possível conferir a equipe apontada em cada OP: o aviso "Equipe não apontada" pode não aparecer, e depois de faturar a equipe trava.</>}
         </Faixa>
       )}
+      {prontidao.erro && (
+        <Faixa tom="erro" acao={<Botao pequeno variante="secundario" onClick={prontidao.recarregar}>Tentar de novo</Botao>}>
+          Não foi possível conferir os dados fiscais das OPs agora ({prontidao.erro}); o selo "Pronta para a nota" fica de fora até a leitura voltar.
+        </Faixa>
+      )}
       {/* RESUMO — notas pendentes / emitidas (OPs + OS veiculares, tudo que está na fila agora) */}
       <div className="acn-kpis">
         <div className="acn-kpi">
@@ -642,6 +658,13 @@ function FaturamentoDoFiscal({ currentUser }) {
           <span className="val acn-num">{totalEmitidas}</span>
           <span className="sub">{faturados.length} OP{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</span>
         </div>
+        {resumoProntidao.total > 0 && (
+          <div className="acn-kpi">
+            <span className="rot"><i data-acn-familia={resumoProntidao.faltam ? 'atencao' : 'ok'} />Dados fiscais completos</span>
+            <span className="val acn-num">{resumoProntidao.prontas}</span>
+            <span className="sub">de {resumoProntidao.total} OP{resumoProntidao.total!==1?'s':''} aguardando nota{resumoProntidao.faltam ? ` · ${resumoProntidao.faltam} com dado faltando` : ''}</span>
+          </div>
+        )}
       </div>
       <div className="acn-fis-barra">
         {podeCorrigirDataDaNota(currentUser) && <Botao pequeno icone={mdiCalendarEditOutline} onClick={() => setCorrigindoData({})}
@@ -683,6 +706,7 @@ function FaturamentoDoFiscal({ currentUser }) {
                           </Selo>
                         </div>
                       )}
+                      {prontidao.mapa.get(o.id) && <div><SeloDaProntidao p={prontidao.mapa.get(o.id)} onClick={() => setVerProntidao(o)} /></div>}
                     </td>
                     <td>
                       <VeiculoOuEnvio o={o} />
@@ -925,6 +949,12 @@ function FaturamentoDoFiscal({ currentUser }) {
         </div>
       )}
 
+      {verProntidao && (
+        <Janela titulo={`Dados fiscais — ${verProntidao.opl}`} pequena onClose={() => setVerProntidao(null)}
+          rodape={<Botao onClick={() => setVerProntidao(null)}>Fechar</Botao>}>
+          <DetalheDaProntidao p={prontidao.mapa.get(verProntidao.id)} aoIrAosCadastros={aoIrAosCadastros ? () => { setVerProntidao(null); aoIrAosCadastros(); } : undefined} />
+        </Janela>
+      )}
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
       {corrigindoData && <CorrigirDataDaNotaModal currentUser={currentUser} inicial={corrigindoData.op || null} onClose={() => setCorrigindoData(null)} onCorrigida={() => fetchAll(true)} />}
       {modalEquipe && (
@@ -985,7 +1015,7 @@ export default function FiscalTab({ currentUser }) {
         { id: 'cadastros', rotulo: 'Cadastros fiscais', titulo: 'Empresas emitentes, transportadoras e o que falta nos clientes e nos itens para a nota sair' },
         { id: 'conferidor', rotulo: 'Conferidor de XML', titulo: 'Solte XMLs de notas emitidas e veja o que está errado (só leitura)' },
       ]} />
-      {aba === 'faturamento' && <FaturamentoDoFiscal currentUser={currentUser} />}
+      {aba === 'faturamento' && <FaturamentoDoFiscal currentUser={currentUser} aoIrAosCadastros={() => setAba('cadastros')} />}
       {aba === 'cadastros' && <FiscalCadastrosTela currentUser={currentUser} />}
       {aba === 'arquivo' && <FiscalArquivoTela currentUser={currentUser} aoIrAoConferidor={() => setAba('conferidor')} />}
       {aba === 'conferidor' && <FiscalConferidorTela currentUser={currentUser} />}
