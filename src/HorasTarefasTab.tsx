@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): a tarefa aberta em janela tem endereço próprio
 import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -15,10 +16,11 @@ import { confirmar } from './Feedback';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ParticipantesPicker, ModalEditarParticipantes, ListaParticipantes, participantesDe, novosParticipantes, notificarParticipantes } from './Participantes';
 import { Faixa, MenuAcoes, Botao } from './Interface';
+import { mdiLink } from '@mdi/js';
 import { LinkOpl } from './AcnTabShared';
 import { ModalAnexosTarefa, contarAnexosDasTarefas } from './TarefaAnexos';
 import {
-  ehGestorEngenharia, mesmaPessoa, normNome, nomesDoUsuario, carregarContextoHorario, extrasAprovadas, horasExtrasDaPessoa,
+  ehGestorEngenharia, mesmaPessoa, normNome, nomesDoUsuario, nomesDoUsuarioComErro, carregarContextoHorario, extrasAprovadas, horasExtrasDaPessoa,
   textoPeriodo, CONTEXTO_VAZIO, PainelHorasExtras, ModalHoraExtra, type ContextoHorario,
 } from './HorasExtras';
 import {
@@ -274,7 +276,7 @@ function ModalObs({ tarefa, onClose, onSalvo }: any) {
 }
 
 // ─── Linha de tarefa ──────────────────────────────────────────────────────────
-function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHorario }: any) {
+function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHorario, onAbrir }: any) {
   const [modalPausar, setModalPausar] = useState(false);
   const [verLog, setVerLog] = useState(false);
   const [editTitulo, setEditTitulo] = useState<string | null>(null);
@@ -404,6 +406,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
             )}
             {/* Só as ações rápidas ficam à vista; o resto vai para o ⋯ */}
             <MenuAcoes rotulo="Mais ações da tarefa" itens={[
+              { rotulo: '🔎 Abrir em janela (com link)', onClick: () => onAbrir && onAbrir(tarefa), oculto: !onAbrir },
               { rotulo: temObs ? '📝 Ver observações' : '📝 Adicionar observação', onClick: () => setModalObs(true) },
               { rotulo: `📋 ${verLog ? 'Ocultar' : 'Ver'} pausas (${(tarefa.pausas || []).length})`, onClick: () => setVerLog(v => !v), oculto: !(tarefa.pausas || []).length },
               { rotulo: '✏️ Editar descrição', onClick: () => setEditTitulo(tarefa.titulo || ''), oculto: tarefa.status === 'concluida' },
@@ -991,6 +994,55 @@ function RelatorioHoras({ currentUser }: any) {
   );
 }
 
+// ─── Janela de leitura da tarefa (Fase 6 do plano de endereços, 26/11/2026) ───────
+// Só mostra: o que muda a tarefa (iniciar, pausar, retomar, concluir, editar) continua na linha da lista. O tempo só aparece quando os feriados e as horas extras foram lidos
+// (sem eles a conta sai errada, e a lista já avisa isso numa faixa).
+function JanelaDaTarefa({ tarefa, agora, ctx, ctxPronto, currentUser, onFechar }: any) {
+  const extras = extrasAprovadas(ctx, tarefa.responsavel_nome || '');
+  const decorrido = ctxPronto && tarefa.data_inicio ? fmtDuracao(segundosContados(tarefa, agora, ctx.feriados, extras)) : null;
+  const pausas = tarefa.pausas || [];
+  const obs = String(tarefa.observacoes || '').trim();
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onFechar(); }}>
+      <div className="modal-box acn-modal-cadastro acn-ht-jan" role="dialog" aria-label="Tarefa da Engenharia">
+        <div className="acn-modal-cab">
+          <span className="modal-title">{tarefa.titulo}</span>
+          <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta tarefa" title="Copiar o link desta tarefa para colar numa mensagem ou e-mail"
+            onClick={() => copiarLinkDoRegistroComAviso('engenharia', 'tarefa', tarefa.id, 'da tarefa')} />
+        </div>
+        <div className="acn-modal-corpo">
+          <dl className="acn-ht-ficha">
+            <dt className="acn-fraco">Responsável</dt><dd>{tarefa.responsavel_nome || '—'}</dd>
+            <dt className="acn-fraco">Situação</dt><dd><span className={'acn-badge acn-ht-st-' + tarefa.status}>{STATUS_LABEL[tarefa.status] || tarefa.status}</span></dd>
+            <dt className="acn-fraco">Tempo</dt><dd>{tarefa.data_inicio ? (decorrido ?? 'não foi possível calcular agora') : '—'}</dd>
+            <dt className="acn-fraco">Início</dt><dd>{fmtDtHr(tarefa.data_inicio)}</dd>
+            {tarefa.data_conclusao && (<><dt className="acn-fraco">Concluída em</dt><dd>{fmtDtHr(tarefa.data_conclusao)}</dd></>)}
+            {tarefa.numero_opl && (<><dt className="acn-fraco">OP</dt><dd><LinkOpl opl={tarefa.numero_opl} currentUser={currentUser} discreto /></dd></>)}
+            {participantesDe(tarefa).length > 0 && (<><dt className="acn-fraco">Participantes</dt><dd><ListaParticipantes item={tarefa} usuario={currentUser} /></dd></>)}
+            <dt className="acn-fraco">Anexos</dt><dd>{tarefa._anexos != null ? tarefa._anexos : '—'}</dd>
+          </dl>
+          {obs && (<><div className="acn-fraco acn-ht-ficha-tit">Observações</div><div className="acn-ht-ficha-obs">{obs}</div></>)}
+          {pausas.length > 0 && (
+            <>
+              <div className="acn-fraco acn-ht-ficha-tit">Pausas ({pausas.length})</div>
+              {pausas.map((p: any, i: number) => (
+                <div key={i} className="acn-ht-ficha-pausa">
+                  <strong>{fmtDtHr(p.pausado_em)}</strong>{p.retomado_em ? ` → ${fmtDtHr(p.retomado_em)}` : ' (pausa ativa)'}
+                  <div className="acn-fraco">Motivo: {p.motivo}</div>
+                </div>
+              ))}
+            </>
+          )}
+          <p className="acn-ajuda">Para iniciar, pausar, retomar ou concluir a tarefa, use os botões da linha dela na lista.</p>
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onFechar}>Fechar</Botao>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUser: any; abaInicial?: string }) {
   // o Relatório gerencial só existe para o gestor da Engenharia (a mesma regra dos botões abaixo): link dele colado por quem não é gestor cai em Tarefas
@@ -1015,6 +1067,26 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
   const [meusNomes, setMeusNomes] = useState<string[] | null>(null);
   useEffect(() => { if (!gestor) nomesDoUsuario(currentUser).then(setMeusNomes); }, [gestor, currentUser?.id]);
   const minhas = gestor ? tarefas : meusNomes ? tarefas.filter(t => mesmaPessoa(t.responsavel_nome, meusNomes)) : [];
+
+  // 26/11/2026 (plano de endereços e rotas, Fase 6): a tarefa abre numa JANELA DE LEITURA com endereço próprio, `#/engenharia/tarefa/<código>` (escolha do usuário: só leitura; iniciar, pausar, retomar e concluir
+  // continuam só na linha da lista, onde mora a regra do relógio e das horas extras). Abre quem a lista já mostra (o gestor, ou o responsável pela tarefa): tarefa de outra pessoa responde como se não existisse
+  // (uma só mensagem), a mesma escolha da tarefa do Financeiro. O botão "Abrir em janela" está no menu ⋯ da linha; a Menção e a data da tarefa no Calendário abrem a mesma janela.
+  const [abertaId, setAbertaId] = useState<string | null>(null);
+  const [lida, setLida] = useState<any>(null);
+  useRegistroNoEndereco({
+    tela: 'engenharia', tipo: 'tarefa', rotulo: 'a tarefa da Engenharia',
+    aberto: abertaId,
+    ler: async (chave) => {
+      const r = await lerPorCodigo(supabase.from('engenharia_horas_tarefas').select('*').eq('id', chave).maybeSingle());
+      if (!r.registro || gestor) return r;
+      const p = await nomesDoUsuarioComErro(currentUser);
+      if (p.erro) return { registro: null, erro: p.erro };   // sem saber quem é a pessoa não se abre nem se recusa: a leitura falhou
+      return mesmaPessoa(r.registro.responsavel_nome, p.nomes) ? r : { registro: null, erro: '' };
+    },
+    mostrar: (t) => { setLida(t); setAbertaId(String(t.id)); },
+    fechar: () => setAbertaId(null),
+  });
+  const aberta = abertaId ? (tarefas.find((x: any) => String(x.id) === abertaId) || (lida && String(lida.id) === abertaId ? lida : null)) : null;
 
   // tarefas + feriados e horas extras; a cada minuto em silêncio
   const carregar = async (silencioso = false) => {
@@ -1179,7 +1251,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
                   <tbody>
                     {filtradas.map(t => (
                       <LinhaTarefa key={t.id} tarefa={t} agora={tick} onAtualizado={() => carregar(true)} currentUser={currentUser}
-                        ctx={ctx} onForaDoHorario={foraDoHorario} />
+                        ctx={ctx} onForaDoHorario={foraDoHorario} onAbrir={t => setAbertaId(String(t.id))} />
                     ))}
                   </tbody>
                 </table>
@@ -1189,6 +1261,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
         </>
       )}
 
+      {aberta && <JanelaDaTarefa tarefa={aberta} agora={tick} ctx={ctx} ctxPronto={ctxPronto && !ctxErro} currentUser={currentUser} onFechar={() => setAbertaId(null)} />}
       {horaExtra && (
         <ModalHoraExtra currentUser={currentUser} pessoaNome={horaExtra.tarefa.responsavel_nome || currentUser?.nome}
           tarefa={horaExtra.tarefa} acao={horaExtra.acao} onClose={() => setHoraExtra(null)} onFeito={horaExtraRegistrada} />
