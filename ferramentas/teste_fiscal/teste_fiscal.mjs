@@ -410,4 +410,59 @@ t('notasDaOp: as notas que a OP cita, pelo número e pela empresa, da mais nova 
   assert.deepEqual(A.notasDaOp({ opl: 'X', numero_nf: '', faturamento_empresa: 'ACN' }, notas, CODIGOS), []);
 });
 
+// ═══ Ligar a OP ao cliente do cadastro (27/11/2026) ═══
+const L = await import(pathToFileURL(RAIZ + '/FiscalLigacaoDaOp.ts').href);
+const CLI_A = { id: 'c1', nome: 'Prefeitura de Teste', documento: '11222333000181' };
+const CLI_B = { id: 'c2', nome: 'Outra Prefeitura', documento: '45723174000110' };
+
+t('acharCliente: o cliente_id gravado na OP manda sobre o nome escrito e sobre o CPF/CNPJ', () => {
+  const r = P.acharCliente({ cliente_id: 'c2', cliente_nome: 'Prefeitura de Teste', cnpj_faturamento: '11222333000181' }, [CLI_A, CLI_B]);
+  assert.equal(r.situacao, 'achado'); assert.equal(r.cliente.id, 'c2'); assert.equal(r.por, 'id');
+});
+t('acharCliente: cliente_id que não está na lista lida NÃO cai no nome (nunca fatura para o cliente errado em silêncio)', () => {
+  const r = P.acharCliente({ cliente_id: 'zzz', cliente_nome: 'Prefeitura de Teste' }, [CLI_A, CLI_B]);
+  assert.equal(r.situacao, 'sem_cadastro'); assert.equal(r.por, 'id'); assert.equal(r.cliente, null);
+});
+t('prontidaoDaOp: OP ligada pelo id fica pronta mesmo com o nome escrito diferente do cadastro', () => {
+  const p = P.prontidaoDaOp({ ...OP_OK, cliente_nome: 'LETICIA - PV A 1741 - AMBIENTAL', cliente_id: 'c1' }, mundo());
+  assert.equal(p.situacao, 'pronta');
+});
+t('prontidaoDaOp: a pendência de cliente sem cadastro aponta o caminho (Cadastros fiscais › OPs sem cliente)', () => {
+  const p = P.prontidaoDaOp({ ...OP_OK, cliente_nome: 'NOME QUE NAO EXISTE' }, mundo());
+  assert.match(p.pendencias[0].faltas[0], /não achei no cadastro de clientes/); assert.match(p.pendencias[0].faltas[0], /OPs sem cliente/);
+});
+t('opPrecisaDeLigacao: só a OP viva, sem nota e sem ligação (cancelada, faturada, com nota ou já ligada ficam de fora)', () => {
+  assert.equal(L.opPrecisaDeLigacao({ id: 1, cliente_nome: 'X', status_geral: 'Em Producao', numero_nf: '' }), true);
+  assert.equal(L.opPrecisaDeLigacao({ id: 1, status_geral: 'Aguarda Emissao NF', numero_nf: null }), true);
+  assert.equal(L.opPrecisaDeLigacao({ id: 1, status_geral: 'Cancelado' }), false);
+  assert.equal(L.opPrecisaDeLigacao({ id: 1, status_geral: 'Faturado' }), false);
+  assert.equal(L.opPrecisaDeLigacao({ id: 1, status_geral: 'Faturado e Disponivel para Entrega', numero_nf: '1679' }), false);
+  assert.equal(L.opPrecisaDeLigacao({ id: 1, status_geral: 'Em Producao', cliente_id: 'c1' }), false);
+  assert.equal(L.opPrecisaDeLigacao(null), false);
+});
+t('agruparParaLigar: o mesmo nome (sem acento nem caixa) vira UM grupo, com as OPs em ordem de número', () => {
+  const ops = [{ id: 1, opl: 'A10.2611/02', cliente_nome: 'prefeitura de teste', status_geral: 'Em Producao' }, { id: 2, opl: 'A10.2611/01', cliente_nome: ' Prefeitura de Teste ', status_geral: 'Em Producao' }, { id: 3, opl: 'A11.2611', cliente_nome: 'Outro', status_geral: 'Em Producao' }];
+  const g = L.agruparParaLigar(ops, [CLI_A, CLI_B]);
+  assert.equal(g.length, 2); assert.equal(g[0].ops.length, 2);
+  assert.deepEqual(g[0].ops.map(o => o.opl), ['A10.2611/01', 'A10.2611/02']);
+  assert.equal(g[0].sugestao.situacao, 'achado'); assert.equal(g[0].sugestao.cliente.id, 'c1'); assert.equal(g[1].sugestao.situacao, 'sem_cadastro');
+});
+t('agruparParaLigar: dois cadastros com o mesmo nome é ambíguo; se as OPs do grupo apontam para cadastros diferentes (CNPJ), nada é sugerido', () => {
+  const dois = [CLI_A, { ...CLI_A, id: 'c9' }];
+  assert.equal(L.agruparParaLigar([{ id: 1, opl: 'A1', cliente_nome: 'Prefeitura de Teste', status_geral: 'Em Producao' }], dois)[0].sugestao.situacao, 'ambiguo');
+  const ops = [{ id: 1, opl: 'A1', cliente_nome: 'Prefeitura', cnpj_faturamento: '11222333000181', status_geral: 'Em Producao' }, { id: 2, opl: 'A2', cliente_nome: 'Prefeitura', cnpj_faturamento: '45723174000110', status_geral: 'Em Producao' }];
+  const s = L.agruparParaLigar(ops, [CLI_A, CLI_B])[0].sugestao;
+  assert.notEqual(s.situacao, 'achado'); assert.equal(s.cliente, null);
+});
+t('agruparParaLigar: OP sem nome de cliente vira grupo "sem_nome" (nada a sugerir) e OP já ligada ou com nota não entra', () => {
+  const g = L.agruparParaLigar([{ id: 1, opl: 'A1', cliente_nome: '', status_geral: 'Em Producao' }, { id: 2, opl: 'A2', cliente_nome: 'X', cliente_id: 'c1', status_geral: 'Em Producao' }, { id: 3, opl: 'A3', cliente_nome: 'X', numero_nf: '5', status_geral: 'Em Producao' }], [CLI_A]);
+  assert.equal(g.length, 1); assert.equal(g[0].sugestao.situacao, 'sem_nome');
+});
+t('resumoDasLigacoes e gruposComSugestao: contam OPs e nomes, com e sem cadastro achado', () => {
+  const ops = [{ id: 1, opl: 'A1', cliente_nome: 'Prefeitura de Teste', status_geral: 'Em Producao' }, { id: 2, opl: 'A2', cliente_nome: 'Prefeitura de Teste', status_geral: 'Em Producao' }, { id: 3, opl: 'A3', cliente_nome: 'Desconhecido', status_geral: 'Em Producao' }];
+  const g = L.agruparParaLigar(ops, [CLI_A]);
+  assert.equal(L.gruposComSugestao(g).length, 1);
+  assert.deepEqual(L.resumoDasLigacoes(g), { ops: 3, nomes: 2, opsComSugestao: 2, nomesComSugestao: 1, opsSemSugestao: 1 });
+});
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS (veja acima)' : ''}.`);

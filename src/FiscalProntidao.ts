@@ -41,10 +41,16 @@ export function linhasVendidas(op: any): any[] {
 /** Serviço de instalação, frete e afins têm a categoria "GENERICO" no cadastro: não são mercadoria da NF-e. */
 export const ehGenerico = (item: any): boolean => chaveDoNome(item?.categoria) === 'GENERICO';
 
-export type AcheiOCliente = { situacao: 'achado' | 'sem_nome' | 'sem_cadastro' | 'ambiguo'; cliente: any | null; por: 'documento' | 'nome' | '' };
+export type AcheiOCliente = { situacao: 'achado' | 'sem_nome' | 'sem_cadastro' | 'ambiguo'; cliente: any | null; por: 'id' | 'documento' | 'nome' | '' };
 
-/** Liga a OP a UM cliente do cadastro: pelo CPF/CNPJ da OP, quando tem e acha um só; senão pelo nome idêntico (sem acento nem caixa). Dois iguais não se chuta. */
+/** Liga a OP a UM cliente do cadastro. Ordem (27/11/2026): 1) a ligação gravada na OP (`cliente_id`, escolhida na Nova OP ou pelo Fiscal) manda sobre tudo;
+ *  2) o CPF/CNPJ da OP, quando tem e acha um só; 3) o nome idêntico (sem acento nem caixa). Dois iguais não se chuta.
+ *  Id gravado que não está na lista lida NÃO cai no nome: a pessoa ligou um cadastro, e mostrar outro em silêncio seria faturar para o cliente errado. */
 export function acharCliente(op: any, clientes: any[]): AcheiOCliente {
+  if (op?.cliente_id) {
+    const ligado = (clientes || []).find(c => String(c.id) === String(op.cliente_id));
+    return ligado ? { situacao: 'achado', cliente: ligado, por: 'id' } : { situacao: 'sem_cadastro', cliente: null, por: 'id' };
+  }
   const doc = soDigitos(op?.cnpj_faturamento);
   if (doc.length === 11 || doc.length === 14) {
     const porDoc = (clientes || []).filter(c => soDigitos(c.documento) === doc);
@@ -101,7 +107,7 @@ export function prontidaoDaOp(op: any, ctx: ContextoDaProntidao): Prontidao {
   // ── cliente ──
   const cli = acharCliente(op, ctx.clientes);
   if (cli.situacao === 'sem_nome') pendencias.push({ grupo: 'cliente', titulo: 'Cliente', faltas: ['a OP não tem o nome do cliente'] });
-  else if (cli.situacao === 'sem_cadastro') pendencias.push({ grupo: 'cliente', titulo: `Cliente "${String(op?.cliente_nome || '').trim()}"`, faltas: ['não achei no cadastro de clientes com este nome (o nome da OP tem de ser o do cadastro)'] });
+  else if (cli.situacao === 'sem_cadastro') pendencias.push({ grupo: 'cliente', titulo: `Cliente "${String(op?.cliente_nome || '').trim()}"`, faltas: [cli.por === 'id' ? 'não achei no cadastro de clientes o cliente a que a OP está ligada (a leitura do cadastro pode estar incompleta): tente de novo' : 'não achei no cadastro de clientes com este nome: ligue a OP ao cliente em Cadastros fiscais › OPs sem cliente'] });
   else if (cli.situacao === 'ambiguo') pendencias.push({ grupo: 'cliente', titulo: `Cliente "${String(op?.cliente_nome || '').trim()}"`, faltas: [cli.por === 'documento' ? 'há mais de um cadastro com este CPF/CNPJ' : 'há mais de um cadastro com este nome: não sei qual é'] });
   else {
     const f: string[] = faltasDoCliente(ctx.fiscaisDosClientes.get(cli.cliente.id)).map(c => textoDeFalta(c, rotuloDoCliente));
