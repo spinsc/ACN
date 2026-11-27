@@ -1,7 +1,9 @@
 # PLANO_TIPAGEM — sair do `// @ts-nocheck`, por etapas, sem mexer no que está no ar
 
-> **Status: PROPOSTA para aprovação (27/11/2026).** Nada disto foi aplicado. O `CLAUDE.md` continua
-> dizendo "não remover o `@ts-nocheck`" até o usuário aprovar o texto novo da seção 8.
+> **Status (27/11/2026): etapas 0 e 1 FEITAS e commitadas localmente (ainda sem publicar); etapas 2 a 5 seguem como proposta.**
+> Etapa 0: três arquivos mortos apagados, `npm run conferir` criado e rodando no deploy, trava das diretivas em `ferramentas/tipagem/`.
+> Etapa 1: `@ts-nocheck` tirado de 203 arquivos (50 módulos, 139 componentes, 14 telas) — **de 283 para 80 arquivos com a diretiva**; só a linha saiu,
+> JS e CSS do build idênticos. O `CLAUDE.md` já usa o texto da seção 8 (adaptado). As medições abaixo são de antes das etapas 0 e 1.
 > Tudo que está aqui foi **medido no código de 27/11/2026** (commit `1fa502a`), num experimento
 > descartável (tirei a diretiva de todos os arquivos, rodei o `tsc`, desfiz com `git checkout`).
 > O que é **estimativa** está escrito "estimativa".
