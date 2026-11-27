@@ -8,6 +8,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { nomeSeguroDeArquivo, contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -53,10 +55,10 @@ export async function enviarArquivos(demandaId: string, etapaNome: string, entId
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     const path = `desenvolvimento/${demandaId}/${nomeSeguroDeArquivo(etapaNome)}/${entId}/${Date.now()}_${i}_${nomeSeguroDeArquivo(f.name)}`;
-    const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: contentTypeUpload(f) });
-    if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-    enviados.push({ nome: f.name, url: pub?.publicUrl || '', por: currentUser?.nome || '', em: new Date().toISOString() });
+    // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+    const { valor: valorPriv, erro: error } = await enviarArquivoPrivado(path, f, contentTypeUpload(f));
+    if (error || !valorPriv) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
+    enviados.push({ nome: f.name, url: valorPriv, por: currentUser?.nome || '', em: new Date().toISOString() });
   }
   return { enviados, falhas };
 }
@@ -169,7 +171,7 @@ function Entregavel({ demanda, etapa, idx, ent, travado, executar, ocupado, curr
         <div className="acn-dev-anexos-lista">
           {estado.anexos.map((a: any, i: number) => (
             <span key={i} className="acn-dev-anexo-grupo">
-              {a.url ? <a href={a.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a>
+              {a.url ? <LinkDeArquivo valor={a.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</LinkDeArquivo>
                 : <span className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>}
               {!travado && <button type="button" className="acn-dev-anexo-x" aria-label={`Tirar ${a.nome}`} title="Tirar anexo" onClick={() => tirarAnexo(a)}><Icone path={mdiClose} size={13} /></button>}
             </span>

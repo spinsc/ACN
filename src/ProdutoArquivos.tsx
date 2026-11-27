@@ -6,6 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { confirmar } from './Feedback';
@@ -33,11 +35,11 @@ export function ProdutoArquivos({ produtoId, currentUser, somenteLeitura = false
     const falhas: string[] = [];
     for (const f of Array.from(files)) {
       const path = `produtos/${produtoId}/projeto/${Date.now()}_${nomeSeguroDeArquivo(f.name)}`;
-      const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: false });
-      if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor: valorPriv, erro: error } = await enviarArquivoPrivado(path, f, f.type || undefined);
+      if (error || !valorPriv) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
       const { error: e2 } = await supabase.from('cadastro_produtos_anexos').insert([{
-        produto_id: produtoId, nome: f.name, url: pub.publicUrl, criado_por: currentUser?.nome || null,
+        produto_id: produtoId, nome: f.name, url: valorPriv, criado_por: currentUser?.nome || null,
       }]);
       if (e2) falhas.push(`${f.name}: o arquivo subiu, mas não foi registrado no produto (${e2.message})`);
     }

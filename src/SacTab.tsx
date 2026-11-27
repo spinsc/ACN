@@ -31,6 +31,7 @@ import { CampoTelefone } from './CampoTelefone';
 import { erroDeTelefone, telefoneParaMostrar } from './Telefone';
 import { gerarPdfDaOS } from './SacImpressaoOS';
 import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo, ImagemPrivada } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline, mdiAccountWrenchOutline } from '@mdi/js';
@@ -143,10 +144,10 @@ function SignCanvas({ onSave }) {
 async function uploadFoto(file: File, pasta: string): Promise<string | null> {
   // 16/10/2026: só se trocava o espaço; nome com acento ou símbolo era recusado pelo armazenamento e a OS não abria sem dizer por quê
   const path = `sac/${pasta}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) { registrarFalhaDeEnvio(error, file); return null; }
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl || null;
+  // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro: error } = await enviarArquivoPrivado(path, file, file.type || undefined);
+  if (error || !valor) { registrarFalhaDeEnvio(error, file); return null; }
+  return valor;
 }
 
 async function uploadAssinatura(dataUrl: string, pasta: string): Promise<string | null> {
@@ -1136,10 +1137,9 @@ function SacTabCompleto({ currentUser }) {
   // Upload genérico de arquivo
   const uploadArquivo = async (file: File, pasta: string): Promise<{nome:string;url:string;tipo:string}|null> => {
     const path = `sac/${pasta}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
-    const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert:true, contentType:'application/octet-stream' });
-    if (error||!data) { registrarFalhaDeEnvio(error, file); return null; }
-    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-    return { nome: file.name, url: pub?.publicUrl||'', tipo: file.type };
+    const { valor, erro: error } = await enviarArquivoPrivado(path, file, 'application/octet-stream');   // bucket privado (B2, 26/11/2026)
+    if (error || !valor) { registrarFalhaDeEnvio(error, file); return null; }
+    return { nome: file.name, url: valor, tipo: file.type };
   };
 
   // Etapa 7.27 (01/10/2026): devolve true se anexou. Arquivo que não subia era descartado em silêncio e a gravação recusada seguia como se tivesse dado certo (a janela limpava a seleção e dizia que
@@ -3117,13 +3117,13 @@ Não leva: ${NAO_LEVA_DA_OS.join('; ')}.`, '1');
                     {modalAnexar.arquivos_os.map((a:any,i:number)=>{
                       const isImg = a.tipo&&a.tipo.startsWith('image/');
                       return isImg ? (
-                        <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.nome}>
-                          <img className="acn-sac-miniatura" src={a.url} alt={a.nome} />
-                        </a>
+                        <LinkDeArquivo key={i} valor={a.url} title={a.nome}>
+                          <ImagemPrivada className="acn-sac-miniatura" valor={a.url} alt={a.nome} />
+                        </LinkDeArquivo>
                       ) : (
-                        <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-sac-anexo-doc">
+                        <LinkDeArquivo key={i} valor={a.url} className="acn-sac-anexo-doc">
                           <Icone path={mdiFileDocumentOutline} size={14} /> {a.nome}
-                        </a>
+                        </LinkDeArquivo>
                       );
                     })}
                   </div>

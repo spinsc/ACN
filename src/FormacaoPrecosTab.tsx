@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
@@ -3121,13 +3122,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       const safeName = `formacao-precos_${(nomeCotacao || 'sem-nome').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`;
       const path     = `opl-anexos/${safeOpl}/${safeName}`;
 
-      const { data: upData, error: upErr } = await supabase.storage
-        .from('acn-media')
-        .upload(path, pdfBlob, { upsert: true, contentType: 'application/pdf' });
+      // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor: valorPdf, erro: upErr } = await enviarArquivoPrivado(path, pdfBlob, 'application/pdf');
 
-      if (upErr || !upData) throw new Error('não foi possível enviar o PDF: ' + explicarErroDeEnvio(upErr));
-
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      if (upErr || !valorPdf) throw new Error('não foi possível enviar o PDF: ' + explicarErroDeEnvio(upErr));
 
       const { error: erroAnexoPdf } = await supabase.from('opl_anexos').insert([{
         opl_id:     oplVinculada.id,
@@ -3135,7 +3133,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         setor:      'Preços',
         tipo:       'documento',
         nome:       safeName,
-        url:        pub?.publicUrl || '',
+        url:        valorPdf,
         criado_por: currentUser?.nome,
       }]);
       // 7.59: o PDF subia e o aviso dizia "anexado à OP" mesmo sem o registro do anexo (nada aparecia nos anexos da OP)
