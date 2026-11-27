@@ -109,10 +109,6 @@ export default function EngenhariaTab({ currentUser }) {
   // Etapa 18e (13/10/2026): a Engenharia só recebe pedidos de desenvolvimento, então a aba de abertura é a de Desenvolvimento
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/engenharia/estruturas…); Desenvolvimento é a padrão e fica sem nome na barra
   const [abaEng, setAbaEng] = useAbaNoEndereco({ tela: 'engenharia' }) as [string, (v: any) => void];
-  // Deep-link da busca global do topo (DashboardTab.tsx) — clicar num
-  // resultado de "Desenvolvimento (Engenharia)" troca pra essa sub-aba e
-  // pré-preenche a busca local com o mesmo termo digitado.
-  const [buscaDeepLink, setBuscaDeepLink] = useState('');
   // Fase 6 (26/11/2026): a demanda do Desenvolvimento (`#/engenharia/projeto/<código>`) mora na aba Desenvolvimento e a tarefa da Engenharia (`#/engenharia/tarefa/<código>`) na aba Horas/Tarefas:
   // com a tela já aberta em outra aba, o endereço troca para a aba dona, que lê o endereço e abre a janela.
   useEffect(() => {
@@ -124,14 +120,7 @@ export default function EngenhariaTab({ currentUser }) {
     sincronizar();
     return aoMudarEndereco(sincronizar, { internas: true });
   }, []);
-  useEffect(() => {
-    const handler = (e) => {
-      setAbaEng('desenvolvimento');
-      setBuscaDeepLink(e.detail?.termo || '');
-    };
-    window.addEventListener('engenharia:abrir-desenvolvimento', handler);
-    return () => window.removeEventListener('engenharia:abrir-desenvolvimento', handler);
-  }, []);
+  // 26/11/2026: o ouvinte `engenharia:abrir-desenvolvimento` (busca do topo → aba Desenvolvimento com a busca preenchida) saiu: ninguém mais o disparava, porque a busca geral abre a demanda pelo endereço `#/engenharia/projeto/<código>`.
   // Menção de hora extra (painel de Menções) abre Horas/Tarefas › Horas extras. Usa o
   // global __acnDeepLink porque a aba pode montar depois do clique (mesmo padrão de Compras).
   const [horasAbaInicial, setHorasAbaInicial] = useState(undefined);
@@ -599,7 +588,7 @@ export default function EngenhariaTab({ currentUser }) {
 
       {abaEng === 'desenvolvimento' ? (
         <div className="acn-eng-sub">
-          <DesenvolvimentoPecasTab currentUser={currentUser} buscaInicial={buscaDeepLink} />
+          <DesenvolvimentoPecasTab currentUser={currentUser} />
         </div>
       ) : abaEng === 'estruturas' ? (
         <div className="acn-eng-sub">

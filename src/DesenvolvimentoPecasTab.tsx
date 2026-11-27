@@ -598,18 +598,13 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: { currentUser: any; buscaInicial?: string }) {
+export default function DesenvolvimentoPecasTab({ currentUser }: { currentUser: any }) {
   const [demandas, setDemandas] = useState<any[] | null>(null);   // null = ainda não leu; depois da primeira leitura a lista fica na tela enquanto recarrega
   const [erroLista, setErroLista] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'andamento' | 'concluidas' | 'canceladas'>('todas');
-  const [busca, setBusca] = useState(buscaInicial || '');
+  const [busca, setBusca] = useState('');
   const [alerta, setAlerta] = useState('todos');
   const [modalNova, setModalNova] = useState(false);
-
-  // Deep-link da busca global (DashboardTab.tsx) — chega depois da
-  // montagem inicial (a aba Engenharia troca de sub-aba e só então
-  // dispara o evento), então precisa reagir a mudanças, não só ao mount.
-  useEffect(() => { if (buscaInicial) setBusca(buscaInicial); }, [buscaInicial]);
 
   const carregar = async () => {
     try {
