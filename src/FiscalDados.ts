@@ -268,6 +268,46 @@ export async function lerContextoDaProntidao(ops: any[]) {
   }
 }
 
+// ═══ Ligar a OP ao cliente do cadastro (27/11/2026; regras puras em FiscalLigacaoDaOp.ts; coluna `oples.cliente_id`, supabase/sql/oples_cliente_id.sql) ═══
+/**
+ * As OPs que ainda vão virar nota e não têm cliente ligado, e os clientes do cadastro. Leitura recusada devolve `erro` (a tela diz que a lista está incompleta, nunca "nenhuma OP sem cliente").
+ * A OP excluída não vem: a política do banco a esconde de todas as telas.
+ */
+export async function lerOpsParaLigar() {
+  try {
+    const ops = await lerPaginado(() => supabase.from('oples').select('id,opl,cliente_nome,cnpj_faturamento,status_geral,numero_nf,cliente_id').is('cliente_id', null).order('id'));
+    const clientes = await lerPaginado(() => supabase.from('clientes').select('id,nome,tipo,documento,cidade,estado').order('id'));
+    return { ops, clientes, erro: '' };
+  } catch (e: any) {
+    return { ops: [] as any[], clientes: [] as any[], erro: explicarErroDoBanco(e) };
+  }
+}
+
+/**
+ * Liga um conjunto de OPs a UM cliente do cadastro. Só toca as que AINDA estão sem ligação (`cliente_id is null` na própria gravação: duas pessoas não se atropelam) e confere
+ * quantas linhas o banco confirmou. Nome e o resto da OP não mudam. Devolve `{ ok, erro, ligadas }`; `ligadas` < pedidas quer dizer que alguma OP já tinha sido ligada por outra pessoa.
+ */
+export async function ligarOpsAoCliente(ops: any[], cliente: any, usuario: any) {
+  const lista = (ops || []).filter(o => o?.id);
+  if (!lista.length) return { ok: false, erro: 'Nenhuma OP escolhida.', ligadas: 0 };
+  if (!cliente?.id) return { ok: false, erro: 'Escolha o cliente do cadastro.', ligadas: 0 };
+  let ligadas = 0;
+  const confirmadas: any[] = [];
+  for (let i = 0; i < lista.length; i += 100) {
+    const bloco = lista.slice(i, i + 100);
+    const { data, error } = await supabase.from('oples').update({ cliente_id: cliente.id }).in('id', bloco.map(o => o.id)).is('cliente_id', null).select('id');
+    if (error) return { ok: false, erro: `${explicarErroDoBanco(error)}${ligadas ? ` (${ligadas} OP(s) já foram ligadas antes de parar.)` : ''}`, ligadas };
+    const ids = new Set((data || []).map((l: any) => l.id));
+    ligadas += ids.size;
+    for (const o of bloco) if (ids.has(o.id)) confirmadas.push(o);
+  }
+  for (const o of confirmadas) {
+    logChange({ module: 'fiscal', entityType: 'oples', entityId: o.id, changeType: 'UPDATE', oldRow: { cliente_id: null }, newRow: { cliente_id: cliente.id }, user: usuario, metadata: { cliente: cliente.nome, cliente_escrito_na_op: o.cliente_nome, opl: o.opl } });
+  }
+  if (ligadas !== lista.length) return { ok: false, erro: `O banco ligou ${ligadas} de ${lista.length} OPs: as outras já tinham sido ligadas por alguém. Atualize a lista e confira.`, ligadas };
+  return { ok: true, erro: '', ligadas };
+}
+
 /**
  * As notas guardadas que uma OP cita (número digitado + empresa), os eventos delas (cancelamento) e o dicionário CNPJ → empresa. Só quem tem a aba Fiscal lê o arquivo (para os
  * outros o banco responde "nenhuma linha", não erro): quem chama NÃO deve mostrar "sem nota guardada" a quem não pode ler (use `podeVerArquivoFiscal`).

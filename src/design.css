@@ -7823,3 +7823,11 @@ body.dark .acn-log-op { color: #7fd8cc; }
 .acn-lix .acn-faixa + .acn-faixa, .acn-lix .acn-faixa + .acn-lix-filtro { margin-top: 8px; }
 .acn-lix-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
 .acn-lix-expirado > td { opacity: .5; }
+/* 12e88 (26/11/2026): painel Responsáveis por perfil do Admin (AdminPainelNotificacoes.tsx) */
+.acn-resp .acn-faixa + .acn-faixa { margin-top: 8px; }
+.acn-resp-lista { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
+.acn-resp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 12px; border: 1px solid var(--acn-line); border-radius: 999px; background: var(--acn-surface-2); font-size: 13px; }
+.acn-resp .acn-filtros { margin-top: 12px; }
+.acn-resp-chip { max-width: 100%; }
+.acn-resp-perfil { flex: none; }
+.acn-resp-nome { min-width: 0; overflow-wrap: anywhere; }
