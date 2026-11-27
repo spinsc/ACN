@@ -21,6 +21,7 @@ import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './Audi
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B4)
 import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B4)
+import { hidratarImagens, limparParaGravar, enviarImagemDeTexto, HtmlComImagens } from './ImagensDeTexto';   // 26/11/2026 (plano do bucket privado, B4b)
 import { CampoTelefone } from './CampoTelefone';
 import { conferirContatoDeLicitacao, licitacaoTemContato, mensagemContatoDaLicitacao, mensagemLicitacaoSemContato, lerContatosDaLicitacao, STATUS_QUE_NAO_PEDEM_CONTATO } from './ContatoObrigatorio';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
@@ -625,12 +626,13 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
     if (!el) return;
     const html = (areasLivres || {})[tabKey] || '';
     if (el.innerHTML !== html) el.innerHTML = html;
+    hidratarImagens(el);   // B4b: o texto guarda só a marca da imagem; o endereço assinado entra agora, só para mostrar
   }, [tabKey, licitacaoId]);
 
   const salvarConteudo = async () => {
     const el = editorRef.current;
     if (!el) return;
-    const html = el.innerHTML;
+    const html = limparParaGravar(el.innerHTML);   // B4b: tira o endereço assinado (expira em 1 hora) e deixa só a marca da imagem
     setSalvando(true);
     const novasAreas = { ...(areasLivres || {}), [tabKey]: html };
     const { error } = await supabase.from('licitacoes')
@@ -662,14 +664,10 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
   };
 
   const inserirImagem = async (file: File) => {
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-    const path = `licitacoes/${licitacaoId}/area-livre/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-    if (error) { alert('Não foi possível inserir a imagem: ' + explicarErroDeEnvio(error, file)); return; }
-    const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
-    const url = urlData?.publicUrl;
-    if (!url) return;
-    document.execCommand('insertHTML', false, `<img src="${url}" style="max-width:100%;border-radius:4px;margin:4px 0" />`);
+    // bucket privado (B4b, 26/11/2026): a imagem vai ao privado e o texto guarda só a marca (ImagensDeTexto.tsx)
+    const { html, erro } = await enviarImagemDeTexto(file, `licitacoes/${licitacaoId}/area-livre`);
+    if (erro || !html) { alert('Não foi possível inserir a imagem: ' + erro); return; }
+    document.execCommand('insertHTML', false, html);
     autosave();
   };
 
@@ -925,7 +923,7 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
           <div className="acn-quadro-titulo">
             Anotação antiga (somente leitura)
           </div>
-          <div className="acn-lic-antiga-corpo" dangerouslySetInnerHTML={{ __html: htmlSeguro(textoAntigo) }} />
+          <HtmlComImagens html={textoAntigo} className="acn-lic-antiga-corpo" />
         </div>
       )}
     </div>

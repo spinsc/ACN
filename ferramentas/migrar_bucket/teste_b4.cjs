@@ -1,6 +1,6 @@
 // Teste da fatia B4 do plano do bucket privado (arquivos das licitações: pastas `licitacoes` e `crm-docs`), 26/11/2026.
 // 1) Varredura do código (sem navegador): nenhum envio dessas pastas vai ao bucket público `acn-media`, toda leitura de documento e anexo passa pelo ajudante,
-//    e a imagem colada em texto (`/area-livre/` e `/nota/`) continua onde estava (é a fatia B4b).
+//    (a imagem colada em texto é a fatia B4b e tem o teste_b4b.cjs).
 // 2) No navegador, com o armazenamento SIMULADO (nada sai para fora): cada pasta e cada categoria de documento pede o endereço assinado; o documento antigo ainda
 //    sem cópia cai no endereço velho; a imagem de texto passa direto; o clique abre a aba com o endereço assinado; o valor novo (`privado:<caminho>`) abre.
 // Não monta a tela das licitações (os componentes não são exportados e a tela depende de dezenas de leituras): a tela é conferida pela varredura do código.
@@ -26,14 +26,10 @@ for (const f of arquivos) {
   while ((mm = re.exec(t))) {
     const antes = t.slice(Math.max(0, mm.index - 400), mm.index);
     const ehLic = /`licitacoes\/\$\{[^}]+\}\/(\$\{[^}]+\}|[a-z_-]+)\//.test(antes) || /`crm-docs\/\$\{[^}]+\}\//.test(antes);
-    const ehImagemDeTexto = /\/area-livre\//.test(antes) || /\/nota\//.test(antes);
-    if (ehLic && !ehImagemDeTexto) achados.push(f);
+    if (ehLic) achados.push(f);
   }
 }
 ok(achados.length === 0, 'nenhum envio de documento de licitação vai ao bucket público (' + achados.join(', ') + ')');
-// o que ficou público de propósito (B4b): a imagem colada dentro do texto
-ok(/licitacoes\/\$\{licitacaoId\}\/area-livre\//.test(lic) && /from\('acn-media'\)\.upload\(path, file, \{ upsert: true \}\)/.test(lic), 'a imagem da Área Livre segue indo ao público (B4b)');
-ok(/crm-docs\/\$\{modalAbrir\.id\}\/nota\//.test(crm), 'a imagem da nota do CRM segue indo ao público (B4b)');
 
 // Licitações
 const up = (lic.match(/async function uploadAnexo[\s\S]*?\n}\n/) || [''])[0];
@@ -93,8 +89,6 @@ const CATEGORIAS = ['edital_anexos', 'erratas', 'impugnacao', 'impugnacao_decisa
     saida.copiado = await ap.urlDoArquivo(PUB + 'licitacoes/L1/edital_anexos/1_ja_copiado.pdf');
     saida.semCopia = await ap.urlDoArquivo(PUB + 'licitacoes/L1/edital_anexos/9_ainda_nao.pdf');
     saida.crmDocsCopiado = await ap.urlDoArquivo(PUB + 'crm-docs/L1/andamento/2.pdf');
-    saida.areaLivre = await ap.urlDoArquivo(PUB + 'licitacoes/L1/area-livre/1.png');
-    saida.nota = await ap.urlDoArquivo(PUB + 'crm-docs/L1/nota/1.png');
     saida.valorNovo = await ap.urlDoArquivo('privado:licitacoes/L1/edital_anexos/1_ja_copiado.pdf');
     for (const c of CATS) await ap.urlDoArquivo(PUB + 'licitacoes/L9/' + c + '/1_a.pdf');
     for (const c of ['andamento', 'processo', 'contratos']) await ap.urlDoArquivo(PUB + 'crm-docs/L9/' + c + '/1.pdf');
@@ -115,8 +109,6 @@ const CATEGORIAS = ['edital_anexos', 'erratas', 'impugnacao', 'impugnacao_decisa
   ok(/acn-privado\/licitacoes\/L1\/edital_anexos\/1_ja_copiado\.pdf\?token=/.test(r.copiado || ''), 'documento de licitação já copiado abre pelo privado (' + r.copiado + ')');
   ok(r.semCopia === PUBLICO + 'licitacoes/L1/edital_anexos/9_ainda_nao.pdf', 'documento ainda sem cópia cai no endereço velho');
   ok(/acn-privado\/crm-docs\/L1\/andamento\/2\.pdf\?token=/.test(r.crmDocsCopiado || ''), 'documento de crm-docs já copiado abre pelo privado');
-  ok(r.areaLivre === PUBLICO + 'licitacoes/L1/area-livre/1.png' && !log.assinados.some((p) => p.includes('area-livre')), 'imagem da Área Livre passa direto, sem pedir endereço assinado (B4b)');
-  ok(r.nota === PUBLICO + 'crm-docs/L1/nota/1.png' && !log.assinados.some((p) => p.includes('/nota/')), 'imagem de nota passa direto, sem pedir endereço assinado (B4b)');
   ok(/token=T/.test(r.valorNovo || ''), 'valor novo (privado:<caminho>) abre por endereço assinado');
   for (const c of CATEGORIAS) ok(log.assinados.includes('licitacoes/L9/' + c + '/1_a.pdf'), 'a categoria ' + c + ' das licitações é privada (pede o endereço assinado)');
   for (const c of ['andamento', 'processo', 'contratos']) ok(log.assinados.includes('crm-docs/L9/' + c + '/1.pdf'), 'crm-docs/' + c + ' é privado');

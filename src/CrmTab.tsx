@@ -5,6 +5,7 @@ import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B4)
 import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B4)
+import { hidratarImagens, limparParaGravar, enviarImagemDeTexto } from './ImagensDeTexto';   // 26/11/2026 (plano do bucket privado, B4b)
 import { contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -1740,7 +1741,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     if (error) { setErroNota(error.message); return; }
     setErroNota('');
     const html = data?.conteudo || '';
-    if (abrirNotaRef.current) abrirNotaRef.current.innerHTML = html;
+    if (abrirNotaRef.current) { abrirNotaRef.current.innerHTML = html; hidratarImagens(abrirNotaRef.current); }   // B4b: a nota guarda só a marca da imagem; o endereço assinado entra agora, só para mostrar
   };
 
   // Antes: apagava a nota e depois gravava a nova — se a gravação falhasse, a nota que existia estava perdida; e os erros eram ignorados.
@@ -1750,7 +1751,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     if (erroNota) { mostrarAviso('Não dá para salvar a nota\nA nota que já existe não foi lida (' + erroNota + '); salvar agora a substituiria sem você ver. Use "Tentar de novo" acima do editor.', 'erro'); return; }
     setAbrirNotaSalvando(true);
     try {
-      const html = abrirNotaRef.current.innerHTML;
+      const html = limparParaGravar(abrirNotaRef.current.innerHTML);   // B4b: tira o endereço assinado (expira em 1 hora) e deixa só a marca da imagem
       const cat = 'nota__' + abrirTabDir;
       const { data: antigas, error: errLer } = await supabase.from('licitacao_documentos').select('id')
         .eq('licitacao_id', modalAbrir.id).eq('categoria', cat).eq('nome', '__nota_livre__');
@@ -1782,15 +1783,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
   const inserirImagemNota = async (file: File) => {
     if (!modalAbrir) return;
-    const ext = file.name.split('.').pop();
-    const path = `crm-docs/${modalAbrir.id}/nota/${Date.now()}.${ext}`;
-    const { error: erroImg } = await supabase.storage.from('acn-media').upload(path, file);
     // 16/10/2026: a falha era ignorada e a nota recebia uma imagem quebrada, sem aviso
-    if (erroImg) { alert('Não foi possível inserir a imagem: ' + explicarErroDeEnvio(erroImg, file)); return; }
-    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+    // bucket privado (B4b, 26/11/2026): a imagem vai ao privado e a nota guarda só a marca (ImagensDeTexto.tsx)
+    const { html, erro } = await enviarImagemDeTexto(file, `crm-docs/${modalAbrir.id}/nota`, 'display:block;');
+    if (erro || !html) { alert('Não foi possível inserir a imagem: ' + erro); return; }
     abrirNotaRef.current?.focus();
-    document.execCommand('insertHTML', false,
-      `<img src="${pub.publicUrl}" style="max-width:100%;border-radius:4px;margin:4px 0;display:block;" />`);
+    document.execCommand('insertHTML', false, html);
   };
 
   const inserirLinkNota = async () => {

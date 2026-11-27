@@ -1,5 +1,5 @@
 // Confere as regras puras do bucket privado (src/ArquivoPrivadoRegras.ts), sem navegador: node ferramentas/migrar_bucket/teste_regras.mjs
-import { caminhoEhPrivado, caminhoDoValor, valorParaGravar, MARCA_PRIVADA } from '../../src/ArquivoPrivadoRegras.ts';
+import { caminhoEhPrivado, caminhoDoValor, valorParaGravar, marcaDeImagemValida, MARCA_PRIVADA } from '../../src/ArquivoPrivadoRegras.ts';
 let n = 0, f = 0;
 const eq = (a, b, r) => { n++; if (JSON.stringify(a) !== JSON.stringify(b)) { f++; console.log('FALHA', r, JSON.stringify(a), '!=', JSON.stringify(b)); } };
 const P = 'https://qgemelnuqdilnggxmrdw.supabase.co/storage/v1/object/public/acn-media/';
@@ -13,22 +13,35 @@ eq(caminhoEhPrivado('licitacoes/L1/edital_anexos/1_x.pdf'), true, 'B4: licitacoe
 for (const p of ['compras-anexos/PC1/a.pdf', 'pcp-cotacoes/c1/a.pdf', 'pcp-nf-fornecedor/f1/a.pdf', 'pcp-fretes-cotacoes/c1/a.pdf', 'pcp-fretes-canhotos/f1/a.jpg', 'logistica/1_ab.jpg',
   'centro-custo-despesas/d1/a.pdf', 'financeiro-tarefas/t1/a.pdf', 'viagens/v1/contrato/a.pdf', 'viagens/v1/comprovantes/hotel/a.pdf', 'terceiros/p1/a.pdf', 'contratos-padrao/a.pdf'])
   eq(caminhoEhPrivado(p), true, 'b1 ' + p);
-eq(caminhoEhPrivado('pcp-cotacoes/c1/area-livre/123.png'), false, 'imagem de área livre fica pública');
-eq(caminhoEhPrivado('crm-docs/L1/nota/123.png'), false, 'imagem de nota fica pública');
-eq(caminhoEhPrivado('licitacoes/L1/area-livre/123.png'), false, 'área livre da licitação');
+eq(caminhoEhPrivado('pcp-cotacoes/c1/area-livre/123.png'), true, 'B4b: imagem de área livre é privada');
+eq(caminhoEhPrivado('crm-docs/L1/nota/123.png'), true, 'B4b: imagem de nota é privada');
+eq(caminhoEhPrivado('licitacoes/L1/area-livre/123.png'), true, 'B4b: área livre da licitação é privada');
+eq(caminhoEhPrivado('produtos/p1/area-livre/1.png'), false, 'B4b: produtos continua público, até com nome de área livre');
 eq(caminhoEhPrivado('compras-anexos'), false, 'só o nome da pasta');
 eq(caminhoEhPrivado('compras-anexosx/a.pdf'), false, 'prefixo parecido de B1');
 for (const p of ['opl-anexos', 'ops-em-criacao', 'demandas-avulsas', 'demandas-cotacoes', 'desenvolvimento', 'engenharia-tarefas', 'analise', 'vistorias']) eq(caminhoEhPrivado(p + '/a/x.pdf'), true, 'B2 privado: ' + p);
-eq(caminhoEhPrivado('opl-anexos/a/area-livre/x.png'), false, 'B2: imagem de texto segue pública');
+eq(caminhoEhPrivado('opl-anexos/a/area-livre/x.png'), true, 'B4b: imagem de texto de pasta privada é privada');
 eq(caminhoEhPrivado('produtos/p/fotos/1.jpg'), false, 'produtos segue público');
 eq(caminhoEhPrivado('crm-anexos/a/x.pdf'), true, 'B3: crm-anexos é privado');
 eq(caminhoEhPrivado('crm-docs/L1/andamento/1.pdf'), true, 'B4: crm-docs é privado');
 eq(caminhoEhPrivado('licitacoes/L1/andamento/1_a.pdf'), true, 'B4: andamento da licitação é privado');
 eq(caminhoDoValor(P + 'licitacoes/L1/edital_anexos/1_a.pdf'), { caminho: 'licitacoes/L1/edital_anexos/1_a.pdf', antigo: true }, 'B4: url antiga de licitação vira privada');
-eq(caminhoDoValor(P + 'licitacoes/L1/area-livre/1.png'), null, 'B4: imagem de área livre passa direto');
+eq(caminhoDoValor(P + 'licitacoes/L1/area-livre/1.png'), { caminho: 'licitacoes/L1/area-livre/1.png', antigo: true }, 'B4b: url antiga de área livre vira privada');
 eq(caminhoDoValor(P + 'crm-anexos/o1/1_a.docx'), { caminho: 'crm-anexos/o1/1_a.docx', antigo: true }, 'B3: url antiga de crm-anexos vira privada');
 eq(caminhoDoValor(P + 'compras-anexos/PC1/a%20b.pdf'), { caminho: 'compras-anexos/PC1/a b.pdf', antigo: true }, 'url antiga de compras');
-eq(caminhoDoValor(P + 'pcp-cotacoes/c1/area-livre/1.png'), null, 'url antiga de área livre passa direto');
+eq(caminhoDoValor(P + 'pcp-cotacoes/c1/area-livre/1.png'), { caminho: 'pcp-cotacoes/c1/area-livre/1.png', antigo: true }, 'url antiga de área livre do Compras vira privada');
+// a marca que a imagem de texto guarda (B4b): só caminho de imagem de texto, nunca outro arquivo privado nem saída da pasta
+eq(marcaDeImagemValida('privado:licitacoes/3f2a-1b/area-livre/1700000000000.png'), true, 'marca: área livre');
+eq(marcaDeImagemValida('privado:crm-docs/3f2a-1b/nota/1700000000000.JPG'), true, 'marca: nota');
+eq(marcaDeImagemValida('privado:chat/sala1/1_x.pdf'), false, 'marca: arquivo de chat não vale');
+eq(marcaDeImagemValida('privado:contratos-padrao/a.pdf'), false, 'marca: contrato não vale');
+eq(marcaDeImagemValida('privado:chat/sala/arquivo.pdf'), false, 'marca: pasta só de letras que não é de imagem de texto');
+eq(marcaDeImagemValida('privado:contratos-padrao/modelos/a.pdf'), false, 'marca: contrato dentro de subpasta');
+eq(marcaDeImagemValida('privado:licitacoes/../chat/area-livre/1.png'), false, 'marca: saída da pasta');
+eq(marcaDeImagemValida('privado:licitacoes/x/area-livre/1.png" onerror="x'), false, 'marca: aspas e atributo solto');
+eq(marcaDeImagemValida('https://x.com/area-livre/1.png'), false, 'marca: endereço de fora');
+eq(marcaDeImagemValida(''), false, 'marca: vazia');
+eq(marcaDeImagemValida(null), false, 'marca: nula');
 eq(caminhoDoValor(P + 'terceiros/p1/a.pdf'), { caminho: 'terceiros/p1/a.pdf', antigo: true }, 'url antiga de terceiros');
 eq(caminhoEhPrivado('chatter/x'), false, 'prefixo parecido');
 eq(caminhoEhPrivado(''), false, 'vazio');
