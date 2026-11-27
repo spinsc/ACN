@@ -139,6 +139,12 @@ export function opsDaNota(nota: { emitente_cnpj: string; numero: number | string
   });
 }
 
+/** O caminho de volta de `opsDaNota`: as notas guardadas que a OP cita (número digitado + empresa), da mais nova para a mais antiga. Nunca grava a ligação: é calculada na leitura. */
+export function notasDaOp<N extends { emitente_cnpj: string; numero: number | string; emissao_dia?: string | null }>(op: OpComNota, notas: N[], codigoDoCnpj: Map<string, string>): N[] {
+  return (notas || []).filter(n => opsDaNota(n, [op], codigoDoCnpj).length > 0)
+    .sort((a, b) => String(b.emissao_dia || '').localeCompare(String(a.emissao_dia || '')) || Number(b.numero) - Number(a.numero));
+}
+
 /** As OPs que têm número de nota digitado e NENHUMA nota guardada com aquele número e empresa: são os XMLs que ainda faltam no arquivo. Uma linha por OP e número. */
 export function opsSemXml(ops: OpComNota[], notas: { emitente_cnpj: string; numero: number | string }[], codigoDoCnpj: Map<string, string>) {
   const guardadas = new Map<string, Set<number>>();   // empresa normalizada ('' = desconhecida) → números

@@ -301,4 +301,113 @@ t('opsSemXml: a OP cuja nota não está guardada aparece; a que está, não; a n
   assert.deepEqual(r.map(x => x.opl + ':' + x.numero), ['A2:11', 'A3:10']);
 });
 
+// ═══ Prontidão da OP para virar nota e nota guardada na OP (26/11/2026) ═══
+const P = await import(pathToFileURL(RAIZ + '/FiscalProntidao.ts').href);
+
+// um mundo pequeno e COMPLETO: a OP deste mundo está pronta; cada teste estraga UMA coisa e confere que só ela é pega
+const EMITENTE_OK = { codigo: 'ACN', razao_social: 'ACN SINAL VERDE LTDA', cnpj: ACN, inscricao_estadual: '255123456', crt: 3, inscricao_municipal: '123', cep: '88132000', logradouro: 'RUA A', numero: '1', bairro: 'CENTRO', cidade: 'PALHOCA', uf: 'SC', codigo_ibge: '4211900', serie_nfe: 3 };
+const CLIENTE_OK = { id: 'c1', nome: 'Prefeitura de Teste', documento: '11222333000181' };
+const FISCAL_CLIENTE_OK = { indicador_ie: 'isento', tipo_orgao: 'municipal', retem_ir: true, codigo_ibge: '4205407' };
+const ITEM_OK = { id: 'i1', codigo: '225', nome: 'SINALIZADOR INTERLED2 VERMELHO', ncm: '85122011', ipi_pct: 0, ativo: true, categoria: 'MERCADORIA PARA REVENDA' };
+const FISCAL_ITEM_OK = { origem_fiscal: 0, monofasico: false, cest_nao_se_aplica: true };
+const mundo = (alt = {}) => ({
+  clientes: [CLIENTE_OK], fiscaisDosClientes: new Map([['c1', FISCAL_CLIENTE_OK]]),
+  catalogo: [ITEM_OK], fiscaisDosItens: new Map([['i1', FISCAL_ITEM_OK]]), emitentes: [EMITENTE_OK], ...alt,
+});
+const OP_OK = { id: 'o1', opl: 'A1.2611', cliente_nome: ' prefeitura de TESTE ', faturamento_empresa: 'Acn', itens_vendidos: [{ nome: 'SINALIZADOR INTERLED2 VERMELHO', item_id: 'i1', quantidade: 2 }] };
+
+t('prontidaoDaOp: o mundo completo está pronto (cliente por nome sem acento nem caixa, empresa em qualquer caixa)', () => {
+  const p = P.prontidaoDaOp(OP_OK, mundo());
+  assert.equal(p.situacao, 'pronta'); assert.equal(p.totalDeFaltas, 0); assert.equal(p.itensConferidos, 1); assert.deepEqual(p.pendencias, []);
+});
+t('prontidaoDaOp: falta dado do cliente → só o cliente é pego, com o nome do campo em português', () => {
+  const p = P.prontidaoDaOp(OP_OK, mundo({ fiscaisDosClientes: new Map([['c1', { ...FISCAL_CLIENTE_OK, codigo_ibge: null, retem_ir: null }]]) }));
+  assert.equal(p.situacao, 'faltam'); assert.equal(p.pendencias.length, 1); assert.equal(p.pendencias[0].grupo, 'cliente');
+  assert.deepEqual(p.pendencias[0].faltas, ['Retém IR', 'Código IBGE']);
+});
+t('prontidaoDaOp: cliente sem linha fiscal (ninguém respondeu) NÃO é pronto', () => {
+  const p = P.prontidaoDaOp(OP_OK, mundo({ fiscaisDosClientes: new Map() }));
+  assert.equal(p.situacao, 'faltam'); assert.equal(p.pendencias[0].grupo, 'cliente'); assert.ok(p.pendencias[0].faltas.length >= 4);
+});
+t('prontidaoDaOp: CPF/CNPJ inválido no cadastro do cliente é pego', () => {
+  const p = P.prontidaoDaOp(OP_OK, mundo({ clientes: [{ ...CLIENTE_OK, documento: '11222333000182' }] }));
+  assert.equal(p.situacao, 'faltam'); assert.ok(p.pendencias[0].faltas.includes('CPF/CNPJ do cadastro'));
+});
+t('prontidaoDaOp: nome do cliente que não está no cadastro é dito, nunca vira pronta', () => {
+  const p = P.prontidaoDaOp({ ...OP_OK, cliente_nome: 'LETICIA - PV A 1741 - AMBIENTAL' }, mundo());
+  assert.equal(p.situacao, 'faltam'); assert.match(p.pendencias[0].faltas[0], /não achei no cadastro de clientes/);
+});
+t('prontidaoDaOp: dois clientes com o mesmo nome é ambíguo: não se chuta', () => {
+  const p = P.prontidaoDaOp(OP_OK, mundo({ clientes: [CLIENTE_OK, { ...CLIENTE_OK, id: 'c2' }] }));
+  assert.equal(p.situacao, 'faltam'); assert.match(p.pendencias[0].faltas[0], /mais de um cadastro/);
+});
+t('acharCliente: o CPF/CNPJ da OP manda sobre o nome; documento que não está no cadastro cai no nome', () => {
+  const dois = [CLIENTE_OK, { id: 'c9', nome: 'Outro Nome', documento: '45.723.174/0001-10' }];
+  assert.equal(P.acharCliente({ cliente_nome: 'Prefeitura de Teste', cnpj_faturamento: '45723174000110' }, dois).cliente.id, 'c9');
+  assert.equal(P.acharCliente({ cliente_nome: 'Prefeitura de Teste', cnpj_faturamento: '99999999000199' }, dois).cliente.id, 'c1');
+  assert.equal(P.acharCliente({ cliente_nome: '' }, dois).situacao, 'sem_nome');
+});
+t('prontidaoDaOp: falta dado do item (CEST, NCM) → só o item é pego, e o item repetido em duas linhas conta uma vez', () => {
+  const op = { ...OP_OK, itens_vendidos: [...OP_OK.itens_vendidos, { nome: 'OUTRA LINHA DO MESMO', item_id: 'i1', quantidade: 1 }] };
+  const p = P.prontidaoDaOp(op, mundo({ fiscaisDosItens: new Map([['i1', { origem_fiscal: 0, monofasico: false }]]), catalogo: [{ ...ITEM_OK, ncm: '' }] }));
+  assert.equal(p.situacao, 'faltam'); assert.equal(p.pendencias.length, 1); assert.equal(p.pendencias[0].grupo, 'item');
+  assert.deepEqual(p.pendencias[0].faltas, ['NCM', 'CEST']);
+  assert.equal(p.itensConferidos, 1);
+});
+t('prontidaoDaOp: item que paga IPI sem enquadramento é pego (e o que não paga, não)', () => {
+  const comIpi = P.prontidaoDaOp(OP_OK, mundo({ catalogo: [{ ...ITEM_OK, ipi_pct: 5 }] }));
+  assert.deepEqual(comIpi.pendencias[0].faltas, ['Enquadramento IPI']);
+  assert.equal(P.prontidaoDaOp(OP_OK, mundo()).situacao, 'pronta');
+});
+t('prontidaoDaOp: linha sem item_id acha o item pelo nome idêntico entre os ATIVOS; inativo e duplicado não valem', () => {
+  const op = { ...OP_OK, itens_vendidos: [{ nome: 'sinalizador interled2 vermelho', quantidade: 1 }] };
+  assert.equal(P.prontidaoDaOp(op, mundo()).situacao, 'pronta');
+  assert.match(P.prontidaoDaOp(op, mundo({ catalogo: [{ ...ITEM_OK, ativo: false }] })).pendencias[0].faltas[0], /não achei este item/);
+  assert.match(P.prontidaoDaOp(op, mundo({ catalogo: [ITEM_OK, { ...ITEM_OK, id: 'i2' }] })).pendencias[0].faltas[0], /mais de um item/);
+});
+t('prontidaoDaOp: serviço e item genérico não entram na conferência; venda SÓ de serviço não vira "pronta"', () => {
+  const generico = { id: 'g1', nome: 'INSTALAÇÃO', categoria: 'GENERICO', ativo: true };
+  const op = { ...OP_OK, itens_vendidos: [...OP_OK.itens_vendidos, { nome: 'INSTALAÇÃO', item_id: 'g1', quantidade: 1 }] };
+  const p = P.prontidaoDaOp(op, mundo({ catalogo: [ITEM_OK, generico] }));
+  assert.equal(p.situacao, 'pronta'); assert.equal(p.itensIgnorados, 1); assert.equal(p.itensConferidos, 1);
+  const so = P.prontidaoDaOp({ ...OP_OK, itens_vendidos: [{ nome: 'INSTALAÇÃO', item_id: 'g1', quantidade: 1 }] }, mundo({ catalogo: [generico] }));
+  assert.equal(so.situacao, 'faltam'); assert.match(so.pendencias[0].faltas[0], /só tem serviço/);
+});
+t('prontidaoDaOp: OP sem nenhum item vendido lançado NÃO está pronta ("ninguém respondeu" nunca vale como pronta)', () => {
+  for (const itens of [[], null, undefined, 'lixo']) {
+    const p = P.prontidaoDaOp({ ...OP_OK, itens_vendidos: itens }, mundo());
+    assert.equal(p.situacao, 'faltam'); assert.match(p.pendencias[0].faltas[0], /não tem itens vendidos/);
+  }
+  // o texto de JSON também é lido
+  assert.equal(P.prontidaoDaOp({ ...OP_OK, itens_vendidos: JSON.stringify(OP_OK.itens_vendidos) }, mundo()).situacao, 'pronta');
+});
+t('prontidaoDaOp: empresa que fatura — em branco, desconhecida ou com o cadastro incompleto é pega', () => {
+  assert.match(P.prontidaoDaOp({ ...OP_OK, faturamento_empresa: '' }, mundo()).pendencias[0].faltas[0], /não diz qual empresa/);
+  assert.match(P.prontidaoDaOp({ ...OP_OK, faturamento_empresa: 'XYZ' }, mundo()).pendencias[0].faltas[0], /não existe em Cadastros fiscais/);
+  const p = P.prontidaoDaOp(OP_OK, mundo({ emitentes: [{ ...EMITENTE_OK, inscricao_estadual: null, crt: null }] }));
+  assert.equal(p.pendencias[0].grupo, 'empresa'); assert.deepEqual(p.pendencias[0].faltas, ['inscrição estadual', 'regime (CRT)']);
+});
+t('prontidaoDaOp: o total soma tudo (empresa + cliente + item) e a ordem é empresa, cliente, item', () => {
+  const p = P.prontidaoDaOp({ ...OP_OK, faturamento_empresa: '' }, mundo({ fiscaisDosClientes: new Map(), fiscaisDosItens: new Map() }));
+  assert.deepEqual(p.pendencias.map(x => x.grupo), ['empresa', 'cliente', 'item']);
+  assert.equal(p.totalDeFaltas, p.pendencias.reduce((s, x) => s + x.faltas.length, 0));
+});
+t('oQueAsOpsCitam: ids de item (sem repetir) e os nomes das linhas sem vínculo', () => {
+  const r = P.oQueAsOpsCitam([{ itens_vendidos: [{ item_id: 'a', nome: 'X' }, { item_id: 'a', nome: 'X' }, { nome: 'Sem Vínculo' }, { nome: '' }] }, { itens_vendidos: [{ item_id: 'b' }] }, { itens_vendidos: null }]);
+  assert.deepEqual(r.itemIds.sort(), ['a', 'b']); assert.deepEqual(r.nomes, ['SEM VINCULO']);
+});
+t('resumoDasProntidoes: conta as prontas e as que faltam e ignora o que não foi conferido', () => {
+  const r = P.resumoDasProntidoes([{ situacao: 'pronta' }, { situacao: 'faltam' }, { situacao: 'faltam' }, undefined, null]);
+  assert.deepEqual(r, { prontas: 1, faltam: 2, total: 3 });
+});
+t('notasDaOp: as notas que a OP cita, pelo número e pela empresa, da mais nova para a mais antiga', () => {
+  const notas = [
+    { chave: 'a', emitente_cnpj: ACN, numero: 1679, emissao_dia: '2026-11-10' }, { chave: 'b', emitente_cnpj: DETECH, numero: 1679, emissao_dia: '2026-11-11' },
+    { chave: 'c', emitente_cnpj: ACN, numero: 1680, emissao_dia: '2026-11-12' }, { chave: 'd', emitente_cnpj: ACN, numero: 5, emissao_dia: '2026-11-13' },
+  ];
+  assert.deepEqual(A.notasDaOp({ opl: 'X', numero_nf: '1679 / 1680', faturamento_empresa: 'ACN' }, notas, CODIGOS).map(n => n.chave), ['c', 'a']);
+  assert.deepEqual(A.notasDaOp({ opl: 'X', numero_nf: '1679', faturamento_empresa: 'Detech' }, notas, CODIGOS).map(n => n.chave), ['b']);
+  assert.deepEqual(A.notasDaOp({ opl: 'X', numero_nf: '', faturamento_empresa: 'ACN' }, notas, CODIGOS), []);
+});
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS (veja acima)' : ''}.`);
