@@ -4605,6 +4605,41 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ═════════ quem foi copiado numa garantia e NÃO tem a aba SAC (G5): o link do aviso abre só a Garantia, como antes da Fase 1 ═════════
+  {
+    const SEM_SAC = { ...USUARIO_ADMIN, perfil: 'Engenharia', abas_permitidas: ['engenharia'] };
+    const DE_OUTRA = { aberto_por_email: 'outra.pessoa@teste.local', aberto_por_nome: 'Outra Pessoa', responsavel: { nome: 'Outra Pessoa', email: 'outra.pessoa@teste.local' } };
+    const FC = fichaFalsa(8, { ...DE_OUTRA, copiados: [{ nome: USUARIO_ADMIN.nome, email: USUARIO_ADMIN.email }] });   // a pessoa só participa por ser copiada
+    const FO = fichaFalsa(9, { ...DE_OUTRA, copiados: [] });   // de outra pessoa: a conta de teste não participa
+    const simSemSac = (url, r) => bancoComAbas(['engenharia'])(url, r) || bancoDeFichas([FC, FO])(url, r);
+    const estadoSemSac = (page) => page.evaluate((jf) => ({
+      hash: location.hash, janelas: document.querySelectorAll(jf).length,
+      soGarantia: !!document.querySelector('.acn-sac-so-garantia'),
+      menu: [...document.querySelectorAll('.sidebar-rotulo')].map(x => x.innerText.trim()),
+      aviso: (document.querySelector('.acn-endereco-aviso') || { innerText: '' }).innerText.replace(/\s+/g, ' ').trim(),
+    }), JF);
+    await cenario('C118 Garantia sem a aba SAC: o link da ficha em que a pessoa é copiada abre só a Garantia; a ficha de outra pessoa responde "não encontrei"; o SAC não entra no menu', { usuario: SEM_SAC, simular: simSemSac }, async ({ page }) => {
+      await abrirComoLinkColado(page, '#/sac/ficha/' + FC.id);
+      await esperarSistema(page); await esperarFicha(page); await espera(1200);
+      let e = await estadoSemSac(page); let al = await A(page);
+      confere('a ficha em que a pessoa é copiada abre pelo link, sem a aba SAC', e.janelas === 1 && e.hash === '#/sac/ficha/' + FC.id && !/não tem acesso/i.test(e.aviso), JSON.stringify({ j: e.janelas, h: e.hash, av: e.aviso }));
+      confere('a tela mostra SÓ a Garantia (sem as outras abas do SAC)', e.soGarantia, JSON.stringify({ so: e.soGarantia }));
+      confere('o SAC não aparece no menu dela', !e.menu.some(x => /^SAC$/i.test(x)), JSON.stringify(e.menu));
+      confere('nenhum aviso de erro', al.length === 0, JSON.stringify(al));
+      await LA(page);
+      await abrirComoLinkColado(page, '#/sac/ficha/' + FO.id);
+      await esperarSistema(page); await esperarDesfechoF(page); await espera(1000);
+      e = await estadoSemSac(page); al = await A(page);
+      confere('a ficha de outra pessoa não abre e diz "não encontrei, ou você não tem acesso"', e.janelas === 0 && al.includes(MSG_F_NAO_ACHOU), JSON.stringify({ j: e.janelas, al }));
+    });
+    await cenario('C118b Garantia sem a aba SAC: as outras telas que a pessoa não tem seguem barradas (a abertura do SAC não alarga mais nada)', { usuario: SEM_SAC, simular: simSemSac }, async ({ page }) => {
+      await abrirComoLinkColado(page, '#/compras');
+      await esperarSistema(page); await espera(2500);
+      const e = await estadoSemSac(page);
+      confere('o link de uma tela que ela não tem mostra "sem acesso"', /não tem acesso/i.test(e.aviso), JSON.stringify(e));
+    });
+  }
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);

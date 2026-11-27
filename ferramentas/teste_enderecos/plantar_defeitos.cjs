@@ -485,6 +485,15 @@ const DEFEITOS = [
   { id: 'fj', nome: 'o detalhe não avisa para fora qual formação está aberta (o endereço não acompanha o que a tela mostra)', cenarios: '^C113', trocas: [
     { arquivo: 'src/FormacaoPrecosTab.tsx', de: "  useEffect(() => { onDetalhe?.(cotacaoAberta ? String(cotacaoAberta.id) : null); }, [cotacaoAberta?.id]);", para: "  useEffect(() => { onDetalhe?.(cotacaoAberta ? String(cotacaoAberta.id) : null); }, []);" },
   ] },
+  { id: 'sa', nome: 'a casca volta a barrar quem não tem a aba SAC (o link da ficha em que a pessoa é copiada cai em "sem acesso")', cenarios: '^C118', trocas: [
+    { arquivo: 'src/DashboardTab.tsx', de: "    podeVer: (id: string) => isVisible(id) || (id === 'sac' && semAcessoAoSac(currentUser)),", para: "    podeVer: isVisible," },
+  ] },
+  { id: 'sb', nome: 'a regra semAcessoAoSac deixa de valer (quem só tem a Garantia passa a ver todas as abas do SAC)', cenarios: '^C118', trocas: [
+    { arquivo: 'src/utils/permissoes.ts', de: "  return Array.isArray(abas) && abas.length > 0 && !abas.includes('sac');", para: "  return false;" },
+  ] },
+  { id: 'sc', nome: 'a abertura do SAC alarga para qualquer tela (quem não tem a aba Compras também a abre pelo link)', cenarios: '^C118b', trocas: [
+    { arquivo: 'src/DashboardTab.tsx', de: "    podeVer: (id: string) => isVisible(id) || (id === 'sac' && semAcessoAoSac(currentUser)),", para: "    podeVer: (id: string) => isVisible(id) || semAcessoAoSac(currentUser)," },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

@@ -41,6 +41,7 @@ import { useRegistroNoEndereco, lerPorCodigo, consumirDicaDeAbertura } from './R
 import { aoMudarEndereco, enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';   // 26/11/2026 (Fase 6): a ficha da Garantia tem endereço; a aba Garantia abre sozinha quando o endereço pede uma ficha
 import { montarEnderecoDoRegistroDaTela, registroDaTelaNoEndereco } from './Rotas';
 import { ModalComprasDaOS } from './ComprasLigadas';
+import { semAcessoAoSac } from './utils/permissoes';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada a esta OS (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
 const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 import { SelectVeiculo } from './VeiculoCadastro';
@@ -274,12 +275,7 @@ function EtiquetaEmpresaOS({ os, onTrocar }: { os: any; onTrocar: (os: any) => v
 }
 
 // G5 (20/10/2026): quem é copiado numa garantia recebe o aviso mesmo sem ter a aba SAC liberada. Para essa pessoa o link do aviso abre só a Garantia — as outras abas do SAC
-// (ordens de serviço, chamados, cadastros) continuam fechadas, como estão para ela no menu. Mesma regra de visibilidade do menu (DashboardTab.isVisible).
-const semAcessoAoSac = (u: any) => {
-  if (!u || u.perfil === 'Admin') return false;
-  const abas = u.abas_permitidas;
-  return Array.isArray(abas) && abas.length > 0 && !abas.includes('sac');
-};
+// (ordens de serviço, chamados, cadastros) continuam fechadas, como estão para ela no menu. A regra (`semAcessoAoSac`) mora em `utils/permissoes.ts`, porque a casca também a usa (26/11/2026).
 export default function SacTab({ currentUser }) {
   if (semAcessoAoSac(currentUser)) return <div className="acn-sac-so-garantia"><GarantiaTab currentUser={currentUser} /></div>;
   return <SacTabCompleto currentUser={currentUser} />;
