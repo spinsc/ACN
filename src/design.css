@@ -7831,3 +7831,14 @@ body.dark .acn-log-op { color: #7fd8cc; }
 .acn-resp-chip { max-width: 100%; }
 .acn-resp-perfil { flex: none; }
 .acn-resp-nome { min-width: 0; overflow-wrap: anywhere; }
+/* 12e89 (27/11/2026): painel Departamentos (Compras) do Admin (AdminPainelDepartamentos.tsx) */
+.acn-dep .acn-faixa + .acn-faixa { margin-top: 8px; }
+.acn-dep-barra { margin: 12px 0; }
+.acn-dep-form { margin: 0 0 12px; padding: 12px; border: 1px solid var(--acn-line); border-radius: 8px; background: var(--acn-surface-2); }
+.acn-dep-titulo { flex: 1 0 100%; font-weight: 700; }
+.acn-dep-form .form-group { flex: 1 1 240px; min-width: 0; }
+.acn-dep-form .form-group .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-dep-acoes { display: flex; gap: 8px; }
+.acn-dep-linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+.acn-dep-inativo > td { opacity: .55; }
+.acn-dep td .acn-selo { margin-left: 8px; }
