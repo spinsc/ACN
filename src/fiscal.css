@@ -59,3 +59,14 @@ html body .modal-box.acn-modal-cadastro.acn-fcad-box-p { width: min(520px, 95vw)
 .acn-fcad-lista { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.45; color: var(--acn-text); overflow-wrap: anywhere; }
 .acn-fcad-secao-sem-linha { display: grid; gap: 10px; min-width: 0; }
 .acn-fcad-nota { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); min-width: 0; }
+
+/* Regras fiscais versionadas (27/11/2026) */
+.acn-fcad-linha-ativa { background: var(--acn-surface-2); }
+.acn-freg-conds { display: flex; flex-wrap: wrap; gap: 4px; }
+.acn-freg-lista { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; line-height: 1.4; }
+.acn-freg-resultado { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); min-width: 0; }
+.acn-freg-porque { margin: 0; font-size: 13px; line-height: 1.45; color: var(--acn-text); overflow-wrap: anywhere; }
+.acn-freg-manda { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 8px 12px; margin: 0; }
+.acn-freg-manda > div { display: grid; gap: 2px; min-width: 0; }
+.acn-freg-manda dt { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-freg-manda dd { margin: 0; font-size: 14px; color: var(--acn-ink); overflow-wrap: anywhere; }

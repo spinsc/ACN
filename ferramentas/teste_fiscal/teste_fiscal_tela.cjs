@@ -102,8 +102,46 @@ const simularTipos = (url) => {
   return null;
 };
 
+// ── regras fiscais versionadas (27/11/2026): versões e regras SIMULADAS; só vale com `modoRegras` ligado ──
+let modoRegras = false;
+let modoLeituraDasRegras = 'ok';   // 'ok' | 'erro'
+let modoAprovarRegras = 'ok';      // 'ok' | 'recusa'
+let bdRegras = { versoes: [], regras: [] };
+const VER = (n, o) => ({ id: 'v' + n, numero: n, titulo: 'Versão ' + n + ' (rascunho)', situacao: 'rascunho', baseada_em: null, criada_em: '2026-11-27T10:00:00Z', criada_por_id: 'u-outro', ultimo_editor_id: 'u-outro', atualizada_em: '2026-11-27T10:00:00Z', aprovada_em: null, aprovada_por_id: null, aprovada_pelo_proprio_editor: null, nota_aprovacao: null, ...o });
+const REG = (id, rotulo, o) => ({ id, versao_id: 'v1', rotulo, emitente: null, tipo_operacao: null, destino: null, tipo_orgao: null, indicador_ie: null, ncm_prefixo: null, origem_fiscal: null, monofasico: null, cfop: '5102', cst_csosn: '00', aliquota_icms_pct: null, cbenef: null, informacao_complementar: null, exige_nota_referenciada: false, confirmada: true, fonte: 'e-mail da contabilidade (teste)', observacao: null, criada_em: '2026-11-27T10:00:00Z', ...o });
+const regrasDeTeste = () => [
+  REG('r1', 'Venda interna', { destino: 'dentro_uf', cfop: '5102', aliquota_icms_pct: '12.00' }),
+  REG('r2', 'Venda interestadual', { destino: 'fora_uf', cfop: '6102', confirmada: false, fonte: null }),
+  REG('r3', 'Venda interna NCM 8512', { destino: 'dentro_uf', ncm_prefixo: '8512', cfop: '5101' }),
+];
+const simularRegras = (url) => {
+  const erro = { status: 500, body: { message: 'boom', code: 'XX000' } };
+  if (/\/rest\/v1\/fiscal_regras_versoes\?/.test(url)) return modoLeituraDasRegras === 'erro' ? erro : { status: 200, body: bdRegras.versoes };
+  if (/\/rest\/v1\/fiscal_regras\?/.test(url)) { const m = decodeURIComponent(url).match(/versao_id=eq\.([^&]+)/); return modoLeituraDasRegras === 'erro' ? erro : { status: 200, body: bdRegras.regras.filter(r => r.versao_id === (m && m[1])) }; }
+  if (/\/rest\/v1\/auth_usuarios\?/.test(url)) return { status: 200, body: [{ id: 'u-outro', nome: 'Outra Pessoa' }] };
+  if (/\/rest\/v1\/fiscal_emitentes\?/.test(url)) return { status: 200, body: [{ id: 'e1', codigo: 'ACN', razao_social: 'ACN SINAL VERDE LTDA' }, { id: 'e2', codigo: 'DETECH', razao_social: 'DETECH' }] };
+  return null;
+};
+const escritaDasRegras = (url, metodo, corpo) => {
+  const dados = (() => { try { return JSON.parse(corpo || 'null'); } catch (e) { return null; } })();
+  if (/\/rest\/v1\/fiscal_regras(\?|$)/.test(url)) {
+    if (metodo === 'POST') { const nova = { ...REG('n' + (bdRegras.regras.length + 1), 'x'), ...dados }; bdRegras.regras.push(nova); return { status: 201, body: [nova] }; }
+    if (metodo === 'PATCH') return { status: 200, body: [{ ...dados, id: (decodeURIComponent(url).match(/id=eq\.([^&]+)/) || [, 'r1'])[1] }] };
+    if (metodo === 'DELETE') { const id = (decodeURIComponent(url).match(/id=eq\.([^&]+)/) || [, ''])[1]; bdRegras.regras = bdRegras.regras.filter(r => r.id !== id); return { status: 200, body: [{ id }] }; }
+  }
+  if (/rpc\/fiscal_regras_nova_versao/.test(url)) { const n = bdRegras.versoes.length + 1; bdRegras.versoes.unshift(VER(n, { ultimo_editor_id: '00000000-0000-0000-0000-000000000000' })); return { status: 200, body: 'v' + n }; }
+  if (/rpc\/fiscal_regras_descartar/.test(url)) { bdRegras.versoes = bdRegras.versoes.filter(v => v.situacao !== 'rascunho'); return { status: 200, body: null }; }
+  if (/rpc\/fiscal_regras_aprovar/.test(url)) {
+    if (modoAprovarRegras === 'recusa') return { status: 400, body: { message: 'Quem editou por último não aprova a própria versão: peça a outro gerente ou ao Admin.', code: 'P0001' } };
+    bdRegras.versoes = bdRegras.versoes.map(v => (v.situacao === 'rascunho' ? { ...v, situacao: 'aprovada', aprovada_em: '2026-11-27T12:00:00Z', aprovada_por_id: 'u-outro', nota_aprovacao: dados && dados.p_nota, atualizada_em: '2026-11-27T12:00:00Z' } : v));
+    return { status: 200, body: { numero: 1, substituiu: null, pelo_proprio_editor: false } };
+  }
+  return null;
+};
+
 let modoDaGravacao = 'ok';
 const respostaDaGravacao = (url, metodo, corpo) => {
+  if (modoRegras) { const rr = escritaDasRegras(url, metodo, corpo); if (rr) return rr; }
   if (/rpc\/fiscal_guardar/.test(url)) return modoDaGravacao === 'ok' ? { status: 200, body: { novas: 1, atualizadas: 0, repetidas: 1, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0 } } : { status: 400, body: { message: 'canceling statement due to statement timeout', code: '57014' } };
   // o PATCH que liga a OP ao cliente: o banco devolve as linhas que ele tocou (os ids do filtro `id=in.(...)`)
   if (modoLigacao && metodo === 'PATCH' && /\/rest\/v1\/oples\?/.test(url)) {
@@ -128,7 +166,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
   fs.writeFileSync(arqs.errada, nota({ numero: 102, idDest: '2', cfop: '5102' }));   // interestadual (idDest 2) com CFOP de dentro do estado
   fs.writeFileSync(arqs.lixo, '<isto nao e uma nota>');
 
-  const ctx = await abrir({ simular: (url) => (modoTipos ? simularTipos(url) : null) || (modoLigacao ? simularLigacao(url) : null) || (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url, metodo, corpo) => respostaDaGravacao(url, metodo, corpo) });
+  const ctx = await abrir({ simular: (url) => (modoRegras ? simularRegras(url) : null) || (modoTipos ? simularTipos(url) : null) || (modoLigacao ? simularLigacao(url) : null) || (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url, metodo, corpo) => respostaDaGravacao(url, metodo, corpo) });
   const { page, gravacoes, consoleErros, falhasDePagina } = ctx;
   try {
     // ═══ Cadastros: empresas ═══
@@ -529,6 +567,129 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     confere('celular 390: Tipos de nota (mapa e conferência) não estoura a largura da página', await semRolagemLateral(page), String(await page.evaluate(() => document.documentElement.scrollWidth)));
     await page.setViewport({ width: 1500, height: 900 });
     modoTipos = false;
+
+    // ═══ Cadastros fiscais › Regras: versões, aprovação e simulador — dados SIMULADOS ═══
+    modoRegras = true;
+    await page.setViewport({ width: 1500, height: 900 });
+    const abrirRegras = async (esperarTexto) => {
+      await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+      await page.goto(BASE + '#/fiscal/cadastros/regras', { waitUntil: 'domcontentloaded' });
+      await esperarSistema(page);
+      await page.waitForFunction((x) => new RegExp(x).test(document.body.innerText), { timeout: 30000 }, esperarTexto);
+    };
+    const botaoHabilitado = (rotulo) => page.evaluate((r) => { const b = [...document.querySelectorAll('.acn-main button')].find(x => x.innerText.trim() === r); return b ? !b.disabled : null; }, rotulo);
+    // A) banco novo: nada vale e nada foi lido como "vazio" por erro
+    bdRegras = { versoes: [], regras: [] };
+    let antesR = gravacoes.length;
+    await abrirRegras('Nenhuma versão ainda');
+    t = await textoDaTela(page);
+    confere('regras: o endereço da visão é #/fiscal/cadastros/regras', (await page.evaluate(() => location.hash)) === '#/fiscal/cadastros/regras', await page.evaluate(() => location.hash));
+    confere('regras: avisa que nada é emitido e a tabela nasce vazia', /Nada é emitido e nada trava o Fiscal/.test(t) && /nasce vazia/.test(t));
+    confere('regras: sem versão, o Admin vê o botão "Nova versão"', (await botaoHabilitado('Nova versão')) === true);
+    const gravouAlgo = gravacoes.slice(antesR).filter(x => !/ver_como_encerrar/.test(x.url));   // o ver_como_encerrar é da casca do sistema ao abrir, não da tela
+    confere('regras: abrir a tela não grava nada', gravouAlgo.length === 0, JSON.stringify(gravouAlgo.map(x => x.url)));
+    // B) leitura recusada: nunca vira "nenhuma versão"
+    modoLeituraDasRegras = 'erro';
+    await abrirRegras('Não foi possível ler as versões das regras');
+    t = await textoDaTela(page);
+    confere('regras: leitura recusada → faixa vermelha e NÃO diz "nenhuma versão ainda"', await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')) && !/Nenhuma versão ainda/.test(t), t.slice(0, 200));
+    modoLeituraDasRegras = 'ok';
+    // C) rascunho com uma regra a confirmar: a aprovação trava e diz por quê
+    bdRegras = { versoes: [VER(1)], regras: regrasDeTeste() };
+    await abrirRegras('Venda interestadual');
+    t = await textoDaTela(page);
+    confere('regras: o rascunho aparece com as 3 regras e o selo "A confirmar"', /Versão 1/.test(t) && /Rascunho/.test(t) && /Venda interna NCM 8512/.test(t) && /A confirmar/.test(t) && /Confirmada/.test(t), t.slice(0, 300));
+    confere('regras: o que está para resolver aparece em vermelho e "Aprovar esta versão" fica desligado', /Para aprovar, falta resolver/.test(t) && /ainda a confirmar com a contabilidade/.test(t) && (await botaoHabilitado('Aprovar esta versão')) === false, t.slice(0, 400));
+    confere('regras: com um rascunho aberto não há "Nova versão" (só um por vez)', (await botaoHabilitado('Nova versão')) === null && /só um por vez/.test(t));
+    // simulador
+    const escolhe = async (sel, valor) => { await page.select(sel, valor); await espera(150); };
+    t = await textoDaTela(page);
+    confere('simulador: sem dado nenhum diz "Faltam dados" e não inventa regra', /Faltam dados/.test(t) && /destino/i.test(t.slice(t.indexOf('Faltam dados'))), t.slice(t.indexOf('Simulador'), t.indexOf('Simulador') + 300));
+    await escolhe('#sm-dest', 'dentro_uf');
+    t = await textoDaTela(page);
+    confere('simulador: dentro do estado SEM NCM → "Faltam dados" (uma regra mais específica depende do NCM)', /Faltam dados/.test(t) && /ncm/i.test(t.slice(t.indexOf('Faltam dados'))), t.slice(t.indexOf('Simulador'), t.indexOf('Simulador') + 400));
+    await page.type('#sm-ncm', '85258929'); await espera(150);
+    t = await textoDaTela(page);
+    confere('simulador: dentro do estado com outro NCM → achou "Venda interna", CFOP 5102, ICMS 12%', /Achou a regra/.test(t) && /CFOP\s*5102/.test(t) && /12,00%/.test(t.replace('12,00%', '12,00%')), t.slice(t.indexOf('Simulador'), t.indexOf('Simulador') + 400));
+    await page.evaluate(() => { const el = document.querySelector('#sm-ncm'); el.focus(); }); await page.click('#sm-ncm', { clickCount: 3 }); await page.type('#sm-ncm', '85122011'); await espera(150);
+    t = await textoDaTela(page);
+    confere('simulador: NCM 8512… → vale a mais específica (CFOP 5101)', /Achou a regra/.test(t) && /Venda interna NCM 8512/.test(t) && /CFOP\s*5101/.test(t), t.slice(t.indexOf('Simulador'), t.indexOf('Simulador') + 400));
+    await escolhe('#sm-dest', 'fora_uf');
+    t = await textoDaTela(page);
+    confere('simulador: interestadual → achou, mas "a confirmar": não vale para emitir', /Achou, mas a confirmar/.test(t) && /NÃO vale para emitir/.test(t), t.slice(t.indexOf('Simulador'), t.indexOf('Simulador') + 400));
+    await escolhe('#sm-dest', 'exterior');
+    t = await textoDaTela(page);
+    confere('simulador: exterior → "Sem regra" (a contabilidade ainda não disse)', /Sem regra/.test(t) && /contabilidade ainda não disse/.test(t), t.slice(t.indexOf('Simulador'), t.indexOf('Simulador') + 300));
+    // D) nova regra: o formulário recusa o que falta e grava o que está certo
+    antesR = gravacoes.length;
+    await clicarTexto(page, '.acn-main button', 'Nova regra');
+    await page.waitForSelector('#rg-rotulo', { timeout: 5000 });
+    await clicarTexto(page, '.modal-box button', 'Salvar regra');
+    await espera(300);
+    t = await page.evaluate(() => document.querySelector('.modal-box').innerText.replace(/\s+/g, ' '));
+    confere('regra nova: sem nome, CFOP e CST o formulário recusa e diz o que falta (nada gravado)', /Dê um nome à regra/.test(t) && gravacoes.length === antesR, t.slice(0, 200));
+    await page.type('#rg-rotulo', 'Venda para o exterior'); await page.select('#rg-dest', 'exterior'); await page.type('#rg-cfop', '7101'); await page.type('#rg-cst', '41');
+    await clicarTexto(page, '.modal-box button', 'Salvar regra');
+    await page.waitForFunction(() => /Regra gravada/.test(document.body.innerText), { timeout: 8000 });
+    const gR = gravacoes.slice(antesR).find(x => x.metodo === 'POST' && /\/rest\/v1\/fiscal_regras(\?|$)/.test(x.url));
+    const corpoR = gR ? JSON.parse(gR.corpo) : {};
+    confere('regra nova: grava na tabela das regras com a versão, o destino e só dígitos (CFOP 7101, CST 41), como "a confirmar"', !!gR && corpoR.versao_id === 'v1' && corpoR.destino === 'exterior' && corpoR.cfop === '7101' && corpoR.cst_csosn === '41' && corpoR.confirmada === false && corpoR.emitente === null, gR && gR.corpo);
+    await page.waitForFunction(() => /Venda para o exterior/.test(document.body.innerText), { timeout: 8000 }).catch(() => {});
+    t = await textoDaTela(page);
+    confere('regra nova: a lista passa a mostrar a regra gravada', /Venda para o exterior/.test(t), t.slice(0, 300));
+    // E) tudo confirmado → aprovar (confirmação, nota e a função do banco)
+    bdRegras.regras = bdRegras.regras.map(r => ({ ...r, confirmada: true, fonte: r.fonte || 'parecer 12/2026 (teste)' }));
+    await abrirRegras('Venda interestadual');
+    t = await textoDaTela(page);
+    confere('aprovação: sem pendência diz "Tudo pronto" e liga o botão "Aprovar esta versão"', /Tudo pronto/.test(t) && (await botaoHabilitado('Aprovar esta versão')) === true, t.slice(0, 300));
+    antesR = gravacoes.length;
+    await clicarTexto(page, '.acn-main button', 'Aprovar esta versão');
+    const dlg1 = await confirmaDialogo(page);
+    confere('aprovação: a pergunta diz que a versão fica congelada e vira a vigente', /Aprovar a versão 1 com 4 regra/.test(dlg1) && /CONGELADA/.test(dlg1) && /vigente/.test(dlg1), dlg1);
+    await page.waitForSelector('.acn-dialogo-campo', { timeout: 5000 });
+    await espera(400); await page.focus('.acn-dialogo-campo');
+    await page.type('.acn-dialogo-campo', 'Conferida com a contabilidade em 27/11');
+    await page.evaluate(() => document.querySelector('.acn-dialogo-btn.primario').click());
+    await page.waitForFunction(() => /Versão 1 aprovada/.test(document.body.innerText), { timeout: 8000 });
+    const gA = gravacoes.slice(antesR).find(x => /rpc\/fiscal_regras_aprovar/.test(x.url));
+    confere('aprovação: chama a função do banco com a versão e a nota', !!gA && /"p_versao":"v1"/.test(gA.corpo) && /Conferida com a contabilidade/.test(gA.corpo), gA && gA.corpo);
+    t = await textoDaTela(page);
+    confere('aprovação: a versão passa a "Vigente", congelada, sem "Nova regra" nem "Aprovar"', /Vigente/.test(t) && /Versão congelada/.test(t) && (await botaoHabilitado('Nova regra')) === null && (await botaoHabilitado('Aprovar esta versão')) === null, t.slice(0, 300));
+    confere('aprovação: a vigente oferece "Nova versão" (cópia da vigente)', (await botaoHabilitado('Nova versão')) === true);
+    antesR = gravacoes.length;
+    await clicarTexto(page, '.acn-main button', 'Nova versão');
+    const dlg2 = await confirmaDialogo(page);
+    await page.waitForFunction(() => /Rascunho aberto/.test(document.body.innerText), { timeout: 8000 });
+    const gN = gravacoes.slice(antesR).find(x => /rpc\/fiscal_regras_nova_versao/.test(x.url));
+    confere('nova versão: a pergunta diz "cópia da versão 1 (a vigente)" e chama a função do banco', /cópia da versão 1/.test(dlg2) && !!gN, dlg2);
+    // F) o banco recusa: a mensagem dele vai para a tela em vermelho
+    bdRegras = { versoes: [VER(1)], regras: regrasDeTeste().map(r => ({ ...r, confirmada: true, fonte: 'teste' })) };
+    modoAprovarRegras = 'recusa';
+    await abrirRegras('Tudo pronto');
+    await clicarTexto(page, '.acn-main button', 'Aprovar esta versão');
+    await confirmaDialogo(page);
+    await page.waitForSelector('.acn-dialogo-campo', { timeout: 5000 });
+    await page.type('.acn-dialogo-campo', 'nota de teste');
+    await page.evaluate(() => document.querySelector('.acn-dialogo-btn.primario').click());
+    await page.waitForFunction(() => /não aprova a própria versão/.test(document.body.innerText), { timeout: 8000 });
+    confere('aprovação recusada pelo banco: a mensagem aparece em vermelho e a versão continua rascunho', await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')) && /Rascunho/.test(await textoDaTela(page)));
+    modoAprovarRegras = 'ok';
+    // G) descartar o rascunho
+    antesR = gravacoes.length;
+    await clicarTexto(page, '.acn-main button', 'Descartar rascunho');
+    const dlg3 = await confirmaDialogo(page);
+    await page.waitForFunction(() => /Rascunho descartado/.test(document.body.innerText), { timeout: 8000 });
+    confere('descartar: pergunta antes e chama a função do banco', /Descartar o rascunho/.test(dlg3) && gravacoes.slice(antesR).some(x => /rpc\/fiscal_regras_descartar/.test(x.url)), dlg3);
+    // H) celular
+    bdRegras = { versoes: [VER(1)], regras: regrasDeTeste() };
+    await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await abrirRegras('Venda interestadual');
+    confere('celular 390: Regras (versões, regras e simulador) não estoura a largura da página', await semRolagemLateral(page), String(await page.evaluate(() => document.documentElement.scrollWidth)));
+    await clicarTexto(page, '.acn-main button', 'Nova regra');
+    await page.waitForSelector('#rg-rotulo', { timeout: 5000 });
+    confere('celular 390: a janela da regra não estoura a largura da página', await semRolagemLateral(page));
+    await page.setViewport({ width: 1500, height: 900 });
+    modoRegras = false;
 
     // ═══ Celular ═══
     for (const [rotulo, hash, esperar] of [['cadastros/empresas', '#/fiscal/cadastros', /DETECH/], ['cadastros/itens', '#/fiscal/cadastros/itens', /Itens ativos/], ['conferidor', '#/fiscal/conferidor', /Solte os arquivos/], ['arquivo/notas', '#/fiscal/arquivo', /Notas guardadas/], ['arquivo/numeracao', '#/fiscal/arquivo/numeracao', /Primeiro/]]) {

@@ -21,6 +21,7 @@ import {
 } from './FiscalDados';
 import { agruparParaLigar, resumoDasLigacoes, gruposComSugestao } from './FiscalLigacaoDaOp';
 import FiscalTiposDeNotaTela from './FiscalTiposDeNotaTela';
+import FiscalRegrasTela from './FiscalRegrasTela';
 import {
   OPCOES_CRT, ORIGENS_FISCAIS, UFS, formDoEmitente, faltasDoEmitente, formDaTransportadora, faltasDoCliente, faltasDoItem, CAMPOS_FISCAIS_DO_CLIENTE, CAMPOS_FISCAIS_DO_ITEM, soDigitos, formatarNcm,
 } from './FiscalRegras';
@@ -573,6 +574,7 @@ export default function FiscalCadastrosTela({ currentUser }) {
         { id: 'itens', rotulo: 'Itens: o que falta' },
         { id: 'ops', rotulo: 'OPs sem cliente' },
         { id: 'tipos', rotulo: 'Tipos de nota' },
+        { id: 'regras', rotulo: 'Regras' },
       ]} />
       {visao === 'empresas' && <EmpresasEmitentes currentUser={currentUser} podeEditar={podeEditar} />}
       {visao === 'transportadoras' && <TransportadorasFiscais currentUser={currentUser} podeEditar={transportadoraPode} />}
@@ -580,6 +582,7 @@ export default function FiscalCadastrosTela({ currentUser }) {
       {visao === 'itens' && <PendenciasDosItens currentUser={currentUser} />}
       {visao === 'ops' && <OpsSemCliente currentUser={currentUser} />}
       {visao === 'tipos' && <FiscalTiposDeNotaTela />}
+      {visao === 'regras' && <FiscalRegrasTela currentUser={currentUser} />}
     </div>
   );
 }

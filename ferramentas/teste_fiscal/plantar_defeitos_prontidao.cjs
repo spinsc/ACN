@@ -1,7 +1,7 @@
 // Planta defeitos de propósito, um de cada vez, e confere que o teste das regras os pega (rode da raiz do projeto: node ferramentas/teste_fiscal/plantar_defeitos_prontidao.cjs).
 // Cada defeito diz o arquivo, o trecho que existe e o trecho estragado. O arquivo é sempre restaurado no fim, mesmo se algo falhar.
 const fs = require('fs'); const { spawnSync } = require('child_process');
-const PRONT = 'src/FiscalProntidao.ts', LIG = 'src/FiscalLigacaoDaOp.ts', TIPOS = 'src/FiscalTiposDeNota.ts';
+const PRONT = 'src/FiscalProntidao.ts', LIG = 'src/FiscalLigacaoDaOp.ts', TIPOS = 'src/FiscalTiposDeNota.ts', MOTOR = 'src/FiscalMotor.ts';
 const defeitos = [
   [PRONT, 'sem item lançado vira pronta', "if (conferidos === 0) {", "if (false) {"],
   [PRONT, 'ambíguo é chutado (cliente)', "if (porNome.length === 1) return { situacao: 'achado', cliente: porNome[0], por: 'nome' };", "if (porNome.length >= 1) return { situacao: 'achado', cliente: porNome[0], por: 'nome' };"],
@@ -30,6 +30,20 @@ const defeitos = [
   [TIPOS, 'falta a NFS-e não é pega', "if (pedeServico && !servico) d.push(", "if (false) d.push("],
   [TIPOS, 'nota a mais de material não é pega', "if (material && !pedeMaterial) d.push(", "if (false) d.push("],
   [TIPOS, 'número só com espaços vale como nota informada', "const material = String(op?.numero_nf ?? '').trim();", "const material = String(op?.numero_nf ?? '');"],
+  // ── motor das regras fiscais versionadas (27/11/2026) ──
+  [MOTOR, 'regra mais específica não ganha', "const melhores = casam.filter(c => !casam.some(o => o !== c && maisEspecifica(o, c)));", "const melhores = casam;"],
+  [MOTOR, 'conflito vira "achou" a primeira', "if (melhores.length > 1 && !melhores.every(m => mesmoResultado(m, melhores[0]))) {", "if (false) {"],
+  [MOTOR, 'dado que falta é tratado como "não casa"', "if (cv === null) { faltam.push(c); continue; }", "if (cv === null) { nao = true; break; }"],
+  [MOTOR, 'regra mais fina que depende de dado ausente é ignorada', "if (maisFinas.length) {", "if (false) {"],
+  [MOTOR, 'NCM curto demais decide', "if (rv.startsWith(cv)) { faltam.push(c); continue; }   // NCM informado curto demais para decidir", "if (rv.startsWith(cv)) continue;"],
+  [MOTOR, 'regra não confirmada vale', "confirmada: !!regra.confirmada, porque: regra.confirmada", "confirmada: true, porque: regra.confirmada"],
+  [MOTOR, 'origem 0 vira "qualquer"', "const vazio = (v: any) => v === null || v === undefined || v === '';", "const vazio = (v: any) => !v;"],
+  [MOTOR, 'resultado igual conta como conflito', "if (compativeis(a, b) && !refina(a, b) && !refina(b, a) && !mesmoResultado(a, b)) pares.push", "if (compativeis(a, b) && !refina(a, b) && !refina(b, a)) pares.push"],
+  [MOTOR, 'NCM não é por prefixo', "if (c === 'ncm_prefixo' ? !(va.startsWith(vb) || vb.startsWith(va)) : !mesmo(va, vb)) return false;", "if (!mesmo(va, vb)) return false;"],
+  [MOTOR, 'regra sem fonte passa na aprovação', "const semFonte = regras.filter(r => r.confirmada && textoOuVazio(r.fonte).length < 3);", "const semFonte = [];"],
+  [MOTOR, 'regras com as mesmas condições passam', "if (vistas.has(k)) p.push(", "if (false) p.push("],
+  [MOTOR, 'confirmada sem fonte é aceita no formulário', "if (f.confirmada && textoOuVazio(f.fonte).length < 3) return", "if (false) return"],
+  [MOTOR, 'monofásico "não" vira nulo', "monofasico: f.monofasico === 'sim' ? true : f.monofasico === 'nao' ? false : null, cfop", "monofasico: f.monofasico === 'sim' ? true : null, cfop"],
 ];
 let pegos = 0;
 const originais = new Map();
