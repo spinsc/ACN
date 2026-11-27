@@ -7818,3 +7818,8 @@ body.dark .acn-log-op { color: #7fd8cc; }
 .acn-ckl-texto { flex: 1 1 160px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .acn-ckl-item.inativo { opacity: .65; }
 .acn-ckl-item.inativo .acn-ckl-texto { text-decoration: line-through; }
+/* 12e87 (26/11/2026): painel Lixeira (24h) do Admin (AdminPainelLixeira.tsx) */
+.acn-lix-filtro { margin-top: 8px; }
+.acn-lix .acn-faixa + .acn-faixa, .acn-lix .acn-faixa + .acn-lix-filtro { margin-top: 8px; }
+.acn-lix-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-lix-expirado > td { opacity: .5; }

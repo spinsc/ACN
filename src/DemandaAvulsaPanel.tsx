@@ -6,6 +6,8 @@ import { departamentosDoSetor } from './RhDepartamentos';
 import { supabase } from './supabaseClient';
 import { anexarValoresDoPedido } from './PedidoValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes, resolverMencoesDeTodos } from './MencaoTextarea';
 import Linkify from './Linkify';
@@ -120,10 +122,10 @@ async function uploadAnexo(file: File, demandaId: string): Promise<{ url: string
   if (file.size > LIMITE_ANEXO_MB * 1024 * 1024) return { url: null, erro: explicarErroDeEnvio({ statusCode: 413 }, file) };
   const path = `demandas-avulsas/${demandaId}/${Date.now()}_${nomeSeguroDeArquivo(file.name)}`;
   // sem tipo informado pelo navegador (.dwg, .step, .rar...), sobe como arquivo genérico
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
-  if (error || !data) return { url: null, erro: explicarErroDeEnvio(error, file) };
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl ? { url: pub.publicUrl } : { url: null, erro: 'não foi possível obter o endereço do arquivo' };
+  // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro: error } = await enviarArquivoPrivado(path, file, file.type || 'application/octet-stream');
+  if (error || !valor) return { url: null, erro: explicarErroDeEnvio(error, file) };
+  return { url: valor };
 }
 
 // Status geral calculado pelas etapas
@@ -1200,9 +1202,9 @@ export function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh
                 {anexos.map(a => (
                   <div className="acn-dav-det-59" key={a.id}>
                     <span className="acn-dav-det-60">{a.tipo === 'foto' ? '🖼️' : '📄'}</span>
-                    <a className="acn-dav-det-61" href={a.url} target="_blank" rel="noreferrer">
+                    <LinkDeArquivo className="acn-dav-det-61" valor={a.url}>
                       {a.nome}
-                    </a>
+                    </LinkDeArquivo>
                     <span className="acn-dav-g-8">{a.criado_por}</span>
                     <Botao className="acn-dav-b acn-dav-det-62" onClick={() => excluirAnexo(a.id)}>✕</Botao>
                     <DescricaoDoAnexo anexo={a} pode={podeMexerNaDemanda || a.criado_por === currentUser?.nome} onSaved={reload} />

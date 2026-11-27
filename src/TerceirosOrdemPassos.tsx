@@ -6,6 +6,7 @@
 //  • Editar a ordem e Incluir mais serviços (só antes do envio).
 // Quem grava é o banco, pelas funções `terceiros_ordem_*` (TerceirosOrdens.ts), tudo ou nada; cada janela só deixa de oferecer o que ele recusaria.
 // A cópia assinada sobe para o armazenamento ANTES de a ordem ser gravada; se o banco recusa, os arquivos recém-enviados são retirados (nada fica solto).
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import React, { useMemo, useRef, useState } from 'react';
 import { mdiClose, mdiPlus, mdiTrashCanOutline, mdiPaperclip } from '@mdi/js';
 import Icone from './Icone';
@@ -365,7 +366,7 @@ export function ModalEditarOrdem({ ordem, servicos, prestadores, onClose, aoGrav
                 {(ordem.copias || []).map((c: any) => (
                   <li key={c.caminho}>
                     <input type="checkbox" checked={mantidas.includes(c.caminho)} disabled={ocupado} aria-label={`Manter ${c.nome}`} onChange={() => setMantidas(m => (m.includes(c.caminho) ? m.filter(x => x !== c.caminho) : [...m, c.caminho]))} />
-                    <a className="acn-terc-anexo-nome" href={enderecoDoAnexo(c.caminho)} target="_blank" rel="noopener noreferrer">{c.nome}</a>
+                    <LinkDeArquivo className="acn-terc-anexo-nome" valor={enderecoDoAnexo(c.caminho)}>{c.nome}</LinkDeArquivo>
                   </li>
                 ))}
               </ul>

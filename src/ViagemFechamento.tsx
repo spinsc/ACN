@@ -7,6 +7,7 @@
 // O desgaste do veículo é um custo calculado, não sai dinheiro: aparece no orçamento, mas fica fora da comparação.
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { CampoNumero } from './ViagemCampos';
 import { Parte } from './ViagemProvisionamento';
 import { fmtReais, fmtKm } from './ViagemCalculo';
@@ -75,7 +76,7 @@ export function BlocoFechamento({ v, set, pode, r, aoAnexarComprovante, aoTirarC
                     const indice = (v.comprovantes || []).indexOf(cp);
                     return (
                       <span key={cp.path || indice} className="acn-vg-comprov-item">
-                        <a href={cp.url} target="_blank" rel="noreferrer" title={cp.nome}><Icone path={mdiPaperclip} size={13} /> {cp.nome}</a>
+                        <LinkDeArquivo valor={cp.url} title={cp.nome}><Icone path={mdiPaperclip} size={13} /> {cp.nome}</LinkDeArquivo>
                         {pode.financeiro && <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Tirar o comprovante ${cp.nome}`} title="Tirar o comprovante" onClick={() => aoTirarComprovante(indice)} />}
                       </span>
                     );

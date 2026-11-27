@@ -8,6 +8,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { confirmar, mostrarAviso } from './Feedback';
 import { Botao } from './Interface';
 import Icone from './Icone';
@@ -21,11 +23,11 @@ export async function enviarAnexosDespesa(despesaIds: string[], arquivos: File[]
     if (f.size > 20 * 1024 * 1024) { erros.push(`${f.name}: maior que 20 MB`); continue; }
     const nomeLimpo = f.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `centro-custo-despesas/${despesaIds[0]}/${Date.now()}_${nomeLimpo}`;
-    const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: f.type || undefined });
-    if (error) { erros.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+    // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+    const { valor, erro: erroEnvio } = await enviarArquivoPrivado(path, f, f.type || undefined);
+    if (erroEnvio || !valor) { erros.push(`${f.name}: ${explicarErroDeEnvio(erroEnvio, f)}`); continue; }
     const { error: erroLinha } = await supabase.from('centro_custo_despesas_anexos').insert(despesaIds.map(id => ({
-      despesa_id: id, nome: f.name, url: pub?.publicUrl || path, tipo: f.type || null, tamanho: f.size,
+      despesa_id: id, nome: f.name, url: valor, tipo: f.type || null, tamanho: f.size,
       criado_por: user?.email || null, criado_por_nome: user?.nome || null,
     })));
     if (erroLinha) erros.push(`${f.name}: ${erroLinha.message}`);
@@ -65,7 +67,7 @@ export function AnexosDespesa({ despesaId, currentUser, podeEditar }: any) {
         : anexos.length === 0 ? <div className="acn-dsa-msg">Nenhum anexo.</div>
         : anexos.map(a => (
           <div key={a.id} className="acn-dsa-item">
-            <a href={a.url} target="_blank" rel="noreferrer" className="acn-dsa-nome"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a>
+            <LinkDeArquivo valor={a.url} className="acn-dsa-nome"><Icone path={mdiPaperclip} size={13} /> {a.nome}</LinkDeArquivo>
             {podeEditar && <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Remover ${a.nome}`} title="Remover" onClick={() => remover(a)} />}
           </div>
         ))}

@@ -1,25 +1,60 @@
-// Etapa 17, onda 5b (26/11/2026): copia os arquivos antigos do chat e das assinaturas do bucket PÚBLICO `acn-media` para o PRIVADO `acn-privado` (mesmo caminho)
+// Plano do bucket privado (onda 5b e fatias B1 a B4, 26/11/2026): copia arquivos do bucket PÚBLICO `acn-media` para o PRIVADO `acn-privado` (mesmo caminho)
 // e, só no fim e só se o usuário mandar, apaga os originais públicos. LEIA o LEIA-ME.md ao lado antes de rodar.
 //
-//   node migrar_para_privado.cjs                 → ensaio: só conta o que há e o que já foi copiado (não muda nada)
-//   node migrar_para_privado.cjs --copiar        → copia o que falta (os originais ficam)
-//   node migrar_para_privado.cjs --apagar        → apaga do público o que JÁ está no privado com o mesmo tamanho
+//   node migrar_para_privado.cjs [--fatia=5b|b1|b2|b3|b4]            → ensaio: conta por pasta o que há e o que já foi copiado (não muda nada)
+//   node migrar_para_privado.cjs --fatia=b1 --copiar                  → copia o que falta (os originais ficam)
+//   node migrar_para_privado.cjs --fatia=b1 --apagar --tela-publicada → apaga do público o que JÁ está no privado com o mesmo tamanho
+//   (--pastas=a,b,c no lugar de --fatia= escolhe pastas à mão; vale a pasta inteira)
 //
+// A fatia padrão é a 5b (chat, assinaturas e as assinaturas do SAC). `--apagar` só vale com `--tela-publicada`: ao apagar o original, o endereço público deixa de abrir,
+// então a tela da fatia (que lê pelo ajudante e cai no privado) TEM de estar publicada e conferida antes.
 // A chave de serviço (service_role) é do usuário: ela entra pela variável de ambiente SUPABASE_SERVICE_KEY e nunca é gravada em arquivo nem mostrada.
 const { createClient } = require('@supabase/supabase-js');
 
 const URL_DO_BANCO = 'https://qgemelnuqdilnggxmrdw.supabase.co';
 const ORIGEM = 'acn-media';
 const DESTINO = 'acn-privado';
+
+// O que cada fatia leva. `so` = só os arquivos da pasta que casam com a expressão. Mantenha igual ao plano (PLANO_BUCKET_PRIVADO.md, seção 4)
+// e à lista de pastas privadas do código (src/ArquivoPrivadoRegras.ts, caminhoEhPrivado), que cresce a cada fatia publicada.
+const SEM_IMAGEM_DE_TEXTO = /^(?!.*\/(area-livre|nota)\/)/;   // as barras PRECISAM de contrabarra: sem ela o script nem abre (erro achado ao preparar a B2, 26/11/2026)
+const FATIAS = {
+  '5b': [{ pasta: 'chat' }, { pasta: 'assinaturas' }, { pasta: 'sac', so: /^sac\/[^/]+\/assinatura_[^/]*$/ }],
+  // imagem colada dentro de texto formatado (/area-livre/, /nota/) fica pública: o endereço está dentro do HTML (ver caminhoEhPrivado em src/ArquivoPrivadoRegras.ts)
+  b1: ['compras-anexos', 'pcp-cotacoes', 'pcp-nf-fornecedor', 'pcp-fretes-cotacoes', 'logistica', 'pcp-fretes-canhotos', 'centro-custo-despesas', 'financeiro-tarefas', 'viagens', 'terceiros', 'contratos-padrao']
+    .map((pasta) => ({ pasta, so: SEM_IMAGEM_DE_TEXTO })),
+  // B2: `produtos` FICA DE FORA (decisão do usuário em 26/11/2026: fotos e catálogo vão na proposta ao cliente, o link precisa continuar abrindo);
+  // `sac` entra só com as fotos e arquivos das OS (a assinatura já foi na 5b: o `so` abaixo as deixa de lado, e elas casam com a regra do código).
+  b2: ['opl-anexos', 'ops-em-criacao', 'demandas-avulsas', 'demandas-cotacoes', 'desenvolvimento', 'engenharia-tarefas', 'analise', 'vistorias']
+    .map((pasta) => ({ pasta, so: SEM_IMAGEM_DE_TEXTO }))
+    .concat([{ pasta: 'sac', so: /^sac\/[^/]+\/(?!assinatura_)[^/]*$/ }])
+    // dos produtos só a subpasta "projeto" (arquivos de projeto); fotos e catálogo ficam públicos. Hoje não há arquivo nela.
+    .concat([{ pasta: 'produtos', so: /^produtos\/[^/]+\/projeto\// }]),
+  b3: ['crm-anexos'].map((pasta) => ({ pasta })),
+  b4: ['licitacoes', 'crm-docs'].map((pasta) => ({ pasta })),   // `crm-docs` é o arquivo dos documentos das Licitações (descoberto na B0)
+};
+
+const arg = (nome) => { const a = process.argv.find((x) => x.startsWith('--' + nome + '=')); return a ? a.slice(nome.length + 3) : null; };
+const tem = (nome) => process.argv.includes('--' + nome);
+
 const chave = process.env.SUPABASE_SERVICE_KEY;
 if (!chave) { console.error('Falta a variável SUPABASE_SERVICE_KEY (a chave service_role do projeto). Veja o LEIA-ME.md.'); process.exit(2); }
-const copiar = process.argv.includes('--copiar');
-const apagar = process.argv.includes('--apagar');
+const copiar = tem('copiar');
+const apagar = tem('apagar');
 if (copiar && apagar) { console.error('Use --copiar OU --apagar, não os dois juntos: confira o resultado da cópia antes de apagar.'); process.exit(2); }
+if (apagar && !tem('tela-publicada')) {
+  console.error('--apagar exige também --tela-publicada: confirme que a tela da fatia já está publicada e que você abriu arquivos dela no sistema.');
+  process.exit(2);
+}
+let grupos;
+if (arg('pastas')) grupos = arg('pastas').split(',').map((p) => p.trim()).filter(Boolean).map((pasta) => ({ pasta }));
+else {
+  const nome = arg('fatia') || '5b';
+  grupos = FATIAS[nome];
+  if (!grupos) { console.error('Fatia desconhecida: ' + nome + '. Use uma de: ' + Object.keys(FATIAS).join(', ') + '.'); process.exit(2); }
+  console.log('Fatia ' + nome + ': ' + grupos.map((g) => g.pasta).join(', '));
+}
 const sb = createClient(URL_DO_BANCO, chave, { auth: { persistSession: false, autoRefreshToken: false } });
-
-// o mesmo critério de src/ArquivoPrivadoRegras.ts (caminhoEhPrivado)
-const ehPrivado = (c) => c.startsWith('chat/') || c.startsWith('assinaturas/') || /^sac\/[^/]+\/assinatura_[^/]*$/.test(c);
 
 async function listar(bucket, prefixo) {
   const achados = [];
@@ -35,32 +70,39 @@ async function listar(bucket, prefixo) {
   }
   return achados;
 }
+const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
 
 (async () => {
-  console.log('Lendo o bucket público (chat, assinaturas e sac)…');
-  const do_publico = [];
-  for (const pasta of ['chat', 'assinaturas', 'sac']) do_publico.push(...await listar(ORIGEM, pasta));
-  const alvo = do_publico.filter((a) => ehPrivado(a.caminho));
-  console.log('  a copiar/conferir: ' + alvo.length + ' arquivos (' + (alvo.reduce((s, a) => s + a.tamanho, 0) / 1048576).toFixed(1) + ' MB)');
-  console.log('Lendo o bucket privado…');
+  const alvo = [];
   const no_privado = new Map();
-  for (const pasta of ['chat', 'assinaturas', 'sac']) for (const a of await listar(DESTINO, pasta)) no_privado.set(a.caminho, a.tamanho);
-  console.log('  já no privado: ' + no_privado.size + ' arquivos');
-
+  console.log('\nPasta                       públicos    privados   faltam   tamanho≠   (público: MB)');
+  for (const g of grupos) {
+    const publicos = (await listar(ORIGEM, g.pasta)).filter((a) => !g.so || g.so.test(a.caminho));
+    const privados = new Map();
+    for (const a of await listar(DESTINO, g.pasta)) if (!g.so || g.so.test(a.caminho)) privados.set(a.caminho, a.tamanho);
+    for (const [k, v] of privados) no_privado.set(k, v);
+    alvo.push(...publicos);
+    const faltam = publicos.filter((a) => !privados.has(a.caminho)).length;
+    const dif = publicos.filter((a) => privados.has(a.caminho) && privados.get(a.caminho) !== a.tamanho).length;
+    console.log(g.pasta.padEnd(28) + String(publicos.length).padStart(8) + String(privados.size).padStart(12) + String(faltam).padStart(9) + String(dif).padStart(11) + '   ' + mb(publicos.reduce((s, a) => s + a.tamanho, 0)));
+  }
   const faltam = alvo.filter((a) => !no_privado.has(a.caminho));
   const diferentes = alvo.filter((a) => no_privado.has(a.caminho) && no_privado.get(a.caminho) !== a.tamanho);
   const prontos = alvo.filter((a) => no_privado.has(a.caminho) && no_privado.get(a.caminho) === a.tamanho);
-  console.log('  faltam copiar: ' + faltam.length + ' · copiados com tamanho diferente: ' + diferentes.length + ' · copiados e conferidos: ' + prontos.length);
+  console.log('\nTotal: ' + alvo.length + ' arquivos públicos (' + mb(alvo.reduce((s, a) => s + a.tamanho, 0)) + ') · faltam copiar: ' + faltam.length + ' (' + mb(faltam.reduce((s, a) => s + a.tamanho, 0)) + ') · copiados com tamanho diferente: ' + diferentes.length + ' · copiados e conferidos: ' + prontos.length);
 
-  if (!copiar && !apagar) { console.log('\nEnsaio: nada foi alterado. Para copiar: --copiar. Depois de conferir: --apagar.'); return; }
+  if (!copiar && !apagar) { console.log('\nEnsaio: nada foi alterado. Para copiar: --copiar. Depois de conferir e de a tela estar publicada: --apagar --tela-publicada.'); return; }
 
   if (copiar) {
     let ok = 0, falhou = 0;
-    for (const a of faltam) {
+    // cópia com tamanho diferente (ficou pela metade): o original público ainda existe, então a do privado é refeita
+    for (const a of diferentes) await sb.storage.from(DESTINO).remove([a.caminho]);
+    for (const a of [...faltam, ...diferentes]) {
       const { error } = await sb.storage.from(ORIGEM).copy(a.caminho, a.caminho, { destinationBucket: DESTINO });
       if (error) { falhou++; console.log('  FALHOU ' + a.caminho + ': ' + error.message); } else ok++;
+      if ((ok + falhou) % 100 === 0) console.log('  … ' + (ok + falhou) + ' de ' + (faltam.length + diferentes.length));
     }
-    console.log('\nCopiados: ' + ok + ' · falharam: ' + falhou + '. Os originais públicos continuam lá. Rode sem opção para conferir e, se estiver tudo igual, --apagar.');
+    console.log('\nCopiados: ' + ok + ' · falharam: ' + falhou + '. Os originais públicos continuam lá. Rode sem --copiar para conferir e, se estiver tudo igual, --apagar.');
     process.exit(falhou ? 1 : 0);
   }
 

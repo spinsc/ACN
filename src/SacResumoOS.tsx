@@ -181,7 +181,7 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
             <div className="acn-quadro">
               <div className="acn-quadro-titulo">Arquivos e fotos</div>
               <div className="acn-srs-arquivos">
-                {arquivos.map((a: any, i: number) => <a key={'a' + i} href={a.url} target="_blank" rel="noreferrer">{a.nome || 'Arquivo ' + (i + 1)}</a>)}
+                {arquivos.map((a: any, i: number) => <LinkDeArquivo key={'a' + i} valor={a.url}>{a.nome || 'Arquivo ' + (i + 1)}</LinkDeArquivo>)}
                 {os.assinatura_aprovacao_url && <LinkDeArquivo valor={os.assinatura_aprovacao_url}>Assinatura da aprovação</LinkDeArquivo>}
                 {os.assinatura_saida_url && <LinkDeArquivo valor={os.assinatura_saida_url}>Assinatura da saída</LinkDeArquivo>}
                 {lista(os.fotos_entrada).length > 0 && <span className="acn-fraco">{lista(os.fotos_entrada).length} foto(s) de entrada</span>}

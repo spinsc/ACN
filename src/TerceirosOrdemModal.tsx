@@ -4,6 +4,7 @@
 //   Aguardando assinatura → enviar as peças (com a cópia assinada), alterar, incluir ou tirar serviços, cancelar;  Peças no prestador → registrar o retorno, ajustar previsão e cópia.
 // Quem só pediu um serviço da ordem vê tudo e imprime, mas não mexe. Quem grava é o banco (TerceirosOrdens.ts); esta janela só deixa de oferecer o que ele recusaria.
 // Cada passo que pede dados abre a janela dele (TerceirosOrdemPassos.tsx) POR CIMA desta; o que o banco confirma sobe para a tela (`aoMudou`) e a lista se atualiza sem esperar a próxima leitura.
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import React, { useEffect, useMemo, useState } from 'react';
 import { mdiClose, mdiOpenInNew, mdiPaperclip, mdiHistory, mdiPrinterOutline, mdiPencilOutline, mdiPlus, mdiSendOutline, mdiCheckBold, mdiCancel, mdiLinkVariantOff } from '@mdi/js';
 import Icone from './Icone';
@@ -162,7 +163,7 @@ export function ModalDaOrdem({ ordemId, ordens, servicos, mapaTipos, mapaPrestad
                     {ordem.copias.map((a: any) => (
                       <li key={a.caminho}>
                         <Icone path={mdiPaperclip} size={14} />
-                        <a className="acn-terc-anexo-nome" href={enderecoDoAnexo(a.caminho)} target="_blank" rel="noopener noreferrer">{a.nome}</a>
+                        <LinkDeArquivo className="acn-terc-anexo-nome" valor={enderecoDoAnexo(a.caminho)}>{a.nome}</LinkDeArquivo>
                         <span className="acn-fraco">{[tamanhoLegivel(a.tamanho), a.por ? `por ${a.por}` : ''].filter(Boolean).join(' · ')}</span>
                       </li>
                     ))}

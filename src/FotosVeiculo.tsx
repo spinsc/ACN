@@ -16,6 +16,8 @@
 import React, { useState, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo, ImagemPrivada } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { Botao } from './Interface';
 import Icone from './Icone';
@@ -64,11 +66,11 @@ export default function FotosVeiculo({ valor = [], onChange, currentUser, pasta 
       if (f.size > 12 * 1024 * 1024) { setErro(`"${f.name}" tem ${fmtTam(f.size)} — o limite é 12 MB.`); continue; }
       if (!String(f.type || '').startsWith('image/')) { setErro(`"${f.name}" não é uma imagem.`); continue; }
       const caminho = `${pasta}/${nomeSeguro(f.name)}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(caminho, f, { upsert: false });
-      if (error) { setErro(`Não subiu "${f.name}": ${explicarErroDeEnvio(error, f)}`); continue; }
-      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(caminho);
+      // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor: valorPriv, erro: error } = await enviarArquivoPrivado(caminho, f, f.type || undefined);
+      if (error || !valorPriv) { setErro(`Não subiu "${f.name}": ${explicarErroDeEnvio(error, f)}`); continue; }
       novas.push({
-        url: pub.publicUrl, nome: f.name, tamanho: f.size,
+        url: valorPriv, nome: f.name, tamanho: f.size,
         criado_por_nome: currentUser?.nome || currentUser?.email || '—',
         criado_em: new Date().toISOString(),
       });
@@ -95,9 +97,9 @@ export default function FotosVeiculo({ valor = [], onChange, currentUser, pasta 
         <div className="acn-fv-grade">
           {fotos.map((f, i) => (
             <div key={f.url} className="acn-fv-foto">
-              <a href={f.url} target="_blank" rel="noopener noreferrer" title={`${f.nome} — abrir`}>
-                <img src={f.url} alt={f.nome} className="acn-fv-img" />
-              </a>
+              <LinkDeArquivo valor={f.url} title={`${f.nome} — abrir`}>
+                <ImagemPrivada valor={f.url} alt={f.nome} className="acn-fv-img" />
+              </LinkDeArquivo>
               <Botao variante="discreto" pequeno icone={mdiClose} className="acn-fv-x" onClick={() => remover(i)} title="Tirar esta foto" />
             </div>
           ))}
@@ -119,10 +121,10 @@ export function FotosVeiculoVer({ fotos = [], tamanho = 64 }) {
   return (
     <div className="acn-fv-ver">
       {lista.map(f => (
-        <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer"
+        <LinkDeArquivo key={f.url} valor={f.url}
           title={`${f.nome || 'foto'}${f.criado_por_nome ? ` — ${f.criado_por_nome}` : ''}`}>
-          <img src={f.url} alt={f.nome || 'foto do carro'} width={tamanho} height={tamanho} className="acn-fv-ver-img" />
-        </a>
+          <ImagemPrivada valor={f.url} alt={f.nome || 'foto do carro'} width={tamanho} height={tamanho} className="acn-fv-ver-img" />
+        </LinkDeArquivo>
       ))}
     </div>
   );
