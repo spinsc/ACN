@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ESTOQUE — controle ligado item a item, para adotar aos poucos
 //
@@ -240,7 +239,7 @@ export async function pedirServicoDoItem({ item, servico, quantidade, motivo, cu
  *
  * Inacabado no mínimo: pede corte e dobra para repor a peça bruta.
  */
-export async function conferirDoisEstados({ item, reservado = 0, currentUser }: any) {
+export async function conferirDoisEstados({ item, reservado = 0, currentUser }: any): Promise<Record<string, any>[]> {
   if (!temDoisEstados(item)) return [];
   const pedidos: any[] = [];
   const un = item.unidade || 'UN';
@@ -284,7 +283,7 @@ export async function conferirDoisEstados({ item, reservado = 0, currentUser }: 
   return pedidos.filter(p => p?.criada || p?.erro);
 }
 
-export async function garantirRequisicaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, jaPedido, currentUser }: any) {
+export async function garantirRequisicaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, jaPedido, currentUser }: any): Promise<Record<string, any>> {
   const jaTem = await reposicaoEmAberto(item, op);
   if (jaTem?.erro) return { erro: `${jaTem.erro}. Nada foi pedido, para não pedir em dobro.` };
   if (jaTem) {
@@ -378,9 +377,10 @@ export async function varrerMinimos({ currentUser }: any) {
     if (!n.precisa) continue;
     abaixo++;
     // garantirRequisicaoReposicao precisa do cadastro para saber o caminho
-    const { data: item, error: erroItem } = await supabase.from('cadastro_itens')
+    // select montado em texto (CAMPOS_DOIS_ESTADOS): o tipo do cliente não lê a lista de colunas, então o resultado é tratado como livre
+    const { data: item, error: erroItem } = (await supabase.from('cadastro_itens')
       .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante,' + CAMPOS_DOIS_ESTADOS)
-      .eq('id', linha.item_id).maybeSingle();
+      .eq('id', linha.item_id).maybeSingle()) as { data: any; error: any };
     // 7.x: o item que não vinha do cadastro era contado como "abaixo do mínimo" e sumia do relatório (nem aberto, nem pulado, nem falha)
     if (erroItem || !item) { falhas.push({ item: { nome: linha.nome || 'item sem nome' }, erro: erroItem ? erroItem.message : 'item não encontrado no cadastro' }); continue; }
     // Item guardado nos dois estados: o que repõe a prateleira é um dos dois serviços da cadeia, não a compra da peça (mesma regra do movimento de estoque)
@@ -635,9 +635,10 @@ async function pedirOQueFaltou({ itemIds, op, currentUser, necessidades }: any) 
       minimo: linha.estoque_minimo, ideal: linha.estoque_ideal,
     });
     if (!n.precisa) continue;
-    const { data: item, error: erroItem } = await supabase.from('cadastro_itens')
+    // select montado em texto (CAMPOS_DOIS_ESTADOS): o tipo do cliente não lê a lista de colunas, então o resultado é tratado como livre
+    const { data: item, error: erroItem } = (await supabase.from('cadastro_itens')
       .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante,' + CAMPOS_DOIS_ESTADOS)
-      .eq('id', linha.item_id).maybeSingle();
+      .eq('id', linha.item_id).maybeSingle()) as { data: any; error: any };
     if (erroItem || !item) { falhas.push(`${linha.nome || 'item sem nome'}: ${erroItem ? erroItem.message : 'item não encontrado no cadastro'}`); continue; }
 
     // Item guardado nos dois estados: o que repõe é um dos dois serviços da cadeia, não a compra da peça (mesma regra do movimento de estoque)
@@ -942,10 +943,11 @@ export async function movimentarEstoque({
   if (r.ok) {
     const lidaReservas = await lerReservadoPorItem([String(itemId)]);
     const reservado = lidaReservas.mapa.get(String(itemId)) || 0;
-    const { data: item, error: erroItem } = await supabase.from('cadastro_itens')
+    // select montado em duas partes de texto: o tipo do cliente não lê a lista de colunas, então o resultado é tratado como livre
+    const { data: item, error: erroItem } = (await supabase.from('cadastro_itens')
       .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante,'
         + 'tem_inacabado,estoque_inacabado,inacabado_minimo,inacabado_ideal,servico_acabamento,servico_bruto')
-      .eq('id', itemId).maybeSingle();
+      .eq('id', itemId).maybeSingle()) as { data: any; error: any };
     // 7.x (15/10/2026): leitura recusada aqui cancelava a conferência do mínimo em silêncio — a saída era gravada e o pedido de reposição nunca nascia.
     // O movimento já está gravado (e não se desfaz); o que volta é o aviso, que as telas mostram com avisosDaReposicao().
     if (lidaReservas.erro || erroItem) {
@@ -1567,7 +1569,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
     if (qual === 'centro') {
       // Etapa 15a (05/10/2026): só os que recebem lançamento e estão na vigência
       const { data, error } = await supabase.from('centros_custo').select('id,codigo,nome,ativo,recebe_lancamento,vigencia_inicio,vigencia_fim').eq('ativo', true).order('nome');
-      if (error) setErroDestino(`Não foi possível ler os centros de custo (${error.message}).`); else setCentros((data || []).filter(centroDisponivel));
+      if (error) setErroDestino(`Não foi possível ler os centros de custo (${error.message}).`); else setCentros((data || []).filter(centroDisponivel as (c: any) => boolean));   // 27/11/2026 (tipagem): comportamento antigo mantido — o filter passa o índice como `hoje` e a vigência não é checada (ver CrmTab)
     }
   };
   useEffect(() => {

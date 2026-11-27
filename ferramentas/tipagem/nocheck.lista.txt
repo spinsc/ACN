@@ -1,9 +1,0 @@
-src/AplicarEstrutura.tsx
-src/Estoque.tsx
-src/FiscalArquivoTela.tsx
-src/FiscalCadastrosTela.tsx
-src/FiscalRegrasTela.tsx
-src/ProducaoTab.tsx
-src/RHTab.tsx
-src/RelatoriosTab.tsx
-src/SetorDemandaTab.tsx

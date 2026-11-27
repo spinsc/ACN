@@ -1,6 +1,11 @@
 # PLANO_TIPAGEM — sair do `// @ts-nocheck`, por etapas, sem mexer no que está no ar
 
-> **Status (27/11/2026): etapas 0 e 1 FEITAS e commitadas localmente (ainda sem publicar); etapas 2 a 5 seguem como proposta.**
+> **Status (27/11/2026): etapas 0, 1 e 2 FEITAS (0 e 1 já publicadas; a 2 commitada localmente, sem publicar); etapas 3 a 5 seguem como proposta.**
+> Etapa 2 (27/11/2026): os 80 arquivos restantes foram zerados só com anotação de tipo e **não há mais nenhum `@ts-nocheck` em `src/`**;
+> o `tsc` passa com 0 erros e `nocheck.lista.txt` está vazia. O que mudou no JS emitido (comparando arquivo a arquivo, sem tipos nem
+> comentários, contra a base publicada) são só parênteses, parâmetros com valor padrão `undefined`, `.then(() => f())` no lugar de `.then(f)`
+> quando o retorno é `undefined`, `+data − +data` no lugar de `data − data` e o `import` de `createPortal` no lugar do `require`; um defeito antigo foi
+> **mantido de propósito** (o filtro de vigência dos centros de custo, ver o relato da etapa 2).
 > Etapa 0: três arquivos mortos apagados, `npm run conferir` criado e rodando no deploy, trava das diretivas em `ferramentas/tipagem/`.
 > Etapa 1: `@ts-nocheck` tirado de 203 arquivos (50 módulos, 139 componentes, 14 telas) — **de 283 para 80 arquivos com a diretiva**; só a linha saiu,
 > JS e CSS do build idênticos. O `CLAUDE.md` já usa o texto da seção 8 (adaptado). As medições abaixo são de antes das etapas 0 e 1.
@@ -209,7 +214,7 @@ assinatura de função), não correção de defeito atual.
 - **Reverter:** `git revert` do grupo.
 - **Estimativa de esforço:** 1 dia (a maior parte é montar o script e conferir; a mudança em si é mecânica).
 
-### Etapa 2 — Zerar os 81 arquivos restantes (457 erros, **estimativa 3 a 5 dias**)
+### Etapa 2 — Zerar os 81 arquivos restantes (457 erros, **estimativa 3 a 5 dias**) — **FEITA em 27/11/2026**
 
 - Ordem: primeiro os **33 arquivos de 1 erro** e os **19 de 2 a 3** (52 arquivos, 83 erros: ~1 dia), depois os **19 de 4 a 10**
   (119 erros: ~1 a 2 dias) e por último os **10 grandes** (255 erros, ~1 a 2 dias). Um arquivo por commit ou grupo pequeno; a diretiva

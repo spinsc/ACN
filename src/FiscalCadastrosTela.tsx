@@ -1,4 +1,3 @@
-// @ts-nocheck
 // A aba "Cadastros fiscais" do Fiscal (preparação do módulo fiscal, 26/11/2026): as empresas que emitem a nota, as transportadoras e o relatório do que falta preencher nos clientes e nos itens.
 // As regras estão em FiscalRegras.ts, a leitura e a gravação em FiscalDados.ts e as tabelas em supabase/sql/fiscal_cadastros.sql. Nada aqui emite nota: é a preparação.
 import React, { useEffect, useMemo, useState } from 'react';
@@ -29,14 +28,14 @@ import './fiscal.css';
 
 const LIMITE_NA_TELA = 200;   // linhas desenhadas por vez nas listas de pendências (a busca e os filtros afinam; o aviso diz quantas ficaram de fora)
 
-const Campo = ({ id, rotulo, largo, dica, children }) => (
+const Campo = ({ id, rotulo, largo = false, dica = undefined, children }: { id: string; rotulo: string; largo?: boolean; dica?: string; children?: any }) => (
   <div className={'acn-fcad-campo' + (largo ? ' acn-fcad-largo' : '')}>
     <label className="acn-label" htmlFor={id}>{rotulo}</label>{children}{dica && <p className="acn-fcad-dica">{dica}</p>}
   </div>
 );
 
 /** Moldura de janela dos cadastros (a janela do sistema: cabeçalho, corpo que rola e rodapé fixo). */
-export function Janela({ titulo, onClose, pequena, children, rodape }) {
+export function Janela({ titulo, onClose, pequena = false, children, rodape = undefined }: { titulo: string; onClose: any; pequena?: boolean; children?: any; rodape?: any }) {
   return (
     <div className="modal-overlay">
       <div className={'modal-box acn-modal-cadastro ' + (pequena ? 'acn-fcad-box-p' : 'acn-fcad-box')} role="dialog" aria-label={titulo}>
@@ -562,7 +561,7 @@ function OpsSemCliente({ currentUser }) {
 
 // ═══ A aba ════════════════════════════════════════════════════════════════════════════════════
 export default function FiscalCadastrosTela({ currentUser }) {
-  const [visao, setVisao] = useAbaNoEndereco({ tela: 'fiscal', nivel: 1, pai: 'cadastros' }) as [string, (v: any) => void];
+  const [visao, setVisao] = useAbaNoEndereco({ tela: 'fiscal', nivel: 1, pai: 'cadastros' });
   const podeEditar = podeEditarCadastroFiscal(currentUser);
   const transportadoraPode = podeEditar || (Array.isArray(currentUser?.abas_permitidas) && currentUser.abas_permitidas.includes('logistica'));
   return (

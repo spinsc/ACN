@@ -609,7 +609,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   useEffect(() => {
     // Etapa 15a (05/10/2026): só os que recebem lançamento e estão na vigência (o código já gravado na OP continua aparecendo no campo)
     supabase.from('centros_custo').select('codigo,nome,ativo,recebe_lancamento,vigencia_inicio,vigencia_fim').eq('ativo', true).order('codigo')
-      .then(({ data }) => setCentrosCusto((data || []).filter((c: any) => centroDisponivel(c))));
+      // 27/11/2026 (tipagem): o filter também passa o índice como 2º argumento (`hoje`), o que desliga a checagem de vigência — comportamento antigo mantido de propósito (ver o relato da etapa 2 da tipagem).
+      .then(({ data }) => setCentrosCusto((data || []).filter(centroDisponivel as (c: any) => boolean)));
   }, []);
 
   useEffect(() => {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
@@ -584,7 +583,7 @@ function PainelSacVeicular({ currentUser }) {
   const [iniciarManuTecnico, setIniciarManuTecnico]         = useState('');
   const [iniciarManuTecnicoId, setIniciarManuTecnicoId]     = useState<string|null>(null);
   // Modo de execução (individual/dupla/equipe) — mesmo padrão da Produção de OPL
-  const [iniciarManuModo, setIniciarManuModo]                 = useState<'individual'|'dupla'|'equipe'>('individual');
+  const [iniciarManuModo, setIniciarManuModo]                 = useState<string>('individual');
   const [iniciarManuTecnico2, setIniciarManuTecnico2]         = useState('');
   const [iniciarManuTecnico2Id, setIniciarManuTecnico2Id]     = useState<string|null>(null);
   const [equipesManu, setEquipesManu]                         = useState<any[]>([]);
@@ -616,7 +615,7 @@ function PainelSacVeicular({ currentUser }) {
     try { return await fn(...args); } finally { emAcao.current.delete(chave); }
   };
 
-  const load = async (silent=false) => {
+  const load = async (silent: any = false) => {   // o botão Atualizar passa o clique aqui (conta como "silencioso"): comportamento antigo, só o tipo foi aberto
     if (!silent) setLoading(true);
     const { data, error } = await supabase.from('sac_ordens_servico').select('*')
       .eq('is_manutencao_veicular', true)
@@ -2039,7 +2038,7 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
     const pendencias = [];
     const agora = new Date().toISOString();
     for (const { alvo, resp } of plano) {
-      let upd = { modo_execucao: resp.modo };
+      let upd: Record<string, any> = { modo_execucao: resp.modo };
       if (resp.modo === 'individual') {
         upd = { ...upd, responsavel_producao: resp.nome, tecnico_producao_id: resp.id,
                  tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null };
@@ -2184,8 +2183,8 @@ export default function ProducaoTab({ currentUser }) {
   const [filtroBusca, setFiltroBusca]     = useState('');
   // Fila padrão = Adaptação: quem trabalha aqui abre a tela e vê só o que de
   // fato é adaptado. Fabricação e Envio ficam em abas próprias.
-  const [filaAtiva, setFilaAtiva]         = useState<'adaptacao'|'fabricacao'|'envio'|'serralheria'|'todas'>('adaptacao');
-  const [visao, setVisao]                 = useState<'tabela'|'kanban'>('tabela');
+  const [filaAtiva, setFilaAtiva]         = useState<string>('adaptacao');
+  const [visao, setVisao]                 = useState<string>('tabela');
 
   // Prioridade e so desempate entre OPs do MESMO dia (definicao do usuario):
   // a data manda, porque e contratual por causa das licitacoes.
@@ -2238,14 +2237,14 @@ export default function ProducaoTab({ currentUser }) {
   const [respNome, setRespNome] = useState('');
   const [respId, setRespId] = useState<string|null>(null);
   // Dupla / Equipe
-  const [modoExecucao, setModoExecucao] = useState<'individual'|'dupla'|'equipe'>('individual');
+  const [modoExecucao, setModoExecucao] = useState<string>('individual');
   const [respNome2, setRespNome2] = useState('');
   const [respId2, setRespId2] = useState<string|null>(null);
   const [equipes, setEquipes] = useState<any[]>([]);
   const [equipeSel, setEquipeSel] = useState<any>(null);
   // Editar responsável
   const [modalEditResp, setModalEditResp] = useState<any>(null);
-  const [editModo, setEditModo] = useState<'individual'|'dupla'|'equipe'>('individual');
+  const [editModo, setEditModo] = useState<string>('individual');
   const [editResp1Nome, setEditResp1Nome] = useState('');
   const [editResp1Id, setEditResp1Id] = useState<string|null>(null);
   const [editResp2Nome, setEditResp2Nome] = useState('');
@@ -2597,8 +2596,8 @@ ${frasePendenciasNaoLidas(falhas)}`);
       setModoExecucao('individual'); setRespNome2(''); setRespId2(null); setEquipeSel(null); setBoxesIniciar(boxesDaOp(opl));
     }
     if (tipo === 'checklist')          liberarChecklist(opl);
-    if (tipo === 'pausar')             pausarOpl(supabase, opl).then(fetchAll);
-    if (tipo === 'retomar')            retomarOpl(supabase, opl).then(fetchAll);
+    if (tipo === 'pausar')             pausarOpl(supabase, opl).then(() => fetchAll());
+    if (tipo === 'retomar')            retomarOpl(supabase, opl).then(() => fetchAll());
     if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
     if (tipo === 'ver')                setModalVerOpl(opl);
     if (tipo === 'viagem' && opl._viagem) setModalViagem(opl._viagem);
@@ -2618,7 +2617,7 @@ ${frasePendenciasNaoLidas(falhas)}`);
   };
 
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/producao/agenda…); Produção é a padrão e fica sem nome na barra
-  const [abaProducao, setAbaProducao] = useAbaNoEndereco({ tela: 'producao' }) as [string, (v: any) => void];
+  const [abaProducao, setAbaProducao] = useAbaNoEndereco({ tela: 'producao' });
   const [maisFiltros, setMaisFiltros] = useState(false);
   const emRetrabalho = opls.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho');
 

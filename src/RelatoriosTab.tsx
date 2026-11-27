@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
@@ -116,8 +115,8 @@ function RelAreaDemandas() {
   const pendentes   = dados.filter(d => d.status === 'Pendente');
   const andamento   = dados.filter(d => d.status === 'Em Andamento');
   const concluidos  = dados.filter(d => d.status === 'Concluido');
-  const atrasados   = dados.filter(d => d.status !== 'Concluido' && (agora - new Date(d.data_abertura || 0)) / 3600000 > 48);
-  const paradas     = dados.filter(d => d.status === 'Pendente' && (agora - new Date(d.data_abertura || 0)) / 3600000 > 8);
+  const atrasados   = dados.filter(d => d.status !== 'Concluido' && (+agora - +new Date(d.data_abertura || 0)) / 3600000 > 48);
+  const paradas     = dados.filter(d => d.status === 'Pendente' && (+agora - +new Date(d.data_abertura || 0)) / 3600000 > 8);
   const tempos      = concluidos.map(d => d.tempo_execucao_horas).filter(v => v > 0);
   const tempoMedio  = tempos.length ? tempos.reduce((a,b) => a+b,0)/tempos.length : null;
 
@@ -158,7 +157,7 @@ function RelAreaDemandas() {
               </tr></thead>
               <tbody>
                 {dados.map(d=>{
-                  const hrs = d.data_abertura ? (agora-new Date(d.data_abertura))/3600000 : 0;
+                  const hrs = d.data_abertura ? (+agora - +new Date(d.data_abertura))/3600000 : 0;
                   const atras = d.status!=='Concluido' && hrs>48;
                   return (
                     <tr key={d.id} className={atras?'acn-linha-alerta':undefined}>
@@ -206,12 +205,12 @@ function RelProducao() {
   useEffect(()=>{ buscar(); },[]);
 
   // agrupa por responsavel
-  const porResp = ops.reduce((acc, o) => {
+  const porResp: Record<string, any[]> = ops.reduce((acc: Record<string, any[]>, o) => {
     const resp = o.responsavel_producao || 'Não informado';
     if (!acc[resp]) acc[resp] = [];
     acc[resp].push(o);
     return acc;
-  }, {});
+  }, {} as Record<string, any[]>);
 
   const agora = new Date();
   const emProd = ops.filter(o=>o.status_geral==='Em Producao').length;
@@ -769,11 +768,11 @@ function RelDemandasAvulsas() {
   };
   useEffect(()=>{ buscar(); },[]);
 
-  const porSetor = dados.reduce((acc,d)=>{
+  const porSetor: Record<string, number> = dados.reduce((acc: Record<string, number>, d)=>{
     const s = d.setor_destino||'Sem setor';
     acc[s] = (acc[s]||0)+1;
     return acc;
-  },{});
+  },{} as Record<string, number>);
 
   return (
     <div>
@@ -1024,7 +1023,7 @@ function RelMarkupVendedor() {
       (cotacoes || []).forEach((c) => { cotacaoPorId[c.id] = c; });
 
       // Agrupa por processo (tipo+id) — pode haver várias versões da mesma cotação
-      const cotsPorProcesso = {};
+      const cotsPorProcesso: Record<string, any[]> = {};
       vinc.forEach((v) => {
         const c = cotacaoPorId[v.cotacao_id];
         if (!c) return;
@@ -1034,8 +1033,8 @@ function RelMarkupVendedor() {
 
       // Resolve a cotação alvo de cada processo, filtra por mês (criado_em) e
       // calcula a média — separa os ids por tipo pra buscar o nome do vendedor
-      const processosCrm = [], processosLic = [];
-      const alvoPorProcesso = {};
+      const processosCrm: any[] = [], processosLic: any[] = [];
+      const alvoPorProcesso: Record<string, any> = {};
       Object.entries(cotsPorProcesso).forEach(([chave, cots]) => {
         const [tipo, processoId] = chave.split(':');
         const alvo = cotacaoAlvo(cots);
@@ -1055,7 +1054,7 @@ function RelMarkupVendedor() {
       const nomeLic = {}; (licData || []).forEach((l) => { nomeLic[l.id] = l.operador || l.analista_nome || null; });
 
       // Agrupa por vendedor (nome + funil, pra não misturar quem atua nos 2)
-      const porVendedor = {};
+      const porVendedor: Record<string, any> = {};
       Object.values(alvoPorProcesso).forEach(({ tipo, processoId, media }) => {
         const nome = tipo === 'crm' ? nomeCrm[processoId] : nomeLic[processoId];
         if (!nome) return;
