@@ -208,6 +208,16 @@ export function podePostarNoInicio(usuarioAtual: any): boolean {
   return usuarioAtual?.perfil === 'Admin' || usuarioAtual?.pode_postar_inicio === true;
 }
 
+// ── Cadastros fiscais (26/11/2026, preparação do módulo fiscal) ───────────────────────────────────────────────────
+// Quem preenche os dados fiscais de cliente, item, empresa emitente e transportadora: Admin, gerentes e quem tem a aba Fiscal (lista de abas vazia = todas, a mesma conta de `tem_alguma_aba`
+// no banco). Suposição minha, a confirmar com o usuário: quem edita o cliente ou o item no Comercial/CRM vê os dados fiscais só para leitura. As tabelas das empresas e das
+// transportadoras repetem a conta no banco; as de cliente e item só pedem login (como as tabelas-mãe), então para elas quem recusa é a tela.
+export function podeEditarCadastroFiscal(usuarioAtual: any): boolean {
+  if (ehAdminOuGerente(usuarioAtual)) return true;
+  const abas = usuarioAtual?.abas_permitidas;
+  return !Array.isArray(abas) || abas.length === 0 || abas.includes('fiscal');
+}
+
 // ── Serviços de terceiros (22/11/2026, pedido do usuário; PLANO_SERVICOS_TERCEIROS.md) ───────────────────────────────────────────────
 // Cadastro de PRESTADORES: Admin, qualquer "Gerente …" e quem tem a aba Adaptação (`producao`; lista de abas vazia = todas, a mesma regra do menu). É a conta da função do banco
 // `terceiros_pode_gerir_prestadores()`, que as políticas da tabela usam: a tela só esconde o botão, quem recusa é o banco. Os TIPOS de serviço são só do Admin (`eh_admin()` no banco).

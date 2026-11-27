@@ -113,9 +113,14 @@ export default function EngenhariaTab({ currentUser }) {
   // resultado de "Desenvolvimento (Engenharia)" troca pra essa sub-aba e
   // pré-preenche a busca local com o mesmo termo digitado.
   const [buscaDeepLink, setBuscaDeepLink] = useState('');
-  // Fase 6 (26/11/2026): a demanda do Desenvolvimento (`#/engenharia/projeto/<código>`) mora na aba Desenvolvimento: com a tela já aberta em outra aba, o endereço dela troca para essa aba, que lê o endereço e abre a janela.
+  // Fase 6 (26/11/2026): a demanda do Desenvolvimento (`#/engenharia/projeto/<código>`) mora na aba Desenvolvimento e a tarefa da Engenharia (`#/engenharia/tarefa/<código>`) na aba Horas/Tarefas:
+  // com a tela já aberta em outra aba, o endereço troca para a aba dona, que lê o endereço e abre a janela.
   useEffect(() => {
-    const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'engenharia')?.tipo === 'projeto') setAbaEng('desenvolvimento'); };
+    const sincronizar = () => {
+      const tipo = registroDaTelaNoEndereco(enderecoAtual(), 'engenharia')?.tipo;
+      if (tipo === 'projeto') setAbaEng('desenvolvimento');
+      else if (tipo === 'tarefa') setAbaEng('horas');
+    };
     sincronizar();
     return aoMudarEndereco(sincronizar, { internas: true });
   }, []);
