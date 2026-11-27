@@ -4,7 +4,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './fiscal.css';
 import { Selo, Faixa, Botao, diaBR } from './Interface';
-import { lerContextoDaProntidao, lerNotasDaOp } from './FiscalDados';
+import { lerContextoDaProntidao, lerNotasDaOp, lerCatalogoCitado } from './FiscalDados';
+import { notasQueAOpPede, conferirNotasInformadas, ROTULO_DO_PEDIDO } from './FiscalTiposDeNota';
 import { prontidaoDaOp, oQueAsOpsCitam } from './FiscalProntidao';
 import { canceladas, situacaoDaNota, notasDaOp, numerosDaNotaDaOp, ROTULO_DA_SITUACAO, soDigitos } from './FiscalArquivo';
 import { podeVerArquivoFiscal } from './utils/permissoes';
@@ -34,7 +35,16 @@ export function useProntidaoDasOps(ops) {
     if (estado.ctx) for (const o of ops || []) m.set(o.id, prontidaoDaOp(o, estado.ctx));
     return m;
   }, [ops, estado.ctx]);
-  return { mapa, erro: estado.erro, carregando: !estado.lido, recarregar: () => setTentativa(n => n + 1) };
+  return { mapa, catalogo: estado.ctx ? estado.ctx.catalogo : null, erro: estado.erro, carregando: !estado.lido, recarregar: () => setTentativa(n => n + 1) };
+}
+
+const ROTULO_CURTO_DO_PEDIDO = { material: 'NF-e', servico: 'NFS-e', material_e_servico: 'NF-e + NFS-e', indefinida: 'não sei' };
+
+/** O tipo de nota que a OP pede pelo que vende (mercadoria = NF-e, serviço = NFS-e). Só informa; `catalogo` é o da prontidão. Sem catálogo lido não mostra nada. */
+export function SeloDoTipoDeNota({ op, catalogo }) {
+  const pede = useMemo(() => (catalogo ? notasQueAOpPede(op, catalogo) : null), [op, catalogo]);
+  if (!pede) return null;
+  return <Selo familia="neutro" ponto={false} title={`${ROTULO_DO_PEDIDO[pede.pede]}${pede.motivos.length ? `: ${pede.motivos.join(' · ')}` : ''}`}>Nota: {ROTULO_CURTO_DO_PEDIDO[pede.pede]}</Selo>;
 }
 
 /** O selo da linha: verde quando está pronta, âmbar com a conta do que falta. O clique abre o detalhe. */
@@ -92,6 +102,18 @@ export function QuadroFiscalDaOp({ op, currentUser }) {
   }, [op?.id, op?.numero_nf, temNota, verArquivo, tentativa]);
 
   const p = pront.mapa.get(op?.id);
+  const [cat, setCat] = useState({ lido: false, catalogo: [], erro: '' });
+  useEffect(() => {
+    if (!temNota) return undefined;
+    let vivo = true;
+    lerCatalogoCitado([op]).then(r => { if (vivo) setCat({ ...r, lido: true }); });
+    return () => { vivo = false; };
+  }, [op?.id, op?.numero_nf, temNota]);
+  const pedeDaOp = useMemo(() => {
+    const catalogo = temNota ? (cat.lido && !cat.erro ? cat.catalogo : null) : pront.catalogo;
+    return catalogo ? notasQueAOpPede(op, catalogo) : null;
+  }, [op, temNota, cat, pront.catalogo]);
+  const confere = useMemo(() => (pedeDaOp && temNota ? conferirNotasInformadas(pedeDaOp, op) : null), [pedeDaOp, op, temNota]);
   const canc = useMemo(() => canceladas(arq.eventos || []), [arq]);
   const guardadas = useMemo(() => (arq.lido && !arq.erro ? notasDaOp(op, arq.notas, arq.codigoDoCnpj) : []), [arq, op]);
   const tentarDeNovo = (aoClicar) => <Botao pequeno onClick={aoClicar}>Tentar de novo</Botao>;
@@ -104,6 +126,7 @@ export function QuadroFiscalDaOp({ op, currentUser }) {
       <div className="acn-fcad-secao-sem-linha">
         <div className="acn-fcad-secao-tit"><SeloDaProntidao p={p} /><span className="acn-fcad-dica">Prontidão para virar nota: empresa que fatura, cliente e itens vendidos.</span></div>
         <DetalheDaProntidao p={p} />
+        {pedeDaOp && <p className="acn-fcad-dica">Pelo que a OP vende, ela pede: <strong>{ROTULO_DO_PEDIDO[pedeDaOp.pede]}</strong>{pedeDaOp.motivos.length ? ` (${pedeDaOp.motivos.join(' · ')})` : ''}.</p>}
       </div>
     );
   }
@@ -111,6 +134,11 @@ export function QuadroFiscalDaOp({ op, currentUser }) {
   return (
     <div className="acn-fcad-secao-sem-linha">
       <div className="acn-fcad-dica">Nota informada pelo Fiscal na OP: {numeros.join(', ')}{op.faturamento_empresa ? ` · ${op.faturamento_empresa}` : ''}.</div>
+      {confere && confere.situacao !== 'sem_nota' && (confere.situacao === 'confere'
+        ? <div className="acn-fcad-achado"><Selo familia="ok" ponto={false}>Confere</Selo><span>As notas informadas combinam com o que a OP vende ({ROTULO_DO_PEDIDO[pedeDaOp.pede]}).</span></div>
+        : confere.situacao === 'diverge'
+          ? <div className="acn-fcad-achado"><Selo familia="atencao" ponto={false}>Confira</Selo><span>{confere.divergencias.join('; ')}. O Fiscal pode ter motivo: isto é só um aviso.</span></div>
+          : <div className="acn-fcad-dica">Não dá para conferir o tipo de nota: a OP não tem itens lançados que digam o que ela vende.</div>)}
       {!verArquivo
         ? <div className="acn-fcad-dica">O arquivo de notas guardadas só aparece para quem tem a aba Fiscal.</div>
         : !arq.lido

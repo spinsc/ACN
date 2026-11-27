@@ -1,7 +1,7 @@
 // Planta defeitos de propósito, um de cada vez, e confere que o teste das regras os pega (rode da raiz do projeto: node ferramentas/teste_fiscal/plantar_defeitos_prontidao.cjs).
 // Cada defeito diz o arquivo, o trecho que existe e o trecho estragado. O arquivo é sempre restaurado no fim, mesmo se algo falhar.
 const fs = require('fs'); const { spawnSync } = require('child_process');
-const PRONT = 'src/FiscalProntidao.ts', LIG = 'src/FiscalLigacaoDaOp.ts';
+const PRONT = 'src/FiscalProntidao.ts', LIG = 'src/FiscalLigacaoDaOp.ts', TIPOS = 'src/FiscalTiposDeNota.ts';
 const defeitos = [
   [PRONT, 'sem item lançado vira pronta', "if (conferidos === 0) {", "if (false) {"],
   [PRONT, 'ambíguo é chutado (cliente)', "if (porNome.length === 1) return { situacao: 'achado', cliente: porNome[0], por: 'nome' };", "if (porNome.length >= 1) return { situacao: 'achado', cliente: porNome[0], por: 'nome' };"],
@@ -21,6 +21,15 @@ const defeitos = [
   [LIG, 'OP com nota entra na lista', "return !String(op.numero_nf || '').trim();", "return true;"],
   [LIG, 'grupo com divergência é sugerido mesmo assim', "achados.every(a => a.situacao === 'achado' && a.cliente?.id === primeiro.cliente?.id)", "achados[0].situacao === 'achado'"],
   [LIG, 'nome não é normalizado ao agrupar', "const k = chaveDoNome(op.cliente_nome);", "const k = String(op.cliente_nome || '');"],
+  // ── mapa de tipos de nota por origem (27/11/2026) ──
+  [TIPOS, 'serviço vira mercadoria', "if (!ehGenerico(a.item)) { produtos++; continue; }", "{ produtos++; continue; }"],
+  [TIPOS, 'frete conta como serviço', "if (ehFrete(a.item.nome)) fretes++; else servicos++;", "servicos++;"],
+  [TIPOS, 'linha sem cadastro não tira a certeza', "&& naoSei === 0,", "&& true,"],
+  [TIPOS, 'só serviço de terceiro não pede NFS-e', "const servico = servicos > 0 || soTerceiro;", "const servico = servicos > 0;"],
+  [TIPOS, 'OP sem base é conferida mesmo assim', "if (!pede.certa) return { situacao: 'sem_base'", "if (false) return { situacao: 'sem_base'"],
+  [TIPOS, 'falta a NFS-e não é pega', "if (pedeServico && !servico) d.push(", "if (false) d.push("],
+  [TIPOS, 'nota a mais de material não é pega', "if (material && !pedeMaterial) d.push(", "if (false) d.push("],
+  [TIPOS, 'número só com espaços vale como nota informada', "const material = String(op?.numero_nf ?? '').trim();", "const material = String(op?.numero_nf ?? '');"],
 ];
 let pegos = 0;
 const originais = new Map();
