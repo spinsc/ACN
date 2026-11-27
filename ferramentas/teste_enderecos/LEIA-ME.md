@@ -1,6 +1,6 @@
 # Teste dos endereços do sistema (F5, Voltar, link de tela, "sem acesso")
 
-Criado em 25/11/2026, na Fase 1 do [PLANO_ENDERECOS_E_ROTAS.md](../../PLANO_ENDERECOS_E_ROTAS.md) (cenários C1 a C15); a Fase 2, o link da OP, trouxe os cenários C16 a C31; a Fase 3, os outros registros (licitação, card do CRM, pedido de compra e OS), os C32 a C44; a Fase 4, as abas de dentro de cada tela, os C45 a C48; a Fase 5 (parte 1), a viagem e o serviço de terceiro, os C49 a C58, a demanda geral, os C59 a C65, e as visões de chips e botões, os C66 a C68. **Roda a cada fase do plano** e ganha os cenários da fase. Nada aqui grava no banco: toda gravação externa é abortada pelo teste.
+Criado em 25/11/2026, na Fase 1 do [PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md](../../PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md) (cenários C1 a C15); a Fase 2, o link da OP, trouxe os cenários C16 a C31; a Fase 3, os outros registros (licitação, card do CRM, pedido de compra e OS), os C32 a C44; a Fase 4, as abas de dentro de cada tela, os C45 a C48; a Fase 5 (parte 1), a viagem e o serviço de terceiro, os C49 a C58, a demanda geral, os C59 a C65, e as visões de chips e botões, os C66 a C68. **Roda a cada fase do plano** e ganha os cenários da fase. Nada aqui grava no banco: toda gravação externa é abortada pelo teste.
 
 ## Como rodar
 

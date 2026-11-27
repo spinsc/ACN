@@ -1,4 +1,4 @@
-// Endereços do sistema (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 1, decidido com o usuário em 25/11/2026).
+// Endereços do sistema (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 1, decidido com o usuário em 25/11/2026).
 //
 // Só regras puras: ler o endereço da barra do navegador e montar o endereço de uma tela. Nada aqui mexe no navegador nem numa tela
 // (isso é do `EnderecoDoNavegador.ts` e do `useNavegacao.ts`), para as regras poderem ser provadas sem abrir o sistema.
