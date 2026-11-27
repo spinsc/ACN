@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // SAC — O CAMINHO DA OS: COBRADA × SEM COBRANÇA (PLANO_SAC_FLUXO.md, etapa S1, decisões do usuário em 27/10/2026)
 //

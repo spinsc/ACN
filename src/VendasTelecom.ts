@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VENDAS DO TELECOM — as regras da aba "Vendas" (pedido do usuário em 03/11/2026)
 //

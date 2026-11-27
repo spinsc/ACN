@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Previsão do tempo da tela Início (09/11/2026): Open-Meteo, gratuito e sem cadastro, para Palhoça/SC (cidade escolhida pelo usuário). As contas estão em InicioModelo.ts.
 // A resposta fica guardada por 30 minutos no navegador (quem troca de tela e volta não gasta outra consulta). Se o serviço cair, vale a última resposta guardada, avisando que é antiga;
 // sem nada guardado a tela diz "indisponível" — nunca inventa número. Todo acesso ao armazenamento do navegador está em try/catch (janela privada ou dados bloqueados).

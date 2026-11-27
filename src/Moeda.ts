@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Regras do campo de dinheiro (CampoMoeda.tsx). Pedido do usuário em 24/11/2026: "todo campo que espera valor monetário deve ser um input com
 // tratamento de valor monetário" — até então eram caixas de texto livre (a pessoa podia escrever "abc" ou "R$ 45000") ou de número puro do navegador

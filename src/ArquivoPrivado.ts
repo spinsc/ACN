@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Arquivos do bucket privado (Etapa 17, onda 5b, 26/11/2026): enviar, resolver o endereço assinado e abrir. As regras de "o que é privado" estão em ArquivoPrivadoRegras.ts.
 // Endereço assinado vale 1 hora e é guardado em memória por 50 minutos (nada é gravado no navegador). Valor que não é de arquivo privado (foto, anexo de outra pasta) passa direto.
 import { useEffect, useState } from 'react';

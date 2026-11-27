@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Contato do cliente obrigatório no CRM e nas Licitações (pedido do usuário em 26/10/2026).
 // Regra decidida com ele: o contato vale quando tem NOME e TELEFONE ou E-MAIL. Vale ao criar e ao editar; os registros antigos (88 dos 225 cards do CRM e 152 das 165
 // licitações estavam sem nenhum contato) continuam abrindo, e pedem o contato na próxima vez que forem editados ou mudarem de etapa. Perder ou desistir não pede contato:

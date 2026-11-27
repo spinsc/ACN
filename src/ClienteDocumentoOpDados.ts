@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Leitura e gravação do CPF/CNPJ do cliente da OP (regras puras em ClienteDocumentoOp.ts; pedido do usuário em 27/11/2026).
 import { supabase } from './supabaseClient';
 import { documentoParaGravar, erroDoDocumentoDoCliente, textoDoPedidoDeDocumento } from './ClienteDocumentoOp';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────
 // CPF/CNPJ DO CLIENTE NA OP (pedido do usuário em 27/11/2026)
 //

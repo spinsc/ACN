@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // O QUE A OP PRECISA TER PARA SEGUIR AO PCP (R1, decisão do usuário de 01/10/2026; o destino é o PCP desde a Etapa 18, de 12/10/2026)
 //

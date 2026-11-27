@@ -1,4 +1,3 @@
-// @ts-nocheck
 // O dinheiro do frete e do pedido de faturamento mora em tabelas à parte desde a onda V4 do "ver valores no banco"
 // (decidido com o usuário em 25/11/2026; PLANO_VER_VALORES_NO_BANCO.md, seção 11): `pcp_fretes_valores` (valor do frete e valor da nota),
 // `pcp_cotacoes_fretes_valores` (valor de cada cotação de transportadora), `pcp_aprovacoes_fretes_valores` (valor no momento da aprovação)

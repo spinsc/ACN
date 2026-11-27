@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PONTO SECULLUM — as regras da tela Ponto (PLANO_PONTO_SECULLUM.md, 19/11/2026) e a leitura da cópia que a função de servidor mantém.
 //

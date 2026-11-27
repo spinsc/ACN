@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // O FRETE E A OP — quando a OP segue para o Comercial e quando o frete vira alerta
 //

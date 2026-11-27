@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Leitura e gravação das regras fiscais versionadas (módulo fiscal, Etapa 3, 27/11/2026; as regras puras estão em FiscalMotor.ts e as tabelas em supabase/sql/fiscal_regras.sql).
 // Padrão do sistema: leitura recusada devolve `erro` (nunca "sem regras"), e a gravação confere a linha devolvida (o banco responde "ok, 0 linhas" a um UPDATE negado).
 // As VERSÕES só mudam pelas funções do banco (criar, descartar, aprovar); as REGRAS de um rascunho se gravam direto, e o banco recusa mexer em versão aprovada.

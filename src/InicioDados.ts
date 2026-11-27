@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // TELA INÍCIO — leitura e gravação no banco (09/11/2026). As regras ficam em InicioModelo.ts.
 // Duas regras de cuidado, as mesmas do resto do sistema:

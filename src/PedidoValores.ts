@@ -1,4 +1,3 @@
-// @ts-nocheck
 // O dinheiro do pedido de compra e da demanda do Compras mora em tabelas à parte desde a onda V3 do "ver valores no banco"
 // (decidido com o usuário em 24/11/2026; PLANO_VER_VALORES_NO_BANCO.md, seção 10). O banco só as entrega a quem tem a caixa "Ver valores" e ao Admin.
 // O pedido guardava dinheiro em TRÊS lugares: a coluna `valor_compra`, a chave `valor` de cada item de `vencedoras` e a chave `valor_unitario` de cada item de `itens`.

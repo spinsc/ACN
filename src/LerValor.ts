@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Leitura do número que a pessoa digita num campo (valor em reais, quantidade). Saiu do NovaOpOsModal em 15/10/2026 para a tela de demandas
 // (AcnTabShared) usar a mesma regra sem criar um ciclo de imports; o NovaOpOsModal continua exportando a função, então quem importava dele não muda.
 

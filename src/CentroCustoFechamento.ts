@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // FECHAMENTO DO MÊS DOS CENTROS DE CUSTO — regras (Etapa 15e-2 do ux-fluxo, 05/10/2026)
 //

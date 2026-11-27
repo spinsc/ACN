@@ -1,4 +1,3 @@
-// @ts-nocheck
 // A "família" de uma formação de preço: a raiz das versões (`versao_raiz_id`, ou o id da própria v1). As ligações da formação (com outra formação, 22/10/2026, e com a Ordem de
 // compra do Compras, 26/10/2026) valem para a FAMÍLIA, então quem abre qualquer versão enxerga a mesma ligação. Mora aqui, num arquivo pequeno, para a tela de Formação de Preços e o
 // Compras usarem a mesma regra sem importar uma da outra.

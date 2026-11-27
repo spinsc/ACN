@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ETAPAS DA OP — em que etapa está, com qual setor, e desde quando.
 //

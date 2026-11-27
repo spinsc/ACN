@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PONTO NA TELA DE HORAS EXTRAS (P3, 25/11/2026; PLANO_PONTO_SECULLUM.md): quem aprova uma hora extra das tarefas vê, ao lado do pedido, o que o ponto da Secullum registrou
 // no dia dela (as batidas, as extras do dia e a jornada). É SÓ INFORMAÇÃO: o sistema nunca aprova, recusa nem ajusta a hora extra por causa do ponto.

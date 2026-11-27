@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPRAS QUE ESPERAM A DECISÃO DE QUEM APROVA — a mesma conta para o painel "Esperando a sua aprovação" e para o contador do menu (R6, 13/10/2026)
 //
