@@ -33,7 +33,7 @@ const Campo = ({ id, rotulo, largo, dica, children }) => (
 );
 
 /** Moldura de janela dos cadastros (a janela do sistema: cabeçalho, corpo que rola e rodapé fixo). */
-function Janela({ titulo, onClose, pequena, children, rodape }) {
+export function Janela({ titulo, onClose, pequena, children, rodape }) {
   return (
     <div className="modal-overlay">
       <div className={'modal-box acn-modal-cadastro ' + (pequena ? 'acn-fcad-box-p' : 'acn-fcad-box')} role="dialog" aria-label={titulo}>

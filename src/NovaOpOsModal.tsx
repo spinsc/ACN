@@ -5,6 +5,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
@@ -55,16 +57,16 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
       const safeName = f.name.replace(/[^a-zA-Z0-9_\-\.]/g, '_').slice(0, 100);
       const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
       const ct = contentTypeUpload(f);
-      const { data: up, error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: ct });
-      if (error || !up) { novasFalhas.push(`${f.name}: não foi enviado — ${explicarErroDeEnvio(error, f)}`); continue; }
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor: valorPriv, erro: error } = await enviarArquivoPrivado(path, f, ct);
+      if (error || !valorPriv) { novasFalhas.push(`${f.name}: não foi enviado — ${explicarErroDeEnvio(error, f)}`); continue; }
       const { error: errReg } = await supabase.from('opl_anexos').insert({
         opl_id: oplId, opl_numero: oplNumero, setor: 'Comercial',
         tipo: f.type.startsWith('image/') ? 'foto' : 'documento',
-        nome: f.name, url: pub?.publicUrl || '', criado_por: currentUser?.nome,
+        nome: f.name, url: valorPriv, criado_por: currentUser?.nome,
       });
       if (errReg) { novasFalhas.push(`${f.name}: foi enviado, mas não ficou registrado na OP (${errReg.message}) — os outros setores não vão ver.`); continue; }
-      setArquivos(prev => [...prev, { nome: f.name, url: pub?.publicUrl || '' }]);
+      setArquivos(prev => [...prev, { nome: f.name, url: valorPriv }]);
     }
     setFalhas(novasFalhas);
     if (ref.current) ref.current.value = '';
@@ -90,7 +92,7 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
           {arquivos.map((a,i) => (
             <div key={i} className="acn-nop-arq">
               <span>✅</span>
-              <a href={a.url} target="_blank" rel="noreferrer" className="acn-nop-arq-lnk">{a.nome}</a>
+              <LinkDeArquivo valor={a.url} className="acn-nop-arq-lnk">{a.nome}</LinkDeArquivo>
             </div>
           ))}
         </div>

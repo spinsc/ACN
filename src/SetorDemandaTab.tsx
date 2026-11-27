@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { anexarValoresDasDemandas } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
@@ -426,11 +428,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     setEnviandoAnexo(true);
     const safeName = file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_').slice(0, 100);
     const path = `demandas-cotacoes/${demandaId}/${Date.now()}_${safeName}`;
-    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type });
-    if (error) alert(`Não subiu "${file.name}": ${explicarErroDeEnvio(error, file)}`);   // 7.53: o envio falhava em silêncio e o anexo não aparecia
+    // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+    const { valor: valorPriv, erro: error } = await enviarArquivoPrivado(path, file, file.type || undefined);
+    if (error || !valorPriv) alert(`Não subiu "${file.name}": ${explicarErroDeEnvio(error, file)}`);   // 7.53: o envio falhava em silêncio e o anexo não aparecia
     else {
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-      setAnexosCotacao(prev => [...prev, { nome: file.name, url: pub?.publicUrl || '' }]);
+      setAnexosCotacao(prev => [...prev, { nome: file.name, url: valorPriv }]);
     }
     setEnviandoAnexo(false);
   };
@@ -1140,7 +1142,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
                   <strong>Anexos: </strong>
                   {modalVer.anexos.map((a:any, i:number) => (
                     <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
-                      <a href={a.url} target="_blank" rel="noreferrer" className="acn-tag"><Icone path={mdiPaperclip} size={12} /> {a.nome || 'arquivo'}</a>
+                      <LinkDeArquivo valor={a.url} className="acn-tag"><Icone path={mdiPaperclip} size={12} /> {a.nome || 'arquivo'}</LinkDeArquivo>
                       {a.descricao && <span className="acn-ajuda" style={{ whiteSpace: 'pre-wrap' }}>{a.descricao}</span>}
                     </span>
                   ))}
@@ -1228,9 +1230,9 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
                   <div className="acn-label"><Icone path={mdiPaperclip} size={13} /> Anexar cotação (PDF, imagem, planilha)</div>
                   <div className="acn-selos">
                     {anexosCotacao.map((a,i) => (
-                      <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-tag">
+                      <LinkDeArquivo key={i} valor={a.url} className="acn-tag">
                         <Icone path={mdiPaperclip} size={12} /> {a.nome}
-                      </a>
+                      </LinkDeArquivo>
                     ))}
                   </div>
                   {anexosCotacao.map((a,i) => (

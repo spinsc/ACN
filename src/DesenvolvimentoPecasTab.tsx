@@ -12,6 +12,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { nomeSeguroDeArquivo, contentTypeUpload } from './FormatosArquivo';
 import { lerPaginado } from './LerPaginado';
@@ -114,10 +116,10 @@ function AnexosDev({ demanda, onAtualizado }: any) {
         const f = files[i];
         // 19/10/2026: nome seguro do armazenamento (acento e símbolo derrubavam o envio); o nome original vai à parte, para a lista
         const path = `desenvolvimento/${demanda.id}/${Date.now()}_${i}_${nomeSeguroDeArquivo(f.name)}`;
-        const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: contentTypeUpload(f) });
-        if (error) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        enviados.push({ nome: f.name, url: pub?.publicUrl || '' });
+        // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+        const { valor: valorPriv, erro: error } = await enviarArquivoPrivado(path, f, contentTypeUpload(f));
+        if (error || !valorPriv) { falhas.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
+        enviados.push({ nome: f.name, url: valorPriv });
       }
       if (enviados.length) {
         const fresco = await lerColunaFresca(demanda.id, 'anexos');
@@ -145,7 +147,7 @@ function AnexosDev({ demanda, onAtualizado }: any) {
         <div className="acn-dev-anexos-lista">
           {anexos.map((a: any, i: number) => (
             a.url
-              ? <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</a>
+              ? <LinkDeArquivo key={i} valor={a.url} className="acn-dev-anexo"><Icone path={mdiPaperclip} size={13} /> {a.nome}</LinkDeArquivo>
               : <span key={i} className="acn-dev-anexo sem-link"><Icone path={mdiPaperclip} size={13} /> {a.nome}</span>
           ))}
         </div>
@@ -596,18 +598,13 @@ function ModalNovaDemanda({ onClose, onCriado, currentUser }: any) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: { currentUser: any; buscaInicial?: string }) {
+export default function DesenvolvimentoPecasTab({ currentUser }: { currentUser: any }) {
   const [demandas, setDemandas] = useState<any[] | null>(null);   // null = ainda não leu; depois da primeira leitura a lista fica na tela enquanto recarrega
   const [erroLista, setErroLista] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'andamento' | 'concluidas' | 'canceladas'>('todas');
-  const [busca, setBusca] = useState(buscaInicial || '');
+  const [busca, setBusca] = useState('');
   const [alerta, setAlerta] = useState('todos');
   const [modalNova, setModalNova] = useState(false);
-
-  // Deep-link da busca global (DashboardTab.tsx) — chega depois da
-  // montagem inicial (a aba Engenharia troca de sub-aba e só então
-  // dispara o evento), então precisa reagir a mudanças, não só ao mount.
-  useEffect(() => { if (buscaInicial) setBusca(buscaInicial); }, [buscaInicial]);
 
   const carregar = async () => {
     try {

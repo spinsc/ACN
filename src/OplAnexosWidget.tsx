@@ -1,6 +1,8 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { contarAnexosDaOp } from './ContagemAnexos';
 import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
@@ -45,10 +47,10 @@ async function uploadOplAnexo(file: File, oplNumero: string): Promise<string | n
   const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
   // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
   const contentType = contentTypeUpload(file);
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
-  if (error || !data) { console.error('Upload erro Supabase:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl || null;
+  // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro: error } = await enviarArquivoPrivado(path, file, contentType);
+  if (error || !valor) { console.error('Upload erro Supabase:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
+  return valor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,17 +176,17 @@ export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }
                     <Icone path={TIPO_ICONE[a.tipo] || mdiFileDocumentOutline} size={18} />
                   </span>
                   <div className="acn-anx-info">
-                    <a href={a.url} target="_blank" rel="noreferrer" className="acn-anx-nome">
+                    <LinkDeArquivo valor={a.url} className="acn-anx-nome">
                       {a.nome}
-                    </a>
+                    </LinkDeArquivo>
                     <div className="acn-ajuda">
                       {a.setor} · {a.criado_por} · {fmtDT(a.criado_em)}
                     </div>
                   </div>
                   <div className="acn-anx-acoes">
-                    <a href={a.url} target="_blank" rel="noreferrer" className="acn-b acn-b-primario acn-b-p">
+                    <LinkDeArquivo valor={a.url} className="acn-b acn-b-primario acn-b-p">
                       Abrir
-                    </a>
+                    </LinkDeArquivo>
                     <Botao variante="perigo-sec" pequeno icone={mdiClose} aria-label="Remover arquivo" onClick={() => excluir(a.id)} />
                   </div>
                 </div>

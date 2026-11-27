@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const RAIZ = fileURLToPath(new URL('../../src', import.meta.url));
 const R = await import(pathToFileURL(RAIZ + '/FiscalRegras.ts').href);
 const X = await import(pathToFileURL(RAIZ + '/FiscalXml.ts').href);
+const A = await import(pathToFileURL(RAIZ + '/FiscalArquivo.ts').href);
 
 let ok = 0;
 const t = (nome, fn) => { try { fn(); ok++; } catch (e) { console.error(`FALHOU: ${nome}\n  ${e.message}`); process.exitCode = 1; } };
@@ -214,6 +215,90 @@ t('transportadora: validações', () => {
   assert.equal(R.erroDaTransportadora(f({ nome: 'X', documento: '05.481.897/0001-36', email: 'a@b.com' })), null);
   assert.match(R.erroDaTransportadora(f({ nome: 'X', email: 'sem arroba' })), /e-mail/);
   assert.equal(R.transportadoraParaGravar(f({ nome: ' X ', documento: '05.481.897/0001-36' }), 'u1').documento, '05481897000136');
+});
+
+// ═══ O arquivo de notas emitidas (src/FiscalArquivo.ts) ═══
+t('emissaoDia: o dia como a nota escreve, sem fuso', () => {
+  assert.equal(A.emissaoDia('2026-11-20T23:30:00-03:00'), '2026-11-20');
+  assert.equal(A.emissaoDia('2026-11-20'), '2026-11-20');
+  assert.equal(A.emissaoDia(''), ''); assert.equal(A.emissaoDia('20/11/2026'), ''); assert.equal(A.emissaoDia(null), '');
+});
+t('numeroInteiro: zeros à esquerda saem; letra e vazio viram nulo', () => {
+  assert.equal(A.numeroInteiro('000123'), 123); assert.equal(A.numeroInteiro('7'), 7);
+  assert.equal(A.numeroInteiro(''), null); assert.equal(A.numeroInteiro('12a'), null); assert.equal(A.numeroInteiro(undefined), null);
+});
+const lida = (o = {}) => { const n = le(nota(o)); return { ...n, arquivo: 'a.xml' }; };
+t('registroDaNota leva os campos e conta bloqueios e alertas', () => {
+  const n = lida({ numero: 321 });
+  const r = A.registroDaNota(n, [{ regra: 'cfop_destino', nivel: 'bloqueia' }, { regra: 'ibscbs_faltando', nivel: 'alerta' }, { regra: 'ibscbs_faltando', nivel: 'alerta' }], '<xml/>');
+  assert.equal(r.numero, 321); assert.equal(r.serie, 3); assert.equal(r.emitente_cnpj, ACN); assert.equal(r.emissao_dia, '2026-11-20'); assert.equal(r.qtd_itens, 2);
+  assert.equal(r.bloqueios, 1); assert.equal(r.alertas, 2); assert.deepEqual(r.regras, ['cfop_destino', 'ibscbs_faltando']); assert.equal(r.valor_nf, 200); assert.equal(r.xml, '<xml/>'); assert.equal(r.autorizada, true);
+});
+t('registroDaNota recusa nota sem chave de 44 dígitos, sem número ou sem CNPJ (nunca vai ao banco)', () => {
+  const n = lida();
+  assert.equal(A.registroDaNota({ ...n, chave: '123' }, [], 'x'), null);
+  assert.equal(A.registroDaNota({ ...n, numero: '' }, [], 'x'), null);
+  assert.equal(A.registroDaNota({ ...n, emitCnpj: '' }, [], 'x'), null);
+});
+t('registroDoEvento e registroDaInutilizacao: o que falta recusa', () => {
+  const chave = chaveDe({ cnpj: ACN, serie: 3, numero: 5 });
+  assert.equal(A.registroDoEvento({ chave, tpEvento: '110111', sequencia: '1', texto: 'x', data: '2026-11-21T10:00:00-03:00', cStat: '135', arquivo: 'e.xml' }, '<e/>').data_dia, '2026-11-21');
+  assert.equal(A.registroDoEvento({ chave: '12', tpEvento: '110111', sequencia: '1', texto: '', data: '', cStat: '', arquivo: '' }, 'x'), null);
+  assert.equal(A.registroDoEvento({ chave, tpEvento: '', sequencia: '1', texto: '', data: '', cStat: '', arquivo: '' }, 'x'), null);
+  assert.equal(A.registroDaInutilizacao({ cnpj: ACN, serie: '3', modelo: '55', de: 5, ate: 7, ano: '26', cStat: '102', arquivo: 'i.xml' }, '<i/>').ate, 7);
+  assert.equal(A.registroDaInutilizacao({ cnpj: ACN, serie: '3', modelo: '55', de: 8, ate: 7, ano: '26', cStat: '102', arquivo: 'i.xml' }, 'x'), null);
+  assert.equal(A.registroDaInutilizacao({ cnpj: '', serie: '3', modelo: '55', de: 1, ate: 1, ano: '', cStat: '', arquivo: '' }, 'x'), null);
+});
+t('situacaoDaNota: cancelada vale mais que o protocolo; sem protocolo e rejeitada são distintas', () => {
+  const canc = A.canceladas([{ chave: 'A', tp_evento: '110111', cstat: '135' }, { chave: 'B', tp_evento: '110111', cstat: '573' }, { chave: 'C', tp_evento: '110110', cstat: '135' }, { chave: 'D', tp_evento: '110111', cstat: null }]);
+  assert.deepEqual([...canc].sort(), ['A', 'D']);   // B foi rejeitado, C é carta de correção
+  assert.equal(A.situacaoDaNota({ chave: 'A', autorizada: true }, canc), 'cancelada');
+  assert.equal(A.situacaoDaNota({ chave: 'B', autorizada: true }, canc), 'emitida');
+  assert.equal(A.situacaoDaNota({ chave: 'X', autorizada: false }, canc), 'rejeitada');
+  assert.equal(A.situacaoDaNota({ chave: 'X', autorizada: null }, canc), 'sem_protocolo');
+});
+t('faixas: números seguidos viram uma faixa', () => {
+  assert.deepEqual(A.faixas([5, 6, 7, 10, 12, 11, 7]).map(A.textoDaFaixa), ['5–7', '10–12']);
+  assert.deepEqual(A.faixas([]), []); assert.deepEqual(A.faixas([4]).map(A.textoDaFaixa), ['4']);
+});
+const nn = (numero, serie = 3, cnpj = ACN, chave = `${cnpj}-${serie}-${numero}`) => ({ chave, emitente_cnpj: cnpj, serie, modelo: '55', numero });
+t('lacunasDaNumeracao: o buraco aparece; inutilizado e cancelado (que tem XML) não contam', () => {
+  const g = A.lacunasDaNumeracao([nn(1), nn(2), nn(3), nn(8), nn(9), nn(12)], [{ cnpj: ACN, serie: 3, modelo: '55', de: 4, ate: 6 }])[0];
+  assert.equal(g.primeiro, 1); assert.equal(g.ultimo, 12); assert.equal(g.guardadas, 6);
+  assert.deepEqual(g.faltam, [7, 10, 11]); assert.deepEqual(g.faixasQueFaltam.map(A.textoDaFaixa), ['7', '10–11']); assert.equal(g.inutilizadas, 3);
+});
+t('lacunasDaNumeracao: cada empresa e cada série têm a sua conta; inutilização de outra série não vale', () => {
+  const r = A.lacunasDaNumeracao([nn(1), nn(3), nn(1, 1, DETECH), nn(2, 1, DETECH)], [{ cnpj: ACN, serie: 1, modelo: '55', de: 2, ate: 2 }]);
+  assert.equal(r.length, 2);
+  const acn = r.find(g => g.cnpj === ACN), det = r.find(g => g.cnpj === DETECH);
+  assert.deepEqual(acn.faltam, [2]); assert.deepEqual(det.faltam, []);
+});
+t('lacunasDaNumeracao: número repetido com chaves diferentes aparece como repetido; mesmo número com a mesma chave não', () => {
+  const g = A.lacunasDaNumeracao([nn(1), nn(2, 3, ACN, 'k1'), nn(2, 3, ACN, 'k2')], [])[0];
+  assert.deepEqual(g.repetidas.map(x => x.numero), [2]); assert.deepEqual(g.repetidas[0].chaves, ['k1', 'k2']);
+  assert.deepEqual(A.lacunasDaNumeracao([nn(1), nn(2)], [])[0].repetidas, []);
+});
+t('lacunasDaNumeracao: nota sem série, sem número ou sem CNPJ fica de fora, nunca lança', () => {
+  assert.deepEqual(A.lacunasDaNumeracao([{ chave: 'x', emitente_cnpj: ACN, serie: null, numero: 1 }, { chave: 'y', emitente_cnpj: '', serie: 3, numero: 1 }, { chave: 'z', emitente_cnpj: ACN, serie: 3, numero: 0 }], []), []);
+  assert.deepEqual(A.lacunasDaNumeracao([], []), []);
+});
+t('numerosDaNotaDaOp: cada sequência de dígitos é uma nota', () => {
+  assert.deepEqual(A.numerosDaNotaDaOp('11197'), [11197]); assert.deepEqual(A.numerosDaNotaDaOp('1670 / 1671'), [1670, 1671]); assert.deepEqual(A.numerosDaNotaDaOp(' '), []); assert.deepEqual(A.numerosDaNotaDaOp(null), []);
+});
+const CODIGOS = new Map([[ACN, 'ACN'], [DETECH, 'DETECH']]);
+t('opsDaNota: casa pelo número e pela empresa (acento e caixa não contam); empresa vazia casa com qualquer uma', () => {
+  const ops = [{ opl: 'A1', numero_nf: '1679', faturamento_empresa: 'Detech' }, { opl: 'A2', numero_nf: '1679', faturamento_empresa: 'ACN' }, { opl: 'A3', numero_nf: '1679 / 1680', faturamento_empresa: '' }, { opl: 'A4', numero_nf: '9', faturamento_empresa: 'ACN' }];
+  assert.deepEqual(A.opsDaNota({ emitente_cnpj: DETECH, numero: 1679 }, ops, CODIGOS).map(o => o.opl), ['A1', 'A3']);
+  assert.deepEqual(A.opsDaNota({ emitente_cnpj: ACN, numero: '1679' }, ops, CODIGOS).map(o => o.opl), ['A2', 'A3']);
+  assert.deepEqual(A.opsDaNota({ emitente_cnpj: ACN, numero: 5 }, ops, CODIGOS), []);
+  // emitente desconhecido: o número basta
+  assert.deepEqual(A.opsDaNota({ emitente_cnpj: '11111111000191', numero: 9 }, ops, CODIGOS).map(o => o.opl), ['A4']);
+});
+t('opsSemXml: a OP cuja nota não está guardada aparece; a que está, não; a nota de OUTRA empresa com o mesmo número não conta', () => {
+  const ops = [{ opl: 'A1', numero_nf: '10', faturamento_empresa: 'ACN' }, { opl: 'A2', numero_nf: '11', faturamento_empresa: 'ACN' }, { opl: 'A3', numero_nf: '10', faturamento_empresa: 'Detech' }, { opl: 'A4', numero_nf: '', faturamento_empresa: 'ACN' }];
+  const notas = [{ emitente_cnpj: ACN, numero: 10 }];
+  const r = A.opsSemXml(ops, notas, CODIGOS);
+  assert.deepEqual(r.map(x => x.opl + ':' + x.numero), ['A2:11', 'A3:10']);
 });
 
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS (veja acima)' : ''}.`);

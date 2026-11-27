@@ -25,6 +25,8 @@ import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 // 10/11/2026 (pedido do usuário): o "Ver" mostra TUDO o que a pessoa preencheu ao pedir, usando as mesmas peças das telas dos setores
 import { ItensDemandaView, vinculosDaDemanda, enderecoDoLink } from './DemandaItens';
 import { membrosDe } from './DemandaExtras';
+import { caminhoDoValor } from './ArquivoPrivadoRegras';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { TIPOS_DE_CUSTO, FORMAS_DE_PAGAMENTO } from './PagamentoDeTerceiro';
 import { lerReservasDaDemanda } from './ViagemReservas';
 import { imprimirOrdemDoSolicitante, temOrdemParaImprimir, tituloDaOrdem } from './OrdemDoSolicitante';
@@ -252,10 +254,13 @@ function ListaDeArquivos({ arquivos }: any) {
   return (
     <ul className="acn-ms-itens">
       {arquivos.map((a: any, k: number) => {
-        const href = enderecoDoLink(a.url);
+        // arquivo de pasta que já mora no bucket privado (valor "privado:…" ou endereço público antigo dela) abre pelo endereço assinado (plano do bucket privado, B1, 26/11/2026)
+        const privado = !!caminhoDoValor(a.url);
+        const href = privado ? null : enderecoDoLink(a.url);
         return (
           <li key={a.id || k}>
-            {href ? <a href={href} target="_blank" rel="noreferrer">📎 {a.nome || a.url}</a> : <>📎 {a.nome || a.url}</>}
+            {privado ? <LinkDeArquivo valor={a.url}>📎 {a.nome || 'arquivo'}</LinkDeArquivo>
+              : href ? <a href={href} target="_blank" rel="noreferrer">📎 {a.nome || a.url}</a> : <>📎 {a.nome || a.url}</>}
             {a.descricao ? <span className="acn-fraco"> — {a.descricao}</span> : null}
             {a.criado_em ? <span className="acn-fraco"> · {dh(a.criado_em)}</span> : null}
           </li>

@@ -12,6 +12,7 @@ import { lerPaginado } from './LerPaginado';
 import { logChange } from './AuditSystem';
 import { nomeSeguroDeArquivo, contentTypeUpload } from './FormatosArquivo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado, BUCKET_PRIVADO } from './ArquivoPrivado';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { somarDiasISO, rotuloDaSituacao, rotuloDoPeriodo } from './TerceirosFluxo';
 import type { ServicoDeTerceiro, EventoDoServico, AnexoDoServico, PecaDoServico, LigacaoDoServico } from './TerceirosFluxo';
@@ -209,6 +210,8 @@ export function auditarPedido(novos: ServicoPedido[], resumo: Record<string, any
 }
 
 // ═══ ANEXOS (o desenho do corte e dobra, a foto, o orçamento…) ═════════════════════════════════════════════════════════════════════════════════════
+// Desde 26/11/2026 (plano do bucket privado, B1) os anexos novos moram no bucket privado e o banco continua guardando só o caminho; o bucket antigo (público) só serve para
+// montar o endereço dos arquivos que ainda não foram copiados: quem mostra o arquivo passa o endereço antigo ao LinkDeArquivo, que tenta o privado primeiro.
 export const BUCKET_DOS_ANEXOS = 'acn-media';
 export const PASTA_DOS_ANEXOS = 'terceiros';
 export const LIMITE_DE_ANEXO = 20 * 1024 * 1024;
@@ -242,8 +245,8 @@ export async function enviarAnexos(arquivos: File[], pasta: string): Promise<{ a
     if (f.size > LIMITE_DE_ANEXO) { erros.push(`"${f.name}": o arquivo passa de 20 MB.`); continue; }
     const caminho = `${pasta}/${Date.now()}-${i}-${nomeSeguroDeArquivo(f.name)}`;
     try {
-      const { error } = await supabase.storage.from(BUCKET_DOS_ANEXOS).upload(caminho, f, { upsert: false, contentType: contentTypeUpload(f) || undefined });
-      if (error) { erros.push(`"${f.name}": ${explicarErroDeEnvio(error, f)}`); continue; }
+      const { erro } = await enviarArquivoPrivado(caminho, f, contentTypeUpload(f) || undefined);
+      if (erro) { erros.push(`"${f.name}": ${explicarErroDeEnvio(erro, f)}`); continue; }
     } catch (e: any) {
       erros.push(`"${f.name}": ${explicarErroDeEnvio(e, f)}`);
       continue;
@@ -257,7 +260,7 @@ export async function enviarAnexos(arquivos: File[], pasta: string): Promise<{ a
 /** Retira do armazenamento os arquivos que acabaram de subir e não ficaram ligados a nenhum serviço (o pedido falhou). Só o que ESTA ação enviou; nunca falha para quem chama. */
 export async function retirarArquivosSoltos(caminhos: string[]): Promise<void> {
   if (!caminhos.length) return;
-  try { await supabase.storage.from(BUCKET_DOS_ANEXOS).remove(caminhos); } catch { /* sem como retirar: fica no armazenamento, sem ligação */ }
+  try { await supabase.storage.from(BUCKET_PRIVADO).remove(caminhos); } catch { /* sem como retirar: fica no armazenamento, sem ligação (o bucket privado não tem regra de apagar para o navegador: o arquivo solto fica lá) */ }
 }
 
 // ═══ AS UNIDADES DA VENDA (um serviço por carro: cada OP /NN do lote) ══════════════════════════════════════════════════════════════════════════

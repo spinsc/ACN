@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDosFretes, anexarValoresDoFrete, anexarValoresDasCotacoesDeFrete, anexarValoresDasAprovacoesDeFrete, valorDaCotacaoOuNulo, AVISO_SEM_VALOR_DO_FRETE } from './FreteValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado, urlDoArquivo } from './ArquivoPrivado';
+import { LinkDeArquivo, ImagemPrivada } from './ArquivoPrivadoTela';
 import { confirmarRemocao } from './Feedback';
 import { acharAproveitamentos } from './AproveitamentoFrete';
 import React, { useState, useEffect, useRef } from 'react';
@@ -206,11 +208,10 @@ const VAZIO_COTACAO_FRETE = { transportadora_nome: '', valor: '', condicao_pagam
 async function uploadArquivoFrete(file: File, pasta: string): Promise<{ url: string; nome: string; error?: string }> {
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `${pasta}/${Date.now()}_${nomeLimpo}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', nome: '', error: explicarErroDeEnvio(error, file) };
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
-  return { url: pub.publicUrl, nome: file.name };
+  // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro } = await enviarArquivoPrivado(path, file, file.type || undefined);
+  if (erro || !valor) return { url: '', nome: '', error: explicarErroDeEnvio(erro, file) };
+  return { url: valor, nome: file.name };
 }
 
 // Etapa 12b3 (01/10/2026): a cor do status do frete vem do Selo (uma cor por família, igual às outras telas); o objeto de cores
@@ -1346,7 +1347,7 @@ function FretesPanel({ currentUser }: any) {
                           {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
                         </div>
                         {c.anexo_url && (
-                          <a className="acn-link-icone" href={c.anexo_url} target="_blank" rel="noreferrer"><Icone path={mdiPaperclip} size={13} /> {c.anexo_nome}</a>
+                          <LinkDeArquivo valor={c.anexo_url} className="acn-link-icone"><Icone path={mdiPaperclip} size={13} /> {c.anexo_nome}</LinkDeArquivo>
                         )}
                       </div>
                       <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} title="Remover" aria-label="Remover cotação"
@@ -1500,7 +1501,7 @@ function FretesPanel({ currentUser }: any) {
                   <div><a className="acn-link-icone" href={modalFrete.url_rastreio} target="_blank" rel="noreferrer"><Icone path={mdiLinkVariant} size={14} /> Ver rastreio</a></div>
                 )}
                 {modalFrete.canhoto_url && (
-                  <div><a className="acn-link-icone" href={modalFrete.canhoto_url} target="_blank" rel="noreferrer"><Icone path={mdiPaperclip} size={14} /> Ver canhoto ({modalFrete.canhoto_nome})</a></div>
+                  <div><LinkDeArquivo valor={modalFrete.canhoto_url} className="acn-link-icone"><Icone path={mdiPaperclip} size={14} /> Ver canhoto ({modalFrete.canhoto_nome})</LinkDeArquivo></div>
                 )}
                 <Botao className="acn-botao-cheio" onClick={()=>fecharModalFrete()}>Fechar</Botao>
               </div>
@@ -2021,7 +2022,7 @@ export default function LogisticaTab({ currentUser }) {
       let col = 0;
       for (const url of fotos) {
         try {
-          const resp = await fetch(url);
+          const resp = await fetch((await urlDoArquivo(url)) || url);
           const blob = await resp.blob();
           const ext = blob.type.includes('png') ? 'PNG' : 'JPEG';
           const dataUrl = await new Promise(r => {
@@ -2134,10 +2135,9 @@ export default function LogisticaTab({ currentUser }) {
     for (const f of fotos) {
       const ext = f.name.split('.').pop();
       const path = `logistica/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from('acn-media').upload(path, f, { contentType: f.type, upsert: true });
-      if (error) { falhasFotos.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-      fotosUrls.push(pub?.publicUrl || path);
+      const { valor, erro: erroFoto } = await enviarArquivoPrivado(path, f, f.type || undefined);
+      if (erroFoto || !valor) { falhasFotos.push(`${f.name}: ${explicarErroDeEnvio(erroFoto, f)}`); continue; }
+      fotosUrls.push(valor);
     }
     if (falhasFotos.length && !await confirmar('Estas fotos NÃO foram enviadas:\n\n' + falhasFotos.join('\n') + '\n\nSalvar o registro mesmo assim, sem elas?')) { setUploading(false); return; }
 
@@ -2439,9 +2439,9 @@ export default function LogisticaTab({ currentUser }) {
                   <div className="acn-quadro-titulo">Fotos ({m.fotos.length})</div>
                   <div className="acn-fotos">
                     {m.fotos.map((url,i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        <img src={url} alt={`foto ${i+1}`} className="acn-foto-grande" />
-                      </a>
+                      <LinkDeArquivo key={i} valor={url}>
+                        <ImagemPrivada valor={url} alt={`foto ${i+1}`} className="acn-foto-grande" />
+                      </LinkDeArquivo>
                     ))}
                   </div>
                 </div>
@@ -2463,9 +2463,9 @@ export default function LogisticaTab({ currentUser }) {
             <div className="modal-title">Fotos — {modalVer.tipo} {fmtDt(modalVer.data)}</div>
             <div className="acn-fotos acn-fotos-centro">
               {(modalVer.fotos||[]).map((url,i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                  <img src={url} alt={`foto ${i+1}`} className="acn-foto-grande" />
-                </a>
+                <LinkDeArquivo key={i} valor={url}>
+                  <ImagemPrivada valor={url} alt={`foto ${i+1}`} className="acn-foto-grande" />
+                </LinkDeArquivo>
               ))}
             </div>
             <div className="acn-modal-acoes">

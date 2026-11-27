@@ -455,6 +455,45 @@ const DEFEITOS = [
   { id: 'el', nome: 'o menu da linha perde o item "Abrir em janela"', cenarios: '^C107', trocas: [
     { arquivo: 'src/HorasTarefasTab.tsx', de: "oculto: !onAbrir },", para: "oculto: true }," },
   ] },
+  { id: 'fa', nome: 'a tela da Formação de Preços deixa de conhecer o detalhe como registro (o endereço #/formacao-precos/preco/<código> não é lido)', cenarios: '^C11[3-7]', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  formacao_precos: ['preco'],", para: "  // formacao_precos: ['preco']," },
+  ] },
+  { id: 'fb', nome: 'o detalhe aberto pelo cartão não escreve o endereço da formação (o detalhe abre, a barra continua na lista)', cenarios: '^C113', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "    aberto: embutido ? null : detalheId,", para: "    aberto: null," },
+  ] },
+  { id: 'fc', nome: 'o detalhe perde o botão "Copiar link"', cenarios: '^C116', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "aria-label=\"Copiar o link desta formação\"", para: "aria-label=\"x\" style={{ display: 'none' }}" },
+  ] },
+  { id: 'fd', nome: 'o detalhe não se fecha quando o endereço deixa de ser o dele (o Voltar do navegador não o fecha)', cenarios: '^C113', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "    fechar: () => { setAbrirRegistro(null); setPedirFechar(n => n + 1); },", para: "    fechar: () => {}," },
+  ] },
+  { id: 'fe', nome: 'o link colado não abre a formação (a leitura pelo código responde sempre "não encontrei")', cenarios: '^C114', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "    ler: (chave) => lerPorCodigo(supabase.from('cotacoes_precos').select('*').eq('id', chave).maybeSingle()),", para: "    ler: async () => ({ registro: null, erro: '' })," },
+  ] },
+  { id: 'ff', nome: 'a leitura recusada da formação vira "não encontrei" (esconde que o banco falhou)', cenarios: '^C115', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "    ler: (chave) => lerPorCodigo(supabase.from('cotacoes_precos').select('*').eq('id', chave).maybeSingle()),", para: "    ler: async (chave) => { const r = await lerPorCodigo(supabase.from('cotacoes_precos').select('*').eq('id', chave).maybeSingle()); return { registro: r.registro, erro: '' }; }," },
+  ] },
+  { id: 'fg', nome: 'trocar de aba com o detalhe aberto deixa o endereço do detalhe na barra (o Voltar desfaz a troca de aba)', cenarios: '^C116', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "    if (noDetalhe) irParaEndereco(montarEnderecoDaAba('formacao_precos', [a]), { substituir: true });", para: "    void noDetalhe;" },
+  ] },
+  { id: 'fh', nome: 'o vínculo de uma demanda (recado formacao) deixa de virar o endereço da formação', cenarios: '^C117', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  formacao: { tela: 'formacao_precos', tipo: 'preco' },", para: "  // formacao: { tela: 'formacao_precos', tipo: 'preco' }," },
+  ] },
+  { id: 'fi', nome: 'a formação aberta pelo endereço não troca para a aba Preços Formados (abre o detalhe escondido atrás do editor)', cenarios: '^C11[47]', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "    mostrar: (c) => { setAbaAtiva('precos_formados'); setAbrirRegistro(c); },", para: "    mostrar: (c) => { setAbrirRegistro(c); }," },
+  ] },
+  { id: 'fj', nome: 'o detalhe não avisa para fora qual formação está aberta (o endereço não acompanha o que a tela mostra)', cenarios: '^C113', trocas: [
+    { arquivo: 'src/FormacaoPrecosTab.tsx', de: "  useEffect(() => { onDetalhe?.(cotacaoAberta ? String(cotacaoAberta.id) : null); }, [cotacaoAberta?.id]);", para: "  useEffect(() => { onDetalhe?.(cotacaoAberta ? String(cotacaoAberta.id) : null); }, []);" },
+  ] },
+  { id: 'sa', nome: 'a casca volta a barrar quem não tem a aba SAC (o link da ficha em que a pessoa é copiada cai em "sem acesso")', cenarios: '^C118', trocas: [
+    { arquivo: 'src/DashboardTab.tsx', de: "    podeVer: (id: string) => isVisible(id) || (id === 'sac' && semAcessoAoSac(currentUser)),", para: "    podeVer: isVisible," },
+  ] },
+  { id: 'sb', nome: 'a regra semAcessoAoSac deixa de valer (quem só tem a Garantia passa a ver todas as abas do SAC)', cenarios: '^C118', trocas: [
+    { arquivo: 'src/utils/permissoes.ts', de: "  return Array.isArray(abas) && abas.length > 0 && !abas.includes('sac');", para: "  return false;" },
+  ] },
+  { id: 'sc', nome: 'a abertura do SAC alarga para qualquer tela (quem não tem a aba Compras também a abre pelo link)', cenarios: '^C118b', trocas: [
+    { arquivo: 'src/DashboardTab.tsx', de: "    podeVer: (id: string) => isVisible(id) || (id === 'sac' && semAcessoAoSac(currentUser)),", para: "    podeVer: (id: string) => isVisible(id) || semAcessoAoSac(currentUser)," },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

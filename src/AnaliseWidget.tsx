@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { ehAdminOuGerente, podeEditarParecerDaAnalise } from './utils/permissoes';
 import { pedirTexto, confirmar } from './Feedback';
@@ -719,13 +721,13 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
     const falhas: string[] = [];   // 16/10/2026: o envio que falhava era ignorado, o arquivo só não aparecia na lista
     for (const file of lista) {
       const path = `analise/${solicitacaoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-      const { data: up, error: erroUp } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
-      if (!up) { falhas.push(`${file.name}: ${explicarErroDeEnvio(erroUp, file)}`); continue; }
-      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      // bucket privado (plano do bucket privado, B2, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor: valorPriv, erro: erroUp } = await enviarArquivoPrivado(path, file, file.type || undefined);
+      if (!valorPriv) { falhas.push(`${file.name}: ${explicarErroDeEnvio(erroUp, file)}`); continue; }
       const { error: erroReg } = await supabase.from('analise_anexos').insert({
         solicitacao_id: solicitacaoId,
         nome: file.name,
-        url: pub?.publicUrl || '',
+        url: valorPriv,
         criado_por: currentUser?.nome || 'Sistema',
         setor,
       });
@@ -847,10 +849,10 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
                               <span className="acn-ajuda">Nenhum arquivo ainda.</span>
                             )}
                             {anx.map((a:any) => (
-                              <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="acn-ana-arq">
+                              <LinkDeArquivo key={a.id} valor={a.url} className="acn-ana-arq">
                                 <Icone path={mdiFileDocumentOutline} size={13} /> {a.nome}
                                 {a.criado_por && <span className="acn-ana-arq-por">· {a.criado_por}</span>}
-                              </a>
+                              </LinkDeArquivo>
                             ))}
                           </div>
                           <label className={'acn-ana-upload' + (uploadando===solId ? ' ocupado' : '')}>

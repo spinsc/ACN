@@ -5,6 +5,8 @@ import { supabase } from './supabaseClient';
 import { lerPaginado } from './LerPaginado';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { logChange } from './AuditSystem';
+import { conferirNota } from './FiscalXml';
+import { registroDaNota, registroDoEvento, registroDaInutilizacao } from './FiscalArquivo';
 import {
   erroDoFiscalCliente, fiscalClienteParaGravar, erroDoFiscalItem, fiscalItemParaGravar, erroDoEmitente, emitenteParaGravar,
   erroDaTransportadora, transportadoraParaGravar, soDigitos,
@@ -165,4 +167,67 @@ export async function lerPendenciasDosItens() {
   try { itens = await lerPaginado(() => supabase.from('cadastro_itens').select('id,codigo,nome,unidade,ncm,ipi_pct,ativo').eq('ativo', true).order('nome').order('id')); } catch (e: any) { erroItens = explicarErroDoBanco(e); }
   const { mapa, erro } = await lerTodosOsFiscaisDosItens();
   return { itens, fiscais: mapa, erro: erroItens || erro, erroItens: !!erroItens, erroFiscal: !!erro };
+}
+
+// ═══ Arquivo de notas emitidas (26/11/2026; regras puras em FiscalArquivo.ts, tabelas e função em supabase/sql/fiscal_arquivo_de_notas.sql) ═══
+const NOTAS_POR_CHAMADA = 20;        // ~25 KB de XML cada: meio megabyte por chamada
+const EVENTOS_POR_CHAMADA = 40;
+
+/**
+ * Guarda no banco as notas, os eventos e as inutilizações de um lote lido pelo Conferidor. Cada chamada é tudo ou nada (a função do banco); o lote vai em várias chamadas e,
+ * se uma falhar, as anteriores ficam guardadas (rodar de novo é seguro: o que já estava guardado não é regravado). Devolve os totais e quantas notas ficaram de fora por falta de dado.
+ */
+export async function guardarNoArquivo(lote: any, emitentes: any[], usuario: any, aoProgredir?: (feitos: number, total: number) => void) {
+  const totais = { novas: 0, atualizadas: 0, repetidas: 0, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0, semDado: 0 };
+  const notas: any[] = [];
+  for (const n of lote.notas || []) {
+    const r = registroDaNota(n, conferirNota(n, emitentes), n.xml || '');
+    if (!r || !r.xml) totais.semDado++; else notas.push(r);
+  }
+  const eventos: any[] = [];
+  for (const e of lote.eventos || []) { const r = registroDoEvento(e, e.xml || ''); if (!r || !r.xml) totais.semDado++; else eventos.push(r); }
+  const inuts: any[] = [];
+  for (const i of lote.inutilizacoes || []) { const r = registroDaInutilizacao(i, i.xml || ''); if (!r || !r.xml) totais.semDado++; else inuts.push(r); }
+
+  const chamadas: any[][] = [];
+  for (let i = 0; i < notas.length; i += NOTAS_POR_CHAMADA) chamadas.push([notas.slice(i, i + NOTAS_POR_CHAMADA), [], []]);
+  for (let i = 0; i < Math.max(eventos.length, inuts.length); i += EVENTOS_POR_CHAMADA) chamadas.push([[], eventos.slice(i, i + EVENTOS_POR_CHAMADA), inuts.slice(i, i + EVENTOS_POR_CHAMADA)]);
+  let feitas = 0;
+  for (const [pn, pe, pi] of chamadas) {
+    const { data, error } = await supabase.rpc('fiscal_guardar', { p_notas: pn, p_eventos: pe, p_inutilizacoes: pi });
+    if (error || !data) {
+      return { ok: false, erro: error ? explicarErroDoBanco(error) : 'O banco não confirmou a gravação.', totais, parcial: feitas > 0 };
+    }
+    for (const k of Object.keys(data)) if (k in totais) totais[k] += Number(data[k]) || 0;
+    feitas++;
+    aoProgredir?.(feitas, chamadas.length);
+  }
+  if (totais.novas || totais.atualizadas || totais.eventos_novos || totais.inutilizacoes_novas) {
+    logChange({ module: 'fiscal', entityType: 'fiscal_notas', entityId: 'importacao', changeType: 'CREATE', newRow: { ...totais }, user: usuario });
+  }
+  return { ok: true, erro: '', totais, parcial: false };
+}
+
+/** Tudo o que a tela "Notas emitidas" lê. Cada leitura que falha volta no seu campo de erro (nunca vira "sem notas"). `comValores` só se a pessoa pode vê-los. */
+export async function lerArquivoDeNotas(comValores: boolean) {
+  const r: any = { notas: [], eventos: [], inutilizacoes: [], valores: new Map<string, number>(), ops: [], erros: {} };
+  const tenta = async (chave: string, fn: () => Promise<any>) => { try { return await fn(); } catch (e: any) { r.erros[chave] = explicarErroDoBanco(e); return null; } };
+  const [notas, eventos, inuts, valores, ops] = await Promise.all([
+    tenta('notas', () => lerPaginado(() => supabase.from('fiscal_notas').select('*').order('emissao_dia', { ascending: false }).order('id'))),
+    tenta('eventos', () => lerPaginado(() => supabase.from('fiscal_eventos').select('chave, tp_evento, sequencia, data_dia, texto, cstat, arquivo').order('id'))),
+    tenta('inutilizacoes', () => lerPaginado(() => supabase.from('fiscal_inutilizacoes').select('*').order('id'))),
+    comValores ? tenta('valores', () => lerPaginado(() => supabase.from('fiscal_notas_valores').select('chave, valor_nf').order('chave'))) : Promise.resolve([]),
+    tenta('ops', () => lerPaginado(() => supabase.from('oples').select('opl, numero_nf, faturamento_empresa, data_emissao_nf').neq('numero_nf', '').order('id'))),
+  ]);
+  r.notas = notas || []; r.eventos = eventos || []; r.inutilizacoes = inuts || []; r.ops = ops || [];
+  for (const v of valores || []) r.valores.set(v.chave, Number(v.valor_nf));
+  return r;
+}
+
+/** O XML guardado de uma nota (ou de um evento, pela `ref`). Só quem tem a aba Fiscal e vê valores o lê. */
+export async function lerXmlGuardado(ref: string) {
+  const { data, error } = await supabase.from('fiscal_arquivos').select('xml').eq('ref', ref).maybeSingle();
+  if (error) return { xml: '', erro: explicarErroDoBanco(error) };
+  if (!data) return { xml: '', erro: 'O XML desta nota não está no arquivo (ou você não tem permissão para lê-lo).' };
+  return { xml: data.xml as string, erro: '' };
 }

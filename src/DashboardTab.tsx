@@ -26,6 +26,7 @@ import {
 import { CabecalhoTela, Botao, Selo, Faixa } from './Interface';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { telaInicialDoUsuario } from './utils/telaInicial';
+import { semAcessoAoSac } from './utils/permissoes';
 import { gruposParaRecolher } from './utils/menuLateral';
 import { useNavegacao } from './useNavegacao';
 import AvisoDeEndereco from './AvisoDeEndereco';
@@ -731,7 +732,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [acessoConferido, setAcessoConferido] = useState(false);   // as permissões já foram relidas do banco? (lerSessaoDoBanco, acima)
   const { tela: activeTab, bloqueio, irParaTela, irParaRegistro } = useNavegacao({
     ids: IDS_DAS_TELAS,
-    podeVer: isVisible,
+    // 26/11/2026: quem foi copiado numa garantia e não tem a aba SAC abre a tela SAC pelo endereço (o aviso e o link da ficha), e o SacTab mostra a ela só a Garantia; o menu continua sem o SAC para ela
+    podeVer: (id: string) => isVisible(id) || (id === 'sac' && semAcessoAoSac(currentUser)),
     telaInicial: () => telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible),
     acessoConferido,
     avisar: (texto: string) => alert(texto),

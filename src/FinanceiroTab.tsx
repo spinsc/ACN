@@ -5,6 +5,8 @@ import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDoFaturamento } from './FreteValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA } from './ComprasFluxo';
 import { labelHierarquico, ModalLancarMedicao,
@@ -291,10 +293,10 @@ const STATUS_FAT_LABEL: Record<string, { label: string; familia: string }> = {
 async function uploadNfFornecedor(file: File): Promise<{ url: string; error?: string }> {
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `pcp-nf-fornecedor/${Date.now()}_${nomeLimpo}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', error: explicarErroDeEnvio(error, file) };
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return { url: pub?.publicUrl || '' };
+  // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro } = await enviarArquivoPrivado(path, file, file.type || undefined);
+  if (erro || !valor) return { url: '', error: explicarErroDeEnvio(erro, file) };
+  return { url: valor };
 }
 
 function LinhaFaturamento({ f, onAtualizar, currentUser, naoLido, marcarLidoLocal }: any) {
@@ -350,7 +352,7 @@ function LinhaFaturamento({ f, onAtualizar, currentUser, naoLido, marcarLidoLoca
         ) : f.status_faturamento === 'pago' ? (
           <span className="acn-txt-ok">
             NF {f.nf_fornecedor_numero} · pago em {fmtDt(f.data_pagamento)}
-            {f.nf_fornecedor_url && <> · <a href={f.nf_fornecedor_url} target="_blank" rel="noreferrer">ver</a></>}
+            {f.nf_fornecedor_url && <> · <LinkDeArquivo valor={f.nf_fornecedor_url}>ver</LinkDeArquivo></>}
           </span>
         ) : (
           <div className="acn-fin-nf">

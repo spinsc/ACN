@@ -329,7 +329,7 @@ const FASE4 = [
   { id: 'marketing', menu: 'Marketing', rotulos: { opls: 'OPs Liberadas para Divulgação', pedidos: 'Pedidos de Registro' } },
   // o Telecom abre SOZINHO em "Separação e envio" quando há OP de rádio esperando na fila (TelecomTab: `esperando > 0`): depende dos dados de agora, então o teste aceita as duas aberturas
   { id: 'telecom', menu: 'Telecom', abreSozinhoEm: 'separacao', rotulos: { vendas: 'Vendas', separacao: 'Separação e envio', demandas: 'Análises e demandas' } },
-  { id: 'fiscal', menu: 'Fiscal', rotulos: { faturamento: 'Faturamento', cadastros: 'Cadastros fiscais', conferidor: 'Conferidor de XML' } },
+  { id: 'fiscal', menu: 'Fiscal', rotulos: { faturamento: 'Faturamento', arquivo: 'Notas emitidas', cadastros: 'Cadastros fiscais', conferidor: 'Conferidor de XML' } },
   { id: 'logistica', menu: 'Logística In/Out', rotulos: { recebimento: 'Aguardando Recebimento', historico: 'Histórico / Novo Registro', relatorio: 'Relatório IN/OUT', fretes: 'Fretes' } },
   { id: 'terceiros', menu: 'Serviços de terceiros', lembra: 'lista', rotulos: { quadro: 'Quadro', agenda: 'Agenda', lista: 'Lista', relatorio: 'Relatório do mês', ordens: 'Ordens de pintura', prestadores: 'Prestadores', tipos: 'Tipos de serviço', modelo: 'Modelo do contrato' } },
 ];
@@ -4426,6 +4426,217 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
       al = await A(page);
       const falhou = al.filter(x => x.startsWith('Não foi possível abrir a tarefa da Engenharia'));
       confere('sem ler o cadastro do RH: nenhuma janela e UMA mensagem que diz que a leitura falhou (nunca "não encontrei")', e.janelas === 0 && falhou.length === 1 && /a leitura falhou/.test(falhou[0]) && !/não a encontrei/.test(falhou[0]), JSON.stringify({ j: e.janelas, h: e.hash, al }));
+    });
+  }
+
+  // ═════════ o detalhe de uma formação em Preços Formados (`#/formacao-precos/preco/<código>`, no lugar da lista da aba Preços Formados) — Fase 6 ═════════
+  // Escolha do usuário: só o DETALHE ganha endereço; o editor (aba Formação de Preços) e o modo embutido (CRM, Licitações, Telecom) não foram tocados.
+  // As formações são SIMULADAS (a lista e a leitura de uma só respondem o que o cenário manda; o banco de produção só tem formações reais).
+  const MSG_FP_NAO_ACHOU = 'Não foi possível abrir a formação de preços: não a encontrei, ou você não tem acesso a ela.';
+  const formacaoFalsa = (n, extra = {}) => ({
+    id: '0000000f-0000-4000-8000-00000000000' + n, nome: 'ZZ Formação do teste ' + n, tipo: 'Pregão', empresa: 'ACN', status: 'rascunho', versao: 1, versao_raiz_id: null,
+    parametros_globais: {}, itens: [], desconto_maximo_pct: 5, vencedora: false, opl_numero: null, opl_id: null, plataforma_id: null,
+    criado_por: 'ZZTESTE', criado_em: '2026-11-20T12:00:0' + n + 'Z', atualizado_em: '2026-11-20T12:00:0' + n + 'Z', atualizado_por: 'ZZTESTE',
+    ...extra,
+  });
+  const FP1 = formacaoFalsa(1), FP2 = formacaoFalsa(2);
+  /** O que o banco "responde" sobre as formações: a lista, a leitura de uma só (lista de zero ou uma linha, como o `.maybeSingle()` pede) e, se o cenário quiser, a leitura recusada. */
+  const bancoDeFormacoes = (formacoes, { recusa = () => false, lidas = [] } = {}) => (url, r) => {
+    if (r.method() !== 'GET') return null;
+    if (url.includes('/rest/v1/cotacoes_precos?')) {
+      if (/[?&]id=eq\./.test(url)) {
+        const m = url.match(/[?&]id=eq\.([^&]+)/); const id = m ? m[1] : '';
+        lidas.push(id);
+        if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+        const t = formacoes.find(x => x.id === id);
+        return { status: 200, body: t ? [t] : [] };
+      }
+      return { status: 200, body: formacoes };
+    }
+    return null;
+  };
+  const estadoFP = (page) => page.evaluate(() => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    const nome = document.querySelector('.acn-fp-pf-nome');
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      detalhe: nome ? nome.innerText : null, cartoes: document.querySelectorAll('.acn-fp-card').length,
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+    };
+  });
+  const esperarFP = (page, ms = 40000) => page.waitForSelector('.acn-fp-pf-nome', { timeout: ms });
+  const esperarSemFP = (page, ms = 15000) => page.waitForFunction(() => !document.querySelector('.acn-fp-pf-nome'), { timeout: ms });
+  const esperarCartoesFP = (page) => page.waitForSelector('.acn-fp-card', { timeout: 40000 });
+  const voltarDoDetalheFP = (page) => page.evaluate(() => { const b = [...document.querySelectorAll('.acn-fp-pf-cab button')].find(x => x.innerText.trim() === 'Voltar'); if (!b) throw new Error('não achei o botão Voltar do detalhe'); b.click(); });
+  const abrirCartaoFP = (page, nome) => page.evaluate((n) => {
+    const c = [...document.querySelectorAll('.acn-fp-card')].find(x => x.innerText.includes(n)); if (!c) throw new Error('não achei o cartão ' + n);
+    const b = [...c.querySelectorAll('button')].find(x => x.innerText.trim() === 'Abrir'); if (!b) throw new Error('não achei o botão Abrir'); b.click();
+  }, nome);
+  const esperarDesfechoFP = (page, ms = 25000) => page.waitForFunction(() => !/^#\/formacao-precos\/preco\//i.test(location.hash), { timeout: ms }).catch(() => {});
+  const LISTA_FP = '#/formacao-precos/precos-formados';
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C113 Detalhe da formação: o botão Abrir do cartão escreve o endereço; Voltar do navegador fecha, Avançar reabre e o Voltar da tela volta um passo', { simular: bancoDeFormacoes([FP1, FP2]) }, async ({ page }) => {
+    await page.goto(BASE + LISTA_FP, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarCartoesFP(page); await espera(900);
+    const antes = await estadoFP(page);
+    confere('a lista abre sem detalhe, na aba Preços Formados, sem endereço de registro', antes.detalhe === null && antes.cartoes >= 2 && antes.hash === LISTA_FP && /Preços Formados/i.test(antes.abaAtiva), JSON.stringify({ d: antes.detalhe, c: antes.cartoes, h: antes.hash, a: antes.abaAtiva }));
+    await abrirCartaoFP(page, FP2.nome);
+    await esperarFP(page); await espera(900);
+    let e = await estadoFP(page);
+    confere('o clique escreve o endereço da formação aberta, um passo novo no histórico, e o detalhe é o dela', e.hash === '#/formacao-precos/preco/' + FP2.id && e.detalhe === FP2.nome && e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ h: e.hash, d: e.detalhe, hist: e.historico, antes: antes.historico }));
+    await page.goBack(); await esperarSemFP(page); await espera(900);
+    e = await estadoFP(page);
+    confere('o Voltar do navegador fecha o detalhe e volta à lista de Preços Formados', e.detalhe === null && e.hash === LISTA_FP && e.cartoes >= 2 && /Preços Formados/i.test(e.abaAtiva), JSON.stringify({ d: e.detalhe, h: e.hash, c: e.cartoes, a: e.abaAtiva }));
+    await page.goForward(); await esperarFP(page); await espera(900);
+    e = await estadoFP(page);
+    confere('o Avançar reabre a mesma formação', e.detalhe === FP2.nome && e.hash === '#/formacao-precos/preco/' + FP2.id, JSON.stringify({ d: e.detalhe, h: e.hash }));
+    await voltarDoDetalheFP(page); await esperarSemFP(page); await espera(900);
+    e = await estadoFP(page);
+    confere('o botão Voltar da tela tira o endereço da formação (um passo atrás) e mostra a lista', e.detalhe === null && e.hash === LISTA_FP && e.cartoes >= 2, JSON.stringify({ d: e.detalhe, h: e.hash, c: e.cartoes }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C114 Detalhe da formação: link colado (primeira página) abre o detalhe; F5 reabre; o Voltar da tela nunca sai do sistema', { simular: bancoDeFormacoes([FP1, FP2]) }, async ({ page }) => {
+    const end = '#/formacao-precos/preco/' + FP1.id;
+    await abrirComoLinkColado(page, end);
+    await esperarSistema(page); await esperarFP(page); await espera(900);
+    let e = await estadoFP(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a formação certa e o endereço continua o do link (não é reescrito)', e.hash === end && e.detalhe === FP1.nome && e.marca === false, JSON.stringify({ h: e.hash, d: e.detalhe, m: e.marca }));
+    confere('a aba aberta é a de Preços Formados', /Preços Formados/i.test(e.abaAtiva), JSON.stringify({ a: e.abaAtiva }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarFP(page); await espera(900);
+    e = await estadoFP(page);
+    confere('F5 reabre a mesma formação, no mesmo endereço', e.hash === end && e.detalhe === FP1.nome, JSON.stringify({ h: e.hash, d: e.detalhe }));
+    await voltarDoDetalheFP(page); await esperarSemFP(page); await espera(1200);
+    e = await estadoFP(page);
+    confere('o Voltar da tela sai do endereço da formação, sem sair do sistema nem criar passo, e continua na lista de Preços Formados', !/preco\//.test(e.hash) && e.detalhe === null && /Preços Formados/i.test(e.abaAtiva) && e.origem === origem && e.historico === h0 && e.cartoes >= 2, JSON.stringify({ h: e.hash, d: e.detalhe, a: e.abaAtiva, o: e.origem, hist: e.historico, h0, c: e.cartoes }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    await cenario('C115 Formação que não existe, que não é código e com a leitura recusada: UMA mensagem, sem detalhe, endereço limpo', {
+      simular: bancoDeFormacoes([FP1, FP2], { recusa: () => modo === 'recusa', lidas }),
+    }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true, MSG_FP_NAO_ACHOU],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false, MSG_FP_NAO_ACHOU],
+        ['o banco recusa a leitura', 'recusa', FP1.id, true, 'Não foi possível abrir a formação de preços: a leitura falhou (erro simulado do banco). Tente de novo.'],
+      ];
+      for (const [nome, m, codigo, leBanco, texto] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/formacao-precos/preco/' + codigo);
+        await esperarSistema(page); await esperarDesfechoFP(page); await espera(800);
+        const e = await estadoFP(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a formação de preços'));
+        confere(`formação (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`formação (${nome}): nenhum detalhe e o endereço sai do da formação`, e.detalhe === null && !/preco\//.test(e.hash), JSON.stringify({ d: e.detalhe, h: e.hash }));
+        confere(`formação (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`formação (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C116 Detalhe da formação: "Copiar link"; trocar de aba com o detalhe aberto fecha o detalhe sem passo novo; Voltar volta à lista', { simular: bancoDeFormacoes([FP1, FP2]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + LISTA_FP, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarCartoesFP(page); await espera(900);
+    await abrirCartaoFP(page, FP1.nome);
+    await esperarFP(page); await espera(900);
+    const SEL = '.acn-fp-pf-cab button[aria-label="Copiar o link desta formação"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('o detalhe tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/formacao-precos/preco/' + FP1.id;
+      const ok = 'Link da formação copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/formacao-precos/preco/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da formação. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+    }
+    await LA(page);
+    let e = await estadoFP(page);
+    const hAberta = e.historico;
+    // com o detalhe aberto as abas de cima continuam à vista: trocar de aba troca o endereço do passo (sem passo novo) e fecha o detalhe
+    await page.evaluate(() => { const t = [...document.querySelectorAll('.acn-main [role="tab"]')].find(x => /Formação de Preços/i.test(x.innerText)); if (!t) throw new Error('não achei a aba Formação de Preços'); t.click(); });
+    await esperarSemFP(page); await espera(900);
+    e = await estadoFP(page);
+    confere('trocar para a aba Formação de Preços fecha o detalhe, põe o endereço da aba e NÃO cria passo novo', e.detalhe === null && e.hash === '#/formacao-precos' && /Formação de Preços/i.test(e.abaAtiva) && e.historico === hAberta, JSON.stringify({ d: e.detalhe, h: e.hash, a: e.abaAtiva, hist: e.historico, hAberta }));
+    await page.goBack(); await espera(1200);
+    e = await estadoFP(page);
+    confere('o Voltar leva à lista de Preços Formados (o passo da aba trocada era o do detalhe)', e.detalhe === null && e.hash === LISTA_FP && /Preços Formados/i.test(e.abaAtiva) && e.cartoes >= 2, JSON.stringify({ d: e.detalhe, h: e.hash, a: e.abaAtiva, c: e.cartoes }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // o vínculo "Formação de preço" de uma demanda avulsa (recado interno): leva ao detalhe da formação por cima de qualquer tela, em UM passo
+  await cenario('C117 Detalhe da formação: o vínculo de uma demanda (recado) abre o detalhe pelo endereço, na aba Preços Formados, em UM passo', { simular: bancoDeFormacoes([FP1, FP2]) }, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoFP(page)).historico;
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'formacao', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'formacao_precos' } })); }, FP2.id);
+    await esperarFP(page); await espera(900);
+    const e = await estadoFP(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('o vínculo abre a formação pelo endereço (#/formacao-precos/preco/<código>), na aba Preços Formados', e.hash === '#/formacao-precos/preco/' + FP2.id && e.detalhe === FP2.nome && /Preços Formados/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, d: e.detalhe, a: e.abaAtiva }));
+    confere('UM passo novo no histórico (a tela e a formação num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ═════════ quem foi copiado numa garantia e NÃO tem a aba SAC (G5): o link do aviso abre só a Garantia, como antes da Fase 1 ═════════
+  {
+    const SEM_SAC = { ...USUARIO_ADMIN, perfil: 'Engenharia', abas_permitidas: ['engenharia'] };
+    const DE_OUTRA = { aberto_por_email: 'outra.pessoa@teste.local', aberto_por_nome: 'Outra Pessoa', responsavel: { nome: 'Outra Pessoa', email: 'outra.pessoa@teste.local' } };
+    const FC = fichaFalsa(8, { ...DE_OUTRA, copiados: [{ nome: USUARIO_ADMIN.nome, email: USUARIO_ADMIN.email }] });   // a pessoa só participa por ser copiada
+    const FO = fichaFalsa(9, { ...DE_OUTRA, copiados: [] });   // de outra pessoa: a conta de teste não participa
+    const simSemSac = (url, r) => bancoComAbas(['engenharia'])(url, r) || bancoDeFichas([FC, FO])(url, r);
+    const estadoSemSac = (page) => page.evaluate((jf) => ({
+      hash: location.hash, janelas: document.querySelectorAll(jf).length,
+      soGarantia: !!document.querySelector('.acn-sac-so-garantia'),
+      menu: [...document.querySelectorAll('.sidebar-rotulo')].map(x => x.innerText.trim()),
+      aviso: (document.querySelector('.acn-endereco-aviso') || { innerText: '' }).innerText.replace(/\s+/g, ' ').trim(),
+    }), JF);
+    await cenario('C118 Garantia sem a aba SAC: o link da ficha em que a pessoa é copiada abre só a Garantia; a ficha de outra pessoa responde "não encontrei"; o SAC não entra no menu', { usuario: SEM_SAC, simular: simSemSac }, async ({ page }) => {
+      await abrirComoLinkColado(page, '#/sac/ficha/' + FC.id);
+      await esperarSistema(page); await esperarFicha(page); await espera(1200);
+      let e = await estadoSemSac(page); let al = await A(page);
+      confere('a ficha em que a pessoa é copiada abre pelo link, sem a aba SAC', e.janelas === 1 && e.hash === '#/sac/ficha/' + FC.id && !/não tem acesso/i.test(e.aviso), JSON.stringify({ j: e.janelas, h: e.hash, av: e.aviso }));
+      confere('a tela mostra SÓ a Garantia (sem as outras abas do SAC)', e.soGarantia, JSON.stringify({ so: e.soGarantia }));
+      confere('o SAC não aparece no menu dela', !e.menu.some(x => /^SAC$/i.test(x)), JSON.stringify(e.menu));
+      confere('nenhum aviso de erro', al.length === 0, JSON.stringify(al));
+      await LA(page);
+      await abrirComoLinkColado(page, '#/sac/ficha/' + FO.id);
+      await esperarSistema(page); await esperarDesfechoF(page); await espera(1000);
+      e = await estadoSemSac(page); al = await A(page);
+      confere('a ficha de outra pessoa não abre e diz "não encontrei, ou você não tem acesso"', e.janelas === 0 && al.includes(MSG_F_NAO_ACHOU), JSON.stringify({ j: e.janelas, al }));
+    });
+    await cenario('C118b Garantia sem a aba SAC: as outras telas que a pessoa não tem seguem barradas (a abertura do SAC não alarga mais nada)', { usuario: SEM_SAC, simular: simSemSac }, async ({ page }) => {
+      await abrirComoLinkColado(page, '#/compras');
+      await esperarSistema(page); await espera(2500);
+      const e = await estadoSemSac(page);
+      confere('o link de uma tela que ela não tem mostra "sem acesso"', /não tem acesso/i.test(e.aviso), JSON.stringify(e));
     });
   }
 

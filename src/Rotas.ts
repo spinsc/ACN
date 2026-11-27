@@ -58,7 +58,7 @@ export type TipoDeRegistro = 'op' | 'viagem' | 'demanda';
 const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem', demanda: 'demanda' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
-export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa' | 'ofi' | 'vistoria' | 'projeto';   // `projeto` = a demanda do Desenvolvimento da Engenharia, numa janela própria (Fase 6, 26/11/2026); `vistoria` = a ficha (janela VER) da vistoria de pátio (Fase 6, 26/11/2026); `ofi` = a ordem de fabricação interna (Fase 6, 26/11/2026; mora nas filas de Serralheria, Chicotes e Laboratório); `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
+export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa' | 'ofi' | 'vistoria' | 'projeto' | 'preco';   // `preco` = o detalhe de uma formação em Preços Formados (Fase 6, 26/11/2026); `projeto` = a demanda do Desenvolvimento da Engenharia, numa janela própria (Fase 6, 26/11/2026); `vistoria` = a ficha (janela VER) da vistoria de pátio (Fase 6, 26/11/2026); `ofi` = a ordem de fabricação interna (Fase 6, 26/11/2026; mora nas filas de Serralheria, Chicotes e Laboratório); `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
 
 /** Quais registros cada tela conhece (id interno da tela → as palavras que valem depois do nome dela). Tela que não está aqui não tem endereço de registro. */
 export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistroDaTela[]>> = {
@@ -67,6 +67,7 @@ export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistr
   compras: ['pedido'],
   sac: ['os', 'ficha'],   // a ficha da Garantia mora na aba Garantia do SAC (a palavra não pode ser `garantia`: é o nome da aba)
   terceiros: ['servico'],
+  formacao_precos: ['preco'],   // o detalhe de uma formação na aba Preços Formados; a palavra não é `formacao` nem `precos-formados` porque esses são os nomes das abas
   engenharia: ['projeto', 'tarefa'],   // `projeto` = a demanda do Desenvolvimento (aba Desenvolvimento; a palavra não é `desenvolvimento` porque esse é o nome da aba); `tarefa` = a tarefa da Engenharia (aba Horas/Tarefas, janela de leitura; a aba filha é `tarefas`, no plural)
   vistorias: ['vistoria'],   // a ficha da vistoria de pátio (janela VER); o retorno e o formulário de saída seguem pelo recado (decidido com o usuário em 26/11/2026)
   serralheria: ['ofi'],   // a OFI (ordem de fabricação interna) mora na fila de cada setor que fabrica: o endereço é o do setor DESTINO dela, e a palavra não colide com as abas (demandas, relatorios)
@@ -226,7 +227,7 @@ export const ABAS_DAS_TELAS: Readonly<Record<string, QuadroDeAbas>> = {
   // Logística (26/11/2026, depois da V4d): a aba de sempre é o Histórico / Novo Registro (`#/logistica`); as outras três ganham endereço.
   logistica: { padrao: 'historico', abas: ['recebimento', 'historico', 'relatorio', 'fretes'] },
   // Fiscal (26/11/2026, preparação do módulo fiscal): antes era uma página só; agora tem o Faturamento de sempre (`#/fiscal`), os Cadastros fiscais (com quatro visões de dentro) e o Conferidor de XML.
-  fiscal: { padrao: 'faturamento', abas: ['faturamento', 'cadastros', 'conferidor'], filhas: { cadastros: { padrao: 'empresas', abas: ['empresas', 'transportadoras', 'clientes', 'itens'] } } },
+  fiscal: { padrao: 'faturamento', abas: ['faturamento', 'arquivo', 'cadastros', 'conferidor'], filhas: { arquivo: { padrao: 'notas', abas: ['notas', 'numeracao', 'sem_xml'] }, cadastros: { padrao: 'empresas', abas: ['empresas', 'transportadoras', 'clientes', 'itens'] } } },
   terceiros: { padrao: 'quadro', abas: ['quadro', 'agenda', 'lista', 'relatorio', 'ordens', 'prestadores', 'tipos', 'modelo'] },
 };
 
@@ -388,6 +389,8 @@ const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string | readonly st
   desenvolvimento: { tela: 'engenharia', tipo: 'projeto' },
   // Fase 6 (26/11/2026): a Menção da tarefa da Engenharia (participante marcado) e a data dela no Calendário trazem o id da tarefa
   tarefa_engenharia: { tela: 'engenharia', tipo: 'tarefa' },
+  // Fase 6 (26/11/2026): o vínculo "Formação de preço" de uma demanda avulsa traz o id da formação
+  formacao: { tela: 'formacao_precos', tipo: 'preco' },
 };
 
 function telasDoAlvo(tela: string | readonly string[]): readonly string[] { return typeof tela === 'string' ? [tela] : tela; }

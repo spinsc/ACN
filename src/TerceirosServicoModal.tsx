@@ -5,6 +5,7 @@
 // Nada aqui grava por conta própria o que muda de coluna: agendar, realizar, voltar e cancelar sobem para a tela (`aoMover`), que abre a janela certa e confirma com o banco.
 // Quem grava de verdade é o banco, pelas funções `terceiros_*` (TerceirosServicos.ts); a tela só deixa de oferecer o que ele recusaria (regras em TerceirosFluxo.ts).
 // T5 (23/11/2026): as duas janelas ganharam a caixa do pagamento ao prestador (TerceirosPagamentoTela.tsx) e a da saída da vistoria de pátio (TerceirosVistoriaTela.tsx).
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { mdiClose, mdiPencilOutline, mdiPaperclip, mdiTrashCanOutline, mdiOpenInNew, mdiPlus, mdiHistory, mdiLinkVariant, mdiPrinterOutline, mdiClipboardTextOutline, mdiLink } from '@mdi/js';
 import { copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 5 do plano de endereços): "Copiar link" do serviço
@@ -291,7 +292,7 @@ export function ModalDoServico({ servico, mapaTipos, mapaPrestadores, prestadore
                     {s.anexos.map((a: any) => (
                       <li key={a.caminho}>
                         <Icone path={mdiPaperclip} size={14} />
-                        <a className="acn-terc-anexo-nome" href={enderecoDoAnexo(a.caminho)} target="_blank" rel="noopener noreferrer">{a.nome}</a>
+                        <LinkDeArquivo className="acn-terc-anexo-nome" valor={enderecoDoAnexo(a.caminho)}>{a.nome}</LinkDeArquivo>
                         <span className="acn-fraco">{[tamanhoLegivel(a.tamanho), a.por ? `por ${a.por}` : ''].filter(Boolean).join(' · ')}</span>
                         {podeEditar && <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Tirar o anexo ${a.nome}`} disabled={ocupado} onClick={() => tirarAnexo(a)} />}
                       </li>

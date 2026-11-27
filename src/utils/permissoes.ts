@@ -262,3 +262,15 @@ export function podeEditarAtualizacao(usuarioAtual: any, autorNome?: any, autorE
   const autor = [autorNome, autorEmail].map(v => String(v || '').trim().toLowerCase()).filter(Boolean);
   return eu.some(v => autor.includes(v));
 }
+
+/**
+ * G5 (20/10/2026): quem é copiado numa garantia recebe o aviso mesmo sem ter a aba SAC liberada, e o link do aviso abre SÓ a Garantia dentro da tela SAC (as outras abas ficam fechadas).
+ * Voltou a valer em 26/11/2026: desde a Fase 1 do plano de endereços toda troca de tela confere a permissão da tela, e o aviso dessa pessoa caía em "sem acesso". A casca (DashboardTab) usa esta regra
+ * para deixar a tela SAC abrir para ela pelo endereço, mas NÃO a põe no menu; quem decide o que ela vê lá dentro é o SacTab (só a Garantia) e a regra de cada ficha (quem abriu, o responsável, os copiados).
+ * Mesma regra de visibilidade do menu (DashboardTab.isVisible): Admin e lista de abas vazia (= todas) têm a aba.
+ */
+export const semAcessoAoSac = (u: any) => {
+  if (!u || u.perfil === 'Admin') return false;
+  const abas = u.abas_permitidas;
+  return Array.isArray(abas) && abas.length > 0 && !abas.includes('sac');
+};

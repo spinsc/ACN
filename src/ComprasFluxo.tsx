@@ -26,6 +26,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { horasUteis } from './utils/horasUteis';
 import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import { Botao, Selo, Faixa } from './Interface';
@@ -565,11 +567,11 @@ export async function enviarAnexosCompra(pedidoId: string, arquivos: File[], use
     if (f.size > 20 * 1024 * 1024) { erros.push(`${f.name}: maior que 20 MB`); continue; }
     const nomeLimpo = f.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `compras-anexos/${pedidoId}/${Date.now()}_${nomeLimpo}`;
-    const { error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: f.type || undefined });
-    if (error) { erros.push(`${f.name}: ${explicarErroDeEnvio(error, f)}`); continue; }
-    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+    // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+    const { valor, erro: erroEnvio } = await enviarArquivoPrivado(path, f, f.type || undefined);
+    if (erroEnvio || !valor) { erros.push(`${f.name}: ${explicarErroDeEnvio(erroEnvio, f)}`); continue; }
     const { error: erroReg } = await supabase.from('pcp_pedidos_compra_anexos').insert([{
-      pedido_id: pedidoId, nome: f.name, url: pub?.publicUrl || path, tipo: f.type || null, tamanho: f.size,
+      pedido_id: pedidoId, nome: f.name, url: valor, tipo: f.type || null, tamanho: f.size,
       criado_por: user?.email || null, criado_por_nome: user?.nome || null,
     }]);
     if (erroReg) { erros.push(`${f.name}: o arquivo subiu, mas não foi registrado na requisição (${erroReg.message})`); continue; }   // 7.58: aparecia como enviado
@@ -642,7 +644,7 @@ export function AnexosCompra({ pedido, currentUser, podeEditar }: any) {
         : anexos.length === 0 ? <div className="acn-ajuda">Nenhum anexo.</div>
         : anexos.map(a => (
           <div key={a.id} className="acn-flx-anexo">
-            <a href={a.url} target="_blank" rel="noreferrer" className="acn-flx-anexo-nome">📎 {a.nome}</a>
+            <LinkDeArquivo valor={a.url} className="acn-flx-anexo-nome">📎 {a.nome}</LinkDeArquivo>
             <span className="acn-ajuda">{a.criado_por_nome || ''} · {fmtDT(a.criado_em)}</span>
             {podeEditar && <Botao pequeno variante="discreto" icone={mdiTrashCanOutline} aria-label={`Remover ${a.nome}`} title="Remover" onClick={() => remover(a)} />}
           </div>
