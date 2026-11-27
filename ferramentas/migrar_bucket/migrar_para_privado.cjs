@@ -1,7 +1,7 @@
 // Plano do bucket privado (onda 5b e fatias B1 a B4, 26/11/2026): copia arquivos do bucket PÚBLICO `acn-media` para o PRIVADO `acn-privado` (mesmo caminho)
 // e, só no fim e só se o usuário mandar, apaga os originais públicos. LEIA o LEIA-ME.md ao lado antes de rodar.
 //
-//   node migrar_para_privado.cjs [--fatia=5b|b1|b2|b3|b4]            → ensaio: conta por pasta o que há e o que já foi copiado (não muda nada)
+//   node migrar_para_privado.cjs [--fatia=5b|b1|b2|b3|b4|b4b]          → ensaio: conta por pasta o que há e o que já foi copiado (não muda nada)
 //   node migrar_para_privado.cjs --fatia=b1 --copiar                  → copia o que falta (os originais ficam)
 //   node migrar_para_privado.cjs --fatia=b1 --apagar --tela-publicada → apaga do público o que JÁ está no privado com o mesmo tamanho
 //   (--pastas=a,b,c no lugar de --fatia= escolhe pastas à mão; vale a pasta inteira)
@@ -34,6 +34,9 @@ const FATIAS = {
   // `crm-docs` é o arquivo dos documentos das Licitações (descoberto na B0). As imagens coladas em texto (/area-livre/ com 279 arquivos, /nota/ com 106)
   // ficam de fora: o endereço está dentro do HTML e a tela não as lê pelo ajudante (fatia B4b). 1,5 GB: rode fora do horário.
   b4: ['licitacoes', 'crm-docs'].map((pasta) => ({ pasta, so: SEM_IMAGEM_DE_TEXTO })),
+  // B4b (26/11/2026): SÓ as imagens coladas em texto (/area-livre/ e /nota/) das pastas que já são privadas: 387 arquivos, 40 MB (279 de licitacoes, 106 de crm-docs, 2 de pcp-cotacoes).
+  // Rode depois que a tela da B4b estiver publicada (a tela nova lê pela marca e, enquanto a cópia não foi feita, cai no endereço velho).
+  b4b: ['licitacoes', 'crm-docs', 'pcp-cotacoes'].map((pasta) => ({ pasta, so: /\/(area-livre|nota)\// })),
 };
 
 const arg = (nome) => { const a = process.argv.find((x) => x.startsWith('--' + nome + '=')); return a ? a.slice(nome.length + 3) : null; };

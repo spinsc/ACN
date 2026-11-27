@@ -23,7 +23,6 @@ for (const f of arquivos) {
   let mm;
   while ((mm = re2.exec(t))) {
     const antes = t.slice(Math.max(0, mm.index - 700), mm.index);
-    if (/area-livre/.test(antes.slice(-300))) continue;
     for (const p of PASTAS_B1) if (antes.slice(-400).includes(p + '/')) { usosPublicos++; console.log('  achado:', f, '→', p); }
   }
   // pastas dinâmicas: logística e viagens
@@ -117,7 +116,7 @@ const PUBLICO = 'https://qgemelnuqdilnggxmrdw.supabase.co/storage/v1/object/publ
   ok(/token=T/.test(r.novoAssinado || ''), 'valor novo abre por endereço assinado');
   ok(/acn-privado\/compras-anexos\/PC1\/ja_copiado\.pdf\?token=/.test(r.antigoCopiado || ''), 'endereço antigo já copiado abre pelo privado (' + r.antigoCopiado + ')');
   ok(r.antigoSemCopia === PUBLICO + 'pcp-nf-fornecedor/1_x.pdf', 'endereço antigo ainda sem cópia cai no endereço velho (' + r.antigoSemCopia + ')');
-  ok(r.areaLivre === PUBLICO + 'pcp-cotacoes/c1/area-livre/1.png' && !log.assinados.some((p) => p.includes('area-livre')), 'imagem de área livre fica no público, sem pedir endereço assinado');
+  ok(r.areaLivre === PUBLICO + 'pcp-cotacoes/c1/area-livre/1.png' && log.assinados.includes('pcp-cotacoes/c1/area-livre/1.png'), 'imagem de área livre (B4b) pede o endereço assinado e, sem cópia, cai no velho');
   ok(r.enderecoTerceiros === PUBLICO + 'terceiros/pasta-1/x.pdf', 'o endereço montado para terceiros é o antigo (o link tenta o privado antes)');
 
   await browser.close();

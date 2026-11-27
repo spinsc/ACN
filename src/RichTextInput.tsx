@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom';
 import { useUsers } from './MencaoTextarea';
 import { combinaBusca } from './SearchUtils';
 import { Botao } from './Interface';
+import { marcaDeImagemValida } from './ArquivoPrivadoRegras';
 import Icone from './Icone';
 import { mdiAccountOutline, mdiPalette } from '@mdi/js';
 
@@ -63,7 +64,9 @@ function limparHtml(html: string): string {
       for (const atr of Array.from(el.attributes)) {
         const nome = atr.name.toLowerCase();
         const valor = (atr.value || '').trim();
-        const permitido = (ATRIBUTOS_POR_MARCA[marca] || []).includes(nome) || ATRIBUTOS_DE_TODAS.includes(nome);
+        // 26/11/2026 (bucket privado, B4b): a imagem de texto guarda `data-arquivo="privado:<caminho>"` no lugar do endereço; só passa a marca de imagem de texto (não aponta para outro arquivo privado)
+        const permitido = (ATRIBUTOS_POR_MARCA[marca] || []).includes(nome) || ATRIBUTOS_DE_TODAS.includes(nome)
+          || (marca === 'IMG' && nome === 'data-arquivo' && marcaDeImagemValida(valor));
         if (!permitido
           || (nome === 'href' && !/^(https?:|mailto:|#|\/)/i.test(valor))
           || (nome === 'src' && !/^(https?:|data:image\/(png|jpe?g|gif|webp);)/i.test(valor))

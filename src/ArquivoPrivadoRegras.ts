@@ -18,17 +18,17 @@ const PASTAS_PRIVADAS = [
   'centro-custo-despesas', 'financeiro-tarefas', 'viagens', 'terceiros', 'contratos-padrao',
   'opl-anexos', 'ops-em-criacao', 'demandas-avulsas', 'demandas-cotacoes', 'desenvolvimento', 'engenharia-tarefas', 'analise', 'vistorias', 'sac',
   'crm-anexos',   // B3 (26/11/2026): documentos e imagens anexados ao card do CRM
-  'licitacoes', 'crm-docs',   // B4 (26/11/2026): arquivos das licitações (`crm-docs` é o que se anexa à licitação aberta pelo CRM); a imagem colada em texto (`/area-livre/`, `/nota/`) segue pública, ver B4b
+  'licitacoes', 'crm-docs',   // B4 (26/11/2026): arquivos das licitações (`crm-docs` é o que se anexa à licitação aberta pelo CRM)
+  // B4b (26/11/2026): a imagem colada em texto formatado (`/area-livre/` e `/nota/`) também é privada; quem desenha o texto usa ImagensDeTexto.tsx
 ];
 
 /**
  * Pastas que moram no bucket privado (a `sac` inteira: assinaturas, fotos e arquivos das OS).
- * Exceção de propósito: imagem colada dentro de um texto formatado (`…/area-livre/…` e `…/nota/…`) fica pública, porque o endereço está dentro do HTML do texto,
- * onde um <img> não pode usar o ajudante (plano do bucket privado, cuidado 6; resolve-se na B4 com um componente próprio).
+ * Desde a B4b (26/11/2026) não há mais exceção: a imagem colada dentro de um texto formatado (`…/area-livre/…` e `…/nota/…`) também é privada. O endereço dela está dentro
+ * do HTML do texto, onde um <img> não pode usar o ajudante; quem desenha o texto usa ImagensDeTexto.tsx (marca `data-arquivo` no lugar do endereço).
  */
 export function caminhoEhPrivado(caminho: string | null | undefined): boolean {
   if (!caminho) return false;
-  if (/\/(area-livre|nota)\//.test(caminho)) return false;
   if (/^produtos\/[^/]+\/projeto\//.test(caminho)) return true;   // arquivos de projeto do produto; foto e catálogo seguem públicos (vão na proposta ao cliente)
   const pasta = caminho.split('/')[0];
   return caminho.includes('/') && PASTAS_PRIVADAS.includes(pasta);
@@ -55,4 +55,14 @@ export function caminhoDoValor(valor: string | null | undefined): { caminho: str
   let caminho = v.slice(i + TRECHO_PUBLICO.length).split('?')[0].split('#')[0];
   try { caminho = decodeURIComponent(caminho); } catch { /* endereço torto: fica como veio */ }
   return caminhoEhPrivado(caminho) ? { caminho, antigo: true } : null;
+}
+
+/**
+ * A marca que a imagem de um texto formatado guarda no lugar do endereço (`<img data-arquivo="privado:<caminho>">`, B4b, 26/11/2026).
+ * Só vale para o caminho de uma imagem de texto (`…/area-livre/<nome>.<ext>` ou `…/nota/<nome>.<ext>`), com letras, números, hífen e sublinhado: o texto vem de quem edita,
+ * então a marca nunca pode apontar para outro arquivo privado (anexo de chat, contrato…) nem sair da pasta (`..`).
+ */
+const MARCA_DE_IMAGEM = /^privado:[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/(?:area-livre|nota)\/[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,8}$/;
+export function marcaDeImagemValida(v: string | null | undefined): boolean {
+  return typeof v === 'string' && MARCA_DE_IMAGEM.test(v.trim());
 }
