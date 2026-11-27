@@ -119,12 +119,17 @@ async function sb(path) {
   const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, { headers });
   return r.json();
 }
-async function sbPost(table, body) {
-  const r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
-    method:'POST', headers: { ...headers, 'Prefer':'return=minimal' },
-    body: JSON.stringify(body)
-  });
-  return r.ok;
+// 26/11/2026 (Etapa 17, onda 5a): a chave pública não lê mais as tabelas dos veículos, serviços e chamados nem insere chamado direto; a página pede tudo a funções
+// do banco. O PIN da área restrita é conferido no servidor (5 erros bloqueiam o veículo por 15 min) e só então os serviços e os chamados chegam.
+async function sbRpc(funcao, args) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + funcao, { method:'POST', headers, body: JSON.stringify(args) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) { return null; }
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function fmtData(d) {
@@ -225,8 +230,8 @@ function render() {
               ? '<p style="font-size:10px;color:#9ca3af;text-align:center;padding:12px">Nenhum serviço cadastrado.</p>'
               : SERVICOS.map(s => `
                 <div class="servico-item">
-                  <div class="servico-nome">${s.item_servico}${s.categoria ? `<span class="servico-cat">${s.categoria}</span>` : ''}</div>
-                  ${s.descricao_tecnica ? `<div class="servico-desc">${s.descricao_tecnica}</div>` : ''}
+                  <div class="servico-nome">${esc(s.item_servico)}${s.categoria ? `<span class="servico-cat">${esc(s.categoria)}</span>` : ''}</div>
+                  ${s.descricao_tecnica ? `<div class="servico-desc">${esc(s.descricao_tecnica)}</div>` : ''}
                 </div>`).join('')}
           </div>
         </div>
@@ -238,11 +243,11 @@ function render() {
               : CHAMADOS.map(c => `
                 <div class="chamado-item">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                    <strong style="font-size:10px">${c.nome_solicitante || 'Anônimo'}</strong>
-                    <span style="font-size:8px;font-weight:700;color:${c.status==='Concluído'?'#16a34a':c.status==='Em Atendimento'?'#92400e':'#dc2626'}">${c.status}</span>
+                    <strong style="font-size:10px">${esc(c.nome_solicitante || 'Anônimo')}</strong>
+                    <span style="font-size:8px;font-weight:700;color:${c.status==='Concluído'?'#16a34a':c.status==='Em Atendimento'?'#92400e':'#dc2626'}">${esc(c.status)}</span>
                   </div>
-                  ${c.contato_telefone ? `<div style="font-size:9px;color:#64748b">${c.contato_telefone}</div>` : ''}
-                  ${c.descricao_defeito ? `<div style="font-size:9px;color:#475569;margin-top:3px">${c.descricao_defeito.slice(0,120)}${c.descricao_defeito.length>120?'...':''}</div>` : ''}
+                  ${c.contato_telefone ? `<div style="font-size:9px;color:#64748b">${esc(c.contato_telefone)}</div>` : ''}
+                  ${c.descricao_defeito ? `<div style="font-size:9px;color:#475569;margin-top:3px">${esc(c.descricao_defeito.slice(0,120))}${c.descricao_defeito.length>120?'...':''}</div>` : ''}
                   <div style="font-size:8px;color:#9ca3af;margin-top:4px">${new Date(c.created_at).toLocaleString('pt-BR')}</div>
                 </div>`).join('')}
           </div>
@@ -272,18 +277,28 @@ function abrirChamadoModal() {
 }
 
 // ── PIN ───────────────────────────────────────────────────────────────────────
-function verificarPin() {
+async function verificarPin() {
   const inp = document.getElementById('inp-pin').value.trim();
-  const pinV = VEICULO.pin_acesso || '123456';
-  const pinG = CONFIG['nfc_pin_global'] || '123456';
-  if (inp === pinV || inp === pinG) {
+  const erro = document.getElementById('pin-erro');
+  erro.textContent = 'Conferindo…';
+  const r = await sbRpc('nfc_area_restrita', { p_chassi: CHASSI, p_pin: inp });
+  if (r && r.ok) {
+    SERVICOS = r.servicos || [];
+    CHAMADOS = r.chamados || [];
+    VEICULO.opl_numero = r.opl_numero || null;
     fecharModal('modal-pin');
+    render();
     document.getElementById('area-restrita').style.display = 'block';
     document.getElementById('inp-pin').value = '';
-    document.getElementById('pin-erro').textContent = '';
-  } else {
-    document.getElementById('pin-erro').textContent = '❌ PIN incorreto. Tente novamente.';
+    erro.textContent = '';
+  } else if (r && r.motivo === 'bloqueado') {
+    erro.textContent = '🔒 Muitas tentativas erradas. Tente de novo em 15 minutos.';
     document.getElementById('inp-pin').value = '';
+  } else if (r && r.motivo === 'pin') {
+    erro.textContent = '❌ PIN incorreto. Restam ' + r.restantes + ' tentativa' + (r.restantes === 1 ? '' : 's') + '.';
+    document.getElementById('inp-pin').value = '';
+  } else {
+    erro.textContent = '⚠️ Não foi possível conferir o PIN agora. Verifique a conexão e tente de novo.';
   }
 }
 document.getElementById('inp-pin').addEventListener('keydown', e => {
@@ -300,19 +315,8 @@ async function enviarChamado() {
   const btn = document.getElementById('btn-enviar-chamado');
   btn.disabled = true;
   btn.textContent = 'Enviando...';
-  const ok = await sbPost('chamados_suporte', {
-    veiculo_id:       VEICULO.id,
-    chassi:           VEICULO.chassi,
-    placa:            VEICULO.placa || null,
-    modelo:           VEICULO.modelo || null,
-    orgao_cliente:    VEICULO.orgao_cliente || null,
-    nome_solicitante: nome,
-    contato_telefone: tel,
-    descricao_defeito: desc,
-    status:           'Aberto',
-    created_at:       new Date().toISOString(),
-    atualizado_em:    new Date().toISOString(),
-  });
+  const r = await sbRpc('portal_abrir_chamado', { p_token: null, p_chassi: CHASSI, p_nome: nome, p_telefone: tel, p_descricao: desc });
+  const ok = !!(r && r.ok);
   btn.disabled = false;
   btn.textContent = '📤 Enviar Chamado';
   if (ok) {
@@ -322,7 +326,7 @@ async function enviarChamado() {
     document.getElementById('inp-desc').value = '';
     alert('✅ Chamado enviado com sucesso!\nNossa equipe entrará em contato em breve.');
   } else {
-    alert('❌ Erro ao enviar chamado. Tente novamente.');
+    alert('❌ ' + ((r && r.erro) || 'Erro ao enviar chamado. Tente novamente.'));
   }
 }
 
@@ -336,31 +340,25 @@ async function init() {
 
   try {
     // Carregar configurações + veículo em paralelo
-    const [cfgData, veicData] = await Promise.all([
-      sb('configuracoes_sistema?chave=in.(nfc_endereco_maps,nfc_pin_global,nfc_nome_empresa,nfc_logo_url)&select=chave,valor'),
-      sb(`veiculos_nfc?chassi=eq.${encodeURIComponent(CHASSI)}&ativo=eq.true&select=*&limit=1`),
+    const [cfgData, dadosV] = await Promise.all([
+      sb('configuracoes_sistema?chave=in.(nfc_endereco_maps,nfc_nome_empresa,nfc_logo_url)&select=chave,valor'),
+      sbRpc('nfc_veiculo_por_chassi', { p_chassi: CHASSI }),
     ]);
 
     if (Array.isArray(cfgData)) {
       cfgData.forEach(r => { CONFIG[r.chave] = r.valor; });
     }
 
-    if (!veicData || veicData.length === 0) {
+    if (!dadosV || !dadosV.veiculo) {
       document.getElementById('app').innerHTML =
-        `<div class="error-card">🚗 Veículo não encontrado.<br><small>Chassi: ${CHASSI}</small></div>`;
+        `<div class="error-card">🚗 Veículo não encontrado.<br><small>Chassi: ${esc(CHASSI)}</small></div>`;
       return;
     }
 
-    VEICULO = veicData[0];
-
-    // Carregar serviços e chamados
-    const [servData, chamData] = await Promise.all([
-      sb(`servicos_executados_nfc?veiculo_id=eq.${VEICULO.id}&order=ordem,criado_em`),
-      sb(`chamados_suporte?veiculo_id=eq.${VEICULO.id}&order=created_at.desc&limit=10`),
-    ]);
-
-    SERVICOS = servData || [];
-    CHAMADOS = chamData || [];
+    VEICULO = dadosV.veiculo;
+    // serviços e chamados só chegam depois do PIN (função nfc_area_restrita)
+    SERVICOS = [];
+    CHAMADOS = [];
 
     render();
   } catch (err) {

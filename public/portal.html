@@ -381,8 +381,19 @@
     return r;
   }
 
+  // 26/11/2026 (Etapa 17, onda 5a): a chave pública não lê mais as tabelas dos veículos e dos chamados; o portal pede tudo a funções do banco,
+  // que só entregam o veículo do link (token) e nunca o PIN, o token dos outros nem o telefone de quem abriu um chamado.
+  async function supaRpc(funcao, args) {
+    try {
+      const r = await fetch(SUPA_URL + '/rest/v1/rpc/' + funcao, { method: 'POST', headers: HDR, body: JSON.stringify(args) });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (e) { return null; }
+  }
+
   // ── Estado global ─────────────────────────────────────────
   let VEICULO  = null;
+  let TOKEN    = null;
   let CONFIG   = {};
 
   // ── Helpers ───────────────────────────────────────────────
@@ -441,10 +452,11 @@
       img.style.display = '';
     }
 
-    // Veículo por token
-    const veiculos = await supa(`veiculos_nfc?portal_token=eq.${encodeURIComponent(token)}&ativo=eq.true&limit=1`);
-    if (!veiculos || veiculos.length === 0) { mostrarErro(); return; }
-    VEICULO = veiculos[0];
+    // Veículo e chamados pelo token
+    const dados = await supaRpc('portal_veiculo_por_token', { p_token: token });
+    if (!dados || !dados.veiculo) { mostrarErro(); return; }
+    VEICULO = dados.veiculo;
+    TOKEN = token;
 
     // Preencher UI
     document.getElementById('v-modelo').textContent  = VEICULO.modelo    || 'Veículo sem descrição';
@@ -476,17 +488,19 @@
       (VEICULO.modelo || 'Veículo') + ' · Chassi: ' + VEICULO.chassi;
 
     // Chamados
-    await carregarChamados();
+    await carregarChamados(dados.chamados);
 
     // Mostrar conteúdo
     document.getElementById('loading').style.display  = 'none';
     document.getElementById('conteudo').style.display = '';
   }
 
-  async function carregarChamados() {
-    const dados = await supa(
-      `chamados_suporte?veiculo_id=eq.${VEICULO.id}&order=created_at.desc&limit=20`
-    );
+  async function carregarChamados(recebidos) {
+    let dados = recebidos;
+    if (!dados) {
+      const d = await supaRpc('portal_veiculo_por_token', { p_token: TOKEN });
+      dados = d && d.chamados ? d.chamados : [];
+    }
     const lista = document.getElementById('lista-chamados');
 
     if (!dados || dados.length === 0) {
@@ -559,29 +573,17 @@
     btn.textContent = 'Enviando...';
     msg.innerHTML = '';
 
-    const payload = {
-      veiculo_id:       VEICULO.id,
-      chassi:           VEICULO.chassi,
-      placa:            VEICULO.placa         || null,
-      modelo:           VEICULO.modelo        || null,
-      orgao_cliente:    VEICULO.orgao_cliente  || null,
-      nome_solicitante: nome,
-      contato_telefone: tel,
-      descricao_defeito: desc,
-      status: 'Aberto'
-    };
+    // o servidor confere os campos, copia placa, modelo e órgão do veículo e fixa o status (função do banco)
+    const r = await supaRpc('portal_abrir_chamado', { p_token: TOKEN, p_chassi: null, p_nome: nome, p_telefone: tel, p_descricao: desc });
 
-    const r = await supaPost('chamados_suporte', payload);
-
-    if (r.ok || r.status === 201) {
+    if (r && r.ok) {
       msg.innerHTML = '<div class="msg-ok">✅ Chamado enviado! Nossa equipe entrará em contato em breve.</div>';
       btn.textContent = 'Enviado ✅';
       // Atualizar lista de chamados após 1.5s e fechar modal após 3s
       setTimeout(() => carregarChamados(), 1500);
       setTimeout(() => { fecharModal(); btn.disabled = false; btn.textContent = 'Enviar Solicitação'; }, 3000);
     } else {
-      const errBody = await r.text().catch(() => '');
-      msg.innerHTML = `<div class="msg-err">❌ Erro ao enviar. Tente novamente ou entre em contato por telefone.</div>`;
+      msg.innerHTML = '<div class="msg-err">❌ ' + esc((r && r.erro) || 'Erro ao enviar. Tente novamente ou entre em contato por telefone.') + '</div>';
       btn.disabled = false;
       btn.textContent = 'Enviar Solicitação';
     }

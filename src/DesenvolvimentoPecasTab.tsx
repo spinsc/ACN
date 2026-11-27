@@ -33,7 +33,8 @@ import { PainelDaEngenharia, SelosDeAlerta, TabelaDeCustos, passaNoAlerta } from
 import { alertasDaDemanda } from './DesenvolvimentoModelo';
 import { hojeISO } from './Interface';
 import { PainelGuiado, FaixaDeTipo, RessalvasAbertas, HistoricoDaDemanda, MenuDaDemanda } from './DesenvolvimentoPorta';
-import { mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh, mdiAccountWrenchOutline } from '@mdi/js';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): a demanda aberta em janela tem endereço próprio
+import { mdiLink, mdiOpenInNew, mdiCogOutline, mdiPlus, mdiPaperclip, mdiContentSaveOutline, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiMagnify, mdiRefresh, mdiAccountWrenchOutline } from '@mdi/js';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, ligada ao projeto (corte e dobra com o desenho anexado, pintura, o que o projeto pedir); importação preguiçosa que não divide o pacote (ver o comentário do AcnTabShared)
 const SolicitarServicoDeTerceiro = lazy(() => import('./TerceirosSolicitar').then(m => ({ default: m.SolicitarServicoDeTerceiro })));
 
@@ -622,28 +623,19 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
 
   useEffect(() => { carregar(); }, []);
 
-  // 12/11/2026: o aviso de quem foi marcado na área livre (caixa de Menções) abre a demanda. Como nas outras abas, o pedido vem pelo global
-  // `__acnDeepLink` (a aba pode montar depois do clique) e pelo evento `acn:abrir-registro`; os filtros saem do caminho para o cartão aparecer
-  // e, com a lista lida, a tela rola até ele.
-  const [focoId, setFocoId] = useState<string | null>(null);
-  useEffect(() => {
-    const pegar = () => {
-      const pend = (window as any).__acnDeepLink;
-      if (!pend || pend.contexto !== 'desenvolvimento' || !pend.contextoId) return;
-      (window as any).__acnDeepLink = null;
-      setFiltro('todas'); setBusca(''); setAlerta('todos');
-      setFocoId(String(pend.contextoId));
-    };
-    pegar();
-    window.addEventListener('acn:abrir-registro', pegar);
-    return () => window.removeEventListener('acn:abrir-registro', pegar);
-  }, []);
-  useEffect(() => {
-    if (!focoId || demandas === null) return;
-    const el = document.getElementById('dev-demanda-' + focoId);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setFocoId(null);
-  }, [focoId, demandas]);
+  // 26/11/2026 (plano de endereços e rotas, Fase 6): a demanda abre numa JANELA própria, `#/engenharia/projeto/<código>` (escolha do usuário: antes a Menção só rolava até o cartão da lista e a Garantia e a busca
+  // geral só preenchiam a busca). O botão "Abrir em janela" do cartão, a Menção da área livre (12/11/2026), o "Abrir o projeto" da Garantia, a busca geral, a data de uma etapa no Calendário, o link colado, o F5, o Voltar
+  // e o Avançar abrem a mesma janela. A janela mostra o cartão da lista (que continua igual) e, com a lista lida, acompanha as gravações; a leitura pelo código não espera a lista.
+  const [abertaId, setAbertaId] = useState<string | null>(null);
+  const [lida, setLida] = useState<any>(null);
+  useRegistroNoEndereco({
+    tela: 'engenharia', tipo: 'projeto', rotulo: 'a demanda de desenvolvimento',
+    aberto: abertaId,
+    ler: (chave) => lerPorCodigo(supabase.from('engenharia_desenvolvimento').select('*').eq('id', chave).maybeSingle()),
+    mostrar: (d) => { setLida(d); setAbertaId(String(d.id)); },
+    fechar: () => setAbertaId(null),
+  });
+  const aberta = abertaId ? ((demandas || []).find((x: any) => String(x.id) === abertaId) || (lida && String(lida.id) === abertaId ? lida : null)) : null;
 
   const lista = demandas || [];
   const casaBusca = (d: any) => combinaBusca([d.titulo, d.descricao, d.numero_opl, d.cliente_nome, d.veiculo_nome], busca);
@@ -707,9 +699,29 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
       ) : (
         filtradas.map(d => (
           <div key={d.id} id={'dev-demanda-' + d.id}>
+            <div className="acn-dev-acoes acn-dev-abrir">
+              <Botao pequeno variante="discreto" icone={mdiOpenInNew} title="Abrir a demanda numa janela, com endereço próprio para copiar o link" onClick={() => setAbertaId(String(d.id))}>Abrir em janela</Botao>
+            </div>
             <DemandaDevCard demanda={d} onAtualizado={carregar} currentUser={currentUser} />
           </div>
         ))
+      )}
+
+      {aberta && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAbertaId(null); }}>
+          <div className="modal-box acn-modal-cadastro acn-dev-jan" role="dialog" aria-label="Demanda de desenvolvimento">
+            <div className="acn-modal-cab">
+              <span className="modal-title">{aberta.numero_opl ? 'OP ' + aberta.numero_opl + ' — ' : ''}{aberta.titulo}</span>
+              <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta demanda" title="Copiar o link desta demanda para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('engenharia', 'projeto', aberta.id, 'da demanda')} />
+            </div>
+            <div className="acn-modal-corpo">
+              <DemandaDevCard demanda={aberta} onAtualizado={carregar} currentUser={currentUser} />
+            </div>
+            <div className="acn-modal-rodape">
+              <Botao onClick={() => setAbertaId(null)}>Fechar</Botao>
+            </div>
+          </div>
+        </div>
       )}
 
       {modalNova && (
