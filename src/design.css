@@ -7852,3 +7852,13 @@ body.dark .acn-log-op { color: #7fd8cc; }
 .acn-dados-chk { cursor: pointer; accent-color: var(--acn-bad); width: 16px; height: 16px; }
 .acn-dados-linha { cursor: pointer; }
 .acn-dados-sel > td { background: var(--acn-bad-soft); }
+/* 12e91 (27/11/2026): painel Perfis de Acesso do Admin (AdminPainelPerfis.tsx) */
+.acn-perf .acn-faixa + .acn-faixa { margin-top: 8px; }
+.acn-perf-barra { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.acn-perf-c { text-align: center; }
+.acn-perf-desc { font-size: 12px; color: var(--acn-muted); }
+.acn-perf-linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+html body .modal-box.acn-modal-cadastro.acn-perf-jan { width: min(780px, 96vw); max-width: 780px; }
+.acn-perf-campos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.acn-perf-campos .form-group { min-width: 0; }
+.acn-perf-campos .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
