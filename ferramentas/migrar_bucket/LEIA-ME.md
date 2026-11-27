@@ -37,6 +37,14 @@ está no ar). Apagar o original público é **definitivo**: por isso o passo 4 s
 node ferramentas/migrar_bucket/teste_b1.cjs
 ```
 
+## Conferência da B3 (varredura do código + navegador com o armazenamento simulado)
+
+```powershell
+node ferramentas/migrar_bucket/teste_b3.cjs
+```
+
+(Cria e apaga sozinho um arquivo provisório `src/zz_teste_b3_montar.tsx`; se o teste for interrompido, apague-o à mão. Precisa do servidor de desenvolvimento no ar na porta 5173.)
+
 ## Conferência da B2 (varredura do código + navegador com o armazenamento simulado)
 
 ```powershell

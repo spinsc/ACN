@@ -1,6 +1,8 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B3)
+import { ImagemPrivada, LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B3)
 import { explicarErroDeEnvio } from './ErroDeArquivo';
 import { contentTypeUpload } from './FormatosArquivo';
 import { confirmar } from './Feedback';
@@ -78,24 +80,25 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
       const path = `crm-anexos/${op.id}/${Date.now()}_${safe}`;
       // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
       const ct = contentTypeUpload(f);
-      const { data: up, error } = await supabase.storage
-        .from('acn-media')
-        .upload(path, f, { upsert: true, contentType: ct });
-      if (error || !up) {
+      // bucket privado (plano do bucket privado, B3, 26/11/2026): o banco guarda "privado:<caminho>";
+      // o nome leva Date.now() e o bucket não aceita sobrescrever, então cada envio é um arquivo novo
+      const { valor, erro: error } = await enviarArquivoPrivado(path, f, ct);
+      if (error || !valor) {
         console.error('Upload erro:', error?.message);
         falhas.push(`${f.name} — ${explicarErroDeEnvio(error, f)}`);
         continue;
       }
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-      await supabase.from('crm_anexos').insert({
+      const { error: errIns } = await supabase.from('crm_anexos').insert({
         oportunidade_id: op.id,
         tipo:            tipoSel,
         nome:            f.name,
-        url:             pub?.publicUrl,
+        url:             valor,
         tamanho:         f.size,
         mime_type:       f.type,
         criado_por:      currentUser?.nome,
       });
+      // o arquivo já subiu: se a ligação com o card não gravar, a pessoa precisa saber (antes ficava calado)
+      if (errIns) falhas.push(`${f.name} — o arquivo subiu, mas não foi possível ligá-lo a este card (${errIns.message})`);
     }
     if (falhas.length > 0) {
       alert(`Falha ao enviar ${falhas.length} arquivo${falhas.length>1?'s':''}:\n\n${falhas.join('\n')}`);
@@ -107,11 +110,14 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
 
   const excluir = async (id: string, url: string) => {
     if (!await confirmar('Remover este arquivo?')) return;
-    // Remove do Storage
-    try {
-      const path = url.split('/acn-media/')[1]?.split('?')[0];
-      if (path) await supabase.storage.from('acn-media').remove([path]);
-    } catch (_) {}
+    // Remove do Storage só o que ainda é endereço público antigo; o arquivo do bucket privado não tem
+    // política de apagar para o navegador (B3, 26/11/2026): só se desliga a ligação e o arquivo fica solto.
+    if (!String(url || '').startsWith('privado:')) {
+      try {
+        const path = url.split('/acn-media/')[1]?.split('?')[0];
+        if (path) await supabase.storage.from('acn-media').remove([path]);
+      } catch (_) {}
+    }
     await supabase.from('crm_anexos').delete().eq('id', id);
     reload();
   };
@@ -179,7 +185,7 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
                   <div key={a.id} className="acn-anx-item" data-anx-crm={t.id}>
                     {/* Preview imagem */}
                     {isImg && (
-                      <img src={a.url} alt={a.nome} className="acn-anx-img"
+                      <ImagemPrivada valor={a.url} alt={a.nome} className="acn-anx-img"
                         onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
                       />
                     )}
@@ -189,18 +195,18 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
                     )}
                     {/* Info */}
                     <div className="acn-anx-info">
-                      <a href={a.url} target="_blank" rel="noreferrer" className="acn-anx-nome">
+                      <LinkDeArquivo valor={a.url} className="acn-anx-nome">
                         {a.nome}
-                      </a>
+                      </LinkDeArquivo>
                       <div className="acn-ajuda">
                         {fmtBytes(a.tamanho)} · {a.criado_por} · {fmtDT(a.criado_em)}
                       </div>
                     </div>
                     {/* Ações */}
                     <div className="acn-anx-acoes">
-                      <a href={a.url} target="_blank" rel="noreferrer" className="acn-b acn-b-primario acn-b-p">
+                      <LinkDeArquivo valor={a.url} className="acn-b acn-b-primario acn-b-p">
                         Abrir
-                      </a>
+                      </LinkDeArquivo>
                       <Botao variante="perigo-sec" pequeno icone={mdiClose} aria-label="Remover arquivo" onClick={() => excluir(a.id, a.url)} />
                     </div>
                   </div>
