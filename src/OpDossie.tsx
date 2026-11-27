@@ -30,6 +30,7 @@ import { OndeEstaAgora } from './OndeEstaAgora';
 import { DossieLote, baseDoLote } from './OpDossieLote';
 import { QuadroComprasLigadas, podePedirCompraDaOp, usuarioAtual } from './ComprasLigadas';
 import { QuadroServicosLigados } from './TerceirosLigados';
+import { QuadroFiscalDaOp } from './FiscalProntidaoTela';
 
 // Entrada, prazo e data do pedido são colunas do tipo date, e a data dos vínculos mistura date e data com hora: `diaBR` lê do texto a data pura e converte a que tem hora (R16, 05/10/2026; antes `new Date(d)`: 0 de 32 batiam com o banco).
 const fmtD   = (d) => diaBR(d);
@@ -249,6 +250,13 @@ export function DossieOp({ op, dossieCarregado = null }) {
             </>
           ) : null}
         </Secao>
+
+        {/* ── Nota fiscal (26/11/2026, preparação do módulo fiscal): sem nota, o que falta para a OP virar nota; com nota, a guardada no arquivo do Fiscal ── */}
+        {o.status_geral !== 'Cancelado' && (
+          <Secao titulo="Nota fiscal" tom="ok">
+            <QuadroFiscalDaOp op={o} currentUser={usuarioAtual()} />
+          </Secao>
+        )}
 
         {/* ── Descrição e observações (22/10/2026: não apareciam no dossiê) ── */}
         {textosDasOps([o]).length > 0 && (

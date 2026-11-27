@@ -51,3 +51,11 @@ html body .modal-box.acn-modal-cadastro.acn-fcad-box-p { width: min(520px, 95vw)
 .acn-fcad-dados > div { display: grid; gap: 2px; min-width: 0; }
 .acn-fcad-dados dt { font-size: 12px; color: var(--acn-muted); margin: 0; }
 .acn-fcad-dados dd { margin: 0; font-size: 13px; color: var(--acn-ink); overflow-wrap: anywhere; }
+
+/* Prontidão da OP para virar nota e nota guardada na OP (26/11/2026) */
+.acn-fcad-prontidao { display: grid; gap: 10px; }
+.acn-fcad-pend { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); min-width: 0; }
+.acn-fcad-pend-tit { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-fcad-lista { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.45; color: var(--acn-text); overflow-wrap: anywhere; }
+.acn-fcad-secao-sem-linha { display: grid; gap: 10px; min-width: 0; }
+.acn-fcad-nota { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface-2); min-width: 0; }

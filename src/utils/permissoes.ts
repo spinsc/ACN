@@ -212,6 +212,16 @@ export function podePostarNoInicio(usuarioAtual: any): boolean {
 // Quem preenche os dados fiscais de cliente, item, empresa emitente e transportadora: Admin, gerentes e quem tem a aba Fiscal (lista de abas vazia = todas, a mesma conta de `tem_alguma_aba`
 // no banco). Suposição minha, a confirmar com o usuário: quem edita o cliente ou o item no Comercial/CRM vê os dados fiscais só para leitura. As tabelas das empresas e das
 // transportadoras repetem a conta no banco; as de cliente e item só pedem login (como as tabelas-mãe), então para elas quem recusa é a tela.
+/**
+ * Quem LÊ o arquivo de notas emitidas (26/11/2026): é a mesma conta do banco (`tem_alguma_aba(['fiscal'])`: Admin, lista de abas vazia ou a aba Fiscal). Gerente sem a aba NÃO lê:
+ * o banco responde "nenhuma linha", e a tela não pode dizer "sem nota guardada" a quem não tem como ver.
+ */
+export function podeVerArquivoFiscal(usuarioAtual: any): boolean {
+  if (String(usuarioAtual?.perfil || '').trim() === 'Admin') return true;
+  const abas = usuarioAtual?.abas_permitidas;
+  return !Array.isArray(abas) || abas.length === 0 || abas.includes('fiscal');
+}
+
 export function podeEditarCadastroFiscal(usuarioAtual: any): boolean {
   if (ehAdminOuGerente(usuarioAtual)) return true;
   const abas = usuarioAtual?.abas_permitidas;
