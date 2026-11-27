@@ -12,6 +12,8 @@ import { hojeISO, Faixa, Botao, Selo } from './Interface';
 import { lerPaginado } from './LerPaginado';
 import { CampoMoeda } from './CampoMoeda';
 import { anexarValoresAosItens, gravarValoresDoItem, gravarValoresPorCodigo, separarValores } from './CadastroItensValores';
+import FiscalItemCampos from './FiscalItemCampos';
+import { podeEditarCadastroFiscal } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -544,6 +546,8 @@ function ItemModal({
               </div>
             </Field>
           </Row>
+          {/* Dados fiscais (26/11/2026, preparação do módulo fiscal): peça própria, grava em fiscal_itens com o botão dela; só no item já salvo. O NCM e o IPI vêm dos campos acima */}
+          <FiscalItemCampos itemId={isEdit ? item.id : null} ncm={form.ncm} ipiPct={form.ipi_pct} currentUser={currentUser} podeEditar={podeEditarCadastroFiscal(currentUser)} />
         </div>
 
         {/* Footer */}

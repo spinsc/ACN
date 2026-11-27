@@ -30,8 +30,14 @@ const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
 import { podeCorrigirDataDaNota } from './utils/permissoes';
+import { Abas } from './Interface';
+import { useAbaNoEndereco } from './AbaNoEndereco';
+import FiscalCadastrosTela from './FiscalCadastrosTela';
+import FiscalConferidorTela from './FiscalConferidorTela';
+import FiscalArquivoTela from './FiscalArquivoTela';
 
-export default function FiscalTab({ currentUser }) {
+// O que era a tela inteira do Fiscal virou a aba "Faturamento" (26/11/2026, preparação do módulo fiscal): nada dentro dela mudou.
+function FaturamentoDoFiscal({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [ordensOS, setOrdensOS] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -963,6 +969,26 @@ export default function FiscalTab({ currentUser }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// A casca do Fiscal (26/11/2026, preparação do módulo fiscal): quatro abas. O faturamento de sempre, o arquivo das notas emitidas, os cadastros que a nota vai exigir e o conferidor de XML.
+// Cada aba tem endereço (#/fiscal, #/fiscal/arquivo, #/fiscal/cadastros, #/fiscal/conferidor); o arquivo se divide em três visões e os cadastros em quatro.
+export default function FiscalTab({ currentUser }) {
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'fiscal' }) as [string, (v: any) => void];
+  return (
+    <div>
+      <Abas ativa={aba} onChange={setAba} itens={[
+        { id: 'faturamento', rotulo: 'Faturamento', titulo: 'As OPs e OS que esperam a nota, a emissão e a entrega' },
+        { id: 'arquivo', rotulo: 'Notas emitidas', titulo: 'As notas guardadas: busca, situação, ligação com a OP e vigia da numeração' },
+        { id: 'cadastros', rotulo: 'Cadastros fiscais', titulo: 'Empresas emitentes, transportadoras e o que falta nos clientes e nos itens para a nota sair' },
+        { id: 'conferidor', rotulo: 'Conferidor de XML', titulo: 'Solte XMLs de notas emitidas e veja o que está errado (só leitura)' },
+      ]} />
+      {aba === 'faturamento' && <FaturamentoDoFiscal currentUser={currentUser} />}
+      {aba === 'cadastros' && <FiscalCadastrosTela currentUser={currentUser} />}
+      {aba === 'arquivo' && <FiscalArquivoTela currentUser={currentUser} aoIrAoConferidor={() => setAba('conferidor')} />}
+      {aba === 'conferidor' && <FiscalConferidorTela currentUser={currentUser} />}
     </div>
   );
 }

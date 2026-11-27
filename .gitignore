@@ -35,3 +35,6 @@ ferramentas/teste_enderecos/saida/
 
 # Fumaça das telas (B7 do plano de migração): o resultado de cada rodada fica só na máquina (traz nomes de tabelas e textos de erro)
 ferramentas/fumaca/saida/
+
+# Módulo fiscal (26/11/2026): plano e perguntas trazem achados fiscais internos e dados das empresas. Ficam só na máquina enquanto o repositório for público.
+MODULO_FISCAL/
